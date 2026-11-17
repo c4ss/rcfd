@@ -25,6 +25,7 @@ export function usePrefersReducedMotion(): boolean {
 
 /**
  * Play under reduced motion (F-816 decision D3): one stop at most every this many ms, below three changes a second, so
- * the field does not flash as it steps; without the preference Play goes as fast as the fields are drawn.
+ * the field does not flash as it steps. Play's own pace is one snapshot a second (workspace/model.ts PLAY_SNAPSHOT_MS,
+ * ADR 0801 Addendum 22), slower than this, so this floor holds for a run without fields (its residual samples).
  */
 export const REDUCED_PLAY_MS = 500;

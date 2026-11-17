@@ -3,11 +3,12 @@
 // runner's, as the engine answered; a request only says what was asked and whether the runner has acted on it yet.
 import { getRunAction as getF807Action } from '../../shared/actions/runs.js';
 import { getFirstRunAction } from '../../shared/actions/first.js';
+import { getSiteRunAction } from '../../shared/sites.js';
 import type { RunEntry, RunRequest } from '../../shared/project.js';
 import { clock } from './model.js';
 
-/** F-813: run control's actions and the first path's (src/shared/actions/first.ts). */
-const getRunAction = (id: string) => getF807Action(id) ?? getFirstRunAction(id);
+/** F-813: run control's actions and the first path's (src/shared/actions/first.ts); F-848: the site's (src/shared/sites.ts). */
+const getRunAction = (id: string) => getF807Action(id) ?? getFirstRunAction(id) ?? getSiteRunAction(id);
 
 /**
  * The run list with the runs this window started that the engine's list does not hold yet: start_run answered with the
@@ -49,6 +50,7 @@ const WAITING: Record<string, string> = {
   'project.resume_run': 'waiting for the runner to release it',
   'project.stop_run': 'waiting for the solver to stop after its current step',
   'project.cancel_run': 'waiting for the runner to take it out of the queue',
+  'site.run_case': 'the runner sends it to the site',
 };
 
 const ASKED: Record<string, string> = {
@@ -60,6 +62,7 @@ const ASKED: Record<string, string> = {
   'project.stop_run': 'Stop requested',
   'project.cancel_run': 'Cancel requested',
   'project.start_runner': 'Runner started',
+  'site.run_case': 'Started on a site',
 };
 
 /** The sentence of a request in the run list: what was asked, when, and what it waits for. */

@@ -12,11 +12,13 @@ import type { Axis } from '../plots/range.js';
 import { SeriesData } from '../plots/series.js';
 import { MONITOR_STYLE, residualOrder, residualStyles, type LineStyle } from '../plots/style.js';
 import { caseName, type RunRow } from '../runs/model.js';
+import { Menu, MenuItem, MenuTrigger, Popover } from 'react-aria-components';
 import { IconButton, Quiet, Select, StatePictogram, Toggle } from '../ui/index.js';
+import { Icon } from '../ui/Pictogram.js';
 import { IconToggle } from '../ui/IconToggle.js';
 import { useCommandHandlers } from '../commands/host.js';
 import '../plots/plots.css';
-import { counterText, flagText, fraction, labelAfter, nearestPosition, valueText, type Band, type Position } from './model.js';
+import { PLAY_SPEEDS, counterText, flagText, fraction, labelAfter, nearestPosition, speedText, speedWords, valueText, type Band, type Position, type PlaySpeed } from './model.js';
 import { Provenance, counterValue, seriesValue, type StopFacts } from '../provenance/index.js';
 
 /** The value of one series at the line's step. */
@@ -44,6 +46,9 @@ export interface TimePanelProps {
   readonly onFollow: (on: boolean) => void;
   readonly playing: boolean;
   readonly onPlay: (on: boolean) => void;
+  /** ADR 0801 Addendum 22: Play's speed (1 is one snapshot a second), remembered per run by the workspace. */
+  readonly speed?: PlaySpeed;
+  readonly onSpeed?: (speed: PlaySpeed) => void;
   /** F-815: the compared run, whose residual and monitor lines are drawn over the selected run's. */
   readonly compare?: { readonly row: RunRow; readonly series: RunSeries | null; readonly version: number; readonly cursor: ReadonlyMap<string, CursorValue> } | null;
 }
@@ -88,7 +93,7 @@ function valueOf(v: CursorValue | undefined, format: (x: number) => string): str
 }
 
 export function TimePanel(props: TimePanelProps) {
-  const { rows, bands, axis, row, onSelect, positions, index, onMove, series, seriesError, version, cursor, running, follow, onFollow, playing, onPlay, compare = null } = props;
+  const { rows, bands, axis, row, onSelect, positions, index, onMove, series, seriesError, version, cursor, running, follow, onFollow, playing, onPlay, compare = null, speed = 1, onSpeed } = props;
   const name = caseName(row.case) || row.id;
   const position = positions[index] ?? null;
   const last = positions.length - 1;
@@ -346,6 +351,32 @@ export function TimePanel(props: TimePanelProps) {
           <IconButton label="Previous snapshot" icon="back" isDisabled={last < 0 || index === 0} onPress={() => onMove(index - 1)} />
           <IconButton variant="primary" icon={playing ? 'pause' : 'play'} label={playing ? 'Pause' : 'Play'} isDisabled={last < 1 || (!playing && index >= last)} onPress={() => onPlay(!playing)} />
           <IconButton label="Next snapshot" icon="forward" isDisabled={last < 0 || index >= last} onPress={() => onMove(index + 1)} />
+          {onSpeed && (
+            // ADR 0801 Addendum 22: Play's speed, a pictogram whose name and tooltip say the speed (no word at rest, G22)
+            <MenuTrigger>
+              <IconButton label={speedWords(speed)} icon="speed" className="tp-speed" data-speed={speed} />
+              <Popover className="ui-popover" offset={2} placement="top start">
+                <Menu
+                  className="ui-listbox"
+                  aria-label="Play speed"
+                  selectionMode="single"
+                  selectedKeys={[String(speed)]}
+                  onAction={(k) => onSpeed(Number(k) as PlaySpeed)}
+                >
+                  {PLAY_SPEEDS.map((s) => (
+                    <MenuItem key={s} id={String(s)} textValue={speedText(s)} className="ui-option" data-speed={s}>
+                      {({ isSelected }) => (
+                        <>
+                          <span className="ui-option-label">{speedText(s)}</span>
+                          {isSelected && <Icon name="check" className="ui-option-check" />}
+                        </>
+                      )}
+                    </MenuItem>
+                  ))}
+                </Menu>
+              </Popover>
+            </MenuTrigger>
+          )}
           {running && (
             <Toggle isSelected={follow} onChange={onFollow} className="tp-follow">
               Follow live

@@ -105,6 +105,10 @@ pub struct RunRecord {
     /// The run this one reruns from its `case.snapshot` (ADR 0734 P3; only a rerun has it).
     #[serde(skip_serializing_if = "Option::is_none")]
     pub rerun_of: Option<String>,
+    /// The run site the run was sent to (ADR 0739 P6); only a run on a remote site has it, so a local run's `run.json`
+    /// keeps its bytes.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub site: Option<String>,
 }
 
 /// On-disk form of [`RunRecord`]: `case` or its legacy name `case_source`, optional `solver_version`.
@@ -134,6 +138,8 @@ struct RunRecordWire {
     condition: Option<String>,
     #[serde(default)]
     rerun_of: Option<String>,
+    #[serde(default)]
+    site: Option<String>,
 }
 
 impl TryFrom<RunRecordWire> for RunRecord {
@@ -158,6 +164,7 @@ impl TryFrom<RunRecordWire> for RunRecord {
             variant: w.variant,
             condition: w.condition,
             rerun_of: w.rerun_of,
+            site: w.site,
         })
     }
 }

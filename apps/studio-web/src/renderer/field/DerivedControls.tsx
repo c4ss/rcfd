@@ -4,12 +4,15 @@
 // in the tooltip shown on hover and keyboard focus, not as standing text (G22). When the cut plane is on, a small panel
 // in the frame's top left corner sets its axis, its position (a value to act on) and the side that is kept.
 //
-// The arrows' data comes through the data door like the field (useArrows): the stored velocity components of the shown
-// snapshot, with the view's tag so that a superseded load is cancelled (G21).
+// ADR 0738: the pictures are the engine's (useDerived): `rcfd post derive` of the shown snapshot through the data door
+// (window.studioDerived), the GLB read by ./glb.ts, with the view's tag so that a superseded request is cancelled (G21).
+// The iso-surface's panel sets its level within the shown field's range; the streamlines' panel the axis their seed
+// line runs along and the number of seeds. useArrows (the Studio's own arrows, T3) is kept for the tests' reference.
 import { useEffect, useMemo, useState, type KeyboardEvent, type PointerEvent } from 'react';
 import { Focusable, ToggleButton, TooltipTrigger } from 'react-aria-components';
-import type { StoreRef, SurfaceData } from '../../shared/data.js';
-import { cancelLoads, loadField } from '../data/door.js';
+import type { DeriveArgs, StoreRef, SurfaceData } from '../../shared/data.js';
+import { cancelLoads, loadDerived, loadField } from '../data/door.js';
+import { readGlb, type Glb } from './glb.js';
 import { IconButton, SegmentedToggle, Slider, Tooltip } from '../ui/index.js';
 import {
   availability,
@@ -26,6 +29,7 @@ import {
   type DerivedKind,
   type Glyphs,
   type Layers,
+  type Rake,
 } from './derived.js';
 
 function DerivedIcon({ kind }: { kind: DerivedKind }) {
@@ -45,10 +49,15 @@ export interface DerivedControlsProps {
   readonly onVectors: (on: boolean) => void;
   /** The cut a new cut plane starts from. */
   readonly startCut: (() => Cut) | null;
+  /** ADR 0738: the engine's iso-surface and streamlines are on. */
+  readonly iso?: boolean;
+  readonly onIso?: (on: boolean) => void;
+  readonly streamlines?: boolean;
+  readonly onStreamlines?: (on: boolean) => void;
 }
 
 /** The controls in the viewport's tool row. */
-export function DerivedControls({ ctx, cut, onCut, vectors, onVectors, startCut }: DerivedControlsProps) {
+export function DerivedControls({ ctx, cut, onCut, vectors, onVectors, startCut, iso = false, onIso, streamlines = false, onStreamlines }: DerivedControlsProps) {
   const ready: DerivedContext = ctx ?? { layers: null, fields: [], nCells: 0 };
   return (
     <div className="fv-derived" role="group" aria-label="Derived pictures">
@@ -68,10 +77,12 @@ export function DerivedControls({ ctx, cut, onCut, vectors, onVectors, startCut 
             </TooltipTrigger>
           );
         }
-        const on = kind === 'cut' ? cut !== null : vectors;
+        const on = kind === 'cut' ? cut !== null : kind === 'vectors' ? vectors : kind === 'iso' ? iso : streamlines;
         const set = (v: boolean) => {
           if (kind === 'cut') onCut(v && startCut ? startCut() : null);
-          else onVectors(v);
+          else if (kind === 'vectors') onVectors(v);
+          else if (kind === 'iso') onIso?.(v);
+          else onStreamlines?.(v);
         };
         return (
           <TooltipTrigger key={kind} delay={600}>
@@ -88,8 +99,11 @@ export function DerivedControls({ ctx, cut, onCut, vectors, onVectors, startCut 
 
 const AXES = AXIS_NAME.map((n, i) => ({ id: String(i), label: n }));
 
-/** The cut plane's panel in the frame: axis, position, side kept. Keys and pointer stay in the panel (not the orbit). */
-export function CutPanel({ cut, layers, onCut }: { cut: Cut; layers: Layers; onCut: (cut: Cut) => void }) {
+/**
+ * The cut plane's panel in the frame: axis, position (in the stored mesh's length unit, ADR 0738 P5), side kept. Keys
+ * and pointer stay in the panel (not the orbit).
+ */
+export function CutPanel({ cut, layers, unit, onCut }: { cut: Cut; layers: Layers; unit: string; onCut: (cut: Cut) => void }) {
   const lo = layers.min[cut.axis];
   const hi = layers.max[cut.axis];
   const keep = (e: KeyboardEvent | PointerEvent) => e.stopPropagation();
@@ -106,7 +120,7 @@ export function CutPanel({ cut, layers, onCut }: { cut: Cut; layers: Layers; onC
       />
       <Slider
         className="fv-cut-slider"
-        label={`Plane at ${AXIS_NAME[cut.axis]}`}
+        label={`Plane at ${AXIS_NAME[cut.axis]}, ${unit}`}
         minValue={lo}
         maxValue={hi}
         step={(hi - lo) / 200 || 1}
@@ -188,4 +202,91 @@ export function useArrows(
     // `store` is named by storeKey
   }, [storeKey, snapshot, surface, layers, nCells, on, tagBase, need, glyphsOf]);
   return state;
+}
+
+// ---- ADR 0738: the engine's derived pictures --------------------------------------------------------------------------
+
+export type DerivedPicture =
+  | { readonly kind: 'off' }
+  | { readonly kind: 'error'; readonly key: string; readonly message: string }
+  /** `glb` is the last picture made (it stays shown while a newer one is made); `key` names what it was made for. */
+  | { readonly kind: 'on'; readonly key: string; readonly glb: Glb; readonly loading: boolean };
+
+/** The key a picture is made for: the store, the snapshot and the engine's arguments. */
+export function pictureKey(storeKey: string, snapshot: number, args: DeriveArgs): string {
+  return `${storeKey}\u0000${snapshot}\u0000${JSON.stringify(args)}`;
+}
+
+/**
+ * One picture the engine makes of a snapshot (`rcfd post derive` through the data door), again whenever the store,
+ * snapshot or arguments change; a superseded request is cancelled by its tag (G21). Null arguments give `off`.
+ */
+export function useDerived(store: StoreRef, snapshot: number | null, args: DeriveArgs | null, tagBase: string, what: string): DerivedPicture {
+  const [state, setState] = useState<DerivedPicture>({ kind: 'off' });
+  const storeKey = `${store.route}\u0000${store.path}`;
+  const argsKey = args ? JSON.stringify(args) : '';
+  useEffect(() => {
+    if (!args || snapshot === null) {
+      setState({ kind: 'off' });
+      return;
+    }
+    let live = true;
+    const key = pictureKey(storeKey, snapshot, args);
+    const tag = `${tagBase}-${args.kind}-${snapshot}`.slice(0, 64);
+    setState((s) => (s.kind === 'on' ? { ...s, loading: true } : s));
+    void (async () => {
+      const r = await loadDerived(store, snapshot, args, { tag });
+      if (!live) return;
+      if (!r.ok) {
+        if (r.error.code === 'cancelled') return;
+        setState({ kind: 'error', key, message: `${what} could not be made by the engine: ${r.error.message}` });
+        return;
+      }
+      let glb: Glb;
+      try {
+        glb = readGlb(r.result.glb);
+      } catch (e) {
+        setState({ kind: 'error', key, message: `${what}: the engine's file could not be read (${e instanceof Error ? e.message : String(e)}).` });
+        return;
+      }
+      setState({ kind: 'on', key, glb, loading: false });
+    })();
+    return () => {
+      live = false;
+      void cancelLoads(tag);
+    };
+    // `store` is named by storeKey, `args` by argsKey
+  }, [storeKey, snapshot, argsKey, tagBase, what]);
+  return state;
+}
+
+/** The iso-surface's panel in the frame: its level, in the shown field's range. */
+export function IsoPanel({ level, lo, hi, quantity, unit, onLevel }: { level: number; lo: number; hi: number; quantity: string; unit: string; onLevel: (v: number) => void }) {
+  const keep = (e: KeyboardEvent | PointerEvent) => e.stopPropagation();
+  return (
+    <div className="fv-cut fv-iso" role="group" aria-label="Iso-surface" onKeyDown={keep} onPointerMove={keep} onPointerDown={keep}>
+      <Slider
+        className="fv-cut-slider"
+        label={`Level of ${quantity}${unit ? `, ${unit}` : ''}`}
+        minValue={lo}
+        maxValue={hi}
+        step={(hi - lo) / 200 || 1}
+        value={level}
+        formatOptions={{ maximumSignificantDigits: 6 }}
+        onChange={onLevel}
+      />
+    </div>
+  );
+}
+
+/** The streamlines' panel in the frame: the axis their rake runs along and how many seeds it has. */
+export function StreamPanel({ rake, layers, onRake }: { rake: Rake; layers: Layers; onRake: (r: Rake) => void }) {
+  const keep = (e: KeyboardEvent | PointerEvent) => e.stopPropagation();
+  const axes = AXES.filter((a) => !layers.twoD || Number(a.id) !== layers.thin);
+  return (
+    <div className="fv-cut fv-stream" role="group" aria-label="Streamlines" onKeyDown={keep} onPointerMove={keep} onPointerDown={keep}>
+      <SegmentedToggle aria-label="Seed line along" options={axes} selected={String(rake.axis)} onChange={(id) => onRake({ ...rake, axis: Number(id) as Axis })} />
+      <Slider className="fv-cut-slider" label="Seeds" minValue={2} maxValue={60} step={1} value={rake.n} onChange={(v) => onRake({ ...rake, n: Math.round(v) })} />
+    </div>
+  );
 }

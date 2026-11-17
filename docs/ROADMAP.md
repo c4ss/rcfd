@@ -16527,7 +16527,20 @@ Generated from `docs/studio-guardrails.md`, `PRODUCT.md` and `DESIGN.md` ([ADR 0
   - note: ADR 0800. Traces: G2, G7; PRODUCT Capabilities (parity: quick run, stop). Done 2026-11-16: run bar in the Runs
     view and Run per case on the home; start_run/pause_run/resume_run/cancel_run on a writable project server (shared
     with the F-812 case editor), rcfd-runner ensure to start the runner; confirmations name what is lost; P2 met for
-    every action (<= 19.4 ms to the painted frame).
+    every action (<= 19.4 ms to the painted frame). G7 amended 2026-11-17 (the maintainer: "the runner should close
+    with studio by default if no external (existing) runner env var is specified"; active runs: ask; ADR 0801 addendum
+    "Runner closes with the Studio"): the Studio owns only a runner that came up while it had the project open with
+    none alive before (.rcfd/runner.json looked at), shuts an idle owned runner down at every close, and asks with the
+    F-837 close guard when it holds runs (Stop runs and close: cancel_run then rcfd-runner shutdown; Keep them running
+    and close; Cancel), merged with save-or-discard; its own rcfd serve closes too; the setting "Keep the runner going
+    after the Studio closes" and --keep-runner keep the runner; tests/unit and tests/e2e runner-lifetime.spec.ts.
+    2026-11-17, the maintainer (ADR 0801, Q-RL-1 settled): the setting shows a visible label, "Keep the runner going"
+    (at most 5 words), and the studio-settings word budget is 14 with no sites file; the Sites section has its own
+    budget, its heading plus one line per site (site names and states are data). Q-RL-2 settled the same day: the
+    runner writes an additive started_by ("studio", "cli" or "mcp", with studio_pid for the Studio) to
+    .rcfd/runner.json, passed by the variable RCFD_RUNNER_STARTED_BY (the Studio sets studio:<pid> on its rcfd-runner
+    ensure and its rcfd-mcp); the Studio owns a runner only when the record says "studio" with its own pid, and falls
+    back to the looks only for a record with no started_by; crates/rcfd-runner/tests/started_by_qrl2.rs.
 - [x] **F-808** Electron Studio: field viewport on three.js WebGPU
   - depends on: F-804, F-802
   - acceptance: Mesh and fields on surfaces drawn by three.js WebGPURenderer with a TSL material that colours from the
@@ -16544,7 +16557,16 @@ Generated from `docs/studio-guardrails.md`, `PRODUCT.md` and `DESIGN.md` ([ADR 0
     maintainer answered F808-D1 with (a): the 256-entry table, exact at its 256 points and at and beyond both ends,
     within 3/255 per channel elsewhere, is written into the acceptance; with P7 and P8 met and the screenshots in
     test-results-visual/f808 for the view-and-report (the precedent of F-810 and F-812), the acceptance is met.
-- [~] **F-809** Electron Studio: derived pictures (iso-surfaces, streamlines, cut planes, vectors)
+    Changed 2026-11-17 (ADR 0801 Addendum 22, the maintainer): the camera is Unity's scene view in place of
+    OrbitControls (src/renderer/field/camera.ts, pure maths with unit tests): hold the right button to look and fly with
+    W A S D, Q and E (Shift faster, speed from the domain size); the middle button pans; Alt and the left button orbit
+    about the point under the cursor; the wheel dollies toward it; a double-click sets the pivot; F frames; quaternion
+    rotation, no pole lock; the plain left button stays the readout's and the arrow keys still orbit. A 2D case opens
+    orthographic along its thin axis and only pans and zooms. Face on only turns the view (zoom and centre kept) and
+    Reset view is a separate icon button (field.reset_view in the palette, Home). The mesh preview and both compare
+    views use the same camera; the P8 bench still orbits one turn per 600 frames.
+    Later 2026-11-17 (the maintainer): no 2D tilt; the Alt of an orbit drag is kept from the menu bar.
+- [x] **F-809** Electron Studio: derived pictures (iso-surfaces, streamlines, cut planes, vectors)
   - depends on: F-808
   - acceptance: Each derived picture computed by the engine (rcfd-render or a registered opt-in service method) or, if
     computed in the Studio, matched against the engine's reference value for value within a tolerance registered before
@@ -16562,6 +16584,11 @@ Generated from `docs/studio-guardrails.md`, `PRODUCT.md` and `DESIGN.md` ([ADR 0
     (`cut_surface`, T2/T3's rules), by the project tool `derive_picture` and `rcfd post derive` (same bytes);
     `data.open` gains `length_unit: "m"`. Left: the field viewport drawing the engine's cut and arrows, iso-surface and
     streamline controls in the Studio; `render_field` with axis/slice/vectors and `rcfd post render` (ADR 0738 P3).
+    2026-11-17: Studio half of ADR 0738 built: the field viewport draws the engine's cut surface and arrows (`rcfd post
+    derive`, run by main over the data port; the readout names the source triangle), and the engine's iso-surfaces and
+    streamlines with their controls; every picture of a service-route store is disabled with the reason. Done: every
+    derived picture is the engine's. Left (not in the acceptance): `render_field` with axis/slice/vectors and `rcfd post
+    render` (ADR 0738 P3).
 - [x] **F-810** Electron Studio: run bands and linked time scrubbing
   - depends on: F-808, F-811
   - acceptance: The run bands of DESIGN.md on one shared time axis, each end marked with its pictogram and word; one
@@ -16574,6 +16601,11 @@ Generated from `docs/studio-guardrails.md`, `PRODUCT.md` and `DESIGN.md` ([ADR 0
     together, Follow live; same-snapshot test against a real quick-start run; P5 met (23.6 snapshots/s at 1e6 cells), P6
     met on rate (9.1/s at 4e6 cells, 4 of 100 frames over 150 ms, machine fully loaded); screenshots in test-results-
     visual/f810 for view-and-report.
+    Changed 2026-11-17 (ADR 0801 Addendum 22, the maintainer): Play steps one stored snapshot per wall-clock second (it
+    went as fast as the fields were drawn); no speed control existed, none was added; one second of simulated time per
+    second was the alternative offered.
+    Later 2026-11-17 (the maintainer, Q-A22-3): a Play speed menu beside Play, 0.25x to 4x, 1x one snapshot a second,
+    remembered per run.
 - [x] **F-811** Electron Studio: residual and monitor plots
   - depends on: F-803
   - acceptance: Residuals and monitors fetched once and then by increments (ADR 0353); every plot range holds every
@@ -16930,7 +16962,16 @@ Generated from `docs/studio-guardrails.md`, `PRODUCT.md` and `DESIGN.md` ([ADR 0
     label, help, usual range with its source and the docs heading from the engine, advanced keys behind Show all; the
     first path's Explain terms are glossary rows (13 terms added to docs/glossary.md), words.ts keeps no meaning of its
     own; engine errors in settings, the case editor and run control get the catalogue's recovery line (unit test over
-    the real catalogue). Left: a learner's view-and-report step (G19); an e2e walk provoking each catalogue error.
+    the real catalogue). 2026-11-17 (branch small-fixes): e2e error-walk.spec.ts provokes, through the Studio's surfaces
+    against rcfd serve --ui and rcfd-mcp --project, every catalogue code a user reaches and finds its recovery line:
+    1003 (a refused value in the case editor), 1002 (a setting changed while another writer holds the run paused), 1004
+    (a mesh over the preview limit), 1201 (Save while another writer holds the edit lock), 1001 (the editor's session
+    closed by another writer), 1202 (Run of a case deleted under the Studio); the case editor's Failed to save notice
+    and the settings' could-not-be-read state now show the line (they showed the message only); the rows it does not
+    provoke are listed with the reason (-32700, -32600, -32601, -32602, 1005, 1006, -32000, 1100; 1007, 1008 and 1200
+    answered by the conflict panels' choices instead of the line; the exit codes of rcfd, rcfd-runner, rcfd-mcp and the
+    hook), and the test fails when the catalogue gains a row in neither list. Left: a learner's view-and-report step
+    (G19).
 - [x] **F-831** Electron Studio: command palette and keyboard shortcuts
   - depends on: F-827, F-802
   - acceptance: A command palette generated from the action registry that finds every action by name; shortcuts for
@@ -17021,7 +17062,7 @@ Generated from `docs/studio-guardrails.md`, `PRODUCT.md` and `DESIGN.md` ([ADR 0
     located message on failure. mesh_preview_adr0732.rs replaces preview_g1 (M1, every shipped case against
     Simulation::new) and adaptive_preview_f475 (M2); e2e tests/e2e/f836.spec.ts. No MCP tool (Q6). Word budgets
     unchanged (case editor 51 of 51 with the preview drawn).
-- [~] **F-837** Electron Studio: run setup, logs and field-view extras from rcfd-studio
+- [x] **F-837** Electron Studio: run setup, logs and field-view extras from rcfd-studio
   - depends on: F-449, F-807, F-810
   - acceptance: Each capability the deleted rcfd-studio had and the Electron Studio lacks is built or recorded as
     declined by the maintainer: run setup for "simulate N s" (time step, adaptive correctors, store plan, Courant
@@ -17068,7 +17109,16 @@ Generated from `docs/studio-guardrails.md`, `PRODUCT.md` and `DESIGN.md` ([ADR 0
     Studio's Run, Run again and Queue now pass start_run {store: plan} (ADR 0140), a case that sets
     output.store_interval or output.store_time_interval keeps its own, the case file is not changed, start_run's own
     default (none) and the CLI's stay, and the start line says the snapshots and size the plan applied. e2e case-file-
-    adr0737.spec.ts (4); word budgets unchanged. Left: the store length unit (ADR 0738).
+    adr0737.spec.ts (4); word budgets unchanged. 2026-11-17 (branch small-fixes): an undo of Refine x2 checks the counts
+    the refine left (each edits[].after of its reply) and sends them as base_value, as the undo of settings.set does, so
+    a count another writer set since is the conflict panel with its three choices (the read before, or the engine's
+    1007), never overwritten silently; unit history.spec.ts (2), e2e case-file-adr0737.spec.ts (5). The store length
+    unit 2026-11-17 (ADR 0738 P5, branch small-fixes): the field view's lengths (the cut panel's position, Plane at x,
+    m; the domain size; the scale bar) are in the unit the engine names for the store: data.open's length_unit on the
+    service route, else the length_unit of a derived picture of it (rcfd post derive), else the engine's documented
+    store unit (rcfd_tsstore::LENGTH_UNIT, read from the source by the unit test), since store.rts does not write it
+    (Q5); each length's tooltip says which; word budgets unchanged; unit f837.spec.ts and derive-bridge.spec.ts, e2e
+    f837.spec.ts, field-derived.spec.ts, data.spec.ts. Nothing left.
 - [x] **F-838** Local-model assistant: keep, port or remove
   - depends on: F-449
   - acceptance: The maintainer decides what becomes of the local-model assistant that only rcfd-gui offered (presets
@@ -17085,3 +17135,26 @@ Generated from `docs/studio-guardrails.md`, `PRODUCT.md` and `DESIGN.md` ([ADR 0
     only assistant. Follow-up 2026-11-17 (maintainer): crates/rcfd-claude removed; its allow-list rules moved to
     rcfd-mcp's test support module crates/rcfd-mcp/tests/claude_allow/ (F2 and C5-A use it unchanged), E5 and the rule
     checks T1, T2, T5 to crates/rcfd-mcp/tests/allow_file_w48e.rs. Cargo.lock 83 to 82 packages.
+- [ ] **F-848** Runs on a remote site: a remote simulation service for the Studio, the CLI and the MCP server
+  - depends on: F-807, F-828
+  - acceptance: With no site named, the Studio, the CLI and the MCP server start and use the local engine as now, and a
+    local run's run.json, launch.json, status.json, events.jsonl and the feed are byte for byte as before
+    (baseline_hashes not re-recorded). A user-level sites file names remote sites; a run started on one (Studio run
+    dialog, rcfd-runner start --site, MCP start_run {site}) has its inputs uploaded content-addressed and resumably,
+    runs under the site's runner, shows in the same Runs list with its site, link state, pause, resume and cancel, and
+    has its status, events, residuals and log mirrored live and its outputs and field store downloaded at the end; its
+    provenance records the site, host and build. Proven against a fake remote in CI (a second local agent and work
+    folder) by the tests ADR 0739 registers, phase by phase.
+  - note: Proposed 2026-11-17 ([ADR 0739](adr/0739-f848-proposal-run-sites-a-remote-simulation-service-for-the-studio-cli-and-mcp.md),
+    design only, open questions Q1 to Q10 for the maintainer). Maintainer's direction 2026-11-17: the Studio supplies a
+    local service unless an external one is named, and an external one in the cloud runs high-intensity, sharded or
+    distributed simulations. Recommended first slice: SSH running a stdio agent (rcfd-runner site --stdio), no
+    listener, a mirror project with the ordinary rcfd-runner on the site; Slurm/PBS and cloud batch later behind one
+    Site interface in rcfd-runner. Distributed single runs need F-100 (no MPI or socket transport, no distributed
+    SIMPLE/PISO; ADR 0058) and are out of scope. Traces: G7, G10, G12, G16, G17, G22.
+    Studio part of phase 1 built 2026-11-17 (branch sites-studio, ADR 0801 Addendum 24): the Where choice of the Runs
+    run bar (only when the sites file lists sites; remembered per project in the Studio's user data), a check before
+    every remote start with the yes in the decision panel (rcfd site check --confirm), the site badge and link state in
+    the runs table, run panel and workspace, and a Sites section in the Studio settings; S11 is
+    apps/studio-web/tests/e2e/sites.spec.ts. Left: Where on home Run, Run again and Rerun; creating the sites file from
+    the Studio; site.jsonl in the feed; phases 2 and 3.

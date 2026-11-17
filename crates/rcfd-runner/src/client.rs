@@ -5,6 +5,7 @@
 
 use crate::records::{LaunchSettings, RunSettings, RunState, RunStatus};
 use crate::runner::{dot_dir, sibling_exe, EXIT_ALREADY_RUNNING};
+use crate::started_by::{self, StartedBy};
 use crate::store::{extra, FsStore, RunStore, RunTags};
 use crate::sys;
 use std::path::{Path, PathBuf};
@@ -52,6 +53,9 @@ pub struct Client {
     store: FsStore,
     runner_exe: PathBuf,
     output: RunnerOutput,
+    /// The surface a runner this client starts records as `started_by` (unless this process's
+    /// [`crate::started_by::ENV`] says otherwise).
+    started_by: Option<StartedBy>,
 }
 
 fn err(e: impl std::fmt::Display) -> String {
@@ -95,7 +99,20 @@ impl Client {
             store: FsStore::new(project),
             runner_exe: runner_exe.into(),
             output: RunnerOutput::default(),
+            started_by: None,
         }
+    }
+
+    /// The same client, whose runner starts record `by` as `started_by` in `.rcfd/runner.json` (Q-RL-2, ADR 0801). This
+    /// process's [`crate::started_by::ENV`], when valid, wins: the Studio sets it on the processes it starts.
+    pub fn with_started_by(mut self, by: Option<StartedBy>) -> Self {
+        self.started_by = by;
+        self
+    }
+
+    /// Who a runner started by this client is recorded as having been started by.
+    pub fn started_by(&self) -> Option<StartedBy> {
+        StartedBy::from_env().or(self.started_by)
     }
 
     /// The same client, with the output of the runners it starts going to `output` (default:
@@ -167,7 +184,9 @@ impl Client {
             stderr,
             file: log,
         } = self.start_output(&dot)?;
-        let mut child = sys::spawn_detached(&self.runner_exe, &args, stdout, stderr)
+        // Q-RL-2 (ADR 0801): who starts it, for runner.json; removed when unknown, so nothing stale is inherited
+        let by = [(started_by::ENV, self.started_by().map(|b| b.env_value()))];
+        let mut child = sys::spawn_detached_env(&self.runner_exe, &args, stdout, stderr, &by)
             .map_err(|e| format!("cannot start {}: {e}", self.runner_exe.display()))?;
         let pid = child.id();
         // The child stays here while the lock is awaited: `runner_running` reaps the kept children, which would take its
@@ -304,6 +323,75 @@ impl Client {
         self.store
             .create_run_with(case, settings, launch, version, tags)
             .map_err(|e| format!("{}: {e}", case.display()))
+    }
+
+    /// Whether site `site` may take a run now (ADR 0739): configured and checked, open to assistants when `assistant`
+    /// (an MCP client asks; Q6 (a)), confirmed once by the user, and its `hello` admitted (protocol major, engine; Q10
+    /// (a)). This starts the site's agent for the `hello` and ends it. Returns the site's `solver_version`.
+    pub fn admit_site(&self, site: &str, assistant: bool) -> Result<String, String> {
+        let (file, entry) = crate::site::sites::site(site)?;
+        if assistant && !entry.assistant {
+            return Err(format!(
+                "site {site} is not open to assistants: the user can set assistant = true in [site.{site}] of {}",
+                file.display()
+            ));
+        }
+        if entry.confirmed.is_none() {
+            return Err(format!(
+                "site {site} is not confirmed: run `rcfd site check {site} --confirm` once (it shows the host key \
+                 and the engine version)"
+            ));
+        }
+        let mut link = crate::site::link::AgentLink::open(site, &entry).map_err(|e| e.to_string())?;
+        let facts = crate::site::Site::hello(&mut link).map_err(|e| e.to_string())?;
+        drop(link);
+        let local = crate::site::remote::local_engine(&sibling_of(&self.runner_exe, "rcfd"));
+        crate::site::remote::admit(site, &file, &entry, &facts, &local)?;
+        Ok(facts.engine["version"].as_str().unwrap_or("unknown").to_string())
+    }
+
+    /// [`Client::submit_with`] for a run on the remote site `site` (ADR 0739): the site is admitted first
+    /// ([`Client::admit_site`]; nothing is written when it is not), then the run is queued here with `site` in `run.json`
+    /// and the site's engine as `solver_version`. The local runner sends it.
+    pub fn submit_on_site(
+        &self,
+        case: &Path,
+        settings: &RunSettings,
+        launch: &LaunchSettings,
+        tags: &RunTags,
+        site: &str,
+        assistant: bool,
+    ) -> Result<String, String> {
+        self.check_launch(launch)?;
+        let version = self.admit_site(site, assistant)?;
+        self.store
+            .create_run_at(case, settings, launch, Some(version), tags, Some(site.to_string()))
+            .map_err(|e| format!("{}: {e}", case.display()))
+    }
+
+    /// [`Client::rerun`] on the remote site `site` (ADR 0739 P6: `rcfd-runner rerun <id> --site <name>`).
+    pub fn rerun_on_site(&self, id: &str, over: &RerunOptions, site: &str, assistant: bool) -> Result<String, String> {
+        check_id(id)?;
+        if !self.store.run_dir(id).join("run.json").is_file() {
+            return Err(format!("no run {id} in this project"));
+        }
+        let rec = self.store.read_record(id).map_err(|e| format!("run {id}: {e}"))?;
+        let mut settings = RunSettings::of(&rec).map_err(|e| format!("run {id}: {e}"))?;
+        let launch = LaunchSettings::of(&rec).map_err(|e| format!("run {id}: {e}"))?;
+        if let Some(p) = over.priority {
+            settings.priority = p;
+        }
+        if let Some(t) = over.threads {
+            settings.threads = t;
+        }
+        if let Some(m) = over.mem_mb {
+            settings.mem_mb = Some(m);
+        }
+        self.check_launch(&launch)?;
+        let version = self.admit_site(site, assistant)?;
+        self.store
+            .create_rerun_at(&rec, &settings, &launch, Some(version), Some(site.to_string()))
+            .map_err(|e| format!("rerun of {id}: {e}"))
     }
 
     /// A new queued run of run `id`'s case as it was then (ADR 0734 P3, Q6 (a)): from `runs/<id>/case.snapshot` with

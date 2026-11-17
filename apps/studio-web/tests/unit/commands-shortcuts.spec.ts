@@ -2,6 +2,7 @@
 // together), none takes a key the Electron menu, Chromium, Windows or another Studio item (F-829 undo and redo, F-810
 // the time panel) holds, the keys the surfaces bind are the ones the table lists, and chords are read the same way on
 // every keyboard layout. The running Electron menu is checked against the table by tests/e2e/commands.spec.ts.
+import { FLY_KEYS } from '../../src/renderer/field/camera.js';
 import { expect, test } from '@playwright/test';
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
@@ -119,9 +120,11 @@ test.describe('the table is the one the window uses', () => {
     expect(editor).toMatch(/\(e\.ctrlKey \|\| e\.metaKey\) && !e\.altKey && !e\.shiftKey && e\.key\.toLowerCase\(\) === 's'/);
     const canvas = readFileSync(path.join(renderer, 'field', 'FieldCanvas.tsx'), 'utf8');
     const block = canvas.slice(canvas.indexOf('key(key) {'), canvas.indexOf('default:', canvas.indexOf('key(key) {')));
-    const cases = [...block.matchAll(/case '([^']+)':/g)].map((m) => chord(m[1]!)).sort();
+    const cases = [...block.matchAll(/case '([^']+)':/g)].map((m) => chord(m[1]!));
+    // ADR 0801 Addendum 22: and the fly keys, live while the right button is held (FLY_KEYS of field/camera.ts)
+    const fly = [...FLY_KEYS].map((code) => chord(code.replace(/^Key/, '')));
     const listed = SHORTCUTS.filter((s) => s.scope === 'field-view').map((s) => s.keys).sort();
-    expect(cases).toEqual(listed);
+    expect([...cases, ...fly].sort()).toEqual(listed);
   });
 });
 

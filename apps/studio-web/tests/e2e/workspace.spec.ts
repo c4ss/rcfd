@@ -266,6 +266,126 @@ test('the keyboard: the scrubber is a slider with arrow keys, Page Up and Down, 
   await shot(page, '03-keyboard');
 });
 
+test('ADR 0801 Addendum 22: Play steps one stored snapshot a second; the 2D cavity is face on, orthographic, pans and zooms only', async () => {
+  test.setTimeout(90_000);
+  const { page } = studio!;
+  await selectRun(page, CAVITY);
+  const slider = scrubber(page);
+  await page.mouse.move(5, 5);
+  await slider.focus();
+  await page.keyboard.press('Home');
+  await settled(page);
+  // the field view: orthographic, straight along the thin axis, framed; the scale bar from the start
+  const canvas = page.locator('.fv-frame canvas');
+  await expect(canvas).toHaveAttribute('data-camera', 'orthographic');
+  await expect(canvas).toHaveAttribute('data-camera-forward', '0.00000 0.00000 -1.00000');
+  await expect(canvas).toHaveAttribute('data-camera-moved', 'false');
+  await expect(page.locator('.fv-scalebar')).toBeVisible();
+  await expect(page.locator('.fv-frame')).toHaveAttribute('aria-label', /Arrow keys pan/);
+  const eye0 = (await canvas.getAttribute('data-camera-eye'))!;
+  const zoom0 = Number(await canvas.getAttribute('data-camera-zoom'));
+  const box = (await canvas.boundingBox())!;
+  const cx = Math.round(box.x + box.width / 2);
+  const cy = Math.round(box.y + box.height / 2);
+  // the middle and right buttons pan; the wheel zooms toward the cursor; nothing turns the view
+  for (const button of ['middle', 'right'] as const) {
+    await page.mouse.move(cx, cy);
+    await page.mouse.down({ button });
+    await page.mouse.move(cx + 50, cy - 20, { steps: 4 });
+    await page.mouse.up({ button });
+  }
+  await expect(canvas).toHaveAttribute('data-camera-moved', 'true');
+  expect(await canvas.getAttribute('data-camera-eye')).not.toBe(eye0);
+  await page.mouse.move(cx - 100, cy + 40);
+  await page.mouse.wheel(0, -300);
+  await expect.poll(async () => Number(await canvas.getAttribute('data-camera-zoom'))).toBeLessThan(zoom0 * 0.8);
+  await page.locator('.fv-frame').focus();
+  await page.keyboard.press('ArrowLeft');
+  await expect(canvas).toHaveAttribute('data-camera-forward', '0.00000 0.00000 -1.00000');
+  await expect(canvas).toHaveAttribute('data-camera-up', '0.00000 1.00000 0.00000');
+  await page.mouse.move(5, 5);
+  await shot(page, '04a-2d-panned-zoomed');
+  // Face on keeps the zoom; Reset view frames the domain again
+  const zoomed = await canvas.getAttribute('data-camera-zoom');
+  await page.getByRole('button', { name: 'View face on (along z)' }).click();
+  expect(await canvas.getAttribute('data-camera-zoom')).toBe(zoomed);
+  await page.getByRole('button', { name: 'Reset view' }).click();
+  await expect(canvas).toHaveAttribute('data-camera-moved', 'false');
+  expect(await canvas.getAttribute('data-camera-eye')).toBe(eye0);
+
+  // Play: the stop moves once a second
+  await slider.focus();
+  await page.keyboard.press('Home');
+  await settled(page);
+  await page.evaluate(() => {
+    const w = window as unknown as { __stops: number[]; __obs?: MutationObserver };
+    w.__stops = [performance.now()];
+    w.__obs = new MutationObserver(() => w.__stops.push(performance.now()));
+    w.__obs.observe(document.querySelector('.ws')!, { attributes: true, attributeFilter: ['data-index'] });
+  });
+  await page.getByRole('button', { name: 'Play', exact: true }).click();
+  await page.waitForTimeout(4300);
+  await page.getByRole('button', { name: 'Pause', exact: true }).click();
+  const stops = await page.evaluate(() => {
+    const w = window as unknown as { __stops: number[]; __obs?: MutationObserver };
+    w.__obs?.disconnect();
+    return w.__stops;
+  });
+  const gaps = stops.slice(1).map((t, i) => t - stops[i]!);
+  test.info().annotations.push({ type: 'play gaps (ms)', description: gaps.map((g) => Math.round(g)).join(', ') });
+  // the first gap runs from before the click; every stop after it a second (its field drawn well within it)
+  expect(stops.length - 1, 'four stops in 4.3 s').toBe(4);
+  for (const g of gaps.slice(1)) {
+    expect(g).toBeGreaterThanOrEqual(950);
+    expect(g).toBeLessThan(1400);
+  }
+  await expect(slider).toHaveAttribute('aria-valuenow', '4');
+
+  // Q-A22-3: the speed menu beside Play (a pictogram; its name says the speed), remembered per run
+  const speedButton = page.locator('.tp-speed');
+  await expect(speedButton).toHaveAccessibleName('Play speed 1×, one snapshot a second');
+  expect((await speedButton.innerText()).trim(), 'no word at rest').toBe('');
+  await speedButton.click();
+  const items = page.getByRole('menuitemradio');
+  await expect(items).toHaveText(['0.25×', '0.5×', '1×', '2×', '4×']);
+  await expect(page.getByRole('menuitemradio', { name: '1×' })).toHaveAttribute('aria-checked', 'true');
+  await page.getByRole('menuitemradio', { name: '4×' }).click();
+  await expect(speedButton).toHaveAccessibleName('Play speed 4×, 4 snapshots a second');
+  await expect(speedButton).toHaveAttribute('data-speed', '4');
+  await page.mouse.move(5, 5);
+  await shot(page, '04b-play-speed-4x');
+  await slider.focus();
+  await page.keyboard.press('Home');
+  await settled(page);
+  await page.evaluate(() => {
+    const w = window as unknown as { __stops: number[]; __obs?: MutationObserver };
+    w.__stops = [];
+    w.__obs = new MutationObserver(() => w.__stops.push(performance.now()));
+    w.__obs.observe(document.querySelector('.ws')!, { attributes: true, attributeFilter: ['data-index'] });
+  });
+  await page.getByRole('button', { name: 'Play', exact: true }).click();
+  await page.waitForTimeout(2100);
+  await page.getByRole('button', { name: 'Pause', exact: true }).click();
+  const fast = await page.evaluate(() => {
+    const w = window as unknown as { __stops: number[]; __obs?: MutationObserver };
+    w.__obs?.disconnect();
+    return w.__stops;
+  });
+  const fastGaps = fast.slice(1).map((t, i) => t - fast[i]!);
+  test.info().annotations.push({ type: 'play gaps at 4x (ms)', description: fastGaps.map((g) => Math.round(g)).join(', ') });
+  expect(fast.length, 'about eight stops in 2.1 s at 4x').toBeGreaterThanOrEqual(6);
+  expect(Math.min(...fastGaps)).toBeGreaterThanOrEqual(230);
+  expect([...fastGaps].sort((p, q) => p - q)[Math.floor(fastGaps.length / 2)]!).toBeLessThan(400);
+  // another run plays at 1x; back on this one, 4x is remembered
+  await selectRun(page, 'r-20261028T152641-97f1');
+  await expect(speedButton).toHaveAttribute('data-speed', '1');
+  await selectRun(page, CAVITY);
+  await expect(speedButton).toHaveAttribute('data-speed', '4');
+  await speedButton.click();
+  await page.getByRole('menuitemradio', { name: '1×' }).click();
+  await expect(speedButton).toHaveAttribute('data-speed', '1');
+});
+
 test('Follow live: the line stays on the running run’s newest snapshot; moving it stops following; Follow live brings it back', async () => {
   test.setTimeout(120_000);
   const { page } = studio!;

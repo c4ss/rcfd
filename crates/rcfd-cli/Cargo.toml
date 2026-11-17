@@ -27,6 +27,10 @@ rcfd-api.workspace = true
 # ADR 0731 Q1 (a): `rcfd project init` makes a project folder through the workspace layer (a workspace crate; no
 # third-party crate added). rcfd-project is a dev-dependency only: the tests open what the command made.
 rcfd-workspace.workspace = true
+# ADR 0739: `rcfd check --inputs` hashes with rcfd-project's filehash; `rcfd site` reads the sites file and talks to a
+# site through rcfd-runner's site layer (both workspace crates, already below rcfd-api).
+rcfd-project.workspace = true
+rcfd-runner = { path = "../rcfd-runner" }
 serde_json.workspace = true
 
 [[bin]]
@@ -35,4 +39,4 @@ path = "src/main.rs"
 
 [dev-dependencies]
 serde_json.workspace = true
-rcfd-project.workspace = true
+wat = "1"

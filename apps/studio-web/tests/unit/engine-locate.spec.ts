@@ -164,6 +164,7 @@ test.describe('the switches on the command line', () => {
       engineDir: path.resolve(cwd, 'eng'),
       noEngine: false,
       service: '127.0.0.1:9',
+      keepRunner: false,
       claude: null,
       problems: [],
     });
@@ -171,18 +172,26 @@ test.describe('the switches on the command line', () => {
       engineDir: path.resolve(cwd, '/x'),
       noEngine: true,
       service: 'localhost:7',
+      keepRunner: false,
       claude: null,
       problems: [],
     });
     // electron . : the app path is not a switch value
-    expect(engineSwitches(['electron', '.'], true, cwd)).toEqual({ engineDir: null, noEngine: false, service: null, claude: null, problems: [] });
+    expect(engineSwitches(['electron', '.'], true, cwd)).toEqual({ engineDir: null, noEngine: false, service: null, keepRunner: false, claude: null, problems: [] });
     expect(engineSwitches(['rcfd-studio', '--engine-dir', '--no-engine', '--service='], false, cwd)).toEqual({
       engineDir: null,
       noEngine: true,
       service: null,
+      keepRunner: false,
       claude: null,
       problems: ['--engine-dir needs a value', '--service needs a value'],
     });
+  });
+  test('G7 as amended 2026-11-17: --keep-runner is a switch with no value, and never the project folder', () => {
+    expect(engineSwitches(['rcfd-studio.exe', '--keep-runner', 'proj'], false, cwd)).toMatchObject({ keepRunner: true, problems: [] });
+    expect(engineSwitches(['electron', '.', '--engine-dir', 'eng', '--keep-runner'], true, cwd)).toMatchObject({ engineDir: path.resolve(cwd, 'eng'), keepRunner: true });
+    expect(engineSwitches(['rcfd-studio.exe', '--keep-runners'], false, cwd).keepRunner).toBe(false);
+    expect(projectArgument(['rcfd-studio', '--keep-runner', 'proj'], false, cwd)).toBe(path.resolve(cwd, 'proj'));
   });
   test('a switch value is never taken for the project folder (F-837)', () => {
     expect(projectArgument(['rcfd-studio.exe', '--engine-dir', 'C:\\eng', 'C:\\p\\quick'], false, 'C:\\')).toBe(path.resolve('C:\\', 'C:\\p\\quick'));

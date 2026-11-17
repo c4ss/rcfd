@@ -149,13 +149,102 @@ pub fn cmd_restart(args: &[String]) -> u8 {
     super::cmd_run(&a)
 }
 
+/// One file of an input: a file input is itself (`path` empty); a folder input (an OpenFOAM mesh) lists every file
+/// below it, `/` between path components, sorted.
+fn input_files(path: &Path) -> Result<Vec<Value>, String> {
+    let hash = |p: &Path| rcfd_project::filehash::hash_path(p).map_err(|e| format!("{}: {e}", p.display()));
+    if !path.is_dir() {
+        let h = hash(path)?;
+        return Ok(vec![json!({"path": "", "hash": h.hash, "bytes": h.bytes})]);
+    }
+    let mut out = Vec::new();
+    let mut stack = vec![(path.to_path_buf(), String::new())];
+    while let Some((dir, rel)) = stack.pop() {
+        let rd = std::fs::read_dir(&dir).map_err(|e| format!("{}: {e}", dir.display()))?;
+        for e in rd.flatten() {
+            let name = e.file_name().to_string_lossy().into_owned();
+            let r = if rel.is_empty() { name } else { format!("{rel}/{name}") };
+            let ft = e.file_type().map_err(|x| format!("{}: {x}", e.path().display()))?;
+            if ft.is_dir() {
+                stack.push((e.path(), r));
+            } else {
+                let h = hash(&e.path())?;
+                out.push(json!({"path": r, "hash": h.hash, "bytes": h.bytes}));
+            }
+        }
+    }
+    out.sort_by(|a, b| a["path"].as_str().cmp(&b["path"].as_str()));
+    Ok(out)
+}
+
+/// `rcfd check <case> --inputs [--json] [--case-dir <dir>] [--set path=value]...` (ADR 0739 P4): every file the case
+/// reads (`rcfd_api::inputs::case_inputs`) with its `fnv64` hash and size (`rcfd_project::filehash`); exit 3 when one
+/// is missing or unreadable, naming it.
+fn check_inputs(path: &str, args: &[String]) -> u8 {
+    let loaded = match opt(args, "--case-dir") {
+        Some(dir) => super::load_case_in(path, Path::new(dir)),
+        None => Case::load(path).map_err(|d| {
+            for x in &d {
+                eprintln!("{path}: {x}");
+            }
+            INVALID
+        }),
+    };
+    let mut case = match loaded {
+        Ok(c) => c,
+        Err(code) => return code,
+    };
+    if let Err(code) = apply_overrides(&mut case, args, path) {
+        return code;
+    }
+    let mut list = Vec::new();
+    let mut code = OK;
+    for i in rcfd_api::inputs::case_inputs(&case) {
+        let mut v = json!({"key": i.key, "file": i.file, "path": i.path.display().to_string()});
+        match input_files(&i.path) {
+            Ok(files) => {
+                let h = rcfd_project::filehash::hash_path(&i.path).ok();
+                v["kind"] = json!(if i.path.is_dir() { "folder" } else { "file" });
+                v["hash"] = json!(h.as_ref().map(|h| h.hash.clone()));
+                v["bytes"] = json!(h.as_ref().map(|h| h.bytes));
+                v["files"] = json!(files);
+            }
+            Err(e) => {
+                eprintln!("{path}: {}: {e}", i.key);
+                v["error"] = json!(e);
+                code = INVALID;
+            }
+        }
+        list.push(v);
+    }
+    if flag(args, "--json") {
+        let out = json!({"ok": code == OK, "case": path, "inputs": list});
+        println!("{}", serde_json::to_string_pretty(&out).unwrap_or_default());
+    } else {
+        for v in &list {
+            println!(
+                "{}\t{}\t{}\t{}",
+                v["key"].as_str().unwrap_or(""),
+                v["file"].as_str().unwrap_or(""),
+                v["hash"].as_str().unwrap_or("-"),
+                v["bytes"].as_u64().map_or_else(|| "-".to_string(), |b| b.to_string())
+            );
+        }
+    }
+    code
+}
+
 /// `rcfd check <case> [--json] [--set ...]`.
 pub fn cmd_check(args: &[String]) -> u8 {
-    let value_opts = [EXTRA_VALUE_OPTS, &["--refine"]].concat();
+    let value_opts = [EXTRA_VALUE_OPTS, &["--refine", "--case-dir"]].concat();
     let pos = positionals(args, &value_opts);
     let [path] = pos[..] else {
         return usage_error("check takes exactly one case file");
     };
+    // ADR 0739 P4: the files the case reads, with their hashes; nothing is run
+    if flag(args, "--inputs") {
+        return check_inputs(path, args);
+    }
     // ADR 0737: the case facts and Refine x2, printed as JSON; nothing is written
     if flag(args, "--facts") || opt(args, "--refine").is_some() {
         return check_facts_or_refine(path, args);

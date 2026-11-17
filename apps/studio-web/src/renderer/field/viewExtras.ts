@@ -6,16 +6,42 @@
 // - the scale bar of a face-on 2D view: the longest 1, 2 or 5 times a power of ten that is at most a quarter of the
 //   view's width (the egui Studio's rule).
 //
-// The store names no length unit. The lengths are the stored mesh's coordinates; the engine's settings are SI, so the
-// Studio writes m beside them and says where that comes from (G6; the gap is recorded in ADR 0801, F-837 addendum).
+// ADR 0738 P5 (E-809e, F-837): the lengths are the stored mesh's coordinates, whose unit the engine names
+// (`length_unit`: data.open on the service route, the reply of every derived picture). store.rts does not write it
+// (Q5), so a local store before its first derived picture shows the engine's documented store unit, held to the
+// engine's replies by tests/unit/derive-bridge.spec.ts. Each length says where its unit comes from (G6).
 import type { Layers } from './derived.js';
 
 export type RangeMode = 'snapshot' | 'run' | 'fixed';
 export const RANGE_MODES: readonly RangeMode[] = ['snapshot', 'run', 'fixed'];
 
-/** The unit the Studio writes beside the stored mesh's lengths (not the store's: it names none). */
-export const LENGTH_UNIT = 'm';
-export const LENGTH_UNIT_WHY = 'The store names no length unit; the lengths are the stored mesh’s coordinates, and the engine’s settings are SI (m).';
+/**
+ * The engine's documented unit of a stored mesh's coordinates (`rcfd_tsstore::LENGTH_UNIT`: the solver's mesh after
+ * mesh.scale and [mesh.transform], in metres), for a store no engine reply has named one for yet.
+ */
+export const STORE_LENGTH_UNIT = 'm';
+
+/** The unit of a store's lengths and where it comes from. */
+export interface LengthUnit {
+  readonly unit: string;
+  readonly from: 'data.open' | 'derive' | 'documented';
+  /** Said in the tooltips of the lengths (G6). */
+  readonly why: string;
+}
+
+/**
+ * The unit of the stored mesh's lengths: the one `data.open` named (the service route), else the one the engine's
+ * derived picture of this store named (`length_unit` of its reply), else the engine's documented store unit.
+ */
+export function lengthUnitOf(opened: string | null, derived: string | null): LengthUnit {
+  if (opened) return { unit: opened, from: 'data.open', why: `Lengths in ${opened}, the unit the engine names for the stored mesh (data.open, length_unit).` };
+  if (derived) return { unit: derived, from: 'derive', why: `Lengths in ${derived}, the unit the engine names for the stored mesh (its derived picture, length_unit).` };
+  return {
+    unit: STORE_LENGTH_UNIT,
+    from: 'documented',
+    why: `Lengths in ${STORE_LENGTH_UNIT}: the engine stores the mesh in metres, after mesh.scale and [mesh.transform] (ADR 0738); store.rts does not write the unit.`,
+  };
+}
 
 /** Axis names. */
 export const AXIS = ['x', 'y', 'z'] as const;

@@ -41,6 +41,16 @@ export interface SurfaceBudget {
   readonly rest: string;
   /** The largest number of visible chrome words at rest. */
   readonly budget: number;
+  /**
+   * For a surface that is a list: the chrome words each item's line may add to `budget` (the surface's budget with n
+   * items is budget + n × perItem).
+   */
+  readonly perItem?: number;
+}
+
+/** A surface's budget with `items` lines (a surface with no `perItem` has its fixed budget). */
+export function budgetOf(b: SurfaceBudget, items = 0): number {
+  return b.budget + items * (b.perItem ?? 0);
 }
 
 /** APPROVED BY THE MAINTAINER 2026-11-17 (F-833): each budget is the AFTER count of the sweep, enforced by the test. */
@@ -65,8 +75,19 @@ export const WORD_BUDGETS = {
   progress: { what: 'progress rows', rest: 'a project opening that lasts', budget: 3 },
   // F-818 (2026-11-17): the Studio's settings page the maintainer asked for (Q-818-5), set at its count when it was
   // built (the brand, the page's name, the Theme section's name and its four choices); approved by the maintainer
-  // 2026-11-17 (ADR 0801 Addendum 20)
-  'studio-settings': { what: 'Studio settings', rest: 'opened from Ctrl+, with no project open, the theme Light', budget: 9 },
+  // 2026-11-17 (ADR 0801 Addendum 20). The maintainer's answer to Q-RL-1 (2026-11-17, ADR 0801 "Addendum: Runner
+  // closes with the Studio"): those 9, plus a visible label of 5 words or fewer on the setting "Keep the runner going
+  // after the Studio closes", makes 14. Counted with no sites file; the Sites section is counted on its own below.
+  'studio-settings': { what: 'Studio settings', rest: 'opened from Ctrl+, with no project open, the theme Light, no sites file', budget: 14 },
+  // The same answer: the Sites section (ADR 0739, ADR 0801 Addendum 24) has its own budget, its heading plus one line
+  // per site. Site names, hosts and states are data, so a site's line has one chrome word (Check); the sites file's
+  // line is its path (data), which is the Open button.
+  'studio-settings-sites': {
+    what: 'Studio settings, the Sites section',
+    rest: 'a sites file of two ssh sites, none checked',
+    budget: 1,
+    perItem: 1,
+  },
 } as const satisfies Readonly<Record<string, SurfaceBudget>>;
 
 export type SurfaceId = keyof typeof WORD_BUDGETS;

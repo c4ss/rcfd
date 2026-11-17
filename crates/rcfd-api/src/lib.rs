@@ -22,6 +22,7 @@ pub mod fan_case;
 pub mod fieldstore;
 pub mod inflate;
 pub mod init;
+pub mod inputs;
 pub mod linsolver;
 pub mod lumped;
 pub mod mesh_preview;

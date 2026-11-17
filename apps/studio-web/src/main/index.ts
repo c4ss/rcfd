@@ -74,6 +74,8 @@ import { RecentStore } from './project/recent.js';
 import { PortBridge, type PortLike } from './service/bridge.js';
 import { ServiceClient } from './service/client.js';
 import { serviceConfig } from './service/config.js';
+import type { KeepRunner, RunnerChoice } from '../shared/runner-lifetime.js';
+import { deriveEngine } from './data/derive.js';
 import { DataPorts } from './data/port.js';
 import { DataRoots } from './data/roots.js';
 import { StudioData } from './data/studio-data.js';
@@ -114,7 +116,8 @@ const serviceSetup = serviceConfig(process.env, path.join(app.getPath('userData'
 const service = new ServiceClient(serviceSetup);
 /** Bulk field data (F-804): R2 reads local stores inside the data roots, R1 goes through the service (src/main/data/). */
 const roots = DataRoots.fromEnv(process.env);
-const data = new StudioData(service, roots);
+// ADR 0738: the engine's rcfd makes the derived pictures of a local store (src/main/data/derive.ts)
+const data = new StudioData(service, roots, undefined, deriveEngine(process.env, isFile, engineChoice));
 const dataPorts = new DataPorts(data);
 /** P1 and P2 measurement only (scripts/measure-service.mjs): the client, reachable from Playwright's main-process evaluate. */
 if (process.env['RCFD_STUDIO_BENCH'] === '1') (globalThis as { rcfdStudioBench?: unknown }).rcfdStudioBench = { service };
@@ -153,10 +156,20 @@ const themeTargets: ThemeTargets = {
   },
 };
 
+/**
+ * G7 as amended 2026-11-17 (src/shared/runner-lifetime.ts): the runner the Studio started closes with it, unless the
+ * --keep-runner switch or the setting "Keep the runner going after the Studio closes" keeps it.
+ */
+const keepRunner = (): KeepRunner => (switches.keepRunner ? 'switch' : theme.keepRunner ? 'setting' : null);
+
 /** The project home (F-805): the engine's project server (src/main/project/config.ts). */
 const projects = new ProjectHome({
   engine,
+  keepRunner,
   recent: new RecentStore(recentFile(process.env, app.getPath('userData'))),
+  // F-848 (ADR 0739 Q8): the Where choice of each project, beside the recent list; the sites file opens in the system's editor
+  siteChoicesFile: path.join(path.dirname(recentFile(process.env, app.getPath('userData'))), 'site-choices.json'),
+  openPath: (file) => shell.openPath(file),
   pickFolder: async () => {
     const win = BrowserWindow.getFocusedWindow() ?? BrowserWindow.getAllWindows()[0];
     const options = { title: 'Open project folder', properties: ['openDirectory' as const] };
@@ -287,6 +300,14 @@ const handlers: { [C in Channel]: Handler<C> } = {
       setTimeout(() => quitWithoutAsking(), 50);
     }
   },
+  'runner.keep.get': (args) => {
+    noArgs('runner.keep.get', args);
+    return { setting: theme.keepRunner, switch: switches.keepRunner };
+  },
+  'runner.keep.set': async (args) => {
+    if (args.length !== 1) throw new Error('runner.keep.set: takes one argument, true or false');
+    return { setting: await theme.setKeepRunner(args[0]), switch: switches.keepRunner };
+  },
   'theme.get': (args) => {
     noArgs('theme.get', args);
     return theme.state(themeTargets);
@@ -298,7 +319,7 @@ const handlers: { [C in Channel]: Handler<C> } = {
   'app.closeAnswer': (args, sender) => {
     const [request, answer] = args;
     if (args.length !== 2 || !Number.isSafeInteger(request) || !(CLOSE_ANSWERS as readonly unknown[]).includes(answer)) {
-      throw new Error('app.closeAnswer: takes a request number and one of asking, close, cancel');
+      throw new Error(`app.closeAnswer: takes a request number and one of ${CLOSE_ANSWERS.join(', ')}`);
     }
     closeAnswered(sender, request as number, answer as CloseAnswer);
   },
@@ -570,8 +591,12 @@ function openWindow(): void {
   win.on('close', (e) => {
     if (closeAllowed.has(win)) return;
     e.preventDefault();
-    void askToClose(win).then((ok) => {
+    void askToClose(win).then(async (ok) => {
       if (!ok || win.isDestroyed()) return;
+      // G7 as amended 2026-11-17: the last window's close ends the open project's runner as the page's answer says,
+      // while the window is still there (Stop runs and close waits for the runs to end)
+      if (BrowserWindow.getAllWindows().filter((w) => !w.isDestroyed()).length === 1) await endRunner();
+      if (win.isDestroyed()) return;
       closeAllowed.add(win);
       win.close();
     });
@@ -668,8 +693,20 @@ function askToClose(win: BrowserWindow): Promise<boolean> {
 function closeAnswered(sender: WebContents, n: number, answer: CloseAnswer): void {
   const r = closeRequests.get(n);
   if (!r || r.contents !== sender) return;
-  if (answer === 'asking') r.ack();
-  else r.done(answer === 'close');
+  if (answer === 'asking') return r.ack();
+  if (answer === 'stop-runs' || answer === 'keep-runs') runnerAnswer = answer === 'stop-runs' ? 'stop' : 'keep';
+  r.done(answer !== 'cancel');
+}
+
+// G7 as amended 2026-11-17 (src/shared/runner-lifetime.ts): the page's answer for the active runs of the runner the
+// Studio owns. A close that did not ask (test mode's quit, a page that did not answer) is `unasked`: an idle owned
+// runner is shut down, one with active runs is kept. Done once, before the project server stops.
+let runnerAnswer: RunnerChoice = 'unasked';
+let runnerEnded: Promise<void> | null = null;
+const RUNNER_END_MS = 60_000;
+function endRunner(): Promise<void> {
+  runnerEnded ??= Promise.race([projects.endRunner(runnerAnswer), new Promise<void>((done) => setTimeout(done, RUNNER_END_MS))]).catch(() => undefined);
+  return runnerEnded;
 }
 
 function quitWithoutAsking(): void {
@@ -677,8 +714,10 @@ function quitWithoutAsking(): void {
   app.quit();
 }
 
-// Quitting: every window is asked first (F-837), then the client stops; a service the Studio started is stopped too
-// unless it holds sessions (G7, client.ts). A window that cancels cancels the quit, and nothing is stopped.
+// Quitting: every window is asked first (F-837), then the open project's runner gets the answer's step (G7 as amended
+// 2026-11-17), then the client stops; a service this start of the Studio started is stopped too (with --keep-runner or
+// the setting, only when it holds no session, as before; one found running only then, client.ts). A window that cancels
+// cancels the quit, and nothing is stopped.
 let serviceStopped = false;
 let quitAsking = false;
 app.on('before-quit', (e) => {
@@ -693,9 +732,15 @@ app.on('before-quit', (e) => {
     if (!answers.every(Boolean)) return;
     for (const w of windows) closeAllowed.add(w);
     serviceStopped = true;
-    const atMost = new Promise((done) => setTimeout(done, 3000));
     // the project server of an open project ends with the Studio: it only reads, and holds no run (G7)
-    void Promise.race([Promise.all([service.shutdown(), projects.shutdown(), caseEditor.shutdown()]), atMost])
+    void endRunner()
+      .then(() => {
+        const atMost = new Promise((done) => setTimeout(done, 3000));
+        return Promise.race([
+          Promise.all([service.shutdown({ keepWithSessions: keepRunner() !== null }), projects.shutdown(), caseEditor.shutdown()]),
+          atMost,
+        ]);
+      })
       .catch(() => undefined)
       .finally(() => app.quit());
   });

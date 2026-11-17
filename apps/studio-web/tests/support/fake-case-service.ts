@@ -279,6 +279,22 @@ export class FakeCaseService {
         this.emit(String(p['session']), 'setting_changed', { path });
         return ok({ removed: path });
       }
+      case 'mesh.refine': {
+        // ADR 0737: every count of mesh.nx, mesh.ny, mesh.nz the session holds, doubled; {apply: true} sets them
+        const x = needSession();
+        if (!x) return;
+        const edits = ['mesh.nx', 'mesh.ny', 'mesh.nz'].flatMap((path) => {
+          const before = getAt(x.tree, path);
+          return typeof before === 'number' ? [{ path, before, after: before * 2 }] : [];
+        });
+        if (p['apply'] === true) {
+          for (const e of edits) {
+            setAt(x.tree, e.path, e.after);
+            this.emit(String(p['session']), 'setting_changed', { path: e.path, live: false });
+          }
+        }
+        return ok({ factor: 2, edits, cells: 0, cells_after: 0, two_d: false, applied: p['apply'] === true });
+      }
       case 'settings.validate': {
         if (!needSession()) return;
         return ok({ ok: this.diagnostics.length === 0, diagnostics: this.diagnostics });

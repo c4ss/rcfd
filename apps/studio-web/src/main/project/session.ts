@@ -39,6 +39,7 @@ import { RunControl, settle, type ControlDeps } from './control.js';
 import { entriesOf, type Names } from './listing.js';
 import { isActive, readRunDetail, readRuns, stale } from './runs.js';
 import type { ProjectServerLike } from './server.js';
+import type { RunSite } from '../../shared/sites.js';
 
 /** Pages the Studio reads of a paged list (100 entries each): the home shows at most 2000 runs and 2000 meshes. */
 export const MAX_PAGES = 20;
@@ -62,6 +63,13 @@ export interface SessionDeps {
   runPollMs?: number;
   /** F-807: run control (the not-read-only server and the runner's CLI); without it every run-control action is refused. */
   control?: ControlDeps;
+  /** F-848: the link state of the project's remote runs (src/main/project/sites.ts); without it the view has no runSites. */
+  runSites?(folder: string): RunSitesLike;
+}
+
+/** F-848: what the session asks of its runs' sites after each read of the run list (null: nothing changed). */
+export interface RunSitesLike {
+  update(ids: readonly string[]): Promise<Readonly<Record<string, RunSite>> | null>;
 }
 
 const message = (e: unknown): string => (e instanceof Error ? e.message : String(e));
@@ -250,6 +258,8 @@ export class ProjectSession {
   private boostUntil = 0;
   private polling = false;
   private slowTimers = new Set<NodeJS.Timeout>();
+  /** F-848: the remote runs' link state (null: not followed). */
+  private readonly sites: RunSitesLike | null;
   view: ProjectView;
 
   private constructor(
@@ -266,6 +276,7 @@ export class ProjectSession {
     this.pollMs = deps.pollMs ?? FEED_POLL_MS;
     this.runPollMs = deps.runPollMs ?? RUN_POLL_MS;
     this.runsReadAt = Date.now();
+    this.sites = deps.runSites?.(folder) ?? null;
     const now = deps.now();
     this.view = {
       folder,
@@ -450,6 +461,7 @@ export class ProjectSession {
             if (read) this.set({ runs: read.runs, skippedRuns: read.skippedRuns, readAt: this.deps.now() });
           }
           await this.readDetails(k === FULL);
+          await this.readSites();
         }
       } finally {
         this.refreshing = null;
@@ -487,6 +499,30 @@ export class ProjectSession {
     }
     if (this.closed || server !== this.server) return;
     this.set({ runDetails: details, runDetailErrors: errors });
+  }
+
+  /** F-848: the link state of the listed remote runs, when it changed (nothing at all while there is no sites file). */
+  private async readSites(): Promise<void> {
+    if (!this.sites || this.closed) return;
+    let next: Readonly<Record<string, RunSite>> | null = null;
+    try {
+      next = await this.sites.update(this.view.runs.items.map((r) => r.id));
+    } catch {
+      return;
+    }
+    if (next && !this.closed) this.set({ runSites: next });
+  }
+
+  /** The close's "Stop runs and close": cancel_run through the run-control server; false when it cannot be reached. */
+  async cancelForClose(run: string): Promise<boolean> {
+    if (!this.deps.control || this.closed) return false;
+    this.control ??= new RunControl(this.folder, this.deps.control);
+    try {
+      await this.control.cancelForClose(run);
+      return true;
+    } catch {
+      return false;
+    }
   }
 
   /** F-837 (ADR 0733): the runner writes its budgets through the run-control server (made on first use, as for an action). */

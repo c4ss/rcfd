@@ -11,8 +11,9 @@
 .hi-button {
   max-width: 260px;
 }
-/* nothing to undo or redo: the arrow alone, the words its name (G22); the button stays a ghost on the band */
-.hi-button[data-disabled] {
+/* nothing to undo or redo: the arrow alone, the words its name (G22); the button stays a ghost on the band (above
+   primitives.css's .ui-button[data-disabled] by specificity: this file can be linked before it, see the panel's focus) */
+.hi-controls .hi-button[data-disabled] {
   background: transparent;
   border-color: transparent;
   color: var(--role-text-2);
@@ -55,8 +56,10 @@
   overflow-wrap: anywhere;
 }
 /* The panel moves focus itself (to the safe choice, or to the title); Enter acts on what has it, so its focus shows
-   however the panel was opened, Ctrl+Z included (a modifier key does not count as keyboard use for focus-visible). */
-.hi-panel-title:focus,
+   however the panel was opened, Ctrl+Z included (a modifier key does not count as keyboard use for focus-visible).
+   Both selectors outrank base.css's :focus:not(:focus-visible) {outline: none} by specificity, not by stylesheet order:
+   since the project home imports the undo controls (ADR 0736), this file is a shared chunk linked before base.css. */
+.hi-panel .hi-panel-title:focus,
 .hi-panel .ui-button[data-focused] {
   outline: var(--focus-width) solid var(--role-focus-ring);
   outline-offset: var(--focus-offset);

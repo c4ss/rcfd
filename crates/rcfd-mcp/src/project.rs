@@ -383,6 +383,12 @@ pub(crate) fn tools() -> Vec<Tool> {
             },
         },
         Tool {
+            name: "list_sites",
+            description: "The run sites of the user's sites file (ADR 0739): name, kind, host, engine and work folders, budgets, whether MCP clients may name the site (assistant) and whether the user confirmed it. start_run with site queues a run on one with assistant true. Nothing is started and nothing is sent.",
+            access: Access::Read,
+            schema: || obj(json!({}), &[]),
+        },
+        Tool {
             name: "start_run",
             description: "Queue a run of a project case with the project's run service and start the service if none is alive. set holds rcfd run --set overrides (path=value). Returns the run id.",
             access: Access::Execute,
@@ -401,7 +407,8 @@ pub(crate) fn tools() -> Vec<Tool> {
                         "dry_run": {"type": "boolean", "description": "return what the call would do (case, set, store and run-time plans, the check, memory, whether a runner would start) and write nothing (ADR 0737)"},
                         "continue_from": {"type": "string", "description": "a run id of this project: the run starts from that ended run's output/restart.rcfd"},
                         "max_steps": {"type": "integer", "minimum": 1, "description": "at most this many steps"},
-                        "from_run": {"type": "string", "description": "instead of case or new_case: rerun that run id from its case.snapshot with its run.json settings (priority, threads and mem_mb given override them); the new run.json has rerun_of"}
+                        "from_run": {"type": "string", "description": "instead of case or new_case: rerun that run id from its case.snapshot with its run.json settings (priority, threads and mem_mb given override them); the new run.json has rerun_of"},
+                        "site": {"type": "string", "description": "a site of list_sites with assistant true: the run goes there (its inputs are uploaded, its folder here is kept up to date from the site); any other site is refused before anything is sent"}
                     }),
                     &[],
                 )

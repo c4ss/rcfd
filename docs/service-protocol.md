@@ -24,6 +24,13 @@ Transport: JSON-RPC 2.0, one JSON object per line (newline-delimited), over TCP
 without an `id` are notifications and get no response. Each TCP connection gets
 its own thread, and connections share sessions.
 
+The service has no authentication. `rcfd serve` therefore listens on a loopback address only: an `--addr` that resolves
+to anything but loopback (`0.0.0.0:7878`, `10.0.0.2:7878`, a host name of another interface) is refused with exit code 2
+and a message before anything listens (ADR 0739 Q9). To reach the service from another machine, use SSH (for example an
+`ssh -L 7878:127.0.0.1:7878 <host>` forward). `--allow-unauthenticated-remote` lifts the refusal for a network the user
+trusts; anyone who can reach the port can then use the service. The default address, `127.0.0.1:7878`, and every
+loopback address behave as before.
+
 ## Limits and sandbox
 
 `ServiceConfig` bounds cell count, steps per call, case runs per `design.*` call (`max_design_evaluations`) and event-log size.

@@ -36,7 +36,9 @@ of `store.rts` (R2, ADR 0350 addendum 1). Case validation uses the engine's sche
 
 New service methods are opt-in, behind a minor protocol version. No existing method, reply shape, golden, CLI help
 text, MCP tool list or default changes without the maintainer (house rule 3). Existing tests are not edited (house
-rule 2). `crates/rcfd-api/tests/baseline_hashes.rs` is never re-recorded.
+rule 2). `crates/rcfd-api/tests/baseline_hashes.rs` is never re-recorded. A new field in a record the engine writes is
+an addition, and older readers ignore it: for example `started_by` and `studio_pid` in `.rcfd/runner.json` (the
+maintainer, 2026-11-17, ADR 0801 Q-RL-2), which no golden or baseline hash covers.
 
 ## G5. Dependencies
 
@@ -57,7 +59,31 @@ rule 2). `crates/rcfd-api/tests/baseline_hashes.rs` is never re-recorded.
 ## G7. Runs outlive the window
 
 The detached runner (`rcfd-runner`) owns runs. Closing, crashing or reloading the Studio never stops, pauses or corrupts
-a run. When the Studio starts again it reconnects and shows the true state of every run.
+a run without the user's choice. When the Studio starts again it reconnects and shows the true state of every run.
+
+Amended 2026-11-17. The maintainer, after closing the Studio and finding `rcfd-runner serve --project …` and a paused
+`rcfd run` still holding `target\release`: "the runner should close with studio by default if no external (existing)
+runner env var is specified". For active runs, their answer was: ask. So:
+
+- The Studio owns only the runner and the service it started itself in this session. The runner records who started
+  it, as `started_by` ("studio", "cli" or "mcp") in `.rcfd/runner.json`, with `studio_pid` for the Studio (the
+  maintainer, 2026-11-17, Q-RL-2). The Studio owns a runner whose record says "studio" with its own pid, and no other:
+  not the CLI's, not Claude Code's (`mcp`), not another Studio's. Only a record without `started_by` (an older runner)
+  falls back to the looks: a runner already alive when the Studio opened the project is adopted, and one that comes up
+  while it has the project open, with none alive before, is the Studio's. A service attached to through
+  `RCFD_STUDIO_SERVICE` or `--service` is never stopped by it.
+- On a close (the window, Alt+F4, quit, Close project), an owned runner with no run queued, running or paused is shut
+  down quietly (`rcfd-runner shutdown`). With active runs the close asks, naming each run: Stop runs and close (each run
+  is cancelled through the engine and keeps its records; then the runner is shut down), Keep them running and close (the
+  runner stays and the next start adopts it), or Cancel (the default). One prompt asks this and save-or-discard together.
+- The Studio's own `rcfd serve` closes with it: the project's runs are the runner's, not the service's. It is kept
+  only while one of its sessions has a solve going in the service itself (running or paused).
+- The setting "Keep the runner going after the Studio closes" (off by default) and the `--keep-runner` switch keep
+  the earlier behaviour: the runner goes on, and nothing is asked about it.
+- A crash, a kill or a reload still stops nothing. A close that cannot ask (the test mode's quit, a page that does not
+  answer) keeps a runner with active runs.
+
+ADR 0801, addendum "Runner closes with the Studio" (2026-11-17), has the details and decisions.
 
 ## G8. Accessibility
 
@@ -86,7 +112,11 @@ hand (house rule 7).
 
 `contextIsolation` on, `nodeIntegration` off, the renderer sandboxed, a strict Content Security Policy, no remote
 content loaded, and an allow-list of IPC calls through the preload script. The service listens on loopback only unless
-the user says otherwise. Electron stays on a release its maintainers still support.
+the user says otherwise. The Studio reaches another machine only through a run site the user named in their sites file
+and confirmed once (host key fingerprint and engine version shown); project data goes there only for a run the user
+started there. Electron stays on a release its maintainers still support.
+
+(The sentence on run sites was added on 2026-11-17 by the maintainer's answer to ADR 0739 Q3, option (a).)
 
 ## G11. Claude Code
 

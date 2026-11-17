@@ -11,8 +11,8 @@
 // - scrubbing (P5): the run workspace of the packaged Studio, as scripts/measure-scrub.mjs: Home, then ArrowRight on the
 //   scrubber through every snapshot of the run, each key as soon as the one before is drawn (mark `rcfd:scrub:drawn`);
 //   one warm-up pass, then the timed passes; rate = requests / time, frame = request to next request.
-// - draw rate while orbiting (P8): a real drag on the viewport (Playwright's mouse: trusted pointer events, so
-//   OrbitControls rotates the camera and three draws on demand), held for a fixed time. A draw is an animation frame in
+// - draw rate while orbiting (P8): a real drag on the viewport (Playwright's mouse with Alt: trusted pointer events, so
+//   the canvas's camera orbits and three draws on demand), held for a fixed time. A draw is an animation frame in
 //   which the page submitted GPU work (GPUQueue.submit, counted by a hook of this script); the rate is draws per second,
 //   the frame is the time between consecutive draws. Taken in two variants: with the hover readout as the user has it
 //   (each pointer move also picks the cell under the cursor on the CPU, FieldCanvas `pickAt`), and with the pick
@@ -403,7 +403,7 @@ async function orbit(page, { pick, seconds }) {
   const b = await canvas.boundingBox();
   if (!b) throw new Error('no canvas');
   // the press lands on the canvas itself: a point of the view not covered by what is drawn over it (the readout of the
-  // drag before, the reset button), else OrbitControls never sees it
+  // drag before, the reset button), else the canvas's camera (src/renderer/field/camera.ts) never sees it
   const at = await page.evaluate(({ x, y, w, h }) => {
     const c = document.querySelector('.fv-frame canvas');
     for (const [fx, fy] of [[0.5, 0.5], [0.4, 0.6], [0.6, 0.4], [0.3, 0.3], [0.7, 0.7], [0.5, 0.25], [0.5, 0.75]]) {
@@ -413,10 +413,12 @@ async function orbit(page, { pick, seconds }) {
   }, { x: b.x, y: b.y, w: b.width, h: b.height });
   if (!at) throw new Error('no point of the view reaches the canvas');
   const [cx, cy] = at;
-  // the drag starts with a trusted press (OrbitControls takes the mouse pointer and listens for its moves), then one move
-  // of that pointer per animation frame, as Chromium delivers a real mouse's moves (aligned to the frames); Playwright's
-  // mouse.move round trips (20 to 30 ms each under load) would make the input, not the Studio, set the rate
+  // the drag starts with a trusted press, Alt and the left button (ADR 0801 Addendum 22: the orbit; the canvas takes the
+  // mouse pointer and listens for its moves), then one move of that pointer per animation frame, as Chromium delivers a
+  // real mouse's moves (aligned to the frames); Playwright's mouse.move round trips (20 to 30 ms each under load) would
+  // make the input, not the Studio, set the rate
   await page.mouse.move(cx, cy);
+  await page.keyboard.down('Alt');
   await page.mouse.down();
   const r = await page.evaluate(
     async ({ withPick, ms, x0, y0, w, h }) => {
@@ -425,7 +427,7 @@ async function orbit(page, { pick, seconds }) {
       o.gpu = [];
       o.recording = true;
       const c = document.querySelector('.fv-frame canvas');
-      // the pick skipped: FieldCanvas pickAt answers null at once for an empty rectangle (OrbitControls does not use it)
+      // the pick skipped: FieldCanvas pickAt answers null at once for an empty rectangle (the orbit's moves do not use it)
       if (!withPick) c.getBoundingClientRect = () => new DOMRect(0, 0, 0, 0);
       let moves = 0;
       const t0 = performance.now();
@@ -448,6 +450,7 @@ async function orbit(page, { pick, seconds }) {
     { withPick: pick, ms: (seconds + WARM_S) * 1000, x0: cx, y0: cy, w: b.width, h: b.height },
   );
   await page.mouse.up();
+  await page.keyboard.up('Alt');
   const moves = r.moves;
   // after the warm-up second: the frames whose interval had a submit
   const start = r.frames[0][0] + WARM_S * 1000;

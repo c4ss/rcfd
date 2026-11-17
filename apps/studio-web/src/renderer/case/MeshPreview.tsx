@@ -2,7 +2,7 @@
 // engine builds it (`mesh.preview`, the solver's own mesh code; G2) and writes it as a mesh-only field store into the
 // project's `.rcfd/previews/<mesh hash>/`; the Studio reads that store with its store reader (route local, the reader
 // that matches the Rust one bit for bit, G3) and draws its boundary surface on the field canvas, one colour per patch,
-// with the mesh grid over it; a 2D mesh is first looked at along its thin axis.
+// with the mesh grid over it; a 2D mesh is drawn orthographic along its thin axis (ADR 0801 Addendum 22).
 //
 // - The session's settings are previewed, saved or not: a preview is asked for when the editor opens and again
 //   PREVIEW_DEBOUNCE_MS after the last settings change. A newer request makes the Studio ignore an older reply (the
@@ -57,8 +57,6 @@ export function MeshPreview({ session, folder, settingsEpoch }: { session: strin
   const [painted, setPainted] = useState<Float32Array | null>(null);
   const generation = useRef(0);
   const canvas = useRef<FieldCanvasApi>(null);
-  /** The mesh last turned face-on (a 2D mesh is looked at along its thin axis once, then the user moves the view). */
-  const facedOn = useRef<string | null>(null);
 
   const build = useCallback(
     async (opts: { adapt: 'base' | 'final'; force: boolean }) => {
@@ -143,15 +141,9 @@ export function MeshPreview({ session, folder, settingsEpoch }: { session: strin
                 forceWebGL={false}
                 onBackend={() => undefined}
                 onMoved={() => undefined}
-                onDrawn={(v) => {
-                  // a 2D mesh: straight along its thin axis, the first time it is drawn
-                  const r = shown?.reply;
-                  if (r?.two_d && facedOn.current !== r.mesh_hash) {
-                    facedOn.current = r.mesh_hash;
-                    canvas.current?.faceOn(thinAxis(r.bounds));
-                  }
-                  setPainted(v);
-                }}
+                // ADR 0801 Addendum 22: a 2D mesh is drawn orthographic, straight along its thin axis, and pans and zooms
+                thin={shown?.reply.two_d ? thinAxis(shown.reply.bounds) : null}
+                onDrawn={setPainted}
               />
             </Suspense>
           )}

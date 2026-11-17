@@ -16,9 +16,11 @@ import type { RunSeries } from '../../shared/run.js';
 import { openStore, cancelLoads } from '../data/door.js';
 import { FieldViewport } from '../field/FieldViewport.js';
 import { caseName, runRows, shownState, unknownWord, type RunRow } from '../runs/model.js';
+import { SiteBadge } from '../runs/Sites.js';
+import type { RunSite } from '../../shared/sites.js';
 import { EmptyMark, Quiet, Select, StateMark, StatePictogram } from '../ui/index.js';
 import { runSeries, runValuesAt } from './door.js';
-import { bandOf, defaultField, lastStep, liveRun, positionsOf, sampleAt, sharedAxis, storePath, type Position } from './model.js';
+import { bandOf, defaultField, lastStep, liveRun, playWait, positionsOf, sampleAt, sharedAxis, storePath, type PlaySpeed, type Position } from './model.js';
 import { TimePanel, type CursorValue } from './TimePanel.js';
 import { CompareControls, CompareFields, CompareMetrics, useComparison, type CompareState } from './Compare.js';
 import { Provenance, countValue, counterValue, statusValue } from '../provenance/index.js';
@@ -46,6 +48,12 @@ export function workspaceHeading(run: string | null, other: string | null): stri
 }
 
 const ACTIVE = new Set(['queued', 'running', 'paused']);
+
+/**
+ * ADR 0801 Addendum 22: Play's speed of each run (by project folder and run id), for as long as the Studio runs; a run
+ * not in it plays at 1x.
+ */
+const playSpeeds = new Map<string, PlaySpeed>();
 
 /** How soon a running run's store is opened again after the last open answered (Follow live sees new snapshots). */
 const LIVE_STORE_MS = 250;
@@ -234,13 +242,24 @@ export default function RunWorkspace({ view, selected, onSelect, compareRequest 
     [row, last],
   );
 
-  // Play: one stop after another, each once the field of the one before is drawn (every 150 ms for a run without fields);
-  // under reduced motion (F-816, G8) no faster than one stop every REDUCED_PLAY_MS
+  // Play (ADR 0801 Addendum 22): one stored snapshot per wall-clock second (PLAY_SNAPSHOT_MS from the move to it, and
+  // never before its field is drawn); every PLAY_SAMPLE_MS for a run without fields; under reduced motion (F-816, G8) no
+  // faster than one stop every REDUCED_PLAY_MS
   const drawnAt = useRef<{ run: string | undefined; snapshot: number } | null>(null);
   const [drawTick, setDrawTick] = useState(0);
   const snap = position?.snapshot ?? null;
   const reduceMotion = usePrefersReducedMotion();
   const steppedAt = useRef(0);
+  const speedKey = `${view.folder}\u0000${row?.id ?? ''}`;
+  const [speedTick, setSpeedTick] = useState(0);
+  const speed: PlaySpeed = playSpeeds.get(speedKey) ?? 1;
+  const onSpeed = useCallback(
+    (s: PlaySpeed) => {
+      playSpeeds.set(speedKey, s);
+      setSpeedTick((n) => n + 1);
+    },
+    [speedKey],
+  );
   useEffect(() => {
     if (!playing) return;
     if (index >= last) {
@@ -248,14 +267,14 @@ export default function RunWorkspace({ view, selected, onSelect, compareRequest 
       return;
     }
     if (snap !== null && !(drawnAt.current?.run === row?.id && drawnAt.current?.snapshot === snap)) return; // its draw re-runs this
-    const pace = snap === null ? 150 : 0;
-    const wait = reduceMotion ? Math.max(pace, REDUCED_PLAY_MS - (performance.now() - steppedAt.current)) : pace;
+    const wait = playWait(snap !== null, performance.now() - steppedAt.current, reduceMotion, REDUCED_PLAY_MS, speed);
     const t = setTimeout(() => {
       steppedAt.current = performance.now();
       moveTo(index + 1, 'play');
     }, wait);
     return () => clearTimeout(t);
-  }, [playing, index, last, snap, row?.id, moveTo, drawTick, reduceMotion]);
+    // `speedTick`: a new speed takes effect at once (the wait is counted again from the move to the stop shown)
+  }, [playing, index, last, snap, row?.id, moveTo, drawTick, reduceMotion, speed, speedTick]);
 
   // timing marks for P5 and P6 (scripts/measure-scrub.mjs): the stop asked for, and its field drawn
   useEffect(() => {
@@ -345,8 +364,9 @@ export default function RunWorkspace({ view, selected, onSelect, compareRequest 
               if (k !== undefined) onSelect(String(k));
             }}
             items={rows}
+            dependencies={[view.runSites, selected]}
           >
-            {(r) => <RunItem row={r} faded={selected !== null && r.id !== selected} />}
+            {(r) => <RunItem row={r} faded={selected !== null && r.id !== selected} site={view.runSites?.[r.id]} />}
           </ListBox>
           {row && <RunNumbers row={row} store={store.info} storeError={store.error} series={series} seriesError={seriesError} position={position} positionsCount={positions.length} />}
           {row && otherRow && <CompareMetrics a={row} b={otherRow} comparison={comparison.comparison} error={comparison.error} />}
@@ -419,7 +439,13 @@ export default function RunWorkspace({ view, selected, onSelect, compareRequest 
             if (on) moveTo(last, 'play');
           }}
           playing={playing}
-          onPlay={setPlaying}
+          speed={speed}
+          onSpeed={onSpeed}
+          onPlay={(on) => {
+            // the stop shown when Play is pressed stays its whole second too
+            if (on) steppedAt.current = performance.now();
+            setPlaying(on);
+          }}
           compare={otherRow ? { row: otherRow, series: otherSeries.series, version: otherSeries.version, cursor: otherCursor } : null}
         />
       )}
@@ -427,7 +453,7 @@ export default function RunWorkspace({ view, selected, onSelect, compareRequest 
   );
 }
 
-function RunItem({ row, faded }: { row: RunRow; faded: boolean }) {
+function RunItem({ row, faded, site }: { row: RunRow; faded: boolean; site?: RunSite | undefined }) {
   const s = shownState(row);
   return (
     <ListBoxItem id={row.id} textValue={`${caseName(row.case)} ${row.id}`} className={`ws-item${row.state === 'failed' ? ' ws-item--failed' : ''}`}>
@@ -440,6 +466,8 @@ function RunItem({ row, faded }: { row: RunRow; faded: boolean }) {
         </Provenance>
       </span>
       <span className="ws-item-state" data-words={row.state === 'failed' ? 'exception' : 'chrome'}>{s ? <StateMark state={s} faded={faded} quiet /> : <span className="ui-state">{unknownWord(row.state)}</span>}</span>
+      {/* F-848: a remote run's site and link state */}
+      <SiteBadge site={site} />
     </ListBoxItem>
   );
 }

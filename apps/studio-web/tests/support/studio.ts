@@ -30,6 +30,8 @@ export async function launchStudio(serviceEnv: Record<string, string>, args: rea
   const env: Record<string, string> = {};
   for (const [k, v] of Object.entries(process.env)) if (v !== undefined && !k.startsWith('RCFD_STUDIO_')) env[k] = v;
   const own: Record<string, string> = serviceEnv['RCFD_STUDIO_STATE_DIR'] || args.some((a) => a.startsWith('--user-data-dir')) ? {} : { RCFD_STUDIO_STATE_DIR: scratchState() };
+  // F-848: the user's own sites file never reaches a test; a test of sites names its own
+  if (!serviceEnv['RCFD_SITES_FILE'] && !env['RCFD_SITES_FILE']) own['RCFD_SITES_FILE'] = path.join(tmpdir(), 'rcfd-studio-tests-no-sites-file.toml');
   // ADR 0801 Addendum 23: a test never reaches the real claude in the installer's folder; one that needs claude names the
   // fake (tests/support/fake-claude-mcp.mjs) itself
   if (!serviceEnv['RCFD_STUDIO_CLAUDE']) own['RCFD_STUDIO_CLAUDE'] = path.join(tmpdir(), 'rcfd-studio-no-claude', 'claude.exe');

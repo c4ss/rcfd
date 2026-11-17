@@ -67,6 +67,8 @@ to." Every way of starting the Studio finds an engine (rcfd, rcfd-mcp and rcfd-r
   `RCFD_STUDIO_SERVICE`. It replaces the service the Studio would start, whatever the engine; the project server still
   comes from the table. It also applies with `--no-engine` (attaching starts nothing). Loopback only today (G10); this
   attach is where engines on other machines (a cloud, a cluster) will plug in, out of scope here.
+- `--keep-runner` (G7 as amended 2026-11-17, below under Run control): the runner the Studio started keeps going after
+  it closes, as the setting "Keep the runner going after the Studio closes" does; it changes no engine choice.
 - The switches take `--name value` or `--name=value`, so a Windows shortcut (Target:
   `"...\rcfd-studio.exe" --engine-dir "D:\rcfd\bin"`) or a `.desktop` file's `Exec=` line can carry them. Their values
   are never taken for the project folder of `rcfd-studio <PROJECT_DIR>` (F-837).
@@ -107,9 +109,12 @@ section above), started when the first project opens:
 - When a connection drops, calls fail at once with `disconnected` and the client tries again after 100 ms, doubling to at
   most 5 s. A service the Studio started is started again if its process is gone. After a reconnection the client tells
   a restarted service from the same one by the last event it saw, and a restart raises `instance` in the state.
-- Runs outlive the window (G7): a reload does not touch the connections. When the Studio quits, a service it started is
-  stopped only if it holds no session; otherwise it keeps running, and the next start attaches to it again
-  (`adopted: true`).
+- Runs outlive the window (G7): a reload does not touch the connections. When the Studio quits, a service this start of
+  the Studio started is stopped unless one of its sessions has a solve going in the service itself (`running` or
+  `paused`; G7 as amended 2026-11-17: the project's runs are the runner's, not the service's). With
+  `--keep-runner` or the setting "Keep the runner going after the Studio closes", and for a service an earlier start
+  left running (`adopted: true`), it is stopped only if it holds no session, as before; otherwise it keeps running, and
+  the next start attaches to it again. A service attached to (`--service`, `RCFD_STUDIO_SERVICE`) is never stopped.
 - `RCFD_STUDIO_BENCH=1` (measurement only, `scripts/measure-service.mjs`): the client is reachable from Playwright's
   main-process evaluate. Unset, nothing is exposed.
 
@@ -239,9 +244,10 @@ failed one; Escape clears the selection. Surface brief: `.impeccable/surfaces/we
 
 - Through the engine: `list_runs` and, for each run whose state or step changed, `run_status` (the last 50 events,
   `RUN_EVENTS`), asked by the main process (`src/main/project/runs.ts`) of the same read-only project server. The runner
-  owns the runs (G7): closing or killing the Studio leaves them going, and the next start shows their true state
-  (`tests/e2e/runs.spec.ts` closes and kills the Studio during a run started from `rcfd-runner`, and checks the step
-  against the runner's own `status.json`).
+  owns the runs (G7): closing or killing the Studio leaves a runner it did not start going, and the next start shows
+  their true state (`tests/e2e/runs.spec.ts` closes and kills the Studio during a run started from `rcfd-runner`, and
+  checks the step against the runner's own `status.json`). A runner the Studio started closes with it (G7 as amended
+  2026-11-17, under Run control).
 - Live: state changes come with the feed (400 ms); while a run is queued, running or paused the main process also reads
   the run list every second (`RUN_POLL_MS`), since the feed reports state changes and not progress.
 - Time: shown only where it is a simulated time. A steady solver writes time 0, and the engine writes NaN as `null`; the
@@ -285,7 +291,11 @@ selected run here. Code: `src/renderer/workspace/` (`RunWorkspace.tsx`, `TimePan
 - **One line moves everything**: the scrubber stops at the store's snapshots (a run without fields: at its residual
   samples). Moving it (pointer, arrow keys, Page Up and Down, Home and End, the transport's first, previous, Play, next)
   moves the field, the residual cursor, the monitor readout and the snapshot counter together; they read the same stop.
-  Play steps to the next snapshot once the one before is drawn. The flag reads "it 40", or "t = 1.25 s · it 145" for a
+  Play steps one stored snapshot per wall-clock second (`PLAY_SNAPSHOT_MS` of `src/renderer/workspace/model.ts`; ADR
+  0801 Addendum 22), never before the field of the one shown is drawn; a run without fields steps through its residual
+  samples every 150 ms, and under reduced motion no stop is shorter than 500 ms. A speed menu beside it (a pictogram;
+  its name says the speed) offers 0.25×, 0.5×, 1×, 2× and 4×, remembered per run while the Studio runs (one second of
+  simulated time per second was the alternative offered for 1×). The flag reads "it 40", or "t = 1.25 s · it 145" for a
   transient run.
 - **Follow live**: on for a running run; the line stays on its newest snapshot as the runner writes them; moving the line
   stops following, Follow live brings it back.
@@ -357,12 +367,27 @@ fallback, a loss, is named above the canvas ("Drawn by WebGL 2 (fallback: <why>)
 - **Legend** from the same table (its 256 entries put into a canvas), ticks in rcfd-studio's `{:.4e}`, the unit in the
   title; the range is the min and max of the shown values (rcfd-studio's snapshot range).
 - **Hover readout**: the stored value of the cell under the cursor (a CPU pick with three's Raycaster on the drawn
-  triangles), its shortest text that reads back as the same `f32`, with cell and triangle. From the keyboard the view
-  orbits with the arrow keys, zooms with + and -, resets with Home, and reads out the value at its centre. F-819b: no
-  pick while a button is held (an orbit or pan); the readout goes at the drag's first move and is taken again where the
-  button is let go.
-- **Mesh grid** toggle (the faces' edges, 38% white, computed once per surface in a worker) and **Reset view** (top right
-  once the view has moved).
+  triangles), its shortest text that reads back as the same `f32`, with cell and triangle; a plain left click takes it
+  where the button is let go. From the keyboard the view orbits with the arrow keys (a 2D case: pans), zooms with + and
+  -, frames the domain with F, turns face on with O, resets with Home or 0, and reads out the value at its centre.
+  F-819b: no pick while a button is held (a look, pan or orbit); the readout goes at the drag's first move and is taken
+  again where the button is let go.
+- **Camera** (ADR 0801 Addendum 22, Unity's scene view; `src/renderer/field/camera.ts`, pure maths tested in
+  `tests/unit/field-camera.spec.ts`, in place of three's OrbitControls): hold the right button to look about the eye,
+  and while it is held W A S D fly, Q and E go down and up, Shift is faster (half the domain's diagonal a second, four
+  times that with Shift); the middle button pans; Alt and the left button orbit about the point of the surface under the
+  cursor (else the pivot), and the release of that Alt is kept from the window's menu bar (a plain Alt still reaches
+  it); the wheel dollies toward the point under the cursor; a double-click puts the orbit pivot there. The rotation is a quaternion with yaw about z: no pole lock, the right stays level, and past the pole a drag to
+  the right still turns the picture the same way. A 2D case (one cell thick) is drawn orthographic straight along its
+  thin axis, framed, and only pans (middle or right button, arrow keys) and zooms (wheel toward the cursor, + and -);
+  there is no tilt into 3D (the maintainer, 2026-11-17).
+  The mesh preview of the case editor and both views of a comparison use the same camera (each its own). The canvas
+  carries the state for the tests: `data-camera` (perspective or orthographic), `data-camera-eye`, `-forward`, `-up`,
+  `-pivot`, `-zoom` (the pivot's depth, or the orthographic height) and `-moved`.
+- **Mesh grid** toggle (the faces' edges, 38% white, computed once per surface in a worker), **Face on** in the tool row
+  (turns to the nearest axis of the view direction, a 2D case its thin axis, keeping the zoom and the point at the
+  centre; palette `field.face_on`, O) and **Reset view** (an icon button in the top right once the view has moved: the
+  starting orientation, the whole domain framed, the pivot at its centre; palette `field.reset_view`, Home).
 - **Data only through the door**: `src/renderer/data/door.ts` is the one renderer module that names `window.studioData`
   (`tests/unit/data-door-static.spec.ts`). Every load carries the view's tag and a superseded or cancelled one is
   cancelled (G21); progress and errors are shown in the frame with Cancel or Try again.
@@ -379,37 +404,79 @@ fallback, a loss, is named above the canvas ("Drawn by WebGL 2 (fallback: <why>)
 The field viewport's tool row has one pictogram per derived picture, named in its accessible name and tooltip (G22):
 cut plane, vectors, iso-surface, streamlines (`src/renderer/field/derived.ts`, `DerivedControls.tsx`). One that does
 not apply is a dashed chip that says why in its accessible name and in the tooltip its focus shows (G6), never as
-standing text. What the engine computes was read first (ADR 0801, addendum F-809), and the tolerances were registered
-there before the code (G3):
+standing text.
 
-- **Cut plane**: rcfd-render's own cut (`View::clip`, only points with `n . p <= d` are drawn; the crate was removed by
-  F-838 and the rule kept), on the GPU for the
-  surface, the mesh grid and the arrows (`maskNode` of each TSL material), and in the pick, so the readout names what is
-  seen. A plane normal to x, y or z: axis, position (a slider in mesh coordinates; the store gives no length unit) and
-  the side kept, in a small panel in the frame's top left corner. Unavailable on a 2D case (one cell layer, the
-  engine's own test of `render_field`).
-- **Vectors**: the arrows of `render.png` (`rcfd_post::render::overlay_vectors`: a 24-per-axis lattice, the largest
-  arrow 0.8 of a step, the head 0.3 back and half that out) carried to the boundary surface: one arrow per lattice bin,
-  at the centroid of the first surface triangle in it, carrying its owner cell's stored components unchanged (on a 2D
-  case the in-plane components, on the face the view looks at). Deep ink. The components come through the data door
-  for the shown snapshot, with the view's tag.
-- **Iso-surface, streamlines**: unavailable everywhere: the engine has no entry point for either on a stored field, and
-  the Studio does not draw a picture it cannot check against the engine.
-- Tests: `tests/unit/field-derived.spec.ts` (the 2D verdict against `render_field` on the quick-start and axial-fan
-  runs; availability and reasons; the cut rule and the arrows' constants read from the Rust source; every arrow against
-  an independent recomputation, components bit for bit the Rust reader's; the pictograms on the grid) and
-  `tests/e2e/field-derived.spec.ts` (the packaged Studio: reasons by role and accessible name, tooltips on keyboard focus;
-  the cut plane pixel by pixel on the tiny and 1e5-cell boxes; the arrows change only pixels to deep ink and their number
-  is the recomputation's; keyboard; screenshots at 1440 x 900 in `test-results-visual/f809/`).
-- Missing in the engine (no Rust change here): an iso-surface of a stored cell field, streamlines, and a store-based
-  slice, sample or vector picture of a 3D case (`render_field` refuses 3D; `render.png`, `field.sample` and
-  `render_image` work on live sessions only).
+Every derived picture is the engine's (ADR 0738): main runs `rcfd post derive` (the library of the MCP tool
+`derive_picture`) on the shown snapshot of a local store inside a data root (`src/main/data/derive.ts`, the data port's
+`derive` operation, `window.studioDerived`), and the viewport draws the GLB it writes as it is (`src/renderer/field/glb.ts`).
+rcfd is `RCFD_STUDIO_RCFD`, else the one beside `RCFD_STUDIO_MCP`, else the engine the Studio ships with. A store read
+through the service has no derived pictures (said in the reason).
+
+- **Cut plane**: the engine's cut of the boundary surface (`cut_surface`; the rule of the removed rcfd-render, `n . p
+  <= d`), drawn in place of the surface, each piece coloured by the value of the surface triangle it was cut from; the
+  readout names that triangle. The mesh grid keeps the same rule as a mask on the GPU. A plane normal to x, y or z:
+  axis, position (a slider in mesh coordinates, m) and the side kept, in a panel in the frame's top left corner.
+  Unavailable on a 2D case (one cell layer, the engine's own test of `render_field`).
+- **Vectors**: the engine's arrows of `render.png`'s rule (a 24-per-axis lattice, the largest arrow 0.8 of a step, the
+  head 0.3 back and half that out) carried to the boundary surface, carrying the owner cell's stored components
+  unchanged (on a 2D case the in-plane components, on the face the view looks at). Deep ink.
+- **Iso-surface**: of the shown stored cell field at a level set in its panel (within the shown range), drawn in place
+  of the surface in the colour of its level. Marching tetrahedra on the cell field, values at points and face centres
+  the mean of the neighbouring cells. Unavailable on a 2D case and for a difference of two runs.
+- **Streamlines**: from a seed line through the middle of the domain (the mid-plane of a 2D case) along x, y or z, with
+  2 to 60 seeds, both directions, at most 2 000 RK4 steps each (velocity linear on each cell's tetrahedra). Deep ink,
+  drawn over the surface.
+- The frame names what it draws, once drawn on the GPU: `data-cut`, `data-arrows`, `data-iso`, `data-streamlines`.
+- Tests: `tests/unit/derive-bridge.spec.ts` (the request, the flags, the GLB is the CLI's file, refusals and the
+  engine's codes), `tests/unit/field-derived.spec.ts` (availability and reasons; the cut rule and the arrows' constants
+  read from the Rust source; the Studio's own arrows against a recomputation; G2: the engine's cut and arrows are the
+  Studio's T2 and T3 sets; the engine's iso-surface and streamlines read back) and `tests/e2e/field-derived.spec.ts`
+  (the packaged Studio: reasons, tooltips on keyboard focus; the cut plane pixel by pixel on the tiny and 1e5-cell
+  boxes; the arrows change only pixels to deep ink and their number is the recomputation's; the iso-surface's colour and
+  level; the streamlines' ink and seeds; keyboard; screenshots at 1440 x 900 in `test-results-visual/f809/`).
+- Not in the engine yet: `render_field` with an axis, slice and vectors of a 3D store, and `rcfd post render`.
 
 ## Run control (F-807)
 
 Runs are started, queued, paused, resumed, stopped and cancelled from the window, and only through the project's runner
 (G7): the Studio asks the engine's project server (`start_run`, `pause_run`, `resume_run`, `cancel_run`), the server
-writes the request into the project, and `rcfd-runner` acts on it. Closing or killing the Studio leaves every run going.
+writes the request into the project, and `rcfd-runner` acts on it. Killing the Studio leaves every run going; closing it
+asks first when its own runner holds runs (below).
+
+### The runner closes with the Studio (G7 as amended 2026-11-17)
+
+The maintainer: "the runner should close with studio by default if no external (existing) runner env var is
+specified"; for active runs: ask. The rules are in `src/shared/runner-lifetime.ts`, the main process's side in
+`src/main/project/runner-lifetime.ts` (ADR 0801, addendum "Runner closes with the Studio").
+
+- Ownership: the Studio looks at the project's `.rcfd/runner.json` (written by the runner once it holds the project's
+  lock) when the project opens, once a second, and before and after each of its run actions. The record says who
+  started the runner (Q-RL-2, the maintainer 2026-11-17): `started_by` "studio", "cli" or "mcp", with `studio_pid` for
+  the Studio. The Studio sets `RCFD_RUNNER_STARTED_BY=studio:<its pid>` on the `rcfd-runner ensure` and the `rcfd-mcp`
+  it starts (`runnerStarterEnv`), and owns a runner whose record says "studio" with its own pid, and no other. A record
+  with no `started_by` (an older runner) falls back to the looks: a runner alive at the open is adopted and never
+  stopped, a runner first seen after a look that found none is the Studio's, and one that replaced another between two
+  looks is not.
+- The close (the window's close button, Alt+F4, quit, Close project): an owned runner with no run queued, running or
+  paused is shut down with no question (`rcfd-runner shutdown --project <folder>`). With active runs the F-837 close
+  guard asks with the F-829 decision panel, naming each run (id, case, state, step or simulated time): **Stop runs and
+  close** (each run is cancelled with `cancel_run`, its records stay and a run with a restart file can go on with
+  `rcfd-runner start --continue-from`; the close waits for them to end, at most 30 s, then shuts the runner down),
+  **Keep them running and close** (the runner stays; the next start adopts it), **Cancel** (the default: the focus is on
+  it, and Escape). With case changes not saved as well, one panel asks both: Save and close, Close and lose them, Cancel,
+  and a toggle for the runs (Keep them running until Stop them is chosen).
+- Overrides: the setting "Keep the runner going after the Studio closes" (Settings, Ctrl+,; an icon toggle, off by
+  default, kept in `studio-preferences.json` as `keepRunner`) and the `--keep-runner` switch. With either, the runner is
+  left going and nothing is asked about it.
+- A close that cannot ask keeps a runner with active runs and shuts down an idle one: the test mode's quit
+  (`RCFD_TEST_HEADLESS=1`, Playwright's `close()`), the P10 measurement's quit, a page that does not answer.
+- The project port has `runnerPlan` (whether the Studio owns the runner, the override, the active runs) and `close`
+  takes the runs' answer (`runs: 'stop' | 'keep'`); the window's close answer gains `stop-runs` and `keep-runs`; the IPC
+  allow-list gains `runner.keep.get` and `runner.keep.set`.
+- Tests: `tests/unit/runner-lifetime.spec.ts` (the rules, the watch with a fake engine, the setting's file, the port);
+  `tests/e2e/runner-lifetime.spec.ts` (the real engine: Stop runs and close, Keep them running and a new Studio that
+  adopts, an idle runner and the Studio's service gone with no question, a CLI runner left alone, the merged prompt,
+  `--keep-runner` and the setting).
 
 - Where: the run bar above the runs table (Start a run: the case, Run, Queue…, Start the runner); Run on each case of the
   project home (switches to Runs with the new run selected); and Run control in the selected run's panel (Pause or
@@ -442,7 +509,8 @@ writes the request into the project, and `rcfd-runner` acts on it. Closing or ki
   confirmations, refusals, the session with a fake engine, the port, the run list's notes, the stylesheet),
   `tests/e2e/run-control.spec.ts` (against the real `rcfd-mcp` and `rcfd-runner` on a copy of the quick-start project
   holding one run at a time: each action by keyboard, a refused action in the window, past the page and by the engine,
-  no runner alive, and G7; screenshots in `test-results-visual/f807/`).
+  no runner alive, and G7 with a runner started from the test, which the Studio adopts and leaves going; screenshots in
+  `test-results-visual/f807/`).
 
 Decisions taken in building F-807 (options, the recommendation followed; each reversible without touching the engine):
 
@@ -672,7 +740,8 @@ the head of the right column. Surface brief: `.impeccable/surfaces/apps-studio-w
 - Mesh preview (F-836, ADR 0732; `src/renderer/case/MeshPreview.tsx`): the session's mesh, saved or not, drawn before any
   run. The engine builds it with the solver's own code (`mesh.preview`, on with `rcfd serve --ui`) and writes a
   mesh-only store into the project's `.rcfd/previews/<mesh hash>/`; the Studio reads it through the data door and draws
-  it on the field canvas, one colour per patch, with the mesh grid and a check box per patch. It builds on open and
+  it on the field canvas, one colour per patch, with the mesh grid and a check box per patch; a 2D mesh is drawn
+  orthographic along its thin axis and pans and zooms (the field view's camera, ADR 0801 Addendum 22). It builds on open and
   500 ms after a settings change; a `[mesh.adapt]` case shows its starting mesh and offers the adapted one with its cost
   (the solves) said first; an estimate over 2 000 000 cells is refused with Build anyway.
 - The page reaches the case operations only through `window.studioCase` (`state`, `sources`, `prepare`, `attach`,
@@ -1184,6 +1253,12 @@ unavailable and why, a value to act on (changes not saved).
 | undo controls | 6 | 0 | arrows named "Nothing to undo" and "Nothing to redo" |
 | decision panel | 0 | 0 | the whole panel is an exception |
 | progress rows | 3 | 3 | the work's name and Cancel (a work in progress is not at rest) |
+| Studio settings, no sites file | 9 | 14 | brand, Settings, Theme and its four choices, the runner toggle's label "Keep the runner going" (9 + at most 5, the maintainer 2026-11-17) |
+| Studio settings, the Sites section | 5 + 1 per site | 1 + 1 per site | the heading Sites and each site's Check; names, hosts, states and the file's path (the Open button) are data |
+
+The two Studio settings rows are the maintainer's answer of 2026-11-17 (ADR 0801, "Addendum: Runner closes with the
+Studio", Q-RL-1): the page is counted with no sites file, and the Sites section on its own, by `perItem` in
+`src/shared/word-budget.ts` (its budget with n sites is 1 + n).
 
 ## Keyboard and assistive technology (F-816, G8)
 
@@ -1304,7 +1379,8 @@ word budgets of `src/shared/word-budget.ts` are unchanged). The tests are `tests
 | A project folder named on the command line opens at start | start | none |
 
 Seven palette commands (G20): `runs.log`, `runs.report`, `runs.budgets` (group Project runs), `field.save_png`,
-`field.range`, `field.face_on`, `plots.monitor_log` (a new group, Run workspace). `project.queue_case` takes an optional
+`field.range`, `field.face_on`, `plots.monitor_log` (a new group, Run workspace); ADR 0801 Addendum 22 adds
+`field.reset_view`. `project.queue_case` takes an optional
 `store` (`none`, the default as before, or `plan`).
 
 ### Decisions (options, the recommendation taken; each reversible)
@@ -1333,7 +1409,9 @@ Seven palette commands (G20): `runs.log`, `runs.report`, `runs.budgets` (group P
   (a). The store names no length unit (a gap for the engine).
 - D8, face on. (a) A button that looks along the thin axis and keeps the view until Reset view; (b) make the fit face on
   for every 2D case (changes F-808's default view). Taken: (a). The scale bar shows only while the view is within 0.1
-  degrees of an axis, so it is true across the picture.
+  degrees of an axis, so it is true across the picture. Superseded 2026-11-17 by ADR 0801 Addendum 22 (the maintainer):
+  a 2D case opens face on, orthographic, and only pans and zooms; Face on only turns the view (zoom and centre kept,
+  in 3D to the nearest axis) and Reset view is the separate full reset.
 - D9, the whole run's range. (a) Read every stored snapshot in the renderer, as a cancellable work, and colour by the
   min and max; (b) wait for an engine range query. Taken: (a); a cancel goes back to the snapshot's range.
 - D10, Run again with fields stored. (a) `start_run` with `store: "plan"` (the engine's store plan); (b) a `--set
@@ -1394,6 +1472,29 @@ A close that would lose case-editor changes not saved asks first, with F-829's d
   typing not yet committed, a page that does not answer, the test-mode quit with a change unsaved).
 - Decisions D13 to D16 (the safe choice, what Close and lose them closes, the test-mode quit, the wait for the page):
   ADR 0801, Addendum 13.
+
+## Run sites (F-848, ADR 0739 phase 1)
+
+With no sites file, the Studio looks and acts as before. If the user's sites file lists sites (`RCFD_SITES_FILE`, or
+`sites.toml` in the `rcfd` folder under APPDATA or `~/.config`), the Studio adds three things.
+
+- **Where.** The Runs run bar shows a Where choice after the case: `local` or a site. Run and Queue… start the run
+  there with `rcfd-runner start ... --site <name>`, using the same store plan as a local run, and the panel shows
+  that line. The choice is remembered per project in `site-choices.json`, in the Studio's user data and never in the
+  project. Home Run, Run again and Rerun stay local.
+- **The yes.** Every remote start checks the site first with `rcfd site check`. A site that is not confirmed, or
+  that runs another engine, asks in the decision panel. Keep it here sends nothing. The yes runs `rcfd site check
+  <name> --confirm`.
+- **The badge.** A remote run shows its site and link state in the run table, the run panel and the workspace:
+  sending, connected, retrying, copying back, done or refused. The state is read from `site.json`, `site.jsonl`,
+  `events.jsonl` and `status.json`. Pause, resume and Stop… work as for local runs.
+
+The Studio settings have a Sites section only while the file exists. It lists the sites and whether each is
+confirmed, and has Check and Open the sites file (the system editor). The Studio does not edit the file.
+
+The tests are `tests/unit/sites.spec.ts` and `tests/e2e/sites.spec.ts`. The e2e tests use two `exec` sites, which
+work only with `RCFD_TEST_EXEC_SITES=1`. Every other test runs with `RCFD_SITES_FILE` pointing at a missing file. The
+details are in ADR 0801, Addendum 24.
 
 ## Security (G10)
 

@@ -13,6 +13,8 @@
 //   --service <host:port>    attach to a service someone else started (loopback only), as RCFD_STUDIO_SERVICE does
 //   --claude <path>          the Claude Code program to register the project with and to open (ADR 0801 Addendum 23;
 //                            RCFD_STUDIO_CLAUDE comes first, src/main/engine/locate.ts locateClaude)
+//   --keep-runner            G7 as amended 2026-11-17: the project's runner keeps going after the Studio closes, as
+//                            the setting "Keep the runner going after the Studio closes" does (either one is enough)
 //
 // Each also takes the `--name=value` form. The arguments after the program (packaged) or after the app's path
 // (`electron .`), without Chromium's and Node's switches (`--inspect=0`, `--remote-debugging-port=0`, which Playwright
@@ -32,6 +34,8 @@ export interface EngineSwitches {
   readonly service: string | null;
   /** `--claude`: the claude program, resolved against the working folder; null when not given. */
   readonly claude: string | null;
+  /** `--keep-runner`: the runner the Studio started keeps going after it closes (src/shared/runner-lifetime.ts). */
+  readonly keepRunner: boolean;
   /** Switches given without their value, in words (the last of a repeated switch wins; that is not a problem). */
   readonly problems: readonly string[];
 }
@@ -44,11 +48,16 @@ export function engineSwitches(argv: readonly string[], defaultApp: boolean, cwd
   let service: string | null = null;
   let claude: string | null = null;
   let noEngine = false;
+  let keepRunner = false;
   const problems: string[] = [];
   for (let i = 0; i < args.length; i++) {
     const a = args[i]!;
     if (a === '--no-engine') {
       noEngine = true;
+      continue;
+    }
+    if (a === '--keep-runner') {
+      keepRunner = true;
       continue;
     }
     for (const name of VALUED) {
@@ -74,7 +83,7 @@ export function engineSwitches(argv: readonly string[], defaultApp: boolean, cwd
       else service = value.trim();
     }
   }
-  return { engineDir, noEngine, service, claude, problems };
+  return { engineDir, noEngine, service, claude, keepRunner, problems };
 }
 
 export function projectArgument(argv: readonly string[], defaultApp: boolean, cwd: string): string | null {

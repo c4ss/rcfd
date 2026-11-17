@@ -11,8 +11,9 @@
 // where it read the whole field, src/main/data/worker.ts), since everything drawn, ranged and read out here is a value
 // of a cell that owns a surface triangle; the colour range is the min and max over those same values (F-808's), and
 // the readout at a triangle is its owner cell's stored value, bit for bit. The whole field is read for the service
-// route and for a comparison's values (`load`), as before. F-809's arrows read their own components whole (useArrows),
-// and the cut plane clips the surface, so neither needs the shown field's other cells. No pick runs while a button is
+// route and for a comparison's values (`load`), as before. F-809's derived pictures are the engine's (ADR 0738): the
+// cut surface and arrows, the iso-surface and the streamlines come as GLB from `rcfd post derive` (useDerived), so
+// none needs the shown field's other cells here. No pick runs while a button is
 // held (an orbit or a pan): the readout is cleared at the drag's first move and taken again where the button is let go.
 //
 // Timing marks (performance.mark / measure, read by scripts/measure-field.mjs for P7): `rcfd:field:open` when a store is
@@ -26,11 +27,13 @@ import { IconToggle } from '../ui/IconToggle.js';
 import { useCommandHandlers } from '../commands/host.js';
 import { savePagePng } from '../workspace/door.js';
 import { rangeOf, shownRange } from './surface.js';
-import { AXIS, LENGTH_UNIT, LENGTH_UNIT_WHY, cellsOutside, cellsOutsideOf, domainText, fixedRange, lengthText, pngName, scaleBar, type RangeMode } from './viewExtras.js';
+import { AXIS, cellsOutside, cellsOutsideOf, domainText, fixedRange, lengthText, lengthUnitOf, pngName, scaleBar, type RangeMode } from './viewExtras.js';
 import { colourRange, f32Text, lutBytes, type ColourRange } from './colormap.js';
 import { FieldCanvas, type Backend, type FieldCanvasApi, type Pick } from './FieldCanvas.js';
-import { CutPanel, DerivedControls, useArrows } from './DerivedControls.js';
-import { availability, middleCut, type Cut, type Glyphs, type Layers } from './derived.js';
+import { CutPanel, DerivedControls, IsoPanel, StreamPanel, pictureKey, useDerived } from './DerivedControls.js';
+import { availability, middleCut, rakeEnds, startRake, type Cut, type Rake } from './derived.js';
+import { cutOf, isoOf, linesOf } from './glb.js';
+import type { DeriveArgs } from '../../shared/data.js';
 import { Legend } from './Legend.js';
 import { Provenance, cellValue, snapshotFactValue } from '../provenance/index.js';
 import { FieldPrep, type PreparedSurface } from './prepare.js';
@@ -152,6 +155,11 @@ export function FieldViewport({
   // F-809: the derived pictures (./derived.ts): rcfd-render's cut plane and the vector arrows
   const [cutAsked, setCut] = useState<Cut | null>(null);
   const [vectorsAsked, setVectors] = useState(false);
+  // ADR 0738: the engine's iso-surface (its level, null for off) and streamlines (their rake, null for off)
+  const [isoLevel, setIsoLevel] = useState<number | null>(null);
+  const [rakeAsked, setRake] = useState<Rake | null>(null);
+  // the engine picture the canvas last drew, finished on the GPU (data-cut, data-arrows, data-iso, data-streamlines)
+  const [pictureDrawn, setPictureDrawn] = useState<object | null>(null);
   const [pointerAt, setPointerAt] = useState('');
   const [hover, setHover] = useState<{ pick: Pick; by: 'pointer' | 'keyboard' } | null>(null);
   const [attempt, setAttempt] = useState(0);
@@ -186,20 +194,52 @@ export function FieldViewport({
   // F-832: the layers are made in the worker with the surface's arrays (F-809's meshLayers, unchanged)
   const layers = opened?.prepared.layers ?? null;
   const derivedCtx = useMemo(
-    () => (opened && layers ? { layers, fields: opened.info.fields, nCells: opened.info.nCells } : null),
-    [opened?.info.fields, opened?.info.nCells, layers],
+    () =>
+      opened && layers
+        ? { layers, fields: opened.info.fields, nCells: opened.info.nCells, route: store.route, storedField: load ? null : field }
+        : null,
+    [opened?.info.fields, opened?.info.nCells, layers, store.route, load, field],
   );
   // a picture that does not apply to this store (another store was opened) is off
   const cut = derivedCtx && cutAsked && availability('cut', derivedCtx).ok ? cutAsked : null;
   const vectorsOn = !!derivedCtx && vectorsAsked && availability('vectors', derivedCtx).ok;
-  // F-832: the arrows are made in the worker too, on the surface it holds
-  const preparedSurface = opened?.prepared ?? null;
-  const glyphsOf = useCallback(
-    (s: SurfaceData, comps: readonly (Float32Array | null)[], l: Layers, n: number): Promise<Glyphs> =>
-      preparedSurface && preparedSurface.surface === s ? prep.glyphs(preparedSurface, comps, l, n) : Promise.reject(new Error('the surface changed')),
-    [prep, preparedSurface],
-  );
-  const arrows = useArrows(store, shown?.snapshot ?? null, shown?.surface ?? null, layers, opened?.info.nCells ?? 0, vectorsOn, tagBase, glyphsOf);
+  const isoOn = !!derivedCtx && isoLevel !== null && availability('iso', derivedCtx).ok;
+  const rake = derivedCtx && rakeAsked && availability('streamlines', derivedCtx).ok ? rakeAsked : null;
+  // ADR 0738: what the engine is asked for, of the shown snapshot
+  const cutArgs: DeriveArgs | null =
+    cut || vectorsOn ? { kind: 'cut_surface', ...(cut ? { axis: cut.axis, at: cut.at, keep: cut.keep } : {}), ...(vectorsOn ? { vectors: true } : {}) } : null;
+  const isoArgs: DeriveArgs | null = isoOn ? { kind: 'iso', field, level: isoLevel! } : null;
+  const streamArgs: DeriveArgs | null =
+    rake && layers ? { kind: 'streamlines', rake: { ...rakeEnds(layers, rake), n: rake.n }, direction: 'both', maxSteps: 2000 } : null;
+  const shownSnapshot = shown?.snapshot ?? null;
+  const cutPic = useDerived(store, shownSnapshot, cutArgs, `${tagBase}-cut`, cut ? 'The cut plane' : 'The arrows');
+  const isoPic = useDerived(store, shownSnapshot, isoArgs, `${tagBase}-iso`, 'The iso-surface');
+  const streamPic = useDerived(store, shownSnapshot, streamArgs, `${tagBase}-stream`, 'The streamlines');
+  const cutGlb = cutPic.kind === 'on' ? cutPic.glb : null;
+  const engineCutAll = useMemo(() => (cutGlb ? cutOf(cutGlb) : null), [cutGlb]);
+  const isoGlb = isoPic.kind === 'on' ? isoPic.glb : null;
+  const engineIso = useMemo(() => (isoGlb ? isoOf(isoGlb) : null), [isoGlb]);
+  const streamGlb = streamPic.kind === 'on' ? streamPic.glb : null;
+  const engineLines = useMemo(() => (streamGlb ? linesOf(streamGlb) : null), [streamGlb]);
+  // the last picture made stays while a newer one is made; it is drawn only while its kind is still asked for
+  const engineCut = cut && engineCutAll ? engineCutAll : null;
+  const engineArrows = vectorsOn && engineCutAll ? engineCutAll.arrows : null;
+  const iso = isoOn ? engineIso : null;
+  const streamlines = rake && engineLines ? engineLines.segments : null;
+  const current = (pic: typeof cutPic, args: DeriveArgs | null) =>
+    pic.kind === 'on' && !pic.loading && args !== null && shownSnapshot !== null && pic.key === pictureKey(storeKey, shownSnapshot, args);
+  const drawnNow = pictureDrawn !== null && pictureDrawn === (engineCut ?? iso ?? engineArrows ?? streamlines);
+  const derivedErrors = [cutPic, isoPic, streamPic].flatMap((p) => (p.kind === 'error' ? [p.message] : []));
+  // ADR 0738 P5 (F-837): the unit of the stored mesh's lengths as the engine names it: data.open's on the service route,
+  // else the `length_unit` of a derived picture of this store (remembered for the store once named)
+  const [namedUnit, setNamedUnit] = useState<{ store: string; unit: string } | null>(null);
+  const pictureUnit = [cutPic, isoPic, streamPic]
+    .map((p) => (p.kind === 'on' && p.key.startsWith(`${storeKey} `) ? p.glb.extras['length_unit'] : undefined))
+    .find((u): u is string => typeof u === 'string' && u !== '');
+  useEffect(() => {
+    if (pictureUnit) setNamedUnit((n) => (n?.store === storeKey && n.unit === pictureUnit ? n : { store: storeKey, unit: pictureUnit }));
+  }, [storeKey, pictureUnit]);
+  const length = lengthUnitOf(opened?.info.lengthUnit ?? null, pictureUnit ?? (namedUnit?.store === storeKey ? namedUnit.unit : null));
 
   // the store: open it and read its surface (once per store)
   useEffect(() => {
@@ -525,6 +565,8 @@ export function FieldViewport({
     else readAt(e.clientX, e.clientY);
   };
   const onKeyDown = (e: KeyboardEvent<HTMLDivElement>) => {
+    // a chord with Ctrl, Cmd or Alt is someone else's (Ctrl+O opens a folder, Ctrl+0 is the actual size)
+    if (e.ctrlKey || e.metaKey || e.altKey) return;
     if (!api.current?.key(e.key)) return;
     e.preventDefault();
     const pick = api.current.pickCentre();
@@ -584,9 +626,8 @@ export function FieldViewport({
     return [`Saved ${r.result.path} (${r.result.width} by ${r.result.height} pixels).`];
   };
   const twoD = layers?.twoD === true;
-  const faceOn = () => {
-    if (layers) api.current?.faceOn(layers.thin);
-  };
+  // Addendum 22: Face on only turns the view (the centre and the zoom stay); Reset view is the full reset
+  const faceOn = () => api.current?.faceOn();
   const NOTHING = 'No field is drawn yet: open a run in the workspace and wait for its picture.';
   useCommandHandlers({
     'field.save_png': { unavailable: () => (shown ? null : NOTHING), run: savePng },
@@ -594,10 +635,8 @@ export function FieldViewport({
       unavailable: () => (!shown ? NOTHING : ranged ? null : 'In compare mode both views share one range; leave compare mode first.'),
       run: (args) => chooseRange((['snapshot', 'run', 'fixed'] as const).find((m) => m === args['mode']) ?? 'snapshot'),
     },
-    'field.face_on': {
-      unavailable: () => (!shown || !layers ? NOTHING : twoD ? null : 'The case is not 2D (one cell layer): there is no face to look at straight on.'),
-      run: faceOn,
-    },
+    'field.face_on': { unavailable: () => (shown ? null : NOTHING), run: faceOn },
+    'field.reset_view': { unavailable: () => (shown ? null : NOTHING), run: reset },
   });
   const outside =
     ranged && rangeMode === 'fixed' && shown && !('problem' in fixed)
@@ -631,13 +670,17 @@ export function FieldViewport({
             vectors={vectorsOn}
             onVectors={setVectors}
             startCut={layers ? () => middleCut(layers, 0) : null}
+            iso={isoOn}
+            onIso={(on) => setIsoLevel(on && drawnRange ? Math.fround(0.5 * (drawnRange.lo + drawnRange.hi)) : null)}
+            streamlines={rake !== null}
+            onStreamlines={(on) => setRake(on && layers ? startRake(layers) : null)}
           />
         )}
-        {arrows.kind === 'error' && (
-          <span className="fv-note fv-note--error" role="alert" data-words="exception">
-            {arrows.message}
+        {derivedErrors.map((m) => (
+          <span key={m} className="fv-note fv-note--error" role="alert" data-words="exception">
+            {m}
           </span>
-        )}
+        ))}
         {ranged && (
           // F-837: the colour range of the shown snapshot (F-808's), of the whole run, or fixed; icons only (G22)
           <div className="fv-range" role="group" aria-label="Colour range">
@@ -646,7 +689,14 @@ export function FieldViewport({
             <IconToggle icon="range-fixed" label="Fixed colour range" isSelected={rangeMode === 'fixed'} onChange={() => chooseRange('fixed')} isDisabled={!shown} />
           </div>
         )}
-        {twoD && layers && <IconButton variant="ghost" icon="face-on" label={`View face on (along ${AXIS[layers.thin]})`} onPress={faceOn} isDisabled={!shown} className="fv-face-on" />}
+        <IconButton
+          variant="ghost"
+          icon="face-on"
+          label={twoD && layers ? `View face on (along ${AXIS[layers.thin]})` : 'View face on (the nearest axis)'}
+          onPress={faceOn}
+          isDisabled={!shown}
+          className="fv-face-on"
+        />
         <IconButton variant="ghost" icon="image" label="Save the view as PNG…" onPress={() => void savePng().catch(() => undefined)} isDisabled={!shown} className="fv-save-png" />
         {runRangeError && (
           <span className="fv-note fv-note--error" role="alert" data-words="exception">
@@ -670,7 +720,9 @@ export function FieldViewport({
         className="fv-frame"
         role="application"
         aria-roledescription="field view"
-        aria-label={`${quantity} on the boundary surface. Arrow keys orbit, plus and minus zoom, Home resets the view; the value at the centre is read out.`}
+        aria-label={`${quantity} on the boundary surface. ${
+          twoD ? 'Arrow keys pan' : 'Arrow keys orbit'
+        }, plus and minus zoom, F frames the domain, O turns the view face on, Home resets the view; the value at the centre is read out.`}
         tabIndex={shown ? 0 : -1}
         onPointerMove={onPointerMove}
         onPointerUp={onPointerUp}
@@ -679,7 +731,10 @@ export function FieldViewport({
         data-ready={phase.kind === 'ready' && shown !== null && drawnValues === shown.values ? '' : undefined}
         data-snapshot={shown ? shown.snapshot : undefined}
         data-step={snap?.step}
-        data-arrows={arrows.kind === 'on' && arrows.snapshot === shown?.snapshot ? arrows.glyphs.cells.length : undefined}
+        data-arrows={vectorsOn && engineCutAll && current(cutPic, cutArgs) && drawnNow ? engineCutAll.arrowCount : undefined}
+        data-cut={cut && engineCut && current(cutPic, cutArgs) && drawnNow ? `${cut.axis} ${cut.at} ${cut.keep}` : undefined}
+        data-iso={iso && current(isoPic, isoArgs) && drawnNow ? iso.triangles : undefined}
+        data-streamlines={streamlines && engineLines && current(streamPic, streamArgs) && drawnNow ? engineLines.lines : undefined}
         data-range={drawnRange ? `${drawnRange.lo} ${drawnRange.hi}` : undefined}
         data-scale={bar ? bar.length : undefined}
         data-provenance="fv-readout"
@@ -698,11 +753,24 @@ export function FieldViewport({
           onDrawn={onDrawn}
           onGridState={setGridState}
           cut={cut}
-          arrows={arrows.kind === 'on' && arrows.snapshot === shown?.snapshot ? arrows.glyphs.segments : null}
+          engineCut={engineCut}
+          engineArrows={engineArrows}
+          iso={iso}
+          streamlines={streamlines}
+          onPictureDrawn={setPictureDrawn}
           prepared={opened?.prepared ?? null}
           scalars={shown?.scalars ?? null}
+          thin={twoD && layers ? layers.thin : null}
         />
-        {cut && layers && shown && <CutPanel cut={cut} layers={layers} onCut={setCut} />}
+        {(cut || isoOn || rake) && layers && shown && (
+          <div className="fv-panels">
+            {cut && <CutPanel cut={cut} layers={layers} unit={length.unit} onCut={setCut} />}
+            {isoOn && drawnRange && (
+              <IsoPanel level={isoLevel!} lo={drawnRange.lo} hi={drawnRange.hi} quantity={word} unit={unit} onLevel={(v) => setIsoLevel(Math.fround(v))} />
+            )}
+            {rake && <StreamPanel rake={rake} layers={layers} onRake={setRake} />}
+          </div>
+        )}
         {ranged && rangeMode === 'fixed' && shown && (
           // F-837: the fixed range's two ends; keys and pointer stay in the panel (not the orbit)
           <div className="fv-fixed" role="group" aria-label="Fixed colour range" onKeyDown={(e) => e.stopPropagation()} onPointerMove={(e) => e.stopPropagation()} onPointerDown={(e) => e.stopPropagation()}>
@@ -717,17 +785,13 @@ export function FieldViewport({
         )}
         {bar && (
           // F-837: the scale bar of a face-on 2D view (the egui Studio's rule), in the picture Save PNG writes
-          <div className="fv-scalebar" data-length={bar.length} title={LENGTH_UNIT_WHY}>
+          <div className="fv-scalebar" data-length={bar.length} data-length-unit={length.from} title={length.why}>
             <span className="fv-scalebar-bar" style={{ width: `${bar.px}px` }} aria-hidden="true" />
-            <span data-words="data">{`${lengthText(bar.length)} ${LENGTH_UNIT}`}</span>
+            <span data-words="data">{`${lengthText(bar.length)} ${length.unit}`}</span>
           </div>
         )}
         <WorkProgress scope={tagBase} />
-        {moved && shown && (
-          <Button className="fv-reset" onPress={reset}>
-            Reset view
-          </Button>
-        )}
+        {moved && shown && <IconButton icon="reset-view" label="Reset view" onPress={reset} className="fv-reset" />}
         {hover?.by === 'keyboard' && <span className="fv-crosshair" aria-hidden="true" />}
         {/* F-832: a load's progress is WorkProgress's (above), shown after PROGRESS_AFTER_MS; this box is for errors */}
         {phase.kind === 'error' && (
@@ -791,10 +855,10 @@ export function FieldViewport({
                 cells
               </Quiet>
               {layers && (
-                // F-837: the domain's size (the egui Studio's "domain 2 x 1 m"): the stored mesh's extents, m from the
-                // engine's SI settings (the store names no unit), said in the tooltip
-                <span className="fv-domain" data-words="data" data-domain={domainText(layers)} title={`Domain${layers.twoD ? ' (2D: the two in-plane extents)' : ''}. ${LENGTH_UNIT_WHY}`}>
-                  {` · ${domainText(layers)} ${LENGTH_UNIT}`}
+                // F-837: the domain's size (the egui Studio's "domain 2 x 1 m"): the stored mesh's extents in the unit
+                // the engine names for them (ADR 0738 P5), where it comes from said in the tooltip
+                <span className="fv-domain" data-words="data" data-domain={domainText(layers)} data-length-unit={length.from} title={`Domain${layers.twoD ? ' (2D: the two in-plane extents)' : ''}. ${length.why}`}>
+                  {` · ${domainText(layers)} ${length.unit}`}
                 </span>
               )}
               {outside && outside.outside > 0 && (

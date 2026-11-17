@@ -17,6 +17,8 @@ import { latestFor, requestWords, setEntries } from './control-model.js';
 import { caseName, type RunRow } from './model.js';
 import './control.css';
 import { EngineRecovery } from '../help/Recovery.js';
+import { LOCAL } from '../../shared/sites.js';
+import { useSiteStart, useSites, useWhere, WhereSelect } from './Sites.js';
 
 /** One action in flight at a time per control group; the last answer for its feedback line. */
 function useAction(onStarted?: (run: string) => void) {
@@ -33,7 +35,12 @@ function useAction(onStarted?: (run: string) => void) {
       setBusy(null);
     }
   };
-  return { busy, last, run, clear: () => setLast(null) };
+  /** F-848: an answer that came another way (a run on a site, src/renderer/runs/Sites.tsx), shown as the last one. */
+  const took = (r: RunActionResult) => {
+    setLast(r);
+    if (r.ok && r.request.run) onStarted?.(r.request.run);
+  };
+  return { busy, last, run, took, clear: () => setLast(null) };
 }
 
 /** A control: the button when the action is available, else the unavailable chip that says why (DESIGN.md Buttons). */
@@ -174,8 +181,14 @@ export function RunBar({ view, onStarted, lead }: { view: ProjectView; onStarted
   const act = useAction(onStarted);
   const startRunner = () => void act.run('project.start_runner', {});
   const request = current(view, act.last);
+  // F-848: Where, shown only when the sites file lists a site; a run on a site asks first when the site needs a yes
+  const sites = useSites(view.folder);
+  const [where, setWhere] = useWhere(sites.state);
+  const onSite = useSiteStart(act.took);
+  const remote = where !== LOCAL;
   return (
     <section className="rc-bar" aria-label="Start a run">
+      {onSite.panel}
       <div className="rc-bar-row">
         <span className="rc-bar-title sr-only">Start a run</span>
         {/* F-837: the runner's budgets first (the keys of F-807's bar keep their order: case, Run, Queue, Start the runner) */}
@@ -192,6 +205,7 @@ export function RunBar({ view, onStarted, lead }: { view: ProjectView; onStarted
         ) : (
           <span className="rc-quiet">No case in cases/ to run.</span>
         )}
+        <WhereSelect state={sites.state} where={where} onChange={setWhere} />
         <Control
           id="project.run_case"
           params={casePath ? { case: casePath } : {}}
@@ -199,9 +213,13 @@ export function RunBar({ view, onStarted, lead }: { view: ProjectView; onStarted
           label="Run"
           icon="play"
           variant="primary"
-          busy={act.busy === 'project.run_case'}
-          onPress={() => casePath && void act.run('project.run_case', { case: casePath })}
-          name={casePath ? `Run ${caseName(casePath)}` : undefined}
+          busy={act.busy === 'project.run_case' || onSite.busy}
+          onPress={() => {
+            if (!casePath) return;
+            if (remote) void onSite.start({ case: casePath, site: where });
+            else void act.run('project.run_case', { case: casePath });
+          }}
+          name={casePath ? (remote ? `Run ${caseName(casePath)} on ${where}` : `Run ${caseName(casePath)}`) : undefined}
         />
         <Button onPress={() => setQueueOpen((o) => !o)} aria-expanded={queueOpen} isDisabled={casePath === null} data-action="project.queue_case">
           Queue…
@@ -221,8 +239,13 @@ export function RunBar({ view, onStarted, lead }: { view: ProjectView; onStarted
         <QueueForm
           view={view}
           casePath={casePath}
-          busy={act.busy === 'project.queue_case'}
+          busy={act.busy === 'project.queue_case' || onSite.busy}
           onQueue={async (p) => {
+            if (remote) {
+              setQueueOpen(false);
+              await onSite.start({ ...p, site: where });
+              return;
+            }
             const r = await act.run('project.queue_case', p);
             if (r.ok) setQueueOpen(false);
           }}

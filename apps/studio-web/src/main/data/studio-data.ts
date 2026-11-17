@@ -9,6 +9,7 @@ import { RemoteData, type RemoteService } from './remote.js';
 import type { DataRoots } from './roots.js';
 import { DataFailure as Failure } from './queue.js';
 import { testDelayMs } from '../work/delay.js';
+import { runDerive, type DeriveEngine } from './derive.js';
 
 /**
  * F-832: the tests' delay before a request reaches its route (none outside them). A cancel during it sends nothing to
@@ -47,9 +48,40 @@ export class StudioData implements DataBackend {
   readonly local: LocalData;
   readonly remote: RemoteData;
 
-  constructor(service: RemoteService, roots: DataRoots, workerUrl: URL = WORKER_URL) {
+  constructor(
+    service: RemoteService,
+    roots: DataRoots,
+    workerUrl: URL = WORKER_URL,
+    /** ADR 0738: the engine's rcfd that makes the derived pictures (src/main/data/derive.ts), or why there is none. */
+    private readonly engine: DeriveEngine = { ok: false, reason: 'The Studio was not given the engine (rcfd) for derived pictures.' },
+  ) {
     this.local = new LocalData(roots, workerUrl);
     this.remote = new RemoteData(service);
+  }
+
+  /** ADR 0738: `rcfd post derive` on a local store folder inside a data root. */
+  private derive(p: string, snapshot: number, r: Extract<DataRequest, { op: 'derive' }>): Job<DataWireResult> {
+    const engine = this.engine;
+    if (!engine.ok) {
+      const promise = Promise.reject(new DataFailure('not_configured', engine.reason));
+      return { promise, cancel: () => undefined };
+    }
+    let inner: Job<DataWireResult> | null = null;
+    let cancelled: DataFailure | null = null;
+    const promise = (async () => {
+      const dir = await this.local.roots.resolve(p);
+      if (!dir.ok) throw new DataFailure('not_allowed', dir.message);
+      if (cancelled) throw cancelled;
+      inner = runDerive(engine.rcfd, dir.dir, snapshot, r.args);
+      return inner.promise;
+    })();
+    return {
+      promise,
+      cancel: (reason = new DataFailure('cancelled', 'cancelled')) => {
+        cancelled = reason;
+        (inner as Job<DataWireResult> | null)?.cancel(reason);
+      },
+    };
   }
 
   run(r: Exclude<DataRequest, { op: 'cancel' }>, timeoutMs: number): Job<DataWireResult> {
@@ -74,6 +106,8 @@ export class StudioData implements DataBackend {
         case 'difference':
           if (r.other.route !== 'local') return failed('difference: both stores must be on the same route (local)');
           return this.local.difference(p, r.snapshot, r.other.path, r.otherSnapshot, r.field);
+        case 'derive':
+          return this.derive(p, r.snapshot, r);
       }
     }
     switch (r.op) {
@@ -92,6 +126,9 @@ export class StudioData implements DataBackend {
       case 'difference':
         // F-815: the service's data.* methods have no difference (ADR 0801, addendum F-815)
         return failed('difference: the service route has no difference of two stores; it is computed by the local reader only');
+      case 'derive':
+        // ADR 0738 Q1 (a): no data.* method; the engine's rcfd post derive runs on a local store
+        return failed('derive: the service route has no derived pictures; the engine makes them of a local store (rcfd post derive)');
     }
   }
 

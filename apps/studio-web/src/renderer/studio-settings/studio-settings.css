@@ -75,3 +75,55 @@
   font-size: var(--type-label-size);
   font-weight: var(--type-label-weight);
 }
+
+/* F-848: the Sites section (SitesSection.tsx), shown only while the user has a sites file */
+.ss-sites {
+  align-items: flex-start;
+}
+.ss-sites-body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-md);
+  min-width: 0;
+}
+.ss-sites-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+}
+.ss-site,
+.ss-sites-file {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--space-sm) var(--space-md);
+}
+.ss-site-name {
+  font-weight: var(--font-weight-medium);
+  min-width: 96px;
+}
+.ss-site-where,
+.ss-sites-path {
+  color: var(--role-text-2);
+  overflow-wrap: anywhere;
+}
+.ss-site-state[data-words='exception'],
+.ss-sites-error {
+  color: var(--role-text-fail);
+}
+/* the sites file's path is its Open button (G22: the line is data) */
+.ss-sites-open {
+  max-width: 100%;
+  height: auto;
+  min-height: var(--size-control);
+  padding-inline: 0;
+  white-space: normal;
+  text-align: left;
+}
+/* the runner toggle (its section's name is for readers only) lines up with the controls of the titled sections */
+.ss-keep {
+  margin-left: calc(232px + var(--space-xl));
+}

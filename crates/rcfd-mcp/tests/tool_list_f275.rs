@@ -48,8 +48,9 @@ const EXECUTE: [&str; 3] = ["design_run_study", "design_evaluate", "design_run_o
 /// `list_meshes` (C5-L restated for F-837), ADR 0734 P4's `hash_project_file` right after `read_project_file` (C5-L
 /// restated for F-828), ADR 0736 P1's six trash tools last (C5-L restated for F-829), ADR 0737's `case_facts` and
 /// `refine_case_mesh` right after `set_runner_config` (restated again for F-837), and ADR 0738 P4's `derive_picture`
-/// right after `render_field` (C5-L restated for F-809).
-const PROJECT_TOOLS: [&str; 35] = [
+/// right after `render_field` (C5-L restated for F-809), and ADR 0739's `list_sites` right after `refine_case_mesh`
+/// (C5-L restated for F-848).
+const PROJECT_TOOLS: [&str; 36] = [
     "project_info",
     "list_runs",
     "run_status",
@@ -74,6 +75,7 @@ const PROJECT_TOOLS: [&str; 35] = [
     "set_runner_config",
     "case_facts",
     "refine_case_mesh",
+    "list_sites",
     "start_run",
     "pause_run",
     "resume_run",
@@ -106,8 +108,8 @@ fn files(dir: &Path) -> Vec<(String, Vec<u8>)> {
     out
 }
 
-/// C5-L: under `--project`, 52 tools (40, ADR 0733's two, ADR 0734's one, ADR 0736's six, ADR 0737's two and ADR 0738's one): the list without `--project` less the 16 of P1, in its order and byte for byte (but the
-/// class `execute` of `design_run_study` and `design_evaluate`, ADR 0196 B), then the 35 project tools.
+/// C5-L: under `--project`, 53 tools (40, ADR 0733's two, ADR 0734's one, ADR 0736's six, ADR 0737's two, ADR 0738's one and ADR 0739's one): the list without `--project` less the 16 of P1, in its order and byte for byte (but the
+/// class `execute` of `design_run_study` and `design_evaluate`, ADR 0196 B), then the 36 project tools.
 #[test]
 fn c5l_project_list_has_no_session_only_tool() {
     let dir = project("c5l");
@@ -126,8 +128,8 @@ fn c5l_project_list_has_no_session_only_tool() {
     assert_eq!(kept.len(), 17);
     assert_eq!(
         live.len(),
-        52,
-        "17 session tools and 35 project tools (ADR 0733: two budgets tools; ADR 0734: hash_project_file; ADR 0736: six trash tools; ADR 0737: case_facts, refine_case_mesh; ADR 0738: derive_picture)"
+        53,
+        "17 session tools and 36 project tools (ADR 0733: two budgets tools; ADR 0734: hash_project_file; ADR 0736: six trash tools; ADR 0737: case_facts, refine_case_mesh; ADR 0738: derive_picture; ADR 0739: list_sites)"
     );
     let mut execute = 0;
     for (l, k) in live.iter().zip(&kept) {

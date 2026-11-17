@@ -12,7 +12,9 @@
 // F-835: a new project is made by the engine, never by the Studio (G4, G12): `create` runs the engine's
 // `rcfd project init <folder>` (ADR 0731; the MCP equivalent is `create_project`) on a folder chosen in the main
 // process's folder dialog, or on the folder the engine has just refused as no project, and then opens it as `open` does.
+import type { RunnerPlan } from './runner-lifetime.js';
 import type { CancelOptions } from './work.js';
+import type { RunSite, SiteCheckResult, SiteOp, SitesState } from './sites.js';
 
 /** The one IPC channel main uses to hand the preload script the project port (main -> renderer only). */
 export const PROJECT_PORT_CHANNEL = 'studio.project-port';
@@ -297,6 +299,12 @@ export interface ProjectView {
    * action log, not project state: the runs themselves are the runner's (G7, G12).
    */
   readonly runRequests?: readonly RunRequest[];
+  /**
+   * F-848 (ADR 0739): the remote runs among the listed runs, by run id: the site run.json names and the link state the
+   * local runner wrote (src/shared/sites.ts). Absent while no run of the project went to a site, and always absent while
+   * the user has no sites file.
+   */
+  readonly runSites?: Readonly<Record<string, RunSite>>;
   /** Feed entries since the project was opened, newest first (at most MAX_CHANGES). */
   readonly changes: readonly ChangeEntry[];
   readonly openedAt: string;
@@ -351,7 +359,13 @@ export type ProjectRequest =
   | { readonly op: 'pick'; readonly id: number }
   | { readonly op: 'open'; readonly id: number; readonly path: string }
   | { readonly op: 'forget'; readonly id: number; readonly path: string }
-  | { readonly op: 'close'; readonly id: number }
+  /**
+   * Closes the open project. `runs` (G7 as amended 2026-11-17, src/shared/runner-lifetime.ts): the close prompt's
+   * answer for the active runs of a runner the Studio owns, `stop` or `keep`; absent, a runner with active runs is kept.
+   */
+  | { readonly op: 'close'; readonly id: number; readonly runs?: 'stop' | 'keep' }
+  /** What a close means for the open project's runner: the reply's result is a RunnerPlan (src/shared/runner-lifetime.ts). */
+  | { readonly op: 'runnerPlan'; readonly id: number }
   | { readonly op: 'refresh'; readonly id: number }
   | { readonly op: 'dismiss'; readonly id: number }
   /** F-807: a run-control action (src/shared/actions/runs.ts) with its parameters; the reply's result is a RunActionResult. */
@@ -374,6 +388,12 @@ export type ProjectRequest =
    */
   | { readonly op: 'trash'; readonly id: number; readonly what: TrashWhat; readonly params: Readonly<Record<string, unknown>> }
   /**
+   * F-848 (ADR 0739): the user's run sites through the engine (src/shared/sites.ts): `list` (a SitesState), `check` and
+   * `confirm` of the site `name` (a SiteCheckResult; confirm records the user's yes in the sites file), `open` (opens the
+   * sites file in the system's editor; the result is {message}, empty when it opened).
+   */
+  | { readonly op: 'sites'; readonly id: number; readonly what: SiteOp; readonly name?: string }
+  /**
    * ADR 0801 Addendum 23: Claude Code for the open project (CLAUDE_CODE_OPS). `status` reads the registration with
    * `claude mcp get`, `register` runs `claude mcp add --scope local` (replacing a registration of another engine),
    * `copy` puts the command on the system clipboard, `open` opens a terminal in the folder running `claude`. The reply's
@@ -386,7 +406,7 @@ export const CREATE_WHERE = ['pick', 'here'] as const;
 export type CreateWhere = (typeof CREATE_WHERE)[number];
 
 export type ProjectOp = ProjectRequest['op'];
-export const PROJECT_OPS = ['state', 'pick', 'open', 'forget', 'close', 'refresh', 'dismiss', 'action', 'cancel', 'create', 'trash', 'claudeCode'] as const satisfies readonly ProjectOp[];
+export const PROJECT_OPS = ['state', 'pick', 'open', 'forget', 'close', 'refresh', 'dismiss', 'action', 'cancel', 'create', 'trash', 'runnerPlan', 'sites', 'claudeCode'] as const satisfies readonly ProjectOp[];
 
 export interface ProjectError {
   /** `bad_request` (the message has the wrong shape), `not_recent` (open of a folder the recent list does not hold). */
@@ -420,8 +440,13 @@ export interface ProjectBridge {
   open(path: string, options?: CancelOptions): Promise<ProjectReply<null>>;
   /** Removes a folder from the recent list. */
   forget(path: string): Promise<ProjectReply<null>>;
-  /** Closes the open project (stops its project server). */
-  close(): Promise<ProjectReply<null>>;
+  /**
+   * Closes the open project (stops its project server). `runs`: the close prompt's answer for the active runs of a runner
+   * the Studio owns (src/shared/runner-lifetime.ts); without it such a runner is kept, and an idle one is shut down.
+   */
+  close(runs?: 'stop' | 'keep'): Promise<ProjectReply<null>>;
+  /** What a close means for the open project's runner (whether the Studio owns it, and its active runs). */
+  runnerPlan(): Promise<ProjectReply<RunnerPlan>>;
   /** Reads the project again now; when the project server stopped, starts it again. */
   refresh(): Promise<ProjectReply<null>>;
   /** Clears the message of a failed open. */
@@ -515,6 +540,10 @@ export interface RunsBridge {
   dispatch(action: string, params?: Readonly<Record<string, unknown>>): Promise<RunActionResult>;
   /** ADR 0736: moves to the project trash, restores from it, or empties it, through the engine. */
   trash(what: TrashWhat, params: Readonly<Record<string, unknown>>): Promise<TrashOutcome>;
+  /** F-848: the user's run sites (list, check, confirm, open the sites file); never rejects. */
+  sites(what: 'list'): Promise<SitesState>;
+  sites(what: 'check' | 'confirm', name: string): Promise<SiteCheckResult>;
+  sites(what: 'open'): Promise<{ readonly message: string }>;
 }
 
 // ---- ADR 0801 Addendum 23: Claude Code, in its own terminal (src/main/claudecode/)

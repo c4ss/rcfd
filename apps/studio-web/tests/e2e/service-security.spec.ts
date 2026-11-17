@@ -163,7 +163,7 @@ test('the port stays in the preload script: the page never sees it, and a reload
     await new Promise((done) => setTimeout(done, 200));
     return { ports: (window as unknown as { __portsSeen: number }).__portsSeen, r, studio: Object.keys(window.studio).sort() };
   });
-  expect(seen).toEqual({ ports: 0, r: { ok: true, result: { echo: { after: 'reload' } } }, studio: ['app', 'theme'] });
+  expect(seen).toEqual({ ports: 0, r: { ok: true, result: { echo: { after: 'reload' } } }, studio: ['app', 'runner', 'theme'] });
   // the reload did not touch the main process's connections (G7)
   expect(fake.connections).toBe(2);
   const s = await untilState(page, (x) => x.status === 'connected');
@@ -179,7 +179,7 @@ test('the shell\'s ipcMain channels are still app.info and app.ready only: the s
     };
   });
   // F-818 and F-837: the shell's channels are app.info, app.ready, the close answer and the theme's two
-  expect(names).toEqual({ handlers: ['app.closeAnswer', 'app.info', 'app.ready', 'theme.get', 'theme.set'], listeners: [] });
+  expect(names).toEqual({ handlers: ['app.closeAnswer', 'app.info', 'app.ready', 'runner.keep.get', 'runner.keep.set', 'theme.get', 'theme.set'], listeners: [] });
 });
 
 test('events reach a subscriber, filtered by session when asked', async () => {

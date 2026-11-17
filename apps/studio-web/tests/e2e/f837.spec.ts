@@ -293,19 +293,34 @@ test('the field view: whole-run and fixed colour ranges; the snapshot’s range 
 
 test('the field view face on: the 2D plane straight on, a scale bar in metres, the domain in the caption', async () => {
   await expect(page.locator('.fv-domain')).toHaveAttribute('data-domain', '1 × 1');
-  await expect(page.locator('.fv-scalebar')).toHaveCount(0);
-  await page.getByRole('button', { name: 'View face on (along z)' }).click();
+  // ADR 0801 Addendum 22: a 2D case opens face on, orthographic along its thin axis, so its scale bar is there at once
+  const canvas = page.locator('.fv-frame canvas').first();
+  await expect(canvas).toHaveAttribute('data-camera', 'orthographic');
+  await expect(canvas).toHaveAttribute('data-camera-forward', '0.00000 0.00000 -1.00000');
   const bar = page.locator('.fv-scalebar');
   await expect(bar).toBeVisible();
   const length = Number(await bar.getAttribute('data-length'));
   const m = length / 10 ** Math.floor(Math.log10(length) + 1e-12);
   expect([1, 2, 5].some((x) => Math.abs(m - x) < 1e-9)).toBe(true);
   await expect(bar).toContainText(/m$/);
+  // ADR 0738 P5: a local store names no length unit, so the bar says the engine's documented store unit, and why
+  await expect(bar).toHaveAttribute('data-length-unit', 'documented');
+  await expect(bar).toHaveAttribute('title', /the engine stores the mesh in metres, after mesh\.scale and \[mesh\.transform\]/);
+  const zoom0 = Number(await canvas.getAttribute('data-camera-zoom'));
+  // zoomed in: Face on only turns the view (it is face on already), the zoom stays; Reset view frames the domain again
+  await page.locator('.fv-frame').first().focus();
+  for (let i = 0; i < 3; i++) await page.keyboard.press('+');
+  const zoomed = Number(await canvas.getAttribute('data-camera-zoom'));
+  expect(zoomed).toBeLessThan(zoom0 * 0.8);
+  await page.getByRole('button', { name: 'View face on (along z)' }).click();
+  expect(Number(await canvas.getAttribute('data-camera-zoom'))).toBe(zoomed);
+  await expect(bar).toBeVisible();
   await page.mouse.move(1439, 899);
   await shot('09-face-on-scale-bar');
-  // turned away from the axis: no scale bar (it would not be true across the view)
   await page.getByRole('button', { name: 'Reset view' }).click();
-  await expect(bar).toHaveCount(0);
+  await expect(canvas).toHaveAttribute('data-camera-moved', 'false');
+  expect(Number(await canvas.getAttribute('data-camera-zoom'))).toBe(zoom0);
+  await expect(bar).toBeVisible();
 });
 
 test('Save PNG: the view with its legend and caption, to the file the save dialog names', async () => {

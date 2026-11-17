@@ -22,7 +22,7 @@
 // sandboxed preload can only require 'electron' and a few built-ins: the shared modules are imported for their types
 // only, and the two constants below are typed by theirs, so a change there fails to compile here.
 import { contextBridge, ipcRenderer, type IpcRendererEvent } from 'electron';
-import type { AppInfo, Channel, CloseAnswer, CLOSE_REQUEST_CHANNEL as CloseChannel, StudioBridge } from '../shared/ipc.js';
+import type { AppInfo, Channel, CloseAnswer, KeepRunnerState, CLOSE_REQUEST_CHANNEL as CloseChannel, StudioBridge } from '../shared/ipc.js';
 import type { ThemeSetting, ThemeState } from '../shared/theme.js';
 import type {
   DEFAULT_CALL_TIMEOUT_MS as DefaultTimeout,
@@ -54,6 +54,7 @@ import type {
   DATA_PORT_CHANNEL as DataPortChannel,
   CompareBridge,
   DataBridge,
+  DerivedBridge,
   DataOptions,
   DataPortMessage,
   DataReply,
@@ -113,6 +114,11 @@ const bridge: StudioBridge = {
       closeListener = typeof listener === 'function' ? listener : null;
     },
     closeAnswer: (request: number, answer: CloseAnswer) => invoke<void>('app.closeAnswer', request, answer),
+  },
+  // G7 as amended 2026-11-17: Keep the runner going after the Studio closes; the main process checks the value
+  runner: {
+    getKeep: () => invoke<KeepRunnerState>('runner.keep.get'),
+    setKeep: (keep: boolean) => invoke<KeepRunnerState>('runner.keep.set', keep),
   },
   // F-818: the theme setting; the main process checks the value (src/main/theme.ts)
   theme: {
@@ -348,7 +354,9 @@ const project: ProjectBridge = {
     return projectSend({ op: 'open', id: nextProjectId++, path });
   },
   forget: (path) => projectSend({ op: 'forget', id: nextProjectId++, path }),
-  close: () => projectSend({ op: 'close', id: nextProjectId++ }),
+  // G7 as amended 2026-11-17: the close prompt's answer for an owned runner's active runs; main checks it again
+  close: (runs) => projectSend(runs === 'stop' || runs === 'keep' ? { op: 'close', id: nextProjectId++, runs } : { op: 'close', id: nextProjectId++ }),
+  runnerPlan: () => projectSend({ op: 'runnerPlan', id: nextProjectId++ }),
   refresh: () => projectSend({ op: 'refresh', id: nextProjectId++ }),
   dismiss: () => projectSend({ op: 'dismiss', id: nextProjectId++ }),
   // F-835: the engine makes the project (rcfd project init), then it opens; main checks `where` again
@@ -382,6 +390,14 @@ const runs: RunsBridge = {
     const r = await projectSend<TrashOutcome>({ op: 'trash', id: nextProjectId++, what, params });
     return r.ok ? r.result : { ok: false, code: r.error.code, message: `The request did not reach the Studio's main process: ${r.error.message}`, data: null };
   },
+  // F-848: the user's run sites through the engine; main checks `what` and the name again
+  sites: (async (what: 'list' | 'check' | 'confirm' | 'open', name?: string) => {
+    const req: ProjectRequest = typeof name === 'string' ? { op: 'sites', id: nextProjectId++, what, name } : { op: 'sites', id: nextProjectId++, what };
+    const r = await projectSend<unknown>(req);
+    if (r.ok) return r.result;
+    const message = `The request did not reach the Studio's main process: ${r.error.message}`;
+    return what === 'list' ? { file: null, exists: false, sites: [], error: message, choice: 'local' } : what === 'open' ? { message } : { ok: false, message };
+  }) as RunsBridge['sites'],
 };
 
 contextBridge.exposeInMainWorld('studioRuns', runs);
@@ -544,6 +560,25 @@ const meshPreview: MeshPreviewBridge = {
 };
 
 contextBridge.exposeInMainWorld('studioMeshPreview', meshPreview);
+
+// ADR 0738 (F-809): a derived picture the engine makes of a stored snapshot (`rcfd post derive`, run by main), same port
+const derived: DerivedBridge = {
+  derive: async (store, snapshot, args, options) => {
+    const r = await sendData({ op: 'derive', id: nextDataId++, store, snapshot, args, ...dataCommon(options) });
+    if (!r.ok) return r;
+    const x = r.result;
+    if (x.kind !== 'derive') return unexpected(x.kind);
+    let summary: Record<string, unknown>;
+    try {
+      summary = JSON.parse(x.summary) as Record<string, unknown>;
+    } catch {
+      return { ok: false, error: { code: 'internal', message: 'the engine’s reply is not JSON' } };
+    }
+    return { ok: true, result: { glb: x.glb, summary } };
+  },
+};
+
+contextBridge.exposeInMainWorld('studioDerived', derived);
 
 // ---- the case port (F-812, src/shared/case.ts)
 //

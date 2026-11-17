@@ -21,16 +21,23 @@ import {
   type RegisteredRunAction,
 } from '../../shared/actions/runs.js';
 import { getFirstRunAction } from '../../shared/actions/first.js';
+import { getSiteRunAction } from '../../shared/sites.js';
 import type { JsonObject } from '../../shared/actions/params.js';
 import { BUDGETS_WRITE_TOOL, RUN_SLOW_MS, type ProjectView, type RunActionFailure, type RunActionResult, type RunRequest, type TrashWriteTool } from '../../shared/project.js';
 import { RpcError } from '../service/rpc.js';
 import { StartFailure, type ProjectServerLike } from './server.js';
+import { runnerStarterEnv } from './runner-lifetime.js';
 
 export interface ControlDeps {
   /** Starts the folder's run-control server: rcfd-mcp --project <folder>, not read-only. */
   startControlServer(folder: string): Promise<ProjectServerLike>;
   /** `rcfd-runner ensure --project <folder>`: resolves when the runner holds the project, or with the reason it does not. */
   ensureRunner(folder: string): Promise<{ readonly ok: true } | { readonly ok: false; readonly message: string }>;
+  /**
+   * F-848: `rcfd-runner <argv> --no-runner --project <folder>` (argv starts with `start` and holds `--site`): the run
+   * queued for a site, or the engine's refusal. Without it a run on a site is refused.
+   */
+  startOnSite?(folder: string, argv: readonly string[]): Promise<{ readonly ok: true; readonly run: string } | { readonly ok: false; readonly message: string }>;
   now(): string;
   /** ms since the epoch, fractional (default performance.timeOrigin + performance.now()). */
   clock?(): number;
@@ -44,7 +51,7 @@ const strOrNull = (v: unknown): string | null => (typeof v === 'string' ? v : nu
 export const preciseNow = (): number => performance.timeOrigin + performance.now();
 
 /** A run-control action of F-807, or of the first path (F-813, src/shared/actions/first.ts). */
-const lookup = (id: string): RegisteredRunAction | undefined => getRunAction(id) ?? getFirstRunAction(id);
+const lookup = (id: string): RegisteredRunAction | undefined => getRunAction(id) ?? getFirstRunAction(id) ?? getSiteRunAction(id);
 
 /** What the action is about, for messages: "run r-...", "cases/cavity.toml", "the project". */
 const target = (p: Readonly<Record<string, unknown>>): string =>
@@ -59,6 +66,7 @@ const VERB: Record<string, string> = {
   'project.stop_run': 'stop',
   'project.cancel_run': 'cancel',
   'project.start_runner': 'start the runner of',
+  'site.run_case': 'start a run on a site of',
 };
 
 /** An engine refusal or failure in words: the problem (with the engine's own message) and the way out. */
@@ -227,6 +235,15 @@ export class RunControl {
     return server.call(tool, args);
   }
 
+  /**
+   * The Studio's close with "Stop runs and close" (src/shared/runner-lifetime.ts): cancel_run on the run-control server,
+   * with the reason in the project journal. The engine's error is the rejection.
+   */
+  async cancelForClose(run: string): Promise<void> {
+    const server = await this.controlServer();
+    await server.call('cancel_run', { run, reason: 'Stopped when the Studio closed (Stop runs and close).' });
+  }
+
   /** Whether the run-control server is running (for tests and diagnostics). */
   get serverRunning(): boolean {
     return this.server !== null && !this.server.exited;
@@ -272,9 +289,46 @@ export class RunControl {
     }
     try {
       let result: Obj;
+      let cli = eq.cli;
       if (a.engine.kind === 'mcp') {
         const server = await this.controlServer();
         result = obj(await server.call(a.engine.tool, eq.mcp!.arguments as Record<string, unknown>));
+      } else if (a.engine.command === 'start') {
+        // F-848: a run on a site. The store plan's settings first (start_run's dry run writes nothing), so the run stores
+        // what the Studio's Run stores locally (ADR 0737); then the remote start, then the runner that sends it.
+        if (!this.deps.startOnSite) {
+          return refused({ code: 'engine', problem: `${a.title}: this Studio has no way to start a run on a site.`, recovery: 'Run it here, or start it with rcfd-runner start --site.', engine: null }, null);
+        }
+        const server = await this.controlServer();
+        const own = Array.isArray(p['set']) ? (p['set'] as string[]) : [];
+        const dry = obj(await server.call('start_run', { case: p['case'], store: 'plan', dry_run: true, ...(own.length ? { set: own } : {}) }));
+        const set = Array.isArray(dry['set']) ? (dry['set'] as unknown[]).filter((x): x is string => typeof x === 'string') : own;
+        const argv = a.cli({ ...p, set } as never, this.folder).slice(1, -2);
+        cli = { argv: ['rcfd-runner', ...argv, '--project', this.folder], cwd: this.folder };
+        const started = await this.deps.startOnSite(this.folder, argv);
+        if (!started.ok) {
+          const request: RunRequest = { ...base, cli, run: null, answeredAt: this.clock(), ms: this.clock() - t0, outcome: 'refused', state: null, settled: true, failure: null };
+          const failure: RunActionFailure = {
+            code: 'bad_state',
+            problem: `The engine refused to start a run of ${target(p)} on site ${String(p['site'])}: ${started.message}`,
+            recovery: 'Nothing was sent to the site. Fix what the engine names (the sites file, the site’s confirmation, or the case), or run it here.',
+            engine: null,
+          };
+          return { ok: false, failure, request: { ...request, failure } };
+        }
+        const r = await this.deps.ensureRunner(this.folder);
+        if (!r.ok) {
+          return refused(
+            {
+              code: 'runner',
+              problem: `Run ${started.run} is queued for site ${String(p['site'])}, but the runner of the project did not start: ${r.message}`,
+              recovery: `Run ${started.run} waits for a runner to send it. Fix what the runner says (its log is .rcfd/runner.log in the project folder), then Start the runner.`,
+              engine: null,
+            },
+            started.run,
+          );
+        }
+        result = { run: started.run, state: 'queued', site: p['site'] ?? null };
       } else {
         const r = await this.deps.ensureRunner(this.folder);
         if (!r.ok) {
@@ -293,6 +347,7 @@ export class RunControl {
       const answeredAt = this.clock();
       const request: RunRequest = {
         ...base,
+        cli,
         run: strOrNull(result['run']) ?? runId,
         answeredAt,
         ms: answeredAt - t0,
@@ -334,7 +389,8 @@ export function ensureRunnerCli(exe: string, folder: string, timeoutMs = 20_000)
       child.stderr?.destroy();
       resolve(r);
     };
-    const child = spawn(exe, ['ensure', '--project', folder], { cwd: folder, stdio: ['ignore', 'ignore', 'pipe'], windowsHide: true });
+    // Q-RL-2: the runner it starts records this Studio as its starter
+    const child = spawn(exe, ['ensure', '--project', folder], { cwd: folder, env: runnerStarterEnv(), stdio: ['ignore', 'ignore', 'pipe'], windowsHide: true });
     child.stderr!.on('data', (d: Buffer) => {
       err = (err + d.toString('utf8')).slice(-4096);
     });

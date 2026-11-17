@@ -13,7 +13,11 @@ import { filesUnder, type Names } from './listing.js';
 import { sameFolder, withExistence, withOpened, without, type StoredRecent } from './recent.js';
 import { ProjectServer, START_TIMEOUT_MS, StartFailure, type ProjectServerLike } from './server.js';
 import { ProjectSession } from './session.js';
+import { cliRunnerEngine, RunnerWatch, type RunnerEngine } from './runner-lifetime.js';
+import { NO_PLAN, type KeepRunner, type RunnerChoice, type RunnerPlan } from '../../shared/runner-lifetime.js';
 import { testDelay } from '../work/delay.js';
+import { RunSites, SiteChoices, Sites } from './sites.js';
+import { LOCAL, SITE_RUN_CASE, type SiteCheckResult, type SiteOp, type SitesState } from '../../shared/sites.js';
 
 export interface RecentLike {
   load(): Promise<StoredRecent[]>;
@@ -40,6 +44,21 @@ export interface HomeDeps {
   ensureRunner?(folder: string): ReturnType<ControlDeps['ensureRunner']>;
   /** F-813: how often a folder that is not a project is checked for its project file (default FIRST_WATCH_MS; 0: never). */
   firstWatchMs?: number;
+  /**
+   * G7 as amended 2026-11-17 (src/shared/runner-lifetime.ts): what keeps the runner going whatever its runs, the
+   * --keep-runner switch or the Studio setting (default: nothing, the runner the Studio owns closes with it).
+   */
+  keepRunner?(): KeepRunner;
+  /** The engine's side of the runner's close (default: rcfd-runner beside the project server, and cancel_run). */
+  runnerEngine?(folder: string, cancelRun: (run: string) => Promise<boolean>): RunnerEngine;
+  /** How often the open project's runner is looked at, ms (default RUNNER_LOOK_MS; 0: only at the open, around actions and at the close). */
+  runnerLookMs?: number;
+  /** F-848: where the Studio keeps the Where choice of each project (its user data; none: not kept). */
+  siteChoicesFile?: string;
+  /** F-848: opens a file in the system's program for it (Electron's shell.openPath); an error message, empty when it opened. */
+  openPath?(file: string): Promise<string>;
+  /** F-848: the environment the sites file is found from (default process.env). */
+  sitesEnv?: Readonly<Record<string, string | undefined>>;
 }
 
 /** F-813: the project file whose appearance turns a folder into a project (rcfd_project's MANIFEST). */
@@ -77,6 +96,8 @@ const isDir = async (p: string): Promise<boolean> => {
 export class ProjectHome {
   private stored: StoredRecent[] = [];
   private session: ProjectSession | null = null;
+  /** The open project's runner: whether the Studio owns it (src/main/project/runner-lifetime.ts). */
+  private runner: RunnerWatch | null = null;
   private opening: string | null = null;
   private failure: OpenFailure | null = null;
   private recentView: ProjectState['recent'] = [];
@@ -86,8 +107,39 @@ export class ProjectHome {
   /** F-813: the timer that checks a not-a-project folder for its project file, and that folder. */
   private watch: { folder: string; timer: ReturnType<typeof setInterval> } | null = null;
 
+  /** F-848: the user's run sites through the engine (null without an engine). */
+  private readonly siteCommands: Sites | null;
+
   constructor(private readonly deps: HomeDeps) {
     this.now = deps.now ?? (() => new Date().toISOString());
+    const e = deps.engine;
+    this.siteCommands = e.configured
+      ? new Sites({
+          rcfd: rcfdBeside(e.path),
+          runner: path.join(path.dirname(e.path), RUNNER_EXE),
+          choices: deps.siteChoicesFile ? new SiteChoices(deps.siteChoicesFile) : null,
+          ...(deps.openPath ? { openPath: deps.openPath } : {}),
+          ...(deps.sitesEnv ? { env: deps.sitesEnv } : {}),
+        })
+      : null;
+  }
+
+  /**
+   * F-848 (ADR 0739): the user's run sites. `list` reads nothing but the sites file's existence when it is absent;
+   * `check` and `confirm` start the site's agent once (no project data goes there); `open` opens the sites file in the
+   * system's editor.
+   */
+  async sites(what: SiteOp, name?: string): Promise<SitesState | SiteCheckResult | { readonly message: string }> {
+    const s = this.siteCommands;
+    switch (what) {
+      case 'list':
+        return s ? s.list(this.session?.folder ?? null) : { file: null, exists: false, sites: [], error: null, choice: LOCAL };
+      case 'check':
+      case 'confirm':
+        return s ? s.check(name ?? '', what === 'confirm') : { ok: false, message: 'No engine is set up, so no site can be checked.' };
+      case 'open':
+        return { message: s ? await s.open() : 'No engine is set up.' };
+    }
   }
 
   get state(): ProjectState {
@@ -277,6 +329,9 @@ export class ProjectHome {
           now: this.now,
           ...(this.deps.pollMs ? { pollMs: this.deps.pollMs } : {}),
           control: this.controlDeps(engine.path),
+          // F-848: the remote runs' link state. run.json's site is read once per run whether or not the sites file is
+          // there, so a run whose site was removed keeps its badge (ADR 0739 P7); a local run adds nothing to the view
+          ...(this.siteCommands ? { runSites: (f: string) => new RunSites(f, () => true) } : {}),
         },
         (view) => this.onView(session, view),
       );
@@ -296,12 +351,37 @@ export class ProjectHome {
       return;
     }
     const before = this.session;
+    const beforeRunner = this.runner;
+    const same = before !== null && sameFolder(before.folder, folder);
     this.session = session;
+    // the same folder again keeps its runner's watch (what the Studio owns stays owned)
+    this.runner = same && beforeRunner ? beforeRunner : this.watchRunner(folder, session);
     this.opening = null;
     this.failure = null;
     await this.setRecent((l) => withOpened(l, folder, this.now()));
     this.emit();
+    // another project replaced this one without a prompt: its runner's step as for a close that did not ask
+    if (beforeRunner && !same) await beforeRunner.close('unasked');
     if (before) await before.close();
+  }
+
+  /** The watch of a newly opened project's runner (none without an rcfd-runner beside the engine). */
+  private watchRunner(folder: string, session: ProjectSession): RunnerWatch | null {
+    const exe = this.deps.engine.configured ? this.deps.engine.path : null;
+    const cancel = (run: string) => session.cancelForClose(run);
+    let engine: RunnerEngine | null = null;
+    if (this.deps.runnerEngine) engine = this.deps.runnerEngine(folder, cancel);
+    else if (exe) {
+      const runner = path.join(path.dirname(exe), RUNNER_EXE);
+      if (existsSync(runner)) engine = cliRunnerEngine(runner, cancel);
+    }
+    if (!engine) return null;
+    return new RunnerWatch(folder, engine, this.deps.keepRunner ?? (() => null), this.deps.runnerLookMs);
+  }
+
+  /** What a close of the open project means for its runner (the close prompt asks when it has active runs). */
+  async runnerPlan(): Promise<RunnerPlan> {
+    return this.runner ? this.runner.plan() : NO_PLAN;
   }
 
   /**
@@ -328,7 +408,13 @@ export class ProjectHome {
         existsSync(runner)
           ? ensureRunnerCli(runner, folder)
           : Promise.resolve({ ok: false as const, message: `there is no ${RUNNER_EXE} beside ${exe}; build it with cargo build --release -p rcfd-runner` }));
-    return { startControlServer: (f) => startControl(exe, f), ensureRunner: ensure, now: this.now };
+    const sites = this.siteCommands;
+    return {
+      startControlServer: (f) => startControl(exe, f),
+      ensureRunner: ensure,
+      now: this.now,
+      ...(sites ? { startOnSite: (f: string, argv: readonly string[]) => sites.start(f, argv) } : {}),
+    };
   }
 
   /** ADR 0736: a trash operation of the engine on the open project. */
@@ -348,7 +434,16 @@ export class ProjectHome {
         failure: { code: 'no_project', problem: 'No project is open, so there is no run to control.', recovery: 'Open a project folder first (Open project folder…).', engine: null },
       };
     }
-    return s.dispatch(id, params);
+    // a look before and after: a runner this action starts is the Studio's (src/shared/runner-lifetime.ts)
+    await this.runner?.look();
+    const r = await s.dispatch(id, params);
+    await this.runner?.look();
+    // F-848 (Q8): the Where of the run just started is the project's next default, kept in the Studio's user data
+    if (r.ok && this.siteCommands) {
+      if (id === SITE_RUN_CASE && typeof params['site'] === 'string') await this.siteCommands.remember(s.folder, params['site']);
+      else if ((id === 'project.run_case' || id === 'project.queue_case') && this.siteCommands.file().exists) await this.siteCommands.remember(s.folder, LOCAL);
+    }
+    return r;
   }
 
   private onView(session: ProjectSession | null, _view: ProjectView): void {
@@ -364,7 +459,14 @@ export class ProjectHome {
     this.emit();
   }
 
-  async close(): Promise<void> {
+  /**
+   * Closes the open project. Its runner first, while the run-control server is there for cancel_run: the step that
+   * `runs` (the close prompt's answer) and the rules of src/shared/runner-lifetime.ts give.
+   */
+  async close(runs: RunnerChoice = 'unasked'): Promise<void> {
+    const w = this.runner;
+    this.runner = null;
+    if (w) await w.close(runs);
     const s = this.session;
     this.session = null;
     this.emit();
@@ -404,9 +506,23 @@ export class ProjectHome {
     this.emit();
   }
 
-  async shutdown(): Promise<void> {
+  /**
+   * The Studio quits (src/main/index.ts, before anything else stops): the open project's runner gets the step that
+   * `runs` gives, as for a close; the project stays open until shutdown().
+   */
+  async endRunner(runs: RunnerChoice): Promise<void> {
+    const w = this.runner;
+    this.runner = null;
+    if (w) await w.close(runs);
+  }
+
+  /** The Studio quits: the open project's runner gets the step that `runs` gives (as for a close), then it closes. */
+  async shutdown(runs: RunnerChoice = 'unasked'): Promise<void> {
     this.stopWatch();
     this.openSeq++;
+    const w = this.runner;
+    this.runner = null;
+    if (w) await w.close(runs);
     const s = this.session;
     this.session = null;
     if (s) await s.close();

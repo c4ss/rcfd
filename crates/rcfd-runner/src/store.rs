@@ -113,6 +113,20 @@ impl FsStore {
         solver_version: Option<String>,
         tags: &RunTags,
     ) -> io::Result<String> {
+        self.create_run_at(case, settings, launch, solver_version, tags, None)
+    }
+
+    /// [`FsStore::create_run_with`] for a run on the site `site` (ADR 0739 P6): `run.json` also has `site`; with `None`
+    /// the run is the one `create_run_with` makes, byte for byte.
+    pub fn create_run_at(
+        &self,
+        case: &Path,
+        settings: &RunSettings,
+        launch: &LaunchSettings,
+        solver_version: Option<String>,
+        tags: &RunTags,
+        site: Option<String>,
+    ) -> io::Result<String> {
         let text = std::fs::read(case)?;
         let case_abs = std::env::current_dir()?.join(case);
         let case_dir = case_abs.parent().map(Path::to_path_buf).unwrap_or_default();
@@ -124,6 +138,7 @@ impl FsStore {
             case_dir: Some(case_dir.display().to_string()),
             mesh_dir: &case_dir,
             rerun_of: None,
+            site,
         };
         self.write_run(&from, settings, launch, solver_version, tags)
     }
@@ -138,6 +153,18 @@ impl FsStore {
         settings: &RunSettings,
         launch: &LaunchSettings,
         solver_version: Option<String>,
+    ) -> io::Result<String> {
+        self.create_rerun_at(src, settings, launch, solver_version, None)
+    }
+
+    /// [`FsStore::create_rerun`] on the site `site` (ADR 0739 P6; `None`: the same run as `create_rerun` makes).
+    pub fn create_rerun_at(
+        &self,
+        src: &RunRecord,
+        settings: &RunSettings,
+        launch: &LaunchSettings,
+        solver_version: Option<String>,
+        site: Option<String>,
     ) -> io::Result<String> {
         let text = std::fs::read(self.run_dir(&src.id).join("case.snapshot"))?;
         let case_dir = match &src.case_dir {
@@ -156,6 +183,7 @@ impl FsStore {
             case_dir: src.case_dir.clone(),
             mesh_dir: &case_dir,
             rerun_of: Some(src.id.clone()),
+            site,
         };
         self.write_run(&from, settings, launch, solver_version, &RunTags::default())
     }
@@ -206,6 +234,7 @@ impl FsStore {
             variant: tags.variant.clone(),
             condition: tags.condition.clone(),
             rerun_of: from.rerun_of.clone(),
+            site: from.site.clone(),
         };
         atomic::write_new(&tmp.join("case.snapshot"), text).map_err(io_error)?;
         atomic::write_json_new(&tmp.join("run.json"), &rec).map_err(io_error)?;
@@ -233,6 +262,8 @@ struct Source<'a> {
     /// The folder the case's mesh file resolves against.
     mesh_dir: &'a Path,
     rerun_of: Option<String>,
+    /// The run site (ADR 0739); `None` for a local run.
+    site: Option<String>,
 }
 
 /// The launch record of a run (ADR 0734 P1, Q1 (a), Q2 (a)): `runs/<id>/launch.json`, and `launch-<launch_seq>.json`

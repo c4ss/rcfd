@@ -17,6 +17,12 @@
 // folder gives all three programs: RCFD_STUDIO_MCP alone gives the project server and the rcfd beside it (started with
 // the first project), RCFD_STUDIO_RCFD alone the rcfd (started at launch) and the rcfd-mcp beside it.
 //
+// The runner's lifetime is a separate choice too (G7 as amended 2026-11-17, src/shared/runner-lifetime.ts): the runner
+// the Studio started closes with it, unless --keep-runner or the Studio setting "Keep the runner going after the Studio
+// closes" is on (either one keeps it; the switch, parsed with the others in src/main/project/argv.ts, cannot be turned
+// off from the page). A runner alive before the Studio opened the project, and a service attached to with --service or
+// RCFD_STUDIO_SERVICE, are never stopped by it, whatever these say.
+//
 // Attaching to a service someone else started is a separate choice (--service > RCFD_STUDIO_SERVICE): it replaces the
 // service the Studio would start, whatever the engine is, and it still applies with --no-engine (attaching starts
 // nothing). That attach is where engines on other machines (a cloud or a cluster) will plug in later; today it is

@@ -6,7 +6,7 @@
 import type { StudioBridge } from '../shared/ipc.js';
 import type { ClaudeCodeBridge, ProjectBridge, RunsBridge } from '../shared/project.js';
 import type { ServiceBridge } from '../shared/service.js';
-import type { CompareBridge, DataBridge, MeshPreviewBridge, SurfaceValuesBridge } from '../shared/data.js';
+import type { CompareBridge, DataBridge, DerivedBridge, MeshPreviewBridge, SurfaceValuesBridge } from '../shared/data.js';
 import type { CaseBridge } from '../shared/case.js';
 import type { RunBridge } from '../shared/run.js';
 import type { ProvenanceBridge } from '../shared/provenance.js';
@@ -25,6 +25,8 @@ declare global {
     readonly studioSurfaceValues: SurfaceValuesBridge;
     /** F-836: the mesh preview's surface with the patch of each triangle, over the data port. */
     readonly studioMeshPreview: MeshPreviewBridge;
+    /** ADR 0738: a derived picture (the cut, arrows, iso-surface, streamlines) made by the engine, over the data port. */
+    readonly studioDerived: DerivedBridge;
     readonly studioCase: CaseBridge;
     /** F-810: a runner run's residual and monitor histories, read only (not run control: that is studioRuns). */
     readonly studioRunData: RunBridge;

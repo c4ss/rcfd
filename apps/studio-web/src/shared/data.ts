@@ -60,6 +60,11 @@ export interface StoreInfo {
    * interrupted run; a later `open` picks up new snapshots). `null` for `service` (data.open does not say).
    */
   readonly index: 'footer' | 'scanned' | null;
+  /**
+   * ADR 0738 P5: the unit of the stored mesh's coordinates as the engine names it (`data.open`'s `length_unit`).
+   * `null` for `local`: store.rts does not write it (the engine's derived pictures name it, `length_unit` of their reply).
+   */
+  readonly lengthUnit: string | null;
 }
 
 /** One field of one snapshot, as `f32` (a field stored as `f64` is rounded to the nearest single, as `as f32` does). */
@@ -177,6 +182,7 @@ export type DataRequest =
       readonly otherSnapshot: number;
       readonly field: string;
     } & Common)
+  | ({ readonly op: 'derive'; readonly store: StoreRef; readonly snapshot: number; readonly args: DeriveArgs } & Common)
   | { readonly op: 'cancel'; readonly id: number; readonly tag: string | number };
 
 /**
@@ -190,6 +196,7 @@ export type DataWireResult =
   | { readonly kind: 'surfaceField'; readonly snapshot: number; readonly field: string; readonly meshHash: string; readonly values: ArrayBuffer }
   | { readonly kind: 'patchSurface'; readonly points: ArrayBuffer; readonly triangles: ArrayBuffer; readonly cells: ArrayBuffer; readonly patch: ArrayBuffer; readonly meshHash: string }
   | { readonly kind: 'difference'; readonly snapshot: number; readonly otherSnapshot: number; readonly field: string; readonly values: ArrayBuffer }
+  | { readonly kind: 'derive'; readonly glb: ArrayBuffer; readonly summary: string }
   | { readonly kind: 'cancel'; readonly cancelled: number };
 
 export type DataPortMessage = { readonly type: 'reply'; readonly id: number; readonly reply: DataReply<DataWireResult> };
@@ -241,4 +248,47 @@ export interface SurfaceValuesBridge {
 export interface MeshPreviewBridge {
   /** The boundary surface of the store's mesh with the patch of each triangle (route `local` only). */
   surface(store: StoreRef, options?: DataOptions): Promise<DataReply<PatchSurfaceData>>;
+}
+
+// ---- ADR 0738 (F-809, E-809d): derived pictures made by the engine ------------------------------------------------------
+
+/** The pictures the Studio asks the engine for (`rcfd post derive --kind`). */
+export const DERIVE_KINDS = ['cut_surface', 'iso', 'streamlines'] as const;
+export type DeriveKind = (typeof DERIVE_KINDS)[number];
+
+/**
+ * What `rcfd post derive` is asked to make of one snapshot (docs/mcp-tools.md, `derive_picture`). Main checks every
+ * member and passes it as the command's flags; nothing else reaches the command line.
+ * - `cut_surface`: the boundary surface the Studio draws, cut by `axis`/`at`/`keep` when given, with the arrows when
+ *   `vectors` (the engine's T2 and T3, ADR 0738 P4);
+ * - `iso`: where the cell field `field` (a stored cell field or `speed`) equals `level`;
+ * - `streamlines`: from `rake` (`n` points from `p0` to `p1`), `direction`, at most `maxSteps` steps each.
+ */
+export interface DeriveArgs {
+  readonly kind: DeriveKind;
+  readonly field?: string;
+  readonly level?: number;
+  readonly axis?: 0 | 1 | 2;
+  readonly at?: number;
+  readonly keep?: 'below' | 'above';
+  readonly vectors?: boolean;
+  readonly rake?: { readonly p0: readonly [number, number, number]; readonly p1: readonly [number, number, number]; readonly n: number };
+  readonly direction?: 'forward' | 'backward' | 'both';
+  readonly maxSteps?: number;
+}
+
+/** The engine's GLB and its reply (`kind`, `snapshot`, `bounds`, `length_unit`, the counts; JSON). */
+export interface DerivedData {
+  readonly glb: ArrayBuffer;
+  readonly summary: Record<string, unknown>;
+}
+
+/**
+ * ADR 0738: what the preload script puts on `window.studioDerived`, over the same data port as `window.studioData` (kept
+ * apart, as `window.studioCompare` is). Route `local` only: main runs the engine's `rcfd post derive` on the store's
+ * folder (inside a data root); without an engine configured, or on the service route, it answers `not_configured` or
+ * `bad_request` with the reason. A `tag` is cancelled by `window.studioData.cancel` (the command is stopped).
+ */
+export interface DerivedBridge {
+  derive(store: StoreRef, snapshot: number, args: DeriveArgs, options?: DataOptions): Promise<DataReply<DerivedData>>;
 }

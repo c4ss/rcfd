@@ -2619,7 +2619,7 @@ local to this list.
 | E-809b | F-809 | Streamlines of a stored velocity field (seeds, polylines with the cell of each point) (ADR 0738 proposed; awaiting the maintainer) | shown unavailable |
 | E-809c | F-809 | A cut or slice of a stored 3D field with values; `render_field` with `axis`, `slice` and `vectors` for a store (ADR 0738 proposed; awaiting the maintainer) | the cut and arrows are drawn by the Studio within tolerances T1 to T3 |
 | E-809d | F-809, G16 | A CLI or MCP way to draw the Studio's cut and arrows of a store, so Claude Code can make the same picture (ADR 0738 proposed; awaiting the maintainer) | none |
-| E-809e | F-809, F-837 | The length unit of the stored mesh coordinates (ADR 0738 proposed; awaiting the maintainer) | the cut position has no unit; the domain size and the scale bar say m from the SI settings, and say why |
+| E-809e | F-809, F-837 | The length unit of the stored mesh coordinates (ADR 0738, accepted and built 2026-11-17) | done: the cut position, the domain size and the scale bar are in the engine's unit (data.open's, else a derived picture's length_unit, else the engine's documented store unit), and say which |
 | E-813 | F-813 | A command that creates a project (`rcfd project init`, MCP `create_project` over `Project::create`; ADR 0731, accepted and built 2026-11-17) | done: New project… and Make a project here run `rcfd project init`; the walk's test makes its projects through them |
 | E-814 | F-814 | An engine entry point that lists a project's Claude Code sessions (rcfd-claude) (ADR 0735: declined by the maintainer 2026-11-17; no engine module, MCP tool or CLI command) | declined: discovery stays in the Studio's main process (apps/studio-web/src/main/claude/discover.ts) |
 | E-828a | F-828 | run.json records the solver's launch argv and a build id (`solver_version` is a release name) (ADR 0734 proposed; awaiting the maintainer) | the reproduce command is built from the runner's start options |
@@ -3231,6 +3231,436 @@ notice is an exception surface (`data-words="exception"`), and the Unavailable r
 - `electron .` with no variable (a probe through Playwright): the engine is `from: 'checkout'` (this worktree's
   `target/release`) and the service is `waiting`. With `--no-engine`, both say the Studio was started without an engine.
   With a bad `--engine-dir`, both name the folder and the missing files.
+
+## Addendum 22: Viewport camera and playback (2026-11-17, branch camera over main 8e330d44)
+
+The maintainer, 2026-11-17, four requests:
+
+> the controls of the polar coordinate system camera is really awful - can we make it behave more like a camera
+> explorer in hammer/unity?
+
+They chose Unity's scene-view scheme.
+
+> for a 2d run can we setup and default to a flat face on display pls
+
+> make it so the button to reset to face on doesn't zoom all the way out - use a different button for a full reset, it
+> should just orient
+
+> when we press play, it should [advance] one snapshot per second i think
+
+### The camera (src/renderer/field/camera.ts)
+
+three.js OrbitControls (a spherical orbit about the domain's centre, clamped at the poles, right-drag pan) is gone. In
+its place is a small controller, `ViewCamera`, written as pure maths with no three.js, DOM or React, so that
+`tests/unit/field-camera.spec.ts` can check it without a window. Its state is an eye, an orientation (a unit
+quaternion), a pivot, and a projection: perspective, or orthographic for a 2D case. `FieldCanvas.tsx` turns pointer and
+key events into its calls and copies its state onto the three.js camera. The field view, both views of a comparison
+(each keeps its own camera, as before) and the case editor's mesh preview all draw through that canvas, so all of them
+get it.
+
+| Input | 3D | 2D (one cell thick) |
+|---|---|---|
+| Hold the right button | look: yaw about z and pitch about the camera's right, about the eye; the pivot turns with the view | pan |
+| W A S D, Q and E, while the right button is held | fly forward, left, back and right, down and up (z); Shift is 4 times faster; the speed is half the domain's diagonal a second | nothing |
+| Middle button | pan: what is under the cursor at the pivot's depth stays under it | pan |
+| Alt and the left button | orbit about the point of the drawn surface under the cursor (it becomes the pivot), else the pivot | nothing |
+| Wheel | dolly toward the point under the cursor, which stays where it is on screen (no surface there: the point of the pivot's plane) | zoom toward the cursor (the orthographic height, about that point) |
+| Double-click | the pivot goes to the point under the cursor; the view does not move | the same (harmless) |
+| Plain left button | the readout, as before: hover, and the value where the button is let go; it moves nothing | the same |
+| Arrow keys (the view focused) | orbit 5 degrees about the pivot | pan a twentieth of the view |
+| + and - | dolly toward the centre of the view, by 1.1 | zoom, by 1.1 |
+| F | frame the whole domain, the orientation kept | the same |
+| O, Face on | the nearest principal axis of the view direction, the up the nearest axis to the current up; the point at the centre and its distance kept | its thin axis (it is face on already; nothing moves) |
+| Home or 0, Reset view | the starting orientation (the three-quarter view, z up), the whole domain framed, the pivot at its centre | face on, framed |
+
+There is no pole lock. The rotation is a quaternion with yaw about the world's z and pitch about the camera's right, so
+the right stays level (no roll) and a pitch goes on past straight up or down. Past the pole the view is upside down.
+There the yaw turns the other way, so a drag to the right still turns the picture to the right. That is the sense in
+which "up" stays sensible.
+
+A 2D case is the one the mesh preview and the field view already detected: the preview's `two_d`, and the store's
+surface layers' `twoD` and `thin` (`./prepare.ts`). It opens orthographic, looking straight along the thin axis from the
+side that puts the other two axes in order (z thin: x right, y up; y thin: x right, z up; x thin: y right, z up),
+framed to the domain. The F-837 scale bar is therefore there from the start. The mesh preview no longer turns face on
+in its first draw; it passes the thin axis to the canvas. No control tilts a 2D case into 3D. Per the maintainer's
+instruction, that waits for their answer (Q-A22-1).
+
+The canvas carries the camera's state for the tests as data attributes: `data-camera` (`perspective` or
+`orthographic`), `data-camera-eye`, `-forward`, `-up`, `-pivot` (six significant digits), `-zoom` (the pivot's depth,
+or the orthographic height), `-moved`, and `-drag` during a drag. The P8 bench (#/dev/field?bench=p8) still orbits one
+turn per 600 frames: it drives the perspective camera itself with the input off, then resets the view.
+
+### Face on and Reset view
+
+Face on (`field.face_on`, the tool row's face-on icon, O) now only turns the view: the zoom and the point at the centre
+stay. It is offered for 3D cases too (to the nearest axis), named "View face on (along z)" in 2D and "View face on (the
+nearest axis)" in 3D. Reset view is the separate full reset: orientation, the whole domain framed, the pivot at its
+centre. It is now an icon button with its name as its tooltip, with a new pictogram `reset-view` on the 14-unit grid
+(four corners framing the three-quarter view's diamond). It still appears in the frame's top right corner once the view
+has moved, as DESIGN.md says. It is a palette command too, `field.reset_view` (Home and 0 in the field view). F, O and
+the fly keys are added to the shortcut table in the field-view scope. A key chord with Ctrl, Cmd or Alt is no longer
+taken by the view: Ctrl+0 was resetting it as well as sizing the window, and Ctrl+O would have turned it.
+
+### Playback (src/renderer/workspace/model.ts)
+
+Before this addendum, Play stepped to the next stop as soon as the field of the one shown was drawn: as fast as the
+fields drew. It paced only a run without fields (a residual sample every 150 ms) and reduced motion (no stop shorter
+than 500 ms). No speed control existed. Play now steps one stored snapshot per wall-clock second (`PLAY_SNAPSHOT_MS`,
+`playWait`). The second counts from the move to a stop, and never runs before that stop's field is drawn. The stop shown
+when Play is pressed also gets its second. The residual samples and the reduced-motion floor are as before. The
+alternative offered to the maintainer was one second of simulated time per second.
+
+### Decisions (options, the recommendation taken; each reversible)
+
+- **A22-D1, Q and E:** (a) down and up along the world's z, or (b) along the camera's up (Unity). Taken: (a). It keeps
+  "up" sensible.
+- **A22-D2, the look and orbit rates:** 0.004 and 0.008 radians per pixel. The fly speed is half the domain's diagonal
+  a second, times 4 with Shift. A wheel pixel scales the distance by 1.0015, so 100 pixels is about 16%.
+- **A22-D3, the face-on shortcut:** O ("orient"). F frames, as in Unity. Home and 0 reset, as before.
+- **A22-D4, Reset view's place:** (a) keep it in the frame's top right corner, shown once the view has moved (DESIGN.md
+  Field view), now an icon button; (b) a permanent button in the tool row. Taken: (a).
+- **A22-D5, Face on in 2D:** it stays, though a 2D view is always face on (the maintainer named its 2D behaviour), and
+  it does nothing there.
+- **A22-D6, the arrow keys in 2D:** they pan (a twentieth of the view), since a 2D case does not orbit.
+- **A22-D7, Play's first step:** one second after Play is pressed, not at once, so every stop gets the same second.
+- **A22-D8, no speed control:** none existed, and none was added (not asked for).
+
+### Open for the maintainer
+
+- **Q-A22-1, tilt a 2D case into 3D:** not built, as instructed. Options: (a) none; (b) a toggle in the tool row that
+  switches the 2D case to the perspective camera, the 3D controls and back. Recommended: (a) until a use is named.
+- **Q-A22-2, Alt and the left button on Windows:** Windows may move the focus to the menu bar when Alt is let go after
+  a drag, as it does for Alt pressed alone. The e2e tests send their input through the DevTools protocol, which never
+  reaches the menu bar, so they cannot show it. If it happens on the maintainer's machine, options: (a) the renderer
+  takes the Alt keyup while a drag is on; (b) a second orbit binding (for example Shift and the right button).
+- **Q-A22-3, a Play speed control:** (a) none (as now); (b) a choice of 0.5, 1, 2 and 5 snapshots a second beside Play
+  (it would cost chrome words in the workspace's budget).
+
+### DESIGN.md (proposed here; approved and edited later the same day, see the answers below)
+
+- Field view: "a Reset view button appears in the top right corner" would read "a Reset view icon button (the full
+  reset: orientation, the whole domain, the pivot) appears in the top right corner". A sentence on the camera's inputs
+  (the table above) and the 2D case (orthographic, face on, pan and zoom only) would be added there. Nothing in
+  DESIGN.md describes Play's pace.
+
+### Verification (2026-11-17, on camera over main 8e330d44, Windows 11, RCFD_TEST_HEADLESS=1)
+
+- The engine was built in this worktree (`cargo build --release -p rcfd-cli -p rcfd-runner -p rcfd-mcp` and the
+  `f447_bench` example, its own `target/`). No Rust file changed.
+- `npm ci`, `npm run typecheck` clean; `npm run build && npm run package:dir` exit 0.
+- Unit: `tests/unit/field-camera.spec.ts` 14 new tests (look, fly, orbit about a pivot with no pole flip, the arrow
+  keys, dolly toward a point, pan, face on, frame, reset, the 2D orthographic case along each axis, the data attributes,
+  Play's pace). The whole unit project: 526 passed, 2 failed. Both failures are in `tests/unit/history.spec.ts`
+  (`mesh.refine` has no inverse words; `src/main/data/derive.ts` removes a file). They concern files this change does
+  not touch, and are left as found. `commands-shortcuts.spec.ts` was restated: the field view's keys are the
+  `key()` cases plus the fly keys.
+- e2e: field (16, of which 7 new or restated for the camera), f837 (14), f836 (5), compare (7), workspace (6, one
+  new: the 2D cavity orthographic, pan and zoom, Face on and Reset view, Play's stops 1 s apart), field-derived (10):
+  58 passed. a11y, word-budget, idle-frames and commands: 36 passed; every surface's word count is unchanged and at its
+  budget, so no budget was raised and none is too tight for this change. Tests that assumed OrbitControls (a plain
+  left drag orbited) now drag with the right button; the pixel checks (the reset restores every pixel) are kept.
+- P8 smoke (`scripts/measure-field.mjs --smoke`): 1e6 triangles orbiting, vertical sync p99 4.30 ms (met). Without a
+  rate limit it ran at 55.4 per s, as recorded before (54.4, "see below" in Addendum F-808). `scripts/measure-large.mjs`
+  now orbits with Alt and the left button. It was not run (a heavy record).
+- Screenshots: test-results-visual/f808 (camera-after-fly, camera-after-orbit, camera-face-on-3d), f810
+  (04a-2d-panned-zoomed), f815 (01b-side-by-side-one-view-moved), f836 (case-editor-preview, -panned), f837
+  (09-face-on-scale-bar).
+
+### The maintainer's answers (2026-11-17), and what they changed (on camera, after 972acd91)
+
+- **Q-A22-1, tilt a 2D case into 3D:** (a), none. Recorded as the decision: a 2D case stays orthographic, face on,
+  pan and zoom only. No control was added.
+- **Q-A22-2, Alt and the left button:** keep the binding, and swallow the menu. Electron toggles or focuses the menu
+  bar on an Alt key-up that the page did not handle (its own handling, after the renderer). The canvas therefore
+  prevents the one Alt key-up that ends an Alt that was used for an orbit drag. The flag is set when the drag starts,
+  cleared by a new Alt key-down, and cleared when the key-up is taken. A plain Alt press and release is left alone and
+  still reaches the menu. Nothing was added in the main process, so `before-input-event` was not needed. The canvas
+  counts the key-ups it took in `data-camera-alt-swallowed`. Tested in field.spec, with the window's menu bar set to
+  hide automatically for the test, so Electron's Alt handling shows in `isMenuBarVisible()`. A plain Alt shows the bar
+  (the control); an Alt orbit drag leaves it hidden; the next plain Alt shows it again.
+- **Q-A22-3, a Play speed control:** (b), with 0.25×, 0.5×, 1×, 2× and 4×. 1× is one snapshot a second. A pictogram
+  button beside Next snapshot (`speed`, two forward marks on the 14-unit grid) opens a menu of the five speeds. Its
+  name and tooltip say the speed, for example "Play speed 2×, 2 snapshots a second". The speed divides the wait for a
+  snapshot and for a residual sample (`playWait`). Reduced motion still holds every speed to two stops a second at
+  most. The speed is remembered per run (project folder and run id) for as long as the Studio runs. It is not written
+  to disk; a run not chosen yet plays at 1×. G22: the control shows no word at rest, so the workspace stays at its
+  budget (17), and no budget was raised. Showing the speed itself at rest ("2×") would count one word and needs a
+  raised budget.
+- **DESIGN.md approved:** Field view now reads "a Reset view icon button (the full reset: orientation, the whole
+  domain, the pivot) appears in the top right corner". It also gains one sentence on the camera's inputs, and on 2D
+  views being orthographic, face on, with pan and zoom only.
+
+Verification of the answers: typecheck; `npm run build && npm run package:dir`; unit 527 passed (the two history.spec
+failures are red on main as well, and are left to ci-fix); e2e field, workspace, compare, a11y, word-budget, idle-frames,
+commands, f836 and f837: 85 passed. The Alt test fails when the key-up is not prevented, which was checked by building
+once without the fix.
+
+## Addendum: Runner closes with the Studio (2026-11-17, branch runner-lifetime over main 21fa5c34)
+
+This addendum has no number, because a parallel branch (claude-mcp) may take Addendum 22. It amends G7
+(`docs/studio-guardrails.md`), roadmap F-807.
+
+The maintainer closed the Studio and found `rcfd-runner serve --project …` and a paused `rcfd run` still running and
+holding `target\release`. Their words: "the runner should close with studio by default if no external (existing) runner
+env var is specified". For active runs, their answer was: ask.
+
+### Rules as built
+
+- **Ownership.** The Studio owns only a runner that came up while it had the project open, with none alive at the look
+  before. A runner alive when the project opened is adopted and never stopped by the Studio: one left by an earlier
+  Studio, one the CLI started, one Claude Code started. A service attached through `RCFD_STUDIO_SERVICE` or `--service`
+  is never stopped either.
+- **Close.** The close can come from the window, Alt+F4, quit, or Close project. An owned runner with no run `queued`,
+  `running` or `paused` is shut down without a question (`rcfd-runner shutdown`). With active runs, the F-837 close
+  guard asks in the F-829 panel and names each run as `id: case, state, step N, t = x s`. The choices are:
+  - Stop runs and close: each active run gets `cancel_run` with a reason and keeps its records, the Studio waits up to
+    30 s, then the runner is shut down.
+  - Keep them running and close: the runner stays, and the next Studio adopts it.
+  - Cancel: the default; it has the focus and takes Escape.
+  
+  When cases are also unsaved, one prompt asks both: Save and close / Close and lose them / Cancel, with a segmented
+  toggle "The runs" (Keep them running, the default, or Stop them).
+- **Service.** The Studio's own `rcfd serve` closes with it unless one of its sessions has a solve going in the service
+  itself (session.list state `running` or `paused`). The project's runs belong to the runner, not to the service. A
+  service the Studio found running keeps the old rule: it is left while it holds any session.
+- **Overrides.** The setting "Keep the runner going after the Studio closes" (off by default) and the `--keep-runner`
+  switch both keep the runner running, and nothing is asked. They also bring back the old service rule. The switch wins
+  over the setting, which is then shown on and disabled. The precedence is in `locate.ts` and `argv.ts`.
+- **Test mode.** The quit under `RCFD_TEST_HEADLESS`, and any close that gets no answer (P10, a page that does not
+  answer), gives the choice `unasked`. An idle owned runner is shut down, and one with active runs is kept. Nothing
+  waits on a prompt.
+
+### How ownership is detected (no engine change)
+
+Superseded for records that say who started the runner: see Q-RL-2 in the maintainer's answers below. The looks remain
+the rule for a record with no `started_by`.
+
+`RunnerWatch` (`src/main/project/runner-lifetime.ts`) reads `.rcfd/runner.json` and checks its pid every second, and
+also before and after each project action. The runner writes that file once it holds `.rcfd/runner.lock` and removes it
+at a clean shutdown. `observeRunner` (`src/shared/runner-lifetime.ts`, pure) works on two looks in a row:
+
+- The first look owns nothing.
+- A runner seen after a look that found none is owned.
+- A different `{pid, started}` between two looks (a replacement) is not owned.
+- A runner that has gone is no longer owned.
+
+### Decisions (recommendations taken; each reversible)
+
+- **RL-D1, starts by MCP or the CLI while the Studio is open.** Claude Code's `start_run` or the CLI may bring a runner
+  up while the Studio has the project open, with none alive before. The Studio owns that runner (the recommended
+  option). The Studio cannot tell who started it without an engine change, and the maintainer's complaint was about
+  exactly this kind of leftover.
+- **RL-D2, a replacement is not owned.** A runner that replaces another between two looks is treated as someone else's.
+  Recommendation taken: the safer side for G7.
+- **RL-D3, `unasked` keeps active runs.** A close that could not ask never stops a run.
+- **RL-D4, the merged prompt's toggle defaults to Keep.** Stopping runs needs an explicit choice.
+- **RL-D5, the service rule above.** Recommended: keep the service only for a solve going in the service.
+  service.spec's survival test now passes `--keep-runner`. A session with no solve going no longer keeps the service.
+- **RL-D6, an icon toggle for the setting.** The studio-settings surface already uses its G22 budget of 9 words. The
+  setting is therefore an IconToggle (the `play` icon), with its words as the accessible name and the tooltip. The
+  budget was not raised; it is too tight for a labelled row (for the maintainer).
+- **RL-D7, opening another project.** The project being replaced gets the `unasked` step for its runner.
+- **RL-D8, the close title.** It uses the project folder's base name, for example "Close quick-start with 1 run going?".
+
+### Open for the maintainer
+
+- **Q-RL-1:** raise the studio-settings word budget to show the setting with a visible label, or keep the icon toggle?
+- **Q-RL-2:** should the runner record who started it (an additive `started_by` in `runner.json`), so that ownership no
+  longer depends on looks? It would be an engine change under G4; not built.
+
+### Verification
+
+- Unit tests: `tests/unit/runner-lifetime.spec.ts`, 21 tests, covering ownership, close steps, wording, RunnerWatch with
+  a fake engine, `readRunnerSeen`, the preferences file, the bridge parse and `keptForSolves`. The touched specs pass:
+  engine-locate, theme, project-home, service-client, run-control and f837.
+- e2e tests, all headless: `tests/e2e/runner-lifetime.spec.ts`, 7 tests:
+  - Stop runs and close, with the journal line;
+  - Keep, then a new Studio adopts the runner;
+  - an idle runner closes with no prompt;
+  - a runner started by the CLI is left alone;
+  - the merged prompt;
+  - `--keep-runner`, then the setting;
+  - Close project with Stop.
+
+  The specs service, run-control, runs, close-guard, f837, project, word-budget, shell, data, service-security and
+  first-path were restated where they assumed survival. No process the tests started is left behind.
+
+### The maintainer's answers (2026-11-17, branch settings-owner over main 30352ff5)
+
+- **Q-RL-1, settled: a visible label, and the budget raised.** The studio-settings page with no sites file keeps its
+  9 words, and the setting "Keep the runner going after the Studio closes" gains a visible label of 5 words or fewer,
+  which makes the page's budget 14 (`src/shared/word-budget.ts`; the table in `apps/studio-web/README.md`). The label
+  is "Keep the runner going" (4 words), the toggle's own text beside its `play` icon. The full sentence stays the
+  accessible name and the tooltip, and starts with the label (WCAG 2.5.3, label in name). This replaces RL-D6.
+  The same answer settles the budget note of Addendum 24: the Sites section has its own budget,
+  `studio-settings-sites`, its heading plus one line per site (1 + n words with n sites, by the new `perItem` of a
+  budget). Site names, hosts and confirmed states count as data, so a site's line has one chrome word, Check.
+  To fit that rule, the sites file's line is now its path (data), and the path is the Open button. Its accessible
+  name is "Open the sites file <path>" and its tooltip "Open the sites file" (SR-D1 below, reversible).
+  `tests/e2e/word-budget.spec.ts` counts the page with no sites file (the Sites section excluded), then writes a
+  sites file of two ssh sites, counts the Sites section alone against 1 + 2, and removes the file before the project
+  surfaces.
+- **Q-RL-2, settled: the runner records who started it.** The runner writes an additive `started_by` to
+  `.rcfd/runner.json`: "studio", "cli" or "mcp", and `studio_pid` (the Studio's main process) when the Studio started
+  it. Older readers ignore both fields (G4); no golden or baseline hash covers `runner.json`, which holds a pid and a
+  time and is removed at a clean shutdown. With no value the record is written as before, key for key.
+  - **How the value travels (SR-D2, the cleanest of a flag or a variable).** One environment variable,
+    `RCFD_RUNNER_STARTED_BY`, with the value `studio:<pid>`, `cli` or `mcp`. `rcfd-runner serve` reads it once at start
+    (`crates/rcfd-runner/src/started_by.rs`). The client's start (`Client::ensure_runner`, behind `rcfd-runner ensure`,
+    `start` and `rerun`, and the project tools' `start_run` and `queue_run`) always sets it on the `serve` it spawns:
+    to its own process's value when that parses, else to the client's surface, and removes it when there is neither.
+    The surface is `cli` for the `rcfd-runner` commands (`main.rs`). For the project workspace it is the journal
+    actor's client (`RunService::with_actor`): `mcp` in `rcfd-mcp`, `cli` in `rcfd project call`. The Studio sets
+    `studio:<its pid>` only on the processes it starts that may start a runner: `rcfd-runner ensure` (`control.ts`)
+    and its own `rcfd-mcp` (`server.ts`), through `runnerStarterEnv`. Claude Code and the CLI the user runs do not get
+    it. The exec site's agent has the variable removed (`site/link.rs`), so a site's runners are not this Studio's.
+    A variable and not a `serve` flag, because a newer client must not make an older `rcfd-runner serve` fail on an
+    unknown flag; an older runner ignores the variable. A malformed value is ignored for the surface.
+  - **The ownership rule (`src/shared/runner-lifetime.ts`, `observeRunner`, used by RunnerWatch).** The Studio owns a
+    runner whose record says `started_by` "studio" with this Studio's pid, at any look, including one alive when the
+    project opened (a runner this Studio started, kept by Close project, and opened again). A record with another
+    `started_by`, or another Studio's pid, is never owned. Only a record with no `started_by` falls back to the watch
+    rule of before. This replaces RL-D1: a runner the CLI or Claude Code starts while the Studio has the project open
+    is no longer the Studio's. RL-D2 now holds only for records with no `started_by`.
+  - **Tests.** Rust: `crates/rcfd-runner/tests/started_by_qrl2.rs` (S1 to S6: `ensure` records cli; the Studio's value
+    records studio and its pid; a malformed value falls back to cli; a library client records mcp; `serve` by hand
+    writes the keys of before and no more; the new keys sit beside every key of before), the unit tests of
+    `started_by.rs`, and `rcfd-workspace`'s `started_by_tests` (the actor's client names the starter). Unit:
+    `tests/unit/runner-lifetime.spec.ts`, restated with the Studio's pid (the record decides, the looks only without
+    it, `readRunnerSeen` of the new fields, RunnerWatch with this Studio's pid, `runnerStarterEnv`). e2e:
+    `tests/e2e/runner-lifetime.spec.ts` checks the record of a runner the Studio started and of one the CLI started, and
+    gains a test: a runner the CLI starts while the Studio has the project open is not the Studio's and is left at
+    the close.
+- **SR-D1 (recommendation taken; reversible), the sites file's Open button.** (a) The path is the button, named
+  "Open the sites file <path>". This is taken: the section then fits "its heading plus one line per site". (b) Keep the
+  worded "Open the sites file" button, which adds 4 chrome words to the section's budget.
+
+## Addendum 24: Run sites in the Studio (2026-11-17, branch sites-studio over main 65c78c47)
+
+This addendum is numbered 24 because Addendum 23 is taken by the claude-mcp branch. It builds the Studio's part of
+phase 1 of ADR 0739 (F-848, test S11). The engine part was already on main.
+
+### How a run reaches a site
+
+- **The route.** A remote run is started with `rcfd-runner start <case> ... --site <name> --no-runner --project
+  <folder>`, and then `rcfd-runner ensure`. This is the same detached start the Studio already uses for the runner
+  (ADR 0146). The Studio does not use MCP `start_run {site}`, because the engine gates it on `assistant = true`, and a
+  click in the Studio is a direct user action, not the assistant's.
+- **The store plan.** Before the start, the Studio makes the dry run `start_run {case, store: "plan", dry_run: true,
+  set}` and passes its `set` on, so a remote run stores what a local run of the same case would store. The panel
+  shows the exact `rcfd-runner start ... --site` line that was run (G16, G17).
+- **Local runs are untouched.** Run, Queue…, Run again, Rerun and the palette still go through `start_run` and
+  `queue_run` exactly as before. The site action, `site.run_case` in `shared/sites.ts`, is kept out of `RUN_ACTIONS`,
+  so the palette and the action list pinned by tests do not change.
+
+### The sites file and the choice
+
+- **The sites file.** The Studio reads the user's sites file only through the engine: `rcfd site list --json`, and
+  `rcfd site check <name> [--confirm]`. It looks for the file where the engine does (`RCFD_SITES_FILE`, else the
+  `rcfd` folder under APPDATA or `~/.config`). While the file is absent, the Studio only checks that it is absent: it
+  spawns no `rcfd site`, writes nothing, and shows no new word.
+- **Where (Q8).** The Runs run bar gains a Where choice after the case, and only when the file lists a site.
+  `local` is the default. The choice is remembered per project folder in `site-choices.json`, beside the recent
+  list in the Studio's user data, and never in the project. Choosing `local` deletes the entry, and nothing is
+  written while no sites file exists. Run and Queue… then start on that site. Home Run, Run again and Rerun stay
+  local.
+- **The check before every remote start (Q3, Q10).** Each remote start first runs `rcfd site check <name>`. That
+  starts the site's agent once, and no project data goes to it. If the site is not admitted (not confirmed, or
+  another engine), the shared decision panel asks. It shows the case, the host key, the engine there and the engine
+  here. "Keep it here" is the safe default and sends nothing. "Confirm and run" (or "Yes, use this engine") runs
+  `rcfd site check <name> --confirm`, and then starts the run. A site whose agent cannot be reached shows the
+  engine's reason, and offers only Keep it here.
+
+### What the Studio shows
+
+- **The badge and the link state.** A remote run carries a badge with the site name and the link state, in the run
+  table (on the run id's line), in the selected run's header, and in the workspace's run list. The main process
+  derives the state from the local runner's files, and nothing in the Studio talks to a site (P4):
+  - `site.json` with `link: done` gives done;
+  - a last `refused` in `site.jsonl` gives refused;
+  - `lost` or `unconfigured` gives retrying;
+  - no `submitted` yet gives sending;
+  - an end in the copied `events.jsonl` while `status.json` has not ended gives copying back (Q4: the downloads
+    come before the final status);
+  - otherwise, connected.
+
+  `run.json`'s `site` is read once per run and session, whether or not the sites file exists. A run whose site was
+  removed therefore keeps its badge (P7), and a local run adds nothing to the view. A run whose link has settled
+  (done or refused) is not read again.
+- **The Sites section of the Studio settings.** It appears only when the sites file exists. It lists each site with
+  its host (or kind) and whether it is confirmed. Check runs the check and says "ready: <engine>" or the engine's
+  reason. A site that needs a yes opens the same decision panel. "Open the sites file" opens the file in the
+  system's editor. The Studio cannot create or edit the file.
+- **Pause, resume and cancel** of a remote run use the existing controls unchanged. The local runner forwards each
+  request to the site.
+
+### Decisions (recommendations taken; each reversible)
+
+- **SS-D1:** remote runs go through `rcfd-runner start --site`, not MCP `start_run {site}`, for the reason above.
+- **SS-D2:** every remote start is checked first (one extra agent hello), so the yes is asked before anything is
+  queued.
+- **SS-D3:** Where is offered only in the Runs run bar (Run and Queue…). Home Run, Run again and Rerun stay local,
+  so there is one place to choose.
+- **SS-D4:** the Sites section shows only when the file exists, and the Studio never creates the file.
+- **SS-D5:** the site's confirmed state in the Sites section is shown as data, not chrome (it is a value of the
+  user's file).
+
+### Word budgets (G22, none raised)
+
+- At rest with no sites file, every surface is as before. word-budget.spec passes unchanged.
+- With sites listed, the Runs view counts 14 of its 14 words. The Where choice's value is data, and its label is
+  only an accessible name.
+- With sites listed, the Studio settings page counts 16 words against its at-rest budget of 9. The section adds
+  "Sites", a "Check" per site and "Open the sites file". The budget is measured at rest, so it is not broken, but it
+  is too tight for this section once the user has sites (for the maintainer, together with Q-RL-1).
+- Settled by the maintainer 2026-11-17 (see "Addendum: Runner closes with the Studio", the maintainer's answers): the
+  page's budget with no sites file is 14, and the Sites section has its own budget, its heading plus one line per site.
+
+### Verification (headless, engine built in the worktree's own target)
+
+- **Unit tests:** `tests/unit/sites.spec.ts`, 14 tests:
+  - the parsers;
+  - the file lookup;
+  - the remembered choices;
+  - no spawn and no read with no sites file;
+  - every link state;
+  - the folder reads;
+  - the action's CLI line against the inventory;
+  - control dispatch with a fake server, including the dry run, the argv, ensure and a refusal;
+  - the port's parsing;
+  - the real engine with an exec site (list, check and confirm).
+
+  `history.spec.ts` now allows the user-data rename of `site-choices.json`. The full unit project passes: 566 tests.
+- **e2e tests:** `tests/e2e/sites.spec.ts`, 6 tests, with `RCFD_TEST_EXEC_SITES=1` and two exec sites:
+  - Start on a site, with the badge going to done. The residuals are byte for byte the site's, and the workspace
+    reads them and draws the downloaded store.
+  - Pause, resume and Stop… of a long remote run. Each reaches the site's run, and `site.jsonl` has `request_sent`
+    pause, resume and cancel.
+  - The remembered choice after a restart, with nothing in the project.
+  - The confirm prompt: Keep it here sends nothing; Confirm and run records the yes and starts the run.
+  - The Sites section, with Check and Open the sites file.
+  - No sites file: no Where choice and no Sites section, and the remote runs keep their badge.
+
+  The touched specs pass: run-control, runs, workspace, theme, settings, settings-ui-f826, theme-surfaces,
+  word-budget and a11y (55 + 20 tests). `tests/support/studio.ts` points `RCFD_SITES_FILE` at a missing file for
+  every test that does not name one, so the user's own sites file never reaches a test.
+- **Capabilities:** the inventory is unchanged. In `coverage.json`, the F-848 exemptions are now ui entries:
+  - `rcfd site list`, `rcfd site check`, `--confirm` and `--json`;
+  - their `rcfd-runner site` aliases;
+  - `rcfd-runner start --site`;
+  - `mcp:list_sites`, which the Studio reaches through the same listing.
+
+  Only the agent (`rcfd-runner site --stdio`) stays exempt, because it runs on the other machine.
+  `docs/studio-coverage.md` is rewritten.
+
+### Left
+
+- Where is not offered on home Run, Run again and Rerun (SS-D3).
+- The Studio cannot create a sites file (SS-D4).
+- Lines of `site.jsonl` are not events in the feed.
+- There is no download progress (phase 2).
+- The engine-version prompt is covered by unit tests only: in e2e, `RCFD_SITE_TEST_GIT_REV` would change the engine
+  for the whole process tree.
 
 ## Addendum 23: Claude Code registered with Claude Code itself; the embedded panel removed (2026-11-17, branch claude-mcp over main 21fa5c34)
 
