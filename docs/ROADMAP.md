@@ -14456,8 +14456,8 @@ Generated from `docs/studio-guardrails.md`, `PRODUCT.md` and `DESIGN.md` ([ADR 0
     (schema_defaults_f834, service_poll_f834), each naming the deleted test it replaces; plans_6867e40.txt restored byte
     for byte (blob 9fc69532), F-476 hash table matched unchanged; UI-only parts and Studio-only logic (start-dialog
     estimates, time step, correctors) not ported, listed in the merge report. Open: process tests need release
-    rcfd-runner and rcfd built first (fail loudly, current); decimate_minmax lost its M3 check; DV1/DV5 default-key
-    checks.
+    rcfd-runner and rcfd built first (fail loudly, current); Follow-up 8d600082: series_plan_f834b.rs restores M3
+    (decimate_minmax) and the engine parts of DV1 and DV5.
 - [ ] **F-835** Electron Studio: new project
   - depends on: F-449, F-805
   - acceptance: An engine entry point creates a project (rcfd project init and an MCP create_project, through
