@@ -2347,7 +2347,7 @@ other jobs): P7 R2 median 41 ms, first open of the launch 289 ms (judged, met); 
 (recorded, met); P8 240 frames per s and p99 frame 4.3 ms with vertical sync (met); verdict 4 of 4 judged lines met. The
 uncapped P8 run gave 38.3 per s (recorded, not judged).
 
-## Addendum 17: F-818, themes: Light, Dark, High contrast and System (2026-11-17)
+## Addendum 17: F-818, themes: Light, Dark, High contrast and System, and the Studio's settings page (2026-11-17)
 
 On 2026-11-17 the maintainer said: "theming in general is a good idea so create a dark mode plus one other theme for
 this". `DESIGN.md` changes need the maintainer's approval, so `DESIGN.md` is not edited. The two new palettes are
@@ -2450,7 +2450,46 @@ tests pass untouched.
 - Q-818-5: the theme control sits in the header band of the project home and the case settings. The Studio has no
   Studio-wide settings page yet. Should one be made, and should the theme move there?
 
-### Verification (2026-11-17, on studio-f818 over studio-roadmap 7cb8ec45)
+### The maintainer's answers (2026-11-17), and the Studio's settings page
+
+- Q-818-1: both palettes approved. They are pasted from `docs/design-themes-proposal.md` into `DESIGN.md` (this
+  approval covers that edit): a `themes` map in the frontmatter (`dark` and `contrast`, each with its `colors`), a
+  Themes section after Colors (the Same Jobs Rule and the Field Is Not Themed Rule), the Overview line on themes, and
+  "a dark theme" taken off the Open list. `tests/unit/tokens.spec.ts` now checks that the frontmatter themes are
+  `tokens.ts`'s and that the prose gives both footer tints.
+- Q-818-2: the ink fields stay light bands in Dark (D2 (a), as built).
+- Q-818-3: Dark's orange stays `#c46810` (as built).
+- Q-818-4: the field overlays do not follow the theme (D6, as built).
+- Q-818-5: yes, a Studio-wide settings page, with the theme control moved there. Built:
+  - `src/renderer/studio-settings/StudioSettingsPage.tsx` at `#/studio-settings` (loaded on demand): the sky header
+    band with the brand, the page's name "Settings" and Close settings (back to where it was opened from), one column
+    of sections, the ink disclaimer footer. Theme is its first and only section: a segmented toggle Light, Dark, High
+    contrast, System (a radio group for assistive technology), applied at once as before. A sentence for readers says
+    what System does and that the field colours are the same in every theme (G22: not standing text).
+  - Opened from the palette's new **Settings** command (`go.studio_settings`, group Go to, global shortcut Ctrl+, in
+    the shortcuts table, owner F-818) and from one quiet entry point: a Settings icon (a new `settings` pictogram, no
+    word at rest) in the header band of the project home and of the case settings, where the theme icon was. The
+    theme icon and its select (`theme/ThemeSelect.tsx`, `theme/theme.css`) are removed; the four Theme palette
+    commands stay.
+  - It is not the case settings (`#/settings`, Go to Case settings), which are a case's keys; the two names are kept
+    apart in the palette's descriptions.
+  - Word budget (G22): a new surface `studio-settings` in `src/shared/word-budget.ts`, set at its count when built: 9
+    words at rest (rcfd, Studio, Settings, Theme, Light, Dark, High, contrast, System). Counted by
+    `tests/e2e/word-budget.spec.ts`; the budget is for the maintainer to confirm.
+  - The a11y walk: `tests/e2e/a11y.spec.ts` reaches the page from the header's icon by keys, walks it (Tab loop,
+    focus indicators, the toggle by the arrow keys, axe-core) as surface `studio-settings`, and leaves it by Close
+    settings.
+  - No other setting was invented for the page. Candidates that are the Studio's own settings today, each set only by
+    an environment variable or kept as its own file, listed here and not moved: the paths of `rcfd`, `rcfd-mcp` and
+    `claude` (`RCFD_STUDIO_RCFD`, `RCFD_STUDIO_MCP`, `RCFD_STUDIO_CLAUDE`); the engine service to join
+    (`RCFD_STUDIO_SERVICE`, `RCFD_STUDIO_SERVICE_ROOT`); the data roots (`RCFD_STUDIO_DATA_ROOTS`); the recent projects
+    list (`recent-projects.json`, forgotten one by one on the home); the Claude Code folder confirmations
+    (`claude/claude-trust.json`). Each is a decision for the maintainer.
+- Verification of the answers: `npm run typecheck` clean; the touched specs (theme, theme-surfaces, word-budget, a11y,
+  commands, settings e2e; theme, tokens, pictograms, commands-palette, commands-shortcuts unit) passed; then the full
+  `npm test` (headless, built and packaged): 687 passed, 0 failed, 9.0 min.
+
+### Verification (2026-11-17, on studio-f818 over studio-roadmap 7cb8ec45; before the answers)
 
 - `npm ci`: exit 0, 0 vulnerabilities. `npm run typecheck`: clean. No dependency was added.
 - `tokens.css`: the `:root` block is byte-identical to the one before F-818 (compared with `git show HEAD:`).

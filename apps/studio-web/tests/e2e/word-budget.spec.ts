@@ -59,6 +59,7 @@ const ROOTS: Record<SurfaceId, SurfaceRoot> = {
   undo: { root: '.hi-controls', exclude: ['.hi-panel'] },
   decision: { root: '.hi-panel' },
   progress: { root: '.wk' },
+  'studio-settings': { root: '.ss-page' },
 };
 
 /** Counts the surface and screenshots the window (the budgets are held by the last test, once every surface is counted). */
@@ -106,6 +107,12 @@ test('the project home with no project open, and the first path’s four station
   await expect(page.getByRole('button', { name: 'Open project folder…' })).toBeEnabled();
   await atRest('home-empty');
   await atRest('first-path-intro');
+  // F-818: the Studio's settings page, from Ctrl+, and back
+  await page.keyboard.press('Control+,');
+  await expect(page.getByRole('radiogroup', { name: 'Theme' })).toBeVisible();
+  await atRest('studio-settings');
+  await page.getByRole('button', { name: 'Close settings' }).click();
+  await expect(page.getByRole('button', { name: 'Open project folder…' })).toBeEnabled();
 });
 
 test('the progress row of a project opening that lasts', async () => {

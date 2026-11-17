@@ -101,6 +101,7 @@ export const SHORTCUTS: readonly Shortcut[] = [
   { keys: 'Ctrl+1', scope: 'global', does: 'Go to Home, the index of the project folder', command: 'go.home', owner: 'F-831' },
   { keys: 'Ctrl+2', scope: 'global', does: 'Go to Runs', command: 'go.runs', owner: 'F-831' },
   { keys: 'Ctrl+L', scope: 'global', does: 'Go to the Claude Code message field', command: 'go.claude', owner: 'F-831' },
+  { keys: 'Ctrl+,', scope: 'global', does: 'Open the Studio’s settings (the theme)', command: 'go.studio_settings', owner: 'F-818' },
   { keys: 'Ctrl+O', scope: 'global', does: 'Open a project folder', command: 'project.open_folder', owner: 'F-831' },
   { keys: 'Ctrl+N', scope: 'global', does: 'New case (from a template or a shipped example)', command: 'case.new', owner: 'F-831' },
   { keys: 'F5', scope: 'global', does: 'Run a case of the project (asks which)', command: 'project.run_case', owner: 'F-831' },

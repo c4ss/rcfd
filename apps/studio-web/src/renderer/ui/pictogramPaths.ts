@@ -80,6 +80,7 @@ export const ICON_NAMES = [
   'stored',
   // F-818
   'theme',
+  'settings',
 ] as const;
 export type IconName = (typeof ICON_NAMES)[number];
 
@@ -116,4 +117,6 @@ export const ICON_PATHS: Record<IconName, { readonly path: string; readonly fill
   stored: { path: 'M4 1L8 5L4 9ZM1 12H13M1 9V12M13 9V12' },
   // F-818: the theme (a square cut on its diagonal, the lower half hatched at 45 degrees: one ground light, one dark)
   theme: { path: 'M2 2H12V12H2ZM2 12L12 2M5 12L12 5M8 12L12 8' },
+  // F-818: the Studio's settings (three rails, each with its stop at a different place)
+  settings: { path: 'M1 3H13M1 7H13M1 11H13M4 1V5M10 5V9M6 9V13' },
 };

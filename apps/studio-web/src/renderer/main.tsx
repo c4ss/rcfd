@@ -38,6 +38,9 @@ const SettingsPage = lazy(() => import('./settings/SettingsPage'));
 const FIELD_HASH = '#/dev/field';
 const FieldDev = lazy(() => import('./dev/FieldDev'));
 const CASE_HASH = '#/case';
+// F-818: the Studio's settings (the theme), loaded on demand
+const STUDIO_SETTINGS_HASH = '#/studio-settings';
+const StudioSettingsPage = lazy(() => import('./studio-settings/StudioSettingsPage'));
 const CaseEditorPage = lazy(() => import('./case/CaseEditorPage'));
 
 // React Aria's usePress adds a one-rule <style> element unless an element with this id exists; the Content Security
@@ -83,6 +86,13 @@ function Root() {
     return (
       <Suspense fallback={null}>
         <FieldDev hash={hash} />
+      </Suspense>
+    );
+  }
+  if (hash === STUDIO_SETTINGS_HASH) {
+    return (
+      <Suspense fallback={null}>
+        <StudioSettingsPage />
       </Suspense>
     );
   }

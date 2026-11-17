@@ -1,5 +1,5 @@
 // F-818, the theme setting in the packaged Studio: Light by default (DESIGN.md's tokens, the light native theme and a
-// white window), the header's theme control and the palette's Theme commands switch the tokens at once with no reload,
+// white window), the Settings page (from the header's icon, the palette and Ctrl+,) and the palette's Theme commands switch the tokens at once with no reload,
 // the native theme and the window background follow, the setting persists across a restart (and a dark start opens on
 // the dark ground), and System follows the emulated colour scheme. The setting is kept in a scratch file
 // (RCFD_STUDIO_PREFERENCES), never in the user data the other tests share.
@@ -93,18 +93,34 @@ test('Light is the default: DESIGN.md’s tokens, the light native theme and a w
   expect(await page.evaluate(() => window.studio.theme.get())).toMatchObject({ setting: 'light' });
 });
 
-test('the header’s theme control switches the tokens at once, with no reload; the native theme and the window follow', async () => {
+test('Settings, from the header’s one icon: Theme is its first section, and a choice switches the tokens at once, with no reload; the native theme and the window follow', async () => {
   await page.evaluate(() => ((window as unknown as { __noReload: number }).__noReload = 818));
-  const control = page.getByRole('button', { name: /Theme/ });
-  await expect(control).toHaveAccessibleName(/Light/);
-  await control.click();
-  await page.getByRole('option', { name: 'Dark', exact: true }).click();
+  await page.locator('.ph-top').getByRole('button', { name: 'Settings', exact: true }).click();
+  await expect(page.getByRole('heading', { level: 1, name: 'Settings' })).toBeVisible();
+  await expect(page.getByRole('heading', { level: 2 }).first()).toHaveText('Theme');
+  const group = page.getByRole('radiogroup', { name: 'Theme' });
+  await expect(group.getByRole('radio')).toHaveText(['Light', 'Dark', 'High contrast', 'System']);
+  await expect(group.getByRole('radio', { name: 'Light' })).toBeChecked();
+  await group.getByRole('radio', { name: 'Dark' }).click();
   await expect.poll(drawn).toEqual(expected('dark'));
-  await expect(control).toHaveAccessibleName(/Dark/);
+  await expect(group.getByRole('radio', { name: 'Dark' })).toBeChecked();
   await expect.poll(native).toEqual({ source: 'dark', background: themes.dark.white });
   expect(await page.evaluate(() => (window as unknown as { __noReload?: number }).__noReload)).toBe(818);
   // kept by the main process in the scratch file
   await expect.poll(async () => JSON.parse(await readFile(prefs, 'utf8')).theme).toBe('dark');
+  await page.getByRole('button', { name: 'Close settings' }).click();
+  await expect(page.getByRole('heading', { name: 'No project open' })).toBeVisible();
+});
+
+test('Settings from the palette’s Settings command and from Ctrl+,', async () => {
+  await byPalette('Settings');
+  await expect(page.getByRole('heading', { level: 1, name: 'Settings' })).toBeVisible();
+  await page.getByRole('button', { name: 'Close settings' }).click();
+  await expect(page.getByRole('heading', { name: 'No project open' })).toBeVisible();
+  await page.keyboard.press('Control+,');
+  await expect(page.getByRole('heading', { level: 1, name: 'Settings' })).toBeVisible();
+  await page.getByRole('button', { name: 'Close settings' }).click();
+  await expect(page.getByRole('heading', { name: 'No project open' })).toBeVisible();
 });
 
 test('the palette’s Theme commands switch it too: High contrast', async () => {
@@ -119,7 +135,10 @@ test('the setting persists across a restart', async () => {
   await launch();
   await expect.poll(drawn).toEqual(expected('contrast'));
   expect(await native()).toEqual({ source: 'light', background: themes.contrast.white });
-  await expect(page.getByRole('button', { name: /Theme/ })).toHaveAccessibleName(/High contrast/);
+  await page.keyboard.press('Control+,');
+  await expect(page.getByRole('radiogroup', { name: 'Theme' }).getByRole('radio', { name: 'High contrast' })).toBeChecked();
+  await page.getByRole('button', { name: 'Close settings' }).click();
+  await expect(page.getByRole('heading', { name: 'No project open' })).toBeVisible();
 });
 
 test('a dark start: the window opens on the dark ground, and the page is dark before and after the setting is read', async () => {

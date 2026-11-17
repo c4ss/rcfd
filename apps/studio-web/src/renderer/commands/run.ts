@@ -374,6 +374,8 @@ async function studio(e: PaletteEntry, values: Values): Promise<Outcome> {
       return close(() => inProject(e.id, values));
     case 'go.settings':
       return close(() => void (location.hash = '#/settings'));
+    case 'go.studio_settings':
+      return close(() => void (location.hash = '#/studio-settings'));
     case 'go.case_editor':
       return close(() => void (location.hash = caseHash.index));
     case 'project.open_folder':

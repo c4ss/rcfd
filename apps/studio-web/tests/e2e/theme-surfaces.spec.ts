@@ -119,15 +119,14 @@ test.afterAll(async () => {
   await rm(fx.root, { recursive: true, force: true }).catch(() => undefined);
 });
 
-test('the project home with no project open, and the theme control opened', async () => {
+test('the project home with no project open, and the Studio’s settings page', async () => {
   await expect(page.getByRole('button', { name: 'Open project folder…' })).toBeEnabled();
   await everyTheme('home-empty');
-  await useTheme('dark');
-  await page.getByRole('button', { name: /Theme/ }).click();
-  await expect(page.getByRole('option', { name: 'High contrast' })).toBeVisible();
-  await page.screenshot({ path: path.join(SHOTS, 'dark', 'theme-control.png'), scale: 'css' });
-  await page.keyboard.press('Escape');
-  await useTheme('light');
+  await page.locator('.ph-top').getByRole('button', { name: 'Settings', exact: true }).click();
+  await expect(page.getByRole('radiogroup', { name: 'Theme' })).toBeVisible();
+  await everyTheme('studio-settings');
+  await page.getByRole('button', { name: 'Close settings' }).click();
+  await expect(page.getByRole('heading', { name: 'No project open' })).toBeVisible();
 });
 
 test('the project home of an open project, with the Claude Code panel beside it', async () => {
@@ -209,10 +208,10 @@ test('the case editor on a case file', async () => {
   await everyTheme('case-editor');
 });
 
-test('the case settings of a session, with the theme control in their header', async () => {
+test('the case settings of a session, with the Settings icon in their header', async () => {
   await page.evaluate(() => (location.hash = '#/settings'));
   await page.getByRole('button', { name: 'New session from defaults' }).click();
   await expect(page.getByRole('heading', { level: 2, name: 'Set in this case' })).toBeVisible({ timeout: 20_000 });
-  await expect(page.locator('.st-top').getByRole('button', { name: /Theme/ })).toBeVisible();
+  await expect(page.locator('.st-top').getByRole('button', { name: 'Settings', exact: true })).toBeVisible();
   await everyTheme('settings');
 });

@@ -1,10 +1,10 @@
 # Proposal: the Dark and High contrast themes of rcfd Studio (F-818)
 
-Status: **proposed, awaiting the maintainer.** `DESIGN.md` is not edited. The two themes are built and can be chosen in
-the Studio (the theme control in the header band, the palette's Theme commands). Their values live in
-`apps/studio-web/src/renderer/design/tokens.ts` (`themes.dark`, `themes.contrast`), and `tokens.css` is generated from
-them. Once the maintainer approves, the blocks below can be pasted into `DESIGN.md` as they are. The decision record is
-ADR 0801 Addendum 17.
+Status: **approved by the maintainer on 2026-11-17 and pasted into `DESIGN.md`** (its frontmatter `themes` and its
+Themes section). The two themes are chosen on the Studio's settings page (Ctrl+, or the Settings icon in the header
+band) or by the palette's Theme commands. Their values live in `apps/studio-web/src/renderer/design/tokens.ts`
+(`themes.dark`, `themes.contrast`), and `tokens.css` is generated from them. The decision record is ADR 0801
+Addendum 17.
 
 On 2026-11-17 the maintainer asked for "a dark mode plus one other theme". The second theme proposed here is **High
 contrast**, a light theme for bright rooms and projectors.

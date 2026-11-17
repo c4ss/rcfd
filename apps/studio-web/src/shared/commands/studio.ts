@@ -139,6 +139,18 @@ export const STUDIO_COMMANDS: readonly StudioCommand[] = [
     note: NAV_NOTE,
   },
   {
+    id: 'go.studio_settings',
+    title: 'Settings',
+    description: 'The settings of the Studio itself (#/studio-settings): its theme. Not a case: the case settings are Go to Case settings.',
+    group: 'Go to',
+    effect: 'navigate',
+    params: [],
+    engine: null,
+    cli: null,
+    mcp: null,
+    note: 'A page of the Studio: its settings are the Studio’s own preferences (its user data), no engine call, nothing to script.',
+  },
+  {
     id: 'go.case_editor',
     title: 'Go to the case editor',
     description: 'The case files of the project open in the editor (#/case).',

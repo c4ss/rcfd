@@ -22,6 +22,7 @@ import {
 import { NATIVE_THEME_SOURCE, resolveTheme, THEME_GROUND, THEME_LABEL, THEME_SETTINGS } from '../../src/shared/theme.js';
 import { backgroundOf, formatPreferences, parsePreferences, preferencesFile, ThemePreference, type ThemeTargets } from '../../src/main/theme.js';
 import { STUDIO_COMMANDS } from '../../src/shared/commands/studio.js';
+import { globalShortcutOf } from '../../src/shared/commands/shortcuts.js';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
 const renderer = path.join(root, 'src', 'renderer');
@@ -123,12 +124,13 @@ test.describe('the themes of tokens.ts', () => {
     expect(canvas).not.toContain("palette['silver-wash']");
   });
 
-  test('theme.css uses only defined tokens and no colour literals', () => {
-    const css = read(renderer, 'theme', 'theme.css').replace(/\/\*[\s\S]*?\*\//g, '');
+  test('the settings page’s stylesheet uses only defined tokens, no colour literals and square corners', () => {
+    const css = read(renderer, 'studio-settings', 'studio-settings.css').replace(/\/\*[\s\S]*?\*\//g, '');
     const defined = new Set(cssCustomProperties().map(([k]) => k));
     const used = [...css.matchAll(/var\((--[a-z0-9-]+)/g)].map((m) => m[1]!);
     expect(used.filter((v) => !defined.has(v))).toEqual([]);
     expect(css.match(/#[0-9a-f]{3,8}\b|rgba?\(|hsla?\(|oklch\(/gi) ?? []).toEqual([]);
+    expect(css).not.toMatch(/border-radius|box-shadow/);
   });
 });
 
@@ -172,6 +174,13 @@ test.describe('the theme setting', () => {
     } finally {
       await rm(dir, { recursive: true, force: true });
     }
+  });
+
+  test('Settings: a palette command on Ctrl+, that opens the Studio’s settings page', () => {
+    const c = STUDIO_COMMANDS.find((x) => x.id === 'go.studio_settings')!;
+    expect(c.title).toBe('Settings');
+    expect(globalShortcutOf('go.studio_settings')?.keys).toBe('Ctrl+,');
+    expect(read(renderer, 'studio-settings', 'hash.ts')).toContain("'#/studio-settings'");
   });
 
   test('the palette has one command per setting, in the View group', () => {
