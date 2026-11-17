@@ -1084,7 +1084,7 @@ unavailable and why, a value to act on (changes not saved).
   that are not chrome (`data`, `exception`, `disclaimer`, `help`). `tests/e2e/word-budget.spec.ts` brings each surface
   to rest in one Studio, photographs it, counts it, and fails when a surface passes its budget. `RCFD_WORD_PHASE=before`
   writes the photographs and counts to `test-results-visual/f833/before/` instead of `after/`.
-- The budgets are the AFTER counts of the sweep, proposed and awaiting the maintainer's approval
+- The budgets are the AFTER counts of the sweep, approved by the maintainer on 2026-11-17 and enforced
   (`BUDGET_STATUS`); raising one needs the maintainer's word.
 
 | Surface | Before | After = budget | What stayed |

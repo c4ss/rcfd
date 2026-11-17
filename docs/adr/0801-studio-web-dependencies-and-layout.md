@@ -1460,6 +1460,33 @@ cannot be made, refusals, conflicts and the decision panel; a work in progress (
 - `python scripts/third_party_licenses.py --check`: up to date.
 - `cargo test -p rcfd-cli --release --test docs_site --test workspace_graph`: 2 and 4 passed.
 
+### The maintainer's answers (2026-11-17)
+
+The maintainer answered the three open points of this addendum on 2026-11-17 and approved all three:
+
+1. **The 17 budgets** of the table above, as proposed (the AFTER counts). `BUDGET_STATUS` in
+   `src/shared/word-budget.ts` now reads approved and enforced; `tests/e2e/word-budget.spec.ts` already fails past a
+   budget, so nothing else changes in the test. Raising a budget still needs the maintainer's word (G22).
+2. **The kept-visible list** ("What stayed visible, and why"), as written.
+3. **Moving the G20 shortcut hints out of visible text into the controls' descriptions** (decision 4, option (b)).
+   Save's Ctrl+S, the composer's keys, undo and redo, and the palette's key hints were already moved by the sweep. One
+   hint was left in a control's accessible name rather than its description: the project home's Commands button was
+   named "Commands Ctrl+K" by a readers-only span inside it. It is now named "Commands", with `aria-keyshortcuts`
+   `Control+K` and the description "Ctrl+K" (`aria-describedby`, `#ph-commands-keys`). No test read the old name. The
+   palette and the shortcut list (Ctrl+/) still list every shortcut, so G20 holds.
+
+The proposed `DESIGN.md` lines above are not applied: `DESIGN.md` is not edited by this item, and they stay for the
+maintainer. F-833 is done.
+
+### Verification (2026-11-17, on studio-f833b)
+
+- `npm ci`: exit 0. `npm run build` (typecheck included) and `npm run package:dir`: clean.
+- `tests/e2e/word-budget.spec.ts` with `commands.spec.ts`: 20 passed; `project.spec.ts` with `a11y.spec.ts`: 21 passed.
+- `npm test`: 649 passed, 2 failed, 3 did not run. The failures were `plots.spec.ts:134` (30 s timeout under load) and
+  `service.spec.ts:132` (the restarted service, a known load flake); run alone, `plots.spec.ts` passed 4 of 4 and
+  `service.spec.ts` 9 of 9.
+- `python scripts/roadmap_progress.py`: done 300, partial 267, todo 82, total 649.
+
 ## Addendum 12: F-816, the keyboard and assistive-technology pass (2026-11-16)
 
 F-816 (G8, with G13, G20 and G22) checks every built surface of the Studio from the keyboard and the accessibility tree

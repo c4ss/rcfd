@@ -22,9 +22,9 @@
 //   A nearest `data-words="chrome"` counts again (a caption inside a data block).
 // - Never counted: accessible names, descriptions and tooltips that are not open (they are not on the screen).
 //
-// Each surface's budget is proposed from its AFTER screenshots (test-results-visual/f833/after/) and awaits the
-// maintainer's approval (G22: raising a budget needs the maintainer's word). tests/e2e/word-budget.spec.ts counts every
-// surface from the DOM and fails past its budget.
+// Each surface's budget is the AFTER count of its screenshots (test-results-visual/f833/after/), approved by the
+// maintainer on 2026-11-17 (ADR 0801 Addendum 11) and enforced: tests/e2e/word-budget.spec.ts counts every surface from
+// the DOM and fails past its budget. Raising a budget needs the maintainer's word (G22).
 
 /** The attribute that marks visible words that are not chrome (see above). */
 export const WORDS_ATTR = 'data-words';
@@ -43,8 +43,8 @@ export interface SurfaceBudget {
   readonly budget: number;
 }
 
-/** PROPOSED, AWAITING THE MAINTAINER'S APPROVAL (F-833): each budget is the AFTER count of the sweep. */
-export const BUDGET_STATUS = 'proposed, awaiting maintainer approval' as const;
+/** APPROVED BY THE MAINTAINER 2026-11-17 (F-833): each budget is the AFTER count of the sweep, enforced by the test. */
+export const BUDGET_STATUS = 'approved by the maintainer 2026-11-17, enforced' as const;
 
 export const WORD_BUDGETS = {
   'home-empty': { what: 'project home, no project open', rest: 'first start, an empty recent list', budget: 6 },
