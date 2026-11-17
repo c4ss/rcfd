@@ -62,6 +62,8 @@ FILES = {
 class Retro(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
+        cls.h3 = ati.RETRO_H3
+        ati.RETRO_H3 = True  # ADR 0703 removed rule H3; these tests of ADR 0701 are kept as records of the rule
         cls.root = tempfile.mkdtemp(prefix="adr_retro_")
         for p, text in FILES.items():
             tg.put(cls.root, p, text)
@@ -71,6 +73,7 @@ class Retro(unittest.TestCase):
 
     @classmethod
     def tearDownClass(cls):
+        ati.RETRO_H3 = cls.h3
         shutil.rmtree(cls.root, ignore_errors=True)
 
     def prim(self, name):

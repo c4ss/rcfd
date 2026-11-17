@@ -29,7 +29,8 @@ shallow clone, outside a git repository or when git fails, those tests have no p
 `--primary git` also applies rule H (ADR 0701): H0, a leading comment block with no `ADR dddd` but a `docs/adr/dddd-....md` path gives E0;
 H1 to H3, a file-citation-only test that rule G left without a primary takes the first ADR (tier, then number) with a registering unit
 that cites its file: H1 a unit in a `## Test files (added <date>, ADR dddd)` section, H2 a unit that says `without an ADR`, `ADR-less`
-or `no ADR describes ...`, H3 a table row with the file in one cell and a limit in another. `coverage.primary.retro` counts them.
+or `no ADR describes ...`. Rule H3 of ADR 0701 (a table row with the file in one cell and a limit in another) is removed (ADR 0703: it read
+1 of 5, audit and test-list rows): `RETRO_H3` is False and no command turns it on. `coverage.primary.retro` counts them (`h3` is 0).
 """
 import argparse
 import json
@@ -53,6 +54,7 @@ LISTING_ADRS = {"0653", "0679", "0684"}  # ADRs that list binaries or sample fil
 RETRO_EXCLUDED = LISTING_ADRS | {"0690", "0701"}  # ADRs whose tables quote sample files: no source of rule H (ADR 0701)
 RETRO_SECTION = re.compile(r"^#{2,3}\s+Test files \(added \d{4}-\d{2}-\d{2}, ADR \d{4}\)\s*$")
 RETRO_PHRASE = re.compile(r"without an ADR|ADR-less|had no ADR|no ADR (?:describes|registers|registered|states|names|covers)", re.I)
+RETRO_H3 = False  # ADR 0703 removed rule H3; the code stays behind this constant only so that the tests of ADR 0701 remain as records
 RETRO_LIMIT = re.compile(r"\d+(?:\.\d+)?\s*%|\d\.\d|[<>]=?\s*\d")
 WORD = re.compile(r"\b[A-Za-z_]\w*\b")
 ADR_IN_SUBJECT = re.compile(r"\bADRs? (\d{4})\b")
@@ -276,7 +278,7 @@ class Text:
 
 def retro_units(text):
     """Rule H of ADR 0701: the registering units of one ADR text as (tier, keys): tier 1 a unit inside a `Test files (added ..., ADR dddd)`
-    section, 2 a paragraph or table row with a `without an ADR` phrase, 3 a table row that cites the file in one cell and has a limit in
+    section, 2 a paragraph or table row with a `without an ADR` phrase, 3 (only while RETRO_H3, ADR 0703: off) a table row that cites the file in one cell and has a limit in
     another. keys are the .rs file keys the unit cites (rs_keys). A paragraph is the lines up to a blank line, a heading or a table row."""
     out, para, in_section = [], [], False
 
@@ -308,7 +310,7 @@ def retro_units(text):
                 if RETRO_PHRASE.search(st):
                     out.append((2, keys))
                 cells = st.strip("|").split("|")
-                for i, c in enumerate(cells):
+                for i, c in enumerate(cells if RETRO_H3 else ()):
                     ck = rs_keys(c)
                     if ck and any(RETRO_LIMIT.search(d) for j, d in enumerate(cells) if j != i):
                         out.append((3, ck))
@@ -762,7 +764,7 @@ def main(argv=None):
             print(f"primary from git: {c['primary']['git']}")
         if "retro" in c["primary"]:
             r = c["primary"]["retro"]
-            print(f"primary from retro rule H (ADR 0701): tests h1 {r['h1']}, h2 {r['h2']}, h3 {r['h3']}, none {r['none']}; "
+            print(f"primary from retro rule H (ADR 0701, H3 removed by ADR 0703): tests h1 {r['h1']}, h2 {r['h2']}, h3 {r['h3']}, none {r['none']}; "
                   f"{len(r['files'])} files")
         print(f"unmapped binaries ({len(c['unmapped_binaries'])}):")
         for u in c["unmapped_binaries"]:
