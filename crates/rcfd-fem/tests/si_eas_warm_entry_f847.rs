@@ -392,6 +392,7 @@ fn pm_scale(model: &SolidModel, g: &[[f64; 3]; 3]) -> f64 {
 // ----------------------------------------------------------------------------- WL, A1, WD1 to WD4, WP: the patch tests
 
 #[test]
+#[ignore = "ADR 0729 amendment 1: the record of the defective set-up as registered (the exact stress D E(F) computed for every case; the J2 material has no element-constant elasticity matrix, so the first J2 case panics before any WD row); superseded by wp_patch_tests_under_the_warm_start_amended"]
 fn wp_patch_tests_under_the_warm_start() {
     let mut ch = Checks::new();
     let rules: [(&str, IncompatibleStabilisation); 4] = [
@@ -426,6 +427,176 @@ fn wp_patch_tests_under_the_warm_start() {
             let mut ps_errs = Vec::new();
             let e_ex = voigt_green_lagrange(&g);
             let s_ex = apply(&mat.elasticity_matrix().unwrap(), &e_ex);
+            let smax = max_abs(&s_ex);
+            for e in 0..m.mesh().n_elements() {
+                let coords = element_coords(m.mesh(), e);
+                let ue = element_u(&m, u, e);
+                let st = &r.states[e];
+                // The driver's own evaluation (ADR 0660 D1) of the same state.
+                let warm = |upd| condensed_force_and_tangent_warm(&coords, &mat, &ue, st, &ctx, rule, upd);
+                let Ok((df, dk, ds, dt)) = warm(PLAIN) else {
+                    refusals += 1;
+                    continue;
+                };
+                let dmodes = &dt[dt.len() - MODES..];
+                match modes_and_strains_with(&coords, &mat, &ue, st, &ctx, rule) {
+                    Ok((alpha, _)) => {
+                        wd1 += bits(&alpha, dmodes);
+                        amax.extend(alpha.iter().map(|a| a.abs()));
+                        let committed = &st.values()[n..];
+                        if ns == 0 {
+                            wd4_elastic += bits(&alpha, committed);
+                        } else {
+                            let d = alpha.iter().zip(committed).map(|(a, b)| (a - b).abs());
+                            wd4_j2 = wd4_j2.max(worst(d) / scale_pm);
+                        }
+                    }
+                    Err(_) => refusals += 1,
+                }
+                match condensed_force_and_tangent(&coords, &mat, &ue, st, &ctx, rule) {
+                    Ok((f, k, s)) => {
+                        wd2 += bits(&f, &df) + bits(k.values(), dk.values()) + bits(&flat6(&s), &flat6(&ds));
+                        if name.starts_with("PT2") && rule != OFF {
+                            ps_errs.extend(s.iter().flat_map(|sq| (0..6).map(|k| (sq[k] - s_ex[k]).abs() / smax)));
+                        }
+                    }
+                    Err(_) => refusals += 1,
+                }
+                for (upd, got) in [
+                    (
+                        IncompatibleModeUpdate::Backtracking,
+                        condensed_force_and_tangent_backtracked(&coords, &mat, &ue, st, &ctx, rule),
+                    ),
+                    (
+                        IncompatibleModeUpdate::BacktrackingWithDecrease,
+                        condensed_force_and_tangent_update(
+                            &coords,
+                            &mat,
+                            &ue,
+                            st,
+                            &ctx,
+                            rule,
+                            IncompatibleModeUpdate::BacktrackingWithDecrease,
+                        ),
+                    ),
+                ] {
+                    match (got, warm(upd)) {
+                        (Ok((f, k, s)), Ok((wf, wk, ws, _))) => {
+                            wd2 += bits(&f, &wf) + bits(k.values(), wk.values()) + bits(&flat6(&s), &flat6(&ws));
+                        }
+                        _ => refusals += 1,
+                    }
+                }
+                if rule == OFF {
+                    match (
+                        hex8_force_and_tangent_at(INC, &coords, &mat, &ue, st, &ctx),
+                        hex8_internal_force_at(INC, &coords, &mat, &ue, st, &ctx),
+                        hex8_second_piola_kirchhoff(INC, &coords, &mat, &ue, st),
+                    ) {
+                        (Ok((f, k)), Ok(fi), Ok(s)) => {
+                            wd3 += bits(&f, &df) + bits(k.values(), dk.values()) + bits(&fi, &df);
+                            wd3 += bits(&flat6(&s), &flat6(&ds));
+                            if name.starts_with("PT2") {
+                                ps_errs.extend(s.iter().flat_map(|sq| (0..6).map(|k| (sq[k] - s_ex[k]).abs() / smax)));
+                            }
+                        }
+                        _ => refusals += 1,
+                    }
+                }
+            }
+            if name.starts_with("PT4") {
+                let yielded = r.states.iter().all(|s| {
+                    s.values()[..n]
+                        .chunks(rcfd_fem::mat_j2::STATE_SIZE)
+                        .all(|p| p[12] > 0.0)
+                });
+                ch.holds(
+                    &format!("WP {label} set-up: every point yielded (material part)"),
+                    yielded,
+                );
+            }
+            ch.at_most(&format!("WP {label}: interior error"), interior_error(&m, u, &g), 1e-10);
+            ch.at_most(
+                &format!("WP PM {label}: max |alpha| / (max |F - I| h)"),
+                worst(amax) / scale_pm,
+                1e-10,
+            );
+            if name.starts_with("PT2") {
+                ch.at_most(
+                    &format!("WP PS {label}: S at every point against D E(F)"),
+                    worst(ps_errs),
+                    1e-10,
+                );
+            }
+        }
+    }
+    ch.holds("WL every committed state of the 20 warm solves has n + 9 values", wl);
+    ch.at_most(
+        "A1 refusals of the entry points given the warm states",
+        refusals as f64,
+        0.0,
+    );
+    ch.at_most(
+        "WD1 modes_and_strains_with against the driver's trial modes: values differing",
+        wd1,
+        0.0,
+    );
+    ch.at_most(
+        "WD2 condensed_force_and_tangent{,_backtracked,_update} against the driver: values differing",
+        wd2,
+        0.0,
+    );
+    ch.at_most("WD3 hex8_* (Off) against the driver: values differing", wd3, 0.0);
+    ch.at_most(
+        "WD4 elastic: modes against the committed modes, values differing",
+        wd4_elastic,
+        0.0,
+    );
+    ch.at_most("WD4 J2: max |d alpha| / (max |F - I| h)", wd4_j2, 2e-10);
+    ch.finish();
+}
+
+/// ADR 0729 amendment 1: as `wp_patch_tests_under_the_warm_start`, with the exact stress of PS computed for PT2 only (as
+/// the originals do).
+#[test]
+fn wp_patch_tests_under_the_warm_start_amended() {
+    let mut ch = Checks::new();
+    let rules: [(&str, IncompatibleStabilisation); 4] = [
+        ("si_eas", OFF),
+        ("si_eas_hg", IncompatibleStabilisation::RestStress),
+        ("si_eas_hg3_rd", IncompatibleStabilisation::Deviatoric),
+        ("si_eas_hg3_rl", IncompatibleStabilisation::LinearStress),
+    ];
+    let ctx = PointContext::default();
+    let (mut refusals, mut wd1, mut wd2, mut wd3, mut wd4_elastic) = (0usize, 0.0, 0.0, 0.0, 0.0);
+    let mut wd4_j2 = 0.0f64;
+    let mut wl = true;
+    for (file, rule) in rules {
+        let cases: Vec<(&str, Material, f64, bool, usize)> = vec![
+            ("PT1 nu 0.3 FIELD_A", steel(0.3), 1.0, false, 1),
+            ("PT1 nu 0.4999 FIELD_A", steel(0.4999), 1.0, false, 1),
+            ("PT2 100 FIELD_A", steel(0.3), 100.0, false, 4),
+            ("PT3 R(60 deg) (I + 100 FIELD_A)", steel(0.3), 100.0, true, 8),
+            ("PT4 J2 FIELD_A", j2_patch_material(), 1.0, false, 4),
+        ];
+        for (name, mat, scale, rotated, steps) in cases {
+            let label = format!("{file} {name}");
+            let g = field_grad(scale, rotated);
+            let m = warm_patch_model(mat.clone(), rule);
+            let r = solve(&m, &patch_prescribed(m.mesh(), &g), &[], &newton(steps)).unwrap();
+            let ns = mat.state_size();
+            let n = 8 * ns;
+            wl &= r.states.iter().all(|s| s.values().len() == n + MODES);
+            let u = r.result.displacement_values();
+            let scale_pm = pm_scale(&m, &g);
+            let mut amax = Vec::new();
+            let mut ps_errs = Vec::new();
+            // Amendment 1: the exact stress of PS for PT2 only (the J2 material has no elasticity matrix).
+            let s_ex = if name.starts_with("PT2") {
+                apply(&mat.elasticity_matrix().unwrap(), &voigt_green_lagrange(&g))
+            } else {
+                [0.0; 6]
+            };
             let smax = max_abs(&s_ex);
             for e in 0..m.mesh().n_elements() {
                 let coords = element_coords(m.mesh(), e);

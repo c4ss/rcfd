@@ -207,3 +207,16 @@ without changing a current call's bits.
 - The static driver has no file save; the restore text is of the transient path only (ADR 0727 arithmetic 5).
 - The rule is of the public element entry points; the assembled readings (`yielded_points`, the creep reading) already cut a
   warm state (ADR 0668 D1) and are not changed.
+
+## Amendment 1 (2026-11-17, before the corrected run of the patch rows)
+
+The registered run of the new file (`f847-scratch/run1.log`, once) made `wu_rule_on_one_element`, `rt_restore_refusal_text`
+and `db_default_digest` pass and their rows are final. `wp_patch_tests_under_the_warm_start` **panicked at a defect of its
+set-up**: it computed the exact stress `D E(F)` of the PS row for every case, and the J2 material of PT4 has no
+element-constant elasticity matrix (`NotYetSupported { item: "material", variant: "J2", ... }`), so the first J2 case
+(`si_eas` PT4) stopped the test before any of WL, A1, WD1 to WD4 was evaluated. The originals compute it for PT2 only. The WP
+rows printed before the panic (`si_eas` PT1 nu 0.3, PT1 nu 0.4999, PT2 with PS, PT3: interior errors `1.7e-16` to `1.0e-15`,
+PM `0`, PS `1.8e-15`, all within their limits) are kept as the record of that run.
+
+Correction: `wp_patch_tests_under_the_warm_start_amended`, the same test with the exact stress computed for PT2 only. No limit,
+case, row or parameter changes. The defective test stays as an ignored record. The corrected test is run once.
