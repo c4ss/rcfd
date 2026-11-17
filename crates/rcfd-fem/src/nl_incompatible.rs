@@ -1115,6 +1115,16 @@ fn warm_state(
     }
 }
 
+/// The points of the stiffness rule of the element (2 x 2 x 2, the points of `mode_points`).
+const POINTS: usize = 8;
+
+/// ADR 0729 D1: whether a state given to a public entry point is a warm state, the material layout (`8 x state_size`
+/// values) followed by the nine committed modes (ADR 0660 D1). A state of the material layout is not one and takes the path
+/// it took before; a state of any other length is refused as before.
+pub(crate) fn given_warm(material: &Material, state: &ElementState) -> bool {
+    state.values().len() == POINTS * material.state_size() + MODES
+}
+
 /// The converged modes (order `3 k + c`) and the Green-Lagrange strain at the points of the stiffness rule (Voigt,
 /// engineering shear) of an Incompatible Hex8 for its displacement (24 values, node-major), from the committed `state`, at
 /// the point context `context` (ADR 0608 D2).
@@ -1130,6 +1140,10 @@ pub fn modes_and_strains(
 
 /// [`modes_and_strains`] of the element with (`stabilised`, ADR 0614 D1; a rule of ADR 0630 D1) or without the
 /// stabilisation.
+///
+/// ADR 0729 D1, D2: `state` is the material state, or the material state followed by the nine committed modes of the warm
+/// start (ADR 0660 D1, a committed state of the driver with the warm start); the local iteration then starts from those
+/// modes and, if it fails, runs from `alpha = 0`.
 pub fn modes_and_strains_with(
     coords: &[Vec3],
     material: &Material,
@@ -1138,6 +1152,17 @@ pub fn modes_and_strains_with(
     context: &PointContext,
     stabilised: impl Into<IncompatibleStabilisation>,
 ) -> Result<([f64; MODES], Vec<[f64; 6]>)> {
+    if given_warm(material, state) {
+        return modes_and_strains_warm(
+            coords,
+            material,
+            displacement,
+            state,
+            context,
+            stabilised.into(),
+            IncompatibleModeUpdate::Plain,
+        );
+    }
     modes_and_strains_opt(coords, material, displacement, state, context, stabilised.into(), false)
 }
 
@@ -1218,7 +1243,8 @@ pub(crate) fn modes_and_strains_warm(
 
 /// The condensed force (24 values), tangent (24 x 24) and second Piola-Kirchhoff stress at the points of an Incompatible
 /// Hex8, with (`stabilised`, ADR 0614 D1; a rule of ADR 0630 D1) or without (ADR 0608 D2) the stabilisation, from the
-/// committed `state` at the point context `context`.
+/// committed `state` at the point context `context`. `state` may carry the nine committed modes of the warm start after the
+/// material state (ADR 0729 D1, D2): the evaluation is then the driver's warm evaluation of ADR 0660 D1.
 pub fn condensed_force_and_tangent(
     coords: &[Vec3],
     material: &Material,
@@ -1236,7 +1262,7 @@ pub fn condensed_force_and_tangent(
         context,
         stabilised.into(),
         false,
-        false,
+        given_warm(material, state),
     )?;
     Ok((ev.force, ev.tangent.expect("tangent requested"), ev.stress))
 }
@@ -1259,7 +1285,7 @@ pub fn condensed_force_and_tangent_backtracked(
         context,
         stabilised.into(),
         true,
-        false,
+        given_warm(material, state),
     )?;
     Ok((ev.force, ev.tangent.expect("tangent requested"), ev.stress))
 }
@@ -1283,7 +1309,7 @@ pub fn condensed_force_and_tangent_update(
         context,
         stabilised.into(),
         update,
-        false,
+        given_warm(material, state),
     )?;
     Ok((ev.force, ev.tangent.expect("tangent requested"), ev.stress))
 }
@@ -1293,7 +1319,8 @@ pub type ModeRecord = (Vec<ModeIterate>, Result<[f64; MODES]>);
 
 /// The accepted iterates of the local iteration of the modes of an Incompatible Hex8 with the local update `update` (ADR
 /// 0658 D1, for checks), from the same iteration as the driver's evaluation, and its outcome: the converged modes or the
-/// error.
+/// error. With a warm `state` (ADR 0729 D2: the material state followed by the nine committed modes) the iteration from those
+/// modes, or, if its outcome is an error, the iteration from `alpha = 0` (the start rule of ADR 0660 D1).
 pub fn mode_iteration_record(
     coords: &[Vec3],
     material: &Material,
@@ -1303,27 +1330,20 @@ pub fn mode_iteration_record(
     stabilised: impl Into<IncompatibleStabilisation>,
     update: IncompatibleModeUpdate,
 ) -> Result<ModeRecord> {
-    check_hex8_fields(coords, displacement)?;
-    let points = mode_points(coords)?;
-    check_state(material, state, points.len())?;
-    let pen = penalty_if(stabilised.into(), coords, &points, material, displacement, context)?;
-    let mut rec = Vec::new();
-    let out = converged(
-        &points,
+    mode_record(
+        coords,
         material,
         displacement,
         state,
         context,
-        pen.as_ref(),
+        stabilised.into(),
         update,
         None,
-        Some(&mut rec),
     )
-    .map(|(alpha, _)| alpha);
-    Ok((rec, out))
 }
 
-/// [`mode_iteration_record`] from the modes `start` (ADR 0660 D1, for checks; `None`: from `alpha = 0`). With `TrustRegion`
+/// [`mode_iteration_record`] from the modes `start` (ADR 0660 D1, for checks; `None`: from `alpha = 0`, or from the committed
+/// modes of a warm `state` as [`mode_iteration_record`]; a given `start` is used as given, ADR 0729 D2). With `TrustRegion`
 /// the iterates of [`trust_region_record`] (halvings: the rejected trials).
 #[allow(clippy::too_many_arguments)]
 pub fn mode_iteration_record_from(
@@ -1336,31 +1356,96 @@ pub fn mode_iteration_record_from(
     update: IncompatibleModeUpdate,
     start: Option<&[f64; MODES]>,
 ) -> Result<ModeRecord> {
-    check_hex8_fields(coords, displacement)?;
-    let points = mode_points(coords)?;
-    check_state(material, state, points.len())?;
-    let pen = penalty_if(stabilised.into(), coords, &points, material, displacement, context)?;
-    let mut rec = Vec::new();
-    let out = converged(
-        &points,
+    mode_record(
+        coords,
         material,
         displacement,
         state,
         context,
-        pen.as_ref(),
+        stabilised.into(),
         update,
-        start.copied(),
-        Some(&mut rec),
+        start,
     )
-    .map(|(alpha, _)| alpha);
-    Ok((rec, out))
+}
+
+/// ADR 0729 D1: the material state of a state given to an entry point if it is a warm state, and its committed modes (a
+/// state of the material layout is checked as before and used as given).
+type GivenState = (Option<ElementState>, Option<[f64; MODES]>);
+
+fn given_state(material: &Material, state: &ElementState, points: usize) -> Result<GivenState> {
+    if given_warm(material, state) {
+        let (m, modes) = warm_state(material, state, points)?;
+        Ok((Some(m), modes))
+    } else {
+        check_state(material, state, points)?;
+        Ok((None, None))
+    }
+}
+
+/// ADR 0729 D2: the iteration `run` from the given `start`; without one, from the committed modes and, if its outcome is
+/// an error, from `alpha = 0`; without either, from `alpha = 0`.
+type Run<T> = (Vec<T>, Result<[f64; MODES]>);
+
+fn record_with_start<T>(
+    start: Option<&[f64; MODES]>,
+    committed: Option<[f64; MODES]>,
+    run: impl Fn(Option<[f64; MODES]>) -> Run<T>,
+) -> Run<T> {
+    match (start, committed) {
+        (Some(s), _) => run(Some(*s)),
+        (None, Some(c)) => {
+            let first = run(Some(c));
+            if first.1.is_ok() {
+                first
+            } else {
+                run(None)
+            }
+        }
+        (None, None) => run(None),
+    }
+}
+
+/// [`mode_iteration_record_from`] with the rule converted.
+#[allow(clippy::too_many_arguments)]
+fn mode_record(
+    coords: &[Vec3],
+    material: &Material,
+    displacement: &[f64],
+    state: &ElementState,
+    context: &PointContext,
+    stabilised: IncompatibleStabilisation,
+    update: IncompatibleModeUpdate,
+    start: Option<&[f64; MODES]>,
+) -> Result<ModeRecord> {
+    check_hex8_fields(coords, displacement)?;
+    let points = mode_points(coords)?;
+    let (cut, committed) = given_state(material, state, points.len())?;
+    let state = cut.as_ref().unwrap_or(state);
+    let pen = penalty_if(stabilised, coords, &points, material, displacement, context)?;
+    Ok(record_with_start(start, committed, |s| {
+        let mut rec = Vec::new();
+        let out = converged(
+            &points,
+            material,
+            displacement,
+            state,
+            context,
+            pen.as_ref(),
+            update,
+            s,
+            Some(&mut rec),
+        )
+        .map(|(alpha, _)| alpha);
+        (rec, out)
+    }))
 }
 
 /// The modes and the accepted iterates of a trust-region iteration (ADR 0660 D2).
 pub type TrustRegionRecord = (Vec<TrustRegionIterate>, Result<[f64; MODES]>);
 
 /// The accepted iterates of the trust-region iteration of the modes of an Incompatible Hex8 (ADR 0660 D2, for checks) from
-/// `start` (`None`: `alpha = 0`), from the same iteration as the driver's evaluation, and its outcome.
+/// `start` (`None`: `alpha = 0`, or the committed modes of a warm `state` and, if that iteration fails, `alpha = 0`, ADR
+/// 0729 D2), from the same iteration as the driver's evaluation, and its outcome.
 pub fn trust_region_record(
     coords: &[Vec3],
     material: &Material,
@@ -1372,21 +1457,24 @@ pub fn trust_region_record(
 ) -> Result<TrustRegionRecord> {
     check_hex8_fields(coords, displacement)?;
     let points = mode_points(coords)?;
-    check_state(material, state, points.len())?;
+    let (cut, committed) = given_state(material, state, points.len())?;
+    let state = cut.as_ref().unwrap_or(state);
     let pen = penalty_if(stabilised.into(), coords, &points, material, displacement, context)?;
-    let mut rec = Vec::new();
-    let out = trust_region(
-        &points,
-        material,
-        displacement,
-        state,
-        context,
-        pen.as_ref(),
-        start.copied(),
-        Some(&mut rec),
-    )
-    .map(|(alpha, _)| alpha);
-    Ok((rec, out))
+    Ok(record_with_start(start, committed, |s| {
+        let mut rec = Vec::new();
+        let out = trust_region(
+            &points,
+            material,
+            displacement,
+            state,
+            context,
+            pen.as_ref(),
+            s,
+            Some(&mut rec),
+        )
+        .map(|(alpha, _)| alpha);
+        (rec, out)
+    }))
 }
 
 /// The condensed force, tangent and stress of the driver's warm evaluation (ADR 0660 D1) and its trial state (the material
@@ -1520,7 +1608,8 @@ pub fn stabilisation_energy_with(
 }
 
 /// The force (33 values: the 24 nodal unknowns, then the nine modes) and the tangent (33 x 33) of the extended Incompatible
-/// Hex8 at the displacement and the given modes, without condensation (ADR 0608 D1; for checks).
+/// Hex8 at the displacement and the given modes, without condensation (ADR 0608 D1; for checks). Of a warm `state` (ADR 0729
+/// D2) the material part is used and the committed modes are ignored.
 pub fn enhanced_force_and_tangent(
     coords: &[Vec3],
     material: &Material,
@@ -1551,6 +1640,13 @@ pub fn enhanced_force_and_tangent_with(
         });
     }
     let points = mode_points(coords)?;
+    // ADR 0729 D2: of a warm state the material part; the committed modes are not read (the modes are given).
+    let cut = if given_warm(material, state) {
+        Some(warm_state(material, state, points.len())?.0)
+    } else {
+        None
+    };
+    let state = cut.as_ref().unwrap_or(state);
     let pen = penalty_if(stabilised, coords, &points, material, displacement, context)?;
     let mut v = displacement.to_vec();
     v.extend_from_slice(modes);

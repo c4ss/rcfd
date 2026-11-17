@@ -1064,19 +1064,32 @@ impl Integrator {
         }
         // ADR 0666 D3: with the warm start an Incompatible element may carry its nine committed modes after its layout.
         let warm = self.model.incompatible_mode_warm_start();
-        if state.states.len() != self.layout.len()
-            || state.states.iter().zip(&self.layout).enumerate().any(|(e, (s, &k))| {
-                s.values().len() != k
-                    && !(warm
-                        && s.values().len() == k + 9
-                        && crate::hex8x::opted(self.model.mesh(), e)
-                            == Some(crate::mesh::SolidFormulation::Incompatible))
-            })
-        {
+        if state.states.len() != self.layout.len() {
             return Err(state_error(format!(
                 "material states of {} elements that do not match the model's layout ({} elements)",
                 state.states.len(),
                 self.layout.len()
+            )));
+        }
+        // ADR 0729 D3: the first element whose length is not accepted, named with its two lengths.
+        let modes_allowed = |e: usize| {
+            warm && crate::hex8x::opted(self.model.mesh(), e) == Some(crate::mesh::SolidFormulation::Incompatible)
+        };
+        if let Some((e, (s, &k))) = state
+            .states
+            .iter()
+            .zip(&self.layout)
+            .enumerate()
+            .find(|(e, (s, &k))| s.values().len() != k && !(modes_allowed(*e) && s.values().len() == k + 9))
+        {
+            let or_modes = if modes_allowed(e) {
+                format!(" (or {} with the nine modes of the warm start)", k + 9)
+            } else {
+                String::new()
+            };
+            return Err(state_error(format!(
+                "the material state of element {e} has {} values where the model's layout has {k}{or_modes}",
+                s.values().len()
             )));
         }
         if state.dt.to_bits() != self.dt.to_bits() {
