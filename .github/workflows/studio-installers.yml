@@ -99,6 +99,9 @@ jobs:
           else
             ls -l win-unpacked/resources/bin/rcfd.exe win-unpacked/resources/bin/rcfd-mcp.exe win-unpacked/resources/bin/rcfd-runner.exe
           fi
+          # the app folder is the tested one (package.json and dist/ only): no node_modules came along
+          unpacked=$(ls -d ./*-unpacked | head -1)
+          if [ -e "$unpacked/resources/app/node_modules" ]; then echo "::error::node_modules in the installed app"; exit 1; fi
       - name: checksums and summary
         working-directory: apps/studio-web/out/installers
         run: |

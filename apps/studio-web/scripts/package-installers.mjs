@@ -97,7 +97,9 @@ if (!platform) {
 console.log(`signing: ${sign ? 'on' : 'off (RCFD_STUDIO_SIGN is not 1)'}; version ${version}; output ${output}`);
 const files = await build({
   targets: platform.createTarget(),
-  projectDir: root,
+  // the staged app is the project: electron-builder copies the production dependencies of the project's package.json
+  // into the app, and the repository's (react, three, ...) are bundled by Vite already, so they must not come along
+  projectDir: path.join(stage, 'app'),
   config: builderConfig({ pkg, stage, output, sign }),
   publish: 'never',
 });
