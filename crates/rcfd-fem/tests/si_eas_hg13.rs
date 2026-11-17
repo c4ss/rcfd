@@ -1691,7 +1691,7 @@ fn failing_attempt(log: &Log) -> Option<usize> {
 }
 
 #[test]
-#[ignore = "ADR 0688: the heavy record of the failing attempt on 16^3, iterate by iterate; run once with --ignored; f767_fast covers the same path on 8^3"]
+#[ignore = "ADR 0688: the heavy record of the failing attempt on 16^3, iterate by iterate, run once (257 s), every limit met: the attempt 0.9625 -> 0.965625 fails at the predictor's iterate (K = 1); the predictor's share in the isolated pencil mode 4.1e-27; at u_1 nu = 1, lambda_1 / (mu h) -0.0761 and m_1 -0.0291 in the single element 3720 (H 0.93); TC 1.4e-7; the corner elements' homogeneous states stable (m_L 1.057, 1.060); f767_fast_rows covers the same path on 8^3"]
 fn f767_nh16_iterates_heavy() {
     let mut ch = Checks::new();
     let t_all = Instant::now();
@@ -1955,7 +1955,7 @@ fn f767_nh16_iterates_heavy() {
 }
 
 #[test]
-#[ignore = "ADR 0688: the heavy record of the line search and the damping of the predictor on the failing attempt and on the whole 16^3 solve; run once with --ignored; f767_fast covers PD8, LS8 on 8^3"]
+#[ignore = "ADR 0688: the heavy record of the line search and the damping of the predictor on the failing attempt and on the whole 16^3 solve, run once (187 s): LS-A, PD-A, LP-A fail with the text of ADR 0678 (the damping takes beta = 1: the lifted iterate inverts element 3959); LS-F, PD-F, LP-F fail from 0.9625 with a negative pivot at node 4768; f767_fast_rows covers PD8, LS8 on 8^3"]
 fn f767_nh16_remedies_heavy() {
     let mut ch = Checks::new();
     let mesh16 = block_mesh(16);
