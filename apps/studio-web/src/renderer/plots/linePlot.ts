@@ -18,6 +18,7 @@ import { LineSegmentsGeometry } from 'three/addons/lines/LineSegmentsGeometry.js
 import { Extent } from './range.js';
 import type { SeriesData } from './series.js';
 import { roleHex, type LineStyle } from './style.js';
+import { drawOnDemand } from '../ui/onDemand.js';
 
 /** The renderer's backend once initialised: WebGPU, or three.js's WebGL2 fallback. */
 export type Backend = 'WebGPU' | 'WebGL2';
@@ -107,6 +108,7 @@ export class LinePlot {
     const r = new WebGPURenderer({ canvas: this.canvas, antialias: true, alpha: false });
     r.setClearColor(new Color(roleHex('ground')), 1);
     await r.init();
+    drawOnDemand(r); // F-817b: three's own frame loop stops at rest (a draw is asked for by requestDraw)
     if (this.disposed) {
       r.dispose();
       throw new Error('disposed');

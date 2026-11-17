@@ -15,6 +15,7 @@
 //   npm run build && node scripts/package-dir.mjs
 //   f447_bench gen <folder> tiny 1e6 4e6        (crates/rcfd-api/examples/f447_bench.rs; once, by hand; 4e6 takes ~20 min)
 //   npm run bench:scrub -- --data=<folder> [--out=<file.json>] [--smoke] [--no-live] [--no-p6]
+// --profile-root=<folder>: a fresh Chromium profile per launch under it (scripts/profile.mjs; F-817b, ADR 0800 §9 Q5).
 //
 // --no-p6 leaves out P6 (the 4e6 box), as the light set of scripts/bench.mjs does (F-817).
 // The script adds what the engine's run list needs beside the generated stores (rcfd-project.json; for each box a folder
@@ -29,6 +30,7 @@ import { cpSync, existsSync, lstatSync, mkdtempSync, readFileSync, renameSync, r
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { profileArgs, profileRecord } from './profile.mjs';
 import { Store } from '../src/main/data/tsstore.ts';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -151,7 +153,7 @@ const state = mkdtempSync(path.join(os.tmpdir(), 'rcfd-f810-bench-'));
 async function openProject(folder) {
   const app = await electron.launch({
     executablePath: executable,
-    args: [OCCLUSION],
+    args: [OCCLUSION, ...profileArgs()],
     env: { ...baseEnv, RCFD_STUDIO_MCP: mcp, RCFD_STUDIO_RECENT: path.join(state, 'recent.json'), RCFD_STUDIO_STATE_DIR: state },
   });
   const page = await app.firstWindow();
@@ -352,4 +354,5 @@ try {
 }
 console.log(`backend ${result.backend}; GPU ${JSON.stringify(result.gpu)}; load after ${result.loadAfter.cpuBusyFraction.toFixed(2)}, ${result.loadAfter.cargoRustcLinkProcesses} cargo/rustc/link`);
 const out = arg('out');
+result.profile = profileRecord();
 if (out) writeFileSync(out, JSON.stringify(result, null, 1) + '\n');

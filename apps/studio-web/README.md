@@ -454,7 +454,7 @@ Decisions taken in building F-814 (options, the recommendation followed; each re
 | `src/shared/service.ts` | The service port's contract: the allow-list of service methods, the port messages, `window.studioService` | as above | F-803 |
 | `src/renderer/` | Renderer (browser code only, no Node types): React, three.js, React Aria Components | `vite build` -> `dist/renderer/` | F-802 onwards |
 | `src/renderer/design/` | `tokens.ts`, the one source of the `DESIGN.md` tokens (colour roles, type ramp, spacing, sizes, lines, focus, motion, pictogram grid); `tokens.css`, generated from it | as above | F-802 |
-| `src/renderer/ui/` | The primitives of `DESIGN.md` Components on React Aria Components: buttons, toggles and segmented toggles, text and number fields, select, switch, tabs (sub and project), table, slider, tooltip, state pictograms and icons; `primitives.css` | as above | F-802 |
+| `src/renderer/ui/` | The primitives of `DESIGN.md` Components on React Aria Components: buttons, toggles and segmented toggles, text and number fields, select, switch, tabs (sub and project), table, slider, tooltip, state pictograms and icons; `primitives.css`; `onDemand.ts`, three.js drawn on demand (F-817b) | as above | F-802 |
 | `src/renderer/project/` | The project home (`ProjectHome.tsx`, `project.css`) and its one door to `window.studioProject` and `window.studioRuns` (`door.ts`) | as above | F-805, F-807 |
 | `src/renderer/runs/` | The Runs view (`RunsView.tsx`, `runs.css`, F-806) and run control (`RunControls.tsx`, `control-model.ts`, `control.css`, F-807) | as above | F-806, F-807 |
 
@@ -848,6 +848,15 @@ Decisions taken in building F-813 (options, the recommendation followed; each re
 - Window: the Studio runs in the tests' mode, `RCFD_TEST_HEADLESS=1` (transparent, click-through, unfocused, off the
   taskbar, background throttling off), so a run opens no visible window; `RCFD_TEST_HEADLESS=0 npm run bench` measures
   with the normal window. The mode is printed and kept in the results.
+- Profile (F-817b; ADR 0800 §9, Q5): every case but P10 runs with a scratch Chromium profile. The bench makes a fresh
+  folder per case in the temporary directory and passes it as `--profile-root=<folder>` (`scripts/profile.mjs`); each
+  launch of the Studio gets an empty `--user-data-dir=<folder>/launch-<n>`, and the folder is removed when the case
+  ends. P10 keeps the user's own profile (`%APPDATA%\rcfd Studio`). A `measure-*.mjs` script run alone uses the user's
+  profile unless given `--profile-root`.
+- Drawing on demand (F-817b): three.js's WebGPURenderer keeps a frame loop of its own once it has drawn;
+  `src/renderer/ui/onDemand.ts` stops it two or three frames after the last draw, on the field canvas and the plots, so
+  the Studio asks for no animation frames at rest (`tests/e2e/idle-frames.spec.ts`: at most 5 per second, measured over
+  2 s on the start page, the project home, the Runs view and the workspace after an orbit key and after a scrub).
 - Results: `out/bench/bench-<time>.json` (every line, the machine, the load, each script's own JSON). The bench is not
   part of `npm test` or CI; results are recorded by hand in ADR 0800 §9.
 

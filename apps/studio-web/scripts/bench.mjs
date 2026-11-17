@@ -39,6 +39,13 @@
 // in place but fully transparent, click-through, unfocused, off the taskbar, background throttling off), so that a run
 // opens no visible window; RCFD_TEST_HEADLESS=0 in the environment measures with the normal window. The mode is printed
 // and kept in the results.
+//
+// The Chromium profile (F-817b; ADR 0800 §9, Q5, the maintainer's answer of 2026-11-16): every case but P10 runs with a
+// scratch profile. The bench makes a fresh folder for the case in the temporary directory and passes it to the script
+// as --profile-root (scripts/profile.mjs), where each launch of the Studio gets an empty profile of its own
+// (`--user-data-dir=<folder>/launch-<n>`); the folder is removed when the case has ended. P10 keeps the user's own
+// profile (%APPDATA%\rcfd Studio on Windows), since it measures the user's own start. The profile of each case is
+// printed and kept in the results.
 import { execFileSync, spawn } from 'node:child_process';
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import os from 'node:os';
@@ -136,7 +143,7 @@ const machine = {
 
 // ---- the cases
 const CASES = [
-  { ids: ['P10'], script: 'measure-cold-start.mjs', args: [] },
+  { ids: ['P10'], script: 'measure-cold-start.mjs', args: [], profile: 'own' },
   { ids: ['P2'], script: 'measure-service.mjs', args: [`--bench-server=${benchServer}`, ...(heavy ? [] : ['--events=100'])] },
   { ids: ['P4'], sizes: heavy ? ['1e6', '4e6'] : ['1e6'], script: 'measure-data.mjs', args: [`--bench-server=${benchServer}`, `--data=${data}`, ...(heavy ? ['--p12'] : [])] },
   { ids: ['P5'], sizes: heavy ? ['1e6', '4e6'] : ['1e6'], script: 'measure-scrub.mjs', strip: true, args: [`--data=${data}`, ...(heavy ? [] : ['--no-p6', '--no-live'])], needs: mcp ? null : 'rcfd-mcp not found (cargo build --release -p rcfd-mcp, or RCFD_MCP_BIN)' },
@@ -170,9 +177,22 @@ const headless = (process.env.RCFD_TEST_HEADLESS ?? '1') === '1';
 const childEnv = { ...process.env, RCFD_TEST_HEADLESS: headless ? '1' : '0', ...(mcp ? { RCFD_MCP_BIN: mcp } : {}) };
 const modeText = headless ? 'test mode RCFD_TEST_HEADLESS=1 (window transparent, opacity 0, unfocused; background throttling off)' : 'normal window (RCFD_TEST_HEADLESS=0)';
 
-function runCase(c, outFile) {
+/** Q5: a fresh profile folder for a case (removed by `removeProfile` when it has ended), or null for the user's own. */
+const scratchProfile = (c) => (c.profile === 'own' ? null : mkdtempSync(path.join(os.tmpdir(), `rcfd-f817-profile-${c.ids.join('-')}-`)));
+function removeProfile(dir) {
+  try {
+    // the Studio's helper processes can hold a file for a moment after the script has ended
+    rmSync(dir, { recursive: true, force: true, maxRetries: 20, retryDelay: 250 });
+  } catch (e) {
+    console.log(`    the profile folder ${dir} could not be removed: ${e.message}`);
+  }
+  return !existsSync(dir);
+}
+const profileText = (dir) => (dir ? `scratch, a fresh --user-data-dir per launch under ${dir}, removed after the case` : "the user's own (Q5: P10 measures the user's own start)");
+
+function runCase(c, outFile, profileDir) {
   return new Promise((resolve) => {
-    const nodeArgs = [...(c.strip ? ['--experimental-strip-types', '--no-warnings'] : []), path.join(root, 'scripts', c.script), ...c.args, `--out=${outFile}`];
+    const nodeArgs = [...(c.strip ? ['--experimental-strip-types', '--no-warnings'] : []), path.join(root, 'scripts', c.script), ...c.args, ...(profileDir ? [`--profile-root=${profileDir}`] : []), `--out=${outFile}`];
     const child = spawn(process.execPath, nodeArgs, { cwd: root, env: childEnv, stdio: ['ignore', 'pipe', 'pipe'], windowsHide: true });
     const tail = [];
     let firstError = null;
@@ -283,14 +303,18 @@ for (const c of CASES) {
   }
   console.log(`\n-- ${c.ids.join(', ')}: ${c.script} ${c.args.map((a) => a.replace(/=.*[\\/]/, '=…/')).join(' ')}`);
   const outFile = path.join(scratch, `${c.ids.join('-')}.json`);
+  const profileDir = scratchProfile(c);
+  console.log(`   profile: ${profileText(profileDir)}`);
   const t = Date.now();
   const loadCase = await load(false);
-  const { code, tail, firstError } = await runCase(c, outFile);
+  const { code, tail, firstError } = await runCase(c, outFile, profileDir);
   entry.wallS = (Date.now() - t) / 1000;
   entry.exitCode = code;
+  entry.profile = { mode: profileDir ? 'scratch' : 'own', root: profileDir, removed: profileDir ? removeProfile(profileDir) : null };
   const from = lines.length;
   if (existsSync(outFile)) {
     entry.result = JSON.parse(readFileSync(outFile, 'utf8'));
+    if (entry.result.profile?.launches !== undefined) entry.profile.launches = entry.result.profile.launches;
     try {
       linesFor(c, entry.result);
     } catch (e) {
@@ -308,7 +332,8 @@ for (const c of CASES) {
     l.load = entry.load;
     l.loaded = busy;
   }
-  console.log(`-- ${c.ids.join(', ')}: ${entry.notRun ? `NOT RUN (${entry.notRun})` : 'done'} in ${entry.wallS.toFixed(0)} s; processor busy ${busyFmt(lb)} before, ${busyFmt(la)} after`);
+  const profileDone = entry.profile.mode === 'own' ? "the user's own profile" : `scratch profile, ${entry.profile.launches ?? '?'} launches, folder ${entry.profile.removed ? 'removed' : 'NOT removed'}`;
+  console.log(`-- ${c.ids.join(', ')}: ${entry.notRun ? `NOT RUN (${entry.notRun})` : 'done'} in ${entry.wallS.toFixed(0)} s; processor busy ${busyFmt(lb)} before, ${busyFmt(la)} after; ${profileDone}`);
 }
 const loadAfter = await load(true);
 rmSync(scratch, { recursive: true, force: true });
@@ -319,6 +344,8 @@ const text = (l) =>
 console.log(`\n==== F-817 bench (${heavy ? 'heavy' : 'light'}), ${started.toISOString()} to ${new Date().toISOString()}`);
 console.log(`machine: ${machine.cpu} (${machine.logical} logical), ${machine.totalMemGB} GB, ${machine.platform}`);
 console.log(`window: ${modeText}`);
+const profileOf = (mode) => cases.filter((c) => c.profile?.mode === mode).map((c) => c.ids.join(', ')).join('; ') || 'none';
+console.log(`profile: scratch for ${profileOf('scratch')}; the user's own for ${profileOf('own')}`);
 console.log(`load before: processor busy ${loadBefore.cpuBusyFraction.toFixed(2)}; ${procText(loadBefore)}`);
 console.log(`load after:  processor busy ${loadAfter.cpuBusyFraction.toFixed(2)}; ${procText(loadAfter)}`);
 for (const l of lines) console.log(text(l));
