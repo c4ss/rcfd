@@ -66,7 +66,7 @@ use crate::transient::{LoadHistory, LoadTable, MotionHistory};
 use rcfd_core::vec3::Vec3;
 use rcfd_linalg::skyline::{PivotRule, SkylineError, SkylineLdlt, SkylineOptions, SkylineOrdering};
 use rcfd_linalg::skyline_lu::EnvelopeLu;
-use rcfd_linalg::sparse_chol::{SupernodalAnalysis, SupernodalLdlt};
+use rcfd_linalg::sparse_chol::{SparseOptions, SparseOrdering, SupernodalAnalysis, SupernodalLdlt};
 use rcfd_linalg::CsrMatrix;
 use std::borrow::Cow;
 use std::cell::{Cell, RefCell};
@@ -1228,6 +1228,18 @@ pub struct NewtonOptions {
     /// its reduced tangent also passes the driver's pivot test; recorded in [`LoadStep::step_lengths`]. Off by default;
     /// refused with `unsymmetric` and in an attempt with a contribution (key `"predictor_damping"`).
     pub predictor_damping: bool,
+    /// The indefinite tangent (ADR 0694 D2): every factor of an attempt without a load-factor control takes the `L D L^T`
+    /// with non-zero pivots (`PivotRule::NonZero`), a pivot refused only when `|d| <= 1e-10 |a_ii|` or not finite (the test
+    /// of the arc-length correction, ADR 0480), so that Newton's method also iterates on a regular tangent that is not
+    /// positive definite. Off by default; refused with `unsymmetric` (key `"indefinite_tangent"`).
+    pub indefinite_tangent: bool,
+    /// The backtracking of the predictor (ADR 0694 D3): iteration 0 of an attempt with a non-zero prescribed increment,
+    /// without a load-factor control, takes its free correction `du` with the first `beta` of `1, 1/2, ..., 2^-10` whose
+    /// trial (the prescribed values at the target) is admissible (its evaluation succeeds and its reduced tangent passes the
+    /// driver's positive pivot test), `beta = 1` if none is; recorded in [`LoadStep::step_lengths`], and a failed attempt
+    /// whose predictor was backtracked names its `beta`. Off by default; refused with `unsymmetric`, with `predictor_damping`
+    /// and in an attempt with a contribution (key `"predictor_backtracking"`).
+    pub predictor_backtracking: bool,
 }
 
 impl NewtonOptions {
@@ -1246,6 +1258,8 @@ impl NewtonOptions {
             line_search: false,
             stagnation: false,
             predictor_damping: false,
+            indefinite_tangent: false,
+            predictor_backtracking: false,
         }
     }
     /// The same options with the active-set record of [`LoadStep::yielded`] switched on or off.
@@ -1286,6 +1300,16 @@ impl NewtonOptions {
     /// The same options with the damping of the predictor switched on or off (ADR 0688 D3).
     pub fn predictor_damping(mut self, on: bool) -> NewtonOptions {
         self.predictor_damping = on;
+        self
+    }
+    /// The same options with the indefinite tangent switched on or off (ADR 0694 D2).
+    pub fn indefinite_tangent(mut self, on: bool) -> NewtonOptions {
+        self.indefinite_tangent = on;
+        self
+    }
+    /// The same options with the backtracking of the predictor switched on or off (ADR 0694 D3).
+    pub fn predictor_backtracking(mut self, on: bool) -> NewtonOptions {
+        self.predictor_backtracking = on;
         self
     }
 
@@ -1346,6 +1370,28 @@ impl NewtonOptions {
                 key: "predictor_damping",
                 reason: "with the unsymmetric tangent: the damping of the predictor needs the symmetric factor (ADR 0688 D3)"
                     .to_string(),
+            });
+        }
+        if self.indefinite_tangent && self.unsymmetric {
+            return Err(FemError::InvalidValue {
+                key: "indefinite_tangent",
+                reason: "with the unsymmetric tangent: the indefinite tangent is the symmetric L D L^T with non-zero pivots (ADR \
+                         0694 D2)"
+                    .to_string(),
+            });
+        }
+        if self.predictor_backtracking && self.unsymmetric {
+            return Err(FemError::InvalidValue {
+                key: "predictor_backtracking",
+                reason: "with the unsymmetric tangent: the backtracking of the predictor needs the symmetric factor (ADR 0694 \
+                         D3)"
+                    .to_string(),
+            });
+        }
+        if self.predictor_backtracking && self.predictor_damping {
+            return Err(FemError::InvalidValue {
+                key: "predictor_backtracking",
+                reason: "with predictor_damping: both set the step length of the predictor (ADR 0694 D3)".to_string(),
             });
         }
         Ok(())
@@ -1772,14 +1818,36 @@ impl Problem<'_> {
     }
 
     /// One attempt from the committed `(u_c, lc, states_c)` to the load factor `lt` (ADR 0404 D5 step 4). With a control
-    /// (ADR 0480 D4) the load factor starts at `lt` and changes at every iteration by the control's correction.
+    /// (ADR 0480 D4) the load factor starts at `lt` and changes at every iteration by the control's correction. ADR 0694 D3:
+    /// a failed attempt whose predictor was backtracked names its step length at the end of its cause.
     fn attempt_with(
         &self,
         u_c: &[f64],
         lc: f64,
         lt: f64,
         states_c: &[ElementState],
+        control: Option<&mut dyn LoadFactorControl>,
+    ) -> std::result::Result<Attempt, Failure> {
+        let backtracked = Cell::new(None);
+        match self.iterate(u_c, lc, lt, states_c, control, &backtracked) {
+            Err(failure) => match backtracked.get() {
+                Some(beta) => Err(backtracked_failure(failure, beta)),
+                None => Err(failure),
+            },
+            ok => ok,
+        }
+    }
+
+    /// The iteration of [`Problem::attempt_with`]; `backtracked` receives the step length of a backtracked predictor (ADR
+    /// 0694 D3) when it is below 1.
+    fn iterate(
+        &self,
+        u_c: &[f64],
+        lc: f64,
+        lt: f64,
+        states_c: &[ElementState],
         mut control: Option<&mut dyn LoadFactorControl>,
+        backtracked: &Cell<Option<f64>>,
     ) -> std::result::Result<Attempt, Failure> {
         let o = self.options;
         let mut lt = lt;
@@ -1796,6 +1864,15 @@ impl Problem<'_> {
             return Err(Failure::Other(
                 "predictor_damping with a contribution: the trial tangent would need the contributions' tangents (ADR \
                  0688 D3)"
+                    .to_string(),
+            ));
+        }
+        // ADR 0694 D3: the backtracking of the predictor, decided once per attempt; refused with a contribution.
+        let back = o.predictor_backtracking && control.is_none() && !o.unsymmetric;
+        if o.predictor_backtracking && !self.contributions.is_empty() {
+            return Err(Failure::Other(
+                "predictor_backtracking with a contribution: the trial tangent would need the contributions' tangents \
+                 (ADR 0694 D3)"
                     .to_string(),
             ));
         }
@@ -1940,7 +2017,15 @@ impl Problem<'_> {
                     } else if o.unsymmetric {
                         factor_solve_unsymmetric(&sys.matrix, &sys.rhs, sys.free(), &dofs)?
                     } else if let Some((ke, per)) = &split {
-                        let exact = factor_solve(&sys.matrix, &sys.rhs, sys.free(), &dofs, o.factor, self.reuse);
+                        let exact = factor_solve(
+                            &sys.matrix,
+                            &sys.rhs,
+                            sys.free(),
+                            &dofs,
+                            o.factor,
+                            self.reuse,
+                            o.indefinite_tangent,
+                        );
                         match exact {
                             Ok(du) => du,
                             // ADR 0570 D2: the exact tangent failed the pivot test; this iteration takes the contributions'
@@ -1958,17 +2043,32 @@ impl Problem<'_> {
                                 let mut kf = ke.clone();
                                 add_triplets(&mut kf, &trip);
                                 sys = reduce(&kf, &rfull, &increment).map_err(|e| Failure::Other(e.to_string()))?;
-                                factor_solve(&sys.matrix, &sys.rhs, sys.free(), &dofs, o.factor, self.reuse).map_err(
-                                    |f| match f {
-                                        Failure::Other(m) => Failure::Other(format!("without the curvature part: {m}")),
-                                        other => other,
-                                    },
-                                )?
+                                factor_solve(
+                                    &sys.matrix,
+                                    &sys.rhs,
+                                    sys.free(),
+                                    &dofs,
+                                    o.factor,
+                                    self.reuse,
+                                    o.indefinite_tangent,
+                                )
+                                .map_err(|f| match f {
+                                    Failure::Other(m) => Failure::Other(format!("without the curvature part: {m}")),
+                                    other => other,
+                                })?
                             }
                             Err(e) => return Err(e),
                         }
                     } else {
-                        factor_solve(&sys.matrix, &sys.rhs, sys.free(), &dofs, o.factor, self.reuse)?
+                        factor_solve(
+                            &sys.matrix,
+                            &sys.rhs,
+                            sys.free(),
+                            &dofs,
+                            o.factor,
+                            self.reuse,
+                            o.indefinite_tangent,
+                        )?
                     }
                 }
                 Some(c) => {
@@ -1999,9 +2099,9 @@ impl Problem<'_> {
             }
             e_last = e;
             energies.push(e);
-            if search || damp {
+            if search || damp || back {
                 // ADR 0607 D1: only an iteration without a prescribed increment is searched; ADR 0688 D3: one with it is
-                // damped from the lifted iterate.
+                // damped from the lifted iterate; ADR 0694 D3: or backtracked from the full step.
                 let alpha = if increment.iter().all(|&(_, v)| v == 0.0) {
                     if search {
                         self.step_length(&u, k, lt, states_c, sys.free(), &du, &rfull)
@@ -2010,6 +2110,12 @@ impl Problem<'_> {
                     }
                 } else if damp {
                     self.predictor_length(&u, lt, states_c, sys.free(), &du)
+                } else if back {
+                    let beta = self.predictor_backtrack(&u, lt, states_c, sys.free(), &du);
+                    if beta < 1.0 {
+                        backtracked.set(Some(beta));
+                    }
+                    beta
                 } else {
                     1.0
                 };
@@ -2097,6 +2203,7 @@ impl Problem<'_> {
                     &self.model.dof_map(),
                     self.options.factor,
                     self.reuse,
+                    false,
                 )
                 .ok()?;
             }
@@ -2112,6 +2219,20 @@ impl Problem<'_> {
             Some(s0) if s0 < 0.0 => self.search_from(s0, u, 0, lt, states_c, free, du, true),
             _ => 1.0,
         }
+    }
+
+    /// The step length `beta` of the backtracked predictor (ADR 0694 D3): the first of `1, 1/2, ..., 2^-PREDICTOR_HALVINGS`
+    /// whose trial (the prescribed values at `lt`) is admissible, the evaluation succeeding and the reduced tangent passing
+    /// the driver's positive pivot test; 1 when none is.
+    fn predictor_backtrack(&self, u: &[f64], lt: f64, states_c: &[ElementState], free: &[usize], du: &[f64]) -> f64 {
+        let mut beta = 1.0;
+        for _ in 0..=PREDICTOR_HALVINGS {
+            if self.trial_slope(u, 0, lt, states_c, free, du, beta, true).is_some() {
+                return beta;
+            }
+            beta *= 0.5;
+        }
+        1.0
     }
 
     /// The step length of the line search (ADR 0607 D1): 1 when the full step passes `s(1) <= eta |s_0|`, else the Illinois
@@ -2235,6 +2356,7 @@ impl FactorReuse {
 /// The envelope `L D L^T` solve of the reduced tangent with the pivot test of the static solve (ADR 0275 arithmetic 4), or
 /// with `factor` [`DirectFactor::SupernodalNestedDissection`] the supernodal one with the same tests and texts (ADR 0542 D2),
 /// its order and symbolic analysis taken from `reuse` while the pattern is unchanged (ADR 0566 D2).
+#[allow(clippy::too_many_arguments)]
 fn factor_solve(
     a: &CsrMatrix,
     b: &[f64],
@@ -2242,12 +2364,16 @@ fn factor_solve(
     dofs: &crate::model::DofMap,
     factor: DirectFactor,
     reuse: &FactorReuse,
+    indefinite: bool,
 ) -> std::result::Result<Vec<f64>, Failure> {
     let diag = a.diag();
     let at = |row: usize| {
         let (n, c) = dofs.node_component(free[row]).expect("free equation exists");
         format!("node {n} component {c}")
     };
+    if indefinite {
+        return factor_solve_indefinite(a, b, &diag, &at, factor);
+    }
     if factor == DirectFactor::SupernodalNestedDissection {
         let mut slot = reuse.analysis.borrow_mut();
         if !slot.as_ref().is_some_and(|x| x.matches(a)) {
@@ -2296,6 +2422,78 @@ fn factor_solve(
     }
     Ok(ldlt.solve(b))
 }
+
+/// ADR 0694 D2: the solve of [`factor_solve`] with the `L D L^T` of non-zero pivots (the same orders: reverse Cuthill-McKee
+/// for the envelope, nested dissection for the supernodal factor, made without the analysis cache) and the pivot test of the
+/// arc-length correction, `|d| <= PIVOT_TOLERANCE |a_ii|` refused, with the texts of [`factor_solve`].
+fn factor_solve_indefinite(
+    a: &CsrMatrix,
+    b: &[f64],
+    diag: &[f64],
+    at: &dyn Fn(usize) -> String,
+    factor: DirectFactor,
+) -> std::result::Result<Vec<f64>, Failure> {
+    let pivot_error = |e: SkylineError| match e {
+        SkylineError::Pivot { row, pivot, .. } => Failure::Other(format!(
+            "singular tangent: pivot {pivot:e} at {} (diagonal {:e})",
+            at(row),
+            diag[row]
+        )),
+        other => Failure::Other(format!("tangent factorisation: {other}")),
+    };
+    let check = |order: &[usize], pivots: &[f64]| -> std::result::Result<(), Failure> {
+        for (&row, &d) in order.iter().zip(pivots) {
+            if d.is_nan() || d.abs() <= PIVOT_TOLERANCE * diag[row].abs() {
+                return Err(Failure::Other(format!(
+                    "singular tangent: pivot {d:e} at {} (diagonal {:e})",
+                    at(row),
+                    diag[row]
+                )));
+            }
+        }
+        Ok(())
+    };
+    if factor == DirectFactor::SupernodalNestedDissection {
+        let options = SparseOptions {
+            ordering: SparseOrdering::NestedDissection,
+            pivots: PivotRule::NonZero,
+            symmetry_tolerance: 1e-12,
+        };
+        let ldlt = SupernodalLdlt::factor_with(a, &options).map_err(pivot_error)?;
+        check(ldlt.order(), ldlt.pivots())?;
+        return Ok(ldlt.solve(b));
+    }
+    let options = SkylineOptions {
+        pivots: PivotRule::NonZero,
+        ..SkylineOptions::default()
+    };
+    let ldlt = SkylineLdlt::factor_with(a, &options).map_err(pivot_error)?;
+    check(ldlt.order(), ldlt.pivots())?;
+    Ok(ldlt.solve(b))
+}
+
+/// ADR 0694 D3: a failure of an attempt whose predictor was backtracked to `beta`, with the step length at the end of its
+/// cause (the reason of a located inversion, or the text).
+fn backtracked_failure(failure: Failure, beta: f64) -> Failure {
+    let note = format!("; the predictor backtracked to beta = {beta:e} (ADR 0694 D3)");
+    match failure {
+        Failure::Other(cause) => Failure::Other(format!("{cause}{note}")),
+        Failure::Inverted(FemError::Element { element, source }) => Failure::Inverted(FemError::Element {
+            element,
+            source: Box::new(match *source {
+                FemError::InvalidValue { key, reason } => FemError::InvalidValue {
+                    key,
+                    reason: format!("{reason}{note}"),
+                },
+                other => other,
+            }),
+        }),
+        other => other,
+    }
+}
+
+/// The most halvings of the backtracked predictor (ADR 0694 D3).
+pub const PREDICTOR_HALVINGS: usize = 10;
 
 /// The unsymmetric envelope `L D U` solve of the reduced tangent (ADR 0560 D4) with the pivot test and the texts of
 /// [`factor_solve`].
