@@ -171,6 +171,10 @@ export function FieldViewport({
   const reopened = useRef(reopen);
   const reopening = useRef(false);
   const drawnFor = useRef<number | null>(null);
+  // the values the canvas last drew: the view is ready (data-ready) only once the shown field is on screen. The canvas
+  // draws after its renderer is initialised (asynchronously, WebGPU or WebGL 2), and until then it has no handle, so a
+  // key pressed in the frame would orbit nothing and read out nothing.
+  const [drawnValues, setDrawnValues] = useState<Float32Array | null>(null);
   const drawnCb = useRef(onDrawnSnapshot);
   drawnCb.current = onDrawnSnapshot;
   // F-815: the comparison's hooks, read when used
@@ -485,7 +489,8 @@ export function FieldViewport({
   }, []);
   useEffect(() => () => cancelAnimationFrame(scaleFrame.current), []);
 
-  const onDrawn = useCallback(() => {
+  const onDrawn = useCallback((values: Float32Array) => {
+    setDrawnValues(values);
     if (drawnFor.current !== null) drawnCb.current?.(drawnFor.current);
     if (!firstPicture.current) return;
     firstPicture.current = false;
@@ -671,7 +676,7 @@ export function FieldViewport({
         onPointerUp={onPointerUp}
         onPointerLeave={() => setHover((h) => (h?.by === 'pointer' && !pinned.current ? null : h))}
         onKeyDown={onKeyDown}
-        data-ready={phase.kind === 'ready' ? '' : undefined}
+        data-ready={phase.kind === 'ready' && shown !== null && drawnValues === shown.values ? '' : undefined}
         data-snapshot={shown ? shown.snapshot : undefined}
         data-step={snap?.step}
         data-arrows={arrows.kind === 'on' && arrows.snapshot === shown?.snapshot ? arrows.glyphs.cells.length : undefined}
