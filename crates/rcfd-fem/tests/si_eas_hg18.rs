@@ -643,7 +643,7 @@ fn f780_fast() {
 // ============================================================================ the heavy record
 
 #[test]
-#[ignore = "ADR 0719: the heavy record of the retry on the 16^3 punch block of ADR 0694 (OB16, IN16, RT16), run once with --ignored; f780_fast covers the retry and the inertia on the saddle patch, the 8^3 block and the column"]
+#[ignore = "ADR 0719: the heavy record of the retry on the 16^3 punch block of ADR 0694 (OB16, IN16, RT16), run once with --ignored (70.8 s, every row met: full load bit-equal to the indefinite-tangent solve, increments 8 and 10 retried, nu 1 at full load); f780_fast covers the retry and the inertia on the saddle patch, the 8^3 block and the column"]
 fn f780_nh16_retry_heavy() {
     let mut ch = Checks::new();
     let t_all = Instant::now();
