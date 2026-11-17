@@ -170,3 +170,14 @@ camber_seam_s_unstretched_construction()`. The fold measure (corner Jacobians), 
   this topology.
 - No flow solve on the meshes; no case value (ADR 0692 follow-up F-778); h_slit is not touched.
 - The reference rows A2 to A4 are a seen number (above).
+
+## Addenda
+
+### Amendment 1 (2026-11-17, after the code, before any registered run; no limit changed)
+
+- No development build of S' was made: the code (`unstretched_first_cell`, `camber_seam_s_unstretched_construction()`, the test
+  file `f777_cgrid_unstretched.rs`) was compiled only (`--no-run`).
+- The BS hash was computed as registered on a `git archive` copy of 79b70068 (`f777-scratch/base`) with one added test file
+  `zz_bs_base.rs` holding only the s4 spec, the reference, the hash function and a build of `camber_seam_s_construction()` (the
+  base has no S', so the whole new test file does not compile there): `0x0105a2fcca924d23`, 12 841 cells, step 5
+  (`f777-scratch/base_bs.log`). The constant `BS_HASH` of the new test file is that value.
