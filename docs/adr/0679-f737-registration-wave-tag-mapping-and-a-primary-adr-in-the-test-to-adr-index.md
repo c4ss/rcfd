@@ -114,3 +114,50 @@ run is made once; a defective set-up gets an amendment before a corrected run.
   named after items.
 - The primary ADR is the registering ADR by rule P, not proved from git; P2 and P3 test the rule on 35 files at most.
 - The workflow on GitHub is not run; the attribution output is checked locally only.
+
+## Amendment 1 (2026-11-17): the primary rule had no tier for the ADR a test file names itself
+
+Written and committed before any code of the amendment and before the corrected run. The first run of the registered code
+(index `f737-scratch/new_index.json`) gave these numbers, all with the limits of the table above intact:
+
+| id | measured on the first run | met |
+|---|---|---|
+| W1 | all 10 listed binaries mapped to their wave ADR; the tag set: 56 tags with exactly one wave ADR, 1 ambiguous (`31`: ADRs 0062 to 0064), 25 tags without a wave ADR | yes |
+| U1 | 49 integration binaries with tests unmapped (baseline 79; limit 65): 10 by rule W, 20 by rule B and other evidence already in the index | yes |
+| P1 | 0 violations in 7713 tests | yes |
+| A1 | 0 tests lost an ADR; 835 of 7713 tests (10.8 %) gained one (limit 12 %) | yes |
+| A2 | all tests mapped 96.1 % (limit 93.7 %) | yes |
+| P3 | sample B (15 of 135 files, seed 737): 14 agree; the one disagreement is `tick_cost_r6.rs` (primary 0139, the file says ADR 0133 R6) | yes (limit 12) |
+| P2 | sample A (20 of 1243 files, seed 737): **11 agree, 9 disagree** (limit 17) | **no** |
+
+The nine disagreements of sample A, by reading: `design/nsga2.rs` (0220, the file names ADR 0209), `runner_start_r9.rs` (0143; the
+file names ADR 0133), `sa_cyclic_beams_full_rotor_f674.rs` (0595; the file names ADR 0601), `design/pareto.rs` (0118 by E5; written
+for F-249), `simple.rs` (0023; the SIMPLE code is older), `starter_run_m.rs` (0186; the file names ADR 0147), `reaction_f255.rs` (0057;
+the file names ADR 0208), `sliding_case_f303.rs` (0216; the file names ADR 0637), `sa_newton_f624_bits.rs` (0517; the file names
+ADR 0566). Cause: in seven of the nine the test file's own header comment names the ADR that registered it (`F-303 (ADR 0637)`),
+and rule P does not read it; E1 and E2 take ADRs from the item's note (which cites parent ADRs) or from any ADR that lists the
+file. The two others (`pareto.rs`, `simple.rs`) are source files with no ADR in the header and stay wrong by rule P.
+
+The P2 miss is recorded; the limit stays (17 of 20). The set-up of rule P is the defect, so a corrected rule is registered here and
+run once on a fresh draw, as the house rules allow.
+
+**Rule P' (amends rule P only).** A new top tier **E0** is added: the first `ADR NNNN` named in the file's leading comment block
+(the `//!` and `//` lines before the first line of code of the file that holds the test) when ADR `NNNN` exists in `docs/adr` and
+is not 0653 or 0679. E0 is also evidence (the ADR is added to the test's `adrs`, additive). Order of the tiers:
+E0 > E1 > E6 > E2 > E3 > E7 > E5 > E4. Nothing else changes.
+
+**Corrected checks (the table above with these replacements, limits unchanged unless stated):**
+
+| id | limit |
+|---|---|
+| P2' | sample A': 20 files drawn with `random.Random(7370).sample` from the sorted list of distinct test files with a primary ADR under rule P'; each read; at least **17 of 20** agree (the same limit as P2; sample A is not reused, the seed is new; any overlap with sample A is disclosed) |
+| P3' | sample B': 15 files with primary evidence E6 or E7 under rule P', seed 7370; at least 12 of 15 agree |
+| U1', A1', A2', P1' | U1 (at most 65), A1 (no ADR lost; at most 12 % of tests gained one, counting E0 gains), A2 (at least 93.7 %), P1 (100 %) re-checked on the corrected run |
+| E0-yield | not a limit: how many files have an E0 ADR, and how many of them differ from the first-run primary |
+
+New negative controls: N7 a file whose header names ADR 0105 and whose name carries item F-020 (ADRs 0110 and 0111) has primary 0105
+with evidence E0; N8 a header naming a non-existent ADR, and a header naming ADR 0653, give no E0; N9 an `ADR` mention after the first
+code line is not read. New mutation M7: E0 dropped from the tier list, caught by N7.
+
+Decision rule as above, with P2' and P3' in place of P2 and P3; the first-run P2 miss is stated in the addendum whatever the result
+of P2'. If P2' is met, the proposed status is done with that disclosure; if it is missed, partial.
