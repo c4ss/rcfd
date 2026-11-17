@@ -13,7 +13,8 @@ import { RpcConnection } from '../../src/main/service/rpc.js';
 import { spawn } from 'node:child_process';
 import { until } from '../support/fake-service.js';
 import { alive, boxToml, findRcfd, killIfRcfd, killPid, NO_RCFD, startRcfd, type RunningRcfd } from '../support/rcfd.js';
-import { launchStudio, pageEvents, pageStates, quitLeavingService, recordInPage, untilState, type Studio } from '../support/studio.js';
+import { launchStudio, pageEvents, pageStates, quitLeavingService, recordInPage, serviceState, untilState, type Studio } from '../support/studio.js';
+import { emptyProject, projectState, stubDialog } from '../support/project.js';
 
 const rcfd = findRcfd();
 test.skip(rcfd === null, NO_RCFD);
@@ -203,5 +204,55 @@ test.describe('a service the Studio starts itself', () => {
     await studio.app.close();
     await until(() => !alive(s.pid!), 10_000, 'the service to stop');
     expect(existsSync(path.join(stateDir, 'service.json'))).toBe(false);
+  });
+});
+
+// F-820 (ADR 0801 Addendum 19): an installed Studio, no variable set, uses the engine it ships with in <resources>/bin.
+// out/packaged has no bin folder, so RCFD_TEST_BUNDLED_BIN (honoured in test mode only) names the folder of the built
+// engine in its place. Its service waits for the first project instead of starting at launch, and G7 still holds.
+test.describe('an installed Studio with its shipped engine', () => {
+  const bin = rcfd ? path.dirname(rcfd) : '';
+  const mcpExe = process.platform === 'win32' ? 'rcfd-mcp.exe' : 'rcfd-mcp';
+  test('rcfd serve starts with the first project, not at launch; with a session it outlives the Studio and is found again at launch (G7)', async () => {
+    test.skip(!existsSync(path.join(bin, mcpExe)), `no ${mcpExe} beside ${rcfd}`);
+    const stateDir = tempDir();
+    const folder = await emptyProject(tempDir(), 'F-820 bundled');
+    const env = { RCFD_TEST_BUNDLED_BIN: bin, RCFD_STUDIO_STATE_DIR: stateDir, RCFD_STUDIO_RECENT: path.join(stateDir, 'recent.json') };
+    let studio = await launchStudio(env);
+    try {
+      // the engine from the shipped folder; the service waits, nothing is started at launch
+      expect((await projectState(studio.page)).engine).toEqual({ configured: true, path: path.join(bin, mcpExe), from: 'bundled' });
+      await studio.page.waitForTimeout(1000);
+      expect(await serviceState(studio.page)).toMatchObject({ status: 'waiting', mode: 'spawn', pid: null });
+      expect(existsSync(path.join(stateDir, 'service.json'))).toBe(false);
+      // the first project starts it
+      await stubDialog(studio.app, folder);
+      await studio.page.evaluate(() => window.studioProject.pick());
+      await until(async () => (await projectState(studio.page)).project, 30_000, 'the project to open');
+      const first = await untilState(studio.page, (s) => s.status === 'connected', 20_000, 'connected');
+      leftovers.add(first.pid!);
+      expect(first).toMatchObject({ mode: 'spawn', adopted: false, instance: 1 });
+      const record = JSON.parse(readFileSync(path.join(stateDir, 'service.json'), 'utf8'));
+      expect(record).toMatchObject({ pid: first.pid, rcfd: path.join(bin, path.basename(rcfd!)) });
+      const created = await studio.page.evaluate((toml) => window.studioService.call('session.create', { toml }), boxToml([4, 4, 4]));
+      const session = (created as { ok: true; result: { session: string } }).result.session;
+      const firstQuit = await quitLeavingService(studio);
+      expect(alive(first.pid!)).toBe(true);
+
+      // the next start finds it again at launch, before any project is opened
+      studio = await launchStudio(env);
+      const again = await untilState(studio.page, (s) => s.status === 'connected', 20_000, 'found again at launch');
+      expect(again).toMatchObject({ pid: first.pid, adopted: true, instance: 1, address: first.address });
+      expect((await projectState(studio.page)).project).toBeNull();
+      const listed = await studio.page.evaluate(() => window.studioService.call('session.list', {}));
+      expect(JSON.stringify(listed)).toContain(session);
+      const secondQuit = await quitLeavingService(studio);
+      expect(alive(first.pid!)).toBe(true);
+      killPid(first.pid!);
+      await Promise.all([firstQuit.closed, secondQuit.closed]);
+    } catch (e) {
+      await studio.app.close().catch(() => undefined);
+      throw e;
+    }
   });
 });

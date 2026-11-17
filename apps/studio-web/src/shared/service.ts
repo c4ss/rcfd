@@ -126,6 +126,7 @@ export interface ServiceInfo {
 
 export type ServiceStatus =
   | 'off' // no service configured
+  | 'waiting' // an installed Studio's own service, started when the first project is opened (F-820)
   | 'starting' // the Studio is starting its own service process
   | 'connecting'
   | 'connected'

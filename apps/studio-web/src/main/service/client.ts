@@ -12,6 +12,9 @@
 // - Runs outlive the window (G7): a reload of the renderer does not touch this client. A service the Studio started
 //   is stopped when the Studio quits only if it holds no session; otherwise it keeps running and the next start finds it
 //   again through `service.json` (see spawn.ts).
+// - The shipped rcfd of an installed Studio (config `start: 'project'`, F-820) is started by `start()` when the first
+//   project opens; until then the state is `waiting`. `findRunning()` at launch connects only to a service an earlier
+//   start left running (G7: its sessions are found again without a project), and starts nothing.
 //
 // Everything is asynchronous; no call waits on the main process's thread. No Electron import (unit-tested in Node).
 import type { ChildProcess } from 'node:child_process';
@@ -66,8 +69,8 @@ export class ServiceClient {
   /** Raised on every new link or teardown: loops and callbacks of an older link see a different value and stop. */
   private epoch = 0;
   private stopped = false;
+  private started = false;
   private retryTimer: NodeJS.Timeout | null = null;
-  private connecting = false;
   private child: ChildProcess | null = null;
   private target: { host: string; port: number } | null = null;
   private everConnected = false;
@@ -92,6 +95,7 @@ export class ServiceClient {
     const mode = config.mode === 'attach' || config.mode === 'spawn' ? config.mode : 'off';
     this.st = {
       ...INITIAL,
+      status: config.mode === 'spawn' && config.start === 'project' ? 'waiting' : 'off',
       mode,
       address: config.mode === 'attach' ? `${config.host}:${config.port}` : null,
       lastError: config.mode === 'invalid' ? config.reason : null,
@@ -113,11 +117,24 @@ export class ServiceClient {
     return () => this.eventListeners.delete(listener);
   }
 
-  /** Starts connecting (and keeps trying). Does nothing without a configured service. */
+  /** Starts connecting (and keeps trying). Does nothing without a configured service, or a second time. */
   start(): void {
     if (this.config.mode !== 'attach' && this.config.mode !== 'spawn') return;
-    if (this.stopped || this.connecting || this.link) return;
+    if (this.stopped || this.started) return;
+    this.started = true;
     void this.connect();
+  }
+
+  /**
+   * Spawn mode: connects (as `start()`) only when a service an earlier start of the Studio left running is there and
+   * answers; starts no process. True when it was found. Used at launch when the service waits for a project (F-820).
+   */
+  async findRunning(): Promise<boolean> {
+    if (this.config.mode !== 'spawn' || this.stopped || this.started) return false;
+    const rec = await readRecord(this.config.stateDir);
+    if (!rec || !processAlive(rec.pid) || !(await answers(rec.host, rec.port, this.connectTimeoutMs))) return false;
+    this.start();
+    return true;
   }
 
   /** One request on the control connection. Rejects with an RpcError when there is no connection, at once. */
@@ -125,6 +142,9 @@ export class ServiceClient {
     if (this.config.mode === 'off') return Promise.reject(new RpcError('not_configured', 'no service is configured (RCFD_STUDIO_SERVICE or RCFD_STUDIO_RCFD)'));
     if (this.config.mode === 'invalid') return Promise.reject(new RpcError('not_configured', this.config.reason));
     const link = this.link;
+    if (this.st.status === 'waiting') {
+      return Promise.reject(new RpcError('disconnected', 'the rcfd service starts when a project is opened'));
+    }
     if (!link || this.st.status !== 'connected') {
       return Promise.reject(new RpcError('disconnected', `no connection to the service (${this.st.status}${this.st.lastError ? `: ${this.st.lastError}` : ''})`));
     }
@@ -171,7 +191,6 @@ export class ServiceClient {
   // ---- connection
 
   private async connect(): Promise<void> {
-    this.connecting = true;
     let opened: Link | null = null;
     try {
       const target = await this.resolveTarget();
@@ -220,8 +239,6 @@ export class ServiceClient {
         opened.events.close('connection attempt failed');
       }
       if (!this.stopped) this.scheduleRetry(e instanceof Error ? e.message : String(e));
-    } finally {
-      this.connecting = false;
     }
   }
 

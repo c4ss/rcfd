@@ -2910,3 +2910,109 @@ reports 6 moderate findings, all one advisory: minimatch 7.0.0-11.0.0, a denial 
 - `actionlint` 1.7.7 over `.github/workflows/`: no finding. Neither new workflow has run; CI was not triggered.
 - No Rust file, test or golden changed; `crates/rcfd-api/tests/baseline_hashes.rs` untouched; `DESIGN.md` untouched;
   outside the test mode (`RCFD_TEST_HEADLESS`) the only change to what a user runs is the fallback label's ellipsis.
+
+### The maintainer's answers (2026-11-17), and what they changed (on f820b over main e3fb058b)
+
+All on the recommendation.
+
+- **Q-F820-2, the engine path: (a).** A packaged Studio with neither `RCFD_STUDIO_MCP` nor `RCFD_STUDIO_RCFD` set uses
+  the engine it ships with, `<resources>/bin` (rcfd, rcfd-mcp, rcfd-runner); PATH is never searched, and each variable
+  still overrides it (a variable that names no file is an error, not a reason to fall back). Built:
+  - `src/main/project/config.ts`: `bundledBin(env, app.isPackaged, process.resourcesPath)` gives `<resources>/bin` when
+    packaged, else null; `engineConfig()` takes it as a last source (`from: 'bundled'`, a new member of
+    `EngineStatus.from`). `rcfd-runner` is found beside the project server, as before (`home.ts`), so it comes from the
+    same folder. Test runs only (`RCFD_TEST_HEADLESS=1`): `RCFD_TEST_BUNDLED_BIN` stands in for the folder, because
+    `out/packaged` (`package-dir.mjs`) has no `bin` folder and must not get one: every existing test keeps being told by
+    the variables, unchanged.
+  - `src/main/service/config.ts`: `serviceConfig(env, stateDir, bundledRcfd)`; with neither `RCFD_STUDIO_SERVICE` nor
+    `RCFD_STUDIO_RCFD` and a shipped rcfd, mode `spawn` with `start: 'project'` (the variable's spawn is
+    `start: 'launch'`). `RCFD_STUDIO_SERVICE_ROOT` and `RCFD_STUDIO_STATE_DIR` apply to both.
+- **Service start: when the first project is opened, not at launch.** The service state has a new status `waiting`
+  (`src/shared/service.ts`) until then; a call answers `disconnected` with "the rcfd service starts when a project is
+  opened", and the case settings page and the action registry say so in words (an exception: the service is not
+  there). `src/main/index.ts` calls `service.start()` from the project home's state when a project is open (it runs
+  once; a `started` flag replaces the old `connecting` guard, which is gone). At launch, `ServiceClient.findRunning()`
+  reads `service.json` and connects only when the service an earlier start left running is alive and answers; it
+  starts no process.
+  - P10 does not change: `measure-cold-start.mjs` starts `out/packaged`, which has no shipped engine, so its path is the
+    one it was; an installed Studio's launch does less than a told one (no `rcfd serve` at launch). Measured here: P10
+    median 361 ms (first 362, max 559) of 10, limit 2.5 s, met, on a shared machine; the upgraded installed copy
+    reported ready in the install check below.
+  - G7 holds: runs outlive the window (nothing in the reload path changed; the existing G7 test passes), and a session
+    is found again: a Studio that waits for a project still connects at launch to the service it left running with a
+    session, before any project is opened (a new e2e test, below, and `findRunning()` in the unit tests).
+- **Q-F820-3, updates: (a), install over the old version.** Added to the Windows job of `studio-installers.yml`:
+  `apps/studio-web/scripts/check-nsis-upgrade.ps1` installs the build silently per user (`/S`), writes a marker and a
+  recent list in `%APPDATA%\rcfd Studio`, installs the same build again over it, and checks: one uninstall entry and
+  the same folder (upgraded in place by `appId`), the marker and the recent list survived, the engine in
+  `resources\bin`, no `node_modules`, the upgraded app starts (the `RCFD_STUDIO_STARTUP_REPORT` ready report); then
+  `scripts/check-installed.mjs` on the installed copy (with no `RCFD_STUDIO_*` variable: the project server is the
+  shipped rcfd-mcp, status `waiting` and no `service.json` at launch, a project opened through the stubbed folder
+  dialog starts the shipped rcfd serve, which stops with the Studio as it holds no session); then the entry's own
+  silent uninstall (`/currentuser /S`) removes the program and keeps the settings folder. `-Previous <setup>` installs
+  an older build first, once there is one; until then the same build is installed twice. The release-page notice (c)
+  waits for signed builds: only a note in `docs/releasing.md`.
+- **Q-F820-6, the certificate:** decided later; the .pfx hook stays as it is.
+- **Q-F820-1, electron-builder 26.18.0: accepted**, with its 6 moderate build-time advisories (one advisory,
+  GHSA-g3hv-75wg-m249, minimatch through `@electron/universal` and `app-builder-lib`) noted; revisit when 26.x moves to
+  minimatch 10.2.1 or later.
+- **Q-F820-4, asar and fuses: kept off** (D2).
+- **Q-F820-5, identity: permanent.** `appId` `org.rcfd.studio`, install folder "rcfd Studio", version numbers from git
+  tags only (a manual build stays `package.json`'s 0.0.0; `installers.spec.ts` now pins it). `desktopName`
+  `rcfd-studio.desktop` is in the installers' app `package.json` (`INSTALLER_METADATA`, not in `out/packaged`'s) with
+  `linux.syncDesktopName: true`, so Electron's Linux app_id / WM_CLASS, the .desktop file name and its
+  `StartupWMClass` agree, and electron-builder's warning is gone.
+  - A correction found by the install check: with `executableName: 'rcfd-studio'` set for every platform, NSIS named
+    the per-user install folder after the executable, `%LOCALAPPDATA%\Programs\rcfd-studio` (and the uninstaller
+    "Uninstall rcfd-studio.exe"), not "rcfd Studio" as this addendum said. To keep the accepted folder name, the
+    executable name is now set for Linux only (`linux.executableName`; `/opt/rcfd Studio/rcfd-studio` is unchanged).
+    Windows takes electron-builder's default from `productName`: the folder is `%LOCALAPPDATA%\Programs\rcfd Studio`
+    and the executable is `rcfd Studio.exe` (D3 changes for Windows accordingly). No build had been installed anywhere
+    before this check, and the userData folder is named after `productName` either way, so no user setting moves.
+- **Linux: recorded as "WebGL 2 on software rendering"** (Q-F821-2) in `docs/studio-guardrails.md` (Open) and
+  `docs/releasing.md`.
+- **Q-F821-3, the panel test: the fake claude pauses between its stream lines.** "resume a closed session"
+  (`tests/unit/claude.spec.ts`) runs the fake with `FAKE_CLAUDE_DELAY_MS=60`, twice the panel's 30 ms coalescing
+  window, so a state carrying the streamed "denied" line is pushed before the transcript replaces it; 8 of 8 repeats
+  passed on Windows. Not re-run in the Linux container.
+- **Q-F821-1: `studio-linux-test.yml` runs weekly** (`cron: "0 4 * * 0"`, Sundays 04:00 UTC, after the daily gate)
+  and by hand. A scheduled run has no inputs: all specs, `gpu_blocklist` `ignore` (WebGL 2 on llvmpipe, the
+  recommendation), no bench. GitHub switches the schedule off after 60 quiet days, as for the gate
+  (`docs/releasing.md`).
+
+Also fixed: `actionlint` 1.7.7 does report one finding in `studio-installers.yml` as committed (shellcheck SC2012 on
+`ls -d ./*-unpacked`; checked on a `git archive` of e3fb058b), contrary to the Verification above; the step now uses
+`find`.
+
+Status: F-820 done (installers for the two platforms named, built; no certificate provided, so unsigned with the hook
+ready; the update path keeps the settings, checked on Windows; Electron supported). Not yet shown: a green run of the
+workflow on GitHub, and a .deb or AppImage upgrade on a Linux machine (by construction neither writes into a home
+folder). F-821 stays partial: the parity tests run on Linux with the WebGL 2 fallback, but of the F-817 bench only P10,
+P2 and P1 ran there; P5, P7 and P8 have not been run with the WebGL 2 fallback (the bench scripts do not take
+`RCFD_TEST_ELECTRON_ARGS`), and P4 needs WebGPU.
+
+### Verification of the answers (2026-11-17, on f820b over main e3fb058b, RCFD_TEST_HEADLESS=1)
+
+- `npm ci` exit 0 (the 6 moderate advisories above); `npm run typecheck` clean; `npm run build && npm run package:dir`
+  clean.
+- Unit, the touched specs (`installers`, `claude`, `service-client`, `project-home`, `actions-registry`): 92 passed, 0
+  failed. New: the bundled `serviceConfig`, `engineConfig` and `bundledBin` cases, the waiting client and
+  `findRunning()` against the fake service, the identity and desktopName checks. `installers` again after the
+  executable-name change: 5 passed. "resume a closed session" with `--repeat-each=8`: 8 passed.
+- e2e on Windows: `service` and `shell` 22 passed, among them the new "an installed Studio with its shipped engine"
+  (`waiting` at launch, no `service.json`, the first project starts rcfd serve from the shipped folder, a session
+  keeps it alive past the Studio, the next launch finds it again before any project is opened); `claude`, `project`
+  and `settings` 28 passed.
+- `node scripts/measure-cold-start.mjs`: P10 median 361 ms, met.
+- `npm run package:installers` on Windows (engine from `target/release`): `rcfd-studio-0.0.0-setup-x64.exe`, unsigned.
+  `node scripts/check-installed.mjs --exe="out/installers/win-unpacked/rcfd Studio.exe"`: every check holds (no
+  variable set; the shipped rcfd-mcp; `waiting`; the shipped rcfd serve started by the first project and stopped with
+  the Studio).
+- `pwsh scripts/check-nsis-upgrade.ps1 -Installer out\installers\rcfd-studio-0.0.0-setup-x64.exe` on this machine (no
+  rcfd Studio was installed before; the script refuses to run over one): every check holds, including the
+  check-installed run on `%LOCALAPPDATA%\Programs\rcfd Studio\rcfd Studio.exe`. Afterwards no uninstall entry, no
+  program folder, no Start-menu entry, no marker and no recent list was left (the script removes what it wrote to
+  `%APPDATA%\rcfd Studio`); the first attempt, on the build with the old executable name, was removed by its uninstall entry's silent command and checked the same way.
+- `actionlint` 1.7.7 (Docker `rhysd/actionlint:1.7.7`) over `.github/workflows/`: no finding. Neither workflow has run
+  on GitHub; the Linux packages were not rebuilt or installed after the `executableName` and `desktopName` changes.
+- No Rust file, golden or `baseline_hashes.rs` changed; `DESIGN.md` untouched.

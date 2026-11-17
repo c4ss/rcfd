@@ -47,8 +47,8 @@ skipped and say why.
 
 ## The solver service (F-803)
 
-Which service the Studio uses is set by its environment (`src/main/service/config.ts`); where a packaged Studio finds its
-`rcfd` is F-820's:
+Which service the Studio uses is set by its environment (`src/main/service/config.ts`); an installed Studio with neither
+variable set uses the `rcfd` it ships with (F-820, below the table):
 
 | Variable | Effect |
 |---|---|
@@ -56,7 +56,15 @@ Which service the Studio uses is set by its environment (`src/main/service/confi
 | `RCFD_STUDIO_RCFD=<path of rcfd>` | start `rcfd serve --addr 127.0.0.1:0` (detached, output to `service.log`) and own it |
 | `RCFD_STUDIO_SERVICE_ROOT=<dir>` | with `RCFD_STUDIO_RCFD`: the service's sandbox (`--root`) |
 | `RCFD_STUDIO_STATE_DIR=<dir>` | where `service.json` (address and process id of a started service) and `service.log` go; default `<user data>/service` |
-| neither of the first two | no service: state `off`, every call answers `not_configured` |
+| neither of the first two, installed | the shipped `<resources>/bin/rcfd`, started when the first project opens (state `waiting` until then) |
+| neither of the first two, not installed | no service: state `off`, every call answers `not_configured` |
+
+- F-820 (ADR 0801 Addendum 19): a packaged Studio with no variable set uses `<resources>/bin` (rcfd, rcfd-mcp,
+  rcfd-runner, put there by the installers); never PATH. Its `rcfd serve` starts when the first project is opened, not
+  at launch, so the launch (P10) does no more than before; at launch it only connects to a service an earlier start
+  left running (G7: its sessions are found again without opening a project). `out/packaged` has no `bin` folder, so the
+  tests are told by the variables as before; `RCFD_TEST_BUNDLED_BIN` (test mode only) stands in for the folder.
+  `node scripts/check-installed.mjs --exe=<installed rcfd-studio>` checks an installed or unpacked copy.
 
 - Two TCP connections: one for calls, answered in the order sent, and one that only long-polls `events.poll`, so a
   waiting poll never holds up a call. Every request has an id and a time limit; nothing waits on the main thread.
@@ -83,7 +91,8 @@ filtered by kind and by name, and a lane of every change the engine's feed repor
 | `RCFD_STUDIO_RECENT=<file>` | where the recent list is kept; default `<user data>/recent-projects.json` |
 | `RCFD_STUDIO_PREFERENCES=<file>` | where the theme setting (F-818: Light, Dark, High contrast, System) is kept; default `<user data>/studio-preferences.json` |
 
-Neither set: the home says what to set, and "Open project folder" is unavailable with the reason.
+Neither set: an installed Studio uses the `rcfd-mcp` it ships with (`<resources>/bin`, F-820); otherwise the home says
+what to set, and "Open project folder" is unavailable with the reason.
 
 - Through the engine: the main process asks the project server `project_info`, `list_runs`, `list_meshes` and
   `read_feed` (the workspace of ADR 0173, the tools Claude Code uses, so both see one folder the same way). The server
@@ -112,8 +121,8 @@ engine):
   `notes/` the way the engine counts them (`src/main/project/listing.ts`; names only, never content), until the engine
   has the query; (b) counts only; (c) add `list_cases` and `list_notes` workspace queries (Rust, a follow-up). Taken:
   (a) now, (c) proposed. The page shows when a name count and the engine's count disagree.
-- D3, where the project server comes from: `RCFD_STUDIO_MCP`, else beside `RCFD_STUDIO_RCFD`; never from `PATH`. Where a
-  packaged Studio finds it is F-820's.
+- D3, where the project server comes from: `RCFD_STUDIO_MCP`, else beside `RCFD_STUDIO_RCFD`, else (an installed
+  Studio, F-820) `<resources>/bin`; never from `PATH`.
 - D4, the recent list: paths and times only, at most 10, in the user data; never opened on its own at start (the empty
   window stays "No project open").
 - D5, which folders the page may open: only the dialog's choice or a folder of the recent list.

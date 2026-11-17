@@ -333,7 +333,10 @@ test.describe('the panel (main process) against the fake claude', () => {
   test.describe.configure({ timeout: 60_000 });
 
   test('resume a closed session: claude -p --resume in the project folder, the message on stdin, the allow-list in argv', async () => {
-    const r = await rig('resume');
+    // the fake pauses 60 ms between its stream lines, twice the panel's 30 ms coalescing window, so a state carrying the
+    // streamed "denied" line is pushed before the transcript replaces it (ADR 0801 Addendum 19, Q-F821-3); with lines
+    // that arrive in one pipe read both happen inside one window
+    const r = await rig('resume', { FAKE_CLAUDE_DELAY_MS: '60' });
     await r.fx.transcript(r.folder, S1, sampleTranscript(r.folder, S1));
     await r.panel.setProject(r.folder);
     await until(() => view(r).sessions.find((s) => s.id === S1 && s.open === 'closed'), 10_000, 'S1 listed closed');

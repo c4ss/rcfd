@@ -3,6 +3,9 @@
 # tag. The installers are uploaded as workflow artifacts only: nothing is published or attached to a release (release.yml
 # opens the draft release; the maintainer decides what goes into it). macOS is not built (not asked for).
 #
+# On Windows the job also installs the build silently, installs it again over itself and checks that the user's settings
+# survive, the app starts and it uses its shipped engine (scripts/check-nsis-upgrade.ps1), then uninstalls it.
+#
 # Signing is wired but off: the Windows build is signed only when the repository variable RCFD_STUDIO_SIGNING is "on"
 # AND the secrets WIN_CSC_LINK (a .pfx, base64) and WIN_CSC_KEY_PASSWORD exist. Until the maintainer provides a
 # certificate, every installer is unsigned and the job summary says so.
@@ -100,8 +103,17 @@ jobs:
             ls -l win-unpacked/resources/bin/rcfd.exe win-unpacked/resources/bin/rcfd-mcp.exe win-unpacked/resources/bin/rcfd-runner.exe
           fi
           # the app folder is the tested one (package.json and dist/ only): no node_modules came along
-          unpacked=$(ls -d ./*-unpacked | head -1)
+          unpacked=$(find . -maxdepth 1 -type d -name '*-unpacked' | head -1)
           if [ -e "$unpacked/resources/app/node_modules" ]; then echo "::error::node_modules in the installed app"; exit 1; fi
+      - name: install, upgrade over it, settings kept, shipped engine used (Windows)
+        # Q-F820-3: an update is the next installer run over the installed copy. Silent per-user install of this build,
+        # a marker in %APPDATA%\rcfd Studio, the same build again over it, then: the marker and the recent list survived,
+        # one copy in the same folder, the app starts, and with no RCFD_STUDIO_* variable it uses <resources>\bin and
+        # starts rcfd serve with the first project (scripts/check-installed.mjs); a silent uninstall keeps the settings.
+        if: runner.os == 'Windows'
+        working-directory: apps/studio-web
+        shell: pwsh
+        run: ./scripts/check-nsis-upgrade.ps1 -Installer (Get-ChildItem out/installers/*-setup-x64.exe | Select-Object -First 1).FullName
       - name: checksums and summary
         working-directory: apps/studio-web/out/installers
         run: |

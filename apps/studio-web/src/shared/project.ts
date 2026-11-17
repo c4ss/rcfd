@@ -32,9 +32,9 @@ export const RUN_POLL_MS = 1000;
 /** Events of a run's events.jsonl the Studio asks `run_status` for (its state changes and the solver's start event). */
 export const RUN_EVENTS = 50;
 
-/** Where the engine's project server comes from (src/main/project/config.ts). */
+/** Where the engine's project server comes from (src/main/project/config.ts); `bundled`: an installed Studio's own. */
 export type EngineStatus =
-  | { readonly configured: true; readonly path: string; readonly from: 'RCFD_STUDIO_MCP' | 'RCFD_STUDIO_RCFD' }
+  | { readonly configured: true; readonly path: string; readonly from: 'RCFD_STUDIO_MCP' | 'RCFD_STUDIO_RCFD' | 'bundled' }
   | { readonly configured: false; readonly reason: string };
 
 /** One folder of the recent list: the folder and when it was last opened. Nothing of the project itself is kept. */

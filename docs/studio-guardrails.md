@@ -179,7 +179,12 @@ from the DOM and fails past the budget, and raising a budget needs the maintaine
 ## Open (for the maintainer)
 
 - The UI framework and component approach (see `PRODUCT.md`, Stack).
-- Platforms beyond Windows 11: answered 2026-11-17 for Linux (tested in Docker first, then in CI; ADR 0801 Addendum
-  19); macOS not asked. Linux on a GPU is still unmeasured.
-- Installers: answered 2026-11-17, built in CI (ADR 0801 Addendum 19); signing waits for the maintainer's certificates,
-  and the update policy is ADR 0801 Q-F820-3.
+- Platforms beyond Windows 11: answered 2026-11-17 for Linux (tested in Docker first, then in CI, weekly; ADR 0801
+  Addendum 19); macOS not asked. Linux is recorded as "WebGL 2 on software rendering": its field views and plots run on
+  Chromium's WebGL 2 fallback over Mesa's llvmpipe, WebGPU and the GPU lines of G9 are unmeasured there until a Linux
+  machine with a GPU is available.
+- Installers: answered 2026-11-17, built in CI (ADR 0801 Addendum 19). An installed Studio uses the engine it ships
+  with (`<resources>/bin`, never PATH; the variables still override it) and starts its service with the first
+  project. Updates install over the old version (checked on Windows in CI: the settings survive); signing waits for
+  the maintainer's certificate (the certificate type is decided later), and a release-page notice follows once builds
+  are signed.

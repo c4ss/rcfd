@@ -3,12 +3,14 @@
 # tests and the e2e suite under Xvfb, Chromium's sandbox on). ci.yml's studio-web job already runs the Studio's tests on
 # ubuntu-24.04, but without the engine, so the specs that need rcfd, rcfd-mcp or rcfd-runner skip there; this one has them.
 #
-# Manual dispatch only, for now: whether it runs on a schedule or beside the daily gate costs hosted-runner minutes and is
-# the maintainer's call. The runner has no GPU: the field views get no WebGL unless gpu_blocklist is "ignore" (WebGL 2 on
-# Mesa's software rasteriser); the ADR lists the specs that cannot pass without one.
+# Weekly (Q-F821-1, the maintainer 2026-11-17: a schedule plus by hand). The runner has no GPU: the field views get no
+# WebGL unless gpu_blocklist is "ignore" (WebGL 2 on Mesa's software rasteriser, which the weekly run uses); the ADR
+# lists the specs that cannot pass without it. Linux is recorded as "WebGL 2 on software rendering".
 name: Studio Linux test (Docker)
 
 on:
+  schedule:
+    - cron: "0 4 * * 0" # Sundays 04:00 UTC, after the daily gate's 02:00; a schedule runs on main only
   workflow_dispatch:
     inputs:
       gpu_blocklist:
@@ -45,8 +47,9 @@ jobs:
       - name: docker run (docker/linux-test/run.mjs)
         env:
           SPECS: ${{ inputs.specs }}
-          GPU: ${{ inputs.gpu_blocklist }}
-          BENCH: ${{ inputs.bench }}
+          # a scheduled run has no inputs: all specs, WebGL 2 on the software rasteriser, no bench
+          GPU: ${{ github.event_name == 'schedule' && 'ignore' || inputs.gpu_blocklist }}
+          BENCH: ${{ github.event_name != 'schedule' && inputs.bench }}
         run: |
           extra=()
           if [ "$BENCH" = true ]; then extra+=(--bench); fi

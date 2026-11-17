@@ -5,13 +5,22 @@
 //   RCFD_STUDIO_SERVICE_ROOT=<dir>       with RCFD_STUDIO_RCFD: passed as `--root` (the service's sandbox)
 //   RCFD_STUDIO_STATE_DIR=<dir>          where a started service's address and log are kept (default: the user data dir)
 //
-// Neither RCFD_STUDIO_SERVICE nor RCFD_STUDIO_RCFD: no service (state `off`). Where a packaged Studio finds its rcfd is
-// F-820's (packaging); until then it is told.
+// Neither RCFD_STUDIO_SERVICE nor RCFD_STUDIO_RCFD: an installed Studio starts the rcfd it ships with
+// (`<resources>/bin`, F-820, ADR 0801 Addendum 19), and only when the first project is opened (`start: 'project'`), so
+// its launch costs nothing more (P10); a service an earlier start left running is still found again at launch (G7).
+// Without a shipped rcfd either: no service (state `off`). Never from PATH.
 
 export type ServiceConfig =
   | { readonly mode: 'off' }
   | { readonly mode: 'attach'; readonly host: string; readonly port: number }
-  | { readonly mode: 'spawn'; readonly rcfd: string; readonly root: string | null; readonly stateDir: string }
+  | {
+      readonly mode: 'spawn';
+      readonly rcfd: string;
+      readonly root: string | null;
+      readonly stateDir: string;
+      /** `launch`: started with the Studio (RCFD_STUDIO_RCFD); `project`: when the first project opens (the shipped rcfd). */
+      readonly start: 'launch' | 'project';
+    }
   | { readonly mode: 'invalid'; readonly reason: string };
 
 const LOOPBACK = new Set(['127.0.0.1', 'localhost', '::1', '[::1]']);
@@ -29,7 +38,12 @@ export function parseLoopbackAddress(text: string): { host: string; port: number
   return { host: host === '[::1]' ? '::1' : host, port };
 }
 
-export function serviceConfig(env: Readonly<Record<string, string | undefined>>, defaultStateDir: string): ServiceConfig {
+/** `bundledRcfd`: the rcfd an installed Studio ships with, when it is there (src/main/project/config.ts bundledBin). */
+export function serviceConfig(
+  env: Readonly<Record<string, string | undefined>>,
+  defaultStateDir: string,
+  bundledRcfd: string | null = null,
+): ServiceConfig {
   const attach = env['RCFD_STUDIO_SERVICE']?.trim() ?? '';
   const rcfd = env['RCFD_STUDIO_RCFD']?.trim() ?? '';
   if (attach && rcfd) {
@@ -43,7 +57,12 @@ export function serviceConfig(env: Readonly<Record<string, string | undefined>>,
   if (rcfd) {
     const root = env['RCFD_STUDIO_SERVICE_ROOT']?.trim() || null;
     const stateDir = env['RCFD_STUDIO_STATE_DIR']?.trim() || defaultStateDir;
-    return { mode: 'spawn', rcfd, root, stateDir };
+    return { mode: 'spawn', rcfd, root, stateDir, start: 'launch' };
+  }
+  if (bundledRcfd) {
+    const root = env['RCFD_STUDIO_SERVICE_ROOT']?.trim() || null;
+    const stateDir = env['RCFD_STUDIO_STATE_DIR']?.trim() || defaultStateDir;
+    return { mode: 'spawn', rcfd: bundledRcfd, root, stateDir, start: 'project' };
   }
   return { mode: 'off' };
 }

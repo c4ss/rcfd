@@ -51,11 +51,22 @@ is never moved or reused: a broken release is followed by a new one with a highe
 | CI `script self-tests` | same | the gate runner's time-limit rule, the limit scanner and the release-notes check work | |
 | CI `studio-web` | same, on Linux and Windows | the Electron Studio (`apps/studio-web/`) installs from its lock file, type-checks, builds, and passes its unit and Playwright tests on the packaged app; `THIRD_PARTY_LICENSES.md` matches both lock files ([test process](test-process.md) section 7) | anything about the Rust engine; macOS; installers and signing (F-820) |
 | `Full gate` workflow | daily on main (skipped when the last green Windows gate tested the same commit, ADR 0653) and on demand | fmt, clippy and every non-ignored test plus the doc-tests pass, one process per test (`scripts/gate_test.py`) | the about 660 `#[ignore]` tests; CUDA tests (no device: they skip and count as passed); wgpu tests where the runner offers no adapter (same); the 12 tests that need fetched validation data (they skip and count as passed, [test process](test-process.md) section 6.3); macOS |
-| `Studio installers` workflow | on demand and on a version tag | the Studio's NSIS (Windows) and AppImage and .deb (Linux) installers build from a clean checkout with the engine's release binaries inside, Electron is on a supported major; the installers are workflow artifacts (30 days), not release binaries (ADR 0801 Addendum 19) | that they install, start or upgrade on a real machine; signing (off until the maintainer provides a certificate); macOS |
-| `Studio Linux test (Docker)` workflow | on demand only | the Studio's unit and e2e tests on Ubuntu 24.04 with the engine's binaries (which the CI `studio-web` job does not build, so its engine specs skip), Chromium's sandbox on (`apps/studio-web/docker/linux-test`) | anything that needs a GPU: the runner has none (the ADR lists the specs that fail for that reason) |
+| `Studio installers` workflow | on demand and on a version tag | the Studio's NSIS (Windows) and AppImage and .deb (Linux) installers build from a clean checkout with the engine's release binaries inside, Electron is on a supported major; on Windows, a silent per-user install, the same build installed again over it with the user's settings kept, the upgraded app starting, using its shipped engine with no variable set and starting its service with the first project, and a silent uninstall that keeps the settings (`apps/studio-web/scripts/check-nsis-upgrade.ps1`); the installers are workflow artifacts (30 days), not release binaries (ADR 0801 Addendum 19) | an upgrade from an older release (the check installs the same build twice until there is one); the Linux packages installing or starting; signing (off until the maintainer provides a certificate); macOS |
+| `Studio Linux test (Docker)` workflow | weekly (Sundays 04:00 UTC, WebGL 2 on the software rasteriser) and on demand | the Studio's unit and e2e tests on Ubuntu 24.04 with the engine's binaries (which the CI `studio-web` job does not build, so its engine specs skip), Chromium's sandbox on (`apps/studio-web/docker/linux-test`) | anything that needs a GPU: the runner has none, so Linux is recorded as "WebGL 2 on software rendering" (the ADR lists the specs that fail without the software rasteriser) |
+
+The Studio's installers take their version from the tag only: a tag `vX.Y.Z` builds `X.Y.Z`, a manual run stays at
+`apps/studio-web/package.json`'s `0.0.0`, so a test build never looks newer than a release. Their identity is
+permanent: the appId `org.rcfd.studio` (an NSIS update finds the installed copy by it), the install folder "rcfd Studio"
+(`%LOCALAPPDATA%\Programs\rcfd Studio` on Windows, `/opt/rcfd Studio` from the .deb) and the settings folder named after
+the product name. An update is the next installer run over the installed one; there is no automatic update.
+
+Not yet: once the Windows builds are signed, the Studio is to tell the user when a newer release exists, by a notice
+that points at the release page (ADR 0801 Addendum 19, Q-F820-3 (c)); nothing is downloaded or installed by itself.
+Until then the release notes are the only notice.
 
 GitHub switches off scheduled workflows in a public repository after 60 days without a push, so the weekly gate stops by itself
-in a quiet period. Start it by hand before a release, and re-enable it in the Actions tab if it was switched off.
+in a quiet period, and so does the weekly Studio Linux test. Start them by hand before a release, and re-enable them in
+the Actions tab if they were switched off.
 
 A run of the workflow counts only if its summary shows 0 failed and its job is green. The workflow runs in a fresh checkout with
 no build cache, which matches the maintainer's `git archive` copy with an empty target folder: `.gitattributes` fixes line

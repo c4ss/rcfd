@@ -65,7 +65,7 @@ import { CasePortBridge, type CasePortLike } from './case/bridge.js';
 import { CaseEditor } from './case/editor.js';
 import { ProjectServer } from './project/server.js';
 import { ProjectPortBridge, type ProjectPortLike } from './project/bridge.js';
-import { engineConfig, recentFile } from './project/config.js';
+import { bundledBin, engineConfig, RCFD_EXE, recentFile } from './project/config.js';
 import { ProjectHome } from './project/home.js';
 import { RecentStore } from './project/recent.js';
 import { PortBridge, type PortLike } from './service/bridge.js';
@@ -94,15 +94,6 @@ const PRELOAD = beside('../preload/index.cjs');
 /** P10 measurement only (scripts/measure-cold-start.mjs): write the ready time to this file, then quit. */
 const STARTUP_REPORT = process.env['RCFD_STUDIO_STARTUP_REPORT'] ?? '';
 
-/** The solver service (src/main/service/config.ts names the environment variables that choose it). */
-const service = new ServiceClient(serviceConfig(process.env, path.join(app.getPath('userData'), 'service')));
-/** Bulk field data (F-804): R2 reads local stores inside the data roots, R1 goes through the service (src/main/data/). */
-const roots = DataRoots.fromEnv(process.env);
-const data = new StudioData(service, roots);
-const dataPorts = new DataPorts(data);
-/** P1 and P2 measurement only (scripts/measure-service.mjs): the client, reachable from Playwright's main-process evaluate. */
-if (process.env['RCFD_STUDIO_BENCH'] === '1') (globalThis as { rcfdStudioBench?: unknown }).rcfdStudioBench = { service };
-
 const isFile = (p: string): boolean => {
   try {
     return statSync(p).isFile();
@@ -110,7 +101,21 @@ const isFile = (p: string): boolean => {
     return false;
   }
 };
-const engine = engineConfig(process.env, isFile);
+/** F-820: the engine an installed Studio ships with (<resources>/bin), used when no variable names one. Never PATH. */
+const bundled = bundledBin(process.env, app.isPackaged, process.resourcesPath);
+const bundledRcfd = bundled !== null && isFile(path.join(bundled, RCFD_EXE)) ? path.join(bundled, RCFD_EXE) : null;
+
+/** The solver service (src/main/service/config.ts names the environment variables that choose it). */
+const serviceSetup = serviceConfig(process.env, path.join(app.getPath('userData'), 'service'), bundledRcfd);
+const service = new ServiceClient(serviceSetup);
+/** Bulk field data (F-804): R2 reads local stores inside the data roots, R1 goes through the service (src/main/data/). */
+const roots = DataRoots.fromEnv(process.env);
+const data = new StudioData(service, roots);
+const dataPorts = new DataPorts(data);
+/** P1 and P2 measurement only (scripts/measure-service.mjs): the client, reachable from Playwright's main-process evaluate. */
+if (process.env['RCFD_STUDIO_BENCH'] === '1') (globalThis as { rcfdStudioBench?: unknown }).rcfdStudioBench = { service };
+
+const engine = engineConfig(process.env, isFile, undefined, bundled);
 
 /** F-818: the theme setting, read before the first window opens. */
 const theme = new ThemePreference(preferencesFile(process.env, app.getPath('userData')));
@@ -147,6 +152,10 @@ const caseEditor = new CaseEditor({
   startServer: (exe, folder) => ProjectServer.start(exe, folder, undefined, { readOnly: false }),
 });
 projects.onState(() => caseEditor.projectChanged());
+// F-820: an installed Studio's own service starts when a project is first opened (start() runs once)
+projects.onState((s) => {
+  if (s.project) service.start();
+});
 // F-810: the open project's folder is a data root (roots.ts), so its runs' stores are read by route local
 projects.onState((s) => {
   if (s.project) {
@@ -555,7 +564,9 @@ void app.whenReady().then(() => {
   nativeTheme.on('updated', () => {
     if (theme.setting === 'system') themeTargets.setBackground(themeBackground());
   });
-  service.start();
+  // F-820: the shipped rcfd starts with the first project; at launch only a service left running is found again (G7)
+  if (serviceSetup.mode === 'spawn' && serviceSetup.start === 'project') void service.findRunning();
+  else service.start();
   // F-837: `rcfd-studio <PROJECT_DIR>` opens that folder (after the recent list is read, so it goes to its head)
   const asked = projectArgument(process.argv, process.defaultApp === true, process.cwd());
   void projects.init().then(() => (asked ? projects.open(asked) : undefined));

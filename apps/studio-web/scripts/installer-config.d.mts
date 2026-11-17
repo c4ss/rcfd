@@ -2,7 +2,9 @@
 export declare const PRODUCT_NAME: string;
 export declare const APP_ID: string;
 export declare const EXECUTABLE: string;
-export declare const INSTALLER_METADATA: { description: string; author: { name: string; url: string }; homepage: string };
+export declare const DESKTOP_NAME: string;
+export declare const WINDOWS_INSTALL_FOLDER: string;
+export declare const INSTALLER_METADATA: { description: string; author: { name: string; url: string }; homepage: string; desktopName: string };
 export declare function runtimePackage(pkg: Record<string, unknown>): Record<string, unknown>;
 export declare function builderConfig(o: {
   pkg: { devDependencies: Record<string, string> } & Record<string, unknown>;

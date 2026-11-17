@@ -10,7 +10,7 @@ import { MessageChannel, type MessagePort } from 'node:worker_threads';
 import { cssCustomProperties } from '../../src/renderer/design/tokens.js';
 import { MAX_CHANGES, type ProjectPortMessage, type ProjectState, type ProjectTool } from '../../src/shared/project.js';
 import { parseProjectRequest, ProjectPortBridge, type ProjectPortLike } from '../../src/main/project/bridge.js';
-import { engineConfig, recentFile } from '../../src/main/project/config.js';
+import { bundledBin, engineConfig, recentFile } from '../../src/main/project/config.js';
 import { HomeRefusal, ProjectHome, type RecentLike } from '../../src/main/project/home.js';
 import { filesUnder, isTempName } from '../../src/main/project/listing.js';
 import { formatRecent, MAX_RECENT, parseRecent, RecentStore, sameFolder, withOpened, without, type StoredRecent } from '../../src/main/project/recent.js';
@@ -46,6 +46,24 @@ test.describe('engineConfig', () => {
     if (!r.configured) expect(r.reason).toMatch(/RCFD_STUDIO_MCP names .* not a file .*cargo build --release -p rcfd-mcp/);
     const b = engineConfig({ RCFD_STUDIO_RCFD: abs('/c/rcfd.exe') }, isFile, 'rcfd-mcp.exe');
     expect(b.configured).toBe(false);
+  });
+  test('F-820: an installed Studio uses the rcfd-mcp it ships with when no variable names one; never PATH', () => {
+    const shipped = new Set([...files, path.join(abs('/res/bin'), 'rcfd-mcp.exe')]);
+    const has = (p: string) => shipped.has(p);
+    expect(engineConfig({}, has, 'rcfd-mcp.exe', abs('/res/bin'))).toEqual({ configured: true, path: path.join(abs('/res/bin'), 'rcfd-mcp.exe'), from: 'bundled' });
+    // the variables win over it
+    expect(engineConfig({ RCFD_STUDIO_MCP: abs('/e/rcfd-mcp.exe') }, has, 'rcfd-mcp.exe', abs('/res/bin'))).toMatchObject({ from: 'RCFD_STUDIO_MCP' });
+    expect(engineConfig({ RCFD_STUDIO_RCFD: abs('/b/rcfd.exe') }, has, 'rcfd-mcp.exe', abs('/res/bin'))).toMatchObject({ from: 'RCFD_STUDIO_RCFD' });
+    // a variable that names nothing is an error, not a reason to fall back
+    expect(engineConfig({ RCFD_STUDIO_MCP: abs('/nope/rcfd-mcp.exe') }, has, 'rcfd-mcp.exe', abs('/res/bin')).configured).toBe(false);
+    // packaged without a bin folder (out/packaged): not configured, as before
+    expect(engineConfig({ PATH: abs('/e') }, has, 'rcfd-mcp.exe', abs('/other/bin')).configured).toBe(false);
+  });
+  test('F-820: the shipped engine is <resources>/bin when packaged; RCFD_TEST_BUNDLED_BIN only in test mode', () => {
+    expect(bundledBin({}, true, abs('/app/resources'))).toBe(path.join(abs('/app/resources'), 'bin'));
+    expect(bundledBin({}, false, abs('/app/resources'))).toBeNull();
+    expect(bundledBin({ RCFD_TEST_BUNDLED_BIN: abs('/t/bin') }, true, abs('/app/resources'))).toBe(path.join(abs('/app/resources'), 'bin'));
+    expect(bundledBin({ RCFD_TEST_HEADLESS: '1', RCFD_TEST_BUNDLED_BIN: abs('/t/bin') }, false, '')).toBe(abs('/t/bin'));
   });
   test('the recent list lives in the user data unless RCFD_STUDIO_RECENT names a file', () => {
     expect(recentFile({}, abs('/u'))).toBe(path.join(abs('/u'), 'recent-projects.json'));

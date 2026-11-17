@@ -1,6 +1,7 @@
 // Unit tests of the service client (src/main/service/client.ts, config.ts, spawn.ts) against the fake service: the
 // connection state, the events.poll loop, and reconnection after a dropped connection and after a restart.
 import { expect, test } from '@playwright/test';
+import { spawn } from 'node:child_process';
 import { mkdtempSync, rmSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -16,11 +17,25 @@ test.describe('configuration', () => {
     expect(serviceConfig({}, '/state')).toEqual({ mode: 'off' });
     expect(serviceConfig({ RCFD_STUDIO_SERVICE: '127.0.0.1:7878' }, '/state')).toEqual({ mode: 'attach', host: '127.0.0.1', port: 7878 });
     expect(serviceConfig({ RCFD_STUDIO_SERVICE: '[::1]:9' }, '/state')).toEqual({ mode: 'attach', host: '::1', port: 9 });
-    expect(serviceConfig({ RCFD_STUDIO_RCFD: '/bin/rcfd' }, '/state')).toEqual({ mode: 'spawn', rcfd: '/bin/rcfd', root: null, stateDir: '/state' });
+    expect(serviceConfig({ RCFD_STUDIO_RCFD: '/bin/rcfd' }, '/state')).toEqual({ mode: 'spawn', rcfd: '/bin/rcfd', root: null, stateDir: '/state', start: 'launch' });
     expect(
       serviceConfig({ RCFD_STUDIO_RCFD: '/bin/rcfd', RCFD_STUDIO_SERVICE_ROOT: '/cases', RCFD_STUDIO_STATE_DIR: '/s2' }, '/state'),
-    ).toEqual({ mode: 'spawn', rcfd: '/bin/rcfd', root: '/cases', stateDir: '/s2' });
+    ).toEqual({ mode: 'spawn', rcfd: '/bin/rcfd', root: '/cases', stateDir: '/s2', start: 'launch' });
     expect(serviceConfig({ RCFD_STUDIO_SERVICE: '127.0.0.1:1', RCFD_STUDIO_RCFD: 'x' }, '/s').mode).toBe('invalid');
+  });
+
+  test('F-820: an installed Studio starts its shipped rcfd with the first project; the variables still win; never PATH', () => {
+    expect(serviceConfig({}, '/state', '/res/bin/rcfd')).toEqual({ mode: 'spawn', rcfd: '/res/bin/rcfd', root: null, stateDir: '/state', start: 'project' });
+    expect(serviceConfig({ RCFD_STUDIO_SERVICE_ROOT: '/cases', RCFD_STUDIO_STATE_DIR: '/s2' }, '/state', '/res/bin/rcfd')).toEqual({
+      mode: 'spawn',
+      rcfd: '/res/bin/rcfd',
+      root: '/cases',
+      stateDir: '/s2',
+      start: 'project',
+    });
+    expect(serviceConfig({ RCFD_STUDIO_RCFD: '/bin/rcfd' }, '/state', '/res/bin/rcfd')).toMatchObject({ rcfd: '/bin/rcfd', start: 'launch' });
+    expect(serviceConfig({ RCFD_STUDIO_SERVICE: '127.0.0.1:7878' }, '/state', '/res/bin/rcfd')).toEqual({ mode: 'attach', host: '127.0.0.1', port: 7878 });
+    expect(serviceConfig({ PATH: '/bin' }, '/state', null)).toEqual({ mode: 'off' });
   });
 
   test('only loopback addresses are accepted (G10)', () => {
@@ -147,6 +162,38 @@ test.describe('ServiceClient (attach mode, fake service)', () => {
     const invalid = new ServiceClient({ mode: 'invalid', reason: 'RCFD_STUDIO_SERVICE: nope' });
     expect(invalid.state.lastError).toBe('RCFD_STUDIO_SERVICE: nope');
     expect(((await invalid.call('service.info').catch((x: unknown) => x)) as RpcError).message).toContain('nope');
+  });
+
+  test('F-820: waiting for a project; findRunning() connects only to a service an earlier start left, and starts nothing', async () => {
+    const stateDir = mkdtempSync(path.join(os.tmpdir(), 'rcfd-f820-'));
+    // a process that stands for the service an earlier start left (the fake answers on its own port)
+    const holder = spawn(process.execPath, ['-e', 'setTimeout(() => {}, 60000)'], { stdio: 'ignore' });
+    const fake = await FakeService.start();
+    try {
+      const cfg = { mode: 'spawn', rcfd: path.join(stateDir, 'no-such-rcfd'), root: null, stateDir, start: 'project' } as const;
+      const waiting = new ServiceClient(cfg, fast);
+      expect(waiting.state).toMatchObject({ status: 'waiting', mode: 'spawn', pid: null });
+      expect(((await waiting.call('service.info').catch((x: unknown) => x)) as RpcError).message).toContain('starts when a project is opened');
+      // no record: nothing found, nothing started
+      expect(await waiting.findRunning()).toBe(false);
+      expect(waiting.state.status).toBe('waiting');
+      await waiting.shutdown();
+
+      await writeRecord(stateDir, { host: '127.0.0.1', port: fake.port, pid: holder.pid!, rcfd: cfg.rcfd, startedAt: new Date().toISOString() });
+      const client = new ServiceClient(cfg, fast);
+      expect(await client.findRunning()).toBe(true);
+      await until(() => client.state.status === 'connected', 5000, 'connected to the service left running');
+      expect(client.state).toMatchObject({ pid: holder.pid, adopted: true });
+      client.start(); // the first project: already connected, nothing more happens
+      expect(client.state.status).toBe('connected');
+      // it holds a session: left running (G7)
+      await client.call('session.create', {});
+      expect(await client.shutdown()).toEqual({ leftRunning: true });
+    } finally {
+      holder.kill();
+      await fake.stop();
+      rmSync(stateDir, { recursive: true, force: true });
+    }
   });
 
   test('a service of another protocol is refused', async () => {

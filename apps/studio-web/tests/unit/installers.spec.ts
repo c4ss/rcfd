@@ -5,7 +5,7 @@ import { expect, test } from '@playwright/test';
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { APP_ID, builderConfig, PRODUCT_NAME, runtimePackage } from '../../scripts/installer-config.mjs';
+import { APP_ID, builderConfig, DESKTOP_NAME, EXECUTABLE, INSTALLER_METADATA, PRODUCT_NAME, runtimePackage, WINDOWS_INSTALL_FOLDER } from '../../scripts/installer-config.mjs';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
 const pkg = JSON.parse(readFileSync(path.join(root, 'package.json'), 'utf8'));
@@ -36,4 +36,20 @@ test('nothing is published and signing is off unless asked for', () => {
   expect(cfg['win'].signExecutable).toBe(false);
   expect(builderConfig({ pkg, stage: 's', output: 'o', sign: true })['win'].signExecutable).toBe(true);
   expect(cfg['mac']).toBeUndefined();
+});
+
+test('the identity is permanent: the version comes from the tag only, and Linux windows link to their menu entry', () => {
+  // a manual build is 0.0.0, so it never looks newer than a release; the workflow passes --version from a vX.Y.Z tag
+  expect(pkg.version).toBe('0.0.0');
+  expect(cfg['nsis'].artifactName).toContain('${version}');
+  expect(DESKTOP_NAME).toBe('rcfd-studio.desktop');
+  expect(INSTALLER_METADATA.desktopName).toBe(DESKTOP_NAME);
+  expect(cfg['linux'].syncDesktopName).toBe(true);
+  expect(cfg['extraResources']).toEqual([{ from: 'out/stage/bin', to: 'bin' }]);
+  // the NSIS install folder is named after the executable when one is set: Windows sets none, so it is "rcfd Studio"
+  expect(WINDOWS_INSTALL_FOLDER).toBe('rcfd Studio');
+  expect(cfg['executableName']).toBeUndefined();
+  expect(cfg['win'].executableName).toBeUndefined();
+  expect(cfg['linux'].executableName).toBe(EXECUTABLE);
+  expect(EXECUTABLE).toBe('rcfd-studio');
 });
