@@ -408,6 +408,17 @@ at a spanwise face of the lower wake stack between the two layers below the tip,
 A scan of `front_gap` 0.15 to 1.0 and `n_nose` 4 to 9 builds all 24 combinations of both blades fold-free and periodic; the quality
 limits hold on 3 of 12 (reference) and 0 of 12 (second blade): non-orthogonality grows with `front_gap` (to 88.3 deg at 1.0).
 
+**Construction S'' (ADR 0699, library only: `CGridOptions::camber_seam_s_wake_remap_construction()`).** S' with
+`wake_stack_remap`: in the span layers that have a remapped grid (ADR 0072 W1), the nodes of every wake line, stack rows included,
+move from the true section to the remapped grid with a weight that is 0 on the trailing-edge line and reaches 1 a quarter of the
+way along the wake. Why: the wake cells near the outlet span about 19 deg of the cylinder, so their spanwise faces are curved strips.
+Under S' the wake stacks of the thin end-wall layers followed each layer's own section and drifted pitchwise by about 0.4 times the
+layer thickness. With four-node faces, those sheared strips got cell centres a fraction of a millimetre off, which against
+centre distances of 5e-5 m gave the S' skewness of 3.24 / 4.01. With the remapped grid, the thin layers move by about 1e-6 m
+per layer and the wake stack is almost a radial extrusion there. At the s4 specs: the reference 84.95 deg / 2.76 / 525.6, the
+second blade 84.47 deg / 2.83 / 551.7, and the largest wake-stack spanwise skewness is 0.24 / 0.26. The non-orthogonality maximum
+moved to the cell next to the trailing-edge line at the start of the weight ramp (layer 3), 0.05 deg below 85 on the reference.
+
 ## Where to go next
 
 * [mesh-quality.md](mesh-quality.md): the quality report, its measures and the library mesh editing operations.
