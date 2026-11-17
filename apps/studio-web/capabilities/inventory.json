@@ -19,10 +19,10 @@
     "service_method": 69,
     "mcp_tool": 70,
     "cli_command": 53,
-    "cli_option": 213,
+    "cli_option": 214,
     "case_key": 951,
     "monitor_format_key": 6,
-    "total": 1362
+    "total": 1363
   },
   "capabilities": [
     {"id":"service:cosim.advance","kind":"service_method","source":"service.info"},
@@ -392,6 +392,7 @@
     {"id":"cli:rcfd workflow show --template","kind":"cli_option","source":"help","parent":"cli:rcfd workflow show"},
     {"id":"cli:rcfd workflow show --workflow","kind":"cli_option","source":"help","parent":"cli:rcfd workflow show"},
     {"id":"cli:rcfd-mcp --cases","kind":"cli_option","source":"help","parent":"cli:rcfd-mcp"},
+    {"id":"cli:rcfd-mcp --client","kind":"cli_option","source":"help","parent":"cli:rcfd-mcp"},
     {"id":"cli:rcfd-mcp --edit-hook","kind":"cli_option","source":"help","parent":"cli:rcfd-mcp"},
     {"id":"cli:rcfd-mcp --max-cells","kind":"cli_option","source":"help","parent":"cli:rcfd-mcp"},
     {"id":"cli:rcfd-mcp --max-design-evaluations","kind":"cli_option","source":"help","parent":"cli:rcfd-mcp"},
