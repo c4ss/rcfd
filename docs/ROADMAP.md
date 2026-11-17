@@ -15510,7 +15510,9 @@ fixed by the item's registration ADR before any code.
     pencil mode is the candidate, not proven. Missed: the plain element's 8^3 failure, registered as the positive
     control of a spurious instability, is also at an iterate; the registered hypothesis that the converged tangent is
     indefinite. Five of six mutations caught. No default bit changed. Not covered: the iterates of the failing attempt,
-    a remedy, a 32^3 mesh. Follow-up F-767 (The failing Newton iterate of rule L at the punch corner).
+    a remedy, a 32^3 mesh. Follow-up F-767 (The failing Newton iterate of rule L at the punch corner). ADR 0688 (F-767,
+    2026-11-17): the failing iterate of the 16^3 rule L solve is the predictor's; the soft mode is not carried by the
+    predictor (share 4e-27) but turns negative in one element under the punch corner within one small step (F-767).
 - [ ] **F-764** Check the first real run of the feature-gated gate step
   - depends on: F-761
   - acceptance: Every limit not stated here is registered in the ADR before the run. In the first daily gate on main
@@ -15548,7 +15550,7 @@ fixed by the item's registration ADR before any code.
     0673 and the f758, f733, f715 and lib tests are unchanged. Not covered: the window condition (dropping it survives),
     failed or pending observations in the window, one function and one seed. Follow-up F-770 (A fast check of the window
     condition of the repetition trigger).
-- [ ] **F-767** The failing Newton iterate of rule L at the punch corner
+- [~] **F-767** The failing Newton iterate of rule L at the punch corner
   - depends on: F-763
   - acceptance: Every limit not stated here is registered in the ADR before the run. The failing attempt of ADR 0682
     (rule L, neo-Hookean, the punch block on 16^3, from the converged state at load factor 0.9625) recorded iterate by
@@ -15557,7 +15559,26 @@ fixed by the item's registration ADR before any code.
     element; the line search of ADR 0607 and a registered damping of the predictor on the same attempt, and whether the
     16^3 block then solves to full load; a positive control on the ADR 0628 patch below its zero; the default bits
     unchanged.
-  - note: Follow-up of F-763 (ADR 0682, 2026-11-16).
+  - note: Structural solver, intermediate tier. Follow-up of F-763 (ADR 0682). PARTIAL. ADR 0688, 2026-11-17: the
+    failing attempt of ADR 0682 (rule L, neo-Hookean, the punch block on 16^3, 0.9625 to 0.965625) recorded iterate by
+    iterate through a contribution that adds nothing (the solve unchanged to the bit) and rebuilt step by step bit for
+    bit; new opt-in NewtonOptions::predictor_damping (the ADR 0607 step-length rule from the lifted iterate, a trial
+    admissible only if its tangent passes the pivot test; default off, defaults bit-identical, baseline_hashes passes)
+    and new public nonlinear::solve_increment (one driver attempt from a committed state, bit for bit the driver's). The
+    attempt fails at the predictor's iterate: the predictor (3.7e-4, its tangent consistent to 1.4e-7, at the energy
+    minimum of its line) is orthogonal to the isolated pencil mode of ADR 0682 (share 4.1e-27), so the candidate of ADR
+    0682 is refuted; at that iterate the tangent has one negative eigenvalue (-0.076 mu h; the ADR 0628 pencil -0.029
+    mu, from +0.063 at the converged state) in the single element 3720 under the punch corner, hourglass form (share
+    0.93), with nothing else moved and no jump of the modes. The ADR 0628 sweep at the centre gradients of the corner
+    elements 3959 and 3720 is stable (m_L 1.057 and 1.060, zero only 40 to 50 per cent further along the ray): not a
+    homogeneous-state property. The line search cannot act on the predictor; the damping falls back to the full step
+    because the lifted iterate inverts the corner element 3959 (a probe); no remedy (line search, damping, both) solves
+    the 16^3 block to full load. Positive control: the plain element on the ADR 0628 patch at 0.93 (below its zero
+    0.9507) has 21 negative eigenvalues, found by the sparse tools equal to the dense ones to 1.2e-15. Missed: the
+    pencil of one negative control (the plain element at 0.97) not converged in 300 iterations; two of seven mutations
+    not caught. Not covered: the equilibrium at 0.965625 (the driver refuses an indefinite tangent), a change of rule
+    L's coefficient (the maintainer's call), other meshes. Follow-up F-774 (The corner element of rule L at the punch
+    corner and the equilibrium past the predictor).
 - [~] **F-768** Primary ADR of file-citation-only tests from the commit that adds the file
   - depends on: F-759
   - acceptance: Every limit not stated here is registered in the ADR before the run. A test whose only primary evidence
@@ -15635,3 +15656,13 @@ fixed by the item's registration ADR before any code.
     in every field except the added `adrs`, `items`, `evidence` and the primary, a shallow clone gets no E8 evidence,
     and a fresh registered sample of at least 20 files with an E8 primary is read with at least 80 % agreement.
   - note: Follow-up of F-768 (ADR 0690, 2026-11-16).
+- [ ] **F-774** The corner element of rule L at the punch corner and the equilibrium past the predictor
+  - depends on: F-767
+  - acceptance: Every limit not stated here is registered in the ADR before the run. On the punch block of ADR 0688
+    (rule L, neo-Hookean, 16^3) at the converged state 0.9625 and along the predictor line of the failing attempt: det F
+    at the integration points of element 3959 and its neighbours and the local mode solution there (cold and warm, its
+    root), and whether the inversions found by the probe of ADR 0688 are a jump of that solution; the equilibrium at
+    0.965625 by a path that accepts an indefinite tangent, with its inertia, against F-bar at the same load; a
+    backtracking of the predictor from the full step on an inadmissible trial, opt-in, and whether the block then solves
+    to full load; the default bits unchanged.
+  - note: Follow-up of F-767 (ADR 0688, 2026-11-16).
