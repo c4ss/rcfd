@@ -75,7 +75,8 @@ const sidecar = JSON.parse(read(repo, '.impeccable', 'design.json')) as {
 };
 const ext = sidecar.extensions;
 /** The colour roles DESIGN.md names in its frontmatter beside the palette (role: the palette colour it is). */
-const FRONTMATTER_ROLES: Readonly<Record<string, keyof typeof palette>> = { 'claude-head': 'meadow' };
+// none since ADR 0801 Addendum 23 removed the Claude Code panel and its claude-head role; kept for the next one
+const FRONTMATTER_ROLES: Readonly<Record<string, keyof typeof palette>> = {};
 const named = <T extends { name: string }>(list: T[], name: string): T => {
   const hit = list.find((x) => x.name === name);
   if (!hit) throw new Error(`design.json has no ${name}`);
@@ -121,7 +122,7 @@ test.describe('tokens.css and tokens.ts', () => {
 test.describe('tokens.ts holds the values of DESIGN.md', () => {
   test('palette: the frontmatter colours, the sidecar canonical values, and the footer tint from the prose', () => {
     const all = design['colors'] as Record<string, string>;
-    // the frontmatter's colour roles (F-814: claude-head) are checked below, against tokens.ts's roles
+    // the frontmatter's colour roles (none now) are checked below, against tokens.ts's roles
     const colors = Object.fromEntries(Object.entries(all).filter(([k]) => !(k in FRONTMATTER_ROLES)));
     const fromPalette = Object.fromEntries(Object.entries(palette).filter(([k]) => k !== 'ink-tint'));
     expect(fromPalette).toEqual(colors);
@@ -304,7 +305,7 @@ test.describe('focus, caret, fields, tabs, selection and pictograms are what DES
         .map(([k]) => k)
         .sort();
     expect(users('orange')).toEqual(['band-live', 'caret', 'focus-ring', 'slider-thumb-active']);
-    expect(users('meadow')).toEqual(['band-converged', 'claude-head', 'sub-tab-selected', 'switch-on']);
+    expect(users('meadow')).toEqual(['band-converged', 'sub-tab-selected', 'switch-on']);
     expect(users('sky')).toEqual(['band-iterating', 'header-band', 'selection-bg']);
     expect(users('fail')).toEqual(['band-failed', 'state-failed', 'text-fail']);
     expect(users('fail-wash')).toEqual(['row-failed']);

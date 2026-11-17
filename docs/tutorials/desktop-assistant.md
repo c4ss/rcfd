@@ -1,12 +1,13 @@
-# The desktop Studio and the Claude Code panel
+# The desktop Studio and Claude Code
 
 This tutorial opens a project in the desktop Studio, adds a cavity case to it, edits and runs the case, looks at the result
-through time, compares two runs and asks Claude Code about them. It is for people who prefer a window to the command line. If
+through time, compares two runs and lets Claude Code work on the same project. It is for people who prefer a window to the command line. If
 you want to script runs instead, start with the [quick start](quick-start-cli.md).
 
 The Studio is the Electron app in `apps/studio-web/` of the repository (ADR 0800). It is a client of the engine: it reads a
 project folder through the engine's project server (`rcfd-mcp`), starts and stops runs through the project's runner
-(`rcfd-runner`), edits cases through the solver service (`rcfd serve`), and talks to Claude Code in a side panel. It is in
+(`rcfd-runner`), edits cases through the solver service (`rcfd serve`), and registers the project server with Claude Code, which
+runs in its own terminal. It is in
 development: there is no installer yet (roadmap F-820), so you run it from a checkout. The two older egui desktop apps,
 `rcfd-studio` and `rcfd-gui`, were removed (F-449); the section "What the Studio does not do yet" lists what they had that
 this Studio does not have yet.
@@ -15,7 +16,8 @@ this Studio does not have yet.
 the case file). Every Studio step is marked `not-executed`: the tutorial test cannot click through a window. The Studio's
 own Playwright tests (`apps/studio-web/tests/e2e/`) drive the packaged app through the same controls, by the names this
 page uses, against the real `rcfd-mcp`, `rcfd-runner` and `rcfd` on a copy of the quick-start example project. Those tests
-use a fake `claude` program, so no real Claude Code session has been run through the panel by the test suite. Nobody has
+use a fake `claude` program for the registration, and stand in for Claude Code by calling the project server
+themselves, so no real Claude Code session has been run by the test suite. Nobody has
 walked through this page step by step against the running app.
 
 **How this page names controls.** The Studio shows few words at rest: many controls are pictograms. This page names each
@@ -216,28 +218,30 @@ rcfd-runner start <case> --project <folder> --threads <n> --priority <n> [--mem-
 When the command cannot reproduce the run exactly (the case file changed since, or a setting has no `rcfd-runner start`
 option), the popover says so.
 
-## 9. Ask Claude Code (not executed)
+## 9. Use Claude Code on the project (not executed)
 
-The Claude Code panel is on the right of the project views; Hide Claude Code and Show Claude Code fold it away and back.
-It lists the project's Claude Code sessions, from a terminal or an editor as well. A session open elsewhere is shown
-read-only as its transcript grows.
-
-To write to Claude Code from the panel, start the Studio with `RCFD_STUDIO_CLAUDE` set to the path of the Claude Code
-program (`claude.exe` on Windows; a `.js`, `.mjs` or `.cjs` path runs on the Studio's own runtime). Without it the panel
-only reads.
+The Studio embeds no Claude Code: you use Claude Code in its own terminal, and the Studio shows what it changes. With a
+project open, Use with Claude Code (the header icon, or the palette) opens a panel that says whether the folder is
+registered with Claude Code and shows the command that registers it:
 
 ```text not-executed
-New chat                      starts a session in the project folder
-Ctrl+L                        goes to the message field; Enter sends, Shift+Enter starts a new line, Escape stops the reply
+claude mcp add rcfd-project --scope local -- "<path to rcfd-mcp>" --project "<project folder>"
 ```
 
-Claude Code gets the engine's project server for this folder (`rcfd-mcp --project`) and no other MCP server. Without an
-allow-list file it may call only the 15 read tools of the project server (`project_info`, `list_runs`, `run_status`,
-`read_residuals`, `compare_runs` and others) and is refused everything else without being asked; a refused call shows the
-narrowest rule that would allow it. The rules come from `.rcfd/claude-allow.json` in the project when that file is
-valid; the Studio never writes it. The first chat in a folder that holds Claude Code control files (`.mcp.json`,
-`CLAUDE.md`, `.claude/`) asks you to confirm them by name. Run ids and project files named in a reply are links that open
-the run in Runs or the file on Home.
+Register runs that command in the project folder; Copy puts it on the clipboard, to run it yourself in a terminal in
+that folder. The registration is Claude Code's own, private to you and to this folder (local scope). The Studio finds
+`claude` where its installer puts it (`%USERPROFILE%\.local\bin\claude.exe` on Windows, `~/.local/bin/claude`
+elsewhere), or where `RCFD_STUDIO_CLAUDE` or the Studio's `--claude <path>` switch says; it never searches PATH. When
+it finds none it still shows the command.
+
+Open Claude Code here (the header icon next to it) opens a terminal in the project folder running `claude`: Windows
+Terminal if it is installed, else a command window. Claude Code then has the project tools of the engine's project
+server, read and write; it asks you before each tool, by its own permission settings.
+
+What Claude Code changes shows in the Studio without a reload: a new or edited case in the case list (an open case editor
+marks the file changed outside), a run it starts, pauses or cancels in Runs, a case it moves to the trash in Trash. One
+quiet line at the end of the project's title strip names the latest change, for example "Claude Code started run
+r-20261117T...", with a link to it; the view does not move by itself.
 
 A question such as "Which runs converged, and how does cavity.toml differ from cavity-re400.toml?" is answered from the
 read tools. What a real model answers depends on the model; none is run by the tests.
@@ -253,7 +257,6 @@ reason. Ctrl+/ lists every shortcut by where it works. The keys that work anywhe
 | Ctrl+K, Ctrl+Shift+P | open the command palette |
 | Ctrl+/ | show the keyboard shortcuts |
 | Ctrl+1, Ctrl+2 | Home, Runs |
-| Ctrl+L | the Claude Code message field |
 | Ctrl+O | open a project folder |
 | Ctrl+N | new case, from a template or a shipped example |
 | F5 | run a case (asks which) |
@@ -270,7 +273,7 @@ Ctrl is Cmd on macOS.
   the MCP tool `create_project` take a name).
 * No delete of a run, a result or a case: the engine has none, so the Studio offers none.
 * No picture of a case's mesh before a run (the removed `rcfd-studio` had one), no iso-surfaces and no streamlines.
-* No model of your own choice: the Claude Code panel is the only assistant. The local-model assistant of the removed
+* No assistant inside the window: Claude Code, in its own terminal, is the only assistant (step 9). The local-model assistant of the removed
   `rcfd-gui` (provider presets `ollama`, `lm-studio`, `llama-cpp`, `vllm`, `openai`, `anthropic`, an API key in the OS
   keychain, read-only and Approve writes modes, and four quick actions: Assess mesh, Validate case, Suggest BCs, Explain
   residuals) was removed with its crate `rcfd-assistant` (F-838), and is not planned for the Studio.
@@ -289,8 +292,6 @@ The removed egui apps had more that this Studio does not have yet:
 * Opening a project folder given on the command line (`rcfd-studio <folder>`).
 * `rcfd-gui` opened and saved a single case file anywhere (Open…, Save as…), not only in a project, and showed the field
   of a running in-process session live, with Step (one iteration), Pause and Stop.
-* A choice of the `claude` model in the Claude Code panel, and an Allow button that added a tool rule to
-  `.rcfd/claude-allow.json` (the Studio reads that file and never writes it).
 
 ## Where to go next
 

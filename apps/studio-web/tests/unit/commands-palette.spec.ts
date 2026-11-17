@@ -51,8 +51,8 @@ test.describe('every registered action is in the palette (G20)', () => {
     }
   });
 
-  test('the navigation commands go to Home, Runs, Case settings, the case editor and the Claude Code panel', () => {
-    for (const id of ['go.home', 'go.runs', 'go.settings', 'go.case_editor', 'go.claude', 'help.shortcuts', 'palette.open']) expect(ids).toContain(id);
+  test('the navigation commands go to Home, Runs, Case settings and the case editor; Claude Code has its two commands', () => {
+    for (const id of ['go.home', 'go.runs', 'go.settings', 'go.case_editor', 'claude_code.register', 'claude_code.open', 'help.shortcuts', 'palette.open']) expect(ids).toContain(id);
   });
 
   test('ids and titles are unique, and the groups are the known ones in their order', () => {
@@ -134,7 +134,7 @@ test.describe('each entry says how to do the same elsewhere (G16, G19)', () => {
     }
     expect(model.find((e) => e.id === 'case.open')!.params.map((p) => p.kind)).toEqual(['case']);
     expect(model.find((e) => e.id === 'project.open_recent')!.params.map((p) => p.kind)).toEqual(['recent']);
-    expect([...CHOICE_KINDS].sort()).toEqual(['case', 'claude-session', 'recent', 'run', 'session']);
+    expect([...CHOICE_KINDS].sort()).toEqual(['case', 'recent', 'run', 'session']);
   });
 
   test('the palette shows each command’s shortcut from the one table', () => {
@@ -163,7 +163,7 @@ test.describe('the renderer runs every Studio command', () => {
 
   test('the commands a surface runs are registered by that surface (useCommandHandlers)', () => {
     const home = readFileSync(path.join(renderer, 'project', 'ProjectHome.tsx'), 'utf8');
-    for (const id of ['go.home', 'go.runs', 'go.claude', 'view.toggle_claude']) expect(home, id).toContain(`'${id}':`);
+    for (const id of ['go.home', 'go.runs', 'home.show_path', 'claude_code.show']) expect(home, id).toContain(`'${id}':`);
     const editor = readFileSync(path.join(renderer, 'case', 'CaseEditorPage.tsx'), 'utf8');
     for (const id of ['case.save', 'case.check_file', 'case.duplicate', 'case.close']) expect(editor, id).toContain(`'${id}':`);
   });

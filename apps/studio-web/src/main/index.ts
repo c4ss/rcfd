@@ -21,8 +21,8 @@
 // - The run workspace (F-810): a MessagePort on RUN_PORT_CHANNEL (src/main/run/), checked against
 //   src/shared/run.ts; a run's histories are read by the open project's read-only project server. Opening a project
 //   makes its folder a data root, so the workspace reads its runs' stores (runs/<id>/fields) through route local.
-// - Claude Code (F-814): a MessagePort on CLAUDE_PORT_CHANNEL (src/main/claude/), checked against src/shared/claude.ts;
-//   claude is started only here, with the project folder as its working folder.
+// - Claude Code (ADR 0801 Addendum 23): nothing embedded. The project port registers the engine's project server with
+//   Claude Code (`claude mcp add --scope local`, src/main/claudecode/) and opens a terminal running `claude` in the folder.
 // - Provenance (F-828): a MessagePort on PROVENANCE_PORT_CHANNEL (src/main/provenance/), checked against
 //   src/shared/provenance.ts; a run's record is read by the open project's read-only project server, and Copy writes the
 //   system clipboard here (the page has no clipboard permission).
@@ -66,7 +66,9 @@ import { CaseEditor } from './case/editor.js';
 import { ProjectServer } from './project/server.js';
 import { ProjectPortBridge, type ProjectPortLike } from './project/bridge.js';
 import { engineConfig, recentFile } from './project/config.js';
-import { chooseEngine, defaultEngine } from './engine/locate.js';
+import { chooseEngine, defaultEngine, locateClaude } from './engine/locate.js';
+import { ClaudeCode } from './claudecode/register.js';
+import { launchTerminal, runClaude } from './claudecode/terminal.js';
 import { ProjectHome } from './project/home.js';
 import { RecentStore } from './project/recent.js';
 import { PortBridge, type PortLike } from './service/bridge.js';
@@ -77,9 +79,6 @@ import { deriveEngine } from './data/derive.js';
 import { DataPorts } from './data/port.js';
 import { DataRoots } from './data/roots.js';
 import { StudioData } from './data/studio-data.js';
-import { claudeConfig } from './claude/config.js';
-import { ClaudePanel } from './claude/panel.js';
-import { ClaudePorts } from './claude/port.js';
 import {
   APP_ENTRY,
   APP_SCHEME,
@@ -124,6 +123,26 @@ const dataPorts = new DataPorts(data);
 if (process.env['RCFD_STUDIO_BENCH'] === '1') (globalThis as { rcfdStudioBench?: unknown }).rcfdStudioBench = { service };
 
 const engine = engineConfig(process.env, isFile, engineChoice);
+
+/**
+ * ADR 0801 Addendum 23: Claude Code for the open project, from its own terminal. `claude` from RCFD_STUDIO_CLAUDE, then
+ * --claude, then its installer's folder (src/main/engine/locate.ts); the registration names this engine's rcfd-mcp.
+ */
+const claudeCode = new ClaudeCode({
+  claude: locateClaude(process.env, switches.claude, isFile),
+  engine: () => (engine.configured ? engine.path : null),
+  folder: () => projects.state.project?.folder ?? null,
+  run: (exe, args, cwd) => runClaude(exe, args, cwd, process.execPath),
+  copy: (text) => clipboard.writeText(text),
+  launch: (claude, folder) =>
+    launchTerminal(claude, folder, {
+      env: process.env,
+      isFile,
+      headless: process.env.RCFD_TEST_HEADLESS === '1',
+      record: process.env['RCFD_STUDIO_LAUNCH_RECORD']?.trim() || null,
+    }),
+  now: () => new Date().toISOString(),
+});
 
 /** F-818: the theme setting, read before the first window opens. */
 const theme = new ThemePreference(preferencesFile(process.env, app.getPath('userData')));
@@ -202,13 +221,6 @@ projects.onState((s) => {
     }
   }
 });
-/** The Claude Code panel (F-814): claude from RCFD_STUDIO_CLAUDE (src/main/claude/config.ts), for the open project. */
-const claude = new ClaudePanel({
-  config: claudeConfig(process.env, app.getPath('userData'), isFile, process.execPath),
-  rcfdMcp: engine.configured ? engine.path : null,
-});
-const claudePorts = new ClaudePorts(claude);
-projects.onState((s) => void claude.setProject(s.project?.folder ?? null));
 
 // Before ready: the scheme must be privileged to behave like a secure web origin (fetch, CSP 'self', module scripts).
 protocol.registerSchemesAsPrivileged([
@@ -375,7 +387,7 @@ function offerProjectPort(contents: WebContents): void {
   projectPorts.delete(contents.id);
   if (contents.isDestroyed() || !isAppUrl(contents.getURL())) return;
   const { port1, port2 } = new MessageChannelMain();
-  projectPorts.set(contents.id, new ProjectPortBridge(adaptProjectPort(port1), projects));
+  projectPorts.set(contents.id, new ProjectPortBridge(adaptProjectPort(port1), projects, claudeCode));
   port1.start();
   contents.postMessage(PROJECT_PORT_CHANNEL, null, [port2]);
 }
@@ -560,11 +572,9 @@ function openWindow(): void {
     offerRunPort(contents);
     offerProvenancePort(contents);
     dataPorts.offer(contents);
-    claudePorts.offer(contents);
   });
   contents.once('destroyed', () => {
     dataPorts.drop(id);
-    claudePorts.drop(id);
     servicePorts.get(id)?.dispose();
     servicePorts.delete(id);
     projectPorts.get(id)?.dispose();
@@ -727,7 +737,7 @@ app.on('before-quit', (e) => {
       .then(() => {
         const atMost = new Promise((done) => setTimeout(done, 3000));
         return Promise.race([
-          Promise.all([service.shutdown({ keepWithSessions: keepRunner() !== null }), projects.shutdown(), caseEditor.shutdown(), claude.shutdown()]),
+          Promise.all([service.shutdown({ keepWithSessions: keepRunner() !== null }), projects.shutdown(), caseEditor.shutdown()]),
           atMost,
         ]);
       })

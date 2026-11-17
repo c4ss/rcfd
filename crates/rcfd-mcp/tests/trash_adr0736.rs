@@ -4,10 +4,9 @@
 //! unfinished run continues from is 1003 naming it, allowed once that run has ended (Q2 (a)); T3 a stale case base is
 //! 1200 and moves nothing, a run of the case keeps its snapshot; T4 a restore onto an occupied path is 1200 with
 //! `data.path` and moves nothing; T5 one journal line and one feed entry per accepted call, `--read-only` 1100;
-//! E `empty_trash` is the class `delete` and removes for good; A no allow-list holds a delete-class tool (Q3 (a)). The
+//! E `empty_trash` is the class `delete` and removes for good; A `empty_trash` is the one delete-class tool (Q3 (a), restated). The
 //! tool lists are checked by `project_list_f270.rs`, `tool_list_f275.rs` and `project_w48f.rs`, restated there.
 
-mod claude_allow;
 mod common;
 
 use common::*;
@@ -399,18 +398,12 @@ fn e_empty_trash_is_the_delete_class_and_removes_for_good() {
     eprintln!("E: empty_trash asked as delete, unknown token 1202, older_than_days kept both, then removed both");
 }
 
-/// A: no allow-list holds a tool of the class `delete` (ADR 0736 Q3 (a)): the delete-class tools of the live list are
-/// exactly `claude_allow::DELETE_TOOLS`; a project's first list holds none; a rule naming one is refused in the plugin's
-/// and the app-owned server's form (and so `AllowList::add` and an allow-list file refuse it), while every other project
-/// tool is still a valid rule.
+/// A: the class `delete` (ADR 0736 Q3 (a)): the delete-class tools of the live list are exactly `empty_trash`, with
+/// `destructiveHint` true and `readOnlyHint` false; every other tool has `destructiveHint` false. Restated by ADR 0801
+/// Addendum 23, which removed the Studio's Claude Code allow-list: Claude Code's own permission prompts ask for every
+/// call of a tool no rule of the user's allows, and these annotations are what the engine tells it.
 #[test]
-fn a_no_allow_list_holds_the_delete_class() {
-    use claude_allow::{is_delete_tool, AllowList, AllowRule, DELETE_TOOLS, PINNED_SERVER};
-    // a whole server would hold its delete-class tools too
-    for whole in [format!("mcp__{PINNED_SERVER}"), "mcp__plugin_rcfd_project".to_string()] {
-        let e = AllowRule::Tool(whole.clone()).validate().unwrap_err().to_string();
-        assert!(e.contains("delete"), "{whole}: {e}");
-    }
+fn a_the_delete_class_is_empty_trash_alone() {
     let dir = project("a-0736");
     let s = server(&dir, Policy::default());
     let live = s.tool_list();
@@ -420,41 +413,18 @@ fn a_no_allow_list_holds_the_delete_class() {
         .filter(|t| t["_meta"]["rcfd/access"] == "delete")
         .map(|t| t["name"].as_str().unwrap())
         .collect();
-    assert_eq!(delete, DELETE_TOOLS);
-    for r in AllowList::project_initial().rules() {
-        let AllowRule::Tool(n) = r else { panic!("{r:?}") };
-        assert!(!is_delete_tool(n), "{n} on the first list");
-    }
-    for t in DELETE_TOOLS {
-        for full in [
-            format!("mcp__{PINNED_SERVER}__{t}"),
-            format!("mcp__plugin_rcfd_project__{t}"),
-            format!("mcp__other__{t}"),
-        ] {
-            let e = AllowRule::Tool(full.clone()).validate().unwrap_err().to_string();
-            assert!(e.contains("delete"), "{full}: {e}");
-            assert!(AllowList::new().add(AllowRule::Tool(full.clone())).is_err());
-            assert!(AllowRule::parse(&full).is_none());
+    assert_eq!(delete, ["empty_trash"]);
+    let mut others = 0;
+    for t in tools {
+        let d = t["_meta"]["rcfd/access"] == "delete";
+        assert_eq!(t["annotations"]["destructiveHint"], d, "{}", t["name"]);
+        if d {
+            assert_eq!(t["annotations"]["readOnlyHint"], false);
+        } else {
+            others += 1;
         }
     }
-    // a file with the rule is refused as a whole
-    let file = AllowList::file_of(&dir);
-    std::fs::create_dir_all(file.parent().unwrap()).unwrap();
-    std::fs::write(
-        &file,
-        format!("{{\"version\": 1, \"rules\": [\"mcp__{PINNED_SERVER}__list_runs\", \"mcp__{PINNED_SERVER}__empty_trash\"]}}\n"),
-    )
-    .unwrap();
-    let e = AllowList::from_file(&file).unwrap_err().to_string();
-    assert!(e.contains("delete"), "{e}");
-    // control: every other tool of the live list is a valid rule
-    let mut others = 0;
-    for t in tools.iter().filter(|t| t["_meta"]["rcfd/access"] != "delete") {
-        let full = format!("mcp__{PINNED_SERVER}__{}", t["name"].as_str().unwrap());
-        AllowRule::Tool(full.clone())
-            .validate()
-            .unwrap_or_else(|e| panic!("{full}: {e}"));
-        others += 1;
-    }
-    eprintln!("A: {DELETE_TOOLS:?} refused in three server forms and in a file; {others} other tools valid rules");
+    eprintln!(
+        "A: {delete:?} the one delete-class tool, destructiveHint true; {others} other tools destructiveHint false"
+    );
 }

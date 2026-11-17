@@ -35,7 +35,7 @@ import { pendingByRun, requestWords, withStartedRuns } from './control-model.js'
 import { RunBar, SelectedRunControls } from './RunControls.js';
 import type { RunRequest } from '../../shared/project.js';
 import { Provenance, reportValue, statusValue } from '../provenance/index.js';
-import { BudgetsButton, BudgetsPanel, ResidualValue, residualColumns } from './RunExtras.js';
+import { BUDGETS_FILE, BudgetsButton, BudgetsPanel, ResidualValue, residualColumns } from './RunExtras.js';
 import { HowItRanTools } from './HowItRan.js';
 import { SiteBadge } from './Sites.js';
 import type { RunSite } from '../../shared/sites.js';
@@ -74,11 +74,13 @@ export function RunsView({ view, selected, onSelect, onOpenWorkspace }: RunsView
   // F-837: the latest residuals of the engine's equations u and p, when some run has them
   const resCols = useMemo(() => residualColumns(all), [all]);
   const [budgetsOpen, setBudgetsOpen] = useState(false);
+  // ADR 0801 Addendum 23: the feed's latest change of the budgets file (by Claude Code, the CLI or another window)
+  const budgetsChange = view.changes.find((c) => c.path === BUDGETS_FILE)?.n ?? 0;
   return (
     <div className="rv">
       <section className="rv-list" aria-labelledby="rv-title">
         <RunBar view={view} onStarted={onSelect} lead={<BudgetsButton open={budgetsOpen} onChange={setBudgetsOpen} />} />
-        {budgetsOpen && <BudgetsPanel onClose={() => setBudgetsOpen(false)} />}
+        {budgetsOpen && <BudgetsPanel onClose={() => setBudgetsOpen(false)} fileChange={budgetsChange} />}
         <div className="rv-tools">
           <h1 id="rv-title" className="rv-title sr-only">
             Runs <span className="rv-total" data-words="data">{view.runs.total}</span>

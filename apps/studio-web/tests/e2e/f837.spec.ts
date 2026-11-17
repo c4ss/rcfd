@@ -1,5 +1,5 @@
 // F-837 in the packaged Studio at 1440 by 900, against the real engine (rcfd serve for the case editor, rcfd-mcp for the
-// project, rcfd-runner for the run started again, the fake claude for the panel): what the removed egui Studio offered
+// project, rcfd-runner for the run started again): what the removed egui Studio offered
 // beside its run list, field view and project view, rebuilt on the engine (the runner's budgets through ADR 0733's
 // runner_config and set_runner_config). One test per capability;
 // screenshots go to test-results-visual/f837/.
@@ -10,7 +10,6 @@ import { _electron as electron, expect, test, type Page } from '@playwright/test
 import { appendFile, mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { existsSync, readFileSync } from 'node:fs';
 import path from 'node:path';
-import { claudeFixture, FAKE_CLAUDE, sampleTranscript, type ClaudeFixture } from '../support/claude.js';
 import { copyExample, findMcp, mcpPids, NO_MCP, projectState, scratch, stubDialog } from '../support/project.js';
 import { appRoot, findRcfd, killIfRcfd, killPid, NO_RCFD, startRcfd, type RunningRcfd } from '../support/rcfd.js';
 import { findRunner, NO_RUNNER, Runner } from '../support/runner.js';
@@ -29,11 +28,9 @@ test.describe.configure({ mode: 'serial', timeout: 120_000 });
 const SHOTS = path.join(appRoot, 'test-results-visual', 'f837');
 const RE100 = 'r-20261028T152641-f8c2';
 const CASE = 'cases/cavity-re100.toml';
-const S1 = '00000000-0000-4000-8000-000000000001';
 
 let dir = '';
 let quick = '';
-let fx: ClaudeFixture;
 let service: RunningRcfd;
 let studio: Studio;
 let page: Page;
@@ -74,16 +71,11 @@ test.beforeAll(async () => {
   await writeFile(path.join(quick, 'cases', 'lid-profile.csv'), 'x,u\n0,0\n1,1\n');
   await mkdir(path.join(quick, 'designs', 'lid-shapes'), { recursive: true });
   await writeFile(path.join(quick, 'designs', 'lid-shapes', 'flat.json'), '{}\n');
-  fx = await claudeFixture('f837');
-  await fx.transcript(quick, S1, sampleTranscript(quick, S1));
   service = await startRcfd(rcfd!);
   studio = await launchStudio({
     RCFD_STUDIO_SERVICE: `127.0.0.1:${service.port}`,
     RCFD_STUDIO_MCP: mcp!,
     RCFD_STUDIO_RECENT: path.join(dir, 'recent.json'),
-    RCFD_STUDIO_CLAUDE: FAKE_CLAUDE,
-    RCFD_STUDIO_CLAUDE_STATE: fx.state,
-    ...fx.env({ FAKE_CLAUDE_DELAY_MS: '20' }),
   });
   page = studio.page;
   await studio.app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0]!.setContentSize(1440, 900));
@@ -100,7 +92,6 @@ test.afterAll(async () => {
   if (service) killIfRcfd(service.pid);
   for (const p of mcpPids(quick)) killPid(p);
   await rm(dir, { recursive: true, force: true }).catch(() => undefined);
-  await rm(fx.root, { recursive: true, force: true }).catch(() => undefined);
 });
 
 test('the project home: designs/ and its entries, a data file of cases/ apart from the case files (no Edit or Run)', async () => {
@@ -397,23 +388,6 @@ test('the palette lists the F-837 commands; one that needs a run says where', as
   await shot('12-palette');
   await page.keyboard.press('Escape');
   await expect(dialog).toHaveCount(0);
-});
-
-test('the Claude Code panel: a finished turn shows its model and the session’s cost', async () => {
-  const panel = page.getByRole('complementary', { name: 'Claude Code' });
-  const closed = panel.getByRole('button', { name: /^Which runs converged\?, closed, \d{4}-\d\d-\d\d \d\d:\d\d$/ });
-  await expect(closed).toBeVisible({ timeout: 45_000 });
-  await closed.click();
-  const field = panel.getByRole('textbox', { name: /^Message to Claude Code, Which runs converged\?/ });
-  await field.fill('Which run converged?');
-  await field.press('Enter');
-  await expect(panel.getByText(/^Answered/)).toBeVisible({ timeout: 30_000 });
-  const meta = panel.locator('[data-turn-meta]').last();
-  await expect(meta.locator('[data-model]')).toHaveAttribute('data-model', 'claude-haiku-5-5');
-  await expect(meta.locator('[data-session-cost]')).toHaveAttribute('data-session-cost', '0.0031');
-  await expect(meta).toContainText('0.0031 USD');
-  await page.mouse.move(1439, 899);
-  await shot('13-claude-model-cost');
 });
 
 test('a project folder given on the command line opens at start', async () => {

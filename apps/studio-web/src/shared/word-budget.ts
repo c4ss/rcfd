@@ -13,7 +13,7 @@
 //   (a scrolled list is still the surface).
 // - Not counted, because they are not chrome: text inside an element whose nearest `data-words` attribute is
 //     data        a value from the engine, the project or the user: names, paths, ids, numbers with their units,
-//                 times, counts, the user's and Claude Code's messages, the schema's key names and options
+//                 times, counts, the user's messages, the schema's key names and options
 //     exception   a failure, a loss, a conflict, something blocked or unavailable, or a value the user must act on
 //                 (G22: these speak)
 //     disclaimer  G6's disclaimer (the footer band)
@@ -67,7 +67,6 @@ export const WORD_BUDGETS = {
   compare: { what: 'run workspace, compare mode', rest: 'two runs side by side', budget: 8 },
   'derived-controls': { what: 'run workspace, derived-picture controls', rest: 'the field toolbar, no cut, no arrows', budget: 0 },
   provenance: { what: 'provenance popover', rest: 'opened on a run’s step count', budget: 11 },
-  claude: { what: 'Claude Code panel', rest: 'a new chat in the quick-start project', budget: 13 },
   palette: { what: 'command palette', rest: 'opened, nothing typed', budget: 4 },
   settings: { what: 'settings', rest: 'a session from the engine’s defaults, Set in this case', budget: 23 },
   'case-editor': { what: 'case editor', rest: 'a case file opened, nothing changed', budget: 51 },

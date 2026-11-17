@@ -9,12 +9,12 @@
 //   forwards, so a page cannot get round them by calling a function differently.
 // - `window.studioProject`: the project folder (F-805, src/shared/project.ts), over a second port on
 //   PROJECT_PORT_CHANNEL in the same way; the checks are src/main/project/bridge.ts's.
+// - `window.studioClaudeCode`: Claude Code's registration for the open project and its terminal (ADR 0801 Addendum 23,
+//   src/shared/project.ts), over the project port.
 // - `window.studioCase`: the case editor's case files (F-812, src/shared/case.ts), on a port of its own on
 //   CASE_PORT_CHANNEL; the checks are src/main/case/bridge.ts's. See the end of this file.
 // - `window.studioRunData`: a runner run's residual and monitor histories (F-810, src/shared/run.ts), on a port of its own on
 //   RUN_PORT_CHANNEL; the checks are src/main/run/bridge.ts's. See the end of this file.
-// - `window.studioClaude`: the Claude Code panel (F-814, src/shared/claude.ts), over a port on CLAUDE_PORT_CHANNEL in
-//   the same way; the checks are src/main/claude/bridge.ts's.
 // - `window.studioProvenance`: a run's provenance and the clipboard of Copy (F-828, src/shared/provenance.ts), on a port of
 //   its own on PROVENANCE_PORT_CHANNEL; the checks are src/main/provenance/bridge.ts's. See the end of this file.
 //
@@ -24,14 +24,6 @@
 import { contextBridge, ipcRenderer, type IpcRendererEvent } from 'electron';
 import type { AppInfo, Channel, CloseAnswer, KeepRunnerState, CLOSE_REQUEST_CHANNEL as CloseChannel, StudioBridge } from '../shared/ipc.js';
 import type { ThemeSetting, ThemeState } from '../shared/theme.js';
-import type {
-  CLAUDE_PORT_CHANNEL as ClaudeChannel,
-  ClaudeBridge,
-  ClaudePortMessage,
-  ClaudeReply,
-  ClaudeRequest,
-  ClaudeState,
-} from '../shared/claude.js';
 import type {
   DEFAULT_CALL_TIMEOUT_MS as DefaultTimeout,
   PortMessage,
@@ -53,6 +45,10 @@ import type {
   RunActionResult,
   TrashOutcome,
   RunsBridge,
+  ClaudeCodeBridge,
+  ClaudeCodeOutcome,
+  ClaudeCodeStatus,
+  ClaudeCodeWhat,
 } from '../shared/project.js';
 import type {
   DATA_PORT_CHANNEL as DataPortChannel,
@@ -406,6 +402,26 @@ const runs: RunsBridge = {
 
 contextBridge.exposeInMainWorld('studioRuns', runs);
 
+// `window.studioClaudeCode` (ADR 0801 Addendum 23): Claude Code's registration and its terminal, over the same project
+// port (op `claudeCode`), checked again in main (src/main/project/bridge.ts). A port that cannot answer gives the reason.
+const claudeCodeStatus = async (what: Exclude<ClaudeCodeWhat, 'open'>): Promise<ClaudeCodeStatus> => {
+  const r = await projectSend<ClaudeCodeStatus>({ op: 'claudeCode', id: nextProjectId++, what });
+  if (r.ok) return r.result;
+  const reason = `The request did not reach the Studio's main process: ${r.error.message}`;
+  return { claude: { found: false, reason }, folder: null, command: null, registration: 'unknown', registeredAs: null, detail: reason, readAt: new Date().toISOString() };
+};
+const claudeCode: ClaudeCodeBridge = {
+  status: () => claudeCodeStatus('status'),
+  register: () => claudeCodeStatus('register'),
+  copy: () => claudeCodeStatus('copy'),
+  open: async () => {
+    const r = await projectSend<ClaudeCodeOutcome>({ op: 'claudeCode', id: nextProjectId++, what: 'open' });
+    return r.ok ? r.result : { ok: false, message: `The request did not reach the Studio's main process: ${r.error.message}` };
+  },
+};
+
+contextBridge.exposeInMainWorld('studioClaudeCode', claudeCode);
+
 // ---- the data port (F-804, src/shared/data.ts)
 //
 // `window.studioData`: bulk field data by route R2 (`local`) or R1 (`service`). The main process hands this script a
@@ -645,96 +661,6 @@ const caseFiles: CaseBridge = {
 };
 
 contextBridge.exposeInMainWorld('studioCase', caseFiles);
-
-// ---- the Claude port (F-814, src/shared/claude.ts): the same pattern as the project port, its own ids and listeners
-
-const CLAUDE_PORT_CHANNEL: typeof ClaudeChannel = 'studio.claude-port';
-/** A send waits for the session check and the start of claude; the others are answered at once. */
-const CLAUDE_TIMEOUT_MS = 60_000;
-
-let claudePort: Port | null = null;
-let nextClaudeId = 1;
-let nextClaudeListener = 1;
-const claudeQueued: ClaudeRequest[] = [];
-const claudePending = new Map<number, { resolve: (r: ClaudeReply) => void; timer: ReturnType<typeof setTimeout> }>();
-const claudeListeners = new Map<number, (s: ClaudeState) => void>();
-
-const claudeSettle = (id: number, reply: ClaudeReply): void => {
-  const p = claudePending.get(id);
-  if (!p) return;
-  claudePending.delete(id);
-  clearTimeout(p.timer);
-  p.resolve(reply);
-};
-
-const claudePost = (req: ClaudeRequest): void => {
-  try {
-    (claudePort as Port).postMessage(req);
-  } catch (e) {
-    claudeSettle(req.id, { ok: false, error: { code: 'bad_request', message: `the request cannot be sent: ${String(e)}` } });
-  }
-};
-
-const claudeSend = <T,>(req: ClaudeRequest): Promise<ClaudeReply<T>> =>
-  new Promise((resolve) => {
-    const timer = setTimeout(() => {
-      claudeSettle(req.id, {
-        ok: false,
-        error: claudePort
-          ? { code: 'timeout', message: `no answer from the Studio's main process within ${CLAUDE_TIMEOUT_MS} ms` }
-          : { code: 'no_port', message: 'the Studio has not connected this window to Claude Code' },
-      });
-    }, CLAUDE_TIMEOUT_MS);
-    claudePending.set(req.id, { resolve: resolve as (r: ClaudeReply) => void, timer });
-    if (claudePort) claudePost(req);
-    else claudeQueued.push(req);
-  });
-
-ipcRenderer.on(CLAUDE_PORT_CHANNEL, (event) => {
-  const p = event.ports[0];
-  if (!p) return;
-  claudePort?.close();
-  claudePort = p;
-  p.onmessage = (e: { data: unknown }) => {
-    const m = e.data as ClaudePortMessage;
-    if (m?.type === 'reply') claudeSettle(m.id, m.reply);
-    else if (m?.type === 'state') {
-      for (const l of claudeListeners.values()) {
-        try {
-          l(m.state);
-        } catch {
-          // the page's listener failed; others still run
-        }
-      }
-    }
-  };
-  for (const req of claudeQueued.splice(0)) claudePost(req);
-});
-
-const claude: ClaudeBridge = {
-  state: async () => {
-    const r = await claudeSend<ClaudeState>({ op: 'state', id: nextClaudeId++ });
-    if (r.ok) return r.result;
-    throw new Error(r.error.message);
-  },
-  onState: (listener) => {
-    const id = nextClaudeListener++;
-    if (typeof listener === 'function') claudeListeners.set(id, listener);
-    return id;
-  },
-  offState: (id) => {
-    claudeListeners.delete(id);
-  },
-  select: (session) => claudeSend({ op: 'select', id: nextClaudeId++, session }),
-  send: (session, text) => claudeSend({ op: 'send', id: nextClaudeId++, session, text }),
-  cancel: () => claudeSend({ op: 'cancel', id: nextClaudeId++ }),
-  confirm: (token) => claudeSend({ op: 'confirm', id: nextClaudeId++, token }),
-  refresh: () => claudeSend({ op: 'refresh', id: nextClaudeId++ }),
-  allow: (rule, base) => claudeSend({ op: 'allow', id: nextClaudeId++, rule, base }),
-  undoAllow: (force) => claudeSend({ op: 'undoAllow', id: nextClaudeId++, force }),
-};
-
-contextBridge.exposeInMainWorld('studioClaude', claude);
 
 // ---- the run port (F-810, src/shared/run.ts)
 //

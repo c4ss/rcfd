@@ -254,6 +254,13 @@ export interface ChangeEntry {
   readonly t: string | null;
   /** When the Studio received the entry (RFC 3339). */
   readonly seen: string;
+  /** ADR 0801 Addendum 23: a journal line's command (`edit_case`, `start_run`, ...), when it names one. */
+  readonly who?: string | null;
+  /**
+   * ADR 0801 Addendum 23: the journal line's actor client (`mcp`, `studio`, `cli`; the Studio starts its own servers
+   * with `rcfd-mcp --client studio`), and its process id; null when the entry names none (run events, external changes).
+   */
+  readonly actor?: { readonly client: string; readonly pid: number | null } | null;
 }
 
 /** The live link to the folder: the feed is being read, or why it is not. */
@@ -385,14 +392,21 @@ export type ProjectRequest =
    * `confirm` of the site `name` (a SiteCheckResult; confirm records the user's yes in the sites file), `open` (opens the
    * sites file in the system's editor; the result is {message}, empty when it opened).
    */
-  | { readonly op: 'sites'; readonly id: number; readonly what: SiteOp; readonly name?: string };
+  | { readonly op: 'sites'; readonly id: number; readonly what: SiteOp; readonly name?: string }
+  /**
+   * ADR 0801 Addendum 23: Claude Code for the open project (CLAUDE_CODE_OPS). `status` reads the registration with
+   * `claude mcp get`, `register` runs `claude mcp add --scope local` (replacing a registration of another engine),
+   * `copy` puts the command on the system clipboard, `open` opens a terminal in the folder running `claude`. The reply's
+   * result is a ClaudeCodeStatus (`status`, `register`, `copy`) or a ClaudeCodeOutcome (`open`).
+   */
+  | { readonly op: 'claudeCode'; readonly id: number; readonly what: ClaudeCodeWhat };
 
 /** F-835: where `create` makes the project. */
 export const CREATE_WHERE = ['pick', 'here'] as const;
 export type CreateWhere = (typeof CREATE_WHERE)[number];
 
 export type ProjectOp = ProjectRequest['op'];
-export const PROJECT_OPS = ['state', 'pick', 'open', 'forget', 'close', 'refresh', 'dismiss', 'action', 'cancel', 'create', 'trash', 'runnerPlan', 'sites'] as const satisfies readonly ProjectOp[];
+export const PROJECT_OPS = ['state', 'pick', 'open', 'forget', 'close', 'refresh', 'dismiss', 'action', 'cancel', 'create', 'trash', 'runnerPlan', 'sites', 'claudeCode'] as const satisfies readonly ProjectOp[];
 
 export interface ProjectError {
   /** `bad_request` (the message has the wrong shape), `not_recent` (open of a folder the recent list does not hold). */
@@ -530,4 +544,60 @@ export interface RunsBridge {
   sites(what: 'list'): Promise<SitesState>;
   sites(what: 'check' | 'confirm', name: string): Promise<SiteCheckResult>;
   sites(what: 'open'): Promise<{ readonly message: string }>;
+}
+
+// ---- ADR 0801 Addendum 23: Claude Code, in its own terminal (src/main/claudecode/)
+//
+// The Studio embeds no Claude Code. It registers the engine's project server for the open folder with Claude Code
+// (`claude mcp add rcfd-project --scope local -- <rcfd-mcp> --project <folder>`, run in the folder, since local scope is
+// keyed by the folder), without --read-only: Claude Code's own permission prompts govern the tools. What Claude Code then
+// changes comes back through the engine's change feed like any other writer's; the home names the last change of an MCP
+// client in one line. `claude` is found as RCFD_STUDIO_CLAUDE, then `--claude <path>`, then its installer's folder
+// (%USERPROFILE%\.local\bin\claude.exe, ~/.local/bin/claude); never PATH.
+
+/** The name the project server is registered under in Claude Code. */
+export const CLAUDE_MCP_NAME = 'rcfd-project';
+
+export const CLAUDE_CODE_OPS = ['status', 'register', 'copy', 'open'] as const;
+export type ClaudeCodeWhat = (typeof CLAUDE_CODE_OPS)[number];
+
+/** Where `claude` was found, or why it was not. */
+export type ClaudeFound =
+  | { readonly found: true; readonly path: string; readonly from: 'RCFD_STUDIO_CLAUDE' | '--claude' | 'installer' }
+  | { readonly found: false; readonly reason: string };
+
+/**
+ * The registration of the open project in Claude Code: `registered` (this engine, this folder), `other` (registered with
+ * another command: `registeredAs`), `not_registered`, or `unknown` (claude not found, or its answer not understood:
+ * `detail`). `none` when no project is open or the Studio has no engine.
+ */
+export type ClaudeRegistration = 'registered' | 'other' | 'not_registered' | 'unknown' | 'none';
+
+export interface ClaudeCodeStatus {
+  readonly claude: ClaudeFound;
+  /** The open project's folder, null without one. */
+  readonly folder: string | null;
+  /** The command to run in the folder, quoted for a shell; null without a project or an engine. */
+  readonly command: string | null;
+  readonly registration: ClaudeRegistration;
+  /** For `other`: the command Claude Code has (`<command> <args>` as `claude mcp get` prints it). */
+  readonly registeredAs: string | null;
+  /** What the last `register` or `copy` did, or why `status` could not tell (in words). */
+  readonly detail: string | null;
+  /** When the status was read (RFC 3339). */
+  readonly readAt: string;
+}
+
+/** What `open` answers. */
+export type ClaudeCodeOutcome = { readonly ok: true; readonly message: string } | { readonly ok: false; readonly message: string };
+
+/**
+ * What the preload script puts on `window.studioClaudeCode`: the operations above, over the project port. A request
+ * that does not reach the main process answers a status `unknown` (or an outcome not ok) with the reason, never rejects.
+ */
+export interface ClaudeCodeBridge {
+  status(): Promise<ClaudeCodeStatus>;
+  register(): Promise<ClaudeCodeStatus>;
+  copy(): Promise<ClaudeCodeStatus>;
+  open(): Promise<ClaudeCodeOutcome>;
 }

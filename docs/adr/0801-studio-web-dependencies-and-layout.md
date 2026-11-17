@@ -3661,3 +3661,116 @@ phase 1 of ADR 0739 (F-848, test S11). The engine part was already on main.
 - There is no download progress (phase 2).
 - The engine-version prompt is covered by unit tests only: in e2e, `RCFD_SITE_TEST_GIT_REV` would change the engine
   for the whole process tree.
+
+## Addendum 23: Claude Code registered with Claude Code itself; the embedded panel removed (2026-11-17, branch claude-mcp over main 21fa5c34)
+
+The maintainer, 2026-11-17:
+
+> completely remove the custom claude code panel and find a way to register the mcp in claude code itself and it should
+> update the project in electron in realtime as it calls the mcp
+
+with these answers the same day: (1) register with `claude mcp add --scope local`, per project, showing the exact
+command to copy and a button that runs it; (2) full access, no `--read-only`: Claude Code's own permission prompts
+govern; (3) live updates from the engine's change feed plus one quiet line naming what Claude Code just did, with a
+link, the view never moving on its own; (4) an "Open Claude Code here" palette command and toolbar icon (a new
+pictogram) opening a terminal in the project folder running `claude`, nothing embedded.
+
+This supersedes F-814's panel (the parts of Addenda 18 and 20 about it) and A20's writing of the allow-list file.
+
+### Removed
+
+- The panel and its main-process half: `src/main/claude/` (allow, bridge, config, discover, driver, panel, port,
+  stream, transcript, trust), `src/renderer/claude/` (ClaudePanel.tsx, claude.css, door.ts, links.ts),
+  `src/shared/claude.ts`, the Claude port and `window.studioClaude`, the palette commands `go.claude`,
+  `view.toggle_claude` and `claude.*`, the `claude-session` choice kind, the shortcuts Ctrl+L (not reassigned) and the
+  message field's Enter, Shift+Enter and Escape, the `claude` word budget, and the first path's line about the panel.
+- Its tests and test support: `tests/unit/claude.spec.ts`, `tests/e2e/claude.spec.ts`, `tests/e2e/claude-allow.spec.ts`,
+  `tests/support/claude.ts`, `tests/support/fake-claude.mjs`, `tests/support/claude/`; the panel's surfaces in the a11y,
+  word-budget, theme-surfaces and f837 specs.
+- The panel's design tokens: the `claude-head` and `chat-own` roles and `measure-chat` (tokens.ts, tokens.css). In
+  DESIGN.md: the claude-head role in the frontmatter (light, dark, contrast), its entry, its mention in the Meadow line
+  and the colour-job rule, the chat parts of Sky Wash and Body, and the "Claude Code panel" section.
+- The Rust twin of the allow-list: `crates/rcfd-mcp/tests/claude_allow/` and `tests/allow_file_w48e.rs` (and the
+  `serde` dev-dependency that only it used). C5-A of `tool_list_f275.rs`, F2 of `project_w48f.rs` and A of
+  `trash_adr0736.rs` are restated on the engine's own access classes and annotations (the 17 read-class tools,
+  read-only hints, and the delete class being `empty_trash` alone).
+
+### Use with Claude Code
+
+An open project's header has two icons with no word at rest (G22). Use with Claude Code (the new `claude-register`
+pictogram) opens a panel under the band. Open Claude Code here (`claude-here`) opens the terminal. The palette has
+both (`claude_code.register`, `claude_code.open`). The panel says one of "Registered with Claude Code for this folder.",
+"Not registered with Claude Code for this folder." or "Registered with a different engine path." (with the path
+registered). It shows the exact command with Copy, and Register (Re-register):
+
+    claude mcp add rcfd-project --scope local -- "<engine rcfd-mcp>" --project "<folder>"
+
+The command runs in the project folder. The state is read with `claude mcp get rcfd-project` in the folder (its Scope,
+Command and Args lines; another scope counts as not registered; paths are compared case-insensitively on Windows).
+Re-register runs `claude mcp remove rcfd-project --scope local` first. The engine path is the project home's
+(`locate.ts`).
+
+Which claude (`locateClaude`): `RCFD_STUDIO_CLAUDE`, then the new `--claude <path>` switch, then the native
+installer's folder (`%USERPROFILE%\.local\bin\claude.exe`, `~/.local/bin/claude`). Never PATH. When none is found, the
+panel shows the command and says where the installer puts claude.
+
+Checked against the real CLI (Claude Code 2.1.326) in a scratch folder. Every registration was removed afterwards, and
+none was made in a real project. `get` of a missing server exits 1 with `No MCP server named "rcfd-project". ...`.
+`add` prints `Added stdio MCP server rcfd-project with command: ... to local config` and names `~/.claude.json
+[project: <folder>]`. `get` then prints `Scope: Local config (private to you in this project)`, `Status: ✔ Connected`
+(for a real project folder), `Type: stdio`, `Command:` and `Args: --project <folder>`. A second `add` exits 1
+(`already exists in local config`). `remove ... --scope local` removes it. A folder with a space works quoted. `get`
+takes about 1.6 s because it starts the server to check it.
+
+### Open Claude Code here
+
+Windows: `%LOCALAPPDATA%\Microsoft\WindowsApps\wt.exe -d <folder> <claude>` when Windows Terminal is installed, else
+`cmd.exe /k <claude>` in a new window with the folder as working folder. Linux: `/usr/bin/x-terminal-emulator -e
+<claude>` in the folder; without it, the page says no terminal was found and what to run. Elsewhere: what to run. Test
+mode (`RCFD_TEST_HEADLESS=1`) never opens a window; it appends the launch to `RCFD_STUDIO_LAUNCH_RECORD`.
+
+### Live updates and the activity line
+
+Every write and run tool of the project server was called against an open project: `new_case`, `edit_case`,
+`write_note`, `set_runner_config`, `refine_case_mesh`, `start_run`, `pause_run`, `cancel_run`, `trash_case` and
+`restore_trash`. Each journals a line with its tool (`who`) and actor, which the change feed carries. The project
+home's feed poll (400 ms) refreshes the case list, runs, notes and trash, and the case editor already marked a file
+changed outside. One gap was found and fixed: the runner's budgets panel read `.rcfd/runner-config.json` once, so a
+`set_runner_config` did not show. It now reads the file again when its feed entry changes and nothing was typed;
+otherwise it says another writer changed the file and keeps the typed values.
+
+The activity line needs Claude Code's changes told apart from the Studio's own, and both servers journalled actor
+client `mcp`. The engine gets an additive switch, `rcfd-mcp --client <name>` (1 to 32 of `a-z0-9_-`, default `mcp`,
+so nothing changes without it); the Studio's own servers run `--client studio`. The line sits at the end of the
+project's title strip and names the latest feed entry of client `mcp` ("Claude Code made cases/a.toml", "changed",
+"started run r-...", "paused run", "cancelled run", "moved to the trash", "restored", "wrote", "changed the runner's
+budgets"), with a link to the run, the case (case editor) or the file (Home), and the time beside it. The view never
+moves on its own.
+
+### Tests
+
+`tests/unit/claude-code.spec.ts` covers the lookup and the switch, the reading of `claude mcp get` against the real
+CLI's output, the Register and Re-register flows against a stub runner, the case with no claude, the fake claude, the
+terminal plans and the test-mode record, the port's `claudeCode` request, the feed's actor and the activity words.
+`tests/e2e/claude-code.spec.ts` runs in the packaged Studio: the panel against `tests/support/fake-claude-mcp.mjs`
+(argv and working folder of each call recorded), the launch record, and the test as Claude Code's stand-in. It spawns
+`rcfd-mcp --project <folder>` itself and calls `new_case`, `edit_case`, `start_run` and `trash_case` over stdio while
+the Studio is open, asserting the lists, the run row, the trash and the activity line; then a Studio Restore is
+journalled as `studio` and does not show on the line. Rust: `c5f_client_switch_names_the_actor` in
+`tool_list_f275.rs`.
+
+### Decisions (options, the recommendation taken; each reversible)
+
+- **A23-D1, telling Claude Code from the Studio:** (a) an additive `--client` switch, default unchanged; (b) guessing
+  from process ids. Taken: (a). Any MCP client other than the Studio is named "Claude Code" on the line.
+- **A23-D2, where the registration lives:** (a) a header icon and a panel under the band, no word at rest; (b) a
+  standing line on Home. Taken: (a). No word budget was raised (Home's open budget is near its limit).
+- **A23-D3, where the activity line lives:** (a) the end of the project's title strip on Home; (b) the header band.
+  Taken: (a), because in the band at 1440 px the line pushed Commands out of the window.
+- **A23-D4, Ctrl+L:** freed, not reassigned.
+- **A23-D5, the fallback terminal on Windows:** `cmd.exe /k <claude>`, detached, in a new window. macOS: the command is
+  said and nothing is opened.
+- **A23-D6, kept from the panel:** the `send` pictogram (the primitives gallery uses it). DESIGN.md's layout line
+  ("three columns (runs, field, Claude Code)"), the primary button example "Send" and the reference chip "in chat"
+  were left as they are, since they describe more than the panel. `.impeccable/design.json` and the panel's surface
+  brief `.impeccable/surfaces/web-src-renderer-claude-claudepanel-tsx.md` were not edited.

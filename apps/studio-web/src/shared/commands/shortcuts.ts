@@ -3,7 +3,7 @@
 // the global entries from it, and tests/unit/commands-shortcuts.spec.ts fails when two entries collide.
 //
 // An entry is a chord in one scope. A scope is where the keys work: `global` anywhere in the window, the others only
-// while the focus is inside that part (the case editor page, the Claude Code message field, the field viewport, ...).
+// while the focus is inside that part (the case editor page, the field viewport, ...).
 // Entries marked `reserved` are bound by someone else and never by F-831: the Electron default application menu (ADR
 // 0801 keeps it), Chromium's own keys in text fields and for focus, and keys other Studio items own (undo and redo for
 // F-829, the time panel's arrows, Home and End for F-810). Listing them is what lets the test refuse a shortcut that
@@ -18,7 +18,6 @@ export type ShortcutScope =
   | 'global'
   | 'palette'
   | 'case-editor'
-  | 'claude-message'
   | 'field-view'
   | 'time-panel'
   | 'runs-table'
@@ -30,7 +29,6 @@ export const SCOPE_WORDS: Readonly<Record<ShortcutScope, string>> = {
   global: 'Anywhere in the window',
   palette: 'In the command palette',
   'case-editor': 'In the case editor',
-  'claude-message': 'In the Claude Code message field',
   'field-view': 'In the field view (focused)',
   'time-panel': 'In the time panel (F-810)',
   'runs-table': 'In the runs table',
@@ -43,7 +41,6 @@ export const SCOPES: readonly ShortcutScope[] = [
   'global',
   'palette',
   'case-editor',
-  'claude-message',
   'runs-table',
   'confirm',
   'field-view',
@@ -62,12 +59,11 @@ export const SCOPE_OVERLAPS: Readonly<Record<ShortcutScope, readonly ShortcutSco
   global: [],
   palette: [],
   'case-editor': ['text-field'],
-  'claude-message': ['text-field'],
   'field-view': [],
   'time-panel': [],
   'runs-table': [],
   confirm: [],
-  'text-field': ['case-editor', 'claude-message'],
+  'text-field': ['case-editor'],
 };
 
 export function scopesOverlap(a: ShortcutScope, b: ShortcutScope): boolean {
@@ -100,7 +96,6 @@ export const SHORTCUTS: readonly Shortcut[] = [
   { keys: 'Ctrl+/', scope: 'global', does: 'Show the keyboard shortcuts', command: 'help.shortcuts', owner: 'F-831' },
   { keys: 'Ctrl+1', scope: 'global', does: 'Go to Home, the index of the project folder', command: 'go.home', owner: 'F-831' },
   { keys: 'Ctrl+2', scope: 'global', does: 'Go to Runs', command: 'go.runs', owner: 'F-831' },
-  { keys: 'Ctrl+L', scope: 'global', does: 'Go to the Claude Code message field', command: 'go.claude', owner: 'F-831' },
   { keys: 'Ctrl+,', scope: 'global', does: 'Open the Studio’s settings (the theme)', command: 'go.studio_settings', owner: 'F-818' },
   { keys: 'Ctrl+O', scope: 'global', does: 'Open a project folder', command: 'project.open_folder', owner: 'F-831' },
   { keys: 'Ctrl+N', scope: 'global', does: 'New case (from a template or a shipped example)', command: 'case.new', owner: 'F-831' },
@@ -120,9 +115,6 @@ export const SHORTCUTS: readonly Shortcut[] = [
 
   // ---- keys of the surfaces (each item that bound it)
   { keys: 'Ctrl+S', scope: 'case-editor', does: 'Save the case', command: 'case.save', owner: 'F-812' },
-  { keys: 'Enter', scope: 'claude-message', does: 'Send the message', command: null, owner: 'F-814' },
-  { keys: 'Shift+Enter', scope: 'claude-message', does: 'Start a new line', command: null, owner: 'F-814' },
-  { keys: 'Escape', scope: 'claude-message', does: 'Stop the reply being written', command: 'claude.stop', owner: 'F-814' },
   { keys: 'Escape', scope: 'runs-table', does: 'Clear the selected run', command: null, owner: 'F-806' },
   { keys: 'Escape', scope: 'confirm', does: 'Keep things as they are; the focus goes back to the control', command: null, owner: 'F-807' },
   { keys: 'ArrowLeft', scope: 'field-view', does: 'Orbit left (a 2D case: pan)', command: null, owner: 'F-808' },

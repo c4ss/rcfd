@@ -410,17 +410,12 @@ test.describe('deletes of runs, results and cases', () => {
       for (const m of code.matchAll(/\b(rm|rmSync|rmdir|rmdirSync|unlink|unlinkSync|rename|renameSync)\s*\(/g)) uses.push(`${path.relative(appRoot, f).split(path.sep).join('/')}: ${m[1]}`);
     }
     // the only removals and renames: the Studio's own record of a service it started (user data), the recent list's
-    // write-then-rename (user data), and the Claude Code panel's write-then-rename of its MCP config and its record of
-    // confirmed control files (F-814, user data; trust.ts refuses a store inside the project), and the theme
-    // setting's write-then-rename (F-818, user data); none of those is in a project folder. The one rename in a project
-    // folder: the Claude Code allow-list file's write-then-rename (F-814, "Allow this from now on", the maintainer's
-    // word of 2026-11-17), only over a file unchanged since it was read. The field viewport's derive (ADR 0738) removes
-    // its own mkdtemp folder under the OS temp directory, never a project folder. The run sites' remembered choice per
-    // project is a write-then-rename in user data too (F-848, site-choices.json beside the recent list)
+    // write-then-rename (user data), and the theme setting's write-then-rename (F-818, user data); none of those is in a
+    // project folder (the Claude Code panel's renames, one of them in a project folder, went with the panel, ADR 0801
+    // Addendum 23). The field viewport's derive (ADR 0738) removes its own mkdtemp folder under the OS temp directory,
+    // never a project folder. The run sites' remembered choice per project is a write-then-rename in user data too
+    // (F-848, site-choices.json beside the recent list)
     expect(uses.sort()).toEqual([
-      'src/main/claude/allow.ts: rename',
-      'src/main/claude/panel.ts: rename',
-      'src/main/claude/trust.ts: rename',
       'src/main/data/derive.ts: rm',
       'src/main/project/recent.ts: rename',
       'src/main/project/sites.ts: rename',

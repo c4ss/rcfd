@@ -22,7 +22,8 @@ export interface Studio {
  * out/packaged has its engine in resources/bin (scripts/package-dir.mjs, ADR 0801 Addendum 21), so a Studio started
  * here can start an rcfd serve of its own when a project opens. Unless the test names one (RCFD_STUDIO_STATE_DIR, or a
  * whole --user-data-dir), that service's record goes to a fresh temporary folder, never to the user data folder the
- * packaged copy shares with an installed Studio.
+ * packaged copy shares with an installed Studio. Unless the test names one, RCFD_STUDIO_CLAUDE names a file that is not
+ * there, so no test runs the claude of the machine.
  */
 export async function launchStudio(serviceEnv: Record<string, string>, args: readonly string[] = []): Promise<Studio> {
   const { executable } = JSON.parse(readFileSync(path.join(appRoot, 'out', 'packaged.json'), 'utf8')) as { executable: string };
@@ -31,6 +32,9 @@ export async function launchStudio(serviceEnv: Record<string, string>, args: rea
   const own: Record<string, string> = serviceEnv['RCFD_STUDIO_STATE_DIR'] || args.some((a) => a.startsWith('--user-data-dir')) ? {} : { RCFD_STUDIO_STATE_DIR: scratchState() };
   // F-848: the user's own sites file never reaches a test; a test of sites names its own
   if (!serviceEnv['RCFD_SITES_FILE'] && !env['RCFD_SITES_FILE']) own['RCFD_SITES_FILE'] = path.join(tmpdir(), 'rcfd-studio-tests-no-sites-file.toml');
+  // ADR 0801 Addendum 23: a test never reaches the real claude in the installer's folder; one that needs claude names the
+  // fake (tests/support/fake-claude-mcp.mjs) itself
+  if (!serviceEnv['RCFD_STUDIO_CLAUDE']) own['RCFD_STUDIO_CLAUDE'] = path.join(tmpdir(), 'rcfd-studio-no-claude', 'claude.exe');
   const app = await electron.launch({ executablePath: executable, ...launchArgs(args), env: { ...env, ...own, ...serviceEnv } });
   const page = await app.firstWindow();
   await page.waitForFunction(() => document.querySelector('h1')?.textContent === 'No project open');

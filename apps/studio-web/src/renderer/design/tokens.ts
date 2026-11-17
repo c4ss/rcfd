@@ -88,10 +88,6 @@ export const role = {
   'band-live': 'orange',
   'band-failed': 'fail',
   hatch: 'silver',
-  // The Claude Code panel (F-814; DESIGN.md Components, Claude Code panel): the meadow head (DESIGN.md's claude-head role,
-  // the maintainer's approval of 2026-11-17) and the user's message in sky-wash.
-  'claude-head': 'meadow',
-  'chat-own': 'sky-wash',
   // Overlays
   tooltip: 'ink',
   'tooltip-text': 'white',
@@ -241,7 +237,6 @@ export const size = {
   icon: 14,
   'switch-width': 28,
   'switch-height': 14,
-  'measure-chat': '60ch',
   'measure-empty': '46ch',
 } as const;
 

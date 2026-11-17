@@ -11,6 +11,8 @@
 //   --engine-dir <folder>    use the engine in <folder> (rcfd, rcfd-mcp and rcfd-runner inside it)
 //   --no-engine              start without an engine: no project server, no service started by the Studio
 //   --service <host:port>    attach to a service someone else started (loopback only), as RCFD_STUDIO_SERVICE does
+//   --claude <path>          the Claude Code program to register the project with and to open (ADR 0801 Addendum 23;
+//                            RCFD_STUDIO_CLAUDE comes first, src/main/engine/locate.ts locateClaude)
 //   --keep-runner            G7 as amended 2026-11-17: the project's runner keeps going after the Studio closes, as
 //                            the setting "Keep the runner going after the Studio closes" does (either one is enough)
 //
@@ -21,7 +23,7 @@
 import path from 'node:path';
 
 /** The engine switches that take a value (the next argument, or after `=`). */
-const VALUED = ['--engine-dir', '--service'] as const;
+const VALUED = ['--engine-dir', '--service', '--claude'] as const;
 
 export interface EngineSwitches {
   /** `--engine-dir`: the folder of the engine to use, resolved against the working folder; null when not given. */
@@ -30,6 +32,8 @@ export interface EngineSwitches {
   readonly noEngine: boolean;
   /** `--service`: the `host:port` to attach to, as written; null when not given. */
   readonly service: string | null;
+  /** `--claude`: the claude program, resolved against the working folder; null when not given. */
+  readonly claude: string | null;
   /** `--keep-runner`: the runner the Studio started keeps going after it closes (src/shared/runner-lifetime.ts). */
   readonly keepRunner: boolean;
   /** Switches given without their value, in words (the last of a repeated switch wins; that is not a problem). */
@@ -42,6 +46,7 @@ export function engineSwitches(argv: readonly string[], defaultApp: boolean, cwd
   const args = ownArgs(argv, defaultApp);
   let engineDir: string | null = null;
   let service: string | null = null;
+  let claude: string | null = null;
   let noEngine = false;
   let keepRunner = false;
   const problems: string[] = [];
@@ -74,10 +79,11 @@ export function engineSwitches(argv: readonly string[], defaultApp: boolean, cwd
         }
       } else continue;
       if (name === '--engine-dir') engineDir = path.resolve(cwd, value.trim());
+      else if (name === '--claude') claude = path.resolve(cwd, value.trim());
       else service = value.trim();
     }
   }
-  return { engineDir, noEngine, service, keepRunner, problems };
+  return { engineDir, noEngine, service, claude, keepRunner, problems };
 }
 
 export function projectArgument(argv: readonly string[], defaultApp: boolean, cwd: string): string | null {

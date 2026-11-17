@@ -621,3 +621,96 @@
 .ph-trash-cell {
   white-space: nowrap;
 }
+
+/* ---- Claude Code (ADR 0801 Addendum 23): the activity line in the band, the registration panel under it ------------ */
+
+.ph-activity {
+  display: flex;
+  flex: 0 1 auto;
+  margin-left: auto;
+  align-items: baseline;
+  gap: var(--space-sm);
+  min-width: 0;
+  max-width: 480px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: var(--role-text-2);
+  font-size: var(--type-label-size);
+}
+.ph-activity-text {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.ph-activity-link {
+  font: inherit;
+  color: var(--role-text);
+  background: none;
+  border: 0;
+  padding: 0;
+  text-decoration: underline;
+  cursor: pointer;
+}
+.ph-activity-link:focus-visible {
+  outline: 2px solid var(--role-focus-ring);
+  outline-offset: 2px;
+}
+.ph-claude-said {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  max-width: 360px;
+  color: var(--role-text-fail);
+  font-size: var(--type-label-size);
+}
+.ph-claude {
+  flex: none;
+  border-bottom: var(--line-rule);
+  padding: var(--space-lg) var(--space-xl);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+  background: var(--role-ground);
+  color: var(--role-text);
+}
+.ph-claude:focus-visible {
+  outline: 2px solid var(--role-focus-ring);
+  outline-offset: -2px;
+}
+.ph-claude p {
+  margin: 0;
+}
+.ph-claude-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.ph-claude-title {
+  margin: 0;
+  font-size: var(--type-title-sm-size);
+  font-weight: var(--font-weight-bold);
+}
+.ph-claude-command {
+  display: flex;
+  align-items: center;
+  gap: var(--space-md);
+  min-width: 0;
+}
+.ph-claude-command code {
+  min-width: 0;
+  overflow-x: auto;
+  white-space: nowrap;
+  padding: var(--space-xs) var(--space-sm);
+  border: var(--line-hair);
+  font-family: var(--font-family);
+  font-size: var(--type-label-size);
+  user-select: all;
+}
+.ph-claude-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-md);
+}
+.ph-claude-detail {
+  color: var(--role-text-2);
+}

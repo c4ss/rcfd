@@ -1,6 +1,5 @@
 // F-833 (G22, The Quiet Rule): every built surface at rest, in the packaged Studio at 1440 by 900 against the real
-// engine (rcfd serve for the sessions and the schema, rcfd-mcp for the project, the fake claude for the Claude Code
-// panel), with its visible chrome words counted from the DOM (tests/support/word-count.ts, by the definition in
+// engine (rcfd serve for the sessions and the schema, rcfd-mcp for the project), with its visible chrome words counted from the DOM (tests/support/word-count.ts, by the definition in
 // src/shared/word-budget.ts) and held to the surface's budget there. Each surface is screenshotted to
 // test-results-visual/f833/<phase>/ (RCFD_WORD_PHASE, default "after") and the counts, with every counted word, are
 // written to counts.json beside them, for the maintainer's view-and-report (G13).
@@ -15,7 +14,6 @@ import { mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import { rm } from 'node:fs/promises';
 import path from 'node:path';
 import { budgetOf, WORD_BUDGETS, type SurfaceId } from '../../src/shared/word-budget.js';
-import { claudeFixture, FAKE_CLAUDE, type ClaudeFixture } from '../support/claude.js';
 import { copyExample, emptyProject, findMcp, mcpPids, NO_MCP, scratch, stubDialog } from '../support/project.js';
 import { appRoot, findRcfd, killIfRcfd, killPid, NO_RCFD, startRcfd, type RunningRcfd } from '../support/rcfd.js';
 import { launchStudio, type Studio } from '../support/studio.js';
@@ -39,7 +37,6 @@ let dir = '';
 let sitesFile = '';
 let quick = '';
 let empty = '';
-let fx: ClaudeFixture;
 let service: RunningRcfd;
 let studio: Studio;
 let page: Page;
@@ -49,7 +46,7 @@ const counts: Record<string, WordCount & { budget: number }> = {};
 const ROOTS: Record<SurfaceId, SurfaceRoot> = {
   'home-empty': { root: '.ph-page', exclude: ['.fp', '.wk'] },
   'first-path-intro': { root: '.fp--intro' },
-  'home-open': { root: '.ph-page', exclude: ['.cc', '.fp', '.wk'] },
+  'home-open': { root: '.ph-page', exclude: ['.fp', '.wk'] },
   'first-path': { root: '.fp--open' },
   runs: { root: '.rv', exclude: ['.rv-run'] },
   'runs-selected': { root: '.rv-run', exclude: ['.pv-pop'] },
@@ -57,7 +54,6 @@ const ROOTS: Record<SurfaceId, SurfaceRoot> = {
   compare: { root: '.ws', exclude: ['.fv-derived', '.wk', '.ws-runs', '.tp'] },
   'derived-controls': { root: '.fv-derived' },
   provenance: { root: '.pv-pop' },
-  claude: { root: '.cc' },
   palette: { root: '.cp-dialog' },
   settings: { root: '.st-page', exclude: ['.hi-controls', '.hi-panel'] },
   'case-editor': { root: '.st-page', exclude: ['.hi-controls', '.wk'] },
@@ -85,17 +81,13 @@ test.beforeAll(async () => {
   empty = await emptyProject(dir, 'An empty project');
   // absent until the Sites section is counted (the Studio looks for it each time a page asks)
   sitesFile = path.join(dir, 'sites.toml');
-  fx = await claudeFixture('f833');
   service = await startRcfd(rcfd!);
   studio = await launchStudio({
     RCFD_STUDIO_SERVICE: `127.0.0.1:${service.port}`,
     RCFD_STUDIO_MCP: mcp!,
     RCFD_STUDIO_RECENT: path.join(dir, 'recent.json'),
     RCFD_SITES_FILE: sitesFile,
-    RCFD_STUDIO_CLAUDE: FAKE_CLAUDE,
-    RCFD_STUDIO_CLAUDE_STATE: fx.state,
     RCFD_STUDIO_TEST_DELAY: JSON.stringify({ projectOpen: OPEN_DELAY_MS }),
-    ...fx.env(),
   });
   page = studio.page;
   await studio.app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0]!.setContentSize(1440, 900));
@@ -109,7 +101,6 @@ test.afterAll(async () => {
   if (service) killIfRcfd(service.pid);
   for (const f of [quick, empty]) for (const p of mcpPids(f)) killPid(p);
   await rm(dir, { recursive: true, force: true }).catch(() => undefined);
-  await rm(fx.root, { recursive: true, force: true }).catch(() => undefined);
 });
 
 test('the project home with no project open, and the first path’s four stations', async () => {
@@ -148,12 +139,12 @@ test('the progress row of a project opening that lasts', async () => {
   await expect(page.getByRole('heading', { level: 1, name: /Quick start/ })).toBeVisible({ timeout: 30_000 });
 });
 
-test('the project home of an open project, and the Claude Code panel beside it', async () => {
+test('the project home of an open project', async () => {
   await expect(page.locator('.ph-group[data-group="runs"] tr[data-run]').first()).toBeVisible({ timeout: 20_000 });
-  const panel = page.getByRole('complementary', { name: 'Claude Code' });
-  await expect(panel.getByRole('list', { name: 'Claude Code sessions of this project' })).toBeVisible({ timeout: 20_000 });
+  // ADR 0801 Addendum 23: Use with Claude Code and Open Claude Code here are icons in the band, with no word at rest
+  await expect(page.getByRole('button', { name: 'Use with Claude Code' })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Open Claude Code here' })).toBeVisible();
   await atRest('home-open');
-  await atRest('claude');
 });
 
 test('the Runs view, then a run selected, then the provenance of its step count', async () => {

@@ -526,6 +526,14 @@ pub(crate) fn tools() -> Vec<Tool> {
     ]
 }
 
+/// Whether `name` can be the actor client of `--client`: 1 to 32 of `a-z`, `0-9`, `_` and `-`.
+pub fn valid_client(name: &str) -> bool {
+    (1..=32).contains(&name.len())
+        && name
+            .bytes()
+            .all(|b| b.is_ascii_lowercase() || b.is_ascii_digit() || b == b'_' || b == b'-')
+}
+
 /// The project tools' state: the project's workspace (its project, run service and change watcher).
 pub struct ProjectTools {
     ws: Workspace,
@@ -542,8 +550,21 @@ impl ProjectTools {
     /// `rcfd-runner` next to the current executable or named by `RCFD_RUNNER_BIN`. Journal lines name the actor `mcp` of
     /// this process.
     pub fn open(dir: &Path) -> Result<Self, String> {
+        Self::open_as(dir, MCP)
+    }
+
+    /// As [`ProjectTools::open`], with journal lines naming the actor `client` of this process instead of `mcp`
+    /// (`rcfd-mcp --client <name>`, ADR 0801 Addendum 23: the Studio starts its own servers with `--client studio`, so
+    /// the feed tells its writes from those of an MCP client such as Claude Code). `client` is 1 to 32 of `a-z`, `0-9`,
+    /// `_` and `-`; anything else is refused with the reason.
+    pub fn open_as(dir: &Path, client: &str) -> Result<Self, String> {
+        if !valid_client(client) {
+            return Err(format!(
+                "--client {client:?}: a client name is 1 to 32 of a-z, 0-9, '_' and '-'"
+            ));
+        }
         Ok(ProjectTools {
-            ws: Workspace::open(dir)?.with_actor(Actor::this_process(MCP)),
+            ws: Workspace::open(dir)?.with_actor(Actor::this_process(client)),
         })
     }
 

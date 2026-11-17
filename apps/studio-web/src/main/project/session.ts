@@ -1,6 +1,7 @@
 // One open project folder: its engine project server, the lists of the project home as the engine answers them, and the
 // live link. The main process asks the engine's change feed (`read_feed`, ADR 0188) every FEED_POLL_MS what changed in
-// the folder, from anyone (Claude Code, the CLI, an editor, the runner); when anything did, it reads the lists again.
+// the folder, from anyone (Claude Code, the CLI, an editor, the runner; each journal line names its actor, and the
+// Studio's own servers are started with `--client studio`, ADR 0801 Addendum 23); when anything did, it reads the lists again.
 // Nothing is cached beyond the last answers, and nothing is written to the folder (G12).
 //
 // No Electron import: the unit tests drive it with a fake server.
@@ -95,7 +96,18 @@ export function changeEntry(e: unknown, seen: string): ChangeEntry {
     run: typeof o['run'] === 'string' ? o['run'] : null,
     t: typeof o['t'] === 'string' ? o['t'] : null,
     seen,
+    who: typeof o['who'] === 'string' ? o['who'] : null,
+    actor: actorOf(o['actor']),
   };
+}
+
+/** ADR 0801 Addendum 23: a journal line's actor `{client, instance: {pid}}` as the home keeps it, or null. */
+function actorOf(v: unknown): ChangeEntry['actor'] {
+  if (typeof v !== 'object' || v === null) return null;
+  const a = v as Record<string, unknown>;
+  if (typeof a['client'] !== 'string') return null;
+  const pid = (a['instance'] as Record<string, unknown> | undefined)?.['pid'];
+  return { client: a['client'], pid: typeof pid === 'number' ? pid : null };
 }
 
 export interface Lists {

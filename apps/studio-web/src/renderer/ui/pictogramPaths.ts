@@ -93,6 +93,9 @@ export const ICON_NAMES = [
   // ADR 0801 Addendum 22
   'reset-view',
   'speed',
+  // ADR 0801 Addendum 23
+  'claude-register',
+  'claude-here',
 ] as const;
 export type IconName = (typeof ICON_NAMES)[number];
 
@@ -146,4 +149,8 @@ export const ICON_PATHS: Record<IconName, { readonly path: string; readonly fill
   'reset-view': { path: 'M1 4V1H4M10 1H13V4M13 10V13H10M4 13H1V10M7 4L10 7L7 10L4 7Z' },
   // ADR 0801 Addendum 22: Play speed (two forward marks, one after the other: faster or slower than one)
   speed: { path: 'M2 3L6 7L2 11M7 3L11 7L7 11' },
+  // ADR 0801 Addendum 23: Use with Claude Code (two blocks joined by a link: the project server plugged into Claude
+  // Code), Open Claude Code here (a terminal window with its prompt)
+  'claude-register': { path: 'M1 4H5V10H1ZM9 4H13V10H9ZM5 7H9' },
+  'claude-here': { path: 'M1 2H13V12H1ZM1 4H13M3 6L5 8L3 10M6 10H9' },
 };

@@ -116,7 +116,7 @@
     {"id": "mcp:trash_results", "ui": "Project > Home: Runs: the trash button Move the results of run to the trash (the parts the run holds), confirmed; Undo restores them (ADR 0736, F-829)"},
     {"id": "mcp:trash_case", "ui": "Project > Home: Cases: the trash button of a case file, confirmed; the base_hash is the engine's hash read just before (read_project_file); Undo restores it (ADR 0736, F-829)"},
     {"id": "mcp:restore_trash", "ui": "Project > Home: Trash: Restore, and the home's Undo of a move to the trash (an F-829 history step) (ADR 0736)"},
-    {"id": "mcp:empty_trash", "ui": "Project > Home: Trash: Empty trash, behind the F-829 decision panel that names what is removed for good (ADR 0736; the class delete, never on the Claude Code panel's allow-list)"},
+    {"id": "mcp:empty_trash", "ui": "Project > Home: Trash: Empty trash, behind the F-829 decision panel that names what is removed for good (ADR 0736; the class delete, Claude Code asks before it, as before every tool)"},
     {"id": "mcp:runner_config", "ui": "Project > Runs: Runner budgets (F-837, ADR 0733: the budgets, the runner's defaults and the values in use, read through runner_config)"},
     {"id": "mcp:set_runner_config", "ui": "Project > Runs: Runner budgets: Write, Replace the file and Undo the write (F-837, ADR 0733: the runner writes its budgets through set_runner_config)"},
     {"id": "mcp:preview_mesh", "ui": "Case editor (F-836, ADR 0732): the mesh preview draws the session's mesh before any run, the solver's own mesh through mesh.preview (rcfd serve --ui), its boundary in 3D with one colour per patch and a patch visibility list; preview_mesh's quality-coloured plane image is the same mesh from the saved file."},
@@ -195,7 +195,7 @@
     {"id": "cli:rcfd workflow run", "exemption": {"item": "F-807", "date": "2026-11-16", "reason": "Task workflows (the workflow methods, tools and commands): no Studio item covers them; nearest home run control (F-807).", "unplanned": true}},
     {"id": "cli:rcfd workflow show", "exemption": {"item": "F-807", "date": "2026-11-16", "reason": "Task workflows (the workflow methods, tools and commands): no Studio item covers them; nearest home run control (F-807).", "unplanned": true}},
     {"id": "cli:rcfd workflow templates", "exemption": {"item": "F-807", "date": "2026-11-16", "reason": "Task workflows (the workflow methods, tools and commands): no Studio item covers them; nearest home run control (F-807).", "unplanned": true}},
-    {"id": "cli:rcfd-mcp", "ui": "Project > Home (the project read through the server, read-only) and Project > Claude Code (the project tools Claude Code is given)"},
+    {"id": "cli:rcfd-mcp", "ui": "Project > Home (the project read through the server, read-only) and Project > Home: Use with Claude Code (the server registered with Claude Code for the folder, ADR 0801 Addendum 23)"},
     {"id": "cli:rcfd-runner cancel", "ui": "Project > Runs > the selected run: Stop… and Cancel… (F-807, through cancel_run)"},
     {"id": "cli:rcfd-runner config", "ui": "Project > Runs: Runner budgets (F-837: the same answer through runner_config)"},
     {"id": "cli:rcfd-runner config set", "ui": "Project > Runs: Runner budgets: Write (F-837: the same write through set_runner_config)"},
@@ -242,7 +242,7 @@
     {"prefix": "cli:rcfd study --", "exemption": {"item": "F-807", "date": "2026-11-16", "reason": "Design studies, operating maps and the design ledger: no Studio item covers them; nearest homes run control (F-807) for running and compare (F-815) for results.", "unplanned": true}},
     {"prefix": "cli:rcfd workflow run --", "exemption": {"item": "F-807", "date": "2026-11-16", "reason": "Task workflows (the workflow methods, tools and commands): no Studio item covers them; nearest home run control (F-807).", "unplanned": true}},
     {"prefix": "cli:rcfd workflow show --", "exemption": {"item": "F-807", "date": "2026-11-16", "reason": "Task workflows (the workflow methods, tools and commands): no Studio item covers them; nearest home run control (F-807).", "unplanned": true}},
-    {"prefix": "cli:rcfd-mcp --", "exemption": {"item": "F-814", "date": "2026-11-16", "reason": "The Claude Code panel (F-814) runs rcfd-mcp with the engine's defaults for case roots, the edit hook and the run and design limits; settings for them are not part of F-814.", "unplanned": true}},
+    {"prefix": "cli:rcfd-mcp --", "exemption": {"item": "F-814", "date": "2026-11-16", "reason": "Use with Claude Code (F-814, ADR 0801 Addendum 23) registers rcfd-mcp --project with the engine's defaults for case roots, the edit hook and the run and design limits; settings for them are not part of F-814.", "unplanned": true}},
     {"prefix": "cli:rcfd-runner ensure --", "exemption": {"item": "F-807", "date": "2026-11-16", "reason": "How the started runner logs and whether it stays attached (--foreground, --log-file, --quiet, --stdout): the Studio starts it detached with its defaults (F-807, Start the runner).", "unplanned": true}},
     {"id": "mcp:list_sites", "ui": "Studio settings > Sites (F-848): the sites of the user's sites file with whether each is confirmed, through rcfd site list --json, which lists what list_sites lists; Project > Runs: the Where choice of the run bar names them."},
     {"id": "cli:rcfd site list", "ui": "Studio settings > Sites and the Where choice of Project > Runs (F-848): the sites of the user's sites file (rcfd site list --json)."},
@@ -327,8 +327,9 @@
     {"id": "cli:rcfd-runner rerun", "ui": "Project > Runs > the selected run: Rerun as it ran (F-828, ADR 0734; through start_run from_run), and the rerun command of How this ran"},
     {"id": "cli:rcfd-runner start --continue-from", "exemption": {"item": "F-828", "date": "2026-11-17", "reason": "The reproduce command of a run's provenance carries --continue-from when its run.json records continue_from (ADR 0734 P3); the Studio has no control that starts a run from another one's last state yet."}},
     {"id": "cli:rcfd-runner start --max-steps", "exemption": {"item": "F-828", "date": "2026-11-17", "reason": "The reproduce command of a run's provenance carries --max-steps when its run.json records max_steps (ADR 0734 P3); the Studio has no control that caps a run's steps yet."}},
-    {"id": "cli:rcfd-mcp --project", "ui": "Project > Home and Project > Claude Code (the server runs on the open project folder)"},
+    {"id": "cli:rcfd-mcp --project", "ui": "Project > Home and Project > Home: Use with Claude Code (the server runs on the open project folder; the registered command is rcfd-mcp --project <folder>)"},
     {"id": "cli:rcfd-mcp --read-only", "ui": "Project > Home (the Studio's own server refuses every tool that writes)"},
-    {"id": "cli:rcfd-mcp --root", "ui": "Project > Claude Code (the server Claude Code is given is rooted at the project folder)"}
+    {"id": "cli:rcfd-mcp --root", "exemption": {"item": "F-814", "date": "2026-11-17", "reason": "Use with Claude Code registers rcfd-mcp --project, which roots the server at the project folder; the older --root form is not offered (ADR 0801 Addendum 23)."}},
+    {"id": "cli:rcfd-mcp --client", "ui": "Project > Home: the Studio's own servers run with --client studio, so the activity line names only what Claude Code (client mcp) changed (ADR 0801 Addendum 23)"}
   ]
 }

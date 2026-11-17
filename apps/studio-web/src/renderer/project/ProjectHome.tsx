@@ -26,7 +26,7 @@ import { useWorkWhile, WorkProgress } from '../work/WorkProgress.js';
 import { caseHash } from '../case/hash.js';
 import { closeProject } from '../case/closeGuard.js';
 import { CaseRunButton, RunFailure } from '../runs/RunControls.js';
-import { ClaudePanel } from '../claude/ClaudePanel.js';
+import { ClaudeActivity, ClaudeCodeIcons, ClaudeCodePanel } from './claudeCode.js';
 import { requestCommand, useCommandFact, useCommandHandlers } from '../commands/host.js';
 import { FirstPath, FirstPathIntro, NotAProjectYet } from '../first/FirstPath.js';
 import { DataFiles, DesignsGroup, UnsavedMark, isCaseFile, useUnsavedCases } from './HomeExtras.js';
@@ -75,6 +75,9 @@ export function ProjectHome() {
     state?.opening ?? '',
   );
   const canOpen = state === null || state.engine.configured;
+  // ADR 0801 Addendum 23: the "Use with Claude Code" panel, opened from its icon in the band or from the palette
+  const [claudeOpen, setClaudeOpen] = useState(false);
+  useCommandHandlers({ 'claude_code.show': { run: () => setClaudeOpen(true) } });
   return (
     <div className="ph-page">
       <header className="ph-top">
@@ -107,6 +110,7 @@ export function ProjectHome() {
         {project && (
           <div className="ph-top-right">
             <LiveWord view={project} />
+            <ClaudeCodeIcons open={claudeOpen} onOpenChange={setClaudeOpen} />
             <IconButton variant="ghost" icon="close" label="Close project" onPress={() => void closeProject()} />
           </div>
         )}
@@ -123,7 +127,10 @@ export function ProjectHome() {
           </span>
         </div>
       </header>
-      <main className="ph-main">{project ? <OpenProject view={project} state={state!} /> : <NoProject state={state} />}</main>
+      <main className="ph-main">
+        {project && claudeOpen && <ClaudeCodePanel folder={project.folder} onClose={() => setClaudeOpen(false)} />}
+        {project ? <OpenProject view={project} state={state!} /> : <NoProject state={state} />}
+      </main>
       <footer className="ph-foot">
         <span data-words="disclaimer">Early-stage software. Not validated for engineering decisions or for safety-critical use. No warranty.</span>
         {/* G22: the footer's normal facts are said to readers; the disclaimer is the only standing text */}
@@ -323,8 +330,8 @@ function focusLater(...selectors: string[]): void {
 
 /**
  * An open project: three views under the header band, Home (the index of the folder, F-805), Runs (F-806) and the run
- * workspace (F-810), which share the selected run, and the Claude Code panel beside them (F-814), whose run and file
- * references open the run in Runs, a case file in the case editor (F-812) or another file on Home.
+ * workspace (F-810), which share the selected run. The header's Claude Code activity line (ADR 0801 Addendum 23) opens
+ * a run in Runs or shows a file on Home through the handlers registered here (`go.runs`, `home.show_path`).
  */
 function OpenProject({ view, state }: { view: ProjectView; state: ProjectState }) {
   const [tab, setTab] = useState<View>('home');
@@ -335,15 +342,10 @@ function OpenProject({ view, state }: { view: ProjectView; state: ProjectState }
     setRun(id);
     setTab('runs');
   };
-  // F-814: a file a Claude Code reply named, shown on Home (n changes on every request), and whether the panel is shown
+  // ADR 0801 Addendum 23: a file the Claude Code activity line links, shown on Home (n changes on every request)
   const [focus, setFocus] = useState<{ path: string; n: number } | null>(null);
-  const [claude, setClaude] = useState(true);
   // F-815: the palette's Compare runs, handed to the run workspace (`n` changes on every request)
   const [compareReq, setCompareReq] = useState<{ run: string; n: number } | null>(null);
-  const openRun = (id: string) => {
-    setRun(id);
-    setTab('runs');
-  };
   const openFile = (p: string) => {
     setFocus((f) => ({ path: p, n: (f?.n ?? 0) + 1 }));
     setTab('home');
@@ -364,8 +366,7 @@ function OpenProject({ view, state }: { view: ProjectView; state: ProjectState }
         focusLater('.ph-views [role="tab"][aria-selected="true"]');
       },
     },
-    'go.claude': { run: () => (setClaude(true), focusLater('.cc textarea', '.cc button')) },
-    'view.toggle_claude': { run: () => (setClaude(!claude), focusLater(claude ? '.cc-show button' : '.cc textarea', '.cc button')) },
+    'home.show_path': { run: (a) => (typeof a['path'] === 'string' ? openFile(a['path']) : undefined) },
     'workspace.compare': {
       run: (a) => {
         const other = a['run'];
@@ -376,7 +377,6 @@ function OpenProject({ view, state }: { view: ProjectView; state: ProjectState }
     },
   });
   return (
-    <div className="ph-work">
     <div className="ph-open">
       <Tabs
         aria-label="Project views"
@@ -411,14 +411,6 @@ function OpenProject({ view, state }: { view: ProjectView; state: ProjectState }
         ]}
       />
     </div>
-    {claude ? (
-      <ClaudePanel project={view} onOpenRun={openRun} onOpenFile={openFile} onHide={() => setClaude(false)} />
-    ) : (
-      <div className="cc-show">
-        <IconButton variant="ghost" icon="back" label="Show Claude Code" onPress={() => setClaude(true)} />
-      </div>
-    )}
-    </div>
   );
 }
 
@@ -443,7 +435,7 @@ function HomeBody({
     else setRunFailure(r);
   };
   const [filter, setFilter] = useState('');
-  // F-814: a file named in a Claude Code reply is shown by filtering the index to it
+  // ADR 0801 Addendum 23: a file the Claude Code activity line links is shown by filtering the index to it
   useEffect(() => {
     if (!focus) return;
     setKind('all');
@@ -505,6 +497,8 @@ function HomeBody({
             {view.engine.name} {view.engine.version}, read-only
           </Fact>
         </dl>
+        {/* ADR 0801 Addendum 23: what Claude Code changed last, one quiet line at the strip's end */}
+        <ClaudeActivity view={view} />
       </section>
       {view.infoError && (
         <Notice title="Failed to read the project's description" failed>

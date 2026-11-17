@@ -27,7 +27,6 @@ import {
   TextField as AriaTextField,
   type Key,
 } from 'react-aria-components';
-import type { ClaudeState } from '../../shared/claude.js';
 import type { ProjectState } from '../../shared/project.js';
 import type { ServiceState } from '../../shared/service.js';
 import type { Confirmation } from '../../shared/actions/runs.js';
@@ -45,7 +44,6 @@ import {
 import { Button, Quiet, StatePictogram, TextField } from '../ui/index.js';
 import { watchServiceState } from '../actions/index.js';
 import { watchProjectState } from '../project/door.js';
-import { watchClaudeState } from '../claude/door.js';
 import {
   choicesFor,
   confirmationFor,
@@ -76,12 +74,10 @@ type Step =
 
 function useEnv(): PaletteEnv {
   const [project, setProject] = useState<ProjectState | null>(null);
-  const [claude, setClaude] = useState<ClaudeState | null>(null);
   const [service, setService] = useState<ServiceState | null>(null);
   useEffect(() => watchProjectState(setProject), []);
-  useEffect(() => watchClaudeState(setClaude), []);
   useEffect(() => watchServiceState(setService), []);
-  return useMemo(() => ({ project, claude, service }), [project, claude, service]);
+  return useMemo(() => ({ project, service }), [project, service]);
 }
 
 /** Runs `f` once the closing dialog has given the focus back, so a command that moves the focus has the last word. */
@@ -97,7 +93,6 @@ const PARAM_WORD: Readonly<Record<string, string>> = {
   case: 'a case file',
   run: 'a run',
   recent: 'a folder',
-  'claude-session': 'a Claude Code session',
 };
 
 export default function CommandPalette({ request }: { request: PaletteRequest }) {

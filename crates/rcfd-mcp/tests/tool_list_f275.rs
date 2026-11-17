@@ -5,7 +5,6 @@
 //! ADR 0196 B: under `--project`, `design_run_study` and `design_evaluate` have the class `execute` (C5-L's registered edit E1,
 //! and B1); without a project they keep `write_files`.
 
-mod claude_allow;
 mod common;
 
 use common::*;
@@ -278,12 +277,13 @@ fn c5s_hidden_tools_need_a_session_kept_tools_do_not() {
     eprintln!("C5-S: 15 hidden tools 1001, create_case a session; 17 kept tools without a session ({answered_ok} answered without error), no session made");
 }
 
-/// C5-A: the Studio bridge's first allow-list is main's 11 read tools, then the read tools added since (P5, ADR 0733, ADR 0734); a file
-/// written from main's 11 reads back as those 11 rules and is written back byte for byte (no migration).
+/// C5-A (restated by ADR 0801 Addendum 23, which removed the Studio's Claude Code panel and its allow-list): main's 11
+/// read tools and the read tools added since (P5, ADR 0733, ADR 0734) are in the project-mode list with the class `read`,
+/// `readOnlyHint` true and `destructiveHint` false. Claude Code's own permission prompts now govern every tool; the engine's
+/// classes and annotations are what a client's permission rules can go by.
 #[test]
-fn c5a_allow_list_has_the_read_tools_and_old_files_stay() {
-    use claude_allow::{AllowList, AllowRule, PINNED_SERVER};
-    const MAIN: [&str; 11] = [
+fn c5a_the_read_tools_are_read_class_with_their_annotations() {
+    const READ: [&str; 17] = [
         "project_info",
         "list_runs",
         "run_status",
@@ -295,46 +295,63 @@ fn c5a_allow_list_has_the_read_tools_and_old_files_stay() {
         "list_changes",
         "read_project_file",
         "wait_run",
+        "read_feed",
+        "check_case_mesh",
+        "preview_mesh",
+        "list_meshes",
+        "runner_config",
+        "hash_project_file",
     ];
-    // a new project's first list: main's 11 in their order, then the six (ADR 0733: runner_config; ADR 0734:
-    // hash_project_file; the maintainer, 2026-11-17) (the set is checked against the live list by project_w48f.rs F2)
-    let first = AllowList::project_initial();
-    let want: Vec<AllowRule> = MAIN
-        .iter()
-        .chain(&[
-            "read_feed",
-            "check_case_mesh",
-            "preview_mesh",
-            "list_meshes",
-            "runner_config",
-            "hash_project_file",
-        ])
-        .map(|t| AllowRule::Tool(format!("mcp__{PINNED_SERVER}__{t}")))
-        .collect();
-    assert_eq!(first.rules(), &want[..]);
-    // an allow-list file of a project made before F-275
-    let mut old = AllowList::new();
-    for t in MAIN {
-        old.add(AllowRule::Tool(format!("mcp__{PINNED_SERVER}__{t}"))).unwrap();
+    let dir = project("c5a");
+    let list = server(&dir, Policy::default()).tool_list();
+    let tools = list["tools"].as_array().unwrap();
+    for name in READ {
+        let t = tools
+            .iter()
+            .find(|t| t["name"] == name)
+            .unwrap_or_else(|| panic!("{name} not listed"));
+        assert_eq!(t["_meta"]["rcfd/access"], "read", "{name}");
+        assert_eq!(t["annotations"]["readOnlyHint"], true, "{name}");
+        assert_eq!(t["annotations"]["destructiveHint"], false, "{name}");
     }
-    let file = AllowList::file_of(&scratch("c5a"));
-    old.to_file(&file).unwrap();
-    let bytes = std::fs::read(&file).unwrap();
-    let back = AllowList::from_file(&file).unwrap();
-    assert_eq!(back.rules().len(), 11);
-    assert_eq!(back, old);
-    back.to_file(&file).unwrap();
-    assert_eq!(
-        std::fs::read(&file).unwrap(),
-        bytes,
-        "the old file was rewritten differently"
-    );
     eprintln!(
-        "C5-A: {} rules for a new project; an old file of {} rules read and written back byte for byte ({} bytes)",
-        first.rules().len(),
-        back.rules().len(),
-        bytes.len()
+        "C5-A: {} read tools listed with class read and their annotations",
+        READ.len()
     );
+}
+
+/// ADR 0801 Addendum 23: `--client <name>` names the actor client of the server's journal lines; without it the actor
+/// is `mcp` as before; a name outside 1 to 32 of `a-z`, `0-9`, `_`, `-` stops the server with the reason.
+#[test]
+fn c5f_client_switch_names_the_actor() {
+    for (extra, want) in [(None, "mcp"), (Some("studio"), "studio")] {
+        let dir = project(&format!("c5f-client-{want}"));
+        let d = dir.to_string_lossy().to_string();
+        let mut args = vec!["--project", d.as_str()];
+        if let Some(c) = extra {
+            args.extend(["--client", c]);
+        }
+        let mut a = Mcp::start(&args);
+        let h = ok(&a.call("read_project_file", json!({"path": "cases/cavity.toml"})))["hash"].clone();
+        ok(&a.call(
+            "edit_case",
+            json!({"path": "cases/cavity.toml", "base_hash": h, "set": {"physics.nu": 0.02}, "reason": want}),
+        ));
+        let r = ok(&a.call("read_feed", json!({"from_seq": 1})));
+        let last = r["entries"].as_array().unwrap().last().unwrap().clone();
+        assert_eq!(last["reason"], want, "{r}");
+        assert_eq!(last["actor"]["client"], want, "{r}");
+        assert_eq!(last["actor"]["instance"]["pid"], a.pid());
+    }
+    let d = project("c5f-client-bad").to_string_lossy().to_string();
+    let o = std::process::Command::new(env!("CARGO_BIN_EXE_rcfd-mcp"))
+        .args(["--project", &d, "--client", "Not Valid"])
+        .stdin(std::process::Stdio::null())
+        .output()
+        .unwrap();
+    assert_eq!(o.status.code(), Some(2));
+    assert!(String::from_utf8_lossy(&o.stderr).contains("a client name is"), "{o:?}");
+    eprintln!("C5-F client: mcp by default, studio with --client studio, a bad name refused");
 }
 
 /// C5-F (the binary part): an edit made through one server process is replayed by a second one's `read_feed
