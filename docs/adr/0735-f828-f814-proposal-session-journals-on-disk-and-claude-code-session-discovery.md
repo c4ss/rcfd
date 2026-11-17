@@ -185,7 +185,8 @@ Built 2026-11-17 on branch `adr0735` (from main 14a2d490).
   `cli:rcfd run --journal-ignore-hash` is exempt under F-828 (the Studio does not offer to skip the check); the
   inventory and `docs/studio-coverage.md` regenerated (`npm run capabilities`).
 - P3: not built (declined).
-- Tests: J1, J2 (service half, sandbox), J4 in `crates/rcfd-api/tests/session_journal_adr0735.rs` (4 tests); J2 (run
+- Merged with ADR 0730 (main 0b4a9171): `rcfd serve` parses `--ui` and `--journal-dir`, and the Studio passes both.
+- Tests: J1, J2 (service half, sandbox), J4 in `crates/rcfd-api/tests/session_journal_adr0735.rs` (5 tests; the fifth runs it with ADR 0730's `--ui` on as well: `service.info` gives `ui` and `journal_dir`, and the methods are the 69, the `help.*` methods, then `journal.save`); J2 (run
   half: settings, last residuals and `solution.vtu` byte for byte against the session's `run.start`), J3 and the
   sandbox refusal of `rcfd serve` in `crates/rcfd-cli/tests/journal_files_adr0735.rs` (3 tests); unit tests of the
   module in `session_journal.rs` (4 tests); J6: `baseline_hashes.rs`, the `service.rs` unit tests,

@@ -21,11 +21,11 @@ Engine read: rcfd 0.1.0, service protocol rcfd-service/1 version 1.1, MCP server
 |---|---|---|---|---|
 | Service methods | 69 | 20 | 49 | 40 |
 | MCP tools | 59 | 24 | 35 | 27 |
-| CLI commands | 39 | 12 | 27 | 22 |
-| CLI options | 162 | 12 | 150 | 122 |
+| CLI commands | 40 | 13 | 27 | 22 |
+| CLI options | 164 | 12 | 152 | 123 |
 | Case schema keys | 951 | 951 | 0 | 0 |
 | Monitor format keys | 6 | 6 | 0 | 0 |
-| **All** | **1286** | **1025** (79.7 %) | **261** | **211** |
+| **All** | **1289** | **1026** (79.6 %) | **263** | **212** |
 
 A case key stands for every value of its enumeration (the solver options of that key, listed in the inventory): the
 schema-driven surface of F-825 offers them all. A CLI option is mapped with its command. "Item does not name it" marks an
@@ -73,18 +73,18 @@ new item (see the last sections).
 | F-827 one action layer for every UI action | 1 | `rcfd call` (not named) |
 | F-828 provenance inspector and reproduce-from-CLI | 3 | `rcfd data list` (not named), `rcfd data provenance` (not named), `rcfd data verify` (not named) |
 
-### CLI options (150 without a UI path)
+### CLI options (152 without a UI path)
 
 | Item | Count | Capabilities |
 |---|---|---|
-| F-805 project home and the live project folder | 8 | `rcfd convert` (3), `rcfd serve` (5) |
+| F-805 project home and the live project folder | 9 | `rcfd convert` (3), `rcfd serve` (6) |
 | F-807 run control (quick run, stop, pause, queue) | 69 | `rcfd map` (10), `rcfd reactor` (1), `rcfd restart` (4), `rcfd run` (28), `rcfd study` (8), `rcfd workflow run` (6), `rcfd workflow show` (2), `rcfd-runner ensure` (4), `rcfd-runner start` (5), `rcfd-runner wait` (1) |
 | F-809 derived pictures (iso-surfaces, streamlines, cut planes, vectors) | 19 | `rcfd acoustics` (3), `rcfd fwh` (9), `rcfd sample` (7) |
 | F-811 residual and monitor plots | 2 | `rcfd post` (2) |
 | F-812 case editor validated by the engine's schema | 30 | `rcfd check` (2), `rcfd check-mesh` (1), `rcfd inflate` (12), `rcfd partition` (15) |
 | F-813 a learner's first path | 1 | `rcfd cases` (1) |
 | F-814 Claude Code panel | 6 | `rcfd-mcp` (6) |
-| F-825 schema-driven case and settings surface | 1 | `rcfd schema` (1) |
+| F-825 schema-driven case and settings surface | 2 | `rcfd schema` (2) |
 | F-827 one action layer for every UI action | 1 | `rcfd call` (1) |
 | F-828 provenance inspector and reproduce-from-CLI | 11 | `rcfd` (1), `rcfd data list` (3), `rcfd data provenance` (3), `rcfd data verify` (3), `rcfd run` (1) |
 | F-830 explain in place from the engine's docs | 1 | `rcfd` (1) |

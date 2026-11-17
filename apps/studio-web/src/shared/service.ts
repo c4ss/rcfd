@@ -16,7 +16,8 @@ export const SERVICE_PORT_CHANNEL = 'studio.service-port';
 
 /**
  * Methods that only read. `data.info` (protocol 1.2, opt-in) returns the service's clock and data port; a service
- * without `data.*` answers it with -32601.
+ * without `data.*` answers it with -32601. `help.glossary` and `help.errors` (ADR 0730, opt-in with `rcfd serve --ui`)
+ * return the engine's glossary and error catalogue; a service without --ui answers them with -32601.
  */
 export const SERVICE_READ_METHODS = [
   'service.info',
@@ -33,6 +34,8 @@ export const SERVICE_READ_METHODS = [
   'journal.get',
   'panel.snapshot',
   'data.info',
+  'help.glossary',
+  'help.errors',
 ] as const;
 
 /** Methods that change a session or its run. */

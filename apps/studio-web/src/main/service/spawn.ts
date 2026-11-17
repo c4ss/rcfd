@@ -92,8 +92,8 @@ export async function removeRecord(stateDir: string): Promise<void> {
 }
 
 /**
- * Starts `<rcfd> serve --addr 127.0.0.1:0 [--root <root>] [--journal-dir <dir>]` (the dir of `journalDirFor`) and
- * resolves once it listens. Rejects if it exits first or
+ * Starts `<rcfd> serve --addr 127.0.0.1:0 --ui [--root <root>] [--journal-dir <dir>]` (the dir of `journalDirFor`)
+ * and resolves once it listens. Rejects if it exits first or
  * prints no address within `timeoutMs`.
  */
 export async function startService(rcfd: string, root: string | null, stateDir: string, timeoutMs = 20_000): Promise<StartedService> {
@@ -102,8 +102,9 @@ export async function startService(rcfd: string, root: string | null, stateDir: 
   // Appended to, so an earlier service that still runs keeps its own lines; this start reads from here on.
   const from = await stat(log).then((s) => s.size, () => 0);
   const fd = openSync(log, 'a');
+  // ADR 0730 P4: --ui switches on the engine's UI metadata and help (settings.schema {ui: true}, help.*)
   const journals = journalDirFor(stateDir, root);
-  const args = ['serve', '--addr', '127.0.0.1:0', ...(root ? ['--root', root] : []), ...(journals ? ['--journal-dir', journals] : [])];
+  const args = ['serve', '--addr', '127.0.0.1:0', '--ui', ...(root ? ['--root', root] : []), ...(journals ? ['--journal-dir', journals] : [])];
   let child: ChildProcess;
   try {
     child = spawn(rcfd, args, { detached: true, windowsHide: true, stdio: ['ignore', fd, fd] });

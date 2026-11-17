@@ -1,8 +1,10 @@
 // The words of the first path (F-813) that are not computed: the disclaimer in the repository's own wording, the limits
-// of the example, and the precise terms one step away from each plain word (G19: from the engine's documentation, named
-// with their source). tests/unit/first-path.spec.ts checks the facts these words name against the engine's sources (the
-// template's text, the README's disclaimer), so a change there shows up here.
-import { FIRST_CASE, FIRST_TEMPLATE } from '../../shared/actions/first.js';
+// of the example, and which glossary term stands one step away from each plain word. The precise terms are the engine's
+// (F-830, G19): their meaning is the row of docs/glossary.md the engine returns from `help.glossary` (rcfd serve --ui),
+// shown with its source; this file keeps no text of its own for them. tests/unit/first-path.spec.ts checks the facts
+// these words name against the engine's sources (the template's text, the README's disclaimer, the glossary's terms), so
+// a change there shows up here.
+import { FIRST_CASE } from '../../shared/actions/first.js';
 
 /** README.md, verbatim (the project's own disclaimer, G6). */
 export const DISCLAIMER =
@@ -36,73 +38,34 @@ export const STEP_HELP: Readonly<Record<'make' | 'run' | 'watch' | 'result', rea
 export interface Term {
   /** The plain word on the path. */
   readonly plain: string;
-  /** The precise term and what it means. */
-  readonly precise: string;
-  /** Where the engine's documentation says it. */
-  readonly source: string;
+  /** The term of docs/glossary.md whose meaning is shown for it (help.glossary). */
+  readonly term: string;
 }
+
+/** Where the precise terms come from (G19). */
+export const TERMS_SOURCE = 'docs/glossary.md';
 
 export const TERMS: Readonly<Record<'make' | 'run' | 'watch' | 'result', readonly Term[]>> = {
   make: [
-    {
-      plain: 'the example',
-      precise: `a case file, ${FIRST_CASE}: a TOML file that describes one simulation (mesh, physics, boundaries, solver and reports)`,
-      source: 'docs/glossary.md, Case file',
-    },
-    {
-      plain: 'a square box whose lid slides',
-      precise: `a lid-driven cavity: the engine’s built-in template ${FIRST_TEMPLATE}, the case of the command-line quick start`,
-      source: 'docs/tutorials/quick-start-cli.md',
-    },
-    {
-      plain: 'made by the engine',
-      precise: `new_case {name, template: "${FIRST_TEMPLATE}"}: the engine checks the case before it writes the file, never replaces a file, and keeps a line in the project journal`,
-      source: 'docs/mcp-tools.md, new_case',
-    },
+    { plain: 'the example', term: 'Case file' },
+    { plain: 'a square box whose lid slides', term: 'Lid-driven cavity' },
+    { plain: 'made by the engine', term: 'Template' },
   ],
   run: [
-    {
-      plain: 'a run',
-      precise: 'one solve of a case by the project’s runner (rcfd-runner), kept in runs/<run id>/; it goes on when the Studio is closed',
-      source: 'docs/ui-restart-plan.md §8',
-    },
-    {
-      plain: 'pictures along the way',
-      precise: 'the engine’s start plan (start_run with store: plan): the fields are stored about 100 times over the run, in single precision (output.store_interval)',
-      source: 'docs/mcp-tools.md, start_run',
-    },
-    {
-      plain: 'rounds of calculation',
-      precise: 'iterations: the solver (SIMPLEC in this case) repeats until the residuals fall below the case’s tolerances (solver.tolerance_u, solver.tolerance_p) or it reaches solver.max_iterations',
-      source: 'docs/case-schema.md, solver',
-    },
+    { plain: 'a run', term: 'Run' },
+    { plain: 'pictures along the way', term: 'Field store' },
+    { plain: 'rounds of calculation', term: 'Iteration' },
   ],
   watch: [
-    { plain: 'Waiting its turn', precise: 'queued: the runner launches it when a slot is free', source: 'docs/run-control.md' },
-    { plain: 'Working', precise: 'running: the solver is computing; the round count is its iteration', source: 'docs/run-control.md' },
-    {
-      plain: 'the runner',
-      precise: 'rcfd-runner, the project’s run service: it owns every run, and Start the runner is rcfd-runner ensure',
-      source: 'rcfd-runner --help',
-    },
+    { plain: 'Waiting its turn', term: 'Queued' },
+    { plain: 'Working', term: 'Running' },
+    { plain: 'the runner', term: 'Runner' },
   ],
   result: [
-    { plain: 'settled', precise: 'converged: the engine’s words “residual targets met”, with the residuals it reached', source: 'the run’s status.json' },
-    { plain: 'velocity to the right', precise: 'ux: the x component of the velocity, as stored in the run’s field store (runs/<run id>/fields)', source: 'the store’s field list' },
-    {
-      plain: 'round, under the picture',
-      precise: 'step: the solver iteration at which the picture was stored, the last of the snapshots in the run’s field store (output.store_interval); the snapshot number and its time t are said to screen readers and in the number’s provenance',
-      source: 'docs/mcp-tools.md, start_run',
-    },
-    {
-      plain: 'the picture',
-      precise: 'the boundary surface of the mesh, drawn as triangles, each coloured by the stored value of the cell that owns it, on the viridis colour map from the lowest to the highest value shown',
-      source: 'docs/adr/0801-studio-web-dependencies-and-layout.md, Addendum 5 (the field viewport)',
-    },
-    {
-      plain: 'the force of the fluid on the lid',
-      precise: 'lid_drag: the case’s report, the viscous force on the lid along x (reports.lid_drag); the engine gives no unit for report values',
-      source: `${FIRST_CASE}, [reports.lid_drag]`,
-    },
+    { plain: 'settled', term: 'Converged' },
+    { plain: 'velocity to the right', term: 'Field' },
+    { plain: 'round, under the picture', term: 'Snapshot' },
+    { plain: 'the picture', term: 'Field view' },
+    { plain: 'the force of the fluid on the lid', term: 'Report' },
   ],
 };

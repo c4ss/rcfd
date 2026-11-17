@@ -1,9 +1,9 @@
 // Learner-first disclosure of the case keys (F-825; PRODUCT.md Principle 5; G15: disclosure decides where a key sits,
 // never whether it exists). Pure functions over the model of schema.ts and the session's settings tree.
 //
-// The schema carries no importance metadata yet: F-826 adds labels and an "advanced" flag to settings.schema, and then
-// `ownKeys` reads that flag instead of the rules below. Until then the tiers come from the schema's structure alone,
-// with no Studio-side list of keys:
+// With the engine's UI metadata (F-826, ADR 0730: `settings.schema {ui: true}`, CaseModel.ui) rule 2 reads its
+// `x-rcfd-advanced` flag: a group's common keys are shown, its advanced keys sit one step away behind "Show all". Without
+// it (a service started without --ui) the tiers come from the schema's structure alone, with no Studio-side list of keys:
 //
 //   1. The sections are the schema's top-level fields in the engine's declaration order (`required`), optional ones
 //      last; the case's own top-level keys (title) form the first section. A first index entry lists every key the case
@@ -16,7 +16,7 @@
 import type { JsonValue } from '../../shared/actions/params.js';
 import { concrete, entryNames, isSet, valueAt, type CaseModel, type Collection, type Group, type Leaf, type SettingNode } from './schema.js';
 
-/** How many of a section's own keys are shown before "Show N more keys" (rule 2), until F-826's advanced flag. */
+/** How many of a section's own keys are shown before "Show N more keys" (rule 2) when the schema has no advanced flag. */
 export const COMMON_KEYS = 8;
 
 /** One entry of the section index. */
@@ -52,14 +52,18 @@ export interface OwnKeys {
   readonly nested: readonly (Group | Collection)[];
 }
 
-/** The keys of a group at a concrete path, split by rule 2. */
-export function ownKeys(group: Group, tree: unknown, path: string): OwnKeys {
+/**
+ * The keys of a group at a concrete path, split by rule 2: with the engine's advanced flag (`ui`), the common keys and
+ * every key that is set are shown and the advanced ones are one step away; without it, the first COMMON_KEYS.
+ */
+export function ownKeys(group: Group, tree: unknown, path: string, ui = false): OwnKeys {
   const leaves = group.children.filter((c): c is Leaf => c.kind === 'leaf');
   const shown: Leaf[] = [];
   const more: Leaf[] = [];
   leaves.forEach((l, i) => {
     const at = concrete(l.pattern, path, group.pattern);
-    (i < COMMON_KEYS || isSet(l, valueAt(tree, at)) ? shown : more).push(l);
+    const common = ui ? !l.advanced : i < COMMON_KEYS;
+    (common || isSet(l, valueAt(tree, at)) ? shown : more).push(l);
   });
   return { shown, more, nested: group.children.filter((c): c is Group | Collection => c.kind !== 'leaf') };
 }
@@ -117,7 +121,7 @@ export function search(model: CaseModel, tree: unknown, query: string): SearchHi
   if (words.length === 0) return [];
   const hits: SearchHit[] = [];
   const matches = (l: Leaf) => {
-    const hay = `${l.pattern} ${l.description}`.toLowerCase();
+    const hay = `${l.pattern} ${l.label ?? ''} ${l.help ?? ''} ${l.description}`.toLowerCase();
     return words.every((w) => hay.includes(w));
   };
   const walk = (n: SettingNode, path: string | null, collection?: string) => {

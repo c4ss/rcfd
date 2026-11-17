@@ -256,3 +256,26 @@ fn j4_off_by_default() {
     assert_eq!(list["sessions"][0]["state"], json!("defined"));
     std::fs::remove_dir_all(&d).ok();
 }
+
+/// With ADR 0730's `--ui` as well: `service.info` reports `ui` and `journal_dir`, and the methods are the 69, then the
+/// `help.*` methods of `--ui`, then `journal.save`; each opt-in adds only its own members.
+#[test]
+fn ui_and_journal_files_both_on() {
+    let d = tmp("ui");
+    let svc = Service::new(ServiceConfig::default());
+    svc.enable_ui();
+    let ui_only = svc.call("service.info", &json!({})).unwrap();
+    svc.enable_journal_files(&d.join("journals").to_string_lossy()).unwrap();
+    let both = svc.call("service.info", &json!({})).unwrap();
+    assert_eq!(both["ui"], json!(rcfd_api::ui::UI_PROTOCOL));
+    assert_eq!(both["journal_dir"], json!(d.join("journals").display().to_string()));
+    let mut want: Vec<Value> = METHODS.iter().map(|m| json!(m)).collect();
+    want.extend(rcfd_api::ui::UI_METHODS.iter().map(|m| json!(m)));
+    want.push(json!("journal.save"));
+    assert_eq!(both["methods"], json!(want));
+    let mut without = both.clone();
+    without.as_object_mut().unwrap().remove("journal_dir");
+    without["methods"].as_array_mut().unwrap().pop();
+    assert_eq!(without, ui_only);
+    std::fs::remove_dir_all(&d).ok();
+}

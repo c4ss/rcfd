@@ -231,8 +231,15 @@
   line-clamp: 2;
   overflow: hidden;
 }
-.st-key-si {
+.st-key-si,
+.st-key-see,
+.st-key-usual {
   display: block;
+}
+/* F-826: the engine's one line of help leads the focus detail */
+.st-key-help {
+  display: block;
+  color: var(--role-text);
 }
 .st-key:hover .st-key-desc,
 .st-key:focus-within .st-key-desc {

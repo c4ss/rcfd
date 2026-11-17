@@ -282,6 +282,9 @@ pub struct Service {
     pub(crate) cosim: crate::cosim_service::Hosts,
     /// The bulk data channel (F-447, ADR 0350); off unless the embedding program calls `enable_data`.
     pub(crate) data: crate::data_service::Channel,
+    /// The UI metadata of `settings.schema {ui: true}` and the `help.*` methods (F-826, F-830, ADR 0730); off unless the
+    /// embedding program calls `enable_ui` (`rcfd serve --ui`).
+    ui: AtomicBool,
     /// The folder of the session journal files (ADR 0735); off unless `enable_journal_files` was called.
     journal_dir: std::sync::OnceLock<PathBuf>,
 }
@@ -334,6 +337,7 @@ impl Service {
             }),
             cosim: crate::cosim_service::Hosts::default(),
             data: crate::data_service::Channel::default(),
+            ui: AtomicBool::new(false),
             journal_dir: std::sync::OnceLock::new(),
         })
     }
@@ -375,6 +379,18 @@ impl Service {
             eprintln!("rcfd serve: session {}: {msg}", s.id);
             inner.log.push_back(msg);
         }
+    }
+
+    /// Switch the UI metadata and the `help.*` methods on (ADR 0730 P4): `settings.schema {ui: true}`, `help.glossary`,
+    /// `help.errors`, and `ui` with the two method names in `service.info`. A service without it answers every method as
+    /// protocol 1.1 does.
+    pub fn enable_ui(&self) {
+        self.ui.store(true, Ordering::SeqCst);
+    }
+
+    /// True once [`Service::enable_ui`] was called.
+    pub fn ui_enabled(&self) -> bool {
+        self.ui.load(Ordering::SeqCst)
     }
 
     /// The configuration.
@@ -470,6 +486,13 @@ impl Service {
                 });
                 // protocol 1.2 (ADR 0350): only a service whose data methods were switched on reports them
                 crate::data_service::extend_info(self, &mut info);
+                // ADR 0730 P4: only a service started with --ui reports the UI metadata and the help methods
+                if self.ui_enabled() {
+                    info["ui"] = json!(crate::ui::UI_PROTOCOL);
+                    if let Some(m) = info["methods"].as_array_mut() {
+                        m.extend(crate::ui::UI_METHODS.iter().map(|n| json!(n)));
+                    }
+                }
                 // ADR 0735: only a service with journal files on reports their folder and `journal.save`
                 if let Some(d) = self.journal_dir.get() {
                     info["journal_dir"] = json!(d.display().to_string());
@@ -479,6 +502,12 @@ impl Service {
                 }
                 Ok(info)
             }
+            "settings.schema" if self.ui_enabled() => crate::ui::settings_schema(p, || {
+                json!({
+                    "case": case_schema().to_json_schema(),
+                    "monitors": monitor_json_schema(),
+                })
+            }),
             "settings.schema" => Ok(json!({
                 "case": case_schema().to_json_schema(),
                 "monitors": monitor_json_schema(),
@@ -1134,6 +1163,7 @@ impl Service {
             m if m.starts_with("design.") => crate::design::tools::call(self, m, p),
             m if m.starts_with("cosim.") => crate::cosim_service::call(self, m, p),
             m if m.starts_with("data.") => crate::data_service::call(self, m, p),
+            m if m.starts_with("help.") && self.ui_enabled() => crate::ui::call(m, p),
             other => Err(RpcError::new(
                 code::METHOD_NOT_FOUND,
                 format!("unknown method '{other}'"),

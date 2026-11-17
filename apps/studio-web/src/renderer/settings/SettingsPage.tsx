@@ -69,7 +69,7 @@ export default function SettingsPage() {
   useEffect(() => {
     if (!connected) return;
     let live = true;
-    void dispatch('settings.schema', {}).then((r) => {
+    void dispatch('settings.schema', { ui: true }).then((r) => {
       if (!live) return;
       if (!r.ok) {
         setSchemaError(r.error.message);

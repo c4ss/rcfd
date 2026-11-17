@@ -16,6 +16,7 @@ import { runAction, runActionAvailability, runActionConfirmation } from '../proj
 import { latestFor, requestWords, setEntries } from './control-model.js';
 import { caseName, type RunRow } from './model.js';
 import './control.css';
+import { EngineRecovery } from '../help/Recovery.js';
 
 /** One action in flight at a time per control group; the last answer for its feedback line. */
 function useAction(onStarted?: (run: string) => void) {
@@ -79,6 +80,8 @@ export function RunFailure({ failure, onDismiss, onStartRunner }: { failure: Run
       <div className="rc-failure-text">
         <p className="rc-problem">{failure.problem}</p>
         <p className="rc-recovery">{failure.recovery}</p>
+        {/* F-830: the engine's own way out of its code, from its error catalogue (help.errors) */}
+        {failure.engine && <EngineRecovery code={failure.engine.code} className="rc-recovery" />}
       </div>
       <div className="rc-failure-actions">
         {failure.code === 'runner' && onStartRunner && <Button onPress={onStartRunner}>Start the runner</Button>}

@@ -34,7 +34,8 @@ import { FieldViewport } from '../field/FieldViewport.js';
 import { plain, type RunRow } from '../runs/model.js';
 import { clock } from '../project/format.js';
 import { STATIONS, fieldWord, fieldsFolder, firstRequest, firstStep, outcomeSentence, plainState, sameRunCommand, stationIndex, type FirstStep, type StationId } from './model.js';
-import { DISCLAIMER, EXAMPLE_LIMITS, STEP_HELP, TERMS, type Term } from './words.js';
+import { DISCLAIMER, EXAMPLE_LIMITS, STEP_HELP, TERMS, TERMS_SOURCE, type Term } from './words.js';
+import { termOf, useGlossary } from '../help/engine.js';
 import { FOLLOW_LINK, followFirstRun, openFirstResult, RESULT_LINK, type ResultNavigation } from './target.js';
 // F-828: the result's numbers open their provenance, as the same numbers do in Runs
 import { Provenance, reportValue, statusValue } from '../provenance/index.js';
@@ -89,19 +90,37 @@ function Explain({ name, children }: { name: string; children: ReactNode }) {
   );
 }
 
+/**
+ * The precise terms of a step (G19, F-830): each plain word with the engine's glossary row for it (`help.glossary`), and
+ * the row's source. When the engine cannot be asked, the term and its source are still named, and the reason is said.
+ */
 function Terms({ terms }: { terms: readonly Term[] }) {
+  const glossary = useGlossary();
+  const rows = glossary?.ok ? glossary.value : null;
   return (
-    <dl className="fp-terms-list" aria-label="The precise terms">
-      {terms.map((t) => (
-        <div key={t.plain} className="fp-term">
-          <dt>{t.plain}</dt>
-          <dd>
-            {t.precise}
-            <span className="fp-term-source">{t.source}</span>
-          </dd>
-        </div>
-      ))}
-    </dl>
+    <>
+      <dl className="fp-terms-list" aria-label="The precise terms">
+        {terms.map((t) => {
+          const row = termOf(rows, t.term);
+          return (
+            <div key={t.plain} className="fp-term" data-term={t.term}>
+              <dt>{t.plain}</dt>
+              <dd>
+                {row ? `${row.term}: ${row.meaning}` : t.term}
+                <span className="fp-term-source">
+                  {TERMS_SOURCE}, {t.term}
+                </span>
+              </dd>
+            </div>
+          );
+        })}
+      </dl>
+      {glossary !== null && !glossary.ok && (
+        <p className="fp-help-block" data-words="exception">
+          The engine’s glossary could not be read ({glossary.reason}); the terms are named with their source.
+        </p>
+      )}
+    </>
   );
 }
 

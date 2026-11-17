@@ -41,7 +41,9 @@ USAGE:
 
 COMMANDS:
     validate <case>            check a case file (.toml or .json); prints diagnostics with line numbers
-    schema [--out <file>]      print (or write) the JSON schema of the case file
+    schema [--out <file>] [--ui]
+                               print (or write) the JSON schema of the case file; --ui adds the labels, help,
+                               advanced flags and recommended ranges of ADR 0730
     run <case> [options]       run a case
         --out <dir>              output directory (default: output.directory of the case)
         --max-iterations <n>     override solver.max_iterations
@@ -124,9 +126,10 @@ COMMANDS:
                                (XDMF + binary heavy data); an .stl input can only be re-encoded to .stl
     post <results-dir> [--format html|csv|json] [--out <file>]
                                re-create reports from <results-dir>/monitors.json written by `run`
-    serve [--addr <host:port>] [--root <dir>] [--stdio] [--cosim <case>] [--journal-dir <dir>]
+    serve [--addr <host:port>] [--root <dir>] [--stdio] [--cosim <case>] [--ui] [--journal-dir <dir>]
                                start the solver service (JSON-RPC 2.0, newline-delimited); --cosim hosts the
                                co-simulation fluid participant of the case's [cosim] table (protocol rcfd-cosim/1);
+                               --ui adds settings.schema {ui: true}, help.glossary and help.errors (rcfd-ui/1);
                                --journal-dir keeps each session's journal in <dir>/<session>-<created>.journal.json
                                (inside --root when given), a file that `rcfd run` can run
     call [--addr <host:port>] <method> [<json-params>]
@@ -145,6 +148,8 @@ COMMANDS:
                                SPL/OASPL/dB(A) and 1/3-octave spectra
     cases [list] [--dir <cases-dir>]
                                list benchmark/validation cases
+    help [glossary | errors]   print this help; glossary: the terms of docs/glossary.md as JSON; errors: every
+                               error and exit code of the engine with what to do next, as JSON
     project init <dir> [--name <name>]  make a project folder: rcfd-project.json and the standard folders
 
 OPTIONS:
@@ -200,6 +205,12 @@ fn dispatch(args: &[String]) -> u8 {
         return OK;
     };
     let rest = &args[1..];
+    // ADR 0730: `help glossary` and `help errors` print the engine's glossary and error catalogue
+    if cmd == "help" && !flag(rest, "--help") && !flag(rest, "-h") {
+        if let Some(code) = cmd_help(rest) {
+            return code;
+        }
+    }
     if matches!(cmd, "-h" | "--help" | "help") || (flag(rest, "--help") || flag(rest, "-h")) {
         print!("{USAGE}");
         return OK;
@@ -305,8 +316,40 @@ fn cmd_validate(args: &[String]) -> u8 {
     }
 }
 
+/// `help glossary` / `help errors` (ADR 0730 P3): the JSON of `help.glossary` / `help.errors`; None for any other
+/// argument, which prints the usage as before.
+fn cmd_help(args: &[String]) -> Option<u8> {
+    let value = match args.first().map(String::as_str) {
+        Some("glossary") => rcfd_api::ui::glossary_json(),
+        Some("errors") => Ok(rcfd_api::errors::catalogue_json()),
+        _ => return None,
+    };
+    Some(match value {
+        Ok(v) => {
+            println!("{}", serde_json::to_string_pretty(&v).unwrap_or_default());
+            OK
+        }
+        Err(e) => {
+            eprintln!("error: {e}");
+            FAIL
+        }
+    })
+}
+
 fn cmd_schema(args: &[String]) -> u8 {
-    let text = serde_json::to_string_pretty(&case_schema().to_json_schema()).unwrap_or_default();
+    // ADR 0730: --ui lays the UI metadata onto the export; without it the text is the one of every earlier version
+    let schema = if flag(args, "--ui") {
+        match rcfd_api::ui::case_schema_ui() {
+            Ok(v) => v,
+            Err(e) => {
+                eprintln!("error: {e}");
+                return FAIL;
+            }
+        }
+    } else {
+        case_schema().to_json_schema()
+    };
+    let text = serde_json::to_string_pretty(&schema).unwrap_or_default();
     match opt(args, "--out") {
         Some(p) => match std::fs::write(p, text + "\n") {
             Ok(()) => {
@@ -869,6 +912,10 @@ fn cmd_serve(args: &[String]) -> u8 {
         ..Default::default()
     };
     let svc = Service::new(cfg);
+    // ADR 0730 P4: the UI metadata and the help methods only with --ui
+    if flag(args, "--ui") {
+        svc.enable_ui();
+    }
     // ADR 0735 P2: one journal file per session, only with the flag
     if let Some(dir) = opt(args, "--journal-dir") {
         match svc.enable_journal_files(dir) {

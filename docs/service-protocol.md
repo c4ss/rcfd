@@ -155,6 +155,26 @@ section in order, the byte length as `u64` little-endian and then the values, li
 unknown ticket is answered with the length 2^64 - 1 and the connection is closed. A store that cannot be read answers
 -32602, a path outside the sandbox 1004.
 
+## UI metadata and help (`rcfd-ui/1`, opt-in with `rcfd serve --ui`)
+
+ADR 0730. Without `--ui` nothing below exists and every reply is as before, byte for byte. With it, `service.info` adds
+`ui: "rcfd-ui/1"` and lists the two help methods after the others; `protocol_version` stays 1.1.
+
+- `settings.schema {ui: true}`: the case schema with the UI metadata of `crates/rcfd-api/src/schema_ui.toml` on its
+  nodes, and `x-rcfd-ui` on the root. A node may carry `x-rcfd-label` (a short name), `x-rcfd-help` (one line, at most
+  160 characters; `x-rcfd-help-from: "docs" | "schema"` when it is the first sentence of the docs page or of the
+  description rather than written for the key), `x-rcfd-advanced: true` (one step away in a learner-first layout),
+  `x-rcfd-unit`, `x-rcfd-see` (`page.md#heading`) and `x-rcfd-recommended {minimum, maximum, source}` (a usual range,
+  advice only, always with its published source; the hard `minimum` and `maximum` still decide what is valid).
+  `ui: false`, `ui: null` or no `ui` give the plain schema; a `ui` that is not a boolean answers -32602.
+- `help.glossary`: `{source: "docs/glossary.md", terms: [{term, meaning, page}]}`, every row of the glossary.
+- `help.errors`: `{errors: [{surface, code, name, meaning, recovery}]}`, every error and exit code of the engine with one
+  line on what to do next. `surface` is `service`, `workspace`, `mcp` (one JSON-RPC number space), `cli_exit`,
+  `runner_exit`, `mcp_exit` or `mcp_hook_exit`.
+
+Both help methods take no parameters (`{}` or none). `rcfd schema --ui`, `rcfd help glossary` and `rcfd help errors`
+print the same on the command line.
+
 ## Where to go next
 
 - [MCP tools](mcp-tools.md): which tool calls which method, and the access class of each.
