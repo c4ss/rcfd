@@ -145,3 +145,72 @@ the record). Added before its run:
 M40 is re-run against the test file with A0b added (mutation made once, on a fresh archive of the amended code); it must fail
 `a0b_two_hypotheses_order`. The decision rule is applied to the amended set: done if everything else is met and M40 is caught by A0b;
 otherwise partial.
+
+## Addendum 1: results (2026-11-17)
+
+Code: `crates/rcfd-api/src/design/hypothesis.rs`: additions only (module doc bullet; `DrawnRow`, `DrawnDrop`, `DrawnLessons`,
+`DrawnLessons::plain`, `lessons_drawn`, inserted before the explore section); `lessons`, `Lesson`, `Lessons` and every drawn
+function of ADR 0693 are untouched. New `crates/rcfd-api/tests/f776_lessons_drawn.rs` (6 tests, all fast, about 13 s in release;
+A0b added by amendment 1). `docs/design-loop.md`: one bullet and one changed sentence. No shared solver file, golden, hash table,
+case key or MCP tool. Commits: registration 352fa459; code and tests; amendment 1 with the docs edit; the A0b test.
+
+Runs (release, `CARGO_TARGET_DIR` in the scratch folder): registered run of A0 to A6 once (`run1.log`, 5 tests, 15.5 s), then the
+corrected run with A0b (`run2.log`, 6 tests, 12.7 s); C1 to C3 fast and once `-- --ignored` (`c_*.log`, `h_*.log`); C4 `--lib`;
+C5 docs_site; fmt and clippy. Mutations on a `git archive` copy with its own target directory (`mutate.py`, `mutate_run.log`,
+`mut_M*.log`; control M0 passes). Machine shared with the other agents; no run was slow beyond the heavy records.
+
+| Check | Limit | Measured | Met |
+|---|---|---|---|
+| A0 | 600 of 600 equal, counts 0 | 600 of 600 (struct and Debug equality, no drop, no drawn flag) | yes |
+| A0b (amendment) | 200 of 200 equal; 40 of 40 in order | 200 of 200; 40 of 40 | yes |
+| A1 | cases 40 of 40; caught and dropped at least 38 of 40 | 40 of 40; **40 of 40** (k = 4, D1 impostor) | yes |
+| A2 | 40 of 40 honest rows kept, equal to the row of `lessons`, 1 check, 0 failed | 40 of 40 | yes |
+| A3 | fail then pass: kept, 2 checks, 1 failed, latest = the pass; pass then fail: dropped | as stated (records 131; dropped record 131 with mismatched [72]) | yes |
+| A4 | forged records ignored (a) to (e) | (a) rows 1, ignored 1, checks 0; (b) forged pass ignored (flag at 131), row dropped by the genuine record 130; (c), (d), (e) row kept, checks 0, ignored 1 | yes |
+| A5 | no model / version 2: row kept, unchecked 1, no flag | as stated for both | yes |
+| A6 | lessons equal before and after the record; no drop before it | equal | yes |
+| C1 | 19 fast; S1 1, S2 1592 of 1595, NC1 400, NC2 61, S4 118 | 19 passed (29.7 s); S1 1, S2 1592, NC1 400, NC2 61, S4 118 of 4000 (heavy 334.8 s) | yes |
+| C2 | 8 fast; A1 394, A2 0, NC6 0, NC7 116, A3 60 to 107 | 8 passed; A1 394, A2 0, NC6 0, NC7 116, A3 60..107 (heavy 56.9 s) | yes |
+| C3 | 6 fast; D1 399, D2 394, NC1 0 of 800 | 6 passed; D1 399, D2 394, NC1 0 of 800, H1 0 (heavy 41.3 s) | yes |
+| C4 | pass | f728 10 passed, f749 8 passed, `--lib` 141 passed 4 ignored | yes |
+| C5 | pass | docs_site 2 passed | yes |
+| R | clean | fmt `--check` clean; clippy `-D warnings` clean | yes |
+
+Mutations (caught = at least one test fails):
+
+| Id | Failing tests | Caught |
+|---|---|---|
+| M33 never drops | a1_a2, a3, a4 | yes |
+| M34 stored `reproduced`, no redo | a4 | yes |
+| M35 latest = first | a3 | yes |
+| M36 inconsistent counted | a4 | yes |
+| M37 inconsistent drops | a4 | yes |
+| M38 no model drops | a5_a6 | yes |
+| M39 hash comparison removed | a4 | yes |
+| M40 rows reversed without records | none in the registered run (survived); **a0b after amendment 1** | yes, by A0b only |
+
+Deviations: M40 survived the registered A0 because every ledger there has one hypothesis; amendment 1 was written and committed
+before A0b and the second M40 run, as the house rules allow for a defective set-up. No limit was changed. Not run: the whole
+workspace and whole integration suites (daily gate), `baseline_hashes` (no shared solver file), rcfd-mcp tests (not touched).
+
+Decision by the rule (amended): done (every check met; M40 caught by A0b).
+
+Remaining questions:
+
+1. A later genuine pass after a genuine failure restores the row (latest wins). Options: (a) as built; (b) any consistent failure
+   drops the row for good. Recommendation (a), as registered, with `drawn_failed` visible so a laundering ledger writer is seen;
+   (b) needs a way to retract a failure, which does not exist.
+2. `lessons_drawn` is library only. Options: (a) leave; (b) an MCP/CLI switch (F-702 territory, golden lists change). Recommendation
+   (a) until F-702.
+3. Evidence entries appended after a drawn record are not re-checked by it. Recommendation: require a drawn record newer than the
+   last evidence entry of the row (a later item; it changes which records count).
+
+## For the lead: roadmap entries
+
+> Proposed status: done
+
+> Follow-up of F-745 (ADR 0693 limit). ADR 0695, 2026-11-17. DONE. Library only, opt-in: design::hypothesis::lessons_drawn(entries, query, rerun) is lessons (unchanged, with its output type) plus the verifier-drawn checks: a drawn record counts for a row only when drawn_record_problems with the caller's model is empty and it names the row's registration hash; the latest such record in ledger order decides, a row whose latest consistent drawn record did not reproduce is dropped (listed in dropped), and every row reports drawn_checks, drawn_failed, drawn_ignored (inconsistent records, believed neither way) and drawn_unchecked (no model of the evaluator held). Checks on 40 synthetic worlds: the D1 impostor caught by a k = 4 drawn check gives 0 rows in 40 of 40 (limit 38), the honest evaluator keeps its row, equal to the lessons row, in 40 of 40; a genuine failure followed by a forged pass still drops the row, forged edits are ignored; ledgers without drawn records give the lessons of ADR 0624 bit for bit in 600 of 600 (one hypothesis) and 200 of 200 (two, row order); every ADR 0624, 0662 and 0693 check keeps its result; 8 of 8 mutations caught (M40, the row order, by the check added in amendment 1 after the one-row ledgers missed it).
+
+> Note for F-745 (append): ADR 0695 (F-776, 2026-11-17): lessons_drawn reads the drawn records, so the verifier-drawn check now decides whether a hypothesis is reported.
+
+> Follow-up proposed: Drawn checks must be newer than the evidence they check. Deps F-776. Acceptance: Every limit not stated here is registered in the ADR before the run. lessons_drawn counts a drawn record for a row only when no evidence entry of the row is newer than the record (entries_seen covers every evidence entry of the row), and reports the records it ignored for that reason separately; on synthetic ledgers an impostor that appends a second evidence set after a passing drawn record is dropped or not reported, and an honest ledger keeps its row; ledgers without drawn records give the lessons of ADR 0624 bit for bit; every ADR 0624, ADR 0662, ADR 0693 and ADR 0695 check keeps its result.
