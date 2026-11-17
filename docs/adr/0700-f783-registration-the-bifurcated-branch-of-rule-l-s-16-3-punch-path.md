@@ -338,3 +338,17 @@ mutations (it uses the same functions, checked by the fast test).
    switch's `eps` ladder from the predicted amplitude, the grid and the caps, the toys, the new test file `si_eas_hg16.rs`):
    taken on the maintainer's standing instruction of 2026-11-11 (take the recommendation).
 2. **Whether either opt-in of ADR 0694 becomes a default**: not taken (it would change default results); open, as in ADR 0694.
+
+## Amendment 1 (2026-11-17, written and committed before the corrected run)
+
+**The defect.** The registered run of `f783_fast` (on aaa276f9, `f783-scratch/run1-fast.log`) stopped before its first check:
+the symmetric state of the toy PT is computed by the toy's Newton from `u = 0`, where the tangent's first entry is `1 - p + 3
+b3 u_0^2 + 2 c u_1 = 1 - p`, exactly zero at the force load `lambda_f = 1.0`; the dense elimination refuses the zero pivot
+("singular") and the test panics at the `unwrap` of that set-up solve. A defect of the set-up (the start of an auxiliary solve),
+not of a registered measure: nothing was measured, and the heavy record was not run.
+
+**The correction.** The symmetric state of PT is solved by the same Newton from its closed form, `u_0 = 0`, `u_1 = 0.05 p`,
+`u_i = p b_i / k_i` (D5), where the first entry is `mu(p) = 1 - 0.9 p` (`0.1` at 1.0). No limit, no other row and no other
+function changes. The registered test becomes the ignored record `f783_fast_known_miss` (its set-up unchanged, the panic in its
+ignore text); the corrected test `f783_fast_amended` is run once. The planned mutations are run against `f783_fast_amended`
+(the registered test measures nothing). The decision can be at best **partial** (a check met only after an amendment).
