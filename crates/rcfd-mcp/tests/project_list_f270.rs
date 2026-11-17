@@ -21,6 +21,10 @@
 //!
 //! ADR 0733 restates it for F-837 (P3): `runner_config` (read, no argument) and `set_runner_config` (`write_files`, required
 //! `set` and `base_hash`) come right after `list_meshes`; without them the list is the F-275 one, byte for byte.
+//!
+//! ADR 0736 restates it for F-829 (P1): the six trash tools come last, after `wait_run` (`list_trash` read, `trash_run`,
+//! `trash_results`, `trash_case` and `restore_trash` `write_files`, `empty_trash` the new class `delete`, the only tool
+//! with `destructiveHint` true); without them the list is the F-837 one above, byte for byte.
 
 use serde_json::{json, Value};
 use std::io::Write;
@@ -106,6 +110,73 @@ fn a2_tools_list_with_project_is_the_golden_with_the_f271_changes() {
     // live text
     assert_eq!(serde_json::to_string(&gold).unwrap(), GOLDEN);
     assert_eq!(serde_json::to_string(&live_value).unwrap(), got);
+    // ADR 0736 P1: the six trash tools last, taken out; the rest is the F-837 list
+    {
+        let tools = live_value["tools"].as_array_mut().unwrap();
+        let n = tools.len();
+        let names: Vec<&str> = tools[n - 6..].iter().map(|t| t["name"].as_str().unwrap()).collect();
+        assert_eq!(
+            names,
+            [
+                "list_trash",
+                "trash_run",
+                "trash_results",
+                "trash_case",
+                "restore_trash",
+                "empty_trash"
+            ]
+        );
+        assert_eq!(tools[n - 7]["name"], "wait_run");
+        let access: Vec<&str> = tools[n - 6..]
+            .iter()
+            .map(|t| t["_meta"]["rcfd/access"].as_str().unwrap())
+            .collect();
+        assert_eq!(
+            access,
+            [
+                "read",
+                "write_files",
+                "write_files",
+                "write_files",
+                "write_files",
+                "delete"
+            ]
+        );
+        let required: Vec<Value> = tools[n - 6..]
+            .iter()
+            .map(|t| t["inputSchema"]["required"].clone())
+            .collect();
+        assert_eq!(
+            required,
+            [
+                json!([]),
+                json!(["run"]),
+                json!(["run", "parts"]),
+                json!(["path", "base_hash"]),
+                json!(["token"]),
+                json!([])
+            ]
+        );
+        for t in &tools[n - 6..] {
+            assert_eq!(t["inputSchema"]["additionalProperties"], false, "{}", t["name"]);
+            assert_eq!(
+                t["annotations"]["destructiveHint"],
+                t["name"] == "empty_trash",
+                "{}",
+                t["name"]
+            );
+            assert_eq!(
+                t["_meta"]["rcfd/needsApproval"],
+                t["name"] != "list_trash",
+                "{}",
+                t["name"]
+            );
+        }
+        for t in &tools[..n - 6] {
+            assert_eq!(t["annotations"]["destructiveHint"], false, "{}", t["name"]);
+        }
+        tools.truncate(n - 6);
+    }
     // ADR 0733 P3: the two budgets tools right after list_meshes, taken out; the rest is the F-275 list
     {
         let tools = live_value["tools"].as_array_mut().unwrap();

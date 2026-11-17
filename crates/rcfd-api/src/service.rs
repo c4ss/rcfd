@@ -53,6 +53,10 @@ pub mod code {
     pub const PARTICIPANT: i64 = 1005;
     /// No hosted co-simulation participant of that name.
     pub const NO_PARTICIPANT: i64 = 1006;
+    /// A `settings.set` or `settings.remove` with a base (`base_value` or `base_hash`) found the session's settings
+    /// changed since that base was read (ADR 0736 P2); `data: {path, current_value, current_hash}`. Only a caller that
+    /// sent a base gets it.
+    pub const CONFLICT: i64 = 1007;
     /// Anything else.
     pub const INTERNAL: i64 = -32000;
 }
@@ -473,6 +477,7 @@ impl Service {
                     return Err(RpcError::new(code::BAD_STATE, "stop the run before changing settings"));
                 }
                 let mut inner = lock(&s.inner);
+                check_base(&inner.case, path, p)?;
                 let old = inner.case.get(path).unwrap_or(Value::Null);
                 inner.case.set(path, value).map_err(|e| {
                     RpcError::validation(vec![Diagnostic {
@@ -522,6 +527,7 @@ impl Service {
                     .rsplit_once('.')
                     .ok_or_else(|| RpcError::params("path must be '<collection>.<name>'"))?;
                 let mut inner = lock(&s.inner);
+                check_base(&inner.case, path, p)?;
                 inner.case.tree.remove_named(coll, name).map_err(|e| {
                     RpcError::validation(vec![Diagnostic {
                         path: path.into(),
@@ -1881,6 +1887,55 @@ impl TcpServer {
             let _ = h.join();
         }
     }
+}
+
+/// JSON equality with numbers compared as numbers (`1` equals `1.0`), as a case reads them back.
+fn same_json(a: &Value, b: &Value) -> bool {
+    match (a, b) {
+        (Value::Number(x), Value::Number(y)) => x == y || x.as_f64().zip(y.as_f64()).is_some_and(|(x, y)| x == y),
+        (Value::Array(x), Value::Array(y)) => x.len() == y.len() && x.iter().zip(y).all(|(x, y)| same_json(x, y)),
+        (Value::Object(x), Value::Object(y)) => {
+            x.len() == y.len() && x.iter().all(|(k, v)| y.get(k).is_some_and(|w| same_json(v, w)))
+        }
+        _ => a == b,
+    }
+}
+
+/// The compare-and-set of `settings.set` and `settings.remove` (ADR 0736 P2): with `base_value` (the value last read at
+/// `path`, `null` for absent) the value at `path` must still equal it, with `base_hash` (`case_hash` of `journal.get`)
+/// the whole tree must still have it; either or both may be given. A mismatch is [`code::CONFLICT`] with the current
+/// value and hash, and nothing is changed. Without either the call is as before.
+fn check_base(case: &Case, path: &str, p: &Value) -> Result<(), RpcError> {
+    let base_value = p.get("base_value");
+    let base_hash = match p.get("base_hash") {
+        None => None,
+        Some(Value::String(h)) => Some(h.as_str()),
+        Some(_) => {
+            return Err(RpcError::params(
+                "base_hash must be the case_hash string of journal.get",
+            ))
+        }
+    };
+    if base_value.is_none() && base_hash.is_none() {
+        return Ok(());
+    }
+    let current_value = case.get(path).unwrap_or(Value::Null);
+    let current_hash = format!("{:016x}", case.tree.content_hash());
+    let value_ok = base_value.is_none_or(|b| same_json(b, &current_value));
+    let hash_ok = base_hash.is_none_or(|h| h == current_hash);
+    if value_ok && hash_ok {
+        return Ok(());
+    }
+    let what = if value_ok {
+        "the session's settings changed since case_hash was read".to_string()
+    } else {
+        format!("{path} changed since it was read (now {current_value})")
+    };
+    Err(RpcError {
+        code: code::CONFLICT,
+        message: format!("{what}; nothing was changed, read it again"),
+        data: Some(json!({"path": path, "current_value": current_value, "current_hash": current_hash})),
+    })
 }
 
 /// Methods advertised by `service.info`.

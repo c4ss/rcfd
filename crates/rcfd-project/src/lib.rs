@@ -13,6 +13,7 @@ pub mod project;
 pub mod records;
 pub mod runid;
 pub mod time;
+pub mod trash;
 pub mod watch;
 
 use std::path::PathBuf;

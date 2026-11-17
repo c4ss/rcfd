@@ -142,6 +142,13 @@ COMMANDS:
     cases [list] [--dir <cases-dir>]
                                list benchmark/validation cases
     project init <dir> [--name <name>]  make a project folder: rcfd-project.json and the standard folders
+    project trash <dir> (--run <id> | --results <id> [--parts fields,output] | --case <path> --base-hash <hash>)
+        [--reason <text>]      move an ended run, its results or a case file to the project trash (.rcfd/trash/)
+    project trash-list <dir>   list the project trash
+    project restore <dir> <token> [--reason <text>]
+                               move a trashed item back (refused when its path is taken)
+    project empty-trash <dir> [--token <token>]... [--older-than-days <n>] [--reason <text>]
+                               remove trashed items for good
 
 OPTIONS:
     -h, --help       print this help (also valid after a command)

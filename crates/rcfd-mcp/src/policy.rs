@@ -24,6 +24,9 @@ pub enum Access {
     Execute,
     /// Writes files to disk.
     WriteFiles,
+    /// Removes project files for good (`empty_trash`, ADR 0736 Q3): never on an allow-list by default, so a client
+    /// asks the user for every call.
+    Delete,
 }
 
 impl Access {
@@ -34,6 +37,7 @@ impl Access {
             Access::Mutate => "mutate",
             Access::Execute => "execute",
             Access::WriteFiles => "write_files",
+            Access::Delete => "delete",
         }
     }
 }

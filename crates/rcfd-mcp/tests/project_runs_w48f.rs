@@ -97,8 +97,8 @@ fn f3_f11_project_tools_on_runner_made_runs() {
         .unwrap()
         .contains("project folder"));
     let list = m.request("tools/list", json!({}));
-    // 40, and ADR 0733's two budgets tools
-    assert_eq!(list["result"]["tools"].as_array().unwrap().len(), 42);
+    // 40, ADR 0733's two budgets tools and ADR 0736's six trash tools
+    assert_eq!(list["result"]["tools"].as_array().unwrap().len(), 48);
 
     // F11 part 1: start_run then wait_run reaches finished on a 30-step cavity
     let r = m.call("start_run", json!({"case": "cases/cavity.toml"}));
@@ -320,12 +320,12 @@ fn f13_server_start() {
     let mut m = Mcp::start(&["--project", &d]);
     let r = m.request("initialize", json!({}));
     assert_eq!(r["result"]["serverInfo"]["name"], "rcfd");
-    // 40, and ADR 0733's two budgets tools
+    // 40, ADR 0733's two budgets tools and ADR 0736's six trash tools
     assert_eq!(
         m.request("tools/list", json!({}))["result"]["tools"]
             .as_array()
             .unwrap()
             .len(),
-        42
+        48
     );
 }
