@@ -16945,7 +16945,16 @@ Generated from `docs/studio-guardrails.md`, `PRODUCT.md` and `DESIGN.md` ([ADR 0
     label, help, usual range with its source and the docs heading from the engine, advanced keys behind Show all; the
     first path's Explain terms are glossary rows (13 terms added to docs/glossary.md), words.ts keeps no meaning of its
     own; engine errors in settings, the case editor and run control get the catalogue's recovery line (unit test over
-    the real catalogue). Left: a learner's view-and-report step (G19); an e2e walk provoking each catalogue error.
+    the real catalogue). 2026-11-17 (branch small-fixes): e2e error-walk.spec.ts provokes, through the Studio's surfaces
+    against rcfd serve --ui and rcfd-mcp --project, every catalogue code a user reaches and finds its recovery line:
+    1003 (a refused value in the case editor), 1002 (a setting changed while another writer holds the run paused), 1004
+    (a mesh over the preview limit), 1201 (Save while another writer holds the edit lock), 1001 (the editor's session
+    closed by another writer), 1202 (Run of a case deleted under the Studio); the case editor's Failed to save notice
+    and the settings' could-not-be-read state now show the line (they showed the message only); the rows it does not
+    provoke are listed with the reason (-32700, -32600, -32601, -32602, 1005, 1006, -32000, 1100; 1007, 1008 and 1200
+    answered by the conflict panels' choices instead of the line; the exit codes of rcfd, rcfd-runner, rcfd-mcp and the
+    hook), and the test fails when the catalogue gains a row in neither list. Left: a learner's view-and-report step
+    (G19).
 - [x] **F-831** Electron Studio: command palette and keyboard shortcuts
   - depends on: F-827, F-802
   - acceptance: A command palette generated from the action registry that finds every action by name; shortcuts for

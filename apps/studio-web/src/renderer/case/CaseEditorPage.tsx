@@ -458,7 +458,7 @@ type Notice =
   | { kind: 'cannot'; outcome: Extract<SaveOutcome, { kind: 'cannot' }> }
   | { kind: 'conflict'; view: Extract<ConflictView, { changed: true }> }
   | { kind: 'nothing' }
-  | { kind: 'failed'; message: string };
+  | { kind: 'failed'; message: string; code?: unknown };
 
 function EditorView({ session, engine, project, setTitle, setStateWord }: EditorProps) {
   const { service, model, schemaError } = engine;
@@ -651,7 +651,8 @@ function CasePanel({ status, refresh, settingsEpoch }: { status: CaseStatus; ref
         return;
       }
       if (!r.ok) {
-        setNotice({ kind: 'failed', message: r.error.message });
+        // F-830: the engine's code too, for its catalogue line (a busy edit lock, 1201; a file gone, 1202)
+        setNotice({ kind: 'failed', message: r.error.message, code: r.error.code });
         return;
       }
       const o = r.result;
@@ -1002,6 +1003,7 @@ function NoticeView(props: {
           Failed to save
         </h3>
         <p>The engine answered: {n.message}</p>
+        <EngineRecovery code={n.code} />
         <div className="ce-row">
           <Button onPress={props.onDismiss}>Dismiss</Button>
         </div>
