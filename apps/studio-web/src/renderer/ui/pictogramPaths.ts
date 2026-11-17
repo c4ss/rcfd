@@ -83,6 +83,9 @@ export const ICON_NAMES = [
   'settings',
   // F-835
   'new-project',
+  // F-828 (ADR 0734)
+  'rerun',
+  'how-ran',
 ] as const;
 export type IconName = (typeof ICON_NAMES)[number];
 
@@ -123,4 +126,8 @@ export const ICON_PATHS: Record<IconName, { readonly path: string; readonly fill
   settings: { path: 'M1 3H13M1 7H13M1 11H13M4 1V5M10 5V9M6 9V13' },
   // F-835: New project… (a folder with its tab, a plus inside)
   'new-project': { path: 'M1 3H5L6 4H13V12H1ZM7 6V10M5 8H9' },
+  // F-828 (ADR 0734): Rerun as it ran (the play mark after a stop: from the start again), How this ran (a command
+  // prompt, the solver's command line)
+  rerun: { path: 'M2 2V12M5 2L10 7L5 12Z' },
+  'how-ran': { path: 'M2 3L6 7L2 11M7 11H12' },
 };

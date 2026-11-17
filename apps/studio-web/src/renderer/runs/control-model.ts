@@ -44,6 +44,7 @@ export function latestFor(requests: readonly RunRequest[] | undefined, run: stri
 const WAITING: Record<string, string> = {
   'project.run_case': 'the runner launches it when a slot is free',
   'project.queue_case': 'the runner launches it by priority when a slot is free',
+  'project.rerun_run': 'the runner launches it when a slot is free',
   'project.pause_run': 'waiting for the runner to hold it',
   'project.resume_run': 'waiting for the runner to release it',
   'project.stop_run': 'waiting for the solver to stop after its current step',
@@ -53,6 +54,7 @@ const WAITING: Record<string, string> = {
 const ASKED: Record<string, string> = {
   'project.run_case': 'Started',
   'project.queue_case': 'Queued',
+  'project.rerun_run': 'Rerun started',
   'project.pause_run': 'Pause requested',
   'project.resume_run': 'Resume requested',
   'project.stop_run': 'Stop requested',

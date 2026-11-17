@@ -387,5 +387,10 @@ function fallback(run: string, error: string): RunProvenance {
     unitsNote: null,
     reproduce: { argv: null, text: null, gaps: [], leftOut: [] },
     readAt: '',
+    launch: null,
+    launchNote: null,
+    meshCheck: null,
+    timeUnit: null,
+    rerun: { argv: null, text: null, gaps: [], leftOut: [] },
   };
 }

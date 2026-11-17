@@ -16,7 +16,7 @@ use crate::{
 };
 use rcfd_api::case::Case;
 use rcfd_runner::client::Client;
-use rcfd_runner::records::{RunSettings, RunState, RunStatus};
+use rcfd_runner::records::{LaunchSettings, RunSettings, RunState, RunStatus};
 use serde_json::{json, Map, Value};
 use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant};
@@ -98,7 +98,55 @@ impl RunService {
 
     /// Queue a run of `case` without starting a runner; returns the run id. Journal: one `run_submitted` line.
     pub fn submit(&self, case: &Path, settings: &RunSettings) -> Result<String, String> {
-        let id = self.client.submit(case, settings)?;
+        self.submit_launch(case, settings, &LaunchSettings::default())
+    }
+
+    /// [`Self::submit`] with the run's launch settings (ADR 0734 P3: `start_run`'s `continue_from` and `max_steps`),
+    /// checked as [`Client::submit_with`] checks them. The journal line also names them when set.
+    pub fn submit_launch(
+        &self,
+        case: &Path,
+        settings: &RunSettings,
+        launch: &LaunchSettings,
+    ) -> Result<String, String> {
+        let id = self
+            .client
+            .submit_with(case, settings, launch, &rcfd_runner::store::RunTags::default())?;
+        self.submitted(&id, case, settings, launch, None);
+        Ok(id)
+    }
+
+    /// A new run of run `src`'s case snapshot with its settings ([`Client::rerun`], ADR 0734 P3); the journal line is a
+    /// `run_submitted` with `rerun_of`.
+    pub fn rerun(&self, src: &str, over: &rcfd_runner::client::RerunOptions) -> Result<String, String> {
+        let id = self.client.rerun(src, over)?;
+        let rec = rcfd_runner::store::FsStore::new(self.client.project());
+        let rec = rcfd_runner::store::RunStore::read_record(&rec, &id).map_err(|e| format!("run {id}: {e}"))?;
+        let settings = RunSettings::of(&rec)?;
+        let launch = LaunchSettings::of(&rec)?;
+        self.submitted(
+            &id,
+            &self.client.project().join(&rec.case),
+            &settings,
+            &launch,
+            Some(src),
+        );
+        Ok(id)
+    }
+
+    /// The latest launch record of run `id` (ADR 0734 P1), `None` before its launch.
+    pub fn launch(&self, id: &str) -> Result<Option<Value>, String> {
+        self.client.launch(id)
+    }
+
+    fn submitted(
+        &self,
+        id: &str,
+        case: &Path,
+        settings: &RunSettings,
+        launch: &LaunchSettings,
+        rerun_of: Option<&str>,
+    ) {
         let root = self.client.project();
         let mut m = Map::new();
         m.insert("run".into(), json!(id));
@@ -115,8 +163,16 @@ impl RunService {
         if let Some(mb) = settings.mem_mb {
             m.insert("mem_mb".into(), json!(mb));
         }
+        if let Some(c) = &launch.continue_from {
+            m.insert("continue_from".into(), json!(c));
+        }
+        if let Some(n) = launch.max_steps {
+            m.insert("max_steps".into(), json!(n));
+        }
+        if let Some(r) = rerun_of {
+            m.insert("rerun_of".into(), json!(r));
+        }
         self.journal("run_submitted", "submit", m);
-        Ok(id)
     }
 
     /// Queue a run and make sure a runner is alive; returns the run id (the runner client's `start`: [`Self::submit`],
@@ -207,6 +263,11 @@ impl Workspace {
 
     pub(crate) fn start_run(&self, args: &Value) -> Result<Value, RpcError> {
         let reason = reason_arg(args)?;
+        // ADR 0734 P3: a rerun of a run's case snapshot instead of a case
+        if args.get("from_run").is_some() {
+            return self.rerun_run(args, reason);
+        }
+        let launch = self.launch_arg(args)?;
         // ADR 0186 G5: a project case, or a new case made first; and whether the start plan applies
         let new_case = args.get("new_case").filter(|v| !v.is_null());
         if new_case.is_some() == args.get("case").is_some() {
@@ -276,7 +337,7 @@ impl Workspace {
         let id = self
             .runs
             .by("start_run", reason)
-            .submit(&path, &settings)
+            .submit_launch(&path, &settings, &launch)
             .map_err(|e| err(INTERNAL, e))?;
         if let Err(e) = self.runs.ensure_runner() {
             return Err(RpcError {
@@ -295,6 +356,77 @@ impl Workspace {
                 "estimated_bytes": p.estimated_bytes(), "note": p.note});
         }
         Ok(out)
+    }
+
+    /// `continue_from` and `max_steps` of `start_run` (ADR 0734 P3), checked before anything is written: a run of this
+    /// project (1004 not a run id, 1202 no such run) and at least 1.
+    fn launch_arg(&self, args: &Value) -> Result<LaunchSettings, RpcError> {
+        let continue_from = match args.get("continue_from").and_then(Value::as_str) {
+            Some(c) => Some(
+                self.run_arg(&json!({"run": c}), "run")
+                    .map(|(id, _)| id)
+                    .map_err(|e| RpcError {
+                        message: format!("continue_from: {}", e.message),
+                        ..e
+                    })?,
+            ),
+            None => None,
+        };
+        let max_steps = u64_arg(args, "max_steps");
+        if max_steps == Some(0) {
+            return Err(err(PARAMS, "max_steps: must be at least 1"));
+        }
+        Ok(LaunchSettings {
+            continue_from,
+            max_steps,
+        })
+    }
+
+    /// `start_run {from_run}` (ADR 0734 P3): a new run of that run's `case.snapshot` with its record's settings;
+    /// `priority`, `threads` and `mem_mb` override them. -32602 with `case`, `new_case`, `set`, `store`,
+    /// `continue_from` or `max_steps` (the record gives those); 1202 no such run; 1003 the record's settings do not read.
+    fn rerun_run(&self, args: &Value, reason: Option<String>) -> Result<Value, RpcError> {
+        let with: Vec<&str> = ["case", "new_case", "set", "store", "continue_from", "max_steps"]
+            .into_iter()
+            .filter(|k| args.get(*k).is_some_and(|v| !v.is_null()))
+            .collect();
+        if !with.is_empty() {
+            return Err(err(
+                PARAMS,
+                format!(
+                    "start_run: from_run reruns that run's case snapshot with its record's settings; give no {}",
+                    with.join(", ")
+                ),
+            ));
+        }
+        let (src, dir) = self.run_arg(args, "from_run")?;
+        let rec: rcfd_project::RunRecord =
+            rcfd_project::atomic::read_json(&dir.join("run.json")).map_err(crate::project_error)?;
+        RunSettings::of(&rec)
+            .and_then(|_| LaunchSettings::of(&rec))
+            .map_err(|e| err(VALIDATION, format!("run {src}: {e}")))?;
+        let over = rcfd_runner::client::RerunOptions {
+            priority: args
+                .get("priority")
+                .and_then(Value::as_i64)
+                .map(|p| p.clamp(i32::MIN as i64, i32::MAX as i64) as i32),
+            threads: u64_arg(args, "threads").map(|t| t as usize),
+            mem_mb: u64_arg(args, "mem_mb"),
+        };
+        let id = self
+            .runs
+            .by("start_run", reason)
+            .rerun(&src, &over)
+            .map_err(|e| err(INTERNAL, e))?;
+        if let Err(e) = self.runs.ensure_runner() {
+            return Err(RpcError {
+                code: INTERNAL,
+                message: format!("run {id} is queued, but the run service did not start: {e}"),
+                data: Some(json!({"run": id})),
+            });
+        }
+        let st = self.runs.status(&id).map_err(|e| err(INTERNAL, e))?;
+        Ok(json!({"run": id, "case": rec.case, "rerun_of": src, "state": state_name(st.state)}))
     }
 
     pub(crate) fn control(&self, name: &str, args: &Value) -> Result<Value, RpcError> {

@@ -35,7 +35,8 @@ import { pendingByRun, requestWords, withStartedRuns } from './control-model.js'
 import { RunBar, SelectedRunControls } from './RunControls.js';
 import type { RunRequest } from '../../shared/project.js';
 import { Provenance, reportValue, statusValue } from '../provenance/index.js';
-import { BudgetsButton, BudgetsPanel, ResidualValue, RunLogTools, residualColumns } from './RunExtras.js';
+import { BudgetsButton, BudgetsPanel, ResidualValue, residualColumns } from './RunExtras.js';
+import { HowItRanTools } from './HowItRan.js';
 import './runs.css';
 
 /** The order of the state filter's options. */
@@ -330,14 +331,16 @@ function SelectedRun({
         </div>
       )}
       <SelectedRunControls view={view} row={row} onStarted={onSelect} />
-      <RunLogTools row={row} />
+      {/* Log and events, the report and How this ran (F-828, ADR 0734): one row of icons */}
+      <HowItRanTools row={row} />
       <dl className="rv-grid" aria-label={`Numbers of ${row.id}`}>
         <Num caption={steady === true ? 'Iterations' : 'Steps'}>
           <Provenance subject={{ kind: 'number', source: statusValue({ run: row.id, quantity: steady === true ? 'iterations' : 'steps', shown: String(row.step), value: row.step, unit: { why: 'a count of the solver’s steps, status.json step' } }) }}>
             {row.step}
           </Provenance>
         </Num>
-        <Num caption="Time, s" word={timeNote(row) !== null}>
+        {/* ADR 0734 P2: the unit run_status names; the caption kept its s before the engine named one */}
+        <Num caption={`Time, ${d?.timeUnit ?? 's'}`} word={timeNote(row) !== null}>
           {timeIsQuiet(timeNote(row)) ? (
             <Dash words={timeText(row)} />
           ) : timeNote(row) !== null ? (
@@ -346,7 +349,7 @@ function SelectedRun({
             <Provenance
               subject={{
                 kind: 'number',
-                source: statusValue({ run: row.id, quantity: 'time', shown: timeText(row), value: row.time, unit: { why: 'status.json gives the time with no unit (the caption’s s is not the engine’s, F-828 gap)' } }),
+                source: statusValue({ run: row.id, quantity: 'time', shown: timeText(row), value: row.time, unit: 'time' }),
               }}
             >
               {timeText(row)}

@@ -1,7 +1,8 @@
 //! `rcfd-runner`: the per-project run service (`serve`) and a command-line client of it (ADR 0123).
 
-use rcfd_runner::client::{Client, RunnerOutput};
-use rcfd_runner::records::RunSettings;
+use rcfd_runner::client::{Client, RerunOptions, RunnerOutput};
+use rcfd_runner::records::{LaunchSettings, RunSettings};
+use rcfd_runner::store::RunTags;
 use std::path::PathBuf;
 use std::process::ExitCode;
 use std::time::Duration;
@@ -14,10 +15,15 @@ USAGE:
 COMMANDS:
     serve                      run the service in the foreground (exit 3 if one already runs for the project)
     ensure [output]            start the service, detached, unless it runs
-    start <case> [--priority n] [--threads n] [--mem-mb n] [--set path=value]... [--no-runner] [output]
-                               queue a run (and start the service unless --no-runner); prints the run id
+    start <case> [--priority n] [--threads n] [--mem-mb n] [--set path=value]... [--continue-from <run-id>]
+          [--max-steps n] [--no-runner] [output]
+                               queue a run (and start the service unless --no-runner); prints the run id.
+                               --continue-from: start from that run's output/restart.rcfd; --max-steps: at most n steps
+    rerun <run-id> [--priority n] [--threads n] [--mem-mb n] [--no-runner] [output]
+                               queue a new run of that run's case.snapshot with its settings (options given override
+                               them); its run.json says rerun_of; prints the new run id
     list                       every run and its status (JSON lines)
-    status <id>                status.json of a run
+    status <id>                status.json of a run, with launch: its latest launch record (launch*.json) or null
     pause <id> | resume <id> | cancel <id>
     wait <id> [--timeout seconds]
                                wait until the run is finished, failed or cancelled (exit 1 unless finished)
@@ -121,11 +127,40 @@ fn run(args: &[String]) -> Result<u8, String> {
                     .filter_map(|(i, _)| rest.get(i + 1).cloned())
                     .collect(),
             };
-            let id = if rest.iter().any(|a| a == "--no-runner") {
-                client.submit(case.as_ref(), &settings)?
-            } else {
-                client.with_output(output(rest)?).start(case.as_ref(), &settings)?
+            // ADR 0734 P3: the launch settings, through submit_with and its checks
+            let launch = LaunchSettings {
+                continue_from: opt(rest, "--continue-from").map(String::from),
+                max_steps: opt(rest, "--max-steps")
+                    .map(|v| v.parse())
+                    .transpose()
+                    .map_err(|_| "--max-steps needs a number")?,
             };
+            let id = client.submit_with(case.as_ref(), &settings, &launch, &RunTags::default())?;
+            if !rest.iter().any(|a| a == "--no-runner") {
+                client.with_output(output(rest)?).ensure_runner()?;
+            }
+            println!("{id}");
+        }
+        "rerun" => {
+            let src = pos.first().ok_or("rerun needs a run id")?;
+            let over = RerunOptions {
+                priority: opt(rest, "--priority")
+                    .map(|v| v.parse())
+                    .transpose()
+                    .map_err(|_| "--priority needs a number")?,
+                threads: opt(rest, "--threads")
+                    .map(|v| v.parse())
+                    .transpose()
+                    .map_err(|_| "--threads needs a number")?,
+                mem_mb: opt(rest, "--mem-mb")
+                    .map(|v| v.parse())
+                    .transpose()
+                    .map_err(|_| "--mem-mb needs a number")?,
+            };
+            let id = client.rerun(src, &over)?;
+            if !rest.iter().any(|a| a == "--no-runner") {
+                client.with_output(output(rest)?).ensure_runner()?;
+            }
             println!("{id}");
         }
         "list" => {
@@ -133,10 +168,13 @@ fn run(args: &[String]) -> Result<u8, String> {
                 println!("{}", serde_json::json!({"id": id, "status": st}));
             }
         }
-        "status" => println!(
-            "{}",
-            serde_json::to_string_pretty(&client.status(id()?)?).unwrap_or_default()
-        ),
+        "status" => {
+            let id = id()?;
+            let mut v = serde_json::to_value(client.status(id)?).map_err(|e| e.to_string())?;
+            // ADR 0734 P1: status.json's members and the latest launch record
+            v["launch"] = client.launch(id)?.unwrap_or_default();
+            println!("{}", serde_json::to_string_pretty(&v).unwrap_or_default());
+        }
         "pause" => client.pause(id()?)?,
         "resume" => client.resume(id()?)?,
         "cancel" => client.cancel(id()?)?,

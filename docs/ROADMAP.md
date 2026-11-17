@@ -16868,13 +16868,20 @@ Generated from `docs/studio-guardrails.md`, `PRODUCT.md` and `DESIGN.md` ([ADR 0
     run.json records no launch argv or build id; status.json and store time have no unit; a session records no file or
     journal file; no rerun options; no mesh hash. 2026-11-17 (ADR 0801 Addendum 20): the maintainer answered D-L1: the
     engine records a session's journal (E-828c), the Studio writes none; a session number's reproduce command stays said
-    as not recorded until the engine gives one. 2026-11-17: engine follow-ups E-828a, E-828b, E-828d and E-828e:
-    ADR 0734 proposed; E-828c: ADR 0735 proposed; awaiting the maintainer.
-    2026-11-17 (ADR 0735, accepted with Q4 declined): E-828c built: session.create records a case file's resolved
-    path and hash (`source` in journal.get and session.list); rcfd serve --journal-dir keeps one
-    `<session>-<created>.journal.json` per session; rcfd run --journal refuses a case file changed since
-    (--journal-ignore-hash); the Studio starts its service with `--journal-dir <state dir>/journals`, and a session
-    number's provenance names its case file and hash and shows and copies `rcfd run --journal <file>`.
+    as not recorded until the engine gives one. 2026-11-17: engine follow-ups E-828a, E-828b, E-828d and E-828e: ADR
+    0734 proposed; E-828c: ADR 0735 proposed; awaiting the maintainer. 2026-11-17 (ADR 0735, accepted with Q4 declined):
+    E-828c built: session.create records a case file's resolved path and hash (`source` in journal.get and
+    session.list); rcfd serve --journal-dir keeps one `<session>-<created>.journal.json` per session; rcfd run --journal
+    refuses a case file changed since (--journal-ignore-hash); the Studio starts its service with `--journal-dir <state
+    dir>/journals`, and a session number's provenance names its case file and hash and shows and copies `rcfd run
+    --journal <file>`. 2026-11-17 (ADR 0734 accepted and built): E-828a, E-828b, E-828d and E-828e are done: each launch
+    writes runs/<id>/launch.json (argv, cwd, solver path and version, build exe_hash and git_rev; rcfd version --json),
+    run_status, list_runs and data.open reply time_unit "s", rcfd-runner start takes --continue-from and --max-steps,
+    rcfd-runner rerun <id> and start_run from_run rerun a run from its case.snapshot (rerun_of), and the runner records
+    mesh_hash of a mesh-file case with hash_project_file and rcfd project hash to check it. The Studio's selected run
+    shows How this ran (command line, build, mesh hash unchanged or changed, rerun command) and Rerun as it ran through
+    start_run; the reproduce command carries --continue-from and --max-steps; time units come from the engine. Still
+    partial: the Studio items Left above.
 - [~] **F-829** Electron Studio: undo, safe deletes and edit conflicts
   - depends on: F-827, F-805
   - acceptance: Undo and redo for every edit made through the action layer; deleting a run, result or case is

@@ -182,6 +182,12 @@ pub(crate) fn tools() -> Vec<Tool> {
             },
         },
         Tool {
+            name: "hash_project_file",
+            description: "The hash of a project file or folder, by the rule of run.json mesh_hash: a file is fnv64 of its bytes; a folder (an OpenFOAM mesh) is fnv64 over the sorted lines <relative path>\\0<file hash>\\n of every file below it. Symbolic links are refused; at most 4 GiB and 100000 files (error 1003 names the limit). Compare with run.json mesh_hash to see whether a run's mesh changed since.",
+            access: Access::Read,
+            schema: || obj(json!({"path": {"type": "string", "description": "project-relative file or folder"}}), &["path"]),
+        },
+        Tool {
             name: "edit_case",
             description: "Set dotted settings (e.g. physics.nu, solver.max_iterations) in a .toml or .json case file. The edited case is validated as set_setting does; the file is replaced atomically only if valid and only if it still has base_hash (else error 1200 with the current hash). The changed lines are edited in place (comments kept) when possible. dry_run validates without writing.",
             access: Access::WriteFiles,
@@ -312,7 +318,10 @@ pub(crate) fn tools() -> Vec<Tool> {
                         "set": {"type": "array", "items": {"type": "string"}, "description": "overrides path=value, in order"},
                         "priority": {"type": "integer"},
                         "threads": {"type": "integer", "minimum": 1, "maximum": 256},
-                        "mem_mb": {"type": "integer", "minimum": 1}
+                        "mem_mb": {"type": "integer", "minimum": 1},
+                        "continue_from": {"type": "string", "description": "a run id of this project: the run starts from that ended run's output/restart.rcfd"},
+                        "max_steps": {"type": "integer", "minimum": 1, "description": "at most this many steps"},
+                        "from_run": {"type": "string", "description": "instead of case or new_case: rerun that run id from its case.snapshot with its run.json settings (priority, threads and mem_mb given override them); the new run.json has rerun_of"}
                     }),
                     &[],
                 )

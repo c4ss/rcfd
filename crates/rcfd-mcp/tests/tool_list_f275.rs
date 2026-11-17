@@ -45,9 +45,10 @@ fn hidden() -> Vec<(&'static str, Value)> {
 /// `design_run_operating_map` since ADR 0200 S9 (registered edit E1).
 const EXECUTE: [&str; 3] = ["design_run_study", "design_evaluate", "design_run_operating_map"];
 
-/// ADR 0195 P1: the 23 project tools in the order of the F-273 list, and ADR 0733 P3's two budgets tools right after
-/// `list_meshes` (C5-L restated for F-837).
-const PROJECT_TOOLS: [&str; 25] = [
+/// ADR 0195 P1: the 23 project tools in the order of the F-273 list, ADR 0733 P3's two budgets tools right after
+/// `list_meshes` (C5-L restated for F-837), and ADR 0734 P4's `hash_project_file` right after `read_project_file` (C5-L
+/// restated for F-828).
+const PROJECT_TOOLS: [&str; 26] = [
     "project_info",
     "list_runs",
     "run_status",
@@ -59,6 +60,7 @@ const PROJECT_TOOLS: [&str; 25] = [
     "list_changes",
     "read_feed",
     "read_project_file",
+    "hash_project_file",
     "edit_case",
     "write_note",
     "new_case",
@@ -94,7 +96,7 @@ fn files(dir: &Path) -> Vec<(String, Vec<u8>)> {
     out
 }
 
-/// C5-L: under `--project`, 42 tools (40 and ADR 0733's two): the list without `--project` less the 16 of P1, in its order and byte for byte (but the
+/// C5-L: under `--project`, 43 tools (40, ADR 0733's two and ADR 0734's one): the list without `--project` less the 16 of P1, in its order and byte for byte (but the
 /// class `execute` of `design_run_study` and `design_evaluate`, ADR 0196 B), then the 23 project tools.
 #[test]
 fn c5l_project_list_has_no_session_only_tool() {
@@ -114,8 +116,8 @@ fn c5l_project_list_has_no_session_only_tool() {
     assert_eq!(kept.len(), 17);
     assert_eq!(
         live.len(),
-        42,
-        "17 session tools and 25 project tools (ADR 0733: two budgets tools)"
+        43,
+        "17 session tools and 26 project tools (ADR 0733: two budgets tools; ADR 0734: hash_project_file)"
     );
     let mut execute = 0;
     for (l, k) in live.iter().zip(&kept) {

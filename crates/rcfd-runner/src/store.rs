@@ -56,6 +56,14 @@ pub trait RunStore {
     }
     /// Write `metrics.json` atomically.
     fn write_metrics(&self, id: &str, metrics: &Value) -> io::Result<()>;
+    /// Write the launch record `launch` of run `id` (ADR 0734 P1) to [`launch_file`], never replacing one; returns the
+    /// file.
+    fn write_launch(&self, id: &str, launch: &Value) -> io::Result<PathBuf> {
+        let seq = launch["launch_seq"].as_u64().unwrap_or(0);
+        let file = launch_file(&self.run_dir(id), seq);
+        atomic::write_json_new(&file, launch).map_err(io_error)?;
+        Ok(file)
+    }
 }
 
 /// [`RunStore`] on the project folder.
@@ -108,6 +116,73 @@ impl FsStore {
         let text = std::fs::read(case)?;
         let case_abs = std::env::current_dir()?.join(case);
         let case_dir = case_abs.parent().map(Path::to_path_buf).unwrap_or_default();
+        let from = Source {
+            text: &text,
+            case: case_in_project(&self.root, &case_abs),
+            name: &case_abs,
+            case_source: Some(case_abs.display().to_string()),
+            case_dir: Some(case_dir.display().to_string()),
+            mesh_dir: &case_dir,
+            rerun_of: None,
+        };
+        self.write_run(&from, settings, launch, solver_version, tags)
+    }
+
+    /// A new queued run of the case of run `src` as it was then (ADR 0734 P3): its `case.snapshot`, `case`, `case_source`
+    /// and `case_dir`, so its relative paths resolve as the original's did, with `settings` and `launch` (the caller
+    /// takes them from the record and applies its overrides) and `rerun_of: <src>`. The mesh hash is the mesh's now. The
+    /// design-study tags are not copied: a rerun is not a run of the study.
+    pub fn create_rerun(
+        &self,
+        src: &RunRecord,
+        settings: &RunSettings,
+        launch: &LaunchSettings,
+        solver_version: Option<String>,
+    ) -> io::Result<String> {
+        let text = std::fs::read(self.run_dir(&src.id).join("case.snapshot"))?;
+        let case_dir = match &src.case_dir {
+            Some(d) => PathBuf::from(d),
+            None => self
+                .root
+                .join(&src.case)
+                .parent()
+                .map_or_else(|| self.root.clone(), Path::to_path_buf),
+        };
+        let from = Source {
+            text: &text,
+            case: src.case.clone(),
+            name: Path::new(&src.case),
+            case_source: src.case_source.clone(),
+            case_dir: src.case_dir.clone(),
+            mesh_dir: &case_dir,
+            rerun_of: Some(src.id.clone()),
+        };
+        self.write_run(&from, settings, launch, solver_version, &RunTags::default())
+    }
+
+    /// The mesh of a file-mesh case and its hash (ADR 0734 P4, Q4 (a)): `mesh` project-relative when it is in the
+    /// project, else absolute; `mesh_hash` absent when the mesh cannot be hashed (missing, a link, over the limit: the
+    /// solver's check reports a mesh it cannot read). `(None, None)` for a generator case.
+    fn mesh_of(&self, from: &Source<'_>, set: &[String]) -> (Option<String>, Option<String>) {
+        match crate::mesh::case_mesh(from.text, from.name, from.mesh_dir, set) {
+            Some(m) => (
+                Some(case_in_project(&self.root, &m)),
+                rcfd_project::filehash::hash_path(&m).ok().map(|h| h.hash),
+            ),
+            None => (None, None),
+        }
+    }
+
+    fn write_run(
+        &self,
+        from: &Source<'_>,
+        settings: &RunSettings,
+        launch: &LaunchSettings,
+        solver_version: Option<String>,
+        tags: &RunTags,
+    ) -> io::Result<String> {
+        let text = from.text;
+        let (mesh, mesh_hash) = self.mesh_of(from, &settings.set);
         let runs = self.root.join("runs");
         std::fs::create_dir_all(&runs)?;
         let mut id = records::new_run_id();
@@ -118,20 +193,21 @@ impl FsStore {
         std::fs::create_dir(&tmp)?;
         let rec = RunRecord {
             id: id.clone(),
-            case: case_in_project(&self.root, &case_abs),
-            case_snapshot_hash: rcfd_project::records::hash_bytes(&text),
-            mesh: None,
-            mesh_hash: None,
+            case: from.case.clone(),
+            case_snapshot_hash: rcfd_project::records::hash_bytes(text),
+            mesh,
+            mesh_hash,
             solver_version: solver_version.unwrap_or_else(|| rcfd_project::records::UNKNOWN_SOLVER_VERSION.into()),
             settings: launch.merged(settings).map_err(bad)?,
             created: records::now_iso(),
-            case_source: Some(case_abs.display().to_string()),
-            case_dir: Some(case_dir.display().to_string()),
+            case_source: from.case_source.clone(),
+            case_dir: from.case_dir.clone(),
             study: tags.study.clone(),
             variant: tags.variant.clone(),
             condition: tags.condition.clone(),
+            rerun_of: from.rerun_of.clone(),
         };
-        atomic::write_new(&tmp.join("case.snapshot"), &text).map_err(io_error)?;
+        atomic::write_new(&tmp.join("case.snapshot"), text).map_err(io_error)?;
         atomic::write_json_new(&tmp.join("run.json"), &rec).map_err(io_error)?;
         let st = RunStatus {
             updated: rec.created.clone(),
@@ -144,6 +220,63 @@ impl FsStore {
         records::retry(|| std::fs::rename(&tmp, runs.join(&id)))?;
         Ok(id)
     }
+}
+
+/// What a new run is made from: the case text and how `run.json` names it.
+struct Source<'a> {
+    text: &'a [u8],
+    case: String,
+    /// The case's file name (its extension says TOML or JSON).
+    name: &'a Path,
+    case_source: Option<String>,
+    case_dir: Option<String>,
+    /// The folder the case's mesh file resolves against.
+    mesh_dir: &'a Path,
+    rerun_of: Option<String>,
+}
+
+/// The launch record of a run (ADR 0734 P1, Q1 (a), Q2 (a)): `runs/<id>/launch.json`, and `launch-<launch_seq>.json`
+/// for a later launch of the same run; each written once, before the solver is spawned.
+pub const LAUNCH_FILE: &str = "launch.json";
+
+/// The file a launch with `launch_seq` writes in the run folder `dir`.
+pub fn launch_file(dir: &Path, launch_seq: u64) -> PathBuf {
+    let first = dir.join(LAUNCH_FILE);
+    if first.exists() {
+        dir.join(format!("launch-{launch_seq}.json"))
+    } else {
+        first
+    }
+}
+
+fn is_launch_name(name: &str) -> bool {
+    name == LAUNCH_FILE
+        || name
+            .strip_prefix("launch-")
+            .and_then(|r| r.strip_suffix(".json"))
+            .is_some_and(|n| !n.is_empty() && n.bytes().all(|b| b.is_ascii_digit()))
+}
+
+/// The latest launch record of the run folder `dir` (the one started last), `None` when the run was never launched (or
+/// was launched before ADR 0734). A record that does not read is an error naming its file.
+pub fn latest_launch(dir: &Path) -> io::Result<Option<Value>> {
+    let rd = match std::fs::read_dir(dir) {
+        Ok(rd) => rd,
+        Err(e) if e.kind() == io::ErrorKind::NotFound => return Ok(None),
+        Err(e) => return Err(e),
+    };
+    let mut best: Option<Value> = None;
+    for e in rd.flatten() {
+        if !is_launch_name(&e.file_name().to_string_lossy()) {
+            continue;
+        }
+        let v: Value = atomic::read_json(&e.path()).map_err(io_error)?;
+        let started = |x: &Value| x["started"].as_str().unwrap_or_default().to_string();
+        if best.as_ref().map_or(true, |b| started(&v) > started(b)) {
+            best = Some(v);
+        }
+    }
+    Ok(best)
 }
 
 fn bad(e: impl std::fmt::Display) -> io::Error {

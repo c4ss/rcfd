@@ -151,6 +151,8 @@ COMMANDS:
     help [glossary | errors]   print this help; glossary: the terms of docs/glossary.md as JSON; errors: every
                                error and exit code of the engine with what to do next, as JSON
     project init <dir> [--name <name>]  make a project folder: rcfd-project.json and the standard folders
+    project hash <path>        the fnv64 hash of a mesh file or OpenFOAM mesh folder, as run.json mesh_hash (JSON)
+    version [--json]           the version; --json: {name, version, git_rev, profile, target}
 
 OPTIONS:
     -h, --help       print this help (also valid after a command)
@@ -220,6 +222,7 @@ fn dispatch(args: &[String]) -> u8 {
             println!("rcfd {}", env!("CARGO_PKG_VERSION"));
             OK
         }
+        "version" => cmd_version(rest),
         "validate" => cmd_validate(rest),
         "schema" => cmd_schema(rest),
         "run" => cmd_run(rest),
@@ -243,6 +246,32 @@ fn dispatch(args: &[String]) -> u8 {
         "acoustics" => cmd_gapc::cmd_acoustics(rest),
         "fwh" => cmd_fwh::cmd_fwh(rest),
         other => usage_error(&format!("unknown command '{other}'")),
+    }
+}
+
+/// `rcfd version [--json]` (ADR 0734 P1): the text of `rcfd --version`, or with `--json` the build as one JSON line:
+/// `git_rev` is `RCFD_GIT_REV` of the build (null when it set none, as a `git archive` build), `profile` `release` or
+/// `debug`, `target` `<arch>-<os>`.
+fn cmd_version(args: &[String]) -> u8 {
+    match args {
+        [] => {
+            println!("rcfd {}", env!("CARGO_PKG_VERSION"));
+            OK
+        }
+        [j] if j == "--json" => {
+            println!(
+                "{}",
+                serde_json::json!({
+                    "name": "rcfd",
+                    "version": env!("CARGO_PKG_VERSION"),
+                    "git_rev": option_env!("RCFD_GIT_REV").filter(|r| !r.is_empty()),
+                    "profile": if cfg!(debug_assertions) { "debug" } else { "release" },
+                    "target": format!("{}-{}", std::env::consts::ARCH, std::env::consts::OS),
+                })
+            );
+            OK
+        }
+        _ => usage_error("version takes only --json"),
     }
 }
 

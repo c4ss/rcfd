@@ -1,5 +1,7 @@
 //! `rcfd project init <dir> [--name <name>]` (ADR 0731 P2): make a project folder with
-//! `rcfd_workspace::create_project`, which calls `rcfd_project::Project::create` unchanged.
+//! `rcfd_workspace::create_project`, which calls `rcfd_project::Project::create` unchanged. `rcfd project hash <path>`
+//! (ADR 0734 P4): the hash of a mesh file or folder by `rcfd_project::filehash` (re-exported by the workspace), the rule
+//! of `hash_project_file`.
 
 use crate::{usage_error, FAIL, OK};
 use std::path::Path;
@@ -8,10 +10,35 @@ use std::path::Path;
 pub(crate) fn cmd_project(args: &[String]) -> u8 {
     match args.first().map(String::as_str) {
         Some("init") => cmd_init(&args[1..]),
+        Some("hash") => cmd_hash(&args[1..]),
         Some(other) => usage_error(&format!(
-            "unknown project command '{other}' (project init <dir> [--name <name>])"
+            "unknown project command '{other}' (project init <dir> [--name <name>], project hash <path>)"
         )),
-        None => usage_error("project needs a command: project init <dir> [--name <name>]"),
+        None => usage_error("project needs a command: project init <dir> [--name <name>], project hash <path>"),
+    }
+}
+
+/// Prints `{path, kind, hash, bytes, files}` as one JSON line; exit 0, 1 when the path cannot be hashed (missing, a
+/// symbolic link, over the limit named in the message), 2 on a usage error.
+fn cmd_hash(args: &[String]) -> u8 {
+    let [path] = args else {
+        return usage_error("project hash takes exactly one file or folder: project hash <path>");
+    };
+    if path.starts_with("--") {
+        return usage_error(&format!("unknown option '{path}' for project hash"));
+    }
+    match rcfd_workspace::filehash::hash_path(Path::new(path)) {
+        Ok(h) => {
+            println!(
+                "{}",
+                serde_json::json!({"path": path, "kind": h.kind, "hash": h.hash, "bytes": h.bytes, "files": h.files})
+            );
+            OK
+        }
+        Err(e) => {
+            eprintln!("error: {e}");
+            FAIL
+        }
     }
 }
 

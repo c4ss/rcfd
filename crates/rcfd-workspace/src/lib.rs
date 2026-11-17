@@ -54,6 +54,8 @@ use std::sync::Mutex;
 pub use create::SOURCES;
 pub use init::{create_project, MAX_NAME, SOLVER_VERSION};
 pub use rcfd_api::service::RpcError;
+/// ADR 0734 P4: the mesh hash rule of `hash_project_file`, `rcfd project hash` and the runner's `run.json` `mesh_hash`.
+pub use rcfd_project::filehash;
 pub use save::{save_case, SaveError, SaveForm, Saved};
 pub use series::{decimate_minmax, residual_series};
 
@@ -78,7 +80,7 @@ pub const FILE_PAGE: usize = 32_000;
 pub const MAX_WAIT_S: f64 = 60.0;
 
 /// The names [`Workspace::call`] answers, in the order of the MCP project tools.
-pub const COMMANDS: [&str; 25] = [
+pub const COMMANDS: [&str; 26] = [
     "project_info",
     "list_runs",
     "run_status",
@@ -90,6 +92,7 @@ pub const COMMANDS: [&str; 25] = [
     "list_changes",
     "read_feed",
     "read_project_file",
+    "hash_project_file",
     "edit_case",
     "write_note",
     "new_case",
@@ -249,6 +252,7 @@ impl Workspace {
             "list_changes" => value(self.list_changes(args)),
             "read_feed" => value(self.read_feed(args)),
             "read_project_file" => value(self.read_project_file(args)),
+            "hash_project_file" => value(self.hash_project_file(args)),
             "edit_case" => value(self.edit_case(args)),
             "write_note" => value(self.write_note(args)),
             "new_case" => value(self.new_case(args)),
