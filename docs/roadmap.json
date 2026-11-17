@@ -8084,9 +8084,9 @@
     "deps": [
       "F-790"
     ],
-    "status": "todo",
+    "status": "done",
     "acceptance": "Every limit not stated here is registered in the ADR before the run. A test of `scripts/test_adr_test_index_retro.py` asserts the `files` map of `coverage.primary.retro` (tier and ADR of each file) on its fake workspace for H1 and H2 files; the index of `--primary git`, `--primary registered` and `p0679` is equal to the index before the commit in every field; `gate_attribute.py` is unchanged; a planted change of a tier in `retro_primaries` is caught; `python -m unittest discover -s scripts` passes.",
-    "note": "Follow-up of F-790 (ADR 0712, 2026-11-16)."
+    "note": "Test-to-ADR index, gate attribution. Follow-up of F-790 (ADR 0712), 2026-11-17. DONE. ADR 0714, 2026-11-17: two tests added to `scripts/test_adr_test_index_retro.py` (one commit, one file, 20 insertions, no change to `adr_test_index.py` or `gate_attribute.py`) that restore the assertion lost with `test_counts` (ADR 0712): the whole `files` map of `coverage.primary.retro` on the fake workspace equals five literal entries of tier and ADR (H1: `r_h1.rs` 0110, `r_tier_a.rs` 0130; H2: `r_h2.rs` 0115, `r_tier_b.rs` 0120, `r_low.rs` 0125), and the counts `(h1, h2, h3) == (2, 3, 0)` agree with the tiers of the map. The index of `--primary git`, `--primary registered` and `p0679` is byte-identical before and after (11 889 642, 11 908 047 and 11 911 149 bytes, `cmp`; the `--report` output too), `python -m unittest discover -s scripts` runs 138 tests (136 before), OK; 5 of 5 planted changes in `retro_primaries` and `retro_units` caught (3 of them, the wrong tier written to the map, always 2 and `best[0] + 1`, and the miscount under `h2`, by the new tests only). Not covered: the `files` map of the real repository, the `none` count."
   },
   {
     "id": "F-793",
