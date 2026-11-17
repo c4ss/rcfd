@@ -47,8 +47,8 @@ const EXECUTE: [&str; 3] = ["design_run_study", "design_evaluate", "design_run_o
 
 /// ADR 0195 P1: the 23 project tools in the order of the F-273 list, ADR 0733 P3's two budgets tools right after
 /// `list_meshes` (C5-L restated for F-837), and ADR 0734 P4's `hash_project_file` right after `read_project_file` (C5-L
-/// restated for F-828).
-const PROJECT_TOOLS: [&str; 26] = [
+/// restated for F-828), and ADR 0738 P4's `derive_picture` right after `render_field` (C5-L restated for F-809).
+const PROJECT_TOOLS: [&str; 27] = [
     "project_info",
     "list_runs",
     "run_status",
@@ -56,6 +56,7 @@ const PROJECT_TOOLS: [&str; 26] = [
     "read_residuals",
     "field_summary",
     "render_field",
+    "derive_picture",
     "compare_runs",
     "list_changes",
     "read_feed",
@@ -96,7 +97,7 @@ fn files(dir: &Path) -> Vec<(String, Vec<u8>)> {
     out
 }
 
-/// C5-L: under `--project`, 43 tools (40, ADR 0733's two and ADR 0734's one): the list without `--project` less the 16 of P1, in its order and byte for byte (but the
+/// C5-L: under `--project`, 44 tools (40, ADR 0733's two, ADR 0734's one and ADR 0738's one): the list without `--project` less the 16 of P1, in its order and byte for byte (but the
 /// class `execute` of `design_run_study` and `design_evaluate`, ADR 0196 B), then the 23 project tools.
 #[test]
 fn c5l_project_list_has_no_session_only_tool() {
@@ -116,8 +117,8 @@ fn c5l_project_list_has_no_session_only_tool() {
     assert_eq!(kept.len(), 17);
     assert_eq!(
         live.len(),
-        43,
-        "17 session tools and 26 project tools (ADR 0733: two budgets tools; ADR 0734: hash_project_file)"
+        44,
+        "17 session tools and 27 project tools (ADR 0733: two budgets tools; ADR 0734: hash_project_file; ADR 0738: derive_picture)"
     );
     let mut execute = 0;
     for (l, k) in live.iter().zip(&kept) {

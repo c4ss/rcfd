@@ -16556,7 +16556,12 @@ Generated from `docs/studio-guardrails.md`, `PRODUCT.md` and `DESIGN.md` ([ADR 0
     on 2D cases with the reason in name and tooltip (G22). Left: iso-surfaces and streamlines have no engine entry point
     (shown unavailable); no CLI/MCP way to make the cut/arrows of a store (G16); no length unit for mesh coordinates.
     Engine needs listed in ADR 0801, "Engine follow-ups of the Studio items" (2026-11-17). 2026-11-17: engine follow-ups
-    E-809a to E-809e: ADR 0738 proposed; awaiting the maintainer.
+    E-809a to E-809e: ADR 0738 proposed; awaiting the maintainer. 2026-11-17: ADR 0738 accepted (all eight recommended
+    options); engine half built: iso-surfaces (marching tetrahedra, cell means at points and face centres), streamlines
+    (RK4, 0.25 of the cell length, velocity linear on the tets), slices and the Studio's cut and arrows as GLB
+    (`cut_surface`, T2/T3's rules), by the project tool `derive_picture` and `rcfd post derive` (same bytes);
+    `data.open` gains `length_unit: "m"`. Left: the field viewport drawing the engine's cut and arrows, iso-surface and
+    streamline controls in the Studio; `render_field` with axis/slice/vectors and `rcfd post render` (ADR 0738 P3).
 - [x] **F-810** Electron Studio: run bands and linked time scrubbing
   - depends on: F-808, F-811
   - acceptance: The run bands of DESIGN.md on one shared time axis, each end marked with its pictogram and word; one

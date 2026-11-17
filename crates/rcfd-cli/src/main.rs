@@ -6,6 +6,7 @@
 //! its convergence targets, 6 run diverged, 7 interrupted (stop file), 8 wall-clock limit
 //! reached (see docs/run-control.md).
 
+mod cmd_derive;
 mod cmd_fwh;
 mod cmd_gapc;
 mod cmd_map;
@@ -126,6 +127,12 @@ COMMANDS:
                                (XDMF + binary heavy data); an .stl input can only be re-encoded to .stl
     post <results-dir> [--format html|csv|json] [--out <file>]
                                re-create reports from <results-dir>/monitors.json written by `run`
+    post derive <store dir> --kind iso|streamlines|slice|cut_surface --out <file.glb> [--field f] [--level v]
+        [--colour-by f] [--rake x0,y0,z0,x1,y1,z1,n | --seeds <json>] [--direction forward|backward|both]
+        [--max-steps n] [--max-length l] [--min-speed s] [--step-fraction f] [--axis x|y|z --at v [--keep below|above]]
+        [--vectors] [--snapshot i | --step s | --time t]
+                               a derived picture of a stored field (runs/<id>/fields) as a GLB in metres, the file of the
+                               project tool derive_picture (ADR 0738); prints its reply as JSON
     serve [--addr <host:port>] [--root <dir>] [--stdio] [--cosim <case>] [--ui] [--journal-dir <dir>]
                                start the solver service (JSON-RPC 2.0, newline-delimited); --cosim hosts the
                                co-simulation fluid participant of the case's [cosim] table (protocol rcfd-cosim/1);
@@ -895,6 +902,9 @@ fn cmd_convert(args: &[String]) -> u8 {
 }
 
 fn cmd_post(args: &[String]) -> u8 {
+    if args.first().map(String::as_str) == Some("derive") {
+        return cmd_derive::cmd_derive(&args[1..]);
+    }
     let pos = positionals(args, &["--format", "--out"]);
     let [dir] = pos[..] else {
         return usage_error("post takes exactly one results directory");

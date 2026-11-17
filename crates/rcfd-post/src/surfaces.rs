@@ -197,26 +197,66 @@ fn solve3(a: [[f64; 3]; 3], b: Vec3) -> Vec3 {
     x
 }
 
+/// Position of tet vertex `id` of the decomposition: a mesh point (`id < n_points`), a face centre, then a cell centre.
+pub fn tet_vertex_position(mesh: &Mesh, id: usize) -> Vec3 {
+    let (np, nf) = (mesh.n_points(), mesh.n_faces());
+    if id < np {
+        mesh.points()[id]
+    } else if id < np + nf {
+        mesh.face_centres()[id - np]
+    } else {
+        mesh.cell_centres()[id - np - nf]
+    }
+}
+
 /// Marching-tetrahedra cut of a mesh at `g = 0` (see the module comment).
 pub fn cut_implicit(mesh: &Mesh, g: impl Fn(Vec3) -> f64) -> Result<Surface> {
     let np = mesh.n_points();
     let nf = mesh.n_faces();
     let nc = mesh.n_cells();
-    let pos = |id: usize| -> Vec3 {
-        if id < np {
-            mesh.points()[id]
-        } else if id < np + nf {
-            mesh.face_centres()[id - np]
-        } else {
-            mesh.cell_centres()[id - np - nf]
-        }
-    };
-    let gv: Vec<f64> = (0..np + nf + nc).map(|i| g(pos(i))).collect();
+    let gv: Vec<f64> = (0..np + nf + nc).map(|i| g(tet_vertex_position(mesh, i))).collect();
     if gv.iter().any(|x| !x.is_finite()) {
         return Err(bad(
             "cut_implicit: the implicit function is not finite at a mesh location".into(),
         ));
     }
+    Ok(march(mesh, &gv, None))
+}
+
+/// Where a cut's vertex lies: on the tet edge `(a, b)` at `t` (see [`cut_values_edges`]).
+pub type TetEdge = (usize, usize, f64);
+
+/// ADR 0738 P1: the marching-tetrahedra core of [`cut_implicit`] on given values at the tet vertices (`n_points` point
+/// values, then `n_faces` face-centre values, then `n_cells` cell-centre values): the surface `gv = 0`. `cut_implicit`
+/// is this function on its function's values, with the same arithmetic in the same order.
+pub fn cut_values(mesh: &Mesh, gv: &[f64]) -> Result<Surface> {
+    Ok(cut_values_edges(mesh, gv)?.0)
+}
+
+/// [`cut_values`] with, for each surface vertex, the tet edge it lies on and where: `(a, b, t)` with the vertex at
+/// `pos(a) + t (pos(b) - pos(a))` (`a == b`, `t = 0` for a vertex on a tet vertex where `gv` is 0). A field known at the
+/// tet vertices is carried to the surface by the same `t`.
+pub fn cut_values_edges(mesh: &Mesh, gv: &[f64]) -> Result<(Surface, Vec<TetEdge>)> {
+    let n = mesh.n_points() + mesh.n_faces() + mesh.n_cells();
+    if gv.len() != n {
+        return Err(bad(format!(
+            "cut_values: {} values for {n} tet vertices (points, face centres, cell centres)",
+            gv.len()
+        )));
+    }
+    if gv.iter().any(|x| !x.is_finite()) {
+        return Err(bad("cut_values: a value is not finite".into()));
+    }
+    let mut edges = Vec::new();
+    let s = march(mesh, gv, Some(&mut edges));
+    Ok((s, edges))
+}
+
+fn march(mesh: &Mesh, gv: &[f64], mut edges: Option<&mut Vec<TetEdge>>) -> Surface {
+    let np = mesh.n_points();
+    let nf = mesh.n_faces();
+    let nc = mesh.n_cells();
+    let pos = |id: usize| -> Vec3 { tet_vertex_position(mesh, id) };
     let mut surf = Surface::default();
     let mut vmap: HashMap<(usize, usize), usize> = HashMap::new();
     for c in 0..nc {
@@ -241,9 +281,15 @@ pub fn cut_implicit(mesh: &Mesh, g: impl Fn(Vec3) -> f64) -> Result<Surface> {
                     };
                     *vmap.entry(key).or_insert_with(|| {
                         let p = if gv[ia] == 0.0 {
+                            if let Some(e) = edges.as_deref_mut() {
+                                e.push((ia, ia, 0.0));
+                            }
                             pos(ia)
                         } else {
                             let t = gv[ia] / (gv[ia] - gv[ib]);
+                            if let Some(e) = edges.as_deref_mut() {
+                                e.push((ia, ib, t));
+                            }
                             vec3::add(pos(ia), vec3::scale(vec3::sub(pos(ib), pos(ia)), t))
                         };
                         surf.points.push(p);
@@ -308,7 +354,7 @@ pub fn cut_implicit(mesh: &Mesh, g: impl Fn(Vec3) -> f64) -> Result<Surface> {
             }
         }
     }
-    Ok(surf)
+    surf
 }
 
 /// Cut by a quadric.

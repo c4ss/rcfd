@@ -25,6 +25,9 @@
 //! ADR 0734 restates it for F-828 (P3, P4): `hash_project_file` (read, required `path`) comes right after
 //! `read_project_file`, and `start_run` gains the properties `continue_from`, `max_steps` and `from_run`; without them the
 //! list is the F-837 one, byte for byte.
+//!
+//! ADR 0738 restates it for F-809 (P4): `derive_picture` (read, required `run` and `kind`) comes right after
+//! `render_field`; without it the list is the F-828 one, byte for byte.
 
 use serde_json::{json, Value};
 use std::io::Write;
@@ -110,6 +113,24 @@ fn a2_tools_list_with_project_is_the_golden_with_the_f271_changes() {
     // live text
     assert_eq!(serde_json::to_string(&gold).unwrap(), GOLDEN);
     assert_eq!(serde_json::to_string(&live_value).unwrap(), got);
+    // ADR 0738 P4: derive_picture right after render_field, taken out; the rest is the F-828 list
+    {
+        let tools = live_value["tools"].as_array_mut().unwrap();
+        let at = tools
+            .iter()
+            .position(|t| t["name"] == "derive_picture")
+            .expect("derive_picture listed");
+        assert_eq!(tools[at - 1]["name"], "render_field");
+        let d = &tools[at];
+        assert_eq!(d["_meta"]["rcfd/access"], "read");
+        assert_eq!(d["inputSchema"]["required"], json!(["run", "kind"]));
+        assert_eq!(
+            d["inputSchema"]["properties"]["kind"]["enum"],
+            json!(["iso", "streamlines", "slice", "cut_surface"])
+        );
+        assert_eq!(d["inputSchema"]["additionalProperties"], false);
+        tools.remove(at);
+    }
     // ADR 0734 P3, P4: hash_project_file right after read_project_file and start_run's three properties, taken out;
     // the rest is the F-837 list
     {

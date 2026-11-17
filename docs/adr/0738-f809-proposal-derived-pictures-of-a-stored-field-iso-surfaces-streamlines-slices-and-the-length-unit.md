@@ -1,7 +1,8 @@
 # ADR 0738: F-809 proposal: derived pictures of a stored field: iso-surfaces, streamlines, slices, the Studio's cut from the CLI, and the length unit
 
-Status: **PROPOSED 2026-11-17.** Not accepted by the maintainer. Nothing is built: no Rust, TypeScript or test code was
-written for this ADR, and nothing was run. The maintainer approves the commands below before any code.
+Status: **ACCEPTED 2026-11-17** (all eight recommended options, see "Answers"). The engine half is built (see "Built");
+the Studio half (the field viewport drawing the engine's cut and arrows, the iso-surface and streamline controls) is not
+yet.
 
 Roadmap item F-809 (Electron Studio: derived pictures), ADR 0801 Addendum 7 and "Engine follow-ups of the Studio items",
 rows E-809a to E-809e; E-809e is also F-837's length unit (ADR 0801 Addendum 13). F-809's acceptance: "Each derived
@@ -159,6 +160,18 @@ What the engine computes on a stored field today (ADR 0801 Addendum 7, checked a
 8. **Fields.** Recommendation: (a). (a) stored cell fields and `speed`; (b) stored fields only; (c) also derived fields
    such as the Q-criterion (`rcfd_post::derived::q_criterion`, needs boundary values for its gradients).
 
+## Answers (maintainer, 2026-11-17)
+
+1. (a) the project tool `derive_picture` and `rcfd post derive`, writing `runs/<id>/derived/*.glb`; no new `data.*`
+   method.
+2. (a) the mean of the neighbouring cells at points and face centres.
+3. (a) classical RK4, step 0.25 of the local cell length.
+4. (a) velocity linear on the tet decomposition of each cell.
+5. (a) the engine writes the Studio's cut and arrows; the Studio draws the engine's output, the engine is the reference.
+6. (a) `data.open` gains `length_unit: "m"`; `time_unit` was already there (ADR 0734 P2), so only `length_unit` is new.
+7. (a) refuse over 2 000 000 triangles, or over 1 000 seeds or 10 000 steps, with 1004.
+8. (a) the stored cell fields and `speed`.
+
 ## Tests that would prove it
 
 - **I1** a cell field linear in y on a box mesh (uniform and graded): the iso-surface at a level more than one cell from
@@ -207,3 +220,36 @@ domain size and scale bar.
   IEEE Transactions on Visualization and Computer Graphics 2(2), 120-129.
 - Darmofal, D. L. and Haimes, R. (1996). An analysis of 3D particle path integration algorithms. Journal of
   Computational Physics 123(1), 182-195.
+
+## Built (2026-11-17, engine half)
+
+- `rcfd-post`: `iso.rs` (P1: `tet_vertex_values`, `iso_surface` with an optional colour field interpolated along the
+  same tet edges), `streamlines.rs` (P2: `Locator`, `TetVelocity`, `trace`, `trace_with`, `rake`, `patch_seeds`, stops
+  `left_domain`, `stagnant`, `max_steps`, `max_length`, `cell_walk_failed`), `picture.rs` (P3/P4: `store_surface`, the
+  surface `data.surface` gives, `clip_surface` with T2's rule `n . p <= d`, `vector_glyphs` with T3's rule, `slice`, and
+  a GLB writer and reader). `surfaces.rs`: the marching core of `cut_implicit` is split out (`march`) and shared by
+  `cut_values` and `cut_values_edges`; `cut_implicit` is the base commit's bit for bit (I3).
+- `rcfd-workspace::derive` and the project tool `derive_picture` (class `read`, after `render_field`; 44 tools with
+  `--project`); `rcfd post derive` calls the same library (`derive_dir`) and writes the same bytes (G16).
+- `data.open` gains `length_unit: "m"` (`rcfd_tsstore::LENGTH_UNIT`); `DATA_METHODS` is unchanged (D2).
+- Tests: `crates/rcfd-post/tests/derived_pictures_adr0738.rs` (I1, I2, I3, S1, S2, S3, T1, T2, T3, G1),
+  `crates/rcfd-mcp/tests/derive_picture_adr0738.rs` (P4, Q7), `crates/rcfd-cli/tests/post_derive_adr0738.rs` (P4, G16),
+  `crates/rcfd-api/tests/data_units_adr0738.rs` (U1, G2: `data.surface` is `store_surface` byte for byte). The tool-list
+  tests are restated (27 project tools, 44 with `--project`); `baseline_hashes.rs` passes unedited (B1).
+
+Deviations and decisions while building:
+
+- **S2's measure.** On a uniform disc mesh the radius error with the interpolated velocity converges at order 3.2
+  (superconvergence of the symmetric means), not 2, so S2 asserts at least 1.8 there and checks the second order on a
+  graded mesh (expansion 3.0: order 2.0, asserted in [1.8, 2.2]). A closed-revolution distance was not used: it mixes in
+  the chord sum of the stop. The RK4 order is measured as the phase error of the analytic velocity at step fractions
+  0.4, 0.2, 0.1 (order 3.9, asserted in [3.8, 4.2]).
+- **T3 in 2D.** The arrows are binned per surface triangle, as the Studio's `vectorGlyphs`, so a 2D cavity of n x n
+  cells gives up to two arrows per lattice bin (448 on the test cavity, not 256).
+- A missing `uz` is taken as zero for the velocity of a 2D store; `_CELL` is u32; the GLB's `asset.extras` holds the
+  reply's summary.
+- `derive_picture` is class `read` but is not added to the first allow-list of `project_w48f` F2: that list is the
+  maintainer's and was not asked about.
+- Not built: P3's first bullet (`render_field` with `axis`, `slice`, `vectors`, `range`; R1) and `rcfd post render`;
+  the Studio half of P4 (the field viewport drawing `cut_surface`, the iso-surface and streamline controls, G2 run from
+  the Studio's specs).
