@@ -99,8 +99,11 @@ export function DerivedControls({ ctx, cut, onCut, vectors, onVectors, startCut,
 
 const AXES = AXIS_NAME.map((n, i) => ({ id: String(i), label: n }));
 
-/** The cut plane's panel in the frame: axis, position, side kept. Keys and pointer stay in the panel (not the orbit). */
-export function CutPanel({ cut, layers, onCut }: { cut: Cut; layers: Layers; onCut: (cut: Cut) => void }) {
+/**
+ * The cut plane's panel in the frame: axis, position (in the stored mesh's length unit, ADR 0738 P5), side kept. Keys
+ * and pointer stay in the panel (not the orbit).
+ */
+export function CutPanel({ cut, layers, unit, onCut }: { cut: Cut; layers: Layers; unit: string; onCut: (cut: Cut) => void }) {
   const lo = layers.min[cut.axis];
   const hi = layers.max[cut.axis];
   const keep = (e: KeyboardEvent | PointerEvent) => e.stopPropagation();
@@ -117,7 +120,7 @@ export function CutPanel({ cut, layers, onCut }: { cut: Cut; layers: Layers; onC
       />
       <Slider
         className="fv-cut-slider"
-        label={`Plane at ${AXIS_NAME[cut.axis]}`}
+        label={`Plane at ${AXIS_NAME[cut.axis]}, ${unit}`}
         minValue={lo}
         maxValue={hi}
         step={(hi - lo) / 200 || 1}

@@ -14,6 +14,7 @@ import { CollectionBody, GroupBody } from './Groups.js';
 import { KeyRow } from './KeyRow.js';
 import { entryNames, entrySeed, formatValue, valueAt, type CaseModel, type SettingNode } from './schema.js';
 import { recoveryOf, useErrorCatalogue, type CatalogueEntry } from '../help/engine.js';
+import { EngineRecovery } from '../help/Recovery.js';
 
 export interface SettingsSurfaceProps {
   readonly model: CaseModel;
@@ -80,7 +81,7 @@ function withValue(tree: unknown, path: string, value: JsonValue | undefined): u
 export function SettingsSurface({ model, session, address, settingsEpoch, stateEpoch, aside }: SettingsSurfaceProps) {
   const list = useMemo(() => sections(model), [model]);
   const [tree, setTree] = useState<unknown>(null);
-  const [loadError, setLoadError] = useState<string | null>(null);
+  const [loadError, setLoadError] = useState<{ message: string; code: unknown } | null>(null);
   const [runState, setRunState] = useState<string | undefined>(undefined);
   const [selected, setSelected] = useState<string>(SET_ID);
   const [query, setQuery] = useState('');
@@ -108,7 +109,7 @@ export function SettingsSurface({ model, session, address, settingsEpoch, stateE
       setTree((t.result as { value?: unknown }).value ?? null);
       setLoadError(null);
     } else {
-      setLoadError(t.error.message);
+      setLoadError({ message: t.error.message, code: t.error.code });
     }
     if (s.ok) {
       const st = (s.result as { state?: unknown }).state;
@@ -433,7 +434,9 @@ export function SettingsSurface({ model, session, address, settingsEpoch, stateE
           {loadError ? (
             <div className="st-empty" data-words="exception">
               <h2 id="st-view-title">The settings could not be read</h2>
-              <p>The engine answered: {loadError}</p>
+              <p>The engine answered: {loadError.message}</p>
+              {/* F-830: the catalogue's way out of its code (a session another writer closed, 1001) */}
+              <EngineRecovery code={loadError.code} />
               <Button onPress={() => void refresh()}>Read again</Button>
             </div>
           ) : tree === null ? (

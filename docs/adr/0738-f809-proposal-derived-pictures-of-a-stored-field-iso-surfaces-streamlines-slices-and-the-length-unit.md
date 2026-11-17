@@ -284,3 +284,11 @@ Deviations and decisions while building:
 - Decision: the iso-surface is of the shown field only (its colour is then the legend's); a difference of two runs has
   no iso-surface (said in the reason). The `speed` field and other seeds (`points`, `patch`) are the CLI's and the
   tool's, not the viewport's.
+- The length unit in the Studio (F-837, 2026-11-17, branch small-fixes): `StoreInfo.lengthUnit` is `data.open`'s
+  `length_unit` on the service route and none on the local one (store.rts does not write it, Q5). The field view's
+  lengths (the cut panel's position, "Plane at x, m"; the domain size; the scale bar) are in the unit the engine named
+  for the store: `data.open`'s, else the `length_unit` of a derived picture of it, else the engine's documented store
+  unit (`rcfd_tsstore::LENGTH_UNIT`, which `tests/unit/f837.spec.ts` reads from the source and
+  `tests/unit/derive-bridge.spec.ts` checks against the reply). Each length's tooltip says which (G6); the domain and
+  the bar carry it as `data-length-unit`. Tests: `tests/unit/f837.spec.ts`, `tests/e2e/f837.spec.ts` (the scale bar),
+  `tests/e2e/field-derived.spec.ts` (the cut's reply names the unit), `tests/e2e/data.spec.ts` (both routes).

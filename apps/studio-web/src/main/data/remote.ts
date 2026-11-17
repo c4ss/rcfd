@@ -207,7 +207,9 @@ function storeInfo(r: unknown, path: string): StoreInfo {
       codec: f['codec'] as FieldInfo['codec'],
     };
   });
-  return { route: 'service', path, nCells: r['n_cells'] as number, nPoints: r['n_points'] as number, meshHash: r['mesh_hash'] as string, snapshots, fields, index: null };
+  // ADR 0738 P5: the engine names the unit of the stored mesh's coordinates; an engine before it says none
+  const lengthUnit = typeof r['length_unit'] === 'string' ? r['length_unit'] : null;
+  return { route: 'service', path, nCells: r['n_cells'] as number, nPoints: r['n_points'] as number, meshHash: r['mesh_hash'] as string, snapshots, fields, index: null, lengthUnit };
 }
 
 export class RemoteData {

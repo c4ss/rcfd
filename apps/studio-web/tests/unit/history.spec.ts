@@ -290,6 +290,68 @@ test.describe('a value another writer changed is never overwritten silently', ()
     }
   });
 
+  test('Refine x2: its undo checks the counts it left and sends them as base_value; another writer’s count is a conflict', async () => {
+    const r = await rig();
+    try {
+      const session = r.fake.makeSession({ 'mesh.nx': 8, 'mesh.ny': 4 });
+      await r.ui('mesh.refine', { session, factor: 2, apply: true });
+      expect([r.get(session, 'mesh.nx'), r.get(session, 'mesh.ny')]).toEqual([16, 8]);
+      // a plain round trip: the undo's writes carry the refined counts as their base
+      expect(await r.h.undo(session)).toMatchObject({ kind: 'done', direction: 'undo' });
+      expect([r.get(session, 'mesh.nx'), r.get(session, 'mesh.ny')]).toEqual([8, 4]);
+      const bases = r.fake.received.filter((x) => x.method === 'settings.set').map((x) => [x.params['path'], x.params['value'], x.params['base_value']]);
+      expect(bases).toEqual([
+        ['mesh.nx', 8, 16],
+        ['mesh.ny', 4, 8],
+      ]);
+      expect(await r.h.redo(session)).toMatchObject({ kind: 'done', direction: 'redo' });
+      expect([r.get(session, 'mesh.nx'), r.get(session, 'mesh.ny')]).toEqual([16, 8]);
+      // another writer sets a count after the refine: the undo stops with both values, nothing written
+      r.fake.externalSet(session, 'mesh.ny', 12);
+      const sets = r.fake.sets().length;
+      expect(await r.h.undo(session)).toMatchObject({ kind: 'conflict', direction: 'undo', scope: session, rows: [{ path: 'mesh.ny', expected: 8, now: 12 }] });
+      expect(r.fake.sets().length).toBe(sets);
+      expect([r.get(session, 'mesh.nx'), r.get(session, 'mesh.ny')]).toEqual([16, 12]);
+      // undo anyway: no base, both counts back
+      expect(await r.h.undo(session, { force: true })).toMatchObject({ kind: 'done' });
+      expect([r.get(session, 'mesh.nx'), r.get(session, 'mesh.ny')]).toEqual([8, 4]);
+      expect(r.fake.received.filter((x) => x.method === 'settings.set').slice(-2).map((x) => 'base_value' in x.params)).toEqual([false, false]);
+      // a refine that only asked (no apply) leaves nothing to check and is no step
+      const s2 = r.fake.makeSession({ 'mesh.nx': 8 });
+      await r.ui('mesh.refine', { session: s2, factor: 2 });
+      expect(r.get(s2, 'mesh.nx')).toBe(8);
+    } finally {
+      await r.close();
+    }
+  });
+
+  test('Refine x2: a count another writer sets between the history’s read and its write is the engine’s 1007, a conflict', async () => {
+    const fake = await FakeCaseService.start();
+    const t = await portTransport(fake.port);
+    try {
+      const d = new Dispatcher(t.transport);
+      const session = fake.makeSession({ 'mesh.nx': 8, 'mesh.ny': 4 });
+      let race = false;
+      const h = new History({
+        dispatchCall: async (c, o) => {
+          const r = await d.dispatchCall(c, o);
+          if (race && c.action === 'settings.get' && (c.params as Record<string, unknown>)['path'] === 'mesh.ny') {
+            race = false;
+            fake.externalSet(session, 'mesh.nx', 20);
+          }
+          return r;
+        },
+      });
+      h.record(await d.dispatchCall({ action: 'mesh.refine', params: { session, factor: 2, apply: true } }));
+      race = true;
+      expect(await h.undo(session)).toMatchObject({ kind: 'conflict', direction: 'undo', rows: [{ path: 'mesh.nx', expected: 16, now: 20 }] });
+      expect(fake.sessions.get(session)?.tree['mesh']).toMatchObject({ nx: 20, ny: 8 });
+    } finally {
+      await t.close();
+      await fake.stop();
+    }
+  });
+
   test('a session that is gone fails in words and keeps the step; values compare as JSON, keys in any order', async () => {
     const r = await rig();
     try {

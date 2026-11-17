@@ -96,9 +96,11 @@ for (const size of SIZES) {
       const dir = storeDir(root, size, codec);
       const a = infoOf(await local.open(dir).promise);
       const b = infoOf(await remote.open(servicePath(size, codec), 30_000).promise);
-      // the same store seen by both routes; only `route`, `path` and `index` differ
-      expect({ ...a, route: 'x', path: 'x', index: null }).toEqual({ ...b, route: 'x', path: 'x', index: null });
+      // the same store seen by both routes; only `route`, `path`, `index` and `lengthUnit` differ
+      expect({ ...a, route: 'x', path: 'x', index: null, lengthUnit: null }).toEqual({ ...b, route: 'x', path: 'x', index: null, lengthUnit: null });
       expect(a.index).toBe('footer');
+      // ADR 0738 P5: data.open names the stored mesh's length unit; store.rts does not
+      expect([a.lengthUnit, b.lengthUnit]).toEqual([null, 'm']);
       expect(a.snapshots.length).toBe(SNAPSHOTS);
       expect(a.fields.map((f) => [f.name, f.precision, f.codec])).toEqual(FIELDS.map((f) => [f, 'f32', codec === 'raw' ? 'raw' : 'shuffle_deflate']));
       let values = 0;

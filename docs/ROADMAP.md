@@ -16945,7 +16945,16 @@ Generated from `docs/studio-guardrails.md`, `PRODUCT.md` and `DESIGN.md` ([ADR 0
     label, help, usual range with its source and the docs heading from the engine, advanced keys behind Show all; the
     first path's Explain terms are glossary rows (13 terms added to docs/glossary.md), words.ts keeps no meaning of its
     own; engine errors in settings, the case editor and run control get the catalogue's recovery line (unit test over
-    the real catalogue). Left: a learner's view-and-report step (G19); an e2e walk provoking each catalogue error.
+    the real catalogue). 2026-11-17 (branch small-fixes): e2e error-walk.spec.ts provokes, through the Studio's surfaces
+    against rcfd serve --ui and rcfd-mcp --project, every catalogue code a user reaches and finds its recovery line:
+    1003 (a refused value in the case editor), 1002 (a setting changed while another writer holds the run paused), 1004
+    (a mesh over the preview limit), 1201 (Save while another writer holds the edit lock), 1001 (the editor's session
+    closed by another writer), 1202 (Run of a case deleted under the Studio); the case editor's Failed to save notice
+    and the settings' could-not-be-read state now show the line (they showed the message only); the rows it does not
+    provoke are listed with the reason (-32700, -32600, -32601, -32602, 1005, 1006, -32000, 1100; 1007, 1008 and 1200
+    answered by the conflict panels' choices instead of the line; the exit codes of rcfd, rcfd-runner, rcfd-mcp and the
+    hook), and the test fails when the catalogue gains a row in neither list. Left: a learner's view-and-report step
+    (G19).
 - [x] **F-831** Electron Studio: command palette and keyboard shortcuts
   - depends on: F-827, F-802
   - acceptance: A command palette generated from the action registry that finds every action by name; shortcuts for
@@ -17036,7 +17045,7 @@ Generated from `docs/studio-guardrails.md`, `PRODUCT.md` and `DESIGN.md` ([ADR 0
     located message on failure. mesh_preview_adr0732.rs replaces preview_g1 (M1, every shipped case against
     Simulation::new) and adaptive_preview_f475 (M2); e2e tests/e2e/f836.spec.ts. No MCP tool (Q6). Word budgets
     unchanged (case editor 51 of 51 with the preview drawn).
-- [~] **F-837** Electron Studio: run setup, logs and field-view extras from rcfd-studio
+- [x] **F-837** Electron Studio: run setup, logs and field-view extras from rcfd-studio
   - depends on: F-449, F-807, F-810
   - acceptance: Each capability the deleted rcfd-studio had and the Electron Studio lacks is built or recorded as
     declined by the maintainer: run setup for "simulate N s" (time step, adaptive correctors, store plan, Courant
@@ -17083,7 +17092,16 @@ Generated from `docs/studio-guardrails.md`, `PRODUCT.md` and `DESIGN.md` ([ADR 0
     Studio's Run, Run again and Queue now pass start_run {store: plan} (ADR 0140), a case that sets
     output.store_interval or output.store_time_interval keeps its own, the case file is not changed, start_run's own
     default (none) and the CLI's stay, and the start line says the snapshots and size the plan applied. e2e case-file-
-    adr0737.spec.ts (4); word budgets unchanged. Left: the store length unit (ADR 0738).
+    adr0737.spec.ts (4); word budgets unchanged. 2026-11-17 (branch small-fixes): an undo of Refine x2 checks the counts
+    the refine left (each edits[].after of its reply) and sends them as base_value, as the undo of settings.set does, so
+    a count another writer set since is the conflict panel with its three choices (the read before, or the engine's
+    1007), never overwritten silently; unit history.spec.ts (2), e2e case-file-adr0737.spec.ts (5). The store length
+    unit 2026-11-17 (ADR 0738 P5, branch small-fixes): the field view's lengths (the cut panel's position, Plane at x,
+    m; the domain size; the scale bar) are in the unit the engine names for the store: data.open's length_unit on the
+    service route, else the length_unit of a derived picture of it (rcfd post derive), else the engine's documented
+    store unit (rcfd_tsstore::LENGTH_UNIT, read from the source by the unit test), since store.rts does not write it
+    (Q5); each length's tooltip says which; word budgets unchanged; unit f837.spec.ts and derive-bridge.spec.ts, e2e
+    f837.spec.ts, field-derived.spec.ts, data.spec.ts. Nothing left.
 - [x] **F-838** Local-model assistant: keep, port or remove
   - depends on: F-449
   - acceptance: The maintainer decides what becomes of the local-model assistant that only rcfd-gui offered (presets

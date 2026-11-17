@@ -312,6 +312,9 @@ test('the field view face on: the 2D plane straight on, a scale bar in metres, t
   const m = length / 10 ** Math.floor(Math.log10(length) + 1e-12);
   expect([1, 2, 5].some((x) => Math.abs(m - x) < 1e-9)).toBe(true);
   await expect(bar).toContainText(/m$/);
+  // ADR 0738 P5: a local store names no length unit, so the bar says the engine's documented store unit, and why
+  await expect(bar).toHaveAttribute('data-length-unit', 'documented');
+  await expect(bar).toHaveAttribute('title', /the engine stores the mesh in metres, after mesh\.scale and \[mesh\.transform\]/);
   const zoom0 = Number(await canvas.getAttribute('data-camera-zoom'));
   // zoomed in: Face on only turns the view (it is face on already), the zoom stays; Reset view frames the domain again
   await page.locator('.fv-frame').first().focus();
