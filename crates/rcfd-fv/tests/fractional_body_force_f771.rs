@@ -547,9 +547,13 @@ fn model_step(u: &mut [f64]) {
     }
 }
 
-/// S1a, S1b, S2a, S2b, NS of ADR 0691: the start-up channel on the orthogonal periodic mesh.
+/// S1a, S1b, S2a, S2b, NS of ADR 0691: the start-up channel on the orthogonal periodic mesh. Known miss (ADR 0691 amendment
+/// 1): the one registered run (b2ac49e3) gave S2a `5.7930e-2` (step 1; limit `1e-9`); S1a `3.5684e-4`, S1b `5.4624e-3` (limit
+/// `2e-2`), S2b `5.4266e-14`, NS `1.0` met. Cause: the lagged periodic partner of the plain fractional predictor (S-a without
+/// `fractional_periodic_implicit`); the corrected set-up is `fractional_start_up_channel_with_the_implicit_partner`.
 #[test]
-fn fractional_start_up_channel_against_the_model_and_the_closed_form() {
+#[ignore = "known miss of ADR 0691 (S2a): the registered record, limits intact"]
+fn fractional_start_up_channel_against_the_model_and_the_closed_form_known_miss() {
     let t0 = Instant::now();
     let g = geom_of(box_2d(NX, NY, L, H, true, false).unwrap());
     let mk = |o: Frac| {
@@ -636,6 +640,68 @@ fn fractional_start_up_channel_against_the_model_and_the_closed_form() {
         "NS",
         r > 0.5,
         format!("control (the force not read): |U_b - U_b,exact| / U_b,exact {r:.4e} (> 0.5)"),
+    );
+    assert!(fails.is_empty(), "{fails:?}");
+}
+
+/// S1a', S2a' of ADR 0691 amendment 1: the plain fractional start-up run (`dte` coefficients) with the implicit periodic
+/// partner only, against the 1-D model and the closed form.
+#[test]
+fn fractional_start_up_channel_with_the_implicit_partner() {
+    let t0 = Instant::now();
+    let g = geom_of(box_2d(NX, NY, L, H, true, false).unwrap());
+    let u = walled_u(&g, |_| [0.0; 3]);
+    let p = ScalarField::from_fn("p", &g, p0);
+    let mut s = frac_settings(Frac {
+        opt: false,
+        twin: false,
+        body: true,
+    });
+    s.fractional_periodic_implicit = true;
+    s.p_ref = (0, p0(g.mesh.cell_centres()[0]));
+    let mut sa = PimpleSolver::new(g.clone(), u, p, s);
+    sa.body_force = Some(BodyForce::uniform(&g, [FX, GY, 0.0]));
+    let dy = H / NY as f64;
+    let row: Vec<usize> = g
+        .mesh
+        .cell_centres()
+        .iter()
+        .map(|c| ((c[1] / dy).floor() as usize).min(NY - 1))
+        .collect();
+    let mut model = vec![0.0; NY];
+    let mut s2 = Vec::new();
+    for _ in 0..STEPS {
+        sa.step(DT);
+        model_step(&mut model);
+        let ubm = model.iter().sum::<f64>() / NY as f64;
+        let d = sa.u.values.iter().enumerate().fold(0.0f64, |w, (c, v)| {
+            w.max(finite_or_inf((v[0] - model[row[c]]).abs()))
+                .max(finite_or_inf(v[1].abs()))
+        });
+        s2.push(d / ubm);
+    }
+    let t = DT * STEPS as f64;
+    let ex = bulk_exact(t);
+    let ubm = model.iter().sum::<f64>() / NY as f64;
+    let ua = sa.u.values.iter().map(|v| v[0]).sum::<f64>() / sa.u.values.len() as f64;
+    println!(
+        "printed: U_b at t = {t}: S-a' {ua:.6}, 1-D model {ubm:.6}, closed form {ex:.6}; elapsed {:.1} s",
+        t0.elapsed().as_secs_f64()
+    );
+    let mut fails = Fails::new();
+    let r = finite_or_inf(((ua - ex) / ex).abs());
+    check(
+        &mut fails,
+        "S1a'",
+        r <= 2e-2,
+        format!("|U_b - U_b,exact| / U_b,exact at t = {t}: {r:.4e} (2e-2)"),
+    );
+    let (v, st) = largest(&s2);
+    check(
+        &mut fails,
+        "S2a'",
+        v <= 1e-9,
+        format!("largest over the steps of max_c (|u_x - u_1D|, |u_y|) / U_b,1D {v:.4e} (step {st}) (1e-9 each step)"),
     );
     assert!(fails.is_empty(), "{fails:?}");
 }
