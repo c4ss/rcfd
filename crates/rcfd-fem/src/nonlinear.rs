@@ -1222,6 +1222,12 @@ pub struct NewtonOptions {
     /// before (the last two corrections did not halve it), and whose energy test holds. Off by default; the relative test
     /// is tried first at every iterate, and the acceptance of ADR 0604 D2 at the last iterate is kept either way.
     pub stagnation: bool,
+    /// The damping of the predictor (ADR 0688 D3): iteration 0 of an attempt with a non-zero prescribed increment, without a
+    /// load-factor control, takes its free correction `du` with the step length `beta` of the rule of ADR 0607 D1 from the
+    /// lifted iterate (the committed free values, the prescribed values at the target), a trial being admissible only when
+    /// its reduced tangent also passes the driver's pivot test; recorded in [`LoadStep::step_lengths`]. Off by default;
+    /// refused with `unsymmetric` and in an attempt with a contribution (key `"predictor_damping"`).
+    pub predictor_damping: bool,
 }
 
 impl NewtonOptions {
@@ -1239,6 +1245,7 @@ impl NewtonOptions {
             unsymmetric: false,
             line_search: false,
             stagnation: false,
+            predictor_damping: false,
         }
     }
     /// The same options with the active-set record of [`LoadStep::yielded`] switched on or off.
@@ -1274,6 +1281,11 @@ impl NewtonOptions {
     /// The same options with the stagnation acceptance at the rounding bound switched on or off (ADR 0619 D1).
     pub fn stagnation(mut self, on: bool) -> NewtonOptions {
         self.stagnation = on;
+        self
+    }
+    /// The same options with the damping of the predictor switched on or off (ADR 0688 D3).
+    pub fn predictor_damping(mut self, on: bool) -> NewtonOptions {
+        self.predictor_damping = on;
         self
     }
 
@@ -1329,6 +1341,13 @@ impl NewtonOptions {
                     .to_string(),
             });
         }
+        if self.predictor_damping && self.unsymmetric {
+            return Err(FemError::InvalidValue {
+                key: "predictor_damping",
+                reason: "with the unsymmetric tangent: the damping of the predictor needs the symmetric factor (ADR 0688 D3)"
+                    .to_string(),
+            });
+        }
         Ok(())
     }
 }
@@ -1352,7 +1371,8 @@ pub struct LoadStep {
     /// With the record, per iteration whether that set differs from the one of the previous iteration (`false` at
     /// iteration 0); empty otherwise.
     pub set_changed: Vec<bool>,
-    /// With [`NewtonOptions::line_search`], the step length of every correction (ADR 0607 D1); empty otherwise.
+    /// With [`NewtonOptions::line_search`] or [`NewtonOptions::predictor_damping`], the step length of every correction
+    /// (ADR 0607 D1, ADR 0688 D3); empty otherwise.
     pub step_lengths: Vec<f64>,
 }
 
@@ -1770,6 +1790,15 @@ impl Problem<'_> {
         let mut step_lengths = Vec::new();
         // ADR 0607 D1: the line search, decided once per attempt.
         let search = o.line_search && control.is_none() && !o.unsymmetric;
+        // ADR 0688 D3: the damping of the predictor, decided once per attempt; refused with a contribution.
+        let damp = o.predictor_damping && control.is_none() && !o.unsymmetric;
+        if o.predictor_damping && !self.contributions.is_empty() {
+            return Err(Failure::Other(
+                "predictor_damping with a contribution: the trial tangent would need the contributions' tangents (ADR \
+                 0688 D3)"
+                    .to_string(),
+            ));
+        }
         let mut previous_set: Option<Vec<bool>> = None;
         let (mut e_first, mut e_last) = (0.0, 0.0);
         let dofs = self.model.dof_map();
@@ -1970,10 +1999,17 @@ impl Problem<'_> {
             }
             e_last = e;
             energies.push(e);
-            if search {
-                // ADR 0607 D1: only an iteration without a prescribed increment is searched.
+            if search || damp {
+                // ADR 0607 D1: only an iteration without a prescribed increment is searched; ADR 0688 D3: one with it is
+                // damped from the lifted iterate.
                 let alpha = if increment.iter().all(|&(_, v)| v == 0.0) {
-                    self.step_length(&u, k, lt, states_c, sys.free(), &du, &rfull)
+                    if search {
+                        self.step_length(&u, k, lt, states_c, sys.free(), &du, &rfull)
+                    } else {
+                        1.0
+                    }
+                } else if damp {
+                    self.predictor_length(&u, lt, states_c, sys.free(), &du)
                 } else {
                     1.0
                 };
@@ -2014,6 +2050,7 @@ impl Problem<'_> {
         free: &[usize],
         du: &[f64],
         alpha: f64,
+        pivot_test: bool,
     ) -> Option<f64> {
         let mut x = u.to_vec();
         for (&q, d) in free.iter().zip(du) {
@@ -2024,7 +2061,7 @@ impl Problem<'_> {
                 x[eq] = lt * v;
             }
         }
-        let (mut fint, _, _) = force_and_tangent(
+        let (mut fint, kt, _) = force_and_tangent(
             self.model,
             &x,
             states_c,
@@ -2045,7 +2082,36 @@ impl Problem<'_> {
             .zip(du)
             .map(|(&q, d)| d * (lt * self.f[q] - fint[q]))
             .sum::<f64>();
-        s.is_finite().then_some(s)
+        if !s.is_finite() {
+            return None;
+        }
+        // ADR 0688 D3: a trial of the damped predictor is admissible only when its reduced tangent passes the pivot test.
+        if pivot_test {
+            let zero: Vec<(usize, f64)> = self.fixed.iter().map(|&(eq, _)| (eq, 0.0)).collect();
+            let sys = reduce(&kt, &vec![0.0; x.len()], &zero).ok()?;
+            if !sys.free().is_empty() {
+                factor_solve(
+                    &sys.matrix,
+                    &sys.rhs,
+                    sys.free(),
+                    &self.model.dof_map(),
+                    self.options.factor,
+                    self.reuse,
+                )
+                .ok()?;
+            }
+        }
+        Some(s)
+    }
+
+    /// The step length `beta` of the damped predictor (ADR 0688 D3): the rule of ADR 0607 D1 from the lifted iterate (`u`
+    /// with the prescribed values at `lt`), `s_0` by a trial evaluation there, every trial admissible only when its reduced
+    /// tangent passes the pivot test; 1 when `s_0` is not negative or its evaluation fails.
+    fn predictor_length(&self, u: &[f64], lt: f64, states_c: &[ElementState], free: &[usize], du: &[f64]) -> f64 {
+        match self.trial_slope(u, 0, lt, states_c, free, du, 0.0, false) {
+            Some(s0) if s0 < 0.0 => self.search_from(s0, u, 0, lt, states_c, free, du, true),
+            _ => 1.0,
+        }
     }
 
     /// The step length of the line search (ADR 0607 D1): 1 when the full step passes `s(1) <= eta |s_0|`, else the Illinois
@@ -2061,14 +2127,32 @@ impl Problem<'_> {
         du: &[f64],
         rfull: &[f64],
     ) -> f64 {
-        const ETA: f64 = 0.5;
-        const TRIALS: usize = 8;
         let s0 = -free.iter().zip(du).map(|(&q, d)| d * rfull[q]).sum::<f64>();
         if s0.is_nan() || s0 >= 0.0 {
             return 1.0;
         }
+        self.search_from(s0, u, k, lt, states_c, free, du, false)
+    }
+
+    /// The search of [`Problem::step_length`] from the slope `s0 < 0` at `alpha = 0` (ADR 0607 D1); with `admissible` (ADR
+    /// 0688 D3) every trial must also pass the pivot test (a refused trial is an overshoot), and when the trials are spent
+    /// the bracket's lower end is taken if it is above 0.
+    #[allow(clippy::too_many_arguments)]
+    fn search_from(
+        &self,
+        s0: f64,
+        u: &[f64],
+        k: usize,
+        lt: f64,
+        states_c: &[ElementState],
+        free: &[usize],
+        du: &[f64],
+        admissible: bool,
+    ) -> f64 {
+        const ETA: f64 = 0.5;
+        const TRIALS: usize = 8;
         let tol = ETA * s0.abs();
-        let s1 = self.trial_slope(u, k, lt, states_c, free, du, 1.0);
+        let s1 = self.trial_slope(u, k, lt, states_c, free, du, 1.0, admissible);
         if let Some(v) = s1 {
             if v <= tol {
                 return 1.0;
@@ -2088,7 +2172,7 @@ impl Problem<'_> {
             if alpha.is_nan() || alpha <= a || alpha >= b {
                 alpha = 0.5 * (a + b);
             }
-            let s = self.trial_slope(u, k, lt, states_c, free, du, alpha);
+            let s = self.trial_slope(u, k, lt, states_c, free, du, alpha, admissible);
             if let Some(v) = s {
                 if v.abs() <= tol {
                     return alpha;
@@ -2113,7 +2197,11 @@ impl Problem<'_> {
                 }
             }
         }
-        alpha
+        if admissible && a > 0.0 {
+            a
+        } else {
+            alpha
+        }
     }
 }
 
@@ -2599,8 +2687,104 @@ pub struct Equilibrium {
     pub residuals: Vec<f64>,
     /// The energies of the corrections.
     pub energies: Vec<f64>,
-    /// With [`NewtonOptions::line_search`], the step length of every correction (ADR 0607 D1); empty otherwise.
+    /// With [`NewtonOptions::line_search`] or [`NewtonOptions::predictor_damping`], the step length of every correction
+    /// (ADR 0607 D1, ADR 0688 D3); empty otherwise.
     pub step_lengths: Vec<f64>,
+}
+
+/// One attempt of [`solve_with`] from a committed state (ADR 0688 D2): from the committed displacement `committed` (which
+/// must carry `lc` times the value of every prescribed equation, bit for bit), the committed element `states` and the
+/// committed load factor `lc`, to the load factor `lt` (`0 <= lc < lt`), with the load vector `load` at factor 1: the
+/// driver's predictor with the prescribed increment `(lt - lc) v`, then its Newton iteration, with its options and criteria
+/// (`options.steps` and `options.max_halvings` are not used: one attempt, no halving). The iterates are those of the
+/// attempt of [`solve_with`] from the same committed state, bit for bit. A failed attempt gives the located inversion
+/// (`FemError::Element`) or `FemError::Solver { solver: "newton" }` with the cause.
+#[allow(clippy::too_many_arguments)]
+pub fn solve_increment(
+    model: &SolidModel,
+    prescribed: &[Prescribed],
+    load: &[f64],
+    committed: &[f64],
+    states: &[ElementState],
+    lc: f64,
+    lt: f64,
+    options: &NewtonOptions,
+    contributions: &[&dyn Contribution],
+) -> Result<Equilibrium> {
+    model.validate()?;
+    model.check_supported_nonlinear_shells()?;
+    check_driver_model(model)?;
+    options.check()?;
+    check_fields(model, committed, states)?;
+    if !(lc.is_finite() && lt.is_finite() && 0.0 <= lc && lc < lt) {
+        return Err(FemError::InvalidValue {
+            key: "load factor",
+            reason: format!("from {lc:e} to {lt:e}: 0 <= lc < lt, finite"),
+        });
+    }
+    let n = model.dof_map().n_equations();
+    if load.len() != n {
+        return Err(FemError::FieldLength {
+            key: "load vector",
+            expected: n,
+            found: load.len(),
+        });
+    }
+    for (key, x) in [("load vector", load), ("displacement", committed)] {
+        if let Some(i) = x.iter().position(|v| !v.is_finite()) {
+            return Err(FemError::InvalidValue {
+                key,
+                reason: format!("value {:e} at equation {i} is not finite", x[i]),
+            });
+        }
+    }
+    let fixed = prescribed_equations(model, prescribed)?;
+    if let Some(&(eq, v)) = fixed
+        .iter()
+        .find(|&&(eq, v)| committed[eq].to_bits() != (lc * v).to_bits())
+    {
+        return Err(FemError::InvalidValue {
+            key: "displacement",
+            reason: format!(
+                "the committed displacement has {:e} at the prescribed equation {eq} (lc times its value {:e}): it must carry \
+                 the committed prescribed values",
+                committed[eq],
+                lc * v
+            ),
+        });
+    }
+    let mut is_fixed = vec![false; n];
+    for &(eq, _) in &fixed {
+        is_fixed[eq] = true;
+    }
+    let free: Vec<usize> = (0..n).filter(|&i| !is_fixed[i]).collect();
+    let reuse = FactorReuse::new();
+    let problem = Problem {
+        model,
+        f: load.to_vec(),
+        fixed,
+        free,
+        options,
+        contributions,
+        reuse: &reuse,
+        context: PointContext::default(),
+        field: None,
+    };
+    match problem.attempt(committed, lc, lt, states) {
+        Ok(a) => Ok(Equilibrium {
+            u: a.u,
+            states: a.states,
+            internal_force: a.fint,
+            residuals: a.residuals,
+            energies: a.energies,
+            step_lengths: a.step_lengths,
+        }),
+        Err(Failure::Inverted(e)) => Err(e),
+        Err(Failure::Other(cause)) => Err(FemError::Solver {
+            solver: "newton",
+            reason: cause,
+        }),
+    }
 }
 
 /// One attempt of the Newton driver (ADR 0479 D2): `f_int(u) + sum of the contributions(u) = load` on the free equations,
