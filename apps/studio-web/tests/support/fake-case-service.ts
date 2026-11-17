@@ -219,6 +219,14 @@ export class FakeCaseService {
       if (!sess) fail(1001, `unknown session '${String(p['session'])}'`);
       return sess;
     };
+    // ADR 0736 P2: a base_value the session no longer holds is refused with 1007 and the value now
+    const stale = (tree: Json, path: string): boolean => {
+      if (!('base_value' in p)) return false;
+      const now = (getAt(tree, path) ?? null) as Json;
+      if (JSON.stringify(now) === JSON.stringify(p['base_value'])) return false;
+      fail(1007, `${path} changed since it was read; nothing was changed, read it again`, { path, current_value: now, current_hash: '0000000000000000' });
+      return true;
+    };
     switch (req.method) {
       case 'service.info':
         return ok({ name: 'fake-case', version: '0.0.0', protocol: 'rcfd-service/1', protocol_version: '1.1', methods: ['service.info', 'settings.schema'] });
@@ -252,6 +260,7 @@ export class FakeCaseService {
         if (!x) return;
         const path = String(p['path']);
         if (x.state === 'running' || x.state === 'paused') return fail(1002, 'stop the run before changing settings');
+        if (stale(x.tree, path)) return;
         const refusal = this.refusals.get(path);
         if (refusal !== undefined) return fail(1003, `validation failed: ${path}: ${refusal}`, { diagnostics: [{ path, line: null, message: refusal }] });
         setAt(x.tree, path, p['value'] as Json);
@@ -262,6 +271,7 @@ export class FakeCaseService {
         const x = needSession();
         if (!x) return;
         const path = String(p['path']);
+        if (stale(x.tree, path)) return;
         const i = path.lastIndexOf('.');
         const parent = getAt(x.tree, path.slice(0, i));
         if (!isObj(parent) || !(path.slice(i + 1) in parent)) return fail(1003, 'validation failed', { diagnostics: [{ path, line: null, message: `no entry ${path}` }] });

@@ -6,7 +6,7 @@
 import { existsSync } from 'node:fs';
 import { readdir, stat } from 'node:fs/promises';
 import path from 'node:path';
-import { FIRST_WATCH_MS, type CreateWhere, type EngineStatus, type OpenFailure, type PickResult, type ProjectState, type ProjectTool, type ProjectView, type RunActionResult } from '../../shared/project.js';
+import { FIRST_WATCH_MS, type CreateWhere, type EngineStatus, type OpenFailure, type PickResult, type ProjectState, type ProjectTool, type ProjectView, type RunActionResult, type TrashOutcome, type TrashWhat } from '../../shared/project.js';
 import { initProjectCli, rcfdBeside, type InitResult } from './create.js';
 import { ensureRunnerCli, type ControlDeps } from './control.js';
 import { filesUnder, type Names } from './listing.js';
@@ -329,6 +329,13 @@ export class ProjectHome {
           ? ensureRunnerCli(runner, folder)
           : Promise.resolve({ ok: false as const, message: `there is no ${RUNNER_EXE} beside ${exe}; build it with cargo build --release -p rcfd-runner` }));
     return { startControlServer: (f) => startControl(exe, f), ensureRunner: ensure, now: this.now };
+  }
+
+  /** ADR 0736: a trash operation of the engine on the open project. */
+  async trash(what: TrashWhat, params: Readonly<Record<string, unknown>>): Promise<TrashOutcome> {
+    const s = this.session;
+    if (!s) return { ok: false, code: 'no_project', message: 'No project is open: open a project folder first.', data: null };
+    return s.trash(what, params);
   }
 
   /** F-807: a run-control action on the open project. */

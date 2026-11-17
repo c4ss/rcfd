@@ -159,6 +159,13 @@ COMMANDS:
     help [glossary | errors]   print this help; glossary: the terms of docs/glossary.md as JSON; errors: every
                                error and exit code of the engine with what to do next, as JSON
     project init <dir> [--name <name>]  make a project folder: rcfd-project.json and the standard folders
+    project trash <dir> (--run <id> | --results <id> [--parts fields,output] | --case <path> --base-hash <hash>)
+        [--reason <text>]      move an ended run, its results or a case file to the project trash (.rcfd/trash/)
+    project trash-list <dir>   list the project trash
+    project restore <dir> <token> [--reason <text>]
+                               move a trashed item back (refused when its path is taken)
+    project empty-trash <dir> [--token <token>]... [--older-than-days <n>] [--reason <text>]
+                               remove trashed items for good
     project hash <path>        the fnv64 hash of a mesh file or OpenFOAM mesh folder, as run.json mesh_hash (JSON)
     version [--json]           the version; --json: {name, version, git_rev, profile, target}
 

@@ -20,12 +20,12 @@ Engine read: rcfd 0.1.0, service protocol rcfd-service/1 version 1.1, MCP server
 | Kind | Capabilities | UI path | Exemption | Exemption whose item does not name it |
 |---|---|---|---|---|
 | Service methods | 69 | 20 | 49 | 40 |
-| MCP tools | 61 | 26 | 35 | 26 |
-| CLI commands | 44 | 14 | 30 | 22 |
-| CLI options | 190 | 12 | 178 | 123 |
+| MCP tools | 67 | 32 | 35 | 26 |
+| CLI commands | 48 | 18 | 30 | 22 |
+| CLI options | 200 | 18 | 182 | 123 |
 | Case schema keys | 951 | 951 | 0 | 0 |
 | Monitor format keys | 6 | 6 | 0 | 0 |
-| **All** | **1321** | **1029** (77.9 %) | **292** | **211** |
+| **All** | **1341** | **1045** (77.9 %) | **296** | **211** |
 
 A case key stands for every value of its enumeration (the solver options of that key, listed in the inventory): the
 schema-driven surface of F-825 offers them all. A CLI option is mapped with its command. "Item does not name it" marks an
@@ -73,7 +73,7 @@ new item (see the last sections).
 | F-827 one action layer for every UI action | 1 | `rcfd call` (not named) |
 | F-828 provenance inspector and reproduce-from-CLI | 5 | `rcfd data list` (not named), `rcfd data provenance` (not named), `rcfd data verify` (not named), `rcfd project hash`, `rcfd version` |
 
-### CLI options (178 without a UI path)
+### CLI options (182 without a UI path)
 
 | Item | Count | Capabilities |
 |---|---|---|
@@ -87,6 +87,7 @@ new item (see the last sections).
 | F-825 schema-driven case and settings surface | 2 | `rcfd schema` (2) |
 | F-827 one action layer for every UI action | 1 | `rcfd call` (1) |
 | F-828 provenance inspector and reproduce-from-CLI | 18 | `rcfd` (1), `rcfd data list` (3), `rcfd data provenance` (3), `rcfd data verify` (3), `rcfd run` (1), `rcfd version` (1), `rcfd-runner rerun` (4), `rcfd-runner start` (2) |
+| F-829 undo, safe deletes and edit conflicts | 4 | `rcfd project empty-trash` (2), `rcfd project restore` (1), `rcfd project trash` (1) |
 | F-830 explain in place from the engine's docs | 1 | `rcfd` (1) |
 | F-835 new project | 1 | `rcfd project init` (1) |
 

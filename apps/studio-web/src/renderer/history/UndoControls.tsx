@@ -17,6 +17,8 @@ import './history.css';
 export interface UndoControlsProps {
   /** The session whose edits the controls undo; null: none (the controls say so). */
   readonly scope: string | null;
+  /** What the scope is, for the group's name (default `session <scope>`; ADR 0736: the project home's trash steps). */
+  readonly label?: string;
   /** Redo made a session again under a new id (redo of "new session"): the page follows it. */
   readonly onRenamed?: (from: string, to: string) => void;
 }
@@ -32,7 +34,7 @@ function isEditing(el: Element | null, dirty: Element | null): boolean {
   return el !== null && el === dirty && el.matches('input, textarea');
 }
 
-export function UndoControls({ scope, onRenamed }: UndoControlsProps) {
+export function UndoControls({ scope, onRenamed, label }: UndoControlsProps) {
   const [view, setView] = useState<HistoryView>(EMPTY);
   const [prompt, setPrompt] = useState<Prompt | null>(null);
   const [announce, setAnnounce] = useState('');
@@ -124,7 +126,7 @@ export function UndoControls({ scope, onRenamed }: UndoControlsProps) {
   const redoLabel = view.redo ? `Redo: ${view.redo.title}` : 'Nothing to redo';
 
   return (
-    <div className="hi-controls" role="group" aria-label={scope ? `Undo and redo, session ${scope}` : 'Undo and redo'}>
+    <div className="hi-controls" role="group" aria-label={scope ? `Undo and redo, ${label ?? `session ${scope}`}` : 'Undo and redo'}>
       {view.undo && !view.undo.available ? (
         <Unavailable label={`Cannot undo: ${view.undo.title}`} reason={view.undo.reason ?? 'This step cannot be undone.'} />
       ) : (

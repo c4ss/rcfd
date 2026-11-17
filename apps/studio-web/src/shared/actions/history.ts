@@ -9,16 +9,21 @@
 //   closes takes its history with it; a restarted service clears every history (its sessions are gone).
 // - Conflict: before undoing (or redoing) a step the settings it left are read again; a value another writer (Claude
 //   Code, the CLI, a second window) changed since is a conflict, shown with the values on both sides and a choice,
-//   never overwritten silently (G18). The service has no compare-and-set, so the read and the write are two calls; the
-//   gap between them is a few milliseconds (reported as a missing engine entry point).
+//   never overwritten silently (G18). The write itself carries the value the step expects as its compare-and-set base
+//   (ADR 0736 P2: settings.set and settings.remove take `base_value`), so a value another writer set between the read
+//   and the write is refused by the engine (1007) and shown as the same conflict; a forced undo sends no base.
 // - Loss: undoing session.create closes the session, which cannot be undone in turn, so it is confirmed in words that
 //   name what is lost (loss.ts); so is an undo or redo of a settings change on a session that holds results, which the
 //   change discards.
 //
+// ADR 0736 (F-829): a step need not be a service action. A surface records an outside step (`recordStep`) with its own
+// undo and redo through the engine: moving a run, its results or a case file to the project trash is undone by
+// restore_trash, through the main process, never by the Studio touching a file (G12).
+//
 // Shared by the renderer, the main process and the tests: no Node or DOM types.
 import type { JsonObject, JsonValue } from './params.js';
 import type { ActionReply, Dispatcher } from './dispatcher.js';
-import { getAction, type ActionCall } from './registry.js';
+import { getAction, SETTINGS_CONFLICT, type ActionCall } from './registry.js';
 import { lossOf, NO_INVERSE, statusFacts, type SessionFacts } from './loss.js';
 
 /** What a surface may say about a step it records (dispatch's `undo` option in the renderer). */
@@ -49,6 +54,17 @@ export interface ConflictRow {
 }
 
 export type Direction = 'undo' | 'redo';
+
+/** What an outside step's undo or redo answered: done, or the engine's refusal in its words. */
+export type StepResult = { readonly ok: true } | { readonly ok: false; readonly message: string };
+
+/** An outside step (ADR 0736): its title and the two ways it goes, each through the engine. */
+export interface OutsideStep {
+  /** "move runs/r-1 to the trash": the button reads "Undo: move runs/r-1 to the trash". */
+  readonly title: string;
+  undo(): Promise<StepResult>;
+  redo(): Promise<StepResult>;
+}
 
 export type HistoryOutcome =
   | { readonly kind: 'nothing'; readonly direction: Direction }
@@ -107,6 +123,8 @@ interface Step {
   after: Expectation[];
   /** What undoing it left (checked before redo). */
   before: Expectation[];
+  /** An outside step's own undo and redo (ADR 0736); the calls above are then unused. */
+  readonly outside?: OutsideStep;
 }
 
 interface Stacks {
@@ -118,6 +136,18 @@ interface Stacks {
 export const MAX_STEPS = 200;
 
 const isObject = (v: unknown): v is Record<string, unknown> => typeof v === 'object' && v !== null && !Array.isArray(v);
+
+/**
+ * A settings write of an undo or redo with its compare-and-set base (ADR 0736 P2): the value the step expects at its
+ * path; none when the step expects nothing there, or when the user chose to replace the value now (`force`).
+ */
+export function withBase(c: ActionCall, expect: readonly Expectation[], force: boolean): ActionCall {
+  if (c.action !== 'settings.set' && c.action !== 'settings.remove') return c;
+  const { base_value: _old, ...params } = c.params as JsonObject;
+  void _old;
+  const x = force ? undefined : expect.find((e) => e.path === params['path']);
+  return { action: c.action, params: x ? { ...params, base_value: x.value } : params };
+}
 
 /** JSON with sorted keys: equal values give equal text. */
 export function canonical(v: unknown): string {
@@ -197,6 +227,18 @@ export class History {
     };
     const st = this.stacks(scope);
     st.undo.push(step);
+    if (st.undo.length > MAX_STEPS) st.undo.shift();
+    st.redo = [];
+    this.emit({ kind: 'changed' });
+  }
+
+  /**
+   * Records an outside step (ADR 0736): one that is no service action, with its own undo and redo through the engine
+   * (the project trash: restore_trash, then the move again). Its scope is the surface's (`project:<folder>`).
+   */
+  recordStep(scope: string, step: OutsideStep): void {
+    const st = this.stacks(scope);
+    st.undo.push({ id: this.nextId++, action: 'outside', title: step.title, forward: { action: 'outside', params: {} }, backward: [], fixed: true, note: null, after: [], before: [], outside: step });
     if (st.undo.length > MAX_STEPS) st.undo.shift();
     st.redo = [];
     this.emit({ kind: 'changed' });
@@ -285,6 +327,14 @@ export class History {
     if (!calls) return { kind: 'unavailable', direction: dir, title: step.title, reason: step.note ?? 'This step cannot be undone.' };
     this.running = true;
     try {
+      if (step.outside) {
+        const r = dir === 'undo' ? await step.outside.undo() : await step.outside.redo();
+        if (!r.ok) return { kind: 'failed', direction: dir, title: step.title, message: r.message, done: 0 };
+        (dir === 'undo' ? st.undo : st.redo).pop();
+        (dir === 'undo' ? st.redo : st.undo).push(step);
+        this.emit({ kind: 'changed' });
+        return { kind: 'done', direction: dir, title: step.title, scope };
+      }
       // 1. what the step (or its undo) left must still be there
       if (!options.force) {
         const rows = await this.changedSince(scope, dir === 'undo' ? step.after : step.before);
@@ -296,11 +346,20 @@ export class History {
         const loss = await this.lossOf(scope, step, calls);
         if (loss) return { kind: 'confirm', direction: dir, title: step.title, scope, loss };
       }
-      // 3. the calls, through the dispatcher
+      // 3. the calls, through the dispatcher, each settings write with the value it expects as its base (ADR 0736 P2)
+      const expect = dir === 'undo' ? step.after : step.before;
       const replies: ActionReply[] = [];
       for (const c of calls) {
-        const r = await this.dispatcher.dispatchCall(c, { origin: dir });
-        if (!r.ok) return { kind: 'failed', direction: dir, title: step.title, message: r.error.message, done: replies.length };
+        const r = await this.dispatcher.dispatchCall(withBase(c, expect, options.force === true), { origin: dir });
+        if (!r.ok) {
+          if (r.error.code === SETTINGS_CONFLICT && replies.length === 0) {
+            const data = isObject(r.error.data) ? r.error.data : {};
+            const path = typeof data['path'] === 'string' ? data['path'] : String(c.params['path'] ?? '');
+            const x = expect.find((e) => e.path === path);
+            return { kind: 'conflict', direction: dir, title: step.title, scope, rows: [{ path, expected: x?.value ?? null, now: (data['current_value'] ?? null) as JsonValue }] };
+          }
+          return { kind: 'failed', direction: dir, title: step.title, message: r.error.message, done: replies.length };
+        }
         replies.push(r);
       }
       let target = scope;

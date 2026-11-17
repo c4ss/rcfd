@@ -159,6 +159,13 @@ pub const CATALOGUE: &[ErrorEntry] = &[
     ),
     e(
         Service,
+        1007,
+        "SETTINGS_CONFLICT",
+        "settings conflict: the session holds another value than the call's base",
+        "Read the setting again (data.current_value is its value now), decide which value to keep, then set it with that base.",
+    ),
+    e(
+        Service,
         -32000,
         "INTERNAL",
         "internal error",

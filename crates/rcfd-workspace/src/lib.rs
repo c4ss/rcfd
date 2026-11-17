@@ -4,7 +4,7 @@
 //!
 //! [`Workspace`] is one open project with its run service and change watcher. [`Workspace::call`] runs one command or
 //! query by the name of its MCP project tool (`project_info`, `list_runs`, ..., `edit_case`, `write_note`, `new_case`,
-//! the mesh commands of [`meshes`], the run service's budgets of [`runner_config`] (ADR 0733), `start_run`, `wait_run`) with that tool's arguments and returns the tool's result
+//! the mesh commands of [`meshes`], the run service's budgets of [`runner_config`] (ADR 0733), `start_run`, `wait_run`, the project trash of [`trash`] (ADR 0736)) with that tool's arguments and returns the tool's result
 //! object ([`Answer`]); errors are
 //! [`RpcError`]s with the codes of ADR 0135 ([`CONFLICT`], [`LOCK_BUSY`], [`NOT_FOUND`] and the service codes). The MCP
 //! descriptors (names, schemas, access classes) stay in `rcfd-mcp`, which wraps these answers as MCP results.
@@ -44,6 +44,7 @@ pub mod runs;
 pub mod save;
 pub mod series;
 pub mod templates;
+pub mod trash;
 pub mod write;
 
 use rcfd_project::{Project, ProjectError, Watcher};
@@ -81,7 +82,7 @@ pub const FILE_PAGE: usize = 32_000;
 pub const MAX_WAIT_S: f64 = 60.0;
 
 /// The names [`Workspace::call`] answers, in the order of the MCP project tools.
-pub const COMMANDS: [&str; 27] = [
+pub const COMMANDS: [&str; 33] = [
     "project_info",
     "list_runs",
     "run_status",
@@ -109,6 +110,12 @@ pub const COMMANDS: [&str; 27] = [
     "resume_run",
     "cancel_run",
     "wait_run",
+    "list_trash",
+    "trash_run",
+    "trash_results",
+    "trash_case",
+    "restore_trash",
+    "empty_trash",
 ];
 
 /// The answer of a command or query.
@@ -268,6 +275,12 @@ impl Workspace {
             "start_run" => value(self.start_run(args)),
             "pause_run" | "resume_run" | "cancel_run" => value(self.control(name, args)),
             "wait_run" => value(self.wait_run(args)),
+            "list_trash" => value(self.list_trash(args)),
+            "trash_run" => value(self.trash_run(args)),
+            "trash_results" => value(self.trash_results(args)),
+            "trash_case" => value(self.trash_case(args)),
+            "restore_trash" => value(self.restore_trash(args)),
+            "empty_trash" => value(self.empty_trash(args)),
             _ => return None,
         })
     }

@@ -31,6 +31,9 @@ import { requestCommand, useCommandFact, useCommandHandlers } from '../commands/
 import { FirstPath, FirstPathIntro, NotAProjectYet } from '../first/FirstPath.js';
 import { DataFiles, DesignsGroup, UnsavedMark, isCaseFile, useUnsavedCases } from './HomeExtras.js';
 import { STUDIO_SETTINGS_HASH } from '../studio-settings/hash.js';
+import { UndoControls } from '../history/UndoControls.js';
+import { isTerminalState } from '../../shared/actions/runs.js';
+import { TrashButton, TrashGroup, caseTarget, resultsTarget, runTarget, trashScope } from './Trash.js';
 import './project.css';
 
 // F-810: the run workspace, loaded on demand (it brings three.js), so the project home costs nothing more at start
@@ -544,6 +547,8 @@ function HomeBody({
             Read again
           </Button>
         )}
+        {/* ADR 0736: undo of a move to the project trash (an F-829 step that restores through the engine) */}
+        <UndoControls scope={trashScope(view.folder)} label="moves to the project trash" />
       </div>
       <div className="ph-work">
         <div className="ph-index" role="region" aria-label="What the project folder holds">
@@ -575,7 +580,7 @@ function HomeBody({
           )}
           {shown('runs') && (
             <Group id="runs" title="Runs" listing={view.runs} engineCount={info?.counts.runs} shown={runs.length} filtered={q !== ''}>
-              {runs.length > 0 && <RunsTable runs={runRows(runs, view.runDetails, view.runDetailErrors)} changed={changed} />}
+              {runs.length > 0 && <RunsTable runs={runRows(runs, view.runDetails, view.runDetailErrors)} changed={changed} folder={view.folder} />}
               {view.runs.total === 0 && !view.runs.error && (
                 <Empty text="No runs yet. A run solves one case and keeps its results in runs/. Run a case from the list above; Claude Code (start_run) and the CLI start the same runs, and theirs appear here as they start." />
               )}
@@ -591,6 +596,7 @@ function HomeBody({
               )}
             </Group>
           )}
+          {kind === 'all' && <TrashGroup view={view} />}
         </div>
         <ChangesLane view={view} />
       </div>
@@ -747,6 +753,9 @@ function CasesTable({
           <th scope="col">
             <span className="sr-only">Run</span>
           </th>
+          <th scope="col">
+            <span className="sr-only">Trash</span>
+          </th>
         </tr>
       </thead>
       <tbody data-words="data">
@@ -775,6 +784,9 @@ function CasesTable({
             </td>
             <td className="rc-case-run" data-words="chrome">
               <CaseRunButton view={view} casePath={c.path} onResult={onRunResult} />
+            </td>
+            <td className="ph-trash-cell" data-words="chrome">
+              <TrashButton folder={view.folder} target={caseTarget(c.path, unsaved.get(c.path))} />
             </td>
           </tr>
         ))}
@@ -820,7 +832,7 @@ function MeshesTable({ meshes, changed }: { meshes: readonly MeshEntry[]; change
   );
 }
 
-function RunsTable({ runs, changed }: { runs: readonly RunRow[]; changed: Map<string, string> }) {
+function RunsTable({ runs, changed, folder }: { runs: readonly RunRow[]; changed: Map<string, string>; folder: string }) {
   return (
     <table className="ph-table ph-table--runs">
       <thead>
@@ -836,6 +848,9 @@ function RunsTable({ runs, changed }: { runs: readonly RunRow[]; changed: Map<st
           <th scope="col">Created</th>
           <th scope="col">
             <span className="sr-only">Last change</span>
+          </th>
+          <th scope="col">
+            <span className="sr-only">Trash</span>
           </th>
         </tr>
       </thead>
@@ -859,6 +874,15 @@ function RunsTable({ runs, changed }: { runs: readonly RunRow[]; changed: Map<st
               <td>{dateTime(r.created)}</td>
               <td className="ph-change-cell">
                 <Changed at={changed.get(`run:${r.id}`)} />
+              </td>
+              {/* ADR 0736: an ended run, or its results, moves to the project trash (the engine refuses one still going) */}
+              <td className="ph-trash-cell" data-words="chrome">
+                {isTerminalState(r.state) && (
+                  <>
+                    <TrashButton folder={folder} target={resultsTarget(r.id)} />
+                    <TrashButton folder={folder} target={runTarget(r.id)} />
+                  </>
+                )}
               </td>
             </tr>
           );

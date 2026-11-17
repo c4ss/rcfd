@@ -36,7 +36,12 @@ pub fn is_transient(e: &io::Error) -> bool {
     e.kind() == io::ErrorKind::PermissionDenied || (cfg!(windows) && matches!(e.raw_os_error(), Some(32 | 33)))
 }
 
-fn with_retry<T>(op: &'static str, path: &Path, r: &Retry, mut f: impl FnMut() -> io::Result<T>) -> Result<T> {
+pub(crate) fn with_retry<T>(
+    op: &'static str,
+    path: &Path,
+    r: &Retry,
+    mut f: impl FnMut() -> io::Result<T>,
+) -> Result<T> {
     let mut sleep = r.first_backoff;
     let attempts = r.attempts.max(1);
     for attempt in 1..=attempts {
@@ -488,6 +493,30 @@ pub fn replace_if_hash_with(
         rel: norm,
         old_hash,
         new_hash,
+        broke_stale_lock: broke,
+    })
+}
+
+/// A held edit lock of one project-relative path, taken by [`lock_edit`]; released when dropped.
+pub struct EditGuard {
+    _held: EditLock,
+    /// True when a stale lock of another writer was removed first.
+    pub broke_stale_lock: bool,
+}
+
+impl std::fmt::Debug for EditGuard {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("EditGuard").field("lock", &self._held.lock).finish()
+    }
+}
+
+/// Take the edit lock of the project-relative path `rel` (normalised, `/` separators) as [`replace_if_hash`] does, for
+/// a writer that changes the path otherwise (the project trash moves it, ADR 0736): the same wait, claim and stale-lock
+/// rules; [`ProjectError::LockBusy`] after [`EDIT_LOCK_WAIT`].
+pub fn lock_edit(root: &Path, rel: &str, who: &str) -> Result<EditGuard> {
+    let (held, broke) = acquire(root, rel, &root.join(rel), who)?;
+    Ok(EditGuard {
+        _held: held,
         broke_stale_lock: broke,
     })
 }

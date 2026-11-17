@@ -616,3 +616,8 @@
 .ph-designs li:last-child {
   border-bottom: 0;
 }
+
+/* ADR 0736: the move-to-trash icon buttons of a row */
+.ph-trash-cell {
+  white-space: nowrap;
+}

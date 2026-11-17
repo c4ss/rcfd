@@ -93,14 +93,15 @@ fn f2_tool_names_pass_the_allow_list_rules() {
         .iter()
         .filter(|t| t["_meta"]["rcfd/access"] == "read" && !plain.iter().any(|p| t["name"] == p.as_str()))
         .map(|t| t["name"].as_str().unwrap())
+        // ADR 0736 (restated): list_trash is a read tool not on the first allow-list (not asked; as ADR 0188 Q6 (a))
+        .filter(|n| *n != "list_trash")
         .collect();
-    // ADR 0733 (the maintainer, 2026-11-17): runner_config is on the first allow-list too. ADR 0734 (restated for F-828):
-    // its read tool hash_project_file is not on it (the first allow-list is unchanged until the maintainer says otherwise)
+    // ADR 0733 and ADR 0734 (the maintainer, 2026-11-17): runner_config and hash_project_file are on the first
+    // allow-list too. ADR 0738 (restated for F-809): its read tool derive_picture is not on it (no answer of the
+    // maintainer adds it)
     let mut read = read;
-    assert!(read.remove("hash_project_file"), "hash_project_file is a read tool");
-    // ADR 0738 (restated for F-809): its read tool derive_picture is not on it either (no answer of the maintainer adds it)
     assert!(read.remove("derive_picture"), "derive_picture is a read tool");
-    assert_eq!(read.len(), 16);
+    assert_eq!(read.len(), 17);
     assert_eq!(read, PROJECT_READ_TOOLS.into_iter().collect::<BTreeSet<_>>());
     eprintln!(
         "F2: {} tools x 2 forms valid, longest {longest} characters; plugin '{plugin_name}', server '{server_name}', app-owned '{PINNED_SERVER}'",
@@ -115,8 +116,9 @@ fn f3_access_classes_read_only_and_schema() {
     let dir = project("f3p");
     let s = server(&dir, Policy::default());
     let list = s.tool_list();
-    // ADR 0733: and the two budgets tools; ADR 0734: and hash_project_file; ADR 0738: and derive_picture
-    assert_eq!(names(&list).len(), 17 + 27);
+    // ADR 0733: and the two budgets tools; ADR 0734: and hash_project_file; ADR 0736: and the six trash tools; ADR 0738:
+    // and derive_picture
+    assert_eq!(names(&list).len(), 17 + 33);
     for (name, access) in PROJECT_TOOLS {
         let t = list["tools"]
             .as_array()

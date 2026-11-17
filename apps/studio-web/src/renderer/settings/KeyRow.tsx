@@ -146,6 +146,7 @@ export function KeyRow({ leaf, path, label }: KeyRowProps) {
       </div>
       <div className="st-key-control" data-words="data">
         {control}
+        <ConflictNote path={path} />
         {TEXT_HINT[leaf.control] && <span className="st-key-hint st-key-detail" data-words="chrome">{TEXT_HINT[leaf.control]}</span>}
         {error && (
           <span className="st-key-error" id={errId} data-words="exception">
@@ -196,6 +197,30 @@ export function KeyRow({ leaf, path, label }: KeyRowProps) {
           )}
         </div>
       )}
+    </div>
+  );
+}
+
+/**
+ * A change the engine refused because another writer changed the value since this page read it (ADR 0736 P2, 1007):
+ * both values and two choices; nothing is sent until the user picks one (F-829, G18).
+ */
+export function ConflictNote({ path }: { path: string }) {
+  const c = useSettings();
+  const x = c.conflicts.get(path);
+  if (!x) return null;
+  const now = formatValue(x.now ?? undefined) || 'empty';
+  return (
+    <div className="hi-overtaken" role="alert" data-words="exception">
+      <p>
+        Not changed: another writer changed {path} since the Studio read it. It is now {x.now === null ? 'not set' : now}.
+      </p>
+      <div className="hi-choices">
+        <Button isDisabled={!c.editable} onPress={() => void (x.remove ? c.removeEntry(path, x.now) : c.change(path, x.mine, x.now))}>
+          {x.remove ? 'Remove it anyway' : `Set mine: ${formatValue(x.mine) || 'empty'}`}
+        </Button>
+        <Button onPress={() => c.keepTheirs(path)}>Keep {x.now === null ? 'it as it is' : now}</Button>
+      </div>
     </div>
   );
 }
