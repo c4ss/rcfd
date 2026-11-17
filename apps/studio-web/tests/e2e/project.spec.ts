@@ -92,7 +92,7 @@ test('the bridge is window.studioProject with exactly its functions, and refuses
       listeners: ipcMain.eventNames().map(String).filter((n) => n !== 'error'),
     };
   });
-  expect(names).toEqual({ handlers: ['app.info', 'app.ready'], listeners: [] });
+  expect(names).toEqual({ handlers: ['app.closeAnswer', 'app.info', 'app.ready'], listeners: [] });
 });
 
 test('opening a project lists its cases, meshes, runs and notes as the engine lists them, and writes nothing to it', async () => {

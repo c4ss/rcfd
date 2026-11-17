@@ -14308,8 +14308,10 @@ Generated from `docs/studio-guardrails.md`, `PRODUCT.md` and `DESIGN.md` ([ADR 0
     while a button is held. Fixes 2026-11-17 (Addendum 16): the reader's worker sends one value per surface triangle
     (1.2 MiB instead of 15.3 MiB, bit-identical), a launch-long memo of verified meshes plus a WebAssembly checksum
     loop, no pick while a button is held; 4e6 scrubbing 11-15/s to 20/s (longest frame 101 to 66 ms), first open of a
-    launch 1.5-1.8 s to 0.86-0.94 s, all 63 lines met in 3 runs under load. Left: a polyhedral FAN-01 mesh (needs Rust),
-    the maintainer's view-and-report.
+    launch 1.5-1.8 s to 0.86-0.94 s, all 63 lines met in 3 runs under load. Maintainer's answers 2026-11-17: the first
+    open of a store in a launch is judged too (Q-819-1, Q-819b-1): a judged P7 line in npm run bench (first open of the
+    1e6 store, R1 or R2, <= 1.5 s) and in measure-large.mjs (per mesh and repeat); a polyhedral FAN-01 mesh is skipped
+    (Q-819-4). Left: the maintainer's view-and-report.
 - [ ] **F-820** Electron Studio: installers, signing and updates
   - depends on: F-801
   - acceptance: Packaged installers for the platforms the maintainer names, signed if the maintainer provides
@@ -14495,9 +14497,13 @@ Generated from `docs/studio-guardrails.md`, `PRODUCT.md` and `DESIGN.md` ([ADR 0
     face-on view with scale bar and domain size, Save PNG, monitor log scale, designs/ group and data files apart,
     unsaved mark, Claude model and session cost, project folder argument at start, seven palette commands; word budgets
     unchanged. Needs engine: simulate-N-s helper with correctors and Courant fix (case-facts query or start_run dry
-    run), Refine x2 (refine_mesh), open/save one case file outside a project, store length unit. Not built:
-    save-or-discard on window close (proposed as an F-829 decision panel). set_runner_config (runner writes its own
-    budgets): ADR 0733 proposed; awaiting the maintainer.
+    run), Refine x2 (refine_mesh), open/save one case file outside a project, store length unit. Save or discard on
+    close 2026-11-17 (the maintainer's approval, ADR 0801 Addendum 13): closing a case session, the project or the
+    window (its close button, Alt+F4, the quit) with case changes not saved asks with the F-829 decision panel (Save and
+    close, Close and lose them, Keep editing; the files and their changes named; Tab held, focus back on cancel); the
+    window through the main process's close event and a page round trip (an unanswered page cannot hold it; the
+    test-mode quit does not ask); e2e close-guard.spec.ts (4). The maintainer confirmed designs/ as the Home heading.
+    Not built: set_runner_config (runner writes its own budgets), ADR 0733 proposed.
 - [ ] **F-838** Local-model assistant: keep, port or remove
   - depends on: F-449
   - acceptance: The maintainer decides what becomes of the local-model assistant that only rcfd-gui offered (presets

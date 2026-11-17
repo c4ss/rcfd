@@ -24,6 +24,7 @@ import { runRows, shownState, timeIsQuiet, timeNote, timeText, unknownWord, type
 import { cancelOpening, projectActions, watchProjectState } from './door.js';
 import { useWorkWhile, WorkProgress } from '../work/WorkProgress.js';
 import { caseHash } from '../case/hash.js';
+import { closeProject } from '../case/closeGuard.js';
 import { CaseRunButton, RunFailure } from '../runs/RunControls.js';
 import { ClaudePanel } from '../claude/ClaudePanel.js';
 import { requestCommand, useCommandFact, useCommandHandlers } from '../commands/host.js';
@@ -101,7 +102,7 @@ export function ProjectHome() {
         {project && (
           <div className="ph-top-right">
             <LiveWord view={project} />
-            <IconButton variant="ghost" icon="close" label="Close project" onPress={actions.close} />
+            <IconButton variant="ghost" icon="close" label="Close project" onPress={() => void closeProject()} />
           </div>
         )}
         {/* F-831: the command palette, also from the pointer */}
