@@ -16297,14 +16297,28 @@ fixed by the item's registration ADR before any code.
     block of ADR 0694 run through the case file reports nu = 1 at full load; off by default, the default bits, the
     schema golden and the hash tables unchanged.
   - note: Follow-up of F-780 (ADR 0719, 2026-11-16).
-- [ ] **F-843** The fold of rule L's 16^3 punch branch by an extended system with warm-started local modes
+- [x] **F-843** The fold of rule L's 16^3 punch branch by an extended system with warm-started local modes
   - depends on: F-841
   - acceptance: Every limit not stated here is registered in the ADR before the run. At ADR 0723's fold bracket, a
     test-only extended (Moore-Spence) system on the model with the warm start of the incompatible modes and committed
     element states, converged to a registered tolerance: lambda_f and a_f inside the bracket, the critical vector's
     share on element 3720, the null vector's residual; a fast control on a closed-form fold with a local unknown; the
     default bits unchanged.
-  - note: Follow-up of F-841 (ADR 0723, 2026-11-16).
+  - note: F-843 (ADR 0724, 2026-11-17): the fold of rule L's 16^3 punch branch computed at ADR 0723's bracket by a
+    test-only Moore-Spence system (R_F = 0, K psi = 0, l . psi = 1), Newton by block elimination with the tangent's
+    factor and central differences of the tangent (step 1e-8), on the model with the warm start of the incompatible
+    modes and committed element states. ADR 0711's rung 5 is rebuilt and committed on the warm model (bit-identical to
+    the plain evaluation), and the bracket's upper end is reproduced (lambda to 6e-14). From rung 5 the system converges
+    in 2 iterations to a_f 2.170072e-4, lambda_f 0.958472086948, both inside the bracket; the null vector's residual |K
+    psi| / (max |K_ii| |psi|) is 3.6e-11 (registered tolerance 1e-9), the Rayleigh quotient -2.6e-5 against -323 at rung
+    5, the critical value simple and lowest (inertia 0 and 1 at +1000 and -1000), and the critical vector's share on
+    element 3720 is 0.586. The fold is 0.23 per cent of a_5 past rung 5; ADR 0723's two-point estimate was within 5e-5
+    relative in a and 3e-9 in lambda. Committing the fold state changes the residual by no bit, and element 3720's mode
+    tangent stays positive definite there. Fast control: ADR 0723's toy with an atan local unknown, the closed-form fold
+    reproduced from both ends of its bracket (a to 3e-11, lambda to 3e-15, the null vector's share to 1e-11); the same
+    system on the toy without the warm start fails at its first evaluation. Default bits unchanged (no library line);
+    six of six mutations caught; no amendment. Follow-up F-845 (The library arc-length driver through rule L's 16^3 fold
+    with warm-started local modes).
 - [ ] **F-844** The local mode update of the incompatible Hex8 as a default, compared on the ADR 0658 set-ups and on rule L's 16^3 punch branch
   - depends on: F-841
   - acceptance: Every limit not stated here is registered in the ADR before the run. The warm start of ADR 0660 D1, the
@@ -16313,3 +16327,11 @@ fixed by the item's registration ADR before any code.
     iterations, and the states where the plain iteration from alpha = 0 fails at a regular root; a recommendation
     registered before the run; the default bits unchanged.
   - note: Follow-up of F-841 (ADR 0723, 2026-11-16).
+- [ ] **F-845** The library arc-length driver through rule L's 16^3 fold with warm-started local modes
+  - depends on: F-797
+  - acceptance: Every limit not stated here is registered in the ADR before the run. From ADR 0711's rung 5, the
+    arc-length opt-in of F-797 on the model with the warm start of the incompatible modes passes the fold computed by
+    ADR 0724 and reads it: a sign change of dlambda/da with nu from 1 to 0 whose bracket contains a_f 2.170072e-4 and
+    lambda_f 0.958472086948, the steps and the local fallbacks, to registered limits; a fast control on a closed-form
+    fold with a local unknown; the default bits unchanged.
+  - note: Follow-up of F-843 (ADR 0724, 2026-11-16).
