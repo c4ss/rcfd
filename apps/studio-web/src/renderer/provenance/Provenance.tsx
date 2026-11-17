@@ -19,17 +19,25 @@ import {
   numberFacts,
   provenanceText,
   runFacts,
+  sessionFacts,
+  SESSION_NO_REPRODUCE,
   versionLine,
   type Fact,
   type NumberSource,
   type RunProvenance,
+  type SessionNumberSource,
 } from '../../shared/provenance.js';
+import { dispatch } from '../actions/index.js';
 import { Button } from '../ui/index.js';
 import { attachedEngine, copyText, runProvenance } from './door.js';
 import { addRunOpener, addTrigger, registerProvenanceCommands, setHovered, type TriggerEntry } from './registry.js';
 import './provenance.css';
 
-export type ProvenanceSubject = { readonly kind: 'number'; readonly source: NumberSource } | { readonly kind: 'run'; readonly run: string };
+export type ProvenanceSubject =
+  | { readonly kind: 'number'; readonly source: NumberSource }
+  | { readonly kind: 'run'; readonly run: string }
+  /** A number of a live service session (settings, the plots' development view): no run behind it. */
+  | { readonly kind: 'session'; readonly source: SessionNumberSource };
 
 export interface ProvenanceProps {
   /** What the number is; a function is read when the popover opens (a live readout). */
@@ -40,6 +48,7 @@ export interface ProvenanceProps {
    * A button and a tab stop of its own (default). Off inside a grid row or a list option, whose row takes the click, the
    * focus and the arrow keys: the number is then passive (no role, no click of its own, so a click still selects the
    * row) and Show provenance (Ctrl+I) opens it while its row has the focus or the pointer is on it.
+   * A host may open a passive number on a click of its own (openTrigger of ./registry.ts: a settings key's name).
    */
   readonly tabStop?: boolean;
   /** The key an element names with data-provenance (the scrubber names the counter). */
@@ -51,7 +60,7 @@ export interface ProvenanceProps {
   readonly className?: string;
 }
 
-const unitWords = (s: NumberSource): string => (s.unit.kind === 'engine' && s.unit.unit !== '' ? ` ${s.unit.unit}` : '');
+const unitWords = (s: NumberSource | SessionNumberSource): string => (s.unit.kind === 'engine' && s.unit.unit !== '' ? ` ${s.unit.unit}` : '');
 
 /** The accessible name of a trigger: its words at rest (G22). */
 export function triggerName(subject: ProvenanceSubject | null): string {
@@ -142,7 +151,15 @@ export function Provenance({ subject, children, tabStop = true, pkey, runOpener,
       // and once more on the next frame, should a close from inside React's own work have left the unmount for later
       requestAnimationFrame(restore);
     };
-    showPopover(<ProvenancePopover subject={open} triggerRef={ref} onClose={close} />, owner, () => setOpen(null));
+    showPopover(
+      open.kind === 'session' ? (
+        <SessionPopover source={open.source} triggerRef={ref} onClose={close} />
+      ) : (
+        <ProvenancePopover subject={open} triggerRef={ref} onClose={close} />
+      ),
+      owner,
+      () => setOpen(null),
+    );
     return () => hidePopover(owner);
   }, [open, owner]);
   const cls = `pv-num${tabStop ? '' : ' pv-num--passive'}${className ? ` ${className}` : ''}`;
@@ -201,7 +218,7 @@ function useRunProvenance(run: string): { p: RunProvenance | null; error: string
   return { ...got, engine };
 }
 
-function ProvenancePopover({ subject, triggerRef, onClose }: { subject: ProvenanceSubject; triggerRef: React.RefObject<HTMLElement | null>; onClose: () => void }) {
+function ProvenancePopover({ subject, triggerRef, onClose }: { subject: Exclude<ProvenanceSubject, { kind: 'session' }>; triggerRef: React.RefObject<HTMLElement | null>; onClose: () => void }) {
   const run = subject.kind === 'run' ? subject.run : subject.source.run;
   const { p, error, engine } = useRunProvenance(run);
   const [copied, setCopied] = useState<{ what: 'command' | 'all'; ok: boolean; message: string } | null>(null);
@@ -262,6 +279,78 @@ function ProvenancePopover({ subject, triggerRef, onClose }: { subject: Provenan
             Copy command
           </Button>
           <Button icon={copied?.what === 'all' && copied.ok ? 'check' : undefined} onPress={() => void copy('all')}>
+            Copy
+          </Button>
+          <span className={copied && !copied.ok ? 'pv-copy-failed' : 'sr-only'} role="status" data-words="exception">
+            {copied?.message ?? ''}
+          </span>
+        </div>
+      </Dialog>
+    </Popover>
+  );
+}
+
+/** The session's journal as journal.get answers it: the number of edits and the case tree's hash. */
+function useJournal(session: string): { readonly entries: number; readonly caseHash: string } | { readonly error: string } | null {
+  const [got, setGot] = useState<{ readonly entries: number; readonly caseHash: string } | { readonly error: string } | null>(null);
+  useEffect(() => {
+    let alive = true;
+    void dispatch('journal.get', { session }, { undo: false }).then((r) => {
+      if (!alive) return;
+      if (!r.ok) return setGot({ error: r.error.message });
+      const o = r.result as { entries?: unknown; case_hash?: unknown };
+      setGot(Array.isArray(o.entries) && typeof o.case_hash === 'string' ? { entries: o.entries.length, caseHash: o.case_hash } : { error: 'journal.get answered without entries or case_hash' });
+    });
+    return () => {
+      alive = false;
+    };
+  }, [session]);
+  return got;
+}
+
+/** The provenance of a session number: the facts the service gives, and why there is no command to reproduce it. */
+function SessionPopover({ source, triggerRef, onClose }: { source: SessionNumberSource; triggerRef: React.RefObject<HTMLElement | null>; onClose: () => void }) {
+  const [engine, setEngine] = useState<{ name: string; version: string } | null | 'reading'>('reading');
+  useEffect(() => {
+    let alive = true;
+    void attachedEngine().then((e) => {
+      if (alive) setEngine(e);
+    });
+    return () => {
+      alive = false;
+    };
+  }, []);
+  const journal = useJournal(source.session);
+  const facts = sessionFacts(source, engine, journal);
+  const [copied, setCopied] = useState<{ ok: boolean; message: string } | null>(null);
+  const copy = async () => {
+    const text = [`Provenance of ${source.quantity}`, ...facts.map(([k, v]) => `${k}: ${v}`), SESSION_NO_REPRODUCE].join('\n');
+    const r = await copyText(text);
+    setCopied({ ok: r.ok, message: r.ok ? 'Provenance copied' : `Not copied: ${r.error.message}` });
+  };
+  return (
+    <Popover triggerRef={triggerRef} isOpen onOpenChange={(o) => !o && onClose()} placement="bottom start" offset={4} className="ui-popover pv-pop">
+      <Dialog aria-label={`Provenance of ${source.quantity}`} className="pv-dialog" data-session={source.session}>
+        <header className="pv-head" data-words="data">
+          <span className="pv-quantity">{source.quantity}</span>
+          <span className="pv-value">{source.shown}</span>
+          {source.unit.kind === 'engine' && source.unit.unit !== '' && <span className="pv-unit">{source.unit.unit}</span>}
+        </header>
+        <dl className="pv-facts">
+          {facts.map(([k, v]) => (
+            <div key={k} data-fact={k}>
+              <dt>{k}</dt>
+              <dd data-words="data">{v}</dd>
+            </div>
+          ))}
+        </dl>
+        <section className="pv-repro" aria-label={`Reproduce session ${source.session} from the command line`}>
+          <p className="pv-reading" data-words="exception">
+            {SESSION_NO_REPRODUCE}
+          </p>
+        </section>
+        <div className="pv-actions">
+          <Button icon={copied?.ok ? 'check' : undefined} onPress={() => void copy()}>
             Copy
           </Button>
           <span className={copied && !copied.ok ? 'pv-copy-failed' : 'sr-only'} role="status" data-words="exception">

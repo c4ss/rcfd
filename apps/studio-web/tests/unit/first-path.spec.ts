@@ -388,7 +388,10 @@ test.describe('the words of the path (G6, G15, G19)', () => {
     expect(src('renderer', 'claude', 'ClaudePanel.tsx')).toContain('Claude Code');
     // no command palette is named until one exists in this build (G6: never suggest a capability that does not exist)
     expect(Object.values(FULL_CONTROL).join(' ')).not.toMatch(/palette/i);
-    expect(RESULT_LINK.label).toBe('Open the run in Runs');
+    expect(RESULT_LINK.label).toBe('Open the run');
+    expect(RESULT_LINK.name).toBe('Open the run in the workspace');
+    // the workspace the result opens exists in this build (G6)
+    expect(src('renderer', 'project', 'ProjectHome.tsx')).toMatch(/label: 'Workspace'/);
   });
 
   test('the path makes and writes nothing itself: its renderer code names no file operation, tool or bridge', () => {

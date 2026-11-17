@@ -221,6 +221,46 @@ test('names and keyboard: the plots are named regions, the controls are reached 
   for (const name of ['Session', 'Case file', 'New session', 'Initialize', 'Step 20', 'Start', 'Stop']) expect(reached.join(' | ')).toContain(name);
 });
 
+test('F-828: the session’s numbers open their provenance: the monitor readout, a residual’s last value, the iteration', async () => {
+  const { session } = await call<{ session: string }>('session.create', { path: 'cases/cavity-re100.toml' });
+  await call('run.initialize', { session });
+  await call('run.step', { session, count: 8 });
+  await open(session);
+  const all = (await call<{ series: Record<string, Series & { unit: string }> }>('monitors.get', { session })).series;
+  const drag = all['lid_drag']!;
+  const monitor = page.getByRole('region', { name: `Monitor · Session ${session}` });
+  const value = monitor.locator('.plot-readout-value').getByRole('button', { name: /^Provenance of lid_drag: / });
+  await expect(value).toHaveCount(1);
+  // Enter on the number
+  await value.focus();
+  await page.keyboard.press('Enter');
+  const d = page.getByRole('dialog', { name: 'Provenance of lid_drag' });
+  await expect(d).toBeVisible();
+  const fact = (k: string) => d.locator(`[data-fact="${k}"] dd`);
+  await expect(fact('Session')).toHaveText(session);
+  await expect(fact('Value')).toContainText(String(drag.y[drag.y.length - 1]));
+  await expect(fact('Iteration')).toHaveText(String(drag.x[drag.x.length - 1]));
+  await expect(fact('Unit')).toHaveText(drag.unit === '' ? 'none, empty in monitors.get (the series’ unit)' : `${drag.unit}, monitors.get (the series’ unit)`);
+  await expect(fact('Read by')).toHaveText('monitors.get of rcfd serve (rcfd-service/1), the latest sample');
+  await expect(fact('Engine')).toHaveText(/^rcfd \S+ \(service\.info\)$/);
+  await page.screenshot({ path: path.join(SHOTS, 'plots-provenance-1440x900.png'), scale: 'css' });
+  await page.keyboard.press('Escape');
+  await expect(value).toBeFocused();
+  // a residual's last value: click; the engine's unit as monitors.get gives it
+  const residuals = page.getByRole('region', { name: `Residuals · Session ${session}` });
+  await residuals.getByRole('button', { name: /^Provenance of res_u: / }).click();
+  const r = page.getByRole('dialog', { name: 'Provenance of res_u' });
+  await expect(r.locator('[data-fact="Unit"] dd')).toHaveText(all['res_u']!.unit === '' ? 'none, empty in monitors.get (the series’ unit)' : `${all['res_u']!.unit}, monitors.get (the series’ unit)`);
+  await page.keyboard.press('Escape');
+  // the iteration of run.status: Ctrl+I on the focused number
+  const iteration = page.locator('.plots-dev-state').getByRole('button', { name: /^Provenance of iteration: \d+$/ });
+  await iteration.focus();
+  await page.keyboard.press('Control+i');
+  const it = page.getByRole('dialog', { name: 'Provenance of iteration' });
+  await expect(it.locator('[data-fact="Read by"] dd')).toHaveText('run.status of rcfd serve (rcfd-service/1) (simulation.iteration)');
+  await page.keyboard.press('Escape');
+});
+
 test('no Content Security Policy violation and no console error', async () => {
   expect(await page.evaluate(() => (window as unknown as { __csp: string[] }).__csp)).toEqual([]);
   expect(consoleErrors).toEqual([]);

@@ -35,7 +35,9 @@ import { plain, type RunRow } from '../runs/model.js';
 import { clock } from '../project/format.js';
 import { STATIONS, fieldWord, fieldsFolder, firstRequest, firstStep, outcomeSentence, plainState, sameRunCommand, stationIndex, type FirstStep, type StationId } from './model.js';
 import { DISCLAIMER, EXAMPLE_LIMITS, STEP_HELP, TERMS, type Term } from './words.js';
-import { openFirstResult, RESULT_LINK, type ResultNavigation } from './target.js';
+import { FOLLOW_LINK, followFirstRun, openFirstResult, RESULT_LINK, type ResultNavigation } from './target.js';
+// F-828: the result's numbers open their provenance, as the same numbers do in Runs
+import { Provenance, reportValue, statusValue } from '../provenance/index.js';
 import './first.css';
 
 // ---- shared pieces
@@ -419,7 +421,7 @@ function WatchStep({ view, step, nav }: { view: ProjectView; step: Extract<First
         )}
         <div className="fp-actions">
           <div className="fp-primary">
-            <Button onPress={() => openFirstResult(run.id, nav)}>Follow it in Runs</Button>
+            <Button onPress={() => followFirstRun(run.id, nav)}>{FOLLOW_LINK.label}</Button>
           </div>
           <Explain name="this step">
             <StepHelp step="watch">
@@ -476,17 +478,58 @@ function ResultStep({ view, step, nav }: { view: ProjectView; step: Extract<Firs
           <dl className="fp-grid" aria-label={`Numbers of ${run.id}`}>
             <div className="fp-num">
               <dt>Rounds of calculation</dt>
-              <dd data-words="data">{rounds}</dd>
+              <dd data-words="data">
+                <Provenance
+                  subject={{
+                    kind: 'number',
+                    source:
+                      d?.finish?.iterations != null
+                        ? statusValue({
+                            run: run.id,
+                            quantity: 'iterations',
+                            shown: String(rounds),
+                            value: rounds ?? null,
+                            unit: { why: 'a count of the solver’s iterations' },
+                            file: `runs/${run.id}/events.jsonl`,
+                            readBy: 'run_status (rcfd-mcp, read-only), the solver’s finish event',
+                          })
+                        : statusValue({ run: run.id, quantity: 'steps', shown: String(rounds), value: rounds ?? null, unit: { why: 'a count of the solver’s steps, status.json step' } }),
+                  }}
+                >
+                  {rounds}
+                </Provenance>
+              </dd>
             </div>
             <div className="fp-num">
               <dt>Solver time, s</dt>
-              <dd data-words={d?.finish?.elapsed != null ? 'data' : 'exception'}>{d?.finish?.elapsed != null ? plain(d.finish.elapsed, 2) : 'not reported'}</dd>
+              <dd data-words={d?.finish?.elapsed != null ? 'data' : 'exception'}>
+                {d?.finish?.elapsed != null ? (
+                  <Provenance
+                    subject={{
+                      kind: 'number',
+                      source: statusValue({
+                        run: run.id,
+                        quantity: 'solver time',
+                        shown: plain(d.finish.elapsed, 2),
+                        value: d.finish.elapsed,
+                        unit: { unit: 's', from: 'the key elapsed_s of the solver’s finish event' },
+                        file: `runs/${run.id}/events.jsonl`,
+                        readBy: 'run_status (rcfd-mcp, read-only), the solver’s finish event',
+                      }),
+                    }}
+                  >
+                    {plain(d.finish.elapsed, 2)}
+                  </Provenance>
+                ) : (
+                  'not reported'
+                )}
+              </dd>
             </div>
             {reports.map(([k, v]) => (
               <div className="fp-num fp-num--wide" key={k}>
                 <dt>{REPORT_WORDS[k] ?? k}, no unit from the engine</dt>
                 <dd title={String(v)} data-words="data">
-                  {report(v)}
+                  <Provenance subject={{ kind: 'number', source: reportValue({ run: run.id, name: k, shown: report(v), value: v }) }}>{report(v)}</Provenance>
                 </dd>
               </div>
             ))}
@@ -498,7 +541,7 @@ function ResultStep({ view, step, nav }: { view: ProjectView; step: Extract<Firs
         </div>
         <div className="fp-actions">
           <div className="fp-primary">
-            <Button variant="primary" onPress={() => openFirstResult(run.id, nav)}>
+            <Button variant="primary" onPress={() => openFirstResult(run.id, nav)} aria-label={RESULT_LINK.name}>
               {RESULT_LINK.label}
             </Button>
           </div>
@@ -576,7 +619,7 @@ function FirstPicture({ folder, run }: { folder: string; run: RunRow }) {
       )}
       <div className="fp-view">
         {last >= 0 ? (
-          <FieldViewport store={store} snapshot={last} field={shown} />
+          <FieldViewport store={store} snapshot={last} field={shown} learner={{ quantity: fieldWord(shown) }} />
         ) : (
           <p className="fp-problem-title" data-words="exception">
             The store holds no snapshot

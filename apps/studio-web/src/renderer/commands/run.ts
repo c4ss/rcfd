@@ -101,9 +101,11 @@ function studioReason(id: string, env: PaletteEnv): string | null {
       return turnRunning(env) ? null : 'No Claude Code reply is being written: there is nothing to stop.';
     case 'provenance.show':
     case 'provenance.copy_command': {
-      // F-828: run by the provenance module's handlers (src/renderer/provenance/registry.ts)
-      if (!view(env)) return NO_PROJECT;
+      // F-828: run by the provenance module's handlers (src/renderer/provenance/registry.ts); a number of a service
+      // session (the settings, the plots) needs no project, a run's command does
+      if (id === 'provenance.copy_command' && !view(env)) return NO_PROJECT;
       const h = commandHandler(id);
+      if (!h && !view(env)) return NO_PROJECT;
       return h ? (h.unavailable?.() ?? null) : 'Open Runs or the Workspace of the project first.';
     }
     // F-837: run by the surface that shows them (runs/RunExtras.tsx, field/FieldViewport.tsx, workspace/TimePanel.tsx)
