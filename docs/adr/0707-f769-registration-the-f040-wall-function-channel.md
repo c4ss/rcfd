@@ -53,3 +53,21 @@ separately because each carries its own number.
 * Grid refinement: the three meshes are all uniform; W7 does not show convergence to the ODE solution (the F-040 note says it does not shrink).
 * That `h_from_solution` is the better choice outside this flow; it is opt-in and default off.
 * The mixing-length closure is not selectable from the case schema (F-040 note); only the library is checked.
+
+## Addendum 1: corrections of rows (ADR 0717, 2026-11-17)
+
+Appended by [ADR 0717](0717-f795-registration-corrections-and-a-reading-of-the-18-unread-limit-rows-of-adrs-0706-to-0710.md)
+(F-795). Nothing above this heading was edited. For any reader, the corrected row below replaces the row of the same id in the
+table above. The other rows of this ADR stand: W2 was read by ADR 0705, W3 to W5 by ADR 0715 and W6 to W8 by ADR 0717, which found
+the three in agreement with the test file and the F-040 note.
+
+**W1** (line 36). Wrong words: "the 12-cell uniform channel mesh" and "a 20-cell mesh". The test
+(`crates/rcfd-turb/tests/channel_wall_function.rs`, lines 95 to 126) calls `run_channel(12, 1.0)`, which builds
+`box_2d_graded(4, ny, 1.0, 2.0, ...)` (line 33): a uniform mesh of 4 x 12 cells, 48 cells, 12 of them across the height 2. The
+second mesh (lines 107 to 115) has 3 x 20 cells, 60 cells, as the bracket of the row already says. The numbers 12 and 20 are the
+cells across the height, not the cells of the mesh. The limits of the row are right. The asserts on `xmin` and on the unknown patch
+name are made on the graded mesh, which the corrected row now says. Corrected row:
+
+| id | test | kind | limit | source |
+|---|---|---|---|---|
+| W1 | `wall_distance_is_exact_on_the_channel_mesh` | numeric | on a uniform 4 x 12 mesh (48 cells, 12 across the height 2, the channel mesh of `run_channel(12, 1.0)`) and on a 3 x 20 mesh (60 cells, height 2) graded symmetric 5.0 across the height, the wall distance to `ymin` and `ymax` equals `min(y, 2 - y)` to **1e-13** in every cell; on the graded mesh the distance to the side wall `xmin` equals `x` to **1e-13**, and an unknown patch name (`nope`) is an error | the asserts; the F-040 note ("equals min(y, 2h-y) to 1e-13 on uniform and graded channel meshes and equals x for a side wall") |
