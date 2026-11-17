@@ -1440,7 +1440,7 @@ fn f767_fast_rows() {
     fast_rows(false);
 }
 
-fn fast_rows(all: bool) {
+fn fast_rows(full: bool) {
     let mut ch = Checks::new();
     let mesh8 = block_mesh(8);
     let m8 = block_model(&mesh8, K_L, DEFAULT, -DELTA);
@@ -1598,7 +1598,7 @@ fn fast_rows(all: bool) {
     );
 
     // PC, NC-P: the ADR 0628 patch, C49.
-    pc_rows(&mut ch, all);
+    pc_rows(&mut ch, full);
     ch.finish();
 }
 
