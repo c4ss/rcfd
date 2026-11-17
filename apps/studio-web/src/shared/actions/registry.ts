@@ -275,6 +275,17 @@ const SPECS = {
     engine: { service: 'settings.validate', timeoutMs: 600_000 },
     mcp: { tool: null, note: 'No session tool; check_case_headless (run.check) checks a case the same way and also builds it.' },
   }),
+  'case.facts': action({
+    title: 'Estimate the run',
+    description: "What a run of the session's case would take, from the engine without running it (rcfd serve --ui, ADR 0737): cells, the thinnest cell, the speed at the start, the time step and step count the engine would set, its Courant estimate and warning, and the runner's memory estimate.",
+    group: 'settings',
+    params: {
+      session,
+      run_time: { type: 'object', optional: true, description: 'The run-time settings {simulate_s, courant, max_dt, mode, adaptive_correctors}; default: the automatic step.' },
+    },
+    engine: { service: 'case.facts', timeoutMs: 600_000 },
+    mcp: { tool: null, note: 'No session tool; in project mode case_facts gives the same for a case file, and `rcfd check <case> --facts` prints it.' },
+  }),
 
   // ---- mesh
   'mesh.check': action({
@@ -284,6 +295,28 @@ const SPECS = {
     params: ON_SESSION,
     engine: { service: 'mesh.check', timeoutMs: 600_000 },
     mcp: { tool: 'check_mesh' },
+  }),
+  'mesh.refine': action({
+    title: 'Refine the mesh x2',
+    description: "Double every cell count of the session's generator mesh (rcfd serve --ui, ADR 0737): the counts become unsaved changes; a mesh file is not refined, and the engine says why.",
+    group: 'mesh',
+    params: {
+      session,
+      factor: { type: 'integer', minimum: 2, maximum: 2, description: 'The refinement factor: 2 only.' },
+      apply: { type: 'boolean', optional: true, description: 'Set the doubled counts in the session; without it the engine only says what they would be.' },
+    },
+    engine: { service: 'mesh.refine', timeoutMs: 600_000 },
+    mcp: { tool: null, note: 'No session tool; in project mode refine_case_mesh writes the same edits to the case file, and `rcfd check <case> --refine 2` prints them.' },
+    unavailable: (ctx) => (busy(ctx) ? IN_PROGRESS : null),
+    undo: {
+      inverse: (p, result) => {
+        if (p.apply !== true || !isObject(result) || !Array.isArray(result['edits'])) return null;
+        const edits = result['edits'] as unknown[];
+        const back = edits.filter(isObject).map((e) => ({ action: 'settings.set', params: { session: p.session, path: String(e['path']), value: e['before'] as JsonValue } }));
+        return back.length > 0 ? back : null;
+      },
+      note: 'Sets each count back to its value before the refine.',
+    },
   }),
 
   // ---- run control

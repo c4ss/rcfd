@@ -64,7 +64,13 @@ const ASKED: Record<string, string> = {
 export function requestWords(q: RunRequest): string {
   const asked = ASKED[q.action] ?? getRunAction(q.action)?.title ?? q.action;
   if (q.outcome === 'refused') return `${asked.replace(/ requested$/, '')} refused: ${q.failure?.problem ?? 'the engine refused it.'}`;
-  const when = `${asked} from the Studio at ${clock(q.at)}`;
+  // ADR 0737: what the engine's store plan applies to a run the Studio started (the case set no store)
+  const s = q.store;
+  const stored =
+    s?.applied === true
+      ? `, its fields stored by the engine's plan${s.snapshots !== null ? ` (about ${s.snapshots} snapshots${s.estimatedBytes !== null ? `, ${mb(s.estimatedBytes)}` : ''})` : ''}`
+      : '';
+  const when = `${asked} from the Studio at ${clock(q.at)}${stored}`;
   if (q.settled) return `${when}; the runner has acted on it.`;
   if (q.slow) {
     return `${when}; the runner has not acted on it after 3 s. The project’s runner may not be running (the engine has no query that says whether it is): Start the runner, and it acts on the request when it starts.`;
@@ -78,4 +84,10 @@ export function setEntries(text: string): string[] {
     .split(/\r?\n/)
     .map((l) => l.trim())
     .filter((l) => l !== '');
+}
+
+/** Bytes as MB, one decimal below 10 MB. */
+function mb(bytes: number): string {
+  const m = bytes / (1024 * 1024);
+  return `${m < 10 ? m.toFixed(1) : Math.round(m)} MB`;
 }

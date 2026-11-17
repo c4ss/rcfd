@@ -11,7 +11,7 @@
 export interface JournalEntry {
   readonly op: string;
   readonly path?: string;
-  readonly source?: { readonly path?: unknown } | null;
+  readonly source?: { readonly path?: unknown; readonly hash?: unknown } | null;
 }
 
 export interface Pending {

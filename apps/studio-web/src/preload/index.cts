@@ -582,6 +582,8 @@ const caseFiles: CaseBridge = {
     return caseSend({ op: 'check', id, path });
   },
   forget: (session) => caseSend({ op: 'forget', id: nextCaseId++, session }),
+  pickFile: () => caseSend({ op: 'pickFile', id: nextCaseId++ }),
+  attachFile: (session, path) => caseSend({ op: 'attachFile', id: nextCaseId++, session, path }),
 };
 
 contextBridge.exposeInMainWorld('studioCase', caseFiles);

@@ -2,6 +2,8 @@
 
 pub mod bc_cat;
 pub mod case;
+pub mod case_save;
+pub mod case_text;
 pub mod chain;
 pub mod chemistry;
 pub mod cht;
@@ -15,6 +17,7 @@ pub mod dynmesh;
 pub mod electric;
 pub mod errors;
 pub mod exprs;
+pub mod facts;
 pub mod fan_case;
 pub mod fieldstore;
 pub mod inflate;
@@ -30,6 +33,7 @@ pub mod phase_change;
 pub mod postproc;
 pub mod properties;
 pub mod radiation;
+pub mod refine;
 pub mod regions;
 pub mod registers;
 pub mod restart;

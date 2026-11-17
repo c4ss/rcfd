@@ -144,13 +144,15 @@ test.describe('the run-control actions (G16)', () => {
   test('the MCP and CLI equivalents of each action', () => {
     const eq = (id: string, p: Record<string, unknown>) => runEquivalents(getRunAction(id)!, p as never, PROJECT);
     expect(eq('project.run_case', { case: 'cases/a.toml' })).toEqual({
-      mcp: { tool: 'start_run', arguments: { case: 'cases/a.toml', store: 'none' } },
+      // restated for ADR 0737: the Studio's Run is start_run's store plan (the maintainer's report of a run with no field)
+      mcp: { tool: 'start_run', arguments: { case: 'cases/a.toml', store: 'plan' } },
       mcpNote: null,
       cli: { argv: ['rcfd-runner', 'start', 'cases/a.toml', '--project', PROJECT], cwd: PROJECT },
-      cliNote: 'rcfd-runner start writes no line in the project journal; start_run does (who: start_run).',
+      cliNote:
+        'rcfd-runner start writes no line in the project journal; start_run does (who: start_run). rcfd-runner start has no store plan: the settings the plan added are in start_run’s answer (store.set) and in the run’s run.json, to pass as --set.',
     });
     const q = eq('project.queue_case', { case: 'cases/a.toml', priority: -2, threads: 4, mem_mb: 800, set: ['solver.max_iterations=5', 'physics.nu=0.02'] });
-    expect(q.mcp).toEqual({ tool: 'start_run', arguments: { case: 'cases/a.toml', store: 'none', priority: -2, threads: 4, mem_mb: 800, set: ['solver.max_iterations=5', 'physics.nu=0.02'] } });
+    expect(q.mcp).toEqual({ tool: 'start_run', arguments: { case: 'cases/a.toml', store: 'plan', priority: -2, threads: 4, mem_mb: 800, set: ['solver.max_iterations=5', 'physics.nu=0.02'] } });
     expect(q.cli.argv).toEqual(['rcfd-runner', 'start', 'cases/a.toml', '--priority', '-2', '--threads', '4', '--mem-mb', '800', '--set', 'solver.max_iterations=5', '--set', 'physics.nu=0.02', '--project', PROJECT]);
     expect(eq('project.queue_case', { case: 'cases/a.toml' }).cli.argv).toEqual(['rcfd-runner', 'start', 'cases/a.toml', '--project', PROJECT]);
     for (const [id, tool, cmd] of [
@@ -392,7 +394,7 @@ test.describe('run control in the main process', () => {
       expect(start.ok).toBe(true);
       const req = s.view.runRequests![0]!;
       expect(req).toMatchObject({ seq: 1, action: 'project.run_case', outcome: 'accepted', state: 'queued', case: 'cases/a.toml', failure: null });
-      expect(req.mcp).toEqual({ tool: 'start_run', arguments: { case: 'cases/a.toml', store: 'none' } });
+      expect(req.mcp).toEqual({ tool: 'start_run', arguments: { case: 'cases/a.toml', store: 'plan' } });
       expect(req.cli.argv).toEqual(['rcfd-runner', 'start', 'cases/a.toml', '--project', PROJECT]);
       expect(req.answeredAt).toBeGreaterThan(Date.now() - 5000);
       const id = req.run!;
@@ -567,6 +569,12 @@ test.describe('the run list’s view of requests', () => {
     expect(requestWords(req({}))).toMatch(/^Pause requested from the Studio at \d\d:\d\d:\d\d; waiting for the runner to hold it\.$/);
     expect(requestWords(req({ slow: true }))).toContain('the runner has not acted on it after 3 s. The project’s runner may not be running');
     expect(requestWords(req({ settled: true }))).toContain('the runner has acted on it.');
+    // ADR 0737: what the engine's store plan applies to a run the Studio started; a case with its own store says nothing
+    const start = { action: 'project.run_case', run: 'r-new', settled: true };
+    expect(requestWords(req({ ...start, store: { applied: true, snapshots: 100, estimatedBytes: 6553600, note: null } }))).toMatch(
+      /^Started from the Studio at \d\d:\d\d:\d\d, its fields stored by the engine's plan \(about 100 snapshots, 6\.3 MB\); the runner has acted on it\.$/,
+    );
+    expect(requestWords(req({ ...start, store: { applied: false, snapshots: null, estimatedBytes: null, note: 'the case sets output.store_interval' } }))).not.toContain('stored');
     expect(requestWords(req({ outcome: 'refused', failure: { code: 'bad_state', problem: 'The engine refused to pause run r-a: run r-a is already finished', recovery: 'x', engine: null } }))).toBe(
       'Pause refused: The engine refused to pause run r-a: run r-a is already finished',
     );

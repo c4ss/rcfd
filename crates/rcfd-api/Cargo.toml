@@ -27,6 +27,10 @@ rcfd-linalg.workspace = true
 rcfd-mesh.workspace = true
 rcfd-particles.workspace = true
 rcfd-post.workspace = true
+# ADR 0737: the project marker and the atomic write of case.save (rcfd-project), the runner's memory rule and default
+# budgets of case.facts and mesh.refine (rcfd-runner); both lower layers, no new external crate.
+rcfd-project.workspace = true
+rcfd-runner = { path = "../rcfd-runner" }
 rcfd-reactor.workspace = true
 rcfd-tsstore.workspace = true
 rcfd-turb.workspace = true

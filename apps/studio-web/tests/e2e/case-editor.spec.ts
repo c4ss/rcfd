@@ -121,7 +121,8 @@ test('window.studioCase is the case port: its functions only, frozen, refusing a
     return { keys: Object.keys(c).sort(), fns: Object.values(c).every((v) => typeof v === 'function'), frozen: Object.isFrozen(c) };
   });
   expect(shape).toEqual({
-    keys: ['attach', 'check', 'conflict', 'create', 'duplicate', 'forget', 'prepare', 'save', 'sources', 'state', 'status'],
+    // restated for ADR 0737: pickFile and attachFile, a case file outside a project (tests/e2e/case-file-adr0737.spec.ts)
+    keys: ['attach', 'attachFile', 'check', 'conflict', 'create', 'duplicate', 'forget', 'pickFile', 'prepare', 'save', 'sources', 'state', 'status'],
     fns: true,
     frozen: true,
   });
@@ -183,7 +184,8 @@ test('round trip: a key changed and saved here is the value the CLI reads from t
   await save.focus();
   await page.keyboard.press('Enter');
   await expect(page.getByText(`Saved 1 setting to ${rel}`)).toBeVisible({ timeout: 20_000 });
-  expect(at(cliSettings(rel), 'solver.max_iterations')).toBe(1500);
+  // polled: the first save's notice has the same words, so it can be seen before the second save has written
+  await expect.poll(() => at(cliSettings(rel), 'solver.max_iterations'), { timeout: 20_000 }).toBe(1500);
 });
 
 test('conflict: the file changed outside between open and save; both values shown, nothing overwritten', async () => {

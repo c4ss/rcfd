@@ -47,3 +47,27 @@ export async function openCase(path: string, attempts = 3): Promise<Opened> {
   }
   return { ok: false, failure: last };
 }
+
+/**
+ * ADR 0737: opens one case file outside a project: the main process's open dialog, a service session made from the
+ * file (`session.create {path}`), and the binding, whose hash is the one the service's journal recorded when it read the
+ * file. Null when the dialog was cancelled.
+ */
+export async function openCaseFile(): Promise<Opened | null> {
+  const f = await caseDoor.pickFile();
+  if (!f.ok) return { ok: false, failure: { message: f.error.message, diagnostics: [], code: f.error.code } };
+  if (f.result === null) return null;
+  return openPickedFile(f.result.file);
+}
+
+/** Opens a file the dialog gave again (loading it as it is now, after a conflict or an outside change). */
+export async function openPickedFile(file: string): Promise<Opened> {
+  const c = await dispatch('session.create', { path: file }, { undo: false });
+  if (!c.ok) return { ok: false, failure: { message: c.error.message, diagnostics: diags(c.error.data), code: c.error.code } };
+  const session = (c.result as { session?: unknown }).session;
+  if (typeof session !== 'string') return { ok: false, failure: { message: 'session.create answered without a session', diagnostics: [], code: 'protocol' } };
+  const a = await caseDoor.attachFile(session, file);
+  if (a.ok) return { ok: true, session, binding: a.result };
+  await dispatch('session.close', { session });
+  return { ok: false, failure: { message: a.error.message, diagnostics: [], code: a.error.code } };
+}

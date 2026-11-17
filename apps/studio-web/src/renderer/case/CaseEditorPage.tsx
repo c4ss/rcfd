@@ -22,10 +22,11 @@ import { EngineRecovery } from '../help/Recovery.js';
 import { useSettings } from '../settings/context.js';
 import { SettingsSurface } from '../settings/SettingsSurface.js';
 import { UndoControls } from '../history/UndoControls.js';
-import { Button, Icon, Quiet, SegmentedToggle, Select, StatePictogram, TextField } from '../ui/index.js';
+import { Button, Icon, IconButton, Quiet, SegmentedToggle, Select, StatePictogram, TextField } from '../ui/index.js';
 import { caseDoor } from './door.js';
 import { caseHash, caseRoute, replaceHash, type CaseRoute } from './hash.js';
-import { openCase, type OpenFailure } from './open.js';
+import { openCase, openCaseFile, openPickedFile, type OpenFailure } from './open.js';
+import { RefineResultView, RunEstimate, refineMesh, type RefineResult } from './estimate.js';
 import { confirmClose } from './closeGuard.js';
 import '../settings/settings.css';
 import './case.css';
@@ -94,13 +95,14 @@ export default function CaseEditorPage() {
   let body: ReactNode;
   if (route === null || route.kind === 'index') body = <IndexView project={project} />;
   else if (route.kind === 'new') body = <NewCaseView project={project} />;
+  else if (route.kind === 'file') body = <FileOpenView />;
   else if (route.kind === 'open') body = <OpenView key={`${route.path}|${route.replaces ?? ''}`} path={route.path} replaces={route.replaces} />;
   else body = <EditorView key={route.session} session={route.session} engine={engine} project={project} setTitle={setTitle} setStateWord={setStateWord} />;
 
   const editing = route?.kind === 'session';
   useEffect(() => {
     if (!editing) {
-      setTitle(route?.kind === 'new' ? 'New case' : route?.kind === 'open' ? `Opening ${fileName(route.path)}` : 'Case editor');
+      setTitle(route?.kind === 'new' ? 'New case' : route?.kind === 'file' ? 'Open a case file' : route?.kind === 'open' ? `Opening ${fileName(route.path)}` : 'Case editor');
       setStateWord(null);
     }
   }, [editing, route]);
@@ -125,6 +127,8 @@ export default function CaseEditorPage() {
               New case
             </Button>
           )}
+          {/* ADR 0737: one case file outside a project; G22: the icon, its name the tooltip */}
+          <IconButton variant="ghost" icon="open-file" label="Open a case file outside a project…" onPress={() => void (location.hash = caseHash.file)} />
         </div>
         <div className="st-top-right">
           {/* F-829: undo and redo of this file's session edits; saving is the file's own step (hash guarded) */}
@@ -188,10 +192,51 @@ function IndexView({ project }: { project: ProjectState | null }) {
             ))}
           </ul>
         )}
-        {project?.project && (
-          <Button variant="primary" icon="plus" onPress={() => void (location.hash = caseHash.new)}>
-            New case
+        <div className="ce-row">
+          {project?.project && (
+            <Button variant="primary" icon="plus" onPress={() => void (location.hash = caseHash.new)}>
+              New case
+            </Button>
+          )}
+          <Button icon="open-file" onPress={() => void (location.hash = caseHash.file)}>
+            Open a case file…
           </Button>
+        </div>
+      </div>
+    </Single>
+  );
+}
+
+// ---- #/case/file: ADR 0737, one case file outside a project
+
+function FileOpenView() {
+  const [failure, setFailure] = useState<OpenFailure | null>(null);
+  const started = useRef(false);
+  useEffect(() => {
+    if (started.current) return;
+    started.current = true;
+    void openCaseFile().then((r) => {
+      if (r === null) return replaceHash(caseHash.index);
+      if (!r.ok) return setFailure(r.failure);
+      replaceHash(caseHash.session(r.session));
+    });
+  }, []);
+  return (
+    <Single>
+      <div className="st-empty" role="status">
+        {failure === null ? (
+          <h2>Opening a case file</h2>
+        ) : (
+          <>
+            <h2 className="ce-failed-title">
+              <StatePictogram state="failed" />
+              Failed to open the case file
+            </h2>
+            <OpenFailureText failure={failure} path="the file" />
+            <div className="ce-row">
+              <Button onPress={() => replaceHash(caseHash.index)}>Back</Button>
+            </div>
+          </>
         )}
       </div>
     </Single>
@@ -570,6 +615,8 @@ function CasePanel({ status, refresh }: { status: CaseStatus; refresh: () => Pro
   const [dup, setDup] = useState<{ ok: true; made: CreatedCase } | { ok: false; message: string } | null>(null);
   const [fileCheck, setFileCheck] = useState<FileCheck | { failed: string } | null>(null);
   const [meshCheck, setMeshCheck] = useState<{ ok: boolean; cells: number | null; patches: string[]; errors: string[]; warnings: string[] } | { failed: string } | null>(null);
+  const [refined, setRefined] = useState<RefineResult | null>(null);
+  const outsideFile = b.outside === true;
   const noticeRef = useRef<HTMLHeadingElement>(null);
 
   useEffect(() => {
@@ -609,7 +656,7 @@ function CasePanel({ status, refresh }: { status: CaseStatus; refresh: () => Pro
       const o = r.result;
       if (o.kind === 'saved') {
         if (o.reopen) {
-          location.hash = caseHash.open(b.path, b.session);
+          reloadRef.current();
           return;
         }
         setNotice({ kind: 'saved', outcome: o });
@@ -619,12 +666,14 @@ function CasePanel({ status, refresh }: { status: CaseStatus; refresh: () => Pro
         else setNotice({ kind: 'failed', message: o.message });
       } else if (o.kind === 'refused') setNotice({ kind: 'refused', outcome: o });
       else if (o.kind === 'cannot') setNotice({ kind: 'cannot', outcome: o });
-      else if (onto === 'current') location.hash = caseHash.open(b.path, b.session);
+      else if (onto === 'current') reloadRef.current();
       else setNotice({ kind: 'nothing' });
       await refresh();
     },
     [b.session, b.path, refresh],
   );
+
+  const reloadRef = useRef<() => void>(() => undefined);
 
   // Ctrl+S (Cmd+S) saves from anywhere on the page (G20: a frequent action has a shortcut)
   const saveRef = useRef(save);
@@ -644,8 +693,19 @@ function CasePanel({ status, refresh }: { status: CaseStatus; refresh: () => Pro
   }, []);
 
   const reload = () => {
-    location.hash = caseHash.open(b.path, b.session);
+    if (!outsideFile) {
+      location.hash = caseHash.open(b.path, b.session);
+      return;
+    }
+    // ADR 0737: a file outside a project is read again by the service, then this session is closed
+    void openPickedFile(b.file).then(async (r) => {
+      if (!r.ok) return setNotice({ kind: 'failed', message: r.failure.message });
+      await dispatch('session.close', { session: b.session });
+      await caseDoor.forget(b.session);
+      replaceHash(caseHash.session(r.session));
+    });
   };
+  reloadRef.current = reload;
 
   const close = async () => {
     // F-837: changes not saved: save, lose them or keep editing (closeGuard.tsx)
@@ -704,6 +764,15 @@ function CasePanel({ status, refresh }: { status: CaseStatus; refresh: () => Pro
     });
   };
 
+  // ADR 0737: Refine x2 sets the doubled counts in the session (unsaved changes, undoable); a mesh file is refused
+  const refine = async () => {
+    setBusy('refine');
+    const r = await refineMesh(b.session);
+    setBusy(null);
+    setRefined(r);
+    await refresh();
+  };
+
   const file = status.file;
   const outside = file.state === 'changed' && notice?.kind !== 'conflict';
 
@@ -714,11 +783,11 @@ function CasePanel({ status, refresh }: { status: CaseStatus; refresh: () => Pro
       run: () => save('opened'),
     },
     'case.check_file': {
-      unavailable: () => (file.state === 'missing' ? `${b.path} is not there: the saved file cannot be checked.` : busy !== null ? 'The editor is busy with another case action; wait for it.' : null),
+      unavailable: () => (outsideFile ? 'A case file outside a project has no check of the saved file here; `rcfd run <file> --check-only` checks it.' : file.state === 'missing' ? `${b.path} is not there: the saved file cannot be checked.` : busy !== null ? 'The editor is busy with another case action; wait for it.' : null),
       run: () => checkFile(),
     },
     'case.duplicate': {
-      unavailable: () => (file.state === 'missing' ? `${b.path} is not there: duplicate needs the saved file.` : null),
+      unavailable: () => (outsideFile ? 'Duplicate makes a case file in a project; a case file outside a project has none.' : file.state === 'missing' ? `${b.path} is not there: duplicate needs the saved file.` : null),
       // its form: the "Duplicate as" field of the case actions
       run: () => document.querySelector<HTMLElement>('.ce-dup input')?.focus(),
     },
@@ -741,7 +810,7 @@ function CasePanel({ status, refresh }: { status: CaseStatus; refresh: () => Pro
           <dd>
             <FileStateWord status={status} />
           </dd>
-          <dt>Project</dt>
+          <dt>{outsideFile ? 'Folder (no project)' : 'Project'}</dt>
           <dd data-words="data">{b.folder}</dd>
           <dt>Opened</dt>
           <dd data-words="data">{clock(b.openedAt)}</dd>
@@ -819,13 +888,20 @@ function CasePanel({ status, refresh }: { status: CaseStatus; refresh: () => Pro
           <Button onPress={() => void checkMesh()} isDisabled={busy !== null}>
             {busy === 'mesh-check' ? 'Checking the mesh' : 'Check the mesh'}
           </Button>
-          <Button onPress={() => void checkFile()} isDisabled={busy !== null || file.state === 'missing'}>
-            {busy === 'check' ? 'Checking the file' : 'Check the saved file'}
-          </Button>
+          {/* ADR 0737: G22, the icon with its name as the tooltip */}
+          <IconButton icon="refine" label="Refine the mesh x2" onPress={() => void refine()} isDisabled={busy !== null || settings.editable === false} />
+          {!outsideFile && (
+            <Button onPress={() => void checkFile()} isDisabled={busy !== null || file.state === 'missing'}>
+              {busy === 'check' ? 'Checking the file' : 'Check the saved file'}
+            </Button>
+          )}
         </div>
         <WorkProgress scope={WORK_SCOPE} placement="inline" />
+        <RunEstimate session={b.session} changes={pending.count} />
+        <RefineResultView result={refined} />
         <MeshCheckView check={meshCheck} />
         <FileCheckView check={fileCheck} />
+        {!outsideFile && (
         <div className="ce-dup">
           <TextField
             label="Duplicate as"
@@ -860,6 +936,7 @@ function CasePanel({ status, refresh }: { status: CaseStatus; refresh: () => Pro
             </p>
           )}
         </div>
+        )}
         <div className="ce-close">
           <Button icon="close" onPress={() => void close()} isDisabled={busy !== null}>
             Close the session

@@ -416,6 +416,12 @@ export interface RunRequest {
   /** Not settled after RUN_SLOW_MS. */
   readonly slow: boolean;
   readonly failure: RunActionFailure | null;
+  /**
+   * ADR 0737: start_run's store plan as it answered (`store`): applied (the case and the set gave no store, so the plan
+   * stores about `snapshots` snapshots, `estimatedBytes` at f32) or not (the case's own store is kept); null for other
+   * actions or an answer without it.
+   */
+  readonly store?: { readonly applied: boolean; readonly snapshots: number | null; readonly estimatedBytes: number | null; readonly note: string | null } | null;
   /** The same from Claude Code and from the CLI (G16, G17). */
   readonly mcp: { readonly tool: string; readonly arguments: Readonly<Record<string, unknown>> } | null;
   readonly cli: { readonly argv: readonly string[]; readonly cwd: string };

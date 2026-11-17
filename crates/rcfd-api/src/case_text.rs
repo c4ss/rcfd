@@ -1,5 +1,6 @@
 //! Smallest-change edits of case files: the write rule of `edit_case` (ADR 0135 amendment 1 item 5), moved here from
-//! `rcfd-mcp` (ADR 0185 E2) so that every writer of a case can use it.
+//! `rcfd-mcp` (ADR 0185 E2) so that every writer of a case can use it, and from `rcfd-workspace` into `rcfd-api` (ADR 0737
+//! P4) so that the service's `case.save` writes by the same rule; `rcfd_workspace::case_text` re-exports it.
 //!
 //! A TOML case gets the `key = value` line of each dotted setting replaced in place (comments and layout kept), or
 //! added to its table; a JSON case gets the value set in its parsed document. The caller re-parses the result and
@@ -7,7 +8,9 @@
 //! refuses the edit (`edit_case`) or writes the whole text it was given (`save_case` in its `Lines` form, ADR 0185 Q2),
 //! so a wrong guess here can never reach the disk.
 
+use crate::case::Case;
 use serde_json::Value;
+use std::path::Path;
 
 /// `value` as a TOML literal (`None` for `null`, which TOML cannot write).
 pub fn toml_literal(value: &Value) -> Option<String> {
@@ -238,6 +241,67 @@ pub fn apply_sets<'a>(
         }
         Some(t)
     }
+}
+
+/// The case file text `disk` (in the folder `dir`, data files inside `sandbox` when given) with the settings of the case
+/// text `saved` placed in its own lines, if that text re-parses to the settings of `saved`; `None` otherwise (a text that
+/// does not parse, a removed setting, a value that cannot be placed). The rule of `save_case`'s `Lines` form (ADR 0185
+/// Q2), moved here from `rcfd-workspace` with this module (ADR 0737 P4) so that the service's `case.save` uses it too.
+pub fn lines_text(dir: &Path, sandbox: Option<&Path>, is_json: bool, disk: &[u8], saved: &[u8]) -> Option<String> {
+    let parse = |t: &str| {
+        if is_json {
+            Case::parse_json_with(t, dir, sandbox)
+        } else {
+            Case::parse_toml_with(t, dir, sandbox)
+        }
+    };
+    let text = std::str::from_utf8(disk).ok()?;
+    let old = parse(text).ok()?;
+    let want = parse(std::str::from_utf8(saved).ok()?).ok()?.tree.to_json();
+    let mut set = Vec::new();
+    changed_settings(&old, &old.tree.to_json(), &want, "", &mut set)?;
+    let out = apply_sets(text, is_json, set.iter().map(|(k, v)| (k.as_str(), v)))?;
+    parse(&out).ok().filter(|c| c.tree.to_json() == want).map(|_| out)
+}
+
+/// The settings of `new` (a settings tree, at `prefix`) whose values differ from the case `old` (a setting under an
+/// optional table that `old` does not hold is compared with the default `old` reads for it), as `(dotted path, value)`;
+/// `None` when a setting of `old_tree` is missing from `new`.
+fn changed_settings(
+    old: &Case,
+    old_tree: &Value,
+    new: &Value,
+    prefix: &str,
+    out: &mut Vec<(String, Value)>,
+) -> Option<()> {
+    let join = |k: &str| {
+        if prefix.is_empty() {
+            k.to_string()
+        } else {
+            format!("{prefix}.{k}")
+        }
+    };
+    let new = new.as_object()?;
+    if let Some(o) = old_tree.as_object() {
+        if o.keys().any(|k| !new.contains_key(k)) {
+            return None; // a removal: the line rule cannot write it
+        }
+    }
+    for (k, v) in new {
+        let path = join(k);
+        match (v.as_object(), old_tree.get(k)) {
+            // a table both hold: compare inside it (a key of the old one missing from the new one is a removal)
+            (Some(_), Some(sub)) if sub.is_object() => changed_settings(old, sub, v, &path, out)?,
+            // a table only the new tree holds (an optional table, a new named entry): its settings one by one
+            (Some(m), _) if !m.is_empty() => changed_settings(old, &Value::Null, v, &path, out)?,
+            _ => {
+                if old.get(&path).ok().as_ref() != Some(v) {
+                    out.push((path, v.clone()));
+                }
+            }
+        }
+    }
+    Some(())
 }
 
 #[cfg(test)]

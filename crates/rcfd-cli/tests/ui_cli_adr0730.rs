@@ -94,9 +94,16 @@ fn serve_info_with_ui_is_the_plain_one_plus_the_additions() {
     assert!(off.get("ui").is_none());
     assert_eq!(on["ui"], "rcfd-ui/1");
     let m = on["methods"].as_array_mut().unwrap();
+    // restated for ADR 0737: the additions are UI_METHODS, now with case.facts, mesh.refine and case.save after help.*
     assert_eq!(
-        m.split_off(m.len() - 2),
-        vec![Value::from("help.glossary"), Value::from("help.errors")]
+        m.split_off(m.len() - 5),
+        vec![
+            Value::from("help.glossary"),
+            Value::from("help.errors"),
+            Value::from("case.facts"),
+            Value::from("mesh.refine"),
+            Value::from("case.save")
+        ]
     );
     on.as_object_mut().unwrap().remove("ui");
     assert_eq!(on, off);

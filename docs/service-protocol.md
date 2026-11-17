@@ -43,6 +43,7 @@ its own thread, and connections share sessions.
 | 1004 | limit exceeded or path outside the sandbox root |
 | 1005 | a hosted co-simulation participant returned an error; `error.message` is the participant's message |
 | 1006 | no hosted co-simulation participant of that name |
+| 1007 | the file changed since it was read; `data.current_hash` is its hash now (`case.save`, with `--ui`; ADR 0737) |
 | -32000 | internal error |
 
 ## Sessions and run states
@@ -174,6 +175,32 @@ ADR 0730. Without `--ui` nothing below exists and every reply is as before, byte
 
 Both help methods take no parameters (`{}` or none). `rcfd schema --ui`, `rcfd help glossary` and `rcfd help errors`
 print the same on the command line.
+
+ADR 0737 adds three methods to the same switch, listed after the help methods (`crate::ui::UI_METHODS`). Each takes an
+object with the members named; any other member is -32602.
+
+- `case.facts {session, run_time?}`: what the time step of the session's case (its unsaved changes included) depends
+  on, without running it: `kind` (`transient`, `steady` with `max_iterations`, `other` with `why`), `algorithm`, `dt`,
+  `dt_in_text` and `end_time`, `end_in_text` (for a session: the value differs from the schema default), `own_control`,
+  `write_times_last`, `cells`, `two_d`, `bounds`, `h_min` and `h_max` (cell volume over its largest face, `empty` faces
+  left out; `h_unit: "m"`), `u0` and `u0_from` (the fastest speed at the start; `u0_unit: "m/s"`), `correctors`, and
+  `run_time`: the plan of a run with `run_time` `{simulate_s, courant, max_dt, mode: adaptive | fixed | case,
+  adaptive_correctors}` (default: the automatic step at Courant 0.5, adaptive correctors), its `entries` (`rcfd run
+  --set`), `dt0`, `steps_estimate`, `courant_estimate`, `wall_s_estimate`, `correctors` and `warning` (above an estimated
+  Courant number of 2, with the fix), or `{refused}`; `memory`: the runner's estimate with its default budgets
+  (`budgets: "runner_defaults"`). 1003 when the case does not build, 1004 over `max_cells`. The rule is ADR 0153's and
+  0158's, with their constants (`rcfd_api::facts`).
+- `mesh.refine {session, factor, apply?}`: Refine x2 of a generator mesh: `edits` [{`path`, `before`, `after`}] (every
+  count of the generator doubled; a second block's `_right` count of 0 is left), `cells`, `cells_after`, `two_d`,
+  `memory_after`, `over_limit`, `applied`. `factor` is 2 only (-32602 otherwise); 1004 with the reason for a mesh file, a
+  generator counted by other settings (`axial_fan_sector`) and a count over its schema maximum, nothing set. With
+  `apply: true` each edit is a `settings.set` of the session (unsaved changes in its journal).
+- `case.save {session, path, base_hash, form?}`: write the session's case to one file outside a project (`.toml` or
+  `.json` by the extension), only if the file still has `base_hash` (`fnv64:`; null: no file there yet), by
+  write-then-rename under an exclusive `<file>.rcfd-lock` beside it. `form: "lines"` keeps the file's comments and layout
+  where it can (else the whole case, `whole`, the default). Reply `{path, old_hash, new_hash, form}`. 1007 with
+  `data.current_hash` when the file changed; 1004 outside the sandbox, or inside a project (`data.use: "edit_case"`);
+  1002 while another writer holds the lock; -32000 when the write failed (nothing replaced).
 
 ## Where to go next
 

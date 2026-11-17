@@ -122,9 +122,13 @@ fn p2_bad_parameters_are_refused_with_ui() {
     for p in [json!({"ui": "yes"}), json!({"ui": 1}), json!([true]), json!("ui")] {
         assert_eq!(error(&on, "settings.schema", p.clone())["code"], -32602, "{p}");
     }
+    // restated for ADR 0737 (2026-11-17): UI_METHODS also holds case.facts, mesh.refine and case.save, which take a
+    // session and so are not called without parameters; every one refuses an unknown member and a non-object
     for m in UI_METHODS {
         assert_eq!(error(&on, m, json!({"x": 1}))["code"], -32602, "{m}");
         assert_eq!(error(&on, m, json!([]))["code"], -32602, "{m}");
+    }
+    for m in UI_METHODS.iter().filter(|m| m.starts_with("help.")) {
         assert!(error(&on, m, Value::Null).is_null(), "{m} without params");
     }
     assert_eq!(error(&on, "help.nothing", json!({}))["code"], -32601);

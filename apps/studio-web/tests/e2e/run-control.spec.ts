@@ -230,7 +230,8 @@ test('quick run from the Runs view, by keyboard: the run shows at once, then que
   const status = aside(page).locator('.rc-status');
   await expect(status).toContainText('Started from the Studio');
   await expect(aside(page).locator('.rc-equiv')).toContainText('rcfd-runner start cases/cavity-re100.toml --project');
-  await expect(aside(page).locator('.rc-equiv')).toContainText('start_run {"case":"cases/cavity-re100.toml","store":"none"}');
+  // restated for ADR 0737: the Studio's Run is start_run's store plan
+  await expect(aside(page).locator('.rc-equiv')).toContainText('start_run {"case":"cases/cavity-re100.toml","store":"plan"}');
   // the runner launches it and it ends; the table follows its state, and status.json says the same
   await expect.poll(() => shownState(page, id), { timeout: 60_000 }).toBe('finished');
   expect(runner!.status(id).state).toBe('finished');
@@ -279,7 +280,7 @@ test('queue with per-run settings; a second run waits; cancel it (confirmed in w
   longRun = await newestRun(page);
   started.push(longRun);
   const req = (await projectState(page)).project!.runRequests![0]!;
-  expect(req.mcp).toEqual({ tool: 'start_run', arguments: { case: 'cases/cavity-re100.toml', store: 'none', set: LONG } });
+  expect(req.mcp).toEqual({ tool: 'start_run', arguments: { case: 'cases/cavity-re100.toml', store: 'plan', set: LONG } });
   expect(req.cli.argv).toEqual(['rcfd-runner', 'start', 'cases/cavity-re100.toml', ...LONG.flatMap((s) => ['--set', s]), '--project', quick]);
   await expect.poll(() => shownState(page, longRun), { timeout: 30_000 }).toBe('running');
 

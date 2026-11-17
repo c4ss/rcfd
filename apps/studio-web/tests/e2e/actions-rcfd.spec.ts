@@ -51,7 +51,9 @@ test.describe('actions on the real service', () => {
     const info = (await c.request('service.info')) as { methods: string[] };
     c.close();
     await s.stop();
-    expect(ACTIONS.map((a) => a.engine.service).filter((m) => !info.methods.includes(m))).toEqual(['data.info']);
+    // restated for ADR 0737: a plain `rcfd serve` lacks the --ui methods (ADR 0730's help.*, which this check had not
+    // caught up with, and ADR 0737's case.facts and mesh.refine) besides data.info
+    expect(ACTIONS.map((a) => a.engine.service).filter((m) => !info.methods.includes(m))).toEqual(['help.glossary', 'help.errors', 'data.info', 'case.facts', 'mesh.refine']);
   });
 
   test('recorded on one service, replayed on another from JSON and from the shell: the same case and run (G16, G17)', async () => {

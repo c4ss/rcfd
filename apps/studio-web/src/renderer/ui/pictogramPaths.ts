@@ -83,6 +83,8 @@ export const ICON_NAMES = [
   'settings',
   // F-835
   'new-project',
+  'refine',
+  'open-file',
 ] as const;
 export type IconName = (typeof ICON_NAMES)[number];
 
@@ -123,4 +125,8 @@ export const ICON_PATHS: Record<IconName, { readonly path: string; readonly fill
   settings: { path: 'M1 3H13M1 7H13M1 11H13M4 1V5M10 5V9M6 9V13' },
   // F-835: New project… (a folder with its tab, a plus inside)
   'new-project': { path: 'M1 3H5L6 4H13V12H1ZM7 6V10M5 8H9' },
+  // ADR 0737: Refine x2 (a square cut into four, each cell halved), Open a case file (a page with its corner folded,
+  // an arrow coming out of it)
+  refine: { path: 'M2 2H12V12H2ZM7 2V12M2 7H12' },
+  'open-file': { path: 'M3 1H8L11 4V13H3ZM8 1V4H11M7 11V6M5 8L7 6L9 8' },
 };

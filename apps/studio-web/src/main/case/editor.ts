@@ -3,6 +3,10 @@
 // it never reads or writes the case text itself (G2), and it never writes over a file another writer changed since it
 // was read (G18): the engine's `edit_case` compares the hash under the project's edit lock.
 //
+// ADR 0737: a case file outside any project (Open a case file) is bound the same way, with the hash the service's journal
+// recorded when it read the file, and saved by the service's `case.save` (the changed lines, compared with that hash
+// under a `<file>.rcfd-lock` beside the file; a file inside a project is refused there and goes through edit_case).
+//
 // No Electron import: the unit tests drive it with a fake service and a fake project server.
 import path from 'node:path';
 import {
@@ -34,7 +38,7 @@ import { testDelay } from '../work/delay.js';
 const cancelledBefore = (what: string): CaseRefusal => new CaseRefusal('cancelled', `The ${what} was cancelled before the engine was asked; nothing was written.`);
 
 /** Engine error codes the editor tells apart (docs/mcp-tools.md, docs/service-protocol.md). */
-export const CODE = { UNKNOWN_SESSION: 1001, INVALID: 1003, REFUSED: 1004, CONFLICT: 1200, NOT_FOUND: 1202 } as const;
+export const CODE = { UNKNOWN_SESSION: 1001, INVALID: 1003, REFUSED: 1004, CONFLICT: 1200, NOT_FOUND: 1202, SAVE_CONFLICT: 1007 } as const;
 
 /** A request the editor refuses before or after asking the engine; bridge.ts turns it into the reply's error. */
 export class CaseRefusal extends Error {
@@ -59,6 +63,8 @@ export interface EditorDeps {
   readonly service: ServiceLike;
   /** Starts the project server for `folder` without `--read-only` (the default: ProjectServer.start). */
   startServer(exe: string, folder: string): Promise<ToolServerLike>;
+  /** ADR 0737: the open dialog for one case file outside a project (absolute path), or null when cancelled. */
+  pickFile?(): Promise<string | null>;
   now?(): string;
 }
 
@@ -115,6 +121,8 @@ export class CaseEditor {
   /** One operation at a time per session (a save and a status must not interleave). */
   private readonly queues = new Map<string, Promise<unknown>>();
   private readonly now: () => string;
+  /** ADR 0737: the files the open dialog gave; attachFile binds only these. */
+  private readonly picked = new Set<string>();
 
   constructor(private readonly deps: EditorDeps) {
     this.now = deps.now ?? (() => new Date().toISOString());
@@ -284,6 +292,12 @@ export class CaseEditor {
     return this.serial(session, async () => {
       const { b, entries } = await this.boundJournal(session);
       const pending = pendingChanges(entries, b.savedIndex);
+      if (b.outside) {
+        const now = await this.outsideHash(b);
+        const file: FileNow =
+          now.hash === null ? { state: 'missing', message: now.error ?? `${b.path} cannot be read now.` } : { state: now.hash === b.hash ? 'same' : 'changed', hash: now.hash };
+        return { binding: view(b), pending, file, projectOpen: true };
+      }
       const p = this.deps.project();
       const projectOpen = p !== null && samePath(p.folder, b.folder);
       let file: FileNow;
@@ -333,15 +347,18 @@ export class CaseEditor {
   conflict(session: string): Promise<ConflictView> {
     return this.serial(session, async () => {
       const { b, entries } = await this.boundJournal(session);
-      this.requireBindingProject(b);
-      const server = await this.caseServer();
       let current: string | null;
-      try {
-        current = (await this.hashOf(server, b.path)).hash;
-      } catch (e) {
-        const r = engineError(e);
-        if (r.code !== CODE.NOT_FOUND) throw r;
-        current = null;
+      if (b.outside) current = (await this.outsideHash(b)).hash;
+      else {
+        this.requireBindingProject(b);
+        const server = await this.caseServer();
+        try {
+          current = (await this.hashOf(server, b.path)).hash;
+        } catch (e) {
+          const r = engineError(e);
+          if (r.code !== CODE.NOT_FOUND) throw r;
+          current = null;
+        }
       }
       if (current === b.hash) return { changed: false };
       const pending = pendingChanges(entries, b.savedIndex);
@@ -349,7 +366,7 @@ export class CaseEditor {
       if (current === null) {
         const rows: ConflictRow[] = [];
         for (const p of pending.paths) rows.push({ path: p, mine: (await mine(p)).value ?? null, file: null, inFile: false });
-        return { changed: true, currentHash: null, rows, removals: pending.removals, fileError: `${b.path} is no longer in the project.` };
+        return { changed: true, currentHash: null, rows, removals: pending.removals, fileError: b.outside ? `${b.path} cannot be read now.` : `${b.path} is no longer in the project.` };
       }
       return this.fileSession(b.file, async (tmp, error) => {
         const rows: ConflictRow[] = [];
@@ -378,6 +395,7 @@ export class CaseEditor {
     return this.serial(session, async () => {
       if (signal?.aborted) throw cancelledBefore('save');
       const { b, entries } = await this.boundJournal(session);
+      if (b.outside) return this.saveOutside(b, entries, onto, signal);
       this.requireBindingProject(b);
       const server = await this.caseServer();
       const pending = pendingChanges(entries, b.savedIndex);
@@ -442,6 +460,96 @@ export class CaseEditor {
         reopen: base !== b.hash,
       };
     });
+  }
+
+  // ---- ADR 0737: one case file outside a project
+
+  /** The open dialog (the main process's); the file it gives may be bound by attachFile. */
+  async pickFile(): Promise<{ file: string } | null> {
+    if (!this.deps.pickFile) throw new CaseRefusal('not_configured', 'This Studio has no file dialog.');
+    const f = await this.deps.pickFile();
+    if (f === null) return null;
+    if (!path.isAbsolute(f) || !/\.(toml|json)$/i.test(f)) throw new CaseRefusal('bad_request', `${f}: a case file is a .toml or .json file`);
+    this.picked.add(path.resolve(f));
+    return { file: path.resolve(f) };
+  }
+
+  /** Binds a session made from a picked file; the hash is the one the service's journal recorded when it read it. */
+  attachFile(session: string, file: string): Promise<CaseBinding> {
+    return this.serial(session, async () => {
+      const abs = path.resolve(file);
+      if (!this.picked.has(abs)) throw new CaseRefusal('bad_request', `${file} was not chosen in the open dialog; open it with Open a case file.`);
+      const entries = await this.journal(session);
+      if (!madeFrom(entries, abs)) throw new CaseRefusal('not_from_file', `Session ${session} was not made from ${abs} (its journal names another source).`);
+      const hash = entries[0]?.source?.hash;
+      if (typeof hash !== 'string') throw new CaseRefusal('engine', `The journal of session ${session} has no hash of ${abs}.`);
+      const b: Bound = { session, folder: path.dirname(abs), path: abs, file: abs, hash, openedAt: this.now(), savedAt: null, savedIndex: entries.length, outside: true };
+      this.bindings.set(session, b);
+      return view(b);
+    });
+  }
+
+  /** The file's hash as the engine reads it now: the journal hash of a session made from it (closed again). */
+  private outsideHash(b: Bound): Promise<{ hash: string | null; error: string | null }> {
+    return this.fileSession(b.file, async (tmp, error) => {
+      if (tmp === null) return { hash: null, error };
+      const h = (await this.journal(tmp))[0]?.source?.hash;
+      return { hash: typeof h === 'string' ? h : null, error: null };
+    });
+  }
+
+  /** The service's `case.save` of the session, the changed lines only, compared with the hash read (ADR 0737). */
+  private async saveOutside(b: Bound, entries: readonly JournalEntry[], onto: 'opened' | 'current', signal?: AbortSignal): Promise<SaveOutcome> {
+    const pending = pendingChanges(entries, b.savedIndex);
+    if (pending.count === 0) return { kind: 'nothing' };
+    const values: Record<string, unknown> = {};
+    for (const p of pending.paths) {
+      const v = await this.valueIn(b.session, p);
+      if (v.found) values[p] = v.value;
+    }
+    // case.save writes a session's whole case: onto the file as it is now, that is a session made from the file now
+    // with this session's changes set in it, so the other writer's other changes stay (G18), as edit_case keeps them
+    const write = async (session: string, base: string) => {
+      await testDelay('caseSave', signal);
+      if (signal?.aborted) throw cancelledBefore('save');
+      return (await this.deps.service.call('case.save', { session, path: b.file, base_hash: base, form: 'lines' })) as { old_hash?: unknown; new_hash?: unknown; form?: unknown };
+    };
+    let base = b.hash;
+    let r: { old_hash?: unknown; new_hash?: unknown; form?: unknown };
+    try {
+      if (onto === 'current') {
+        r = await this.fileSession(b.file, async (tmp, error) => {
+          if (tmp === null) throw new CaseRefusal('engine', `The engine does not read ${b.path} as a case now: ${error ?? 'no session'}`);
+          const h = (await this.journal(tmp))[0]?.source?.hash;
+          if (typeof h !== 'string') throw new CaseRefusal('engine', `The journal of a session of ${b.path} has no hash.`);
+          base = h;
+          for (const [p, value] of Object.entries(values)) await this.deps.service.call('settings.set', { session: tmp, path: p, value });
+          for (const p of pending.removals) await this.deps.service.call('settings.remove', { session: tmp, path: p }).catch(() => undefined);
+          return write(tmp, base);
+        });
+      } else r = await write(b.session, base);
+    } catch (e) {
+      const x = engineError(e);
+      if (x.code === CODE.SAVE_CONFLICT) {
+        const cur = (x.data as { current_hash?: unknown } | undefined)?.current_hash;
+        return { kind: 'conflict', currentHash: typeof cur === 'string' ? cur : null, message: x.message };
+      }
+      if (x.code === CODE.INVALID) return { kind: 'refused', message: x.message, diagnostics: diagnostics(x.data) };
+      throw x;
+    }
+    const newHash = typeof r.new_hash === 'string' ? r.new_hash : '';
+    this.bindings.set(b.session, { ...b, hash: newHash, savedIndex: entries.length, savedAt: this.now() });
+    return {
+      kind: 'saved',
+      path: b.path,
+      oldHash: typeof r.old_hash === 'string' ? r.old_hash : base,
+      newHash,
+      // the service's `lines` form is edit_case's `minimal`: the changed lines in place, comments kept
+      form: r.form === 'lines' ? 'minimal' : typeof r.form === 'string' ? r.form : '',
+      values,
+      mesh: null,
+      reopen: base !== b.hash,
+    };
   }
 
   /** The engine's templates and shipped examples: the enumerations of `new_case` in the server's `tools/list`. */
@@ -546,4 +654,5 @@ const view = (b: Bound): CaseBinding => ({
   hash: b.hash,
   openedAt: b.openedAt,
   savedAt: b.savedAt,
+  ...(b.outside ? { outside: true as const } : {}),
 });

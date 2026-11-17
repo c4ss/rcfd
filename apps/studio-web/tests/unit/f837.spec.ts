@@ -313,9 +313,11 @@ test.describe('the palette and the run action', () => {
     for (const n of ['log', 'report', 'image', 'budgets', 'range-snapshot', 'range-run', 'range-fixed', 'face-on', 'log-scale', 'stored']) expect(ICON_NAMES).toContain(n);
   });
 
-  test('Run again with fields stored is start_run’s store plan; the default stays store none', () => {
+  // restated for ADR 0737: the Studio's own start is the store plan by default now; none stays an explicit choice
+  test('Run again with fields stored is start_run’s store plan; the default is store plan (ADR 0737)', () => {
     const q = getRunAction('project.queue_case')!;
     expect(runEquivalents(q, { case: 'cases/a.toml', store: 'plan' } as never, '/p').mcp).toEqual({ tool: 'start_run', arguments: { case: 'cases/a.toml', store: 'plan' } });
-    expect(runEquivalents(q, { case: 'cases/a.toml' } as never, '/p').mcp).toEqual({ tool: 'start_run', arguments: { case: 'cases/a.toml', store: 'none' } });
+    expect(runEquivalents(q, { case: 'cases/a.toml' } as never, '/p').mcp).toEqual({ tool: 'start_run', arguments: { case: 'cases/a.toml', store: 'plan' } });
+    expect(runEquivalents(q, { case: 'cases/a.toml', store: 'none' } as never, '/p').mcp).toEqual({ tool: 'start_run', arguments: { case: 'cases/a.toml', store: 'none' } });
   });
 });

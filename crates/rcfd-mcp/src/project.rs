@@ -36,6 +36,19 @@ fn reason_schema() -> Value {
     json!({"type": "string", "maxLength": rcfd_workspace::journal::MAX_REASON, "description": "why this change is made, in a short sentence (at most 500 characters): kept with it in the project journal (.rcfd/edits.jsonl), shown in the Studio and by read_feed"})
 }
 
+/// The run-time settings of `start_run` and `case_facts` (ADR 0737 P2): the engine's time-step rule of ADR 0153 and 0158.
+fn run_time_schema() -> Value {
+    json!({"type": "object", "description": "set the run's time step: solver.end_time = simulate_s (default the case's), a first step for the courant target (default 0.5) through the thinnest cell, then the solver's Courant controller up to max_dt (default simulate_s/100) (mode adaptive, the default), equal steps (fixed) or the case's own (case); adaptive_correctors (default true) adds solver.corrector_control=adaptive where the solver accepts it. Entries go before the store plan's and set's.",
+        "properties": {
+            "simulate_s": {"type": "number", "exclusiveMinimum": 0},
+            "courant": {"type": "number", "exclusiveMinimum": 0},
+            "max_dt": {"type": "number", "exclusiveMinimum": 0},
+            "mode": {"type": "string", "enum": ["adaptive", "fixed", "case"]},
+            "adaptive_correctors": {"type": "boolean"}
+        },
+        "additionalProperties": false})
+}
+
 /// A project case argument of the mesh tools (ADR 0187).
 fn case_schema() -> Value {
     json!({"type": "string", "description": "project-relative case file (.toml or .json), e.g. cases/cavity.toml"})
@@ -299,6 +312,36 @@ pub(crate) fn tools() -> Vec<Tool> {
             },
         },
         Tool {
+            name: "case_facts",
+            description: "What a project case's time step depends on, without running it (ADR 0737): the kind of run, solver.dt and solver.end_time (and whether the file sets them), its own step control, cells, 2D, bounds, the thinnest and thickest cell (h_min, h_max, m), the fastest speed at the start (u0, m/s, and where), the pressure correctors; run_time: the plan of a run with the run_time settings of start_run (default: automatic step at Courant 0.5, adaptive correctors), its --set entries, first step, step and Courant estimates and a warning above Courant 2; memory: the runner's estimate with the project's budgets. Error 1003 when the case does not build.",
+            access: Access::Read,
+            schema: || {
+                obj(
+                    json!({
+                        "case": {"type": "string", "description": "project-relative case file"},
+                        "run_time": run_time_schema()
+                    }),
+                    &["case"],
+                )
+            },
+        },
+        Tool {
+            name: "refine_case_mesh",
+            description: "Refine x2 (ADR 0737): double every cell count of the case's generator mesh (mesh.nx, mesh.ny, mesh.nz and the second block's _right counts), written through edit_case's rule (only if the file still has base_hash, else error 1200; comments kept). Refused (1004, with the reason, nothing written) for a mesh file, a generator counted by other settings (axial_fan_sector) and a count over its maximum. Returns the edits, cells before and after, the runner's memory estimate after, and edit_case's result.",
+            access: Access::WriteFiles,
+            schema: || {
+                obj(
+                    json!({
+                        "case": {"type": "string", "description": "project-relative case file"},
+                        "factor": {"type": "integer", "enum": [2], "description": "only 2"},
+                        "base_hash": {"type": "string", "description": "hash from read_project_file"},
+                        "reason": reason_schema()
+                    }),
+                    &["case", "factor", "base_hash"],
+                )
+            },
+        },
+        Tool {
             name: "start_run",
             description: "Queue a run of a project case with the project's run service and start the service if none is alive. set holds rcfd run --set overrides (path=value). Returns the run id.",
             access: Access::Execute,
@@ -312,7 +355,9 @@ pub(crate) fn tools() -> Vec<Tool> {
                         "set": {"type": "array", "items": {"type": "string"}, "description": "overrides path=value, in order"},
                         "priority": {"type": "integer"},
                         "threads": {"type": "integer", "minimum": 1, "maximum": 256},
-                        "mem_mb": {"type": "integer", "minimum": 1}
+                        "mem_mb": {"type": "integer", "minimum": 1},
+                        "run_time": run_time_schema(),
+                        "dry_run": {"type": "boolean", "description": "return what the call would do (case, set, store and run-time plans, the check, memory, whether a runner would start) and write nothing (ADR 0737)"}
                     }),
                     &[],
                 )

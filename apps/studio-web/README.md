@@ -1315,15 +1315,28 @@ Seven palette commands (G20): `runs.log`, `runs.report`, `runs.budgets` (group P
   sum sign; (b) the session's whole history, turns from the terminal included (the Studio reads no cost from a
   transcript). Taken: (a).
 
-### Needs the engine (not built)
+### From the engine (ADR 0737, built 2026-11-17)
 
-- The egui run setup's "simulate N s" helper (time step and step count from a duration), adaptive correctors and the
-  Courant fix: needs a case-facts query (cell sizes, a velocity scale) or `start_run {dry_run: true}` returning the
-  plan and its estimates.
-- Refine the mesh by 2: needs a mesh refine entry point (`refine_mesh {mesh, factor}` or a service method).
-- Open and save one case file anywhere, outside a project: the case editor's save is project-relative; needs a service
-  save to a path outside a project.
-- The store's length unit: needs a unit for the coordinates in the store's info.
+- **Estimate before you run.** The case editor shows a line from the service's `case.facts` (`rcfd serve --ui`), asked
+  again after each change: the cells, the thinnest cell, the time step, the steps, the Courant estimate and the memory.
+  The tooltip says "the runner's default budgets" when there is no project, and the engine's Courant warning shows with
+  its fix. The run-time rule (ADR 0153) belongs to the engine: `start_run {run_time, dry_run}`, MCP `case_facts`,
+  `rcfd check --facts`. The Studio never had a copy of it; `tests/unit/case-file-adr0737.spec.ts` checks that none
+  appears.
+- **Refine x2.** An icon in the case actions calls the service's `mesh.refine {factor: 2, apply: true}`. The doubled
+  counts become unsaved changes, and Undo puts them back. A mesh file or a generator without counts is refused with
+  the engine's reason. From Claude Code, `refine_case_mesh` does the same; `rcfd check <case> --refine 2` shows the
+  edits.
+- **Open a case file outside a project.** Use `#/case/file`, the palette action, the icon in the editor's top bar or
+  the button on `#/case`. The main process shows the dialog and binds only a file it gave. Saving uses the service's
+  `case.save {form: "lines"}`: the changed lines, compared with the hash read, under a `<file>.rcfd-lock`. A file inside
+  a project is refused there and saved with `edit_case`. A conflict (1007) shows both sides; writing yours keeps the
+  other writer's other changes.
+- **Runs keep their fields.** Run, Run again and Queue pass `start_run {store: "plan"}` (ADR 0140), because the
+  maintainer reported a case without `[output]` that stored nothing. A case that sets its own store keeps it, and the
+  case file is not changed. The start line names the snapshots and size the plan applied. The MCP and CLI defaults
+  stay `none`.
+- Still needed from the engine: the store's length unit (ADR 0738).
 
 ### Save or discard before a close (F-837, approved by the maintainer 2026-11-17)
 

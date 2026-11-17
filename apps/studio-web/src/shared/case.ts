@@ -62,6 +62,12 @@ export interface CaseBinding {
   readonly hash: string;
   readonly openedAt: string;
   readonly savedAt: string | null;
+  /**
+   * ADR 0737: true for a case file outside any project, opened with Open a case file: `folder` is the file's folder,
+   * `path` the absolute file, and a save is the service's `case.save` (the changed lines; a `<file>.rcfd-lock` beside
+   * the file while it is written), not the project server's `edit_case`.
+   */
+  readonly outside?: true;
 }
 
 /** The changes of a session since it was opened or last saved, from its journal (`journal.get`). */
@@ -195,6 +201,10 @@ export type CaseRequest =
   | { readonly op: 'duplicate'; readonly id: number; readonly path: string; readonly name: string }
   | { readonly op: 'check'; readonly id: number; readonly path: string }
   | { readonly op: 'forget'; readonly id: number; readonly session: string }
+  /** ADR 0737: the open dialog for one case file outside a project; the reply is `{file}`, or null when cancelled. */
+  | { readonly op: 'pickFile'; readonly id: number }
+  /** ADR 0737: binds a session made from a file `pickFile` gave (`session.create {path}`); its hash is the journal's. */
+  | { readonly op: 'attachFile'; readonly id: number; readonly session: string; readonly path: string }
   /**
    * F-832 (G21): cancels the save or check of request `target`. A check is answered `cancelled` at once (the engine's
    * project server has no way to stop a tool call, so its result is dropped when it comes). A save is cancelled only
@@ -205,7 +215,7 @@ export type CaseRequest =
   | { readonly op: 'cancel'; readonly id: number; readonly target: number };
 
 export type CaseOp = CaseRequest['op'];
-export const CASE_OPS = ['state', 'sources', 'prepare', 'attach', 'status', 'conflict', 'save', 'create', 'duplicate', 'check', 'forget', 'cancel'] as const satisfies readonly CaseOp[];
+export const CASE_OPS = ['state', 'sources', 'prepare', 'attach', 'status', 'conflict', 'save', 'create', 'duplicate', 'check', 'forget', 'cancel', 'pickFile', 'attachFile'] as const satisfies readonly CaseOp[];
 
 export interface CaseError {
   /**
@@ -247,6 +257,10 @@ export interface CaseBridge {
   /** F-832: `options.onCancel` receives the function that cancels this check. */
   check(path: string, options?: CancelOptions): Promise<CaseReply<FileCheck>>;
   forget(session: string): Promise<CaseReply<null>>;
+  /** ADR 0737: asks for a case file outside a project (the main process's dialog); null when cancelled. */
+  pickFile(): Promise<CaseReply<{ readonly file: string } | null>>;
+  /** ADR 0737: binds a session made from the picked file to it. */
+  attachFile(session: string, file: string): Promise<CaseReply<CaseBinding>>;
 }
 
 // ---- The case-level actions and their engine equivalents (G16). They are not in the F-827 registry, whose actions are
@@ -272,6 +286,15 @@ export const CASE_ACTIONS: readonly CaseAction[] = [
     engine: ['read_project_file', 'session.create {path}', 'journal.get'],
     mcp: 'read_project_file (the hash); the project server has no session tools (docs/mcp-tools.md, Project mode)',
     cli: 'rcfd validate <case> reads and checks the same file; rcfd call session.create \'{"path": "<file>"}\' makes the same session',
+  },
+  {
+    id: 'case.open_file',
+    title: 'Open a case file outside a project',
+    description:
+      'ADR 0737: one .toml or .json case file from anywhere, without a project; a save writes the changed lines with the service (case.save), only if the file is as it was read, and refuses a file inside a project (that one is saved with edit_case).',
+    engine: ['session.create {path}', 'journal.get', 'case.save {session, path, base_hash, form: lines}'],
+    mcp: 'none: the MCP server works in a project (edit_case); rcfd-mcp without --project has no case-file tools',
+    cli: 'rcfd call session.create \'{"path": "<file>"}\' makes the same session; rcfd validate <file> checks the file',
   },
   {
     id: 'case.save',

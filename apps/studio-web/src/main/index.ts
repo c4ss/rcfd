@@ -161,6 +161,13 @@ const caseEditor = new CaseEditor({
   engine: projects.state.engine,
   service,
   startServer: (exe, folder) => ProjectServer.start(exe, folder, undefined, { readOnly: false }),
+  // ADR 0737: Open a case file outside a project
+  pickFile: async () => {
+    const win = BrowserWindow.getFocusedWindow() ?? BrowserWindow.getAllWindows()[0];
+    const options = { title: 'Open a case file', properties: ['openFile' as const], filters: [{ name: 'Case files', extensions: ['toml', 'json'] }] };
+    const r = win ? await dialog.showOpenDialog(win, options) : await dialog.showOpenDialog(options);
+    return r.canceled ? null : (r.filePaths[0] ?? null);
+  },
 });
 projects.onState(() => caseEditor.projectChanged());
 // F-820: an installed Studio's own service starts when a project is first opened (start() runs once)

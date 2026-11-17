@@ -2629,9 +2629,9 @@ local to this list.
 | E-828e | F-828 | A read-only hash of a mesh file a run names (ADR 0734 proposed; awaiting the maintainer) | said as a gap beside the command |
 | E-829a | F-829 | Delete or trash for runs, results and cases (`trash_run`, `trash_case`, `list_trash`, `restore_trash`) (ADR 0736 proposed; awaiting the maintainer) | the Studio offers no delete |
 | E-829b | F-829 | Compare-and-set for `settings.set` (a base value or hash) (ADR 0736 proposed; awaiting the maintainer) | the Studio reads the value again before it sends |
-| E-837a | F-837 | A case-facts query (cell sizes, a velocity scale) or `start_run {dry_run: true}`, for "simulate N s", adaptive correctors and the Courant fix (ADR 0737 proposed; awaiting the maintainer) | not built |
-| E-837b | F-837 | A mesh refine entry point (`refine_mesh {mesh, factor}` or a service method), for Refine by 2 (ADR 0737 proposed; awaiting the maintainer) | not built |
-| E-837c | F-837 | A service save of a case session to a path outside a project, for one case file anywhere (ADR 0737 proposed; awaiting the maintainer) | not built |
+| E-837a | F-837 | A case-facts query (cell sizes, a velocity scale) or `start_run {dry_run: true}`, for "simulate N s", adaptive correctors and the Courant fix (ADR 0737 accepted; built 2026-11-17: `case.facts`, `case_facts`, `start_run {run_time, dry_run}`) | built |
+| E-837b | F-837 | A mesh refine entry point (`refine_mesh {mesh, factor}` or a service method), for Refine by 2 (ADR 0737 accepted; built 2026-11-17: `mesh.refine`, `refine_case_mesh`, factor 2) | built |
+| E-837c | F-837 | A service save of a case session to a path outside a project, for one case file anywhere (ADR 0737 accepted; built 2026-11-17: `case.save`, the Studio's Open a case file) | built |
 | E-837d | F-837 | `rcfd-runner config set` or MCP `set_runner_config` (ADR 0733, accepted 2026-11-17) | built 2026-11-17: the panel reads with `runner_config` and writes with `set_runner_config` (the runner's checks, atomic, conflict 1200); the Studio no longer writes `.rcfd/runner-config.json` |
 
 (2026-11-17) Engine ADRs proposed for these rows, status Proposed, nothing built:

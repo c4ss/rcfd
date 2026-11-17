@@ -51,6 +51,8 @@ const FIELDS: Record<CaseRequest['op'], string> = {
   check: 'path',
   forget: 'session',
   cancel: 'target',
+  pickFile: '',
+  attachFile: 'path,session',
 };
 
 /** Checks one message from the port. Anything not exactly a CaseRequest is refused, with the reason. */
@@ -197,6 +199,12 @@ export class CasePortBridge {
           break;
         case 'forget':
           e.forget(r.session);
+          break;
+        case 'pickFile':
+          result = await e.pickFile();
+          break;
+        case 'attachFile':
+          result = await e.attachFile(r.session, r.path);
           break;
       }
       this.reply(r.id, { ok: true, result });

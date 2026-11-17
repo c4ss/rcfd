@@ -21,6 +21,10 @@
 //!
 //! ADR 0733 restates it for F-837 (P3): `runner_config` (read, no argument) and `set_runner_config` (`write_files`, required
 //! `set` and `base_hash`) come right after `list_meshes`; without them the list is the F-275 one, byte for byte.
+//!
+//! ADR 0737 restates it for F-837 (P1 to P3): `case_facts` (read, required `case`) and `refine_case_mesh` (`write_files`,
+//! required `case`, `factor` and `base_hash`) come right after `set_runner_config`, and `start_run` gains exactly the
+//! properties `run_time` and `dry_run`; without them the list is the ADR 0733 one, byte for byte.
 
 use serde_json::{json, Value};
 use std::io::Write;
@@ -106,6 +110,33 @@ fn a2_tools_list_with_project_is_the_golden_with_the_f271_changes() {
     // live text
     assert_eq!(serde_json::to_string(&gold).unwrap(), GOLDEN);
     assert_eq!(serde_json::to_string(&live_value).unwrap(), got);
+    // ADR 0737: the two tools right after set_runner_config and start_run's two properties, taken out
+    {
+        let tools = live_value["tools"].as_array_mut().unwrap();
+        let at = tools
+            .iter()
+            .position(|t| t["name"] == "case_facts")
+            .expect("case_facts listed");
+        assert_eq!(tools[at - 1]["name"], "set_runner_config");
+        assert_eq!(tools[at + 1]["name"], "refine_case_mesh");
+        let (r, w) = (&tools[at], &tools[at + 1]);
+        assert_eq!(r["_meta"]["rcfd/access"], "read");
+        assert_eq!(r["inputSchema"]["required"], json!(["case"]));
+        assert_eq!(w["_meta"]["rcfd/access"], "write_files");
+        assert_eq!(w["inputSchema"]["required"], json!(["case", "factor", "base_hash"]));
+        for t in [r, w] {
+            assert_eq!(t["inputSchema"]["additionalProperties"], false, "{}", t["name"]);
+        }
+        tools.drain(at..at + 2);
+        let sr = tools.iter_mut().find(|t| t["name"] == "start_run").unwrap();
+        let props = sr["inputSchema"]["properties"].as_object_mut().unwrap();
+        let rt = props.remove("run_time").expect("start_run has run_time");
+        assert_eq!(rt["additionalProperties"], false);
+        assert_eq!(
+            props.remove("dry_run").expect("start_run has dry_run")["type"],
+            "boolean"
+        );
+    }
     // ADR 0733 P3: the two budgets tools right after list_meshes, taken out; the rest is the F-275 list
     {
         let tools = live_value["tools"].as_array_mut().unwrap();

@@ -24,7 +24,7 @@ rcfd-particles -> core, mesh   (one-way Lagrangian particle tracking, ADR 0028)
 rcfd-turb   -> core, mesh, fv
 rcfd-post   -> core, mesh, io, fv, fem   (fem: the VTK output of a solid result and the solid glue modules, ADR 0278)
 rcfd-tsstore -> core, mesh, io   (time-series field store of a run, Studio L3, ADR 0124)
-rcfd-api    -> core, fv, io, particles, tsstore (and the crates above)
+rcfd-api    -> core, fv, io, particles, tsstore (and the crates above); project, runner (ADR 0737: case.save outside a project, the runner's memory rule)
 rcfd-workspace -> api, project, runner, tsstore, post, io, mesh   (the project folder's commands, queries and write rule, shared by the MCP server and the Studio; ADR 0173, ADR 0185; io and mesh for the mesh commands, ADR 0187; the project journal's entries and the change feed, ADR 0188)
 rcfd-mcp    -> api, workspace, project, runner, tsstore, post   (project tools behind --project: their MCP descriptors over the workspace; ADR 0135, ADR 0185)
 rcfd-cli    -> core, mesh, io, post, fv, api, workspace   (workspace for `rcfd project init`, ADR 0731)

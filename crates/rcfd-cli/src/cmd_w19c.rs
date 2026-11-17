@@ -151,10 +151,15 @@ pub fn cmd_restart(args: &[String]) -> u8 {
 
 /// `rcfd check <case> [--json] [--set ...]`.
 pub fn cmd_check(args: &[String]) -> u8 {
-    let pos = positionals(args, EXTRA_VALUE_OPTS);
+    let value_opts = [EXTRA_VALUE_OPTS, &["--refine"]].concat();
+    let pos = positionals(args, &value_opts);
     let [path] = pos[..] else {
         return usage_error("check takes exactly one case file");
     };
+    // ADR 0737: the case facts and Refine x2, printed as JSON; nothing is written
+    if flag(args, "--facts") || opt(args, "--refine").is_some() {
+        return check_facts_or_refine(path, args);
+    }
     let json_out = flag(args, "--json");
     let report = |code: u8, diags: Value, rules_v: Value, mesh: Value| {
         if json_out {
@@ -220,6 +225,79 @@ pub fn cmd_check(args: &[String]) -> u8 {
         );
     }
     report(code, ev["diagnostics"].clone(), rules_v, ev["mesh"].clone())
+}
+
+/// `rcfd check <case> --facts` and `--refine 2` (ADR 0737 P1, P3; G16): the JSON of the service's `case.facts` and
+/// `mesh.refine` for a case file (the run-time plan with the default settings, the memory estimate with the runner's
+/// default budgets). Exit 0, 2 (a factor other than 2, both switches) or 3 (the case does not build, or is not refined:
+/// the reason on standard error).
+fn check_facts_or_refine(path: &str, args: &[String]) -> u8 {
+    use rcfd_api::facts::{self, InText, RunTime};
+    if flag(args, "--facts") && opt(args, "--refine").is_some() {
+        return usage_error("check takes --facts or --refine, not both");
+    }
+    let text = match std::fs::read_to_string(path) {
+        Ok(t) => t,
+        Err(e) => {
+            eprintln!("{path}: {e}");
+            return INVALID;
+        }
+    };
+    let mut case = match Case::load(path) {
+        Ok(c) => c,
+        Err(d) => {
+            for x in &d {
+                eprintln!("{path}: {x}");
+            }
+            return INVALID;
+        }
+    };
+    if let Err(code) = apply_overrides(&mut case, args, path) {
+        return code;
+    }
+    let budgets = facts::Budgets::default();
+    let out = if let Some(f) = opt(args, "--refine") {
+        let Ok(factor) = f.parse::<u64>() else {
+            return usage_error("--refine takes the factor 2");
+        };
+        match rcfd_api::refine::count_refinement(&case, factor, None) {
+            Ok(r) => {
+                let mut v = r.to_json();
+                v["memory_after"] = facts::memory_json(r.cells_after, &budgets, "runner_defaults");
+                v
+            }
+            Err(rcfd_api::refine::Refusal::Factor(m)) => return usage_error(&m),
+            Err(rcfd_api::refine::Refusal::Refused(m)) => {
+                eprintln!("{path}: Refine x2: {m}");
+                return INVALID;
+            }
+            Err(rcfd_api::refine::Refusal::Invalid(d)) => {
+                for x in &d {
+                    eprintln!("{path}: {x}");
+                }
+                return INVALID;
+            }
+        }
+    } else {
+        let raw = facts::text_tree(&text).unwrap_or(Value::Null);
+        match facts::case_facts(&case, InText::Text(&raw), None) {
+            Ok(f) => {
+                let mut v = f.to_json();
+                v["run_time"] = facts::plan_json(path, &f, &RunTime::default());
+                v["memory"] = facts::memory_json(f.cells, &budgets, "runner_defaults");
+                v
+            }
+            Err(facts::FactsError::Invalid(d)) => {
+                for x in &d {
+                    eprintln!("{path}: {x}");
+                }
+                return INVALID;
+            }
+            Err(facts::FactsError::TooLarge { .. }) => unreachable!("no cell limit"),
+        }
+    };
+    println!("{}", serde_json::to_string_pretty(&out).unwrap_or_default());
+    OK
 }
 
 /// True when `rcfd run` should run the chain of the case.

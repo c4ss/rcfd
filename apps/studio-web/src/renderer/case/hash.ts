@@ -3,6 +3,7 @@
 //
 //   #/case                                the sessions open on case files
 //   #/case/new                            a new case from one of the engine's templates or shipped examples
+//   #/case/file                           ADR 0737: open one case file outside a project (the open dialog)
 //   #/case/open/<cases/x.toml>[?replaces=<session>]
 //                                         open a case file; with `replaces`, that session is closed once the new one
 //                                         is open (loading the file again after a conflict or an outside change)
@@ -13,12 +14,14 @@ export const CASE_HASH = '#/case';
 export type CaseRoute =
   | { readonly kind: 'index' }
   | { readonly kind: 'new' }
+  | { readonly kind: 'file' }
   | { readonly kind: 'open'; readonly path: string; readonly replaces: string | null }
   | { readonly kind: 'session'; readonly session: string };
 
 export const caseHash = {
   index: CASE_HASH,
   new: `${CASE_HASH}/new`,
+  file: `${CASE_HASH}/file`,
   open: (path: string, replaces?: string): string => `${CASE_HASH}/open/${encodeURIComponent(path)}${replaces ? `?replaces=${encodeURIComponent(replaces)}` : ''}`,
   session: (session: string): string => `${CASE_HASH}/${encodeURIComponent(session)}`,
 };
@@ -29,6 +32,7 @@ export function caseRoute(hash: string): CaseRoute | null {
   if (!hash.startsWith(`${CASE_HASH}/`)) return null;
   const rest = hash.slice(CASE_HASH.length + 1);
   if (rest === 'new') return { kind: 'new' };
+  if (rest === 'file') return { kind: 'file' };
   const open = /^open\/([^?]+)(?:\?replaces=(.+))?$/.exec(rest);
   if (open) return { kind: 'open', path: decodeURIComponent(open[1]!), replaces: open[2] ? decodeURIComponent(open[2]) : null };
   if (/^[^/?]+$/.test(rest)) return { kind: 'session', session: decodeURIComponent(rest) };

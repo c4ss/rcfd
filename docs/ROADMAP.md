@@ -17017,7 +17017,20 @@ Generated from `docs/studio-guardrails.md`, `PRODUCT.md` and `DESIGN.md` ([ADR 0
     session asks with the shared save-or-discard prompt (closeGuard) when its session holds case-editor changes not
     saved, instead of its older loss question (kept for a session with none); the window-close and close-project split
     and Keep editing as the default are unchanged; e2e close-guard.spec.ts. 2026-11-17: engine follow-ups E-837a to
-    E-837c: ADR 0737 proposed (the length unit: ADR 0738); awaiting the maintainer.
+    E-837c: ADR 0737 proposed (the length unit: ADR 0738); awaiting the maintainer. 2026-11-17 (ADR 0737, accepted with
+    every recommendation, built on branch adr0737): E-837a to E-837c through the engine. The case editor's estimate line
+    (cells, thinnest cell, time step, steps, Courant estimate and warning, memory with the runner's default budgets when
+    there is no project) comes from the service's case.facts (rcfd serve --ui). The run-time rule of ADR 0153 is the
+    engine's (start_run {run_time, dry_run}; MCP case_facts; rcfd check --facts), and the Studio had no copy to remove.
+    Refine x2 is the service's mesh.refine (factor 2 only, a mesh file refused with the reason, undoable; MCP
+    refine_case_mesh through edit_case; rcfd check --refine 2). Open and save one case file outside a project
+    (#/case/file, palette case.open_file): the service's case.save {form: lines}, the hash compared under a <file>.rcfd-
+    lock, a file inside a project refused (edit_case), a conflict (1007) shown with both sides. Decision (the
+    maintainer's report: cylinder_re100_shedding.toml, without [output], ran from the Studio and stored no field): the
+    Studio's Run, Run again and Queue now pass start_run {store: plan} (ADR 0140), a case that sets
+    output.store_interval or output.store_time_interval keeps its own, the case file is not changed, start_run's own
+    default (none) and the CLI's stay, and the start line says the snapshots and size the plan applied. e2e case-file-
+    adr0737.spec.ts (4); word budgets unchanged. Left: the store length unit (ADR 0738).
 - [x] **F-838** Local-model assistant: keep, port or remove
   - depends on: F-449
   - acceptance: The maintainer decides what becomes of the local-model assistant that only rcfd-gui offered (presets

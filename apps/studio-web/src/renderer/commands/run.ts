@@ -55,7 +55,7 @@ export function unavailableReason(e: PaletteEntry, env: PaletteEnv): string | nu
       return a.available ? null : a.reason;
     }
     case 'case': {
-      if (e.id === 'case.new') return null;
+      if (e.id === 'case.new' || e.id === 'case.open_file') return null;
       if (e.id === 'case.open') return view(env) ? null : NO_PROJECT;
       const h = commandHandler(e.id);
       return h ? (h.unavailable?.() ?? null) : NOT_IN_EDITOR;
@@ -360,6 +360,7 @@ async function executeInner(e: PaletteEntry, values: Values, env: PaletteEnv): P
     case 'case': {
       if (e.id === 'case.open') return close(() => void (location.hash = caseHash.open(String(values['case']))));
       if (e.id === 'case.new') return close(() => void (location.hash = caseHash.new));
+      if (e.id === 'case.open_file') return close(() => void (location.hash = caseHash.file));
       const h = commandHandler(e.id);
       if (!h) return { kind: 'done', ok: false, title: `Unavailable: ${e.title}`, lines: [NOT_IN_EDITOR], reply: null, equivalents: [], run: null };
       return close(() => h.run(values));

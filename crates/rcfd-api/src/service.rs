@@ -53,6 +53,9 @@ pub mod code {
     pub const PARTICIPANT: i64 = 1005;
     /// No hosted co-simulation participant of that name.
     pub const NO_PARTICIPANT: i64 = 1006;
+    /// A file changed since it was read; `data.current_hash` is its hash now (`case.save`, ADR 0737 P4; the code of ADR
+    /// 0736).
+    pub const CONFLICT: i64 = 1007;
     /// Anything else.
     pub const INTERNAL: i64 = -32000;
 }
@@ -382,8 +385,8 @@ impl Service {
     }
 
     /// Switch the UI metadata and the `help.*` methods on (ADR 0730 P4): `settings.schema {ui: true}`, `help.glossary`,
-    /// `help.errors`, and `ui` with the two method names in `service.info`. A service without it answers every method as
-    /// protocol 1.1 does.
+    /// `help.errors`, ADR 0737's `case.facts`, `mesh.refine` and `case.save`, and `ui` with those method names
+    /// ([`crate::ui::UI_METHODS`]) in `service.info`. A service without it answers every method as protocol 1.1 does.
     pub fn enable_ui(&self) {
         self.ui.store(true, Ordering::SeqCst);
     }
@@ -1164,6 +1167,10 @@ impl Service {
             m if m.starts_with("cosim.") => crate::cosim_service::call(self, m, p),
             m if m.starts_with("data.") => crate::data_service::call(self, m, p),
             m if m.starts_with("help.") && self.ui_enabled() => crate::ui::call(m, p),
+            // ADR 0737: the case facts, Refine x2 and the save outside a project, only with --ui (Q1 (a))
+            "case.facts" if self.ui_enabled() => self.case_facts_call(p),
+            "mesh.refine" if self.ui_enabled() => self.mesh_refine_call(p),
+            "case.save" if self.ui_enabled() => self.case_save_call(p),
             other => Err(RpcError::new(
                 code::METHOD_NOT_FOUND,
                 format!("unknown method '{other}'"),
@@ -2547,3 +2554,5 @@ mod tests {
 
 #[cfg(test)]
 mod monitors_f456;
+
+mod case_tools;

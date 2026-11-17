@@ -17,7 +17,9 @@ export const SERVICE_PORT_CHANNEL = 'studio.service-port';
 /**
  * Methods that only read. `data.info` (protocol 1.2, opt-in) returns the service's clock and data port; a service
  * without `data.*` answers it with -32601. `help.glossary` and `help.errors` (ADR 0730, opt-in with `rcfd serve --ui`)
- * return the engine's glossary and error catalogue; a service without --ui answers them with -32601.
+ * return the engine's glossary and error catalogue, and `case.facts` (ADR 0737, the same switch) a case's facts and run
+ * estimate; a service without --ui answers them with -32601. `mesh.refine` (ADR 0737, --ui) is a control method. The
+ * service's `case.save` is not on the list: the case editor's main process calls it (src/main/case/editor.ts).
  */
 export const SERVICE_READ_METHODS = [
   'service.info',
@@ -36,6 +38,7 @@ export const SERVICE_READ_METHODS = [
   'data.info',
   'help.glossary',
   'help.errors',
+  'case.facts',
 ] as const;
 
 /** Methods that change a session or its run. */
@@ -50,6 +53,7 @@ export const SERVICE_CONTROL_METHODS = [
   'run.resume',
   'run.stop',
   'run.step',
+  'mesh.refine',
 ] as const;
 
 /**

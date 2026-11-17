@@ -290,6 +290,7 @@ export class RunControl {
         state: strOrNull(result['state']),
         settled: a.expect === 'runner',
         failure: null,
+        store: storeOf(result['store']),
       };
       return { ok: true, request, result };
     } catch (e) {
@@ -333,4 +334,12 @@ export function ensureRunnerCli(exe: string, folder: string, timeoutMs = 20_000)
     );
     const timer = setTimeout(() => finish({ ok: false, message: `rcfd-runner ensure did not end within ${timeoutMs / 1000} s` }), timeoutMs);
   });
+}
+
+/** ADR 0737: start_run's `store` answer {applied, snapshots, estimated_bytes, note}, or null. */
+function storeOf(v: unknown): RunRequest['store'] {
+  const o = obj(v);
+  if (typeof o['applied'] !== 'boolean') return null;
+  const n = (x: unknown) => (typeof x === 'number' && Number.isFinite(x) ? x : null);
+  return { applied: o['applied'], snapshots: n(o['snapshots']), estimatedBytes: n(o['estimated_bytes']), note: strOrNull(o['note']) };
 }

@@ -67,7 +67,8 @@ fn every_service_code_is_in_the_catalogue() {
         .next()
         .unwrap();
     let codes = numbers_after(module, ": i64 = ");
-    assert_eq!(codes.len(), 11, "the constants of service::code");
+    // restated for ADR 0737: CONFLICT 1007 (case.save), the twelfth constant, catalogued as the others
+    assert_eq!(codes.len(), 12, "the constants of service::code");
     for c in codes {
         let e = lookup(Surface::Service, c).unwrap_or_else(|| panic!("service code {c} is not in the catalogue"));
         assert!(!e.recovery.is_empty());

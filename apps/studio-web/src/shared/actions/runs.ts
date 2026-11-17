@@ -138,10 +138,13 @@ const SPECS = {
     group: 'run',
     params: { case: caseParam },
     engine: { kind: 'mcp', tool: 'start_run' },
-    // the CLI's `start` has no start plan: `store: none` keeps the two the same run (start_run's default for a case today)
-    mcpArgs: (p) => ({ case: p.case, store: 'none' }),
+    // ADR 0737 (the maintainer's report, 2026-11-17: a transient case without [output] ran and stored no field, a dead
+    // end in the Studio): the Studio's Run is start_run's store plan (ADR 0140, about 100 f32 snapshots), unless the case
+    // or a set entry gives the store. The case file is not changed; start_run's own default (none) and the CLI's stay.
+    mcpArgs: (p) => ({ case: p.case, store: 'plan' }),
     cli: (p, project) => runner('start', p.case, '--project', project),
-    cliNote: 'rcfd-runner start writes no line in the project journal; start_run does (who: start_run).',
+    cliNote:
+      'rcfd-runner start writes no line in the project journal; start_run does (who: start_run). rcfd-runner start has no store plan: the settings the plan added are in start_run’s answer (store.set) and in the run’s run.json, to pass as --set.',
     unavailable: (ctx, p) => caseProblem(ctx, p.case),
     expect: 'new_run',
   }),
@@ -161,12 +164,12 @@ const SPECS = {
         type: 'string',
         optional: true,
         enum: ['none', 'plan'],
-        description: 'plan: the engine’s start plan stores the run’s fields (about 100 snapshots) unless the case or set gives the store; none (default): only what the case asks for.',
+        description: 'plan (default, ADR 0737): the engine’s start plan stores the run’s fields (about 100 snapshots) unless the case or set gives the store; none: only what the case asks for.',
       },
     },
     engine: { kind: 'mcp', tool: 'start_run' },
     mcpArgs: (p) => {
-      const out: Record<string, JsonValue> = { case: p.case, store: p.store ?? 'none' };
+      const out: Record<string, JsonValue> = { case: p.case, store: p.store ?? 'plan' };
       if (p.priority !== undefined) out['priority'] = p.priority;
       if (p.threads !== undefined) out['threads'] = p.threads;
       if (p.mem_mb !== undefined) out['mem_mb'] = p.mem_mb;

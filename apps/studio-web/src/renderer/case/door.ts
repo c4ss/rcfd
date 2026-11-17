@@ -22,4 +22,6 @@ export const caseDoor: CaseBridge = {
   duplicate: (path, name) => bridge()?.duplicate(path, name) ?? Promise.resolve(missing),
   check: (path, options) => bridge()?.check(path, options) ?? Promise.resolve(missing),
   forget: (session) => bridge()?.forget(session) ?? Promise.resolve(missing),
+  pickFile: () => bridge()?.pickFile() ?? Promise.resolve(missing),
+  attachFile: (session, file) => bridge()?.attachFile(session, file) ?? Promise.resolve(missing),
 };

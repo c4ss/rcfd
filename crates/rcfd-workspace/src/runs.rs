@@ -15,6 +15,7 @@ use crate::{
     err, str_arg, u64_arg, RpcError, Workspace, BAD_STATE, INTERNAL, MAX_WAIT_S, NOT_FOUND, PARAMS, VALIDATION,
 };
 use rcfd_api::case::Case;
+use rcfd_api::facts::{InText, RunTime};
 use rcfd_runner::client::Client;
 use rcfd_runner::records::{RunSettings, RunState, RunStatus};
 use serde_json::{json, Map, Value};
@@ -234,18 +235,54 @@ impl Workspace {
             }
             Ok(set)
         };
-        let (path, set, plan, created) = match new_case {
+        // ADR 0737 P2: the run-time plan (the engine's rule of ADR 0153 and 0158) and the dry run; without either, as before
+        let run_time = match args.get("run_time") {
+            None | Some(Value::Null) => None,
+            Some(v) => Some(RunTime::from_json(v).map_err(|m| err(PARAMS, m))?),
+        };
+        let dry_run = match args.get("dry_run") {
+            None | Some(Value::Null) => false,
+            Some(Value::Bool(b)) => *b,
+            Some(_) => return Err(err(PARAMS, "dry_run: true or false")),
+        };
+        // the run-time entries of `case` (`raw`: its text's document, when there is one) with the call's own entries
+        // applied, and the plan's JSON
+        let timed = |case: &Case, raw: Option<&Value>, set: &[String], name: &str| -> Result<Timing, RpcError> {
+            let Some(rt) = &run_time else { return Ok(None) };
+            let mut c = case.clone();
+            for e in set {
+                rcfd_api::chain::apply_set(&mut c, e).map_err(|x| err(VALIDATION, format!("set: {x}")))?;
+            }
+            let in_text = raw.map_or(InText::NotDefault, InText::Text);
+            let f = rcfd_api::facts::case_facts(&c, in_text, None).map_err(|e| crate::facts::facts_error(name, e))?;
+            let tp = rcfd_api::facts::plan(&f, rt).map_err(|m| err(VALIDATION, format!("{name}: run_time: {m}")))?;
+            Ok(Some((tp.entries.clone(), tp.to_json(name, &f))))
+        };
+        let timed_set = |timing: &Timing, set: &[String]| -> Vec<String> {
+            timing
+                .iter()
+                .flat_map(|t| t.0.clone())
+                .chain(set.iter().cloned())
+                .collect()
+        };
+        let (path, set, plan, created, timing, dry) = match new_case {
             Some(n) => {
                 // made and checked, the entries applied and the plan made, all before anything is written
                 let nc = self.prepare_case(n)?;
                 let set = set_of()?;
+                let timing = timed(&nc.case, None, &set, &nc.rel)?;
                 let plan = planned
-                    .then(|| Plan::with_set(nc.case.clone(), &set))
+                    .then(|| Plan::with_set(nc.case.clone(), &timed_set(&timing, &set)))
                     .transpose()
                     .map_err(|m| err(VALIDATION, m))?;
-                let created = self.write_case(&nc, "start_run", reason.clone())?;
-                let path = self.project.resolve(&nc.rel).map_err(crate::project_error)?;
-                (path, set, plan, Some(created))
+                if dry_run {
+                    let path = self.project.root().join(&nc.rel);
+                    (path, set, plan, None, timing, Some((nc.case.clone(), nc.rel.clone())))
+                } else {
+                    let created = self.write_case(&nc, "start_run", reason.clone())?;
+                    let path = self.project.resolve(&nc.rel).map_err(crate::project_error)?;
+                    (path, set, plan, Some(created), timing, None)
+                }
             }
             None => {
                 let rel = str_arg(args, "case");
@@ -254,15 +291,39 @@ impl Workspace {
                     return Err(err(NOT_FOUND, format!("{rel}: no such case file")));
                 }
                 let set = set_of()?;
+                let (timing, read) = if run_time.is_some() || dry_run {
+                    let (case, raw) = self.read_case_text(&path)?;
+                    (timed(&case, Some(&raw), &set, &self.rel(&path))?, Some(case))
+                } else {
+                    (None, None)
+                };
                 let plan = match planned {
-                    true => Some(Plan::with_set(self.read_case(&path)?, &set).map_err(|m| err(VALIDATION, m))?),
+                    true => Some(
+                        Plan::with_set(self.read_case(&path)?, &timed_set(&timing, &set))
+                            .map_err(|m| err(VALIDATION, m))?,
+                    ),
                     false => None,
                 };
-                (path, set, plan, None)
+                let dry = if dry_run {
+                    read.map(|c| (c, self.rel(&path)))
+                } else {
+                    None
+                };
+                (path, set, plan, None, timing, dry)
             }
         };
-        // the plan's entries first, the run's own after them (the Studio's order: the last entry of a key applies)
-        let set: Vec<String> = plan.iter().flat_map(Plan::entries).chain(set).collect();
+        // the run-time entries first, then the store plan's, the run's own after them (the Studio's order: the last entry
+        // of a key applies)
+        let set: Vec<String> = timing
+            .iter()
+            .flat_map(|t| t.0.clone())
+            .chain(plan.iter().flat_map(Plan::entries))
+            .chain(set)
+            .collect();
+        if let Some((case, rel)) = dry {
+            let timing = timing.map(|t| t.1);
+            return Ok(self.dry_start(&case, &rel, &set, plan.as_ref(), timing, u64_arg(args, "mem_mb")));
+        }
         let settings = RunSettings {
             priority: args
                 .get("priority")
@@ -291,10 +352,54 @@ impl Workspace {
             out["created"] = c;
         }
         if let Some(p) = &plan {
-            out["store"] = json!({"applied": p.every.is_some(), "set": p.entries(), "snapshots": p.snapshots(),
-                "estimated_bytes": p.estimated_bytes(), "note": p.note});
+            out["store"] = store_json(p);
+        }
+        if let Some((_, t)) = timing {
+            out["run_time"] = t;
         }
         Ok(out)
+    }
+
+    /// What `start_run` would do (ADR 0737 P2 `dry_run`), written nowhere: the case, the `--set` entries, the store and
+    /// run-time plans, the check of the case with those entries (`rcfd run --check-only`'s reply), the memory the runner
+    /// would book and whether a runner would be started.
+    fn dry_start(
+        &self,
+        case: &Case,
+        rel: &str,
+        set: &[String],
+        plan: Option<&Plan>,
+        timing: Option<Value>,
+        mem_mb: Option<u64>,
+    ) -> Value {
+        let mut c = case.clone();
+        let applied = set
+            .iter()
+            .try_for_each(|e| rcfd_api::chain::apply_set(&mut c, e).map_err(|x| format!("set: {x}")));
+        let check = match applied {
+            Ok(()) => rcfd_api::runctl::check_only(&c).1,
+            Err(m) => json!({"ok": false, "diagnostics": [{"path": "", "line": null, "message": m}]}),
+        };
+        let memory = match (mem_mb, check["cells"].as_u64()) {
+            (Some(m), _) => json!({"mb": m, "rule": "mem_mb given", "budgets": null}),
+            (None, Some(cells)) => {
+                let (b, from) = self.budgets();
+                rcfd_api::facts::memory_json(cells, &b, from)
+            }
+            (None, None) => Value::Null,
+        };
+        let running = self.runs.runner_running();
+        json!({
+            "dry_run": true,
+            "case": rel,
+            "set": set,
+            "store": plan.map(store_json),
+            "run_time": timing,
+            "check": check,
+            "memory_mb": memory["mb"],
+            "memory": memory,
+            "runner": {"running": running, "would_start": !running},
+        })
     }
 
     pub(crate) fn control(&self, name: &str, args: &Value) -> Result<Value, RpcError> {
@@ -341,3 +446,12 @@ impl Workspace {
         )
     }
 }
+
+/// `store` of a `start_run` reply.
+fn store_json(p: &Plan) -> Value {
+    json!({"applied": p.every.is_some(), "set": p.entries(), "snapshots": p.snapshots(),
+        "estimated_bytes": p.estimated_bytes(), "note": p.note})
+}
+
+/// The run-time plan of a `start_run`: its `--set` entries and its JSON (`None` without `run_time`).
+type Timing = Option<(Vec<String>, Value)>;

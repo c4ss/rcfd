@@ -1,7 +1,9 @@
 # ADR 0737: F-837 proposal: case facts and a dry-run start, a mesh refine, and saving a case outside a project
 
-Status: **PROPOSED 2026-11-17.** Not accepted by the maintainer. Nothing is built: no Rust, TypeScript or test code was
-written for this ADR, and nothing was run. The maintainer approves the commands below before any code.
+Status: **ACCEPTED 2026-11-17** (the maintainer took the recommended option of every open question; see "Maintainer
+answers" below). **Built 2026-11-17** on branch `adr0737`; see "Built" at the end.
+
+*Proposed 2026-11-17; the proposal below is kept as written.*
 
 Roadmap item F-837 (Electron Studio: run setup, logs and field-view extras from rcfd-studio), ADR 0801 Addendum 13
 "Needs the engine" and "Engine follow-ups of the Studio items", rows E-837a, E-837b and E-837c. E-837d is
@@ -162,3 +164,92 @@ G16 and G18. Number 0737 follows ADR 0736.
 
 F-837 rows E-837a ("simulate N s", adaptive correctors and the Courant fix in the run set-up), E-837b (Refine by 2) and
 E-837c (open and save one case file anywhere).
+
+## Maintainer answers (2026-11-17)
+
+Every recommended option:
+
+1. (a) The new service methods are behind `rcfd serve --ui`, listed in `UI_METHODS`.
+2. (a) The engine owns the run-time rule: `start_run {run_time}`, ported from ADR 0153 with its constants. The Studio
+   computes none of it.
+3. (a) Refine x2 refuses a mesh-file case and says why.
+4. (a) Factor 2 only.
+5. (a) `case.save` refuses a path inside a project and points to `edit_case`.
+6. (a) Outside a project, a `<file>.rcfd-lock` sits beside the file while it is written.
+7. (a) Without a project, the memory estimate uses the runner's default budgets and says so.
+
+## Built
+
+Engine (Rust):
+
+- `rcfd_api::facts`: `case_facts`, `RunTime`, `plan`, `warning`, `CorrectorPlan`, `memory_mb` and `memory_json`, ported
+  from the egui `time_step.rs` at 44e63df8 with its constants (Courant target 0.5, warning above 2, at least 100 steps,
+  4.7e-6 s per cell step, the 13 own-control keys). Its unit tests are the egui tests with the same numbers.
+- `rcfd_api::refine`: `count_keys` (ported from `preview.rs`, plus `box_3d` and the cylindrical-interface annulus) and
+  `count_refinement`.
+- `rcfd_api::case_save`: the hash compare, the `create_new` lock, and write-then-rename.
+- `case_text` moved from `rcfd-workspace` to `rcfd-api` (`git mv`; the workspace re-exports it), with `lines_text`,
+  so the service's `case.save {form: "lines"}` and `edit_case` share one rule. `rcfd-api` now depends on
+  `rcfd-project` (the manifest and the hash) and `rcfd-runner` (`Config`, the memory rule); the crate layering allows
+  both.
+- Service, behind `--ui`: `case.facts {session, run_time?}`, `mesh.refine {session, factor, apply?}` and
+  `case.save {session, path, base_hash, form?}`. `UI_METHODS` is now `help.glossary, help.errors, case.facts,
+  mesh.refine, case.save`. Error 1007 `CONFLICT` is in the catalogue.
+- MCP project tools: `case_facts {case, run_time?}` (read) and `refine_case_mesh {case, factor, base_hash, reason?}`
+  (write_files, through `edit_case`). `start_run` takes `run_time` and `dry_run`. CLI: `rcfd check <case> --facts` and
+  `--refine 2`.
+
+Deviations from the proposal, decided while building:
+
+- The facts field is `case_hash`, not `hash`, as in the session journal.
+- The corrector entry is the last of the plan's `entries`, not a separate list. A refused plan answers
+  `{refused, correctors}`.
+- `refine_case_mesh` writes through `edit_case`, so its journal line names `who: edit_case` and the call's reason.
+- `mesh.refine {apply: true}` sets the counts with `settings.set`. ADR 0736's `base_value` is not used, because 0736 is
+  not on main. The Studio's undo puts each `before` value back.
+- Code 1007 is shared with ADR 0736 by design. Whichever merges second keeps the one catalogue entry.
+- `case_facts` is not on the Claude Code first-use allow-list; that was not asked (ADR 0188 Q6 (a)).
+- C1 is covered by the ported egui unit tests and hand-computed facts, not by a recording of the old commit. That
+  follows ADR 0730: no frozen recordings.
+
+Studio (apps/studio-web):
+
+- The case editor's estimate line comes from `case.facts`: cells, the thinnest cell, the time step, the steps, the
+  Courant estimate and the memory. Its tooltip names the runner's default budgets when there is no project, and the
+  engine's warning is shown as an exception. It is asked again after every change.
+- Refine x2 is an icon button that dispatches `mesh.refine {apply: true}`. The counts become unsaved changes and can be
+  undone. A refusal shows the engine's reason.
+- Open a case file outside a project: `#/case/file`, the palette action `case.open_file`, an icon in the editor's top bar
+  and a button on `#/case`. The main process shows the dialog and binds only files it gave. The hash is the one the
+  service's journal recorded.
+- A save of such a file is the service's `case.save {form: "lines"}`. A file changed outside is a conflict (1007) with
+  both sides shown. "Write my changes into the file as it is now" sets this session's changes in a fresh session of the
+  file and saves that, so the other writer's other changes stay (G18).
+- `case.facts` and `mesh.refine` are on the allow-list, each with a registry action. `case.save` is not: only the main
+  process calls it.
+- The run-time rule: the Studio had no copy of it, so there was nothing to remove. A unit test checks that none of its
+  constants appear in the Studio's source.
+- **Decision: the Studio starts runs with the store plan.** The Studio's Run, Run again and Queue now call
+  `start_run {store: "plan"}` (ADR 0140: about 100 f32 snapshots, unless the case or a `set` entry gives the store). The
+  reason is the maintainer's report of 2026-11-17: `cylinder_re100_shedding.toml` (dt 0.02, end_time 200, no
+  `[output]`) ran from the Studio and stored no field, and the workspace could only say so, a dead end.
+  - A case that sets `output.store_interval` or `output.store_time_interval` keeps its own store.
+  - The case file is not changed.
+  - `start_run`'s own default (`none`, ADR 0186 Q2) and the CLI's stay.
+  - The start line says what the plan applied: about N snapshots and the size, from the reply's `store`.
+  - Queue's store `none` stays an explicit choice.
+
+Tests:
+
+- `crates/rcfd-api/tests/case_facts_adr0737.rs`: 8 tests covering C1 to C5 for the service.
+- `crates/rcfd-mcp/tests/case_facts_adr0737.rs`: 3 tests. They cover the project tools and C2, including a real run
+  whose `run.json` `settings.set` equals the dry run's `set`.
+- The `facts` unit tests in `rcfd-api`.
+- Restated, with no golden edited: `ui_byte_identity_adr0730.rs`, `project_list_f270.rs`, `tool_list_f275.rs`,
+  `project_w48f.rs` and `project_runs_w48f.rs`.
+- Studio unit tests: `tests/unit/case-file-adr0737.spec.ts` (9 tests).
+- Studio restated tests: `actions-registry`, `run-control` and `f837` (the store plan) unit specs, and the `case-editor`
+  e2e spec (the case port's keys).
+- Studio e2e: `tests/e2e/case-file-adr0737.spec.ts`, 4 tests against `rcfd serve --ui`, with screenshots in
+  `test-results-visual/adr0737/`. Restated: `run-control.spec.ts` (store plan).
+- `word-budget.spec.ts` passes with the budgets unchanged.

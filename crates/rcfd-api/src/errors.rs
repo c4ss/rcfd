@@ -159,6 +159,13 @@ pub const CATALOGUE: &[ErrorEntry] = &[
     ),
     e(
         Service,
+        1007,
+        "CONFLICT",
+        "the file changed since it was read; data.current_hash is its hash now (case.save, ADR 0737)",
+        "Read the file again (open it again), then save onto its current hash.",
+    ),
+    e(
+        Service,
         -32000,
         "INTERNAL",
         "internal error",

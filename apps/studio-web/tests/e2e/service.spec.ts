@@ -42,7 +42,8 @@ test.describe('rcfd serve without the Studio', () => {
     c.close();
     await s.stop();
     expect(info.protocol).toBe('rcfd-service/1');
-    expect(SERVICE_METHODS.filter((m) => !info.methods.includes(m))).toEqual(['data.info', 'help.glossary', 'help.errors']);
+    // restated for ADR 0737: case.facts and mesh.refine are --ui methods too
+    expect(SERVICE_METHODS.filter((m) => !info.methods.includes(m))).toEqual(['data.info', 'help.glossary', 'help.errors', 'case.facts', 'mesh.refine']);
     // ADR 0730: the switch the Studio's spawn passes adds the help methods and the ui key
     const u = await startRcfd(rcfd!, 0, ['--ui']);
     leftovers.add(u.pid);

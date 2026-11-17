@@ -89,7 +89,8 @@ COMMANDS:
                                conservative_overlap
     check <case> [--json] [--set path=value]
                                validate, build, check the mesh and evaluate the setup rules; exit 0, 3 (invalid or
-                               an error-level rule) or 4 (mesh); --json prints ok, exit_code, diagnostics, rules, mesh
+                               an error-level rule) or 4 (mesh); --json prints ok, exit_code, diagnostics, rules, mesh;
+                               --facts prints the case facts and run-time plan, --refine 2 the Refine x2 edits (JSON)
     study <case> [--out dir] [--parallel n] [--resume] [--max-new-points n] [--no-fields] [--list] [--json] [--set path=value]
                                parametric study from the `study` section: one run per design point, table.csv/table.json
     map <case> --axis path=v1,v2,... [--axis path=start:stop:count]... [--out dir] [--cold] [--stop-on-failure] [--no-retry] [--serpentine] [--max-steps n] [--warm-start flow|extended] [--json] [--set path=value]

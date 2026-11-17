@@ -114,7 +114,15 @@ test.describe('the registry', () => {
   });
 
   test('the actions that F-829 can undo, and how', () => {
-    expect(ACTIONS.filter((a) => a.undo).map((a) => a.id)).toEqual(['session.create', 'session.close', 'settings.set', 'settings.remove']);
+    // restated for ADR 0737: mesh.refine {apply: true} is undone by setting each count back (its reply's edits)
+    expect(ACTIONS.filter((a) => a.undo).map((a) => a.id)).toEqual(['session.create', 'session.close', 'settings.set', 'settings.remove', 'mesh.refine']);
+    const refine = getAction('mesh.refine')!;
+    const edits = { edits: [{ path: 'mesh.nx', before: 8, after: 16 }, { path: 'mesh.ny', before: 8, after: 16 }] };
+    expect(refine.undo!.inverse({ session: 's1', factor: 2, apply: true } as never, edits, null)).toEqual([
+      { action: 'settings.set', params: { session: 's1', path: 'mesh.nx', value: 8 } },
+      { action: 'settings.set', params: { session: 's1', path: 'mesh.ny', value: 8 } },
+    ]);
+    expect(refine.undo!.inverse({ session: 's1', factor: 2 } as never, edits, null)).toBeNull();
     const create = getAction('session.create')!;
     expect(create.undo!.inverse({} as never, { session: 's7' }, null)).toEqual([{ action: 'session.close', params: { session: 's7' } }]);
     const set = getAction('settings.set')!;
