@@ -207,3 +207,97 @@ s4). The **full-weight wake lines** are those with `p >= max(n_down / 4, 1)` (`o
   `zz_hs_base.rs` holding only the s4 spec, the two blades, the hash function and builds of
   `camber_seam_s_unstretched_construction()` (`f782-scratch/base_hs.log`): REF `0x0d257b2fcee093ca`, B2 `0xefc53b8c413a845b`, 12 841
   cells and step 5 on both. The constants `HS_PRIME_REF` and `HS_PRIME_B2` of the new test file are those values.
+
+## Addendum 1: results (2026-11-17)
+
+One registered run of the new test file (`f782-scratch/run1.log`, release, `cargo test -p rcfd-mesh --release --test
+f782_cgrid_wake_remap -- --nocapture --test-threads 2`: 6 passed, 0 failed, 33 s).
+
+| id | limit | measured | met |
+|---|---|---|---|
+| W1a | S'' builds REF, cells > 0 | 12 841 cells, construction step 5 (as predicted) | yes |
+| W1b | corner Jacobians of one sign, none zero; min volume > 0 | 100 096 of 100 096 negative, 0 zero; min volume 1.20e-13 m^3 | yes |
+| W1c | periodicity <= 1e-12 m | 1.96e-17 m | yes |
+| W2 | <= 85 deg | **84.953 deg** (face between C (56, 2) and (56, 3), layer 3: the cell between the trailing-edge line 56 and the first ramp line 57, `omega` 0.5). Predicted 84.688 unchanged: **the prediction was wrong** (see deviations) | yes (margin 0.047 deg) |
+| W3 | <= 4.0 | 2.7609 (C (37, 7) / (38, 7), layer 6; as predicted, the S' runner-up unchanged) | yes |
+| W4 | <= 1000 | 525.6 (C (59, 9), layer 16; as predicted, unchanged) | yes |
+| W5a | <= 4.0 | 0.2353 (C (2, 1), between layers 4 and 5, a thick span layer; S' 3.2404) | yes |
+| W5b | <= 1.0 | 0.2353 | yes |
+| W6 | <= 5e-6 m | 6.48e-7 m (thin cell 7, line 5, row 2; S' 3.27e-5 m) | yes |
+| W7 | every node outside the changed set equal in bits | 0 nodes differ outside; 649 inside differ | yes |
+| B2a | S'' builds B2 | 12 841 cells, step 5 | yes |
+| B2b | no folded cell | 100 096 of 100 096 negative, min volume 1.58e-13 m^3 | yes |
+| B2c | periodicity | 2.19e-17 m | yes |
+| B2d | <= 85 deg | 84.472 deg (the same face C (56, 2) / (56, 3), layer 3; S' 84.218) | yes |
+| B2e | <= 4.0 | 2.8312 (C (37, 7) / (38, 7), layer 16; estimate about 3.4) | yes |
+| B2f | <= 1000 | 551.7 (C (59, 9), layer 16; unchanged) | yes |
+| B2g / B2h (W5a / W5b) | <= 4.0 / <= 1.0 | 0.2574 (C (62, 1), layers 4 / 5; S' 4.0112) | yes |
+| B2-W6 | <= 5e-6 m | 7.17e-7 m (cell 7, line 5, row 2) | yes |
+| NC-W5 | the measure on S' reproduces ADR 0696 | REF 3.240429, B2 4.011244, both at C (4, 1) layers 8 / 9 | yes |
+| NC-W6 | S' drift > 1e-5 m | 3.27e-5 m | yes |
+| NC-W7 | some changed node differs | 649 | yes |
+| HS | S hash `0x0105a2fcca924d23` | equal (also the f777 `bs_` test) | yes |
+| HS' | S' hashes equal to the base copy | REF `0x0d257b2fcee093ca`, B2 `0xefc53b8c413a845b`, equal | yes |
+| HB1 | `cgrid_w35d` three b1 tests | pass (in the whole non-ignored file: 7 passed, 15 ignored, `e1_mesh.log`) | yes |
+| HB2 | `f726_cgrid_staggered` b2 (H hash) | pass (whole non-ignored file: 7 passed, 1 ignored) | yes |
+| E1 | named tests | `f777_cgrid_unstretched` 10 passed, 2 ignored; `f726_cgrid_staggered` 7 / 1; `cgrid_w35d` 7 / 15; `fan_design_w46a` `s4_realised_default_meshes` passed; `fan01_p10_w36d` c2 passed; `f722_rom_reference_fan` 6 passed, 1 ignored | yes |
+| E2 | `--lib` 77 passed, 2 ignored | 77 passed, 2 ignored | yes |
+| E3 | baseline_hashes | 3 passed, 1 ignored | yes |
+
+Also run: `cargo fmt -p rcfd-mesh --check` clean; `cargo clippy -p rcfd-mesh --all-targets -- -D warnings` clean; `cargo test -p
+rcfd-cli --release --test docs_site` passed (with this ADR and the `docs/meshing.md` paragraph).
+
+### Mutations (`f782-scratch/mut`, `mutate.py`, logs `mut_MU*.log`; each run once against the new test file, HB1 and HB2)
+
+| id | mutation | caught by |
+|---|---|---|
+| MU1 | field ignored | W3 / W5a on B2 (4.0112), W5b on both, W6 (3.3e-5 / 3.6e-5 m), NC-W7 (as predicted) |
+| MU2 | `omega = 1` on the trailing-edge line | W7 (80 nodes outside the set differ), also W1b (folded cells around C (55, 2..3), layer 2), W2 (88.0 deg) and W3 (5.5) on both blades |
+| MU3 | the far rows blend from `a` | W1a on both blades (refused: folded line family). Predicted W5b; caught earlier, by the build |
+| MU4 | the fade over half of the wake lines | W6 (1.44e-5 / 1.59e-5 m at line 6, as predicted) |
+| MU5 | the rule on the lower wake lines only | W1a on both blades (refused: the wake-cut nodes `j = 0` are shared by the lower and upper lines, so the upper line overwrote the lower line's remapped node with the true section). Predicted W5a on line 59; caught earlier, by the build |
+| MU6 | blend length `0.05` -> `0.051` chords | HS, HS', HB1 (three hashes), HB2 |
+
+Six of six caught.
+
+### Deviations
+
+- **W2 / B2d prediction wrong.** Registered: the non-orthogonality maximum unchanged at blade line 45 (84.688 / 84.218). Measured:
+  a new maximum of 84.953 / 84.472 deg at the in-plane face between rows 2 and 3 of the cell between the trailing-edge line 56
+  and the first ramp line 57 (`omega` 0.5), layer 3 (between the last thin hub node layer and the first thick one). The limit
+  holds, but on the reference by only 0.047 deg. Probable cause (from the design, not run): the ramp moves line 57 by half of
+  `b - a` next to a line that does not move, over the shortest line spacing of the wake (about 3.5e-4 m along it), and `b - a` is
+  largest where `rho_k - r_k` is largest (up to 1.8e-4 m at node layers 3 and 7). The registration's estimate of a few degrees of
+  rotation there was the right size; the text wrongly assumed the rotated faces were far from 85 deg.
+- MU3 and MU5 were caught by the build (W1a) rather than by the checks predicted.
+- No development build; no other deviation.
+
+### Not run
+
+The ignored records of the named files; the whole `rcfd-mesh` integration suite and the workspace (the daily gate); flow solves
+on S'' meshes; a front_gap / n_nose scan of S''; other specs.
+
+### Decision by the registered rule
+
+**done.** Every registered check is met. S'' builds both blades with no folded cell, periodic, within 85 deg / 4.0 / 1000 (REF
+84.953 deg / 2.761 / 525.6, B2 84.472 deg / 2.831 / 551.7). The spanwise skewness of the wake stack falls from 3.2404 / 4.0112
+(S') to 0.235 / 0.257, and the thin-layer wake-stack drift from 3.3e-5 m to 6.5e-7 / 7.2e-7 m. The change is confined to the wake
+lines of the span layers. S, S' (REF and B2) and the H / G hashes are unchanged in bits, and every named existing test, `--lib`
+and baseline_hashes pass. Three negative controls and six of six mutations caught. The non-orthogonality prediction was wrong,
+and the reference keeps only 0.047 deg of margin (deviations).
+
+### Remaining questions (each with options and a recommendation)
+
+1. **The 0.047 deg non-orthogonality margin at the start of the ramp.** Options: (a) a follow-up that sets the ramp length from
+   the wake line spacing, registered on both blades; (b) leave it, since the limit holds; (c) a ramp over all wake lines.
+   Recommendation: (a), before S'' becomes a case value. Option (c) would put shear back on the long cells.
+2. **A case value for S''** needs a schema enum value and the schema golden (rule 6). Open for the maintainer, together with F-778.
+3. **A scan of S''** (front_gap, n_nose) was not run. Recommendation: run it within the follow-up of question 1.
+
+## For the lead: roadmap entries
+
+> Proposed status: done
+
+> Follow-up of F-777 (ADR 0696 question 1). ADR 0699, 2026-11-17. DONE. New opt-in construction S'' = CGridOptions::camber_seam_s_wake_remap_construction() = camber_seam_s_unstretched + wake_stack_remap: in the span layers with a remapped grid (ADR 0072 W1), the wake-line nodes, stack rows included, move from the true section to the remapped grid with a weight of 0 on the trailing-edge line, rising by a smooth step to 1 over a quarter of the wake lines. Derived: the long wake cells span about 19 deg of the cylinder, so their four-node spanwise faces are curved strips; the pitchwise drift of the thin-layer wake stacks (about 0.4 layer thicknesses per layer) offset the computed cell centres by a fraction of a millimetre against centre distances of 5e-5 m. With the remapped grid the drift per thin layer falls from 3.3e-5 m to 7e-7 m. At the ADR 0118 s4 specs, ComputerFan::rom_reference() blade 0 and the ADR 0696 second blade build with no folded cell, periodic, at 84.95 / 84.47 deg, skewness 2.76 / 2.83 and aspect 525.6 / 551.7. The largest wake-stack spanwise skewness falls from 3.24 / 4.0112 (S', disclosed) to 0.235 / 0.257. Against the registered prediction, the non-orthogonality maximum moved to the cell next to the trailing-edge line at the start of the ramp, 0.047 deg below 85 on the reference. A locality check finds the change only on the wake lines of the span layers. camber_seam_h (cgrid_w35d B1, the ADR 0692 H hash), camber_seam_s (0x0105a2fcca924d23) and camber_seam_s_unstretched (reference and second-blade hashes against the base) are unchanged in bits. f777, f726, cgrid_w35d, f722, fan01_p10_w36d c2, fan_design_w46a s4, --lib and baseline_hashes pass. Six of six mutations caught. Library only; no case value.
+
+> Follow-up proposed: ramp length of the S'' wake-stack remap from the wake line spacing. Deps F-782. Acceptance: Every limit not stated here is registered in the ADR before the run. A new opt-in field of S'' sets the length of the trailing-edge ramp of wake_stack_remap from the wake line spacing so that, at the ADR 0118 s4 specs, ComputerFan::rom_reference() blade 0 and the ADR 0696 second blade build with no folded cell within 84.5 deg non-orthogonality (the 84.953 and 84.472 deg of ADR 0699 at the first ramp cell disclosed), skewness 4.0 and aspect 1000, the wake-stack spanwise skewness stays within 1.0, a registered front_gap and n_nose scan inside the camber_seam range builds a registered fraction, and camber_seam_h, camber_seam_s, camber_seam_s_unstretched and camber_seam_s_wake_remap are unchanged in bits.
