@@ -48,9 +48,6 @@ class H3Removed(unittest.TestCase):
     def prim(self, name):
         return self.t[name]["primary_adr"], self.t[name]["primary_evidence"]
 
-    def test_constant_is_off(self):
-        self.assertIs(ati.RETRO_H3, False)
-
     def test_a1_row_with_a_limit_gives_no_primary_even_in_a_registration_adr(self):
         self.assertEqual(self.t["a1_row_with_limit"]["adrs"], ["0100"])
         self.assertIsNone(self.t["a1_row_with_limit"]["primary_adr"])
