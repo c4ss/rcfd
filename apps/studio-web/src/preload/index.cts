@@ -22,7 +22,7 @@
 // sandboxed preload can only require 'electron' and a few built-ins: the shared modules are imported for their types
 // only, and the two constants below are typed by theirs, so a change there fails to compile here.
 import { contextBridge, ipcRenderer, type IpcRendererEvent } from 'electron';
-import type { AppInfo, Channel, CloseAnswer, CLOSE_REQUEST_CHANNEL as CloseChannel, StudioBridge } from '../shared/ipc.js';
+import type { AppInfo, Channel, CloseAnswer, KeepRunnerState, CLOSE_REQUEST_CHANNEL as CloseChannel, StudioBridge } from '../shared/ipc.js';
 import type { ThemeSetting, ThemeState } from '../shared/theme.js';
 import type {
   CLAUDE_PORT_CHANNEL as ClaudeChannel,
@@ -117,6 +117,11 @@ const bridge: StudioBridge = {
       closeListener = typeof listener === 'function' ? listener : null;
     },
     closeAnswer: (request: number, answer: CloseAnswer) => invoke<void>('app.closeAnswer', request, answer),
+  },
+  // G7 as amended 2026-11-17: Keep the runner going after the Studio closes; the main process checks the value
+  runner: {
+    getKeep: () => invoke<KeepRunnerState>('runner.keep.get'),
+    setKeep: (keep: boolean) => invoke<KeepRunnerState>('runner.keep.set', keep),
   },
   // F-818: the theme setting; the main process checks the value (src/main/theme.ts)
   theme: {
@@ -352,7 +357,9 @@ const project: ProjectBridge = {
     return projectSend({ op: 'open', id: nextProjectId++, path });
   },
   forget: (path) => projectSend({ op: 'forget', id: nextProjectId++, path }),
-  close: () => projectSend({ op: 'close', id: nextProjectId++ }),
+  // G7 as amended 2026-11-17: the close prompt's answer for an owned runner's active runs; main checks it again
+  close: (runs) => projectSend(runs === 'stop' || runs === 'keep' ? { op: 'close', id: nextProjectId++, runs } : { op: 'close', id: nextProjectId++ }),
+  runnerPlan: () => projectSend({ op: 'runnerPlan', id: nextProjectId++ }),
   refresh: () => projectSend({ op: 'refresh', id: nextProjectId++ }),
   dismiss: () => projectSend({ op: 'dismiss', id: nextProjectId++ }),
   // F-835: the engine makes the project (rcfd project init), then it opens; main checks `where` again

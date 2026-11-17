@@ -81,7 +81,7 @@ test('the bridge is window.studioProject with exactly its functions, and refuses
     const p = window.studioProject as unknown as Record<string, unknown>;
     return { keys: Object.keys(p).sort(), fns: Object.values(p).every((v) => typeof v === 'function'), frozen: Object.isFrozen(p) };
   });
-  expect(shape).toEqual({ keys: ['close', 'create', 'dismiss', 'forget', 'offState', 'onState', 'open', 'pick', 'refresh', 'state'], fns: true, frozen: true });
+  expect(shape).toEqual({ keys: ['close', 'create', 'dismiss', 'forget', 'offState', 'onState', 'open', 'pick', 'refresh', 'runnerPlan', 'state'], fns: true, frozen: true });
   const r = await page.evaluate((f) => window.studioProject.open(f), quick);
   expect(r).toEqual({ ok: false, error: { code: 'not_recent', message: expect.stringContaining('recent list') } });
   const odd = await page.evaluate(() => (window.studioProject.open as unknown as (p: unknown) => Promise<unknown>)({ toString: () => 'C:\\' }));
@@ -96,7 +96,7 @@ test('the bridge is window.studioProject with exactly its functions, and refuses
     };
   });
   // F-818 and F-837: the shell's channels are app.info, app.ready, the close answer and the theme's two
-  expect(names).toEqual({ handlers: ['app.closeAnswer', 'app.info', 'app.ready', 'theme.get', 'theme.set'], listeners: [] });
+  expect(names).toEqual({ handlers: ['app.closeAnswer', 'app.info', 'app.ready', 'runner.keep.get', 'runner.keep.set', 'theme.get', 'theme.set'], listeners: [] });
 });
 
 test('opening a project lists its cases, meshes, runs and notes as the engine lists them, and writes nothing to it', async () => {

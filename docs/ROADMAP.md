@@ -16527,7 +16527,13 @@ Generated from `docs/studio-guardrails.md`, `PRODUCT.md` and `DESIGN.md` ([ADR 0
   - note: ADR 0800. Traces: G2, G7; PRODUCT Capabilities (parity: quick run, stop). Done 2026-11-16: run bar in the Runs
     view and Run per case on the home; start_run/pause_run/resume_run/cancel_run on a writable project server (shared
     with the F-812 case editor), rcfd-runner ensure to start the runner; confirmations name what is lost; P2 met for
-    every action (<= 19.4 ms to the painted frame).
+    every action (<= 19.4 ms to the painted frame). G7 amended 2026-11-17 (the maintainer: "the runner should close
+    with studio by default if no external (existing) runner env var is specified"; active runs: ask; ADR 0801 addendum
+    "Runner closes with the Studio"): the Studio owns only a runner that came up while it had the project open with
+    none alive before (.rcfd/runner.json looked at), shuts an idle owned runner down at every close, and asks with the
+    F-837 close guard when it holds runs (Stop runs and close: cancel_run then rcfd-runner shutdown; Keep them running
+    and close; Cancel), merged with save-or-discard; its own rcfd serve closes too; the setting "Keep the runner going
+    after the Studio closes" and --keep-runner keep the runner; tests/unit and tests/e2e runner-lifetime.spec.ts.
 - [x] **F-808** Electron Studio: field viewport on three.js WebGPU
   - depends on: F-804, F-802
   - acceptance: Mesh and fields on surfaces drawn by three.js WebGPURenderer with a TSL material that colours from the

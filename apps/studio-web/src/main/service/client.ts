@@ -9,9 +9,10 @@
 // - After a reconnection the client tells a restarted service from the same one by the event it saw last: the same
 //   instance still has that event under its sequence number, a new one has a shorter log or a different event there.
 //   A new instance starts the cursor at 0 (all of its events are new to the Studio) and raises `instance`.
-// - Runs outlive the window (G7): a reload of the renderer does not touch this client. A service the Studio started
-//   is stopped when the Studio quits only if it holds no session; otherwise it keeps running and the next start finds it
-//   again through `service.json` (see spawn.ts).
+// - Runs outlive the window (G7): a reload of the renderer does not touch this client. G7 as amended 2026-11-17: a
+//   service this start of the Studio started is stopped when the Studio quits (runs are the runner's, not the
+//   service's); with --keep-runner or the Studio setting, and for a service found running (adopted), only if it holds no
+//   session, as before; otherwise it keeps running and the next start finds it again through `service.json` (spawn.ts).
 // - The shipped rcfd of an installed Studio (config `start: 'project'`, F-820) is started by `start()` when the first
 //   project opens; until then the state is `waiting`. `findRunning()` at launch connects only to a service an earlier
 //   start left running (G7: its sessions are found again without a project), and starts nothing.
@@ -154,8 +155,14 @@ export class ServiceClient {
   /**
    * Stops the client for good (the Studio is quitting). A service the Studio started is stopped too when it holds no
    * session; with sessions it is left running for the next start (G7). Resolves with whether it was left running.
+   *
+   * G7 as amended 2026-11-17: `keepWithSessions: false` (the Studio's quit unless --keep-runner or the setting keeps the
+   * runner) stops a service this start of the Studio started when none of its sessions has a solve going in the service
+   * itself (`running` or `paused`, `run.start` on a session): the project's runs are the runner's, and the case
+   * editor's sessions end with the Studio. A service found running (adopted) keeps the rule above: the Studio never
+   * stops a service it did not start while it holds someone's session.
    */
-  async shutdown(): Promise<{ leftRunning: boolean }> {
+  async shutdown(opts: { readonly keepWithSessions?: boolean } = {}): Promise<{ leftRunning: boolean }> {
     this.stopped = true;
     if (this.retryTimer) clearTimeout(this.retryTimer);
     this.retryTimer = null;
@@ -164,10 +171,11 @@ export class ServiceClient {
     if (this.config.mode === 'spawn' && pid !== null && processAlive(pid)) {
       let keep = true;
       const link = this.link;
+      const owned = opts.keepWithSessions === false && !this.st.adopted;
       if (link && this.st.status === 'connected') {
         try {
           const r = (await link.control.request('session.list', {}, 1500)) as { sessions?: unknown };
-          keep = !Array.isArray(r.sessions) || r.sessions.length > 0;
+          keep = owned ? keptForSolves(r.sessions) : !Array.isArray(r.sessions) || r.sessions.length > 0;
         } catch {
           keep = true; // cannot tell: never stop what may hold someone's run (G7, G18)
         }
@@ -426,4 +434,16 @@ async function answers(host: string, port: number, timeoutMs: number): Promise<b
   } finally {
     c?.close();
   }
+}
+
+/**
+ * G7 as amended 2026-11-17: whether a service the Studio started is kept at its quit for a solve going in it: a session
+ * whose state is `running` or `paused` (session.list), or a list that cannot be read.
+ */
+export function keptForSolves(sessions: unknown): boolean {
+  if (!Array.isArray(sessions)) return true;
+  return sessions.some((x) => {
+    const state = typeof x === 'object' && x !== null ? (x as { state?: unknown }).state : undefined;
+    return state === 'running' || state === 'paused';
+  });
 }

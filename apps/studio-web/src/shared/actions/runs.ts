@@ -308,7 +308,7 @@ const SPECS = {
   'project.start_runner': action({
     title: 'Start the runner',
     description:
-      "Start the project's runner, detached, unless one is alive. The runner launches queued runs and acts on pause, resume and cancel requests; it goes on when the Studio is closed.",
+      "Start the project's runner, detached, unless one is alive. The runner launches queued runs and acts on pause, resume and cancel requests. A runner the Studio started closes with it: at once when it holds no run, after asking when it does (the Studio setting or --keep-runner keeps it going).",
     group: 'run',
     params: {},
     engine: { kind: 'runner', command: 'ensure' },

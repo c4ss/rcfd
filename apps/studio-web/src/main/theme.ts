@@ -33,7 +33,22 @@ export function parsePreferences(text: string): ThemeSetting {
   }
 }
 
-export const formatPreferences = (theme: ThemeSetting): string => JSON.stringify({ format: FORMAT, version: 1, theme }, null, 2) + '\n';
+/**
+ * G7 as amended 2026-11-17: "Keep the runner going after the Studio closes", kept in the same file; off unless the file
+ * says `keepRunner: true`.
+ */
+export function parseKeepRunner(text: string): boolean {
+  try {
+    const v = JSON.parse(text) as { format?: unknown; keepRunner?: unknown };
+    return v?.format === FORMAT && v.keepRunner === true;
+  } catch {
+    return false;
+  }
+}
+
+/** The file's text; `keepRunner` is written only when on, so the file of a Studio that never set it is as before. */
+export const formatPreferences = (theme: ThemeSetting, keepRunner = false): string =>
+  JSON.stringify({ format: FORMAT, version: 1, theme, ...(keepRunner ? { keepRunner: true } : {}) }, null, 2) + '\n';
 
 /** The window background colour of a setting, given whether the system is dark. */
 export const backgroundOf = (setting: ThemeSetting, systemDark: boolean): string => THEME_GROUND[resolveTheme(setting, systemDark)];
@@ -47,6 +62,7 @@ export interface ThemeTargets {
 
 export class ThemePreference {
   private current: ThemeSetting;
+  private keep: boolean;
   private writing: Promise<void> = Promise.resolve();
 
   /** Reads the file once, synchronously, before the first window, so the window opens in its theme. */
@@ -58,6 +74,31 @@ export class ThemePreference {
       // no file yet: the default
     }
     this.current = text ? parsePreferences(text) : DEFAULT_THEME;
+    this.keep = text ? parseKeepRunner(text) : false;
+  }
+
+  /** G7 as amended 2026-11-17: the setting "Keep the runner going after the Studio closes". */
+  get keepRunner(): boolean {
+    return this.keep;
+  }
+
+  /** Changes the runner setting and writes the file (in order with the theme's writes). */
+  async setKeepRunner(keep: unknown): Promise<boolean> {
+    if (typeof keep !== 'boolean') throw new Error(`runner.keep.set: takes true or false, not ${JSON.stringify(keep)}`);
+    this.keep = keep;
+    await this.write();
+    return this.keep;
+  }
+
+  private async write(): Promise<void> {
+    const text = formatPreferences(this.current, this.keep);
+    this.writing = this.writing.catch(() => undefined).then(async () => {
+      await mkdir(path.dirname(this.file), { recursive: true });
+      const tmp = `${this.file}.${process.pid}.tmp`;
+      await writeFile(tmp, text);
+      await rename(tmp, this.file);
+    });
+    await this.writing.catch(() => undefined);
   }
 
   get setting(): ThemeSetting {
@@ -79,14 +120,7 @@ export class ThemePreference {
     if (!isThemeSetting(setting)) throw new Error(`theme.set: not a theme setting: ${JSON.stringify(setting)}`);
     this.current = setting;
     this.apply(targets);
-    const text = formatPreferences(setting);
-    this.writing = this.writing.catch(() => undefined).then(async () => {
-      await mkdir(path.dirname(this.file), { recursive: true });
-      const tmp = `${this.file}.${process.pid}.tmp`;
-      await writeFile(tmp, text);
-      await rename(tmp, this.file);
-    });
-    await this.writing.catch(() => undefined);
+    await this.write();
     return this.state(targets);
   }
 }

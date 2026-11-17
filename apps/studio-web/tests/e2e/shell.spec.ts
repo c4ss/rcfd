@@ -9,7 +9,7 @@ import { APP_ENTRY, CSP_HEADER, CSP_META } from '../../src/main/security.js';
 import { launchArgs } from '../support/launch.js';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
-const ALLOWED_CHANNELS = ['app.closeAnswer', 'app.info', 'app.ready', 'theme.get', 'theme.set'];
+const ALLOWED_CHANNELS = ['app.closeAnswer', 'app.info', 'app.ready', 'runner.keep.get', 'runner.keep.set', 'theme.get', 'theme.set'];
 
 let app: ElectronApplication;
 let page: Page;
@@ -100,25 +100,28 @@ test('the page has no Node: no require, process, module, Buffer or ipcRenderer',
   ]);
 });
 
-test('the bridge is the allow-list: window.studio.app.{info, ready, onCloseRequest, closeAnswer}, window.studio.theme.{get, set} (F-818) and nothing else', async () => {
+test('the bridge is the allow-list: window.studio.app.{info, ready, onCloseRequest, closeAnswer}, window.studio.runner.{getKeep, setKeep} (G7 as amended 2026-11-17), window.studio.theme.{get, set} (F-818) and nothing else', async () => {
   const shape = await page.evaluate(() => {
     const s = window.studio as unknown as Record<string, Record<string, unknown>>;
     const app = s['app'] ?? {};
     const theme = s['theme'] ?? {};
+    const runner = s['runner'] ?? {};
     return {
       top: Object.keys(s).sort(),
       app: Object.keys(app).sort(),
+      runner: Object.keys(runner).sort(),
       theme: Object.keys(theme).sort(),
-      types: [...Object.values(app), ...Object.values(theme)].map((v) => typeof v),
+      types: [...Object.values(app), ...Object.values(runner), ...Object.values(theme)].map((v) => typeof v),
       // A context-isolated bridge is a frozen copy: the page cannot add to it or replace a function.
-      frozen: Object.isFrozen(s) && Object.isFrozen(app) && Object.isFrozen(theme),
+      frozen: Object.isFrozen(s) && Object.isFrozen(app) && Object.isFrozen(runner) && Object.isFrozen(theme),
     };
   });
   expect(shape).toEqual({
-    top: ['app', 'theme'],
+    top: ['app', 'runner', 'theme'],
     app: ['closeAnswer', 'info', 'onCloseRequest', 'ready'],
+    runner: ['getKeep', 'setKeep'],
     theme: ['get', 'set'],
-    types: ['function', 'function', 'function', 'function', 'function', 'function'],
+    types: ['function', 'function', 'function', 'function', 'function', 'function', 'function', 'function'],
     frozen: true,
   });
 });
@@ -146,7 +149,7 @@ test('the main process handles exactly the allow-listed channels and refuses for
       foreign: await call('app.info', 'https://example.com/', []),
       otherHost: await call('app.info', 'app://other/index.html', []),
       withArgs: await call('app.info', 'app://studio/index.html', ['x']),
-      // F-837: a close answer is a request number and one of three words; nothing else gets through
+      // F-837: a close answer is a request number and one of its words (CLOSE_ANSWERS); nothing else gets through
       badAnswer: await call('app.closeAnswer', 'app://studio/index.html', [1, 'quit']),
       noRequest: await call('app.closeAnswer', 'app://studio/index.html', ['1', 'close']),
       unknownRequest: await call('app.closeAnswer', 'app://studio/index.html', [987654, 'close']),

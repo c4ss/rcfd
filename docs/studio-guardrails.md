@@ -57,7 +57,28 @@ rule 2). `crates/rcfd-api/tests/baseline_hashes.rs` is never re-recorded.
 ## G7. Runs outlive the window
 
 The detached runner (`rcfd-runner`) owns runs. Closing, crashing or reloading the Studio never stops, pauses or corrupts
-a run. When the Studio starts again it reconnects and shows the true state of every run.
+a run without the user's choice. When the Studio starts again it reconnects and shows the true state of every run.
+
+Amended 2026-11-17. The maintainer, after closing the Studio and finding `rcfd-runner serve --project …` and a paused
+`rcfd run` still holding `target\release`: "the runner should close with studio by default if no external (existing)
+runner env var is specified". For active runs, their answer was: ask. So:
+
+- The Studio owns only the runner and the service it started itself in this session. A runner already alive when it
+  opened the project (an earlier Studio's, the CLI's, Claude Code's) and a service attached to through
+  `RCFD_STUDIO_SERVICE` or `--service` are never stopped by it. A runner that comes up while the Studio has the project
+  open, with none alive before, is the Studio's, whoever asked for it (its Run, or Claude Code's `start_run`).
+- On a close (the window, Alt+F4, quit, Close project), an owned runner with no run queued, running or paused is shut
+  down quietly (`rcfd-runner shutdown`). With active runs the close asks, naming each run: Stop runs and close (each run
+  is cancelled through the engine and keeps its records; then the runner is shut down), Keep them running and close (the
+  runner stays and the next start adopts it), or Cancel (the default). One prompt asks this and save-or-discard together.
+- The Studio's own `rcfd serve` closes with it: the project's runs are the runner's, not the service's. It is kept
+  only while one of its sessions has a solve going in the service itself (running or paused).
+- The setting "Keep the runner going after the Studio closes" (off by default) and the `--keep-runner` switch keep
+  the earlier behaviour: the runner goes on, and nothing is asked about it.
+- A crash, a kill or a reload still stops nothing. A close that cannot ask (the test mode's quit, a page that does not
+  answer) keeps a runner with active runs.
+
+ADR 0801, addendum "Runner closes with the Studio" (2026-11-17), has the details and decisions.
 
 ## G8. Accessibility
 
