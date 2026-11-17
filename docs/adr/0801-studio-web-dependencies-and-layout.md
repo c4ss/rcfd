@@ -1534,7 +1534,7 @@ camera moves at once on a key (no easing, damping off).
 
 ### Open for the maintainer
 
-- D1: whether to add axe-core under G5 on top of the written checks.
+- D1: whether to add axe-core under G5 on top of the written checks. (Answered 2026-11-17: yes; see the follow-up below.)
 - The decision panel and the confirmation strip now hold Tab while open; if the maintainer wants to reach the page
   behind a decision without answering it, D4 (b) is the way back.
 - Observed, not changed: while the run workspace is open the page asks for animation frames continuously (743 in the
@@ -1553,6 +1553,63 @@ camera moves at once on a key (no easing, damping off).
   and `run-control.spec.ts` 23 passed.
 - `python scripts/third_party_licenses.py --check`: up to date.
 - `cargo test -p rcfd-cli --release --test docs_site --test workspace_graph`: 2 and 3 passed.
+
+### Follow-up (2026-11-17): axe-core, the maintainer's answer to D1
+
+The maintainer, 2026-11-17: "keep axe-core, but don't worry too much about full accessibility features". Also: Tab
+stays held inside open dialogs (D4 (a) stands; the decision panel and the confirmation strip keep `aria-modal` and
+contain Tab). So D1 is now (a) and (b): the written checks stay, and axe-core runs on top of them. This is not a full
+accessibility audit, and no further accessibility work was started.
+
+The new direct dependency (`devDependencies`, test only; nothing of it is in the built app):
+
+| Package | Version | Licence | Why it | Alternatives considered |
+|---|---|---|---|---|
+| `axe-core` | 4.14.0 (2026-10-05) | MPL-2.0 | The maintainer's word. Its rule set covers what the written checks do not (list structure, ARIA attributes allowed and required, label in name, scrollable regions). It has no dependencies; the test reads `axe.min.js` from the package and puts it into the page through the DevTools protocol, so the app's CSP and code are unchanged. 4.14.1 (2026-11-16) was one day old, under the two-week rule. | `@axe-core/playwright` 4.14.0 (2026-10-15): a thin wrapper that would pull `axe-core` `~4.14.0`, which resolves to 4.14.1 today, unless pinned again; one package more for a call the test makes in four lines. |
+
+What was built:
+
+- `tests/support/axe.ts`: `axeCheck(page)` runs axe on the whole window and sorts the violations into failing (impact
+  serious or critical), excluded (serious or critical, on the `EXCLUDED` list with a reason) and other (minor or
+  moderate, recorded only). `color-contrast` and `color-contrast-enhanced` are off: there is no WCAG contrast
+  requirement (the maintainer, 2026-11-16), and the colours of `DESIGN.md` change only with the maintainer's approval.
+- `tests/e2e/a11y.spec.ts`: every surface of the keyboard walk runs axe first, before the walk moves the focus (16
+  surface states: home with and without a project, the first path, the Claude Code panel, Runs, a selected run, the
+  provenance popover, the run workspace, its derived-picture controls, a select's list, compare mode, the command
+  palette, the case editor, its undo controls, case settings and the decision panel). A serious or critical
+  violation fails the surface's test; the last test checks that axe ran on every walked surface. The results go to
+  `test-results-visual/f816/axe.json`.
+
+Violations found (axe 4.14.0, first run) and fixed:
+
+| Rule (impact) | Where | Fix |
+|---|---|---|
+| `listitem` (serious) | The Claude Code transcript, on every surface with the panel open: `<ol role="log">` made its `li` items children of a log, not a list | `ClaudePanel.tsx`: the log role and name moved to a wrapping `div.cc-feed-log` with `display: contents` (`claude.css`), so the `ol` stays a list and lays out as before. Also clears the minor `aria-allowed-role` on the `ol`. |
+| `label-content-name-mismatch` (serious) | Runs and a selected run: the "Run again" button was named "Run cavity-re100.toml again" (the words shown are not in the name in order) | `RunControls.tsx`: named "Run again: cavity-re100.toml". The icon-only "with fields stored" button keeps its name (nothing shown to match). |
+| `label-content-name-mismatch` (serious) | The command palette: each option was named by its title alone while it shows the title, the command id and its keys | `CommandPalette.tsx`: the option is named by its content in the order shown (title, id, group while filtering, keys, the unavailable reason); the visually hidden description that repeated the id and keys is gone. Spaces between the parts and between the keys are text nodes inside flex boxes, so nothing drawn changes. Names still start with the title (`commands.spec.ts`, `f837.spec.ts` match on that). |
+| `scrollable-region-focusable` (serious) | The command palette's list scrolls but has no Tab stop: its field moves a virtual focus in it (`aria-activedescendant`) | `CommandPalette.tsx`: the field of the palette (and of a parameter's choice list) is `role="combobox"` with `aria-expanded="true"`, the ARIA pattern for a field over a list it controls; axe then reads the list as the combobox's popup. No Tab stop was added. |
+
+After the fixes, no serious or critical violation is left on any surface. The `EXCLUDED` list is empty: no fix
+needed a change to `DESIGN.md` or to a visible design. Left as recorded, not acted on (minor or moderate):
+`page-has-heading-one` (moderate) on the run workspace, compare mode, the case editor and its undo controls (no `h1`
+there; adding one is a visible change); in compare mode `landmark-unique` (two field views of the same name),
+`region` (React Aria's overlay container outside a landmark), both moderate, and `empty-table-header` (minor, the
+metric table's first header is named by `aria-label`, not by text).
+
+Decisions taken (each reversible):
+
+- D7, how axe is loaded. (a) `axe-core` alone, injected by the test; (b) `@axe-core/playwright`. Taken: (a), one
+  package and an exact pin. Recommendation: (a).
+- D8, where axe runs. (a) Inside the keyboard walk, on each of its 16 surface states; (b) a separate spec that reaches
+  the same surfaces again. Taken: (a), the surfaces are reached once and stay in step with the walk. Recommendation: (a).
+
+Open for the maintainer: none new. If the maintainer wants the moderate findings above acted on, `page-has-heading-one`
+is the one that would change what is shown.
+
+Verification of the follow-up (2026-11-17, on studio-f816b over studio-roadmap 0773c5e2): `npm run typecheck` clean;
+after `npm run build && npm run package:dir`, `a11y.spec.ts`, `claude.spec.ts`, `commands.spec.ts`, `f837.spec.ts` and
+`word-budget.spec.ts` 53 passed; full `npm test` 654 passed, none failed; `python scripts/third_party_licenses.py
+--check` up to date (axe-core added, 123 lock entries).
 
 ## Addendum 13: F-837, run logs, runner budgets and field-view extras from rcfd-studio (2026-11-17)
 

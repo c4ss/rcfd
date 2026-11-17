@@ -1111,9 +1111,12 @@ unavailable and why, a value to act on (changes not saved).
 
 Every built surface works from the keyboard alone, shows where the focus is, names every control, keeps still under
 reduced motion and never says a state by colour alone. No WCAG contrast rule applies (the maintainer removed it on
-2026-11-16); colour values follow `DESIGN.md`. No checker library was added (G5): the checks are written in
-`tests/support/a11y.ts` on the DOM, the keyboard and Chromium's own accessibility tree (read through the DevTools
-protocol).
+2026-11-16); colour values follow `DESIGN.md`. The checks are written in `tests/support/a11y.ts` on the DOM, the
+keyboard and Chromium's own accessibility tree (read through the DevTools protocol). On top of them, axe-core 4.14.0
+(a dev dependency, MPL-2.0, ADR 0801 Addendum 12, by the maintainer's word of 2026-11-17) runs on each surface of the
+walk (`tests/support/axe.ts`) and fails only on violations of impact serious or critical; `color-contrast` is off,
+and a rule whose fix would change `DESIGN.md` or a visible design goes in the documented `EXCLUDED` list there with
+its reason (empty today). It writes `test-results-visual/f816/axe.json`. This is not a full accessibility audit.
 
 `tests/e2e/a11y.spec.ts` opens the packaged Studio against the real engine (as `word-budget.spec.ts` does) and reaches
 every surface with keys only: Tab, Shift+Tab, the arrows, Enter, Space, Escape and the shortcuts (Ctrl+1, Ctrl+2, Ctrl+K,

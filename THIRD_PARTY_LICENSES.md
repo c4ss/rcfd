@@ -285,17 +285,18 @@ Pinned to exact versions in `apps/studio-web/package.json` and justified in ADR 
 | @types/react-dom | 19.3.0 | `MIT` | `devDependencies` |
 | @types/three | 0.187.0 | `MIT` | `devDependencies` |
 | @vitejs/plugin-react | 6.3.0 | `MIT` | `devDependencies` |
+| axe-core | 4.14.0 | `MPL-2.0` | `devDependencies` |
 | electron | 45.3.3 | `MIT` | `devDependencies` |
 | typescript | 7.0.2 | `Apache-2.0` | `devDependencies` |
 | vite | 8.3.8 | `MIT` | `devDependencies` |
 
-### Licence summary (122 packages in the lock file)
+### Licence summary (123 packages in the lock file)
 
 | Licence (as recorded) | Packages |
 |---|---|
 | `MIT` | 68 |
 | `Apache-2.0` | 35 |
-| `MPL-2.0` | 12 |
+| `MPL-2.0` | 13 |
 | `BSD-3-Clause` | 2 |
 | `ISC` | 2 |
 | `0BSD` | 1 |
@@ -373,6 +374,7 @@ Development packages are build and test tools; the built app contains only the r
 | @typescript/typescript-win32-x64 | 7.0.2 | `Apache-2.0` | development, optional (win32) |
 | @vitejs/plugin-react | 6.3.0 | `MIT` | development |
 | aria-hidden | 1.2.6 | `MIT` | runtime |
+| axe-core | 4.14.0 | `MPL-2.0` | development |
 | base64-js | 1.5.1 | `MIT` | runtime |
 | buffer | 6.0.3 | `MIT` | runtime |
 | client-only | 0.0.1 | `MIT` | runtime |

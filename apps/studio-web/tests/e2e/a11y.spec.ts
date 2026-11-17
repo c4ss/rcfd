@@ -23,6 +23,7 @@ import { mkdirSync, writeFileSync } from 'node:fs';
 import { rm } from 'node:fs/promises';
 import path from 'node:path';
 import { arrowWalk, cycleOf, framesDuring, installA11y, motionOf, pointerOnly, reach, rolesOf, tabWalk, unnamed, NO_ROLE, type Stop, type Walk } from '../support/a11y.js';
+import { axeCheck, EXCLUDED, OFF, type AxeReport } from '../support/axe.js';
 import { claudeFixture, FAKE_CLAUDE, type ClaudeFixture } from '../support/claude.js';
 import { copyExample, emptyProject, findMcp, mcpPids, NO_MCP, scratch, stubDialog } from '../support/project.js';
 import { appRoot, findRcfd, killIfRcfd, killPid, NO_RCFD, startRcfd, type RunningRcfd } from '../support/rcfd.js';
@@ -65,6 +66,8 @@ interface SurfaceReport {
   indicators: Record<string, number>;
 }
 const report: Record<string, SurfaceReport | Record<string, unknown>> = {};
+/** axe-core on each surface (F-816, the maintainer's word of 2026-11-17): serious and critical violations fail. */
+const axeReport: Record<string, AxeReport> = {};
 const checkedComposites = new Set<string>();
 
 test.beforeAll(async () => {
@@ -93,6 +96,7 @@ test.beforeAll(async () => {
 
 test.afterAll(async () => {
   writeFileSync(path.join(SHOTS, 'report.json'), JSON.stringify(report, null, 2) + '\n');
+  writeFileSync(path.join(SHOTS, 'axe.json'), JSON.stringify({ off: OFF, excluded: EXCLUDED, surfaces: axeReport }, null, 2) + '\n');
   await studio?.app.close();
   await service?.stop();
   if (service) killIfRcfd(service.pid);
@@ -145,6 +149,10 @@ const seenUnnamed = new Set<string>();
 async function surface(id: string, root: string, opts: { exclude?: string[]; modal?: boolean; composites?: boolean } = {}): Promise<SurfaceReport> {
   await page.mouse.move(1439, 899);
   await expect(page.locator(root).first()).toBeVisible();
+  // axe-core on the whole window as this surface shows it, before the walk moves the focus
+  const ax = await axeCheck(page);
+  axeReport[id] = ax;
+  expect.soft(ax.failing, `${id}: axe-core violations of impact serious or critical`).toEqual([]);
   const shots: string[] = [];
   const shotRoles = new Set<string>();
   const forward = await tabWalk(page, {
@@ -605,4 +613,7 @@ test('every surface was walked', () => {
       'first-path',
     ].sort(),
   );
+  // axe-core ran on every walked surface: home, case editor, runs, run workspace, compare, provenance, the palette and
+  // the decision panel among them
+  expect(Object.keys(axeReport).sort()).toEqual(walked.sort());
 });
