@@ -220,3 +220,105 @@ PM `0`, PS `1.8e-15`, all within their limits) are kept as the record of that ru
 
 Correction: `wp_patch_tests_under_the_warm_start_amended`, the same test with the exact stress computed for PT2 only. No limit,
 case, row or parameter changes. The defective test stays as an ignored record. The corrected test is run once.
+
+## Addendum 1: results (2026-11-17)
+
+Runs, each made once: `f847-scratch/run1.log` (the new file as registered: `wu_rule_on_one_element`, `rt_restore_refusal_text`,
+`db_default_digest` final; `wp_patch_tests_under_the_warm_start` panicked at the set-up defect of Amendment 1),
+`run2.log` (`wp_patch_tests_under_the_warm_start_amended`, once), `db-base.log` (the digest on base), `fp-*.log` (the four
+patch tests on the flip copy), `s1.log` (the named existing tests and `--lib`), `bh.log`, `docs.log`, `mut-MU*.log`. All release.
+
+| Id | Limit | Measured | Met |
+|---|---|---|---|
+| WL | holds | holds (20 solves, every state `n + 9` values) | yes |
+| A1 (patch) | `0` refusals | `0` | yes |
+| A1 (unit) | `0` refusals | `0` | yes |
+| WD1 | `0` | `0` of 6480 modes | yes |
+| WD2 | `0` | `0` | yes |
+| WD3 | `0` | `0` | yes |
+| WD4 elastic | `0` | `0` | yes |
+| WD4 J2 | `<= 2e-10` | `0` | yes |
+| WP interior error (20) | `<= 1e-10` | largest `1.05e-15` | yes |
+| WP PM (20) | `<= 1e-10` | `0` in every case | yes |
+| WP PS (4) | `<= 1e-10` | `1.79e-15` each | yes |
+| WP PT4 yielded (4) | holds | holds | yes |
+| WI | cold `>= 2`; warm `1`, `0` differing; `0` | cold 4 iterates; warm 1, `0`; `0` | yes |
+| WS | `> 0`; `<= 1e-8` | 9 of 9; `3.4e-15` | yes |
+| NC1 | 104 of 104 | 104 of 104 | yes |
+| NC2 | `0` | `0` | yes |
+| NC3 | 2 of 2 | 2 of 2 | yes |
+| EX | `0` | `0` | yes |
+| EN | `0` (both cases) | `0`, `0` | yes |
+| J | `0` | `0` | yes |
+| RT1 | the registered text | equal | yes |
+| RT2 | the registered text | equal | yes |
+| RT3 | today's text | equal | yes |
+| RT4 | accepted | accepted | yes |
+| DB | equal | `0x2b98a16cbb48d51c` over 10387 values on base and on the code commit | yes |
+| DBT | pass | `si_eas_default_bits` 1 passed, `si_eas_hg_default_bits` 1 passed, `baseline_hashes` 3 passed (1 ignored as registered there; 102 s with the build) | yes |
+| FP | `0` of 4 name `FieldLength` | `0` of 4 | yes |
+| S1 | pass | `--lib` 15; `si_eas` 8 (1 ignored), `si_eas_hg` 8 (1), `si_eas_hg3_rd` 6, `si_eas_hg3_rl` 6, `si_eas_hg6` 4 (2), `si_eas_hg7` 4 (2), `si_eas_hg8` 5 (2), `si_eas_default_bits` 1, `si_eas_hg_default_bits` 1, `si_eas_local_update_f844` 4 (3), `si_eas_warm_default_f846` 3; 94 s with the build | yes |
+| S2 | clean | `cargo fmt -p rcfd-fem --check` clean; `cargo clippy -p rcfd-fem --release --all-targets -- -D warnings` clean | yes |
+| S3 | builds | 45ded9e0 (docs), a07b039b (code and test, built), f4ff0ed1 (amendment, built), the results commit (docs) | yes |
+| docs_site | pass | `cargo test -p rcfd-cli --release --test docs_site`: 2 passed | yes |
+
+**E1 held.** On the flip copy each of the four patch tests passes its nine rows of PT1 to PT3 (with PS) through the public
+entry points given the warm states, then panics at its PT4 set-up line (`index out of bounds: the len is 9 but the index is
+12`, `si_eas.rs` 526, `si_eas_hg.rs` 906, `f703/r_body.rs` 518). The refusal of ADR 0727 class (iv) is gone; what is left is
+a reading of the J2 state in the tests themselves, which assumes the material layout.
+
+**A limit of c4 on the patch tests.** The patch fields are homogeneous, and the converged modes are exactly `0` in every case
+(PM `0`). On the patch the committed modes are `0`, so starting from them is starting from `alpha = 0`. There WD1 to WD4 show
+that the entry points accept the warm states and return the driver's own force, tangent, stress and modes bit for bit. They
+cannot show that the modes are used as the start. The unit rows show that: WI (from the committed root, 1 iterate instead of
+4), WS (another start, other last bits), NC2 (the fallback), EX, and the mutations MU1 and MU2.
+
+### Mutations (each on a scratch copy of f4ff0ed1, the new file run once)
+
+| Id | Mutation | Caught | By |
+|---|---|---|---|
+| MU1 | `warm_state` returns no modes (the start dropped everywhere) | yes | WI (4 iterates), WS (`0` differing) |
+| MU2 | no fallback in `evaluate`, `modes_and_strains_warm` and the records | yes | NC2 (`inf`: refused), A1 (2 refusals) |
+| MU3 | the per-element text reverted to the count text | yes | RT1, RT2 |
+| MU4 | `mode_iteration_record_from` with `Some(s)` and a warm state starts from the committed modes | yes | EX (`inf`: the records differ in length) |
+| MU5 | `enhanced_force_and_tangent_with` passes the whole warm state | yes | A1 (12 refusals). EN itself did not miss: a refused pair is counted in A1 and skipped in EN |
+| MU6 | `hex8_evaluate` keeps `warm = false` | yes | A1 (180 refusals). WD3 itself did not miss, for the same reason |
+| MU7 | `given_warm` true for every `L > n` | yes | NC1 (0 of 104: the refusals name `expected n + 9`) |
+
+### Deviations
+
+- The patch test as registered had a set-up defect (Amendment 1). Its corrected copy ran once and met every row.
+- For MU5 and MU6 the registered catching rows were EN and WD3. The catch came from A1, because the test counts a refused
+  call as a refusal and does not compare it. Every mutation was caught, but by a different row in these two cases.
+- MU7 as run makes `given_warm` true for every length above `n`. `warm_state` then refuses with `expected n + 9`, so the error
+  changes; the extra values are not silently ignored. The registered wording was "accepted ... with the extra values ignored".
+  Both forms break the rule "refused as before", and NC1 catches this one.
+
+### Not run
+
+The heavy ignored records of the element; the other test files of the element that call the entry points with material
+states only (`si_eas_hg14`, `hg20`, `hg21` and the rest; R1, rule 7, the daily gate); the whole rcfd-fem suite.
+
+### Decision
+
+**done**, by the registered rule. Every row was met: the patch rows after Amendment 1, which fixed a set-up defect before
+their corrected run and changed no limit. DB was equal, DBT and S1 passed, and all seven mutations were caught (two by A1
+rather than their registered row). One limit of c4 is recorded above: the patch modes are exactly zero, so the use of the
+modes as the start is shown by the unit rows and the mutations, not by the patch tests.
+
+### Remaining questions
+
+1. **The PT4 set-up line of the four existing patch tests (E1).** Under a switched default they still fail, at
+   `chunks(STATE_SIZE)` and `p[12]` on a 113-value state. Options: (a) the switch item edits those four lines to read the
+   material part (`&values[..8 * STATE_SIZE]`); (b) leave the tests on the opt-out by setting the flag to `false`; (c) keep the
+   opt-in. Recommendation: (a), as part of the switch item, which edits existing tests anyway (ADR 0727 remaining question 1).
+   Not taken here: it edits existing tests, and the switch is the maintainer's decision.
+2. **The default switch** stays open, as in ADR 0727 question 1. The element entry points no longer block it.
+
+## For the lead: roadmap entries
+
+> Proposed status: done.
+
+> F-847 (ADR 0729, 2026-11-17): the public element entry points of the incompatible Hex8 accept a committed state of the warm start by a length rule. A state of the material layout (8 x state_size values) takes the code it took before. A state with nine more values is a warm state: its material part is used as now, and its last nine values are the committed modes, the start of the local iteration (if that iteration fails, it restarts from zero, ADR 0660 D1). Every other length is refused with the error it got before. The rule covers modes_and_strains{,_with}, condensed_force_and_tangent{,_backtracked,_update}, mode_iteration_record{,_from} and trust_region_record (a start given by the caller wins), enhanced_force_and_tangent{,_with} (the modes are given, the trailing ones ignored), and nonlinear::hex8_force_and_tangent_at, hex8_internal_force_at and hex8_second_piola_kirchhoff with Incompatible. On the ADR 0727 patch tests under the warm start (4 rules, 5 cases, 36 elements each), every entry point returns the driver's own evaluation bit for bit and every patch row meets its limit. The patch modes are exactly zero, so the use of the modes as the start is shown on one element: from the committed root 1 local iterate instead of 4, other bits from another start, and the restart from zero for NaN modes. The transient restore now names the first element and its two lengths. A digest of every default call and every refusal is equal before and after; the default bit records and baseline_hashes pass. Under a flipped default the four patch tests no longer fail at an entry point, but still fail at their own PT4 set-up line, which reads the J2 state by the material layout. Seven of seven mutations were caught.
+
+> F-846 (ADR 0727, 2026-11-17), add at the end of its note: ADR 0729 makes the element entry points accept a warm state; under the switch the four patch tests of class (iv) then fail only at their own PT4 set-up line (index 12 of a 9-value chunk), an edit for the switch item.
