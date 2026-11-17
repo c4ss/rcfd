@@ -190,3 +190,85 @@ A miss of C3 is a finding about the first reading or about the criterion, not a 
   are not read.
 - Whether E8 should rank above E0, and what the primary of an unregistered file should be (F-787, F-793), are not decided here.
 - No limit of ADR 0720 is changed, whatever is found; a proposal goes to the lead as a follow-up.
+
+## Addendum 1: the second reading (2026-11-17, written and committed before the first reading was opened)
+
+Registration commit 6ff7b814 (this file alone). ADR 0720 from line 145 on and the contents of `f773-scratch` were still closed
+when this addendum was committed.
+
+### The list (C1)
+
+`python scripts/adr_test_index.py --primary git --out f839-scratch/idx_on.json` (44 s) and `--no-e8` (15 s), then
+`f839-scratch/list.py`: the files with an E8 primary are exactly `crates/rcfd-claude/src/discover.rs` (0126) and
+`crates/rcfd-project/src/time.rs` (0122); the supplementary population is 29 files; `random.Random(7730).sample(sorted(population),
+20)` gives the 20 files of the table below (in the order drawn). The script counted the paths that occur as strings in ADR 0720
+from line 145 on and printed counts only: 20 of 20 of the sample, 2 of 2 of the E8-primary files (and 1 of the 9 files not drawn,
+which says the addendum lists the sample and not the population). **C1 met**; the fallback of the procedure was not needed.
+
+The index of this tree reports `e8`: tests 5704, files 951, links 6098 (ADR 0720 counted 5695, 950, 6089 at its base); the
+population (29) and the 2 E8-primary files are as ADR 0720 registered them.
+
+### Deviations and further disclosures
+
+1. **`--follow`.** The registered command `git log --diff-filter=A --follow` gave, for 2 of the 22 files
+   (`sa_gyro_sector_split_schur_default_bits.rs`, `si_eas_hg3.rs`), the commit that added *another* file (git's rename detection
+   took the new file for a rename of a similar earlier one: 6523d01d, an F-569 record, and 490d2a86, `si_eas_hg2.rs`). For these
+   two I used the oldest line of `git log --diff-filter=A` without `--follow` (a71861ee and 9c075cc2), which is the commit the
+   index records in the E8 evidence. For the other 20 the two commands give the same commit.
+2. **ADRs about the attribution left out of the search.** The search for ADRs citing a base name excluded 0653, 0679, 0684,
+   0690, 0701, 0703, 0704, 0712, 0714, 0720 and this ADR (rule 4: never a primary), so that the grep could not print a line of ADR
+   0720's addendum or of an earlier reading of the same file. No candidate ADR is among them.
+3. **More of an ADR read where the citing lines did not settle it** (allowed by the registration): ADR 0126 (lines matching
+   `discover`, `project_dir_name`, `agents --json`, the transcript directory: D1, D6, check D7), ADR 0122 (lines matching the
+   time format: decisions 2 and 4, check T1), ADR 0155 (the rows S1 to S3), ADR 0173 (lines matching `hook`: D5 (b)), ADR 0195
+   (lines matching P6, C5-K, C5-R), ADR 0051 (R1, R2).
+4. The evidence per file is in `f839-scratch/ev_01.txt` to `ev_22.txt` (written by `gather.py`).
+
+### The 2 E8-primary files
+
+| # | File | E8 primary | Verdict | Reason |
+|---|---|---|---|---|
+| 1 | `crates/rcfd-claude/src/discover.rs` | 0126 | **agree** (borderline) | The origin commit 975f340d adds the crate and names ADR 0126 ("session discovery ... (ADR 0126)"). ADR 0126 decides the module (D1 lists `discover`) and the behaviour its three unit tests check (D6: the transcript directory named by replacing non-alphanumerics with `-`, the cwd compared with separators and Windows case ignored, the listing of `claude agents --json` with live pids) and its file list names `src/discover.rs`. The only other ADR citing the file (0128) is a later audit fix of its spawns. The doubt: the ADR's check table registers the integration tests `d7_*`, not these three unit tests by name, so it "first describes" the file but does not state a limit for each test; resolved by rule 5. |
+| 2 | `crates/rcfd-project/src/time.rs` | 0122 | **agree** | The origin commit 46226203 adds the crate, names ADR 0122 and lists the check T1. ADR 0122 never cites `time.rs` by name, but its decision 4 fixes the UTC formats and the civil-from-days algorithm of Hinnant, and its check T1 is the file's two tests exactly ("known dates (1970-01-01, 2000-02-29, 2000-03-01, 2024-02-29, 1 700 000 000 s) and 100 000 consecutive days", limit exact; `known_dates` and `days_step_one_calendar_day_at_a_time`). That is a registration of the file's tests in everything but the file name. ADR 0128 only lists the file as a duplicate of another crate's code. |
+
+### The 20 supplementary files
+
+E0 is the E0 primary (the file's header), E8 the first E8 ADR (the first ADR of the origin commit's subject, or the registration
+ADR of its item).
+
+| # | File | E0 | E8 | E0 verdict | E8 verdict | Category | Reason |
+|---|---|---|---|---|---|---|---|
+| 3 | `rcfd-fem/tests/sa_cms_pattern_default_bits.rs` | 0511 | 0474 | agree | disagree | **E0** | Header "F-559 (ADR 0511) D4"; 0511 names the file as new and registers D4 (the digests it prints). The subject says "digests of the ADR 0474 option paths ... (ADR 0511 D4)": 0474 is the feature whose bits are recorded, it does not cite the file. |
+| 4 | `rcfd-fem/tests/sa_rotor.rs` | 0476 | 0450 | agree | disagree | **E0** | Header "F-416 (ADR 0476)"; 0476 names the file as new with its checks Z, J, X, R, O, A, U, L, G. The subject names 0450 as the solver the rotor uses ("whirl by the quadratic solver of ADR 0450") before "(ADR 0476)"; 0450 does not cite the file. |
+| 5 | `rcfd-fem/tests/sb_modal.rs` | 0284 | 0273 | agree | disagree | **E0** | Header "F-383 (ADR 0284)", seed `0xF383_0284`; 0284 names the file as new and holds its set-ups and checks. The subject names 0273 for the mass rules reused; 0273 (element library) does not cite the file. |
+| 6 | `rcfd-fem/tests/si_rotating_whirl_sparse.rs` | 0427 | 0411 | agree | disagree | **E0** | Header "F-506 (ADR 0427)"; the subject ends "(ADR 0427), before their run" and names 0411 only as the state form the solver works on. 0411 does not cite the file. |
+| 7 | `rcfd-fem/tests/sa_prestress_mixed.rs` | 0486 | 0473 | agree | disagree | **E0** | Header "F-557 (ADR 0486)"; 0486 names the test file above its checks table. The subject names 0473 as the ADR whose refusal RF1 is lifted, then "the checks of ADR 0486". |
+| 8 | `rcfd-fem/tests/sa_cms_enrich_default_bits.rs` | 0532 | 0511 | agree | disagree | **E0** | Header "F-603 (ADR 0532) D6"; 0532 names the file as new and registers D6. The subject: "D6 digests of the ADR 0511 paths ... (ADR 0532)"; 0511 is the feature recorded and does not cite the file. |
+| 9 | `rcfd-post/tests/sa_solid_rotor.rs` | 0476 | 0450 | agree | disagree | **E0** | Same commit as row 4. Header "F-416 (ADR 0476)"; 0476 names the file as new with checks K and S. 0450 is the eigensolver, not cited. |
+| 10 | `rcfd-studio/tests/mesh_transform_u.rs` | 0155 | 0133 | agree | disagree | **E0** | Header "ADR 0155 (job 48U) S1-S3"; 0155 does not cite the file name but registers S1, S2, S3 (rows of its checks table and of its results), which are the file's tests. The subject names 0133 and 0142 for "dated notes in ADRs 0133 and 0142", then "(ADR 0155)". 0133 is run control in the Studio, another subject. |
+| 11 | `rcfd-fem/src/rotating/whirl/state/arnoldi.rs` | 0428 | 0416 | agree | disagree | **E0** | Module header "(ADR 0428, F-519)"; 0428 names the file as new, defines its interfaces (D5) and its one unit test is "the development unit test of amendment 1" of 0428. The subject names 0416 for the Francis QR reused. |
+| 12 | `rcfd-fem/tests/si_knife_edge_closed_form.rs` | 0394 | 0390 | agree | disagree | **E0** | Header "F-492 (ADR 0394)"; 0394 is test-only and names this file and its two test functions (D3). The subject: "the knife-edge buckling factors of ADR 0390's beam ... checks of ADR 0394". 0390 owns the beam and the A9 miss that led to F-492 but does not cite the file. |
+| 13 | `rcfd-mcp/src/edit_hook.rs` | 0173 | 0195 | disagree (right: 0195) | agree | **E8** (borderline) | Header "(ADR 0173 D5 (b), ADR 0195 P6)". ADR 0173 is a scoping proposal whose D5 (b) says a plugin hook should refuse Edit and Write under `cases/`, `runs/`, `designs/` and leaves the contract "to be read from the Claude Code hooks documentation"; it does not cite the file and states no check. ADR 0195 ("ADR 0173 amendment 6, F-275 registration") names `crates/rcfd-mcp/src/edit_hook.rs` as the new module, fixes its steps and exit codes (P6), registers C5-K and C5-R and reports "one unit test in `edit_hook.rs`"; the origin commit names only 0195. The doubt: 0195 calls itself an amendment of 0173 and the header names 0173 first; by rule 1 (the origin commit names 0195) the row is E8, not "both". |
+| 14 | `rcfd-fem/tests/sa_gyro.rs` | 0472 | 0450 | agree | disagree | **E0** | Header "F-415 (ADR 0472)"; 0472 names the file as new and holds the checks and the amendment about its run. 0450 is the quadratic eigensolver used. |
+| 15 | `rcfd-fem/tests/sb_loads.rs` | 0276 | 0281 | agree | disagree | **E0** | Header "F-375 (ADR 0276)", seed `0xF375_0276`; 0276 names the file as new (D3, checks table). The subject names 0281 only for "the thermal load still refused (ADR 0281)", then "tests sb_loads (ADR 0276)". 0281 cites the file later, to retire its X1 block: a later ADR touching one check (rule 1, secondary). |
+| 16 | `rcfd-fem/tests/sa_gyro_sector_split_schur_default_bits.rs` | 0527 | 0492 | agree | disagree | **E0** | Header "F-584 (ADR 0527) G11"; 0527 names the file and registers G11. The subject: "default-bits record of the ADR 0492 sector split paths ... (ADR 0527 G11)"; 0492 is the feature recorded. |
+| 17 | `rcfd-fem/tests/sa_cms_residual.rs` | 0474 | 0469 | agree | disagree | **E0** | Header "F-552 (ADR 0474)"; 0474 names the file as new for all checks but D2. The subject names 0469 (the reduction extended) and 0464 (a routine shared) before "checks of ADR 0474". |
+| 18 | `rcfd-io/tests/w27c_registry.rs` | 0051 | 0244 | agree | disagree | **E0** | Header "Wave 27C (ADR 0051) registered checks R1 and R2"; 0051 registers R1 (registry) and R2 (deck round trip) and lists the file in its addendum. The E8 ADR comes from the item: the subject is "F-237: format registry, Nastran-style load deck" (2026-10-17) and 0244 is the registration ADR F-237 received on 2026-11-12 for a later extension (heat-rate export); 0244 cites the file only as an existing test it must not force an edit of. |
+| 19 | `rcfd-fem/tests/si_eas_hg3.rs` | 0630 | 0614 | agree | disagree | **E0** | Header "F-703 (ADR 0630)"; 0630 D5 names the file and what it holds. The subject names 0614 for the existing coefficient ("RestStress the ADR 0614 coefficient") before "the checks of ADR 0630". |
+| 20 | `rcfd-fem/tests/si_rotating_whirl_state_sparse.rs` | 0428 | 0416 | agree | disagree | **E0** | Same commit as row 11. Header "F-519 (ADR 0428)"; 0428 names the file as the new test file. 0416 is the state matrix and QR reused. |
+| 21 | `rcfd-fv/tests/coupled_ddt_fractional_bdf2_f757.rs` | 0687 | 0675 | agree | disagree | **E0** | Header "F-757 (ADR 0687)"; the subject lists the file with "(ADR 0687: P1f, ...)" and names 0675 for the defect routine shared. 0675 does not cite the file. |
+| 22 | `rcfd-fem/tests/si_modal_mpc.rs` | 0384 | 0296 | agree | disagree | **E0** | Header "F-486 (ADR 0384)"; 0384 names the file as new and registers all its checks. The subject: "modal analysis on the transformation of ADR 0296 ... the checks of ADR 0384"; 0296 is the transformation reused. |
+
+### Counts of the second reading alone
+
+- E8-primary files: 2 of 2 agree (1 borderline). Both verdicts are the ones the registration of ADR 0720 predicted; for each
+  the evidence was found in the ADR text (D1 and D6 of ADR 0126; decision 4 and check T1 of ADR 0122), so the control of the
+  registration is not triggered, but with 2 files it has little force.
+- Supplementary files: **E0 19, E8 1, both 0, neither 0**; 1 borderline (row 13). Not all in one category, so the control is not
+  triggered. "E8 right and E0 not": 1 of 20 (the decision aid of ADR 0720's check E8 asks for at least 16).
+- The pattern in the 19: the subject of the origin commit names an earlier ADR as the thing the new work builds on, lifts or
+  records ("the quadratic solver of ADR 0450", "RF1 of ADR 0473 lifted", "digests of the ADR 0474 option paths") and names the
+  file's own ADR last, usually in brackets. The first ADR of the subject is then the background, the last one the origin. In 18 of
+  the 20 rows the E0 primary is also among the E8 ADRs of the file, as the last ADR of the subject; the 2 exceptions are rows 13
+  (subject names only 0195) and 18 (the E8 ADR comes from the item).
+- C2: 22 of 22 read, each with a verdict and a reason. **Met.**
