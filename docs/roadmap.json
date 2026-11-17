@@ -7792,9 +7792,9 @@
     "deps": [
       "F-758"
     ],
-    "status": "todo",
+    "status": "done",
     "acceptance": "a fast test with an observation sequence whose last d + 1 points lie in the incumbent's basin while the plain pick of the step lies outside it shows that the repetition trigger makes no restart pick, the surviving ADR 0680 mutation M2 (the plain-pick condition dropped) is caught by it, and the O1 points hash of ADR 0673 is unchanged.",
-    "note": "Follow-up of F-758 (ADR 0680, 2026-11-16)."
+    "note": "Follow-up of F-758 (ADR 0680, 2026-11-17). DONE. ADR 0686, 2026-11-17: test-only, no library line changed. A fast test (crates/rcfd-api/tests/f766_plain_pick_condition.rs, 0.01 s) on a hand-built 18-observation sequence in two dimensions whose last d + 1 points lie in the incumbent's basin (deltas 0.22 to 0.32 of radius 2) while the plain pick of the step lies outside it (delta 6.98, 13 evaluated points outside): the repetition trigger makes no restart pick and its pick is bit-equal to the plain pick; the preconditions are asserted inside the test so it cannot pass vacuously. A positive twin on the same observations with the default exclusion (plain pick inside at delta 0.70) gets a restart pick at delta 3.27. The surviving ADR 0680 mutation M2 (the plain-pick condition dropped) is caught by the first test and not by the twin; the inverted condition is caught by both. The O1 points hash of ADR 0673 and the f758, f733, f715 and lib tests are unchanged. Not covered: the window condition (dropping it survives), failed or pending observations in the window, one function and one seed. Follow-up F-770 (A fast check of the window condition of the repetition trigger)."
   },
   {
     "id": "F-767",
@@ -7828,5 +7828,16 @@
     "status": "todo",
     "acceptance": "Every limit not stated here is registered in the ADR before the run. A short registration ADR per group states what the files `rcfd-assistant/tests/physics_workflow.rs`, `rcfd-assistant/tests/workflow_engine.rs`, `rcfd-turb/tests/channel_wall_function.rs`, `rcfd-cli/tests/physics_cases.rs`, `rcfd-api/tests/mesh_params.rs` and `rcfd-core/tests/table_expr.rs` check and which limits they carry, read from the code and the roadmap notes, with no Rust file edited; the index maps these files by a reading of that ADR (evidence E2, not only a word); a registered sample is read.",
     "note": "Follow-up of F-760 (ADR 0685, 2026-11-16)."
+  },
+  {
+    "id": "F-770",
+    "title": "A fast check of the window condition of the repetition trigger",
+    "phase": 9,
+    "deps": [
+      "F-766"
+    ],
+    "status": "todo",
+    "acceptance": "a fast test on an observation sequence whose plain pick lies in the incumbent's basin and whose last d + 1 evaluated points do not all lie in it shows that the repetition trigger makes no restart pick, the survivor of ADR 0686 (mutation M4, the window condition dropped) is caught by it, a twin with the window inside gets a restart pick, and the O1 points hash of ADR 0673 is unchanged.",
+    "note": "Follow-up of F-766 (ADR 0686, 2026-11-16)."
   }
 ]

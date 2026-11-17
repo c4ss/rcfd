@@ -15517,13 +15517,23 @@ fixed by the item's registration ADR before any code.
     reference is at least half the fixed cylinder's lift amplitude; the force series are kept for diagnosis; a negative
     control with the body velocity left out of the forcing misses the lift amplitude and phase.
   - note: Follow-up of F-756 (ADR 0677, 2026-11-16).
-- [ ] **F-766** A fast check of the plain-pick condition of the repetition trigger
+- [x] **F-766** A fast check of the plain-pick condition of the repetition trigger
   - depends on: F-758
   - acceptance: a fast test with an observation sequence whose last d + 1 points lie in the incumbent's basin while the
     plain pick of the step lies outside it shows that the repetition trigger makes no restart pick, the surviving ADR
     0680 mutation M2 (the plain-pick condition dropped) is caught by it, and the O1 points hash of ADR 0673 is
     unchanged.
-  - note: Follow-up of F-758 (ADR 0680, 2026-11-16).
+  - note: Follow-up of F-758 (ADR 0680, 2026-11-17). DONE. ADR 0686, 2026-11-17: test-only, no library line changed. A
+    fast test (crates/rcfd-api/tests/f766_plain_pick_condition.rs, 0.01 s) on a hand-built 18-observation sequence in
+    two dimensions whose last d + 1 points lie in the incumbent's basin (deltas 0.22 to 0.32 of radius 2) while the
+    plain pick of the step lies outside it (delta 6.98, 13 evaluated points outside): the repetition trigger makes no
+    restart pick and its pick is bit-equal to the plain pick; the preconditions are asserted inside the test so it
+    cannot pass vacuously. A positive twin on the same observations with the default exclusion (plain pick inside at
+    delta 0.70) gets a restart pick at delta 3.27. The surviving ADR 0680 mutation M2 (the plain-pick condition dropped)
+    is caught by the first test and not by the twin; the inverted condition is caught by both. The O1 points hash of ADR
+    0673 and the f758, f733, f715 and lib tests are unchanged. Not covered: the window condition (dropping it survives),
+    failed or pending observations in the window, one function and one seed. Follow-up F-770 (A fast check of the window
+    condition of the repetition trigger).
 - [ ] **F-767** The failing Newton iterate of rule L at the punch corner
   - depends on: F-763
   - acceptance: Every limit not stated here is registered in the ADR before the run. The failing attempt of ADR 0682
@@ -15552,3 +15562,10 @@ fixed by the item's registration ADR before any code.
     Rust file edited; the index maps these files by a reading of that ADR (evidence E2, not only a word); a registered
     sample is read.
   - note: Follow-up of F-760 (ADR 0685, 2026-11-16).
+- [ ] **F-770** A fast check of the window condition of the repetition trigger
+  - depends on: F-766
+  - acceptance: a fast test on an observation sequence whose plain pick lies in the incumbent's basin and whose last d +
+    1 evaluated points do not all lie in it shows that the repetition trigger makes no restart pick, the survivor of ADR
+    0686 (mutation M4, the window condition dropped) is caught by it, a twin with the window inside gets a restart pick,
+    and the O1 points hash of ADR 0673 is unchanged.
+  - note: Follow-up of F-766 (ADR 0686, 2026-11-16).
