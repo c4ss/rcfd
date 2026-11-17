@@ -519,7 +519,9 @@ struct Reading {
     u: f64,
 }
 
-fn reading(a4: f64, a8: f64, a16: f64) -> Reading {
+/// The reading as registered (ADR 0678 c4): its limit `a16 + d2 / (2^p - 1)` has the wrong sign (amendment 1); kept for the
+/// ignored record of the first run.
+fn reading_registered(a4: f64, a8: f64, a16: f64) -> Reading {
     if !(a4.is_finite() && a8.is_finite() && a16.is_finite()) {
         return Reading {
             asymptotic: false,
@@ -538,6 +540,44 @@ fn reading(a4: f64, a8: f64, a16: f64) -> Reading {
                 asymptotic: true,
                 p,
                 a_inf: a16 + d2 / g,
+                u: 1.25 * d2.abs() / g,
+            };
+        }
+        return Reading {
+            asymptotic: false,
+            p,
+            a_inf: a16,
+            u: d2.abs() / (2f64.sqrt() - 1.0),
+        };
+    }
+    Reading {
+        asymptotic: false,
+        p: f64::NAN,
+        a_inf: a16,
+        u: d1.abs().max(d2.abs()),
+    }
+}
+
+/// The reading of amendment 1: the Richardson limit `a16 - d2 / (2^p - 1)` (`d2 = a8 - a16`); the rest as registered.
+fn reading(a4: f64, a8: f64, a16: f64) -> Reading {
+    if !(a4.is_finite() && a8.is_finite() && a16.is_finite()) {
+        return Reading {
+            asymptotic: false,
+            p: f64::NAN,
+            a_inf: f64::NAN,
+            u: f64::NAN,
+        };
+    }
+    let d1 = a4 - a8;
+    let d2 = a8 - a16;
+    if d1 * d2 > 0.0 {
+        let p = (d1 / d2).log2();
+        if (0.5..=4.0).contains(&p) {
+            let g = 2f64.powf(p) - 1.0;
+            return Reading {
+                asymptotic: true,
+                p,
+                a_inf: a16 - d2 / g,
                 u: 1.25 * d2.abs() / g,
             };
         }
@@ -613,7 +653,7 @@ fn against(ch: &mut Checks, id: &str, tag: &str, run: &Run, known: (f64, f64), l
     );
 }
 
-fn nc2_rows(ch: &mut Checks) {
+fn nc2_rows(ch: &mut Checks, reading: fn(f64, f64, f64) -> Reading) {
     let f = |h: f64| 1.0 + 0.3 * h.powf(1.5);
     let (a4, a8, a16) = (f(0.25), f(0.125), f(0.0625));
     let r = reading(a4, a8, a16);
@@ -637,10 +677,21 @@ fn nc2_rows(ch: &mut Checks) {
 }
 
 #[test]
-/// SU1, SU2, SU3, M0, M1, FC, JY on `4^3`, `8^3` and DB4; NC2.
-fn j2_refined_reference_setup() {
+#[ignore = "ADR 0678 amendment 1: the registered run, defective: the registered Richardson limit has the wrong sign (NC2 (i) |a_inf - 1| 9.375e-3 > 1e-10); every other row met"]
+/// SU1, SU2, SU3, M0, M1, FC, JY on `4^3`, `8^3` and DB4; NC2 with the reading as registered (the registered run).
+fn j2_refined_reference_setup_known_miss() {
+    setup_rows(reading_registered);
+}
+
+#[test]
+/// The same rows with the reading of amendment 1.
+fn j2_refined_reference_setup_corrected() {
+    setup_rows(reading);
+}
+
+fn setup_rows(reading: fn(f64, f64, f64) -> Reading) {
     let mut ch = Checks::new();
-    nc2_rows(&mut ch);
+    nc2_rows(&mut ch, reading);
     for (n, f_known, l_known) in [(4, NH_FBAR_4, NH_L_4), (8, NH_FBAR_8, NH_L_8)] {
         let (mesh, _) = block_mesh(n, 0.0, 0);
         let tag = format!("block {n}^3");
