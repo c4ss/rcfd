@@ -18,6 +18,7 @@ use rcfd_api::case::Case;
 use rcfd_api::facts::{InText, RunTime};
 use rcfd_runner::client::Client;
 use rcfd_runner::records::{LaunchSettings, RunSettings, RunState, RunStatus};
+use rcfd_runner::started_by::StartedBy;
 use serde_json::{json, Map, Value};
 use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant};
@@ -55,6 +56,9 @@ impl RunService {
 
     /// Name `actor` in the journal lines of this service's submissions and requests (ADR 0188 J3).
     pub fn with_actor(mut self, actor: Option<Actor>) -> Self {
+        // Q-RL-2 (ADR 0801): a runner this service starts records the actor's client (cli, mcp) as started_by
+        let by = actor.as_ref().and_then(|a| StartedBy::from_client_name(&a.client));
+        self.client = self.client.with_started_by(by);
         self.actor = actor;
         self
     }
@@ -683,3 +687,30 @@ fn store_json(p: &Plan) -> Value {
 
 /// The run-time plan of a `start_run`: its `--set` entries and its JSON (`None` without `run_time`).
 type Timing = Option<(Vec<String>, Value)>;
+
+#[cfg(test)]
+mod started_by_tests {
+    use super::*;
+
+    /// Q-RL-2 (ADR 0801): a runner the service starts records its actor's client (cli, mcp) as started_by.
+    #[test]
+    fn the_actor_names_who_starts_the_runner() {
+        if std::env::var_os(rcfd_runner::started_by::ENV).is_some() {
+            eprintln!(
+                "skipped: {} is set in the test's environment",
+                rcfd_runner::started_by::ENV
+            );
+            return;
+        }
+        let s = RunService::new("p", "rcfd-runner");
+        assert_eq!(s.client.started_by(), None);
+        let s = s.with_actor(Some(Actor::this_process(crate::journal::MCP)));
+        assert_eq!(s.client.started_by(), Some(StartedBy::Mcp));
+        let s = s.with_actor(Some(Actor::this_process("cli")));
+        assert_eq!(s.client.started_by(), Some(StartedBy::Cli));
+        let s = s.with_actor(Some(Actor::this_process(crate::journal::STUDIO)));
+        assert_eq!(s.client.started_by(), None);
+        let s = s.with_actor(None);
+        assert_eq!(s.client.started_by(), None);
+    }
+}

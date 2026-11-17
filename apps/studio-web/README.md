@@ -448,11 +448,14 @@ The maintainer: "the runner should close with studio by default if no external (
 specified"; for active runs: ask. The rules are in `src/shared/runner-lifetime.ts`, the main process's side in
 `src/main/project/runner-lifetime.ts` (ADR 0801, addendum "Runner closes with the Studio").
 
-- Ownership: the Studio looks at the project's `.rcfd/runner.json` (the pid and start time the runner writes once it
-  holds the project's lock) when the project opens, once a second, and before and after each of its run actions. A
-  runner alive at the open is adopted and never stopped by the Studio. A runner first seen after a look that found none
-  is the Studio's, whoever asked for it (the Studio's Run, Claude Code's `start_run` while the Studio has the project
-  open, the CLI). A runner that replaced another between two looks is not.
+- Ownership: the Studio looks at the project's `.rcfd/runner.json` (written by the runner once it holds the project's
+  lock) when the project opens, once a second, and before and after each of its run actions. The record says who
+  started the runner (Q-RL-2, the maintainer 2026-11-17): `started_by` "studio", "cli" or "mcp", with `studio_pid` for
+  the Studio. The Studio sets `RCFD_RUNNER_STARTED_BY=studio:<its pid>` on the `rcfd-runner ensure` and the `rcfd-mcp`
+  it starts (`runnerStarterEnv`), and owns a runner whose record says "studio" with its own pid, and no other. A record
+  with no `started_by` (an older runner) falls back to the looks: a runner alive at the open is adopted and never
+  stopped, a runner first seen after a look that found none is the Studio's, and one that replaced another between two
+  looks is not.
 - The close (the window's close button, Alt+F4, quit, Close project): an owned runner with no run queued, running or
   paused is shut down with no question (`rcfd-runner shutdown --project <folder>`). With active runs the F-837 close
   guard asks with the F-829 decision panel, naming each run (id, case, state, step or simulated time): **Stop runs and

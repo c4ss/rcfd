@@ -194,8 +194,12 @@ pub fn serve(project: &Path) -> Result<i32, String> {
     } else {
         "the default (no runner-config.json)".into()
     };
-    let info = json!({"pid": std::process::id(), "started": records::now_iso(), "config": cfg,
-                      "config_source": cfg_src, "rcfd_bin": cfg.solver()});
+    let mut info = json!({"pid": std::process::id(), "started": records::now_iso(), "config": cfg,
+                          "config_source": cfg_src, "rcfd_bin": cfg.solver()});
+    // Q-RL-2 (ADR 0801): who started this runner, additive (G4); absent when the starter did not say
+    if let Some(by) = crate::started_by::StartedBy::from_env() {
+        by.record(&mut info);
+    }
     records::atomic_write(&dot.join("runner.json"), info.to_string().as_bytes()).map_err(|e| e.to_string())?;
     let mut r = Runner::new(FsStore::new(project), cfg, cfg_src);
     let poll = Duration::from_millis(r.cfg.poll_ms);

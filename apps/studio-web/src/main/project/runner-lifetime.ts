@@ -17,7 +17,18 @@ import {
   type RunnerPlan,
   type RunnerSeen,
   type RunnerStep,
+  STARTED_BY_ENV,
+  studioStartedBy,
 } from '../../shared/runner-lifetime.js';
+
+/**
+ * The environment of a process the Studio starts that may start the project's runner (`rcfd-runner ensure`, its own
+ * rcfd-mcp): the Studio's, with RCFD_RUNNER_STARTED_BY=studio:<this pid>, so the runner's record says this Studio started
+ * it (Q-RL-2). Only those processes get it: Claude Code and the CLI the user runs do not.
+ */
+export function runnerStarterEnv(env: NodeJS.ProcessEnv = process.env, pid: number = process.pid): NodeJS.ProcessEnv {
+  return { ...env, [STARTED_BY_ENV]: studioStartedBy(pid) };
+}
 
 /** How often the open project's runner is looked at. */
 export const RUNNER_LOOK_MS = 1000;
@@ -46,9 +57,16 @@ export async function readRunnerSeen(folder: string, alive: (pid: number) => boo
     return (e as NodeJS.ErrnoException).code === 'ENOENT' ? null : undefined;
   }
   try {
-    const j = JSON.parse(text) as { pid?: unknown; started?: unknown };
+    const j = JSON.parse(text) as { pid?: unknown; started?: unknown; started_by?: unknown; studio_pid?: unknown };
     if (!Number.isSafeInteger(j.pid) || (j.pid as number) <= 0 || typeof j.started !== 'string') return undefined;
-    return alive(j.pid as number) ? { pid: j.pid as number, started: j.started } : null;
+    if (!alive(j.pid as number)) return null;
+    // Q-RL-2: who started it (additive; an older runner's record has neither field)
+    return {
+      pid: j.pid as number,
+      started: j.started,
+      ...(typeof j.started_by === 'string' ? { startedBy: j.started_by } : {}),
+      ...(Number.isSafeInteger(j.studio_pid) ? { studioPid: j.studio_pid as number } : {}),
+    };
   } catch {
     return undefined;
   }
@@ -150,6 +168,8 @@ export class RunnerWatch {
     private readonly engine: RunnerEngine,
     private readonly keep: () => KeepRunner,
     lookMs = RUNNER_LOOK_MS,
+    /** This Studio's pid, the one it gives the runners it starts (RCFD_RUNNER_STARTED_BY=studio:<pid>). */
+    private readonly self: number = process.pid,
   ) {
     void this.look();
     if (lookMs > 0) {
@@ -164,7 +184,7 @@ export class RunnerWatch {
       if (this.closed) return;
       const seen = await this.engine.look(this.folder).catch(() => undefined);
       // a look that cannot tell changes nothing: a runner would otherwise seem to go and come back, and be owned
-      if (seen !== undefined) this.ownership = observeRunner(this.ownership, seen);
+      if (seen !== undefined) this.ownership = observeRunner(this.ownership, seen, this.self);
     });
     return this.looking;
   }

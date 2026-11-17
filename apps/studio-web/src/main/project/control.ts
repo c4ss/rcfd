@@ -26,6 +26,7 @@ import type { JsonObject } from '../../shared/actions/params.js';
 import { BUDGETS_WRITE_TOOL, RUN_SLOW_MS, type ProjectView, type RunActionFailure, type RunActionResult, type RunRequest, type TrashWriteTool } from '../../shared/project.js';
 import { RpcError } from '../service/rpc.js';
 import { StartFailure, type ProjectServerLike } from './server.js';
+import { runnerStarterEnv } from './runner-lifetime.js';
 
 export interface ControlDeps {
   /** Starts the folder's run-control server: rcfd-mcp --project <folder>, not read-only. */
@@ -388,7 +389,8 @@ export function ensureRunnerCli(exe: string, folder: string, timeoutMs = 20_000)
       child.stderr?.destroy();
       resolve(r);
     };
-    const child = spawn(exe, ['ensure', '--project', folder], { cwd: folder, stdio: ['ignore', 'ignore', 'pipe'], windowsHide: true });
+    // Q-RL-2: the runner it starts records this Studio as its starter
+    const child = spawn(exe, ['ensure', '--project', folder], { cwd: folder, env: runnerStarterEnv(), stdio: ['ignore', 'ignore', 'pipe'], windowsHide: true });
     child.stderr!.on('data', (d: Buffer) => {
       err = (err + d.toString('utf8')).slice(-4096);
     });

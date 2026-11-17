@@ -147,7 +147,25 @@ pub fn detached_command(exe: &Path, args: &[String]) -> (Command, u32) {
 /// end (a shell capturing `rcfd-runner start ...`) therefore keeps that reader waiting until the new process exits,
 /// whatever `stdout` and `stderr` are (ADR 0146 I1-I3).
 pub fn spawn_detached(exe: &Path, args: &[String], stdout: Stdio, stderr: Stdio) -> io::Result<Child> {
+    spawn_detached_env(exe, args, stdout, stderr, &[])
+}
+
+/// [`spawn_detached`], with environment changes for the new process: `(name, Some(value))` sets a variable,
+/// `(name, None)` removes it (the runner's `started_by`, [`crate::started_by::ENV`]).
+pub fn spawn_detached_env(
+    exe: &Path,
+    args: &[String],
+    stdout: Stdio,
+    stderr: Stdio,
+    env: &[(&str, Option<String>)],
+) -> io::Result<Child> {
     let (mut cmd, _) = detached_command(exe, args);
+    for (k, v) in env {
+        match v {
+            Some(v) => cmd.env(k, v),
+            None => cmd.env_remove(k),
+        };
+    }
     cmd.stdout(stdout).stderr(stderr).spawn()
 }
 

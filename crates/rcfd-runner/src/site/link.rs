@@ -50,6 +50,8 @@ pub fn agent_command(entry: &SiteEntry) -> Command {
         "exec" => {
             let (mut c, _) = crate::sys::console(agent_path(&entry.engine, std::env::consts::EXE_SUFFIX), 0);
             c.args(["site", "--stdio", "--work", &entry.work]);
+            // the site's runners are not this machine's surface's (Q-RL-2, ADR 0801): no started_by goes there
+            c.env_remove(crate::started_by::ENV);
             c
         }
         _ => {

@@ -3,23 +3,38 @@
 // specified". Pure, no Electron and no Node import: the main process (src/main/project/runner-lifetime.ts), the page's
 // close prompt (src/renderer/case/closeGuard.tsx) and the unit tests share it.
 //
-// Ownership. The Studio owns only the project runner that came up while it had the project open, with no runner alive
-// at its look before (it looks at the open, once a second, and around each of its own run-control actions, at
-// .rcfd/runner.json: the pid and start time the runner writes once it holds the project's lock). So a runner alive when
-// the project opened (an earlier Studio's, the CLI's, Claude Code's) is adopted, never owned, and never stopped. A
-// runner that starts while the Studio has the project open is the Studio's, whoever asked for it (the Studio's Run,
-// Claude Code's start_run, the CLI): the engine does not say who started a runner, and the maintainer's recommended
-// rule is that the Studio owns it when it is open for the project and no runner was alive before.
+// Ownership (the maintainer's answer to Q-RL-2, 2026-11-17). The runner records who started it in .rcfd/runner.json:
+// `started_by` "studio", "cli" or "mcp", and `studio_pid` for the Studio (the Studio sets RCFD_RUNNER_STARTED_BY to
+// studio:<its pid> on the rcfd-runner ensure and the rcfd-mcp it starts). The Studio owns a runner whose record says
+// "studio" with this Studio's pid, from any look; a record with another `started_by`, or another Studio's pid, is never
+// owned. Only a record with no `started_by` (an older runner, or one started by hand with rcfd-runner serve) falls back
+// to the watch rule of before: the Studio owns the runner that came up while it had the project open, with no runner
+// alive at its look before (it looks at the open, once a second, and around each of its own run-control actions, at the
+// pid and start time the runner writes once it holds the project's lock). By that rule a runner alive when the project
+// opened is adopted, never owned and never stopped, and one that replaced another between two looks is not owned.
 //
 // Closing (the window, Alt+F4, quit, Close project). For an owned runner, unless the setting "Keep the runner going after
 // the Studio closes" or --keep-runner is on: no run queued, running or paused, it is shut down quietly (rcfd-runner
 // shutdown); runs active, the close asks (stop them, keep them running, or cancel). A close that cannot ask (the test
 // mode's quit, a page that does not answer) keeps a runner with active runs and shuts down an idle one.
 
+/**
+ * The variable that tells the engine who starts a runner (Q-RL-2; crates/rcfd-runner/src/started_by.rs): `rcfd-runner
+ * serve` writes it to runner.json as `started_by` (and `studio_pid`).
+ */
+export const STARTED_BY_ENV = 'RCFD_RUNNER_STARTED_BY';
+
+/** Its value for the Studio whose main process has pid `pid`. */
+export const studioStartedBy = (pid: number): string => `studio:${pid}`;
+
 /** What .rcfd/runner.json says of the runner holding the project: its process and when it started. */
 export interface RunnerSeen {
   readonly pid: number;
   readonly started: string;
+  /** Who started it (`started_by`: "studio", "cli", "mcp"); absent in the record of an older runner. */
+  readonly startedBy?: string;
+  /** The Studio's pid, when `startedBy` is "studio" (`studio_pid`). */
+  readonly studioPid?: number;
 }
 
 export const sameRunner = (a: RunnerSeen | null, b: RunnerSeen | null): boolean =>
@@ -37,13 +52,22 @@ export interface Ownership {
 
 export const NOT_LOOKED: Ownership = { looked: false, last: null, owned: null };
 
+/** Whether the runner's record says this Studio (pid `self`) started it; null when the record does not say who did. */
+export function startedByThisStudio(seen: RunnerSeen, self: number): boolean | null {
+  if (seen.startedBy === undefined) return null;
+  return seen.startedBy === 'studio' && seen.studioPid === self;
+}
+
 /**
- * One look at the project's runner. The first look (at the open) owns nothing: a runner alive then is adopted. After
- * it, a runner seen for the first time is owned when no runner was alive at the look before; one that replaced another
- * between two looks is not (the Studio never stops a runner it cannot tell it started). An owned runner that is gone is
- * not owned any more.
+ * One look at the project's runner by the Studio whose pid is `self`. A runner whose record says who started it is owned
+ * exactly when it says this Studio, at any look. A record that does not say falls back to the looks: the first look (at
+ * the open) owns nothing, so a runner alive then is adopted; after it, a runner seen for the first time is owned when no
+ * runner was alive at the look before, and one that replaced another between two looks is not (the Studio never stops a
+ * runner it cannot tell it started). An owned runner that is gone is not owned any more.
  */
-export function observeRunner(o: Ownership, seen: RunnerSeen | null): Ownership {
+export function observeRunner(o: Ownership, seen: RunnerSeen | null, self: number): Ownership {
+  const mine = seen === null ? null : startedByThisStudio(seen, self);
+  if (mine !== null) return { looked: true, last: seen, owned: mine ? seen : null };
   if (!o.looked) return { looked: true, last: seen, owned: null };
   const owned = o.owned !== null && sameRunner(o.owned, seen) ? o.owned : null;
   if (seen === null) return { looked: true, last: null, owned: null };

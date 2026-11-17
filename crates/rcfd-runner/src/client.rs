@@ -5,6 +5,7 @@
 
 use crate::records::{LaunchSettings, RunSettings, RunState, RunStatus};
 use crate::runner::{dot_dir, sibling_exe, EXIT_ALREADY_RUNNING};
+use crate::started_by::{self, StartedBy};
 use crate::store::{extra, FsStore, RunStore, RunTags};
 use crate::sys;
 use std::path::{Path, PathBuf};
@@ -52,6 +53,9 @@ pub struct Client {
     store: FsStore,
     runner_exe: PathBuf,
     output: RunnerOutput,
+    /// The surface a runner this client starts records as `started_by` (unless this process's
+    /// [`crate::started_by::ENV`] says otherwise).
+    started_by: Option<StartedBy>,
 }
 
 fn err(e: impl std::fmt::Display) -> String {
@@ -95,7 +99,20 @@ impl Client {
             store: FsStore::new(project),
             runner_exe: runner_exe.into(),
             output: RunnerOutput::default(),
+            started_by: None,
         }
+    }
+
+    /// The same client, whose runner starts record `by` as `started_by` in `.rcfd/runner.json` (Q-RL-2, ADR 0801). This
+    /// process's [`crate::started_by::ENV`], when valid, wins: the Studio sets it on the processes it starts.
+    pub fn with_started_by(mut self, by: Option<StartedBy>) -> Self {
+        self.started_by = by;
+        self
+    }
+
+    /// Who a runner started by this client is recorded as having been started by.
+    pub fn started_by(&self) -> Option<StartedBy> {
+        StartedBy::from_env().or(self.started_by)
     }
 
     /// The same client, with the output of the runners it starts going to `output` (default:
@@ -167,7 +184,9 @@ impl Client {
             stderr,
             file: log,
         } = self.start_output(&dot)?;
-        let mut child = sys::spawn_detached(&self.runner_exe, &args, stdout, stderr)
+        // Q-RL-2 (ADR 0801): who starts it, for runner.json; removed when unknown, so nothing stale is inherited
+        let by = [(started_by::ENV, self.started_by().map(|b| b.env_value()))];
+        let mut child = sys::spawn_detached_env(&self.runner_exe, &args, stdout, stderr, &by)
             .map_err(|e| format!("cannot start {}: {e}", self.runner_exe.display()))?;
         let pid = child.id();
         // The child stays here while the lock is awaited: `runner_running` reaps the kept children, which would take its
