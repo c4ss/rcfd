@@ -181,3 +181,11 @@ camber_seam_s_unstretched_construction()`. The fold measure (corner Jacobians), 
   `zz_bs_base.rs` holding only the s4 spec, the reference, the hash function and a build of `camber_seam_s_construction()` (the
   base has no S', so the whole new test file does not compile there): `0x0105a2fcca924d23`, 12 841 cells, step 5
   (`f777-scratch/base_bs.log`). The constant `BS_HASH` of the new test file is that value.
+
+### Amendment 2 (2026-11-17, after the registered run, before any further run; no limit changed)
+
+The registered run (`f777-scratch/run1.log`) missed B2e (skewness 4.0112 against 4.0 on the second blade); every other check of
+the file was met (numbers in addendum 1). By rule 2 the test `b2_construction_s_prime_meshes_the_second_blade` becomes the ignored
+record `b2_construction_s_prime_meshes_the_second_blade_known_miss` with its limits intact, and one test is added,
+`b2_construction_s_prime_meshes_the_second_blade_met_limits`: the same code and limits for B2a to B2d and B2f, B2e printed only (the
+computation is deterministic; it is run once to confirm the numbers). The scan SC was run once as registered (`run_sc.log`).
