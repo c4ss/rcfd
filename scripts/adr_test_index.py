@@ -5,6 +5,7 @@ Usage (from the workspace root):
     python scripts/adr_test_index.py [--out index.json] [--report] [--adr NNNN ...] [--metadata meta.json] [--root DIR]
 --out       write the index as JSON
 --report    print the coverage and the unmapped binaries
+--primary   primary-ADR rule: registered (default, ADR 0684) or p0679
 --adr       print the tests of these ADRs as cargo commands (the per-merge "ADR's own registered tests")
 --metadata  a saved `cargo metadata --no-deps --format-version 1` (default: run cargo)
 
@@ -18,6 +19,9 @@ their libtest names from the `mod` nesting. Evidence per test, each with its kin
 Items map to ADRs through ADR file names `NNNN-fMMM-...` and `ADR NNNN` in the item's roadmap note.
 Each test with an ADR also gets `primary_adr` (ADR 0679 rule P): the first tier of E0 > E1 > E6 > E2 > E3 > E7 > E5 > E4 that has an ADR;
 within the tier an ADR file named `registration` or `-wave` first, then the lowest number.
+`--primary registered` (the default of the command line, ADR 0684 rule R) takes the primary from E0 > E1 > E6 > E2 only: E3, E4, E5
+and E7 stay evidence (`adrs`) but give no primary (`null`), and in E2 the lowest ADR number that cites the file wins, the listing
+ADRs 0653, 0679 and 0684 left out. The library call `build()` keeps rule P unless `primary_rule="registered"` is given.
 """
 import argparse
 import json
@@ -35,7 +39,9 @@ WAVE_IN_STEM = re.compile(r"(?:^|_)(?:w|wave)(\d{2})([a-z]\d?)?(?=_|$)")
 WAVE_ADR = re.compile(r"^(\d{4})-wave(\d{2})([a-z]\d?)?-")
 NOT_EVIDENCE = {"0653", "0679"}  # ADRs that list test binaries: they are no evidence of which ADR registered one
 E7_MAX_ADRS, E7_MIN_LEN = 3, 10
-TIERS = ("E0", "E1", "E6", "E2", "E3", "E7", "E5", "E4")
+TIERS = ("E0", "E1", "E6", "E2", "E3", "E7", "E5", "E4")  # rule P of ADR 0679 (`--primary p0679`)
+REGISTERED_TIERS = ("E0", "E1", "E6", "E2")  # rule R of ADR 0684: the evidence that registers or first describes a file
+LISTING_ADRS = {"0653", "0679", "0684"}  # ADRs that list binaries or sample files: no E2 evidence for the primary (ADR 0684)
 WORD = re.compile(r"\b[A-Za-z_]\w*\b")
 CRATE_IN_PATH = re.compile(r"(rcfd-[a-z0-9-]+)/((?:src|tests|benches|examples)/.+\.rs)$")
 
@@ -307,19 +313,25 @@ def wave_resolve(tag, table):
     return ("ambiguous", cands) if cands else ("none", [])
 
 
-def primary_adr(ev, item_adrs, adr_files):
-    """(ADR, evidence kind) of a test: the first tier of TIERS with an ADR; in the tier an ADR file named registration or -wave
-    first, then the lowest number."""
-    for kind in TIERS:
+def primary_adr(ev, item_adrs, adr_files, rule="p0679"):
+    """(ADR, evidence kind) of a test. Rule p0679: the first tier of TIERS with an ADR; in the tier an ADR file named registration
+    or -wave first, then the lowest number. Rule registered (ADR 0684): only the tiers of REGISTERED_TIERS; in E2 the lowest
+    number outside LISTING_ADRS; none (None, None) when no such tier has an ADR."""
+    registered = rule == "registered"
+    for kind in REGISTERED_TIERS if registered else TIERS:
         cands = set()
         for e in ev:
             if e["kind"] != kind:
                 continue
             if "adr" in e:
-                cands.add(e["adr"])
+                if not (registered and kind == "E2" and e["adr"] in LISTING_ADRS):
+                    cands.add(e["adr"])
             elif kind in ("E1", "E4"):
                 cands |= item_adrs.get(e["item"], set())
         if cands:
+            if registered and kind == "E2":
+                return min(cands), kind
+
             def key(n):
                 reg = any("registration" in f or "-wave" in f for f in adr_files.get(n, []))
                 return (0 if reg else 1, n)
@@ -339,7 +351,7 @@ def rel(root, p):
     return os.path.relpath(p, root).replace("\\", "/")
 
 
-def build(root, meta):
+def build(root, meta, primary_rule="p0679"):
     adrs, roadmap, item_adrs, adr_items = load_docs(root)
     ws_root = meta.get("workspace_root", root)
     pkgs = meta["packages"]
@@ -446,7 +458,7 @@ def build(root, meta):
         t["adrs"] = sorted(found)
         t["items"] = sorted(set(items) | {i for n in found for i in adr_items.get(n, ())})
         t["evidence"] = ev
-        t["primary_adr"], t["primary_evidence"] = primary_adr(ev, item_adrs, adr_files)
+        t["primary_adr"], t["primary_evidence"] = primary_adr(ev, item_adrs, adr_files, primary_rule)
 
     by_adr, by_primary = {}, {}
     for t in tests:
@@ -539,9 +551,11 @@ def main(argv=None):
     ap.add_argument("--out")
     ap.add_argument("--report", action="store_true")
     ap.add_argument("--adr", nargs="*", default=[])
+    ap.add_argument("--primary", choices=("registered", "p0679"), default="registered",
+                    help="rule of the primary ADR: registered (ADR 0684, default) or p0679 (ADR 0679)")
     a = ap.parse_args(argv)
     root = os.path.abspath(a.root)
-    idx = build(root, metadata(root, a.metadata))
+    idx = build(root, metadata(root, a.metadata), a.primary)
     if a.out:
         with open(a.out, "w", encoding="utf-8") as f:
             json.dump(idx, f, indent=1)
