@@ -12,7 +12,9 @@
 // - T3: the constants of overlay_vectors and render.png read from the Rust source; every arrow against an independent
 //   f64 recomputation (the same arrows, each point within 2^-20 of the largest extent) and the stored components bit
 //   for bit (the Rust reader's reference bytes);
-// - the controls' pictograms are on the 14-unit grid.
+// - the controls' pictograms are on the 14-unit grid;
+// - G2 (ADR 0738): the engine's `cut_surface` (`rcfd post derive`) is the Studio's T2 and T3 sets: the surface
+//   triangles, the triangles the cut keeps whole, and the arrows, on the quick-start cavity and the axial-fan passage.
 //
 // The tolerances are the ones registered in ADR 0801, addendum F-809, before the code. Needs `f447_bench` for the boxes
 // and `rcfd-mcp` for the engine's verdict; without them those tests are skipped and say why.
@@ -42,6 +44,8 @@ import {
 import type { SurfaceArrays } from '../../src/renderer/field/surface.js';
 import { findBench, generate, NO_BENCH, refBytes, storeDir } from '../support/f447.js';
 import { findMcp, NO_MCP, repoRoot } from '../support/project.js';
+import { findRcfd, NO_RCFD } from '../support/rcfd.js';
+import { execFileSync } from 'node:child_process';
 
 test.describe.configure({ mode: 'serial' });
 
@@ -334,5 +338,118 @@ test('the derived-picture pictograms are on the 14-unit grid, at 0, 45 and 90 de
       cur = next;
     }
     expect(n, kind).toBeGreaterThan(2);
+  }
+});
+
+// ---- G2 (ADR 0738): the engine's cut and arrows are the Studio's ------------------------------------------------------
+
+interface GlbPrimitive {
+  readonly mode: number;
+  readonly attributes: Record<string, Float32Array | Uint32Array>;
+  readonly extras: Record<string, unknown>;
+}
+
+/** The primitives of a GLB the engine wrote (non-indexed, f32 and u32 accessors only, as rcfd_post::picture writes). */
+function readGlb(bytes: Buffer): { asset: Record<string, unknown>; primitives: GlbPrimitive[] } {
+  const u32 = (o: number) => bytes.readUInt32LE(o);
+  expect(u32(0)).toBe(0x46546c67);
+  const jsonLen = u32(12);
+  const doc = JSON.parse(bytes.subarray(20, 20 + jsonLen).toString('utf8'));
+  const binAt = 20 + jsonLen + 8;
+  const read = (i: number): Float32Array | Uint32Array => {
+    const a = doc.accessors[i];
+    const v = doc.bufferViews[a.bufferView];
+    const comps = a.type === 'VEC3' ? 3 : 1;
+    const off = binAt + (v.byteOffset ?? 0) + (a.byteOffset ?? 0);
+    const b = bytes.buffer.slice(bytes.byteOffset + off, bytes.byteOffset + off + 4 * comps * a.count);
+    return a.componentType === 5126 ? new Float32Array(b) : new Uint32Array(b);
+  };
+  const primitives: GlbPrimitive[] = [];
+  for (const m of doc.meshes ?? []) {
+    for (const p of m.primitives) {
+      const attributes: Record<string, Float32Array | Uint32Array> = {};
+      for (const [k, i] of Object.entries(p.attributes)) attributes[k] = read(i as number);
+      primitives.push({ mode: p.mode, attributes, extras: p.extras ?? {} });
+    }
+  }
+  return { asset: doc.asset, primitives };
+}
+
+const rcfd = findRcfd();
+
+function engineCut(dir: string, flags: string[]): ReturnType<typeof readGlb> {
+  const scratch = mkdtempSync(path.join(os.tmpdir(), 'rcfd-adr0738-g2-'));
+  try {
+    const out = path.join(scratch, 'cut.glb');
+    execFileSync(rcfd!, ['post', 'derive', dir, '--kind', 'cut_surface', '--vectors', ...flags, '--out', out]);
+    return readGlb(readFileSync(out));
+  } finally {
+    rmSync(scratch, { recursive: true, force: true });
+  }
+}
+
+test('G2: the engine’s cut_surface is the Studio’s surface, cut (T2) and arrows (T3), on the quick-start and axial-fan runs', () => {
+  test.skip(rcfd === null, NO_RCFD);
+  test.setTimeout(120_000);
+  for (const project of ['quick-start', 'axial-fan']) {
+    const dir = exampleRun(project).dir;
+    const o = open(dir);
+    const s = o.surface;
+    const layers = meshLayers(s, o.nCells);
+    const comps: (Float32Array | null)[] = (['ux', 'uy', 'uz'] as const).map((f) => (o.fields.some((x) => x.name === f) ? o.field(f) : null));
+    const g = vectorGlyphs(s, layers.twoD ? comps.map((c, k) => (k === layers.thin ? null : c)) : comps, layers, o.nCells);
+    // no cut: every surface triangle, its corners and cell exactly; the arrows within 2^-20 of the largest extent
+    const whole = engineCut(dir, []);
+    expect(whole.asset['extras'] && (whole.asset['extras'] as Record<string, unknown>)['length_unit'], project).toBe('m');
+    const tri = whole.primitives.find((p) => p.mode === 4)!;
+    const nt = s.triangles.length / 3;
+    expect(tri.attributes['POSITION']!.length, `${project}: all triangles`).toBe(9 * nt);
+    // (mismatches are counted, not expected one by one: the passage has some 10^5 triangles)
+    let differ = 0;
+    for (let t = 0; t < nt; t++) {
+      if (tri.attributes['_TRIANGLE']![3 * t] !== t || tri.attributes['_CELL']![3 * t] !== s.cells[t]) differ++;
+      for (let k = 0; k < 3; k++) {
+        const v = s.triangles[3 * t + k]!;
+        for (let a = 0; a < 3; a++) if (!Object.is(tri.attributes['POSITION']![9 * t + 3 * k + a], s.points[3 * v + a])) differ++;
+      }
+    }
+    expect(differ, `${project}: triangles, cells and corners bit for bit`).toBe(0);
+    const lines = whole.primitives.find((p) => p.mode === 1)!;
+    expect(lines.extras['arrows'], `${project}: the arrow count`).toBe(g.cells.length);
+    const pos = lines.attributes['POSITION'] as Float32Array;
+    expect(pos.length, project).toBe(g.segments.length);
+    const ext = [0, 1, 2].map((k) => layers.max[k]! - layers.min[k]!);
+    const tol = 2 ** -20 * Math.max(...ext);
+    let worst = 0;
+    for (let i = 0; i < pos.length; i++) worst = Math.max(worst, Math.abs(pos[i]! - g.segments[i]!));
+    expect(worst, `${project}: arrows within 2^-20 of the largest extent`).toBeLessThanOrEqual(tol);
+    // a cut through the middle of the longest axis: the triangles T2 keeps whole are the engine's, unchanged; the engine
+    // has no triangle T2 drops whole; every corner it draws keeps n . p <= d
+    const axis = ext.indexOf(Math.max(...ext)) as 0 | 1 | 2;
+    const at = Math.fround(0.5 * (layers.min[axis]! + layers.max[axis]!));
+    for (const keep of ['below', 'above'] as const) {
+      const cut = { axis, at, keep };
+      const c = engineCut(dir, ['--axis', 'xyz'[axis]!, '--at', String(at), '--keep', keep]).primitives.find((p) => p.mode === 4)!;
+      const src = c.attributes['_TRIANGLE']!;
+      const cp = c.attributes['POSITION']!;
+      const corner = (t: number, k: number) => [0, 1, 2].map((a) => s.points[3 * s.triangles[3 * t + k]! + a]!);
+      const kept = new Set<number>();
+      for (let t = 0; t < nt; t++) if ([0, 1, 2].every((k) => keeps(cut, corner(t, k)))) kept.add(t);
+      const some = new Set<number>();
+      for (let t = 0; t < nt; t++) if ([0, 1, 2].some((k) => keeps(cut, corner(t, k)))) some.add(t);
+      const whole3 = new Set<number>();
+      const bad = { dropped: 0, outside: 0, moved: 0 };
+      for (let i = 0; i < src.length / 3; i++) {
+        const t = src[3 * i]!;
+        if (!some.has(t)) bad.dropped++;
+        for (let k = 0; k < 3; k++) if (!keeps(cut, [cp[9 * i + 3 * k]!, cp[9 * i + 3 * k + 1]!, cp[9 * i + 3 * k + 2]!])) bad.outside++;
+        if (kept.has(t)) {
+          whole3.add(t);
+          for (let k = 0; k < 3; k++) for (let a = 0; a < 3; a++) if (cp[9 * i + 3 * k + a] !== corner(t, k)[a]) bad.moved++;
+        }
+      }
+      expect(bad, `${project} ${keep}: no triangle T2 drops, no corner outside, the whole ones unchanged`).toEqual({ dropped: 0, outside: 0, moved: 0 });
+      expect([...whole3].sort((x, y) => x - y), `${project} ${keep}: the triangles kept whole`).toEqual([...kept]);
+    }
   }
 });

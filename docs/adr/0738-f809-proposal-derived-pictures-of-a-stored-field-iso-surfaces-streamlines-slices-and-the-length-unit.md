@@ -251,5 +251,10 @@ Deviations and decisions while building:
 - `derive_picture` is class `read` but is not added to the first allow-list of `project_w48f` F2: that list is the
   maintainer's and was not asked about.
 - Not built: P3's first bullet (`render_field` with `axis`, `slice`, `vectors`, `range`; R1) and `rcfd post render`;
-  the Studio half of P4 (the field viewport drawing `cut_surface`, the iso-surface and streamline controls, G2 run from
-  the Studio's specs).
+  the Studio half of P4 (the field viewport drawing `cut_surface`, the iso-surface and streamline controls).
+- G2 from the Studio's side: `apps/studio-web/tests/unit/field-derived.spec.ts` runs `rcfd post derive --kind
+  cut_surface --vectors` on the quick-start cavity and the axial-fan passage and finds the Studio's surface triangles,
+  cells and corners bit for bit, the arrows of `vectorGlyphs` within 2^-20 of the largest extent (T3's tolerance) with
+  the same count, and, for a cut through the middle of the longest axis kept below and above, the triangles T2 keeps
+  whole unchanged, no triangle T2 drops, and no drawn corner outside `n . p <= d`. So the Studio can switch to the
+  engine's geometry with its T2 and T3 tests as they are.
