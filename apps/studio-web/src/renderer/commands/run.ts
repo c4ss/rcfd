@@ -121,6 +121,7 @@ function studioReason(id: string, env: PaletteEnv): string | null {
     case 'field.save_png':
     case 'field.range':
     case 'field.face_on':
+    case 'field.reset_view':
     case 'plots.monitor_log': {
       if (!view(env)) return NO_PROJECT;
       const h = commandHandler(id);
@@ -139,6 +140,7 @@ const F837_WHERE: Readonly<Record<string, string>> = {
   'field.save_png': 'Open a run in the workspace first.',
   'field.range': 'Open a run in the workspace first.',
   'field.face_on': 'Open a run in the workspace first.',
+  'field.reset_view': 'Open a run in the workspace first.',
   'plots.monitor_log': 'Open a run in the workspace first.',
 };
 
@@ -431,6 +433,7 @@ async function studio(e: PaletteEntry, values: Values, env: PaletteEnv): Promise
     case 'runs.budgets':
     case 'field.range':
     case 'field.face_on':
+    case 'field.reset_view':
     case 'plots.monitor_log': {
       // F-837: the palette closes first, so the focus is back on the surface
       const h = commandHandler(e.id);

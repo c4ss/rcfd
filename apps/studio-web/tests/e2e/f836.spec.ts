@@ -95,8 +95,36 @@ test('a generator mesh is drawn before any run, from the store the engine wrote;
   await expect(patches()).toContainText('frontAndBack');
   // 32 x 32 hexahedra: every boundary quadrilateral is two triangles (lid 32, walls 96, front and back 2 x 1024)
   expect(await triangles()).toBe(2 * (32 + 96 + 2048));
+  // ADR 0801 Addendum 22: the 2D cavity's mesh is drawn orthographic, straight along its thin axis (z), framed
+  const canvas = preview().locator('.mp-view canvas');
+  await expect(canvas).toHaveAttribute('data-camera', 'orthographic');
+  await expect(canvas).toHaveAttribute('data-camera-forward', '0.00000 0.00000 -1.00000');
+  await expect(canvas).toHaveAttribute('data-camera-moved', 'false');
   await page.mouse.move(1439, 899);
   await shot('case-editor-preview');
+  // it pans with the right button and zooms with the wheel, and never turns
+  const box = (await canvas.boundingBox())!;
+  const cx = Math.round(box.x + box.width / 2);
+  const cy = Math.round(box.y + box.height / 2);
+  const eye0 = (await canvas.getAttribute('data-camera-eye'))!;
+  const zoom0 = Number(await canvas.getAttribute('data-camera-zoom'));
+  await page.mouse.move(cx, cy);
+  await page.mouse.down({ button: 'right' });
+  await page.mouse.move(cx + 40, cy + 20, { steps: 4 });
+  await page.mouse.up({ button: 'right' });
+  await expect(canvas).toHaveAttribute('data-camera-moved', 'true');
+  await expect(canvas).toHaveAttribute('data-camera-forward', '0.00000 0.00000 -1.00000');
+  expect(await canvas.getAttribute('data-camera-eye')).not.toBe(eye0);
+  await page.mouse.wheel(0, -200);
+  await expect.poll(async () => Number(await canvas.getAttribute('data-camera-zoom'))).toBeLessThan(zoom0);
+  await page.keyboard.down('Alt');
+  await page.mouse.down();
+  await page.mouse.move(cx + 90, cy + 60, { steps: 4 });
+  await page.mouse.up();
+  await page.keyboard.up('Alt');
+  await expect(canvas).toHaveAttribute('data-camera-forward', '0.00000 0.00000 -1.00000');
+  await page.mouse.move(1439, 899);
+  await shot('case-editor-preview-panned');
   const c = await countWords(page, { root: '.st-page', exclude: ['.hi-controls', '.wk'] });
   const budget = WORD_BUDGETS['case-editor'].budget;
   console.log(`F-836: case editor with the preview drawn, ${c.count} chrome words (budget ${budget}): ${c.words.map((w) => w.word).join(' ')}`);

@@ -14,11 +14,14 @@
 // place of the surface (coloured by the source triangle's value; the pick names that source triangle), its arrows, an
 // iso-surface in place of the surface (coloured by its level through the same table), and streamlines in ink over
 // everything. The mesh grid keeps the mask. Nothing here moves the camera.
-import { forwardRef, useEffect, useImperativeHandle, useMemo, useRef, type Ref } from 'react';
+//
+// ADR 0801 Addendum 22: the camera is ./camera.ts's controller (Unity's scene view: right button to look and fly, middle
+// to pan, Alt and left to orbit about the point under the cursor, the wheel toward the cursor), in place of three's
+// OrbitControls; a 2D case (`thin`) is drawn by an orthographic camera straight along its thin axis, pan and zoom only.
+import { forwardRef, useEffect, useImperativeHandle, useMemo, useRef, useState, type Ref } from 'react';
 import { Canvas, useThree } from '@react-three/fiber';
 import * as THREE from 'three/webgpu';
 import { attribute, dot, float, floor, positionWorld, texture, uniform, varying, vec2, vec3 } from 'three/tsl';
-import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import type { SurfaceData } from '../../shared/data.js';
 import { palette } from '../design/tokens.js';
 import { onThemeChange, themeHex } from '../theme/theme.js';
@@ -27,6 +30,7 @@ import { clipPlane, type Cut } from './derived.js';
 import type { EngineCut, EngineIso } from './glb.js';
 import { bounds, cornerPositions, cornerScalars, cornerScalarsOf, gridEdges } from './surface.js';
 import { drawOnDemand } from '../ui/onDemand.js';
+import { FLY_KEYS, ORBIT_KEY_RAD, ViewCamera, ZOOM_KEY, cameraAttributes, flyMove, type Axis, type Vec3 } from './camera.js';
 import type { PreparedSurface } from './prepare.js';
 
 export type Backend = { readonly kind: 'webgpu' } | { readonly kind: 'webgl2'; readonly reason: string };
@@ -52,19 +56,21 @@ export interface BenchResult {
 }
 
 export interface FieldCanvasApi {
-  /** Back to the fitted view. */
+  /** Reset view (Addendum 22): the starting orientation, the whole domain framed, the pivot at its centre. */
   reset(): void;
+  /** F: the whole domain framed, the orientation kept. */
+  frame(): void;
   /** The cell under a point of the page (client coordinates), or null off the surface. */
   pickAt(clientX: number, clientY: number): Pick | null;
   /** The cell at the centre of the view (the keyboard's readout). */
   pickCentre(): Pick | null;
-  /** Orbit, zoom and reset from the keyboard; true when the key was used. */
+  /** Orbit (pan in 2D), zoom, frame, face on and reset from the keyboard; true when the key was used. */
   key(key: string): boolean;
   /**
-   * F-837: looks straight along `axis` (the thin axis of a 2D case) from its + side at the whole surface, the other two
-   * axes across the view (a move of the view: Reset goes back to the fitted one).
+   * Face on (Addendum 22): looks along the nearest principal axis of the view direction (a 2D case: its thin axis),
+   * keeping the point at the centre of the view and the zoom; only the orientation changes.
    */
-  faceOn(axis: 0 | 1 | 2): void;
+  faceOn(): void;
   /**
    * F-837: the axis the camera looks straight along (within 0.1 degree), and the length of one CSS pixel on the surface's
    * face toward the camera there (in the stored mesh's length unit); null when the view looks along no axis.
@@ -116,6 +122,11 @@ export interface FieldCanvasProps {
   readonly streamlines?: Float32Array<ArrayBuffer> | null;
   /** ADR 0738: the engine's pictures above are drawn, finished on the GPU, and one animation frame has passed. */
   readonly onPictureDrawn?: (picture: object | null) => void;
+  /**
+   * Addendum 22: the thin axis of a 2D case (one cell thick), or null for 3D. A 2D case is drawn orthographic, straight
+   * along that axis, and only pans and zooms.
+   */
+  readonly thin?: Axis | null;
 }
 
 /** A colour of tokens.ts written to the canvas unchanged (the output does no colour space conversion). */
@@ -212,51 +223,34 @@ function fieldMaterial(lut: THREE.DataTexture): Material {
   return { material, lo: lo as unknown as { value: number }, inv: inv as unknown as { value: number } };
 }
 
-/** The camera that shows the whole surface: a three-quarter view (z up), or straight on for a flat one. */
-function fit(camera: THREE.PerspectiveCamera, controls: OrbitControls | null, s: SurfaceData, aspect: number, box?: { min: readonly number[]; max: readonly number[] }): void {
-  const b = box ?? bounds(s.points);
-  const c = new THREE.Vector3((b.min[0] + b.max[0]) / 2, (b.min[1] + b.max[1]) / 2, (b.min[2] + b.max[2]) / 2);
-  const ext = [b.max[0] - b.min[0], b.max[1] - b.min[1], b.max[2] - b.min[2]];
-  const big = Math.max(...ext) || 1;
-  const r = 0.5 * Math.hypot(ext[0]!, ext[1]!, ext[2]!) || 1;
-  const flat = ext.findIndex((e) => e < 1e-6 * big);
-  const dir = new THREE.Vector3();
-  camera.up.set(0, 0, 1);
-  if (flat === 2) {
-    dir.set(0, 0, 1);
-    camera.up.set(0, 1, 0);
-  } else if (flat === 1) dir.set(0, -1, 0);
-  else if (flat === 0) dir.set(1, 0, 0);
-  else dir.set(1, -1.6, 1.1).normalize();
-  const half = THREE.MathUtils.degToRad(camera.fov / 2);
-  const fov = Math.min(half, Math.atan(Math.tan(half) * aspect));
-  const dist = (1.08 * r) / Math.sin(fov);
-  camera.position.copy(c).addScaledVector(dir, dist);
-  camera.near = dist / 100;
-  camera.far = dist * 100;
-  camera.lookAt(c);
-  camera.updateProjectionMatrix();
-  if (controls) {
-    controls.target.copy(c);
-    controls.update();
-  }
-}
-
 interface SceneProps extends Omit<FieldCanvasProps, 'forceWebGL' | 'onBackend'> {
   readonly apiRef: Ref<FieldCanvasApi>;
 }
 
 let gridIds = 0;
 
-function Scene({ surface, values, valuesPer = 'cell', range, grid, onMoved, onView, onDrawn, onGridState, cut = null, arrows = null, apiRef, prepared, scalars, engineCut = null, engineArrows = null, iso = null, streamlines = null, onPictureDrawn }: SceneProps) {
+function Scene({ surface, values, valuesPer = 'cell', range, grid, onMoved, onView, onDrawn, onGridState, cut = null, arrows = null, apiRef, prepared, scalars, engineCut = null, engineArrows = null, iso = null, streamlines = null, onPictureDrawn, thin = null }: SceneProps) {
   // F-832: the arrays made off the main thread, when they belong to this surface
   const prep = prepared && prepared.surface === surface ? prepared : null;
   const box = prep ? { min: prep.min, max: prep.max } : undefined;
   const boxRef = useRef(box);
   boxRef.current = box;
-  const { gl, camera, scene, invalidate, size } = useThree();
+  const { gl, camera, scene, invalidate, size, set } = useThree();
   const renderer = gl as unknown as THREE.WebGPURenderer;
-  const cam = camera as THREE.PerspectiveCamera;
+  // Addendum 22: the canvas's own perspective camera (3D), and an orthographic one for a 2D case; both follow the
+  // controller of ./camera.ts (`view`), which owns the eye, orientation, pivot and projection
+  const [persp] = useState(() => camera as THREE.PerspectiveCamera);
+  const ortho = useMemo(() => {
+    const o = new THREE.OrthographicCamera(-1, 1, 1, -1, 0.01, 100);
+    // react-three-fiber leaves a manual camera's projection alone on a resize (this file sets it)
+    (o as unknown as { manual: boolean }).manual = true;
+    return o;
+  }, []);
+  const cam: THREE.PerspectiveCamera | THREE.OrthographicCamera = thin !== null ? ortho : persp;
+  const view = useMemo(() => new ViewCamera(persp.fov), [persp]);
+  useEffect(() => {
+    set({ camera: cam });
+  }, [cam, set]);
   const lut = useMemo(lutTexture, []);
   const clip = useMemo(clipUniforms, []);
   // ADR 0738: the surface is not masked: a cut surface is the engine's (engineCut), drawn in its place
@@ -319,7 +313,6 @@ function Scene({ surface, values, valuesPer = 'cell', range, grid, onMoved, onVi
       }),
     [renderer, invalidate],
   );
-  const controls = useRef<OrbitControls | null>(null);
   const report = useRef(onMoved);
   report.current = onMoved;
   const viewCb = useRef(onView);
@@ -331,6 +324,36 @@ function Scene({ surface, values, valuesPer = 'cell', range, grid, onMoved, onVi
     userMoved.current = m;
     report.current(m);
   });
+  const camRef = useRef(cam);
+  camRef.current = cam;
+  /** The P8 bench drives the camera itself: no input meanwhile. */
+  const benching = useRef(false);
+  /** The controller's state onto the three.js camera, its data attributes on the canvas, and a new frame. */
+  const apply = useRef(() => {});
+  apply.current = () => {
+    const c = camRef.current;
+    c.position.set(...view.eye);
+    c.quaternion.set(...view.rot);
+    const { near, far } = view.clip;
+    c.near = near;
+    c.far = far;
+    if (c instanceof THREE.OrthographicCamera) {
+      const h = view.height / 2;
+      c.left = -h * view.aspect;
+      c.right = h * view.aspect;
+      c.top = h;
+      c.bottom = -h;
+      c.zoom = 1;
+    } else {
+      c.fov = view.fov;
+      c.aspect = view.aspect;
+    }
+    c.updateProjectionMatrix();
+    c.updateMatrixWorld();
+    Object.assign(renderer.domElement.dataset, cameraAttributes(view, userMoved.current));
+    invalidate();
+    viewed();
+  };
   const aspect = size.width / Math.max(1, size.height);
   const aspectRef = useRef(aspect);
   aspectRef.current = aspect;
@@ -380,21 +403,170 @@ function Scene({ surface, values, valuesPer = 'cell', range, grid, onMoved, onVi
     invalidate();
   }, [arrows, arrowLines, invalidate]);
 
+  // Addendum 22: the point of the drawn picture under a point of the view (normalised device coordinates), or null: the
+  // engine's cut surface or iso-surface where one stands in for the surface, else the surface
+  const hitAt = useRef<(x: number, y: number) => Vec3 | null>(() => null);
+  hitAt.current = (x, y) => {
+    const rc = new THREE.Raycaster();
+    rc.setFromCamera(new THREE.Vector2(x, y), camRef.current);
+    const shown = [cutMesh, isoMesh, mesh].filter((o) => o.visible);
+    const hit = rc.intersectObjects(shown, false)[0];
+    return hit ? [hit.point.x, hit.point.y, hit.point.z] : null;
+  };
+
+  // Addendum 22: the pointer and the fly keys (Unity's scene view). Hold the right button: look, and W A S D, Q and E fly
+  // (Shift faster); the middle button pans; Alt and the left button orbit about the point under the cursor (else the
+  // pivot); the wheel dollies toward the point under the cursor; a double-click puts the pivot there. A 2D case pans with
+  // the middle or right button and zooms with the wheel. The plain left button is the readout's (FieldViewport).
   useEffect(() => {
-    const c = new OrbitControls(cam, renderer.domElement);
-    controls.current = c;
-    c.enableDamping = false;
-    c.screenSpacePanning = true;
-    c.addEventListener('start', () => moved.current(true));
-    c.addEventListener('change', () => {
-      invalidate();
-      viewed();
-    });
-    return () => {
-      c.dispose();
-      controls.current = null;
+    const el = renderer.domElement;
+    let drag: { mode: 'look' | 'pan' | 'orbit'; id: number; x: number; y: number } | null = null;
+    const held = new Set<string>();
+    let fast = false;
+    let raf = 0;
+    let last = 0;
+    const ndc = (e: { clientX: number; clientY: number }): [number, number] => {
+      const r = el.getBoundingClientRect();
+      return [((e.clientX - r.left) / Math.max(1, r.width)) * 2 - 1, -(((e.clientY - r.top) / Math.max(1, r.height)) * 2 - 1)];
     };
-  }, [cam, renderer, invalidate]);
+    const changed = () => {
+      if (!userMoved.current) moved.current(true);
+      apply.current();
+    };
+    const loop = (t: number) => {
+      raf = 0;
+      if (!drag || drag.mode !== 'look' || held.size === 0) return;
+      const dt = Math.min(0.1, Math.max(0, (t - last) / 1000));
+      last = t;
+      if (view.fly(flyMove(held), dt, fast)) changed();
+      raf = requestAnimationFrame(loop);
+    };
+    const onKeyDown = (e: KeyboardEvent) => {
+      fast = e.shiftKey;
+      if (!FLY_KEYS.has(e.code)) return;
+      e.preventDefault();
+      e.stopPropagation();
+      if (!held.has(e.code)) {
+        held.add(e.code);
+        if (!raf) {
+          last = performance.now();
+          raf = requestAnimationFrame(loop);
+        }
+      }
+    };
+    const onKeyUp = (e: KeyboardEvent) => {
+      fast = e.shiftKey;
+      if (!FLY_KEYS.has(e.code)) return;
+      e.preventDefault();
+      e.stopPropagation();
+      held.delete(e.code);
+    };
+    // Q-A22-2 (the maintainer, 2026-11-17): Alt used for an orbit drag does not also move the focus to the window's menu
+    // bar when it is let go. Electron toggles the menu bar on an Alt key-up the page did not handle, so the page handles
+    // (prevents) that one key-up; a plain Alt press and release still reaches the menu.
+    let altDragged = false;
+    const onAlt = (e: KeyboardEvent) => {
+      if (e.key !== 'Alt') return;
+      if (e.type === 'keydown') {
+        if (!e.repeat) altDragged = false;
+      } else if (altDragged) {
+        altDragged = false;
+        e.preventDefault();
+        el.dataset['cameraAltSwallowed'] = String(Number(el.dataset['cameraAltSwallowed'] ?? '0') + 1);
+      }
+    };
+    const endFly = () => {
+      held.clear();
+      cancelAnimationFrame(raf);
+      raf = 0;
+      window.removeEventListener('keydown', onKeyDown, true);
+      window.removeEventListener('keyup', onKeyUp, true);
+    };
+    const onDown = (e: PointerEvent) => {
+      if (benching.current || drag) return;
+      let mode: 'look' | 'pan' | 'orbit' | null = null;
+      if (view.ortho) mode = e.button === 1 || e.button === 2 ? 'pan' : null;
+      else if (e.button === 2) mode = 'look';
+      else if (e.button === 1) mode = 'pan';
+      else if (e.button === 0 && e.altKey) mode = 'orbit';
+      if (!mode) return;
+      e.preventDefault();
+      if (mode === 'orbit') {
+        altDragged = true;
+        const p = hitAt.current(...ndc(e));
+        if (p) view.setPivot(p);
+      }
+      drag = { mode, id: e.pointerId, x: e.clientX, y: e.clientY };
+      el.setPointerCapture(e.pointerId);
+      el.dataset['cameraDrag'] = mode;
+      if (mode === 'look') {
+        window.addEventListener('keydown', onKeyDown, true);
+        window.addEventListener('keyup', onKeyUp, true);
+      }
+    };
+    const onMove = (e: PointerEvent) => {
+      if (!drag || e.pointerId !== drag.id) return;
+      const dx = e.clientX - drag.x;
+      const dy = e.clientY - drag.y;
+      drag.x = e.clientX;
+      drag.y = e.clientY;
+      if (dx === 0 && dy === 0) return;
+      if (drag.mode === 'look') view.look(dx, dy);
+      else if (drag.mode === 'orbit') view.orbit(dx, dy);
+      else view.pan(dx, dy, el.clientHeight);
+      changed();
+    };
+    const onUp = (e: PointerEvent) => {
+      if (!drag || e.pointerId !== drag.id) return;
+      if (el.hasPointerCapture(e.pointerId)) el.releasePointerCapture(e.pointerId);
+      if (drag.mode === 'look') endFly();
+      drag = null;
+      delete el.dataset['cameraDrag'];
+    };
+    const onWheel = (e: WheelEvent) => {
+      if (benching.current) return;
+      e.preventDefault();
+      const px = e.deltaY * (e.deltaMode === 1 ? 16 : e.deltaMode === 2 ? 100 : 1);
+      const [x, y] = ndc(e);
+      view.wheel(px, x, y, hitAt.current(x, y));
+      changed();
+    };
+    const onDouble = (e: MouseEvent) => {
+      if (benching.current || e.button !== 0) return;
+      const p = hitAt.current(...ndc(e));
+      if (!p) return;
+      view.setPivot(p);
+      apply.current();
+    };
+    const noMenu = (e: Event) => e.preventDefault();
+    // the middle button's autoscroll is the browser's default of its mousedown
+    const noAutoscroll = (e: MouseEvent) => {
+      if (e.button === 1) e.preventDefault();
+    };
+    el.addEventListener('pointerdown', onDown);
+    el.addEventListener('pointermove', onMove);
+    el.addEventListener('pointerup', onUp);
+    el.addEventListener('pointercancel', onUp);
+    el.addEventListener('wheel', onWheel, { passive: false });
+    el.addEventListener('dblclick', onDouble);
+    el.addEventListener('contextmenu', noMenu);
+    el.addEventListener('mousedown', noAutoscroll);
+    window.addEventListener('keydown', onAlt, true);
+    window.addEventListener('keyup', onAlt, true);
+    return () => {
+      endFly();
+      window.removeEventListener('keydown', onAlt, true);
+      window.removeEventListener('keyup', onAlt, true);
+      el.removeEventListener('pointerdown', onDown);
+      el.removeEventListener('pointermove', onMove);
+      el.removeEventListener('pointerup', onUp);
+      el.removeEventListener('pointercancel', onUp);
+      el.removeEventListener('wheel', onWheel);
+      el.removeEventListener('dblclick', onDouble);
+      el.removeEventListener('contextmenu', noMenu);
+      el.removeEventListener('mousedown', noAutoscroll);
+    };
+  }, [renderer, view]);
 
   // the surface: new geometry, fitted view
   useEffect(() => {
@@ -423,11 +595,13 @@ function Scene({ surface, values, valuesPer = 'cell', range, grid, onMoved, onVi
     lines.geometry = new THREE.BufferGeometry();
     mesh.visible = false; // until its values are in
     surfaceReady.current = false;
-    fit(cam, controls.current, surface, aspectRef.current, boxRef.current);
+    view.aspect = aspectRef.current;
+    view.setDomain(boxRef.current ?? bounds(surface.points), thin);
     moved.current(false);
-    viewed();
-    // `prep` is made from `surface` (a new surface comes with its own); it is read when the surface is set
-  }, [surface, mesh, lines, cam, invalidate]);
+    apply.current();
+    // `prep` is made from `surface` (a new surface comes with its own); it is read when the surface is set; a 2D
+    // case's thin axis comes with its surface
+  }, [surface, thin, mesh, lines, invalidate]);
 
   // the values and the range, then the first picture of them
   useEffect(() => {
@@ -571,12 +745,11 @@ function Scene({ surface, values, valuesPer = 'cell', range, grid, onMoved, onVi
   }, [grid, surface, lines, invalidate]);
 
   useEffect(() => {
-    cam.aspect = aspect;
-    cam.updateProjectionMatrix();
-    if (surface && !userMoved.current) fit(cam, controls.current, surface, aspect, boxRef.current);
-    invalidate();
-    viewed();
-  }, [aspect, cam, invalidate, surface]);
+    view.aspect = aspect;
+    // a resize frames an unmoved view again
+    if (surface && !userMoved.current) view.reset();
+    apply.current();
+  }, [aspect, cam, view, surface]);
 
   useImperativeHandle(
     apiRef,
@@ -606,79 +779,32 @@ function Scene({ surface, values, valuesPer = 'cell', range, grid, onMoved, onVi
         // F-819b: surface values are the owner cell's value at the triangle's index
         return { triangle, cell, value: (valuesPer === 'triangle' ? values[triangle] : values[cell])!, point: [hit.point.x, hit.point.y, hit.point.z] };
       };
-      const orbit = (dAzimuth: number, dPolar: number, scale: number) => {
-        const c = controls.current;
-        const target = c ? c.target : new THREE.Vector3();
-        const offset = cam.position.clone().sub(target);
-        const q = new THREE.Quaternion().setFromUnitVectors(cam.up, new THREE.Vector3(0, 1, 0));
-        offset.applyQuaternion(q);
-        const s = new THREE.Spherical().setFromVector3(offset);
-        s.theta += dAzimuth;
-        s.phi = Math.min(Math.max(s.phi + dPolar, 0.01), Math.PI - 0.01);
-        s.radius *= scale;
-        offset.setFromSpherical(s).applyQuaternion(q.invert());
-        cam.position.copy(target).add(offset);
-        cam.lookAt(target);
-        c?.update();
-        moved.current(true);
-        invalidate();
-        viewed();
+      const changed = () => {
+        if (!userMoved.current) moved.current(true);
+        apply.current();
       };
       const reset = () => {
         if (!surface) return;
-        fit(cam, controls.current, surface, aspectRef.current, boxRef.current);
+        view.reset();
         moved.current(false);
-        invalidate();
-        viewed();
+        apply.current();
       };
-      const boxNow = () => boxRef.current ?? (surface ? bounds(surface.points) : null);
       return {
         reset,
-        faceOn(axis) {
-          const b = boxNow();
-          if (!b) return;
-          const c = new THREE.Vector3((b.min[0]! + b.max[0]!) / 2, (b.min[1]! + b.max[1]!) / 2, (b.min[2]! + b.max[2]!) / 2);
-          const across = [0, 1, 2].filter((k) => k !== axis);
-          const w = b.max[across[0]!]! - b.min[across[0]!]!;
-          const h = b.max[across[1]!]! - b.min[across[1]!]!;
-          const half = THREE.MathUtils.degToRad(cam.fov / 2);
-          // the whole face in the view: its height in the vertical angle, its width in the horizontal one
-          const dist = 1.08 * Math.max(h / 2 / Math.tan(half), w / 2 / (Math.tan(half) * aspectRef.current)) + (b.max[axis]! - b.min[axis]!) / 2;
-          const dir = new THREE.Vector3();
-          dir.setComponent(axis, 1);
-          const up = new THREE.Vector3();
-          up.setComponent(across[1]!, 1);
-          cam.up.copy(up);
-          cam.position.copy(c).addScaledVector(dir, dist || 1);
-          cam.near = (dist || 1) / 100;
-          cam.far = (dist || 1) * 100;
-          cam.lookAt(c);
-          cam.updateProjectionMatrix();
-          const ctl = controls.current;
-          if (ctl) {
-            ctl.target.copy(c);
-            ctl.update();
-          }
-          moved.current(true);
-          invalidate();
-          viewed();
+        frame() {
+          if (!surface) return;
+          view.frame();
+          changed();
+        },
+        faceOn() {
+          if (!surface) return;
+          view.faceOn();
+          changed();
         },
         faceScale() {
-          const b = boxNow();
           const el = renderer.domElement;
-          if (!b || el.clientHeight === 0) return null;
-          const target = controls.current ? controls.current.target : new THREE.Vector3();
-          const look = target.clone().sub(cam.position).normalize();
-          for (const axis of [0, 1, 2] as const) {
-            const along = Math.abs(look.getComponent(axis));
-            if (along < Math.cos(THREE.MathUtils.degToRad(0.1))) continue;
-            // the face toward the camera: the box's side on the camera's side of the axis
-            const face = look.getComponent(axis) < 0 ? b.max[axis]! : b.min[axis]!;
-            const d = Math.abs(cam.position.getComponent(axis) - face);
-            const height = 2 * d * Math.tan(THREE.MathUtils.degToRad(cam.fov / 2));
-            return { axis, perPixel: height / el.clientHeight, widthPx: el.clientWidth };
-          }
-          return null;
+          const f = view.faceScale(el.clientHeight);
+          return f ? { ...f, widthPx: el.clientWidth } : null;
         },
         pickAt(clientX, clientY) {
           const r = renderer.domElement.getBoundingClientRect();
@@ -687,26 +813,42 @@ function Scene({ surface, values, valuesPer = 'cell', range, grid, onMoved, onVi
         },
         pickCentre: () => pickNdc(0, 0),
         key(key) {
-          const step = THREE.MathUtils.degToRad(5);
-          switch (key) {
+          if (!surface) return false;
+          // a 2D case pans with the arrows (a twentieth of the view's height a key); 3D orbits ORBIT_KEY_RAD
+          const el = renderer.domElement;
+          const step = el.clientHeight / 20;
+          const arrow = (dx: number, dy: number) => {
+            if (view.ortho) view.pan(dx * step, dy * step, el.clientHeight);
+            else view.orbit(-dx, dy, ORBIT_KEY_RAD);
+            changed();
+            return true;
+          };
+          // a letter as the shortcut table spells it (upper case)
+          switch (key.length === 1 ? key.toUpperCase() : key) {
             case 'ArrowLeft':
-              orbit(-step, 0, 1);
-              return true;
+              return arrow(1, 0);
             case 'ArrowRight':
-              orbit(step, 0, 1);
-              return true;
+              return arrow(-1, 0);
             case 'ArrowUp':
-              orbit(0, -step, 1);
-              return true;
+              return arrow(0, 1);
             case 'ArrowDown':
-              orbit(0, step, 1);
-              return true;
+              return arrow(0, -1);
             case '+':
             case '=':
-              orbit(0, 0, 1 / 1.1);
+              view.zoom(1 / ZOOM_KEY);
+              changed();
               return true;
             case '-':
-              orbit(0, 0, 1.1);
+              view.zoom(ZOOM_KEY);
+              changed();
+              return true;
+            case 'F':
+              view.frame();
+              changed();
+              return true;
+            case 'O':
+              view.faceOn();
+              changed();
               return true;
             case 'Home':
             case '0':
@@ -717,10 +859,11 @@ function Scene({ surface, values, valuesPer = 'cell', range, grid, onMoved, onVi
           }
         },
         async bench({ warm, frames, uncapped }) {
-          const c = controls.current;
-          if (c) c.enabled = false;
-          const target = c ? c.target.clone() : new THREE.Vector3();
+          // the bench drives the perspective camera itself (z up), with the input off; then the view is reset
+          benching.current = true;
+          const target = new THREE.Vector3(...view.pivot);
           const start = cam.position.clone().sub(target);
+          cam.up.set(0, 0, 1);
           const radius = Math.hypot(start.x, start.y);
           const height = start.z;
           const empty: number[] = [];
@@ -748,13 +891,13 @@ function Scene({ surface, values, valuesPer = 'cell', range, grid, onMoved, onVi
             prev = stamp;
           }
           await finished(renderer);
-          if (c) c.enabled = true;
+          benching.current = false;
           reset();
           return { triangles: surface ? surface.cells.length : 0, uncapped, frameMs: out, workMs: work, emptyFrameMs: empty };
         },
       };
     },
-    [cam, mesh, cutMesh, surface, values, valuesPer, renderer, scene, invalidate],
+    [cam, view, mesh, cutMesh, surface, values, valuesPer, renderer, scene],
   );
 
   return null;

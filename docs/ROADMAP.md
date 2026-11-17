@@ -16544,6 +16544,15 @@ Generated from `docs/studio-guardrails.md`, `PRODUCT.md` and `DESIGN.md` ([ADR 0
     maintainer answered F808-D1 with (a): the 256-entry table, exact at its 256 points and at and beyond both ends,
     within 3/255 per channel elsewhere, is written into the acceptance; with P7 and P8 met and the screenshots in
     test-results-visual/f808 for the view-and-report (the precedent of F-810 and F-812), the acceptance is met.
+    Changed 2026-11-17 (ADR 0801 Addendum 22, the maintainer): the camera is Unity's scene view in place of
+    OrbitControls (src/renderer/field/camera.ts, pure maths with unit tests): hold the right button to look and fly with
+    W A S D, Q and E (Shift faster, speed from the domain size); the middle button pans; Alt and the left button orbit
+    about the point under the cursor; the wheel dollies toward it; a double-click sets the pivot; F frames; quaternion
+    rotation, no pole lock; the plain left button stays the readout's and the arrow keys still orbit. A 2D case opens
+    orthographic along its thin axis and only pans and zooms. Face on only turns the view (zoom and centre kept) and
+    Reset view is a separate icon button (field.reset_view in the palette, Home). The mesh preview and both compare
+    views use the same camera; the P8 bench still orbits one turn per 600 frames.
+    Later 2026-11-17 (the maintainer): no 2D tilt; the Alt of an orbit drag is kept from the menu bar.
 - [x] **F-809** Electron Studio: derived pictures (iso-surfaces, streamlines, cut planes, vectors)
   - depends on: F-808
   - acceptance: Each derived picture computed by the engine (rcfd-render or a registered opt-in service method) or, if
@@ -16579,6 +16588,11 @@ Generated from `docs/studio-guardrails.md`, `PRODUCT.md` and `DESIGN.md` ([ADR 0
     together, Follow live; same-snapshot test against a real quick-start run; P5 met (23.6 snapshots/s at 1e6 cells), P6
     met on rate (9.1/s at 4e6 cells, 4 of 100 frames over 150 ms, machine fully loaded); screenshots in test-results-
     visual/f810 for view-and-report.
+    Changed 2026-11-17 (ADR 0801 Addendum 22, the maintainer): Play steps one stored snapshot per wall-clock second (it
+    went as fast as the fields were drawn); no speed control existed, none was added; one second of simulated time per
+    second was the alternative offered.
+    Later 2026-11-17 (the maintainer, Q-A22-3): a Play speed menu beside Play, 0.25x to 4x, 1x one snapshot a second,
+    remembered per run.
 - [x] **F-811** Electron Studio: residual and monitor plots
   - depends on: F-803
   - acceptance: Residuals and monitors fetched once and then by increments (ADR 0353); every plot range holds every

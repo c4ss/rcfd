@@ -284,7 +284,11 @@ selected run here. Code: `src/renderer/workspace/` (`RunWorkspace.tsx`, `TimePan
 - **One line moves everything**: the scrubber stops at the store's snapshots (a run without fields: at its residual
   samples). Moving it (pointer, arrow keys, Page Up and Down, Home and End, the transport's first, previous, Play, next)
   moves the field, the residual cursor, the monitor readout and the snapshot counter together; they read the same stop.
-  Play steps to the next snapshot once the one before is drawn. The flag reads "it 40", or "t = 1.25 s · it 145" for a
+  Play steps one stored snapshot per wall-clock second (`PLAY_SNAPSHOT_MS` of `src/renderer/workspace/model.ts`; ADR
+  0801 Addendum 22), never before the field of the one shown is drawn; a run without fields steps through its residual
+  samples every 150 ms, and under reduced motion no stop is shorter than 500 ms. A speed menu beside it (a pictogram;
+  its name says the speed) offers 0.25×, 0.5×, 1×, 2× and 4×, remembered per run while the Studio runs (one second of
+  simulated time per second was the alternative offered for 1×). The flag reads "it 40", or "t = 1.25 s · it 145" for a
   transient run.
 - **Follow live**: on for a running run; the line stays on its newest snapshot as the runner writes them; moving the line
   stops following, Follow live brings it back.
@@ -356,12 +360,27 @@ fallback, a loss, is named above the canvas ("Drawn by WebGL 2 (fallback: <why>)
 - **Legend** from the same table (its 256 entries put into a canvas), ticks in rcfd-studio's `{:.4e}`, the unit in the
   title; the range is the min and max of the shown values (rcfd-studio's snapshot range).
 - **Hover readout**: the stored value of the cell under the cursor (a CPU pick with three's Raycaster on the drawn
-  triangles), its shortest text that reads back as the same `f32`, with cell and triangle. From the keyboard the view
-  orbits with the arrow keys, zooms with + and -, resets with Home, and reads out the value at its centre. F-819b: no
-  pick while a button is held (an orbit or pan); the readout goes at the drag's first move and is taken again where the
-  button is let go.
-- **Mesh grid** toggle (the faces' edges, 38% white, computed once per surface in a worker) and **Reset view** (top right
-  once the view has moved).
+  triangles), its shortest text that reads back as the same `f32`, with cell and triangle; a plain left click takes it
+  where the button is let go. From the keyboard the view orbits with the arrow keys (a 2D case: pans), zooms with + and
+  -, frames the domain with F, turns face on with O, resets with Home or 0, and reads out the value at its centre.
+  F-819b: no pick while a button is held (a look, pan or orbit); the readout goes at the drag's first move and is taken
+  again where the button is let go.
+- **Camera** (ADR 0801 Addendum 22, Unity's scene view; `src/renderer/field/camera.ts`, pure maths tested in
+  `tests/unit/field-camera.spec.ts`, in place of three's OrbitControls): hold the right button to look about the eye,
+  and while it is held W A S D fly, Q and E go down and up, Shift is faster (half the domain's diagonal a second, four
+  times that with Shift); the middle button pans; Alt and the left button orbit about the point of the surface under the
+  cursor (else the pivot), and the release of that Alt is kept from the window's menu bar (a plain Alt still reaches
+  it); the wheel dollies toward the point under the cursor; a double-click puts the orbit pivot there. The rotation is a quaternion with yaw about z: no pole lock, the right stays level, and past the pole a drag to
+  the right still turns the picture the same way. A 2D case (one cell thick) is drawn orthographic straight along its
+  thin axis, framed, and only pans (middle or right button, arrow keys) and zooms (wheel toward the cursor, + and -);
+  there is no tilt into 3D (the maintainer, 2026-11-17).
+  The mesh preview of the case editor and both views of a comparison use the same camera (each its own). The canvas
+  carries the state for the tests: `data-camera` (perspective or orthographic), `data-camera-eye`, `-forward`, `-up`,
+  `-pivot`, `-zoom` (the pivot's depth, or the orthographic height) and `-moved`.
+- **Mesh grid** toggle (the faces' edges, 38% white, computed once per surface in a worker), **Face on** in the tool row
+  (turns to the nearest axis of the view direction, a 2D case its thin axis, keeping the zoom and the point at the
+  centre; palette `field.face_on`, O) and **Reset view** (an icon button in the top right once the view has moved: the
+  starting orientation, the whole domain framed, the pivot at its centre; palette `field.reset_view`, Home).
 - **Data only through the door**: `src/renderer/data/door.ts` is the one renderer module that names `window.studioData`
   (`tests/unit/data-door-static.spec.ts`). Every load carries the view's tag and a superseded or cancelled one is
   cancelled (G21); progress and errors are shown in the frame with Cancel or Try again.
@@ -702,7 +721,8 @@ the head of the right column. Surface brief: `.impeccable/surfaces/apps-studio-w
 - Mesh preview (F-836, ADR 0732; `src/renderer/case/MeshPreview.tsx`): the session's mesh, saved or not, drawn before any
   run. The engine builds it with the solver's own code (`mesh.preview`, on with `rcfd serve --ui`) and writes a
   mesh-only store into the project's `.rcfd/previews/<mesh hash>/`; the Studio reads it through the data door and draws
-  it on the field canvas, one colour per patch, with the mesh grid and a check box per patch. It builds on open and
+  it on the field canvas, one colour per patch, with the mesh grid and a check box per patch; a 2D mesh is drawn
+  orthographic along its thin axis and pans and zooms (the field view's camera, ADR 0801 Addendum 22). It builds on open and
   500 ms after a settings change; a `[mesh.adapt]` case shows its starting mesh and offers the adapted one with its cost
   (the solves) said first; an estimate over 2 000 000 cells is refused with Build anyway.
 - The page reaches the case operations only through `window.studioCase` (`state`, `sources`, `prepare`, `attach`,
@@ -1340,7 +1360,8 @@ word budgets of `src/shared/word-budget.ts` are unchanged). The tests are `tests
 | A project folder named on the command line opens at start | start | none |
 
 Seven palette commands (G20): `runs.log`, `runs.report`, `runs.budgets` (group Project runs), `field.save_png`,
-`field.range`, `field.face_on`, `plots.monitor_log` (a new group, Run workspace). `project.queue_case` takes an optional
+`field.range`, `field.face_on`, `plots.monitor_log` (a new group, Run workspace); ADR 0801 Addendum 22 adds
+`field.reset_view`. `project.queue_case` takes an optional
 `store` (`none`, the default as before, or `plan`).
 
 ### Decisions (options, the recommendation taken; each reversible)
@@ -1369,7 +1390,9 @@ Seven palette commands (G20): `runs.log`, `runs.report`, `runs.budgets` (group P
   (a). The store names no length unit (a gap for the engine).
 - D8, face on. (a) A button that looks along the thin axis and keeps the view until Reset view; (b) make the fit face on
   for every 2D case (changes F-808's default view). Taken: (a). The scale bar shows only while the view is within 0.1
-  degrees of an axis, so it is true across the picture.
+  degrees of an axis, so it is true across the picture. Superseded 2026-11-17 by ADR 0801 Addendum 22 (the maintainer):
+  a 2D case opens face on, orthographic, and only pans and zooms; Face on only turns the view (zoom and centre kept,
+  in 3D to the nearest axis) and Reset view is the separate full reset.
 - D9, the whole run's range. (a) Read every stored snapshot in the renderer, as a cancellable work, and colour by the
   min and max; (b) wait for an engine range query. Taken: (a); a cancel goes back to the snapshot's range.
 - D10, Run again with fields stored. (a) `start_run` with `store: "plan"` (the engine's store plan); (b) a `--set

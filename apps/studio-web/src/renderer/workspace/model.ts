@@ -67,6 +67,37 @@ export function sampleAt(x: readonly number[], y: readonly number[], step: numbe
   return lo < x.length && x[lo] === step ? y[lo]! : null;
 }
 
+/**
+ * Play's pace (ADR 0801 Addendum 22, the maintainer's choice of 2026-11-17): at 1x one stored snapshot per wall-clock
+ * second. The alternative offered was one second of simulated time per second. A run without fields steps through its
+ * residual samples every PLAY_SAMPLE_MS at 1x, as before.
+ */
+export const PLAY_SNAPSHOT_MS = 1000;
+export const PLAY_SAMPLE_MS = 150;
+
+/** The Play speeds of the menu beside Play (the maintainer, 2026-11-17); 1 is the default. */
+export const PLAY_SPEEDS = [0.25, 0.5, 1, 2, 4] as const;
+export type PlaySpeed = (typeof PLAY_SPEEDS)[number];
+
+/** A speed as the menu and its name say it: "0.25×", "1×". */
+export const speedText = (s: number): string => `${s}×`;
+
+/** A speed in words for the button's name and tooltip: "Play speed 2×, two snapshots a second". */
+export function speedWords(s: number): string {
+  const per = s >= 1 ? `${s === 1 ? 'one snapshot' : `${s} snapshots`} a second` : `one snapshot every ${1 / s} seconds`;
+  return `Play speed ${speedText(s)}, ${per}`;
+}
+
+/**
+ * How long Play waits before the next stop, `sinceMs` after it moved to the one shown (whose field is drawn): a snapshot
+ * stays PLAY_SNAPSHOT_MS / speed, a sample PLAY_SAMPLE_MS / speed, and under reduced motion no stop is shorter than
+ * `reducedMs` (so 2x and 4x are held to two stops a second there).
+ */
+export function playWait(snapshot: boolean, sinceMs: number, reduceMotion: boolean, reducedMs: number, speed = 1): number {
+  const pace = (snapshot ? PLAY_SNAPSHOT_MS : PLAY_SAMPLE_MS) / (speed > 0 ? speed : 1);
+  return Math.max(0, Math.max(pace, reduceMotion ? reducedMs : 0) - Math.max(0, sinceMs));
+}
+
 /** The last step a run reached, as the runner recorded it (status.json), and its stored or sampled steps. */
 export function lastStep(row: Pick<RunRow, 'step'>, positions: readonly Position[]): number {
   const p = positions.length > 0 ? positions[positions.length - 1]!.step : 0;

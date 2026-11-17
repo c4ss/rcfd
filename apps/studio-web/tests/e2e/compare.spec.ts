@@ -208,6 +208,27 @@ test('side by side: both views read the same snapshot time, in one colour range 
   const next = await settledSide(page);
   expect(next.step).toBeGreaterThan(step);
   await expect(frame(page, 'b')).toHaveAttribute('data-step', String(next.step));
+  // ADR 0801 Addendum 22: each view has its own camera (orthographic, the 2D cavities face on); one moves alone
+  const ca = frame(page, 'a').locator('canvas');
+  const cb = frame(page, 'b').locator('canvas');
+  for (const c of [ca, cb]) {
+    await expect(c).toHaveAttribute('data-camera', 'orthographic');
+    await expect(c).toHaveAttribute('data-camera-moved', 'false');
+  }
+  const eyeB = await cb.getAttribute('data-camera-eye');
+  const box = (await ca.boundingBox())!;
+  await page.mouse.move(Math.round(box.x + box.width / 2), Math.round(box.y + box.height / 2));
+  await page.mouse.wheel(0, -240);
+  await page.mouse.down({ button: 'middle' });
+  await page.mouse.move(Math.round(box.x + box.width / 2) + 30, Math.round(box.y + box.height / 2), { steps: 3 });
+  await page.mouse.up({ button: 'middle' });
+  await expect(ca).toHaveAttribute('data-camera-moved', 'true');
+  await expect(cb).toHaveAttribute('data-camera-moved', 'false');
+  expect(await cb.getAttribute('data-camera-eye')).toBe(eyeB);
+  await page.mouse.move(5, 5);
+  await shot(page, '01b-side-by-side-one-view-moved');
+  await view(page, 'a').getByRole('button', { name: 'Reset view' }).click();
+  await expect(ca).toHaveAttribute('data-camera-moved', 'false');
 });
 
 test('a stop where the compared run has no snapshot: its view says so in words, and so does the difference', async () => {
