@@ -1225,7 +1225,7 @@ word budgets of `src/shared/word-budget.ts` are unchanged). The tests are `tests
 | The selected run's warnings at rest; its log's end (200 lines) and last events on demand, warnings named as such | Runs, a run selected | `read_project_file` of `runs/<id>/log.txt` from its end; `run_status {events: 50}` (the tool's maximum) |
 | Open the report | Runs, a run selected | `read_project_file` says `runs/<id>/output/report.html` is there; the system's program for HTML opens it (`shell.openPath`) |
 | Run again with fields stored | Runs, a run selected | `start_run {case, store: "plan"}` (ADR 0140) |
-| The runner's budgets: read, set, undo | Runs, beside the run bar | `.rcfd/runner-config.json` and `.rcfd/runner.json` (rcfd-runner's own files; no engine command sets them) |
+| The runner's budgets: read, set, undo | Runs, beside the run bar | `runner_config` and `set_runner_config` (ADR 0733): the runner reads and writes its own `.rcfd/runner-config.json` and reports `.rcfd/runner.json` |
 | Colour range of the whole run, or fixed | Field view | `data.field` of every stored snapshot (a cancellable work, F-832) |
 | View face on (2D), with a scale bar | Field view | none (the camera) |
 | The domain's extents in the caption | Field view | the stored mesh's points |
@@ -1247,9 +1247,12 @@ Seven palette commands (G20): `runs.log`, `runs.report`, `runs.budgets` (group P
   whole numbers, positive counts), only the keys set, never over a change since it was read (a hash), and keeps the
   last write to undo; (b) hand it to Claude Code; (c) wait for an engine command. Taken: (a). The write is not atomic
   (a rename is outside the house rule of `tests/unit/history.spec.ts`); the runner reads the file once, when it starts.
-  Proposed engine command: `rcfd-runner config set` or an MCP `set_runner_config`.
+  Proposed engine command: `rcfd-runner config set` or an MCP `set_runner_config`. Superseded 2026-11-17 by (c), ADR
+  0733 accepted and built: the runner writes the file itself (`set_runner_config` on the run-control server, its own
+  checks, atomic, conflict 1200), and the Studio's checks and writer are gone.
 - D2, the budgets' undo. (a) The panel's own Undo of its last write, refused over another writer's change unless asked
-  ("Undo anyway"); (b) a step in F-829's history, which is per case-editor session. Taken: (a). Undo of a write to a
+  ("Undo anyway"); (b) a step in F-829's history, which is per case-editor session. Taken: (a). Since ADR 0733 (Q2 (a))
+  the undo sends the keys of that write back with their values before it, through `set_runner_config`. Undo of a write to a
   file that was not there leaves `{}` (every key at the runner's default): the Studio removes no file.
 - D3, the report. (a) `shell.openPath` (the system's program for HTML); (b) show the file in its folder; (c) copy the
   path. Taken: (a).

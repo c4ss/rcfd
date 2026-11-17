@@ -6,7 +6,7 @@
 // Node's MessageChannel; src/main/index.ts adapts Electron's MessagePortMain).
 import path from 'node:path';
 import { BUDGET_KEYS, PNG_NAME, RUN_ID, type BudgetKey, type PageRect, type RunError, type RunPortMessage, type RunReply, type RunRequest } from '../../shared/run.js';
-import { readRunLog, reportFile, savePng, type PngDeps, type RunnerBudgetsFile } from './extras.js';
+import { readRunLog, reportFile, savePng, type PngDeps, type RunnerBudgetsEngine } from './extras.js';
 import { readComparison, readRunAt, readRunSeries, type Query } from './series.js';
 
 export interface RunPortLike {
@@ -20,10 +20,10 @@ export interface RunPortLike {
 export interface RunSource {
   query(): Query | null;
   now(): string;
-  /** F-837: the open project's folder (null: none), its budgets file, the system's opener and the picture of the page. */
+  /** F-837: the open project's folder (null: none), its runner's budgets (through the engine), the system's opener and the picture of the page. */
   readonly extras?: {
     folder(): string | null;
-    budgets: RunnerBudgetsFile;
+    budgets: RunnerBudgetsEngine;
     /** Opens a file in the system's program for it; resolves to '' when it did, else to the reason (Electron's shell.openPath). */
     openPath(file: string): Promise<string>;
     png: PngDeps;
@@ -80,9 +80,11 @@ export function parseRunRequest(raw: unknown): ParsedRun {
       if (keys !== 'id,op') return bad('budgets: takes nothing');
       return { ok: true, request: { op, id } };
     case 'setBudgets': {
-      if (keys !== 'base,id,op,values') return bad('setBudgets: takes exactly values and a base');
+      if (keys !== 'base,id,op,replace,values') return bad('setBudgets: takes exactly values, a base and replace');
       const base = raw['base'];
-      if (base !== null && (typeof base !== 'string' || !/^[0-9a-f]{64}$/.test(base))) return bad('setBudgets: the base is a sha256 in hex, or null');
+      if (base !== null && (typeof base !== 'string' || !/^(fnv64|fnv1a64):[0-9a-f]{16}$/.test(base))) return bad('setBudgets: the base is the engine’s fnv64: hash, or null');
+      const replace = raw['replace'];
+      if (typeof replace !== 'boolean') return bad('setBudgets: replace is true or false');
       const values = raw['values'];
       if (!isPlainObject(values)) return bad('setBudgets: the values are an object');
       const out: Partial<Record<BudgetKey, number | null>> = {};
@@ -91,7 +93,7 @@ export function parseRunRequest(raw: unknown): ParsedRun {
         if (v !== null && (typeof v !== 'number' || !Number.isFinite(v))) return bad(`setBudgets: ${k} is a number or null`);
         out[k as BudgetKey] = v;
       }
-      return { ok: true, request: { op, id, values: out, base } };
+      return { ok: true, request: { op, id, values: out, base, replace } };
     }
     case 'undoBudgets': {
       if (keys !== 'force,id,op') return bad('undoBudgets: takes exactly force');
@@ -178,7 +180,7 @@ export class RunPortBridge {
     }
   }
 
-  /** F-837's operations that read or write files of the folder, or open a program, in the main process. */
+  /** F-837's operations that ask the engine about the runner's budgets, write a PNG the user names, or open a program, in the main process. */
   private async extra(r: Extract<RunRequest, { op: 'savePng' | 'budgets' | 'setBudgets' | 'undoBudgets' | 'openReport' }>): Promise<RunReply> {
     const x = this.source.extras;
     if (!x) return { ok: false, error: { code: 'io', message: 'this window cannot read or write files' } };
@@ -194,7 +196,7 @@ export class RunPortBridge {
     if (folder === null) return { ok: false, error: { code: 'no_project', message: 'no project is open' } };
     try {
       if (r.op === 'budgets') return { ok: true, result: await x.budgets.read(folder) };
-      if (r.op === 'setBudgets') return { ok: true, result: await x.budgets.write(folder, r.values, r.base) };
+      if (r.op === 'setBudgets') return { ok: true, result: await x.budgets.write(folder, r.values, r.base, r.replace) };
       if (r.op === 'undoBudgets') return { ok: true, result: await x.budgets.undo(folder, r.force) };
       // openReport: only a report the engine finds in the run's folder (the run id is checked: no '..', no separator)
       const query = this.source.query();

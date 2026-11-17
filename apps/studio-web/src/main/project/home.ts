@@ -326,6 +326,13 @@ export class ProjectHome {
     }
   }
 
+  /** F-837 (ADR 0733): the runner writes the open project's budgets (`set_runner_config`); refused when no project is open. */
+  setRunnerConfig(args: Record<string, unknown>): Promise<unknown> {
+    const s = this.session;
+    if (!s) return Promise.reject(new Error('no project is open'));
+    return s.setRunnerConfig(args);
+  }
+
   /** F-810: one read-only query of the open project's server (the run workspace); refused when no project is open. */
   query(tool: ProjectTool, args: Record<string, unknown>): Promise<unknown> {
     const s = this.session;

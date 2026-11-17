@@ -20,12 +20,12 @@ Engine read: rcfd 0.1.0, service protocol rcfd-service/1 version 1.1, MCP server
 | Kind | Capabilities | UI path | Exemption | Exemption whose item does not name it |
 |---|---|---|---|---|
 | Service methods | 69 | 19 | 50 | 40 |
-| MCP tools | 56 | 21 | 35 | 27 |
-| CLI commands | 36 | 9 | 27 | 22 |
-| CLI options | 156 | 8 | 148 | 121 |
-| Case schema keys | 948 | 948 | 0 | 0 |
+| MCP tools | 58 | 23 | 35 | 27 |
+| CLI commands | 38 | 11 | 27 | 22 |
+| CLI options | 159 | 11 | 148 | 121 |
+| Case schema keys | 951 | 951 | 0 | 0 |
 | Monitor format keys | 6 | 6 | 0 | 0 |
-| **All** | **1271** | **1011** (79.5 %) | **260** | **210** |
+| **All** | **1281** | **1021** (79.7 %) | **260** | **210** |
 
 A case key stands for every value of its enumeration (the solver options of that key, listed in the inventory): the
 schema-driven surface of F-825 offers them all. A CLI option is mapped with its command. "Item does not name it" marks an

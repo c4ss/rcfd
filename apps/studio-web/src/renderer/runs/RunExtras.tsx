@@ -1,12 +1,13 @@
-// F-837: what the removed egui Studio showed of runs beside its run list, rebuilt for this one (no new engine entry
-// point; src/main/run/extras.ts says where each comes from):
+// F-837: what the removed egui Studio showed of runs beside its run list, rebuilt for this one (src/main/run/extras.ts
+// says where each comes from):
 //
 // - the latest residuals of each run, in two columns headed by the engine's own equation names (u, p), from
 //   run_status's `last_residual` (the last line of residuals.jsonl);
 // - the selected run's report (runs/<id>/output/report.html, opened in the system's program for HTML) and its log
 //   (the end of log.txt) with its events, the runner's and the solver's warnings named as warnings and shown at rest;
-// - the runner's budgets (.rcfd/runner-config.json, owned by rcfd-runner): read, written only with the keys the runner
-//   reads and the checks it makes, never over another writer's change (G18), and the last write undone.
+// - the runner's budgets (.rcfd/runner-config.json, owned by rcfd-runner): read and written by the runner itself (ADR 0733,
+//   its checks and its messages), never over another writer's change (G18), and the last write undone by sending the
+//   keys it set back with their values before it.
 //
 // G22: every control is an icon with its name as tooltip and accessible name; at rest the surfaces gain no chrome word
 // (a column head is the engine's equation name, a warning speaks as an exception).
@@ -234,12 +235,12 @@ export function BudgetsPanel({ onClose }: { onClose: () => void }) {
     if (o.kind === 'written') {
       setB(o.budgets);
       setDraft(draftOf(o.budgets));
-      setNote({ kind: 'done', text: undo ? `${o.budgets.path} is as it was.` : `Written to ${o.budgets.path}. The runner reads it when it starts.` });
+      setNote({ kind: 'done', text: undo ? `${o.budgets.path} is as it was.` : `Written to ${o.budgets.path}; applies at the next runner start.` });
     } else if (o.kind === 'conflict') {
       setB(o.budgets);
       setNote(
         undo
-          ? { kind: 'undo-conflict', text: `${o.budgets.path} was changed by another writer after this window wrote it. Undo anyway puts back what was there before this window’s write.` }
+          ? { kind: 'undo-conflict', text: `${o.budgets.path} was changed by another writer after this window wrote it. Undo anyway sets the keys this window wrote back to their values before it.` }
           : { kind: 'conflict', text: `${o.budgets.path} was changed by another writer since it was read: nothing was written. Read it again, then set your values.` },
       );
     } else setNote({ kind: 'refused', text: o.message });
@@ -247,6 +248,11 @@ export function BudgetsPanel({ onClose }: { onClose: () => void }) {
   const changes = (): Partial<Record<BudgetKey, number | null>> => {
     const out: Partial<Record<BudgetKey, number | null>> = {};
     if (!b || !draft) return out;
+    // a file the runner cannot read is replaced whole: every key, empty ones at the runner's default
+    if (b.needsReplace) {
+      for (const k of BUDGET_KEYS) out[k] = Number.isNaN(draft[k]) ? null : draft[k];
+      return out;
+    }
     for (const k of BUDGET_KEYS) {
       const now = draft[k];
       const was = b.values[k];
@@ -259,7 +265,7 @@ export function BudgetsPanel({ onClose }: { onClose: () => void }) {
   const save = async () => {
     if (!b) return;
     setBusy(true);
-    const r = await setRunnerBudgets(changes(), b.hash);
+    const r = await setRunnerBudgets(changes(), b.hash, b.needsReplace);
     setBusy(false);
     if (!r.ok) setNote({ kind: 'refused', text: r.error.message });
     else outcome(r.result, false);
@@ -337,7 +343,7 @@ export function BudgetsPanel({ onClose }: { onClose: () => void }) {
       )}
       <div className="rv-budgets-actions">
         <Button variant="primary" onPress={() => void save()} isDisabled={busy || !changed || !b} data-budgets="write">
-          Write
+          {b?.needsReplace ? 'Replace the file' : 'Write'}
         </Button>
         {note?.kind === 'conflict' && <Button onPress={() => void load().then(() => setNote(null))}>Read again</Button>}
         {note?.kind === 'undo-conflict' ? (
