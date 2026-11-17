@@ -7858,9 +7858,9 @@
     "deps": [
       "F-768"
     ],
-    "status": "todo",
+    "status": "partial",
     "acceptance": "Every limit not stated here is registered in the ADR before the run. A header comment that names an ADR as a path (`docs/adr/NNNN-...md`) counts as E0 evidence, and an ADR that says of a file that it was committed without an ADR or states the checks of a file it first registers (ADR 0024, 0060 and 0685 are the cases found by ADR 0690) is read by a rule registered before the run; a fresh registered sample of at least 25 file-citation-only files drawn from the files that rule G leaves without a primary, and the 45 files read in ADR 0690, are read with at least 80 % agreement counting only the files with a primary, and the number of files with a primary is reported next to the agreement; the attribution data of `gate_attribute.py` is unchanged for the existing consumers.",
-    "note": "Follow-up of F-768 (ADR 0690, 2026-11-16)."
+    "note": "Test-to-ADR index, gate attribution. Follow-up of F-768 (ADR 0690, 2026-11-17). PARTIAL. ADR 0701, 2026-11-17: in `scripts/adr_test_index.py --primary git` a leading comment block with no `ADR dddd` but a `docs/adr/dddd-...md` path gives E0 evidence (7 files, 65 tests), and a file-citation-only test that rule G left without a primary takes the first ADR, by tier then number, with a registering unit that cites its file: H1 a unit in a `## Test files (added <date>, ADR dddd)` section (the notes of ADR 0685; 19 files), H2 a unit that says `without an ADR`, `ADR-less` or `no ADR describes` (5 files), H3 a table row with the file in one cell and a limit in another (8 files); units of ADRs 0653, 0679, 0684, 0690 and 0701 are not sources. Tests with an ADR and no primary fell from 559 to 351; `--primary registered` and `p0679` are bit-identical, the data of `gate_attribute.py` are unchanged in shape, 2 git processes, 16.8 s. Read by one reader: of the 45 files of ADR 0690, 12 have a primary and 9 agree (75 %, limit 80 % missed); of a fresh sample of 25 (seed 7720), 16 have a primary and 15 agree (93.8 %); together 24 of 28 (85.7 %). H0, H1 and H2 read 22 of 22, H3 1 of 5 (audit and test-list rows). Open: remove or restrict H3. Follow-up F-785 (Restrict or remove rule H3 of the retro-registration rule). Follow-up F-786 (A second reader for the primary-ADR samples of the test-to-ADR index)."
   },
   {
     "id": "F-773",
@@ -7996,5 +7996,27 @@
     "status": "todo",
     "acceptance": "Every limit not stated here is registered in the ADR before the run. A new opt-in field of S'' sets the length of the trailing-edge ramp of wake_stack_remap from the wake line spacing so that, at the ADR 0118 s4 specs, ComputerFan::rom_reference() blade 0 and the ADR 0696 second blade build with no folded cell within 84.5 deg non-orthogonality (the 84.953 and 84.472 deg of ADR 0699 at the first ramp cell disclosed), skewness 4.0 and aspect 1000, the wake-stack spanwise skewness stays within 1.0, a registered front_gap and n_nose scan inside the camber_seam range builds a registered fraction, and camber_seam_h, camber_seam_s, camber_seam_s_unstretched and camber_seam_s_wake_remap are unchanged in bits.",
     "note": "Follow-up of F-782 (ADR 0699, 2026-11-16)."
+  },
+  {
+    "id": "F-785",
+    "title": "Restrict or remove rule H3 of the retro-registration rule",
+    "phase": 9,
+    "deps": [
+      "F-772"
+    ],
+    "status": "todo",
+    "acceptance": "Every limit not stated here is registered in the ADR before the run. A table row that cites a file and has a limit in another cell takes the primary only where its ADR registers the file (the ADR file name carries `registration`, or the row is in a section the ADR names as the registration of the file's item), or rule H3 is removed; the 8 files of rule H3 of ADR 0701 and a fresh registered sample of at least 20 files with a primary under rules H0 to H3 as they stand are read with at least 90 % agreement counting only the files with a primary, and the number of files with a primary is reported next to the agreement; the attribution data of `gate_attribute.py` is unchanged for the existing consumers.",
+    "note": "Follow-up of F-772 (ADR 0701, 2026-11-16)."
+  },
+  {
+    "id": "F-786",
+    "title": "A second reader for the primary-ADR samples of the test-to-ADR index",
+    "phase": 9,
+    "deps": [
+      "F-772"
+    ],
+    "status": "todo",
+    "acceptance": "Every limit not stated here is registered in the ADR before the run. The 28 files with a primary read in ADR 0701, with the five borderline readings (`cylinder.rs`, `run_control.rs`, `species.rs`, `properties.rs`, `cavity.rs`), are read by a reader who did not write the rule, against a written criterion registered before the reading, and agree with the first reading on at least 85 % of the files; the disagreements are listed with a reason; no limit of ADR 0684, 0690 or 0701 is changed by the second reading.",
+    "note": "Follow-up of F-772 (ADR 0701, 2026-11-16)."
   }
 ]
