@@ -15558,7 +15558,7 @@ fixed by the item's registration ADR before any code.
     16^3 block then solves to full load; a positive control on the ADR 0628 patch below its zero; the default bits
     unchanged.
   - note: Follow-up of F-763 (ADR 0682, 2026-11-16).
-- [ ] **F-768** Primary ADR of file-citation-only tests from the commit that adds the file
+- [~] **F-768** Primary ADR of file-citation-only tests from the commit that adds the file
   - depends on: F-759
   - acceptance: Every limit not stated here is registered in the ADR before the run. A test whose only primary evidence
     is a file citation takes its primary from the first git commit that adds the file (an `ADR NNNN` in its subject, or
@@ -15566,7 +15566,22 @@ fixed by the item's registration ADR before any code.
     history depth the gate has stated and a fall-back to no primary where the history is shallow; the 20 files of ADR
     0684 sample D (seed 7590) and a fresh registered sample of at least 20 file-citation-only files are read with at
     least 80 % agreement; the attribution data of `gate_attribute.py` is unchanged for the existing consumers.
-  - note: Follow-up of F-759 (ADR 0684, 2026-11-16).
+  - note: Test-to-ADR index, gate attribution. Follow-up of F-759 (ADR 0684, 2026-11-17). PARTIAL. ADR 0690, 2026-11-17:
+    the primary ADR of a test whose only primary evidence is a file citation (E2) is taken from the first git commit
+    that adds the file, in `scripts/adr_test_index.py --primary git` (now the command-line default): one batched `git
+    log -M --diff-filter=AR --name-status` pass (0.44 s, 2 git processes, none per file), renames and re-adds followed,
+    the first `ADR dddd` of the commit subject or the registration ADR of its first `F-ddd`, accepted only when it is
+    one of the test's `adrs`; no primary on a shallow clone, a git-archive copy or an enclosing repository (history
+    `shallow` or `none` in `coverage.primary.git`). Controls: shallow clone and archive copy 0 differences (522 of 522
+    E2-only tests null); the batched origin equals the per-file `--follow` recomputation in 103 of 103 files; the data
+    of the existing consumers equal in every field except the primary of the E2-only tests (7235 other primaries
+    identical), `gate_attribute.py` and `gate.yml` unedited; 8 of 8 mutations caught. Sample D (20 files of ADR 0684) 16
+    of 20 overall agreement (1 agree, 15 correct nulls, 4 missed), fresh sample of 25 files (seed 7680) 16 of 25 (limit
+    20, missed: 16 correct nulls, 9 files that an ADR does describe); limit on tests with an ADR and no primary 456
+    missed (559; the E2 population grew from 413 to 522 tests). The rule is safe where it speaks and silent for 514 of
+    522 E2-only tests (98 %): their first commit is the initial import or names an item without an ADR file. Follow-up
+    F-772 (Retro-registration ADRs and ADR paths in file headers as primary evidence for file-citation-only tests).
+    Follow-up F-773 (A git commit that names an ADR or an item as evidence of the files it adds).
 - [ ] **F-769** ADRs for the five feature groups that no ADR describes (the assistant setup helpers and workflow engine, the F-040 wall-function channel, the shipped turbulence and compressible examples through the binary, the mesh generator parameters, tables called from expressions)
   - depends on: F-760
   - acceptance: Every limit not stated here is registered in the ADR before the run. A short registration ADR per group
@@ -15601,3 +15616,22 @@ fixed by the item's registration ADR before any code.
     registered limit of its twin on every step where the run without the opt-in is not, and a hydrostatic rest state
     stays at rest within a registered limit. Every limit not stated here is registered in the ADR before the run.
   - note: Follow-up of F-757 (ADR 0687, 2026-11-16).
+- [ ] **F-772** Retro-registration ADRs and ADR paths in file headers as primary evidence for file-citation-only tests
+  - depends on: F-768
+  - acceptance: Every limit not stated here is registered in the ADR before the run. A header comment that names an ADR
+    as a path (`docs/adr/NNNN-...md`) counts as E0 evidence, and an ADR that says of a file that it was committed
+    without an ADR or states the checks of a file it first registers (ADR 0024, 0060 and 0685 are the cases found by ADR
+    0690) is read by a rule registered before the run; a fresh registered sample of at least 25 file-citation-only files
+    drawn from the files that rule G leaves without a primary, and the 45 files read in ADR 0690, are read with at least
+    80 % agreement counting only the files with a primary, and the number of files with a primary is reported next to
+    the agreement; the attribution data of `gate_attribute.py` is unchanged for the existing consumers.
+  - note: Follow-up of F-768 (ADR 0690, 2026-11-16).
+- [ ] **F-773** A git commit that names an ADR or an item as evidence of the files it adds
+  - depends on: F-768
+  - acceptance: Every limit not stated here is registered in the ADR before the run. The ADR named in the subject of the
+    commit that adds a test file, and the ADR of an item named there that has a registration ADR, are evidence of kind
+    E8 of the file's tests (`adrs`, `items` and `evidence` extended, so the primary rule of ADR 0690 needs no coherence
+    step); the added evidence is counted before the run, the index of the final tree is compared with that of ADR 0690
+    in every field except the added `adrs`, `items`, `evidence` and the primary, a shallow clone gets no E8 evidence,
+    and a fresh registered sample of at least 20 files with an E8 primary is read with at least 80 % agreement.
+  - note: Follow-up of F-768 (ADR 0690, 2026-11-16).
