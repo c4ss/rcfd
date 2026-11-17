@@ -85,8 +85,11 @@ export interface FieldCanvasProps {
   readonly onMoved: (moved: boolean) => void;
   /** F-837: the camera changed (any move, fit or resize), for what is drawn over the view (the scale bar). */
   readonly onView?: () => void;
-  /** The first picture of this surface, values and range: drawn, finished on the GPU, and one animation frame later. */
-  readonly onDrawn?: () => void;
+  /**
+   * The first picture of this surface, values and range: drawn, finished on the GPU, and one animation frame later. It
+   * names the values drawn, so a host knows which of its fields is on screen (and that the view's handle is set).
+   */
+  readonly onDrawn?: (values: Float32Array) => void;
   readonly onGridState?: (state: 'off' | 'computing' | 'on') => void;
   /** F-809: rcfd-render's cut plane, or null for none. */
   readonly cut?: Cut | null;
@@ -389,7 +392,7 @@ function Scene({ surface, values, valuesPer = 'cell', range, grid, onMoved, onVi
     void finished(renderer)
       .then(nextFrame)
       .then(() => {
-        if (live) onDrawn?.();
+        if (live) onDrawn?.(values);
       });
     invalidate();
     return () => {
