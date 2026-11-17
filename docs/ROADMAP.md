@@ -17080,3 +17080,20 @@ Generated from `docs/studio-guardrails.md`, `PRODUCT.md` and `DESIGN.md` ([ADR 0
     only assistant. Follow-up 2026-11-17 (maintainer): crates/rcfd-claude removed; its allow-list rules moved to
     rcfd-mcp's test support module crates/rcfd-mcp/tests/claude_allow/ (F2 and C5-A use it unchanged), E5 and the rule
     checks T1, T2, T5 to crates/rcfd-mcp/tests/allow_file_w48e.rs. Cargo.lock 83 to 82 packages.
+- [ ] **F-848** Runs on a remote site: a remote simulation service for the Studio, the CLI and the MCP server
+  - depends on: F-807, F-828
+  - acceptance: With no site named, the Studio, the CLI and the MCP server start and use the local engine as now, and a
+    local run's run.json, launch.json, status.json, events.jsonl and the feed are byte for byte as before
+    (baseline_hashes not re-recorded). A user-level sites file names remote sites; a run started on one (Studio run
+    dialog, rcfd-runner start --site, MCP start_run {site}) has its inputs uploaded content-addressed and resumably,
+    runs under the site's runner, shows in the same Runs list with its site, link state, pause, resume and cancel, and
+    has its status, events, residuals and log mirrored live and its outputs and field store downloaded at the end; its
+    provenance records the site, host and build. Proven against a fake remote in CI (a second local agent and work
+    folder) by the tests ADR 0739 registers, phase by phase.
+  - note: Proposed 2026-11-17 ([ADR 0739](adr/0739-f848-proposal-run-sites-a-remote-simulation-service-for-the-studio-cli-and-mcp.md),
+    design only, open questions Q1 to Q10 for the maintainer). Maintainer's direction 2026-11-17: the Studio supplies a
+    local service unless an external one is named, and an external one in the cloud runs high-intensity, sharded or
+    distributed simulations. Recommended first slice: SSH running a stdio agent (rcfd-runner site --stdio), no
+    listener, a mirror project with the ordinary rcfd-runner on the site; Slurm/PBS and cloud batch later behind one
+    Site interface in rcfd-runner. Distributed single runs need F-100 (no MPI or socket transport, no distributed
+    SIMPLE/PISO; ADR 0058) and are out of scope. Traces: G7, G10, G12, G16, G17, G22.
