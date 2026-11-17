@@ -16,6 +16,12 @@
 //! With `PimpleSettings::coupled_ddt_correction` as well (F-757, ADR 0687) the coupled faces take the same form with the
 //! partner cell in the place of the neighbour; `PimpleSettings::fractional_periodic_implicit` makes the periodic partner of
 //! the predictor implicit (ADR 0046 D1).
+//!
+//! With `PimpleSettings::fractional_body_force` (F-771, ADR 0691; incremental form only) the step reads
+//! `PimpleSolver::body_force` as the PISO step does: the walls' pressure gradient that balances it, the predictor's cell
+//! term, and the balanced-force face term `c_f (b_f . S - B_f . S)` next to each face's pressure term (same coefficient
+//! `c_f`, `B_f` the cell values interpolated as the pressure gradient is), so that a discrete potential force with
+//! `p = Phi` gives a zero intermediate flux.
 //! Child module of `pimple`: it reads the private history of the solver.
 
 use super::{coupled_ddt_defect, ddt_history_weights, PeriodicLinks, PimpleSolver, StepInfo};
@@ -24,10 +30,10 @@ use crate::ddt::{add_ddt, max_courant};
 use crate::diffusion::{laplacian, uniform_gamma};
 use crate::gradient::{green_gauss, least_squares};
 use crate::pressure::{
-    boundary_hby_a, boundary_values_pbc, corrected_flux, divergence, pressure_bc, solve_pressure, PressureBc,
-    PressureControls,
+    apply_body_force_wall_gradient, boundary_hby_a, boundary_values_pbc, corrected_flux, divergence, pressure_bc,
+    solve_pressure, PressureBc, PressureControls,
 };
-use crate::simple::normalised_residual;
+use crate::simple::{normalised_residual, BodyForce};
 use crate::FvGeometry;
 use rcfd_core::vec3::{self, Vec3};
 
@@ -123,8 +129,22 @@ impl PimpleSolver {
         // the pressure acts over the effective step dt/c0 (c0 = 1 for Euler, 3/2 for constant-step BDF2)
         let dte = dt / (c1 - c2);
 
+        // F-771 (ADR 0691, opt-in): the body force of the step
+        if s.fractional_body_force {
+            assert!(fs.incremental, "fractional_body_force: incremental form only");
+        }
+        let body: Option<BodyForce> = if s.fractional_body_force {
+            self.body_force.clone()
+        } else {
+            None
+        };
+
         // pressure at the old level
-        let pbc = pressure_bc(&g, &self.u, &self.p);
+        let mut pbc = pressure_bc(&g, &self.u, &self.p);
+        if let Some(bf) = &body {
+            // the walls' pressure gradient that balances the body force (as the PISO step)
+            apply_body_force_wall_gradient(&g, bf, &mut pbc);
+        }
         let pbc_h = homogeneous(&pbc);
         let bvals_p = boundary_values_pbc(&g, &pbc, &self.p.values);
         let grad_p = green_gauss(&g, &self.p.values, &bvals_p, 0);
@@ -223,6 +243,12 @@ impl PimpleSolver {
                     sys.b[c] -= vol[c] * grad_p[c][k];
                 }
             }
+            if let Some(bf) = &body {
+                // F-771 (ADR 0691): the predictor's cell term
+                for c in 0..n {
+                    sys.b[c] += vol[c] * bf.cell[c][k];
+                }
+            }
             if sc {
                 for (a, d) in a_p.iter_mut().zip(&sys.a.diag) {
                     *a += d;
@@ -270,6 +296,17 @@ impl PimpleSolver {
         if fs.incremental {
             let p = &self.p.values;
             let nei = mesh.neighbour();
+            // F-771 (ADR 0691): the balanced-force face term `b_f . S - B_f . S` (zero without the opt-in or a body force),
+            // `B_f = w b_o + (1 - w) b_x` the cell values interpolated with the weight `w` of the face's pressure gradient
+            let body_face = |f: usize, w: f64, x: usize| -> f64 {
+                match &body {
+                    Some(bf) => {
+                        let bfc = [0, 1, 2].map(|i| w * bf.cell[own[f]][i] + (1.0 - w) * bf.cell[x][i]);
+                        bf.face[f] - vec3::dot(bfc, sf[f])
+                    }
+                    None => 0.0,
+                }
+            };
             for f in 0..mesh.n_faces() {
                 if g.empty[f] {
                     continue;
@@ -283,6 +320,9 @@ impl PimpleSolver {
                     } else {
                         phi_star[f] += dte * (vec3::dot(gf, sf[f]) - g.lap_coeff[f] * (p[nei[f]] - p[own[f]]));
                     }
+                    if body.is_some() {
+                        phi_star[f] += if sc { gamma_sc[f] } else { dte } * body_face(f, w, nei[f]);
+                    }
                 } else {
                     let i = f - n_int;
                     if let Some(gp) = pbc.coupled[i] {
@@ -294,10 +334,17 @@ impl PimpleSolver {
                             Some((gc, d)) => phi_star[f] += gc[f] * r + gc[f] / dt * d[i],
                             None => phi_star[f] += dte * r,
                         }
+                        if body.is_some() {
+                            let cf = coupled_sc.as_ref().map_or(dte, |(gc, _)| gc[f]);
+                            phi_star[f] += cf * body_face(f, a, own[gp]);
+                        }
                     } else if !pbc.fixed_u[i] {
                         let co = &pbc.coeffs[i];
                         phi_star[f] +=
                             dte * (vec3::dot(grad_p[own[f]], sf[f]) - vec3::norm(sf[f]) * co.gradient(p[own[f]]));
+                        if body.is_some() {
+                            phi_star[f] += dte * body_face(f, 1.0, own[f]);
+                        }
                     }
                 }
             }

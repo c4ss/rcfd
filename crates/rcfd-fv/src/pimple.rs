@@ -26,8 +26,8 @@ use crate::geometry::FvGeometry;
 use crate::gradient::{green_gauss, least_squares};
 use crate::lumped::FaceJump;
 use crate::pressure::{
-    boundary_hby_a, boundary_values_pbc, corrected_flux, coupled_gamma, divergence, face_interpolate, pressure_bc,
-    solve_pressure, CoupledNonOrth, PressureBc, PressureControls,
+    apply_body_force_wall_gradient, boundary_hby_a, boundary_values_pbc, corrected_flux, coupled_gamma, divergence,
+    face_interpolate, pressure_bc, solve_pressure, CoupledNonOrth, PressureBc, PressureControls,
 };
 use crate::simple::{normalised_residual, BodyForce};
 use rcfd_core::vec3::{self, Vec3};
@@ -219,6 +219,15 @@ pub struct PimpleSettings {
     /// pairs keep the lagged partner. Not read without the extrapolation (implicit Euler, later outer iterations, the first
     /// step of BDF2) or by the fractional step. Default `false` (bit-identical).
     pub periodic_partner_extrapolated: bool,
+    /// F-771 (ADR 0691): the fractional step reads `PimpleSolver::body_force` (not the hook's `source_force`; the fractional
+    /// step runs no hook) in the three places of the PISO step: the walls' pressure gradient that balances it
+    /// (`pressure::apply_body_force_wall_gradient`), the predictor's cell term `V b`, and the balanced-force face term of the
+    /// intermediate flux, `c_f (b_f . S_f - B_f . S_f)` with `c_f` the coefficient of the face's pressure term (`dte`, or
+    /// `Gamma` with `fractional_step_consistent` and on the coupled faces with `coupled_ddt_correction` as well) and `B_f` the
+    /// cell values interpolated as the face interpolates the pressure gradient (no term on fixed-velocity faces). Incremental
+    /// form only: with the Chorin form the step panics. Not read by the PISO/PIMPLE step (which always reads the body force)
+    /// or without a body force. Default `false` (bit-identical).
+    pub fractional_body_force: bool,
 }
 
 /// The outer iterations of one step with `PimpleSettings::outer_pressure_tolerance` (F-536, ADR 0458 C2).
@@ -1047,6 +1056,7 @@ impl PimpleSettings {
             coupled_ddt_correction: false,
             fractional_periodic_implicit: false,
             periodic_partner_extrapolated: false,
+            fractional_body_force: false,
         }
     }
 
@@ -1833,18 +1843,7 @@ impl PimpleSolver {
             if let Some(bf) = body {
                 // fixed-flux pressure condition: where the normal velocity is prescribed the pressure gradient balances
                 // the body force (as in the steady solver)
-                for i in 0..pbc.coeffs.len() {
-                    if pbc.fixed_u[i] && pbc.coupled[i].is_none() {
-                        let f = n_int + i;
-                        let gradient = bf.face[f] / vec3::norm(sf[f]).max(1e-300);
-                        pbc.coeffs[i] = crate::bc::FaceCoeffs {
-                            a: 1.0,
-                            b: g.dn[i] * gradient,
-                            c: 0.0,
-                            d: gradient,
-                        };
-                    }
-                }
+                apply_body_force_wall_gradient(&g, bf, &mut pbc);
             }
             if let Some(a) = &self.ale {
                 a.apply_wall_gradients(&mut pbc, &g.dn);

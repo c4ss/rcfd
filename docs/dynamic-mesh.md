@@ -87,6 +87,11 @@ case section see [case-schema.md](case-schema.md); for the full decision record 
   `fractional_periodic_implicit` (the implicit periodic partner of the fractional predictor), and the PISO term is checked
   with BDF2 together with the opt-in `periodic_partner_extrapolated` (the BDF2 deferred-correction state of the periodic
   partner extrapolated in time, without which a BDF2 periodic run differs from its twin by up to `4.2e-4 U_ref`).
+  Since F-771 (ADR 0691) the fractional step reads `PimpleSolver::body_force` with the opt-in `fractional_body_force`
+  (incremental form only; default `false`): the walls' balancing pressure gradient (`pressure::apply_body_force_wall_gradient`,
+  shared with the PISO step), the predictor's cell term and the balanced-force face term with each face's pressure
+  coefficient; on the channel with its body force the fractional run stays within `1.8e-14 U_ref` of its twin over 200 steps
+  (`4.4e-4` to `1.5e-3` without `coupled_ddt_correction`), and a discrete hydrostatic rest state stays exactly at rest.
   data set per face on rotor patches are the caller's to set on the new mesh; sectors of different pitch are refused. In the
   case tree since F-711 (ADR 0646) for the sector: `[mesh.sliding]` on `mesh.generator =
   "annulus_3d_sector_cylindrical_interface"` runs ADR 0634's turned loop (`mesh_turned`, `periodic_sliding_step`,
