@@ -54,6 +54,33 @@ export function shownRange(cells: Uint32Array, values: Float32Array): { lo: numb
   return lo <= hi ? { lo, hi } : null;
 }
 
+/**
+ * F-819b: `cornerScalars` of surface values (one per triangle, `values[t]` the owner cell's value, as
+ * src/shared/surface-values.ts gathers them): the same arrays, from the same values in the same order.
+ */
+export function cornerScalarsOf(values: Float32Array, into?: Float32Array<ArrayBuffer>): Float32Array<ArrayBuffer> {
+  const out = into && into.length === 3 * values.length ? into : new Float32Array(3 * values.length);
+  for (let t = 0; t < values.length; t++) {
+    const v = values[t]!;
+    out[3 * t] = v;
+    out[3 * t + 1] = v;
+    out[3 * t + 2] = v;
+  }
+  return out;
+}
+
+/** F-819b: `shownRange` of surface values (one per triangle): the same comparisons over the same values in the same order. */
+export function rangeOf(values: Float32Array): { lo: number; hi: number } | null {
+  let lo = Number.POSITIVE_INFINITY;
+  let hi = Number.NEGATIVE_INFINITY;
+  for (let t = 0; t < values.length; t++) {
+    const v = values[t]!;
+    if (v < lo) lo = v;
+    if (v > hi) hi = v;
+  }
+  return lo <= hi ? { lo, hi } : null;
+}
+
 /** A surface's bounding box. */
 export function bounds(points: Float32Array): { min: [number, number, number]; max: [number, number, number] } {
   const min: [number, number, number] = [Infinity, Infinity, Infinity];

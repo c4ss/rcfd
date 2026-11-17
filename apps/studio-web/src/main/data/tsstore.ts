@@ -22,6 +22,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import zlib from 'node:zlib';
+import { FNV_BASIS, fnv64, fnv64Update, type Fnv } from './fnv.js';
 
 export const STORE_FILE = 'store.rts';
 export const VERSION = 1;
@@ -33,6 +34,16 @@ const MAX_JSON_FRAME = 2 ** 28;
 /** Chunk of the streamed MESH checksum. */
 const MESH_CHUNK = 1 << 24;
 
+/**
+ * F-819b: the mesh frames verified in this process (the store reader's worker lives as long as the Studio's launch):
+ * file path -> the identity it had when its checksum matched (`Store.identity`). Never written to disk: a file not
+ * verified in this launch is verified, and a file that changed since is verified again.
+ */
+const verifiedMeshes = new Map<string, string>();
+
+/** F-819b: how often `verifyMesh` hashed a mesh frame and how often it found it verified already (for the tests). */
+export const meshChecks = { hashed: 0, remembered: 0 };
+
 export class StoreError extends Error {
   constructor(message: string) {
     super(`tsstore: ${message}`);
@@ -42,28 +53,8 @@ export class StoreError extends Error {
 
 const bad = (msg: string): StoreError => new StoreError(msg);
 
-/** FNV-1a 64 state as two unsigned 32-bit halves [low, high]. */
-export type Fnv = [number, number];
-/** Offset basis cbf29ce484222325. */
-export const FNV_BASIS: Readonly<Fnv> = [0x84222325, 0xcbf29ce4];
-
-/** Continues FNV-1a 64 (prime 100000001b3 = 2^40 + 0x1b3) over `bytes` from `state`. */
-export function fnv64Update(state: Readonly<Fnv>, bytes: Uint8Array): Fnv {
-  let lo = state[0] | 0;
-  let hi = state[1] | 0;
-  for (let i = 0; i < bytes.length; i++) {
-    lo ^= bytes[i]!;
-    // (hi, lo) * (2^40 + 0x1b3) modulo 2^64
-    const p0 = (lo & 0xffff) * 0x1b3;
-    const p1 = (lo >>> 16) * 0x1b3;
-    const carry = ((p0 >>> 16) + p1) >>> 16;
-    hi = (Math.imul(hi, 0x1b3) + carry + (lo << 8)) | 0;
-    lo = Math.imul(lo, 0x1b3);
-  }
-  return [lo >>> 0, hi >>> 0];
-}
-
-export const fnv64 = (bytes: Uint8Array): Fnv => fnv64Update(FNV_BASIS, bytes);
+// FNV-1a 64 (./fnv.ts, F-819b: a WebAssembly loop for many bytes, the reference loop for few)
+export { FNV_BASIS, fnv64, fnv64Update, type Fnv } from './fnv.js';
 
 const u32 = (b: Uint8Array, off: number): number => (b[off]! | (b[off + 1]! << 8) | (b[off + 2]! << 16) | (b[off + 3]! << 24)) >>> 0;
 
@@ -497,20 +488,59 @@ export class Store {
     return out.buffer;
   }
 
-  /** Verifies the payload checksum of the MESH frame (streamed; once per open store). */
+  /**
+   * Verifies the payload checksum of the MESH frame (streamed; once per open store). F-819b: a file whose mesh frame was
+   * verified earlier in this process, and which is still the same file unchanged (`identity`), is not hashed again;
+   * any other file is.
+   */
   verifyMesh(): void {
     if (this.meshVerified) return;
     const h = this.headAt(HEADER_LEN, this.len);
     if (!h || h.kind !== 'MESH') throw bad('the first frame is not a mesh frame');
-    let s: Fnv = [FNV_BASIS[0], FNV_BASIS[1]];
     const start = HEADER_LEN + FRAME_HEAD_LEN;
-    for (let at = 0; at < h.len; at += MESH_CHUNK) s = fnv64Update(s, this.read(start + at, Math.min(MESH_CHUNK, h.len - at)));
-    if (s[0] !== h.sum[0] || s[1] !== h.sum[1]) throw bad(`payload checksum mismatch in frame at offset ${HEADER_LEN}`);
     const p = this.read(start, 24);
     if (hex16(p, 0) !== this.mesh.hash || u64(p, 8) !== this.mesh.nCells || u64(p, 16) !== this.mesh.nPoints) {
       throw bad('mesh frame changed while open');
     }
+    const before = this.identity(h);
+    if (verifiedMeshes.get(this.file) === before) {
+      meshChecks.remembered++;
+      this.meshVerified = true;
+      return;
+    }
+    verifiedMeshes.delete(this.file);
+    let s: Fnv = [FNV_BASIS[0], FNV_BASIS[1]];
+    const chunk = new Uint8Array(Math.min(MESH_CHUNK, h.len));
+    for (let at = 0; at < h.len; at += MESH_CHUNK) {
+      const n = Math.min(MESH_CHUNK, h.len - at);
+      s = fnv64Update(s, this.readInto(chunk, start + at, n));
+    }
+    meshChecks.hashed++;
+    if (s[0] !== h.sum[0] || s[1] !== h.sum[1]) throw bad(`payload checksum mismatch in frame at offset ${HEADER_LEN}`);
     this.meshVerified = true;
+    // remembered only when the file did not change while it was hashed
+    if (this.identity(h) === before) verifiedMeshes.set(this.file, before);
+  }
+
+  /**
+   * F-819b: what names this file's mesh frame for `verifyMesh`'s memory: the open file's device, file index, size, and
+   * times of modification, change and creation (nanoseconds), and the mesh frame's length, recorded checksum, hash and
+   * counts. A write to the file moves its modification and change times, a replacement its file index or creation time.
+   */
+  private identity(h: Head): string {
+    const st = fs.fstatSync(this.fd, { bigint: true });
+    return [st.dev, st.ino, st.size, st.mtimeNs, st.ctimeNs, st.birthtimeNs, h.len, h.sum[0], h.sum[1], this.mesh.hash, this.mesh.nCells, this.mesh.nPoints].join(':');
+  }
+
+  /** `n` bytes at `off` into the start of `buf` (reused between the chunks of the mesh checksum). */
+  private readInto(buf: Uint8Array, off: number, n: number): Uint8Array {
+    let got = 0;
+    while (got < n) {
+      const k = fs.readSync(this.fd, buf, got, n - got, off + got);
+      if (k <= 0) throw bad(`short read at offset ${off + got}`);
+      got += k;
+    }
+    return buf.subarray(0, n);
   }
 
   /**

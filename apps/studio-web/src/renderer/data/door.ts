@@ -5,7 +5,7 @@
 //
 // The data port is a main-process read of a store (`local`, R2) or the service's `data.*` methods (`service`, R1), not a
 // service method of SERVICE_METHODS, so it has no entry in the action registry (G16; reported with F-804 and F-808).
-import type { DataOptions, DataReply, DifferenceData, FieldData, StoreInfo, StoreRef, SurfaceData } from '../../shared/data.js';
+import type { DataOptions, DataReply, DifferenceData, FieldData, StoreInfo, StoreRef, SurfaceData, SurfaceFieldData } from '../../shared/data.js';
 
 const bridge = () => window.studioData;
 
@@ -27,6 +27,16 @@ export function loadField(store: StoreRef, snapshot: number, field: string, opti
 export function loadSurface(store: StoreRef, options?: DataOptions): Promise<DataReply<SurfaceData>> {
   const b = bridge();
   return b ? b.surface(store, options) : Promise.resolve(noBridge());
+}
+
+/**
+ * F-819b: one field of one snapshot on the store's boundary surface only, one value per triangle of `loadSurface`'s
+ * surface (route `local`; the service route answers `bad_request`, and `loadField` reads the whole field there).
+ */
+export function loadSurfaceField(store: StoreRef, snapshot: number, field: string, options?: DataOptions): Promise<DataReply<SurfaceFieldData>> {
+  // F-819b: the surface values have their own bridge over the same data port (window.studioSurfaceValues)
+  const b = window.studioSurfaceValues as typeof window.studioSurfaceValues | undefined;
+  return b ? b.field(store, snapshot, field, options) : Promise.resolve(noBridge());
 }
 
 /** F-815: `other`'s field at `otherSnapshot` minus `store`'s at `snapshot`, in f64, on the same mesh (route local). */

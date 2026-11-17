@@ -5,11 +5,16 @@
 // The worker keeps the stores it has opened (at most MAX_OPEN, least recently used closed first). Before each task it
 // looks at the file again: a store that grew is refreshed (a scanned index picks up the snapshots a live run committed),
 // a store that was replaced or changed otherwise is opened anew.
+//
+// F-819b: with a store it keeps the owner cells of its surface's triangles, the first time the surface is made, so a
+// field asked for on the surface (`surfaceField`) is gathered here, where the whole field was read, and only the
+// surface's values cross to the renderer. A store opened anew makes its surface anew.
 import fs from 'node:fs';
 import { parentPort } from 'node:worker_threads';
 import type { FieldInfo, StoreInfo } from '../../shared/data.js';
 import { Store, StoreError, STORE_FILE } from './tsstore.js';
 import { difference, fieldsMatch, meshMatch } from '../../shared/compare.js';
+import { gatherSurface } from '../../shared/surface-values.js';
 import path from 'node:path';
 
 /** main -> worker */
@@ -17,6 +22,7 @@ export type WorkerTask =
   | { readonly id: number; readonly op: 'open'; readonly dir: string; readonly path: string }
   | { readonly id: number; readonly op: 'field'; readonly dir: string; readonly snapshot: number; readonly field: string }
   | { readonly id: number; readonly op: 'surface'; readonly dir: string }
+  | { readonly id: number; readonly op: 'surfaceField'; readonly dir: string; readonly snapshot: number; readonly field: string }
   | {
       readonly id: number;
       readonly op: 'difference';
@@ -37,6 +43,7 @@ export type WorkerResult =
   | { readonly kind: 'open'; readonly info: StoreInfo }
   | { readonly kind: 'field'; readonly snapshot: number; readonly field: string; readonly values: ArrayBuffer }
   | { readonly kind: 'surface'; readonly points: ArrayBuffer; readonly triangles: ArrayBuffer; readonly cells: ArrayBuffer }
+  | { readonly kind: 'surfaceField'; readonly snapshot: number; readonly field: string; readonly meshHash: string; readonly values: ArrayBuffer }
   | { readonly kind: 'difference'; readonly snapshot: number; readonly otherSnapshot: number; readonly field: string; readonly values: ArrayBuffer }
   | { readonly kind: 'hooks' };
 
@@ -46,6 +53,8 @@ interface Open {
   readonly store: Store;
   readonly ino: number;
   readonly birth: number;
+  /** F-819b: the owner cell of each triangle of this store's surface, once the surface was made. */
+  cells: Uint32Array | null;
 }
 
 const open = new Map<string, Open>();
@@ -62,6 +71,10 @@ function closeOne(dir: string): void {
 }
 
 function storeFor(dir: string): Store {
+  return openFor(dir).store;
+}
+
+function openFor(dir: string): Open {
   let st: fs.Stats;
   try {
     st = fs.statSync(path.join(dir, STORE_FILE));
@@ -89,12 +102,17 @@ function storeFor(dir: string): Store {
   }
   if (!o) {
     const store = new Store(dir);
-    o = { store, ino: st.ino, birth: st.birthtimeMs };
+    o = { store, ino: st.ino, birth: st.birthtimeMs, cells: null };
     while (open.size >= MAX_OPEN) closeOne(open.keys().next().value as string);
   } else open.delete(dir);
   open.set(dir, o); // most recently used last
   o.store.hooks = { wrongStride };
-  return o.store;
+  return o;
+}
+
+/** F-819b: the surface's owner cells of an open store, kept (a copy: the surface's own arrays go to the renderer). */
+function keepCells(o: Open, cells: ArrayBuffer): void {
+  o.cells = new Uint32Array(cells.slice(0));
 }
 
 function info(s: Store, p: string): StoreInfo {
@@ -142,8 +160,19 @@ function run(t: WorkerTask): { result: WorkerResult; transfer: ArrayBuffer[] } {
       return { result: { kind: 'field', snapshot: t.snapshot, field: t.field, values }, transfer: [values] };
     }
     case 'surface': {
-      const s = storeFor(t.dir).surface();
+      const o = openFor(t.dir);
+      const s = o.store.surface();
+      keepCells(o, s.cells);
       return { result: { kind: 'surface', ...s }, transfer: [s.points, s.triangles, s.cells] };
+    }
+    case 'surfaceField': {
+      const o = openFor(t.dir);
+      if (o.store.fieldInfo(t.snapshot, t.field).location !== 'cell') {
+        throw new StoreError(`field '${t.field}' is a point field; the surface's values are the values of its triangles' cells`);
+      }
+      if (!o.cells) keepCells(o, o.store.surface().cells);
+      const values = gatherSurface(o.cells!, new Float32Array(o.store.field(t.snapshot, t.field))).buffer;
+      return { result: { kind: 'surfaceField', snapshot: t.snapshot, field: t.field, meshHash: o.store.meshHash, values }, transfer: [values] };
     }
     case 'difference': {
       const values = differenceOf(storeFor(t.dir), t.snapshot, storeFor(t.otherDir), t.otherSnapshot, t.field);

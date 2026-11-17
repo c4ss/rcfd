@@ -5,7 +5,7 @@
 // (`onMainThread` says so; the Studio's windows have workers).
 import type { SurfaceData } from '../../shared/data.js';
 import { meshLayers, vectorGlyphs, type Glyphs, type Layers } from './derived.js';
-import { bounds, cornerPositions, cornerScalars, shownRange } from './surface.js';
+import { bounds, cornerPositions, cornerScalars, cornerScalarsOf, rangeOf, shownRange } from './surface.js';
 import type { PrepReply, PrepRequest } from './prepare.worker.js';
 
 export interface PreparedSurface {
@@ -131,6 +131,22 @@ export class FieldPrep {
     const r = await this.ask(w, { op: 'field', id, surface: prepared.id, values: own }, [own.buffer]);
     if (r.op === 'error') throw new Error(r.message);
     if (r.op !== 'field') throw new Error('unexpected reply of the field worker');
+    return { scalars: r.scalars, values: r.values, range: r.range };
+  }
+
+  /**
+   * F-819b: the arrays of one field given as surface values (one per triangle of `prepared`'s surface, as
+   * src/shared/surface-values.ts gathers them). `values` is handed over (transferred) and comes back in the result.
+   */
+  async surfaceField(prepared: PreparedSurface, values: Float32Array<ArrayBuffer>): Promise<PreparedField> {
+    if (values.length !== prepared.surface.cells.length) throw new Error(`${values.length} surface values for ${prepared.surface.cells.length} triangles`);
+    const w = this.ensure();
+    if (!w) return { scalars: cornerScalarsOf(values), values, range: rangeOf(values) };
+    const id = ++prepIds;
+    const own = values.byteOffset === 0 && values.byteLength === values.buffer.byteLength ? values : values.slice();
+    const r = await this.ask(w, { op: 'surfaceField', id, surface: prepared.id, values: own }, [own.buffer]);
+    if (r.op === 'error') throw new Error(r.message);
+    if (r.op !== 'surfaceField') throw new Error('unexpected reply of the field worker');
     return { scalars: r.scalars, values: r.values, range: r.range };
   }
 

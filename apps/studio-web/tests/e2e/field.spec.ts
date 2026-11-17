@@ -309,6 +309,35 @@ test('reset view: a drag moves the view and shows Reset view; pressing it from t
   expect(await frameDiff(after, before)).toBe(0);
 });
 
+test('F-819b: no readout is taken while a button is held (an orbit); at the release it is the stored value under the cursor', async () => {
+  const box = await frameBox();
+  const cx = Math.round(box.x + box.width / 2);
+  const cy = Math.round(box.y + box.height / 2);
+  const readout = page.locator('.fv-readout-value');
+  const where = page.locator('.fv-readout');
+  const h = await hoverAt(cx, cy);
+  expect(h).not.toBeNull();
+  await expect(where).toHaveAttribute('data-pointer', `${cx},${cy}`);
+  await page.mouse.down();
+  await page.mouse.move(cx + 30, cy + 10, { steps: 6 });
+  await page.evaluate(() => new Promise((done) => requestAnimationFrame(() => requestAnimationFrame(done))));
+  // the view orbited, and nothing was read out on the way: no value, and the readout's point is still the press's
+  await expect(page.getByRole('button', { name: 'Reset view' })).toBeVisible();
+  await expect(readout).toHaveCount(0);
+  await expect(where).toHaveAttribute('data-pointer', `${cx},${cy}`);
+  await page.mouse.up();
+  await expect(where).toHaveAttribute('data-pointer', `${cx + 30},${cy + 10}`);
+  await expect(readout).toHaveCount(1);
+  const cell = Number(await readout.getAttribute('data-cell'));
+  expect(await readout.textContent()).toBe(f32Text(shown['tiny']!.values[cell]!));
+  // as a plain hover there
+  expect(await hoverAt(cx + 30, cy + 10)).toEqual({ cell, text: f32Text(shown['tiny']!.values[cell]!) });
+  await page.mouse.move(10, 10);
+  await page.getByRole('button', { name: 'Reset view' }).focus();
+  await page.keyboard.press('Enter');
+  await expect(page.getByRole('button', { name: 'Reset view' })).toHaveCount(0);
+});
+
 test('keyboard: the view takes focus, arrow keys orbit, the readout shows the stored value at the centre, Home resets', async () => {
   const frame = page.locator('.fv-frame');
   await page.mouse.move(10, 10);

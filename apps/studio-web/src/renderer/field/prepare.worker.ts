@@ -3,8 +3,12 @@
 // copy. The worker keeps the surface it was given last, so a field (one value per cell) needs only its values. F-809's
 // derived pictures loop over the whole surface too: the mesh's layers (with the surface) and the vector arrows (./derived.ts,
 // unchanged arithmetic) are made here as well.
+//
+// F-819b: a field can also come as surface values, one per triangle (`surfaceField`, gathered by the store reader where
+// it read the whole field); its arrays are made with ./surface.ts cornerScalarsOf and rangeOf, the same values in the
+// same order as cornerScalars and shownRange take them from the whole field.
 import { meshLayers, vectorGlyphs, type Glyphs, type Layers } from './derived.js';
-import { bounds, cornerPositions, cornerScalars, shownRange } from './surface.js';
+import { bounds, cornerPositions, cornerScalars, cornerScalarsOf, rangeOf, shownRange } from './surface.js';
 
 export type PrepRequest =
   | {
@@ -17,6 +21,8 @@ export type PrepRequest =
       readonly nCells: number;
     }
   | { readonly op: 'field'; readonly id: number; readonly surface: number; readonly values: Float32Array<ArrayBuffer> }
+  /** F-819b: one value per triangle of the surface held (src/shared/surface-values.ts). */
+  | { readonly op: 'surfaceField'; readonly id: number; readonly surface: number; readonly values: Float32Array<ArrayBuffer> }
   | {
       readonly op: 'glyphs';
       readonly id: number;
@@ -39,7 +45,7 @@ export type PrepReply =
     }
   | { readonly op: 'glyphs'; readonly id: number; readonly glyphs: Glyphs }
   | {
-      readonly op: 'field';
+      readonly op: 'field' | 'surfaceField';
       readonly id: number;
       readonly scalars: Float32Array<ArrayBuffer>;
       readonly values: Float32Array<ArrayBuffer>;
@@ -84,6 +90,13 @@ scope.onmessage = (e) => {
     if (r.op === 'glyphs') {
       const glyphs = vectorGlyphs(held, r.components, r.layers, r.nCells);
       scope.postMessage({ op: 'glyphs', id: r.id, glyphs }, [glyphs.triangles.buffer, glyphs.cells.buffer, glyphs.segments.buffer]);
+      return;
+    }
+    if (r.op === 'surfaceField') {
+      if (r.values.length !== held.cells.length) throw new Error(`${r.values.length} surface values for ${held.cells.length} triangles`);
+      const range = rangeOf(r.values);
+      const scalars = cornerScalarsOf(r.values);
+      scope.postMessage({ op: 'surfaceField', id: r.id, scalars, values: r.values, range }, [scalars.buffer, r.values.buffer]);
       return;
     }
     const cells = held.cells;

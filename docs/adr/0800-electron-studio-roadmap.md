@@ -300,6 +300,23 @@ reader checking the checksum of the whole 773 MB mesh frame. The FAN-01 meshes a
 and every FAN-01 number is far inside its limit. No polyhedral FAN-01 mesh exists, and F1's counts doubled do not build.
 The numbers, causes and proposed fixes are in ADR 0801, Addendum F-819.
 
+F-819b, the three fixes (2026-11-17). At 4e6 cells, the field viewport now gets a stored field as surface values: the
+reader's worker gathers the 320 000 values of the cells that own a surface triangle (1.22 MiB instead of 15.3 MiB),
+bit for bit, and the drawn values, the F-808 range and the readout are unchanged. The reader remembers, for the launch,
+each store file whose mesh checksum it verified, and verifies again any file not verified in this launch or changed
+since. Its FNV-1a 64 runs a WebAssembly loop for many bytes. No pick runs while a mouse button is held. Measured with
+`npm run bench:large`, three repeats before and three after, on a loaded machine (busy 0.3 to 1.0 around the
+measurements):
+
+| Measure | Before | After |
+|---|---|---|
+| 4e6 scrub (P5) | 11.3 to 14.8 per s, longest frame 83 to 101 ms | 20.1 to 20.2 per s, longest frame 51 to 66 ms |
+| 4e6 first open in a launch (not judged) | 1505 to 1784 ms | 858 to 944 ms |
+| 4e6 P7 median | 161 to 202 ms | 114 to 146 ms |
+| 4e6 orbit with no rate limit, the drag with the readout | 214 to 244 draws per s | 2427 to 2879 draws per s |
+
+63 of 63 judged lines were met in both sets, and no limit changed. ADR 0801, Addendum F-819b, has the numbers.
+
 ## 10. Retiring the egui apps early (maintainer, 2026-11-16)
 
 The maintainer asked to "kill the old rcfd-studio and clear up some test bandwidth" and chose (a) of three options:

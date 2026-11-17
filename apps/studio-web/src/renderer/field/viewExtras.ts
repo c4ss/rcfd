@@ -78,6 +78,20 @@ export function cellsOutside(cells: Uint32Array, values: Float32Array, lo: numbe
   return { outside, of: seen.size };
 }
 
+/** F-819b: `cellsOutside` of surface values (one per triangle, `values[t]` the value of `cells[t]`). */
+export function cellsOutsideOf(cells: Uint32Array, values: Float32Array, lo: number, hi: number): { outside: number; of: number } {
+  const seen = new Set<number>();
+  let outside = 0;
+  for (let t = 0; t < cells.length; t++) {
+    const c = cells[t]!;
+    if (seen.has(c)) continue;
+    seen.add(c);
+    const v = values[t]!;
+    if (v < lo || v > hi) outside++;
+  }
+  return { outside, of: seen.size };
+}
+
 /** The file name Save PNG proposes: `<run>-<field>-step<k>.png`, only letters, digits, `.`, `_` and `-`. */
 export function pngName(run: string, field: string, step: number | undefined): string {
   const clean = (s: string) => s.replace(/[^A-Za-z0-9._-]+/g, '_').replace(/^[._]+/, '') || 'field';
