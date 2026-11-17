@@ -18,6 +18,12 @@ export interface AppInfo {
   readonly packaged: boolean;
 }
 
+/** The setting "Keep the runner going after the Studio closes", and the --keep-runner switch. */
+export interface KeepRunnerState {
+  readonly setting: boolean;
+  readonly switch: boolean;
+}
+
 /** Channel name -> argument tuple and reply. The only channels there are. */
 export interface IpcContract {
   /** The shell's name and versions. */
@@ -33,14 +39,25 @@ export interface IpcContract {
    * editing). The request is the number the main process sent.
    */
   'app.closeAnswer': { args: [request: number, answer: CloseAnswer]; reply: void };
+  /**
+   * G7 as amended 2026-11-17: the setting "Keep the runner going after the Studio closes" (off by default), and whether
+   * the --keep-runner switch is on (it keeps the runner whatever the setting).
+   */
+  'runner.keep.get': { args: []; reply: KeepRunnerState };
+  /** Sets the setting and keeps it in the Studio's user data (studio-preferences.json). */
+  'runner.keep.set': { args: [keep: boolean]; reply: KeepRunnerState };
   /** F-818: the theme setting (src/shared/theme.ts) and whether the system is dark now. */
   'theme.get': { args: []; reply: ThemeState };
   /** F-818: sets the theme, keeps it in the Studio's user data, and sets the window's native theme and background. */
   'theme.set': { args: [setting: ThemeSetting]; reply: ThemeState };
 }
 
-/** F-837: the answers to a close request. */
-export const CLOSE_ANSWERS = ['asking', 'close', 'cancel'] as const;
+/**
+ * F-837: the answers to a close request. G7 as amended 2026-11-17: `stop-runs` and `keep-runs` close as `close` does,
+ * and say what to do with the active runs of a runner the Studio owns (src/shared/runner-lifetime.ts); `close` keeps
+ * such a runner (the page did not ask about it) and shuts down one with no active run.
+ */
+export const CLOSE_ANSWERS = ['asking', 'close', 'cancel', 'stop-runs', 'keep-runs'] as const;
 export type CloseAnswer = (typeof CLOSE_ANSWERS)[number];
 
 /**
@@ -53,7 +70,7 @@ export const CLOSE_REQUEST_CHANNEL = 'studio.close-request';
 export type Channel = keyof IpcContract;
 
 /** The allow-list at run time. `satisfies` keeps it equal to the keys of IpcContract in both directions. */
-export const CHANNELS = ['app.info', 'app.ready', 'app.closeAnswer', 'theme.get', 'theme.set'] as const satisfies readonly Channel[];
+export const CHANNELS = ['app.info', 'app.ready', 'app.closeAnswer', 'runner.keep.get', 'runner.keep.set', 'theme.get', 'theme.set'] as const satisfies readonly Channel[];
 type Missing = Exclude<Channel, (typeof CHANNELS)[number]>;
 const complete: Missing extends never ? true : Missing = true;
 void complete;
@@ -66,6 +83,11 @@ export interface StudioBridge {
     /** F-837: the one listener of close requests (a second call replaces the first; null removes it). */
     onCloseRequest(listener: ((request: number) => void) | null): void;
     closeAnswer(request: number, answer: CloseAnswer): Promise<void>;
+  };
+  /** G7 as amended 2026-11-17: the setting that keeps the runner going after the Studio closes. */
+  readonly runner: {
+    getKeep(): Promise<KeepRunnerState>;
+    setKeep(keep: boolean): Promise<KeepRunnerState>;
   };
   /** F-818: the theme setting. */
   readonly theme: {

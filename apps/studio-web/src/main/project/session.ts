@@ -477,6 +477,18 @@ export class ProjectSession {
     this.set({ runDetails: details, runDetailErrors: errors });
   }
 
+  /** The close's "Stop runs and close": cancel_run through the run-control server; false when it cannot be reached. */
+  async cancelForClose(run: string): Promise<boolean> {
+    if (!this.deps.control || this.closed) return false;
+    this.control ??= new RunControl(this.folder, this.deps.control);
+    try {
+      await this.control.cancelForClose(run);
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
   /** F-837 (ADR 0733): the runner writes its budgets through the run-control server (made on first use, as for an action). */
   setRunnerConfig(args: Record<string, unknown>): Promise<unknown> {
     if (!this.deps.control) return Promise.reject(new Error('Run control is not set up in this Studio, so the runner’s budgets cannot be written.'));

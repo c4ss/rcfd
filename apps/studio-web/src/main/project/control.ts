@@ -227,6 +227,15 @@ export class RunControl {
     return server.call(tool, args);
   }
 
+  /**
+   * The Studio's close with "Stop runs and close" (src/shared/runner-lifetime.ts): cancel_run on the run-control server,
+   * with the reason in the project journal. The engine's error is the rejection.
+   */
+  async cancelForClose(run: string): Promise<void> {
+    const server = await this.controlServer();
+    await server.call('cancel_run', { run, reason: 'Stopped when the Studio closed (Stop runs and close).' });
+  }
+
   /** Whether the run-control server is running (for tests and diagnostics). */
   get serverRunning(): boolean {
     return this.server !== null && !this.server.exited;

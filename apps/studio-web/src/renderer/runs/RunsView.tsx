@@ -98,7 +98,7 @@ export function RunsView({ view, selected, onSelect, onOpenWorkspace }: RunsView
         ) : all.length === 0 ? (
           <EmptyMark
             className="rv-empty"
-            text="No runs yet. A run solves one case and keeps its results in runs/; the runner owns it, so it goes on when the Studio is closed. Choose a case above and Run it, or Queue it with a priority. Claude Code (start_run) and the CLI (rcfd-runner start) start the same runs; theirs appear here as they start."
+            text="No runs yet. A run solves one case and keeps its results in runs/; the runner owns it, so closing the Studio never stops it without asking. Choose a case above and Run it, or Queue it with a priority. Claude Code (start_run) and the CLI (rcfd-runner start) start the same runs; theirs appear here as they start."
           />
         ) : (
           <div

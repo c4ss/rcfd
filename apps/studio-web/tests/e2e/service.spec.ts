@@ -1,6 +1,8 @@
 // The service client against the real `rcfd serve` (F-803): service.info and an events.poll event from the renderer,
 // reconnection after the service is killed and started again (attached to it, and started by the Studio itself), and
-// G7: a reload does not touch the service, and a service the Studio started outlives the Studio while it holds sessions.
+// G7: a reload does not touch the service, and a service the Studio started outlives the Studio while a session of it
+// has a solve going (G7 as amended 2026-11-17: one whose sessions run nothing closes with the Studio, unless
+// --keep-runner or the setting keeps the old rule, kept while it holds any session).
 //
 // Needs the rcfd binary (tests/support/rcfd.ts says where it is looked for); without it these tests are skipped with
 // that reason.
@@ -161,10 +163,10 @@ test.describe('a service the Studio starts itself', () => {
       expect(created.ok).toBe(true);
       const e = await until(async () => (await pageEvents(studio.page)).find((x) => x.kind === 'created' && x.instance === 2), 10_000, 'the created event');
       expect(e.seq).toBe(1);
-      // it holds a session now, so it outlives the Studio (next test); here it is stopped by hand
+      // it holds a session that runs nothing: G7 as amended 2026-11-17, it closes with the Studio
       const { closed } = await quitLeavingService(studio);
-      expect(alive(second.pid!)).toBe(true);
-      killPid(second.pid!);
+      await until(() => (!alive(second.pid!) ? true : null), 10_000, 'the service to stop with the Studio');
+      expect(existsSync(path.join(stateDir, 'service.json'))).toBe(false);
       await closed;
     } catch (e) {
       await studio.app.close().catch(() => undefined);
@@ -224,12 +226,14 @@ test.describe('a service the Studio starts itself', () => {
 test.describe('an installed Studio with its shipped engine', () => {
   const bin = packagedBin();
   const mcpExe = process.platform === 'win32' ? 'rcfd-mcp.exe' : 'rcfd-mcp';
-  test('rcfd serve starts with the first project, not at launch; with a session it outlives the Studio and is found again at launch (G7)', async () => {
+  test('rcfd serve starts with the first project, not at launch; with --keep-runner and a session it outlives the Studio and is found again at launch (G7)', async () => {
     test.skip(!existsSync(path.join(bin, mcpExe)), `out/packaged has no engine (${bin}): packaged with --no-engine`);
     const stateDir = tempDir();
     const folder = await emptyProject(tempDir(), 'F-820 bundled');
     const env = { RCFD_STUDIO_STATE_DIR: stateDir, RCFD_STUDIO_RECENT: path.join(stateDir, 'recent.json') };
-    let studio = await launchStudio(env);
+    // --keep-runner: the old rule of G7 for the Studio's own service (kept while it holds a session); without it, a
+    // session that runs nothing would not keep it (G7 as amended 2026-11-17; the tests above)
+    let studio = await launchStudio(env, ['--keep-runner']);
     try {
       // the engine from the shipped folder; the service waits, nothing is started at launch
       expect((await projectState(studio.page)).engine).toEqual({ configured: true, path: path.join(bin, mcpExe), from: 'bundled' });

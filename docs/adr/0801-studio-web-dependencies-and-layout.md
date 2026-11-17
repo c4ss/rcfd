@@ -3394,3 +3394,90 @@ Verification of the answers: typecheck; `npm run build && npm run package:dir`; 
 failures are red on main as well, and are left to ci-fix); e2e field, workspace, compare, a11y, word-budget, idle-frames,
 commands, f836 and f837: 85 passed. The Alt test fails when the key-up is not prevented, which was checked by building
 once without the fix.
+
+## Addendum: Runner closes with the Studio (2026-11-17, branch runner-lifetime over main 21fa5c34)
+
+This addendum has no number, because a parallel branch (claude-mcp) may take Addendum 22. It amends G7
+(`docs/studio-guardrails.md`), roadmap F-807.
+
+The maintainer closed the Studio and found `rcfd-runner serve --project …` and a paused `rcfd run` still running and
+holding `target\release`. Their words: "the runner should close with studio by default if no external (existing) runner
+env var is specified". For active runs, their answer was: ask.
+
+### Rules as built
+
+- **Ownership.** The Studio owns only a runner that came up while it had the project open, with none alive at the look
+  before. A runner alive when the project opened is adopted and never stopped by the Studio: one left by an earlier
+  Studio, one the CLI started, one Claude Code started. A service attached through `RCFD_STUDIO_SERVICE` or `--service`
+  is never stopped either.
+- **Close.** The close can come from the window, Alt+F4, quit, or Close project. An owned runner with no run `queued`,
+  `running` or `paused` is shut down without a question (`rcfd-runner shutdown`). With active runs, the F-837 close
+  guard asks in the F-829 panel and names each run as `id: case, state, step N, t = x s`. The choices are:
+  - Stop runs and close: each active run gets `cancel_run` with a reason and keeps its records, the Studio waits up to
+    30 s, then the runner is shut down.
+  - Keep them running and close: the runner stays, and the next Studio adopts it.
+  - Cancel: the default; it has the focus and takes Escape.
+  
+  When cases are also unsaved, one prompt asks both: Save and close / Close and lose them / Cancel, with a segmented
+  toggle "The runs" (Keep them running, the default, or Stop them).
+- **Service.** The Studio's own `rcfd serve` closes with it unless one of its sessions has a solve going in the service
+  itself (session.list state `running` or `paused`). The project's runs belong to the runner, not to the service. A
+  service the Studio found running keeps the old rule: it is left while it holds any session.
+- **Overrides.** The setting "Keep the runner going after the Studio closes" (off by default) and the `--keep-runner`
+  switch both keep the runner running, and nothing is asked. They also bring back the old service rule. The switch wins
+  over the setting, which is then shown on and disabled. The precedence is in `locate.ts` and `argv.ts`.
+- **Test mode.** The quit under `RCFD_TEST_HEADLESS`, and any close that gets no answer (P10, a page that does not
+  answer), gives the choice `unasked`. An idle owned runner is shut down, and one with active runs is kept. Nothing
+  waits on a prompt.
+
+### How ownership is detected (no engine change)
+
+`RunnerWatch` (`src/main/project/runner-lifetime.ts`) reads `.rcfd/runner.json` and checks its pid every second, and
+also before and after each project action. The runner writes that file once it holds `.rcfd/runner.lock` and removes it
+at a clean shutdown. `observeRunner` (`src/shared/runner-lifetime.ts`, pure) works on two looks in a row:
+
+- The first look owns nothing.
+- A runner seen after a look that found none is owned.
+- A different `{pid, started}` between two looks (a replacement) is not owned.
+- A runner that has gone is no longer owned.
+
+### Decisions (recommendations taken; each reversible)
+
+- **RL-D1, starts by MCP or the CLI while the Studio is open.** Claude Code's `start_run` or the CLI may bring a runner
+  up while the Studio has the project open, with none alive before. The Studio owns that runner (the recommended
+  option). The Studio cannot tell who started it without an engine change, and the maintainer's complaint was about
+  exactly this kind of leftover.
+- **RL-D2, a replacement is not owned.** A runner that replaces another between two looks is treated as someone else's.
+  Recommendation taken: the safer side for G7.
+- **RL-D3, `unasked` keeps active runs.** A close that could not ask never stops a run.
+- **RL-D4, the merged prompt's toggle defaults to Keep.** Stopping runs needs an explicit choice.
+- **RL-D5, the service rule above.** Recommended: keep the service only for a solve going in the service.
+  service.spec's survival test now passes `--keep-runner`. A session with no solve going no longer keeps the service.
+- **RL-D6, an icon toggle for the setting.** The studio-settings surface already uses its G22 budget of 9 words. The
+  setting is therefore an IconToggle (the `play` icon), with its words as the accessible name and the tooltip. The
+  budget was not raised; it is too tight for a labelled row (for the maintainer).
+- **RL-D7, opening another project.** The project being replaced gets the `unasked` step for its runner.
+- **RL-D8, the close title.** It uses the project folder's base name, for example "Close quick-start with 1 run going?".
+
+### Open for the maintainer
+
+- **Q-RL-1:** raise the studio-settings word budget to show the setting with a visible label, or keep the icon toggle?
+- **Q-RL-2:** should the runner record who started it (an additive `started_by` in `runner.json`), so that ownership no
+  longer depends on looks? It would be an engine change under G4; not built.
+
+### Verification
+
+- Unit tests: `tests/unit/runner-lifetime.spec.ts`, 21 tests, covering ownership, close steps, wording, RunnerWatch with
+  a fake engine, `readRunnerSeen`, the preferences file, the bridge parse and `keptForSolves`. The touched specs pass:
+  engine-locate, theme, project-home, service-client, run-control and f837.
+- e2e tests, all headless: `tests/e2e/runner-lifetime.spec.ts`, 7 tests:
+  - Stop runs and close, with the journal line;
+  - Keep, then a new Studio adopts the runner;
+  - an idle runner closes with no prompt;
+  - a runner started by the CLI is left alone;
+  - the merged prompt;
+  - `--keep-runner`, then the setting;
+  - Close project with Stop.
+
+  The specs service, run-control, runs, close-guard, f837, project, word-budget, shell, data, service-security and
+  first-path were restated where they assumed survival. No process the tests started is left behind.

@@ -18,6 +18,7 @@ import {
   type TrashOutcome,
   type TrashWhat,
 } from '../../shared/project.js';
+import { NO_PLAN, type RunnerChoice, type RunnerPlan } from '../../shared/runner-lifetime.js';
 import { HomeRefusal } from './home.js';
 
 export const MAX_PATH_CHARS = 4096;
@@ -36,8 +37,11 @@ export interface BridgeHome {
   pick(): Promise<unknown>;
   openRecent(path: string): Promise<void>;
   forget(path: string): Promise<void>;
-  close(): Promise<void>;
+  /** `runs`: the close prompt's answer for an owned runner's active runs (src/shared/runner-lifetime.ts). */
+  close(runs?: RunnerChoice): Promise<void>;
   refresh(): Promise<void>;
+  /** What a close means for the open project's runner (optional so that a home without it answers NO_PLAN). */
+  runnerPlan?(): Promise<RunnerPlan>;
   dismiss(): void;
   /** F-807: a run-control action (the home answers it; optional so that a home without run control refuses it). */
   action?(id: string, params: Readonly<Record<string, unknown>>): Promise<RunActionResult>;
@@ -96,9 +100,15 @@ export function parseProjectRequest(raw: unknown): ParsedProject {
   const op = raw['op'];
   const keys = Object.keys(raw).sort().join(',');
   switch (op) {
+    case 'close': {
+      if (keys === 'id,op') return { ok: true, request: { op, id } };
+      const runs = raw['runs'];
+      if (keys !== 'id,op,runs' || (runs !== 'stop' && runs !== 'keep')) return bad("close: takes nothing, or runs: 'stop' or 'keep'");
+      return { ok: true, request: { op, id, runs } };
+    }
     case 'state':
     case 'pick':
-    case 'close':
+    case 'runnerPlan':
     case 'refresh':
     case 'dismiss':
     case 'cancel':
@@ -213,7 +223,10 @@ export class ProjectPortBridge {
           await this.home.forget(r.path);
           break;
         case 'close':
-          await this.home.close();
+          await this.home.close(r.runs ?? 'unasked');
+          break;
+        case 'runnerPlan':
+          result = this.home.runnerPlan ? await this.home.runnerPlan() : NO_PLAN;
           break;
         case 'refresh':
           await this.home.refresh();

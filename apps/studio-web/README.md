@@ -67,6 +67,8 @@ to." Every way of starting the Studio finds an engine (rcfd, rcfd-mcp and rcfd-r
   `RCFD_STUDIO_SERVICE`. It replaces the service the Studio would start, whatever the engine; the project server still
   comes from the table. It also applies with `--no-engine` (attaching starts nothing). Loopback only today (G10); this
   attach is where engines on other machines (a cloud, a cluster) will plug in, out of scope here.
+- `--keep-runner` (G7 as amended 2026-11-17, below under Run control): the runner the Studio started keeps going after
+  it closes, as the setting "Keep the runner going after the Studio closes" does; it changes no engine choice.
 - The switches take `--name value` or `--name=value`, so a Windows shortcut (Target:
   `"...\rcfd-studio.exe" --engine-dir "D:\rcfd\bin"`) or a `.desktop` file's `Exec=` line can carry them. Their values
   are never taken for the project folder of `rcfd-studio <PROJECT_DIR>` (F-837).
@@ -106,9 +108,12 @@ section above), started when the first project opens:
 - When a connection drops, calls fail at once with `disconnected` and the client tries again after 100 ms, doubling to at
   most 5 s. A service the Studio started is started again if its process is gone. After a reconnection the client tells
   a restarted service from the same one by the last event it saw, and a restart raises `instance` in the state.
-- Runs outlive the window (G7): a reload does not touch the connections. When the Studio quits, a service it started is
-  stopped only if it holds no session; otherwise it keeps running, and the next start attaches to it again
-  (`adopted: true`).
+- Runs outlive the window (G7): a reload does not touch the connections. When the Studio quits, a service this start of
+  the Studio started is stopped unless one of its sessions has a solve going in the service itself (`running` or
+  `paused`; G7 as amended 2026-11-17: the project's runs are the runner's, not the service's). With
+  `--keep-runner` or the setting "Keep the runner going after the Studio closes", and for a service an earlier start
+  left running (`adopted: true`), it is stopped only if it holds no session, as before; otherwise it keeps running, and
+  the next start attaches to it again. A service attached to (`--service`, `RCFD_STUDIO_SERVICE`) is never stopped.
 - `RCFD_STUDIO_BENCH=1` (measurement only, `scripts/measure-service.mjs`): the client is reachable from Playwright's
   main-process evaluate. Unset, nothing is exposed.
 
@@ -238,9 +243,10 @@ failed one; Escape clears the selection. Surface brief: `.impeccable/surfaces/we
 
 - Through the engine: `list_runs` and, for each run whose state or step changed, `run_status` (the last 50 events,
   `RUN_EVENTS`), asked by the main process (`src/main/project/runs.ts`) of the same read-only project server. The runner
-  owns the runs (G7): closing or killing the Studio leaves them going, and the next start shows their true state
-  (`tests/e2e/runs.spec.ts` closes and kills the Studio during a run started from `rcfd-runner`, and checks the step
-  against the runner's own `status.json`).
+  owns the runs (G7): closing or killing the Studio leaves a runner it did not start going, and the next start shows
+  their true state (`tests/e2e/runs.spec.ts` closes and kills the Studio during a run started from `rcfd-runner`, and
+  checks the step against the runner's own `status.json`). A runner the Studio started closes with it (G7 as amended
+  2026-11-17, under Run control).
 - Live: state changes come with the feed (400 ms); while a run is queued, running or paused the main process also reads
   the run list every second (`RUN_POLL_MS`), since the feed reports state changes and not progress.
 - Time: shown only where it is a simulated time. A steady solver writes time 0, and the engine writes NaN as `null`; the
@@ -433,7 +439,40 @@ through the service has no derived pictures (said in the reason).
 
 Runs are started, queued, paused, resumed, stopped and cancelled from the window, and only through the project's runner
 (G7): the Studio asks the engine's project server (`start_run`, `pause_run`, `resume_run`, `cancel_run`), the server
-writes the request into the project, and `rcfd-runner` acts on it. Closing or killing the Studio leaves every run going.
+writes the request into the project, and `rcfd-runner` acts on it. Killing the Studio leaves every run going; closing it
+asks first when its own runner holds runs (below).
+
+### The runner closes with the Studio (G7 as amended 2026-11-17)
+
+The maintainer: "the runner should close with studio by default if no external (existing) runner env var is
+specified"; for active runs: ask. The rules are in `src/shared/runner-lifetime.ts`, the main process's side in
+`src/main/project/runner-lifetime.ts` (ADR 0801, addendum "Runner closes with the Studio").
+
+- Ownership: the Studio looks at the project's `.rcfd/runner.json` (the pid and start time the runner writes once it
+  holds the project's lock) when the project opens, once a second, and before and after each of its run actions. A
+  runner alive at the open is adopted and never stopped by the Studio. A runner first seen after a look that found none
+  is the Studio's, whoever asked for it (the Studio's Run, Claude Code's `start_run` while the Studio has the project
+  open, the CLI). A runner that replaced another between two looks is not.
+- The close (the window's close button, Alt+F4, quit, Close project): an owned runner with no run queued, running or
+  paused is shut down with no question (`rcfd-runner shutdown --project <folder>`). With active runs the F-837 close
+  guard asks with the F-829 decision panel, naming each run (id, case, state, step or simulated time): **Stop runs and
+  close** (each run is cancelled with `cancel_run`, its records stay and a run with a restart file can go on with
+  `rcfd-runner start --continue-from`; the close waits for them to end, at most 30 s, then shuts the runner down),
+  **Keep them running and close** (the runner stays; the next start adopts it), **Cancel** (the default: the focus is on
+  it, and Escape). With case changes not saved as well, one panel asks both: Save and close, Close and lose them, Cancel,
+  and a toggle for the runs (Keep them running until Stop them is chosen).
+- Overrides: the setting "Keep the runner going after the Studio closes" (Settings, Ctrl+,; an icon toggle, off by
+  default, kept in `studio-preferences.json` as `keepRunner`) and the `--keep-runner` switch. With either, the runner is
+  left going and nothing is asked about it.
+- A close that cannot ask keeps a runner with active runs and shuts down an idle one: the test mode's quit
+  (`RCFD_TEST_HEADLESS=1`, Playwright's `close()`), the P10 measurement's quit, a page that does not answer.
+- The project port has `runnerPlan` (whether the Studio owns the runner, the override, the active runs) and `close`
+  takes the runs' answer (`runs: 'stop' | 'keep'`); the window's close answer gains `stop-runs` and `keep-runs`; the IPC
+  allow-list gains `runner.keep.get` and `runner.keep.set`.
+- Tests: `tests/unit/runner-lifetime.spec.ts` (the rules, the watch with a fake engine, the setting's file, the port);
+  `tests/e2e/runner-lifetime.spec.ts` (the real engine: Stop runs and close, Keep them running and a new Studio that
+  adopts, an idle runner and the Studio's service gone with no question, a CLI runner left alone, the merged prompt,
+  `--keep-runner` and the setting).
 
 - Where: the run bar above the runs table (Start a run: the case, Run, Queue…, Start the runner); Run on each case of the
   project home (switches to Runs with the new run selected); and Run control in the selected run's panel (Pause or
@@ -466,7 +505,8 @@ writes the request into the project, and `rcfd-runner` acts on it. Closing or ki
   confirmations, refusals, the session with a fake engine, the port, the run list's notes, the stylesheet),
   `tests/e2e/run-control.spec.ts` (against the real `rcfd-mcp` and `rcfd-runner` on a copy of the quick-start project
   holding one run at a time: each action by keyboard, a refused action in the window, past the page and by the engine,
-  no runner alive, and G7; screenshots in `test-results-visual/f807/`).
+  no runner alive, and G7 with a runner started from the test, which the Studio adopts and leaves going; screenshots in
+  `test-results-visual/f807/`).
 
 Decisions taken in building F-807 (options, the recommendation followed; each reversible without touching the engine):
 

@@ -18,6 +18,8 @@ import {
   type RunAvailability,
 } from '../../shared/actions/runs.js';
 
+import { NO_PLAN, type RunnerPlan } from '../../shared/runner-lifetime.js';
+
 const bridge = () => window.studioProject;
 
 /** Follows the main process's project state; returns the function that stops following. */
@@ -64,6 +66,24 @@ export const projectActions = {
   /** F-835: the engine makes a project in the folder it has just refused as no project, then it opens. */
   createHere: () => void bridge()?.create('here', keepCancel),
 };
+
+/**
+ * G7 as amended 2026-11-17 (src/shared/runner-lifetime.ts): what a close means for the open project's runner. A port
+ * that cannot answer gives the plan of a runner the Studio does not own: nothing is asked, and nothing stopped.
+ */
+export async function runnerPlan(): Promise<RunnerPlan> {
+  const r = await bridge()
+    ?.runnerPlan()
+    .catch(() => null);
+  return r && r.ok ? r.result : NO_PLAN;
+}
+
+/** Close project with the close prompt's answer for the runs (awaited: a stop waits for the runs to end). */
+export async function closeProjectWith(runs: 'stop' | 'keep' | null): Promise<void> {
+  await bridge()
+    ?.close(runs ?? undefined)
+    .catch(() => undefined);
+}
 
 /** F-807: dispatches a run-control action; resolves with the engine's answer or the refusal in words (never rejects). */
 export async function runAction<Id extends RunActionId>(id: Id, params: RunActionParams<Id>): Promise<RunActionResult> {
