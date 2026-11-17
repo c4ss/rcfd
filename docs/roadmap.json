@@ -8107,8 +8107,19 @@
     "deps": [
       "F-769"
     ],
-    "status": "todo",
+    "status": "done",
     "acceptance": "Every limit not stated here is registered in the ADR before the run. A reader other than the author of the rows reads a registered sample of at least 15 rows of ADRs 0706 to 0710, including 10 of the 22 rows of 0706 not read in ADR 0705, against the files and the roadmap notes they cite, with at least 90 percent agreement, and the disagreements are listed with the line.",
-    "note": "Follow-up of F-769 (ADR 0705, 2026-11-16)."
+    "note": "Follow-up of F-769 (ADR 0705, 2026-11-16). DONE. ADR 0715, 2026-11-17: a reader who wrote neither the rows nor the tests read 20 limit rows of ADRs 0706 to 0710 against the test files and the roadmap notes of F-040 and F-043, by a criterion and a sample registered and committed before the draw (a row agrees if the test named exists, an assert checks what the row says, the number equals the code's after normalisation of percent, exponent and band forms, mesh and set-up numbers equal those the test builds, and a cited note contains what the row says it contains; rounding without \"about\" disagrees). Sample: `random.Random(794).sample` of the rows not read by ADR 0705, 10 of the 22 of 0706 (H2, H3, H4, H8, H12, H16, H18, H19, H22, H24), W3, W4, W5, C4, C5, C7, M2, M3, T3, T4; none of ADR 0705's ten. Result: 19 of 20 agree (95 percent, limit 90 percent met); by ADR 9 of 10, 3 of 3, 3 of 3, 2 of 2, 2 of 2; no reservation. The one disagreement: row H22 (ADR 0706 line 89) says an invalid boundary name \"fails the validate task\", but `rcfd-api/tests/workflow.rs` lines 212 and 213 assert only that the first failed task has a message containing `nonexistent`, not which task it is (the words come from the test's comment; the task of kind `validate` has the id `setup`). A literal search of every number of the 19 agreeing rows in the test files found all but the three derived y+ values of W3 (395/ny, in the F-040 note), `10 %` for `0.10` and a year. No test was needed for the reading; docs_site passes; no Rust file, script, golden or hash table and none of ADRs 0705 to 0710 edited. The samples of ADR 0705 and ADR 0715 share no row, so this is a reading of other rows, not a measure of two readers on the same row: 30 of 48 rows are read once, 18 are unread. Outside the sample, row W1 (ADR 0707 line 36) says \"12-cell\" for a 4 x 12 mesh (the first reader's reservation; a disagreement under the mesh clause of ADR 0715). Follow-up proposed below (correct H22 and W1 by addendum, read the 18 remaining rows). Follow-up F-795 (Correct rows H22 and W1 and read the 18 unread limit rows of ADRs 0706 to 0710)."
+  },
+  {
+    "id": "F-795",
+    "title": "Correct rows H22 and W1 and read the 18 unread limit rows of ADRs 0706 to 0710",
+    "phase": 9,
+    "deps": [
+      "F-794"
+    ],
+    "status": "todo",
+    "acceptance": "Every limit not stated here is registered in the ADR before the run. An addendum to ADR 0706 corrects row H22 (the test asserts that the first failed task has a message containing `nonexistent`, not which task it is) and an addendum to ADR 0707 corrects row W1 (a uniform 4 x 12 mesh), with the text above each addendum unchanged; the 18 rows not read in ADR 0705 or ADR 0715 (H5, H7, H9, H10, H11, H13, H14, H15, H17, H20, H21, H23, W6, W7, W8, C3, C6, T5) are read by a reader other than the author of the rows against the criterion of ADR 0715, every disagreement is listed with the line and corrected by the same addenda, and at least 16 of the 18 agree; no Rust file is edited and docs_site passes.",
+    "note": "Follow-up of F-794 (ADR 0715, 2026-11-16)."
   }
 ]
