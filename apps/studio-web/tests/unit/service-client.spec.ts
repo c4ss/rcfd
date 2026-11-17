@@ -8,34 +8,44 @@ import path from 'node:path';
 import type { ServiceEvent, ServiceState } from '../../src/shared/service.js';
 import { findHead, ServiceClient, type ClientEventBatch } from '../../src/main/service/client.js';
 import { backoffMs, parseLoopbackAddress, serviceConfig } from '../../src/main/service/config.js';
+import { exe, type EngineChoice } from '../../src/main/engine/locate.js';
 import { RpcConnection, RpcError } from '../../src/main/service/rpc.js';
 import { parseListening, processAlive, readRecord, removeRecord, writeRecord } from '../../src/main/service/spawn.js';
 import { FakeService, until } from '../support/fake-service.js';
 
+/** The engine chosen by the variables (src/main/engine/locate.ts chooseEngine), and a complete engine folder. */
+const VARS: EngineChoice = { from: 'variables' };
+const SHIPPED: EngineChoice = { from: 'bundled', dir: path.resolve('/res/bin'), missing: [] };
+const shippedRcfd = path.join(path.resolve('/res/bin'), exe('rcfd'));
+
 test.describe('configuration', () => {
   test('attach, spawn, off, and the conflicts', () => {
-    expect(serviceConfig({}, '/state')).toEqual({ mode: 'off' });
-    expect(serviceConfig({ RCFD_STUDIO_SERVICE: '127.0.0.1:7878' }, '/state')).toEqual({ mode: 'attach', host: '127.0.0.1', port: 7878 });
-    expect(serviceConfig({ RCFD_STUDIO_SERVICE: '[::1]:9' }, '/state')).toEqual({ mode: 'attach', host: '::1', port: 9 });
-    expect(serviceConfig({ RCFD_STUDIO_RCFD: '/bin/rcfd' }, '/state')).toEqual({ mode: 'spawn', rcfd: '/bin/rcfd', root: null, stateDir: '/state', start: 'launch' });
+    expect(serviceConfig({}, '/state', { from: 'no-engine' })).toEqual({ mode: 'off', reason: expect.stringContaining('--no-engine') });
+    expect(serviceConfig({ RCFD_STUDIO_SERVICE: '127.0.0.1:7878' }, '/state', VARS)).toEqual({ mode: 'attach', host: '127.0.0.1', port: 7878 });
+    expect(serviceConfig({ RCFD_STUDIO_SERVICE: '[::1]:9' }, '/state', VARS)).toEqual({ mode: 'attach', host: '::1', port: 9 });
+    expect(serviceConfig({ RCFD_STUDIO_RCFD: '/bin/rcfd' }, '/state', VARS)).toEqual({ mode: 'spawn', rcfd: '/bin/rcfd', root: null, stateDir: '/state', start: 'launch' });
     expect(
-      serviceConfig({ RCFD_STUDIO_RCFD: '/bin/rcfd', RCFD_STUDIO_SERVICE_ROOT: '/cases', RCFD_STUDIO_STATE_DIR: '/s2' }, '/state'),
+      serviceConfig({ RCFD_STUDIO_RCFD: '/bin/rcfd', RCFD_STUDIO_SERVICE_ROOT: '/cases', RCFD_STUDIO_STATE_DIR: '/s2' }, '/state', VARS),
     ).toEqual({ mode: 'spawn', rcfd: '/bin/rcfd', root: '/cases', stateDir: '/s2', start: 'launch' });
-    expect(serviceConfig({ RCFD_STUDIO_SERVICE: '127.0.0.1:1', RCFD_STUDIO_RCFD: 'x' }, '/s').mode).toBe('invalid');
+    expect(serviceConfig({ RCFD_STUDIO_SERVICE: '127.0.0.1:1', RCFD_STUDIO_RCFD: 'x' }, '/s', VARS).mode).toBe('invalid');
   });
 
   test('F-820: an installed Studio starts its shipped rcfd with the first project; the variables still win; never PATH', () => {
-    expect(serviceConfig({}, '/state', '/res/bin/rcfd')).toEqual({ mode: 'spawn', rcfd: '/res/bin/rcfd', root: null, stateDir: '/state', start: 'project' });
-    expect(serviceConfig({ RCFD_STUDIO_SERVICE_ROOT: '/cases', RCFD_STUDIO_STATE_DIR: '/s2' }, '/state', '/res/bin/rcfd')).toEqual({
+    expect(serviceConfig({}, '/state', SHIPPED)).toEqual({ mode: 'spawn', rcfd: shippedRcfd, root: null, stateDir: '/state', start: 'project' });
+    expect(serviceConfig({ RCFD_STUDIO_SERVICE_ROOT: '/cases', RCFD_STUDIO_STATE_DIR: '/s2' }, '/state', SHIPPED)).toEqual({
       mode: 'spawn',
-      rcfd: '/res/bin/rcfd',
+      rcfd: shippedRcfd,
       root: '/cases',
       stateDir: '/s2',
       start: 'project',
     });
-    expect(serviceConfig({ RCFD_STUDIO_RCFD: '/bin/rcfd' }, '/state', '/res/bin/rcfd')).toMatchObject({ rcfd: '/bin/rcfd', start: 'launch' });
-    expect(serviceConfig({ RCFD_STUDIO_SERVICE: '127.0.0.1:7878' }, '/state', '/res/bin/rcfd')).toEqual({ mode: 'attach', host: '127.0.0.1', port: 7878 });
-    expect(serviceConfig({ PATH: '/bin' }, '/state', null)).toEqual({ mode: 'off' });
+    // a variable names the engine: chooseEngine gives `variables`, and the shipped folder is not used
+    expect(serviceConfig({ RCFD_STUDIO_RCFD: '/bin/rcfd' }, '/state', VARS)).toMatchObject({ rcfd: '/bin/rcfd', start: 'launch' });
+    // an attach replaces the service the Studio would start, whatever the engine
+    expect(serviceConfig({ RCFD_STUDIO_SERVICE: '127.0.0.1:7878' }, '/state', SHIPPED)).toEqual({ mode: 'attach', host: '127.0.0.1', port: 7878 });
+    // a shipped folder without the whole engine: off, saying what is missing
+    const broken: EngineChoice = { from: 'bundled', dir: path.resolve('/res/bin'), missing: [{ name: 'rcfd', pkg: 'rcfd-cli' }] };
+    expect(serviceConfig({ PATH: '/bin' }, '/state', broken)).toEqual({ mode: 'off', reason: expect.stringContaining(exe('rcfd')) });
   });
 
   test('only loopback addresses are accepted (G10)', () => {
@@ -43,7 +53,7 @@ test.describe('configuration', () => {
     for (const bad of ['10.0.0.2:7878', '0.0.0.0:7878', 'example.com:7878', '127.0.0.1', '127.0.0.1:0', '127.0.0.1:70000', ':7878']) {
       expect('error' in parseLoopbackAddress(bad), bad).toBe(true);
     }
-    const c = serviceConfig({ RCFD_STUDIO_SERVICE: '192.168.1.5:7878' }, '/s');
+    const c = serviceConfig({ RCFD_STUDIO_SERVICE: '192.168.1.5:7878' }, '/s', VARS);
     expect(c).toEqual({ mode: 'invalid', reason: expect.stringContaining('not a loopback address') });
   });
 
@@ -155,10 +165,14 @@ test.describe('ServiceClient (attach mode, fake service)', () => {
     expect(w.states.some((s) => s.retryInMs === 30)).toBe(true);
     await client.shutdown();
 
-    const off = new ServiceClient({ mode: 'off' });
+    const off = new ServiceClient({ mode: 'off', reason: 'The Studio was started without an engine (--no-engine).' });
     off.start();
     expect(off.state.status).toBe('off');
-    expect(((await off.call('service.info').catch((x: unknown) => x)) as RpcError).code).toBe('not_configured');
+    // the reason is in the state, for the settings page and the actions' availability
+    expect(off.state.lastError).toBe('The Studio was started without an engine (--no-engine).');
+    const offError = (await off.call('service.info').catch((x: unknown) => x)) as RpcError;
+    expect(offError.code).toBe('not_configured');
+    expect(offError.message).toBe('No rcfd service: The Studio was started without an engine (--no-engine).');
     const invalid = new ServiceClient({ mode: 'invalid', reason: 'RCFD_STUDIO_SERVICE: nope' });
     expect(invalid.state.lastError).toBe('RCFD_STUDIO_SERVICE: nope');
     expect(((await invalid.call('service.info').catch((x: unknown) => x)) as RpcError).message).toContain('nope');

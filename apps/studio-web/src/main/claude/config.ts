@@ -44,7 +44,7 @@ export function claudeConfig(
       ...base,
       program: {
         configured: false,
-        reason: `The Studio was not told where Claude Code is. Set RCFD_STUDIO_CLAUDE to the path of ${EXE} (the Claude Code CLI, code.claude.com/docs) and start the Studio again. The Studio does not look for it on PATH. Until then the project's sessions are listed from their transcripts and shown read-only.`,
+        reason: `Claude Code was not found: the Studio looks for it only where RCFD_STUDIO_CLAUDE says, and that is not set (it does not look on PATH). Set RCFD_STUDIO_CLAUDE to the path of ${EXE} (the Claude Code CLI, code.claude.com/docs) and start the Studio again. Until then the project's sessions are listed from their transcripts and shown read-only.`,
       },
       command: null,
       prefix: [],

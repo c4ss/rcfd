@@ -6,8 +6,11 @@
 import { expect, test, type ElectronApplication, type Page } from '@playwright/test';
 import { mkdir, readFile, rm, unlink, writeFile } from 'node:fs/promises';
 import path from 'node:path';
-import { launchStudio, type Studio } from '../support/studio.js';
-import { appRoot } from '../support/rcfd.js';
+import { existsSync } from 'node:fs';
+import { launchStudio, packagedBin, type Studio } from '../support/studio.js';
+import { appRoot, killIfRcfd } from '../support/rcfd.js';
+import { until } from '../support/fake-service.js';
+import { exe } from '../../src/main/engine/locate.js';
 import {
   copyExample,
   copyRun,
@@ -38,7 +41,7 @@ const sized = async (s: Studio): Promise<Studio> => {
   return s;
 };
 
-const launch = async (env: Record<string, string>): Promise<Studio> => sized(await launchStudio(env));
+const launch = async (env: Record<string, string>, args: readonly string[] = []): Promise<Studio> => sized(await launchStudio(env, args));
 const shot = (page: Page, name: string) => page.screenshot({ path: path.join(SHOTS, `${name}.png`), scale: 'css' });
 
 /** Opens `folder` through the (stubbed) folder dialog and waits for its name as the page's h1. */
@@ -273,19 +276,55 @@ test('close: back to no project open, with the recent list; a folder that went a
   await expect.poll(() => mcpPids(quick).length, { timeout: 10_000 }).toBe(0);
 });
 
-test('without the engine: opening is unavailable, and the window says what to set', async () => {
-  studio = await launch({ RCFD_STUDIO_RECENT: recentFile });
+// ADR 0801 Addendum 21: out/packaged has its engine now, so a Studio without one is asked for (--no-engine, the switch
+// a shortcut can carry); the window says it was started that way.
+test('without the engine: opening is unavailable, and the window says why', async () => {
+  studio = await launch({ RCFD_STUDIO_RECENT: recentFile }, ['--no-engine']);
   const { page } = studio;
   await expect(page.getByText('Projects cannot be opened yet')).toBeVisible();
-  await expect(page.getByText(/Set RCFD_STUDIO_MCP to the path of rcfd-mcp/)).toBeVisible();
+  await expect(page.getByText('The Studio was started without an engine (--no-engine).')).toBeVisible();
   // the button is the Unavailable chip: it explains, and does nothing
   await expect(page.getByRole('button', { name: 'Open project folder…' })).toHaveAttribute('aria-disabled', 'true');
   await page.getByRole('button', { name: 'Open project folder…' }).click({ force: true });
   await page.waitForTimeout(300);
   expect((await projectState(page)).failure).toBeNull();
   const s = await projectState(page);
-  expect(s.engine.configured).toBe(false);
+  expect(s.engine).toEqual({ configured: false, reason: 'The Studio was started without an engine (--no-engine).' });
   await shot(page, '09-not-configured');
   await studio.app.close();
   studio = null;
+});
+
+// ADR 0801 Addendum 21 ("Engine found without setup"): no RCFD_STUDIO_* variable and no switch, and the packaged Studio
+// opens a project with the engine beside it (out/packaged/resources/bin, as an installed Studio's <resources>/bin). Its
+// own user data folder (--user-data-dir, Chromium's switch, not one of the Studio's) keeps the recent list and the
+// service's record out of the one the packaged copy shares with an installed Studio.
+test('with no variable set: the engine packaged beside the Studio opens a project, and its service starts with it', async () => {
+  const bin = packagedBin();
+  test.skip(!existsSync(path.join(bin, exe('rcfd-mcp'))), `out/packaged has no engine (${bin}): packaged with --no-engine`);
+  const userData = path.join(dir, 'user-data');
+  studio = await launch({}, [`--user-data-dir=${userData}`]);
+  const { app, page } = studio;
+  let servicePid: number | null = null;
+  try {
+    expect((await projectState(page)).engine).toEqual({ configured: true, path: path.join(bin, exe('rcfd-mcp')), from: 'bundled' });
+    expect(await page.evaluate(() => window.studioService.state())).toMatchObject({ status: 'waiting', mode: 'spawn', pid: null });
+    await openByDialog(app, page, quick, /Quick start/);
+    await expect(page.locator('.ph-group[data-group="runs"] tr[data-run]').first()).toBeVisible({ timeout: 20_000 });
+    // the rcfd beside it is started by the first project, and is the packaged one
+    const svc = await until(async () => {
+      const st = await page.evaluate(() => window.studioService.state());
+      return st.status === 'connected' ? st : null;
+    }, 20_000, 'the service to connect');
+    servicePid = svc.pid;
+    const record = JSON.parse(await readFile(path.join(userData, 'service', 'service.json'), 'utf8')) as { pid: number; rcfd: string };
+    expect(record).toMatchObject({ pid: svc.pid, rcfd: path.join(bin, exe('rcfd')) });
+    // the recent list is the Studio's own (no RCFD_STUDIO_RECENT)
+    const recent = JSON.parse(await readFile(path.join(userData, 'recent-projects.json'), 'utf8')) as { projects: { path: string }[] };
+    expect(recent.projects.map((r) => path.basename(r.path))).toEqual(['quick-start']);
+  } finally {
+    await studio.app.close();
+    studio = null;
+    if (servicePid !== null) killIfRcfd(servicePid);
+  }
 });

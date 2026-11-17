@@ -98,7 +98,7 @@ export class ServiceClient {
       status: config.mode === 'spawn' && config.start === 'project' ? 'waiting' : 'off',
       mode,
       address: config.mode === 'attach' ? `${config.host}:${config.port}` : null,
-      lastError: config.mode === 'invalid' ? config.reason : null,
+      lastError: config.mode === 'invalid' || config.mode === 'off' ? config.reason : null,
     };
     if (config.mode === 'attach') this.target = { host: config.host, port: config.port };
   }
@@ -139,7 +139,7 @@ export class ServiceClient {
 
   /** One request on the control connection. Rejects with an RpcError when there is no connection, at once. */
   call(method: string, params: Record<string, unknown> = {}, timeoutMs?: number): Promise<unknown> {
-    if (this.config.mode === 'off') return Promise.reject(new RpcError('not_configured', 'no service is configured (RCFD_STUDIO_SERVICE or RCFD_STUDIO_RCFD)'));
+    if (this.config.mode === 'off') return Promise.reject(new RpcError('not_configured', `No rcfd service: ${this.config.reason}`));
     if (this.config.mode === 'invalid') return Promise.reject(new RpcError('not_configured', this.config.reason));
     const link = this.link;
     if (this.st.status === 'waiting') {

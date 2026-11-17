@@ -1,7 +1,8 @@
 // Starting the packaged Studio (out/packaged, scripts/package-dir.mjs) for the service tests, with the service chosen by
 // environment variables (src/main/service/config.ts), and reading its service state from the page.
 import { _electron as electron, type ElectronApplication, type Page } from '@playwright/test';
-import { readFileSync } from 'node:fs';
+import { mkdtempSync, readFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import path from 'node:path';
 import type { ServiceState } from '../../src/shared/service.js';
 import { until } from './fake-service.js';
@@ -13,16 +14,35 @@ export interface Studio {
   readonly page: Page;
 }
 
-/** Launches the packaged Studio with these service variables (and none inherited from the test's own environment). */
-export async function launchStudio(serviceEnv: Record<string, string>): Promise<Studio> {
+/**
+ * Launches the packaged Studio with these service variables (and none inherited from the test's own environment), and
+ * these arguments (the engine switches of src/main/project/argv.ts, `--no-engine` for the tests of a Studio without an
+ * engine, or a project folder).
+ *
+ * out/packaged has its engine in resources/bin (scripts/package-dir.mjs, ADR 0801 Addendum 21), so a Studio started
+ * here can start an rcfd serve of its own when a project opens. Unless the test names one (RCFD_STUDIO_STATE_DIR, or a
+ * whole --user-data-dir), that service's record goes to a fresh temporary folder, never to the user data folder the
+ * packaged copy shares with an installed Studio.
+ */
+export async function launchStudio(serviceEnv: Record<string, string>, args: readonly string[] = []): Promise<Studio> {
   const { executable } = JSON.parse(readFileSync(path.join(appRoot, 'out', 'packaged.json'), 'utf8')) as { executable: string };
   const env: Record<string, string> = {};
   for (const [k, v] of Object.entries(process.env)) if (v !== undefined && !k.startsWith('RCFD_STUDIO_')) env[k] = v;
-  const app = await electron.launch({ executablePath: executable, ...launchArgs(), env: { ...env, ...serviceEnv } });
+  const own: Record<string, string> = serviceEnv['RCFD_STUDIO_STATE_DIR'] || args.some((a) => a.startsWith('--user-data-dir')) ? {} : { RCFD_STUDIO_STATE_DIR: scratchState() };
+  const app = await electron.launch({ executablePath: executable, ...launchArgs(args), env: { ...env, ...own, ...serviceEnv } });
   const page = await app.firstWindow();
   await page.waitForFunction(() => document.querySelector('h1')?.textContent === 'No project open');
   return { app, page };
 }
+
+/** out/packaged's engine folder: resources/bin beside the executable (Contents/Resources/bin of the macOS bundle). */
+export function packagedBin(): string {
+  const { executable } = JSON.parse(readFileSync(path.join(appRoot, 'out', 'packaged.json'), 'utf8')) as { executable: string };
+  const exeDir = path.dirname(executable);
+  return process.platform === 'darwin' ? path.join(exeDir, '..', 'Resources', 'bin') : path.join(exeDir, 'resources', 'bin');
+}
+
+const scratchState = (): string => mkdtempSync(path.join(tmpdir(), 'rcfd-studio-state-'));
 
 export const serviceState = (page: Page): Promise<ServiceState> => page.evaluate(() => window.studioService.state());
 

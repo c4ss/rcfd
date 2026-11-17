@@ -1,10 +1,12 @@
 // Finding and starting the real `rcfd` binary for the tests that use the service itself. Built by
-// `cargo build --release -p rcfd-cli`; looked for in RCFD_BIN, then $CARGO_TARGET_DIR/release, then target/release of
-// this checkout or of any folder above it (a git worktree inside the main checkout shares its target folder).
+// `cargo build --release -p rcfd-cli`; looked for in RCFD_BIN, then where the Studio itself finds the engine of its
+// checkout (checkoutRelease of src/main/engine/locate.ts: $CARGO_TARGET_DIR/release, else <repo>/target/release), then
+// target/release of any folder above the app (a git worktree inside the main checkout can share its target folder).
 import { execFileSync, spawn, type ChildProcess } from 'node:child_process';
 import { existsSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { checkoutRelease } from '../../src/main/engine/locate.js';
 
 const exe = process.platform === 'win32' ? 'rcfd.exe' : 'rcfd';
 export const appRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
@@ -12,7 +14,7 @@ export const appRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url))
 export function findRcfd(): string | null {
   const candidates: string[] = [];
   if (process.env['RCFD_BIN']) candidates.push(process.env['RCFD_BIN']);
-  if (process.env['CARGO_TARGET_DIR']) candidates.push(path.join(process.env['CARGO_TARGET_DIR'], 'release', exe));
+  candidates.push(path.join(checkoutRelease(process.env, appRoot), exe));
   for (let dir = appRoot; ; dir = path.dirname(dir)) {
     candidates.push(path.join(dir, 'target', 'release', exe));
     if (path.dirname(dir) === dir) break;

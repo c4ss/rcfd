@@ -372,7 +372,7 @@ export class ProjectSession {
         failure: {
           code: 'engine',
           problem: 'Run control is not set up in this Studio: it has no way to reach the engine’s run tools.',
-          recovery: 'Start the Studio with RCFD_STUDIO_MCP set to the path of rcfd-mcp, with rcfd-runner and rcfd beside it.',
+          recovery: 'Open the project in a Studio that has its whole engine (rcfd-mcp, rcfd-runner and rcfd in one folder); the project home says what is missing.',
           engine: null,
         },
       };
