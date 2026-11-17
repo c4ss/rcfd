@@ -14314,16 +14314,40 @@ Generated from `docs/studio-guardrails.md`, `PRODUCT.md` and `DESIGN.md` ([ADR 0
     loop, no pick while a button is held; 4e6 scrubbing 11-15/s to 20/s (longest frame 101 to 66 ms), first open of a
     launch 1.5-1.8 s to 0.86-0.94 s, all 63 lines met in 3 runs under load. Left: a polyhedral FAN-01 mesh (needs Rust),
     the maintainer's view-and-report.
-- [ ] **F-820** Electron Studio: installers, signing and updates
+- [~] **F-820** Electron Studio: installers, signing and updates
   - depends on: F-801
   - acceptance: Packaged installers for the platforms the maintainer names, signed if the maintainer provides
     certificates, with an update path that keeps the G10 settings; Electron on a supported release.
-  - note: NEEDS THE USER: packaging, signing and update policy are open in docs/studio-guardrails.md. Traces: G10.
-- [ ] **F-821** Electron Studio: Linux and macOS
+  - note: ADR 0801 Addendum 17. Traces: G10. Partial 2026-11-17 (ADR 0801 Addendum 17). Maintainer 2026-11-17:
+    installers built in CI, Linux tested in Docker first, signing when certificates exist, macOS not asked. Built:
+    electron-builder 26.18.0 (devDependency, Q-F820-1), npm run package:installers: NSIS (Windows, per user, keeps app
+    data, built here: 129 MB, unsigned) and AppImage plus .deb (Linux, built in Docker), each with rcfd, rcfd-mcp and
+    rcfd-runner in resources/bin and the tested app folder (dist byte-identical to out/packaged).
+    .github/workflows/studio-installers.yml builds them on manual dispatch and on tags, artifacts only, nothing
+    published; Windows signing wired but off (RCFD_STUDIO_SIGN, repository variable RCFD_STUDIO_SIGNING plus secrets
+    WIN_CSC_LINK, WIN_CSC_KEY_PASSWORD); Electron 45.3.3 is the latest stable (43, 44, 45 supported) and the workflow
+    fails when the pin falls out of support. Update path: install over; settings live in userData named after
+    productName, no installer touches it; tests/unit/installers.spec.ts pins productName, appId, keep-on-uninstall, no
+    asar, no publish. Not run on GitHub (actionlint clean). Left: the maintainer's answers to Q-F820-1..6 (accept the
+    dependency; where an installed Studio finds its bundled engine, without which it opens no project unless told by
+    RCFD_STUDIO_MCP; automatic updates; asar and fuses; identity and version; the certificate), a first green run of
+    the workflow, signed builds, an install-upgrade check on a runner.
+- [~] **F-821** Electron Studio: Linux and macOS
   - depends on: F-817
   - acceptance: The F-817 bench and the parity tests run on Linux (and macOS if the maintainer asks), with WebGPU or the
     WebGL2 fallback; misses stated with their numbers.
-  - note: NEEDS THE USER: platforms beyond Windows 11 are open in docs/studio-guardrails.md. Traces: G9.
+  - note: ADR 0801 Addendum 17. Traces: G9. Partial 2026-11-17 (ADR 0801 Addendum 17).
+    apps/studio-web/docker/linux-test (npm run test:linux-docker): Ubuntu 24.04 container builds the engine and the
+    packaged Linux Studio, runs unit and e2e under Xvfb with Chromium's sandbox on (verified by the renderer's seccomp
+    mode); cargo, npm and Electron caches in named volumes. Linux fixes: the test window at opacity 0 was never
+    painted on X11; Playwright ran Linux with --no-sandbox (G10 gap, launchArgs() fixes it); samePath used the running
+    system's path rules; the WebGL 2 fallback label covered the other view's controls in compare; three test timing
+    assumptions. Counts on the final tree with --ignore-gpu-blocklist (WebGL 2 on llvmpipe): unit 435/1/0 (claude.spec
+    panel timing, Q-F821-3), e2e 213/2/7 in run 3 with both failures fixed and rerun green; without the switch no
+    WebGL: 13 GPU tests fail (listed in the ADR). F-817 light bench in Docker: P10 263 ms and P2 p99 1.10 ms met; P4
+    (needs WebGPU), P5, P7, P8 not run (no GPU). .github/workflows/studio-linux-test.yml runs the same on manual
+    dispatch only (not run). Left: GPU lines and WebGPU on Linux need a machine with a GPU (Q-F821-2); when the CI job
+    runs (Q-F821-1); macOS not asked.
 - [x] **F-822** Electron Studio: tutorials that name the GUI
   - depends on: F-813
   - acceptance: Every tutorial that names rcfd-gui or rcfd-studio rewritten for the Electron Studio, or marked as CLI-

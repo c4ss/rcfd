@@ -2249,3 +2249,280 @@ On 256 MiB in plain Node, the reference loop ran at 1.1 to 1.2 ns per byte and t
 - `npm run bench:large`: the two sets of three runs above, both with exit 0 and 63 of 63 judged lines met. The after
   set ran on a package built before one change that only narrows a TypeScript type in `FieldViewport` (a cast replaced
   by an `in` check) and does not change behaviour; `npm test` ran on the final tree.
+
+## Addendum 17: F-820 and F-821, installers built in CI and the Studio on Linux in Docker (2026-11-17)
+
+The maintainer's answer to the packaging and platform questions of `docs/studio-guardrails.md` (2026-11-17): "(b) in CI
+(docker can test linux before CI)". Read as: the installers are built in CI; Linux is tested in Docker on the
+maintainer's machine first, then in CI; signing waits until the maintainer provides certificates (a documented hook that
+is off); macOS was not asked for, so it is left out, and nothing here makes it harder (`builderConfig()` has no `mac`
+section to remove, `package-dir.mjs` keeps its macOS branch).
+
+Nothing here was run on GitHub Actions: the two new workflows have not run. `actionlint` 1.7.7 (Docker image
+`rhysd/actionlint:1.7.7`, with its shellcheck) reports no problem in any workflow of `.github/workflows/`.
+
+### F-821: the Studio on Linux, in Docker
+
+`apps/studio-web/docker/linux-test/` (`npm run test:linux-docker` runs `run.mjs`):
+
+- `Dockerfile`: Ubuntu 24.04 (glibc 2.39, the CI runners' distribution), Rust 1.99.0 (the gate's), Node 22.19.0 (CI's),
+  the libraries Electron 45 needs, Xvfb, D-Bus, Mesa's software drivers. The build context is the folder alone; the
+  repository's files are not in the image. Image `rcfd-studio-linux-test:ubuntu24.04`.
+- `run.mjs` (host side, Windows or Linux): builds the image when missing, hands the container `git archive` of HEAD
+  (or `--worktree`: the tracked files as they are) with `core.autocrlf=false`, so the container sees the files as the
+  repository stores them (LF, `.gitattributes`). Cargo's target folder and registry and npm's and Electron's downloads
+  live in named volumes (`rcfd-studio-linux-target`, `rcfd-studio-linux-registry`, `rcfd-studio-linux-dl`): the first
+  run built the engine in 103 s on 8 cores, later runs reuse it. Results in `test-results-linux/` (git-ignored):
+  `summary.txt` with the counts, a log per step, Playwright's JSON reports.
+- `inside.sh` (in the container, from the archive): `cargo build --release --locked -p rcfd-cli -p rcfd-mcp -p
+  rcfd-runner` and the `f447_bench` example; `npm ci`, `npm run build`, `npm run package:dir` (the packaged Linux
+  Studio, `out/packaged/rcfd-studio`); the unit project; the e2e project under `xvfb-run` and `dbus-run-session`, as an
+  unprivileged user (Chromium's sandbox does not run as root); optional steps `installers` (AppImage and .deb) and
+  `bench` (the F-817 light set). The binaries are found as on Windows, through `CARGO_TARGET_DIR`.
+- The container runs with `--security-opt seccomp=unconfined`: Chromium's sandbox needs user namespaces, which
+  Docker's default seccomp profile refuses. The container is looser; the app keeps its sandbox (G10), and the test now
+  proves it (below).
+- `--gpu-blocklist=ignore` passes `--ignore-gpu-blocklist` to the tests' Electron through `RCFD_TEST_ELECTRON_ARGS`
+  (`tests/support/launch.ts`). There is no GPU in the container: by default Chromium turns off WebGL as well as WebGPU
+  (`getGPUFeatureStatus()`: `webgl: disabled_off`, `webgpu: disabled_off`), which is what a GPU-less Linux machine
+  gets, and the Studio's field views and plots cannot draw at all. With the switch, Chromium draws WebGL 2 on Mesa's
+  llvmpipe (`webgl: enabled`), so the drawing code and its pixel checks run; it says nothing about GPU speed. WebGPU
+  stays without an adapter either way (the container has Mesa's lavapipe, but Chromium's WebGPU on Linux needs more
+  than the blocklist switch); every Linux run here is therefore a WebGL 2 fallback run.
+
+#### Linux bugs found and fixed (Windows unchanged)
+
+1. **The test window was never painted on Linux.** The test mode (`RCFD_TEST_HEADLESS=1`) shows the window at
+   opacity 0; Chromium on X11 takes a fully transparent window for a hidden one, stops painting it and drops it to
+   about one frame a second. Every `page.screenshot` timed out (14 failures of the first run) and clicks waited for
+   frames that did not come (5 more). Bisected in the container (opacity was the only option that mattered; skip
+   taskbar, ignore-mouse, `showInactive` and the focus emulation do not). `src/main/index.ts` sets opacity 0 off Linux
+   only; Linux test runs use a virtual display instead. Outside the test mode nothing changes, on any platform.
+2. **Linux runs tested the Studio with Chromium's OS sandbox off.** Playwright's `_electron.launch` adds
+   `--no-sandbox` on Linux unless `chromiumSandbox: true` is passed, so CI's ubuntu `studio-web` job ran the Studio
+   without the sandbox G10 asks for, and `shell.spec.ts` assumed `osSandboxed: true` on Linux instead of checking it.
+   Every e2e launch now goes through `launchArgs()` (`tests/support/launch.ts`, `chromiumSandbox: true`; Playwright
+   ignores it on Windows), the bench scripts pass it too, and `shell.spec.ts` reads the renderer's seccomp mode from
+   `/proc/<pid>/status` on Linux (2 = the sandbox's seccomp-bpf filter; 0 with `--no-sandbox`). It passes in Docker.
+   CI's ubuntu job already lifts Ubuntu's AppArmor restriction on user namespaces, so it should keep passing, but
+   that job has not run with this change.
+3. **`samePath(a, b, 'win32')` used the running system's path rules** (`src/main/case/editor.ts`): on Linux,
+   `path.resolve` of `C:\P\cases\a.toml` is not a Windows path, and the unit test failed. It now resolves with
+   `path.win32` or `path.posix` as asked; on Windows `path` is `path.win32`, so nothing changes there, and production
+   always passes the running platform.
+4. **A unit test assumed a file's change time moves within milliseconds** (`tests/unit/data-routes.spec.ts`, F-819b's
+   mesh memo). Linux stamps times from a coarse clock (a kernel tick), so a write right after the last change can keep
+   the change time. The test waits 50 ms before each in-place change on Linux. The memo itself (size, modification
+   time, change time, inode) has the same limit: an in-place rewrite of a store within one tick of its previous change,
+   with its modification time put back, is not seen. A normal write moves the modification time, and a store is not
+   rewritten in place within milliseconds of the check that hashed it, so the code is unchanged.
+5. **A test read the heading before the project had closed** (`tests/e2e/project.spec.ts`, close): it now waits for
+   the heading. A slow renderer (Linux without a GPU) lost the race.
+
+Not a Linux bug, not changed: `tests/unit/claude.spec.ts` "resume a closed session" failed in two of the three full
+container runs (passed in the first). It asks that one of the panel's coalesced states (at most one every 30 ms) showed the streamed "denied"
+line before the transcript replaced it; when the fake claude's lines arrive in one pipe read, both happen inside one
+window and no state carries the line. A timing assumption of the test, not of the platform.
+
+#### Counts
+
+Five runs on 2026-11-17 (Docker 29.9.3 on Windows 11, WSL 2 kernel, `--cpuset-cpus 0-7`, 24 GB; the machine shared
+with other agents' builds). The suite has 436 unit tests and 222 e2e tests.
+
+| Run | Source | Chromium switches | unit: passed, failed, skipped | e2e: passed, failed, skipped |
+|---|---|---|---|---|
+| 1 | before any fix | none | 430, 2, 0 | 66, 23, 133 |
+| 2 | fixes 1-4 | none | 435, 1, 0 | 156, 14, 52 |
+| 3 | fixes 1-5 | `--ignore-gpu-blocklist` | 435, 1, 0 | 213, 2, 7 |
+| 4 | the two run-3 failures fixed (below); `compare`, `workspace`, `field` specs | `--ignore-gpu-blocklist` | - | 21, 1, 1 |
+| 5 | final tree; `workspace` and `project` specs | `--ignore-gpu-blocklist` | - | 15, 0, 0 |
+
+Run 1's failures: 14 screenshot time-outs and 5 click time-outs (fix 1), one focus check, two backend attributes and
+one closed page (the GPU list below). The unit failure left in runs 2 and 3 is the panel test above.
+
+Run 3's two failures were found and fixed, both real but only visible with a slow renderer:
+
+6. **The WebGL 2 fallback's label covered the other view's controls** (compare, side by side): its reason is long, the
+   half-width view's tool row did not shrink it, and it ran over the neighbouring view's "Compared run" select and
+   took its clicks. `.fv-backend` now shrinks with an ellipsis (`src/renderer/field/field.css`; the text and its
+   accessible content are unchanged; with WebGPU the label is screen-reader only, so Windows with a GPU looks the same).
+7. **Follow live's counter check pinned the snapshot number** (`tests/e2e/workspace.spec.ts`) to the one read a moment
+   earlier, while the run kept writing; it now checks "snapshot N of N" (the newest) with N at least that number.
+   Run 4's one failure was that spec on a tree whose new pattern had been written with a stray control character; run
+   5 is the corrected file.
+
+The specs that cannot pass in a container without a GPU, and why (no faking: they fail, and the run says so):
+
+Without a GPU and without the switch (run 2), Chromium has neither WebGPU nor WebGL, the field viewport never reports a
+first picture and the plots end in `data-backend="failed"`. These 13 tests fail for that reason, and 52 more do not run
+because they follow one of them in a serial group:
+
+- `a11y.spec.ts:301` (the run workspace walk), `word-budget.spec.ts:144` (the same surface), `cancel.spec.ts:207`
+  (opening a run), `compare.spec.ts:157`, `f837.spec.ts:257` (colour ranges), `field.spec.ts:196`,
+  `field-derived.spec.ts:164`, `first-path.spec.ts:198` (the stored picture), `idle-frames.spec.ts:152`,
+  `plots.spec.ts:134`, `provenance.spec.ts:293` (the workspace's numbers), `responsiveness.spec.ts:260` (fields load),
+  `workspace.spec.ts:116` (the run bands wait for the field frame).
+
+With `--ignore-gpu-blocklist` every one of them passes on Mesa's llvmpipe (runs 3 to 5), including the pixel checks
+titled "(WebGPU)" (`field.spec.ts:232`, `field-derived.spec.ts:273`): they check whichever renderer drew, and on Linux
+that was always the WebGL 2 fallback. Nothing WebGPU-specific has run on Linux. The responsiveness limits passed on the
+software rasteriser, but its frame times say nothing about a GPU.
+
+All skips are Playwright's "did not run" for the rest of a serial group after one of its tests failed; no spec skipped
+for a missing binary (the engine was built in the container).
+
+#### The F-817 bench in Docker
+
+`npm run bench` (light set) in the container, without the switch (the bench scripts do not read
+`RCFD_TEST_ELECTRON_ARGS`), load 0.00 to 0.03 inside the container's eight processors:
+
+| Line | Result |
+|---|---|
+| P10 cold start | median 263 ms (first 269, max 298) of 10, limit 2500 ms: met |
+| P2 solver event to renderer | p99 1.10 ms (p50 0.70, max 1.34) of 100, limit 20 ms: met; clock drift 0.07 ms, 0 missed |
+| P1 round trips (recorded) | `service.info` p99 0.39 ms, `run.status` p99 0.35 ms, main process: met |
+| P4 field to GPU buffer | not run: `measure-data.mjs` asks for a WebGPU adapter and there is none |
+| P5 scrubbing | not run: the run workspace's field frame never appeared (no WebGL) |
+| P7, P8 first picture, orbit | not run: no first picture in 120 s (no WebGL) |
+
+Verdict `INCOMPLETE: 2 of 2 judged lines met; not run: P4; P5; P7, P8` (exit 2). The two lines that run are the two
+that need no GPU; they say the Linux shell, its service path and its start are well inside the limits. P4, P5, P7 and
+P8 are GPU lines and cannot be judged in a container: with the switch P5, P7 and P8 would run on a software
+rasteriser, which measures Mesa, not the Studio, and P4 needs WebGPU by design (it measures the upload to a WebGPU
+buffer).
+
+### F-820: installers built in CI, signing off, the update path
+
+- **Tool: electron-builder 26.18.0** (a new devDependency, its §2 entry below). `scripts/installer-config.mjs` holds the
+  configuration (pure, unit-tested), `scripts/package-installers.mjs` (`npm run package:installers`) stages
+  `out/stage/app` (the same `package.json` as `out/packaged`, from the shared `runtimePackage()`, plus description,
+  author and homepage, and `dist/`) and `out/stage/bin` (rcfd, rcfd-mcp, rcfd-runner from `--engine`,
+  `$CARGO_TARGET_DIR/release` or `target/release`), then builds for the running platform: NSIS on Windows, AppImage
+  and .deb on Linux. The staged app is electron-builder's project folder, so none of the repository's
+  `dependencies` (bundled by Vite already) are copied in: the installed `resources/app` is `package.json` and `dist/`,
+  and its `dist/` is byte-identical to `out/packaged`'s (checked with `diff -rq`). No asar and no fuses yet (open
+  question Q-F820-4), so the installed app is the folder the tests run. The engine goes to `<resources>/bin`.
+- **Built here**: Windows `rcfd-studio-0.0.0-setup-x64.exe`, 129 MB (NSIS, assisted, per user, the install folder can
+  be changed), unsigned ("file signing skipped via signExecutable configuration"); in the container
+  `rcfd-studio-0.0.0-x86_64.AppImage` (138 MB) and `rcfd-studio-0.0.0-amd64.deb` (111 MB, installs to
+  `/opt/rcfd Studio/`, `Depends: libgtk-3-0, libnotify4, libnss3, libxss1, libxtst6, xdg-utils, libatspi2.0-0,
+  libuuid1, libsecret-1-0`), each with the three engine binaries in `resources/bin`. None was installed or started:
+  an install would write to this machine's user profile, where the maintainer's settings live.
+- **CI: `.github/workflows/studio-installers.yml`**, on manual dispatch and on a tag `vX.Y.Z` (the tag's version names
+  the installers). Per runner (`windows-latest`, `ubuntu-24.04`): the engine in release from an empty target folder (no
+  cache, as the gate), `npm ci`, `npm run build`, the Electron support check (below), the signing decision, `npm run
+  package:installers`, a check that the engine is inside and no `node_modules` came along, SHA-256 sums in the job
+  summary, and an upload as workflow artifacts (30 days). Nothing is published and nothing is attached to the draft
+  release of `release.yml`; `docs/releasing.md` lists both new workflows and what they do not prove.
+- **CI: `.github/workflows/studio-linux-test.yml`**, manual dispatch only: the same Docker run on `ubuntu-24.04`
+  (inputs: `gpu_blocklist`, `specs`, `bench`), logs and reports uploaded. Manual because hosted-runner minutes and its
+  place beside the daily gate are the maintainer's call (Q-F821-1). It adds to CI's `studio-web` job what that job
+  lacks: the engine, so the specs that need rcfd, rcfd-mcp or rcfd-runner run instead of skipping.
+- **Signing, off.** `RCFD_STUDIO_SIGN=1` turns on Windows signing in `package-installers.mjs`, which then requires
+  `CSC_LINK` (or `WIN_CSC_LINK`) and `CSC_KEY_PASSWORD` (electron-builder's own variables) and refuses to build
+  without them; off, it deletes those variables before electron-builder starts, so a certificate in the environment is
+  never used by accident, and `signExecutable: false` skips signing. In the workflow a step turns it on only when the
+  repository variable `RCFD_STUDIO_SIGNING` is `on` and the secrets `WIN_CSC_LINK` and `WIN_CSC_KEY_PASSWORD` exist;
+  today neither exists, so every installer is unsigned and the summary says so. Linux packages are not signed.
+- **Electron is on a supported release.** 45.3.3 is `latest` on npm (2026-11-16); the maintained lines are 43.8.10,
+  44.11.3 and 45.3.3 (`npm view electron dist-tags`, 2026-11-17), so 45 is in support until about the release of 48
+  (§4). The installer workflow fails when the pinned major falls more than two behind npm's latest.
+
+#### The update path keeps the settings
+
+The Studio's own settings are files in Electron's userData folder, named after `productName`: `%APPDATA%\rcfd Studio`
+on Windows, `~/.config/rcfd Studio` on Linux (`$XDG_CONFIG_HOME` when set). It holds `recent-projects.json`,
+`service/` (a started service's address and log) and `claude/` (the Claude panel's state); everything else is in the
+project folder (G12), which no installer touches. An update is the next installer run over the installed one: NSIS
+finds the installed copy by `appId` (`org.rcfd.studio`) and replaces the program folder, a .deb upgrade replaces the
+files under `/opt`, an AppImage is one file replaced by the next. None of them writes into userData:
+`deleteAppDataOnUninstall: false` keeps it even on an uninstall, and a .deb never owns files in a home folder. The G10
+settings themselves (sandbox, context isolation, CSP, the IPC allow-list) are code, carried unchanged because the
+installed app folder is the tested one. `tests/unit/installers.spec.ts` pins what this rests on: `productName` "rcfd
+Studio" in both `out/packaged` and the installers (renaming it would strand every user's settings in the old folder),
+the fixed `appId`, `deleteAppDataOnUninstall: false`, a per-user install, no asar, only `package.json` and `dist/`, the
+pinned Electron, no `publish`, signing off unless asked, no macOS section. An install-then-upgrade test was not added:
+on this machine it would install into the maintainer's own profile; on a CI runner it is cheap, and is proposed with
+Q-F820-3. There is no automatic update (Q-F820-3).
+
+#### The new dependency (`devDependencies`)
+
+| Package | Version | Licence | Why it | Alternatives considered |
+|---|---|---|---|---|
+| `electron-builder` | 26.18.0 | MIT | Builds the NSIS, AppImage and .deb installers from the packaged app folder, with Windows signing (signtool or Azure Trusted Signing) behind configuration, and `electron-updater` support should Q-F820-3 want it. 26.18.0 was published 2026-10-20 (`latest`; 26.18.1 is tagged `v26` only). Build-time only: nothing of it runs in the app; the installers carry NSIS's installer stub (zlib licence) and the AppImage runtime (MIT), downloaded by electron-builder at build time, not lock entries. | Electron Forge (Squirrel.Windows instead of NSIS; deb and rpm; a similar dependency tree), hand-written packaging on `package-dir.mjs` with `makensis`, `dpkg-deb` and `appimagetool` (no npm dependency, but signing, NSIS upgrade logic and AppImage assembly by hand; three tools to install on each runner). |
+
+It adds 264 lock entries (123 before, 387 after), licences MIT 199, ISC
+33, BSD-3-Clause 9, BlueOak-1.0.0 8, BSD-2-Clause 5, Apache-2.0 5, Python-2.0 1, WTFPL 1, WTFPL OR ISC 1, WTFPL OR MIT
+1, MIT OR CC0-1.0 1: none GPL, all compatible with AGPL-3.0. `THIRD_PARTY_LICENSES.md` is regenerated. `npm audit`
+reports 6 moderate findings, all one advisory: minimatch 7.0.0-11.0.0, a denial of service by glob amplification
+(GHSA-g3hv-75wg-m249), reached through `@electron/universal` and `app-builder-lib`; npm's only fix is electron-builder
+25.1.0, a downgrade. It runs at build time on the repository's own globs, never in the app (Q-F820-1).
+
+### Decisions (options, the recommendation taken; each reversible)
+
+- D1, the packager: (a) electron-builder, (b) Electron Forge, (c) by hand. Taken: (a), NSIS being the Windows target
+  the task named, and one tool for both platforms with signing built in.
+- D2, the installed app: (a) the tested folder, no asar, no fuses; (b) asar and fuses now. Taken: (a). Fuses would
+  break things that exist: `RunAsNode` off breaks the Claude panel's `.js` claude path (`ELECTRON_RUN_AS_NODE`,
+  `src/main/claude/config.ts`), `EnableNodeCliInspectArguments` off breaks Playwright on that build, and
+  `OnlyLoadAppFromAsar` needs asar, which moves the worker and its WebAssembly into an archive that is not tested.
+- D3, identity: `appId` `org.rcfd.studio`, `productName` "rcfd Studio" (unchanged from F-801), executable
+  `rcfd-studio`, .deb package `rcfd-studio`. The appId is new and permanent once a user installs; see Q-F820-5.
+- D4, NSIS: assisted, per user (no administrator), install folder changeable, app data kept on uninstall.
+- D5, no build cache in the installer workflow (what ships is built from an empty target folder, as the gate is).
+- D6, the Docker test container runs with `seccomp=unconfined`, so the app's sandbox runs as on a desktop. A narrower
+  profile (Chromium's own seccomp JSON) is possible later.
+- D7, the .deb maintainer field names the project and its URL, without an e-mail address (none exists in the
+  repository).
+
+### Open for the maintainer
+
+- **Q-F820-1, accept electron-builder 26.18.0** (§2 entry above, 264 lock entries, the six moderate audit findings of
+  one build-time advisory). Recommendation: accept; revisit the advisory when 26.x moves to minimatch 10.2.1 or later.
+- **Q-F820-2, where an installed Studio finds its engine.** The installers ship rcfd, rcfd-mcp and rcfd-runner in
+  `<resources>/bin`, but the Studio still finds them only through `RCFD_STUDIO_MCP` / `RCFD_STUDIO_RCFD` (F-805 D3:
+  nothing from PATH), so an installed Studio opens no project unless told. (a) When neither variable is set and the app
+  is packaged, use `<resources>/bin` (the engine shipped with it; still never PATH); (b) keep the variables only; (c)
+  look on PATH. Recommendation: (a). It is a small change to `engineConfig()` and `serviceConfig()`; with (a) the
+  installed Studio would also start its own service at launch, as it does today when `RCFD_STUDIO_RCFD` is set, so say
+  whether that should wait for a first project instead.
+- **Q-F820-3, updates.** (a) None automatic: the next installer is run over the installed one (built); (b)
+  `electron-updater` against GitHub releases, which needs installers published in releases and, on Windows, signed
+  builds to verify; (c) a notice only, pointing at the release page. Recommendation: (a) until signing exists, then
+  (c); and add an install-upgrade-uninstall check of the settings folder to the Windows installer job (silent NSIS
+  install of the build over a first copy, a marker file in userData survives both).
+- **Q-F820-4, asar and fuses** (D2). Recommendation: keep both off until the Claude panel no longer needs
+  `ELECTRON_RUN_AS_NODE` for a `.js` claude, then turn on `RunAsNode` off, `EnableNodeOptionsEnvironmentVariable` off,
+  `EnableNodeCliInspectArguments` off and `EnableCookieEncryption` on for the installers only.
+- **Q-F820-5, identity and version.** The `appId` (`org.rcfd.studio`) and the install folder name ("rcfd Studio", with
+  a space, under `/opt` and in Program Files) are permanent once installed; the version is package.json's 0.0.0 on a
+  manual run and the tag's on a tag. Recommendation: keep the appId; take the version from the tag only (manual runs
+  stay 0.0.0, so a test build never looks newer than a release); set `desktopName` (electron-builder warns that Linux
+  desktops will not link the running window to its menu entry without it).
+- **Q-F820-6, the certificate.** An OV/EV .pfx (the secrets above) or Azure Trusted Signing (electron-builder's
+  `azureSignOptions`, other secrets). Recommendation: whichever the maintainer can get; the hook takes the .pfx today.
+- **Q-F821-1, when the Linux Docker job runs in CI.** (a) Manual only (now); (b) weekly; (c) beside the daily gate.
+  Recommendation: (b) with `gpu_blocklist: ignore`, once its GPU failures are accepted as the known list above.
+- **Q-F821-2, a GPU for Linux.** The acceptance asks for the bench and the parity tests "with WebGPU or the WebGL2
+  fallback"; the WebGL 2 fallback runs here on a software rasteriser, WebGPU not at all. A Linux machine with a GPU
+  (or a GPU runner) is needed for the GPU lines and for WebGPU. Recommendation: run `run.mjs` with the GPU passed
+  through on a Linux machine with a GPU when one is available, and until then record Linux as "WebGL 2 on software".
+- **Q-F821-3, the panel test's timing** (`claude.spec.ts`, above). Recommendation: make the fake claude pause between
+  its stream lines, or record the feed items pushed rather than the coalesced states.
+
+### Verification (2026-11-17, on studio-f820 over studio-roadmap 3aed5063)
+
+- Windows 11, Node 22.19.0: `npm ci` then `npm install --save-exact --save-dev electron-builder@26.18.0`; `npm run
+  build` (both type checks, Vite, main) clean; `npx tsc --noEmit -p tsconfig.test.json` clean.
+- Unit project on Windows: 436 passed, 0 failed (the four new `installers.spec.ts` tests among them).
+- e2e on Windows, after `npm run build && npm run package:dir`, only the specs this touches: `shell`, `primitives`,
+  `project`, `f837` 49 passed; `project` again after its change 10 passed; `compare`, `field` and `workspace` after
+  the CSS and Follow live changes, all passed (`workspace` 5 of 5 once its pattern was corrected).
+- `npm run package:installers` on Windows: the NSIS installer above, `resources/app` holds `package.json` and `dist/`
+  only, `diff -rq` of its `dist/` against `out/packaged`'s: identical; `resources/bin` holds the three engine binaries.
+- Docker: the five runs above; run 3 built the AppImage and the .deb (`installers: exit 0`, 126 s) and listed the
+  engine binaries in the .deb.
+- `python scripts/third_party_licenses.py --check`: "THIRD_PARTY_LICENSES.md is up to date".
+- `actionlint` 1.7.7 over `.github/workflows/`: no finding. Neither new workflow has run; CI was not triggered.
+- No Rust file, test or golden changed; `crates/rcfd-api/tests/baseline_hashes.rs` untouched; `DESIGN.md` untouched;
+  outside the test mode (`RCFD_TEST_HEADLESS`) the only change to what a user runs is the fallback label's ellipsis.

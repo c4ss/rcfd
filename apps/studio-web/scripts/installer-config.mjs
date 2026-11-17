@@ -61,7 +61,7 @@ export function builderConfig({ pkg, stage, output, sign }) {
     nodeGypRebuild: false,
     files: ['package.json', 'dist/**'],
     // The engine beside the app: <resources>/bin. Where a packaged Studio looks for it is open (ADR 0801 Addendum 17,
-    // Q-E); today the Studio still has to be told by RCFD_STUDIO_MCP / RCFD_STUDIO_RCFD.
+    // Q-F820-2); today the Studio still has to be told by RCFD_STUDIO_MCP / RCFD_STUDIO_RCFD.
     extraResources: [{ from: `${stage}/bin`, to: 'bin' }],
     // Never published from a build: artifacts only, the maintainer releases by hand (docs/releasing.md).
     publish: null,
