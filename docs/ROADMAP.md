@@ -15830,14 +15830,30 @@ fixed by the item's registration ADR before any code.
     another hypothesis newer than the record is not stale, order kept, 120 of 120); the boundary at entries_seen (80 of
     80); ledgers without drawn records give the lessons of ADR 0624 bit for bit (160 of 160); every ADR 0624, 0662, 0693
     and 0695 check keeps its result (f776 6 of 6 unedited); 8 of 8 mutations caught.
-- [ ] **F-782** wake stacks of construction S' at the thin end-wall layers
+- [x] **F-782** wake stacks of construction S' at the thin end-wall layers
   - depends on: F-777
   - acceptance: Every limit not stated here is registered in the ADR before the run. A new opt-in field of S' builds the
     wake-stack nodes of the thin end-wall layers so that the spanwise faces of the wake stack meet skewness 4.0 on
     ComputerFan::rom_reference() blade 0 and on the ADR 0696 second blade at the ADR 0118 s4 specs (the measured 3.24
     and 4.0112 of ADR 0696 disclosed), with no folded cell within 85 deg non-orthogonality and aspect 1000 on both, and
     camber_seam_h, camber_seam_s and camber_seam_s_unstretched unchanged in bits.
-  - note: Follow-up of F-777 (ADR 0696, 2026-11-16).
+  - note: Follow-up of F-777 (ADR 0696 question 1). ADR 0699, 2026-11-17. DONE. New opt-in construction S'' =
+    CGridOptions::camber_seam_s_wake_remap_construction() = camber_seam_s_unstretched + wake_stack_remap: in the span
+    layers with a remapped grid (ADR 0072 W1), the wake-line nodes, stack rows included, move from the true section to
+    the remapped grid with a weight of 0 on the trailing-edge line, rising by a smooth step to 1 over a quarter of the
+    wake lines. Derived: the long wake cells span about 19 deg of the cylinder, so their four-node spanwise faces are
+    curved strips; the pitchwise drift of the thin-layer wake stacks (about 0.4 layer thicknesses per layer) offset the
+    computed cell centres by a fraction of a millimetre against centre distances of 5e-5 m. With the remapped grid the
+    drift per thin layer falls from 3.3e-5 m to 7e-7 m. At the ADR 0118 s4 specs, ComputerFan::rom_reference() blade 0
+    and the ADR 0696 second blade build with no folded cell, periodic, at 84.95 / 84.47 deg, skewness 2.76 / 2.83 and
+    aspect 525.6 / 551.7. The largest wake-stack spanwise skewness falls from 3.24 / 4.0112 (S', disclosed) to 0.235 /
+    0.257. Against the registered prediction, the non-orthogonality maximum moved to the cell next to the trailing-edge
+    line at the start of the ramp, 0.047 deg below 85 on the reference. A locality check finds the change only on the
+    wake lines of the span layers. camber_seam_h (cgrid_w35d B1, the ADR 0692 H hash), camber_seam_s
+    (0x0105a2fcca924d23) and camber_seam_s_unstretched (reference and second-blade hashes against the base) are
+    unchanged in bits. f777, f726, cgrid_w35d, f722, fan01_p10_w36d c2, fan_design_w46a s4, --lib and baseline_hashes
+    pass. Six of six mutations caught. Library only; no case value. Follow-up F-784 (ramp length of the S'' wake-stack
+    remap from the wake line spacing).
 - [ ] **F-783** The bifurcated branch of rule L's 16^3 punch path
   - depends on: F-779
   - acceptance: Every limit not stated here is registered in the ADR before the run. A branch switch at the bifurcation
@@ -15846,3 +15862,13 @@ fixed by the item's registration ADR before any code.
     branch and F-bar; a fast control on a closed-form pitchfork, and a control of the continuity test whose Newton
     converges to a distant root; the default bits unchanged.
   - note: Follow-up of F-779 (ADR 0697, 2026-11-16).
+- [ ] **F-784** ramp length of the S'' wake-stack remap from the wake line spacing
+  - depends on: F-782
+  - acceptance: Every limit not stated here is registered in the ADR before the run. A new opt-in field of S'' sets the
+    length of the trailing-edge ramp of wake_stack_remap from the wake line spacing so that, at the ADR 0118 s4 specs,
+    ComputerFan::rom_reference() blade 0 and the ADR 0696 second blade build with no folded cell within 84.5 deg
+    non-orthogonality (the 84.953 and 84.472 deg of ADR 0699 at the first ramp cell disclosed), skewness 4.0 and aspect
+    1000, the wake-stack spanwise skewness stays within 1.0, a registered front_gap and n_nose scan inside the
+    camber_seam range builds a registered fraction, and camber_seam_h, camber_seam_s, camber_seam_s_unstretched and
+    camber_seam_s_wake_remap are unchanged in bits.
+  - note: Follow-up of F-782 (ADR 0699, 2026-11-16).
