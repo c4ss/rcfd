@@ -5,7 +5,7 @@ Usage (from the workspace root):
     python scripts/adr_test_index.py [--out index.json] [--report] [--adr NNNN ...] [--metadata meta.json] [--root DIR]
 --out       write the index as JSON
 --report    print the coverage and the unmapped binaries
---primary   primary-ADR rule: registered (default, ADR 0684) or p0679
+--primary   primary-ADR rule: git (default, ADR 0690), registered (ADR 0684) or p0679
 --adr       print the tests of these ADRs as cargo commands (the per-merge "ADR's own registered tests")
 --metadata  a saved `cargo metadata --no-deps --format-version 1` (default: run cargo)
 
@@ -21,7 +21,11 @@ Each test with an ADR also gets `primary_adr` (ADR 0679 rule P): the first tier 
 within the tier an ADR file named `registration` or `-wave` first, then the lowest number.
 `--primary registered` (the default of the command line, ADR 0684 rule R) takes the primary from E0 > E1 > E6 > E2 only: E3, E4, E5
 and E7 stay evidence (`adrs`) but give no primary (`null`), and in E2 the lowest ADR number that cites the file wins, the listing
-ADRs 0653, 0679 and 0684 left out. The library call `build()` keeps rule P unless `primary_rule="registered"` is given.
+ADRs 0653, 0679 and 0684 left out. The library call `build()` keeps rule P unless `primary_rule="registered"` or `"git"` is given.
+`--primary git` (the default of the command line, ADR 0690 rule G) is rule R, except that a test whose primary evidence is E2 takes
+its primary from the first git commit that adds its file (renames followed): the first `ADR dddd` of the commit subject, else the
+registration ADR of the first `F-ddd` of the subject, and only when that ADR is one of the test's `adrs`; else no primary. On a
+shallow clone, outside a git repository or when git fails, those tests have no primary; `coverage.primary.git` says which.
 """
 import argparse
 import json
@@ -43,6 +47,8 @@ TIERS = ("E0", "E1", "E6", "E2", "E3", "E7", "E5", "E4")  # rule P of ADR 0679 (
 REGISTERED_TIERS = ("E0", "E1", "E6", "E2")  # rule R of ADR 0684: the evidence that registers or first describes a file
 LISTING_ADRS = {"0653", "0679", "0684"}  # ADRs that list binaries or sample files: no E2 evidence for the primary (ADR 0684)
 WORD = re.compile(r"\b[A-Za-z_]\w*\b")
+ADR_IN_SUBJECT = re.compile(r"\bADRs? (\d{4})\b")
+ITEM_IN_SUBJECT = re.compile(r"\bF-(\d{2,4})\b")
 CRATE_IN_PATH = re.compile(r"(rcfd-[a-z0-9-]+)/((?:src|tests|benches|examples)/.+\.rs)$")
 
 
@@ -317,7 +323,7 @@ def primary_adr(ev, item_adrs, adr_files, rule="p0679"):
     """(ADR, evidence kind) of a test. Rule p0679: the first tier of TIERS with an ADR; in the tier an ADR file named registration
     or -wave first, then the lowest number. Rule registered (ADR 0684): only the tiers of REGISTERED_TIERS; in E2 the lowest
     number outside LISTING_ADRS; none (None, None) when no such tier has an ADR."""
-    registered = rule == "registered"
+    registered = rule in ("registered", "git")
     for kind in REGISTERED_TIERS if registered else TIERS:
         cands = set()
         for e in ev:
@@ -337,6 +343,67 @@ def primary_adr(ev, item_adrs, adr_files, rule="p0679"):
                 return (0 if reg else 1, n)
             return min(cands, key=key), kind
     return None, None
+
+
+def git_history(root):
+    """(state, origin, calls) for rule G (ADR 0690). state is `full` (the workspace root is the top of a git repository that is not
+    shallow), `shallow` (anything but `false` from --is-shallow-repository) or `none` (no repository at the root, git missing or
+    failing). origin maps a path to (commit, subject) of the first commit that adds it, renames followed; empty unless `full`.
+    At most 2 git processes: one rev-parse, one log over the whole history."""
+    calls = 0
+    try:
+        calls += 1
+        r = subprocess.run(["git", "rev-parse", "--show-toplevel", "--is-shallow-repository"], cwd=root, stdout=subprocess.PIPE,
+                           stderr=subprocess.PIPE)
+        if r.returncode != 0:
+            return "none", {}, calls
+        lines = r.stdout.decode("utf-8", "replace").split("\n")
+        norm = lambda p: os.path.normcase(os.path.realpath(p))  # noqa: E731
+        if norm(lines[0].strip()) != norm(root):
+            return "none", {}, calls
+        if (lines[1].strip() if len(lines) > 1 else "") != "false":
+            return "shallow", {}, calls
+        calls += 1
+        r = subprocess.run(["git", "-c", "core.quotepath=off", "log", "--reverse", "-M", "--diff-filter=AR", "--name-status",
+                            "--format=%x01%H%x09%s", "--relative"], cwd=root, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        if r.returncode != 0:
+            return "none", {}, calls
+    except OSError:
+        return "none", {}, calls
+    origin, cur = {}, None
+    for ln in r.stdout.decode("utf-8", "replace").splitlines():
+        if ln.startswith("\x01"):
+            h, _, subj = ln[1:].partition("\t")
+            cur = (h, subj)
+        elif "\t" in ln and cur:
+            parts = ln.split("\t")
+            if parts[0] == "A" and len(parts) == 2:
+                origin.setdefault(parts[1], cur)
+            elif parts[0].startswith("R") and len(parts) == 3:
+                origin.setdefault(parts[2], origin.get(parts[1], cur))
+    return "full", origin, calls
+
+
+def commit_adr(subject, adrs, reg):
+    """The ADR a commit subject names: the first `ADR dddd` that exists, else the registration ADR of the first `F-ddd` that has one."""
+    for m in ADR_IN_SUBJECT.finditer(subject):
+        if m.group(1) in adrs:
+            return m.group(1)
+    for m in ITEM_IN_SUBJECT.finditer(subject):
+        if item_id(m.group(1)) in reg:
+            return reg[item_id(m.group(1))]
+    return None
+
+
+def registration_adrs(adrs):
+    """Item -> its registration ADR: the ADR whose file name carries `-fddd-` (a file named `registration` first, then the lowest number)."""
+    reg = {}
+    for n, a in sorted(adrs.items()):
+        isreg = any("registration" in f for f in a["files"])
+        for it in a["items"]:
+            if it not in reg or (isreg and not reg[it][0]):
+                reg[it] = (isreg, n)
+    return {it: v[1] for it, v in reg.items()}
 
 
 def metadata(root, path=None):
@@ -460,6 +527,26 @@ def build(root, meta, primary_rule="p0679"):
         t["evidence"] = ev
         t["primary_adr"], t["primary_evidence"] = primary_adr(ev, item_adrs, adr_files, primary_rule)
 
+    gstat = None
+    if primary_rule == "git":
+        state, origin, calls = git_history(root)
+        reg = registration_adrs(adrs)
+        gstat = {"history": state, "e2_tests": 0, "from_git": 0, "no_commit_rule": 0, "not_in_adrs": 0, "no_origin": 0,
+                 "git_calls": calls}
+        for t in tests:
+            if t["primary_evidence"] != "E2":
+                continue
+            gstat["e2_tests"] += 1
+            cand, why = None, "no_origin"
+            if state == "full" and t["file"] in origin:
+                cand = commit_adr(origin[t["file"]][1], adrs, reg)
+                why = "no_commit_rule" if cand is None else ("not_in_adrs" if cand not in t["adrs"] else "from_git")
+            if why == "from_git":
+                t["primary_adr"] = cand
+            else:
+                t["primary_adr"], t["primary_evidence"] = None, None
+            gstat[why] += 1
+
     by_adr, by_primary = {}, {}
     for t in tests:
         for n in t["adrs"]:
@@ -489,6 +576,8 @@ def build(root, meta, primary_rule="p0679"):
         if t["primary_adr"]:
             pe[t["primary_evidence"]] = pe.get(t["primary_evidence"], 0) + 1
     idx["coverage"]["primary"] = {"with_primary": sum(pe.values()), "by_evidence": dict(sorted(pe.items()))}
+    if gstat:
+        idx["coverage"]["primary"]["git"] = gstat
     return idx
 
 
@@ -551,8 +640,8 @@ def main(argv=None):
     ap.add_argument("--out")
     ap.add_argument("--report", action="store_true")
     ap.add_argument("--adr", nargs="*", default=[])
-    ap.add_argument("--primary", choices=("registered", "p0679"), default="registered",
-                    help="rule of the primary ADR: registered (ADR 0684, default) or p0679 (ADR 0679)")
+    ap.add_argument("--primary", choices=("git", "registered", "p0679"), default="git",
+                    help="rule of the primary ADR: git (ADR 0690, default), registered (ADR 0684) or p0679 (ADR 0679)")
     a = ap.parse_args(argv)
     root = os.path.abspath(a.root)
     idx = build(root, metadata(root, a.metadata), a.primary)
@@ -570,6 +659,8 @@ def main(argv=None):
         print(f"wave tags: {w['tagged_tests']} tagged tests, {len(w['mapped_tags'])} tags mapped, {len(w['ambiguous_tags'])} ambiguous "
               f"{w['ambiguous_tags']}, {len(w['no_wave_adr_tags'])} without a wave ADR; E7 too common: {len(w['e7_too_common'])} binaries")
         print(f"primary ADR: {c['primary']['with_primary']} tests {c['primary']['by_evidence']}")
+        if "git" in c["primary"]:
+            print(f"primary from git: {c['primary']['git']}")
         print(f"unmapped binaries ({len(c['unmapped_binaries'])}):")
         for u in c["unmapped_binaries"]:
             print("  " + u)
