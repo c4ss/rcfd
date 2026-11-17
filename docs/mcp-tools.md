@@ -201,6 +201,9 @@ Each line has `t`, `kind`, `who` (the command), `seq` (one more than the last, g
 - `run_submitted`: `run`, `case`, `set`, `priority`, `threads`, `mem_mb`.
 - `run_control`: `run`, `requested` (`pause`, `resume` or `cancel`).
 - `stale_lock_broken`: `path`, `age_s` (an edit lock older than 30 s was removed).
+- `edit_lock_remove_failed`: `path`, `error`, `attempts` (the edit was written, but its edit lock could not be removed after
+  retrying a transient error, for example a handle another program holds on the lock file; the lock is left until it is 30 s
+  old, [ADR 0676](adr/0676-f755-registration-a-forced-control-of-the-edit-locks-starvation-and-of-a-lock-left-behind.md)).
 
 Which Claude Code session an `mcp` actor belongs to is not recorded: no way to link the server's process to a session has been
 checked (ADR 0188 Q4).
