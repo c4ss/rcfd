@@ -77,7 +77,11 @@ case section see [case-schema.md](case-schema.md); for the full decision record 
   gradient exercised: a 60-degree sector whose wrap faces are tilted (`|k| / |S|` up to `0.36`) under a balanced potential
   `r^6 cos 6 theta` and a swirl driver stays within `6.8e-15 U_ref` of its unrolled full annulus (all six copies) over 200
   steps, against `2.6e-3` to `4.6e-3` for the control without the pressure part; its converged corrected flux is
-  divergence-free per cell to `4.0e-15`.
+  divergence-free per cell to `4.0e-15`. Those runs had the transient Rhie-Chow term (`ddt_correction`) off, because by
+  default it acts on internal faces only; the opt-in `PimpleSettings::coupled_ddt_correction` (F-754, ADR 0675; default
+  `false`) gives the coupled pairs the same term with the partner cell (its old velocity rotated by `R`) and the pair mean of
+  `rAU`. With `ddt_correction` on, the channel stays within `5.6e-15 U_ref` of its twin and the sector within `7.1e-15` of
+  its annulus over 200 steps; without the opt-in they miss by up to `1.4e-5` and `9.4e-5`. The default is unchanged.
   data set per face on rotor patches are the caller's to set on the new mesh; sectors of different pitch are refused. In the
   case tree since F-711 (ADR 0646) for the sector: `[mesh.sliding]` on `mesh.generator =
   "annulus_3d_sector_cylindrical_interface"` runs ADR 0634's turned loop (`mesh_turned`, `periodic_sliding_step`,

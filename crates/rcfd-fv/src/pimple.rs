@@ -201,6 +201,11 @@ pub struct PimpleSettings {
     /// stays. A control for the effect of the pressure part. Read only with `coupled_non_orth`. Default `false`
     /// (bit-identical).
     pub coupled_non_orth_without_pressure: bool,
+    /// F-754 (ADR 0675): with `ddt_correction`, give the coupled (periodic) faces the transient Rhie-Chow term the internal
+    /// faces carry, the partner cell in the place of the neighbour (its old velocity rotated into the owner's frame on a
+    /// rotational pair) and the pair mean of `rAU`. Not read on a moving mesh or by the fractional step. Default `false`
+    /// (bit-identical).
+    pub coupled_ddt_correction: bool,
 }
 
 /// The outer iterations of one step with `PimpleSettings::outer_pressure_tolerance` (F-536, ADR 0458 C2).
@@ -1026,6 +1031,7 @@ impl PimpleSettings {
             rotational_periodic_implicit: false,
             coupled_non_orth: false,
             coupled_non_orth_without_pressure: false,
+            coupled_ddt_correction: false,
         }
     }
 
@@ -2132,6 +2138,9 @@ impl PimpleSolver {
                 face_interpolate(&g, &r_au)
             };
             let gamma_bf = (s.coupled_body_pair_mean && body.is_some()).then(|| coupled_gamma(&g, &pbc, &gamma_p));
+            // F-754 (ADR 0675): the coupled faces' transient Rhie-Chow term (`None` unless asked for)
+            let ddt_cp = (s.ddt_correction && s.coupled_ddt_correction && self.ale.is_none())
+                .then(|| coupled_ddt_term(&g, &pbc, &self.hist_u, &self.phi_hist, &gamma_p, c1, c2));
             // ADR 0214 F0: rAtU of the consistent correctors and its face values (`None` = the default correctors)
             let r_t: Option<Vec<f64>> = cf.enabled.then(|| consistent_rau(&vol, &a_p, &h1));
             let gamma_t: Option<Vec<f64>> = r_t.as_ref().map(|r| face_interpolate(&g, r));
@@ -2161,6 +2170,9 @@ impl PimpleSolver {
                     for f in 0..n_int {
                         phi_hby_a[f] += gamma_p[f] / dt * ddt_defect[f];
                     }
+                }
+                for &(f, t) in ddt_cp.iter().flatten() {
+                    phi_hby_a[f] += t / dt;
                 }
                 if rc {
                     let b = body.map(|bf| bf.cell.as_slice());
@@ -3293,6 +3305,53 @@ fn consistent_non_orth(
 
 /// Weights `(c1, c2)` of the old levels in the time derivative
 /// `(c0 u - c1 u^n + c2 u^{n-1}) / dt` for the active scheme and history.
+/// F-754 (ADR 0675): `(f, gamma_f D_f)` of every coupled face `f`, the internal faces' transient Rhie-Chow term with the
+/// partner cell `c` in the place of the neighbour: `gamma_f = w rAU_r + (1 - w) rAU_c` (the pair mean of the pressure
+/// equation) and `D_f = c1 (phi_old - U_old_f . S) - c2 (phi_older - U_older_f . S)` with `U_f = w U_r + (1 - w) R U_c`, the
+/// face value `boundary_hby_a` gives the coupled faces' `HbyA`.
+fn coupled_ddt_term(
+    g: &FvGeometry,
+    pbc: &PressureBc,
+    hist_u: &[History; 3],
+    phi_hist: &History,
+    gamma_p: &[f64],
+    c1: f64,
+    c2: f64,
+) -> Vec<(usize, f64)> {
+    let n = g.mesh.n_cells();
+    let n_int = g.n_internal;
+    let sf = g.mesh.face_area_vectors();
+    let zero_b = vec![[0.0; 3]; g.mesh.n_boundary_faces()];
+    let level = |older: bool| -> Vec<Vec3> {
+        let u: Vec<Vec3> = (0..n)
+            .map(|c| {
+                [0, 1, 2].map(|k| match (older, &hist_u[k].older) {
+                    (true, Some(o)) => o[c],
+                    _ => hist_u[k].old[c],
+                })
+            })
+            .collect();
+        boundary_hby_a(g, pbc, &zero_b, &u)
+    };
+    let gamma = coupled_gamma(g, pbc, gamma_p);
+    let bo = level(false);
+    let bol = (c2 != 0.0).then(|| level(true));
+    let phi_older = phi_hist.older.as_ref().unwrap_or(&phi_hist.old);
+    let mut out = Vec::new();
+    for (i, cp) in pbc.coupled.iter().enumerate() {
+        let f = n_int + i;
+        if cp.is_none() || g.empty[f] {
+            continue;
+        }
+        let mut d = c1 * (phi_hist.old[f] - vec3::dot(bo[i], sf[f]));
+        if let Some(b) = &bol {
+            d -= c2 * (phi_older[f] - vec3::dot(b[i], sf[f]));
+        }
+        out.push((f, gamma[f] * d));
+    }
+    out
+}
+
 fn ddt_history_weights(scheme: &TimeScheme, hist: &History, dt: f64) -> (f64, f64) {
     match (scheme, &hist.older, hist.dt_old) {
         (TimeScheme::Bdf2, Some(_), Some(dt_old)) => {
