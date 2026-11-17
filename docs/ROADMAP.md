@@ -16552,6 +16552,7 @@ Generated from `docs/studio-guardrails.md`, `PRODUCT.md` and `DESIGN.md` ([ADR 0
     orthographic along its thin axis and only pans and zooms. Face on only turns the view (zoom and centre kept) and
     Reset view is a separate icon button (field.reset_view in the palette, Home). The mesh preview and both compare
     views use the same camera; the P8 bench still orbits one turn per 600 frames.
+    Later 2026-11-17 (the maintainer): no 2D tilt; the Alt of an orbit drag is kept from the menu bar.
 - [x] **F-809** Electron Studio: derived pictures (iso-surfaces, streamlines, cut planes, vectors)
   - depends on: F-808
   - acceptance: Each derived picture computed by the engine (rcfd-render or a registered opt-in service method) or, if
@@ -16590,6 +16591,8 @@ Generated from `docs/studio-guardrails.md`, `PRODUCT.md` and `DESIGN.md` ([ADR 0
     Changed 2026-11-17 (ADR 0801 Addendum 22, the maintainer): Play steps one stored snapshot per wall-clock second (it
     went as fast as the fields were drawn); no speed control existed, none was added; one second of simulated time per
     second was the alternative offered.
+    Later 2026-11-17 (the maintainer, Q-A22-3): a Play speed menu beside Play, 0.25x to 4x, 1x one snapshot a second,
+    remembered per run.
 - [x] **F-811** Electron Studio: residual and monitor plots
   - depends on: F-803
   - acceptance: Residuals and monitors fetched once and then by increments (ADR 0353); every plot range holds every

@@ -3336,7 +3336,7 @@ alternative offered to the maintainer was one second of simulated time per secon
 - **Q-A22-3, a Play speed control:** (a) none (as now); (b) a choice of 0.5, 1, 2 and 5 snapshots a second beside Play
   (it would cost chrome words in the workspace's budget).
 
-### DESIGN.md (not edited; the maintainer's approval first)
+### DESIGN.md (proposed here; approved and edited later the same day, see the answers below)
 
 - Field view: "a Reset view button appears in the top right corner" would read "a Reset view icon button (the full
   reset: orientation, the whole domain, the pivot) appears in the top right corner". A sentence on the camera's inputs
@@ -3365,3 +3365,32 @@ alternative offered to the maintainer was one second of simulated time per secon
 - Screenshots: test-results-visual/f808 (camera-after-fly, camera-after-orbit, camera-face-on-3d), f810
   (04a-2d-panned-zoomed), f815 (01b-side-by-side-one-view-moved), f836 (case-editor-preview, -panned), f837
   (09-face-on-scale-bar).
+
+### The maintainer's answers (2026-11-17), and what they changed (on camera, after 972acd91)
+
+- **Q-A22-1, tilt a 2D case into 3D:** (a), none. Recorded as the decision: a 2D case stays orthographic, face on,
+  pan and zoom only. No control was added.
+- **Q-A22-2, Alt and the left button:** keep the binding, and swallow the menu. Electron toggles or focuses the menu
+  bar on an Alt key-up that the page did not handle (its own handling, after the renderer). The canvas therefore
+  prevents the one Alt key-up that ends an Alt that was used for an orbit drag. The flag is set when the drag starts,
+  cleared by a new Alt key-down, and cleared when the key-up is taken. A plain Alt press and release is left alone and
+  still reaches the menu. Nothing was added in the main process, so `before-input-event` was not needed. The canvas
+  counts the key-ups it took in `data-camera-alt-swallowed`. Tested in field.spec, with the window's menu bar set to
+  hide automatically for the test, so Electron's Alt handling shows in `isMenuBarVisible()`. A plain Alt shows the bar
+  (the control); an Alt orbit drag leaves it hidden; the next plain Alt shows it again.
+- **Q-A22-3, a Play speed control:** (b), with 0.25×, 0.5×, 1×, 2× and 4×. 1× is one snapshot a second. A pictogram
+  button beside Next snapshot (`speed`, two forward marks on the 14-unit grid) opens a menu of the five speeds. Its
+  name and tooltip say the speed, for example "Play speed 2×, 2 snapshots a second". The speed divides the wait for a
+  snapshot and for a residual sample (`playWait`). Reduced motion still holds every speed to two stops a second at
+  most. The speed is remembered per run (project folder and run id) for as long as the Studio runs. It is not written
+  to disk; a run not chosen yet plays at 1×. G22: the control shows no word at rest, so the workspace stays at its
+  budget (17), and no budget was raised. Showing the speed itself at rest ("2×") would count one word and needs a
+  raised budget.
+- **DESIGN.md approved:** Field view now reads "a Reset view icon button (the full reset: orientation, the whole
+  domain, the pivot) appears in the top right corner". It also gains one sentence on the camera's inputs, and on 2D
+  views being orthographic, face on, with pan and zoom only.
+
+Verification of the answers: typecheck; `npm run build && npm run package:dir`; unit 527 passed (the two history.spec
+failures are red on main as well, and are left to ci-fix); e2e field, workspace, compare, a11y, word-budget, idle-frames,
+commands, f836 and f837: 85 passed. The Alt test fails when the key-up is not prevented, which was checked by building
+once without the fix.

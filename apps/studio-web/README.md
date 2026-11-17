@@ -286,8 +286,9 @@ selected run here. Code: `src/renderer/workspace/` (`RunWorkspace.tsx`, `TimePan
   moves the field, the residual cursor, the monitor readout and the snapshot counter together; they read the same stop.
   Play steps one stored snapshot per wall-clock second (`PLAY_SNAPSHOT_MS` of `src/renderer/workspace/model.ts`; ADR
   0801 Addendum 22), never before the field of the one shown is drawn; a run without fields steps through its residual
-  samples every 150 ms, and under reduced motion no stop is shorter than 500 ms. There is no speed control (one second
-  of simulated time per second was the alternative offered). The flag reads "it 40", or "t = 1.25 s · it 145" for a
+  samples every 150 ms, and under reduced motion no stop is shorter than 500 ms. A speed menu beside it (a pictogram;
+  its name says the speed) offers 0.25×, 0.5×, 1×, 2× and 4×, remembered per run while the Studio runs (one second of
+  simulated time per second was the alternative offered for 1×). The flag reads "it 40", or "t = 1.25 s · it 145" for a
   transient run.
 - **Follow live**: on for a running run; the line stays on its newest snapshot as the runner writes them; moving the line
   stops following, Follow live brings it back.
@@ -368,10 +369,11 @@ fallback, a loss, is named above the canvas ("Drawn by WebGL 2 (fallback: <why>)
   `tests/unit/field-camera.spec.ts`, in place of three's OrbitControls): hold the right button to look about the eye,
   and while it is held W A S D fly, Q and E go down and up, Shift is faster (half the domain's diagonal a second, four
   times that with Shift); the middle button pans; Alt and the left button orbit about the point of the surface under the
-  cursor (else the pivot); the wheel dollies toward the point under the cursor; a double-click puts the orbit pivot
-  there. The rotation is a quaternion with yaw about z: no pole lock, the right stays level, and past the pole a drag to
+  cursor (else the pivot), and the release of that Alt is kept from the window's menu bar (a plain Alt still reaches
+  it); the wheel dollies toward the point under the cursor; a double-click puts the orbit pivot there. The rotation is a quaternion with yaw about z: no pole lock, the right stays level, and past the pole a drag to
   the right still turns the picture the same way. A 2D case (one cell thick) is drawn orthographic straight along its
-  thin axis, framed, and only pans (middle or right button, arrow keys) and zooms (wheel toward the cursor, + and -).
+  thin axis, framed, and only pans (middle or right button, arrow keys) and zooms (wheel toward the cursor, + and -);
+  there is no tilt into 3D (the maintainer, 2026-11-17).
   The mesh preview of the case editor and both views of a comparison use the same camera (each its own). The canvas
   carries the state for the tests: `data-camera` (perspective or orthographic), `data-camera-eye`, `-forward`, `-up`,
   `-pivot`, `-zoom` (the pivot's depth, or the orthographic height) and `-moved`.
