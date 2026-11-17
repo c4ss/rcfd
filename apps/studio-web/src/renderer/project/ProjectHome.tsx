@@ -106,9 +106,13 @@ export function ProjectHome() {
         )}
         {/* F-831: the command palette, also from the pointer */}
         <div className="ph-top-commands">
-          <Button variant="ghost" onPress={() => requestCommand('palette.open')} aria-keyshortcuts="Control+K">
-            Commands <span className="ph-top-key sr-only">Ctrl+K</span>
+          {/* G20, G22 (approved 2026-11-17): the shortcut is the button's description, not part of its name or text */}
+          <Button variant="ghost" onPress={() => requestCommand('palette.open')} aria-keyshortcuts="Control+K" aria-describedby="ph-commands-keys">
+            Commands
           </Button>
+          <span className="ph-top-key sr-only" id="ph-commands-keys">
+            Ctrl+K
+          </span>
         </div>
       </header>
       <main className="ph-main">{project ? <OpenProject view={project} state={state!} /> : <NoProject state={state} />}</main>
