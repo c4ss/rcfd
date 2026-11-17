@@ -392,8 +392,8 @@ fn shekel_nm(x0: Option<Vec<f64>>, seed: u64) -> (f64, Vec<f64>) {
 }
 
 #[test]
-#[ignore = "heavy record (ADR 0673 S0 to S3): Shekel 10, 60 runs of 150, about 5 minutes on ten threads"]
-fn s0_s3_shekel10_plain_fresh_and_step_record() {
+#[ignore = "known miss of S1 on a44c52b5 (ADR 0673 addendum 1): fresh 17 of 20 against plain 18 of 20; S0, S3 met; S2 measured fresh 17, step 11; heavy record, about 5 minutes on ten threads"]
+fn s0_s3_shekel10_plain_fresh_and_step_known_miss() {
     let t = Instant::now();
     // S0: the minimum
     let (f4, x4) = shekel_nm(Some(vec![4.0; 4]), 0);
