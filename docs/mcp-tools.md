@@ -245,10 +245,10 @@ arguments cannot be used there. `initialize`'s first sentence then names no sess
 | `list_workflow_tasks`, `create_workflow`, `edit_workflow`, `run_workflow_task` | none yet |
 
 The Claude Code panel of the desktop Studio (`apps/studio-web/`) allows the project's read tools without asking: it uses
-the allow-list file (`.rcfd/claude-allow.json`) when it is valid, else the 15 read-class project tools (`read_feed`,
-`check_case_mesh`, `preview_mesh` and `list_meshes` among them), and refuses every other tool without asking; it never
-writes the file. The removed egui Studio `rcfd-studio` (F-449) wrote that file with the same 15 tools when a project had
-none (ADR 0195 P5); the desktop Studio does not.
+the allow-list file (`.rcfd/claude-allow.json`) when it is valid, else the 17 read-class project tools (`read_feed`,
+`check_case_mesh`, `preview_mesh`, `list_meshes`, `runner_config` and `hash_project_file` among them), and refuses every
+other tool without asking; it never writes the file. The removed egui Studio `rcfd-studio` (F-449) wrote that file with
+the 15 tools of its day when a project had none (ADR 0195 P5); the desktop Studio does not.
 
 ### The plugin's edit hook
 

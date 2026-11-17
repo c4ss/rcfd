@@ -221,7 +221,8 @@ provenance, a "changed" mesh, and time units from the engine.
   P3 through `start_run`), and unit tests of `filehash` and `case_mesh`.
 - Restated, no golden edited: `project_list_f270.rs` (`hash_project_file` and the three `start_run` properties taken
   out at their place before ADR 0733's block), `tool_list_f275.rs` (43 tools, 26 project tools), `project_w48f.rs` F3
-  (17 + 26) and F2 (the first allow-list is the read-class project tools except `hash_project_file`, not decided below),
+  (17 + 26) and F2 (the first allow-list is the read-class project tools except `hash_project_file`, not decided then; decided
+  2026-11-17 below: no exception),
   `project_runs_w48f.rs` (43 tools; `run_status`'s `launch` and `time_unit` and `list_runs`'s `time_unit` taken out
   of the shape before comparing).
 - `crates/rcfd-api/tests/baseline_hashes.rs` is not edited; no solver path, scheme or default changed.
@@ -237,6 +238,13 @@ provenance, a "changed" mesh, and time units from the engine.
   `--priority`, `--threads`, `--mem-mb` and `--no-runner`, as P3 lists.
 - `rcfd project hash` takes any path (it has no project to stay inside); `hash_project_file` stays inside the project.
 - Rerun is offered on a run in any state; the engine decides.
-- Not decided: whether `hash_project_file` joins the Studio bridge's first allow-list (`PROJECT_READ_TOOLS`, ADR 0195
+- Was not decided: whether `hash_project_file` joins the Studio bridge's first allow-list (`PROJECT_READ_TOOLS`, ADR 0195
   P5), as ADR 0733 asked for `runner_config`. (a) leave the list as it is (built; F2 restated with this one exception);
   (b) add it, which restates C5-A and F2 again. Recommendation: (b), it only reads.
+- **Decided 2026-11-17: joins the first list** (the maintainer, (b)). `hash_project_file` is added after `runner_config`:
+  `PROJECT_READ_TOOLS` in `apps/studio-web/src/main/claude/allow.ts` and its Rust twin in
+  `crates/rcfd-mcp/tests/claude_allow/mod.rs` (17 tools). Restated, no golden re-recorded: `tool_list_f275.rs` C5-A (main's
+  11, then `read_feed`, `check_case_mesh`, `preview_mesh`, `list_meshes`, `runner_config`, `hash_project_file`),
+  `project_w48f.rs` F2 (exactly the 17 read-class project tools, no exception left), the Studio unit test
+  (`claude.spec.ts`, 17) and the e2e checks (`17 allowed, everything else denied`, 17 list items, 17 tool flags). An
+  existing allow-list file is not changed. The README's list and `docs/mcp-tools.md` say 17.

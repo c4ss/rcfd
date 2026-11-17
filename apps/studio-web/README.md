@@ -454,12 +454,12 @@ are chips that open the run in Runs or the file on Home. The panel hides to a sl
   `--add-dir`, `--permission-prompt-tool` and malformed rules. A turn whose `system/init` does not report `dontAsk` is
   killed before any action. Stop kills the process tree.
 - Tool approvals: the allow-list file `.rcfd/claude-allow.json` (`{"version":1,"rules":[...]}`) when valid (one bad
-  rule refuses the whole file and no chat starts), else the conservative first list: the 16 read-class tools of the
+  rule refuses the whole file and no chat starts), else the conservative first list: the 17 read-class tools of the
   engine's project server (`mcp__rcfd_project__project_info`, `list_runs`, `run_status`, `read_metrics`,
   `read_residuals`, `field_summary`, `render_field`, `compare_runs`, `list_changes`, `read_project_file`, `wait_run`,
-  `read_feed`, `check_case_mesh`, `preview_mesh`, `list_meshes`, `runner_config`; the last since ADR 0733, the
-  maintainer's word of 2026-11-17). Everything else is denied without asking; a denied call shows the narrowest rule
-  that would allow it.
+  `read_feed`, `check_case_mesh`, `preview_mesh`, `list_meshes`, `runner_config`, `hash_project_file`; the last two
+  since ADR 0733 and ADR 0734, the maintainer's word of 2026-11-17). Everything else is denied without asking; a denied
+  call shows the narrowest rule that would allow it.
 - The project server Claude Code is given: `rcfd-mcp --project <folder> --root <folder>` (`RCFD_STUDIO_MCP`), in an MCP
   config the Studio writes in its own state folder; with `--strict-mcp-config` no other server is loaded. Without
   `RCFD_STUDIO_MCP` the config lists no server.

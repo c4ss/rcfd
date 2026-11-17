@@ -265,7 +265,7 @@ fn c5s_hidden_tools_need_a_session_kept_tools_do_not() {
     eprintln!("C5-S: 15 hidden tools 1001, create_case a session; 17 kept tools without a session ({answered_ok} answered without error), no session made");
 }
 
-/// C5-A: the Studio bridge's first allow-list is main's 11 read tools, then the four read tools added since (P5); a file
+/// C5-A: the Studio bridge's first allow-list is main's 11 read tools, then the read tools added since (P5, ADR 0733, ADR 0734); a file
 /// written from main's 11 reads back as those 11 rules and is written back byte for byte (no migration).
 #[test]
 fn c5a_allow_list_has_the_read_tools_and_old_files_stay() {
@@ -283,9 +283,8 @@ fn c5a_allow_list_has_the_read_tools_and_old_files_stay() {
         "read_project_file",
         "wait_run",
     ];
-    // a new project's first list: main's 11 in their order, then the five (ADR 0733: runner_config, the maintainer,
-    // 2026-11-17) (the set is checked against the live list by
-    // project_w48f.rs F2)
+    // a new project's first list: main's 11 in their order, then the six (ADR 0733: runner_config; ADR 0734:
+    // hash_project_file; the maintainer, 2026-11-17) (the set is checked against the live list by project_w48f.rs F2)
     let first = AllowList::project_initial();
     let want: Vec<AllowRule> = MAIN
         .iter()
@@ -295,6 +294,7 @@ fn c5a_allow_list_has_the_read_tools_and_old_files_stay() {
             "preview_mesh",
             "list_meshes",
             "runner_config",
+            "hash_project_file",
         ])
         .map(|t| AllowRule::Tool(format!("mcp__{PINNED_SERVER}__{t}")))
         .collect();

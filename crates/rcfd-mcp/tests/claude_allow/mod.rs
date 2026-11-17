@@ -287,8 +287,9 @@ pub const PINNED_SERVER: &str = "rcfd_project";
 
 /// The read-class project tools: the first contents of a new project's allow-list, under the app-owned server's names
 /// (ADR 0134 W48-11 (a)). The 11 of ADR 0135's tool table, then the read tools added since (ADR 0187 Q6 (b) and ADR 0188
-/// Q6 (b), taken by ADR 0195 P5), and `runner_config` (ADR 0733, the maintainer, 2026-11-17). An existing allow-list file is not changed by this list.
-pub const PROJECT_READ_TOOLS: [&str; 16] = [
+/// Q6 (b), taken by ADR 0195 P5), `runner_config` (ADR 0733) and `hash_project_file` (ADR 0734), both the maintainer's
+/// word of 2026-11-17. An existing allow-list file is not changed by this list.
+pub const PROJECT_READ_TOOLS: [&str; 17] = [
     "project_info",
     "list_runs",
     "run_status",
@@ -305,6 +306,7 @@ pub const PROJECT_READ_TOOLS: [&str; 16] = [
     "preview_mesh",
     "list_meshes",
     "runner_config",
+    "hash_project_file",
 ];
 
 /// Format version of the allow-list file.

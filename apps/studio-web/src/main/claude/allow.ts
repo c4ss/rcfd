@@ -55,6 +55,8 @@ export const PROJECT_READ_TOOLS = [
   'list_meshes',
   // ADR 0733 (the maintainer, 2026-11-17): the runner's budgets, read-only
   'runner_config',
+  // ADR 0734 (the maintainer, 2026-11-17): the hash of a project file or mesh folder, read-only
+  'hash_project_file',
 ] as const;
 
 export class RuleError extends Error {
