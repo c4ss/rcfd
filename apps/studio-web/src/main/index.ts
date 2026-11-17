@@ -26,6 +26,9 @@
 // - Provenance (F-828): a MessagePort on PROVENANCE_PORT_CHANNEL (src/main/provenance/), checked against
 //   src/shared/provenance.ts; a run's record is read by the open project's read-only project server, and Copy writes the
 //   system clipboard here (the page has no clipboard permission).
+// - The theme (F-818): theme.get and theme.set of the allow-list; the setting is kept in the user data
+//   (src/main/theme.ts), and nativeTheme.themeSource and each window's background colour follow it, so a dark start
+//   shows no white ground before the page paints.
 //
 // Service and file I/O live in this process, never in the renderer.
 import {
@@ -35,6 +38,7 @@ import {
   dialog,
   ipcMain,
   MessageChannelMain,
+  nativeTheme,
   protocol,
   session,
   shell,
@@ -46,7 +50,8 @@ import { statSync } from 'node:fs';
 import { readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { CHANNELS, type AppInfo, type Channel, type IpcContract } from '../shared/ipc.js';
+import { CHANNELS, CLOSE_ANSWERS, CLOSE_REQUEST_CHANNEL, type AppInfo, type Channel, type CloseAnswer, type IpcContract } from '../shared/ipc.js';
+import { backgroundOf, preferencesFile, ThemePreference, type ThemeTargets } from './theme.js';
 import { SERVICE_PORT_CHANNEL } from '../shared/service.js';
 import { PROJECT_PORT_CHANNEL } from '../shared/project.js';
 import { CASE_PORT_CHANNEL } from '../shared/case.js';
@@ -106,6 +111,18 @@ const isFile = (p: string): boolean => {
   }
 };
 const engine = engineConfig(process.env, isFile);
+
+/** F-818: the theme setting, read before the first window opens. */
+const theme = new ThemePreference(preferencesFile(process.env, app.getPath('userData')));
+const themeTargets: ThemeTargets = {
+  setSource: (source) => {
+    nativeTheme.themeSource = source;
+  },
+  systemDark: () => nativeTheme.shouldUseDarkColors,
+  setBackground: (colour) => {
+    for (const w of BrowserWindow.getAllWindows()) if (!w.isDestroyed()) w.setBackgroundColor(colour);
+  },
+};
 
 /** The project home (F-805): the engine's project server from the environment (src/main/project/config.ts). */
 const projects = new ProjectHome({
@@ -208,7 +225,7 @@ function noArgs(channel: Channel, args: unknown[]): void {
   if (args.length !== 0) throw new Error(`${channel}: takes no arguments`);
 }
 
-type Handler<C extends Channel> = (args: unknown[]) => IpcContract[C]['reply'] | Promise<IpcContract[C]['reply']>;
+type Handler<C extends Channel> = (args: unknown[], sender: WebContents) => IpcContract[C]['reply'] | Promise<IpcContract[C]['reply']>;
 
 /** One handler per channel of the allow-list. Each checks its own arguments, which arrive from the renderer untyped. */
 const handlers: { [C in Channel]: Handler<C> } = {
@@ -223,8 +240,23 @@ const handlers: { [C in Channel]: Handler<C> } = {
     const readyUnixMs = Date.now();
     if (STARTUP_REPORT) {
       await writeFile(STARTUP_REPORT, JSON.stringify({ readyUnixMs, electron: process.versions.electron }));
-      setTimeout(() => app.quit(), 50);
+      setTimeout(() => quitWithoutAsking(), 50);
     }
+  },
+  'theme.get': (args) => {
+    noArgs('theme.get', args);
+    return theme.state(themeTargets);
+  },
+  'theme.set': (args) => {
+    if (args.length !== 1) throw new Error('theme.set: takes one argument, the setting');
+    return theme.set(args[0], themeTargets);
+  },
+  'app.closeAnswer': (args, sender) => {
+    const [request, answer] = args;
+    if (args.length !== 2 || !Number.isSafeInteger(request) || !(CLOSE_ANSWERS as readonly unknown[]).includes(answer)) {
+      throw new Error('app.closeAnswer: takes a request number and one of asking, close, cancel');
+    }
+    closeAnswered(sender, request as number, answer as CloseAnswer);
   },
 };
 
@@ -249,10 +281,10 @@ function trusted(event: IpcMainInvokeEvent): boolean {
 
 function registerIpc(): void {
   for (const channel of CHANNELS) {
-    const handler: (args: unknown[]) => unknown = handlers[channel];
+    const handler: (args: unknown[], sender: WebContents) => unknown = handlers[channel];
     ipcMain.handle(channel, (event, ...args: unknown[]) => {
       if (!trusted(event)) throw new Error(`${channel}: refused, the sender is not an rcfd Studio page`);
-      return handler(args);
+      return handler(args, event.sender);
     });
   }
 }
@@ -430,11 +462,19 @@ function offerServicePort(contents: WebContents): void {
  */
 const HEADLESS = process.env.RCFD_TEST_HEADLESS === '1';
 
+/** The window background of the theme now (nativeTheme says whether the system is dark, for System). */
+function themeBackground(): string {
+  // the same rule as ThemePreference.apply: resolve System by the system's colours
+  return backgroundOf(theme.setting, nativeTheme.shouldUseDarkColors);
+}
+
 function openWindow(): void {
   const win = new BrowserWindow({
     width: 1280,
     height: 800,
     show: false,
+    // F-818: the theme's ground, so the window is never white before a dark page paints
+    backgroundColor: themeBackground(),
     // opacity 0 only off Linux: Chromium on X11 takes a fully transparent window for a hidden one and stops painting it
     // (screenshots time out, frames drop to one a second); Linux test runs use a virtual display (xvfb) instead
     ...(HEADLESS ? { skipTaskbar: true, ...(process.platform === 'linux' ? {} : { opacity: 0 }), focusable: true } : {}),
@@ -480,6 +520,17 @@ function openWindow(): void {
     provenancePorts.get(id)?.dispose();
     provenancePorts.delete(id);
   });
+  // F-837: a close of the window (its close button, Alt+F4, the system's Close) asks the page first, which asks the user
+  // when a case has unsaved changes; the quit below asks the same way before anything is stopped
+  win.on('close', (e) => {
+    if (closeAllowed.has(win)) return;
+    e.preventDefault();
+    void askToClose(win).then((ok) => {
+      if (!ok || win.isDestroyed()) return;
+      closeAllowed.add(win);
+      win.close();
+    });
+  });
   win.once('ready-to-show', () => {
     if (!HEADLESS) return win.show();
     win.setIgnoreMouseEvents(true);
@@ -499,6 +550,11 @@ function openWindow(): void {
 void app.whenReady().then(() => {
   hardenSession();
   registerIpc();
+  // F-818: the native parts in the theme before the window opens; System follows the system's changes
+  theme.apply(themeTargets);
+  nativeTheme.on('updated', () => {
+    if (theme.setting === 'system') themeTargets.setBackground(themeBackground());
+  });
   service.start();
   // F-837: `rcfd-studio <PROJECT_DIR>` opens that folder (after the recent list is read, so it goes to its head)
   const asked = projectArgument(process.argv, process.defaultApp === true, process.cwd());
@@ -507,15 +563,93 @@ void app.whenReady().then(() => {
 });
 app.on('window-all-closed', () => app.quit());
 
-// Quitting: the client stops; a service the Studio started is stopped too unless it holds sessions (G7, client.ts).
+// ---- F-837: save or discard before closing (the page asks: src/renderer/case/closeGuard.tsx)
+//
+// A request goes to the page on CLOSE_REQUEST_CHANNEL; the page answers `asking` at once, then `close` or `cancel` once
+// the user has chosen (with no unsaved change, `close` straight after). A page that does not say `asking` within
+// CLOSE_ACK_MS (hung, crashed, not loaded) cannot hold the window: it closes. A page that crashes or goes away while
+// asking lets the window close; a page that loads again ends the question as a cancel, so a second close asks again.
+//
+// Test mode (RCFD_TEST_HEADLESS=1) quits without asking: Playwright's close() is app.quit(), and a test that leaves a
+// change unsaved must not hang its teardown. A close of the window itself (BrowserWindow.close(), what the close button
+// and Alt+F4 do) still asks there, so the tests can answer it. The P10 measurement's quit does not ask either.
+const CLOSE_ACK_MS = 3000;
+/** Windows the page let close (or that close as the app quits): their next close event goes through. */
+const closeAllowed = new WeakSet<BrowserWindow>();
+/** A quit that does not ask the windows (test mode, the P10 measurement); a window's own close still asks. */
+let quitWithoutAskingSet = HEADLESS;
+let closeSeq = 0;
+/** Requests waiting for the page's answer, by number: the page that was asked, and how to settle the request. */
+const closeRequests = new Map<number, { contents: WebContents; ack: () => void; done: (ok: boolean) => void }>();
+/** The request in flight per window, shared by its close event and the quit. */
+const closeAsks = new Map<BrowserWindow, Promise<boolean>>();
+
+function askToClose(win: BrowserWindow): Promise<boolean> {
+  const asked = closeAsks.get(win);
+  if (asked) return asked;
+  const contents = win.webContents;
+  if (win.isDestroyed() || contents.isDestroyed() || contents.isCrashed()) return Promise.resolve(true);
+  const n = ++closeSeq;
+  const p = new Promise<boolean>((resolve) => {
+    let settled = false;
+    const gone = (): void => done(true);
+    const reloaded = (): void => done(false);
+    const timer = setTimeout(() => done(true), CLOSE_ACK_MS);
+    function done(ok: boolean): void {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      closeRequests.delete(n);
+      closeAsks.delete(win);
+      if (!contents.isDestroyed()) {
+        contents.off('render-process-gone', gone);
+        contents.off('did-navigate', reloaded);
+        contents.off('destroyed', gone);
+      }
+      resolve(ok);
+    }
+    contents.once('render-process-gone', gone);
+    contents.once('did-navigate', reloaded);
+    contents.once('destroyed', gone);
+    closeRequests.set(n, { contents, ack: () => clearTimeout(timer), done });
+    contents.send(CLOSE_REQUEST_CHANNEL, n);
+  });
+  closeAsks.set(win, p);
+  return p;
+}
+
+function closeAnswered(sender: WebContents, n: number, answer: CloseAnswer): void {
+  const r = closeRequests.get(n);
+  if (!r || r.contents !== sender) return;
+  if (answer === 'asking') r.ack();
+  else r.done(answer === 'close');
+}
+
+function quitWithoutAsking(): void {
+  quitWithoutAskingSet = true;
+  app.quit();
+}
+
+// Quitting: every window is asked first (F-837), then the client stops; a service the Studio started is stopped too
+// unless it holds sessions (G7, client.ts). A window that cancels cancels the quit, and nothing is stopped.
 let serviceStopped = false;
+let quitAsking = false;
 app.on('before-quit', (e) => {
   if (serviceStopped) return;
   e.preventDefault();
-  serviceStopped = true;
-  const atMost = new Promise((done) => setTimeout(done, 3000));
-  // the project server of an open project ends with the Studio: it only reads, and holds no run (G7)
-  void Promise.race([Promise.all([service.shutdown(), projects.shutdown(), caseEditor.shutdown(), claude.shutdown()]), atMost])
-    .catch(() => undefined)
-    .finally(() => app.quit());
+  if (quitAsking) return;
+  quitAsking = true;
+  const windows = BrowserWindow.getAllWindows().filter((w) => !w.isDestroyed());
+  const asks = quitWithoutAskingSet ? [] : windows.filter((w) => !closeAllowed.has(w)).map((w) => askToClose(w));
+  void Promise.all(asks).then((answers) => {
+    quitAsking = false;
+    if (!answers.every(Boolean)) return;
+    for (const w of windows) closeAllowed.add(w);
+    serviceStopped = true;
+    const atMost = new Promise((done) => setTimeout(done, 3000));
+    // the project server of an open project ends with the Studio: it only reads, and holds no run (G7)
+    void Promise.race([Promise.all([service.shutdown(), projects.shutdown(), caseEditor.shutdown(), claude.shutdown()]), atMost])
+      .catch(() => undefined)
+      .finally(() => app.quit());
+  });
 });

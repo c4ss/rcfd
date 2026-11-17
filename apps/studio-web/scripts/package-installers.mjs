@@ -1,4 +1,4 @@
-// Builds the Studio's installers for this platform with electron-builder (F-820, ADR 0801 Addendum 17): NSIS on Windows,
+// Builds the Studio's installers for this platform with electron-builder (F-820, ADR 0801 Addendum 19): NSIS on Windows,
 // AppImage and .deb on Linux. macOS is not built (the maintainer has not asked for it); builderConfig() has no mac section.
 //
 //   node scripts/package-installers.mjs [--engine=<folder with rcfd, rcfd-mcp, rcfd-runner>] [--no-engine]
@@ -91,7 +91,7 @@ if (process.argv.includes('--no-engine')) {
 const { build, Platform } = await import('electron-builder');
 const platform = process.platform === 'win32' ? Platform.WINDOWS : process.platform === 'linux' ? Platform.LINUX : null;
 if (!platform) {
-  console.error(`no installer is defined for ${process.platform} (macOS is not built: ADR 0801 Addendum 17)`);
+  console.error(`no installer is defined for ${process.platform} (macOS is not built: ADR 0801 Addendum 19)`);
   process.exit(1);
 }
 console.log(`signing: ${sign ? 'on' : 'off (RCFD_STUDIO_SIGN is not 1)'}; version ${version}; output ${output}`);

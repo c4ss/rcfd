@@ -146,3 +146,80 @@
   --pictogram-joins: miter;
   --breakpoint-min-desktop: 1180px;
 }
+
+/* F-818: the dark theme (proposed, docs/design-themes-proposal.md). */
+:root[data-theme='dark'] {
+  --color-ink: #dce6f2;
+  --color-ink-2: #9bb0c8;
+  --color-ink-hover: #f3f7fb;
+  --color-sky: #245f8c;
+  --color-sky-wash: #1a3350;
+  --color-meadow: #286b33;
+  --color-meadow-wash: #183626;
+  --color-meadow-deep: #78c884;
+  --color-orange: #c46810;
+  --color-orange-deep: #f3a052;
+  --color-fail: #f07a82;
+  --color-fail-wash: #3b1a22;
+  --color-silver: #34475d;
+  --color-silver-wash: #16243a;
+  --color-white: #0f1c2c;
+  --color-ink-tint: #3a5170;
+  --tint-ghost-hover: rgba(15, 28, 44, 0.35);
+  --tint-project-tab-hover: rgba(15, 28, 44, 0.3);
+  --tint-tab-divider: rgba(220, 230, 242, 0.35);
+  --tint-popover-shadow: rgba(15, 28, 44, 0.6);
+  color-scheme: dark;
+}
+
+/* F-818: the contrast theme (proposed, docs/design-themes-proposal.md). */
+:root[data-theme='contrast'] {
+  --color-ink: #0a2240;
+  --color-ink-2: #2b4466;
+  --color-ink-hover: #1b3d6a;
+  --color-sky: #55ade6;
+  --color-sky-wash: #d2e7f7;
+  --color-meadow: #5cb86a;
+  --color-meadow-wash: #d5ecd9;
+  --color-meadow-deep: #1d6a2a;
+  --color-orange: #e87500;
+  --color-orange-deep: #8f4500;
+  --color-fail: #8a0d17;
+  --color-fail-wash: #f5d6d9;
+  --color-silver: #7b8794;
+  --color-silver-wash: #e3e8ee;
+  --color-white: #ffffff;
+  --color-ink-tint: #dce6f2;
+  --tint-ghost-hover: rgba(255, 255, 255, 0.35);
+  --tint-project-tab-hover: rgba(255, 255, 255, 0.3);
+  --tint-tab-divider: rgba(10, 34, 64, 0.35);
+  --tint-popover-shadow: rgba(10, 34, 64, 0.18);
+  color-scheme: light;
+}
+
+/* F-818: a dark system before data-theme is set. */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme]) {
+    --color-ink: #dce6f2;
+    --color-ink-2: #9bb0c8;
+    --color-ink-hover: #f3f7fb;
+    --color-sky: #245f8c;
+    --color-sky-wash: #1a3350;
+    --color-meadow: #286b33;
+    --color-meadow-wash: #183626;
+    --color-meadow-deep: #78c884;
+    --color-orange: #c46810;
+    --color-orange-deep: #f3a052;
+    --color-fail: #f07a82;
+    --color-fail-wash: #3b1a22;
+    --color-silver: #34475d;
+    --color-silver-wash: #16243a;
+    --color-white: #0f1c2c;
+    --color-ink-tint: #3a5170;
+    --tint-ghost-hover: rgba(15, 28, 44, 0.35);
+    --tint-project-tab-hover: rgba(15, 28, 44, 0.3);
+    --tint-tab-divider: rgba(220, 230, 242, 0.35);
+    --tint-popover-shadow: rgba(15, 28, 44, 0.6);
+    color-scheme: dark;
+  }
+}

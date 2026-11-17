@@ -1,7 +1,8 @@
 // Which series a plot draws and how each line looks (F-811). Colours are roles of tokens.ts (never palette names), and
 // every series also has its own dash pattern and its name beside its swatch, so colour is never the only thing that
 // tells two lines apart (G8). Pure code.
-import { palette, role, type RoleName } from '../design/tokens.js';
+import { role, type RoleName } from '../design/tokens.js';
+import { themeHex } from '../theme/theme.js';
 
 /** The residual series of the engine: `continuity` and every `res_*` (crates/rcfd-api/src/sim.rs, rcfd-post html_report). */
 export function isResidual(name: string): boolean {
@@ -50,9 +51,9 @@ export function residualStyles(names: readonly string[]): Map<string, LineStyle>
 /** The monitor chart's one line: ink, 1.75 px, solid (the prototype's .cd-chart). */
 export const MONITOR_STYLE: LineStyle = { role: 'text', width: 1.75, dash: [] };
 
-/** The hex colour of a role, for three.js materials (CSS uses var(--role-*)). */
+/** The hex colour of a role in the theme drawn now, for three.js materials (CSS uses var(--role-*); F-818). */
 export function roleHex(r: RoleName): string {
-  return palette[role[r]];
+  return themeHex(role[r]);
 }
 
 /** The order in which a run's residual series are listed: continuity, then u, p, then the rest by name. */

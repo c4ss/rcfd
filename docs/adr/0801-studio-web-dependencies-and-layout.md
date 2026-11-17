@@ -1040,6 +1040,8 @@ derived picture, and the Studio cannot add one (no Rust change). So:
 - G16: a CLI or MCP way to draw the Studio's cut and arrows of a store (rcfd-render's `View::clip` is a library
   feature only), so Claude Code can make the same picture.
 - The length unit of the stored mesh coordinates (the cut panel shows the position without a unit).
+- (2026-11-17) Collected with the other items' engine needs in "Engine follow-ups of the Studio items" at the end of this
+  ADR, as E-809a to E-809e.
 
 ### Proposed for `DESIGN.md` (not edited here)
 
@@ -1109,6 +1111,11 @@ F-828, registers the comparison).
 - `status.json`'s `time` has no unit (the Runs view's "Time, s" caption is the Studio's word).
 - No read-only hash of a mesh file a run names (the reproduce check cannot say whether it changed).
 - A service session has no reproduce surface yet (`journal.get` then `rcfd run --journal`).
+
+Follow-up (2026-11-17, Addendum 18): the service-session numbers (settings, the dev plots), the field caption's step and
+time and the first path's result numbers now open their provenance; a session number says its file and its reproduce
+command as not recorded, and a snapshot's time its unit. The engine needs above are E-828a to E-828e of "Engine
+follow-ups of the Studio items" at the end of this ADR.
 
 ### Proposed for `DESIGN.md` (not edited here)
 
@@ -1682,6 +1689,8 @@ field-view extras from the egui Studio (F-837)".
   says why).
 - Proposed, not needed: `rcfd-runner config set` or an MCP `set_runner_config`, so the budgets are written by their
   owner, atomically.
+- (2026-11-17) Collected in "Engine follow-ups of the Studio items" at the end of this ADR, as E-837a to E-837d (the
+  length unit is E-809e).
 
 ### Not built, no engine needed
 
@@ -1704,6 +1713,79 @@ field-view extras from the egui Studio (F-837)".
   within its budget) and `f837.spec.ts` (14) passed in the full run.
 - `python scripts/third_party_licenses.py --check`: up to date.
 - `cargo test -p rcfd-cli --release --test docs_site --test workspace_graph`: 2 and 3 passed.
+
+### The maintainer's answers (2026-11-17)
+
+- Save or discard on close: approved, built below (it was "Not built, no engine needed" above).
+- `set_runner_config` (ADR 0733): not built; ADR 0733 stays proposed. The budgets panel keeps writing
+  `.rcfd/runner-config.json` itself (D1 (a)).
+- D5, `designs/` on the home: the maintainer confirmed (a), the folder's own name as the heading (data, no chrome word).
+
+### Save or discard before a close (F-837, on studio-f837b)
+
+What the egui Studio asked on exit, in the Electron Studio's own design. A close that would lose case-editor changes not
+saved asks first with F-829's decision panel (`src/renderer/case/closeGuard.tsx`, mounted once beside every route);
+with nothing unsaved nothing asks and the close goes on as before. No dependency, no Rust, no service method and no word
+budget changed; `DESIGN.md` is not edited.
+
+- The closes that ask: Close the session (the button and the palette's `case.close`), Close project (the button and the
+  palette's `project.close`), and the window: its close button, Alt+F4, the system's Close and the app's quit. The case
+  editor is a page with no tabs (its header names the file); closing that "tab" is Close the session, so no other tab
+  close exists to guard.
+- The window: the main process holds the window's `close` event and sends the page a request
+  (`studio.close-request`, main to page); the page answers on a new ipcMain channel, `app.closeAnswer(request,
+  answer)`: `asking` at once, then `close` or `cancel`. The preload exposes `app.onCloseRequest(listener)` and
+  `app.closeAnswer` (the bridge stays one function per channel, the shell's allow-list tests updated). A page that does
+  not say `asking` within 3 s (hung, crashed, not loaded) cannot hold the window; a renderer that crashes or goes away
+  while asking lets the window close; a reload ends the question as a cancel. The quit (`before-quit`) asks every
+  window before anything is stopped, and a window that cancels cancels the quit with nothing stopped; the shutdown that
+  follows is the one before (G7: the service, the project server, the case editor's server, claude, in at most 3 s).
+- The words name what is lost (G22: a loss speaks; the panel is an exception surface, its budget 0 chrome words
+  unchanged): the title (`Close cases/cavity-re100.toml with 1 change not saved?`, `Close <project> with ...`, `Close
+  rcfd Studio with ...`), then "Closing without saving loses them:" and each file with its count and its first four
+  setting paths.
+- Choices, in the wording of the editor's earlier close question: Save and close (each file through the engine as Save
+  does, onto the file as it was opened; a refusal, a removed entry or another writer's change keeps the panel open with
+  the engine's words as its title, and nothing closes), Close and lose them, Keep editing (the safe choice: focused when
+  the panel opens, and Escape). Tab and Shift+Tab stay in the panel (DecisionPanel, F-816); Keep editing gives the focus
+  back where it was, a text field the close blurred included. A value typed but not committed is committed first, as
+  Save does, so it is counted and named.
+- The case editor's inline close question (Close and lose them, Keep editing) is replaced by the panel, which adds Save
+  and close.
+
+Decisions (options, the recommendation taken; each reversible):
+
+- D13, the safe choice. (a) Keep editing, focused, and Escape (taken: F-829's rule, "a loss: keeping is the default",
+  and a press of Enter changes nothing); (b) Save and close focused, as many desktop programs do. Recommendation: (a).
+- D14, what Close and lose them closes. (a) The session (Close the session) and the project's sessions (Close project)
+  with their changes; on the window nothing more than the quit closed before (taken: G7, the Studio's quit stops no
+  session or run on the service, and the editor's bindings end with the Studio); (b) close every session with changes
+  on the window's close too (a case-editor session could hold a run that G7 keeps going). Recommendation: (a).
+- D15, the test-mode quit. (a) Under `RCFD_TEST_HEADLESS=1` the quit does not ask, while a close of the window itself
+  still asks (taken: Playwright's `close()` is `app.quit()`, and a test that leaves a change unsaved must not hang its
+  teardown; the tests close the window with `BrowserWindow.close()`, what the close button does); (b) ask in test mode
+  too and make every test save or discard before it ends. The P10 measurement's quit does not ask either.
+  Recommendation: (a).
+- D16, the wait for the page. (a) 3 s for `asking`, then no limit while the user decides (taken); (b) one limit for
+  the whole answer (a user reading the panel would see the window close under them). Recommendation: (a).
+
+Tests: `tests/e2e/close-guard.spec.ts` (4): Close the session (the panel's words, Tab held, Escape and the focus back,
+Save and close by the keyboard writes the file and closes the session); Close project (Keep editing keeps it, Close and
+lose them closes the session and the project, the file untouched; nothing unsaved closes at once); the window's own close
+(typing not yet committed is counted, Escape gives the focus back to the field, a second close asks again, Save and
+close writes the file and the app ends); nothing unsaved closes the window at once, a page with no listener cannot hold
+it, and the test-mode quit with a change unsaved does not hang. `case-editor.spec.ts`'s close test now answers the
+panel (its last close by the keyboard); `shell.spec.ts`, `project.spec.ts`, `data.spec.ts` and
+`service-security.spec.ts` list the new channel and bridge functions, and `shell.spec.ts` checks that a malformed answer
+is refused.
+
+### Verification (2026-11-17, on studio-f837b over studio-roadmap ccacac87)
+
+- `npm ci`: exit 0. `npm run typecheck`: clean. `python scripts/third_party_licenses.py --check`: up to date. No
+  dependency was added.
+- `npx playwright test tests/e2e/close-guard.spec.ts`: 4 passed. The touched specs together (shell, data, project,
+  service-security, close-guard, case-editor, a11y, word-budget, commands, first-path, f837, undo-case): 105 passed.
+- `npm test` (headless, built and packaged): 658 passed, 0 failed (8.7 min).
 
 ## Addendum 14: F-817b, drawing on demand at rest, and a scratch profile per bench case (2026-11-17)
 
@@ -1977,6 +2059,9 @@ move per frame.
 - Q-819-4: a FAN-01 mesh larger than F1, or a polyhedral one, needs the mesher (other counts, `h_slit`, or a reachable
   polyhedral dual, which needs Rust). Is one wanted for F-448? Recommendation: no. The FAN-01 surfaces are 30 to 100
   times smaller than the 1e6 box's, so the box cases bound them.
+- Answers (the maintainer, 2026-11-17): Q-819-1 yes (applied in Addendum 16 with fix (a), and judged since: Addendum 16,
+  "The maintainer's answers"); Q-819-2 and Q-819-3 applied in Addendum 16; Q-819-4 no, the polyhedral FAN-01 mesh is
+  skipped.
 - The display ran at 60 Hz in this session (238 Hz in F-817's runs). The synced rates and the fan scrubs are the
   display's, and the idle baseline of ADR 0800 §9 Q4 should state its display rate.
 
@@ -2250,7 +2335,296 @@ On 256 MiB in plain Node, the reference loop ran at 1.1 to 1.2 ns per byte and t
   set ran on a package built before one change that only narrows a TypeScript type in `FieldViewport` (a cast replaced
   by an `in` check) and does not change behaviour; `npm test` ran on the final tree.
 
-## Addendum 17: F-820 and F-821, installers built in CI and the Studio on Linux in Docker (2026-11-17)
+### The maintainer's answers (2026-11-17), and the first open judged (on studio-f837b)
+
+- Q-819-1 and Q-819b-1: yes, the first open of a store in a launch is judged as well, against the same 1.5 s. Built:
+  - `scripts/bench.mjs`: a judged P7 line "first picture of the 1e6 surface, <route>, first open of the launch", the
+    first of `measure-field.mjs`'s 5 opens (the first open of the 1e6 store in the Studio's launch, and in the bench
+    server's for R1, before the reader's worker remembers its mesh check). As the median line, it is judged on the better
+    route, R1 or R2 (ADR 0350 §3); the other route's first open is printed as recorded. The median line is unchanged.
+  - `scripts/measure-field.mjs`: says both verdicts on its P7 line and keeps `firstMet` in its JSON.
+  - `scripts/measure-large.mjs`: a fourth P7 entry in `LIMITS`, `firstOpen` ("first picture of the surface, first open
+    of the store in the launch", <= 1500 ms, judged), one line per mesh and repeat (each repeat is a launch of its own).
+    It was added on the maintainer's answer, with the limit unchanged; `measure-large.mjs` has not been run with it (a
+    heavy record, house rule 7). Addendum 16's three runs had the 4e6 first open at 858 to 944 ms.
+- Q-819-4: no FAN-01 mesh larger than F1 and no polyhedral one; the polyhedral FAN-01 mesh of F-819's acceptance is
+  skipped.
+- Q-819b-2 and Q-819b-3 had no answer in this round and stay open.
+
+Check of the new line (`npm run bench -- --only=P7,P8 --no-gen`, once, 2026-11-17, processor busy 0.69 to 0.72 from
+other jobs): P7 R2 median 41 ms, first open of the launch 289 ms (judged, met); R1 median 1328 ms, first open 1356 ms
+(recorded, met); P8 240 frames per s and p99 frame 4.3 ms with vertical sync (met); verdict 4 of 4 judged lines met. The
+uncapped P8 run gave 38.3 per s (recorded, not judged).
+
+## Addendum 17: F-818, themes: Light, Dark, High contrast and System, and the Studio's settings page (2026-11-17)
+
+On 2026-11-17 the maintainer said: "theming in general is a good idea so create a dark mode plus one other theme for
+this". `DESIGN.md` changes need the maintainer's approval, so `DESIGN.md` is not edited. The two new palettes are
+written as a proposal in `docs/design-themes-proposal.md`, in `DESIGN.md`'s token format, ready to paste. No dependency,
+no Rust file, no service method, golden or default was changed. The default theme (Light) is `DESIGN.md` as before:
+its CSS is the unchanged `:root` block of `tokens.css` (byte for byte), and the existing visual, pixel and word-budget
+tests pass untouched.
+
+### What is built
+
+1. **Themes are sets of the tokens** (`src/renderer/design/tokens.ts`). `themes.light` is `palette` (`DESIGN.md`).
+   `themes.dark` and `themes.contrast` give every palette colour a value. The role table is the same in every theme,
+   so every component keeps its token and each hue keeps its job. `tokens.css` (generated, `npm run tokens:css`)
+   gains one block per other theme under `:root[data-theme='dark' | 'contrast']`, and a
+   `@media (prefers-color-scheme: dark) { :root:not([data-theme]) }` block, so a dark start is dark before the page's
+   script runs. Roles refer to the palette by `var()`, so nothing else in the CSS changes. The Dark popover lift is
+   tinted from the ground (`themeTint`), and Dark sets `color-scheme: dark`.
+2. **The setting** (`src/shared/theme.ts`, `src/main/theme.ts`): Light (default), Dark, High contrast, System. It is a
+   preference of the Studio, kept in its user data (`studio-preferences.json`, or the file named by
+   `RCFD_STUDIO_PREFERENCES`) beside the recent list. It is never project state (G12). It crosses the bridge only
+   through two new channels of the IPC allow-list (G10): `theme.get` and `theme.set`. The preload exposes them as
+   `window.studio.theme.{get, set}`, and the main process checks the value. The main process reads the file before
+   the first window opens, sets `nativeTheme.themeSource` (light, dark, light, system) and the window's
+   `backgroundColor` to the theme's ground, and sets both again on every change (and on the system's change under
+   System). A dark start shows no white window.
+3. **The page** (`src/renderer/theme/theme.ts`): `<html data-theme>` names the theme drawn. A change sets it at once
+   (no reload), then the main process keeps it. System follows `prefers-color-scheme`, which `nativeTheme` drives.
+   The three.js canvases follow through `onThemeChange`: the plots (`plots/linePlot.ts`) recolour their ground and
+   lines and draw once, and the field viewport (`field/FieldCanvas.tsx`) takes the theme's silver-wash as its clear
+   colour and draws once. The colour map and the overlays on the field (mesh grid, arrows) are not themed. The Claude
+   Code panel, the palette, the case editor and the settings are CSS and follow the tokens.
+4. **Controls.** A theme control in the header band of the project home and of the case settings. It is an icon on
+   the pictogram grid (`theme`: a square cut on its diagonal, one half hatched), with no visible word at rest (G22,
+   word budgets unchanged). Its accessible name is "Theme" and it reads the theme chosen. It opens the list Light,
+   Dark, High contrast, System. The palette has four commands in a new **View** group: Theme: Light, Theme: Dark,
+   Theme: High contrast, Theme: System (`view.theme_*`).
+
+### Decisions (options, the recommendation taken; each reversible)
+
+- D1, the second theme:
+  - (a) High contrast, a light theme for bright rooms and projectors (taken; why in the proposal: learners in
+    classrooms, and the hairlines and hatch that carry the program's structure are the first to wash out);
+  - (b) a colour-blind-safe theme (state is already shape plus word, G8, and the field is viridis);
+  - (c) a dim dark variant (repeats Dark).
+
+  Recommendation: (a), as the maintainer's brief suggested. The design docs do not make another theme clearly better.
+- D2, how a theme is defined:
+  - (a) palette values per theme, roles unchanged (taken);
+  - (b) roles remapped per theme (for example, the footer on a second dark tone in Dark).
+
+  Recommendation: (a). It is what "keeps each hue's single job" means, and it keeps one role table. A consequence the
+  maintainer should see: in Dark the ink fields (footer band, tooltips, scrubber flag, primary buttons) are light
+  bands with dark text.
+- D3, where the setting is kept: (a) the main process, in user data, through the IPC allow-list (taken); (b) the
+  page's `localStorage` (the Chromium profile is shared by the tests, and it would be state outside the main
+  process's view). Recommendation: (a).
+- D4, no flash: (a) `nativeTheme.themeSource`, the window background and the `prefers-color-scheme` fallback block
+  (taken); (b) a synchronous IPC call in the preload (`sendSync`; the shell test holds that the main process has no
+  `ipcMain.on` listener); (c) a command-line argument per window (stale after a change and a reload).
+  Recommendation: (a). High contrast starts as Light for the moment before the page reads the setting (both are white).
+- D5, Light's native theme: under Light, `nativeTheme.themeSource` is now `light`; before F-818 it was the system's.
+  On a dark system the title bar is light under Light. The page under Light is unchanged.
+- D6, the field overlays: Light's values in every theme (taken), because they sit on the colour map.
+- D7, the palette command: four commands, one per value (taken), so typing "dark" finds it, and the palette's
+  parameter kinds (`CHOICE_KINDS`) are unchanged. The other option was one command with a typed parameter.
+
+### Tests added and changed
+
+- `tests/unit/theme.spec.ts` (new): every theme sets every colour, all distinct; each themed colour stays within 25
+  degrees of its Light hue, and the neutrals stay ink-tinted (no black or pure grey); themes set no roles; `tokens.css`
+  is the unchanged `:root` block, then the theme blocks and the dark-system block; the window grounds equal the themes'
+  `white`; `colormap.ts` reads no theme; `theme.css` uses tokens only; the setting's file, its native source, its
+  background, and refusal of a bad value; the palette commands. No contrast check (G8).
+- `tests/e2e/theme.spec.ts` (new, packaged Studio, scratch preferences): Light by default (tokens, `themeSource`
+  light, white window); the header control switches the tokens at once with no reload, and the native theme and the
+  window background follow; the palette switches to High contrast; the setting persists across a restart; a dark start
+  opens on the dark ground and is dark before `data-theme` is set; System follows the emulated colour scheme, and an
+  explicit setting does not; the main process refuses a value that is not a setting.
+- `tests/e2e/theme-surfaces.spec.ts` (new, with rcfd and rcfd-mcp): the main surfaces in each theme, screenshotted
+  to `apps/studio-web/test-results-visual/f818/{light,dark,contrast}/`: home-empty, home-open (with the Claude Code
+  panel), runs-selected, workspace, palette, case-editor, settings, and `dark/theme-control.png`. On the workspace, the
+  field viewport's ground is the theme's silver-wash exactly, the plots' ground is the theme's ground, and the field's
+  pixels inside the frame are the same in every theme wherever the ground does not show.
+- Changed for the new channels and file: `tests/e2e/shell.spec.ts` (the allow-list is now app.info, app.ready,
+  theme.get, theme.set, with F-837's app.closeAnswer after the merge, and `window.studio` has `theme`); `tests/unit/tokens.spec.ts` (the declared-once check reads
+  the `:root` block); `tests/unit/history.spec.ts` (`src/main/theme.ts: rename`, the setting's write-then-rename in
+  user data); `tests/e2e/data.spec.ts`, `project.spec.ts` and `service-security.spec.ts` (their "the shell's channels
+  are unchanged" checks list the theme's two channels and `window.studio.theme`; the service, data and project ports
+  still use no shell channel).
+- The Studio has no terminal surface, so there was none to check.
+
+### Open for the maintainer
+
+- Q-818-1: approve, change or reject the Dark and High contrast palettes (`docs/design-themes-proposal.md`), then paste
+  them into `DESIGN.md` and close F-818.
+- Q-818-2: Dark's ink fields (footer, tooltips, flag, primary buttons) as light bands (D2 (a)), or a second dark tone
+  for them (D2 (b)).
+- Q-818-3: Dark's orange (`#c46810`) balances the label on the live segment against the focus ring on the ground.
+- Q-818-4: the field overlays in Light's values in every theme (D6).
+- Q-818-5: the theme control sits in the header band of the project home and the case settings. The Studio has no
+  Studio-wide settings page yet. Should one be made, and should the theme move there?
+
+### The maintainer's answers (2026-11-17), and the Studio's settings page
+
+- Q-818-1: both palettes approved. They are pasted from `docs/design-themes-proposal.md` into `DESIGN.md` (this
+  approval covers that edit): a `themes` map in the frontmatter (`dark` and `contrast`, each with its `colors`), a
+  Themes section after Colors (the Same Jobs Rule and the Field Is Not Themed Rule), the Overview line on themes, and
+  "a dark theme" taken off the Open list. `tests/unit/tokens.spec.ts` now checks that the frontmatter themes are
+  `tokens.ts`'s and that the prose gives both footer tints.
+- Q-818-2: the ink fields stay light bands in Dark (D2 (a), as built).
+- Q-818-3: Dark's orange stays `#c46810` (as built).
+- Q-818-4: the field overlays do not follow the theme (D6, as built).
+- Q-818-5: yes, a Studio-wide settings page, with the theme control moved there. Built:
+  - `src/renderer/studio-settings/StudioSettingsPage.tsx` at `#/studio-settings` (loaded on demand): the sky header
+    band with the brand, the page's name "Settings" and Close settings (back to where it was opened from), one column
+    of sections, the ink disclaimer footer. Theme is its first and only section: a segmented toggle Light, Dark, High
+    contrast, System (a radio group for assistive technology), applied at once as before. A sentence for readers says
+    what System does and that the field colours are the same in every theme (G22: not standing text).
+  - Opened from the palette's new **Settings** command (`go.studio_settings`, group Go to, global shortcut Ctrl+, in
+    the shortcuts table, owner F-818) and from one quiet entry point: a Settings icon (a new `settings` pictogram, no
+    word at rest) in the header band of the project home and of the case settings, where the theme icon was. The
+    theme icon and its select (`theme/ThemeSelect.tsx`, `theme/theme.css`) are removed; the four Theme palette
+    commands stay.
+  - It is not the case settings (`#/settings`, Go to Case settings), which are a case's keys; the two names are kept
+    apart in the palette's descriptions.
+  - Word budget (G22): a new surface `studio-settings` in `src/shared/word-budget.ts`, set at its count when built: 9
+    words at rest (rcfd, Studio, Settings, Theme, Light, Dark, High, contrast, System). Counted by
+    `tests/e2e/word-budget.spec.ts`; the budget is for the maintainer to confirm.
+  - The a11y walk: `tests/e2e/a11y.spec.ts` reaches the page from the header's icon by keys, walks it (Tab loop,
+    focus indicators, the toggle by the arrow keys, axe-core) as surface `studio-settings`, and leaves it by Close
+    settings.
+  - No other setting was invented for the page. Candidates that are the Studio's own settings today, each set only by
+    an environment variable or kept as its own file, listed here and not moved: the paths of `rcfd`, `rcfd-mcp` and
+    `claude` (`RCFD_STUDIO_RCFD`, `RCFD_STUDIO_MCP`, `RCFD_STUDIO_CLAUDE`); the engine service to join
+    (`RCFD_STUDIO_SERVICE`, `RCFD_STUDIO_SERVICE_ROOT`); the data roots (`RCFD_STUDIO_DATA_ROOTS`); the recent projects
+    list (`recent-projects.json`, forgotten one by one on the home); the Claude Code folder confirmations
+    (`claude/claude-trust.json`). Each is a decision for the maintainer.
+- Verification of the answers: `npm run typecheck` clean; the touched specs (theme, theme-surfaces, word-budget, a11y,
+  commands, settings e2e; theme, tokens, pictograms, commands-palette, commands-shortcuts unit) passed; then the full
+  `npm test` (headless, built and packaged): 687 passed, 0 failed, 9.0 min.
+
+### Verification (2026-11-17, on studio-f818 over studio-roadmap 7cb8ec45; before the answers)
+
+- `npm ci`: exit 0, 0 vulnerabilities. `npm run typecheck`: clean. No dependency was added.
+- `tokens.css`: the `:root` block is byte-identical to the one before F-818 (compared with `git show HEAD:`).
+- `npm test` (headless, built and packaged): 679 passed, 0 failed, 8.4 min. This includes the 7 + 7 new e2e tests, the
+  word budgets (all surfaces within their approved budgets, unchanged), field and field-derived pixels, primitives
+  and a11y. A first full run failed 4 tests in data, project and service-security, which asserted the shell's old
+  two channels. Those three specs were updated as listed above and pass, then the full run above passed.
+
+## Addendum 18: the Studio-only leftovers of F-814, F-813 and F-828 (2026-11-17)
+
+No new dependency, no engine change, no change to a default. On studio-leftovers over studio-roadmap e7b6c43b.
+
+### F-814: a case file named in a reply opens in the case editor
+
+- `src/renderer/claude/links.ts`: `Known` carries the case files of the project (files of `cases/` ending `.toml` or
+  `.json`, the engine's rule of ADR 0148, `isCaseFile` of the home); `fileOpensIn(path, known)` says `case` or `home`.
+- `src/renderer/claude/ClaudePanel.tsx`: a case file's chip is "Edit <path> in the case editor" and goes to
+  `#/case/open/<path>`, as the home's Edit does (F-812 makes the session, binds it and shows the editor). A data file of
+  `cases/`, a mesh and a note keep the filtered Home ("Show <path> on the project home").
+- Tests: `tests/unit/claude.spec.ts` (where each kind opens), `tests/e2e/claude.spec.ts` (the note filters Home; the
+  case chip opens the editor on a session of `rcfd serve`, which the spec now starts; back on Home the transcript and
+  its chips are as before; the folder is still unchanged).
+- Still waiting for the maintainer, not touched: the claude-head colour role (DESIGN.md), and whether the Studio writes
+  `.rcfd/claude-allow.json`. Still the engine's: session discovery (the TypeScript stopgap stays).
+
+### F-813: the result opens the run workspace; the field caption for a learner
+
+- `src/renderer/first/target.ts`: the result's "Open the run" (accessible name "Open the run in the workspace") selects
+  the run and shows the run workspace (F-810); a run still going keeps "Follow it in Runs". The project view hands the
+  path `openWorkspace` beside `openRun`.
+- `FieldViewport` takes `learner: { quantity }`, which the first path passes with its plain word for the field. The
+  learner's caption at rest is the run, the plain word with the engine's unit, and "round <step>". The stored name,
+  the snapshot and its count, the step and t, the colour range and the cells are said to readers (G22), and the
+  readout's cell and triangle are too. The precise terms "round" (step) and "the picture" (the boundary surface's
+  triangles coloured by their cells) are added to the result's Explain (G19, PRODUCT Principle 5), and the full control
+  names the run workspace. The values and the picture do not change, and the other surfaces keep their caption.
+- Unchanged, as asked: the walk's test still writes `rcfd-project.json` itself, because no engine command makes a
+  project (ADR 0731, proposed).
+- Tests: `tests/e2e/first-path.spec.ts` (the visible caption has none of snapshot, step, t =, triangles, ux; the round
+  opens its provenance; the result and the keyboard walk open the workspace with the run drawn),
+  `tests/unit/first-path.spec.ts`.
+
+### F-828: the numbers that had no provenance
+
+- A session number is a third subject of the inspector (`{kind: 'session'}`, `SessionNumberSource` and `sessionFacts` in
+  `src/shared/provenance.ts`): value, unit as the engine gave it, session, iteration, the service method that answered,
+  the session's journal (`journal.get`: its edit count and case hash, read when the popover opens), and the engine of
+  `service.info`. There is no run behind it, so there is no run.json, snapshot or reproduce command. What the service
+  does not record is said as not recorded: the file a session was made from (neither `session.list` nor `journal.get`
+  names it) and a reproduce command (`journal.get` gives the edits, but no journal file exists for `rcfd run --journal`).
+- Settings (`KeyRow.tsx`, so the case editor too): a key whose value is a number, or a list of numbers, opens the
+  provenance of the engine's value (`settings.get`). Its unit is the schema's `x-rcfd-unit` or `x-rcfd-si-dimension`
+  and names which one, or says the schema names none. It opens by Ctrl+I or the palette while the key's field has the
+  focus (the row names it with `data-provenance`), or by a click on the key's name, which also puts the focus in the
+  field. The name is a passive trigger, as in the runs grid, so Tab and Enter stay the field's. F-816's walk is
+  unchanged, and no element is left that no key reaches (the a11y spec showed that a `tabindex="-1"` button would leave
+  one).
+- Dev plots (`ResidualPlot.tsx`, `MonitorPlot.tsx`, `PlotsDev.tsx`): the latest value of each residual and of the
+  monitor (`monitors.get`, its series unit) and the session's iteration (`run.status`) are buttons: click, Enter, Ctrl+I.
+  The feed's own counters (fetch counts and times) are the Studio's measurements, not solver numbers, and stay plain.
+- The field caption's step and t (the workspace, Compare, the dev field view) and the learner's round open the
+  snapshot's provenance (`snapshotFactValue`). The time's unit is said as not recorded, because store.rts gives a
+  snapshot's time without one.
+- The first path's result numbers (rounds, solver time, the report values) open theirs, with the same sources as Runs.
+- The palette's Show provenance now works off a project (a session number needs none; Copy reproduce command still
+  needs one). While the palette is open, the number meant is the one that had the focus before the palette opened.
+- Tests: `tests/unit/provenance.spec.ts` (the session facts, the not-recorded words, the trigger counts per surface),
+  `tests/e2e/settings-rcfd.spec.ts` (click, Ctrl+I, the palette on a real session; the schema's SI dimension named),
+  `tests/e2e/plots.spec.ts` (monitor by Enter, residual by click, iteration by Ctrl+I, against `monitors.get` of the
+  test's own), `tests/e2e/provenance.spec.ts` (the caption's step and time).
+- Numbers still without provenance (Studio work, no engine needed): the Runs table's residual columns u and p (F-837,
+  the value is in the tooltip), the compared run's residuals in the time panel (F-815), the legend's ticks, the domain
+  size and the scale bar (F-837), the runner budgets (F-837), the home's counts. F-828 stays partial on these.
+
+### Status after this addendum
+
+- F-814 stays partial: what is left is two maintainer decisions and the engine's session discovery (below).
+- F-813 stays partial: the engine's project command, and the maintainer's first-time view-and-report.
+- F-828 stays partial: the numbers listed above, and the engine's records (below).
+
+### Open for the maintainer
+
+- D-L1 (F-828): should the Studio write a session's journal (`journal.get`) to a file so that a session number gets a
+  reproduce command (`rcfd run --journal <file>`)? It would be the Studio writing a file the user did not ask for (G12).
+  Recommendation: no. Ask the engine to record the journal file itself (follow-up E-828c).
+- The two F-814 decisions are as before: the claude-head colour role, and writing `.rcfd/claude-allow.json`.
+
+### Verification (2026-11-17, on studio-leftovers over studio-roadmap e7b6c43b, RCFD_TEST_HEADLESS=1)
+
+- `npm run typecheck`, `npm run build`, `npm run package:dir`: clean.
+- Unit project: 434 passed.
+- The touched specs alone (claude, first-path, provenance, settings-rcfd, settings, plots), then word-budget and a11y
+  (axe), then case-editor: all passed. Every word budget is unchanged and held. The a11y spec first failed on the
+  settings names as `tabindex="-1"` buttons (elements no key reaches), which is why the names are passive triggers.
+- The full `npm test` once: 663 passed, none failed or flaky. After it, one reader-only word in the learner caption
+  changed ("the last stored picture" to "stored picture", because the viewport does not know that it is the last), and
+  first-path.spec.ts passed again on a new build (5 of 5).
+
+## Engine follow-ups of the Studio items (2026-11-17)
+
+Every engine entry point the partial Studio items wait for, in one place, so that one engine ADR can take them
+together. The Studio shows each one as unavailable or not recorded, and does not stand in for it (G2, G6, G16). Ids are
+local to this list.
+
+| Id | Item | What the engine needs to give | Today in the Studio |
+| --- | --- | --- | --- |
+| E-809a | F-809 | An iso-surface of a stored cell field (triangles with their cells), as a `data.*` method or an MCP tool | shown unavailable |
+| E-809b | F-809 | Streamlines of a stored velocity field (seeds, polylines with the cell of each point) | shown unavailable |
+| E-809c | F-809 | A cut or slice of a stored 3D field with values; `render_field` with `axis`, `slice` and `vectors` for a store | the cut and arrows are drawn by the Studio within tolerances T1 to T3 |
+| E-809d | F-809, G16 | A CLI or MCP way to draw the Studio's cut and arrows of a store, so Claude Code can make the same picture | none |
+| E-809e | F-809, F-837 | The length unit of the stored mesh coordinates | the cut position has no unit; the domain size and the scale bar say m from the SI settings, and say why |
+| E-813 | F-813 | A command that creates a project (`rcfd project init`, MCP `create_project` over `Project::create`; ADR 0731, proposed) | the empty folder says it is missing; the walk's test writes `rcfd-project.json` |
+| E-814 | F-814 | An engine entry point that lists a project's Claude Code sessions (rcfd-claude) | a TypeScript stopgap in the main process |
+| E-828a | F-828 | run.json records the solver's launch argv and a build id (`solver_version` is a release name) | the reproduce command is built from the runner's start options |
+| E-828b | F-828 | A unit for `status.json`'s `time`, and for a snapshot's time in store.rts | "Time, s" is the Studio's caption; the provenance says not recorded |
+| E-828c | F-828 | A service session's record: the file `session.create` read, and a journal file that `rcfd run --journal` can run | the provenance says not recorded, with no command |
+| E-828d | F-828 | `rcfd-runner start` options for `continue_from` and `max_steps`, or `rcfd-runner rerun <id>` / `start_run {from_run}` | said as a gap beside the command |
+| E-828e | F-828 | A read-only hash of a mesh file a run names | said as a gap beside the command |
+| E-829a | F-829 | Delete or trash for runs, results and cases (`trash_run`, `trash_case`, `list_trash`, `restore_trash`) | the Studio offers no delete |
+| E-829b | F-829 | Compare-and-set for `settings.set` (a base value or hash) | the Studio reads the value again before it sends |
+| E-837a | F-837 | A case-facts query (cell sizes, a velocity scale) or `start_run {dry_run: true}`, for "simulate N s", adaptive correctors and the Courant fix | not built |
+| E-837b | F-837 | A mesh refine entry point (`refine_mesh {mesh, factor}` or a service method), for Refine by 2 | not built |
+| E-837c | F-837 | A service save of a case session to a path outside a project, for one case file anywhere | not built |
+| E-837d | F-837 | `rcfd-runner config set` or MCP `set_runner_config` (ADR 0733, proposed) | the Studio writes `.rcfd/runner-config.json` conflict-safe, and the runner checks it |
+
+## Addendum 19: F-820 and F-821, installers built in CI and the Studio on Linux in Docker (2026-11-17)
 
 The maintainer's answer to the packaging and platform questions of `docs/studio-guardrails.md` (2026-11-17): "(b) in CI
 (docker can test linux before CI)". Read as: the installers are built in CI; Linux is tested in Docker on the

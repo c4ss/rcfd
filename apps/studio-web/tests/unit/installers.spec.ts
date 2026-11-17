@@ -1,5 +1,5 @@
 // F-820: the installer rules that keep a user's settings across an update (scripts/installer-config.mjs, ADR 0801
-// Addendum 17). The settings live in Electron's userData folder, named after productName; an update keeps them as long
+// Addendum 19). The settings live in Electron's userData folder, named after productName; an update keeps them as long
 // as the name, the NSIS appId and the keep-on-uninstall flag stay put, and the installed app is the tested app folder.
 import { expect, test } from '@playwright/test';
 import { readFileSync } from 'node:fs';

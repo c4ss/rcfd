@@ -133,6 +133,56 @@ test('a refused value shows the engine’s words; a value with a unit is convert
   await page.getByRole('textbox', { name: 'Find a setting' }).fill('');
 });
 
+test('F-828: a number of the session opens its provenance: click on the key’s name, Ctrl+I in its field, the palette', async () => {
+  await openSection('solver');
+  const name = row('solver.alpha_u').locator('.st-key-name [data-provenance-trigger]');
+  await expect(name).toHaveAttribute('data-provenance-name', /^Provenance of solver\.alpha_u: 0\.9/);
+  // not a control of its own: Tab and Enter stay the field's (F-816's keyboard walk is unchanged)
+  await expect(row('solver.alpha_u').getByRole('button', { name: /^Provenance of / })).toHaveCount(0);
+  await name.click();
+  const d = page.getByRole('dialog', { name: 'Provenance of solver.alpha_u' });
+  await expect(d).toBeVisible();
+  const fact = (k: string) => d.locator(`[data-fact="${k}"] dd`);
+  await expect(fact('Session')).toHaveText(session);
+  await expect(fact('Read by')).toHaveText('settings.get of rcfd serve (rcfd-service/1)');
+  await expect(fact('Unit')).toHaveText('none: the case schema names no unit for solver.alpha_u');
+  const info = (await rpc.request('service.info')) as { name: string; version: string };
+  await expect(fact('Engine')).toHaveText(`${info.name} ${info.version} (service.info)`);
+  const journal = (await rpc.request('journal.get', { session })) as { entries: unknown[]; case_hash: string };
+  await expect(fact('Journal')).toContainText(`case hash ${journal.case_hash} (journal.get)`);
+  // what the service does not record is said, not filled in
+  await expect(fact('Case file')).toHaveText(/^not recorded: /);
+  await expect(d.getByText(/^Not recorded: a service session has no reproduce command/)).toBeVisible();
+  await shot('provenance-setting');
+  await page.keyboard.press('Escape');
+  await expect(d).toHaveCount(0);
+  // the click put the focus in the key's field, where Escape gives it back
+  await expect(row('solver.alpha_u').getByRole('textbox')).toBeFocused();
+  // Ctrl+I while the field has the focus; the focus comes back to the field
+  const field = row('solver.alpha_u').getByRole('textbox');
+  await field.focus();
+  await page.keyboard.press('Control+i');
+  await expect(d).toBeVisible();
+  await page.keyboard.press('Escape');
+  await expect(field).toBeFocused();
+  // the palette's Show provenance on the focused field
+  await page.keyboard.press('Control+k');
+  const palette = page.getByRole('dialog', { name: /command/i });
+  await expect(palette).toBeVisible();
+  await page.keyboard.type('Show provenance');
+  await page.keyboard.press('Enter');
+  await expect(d).toBeVisible();
+  await page.keyboard.press('Escape');
+  // a dimensioned number: its unit is the schema's SI dimension, named with where the engine writes it
+  const speed = model.leaves.find((l) => l.control === 'number' && l.siDimension === 'm s^-1' && !l.pattern.includes('*'))!;
+  await page.getByRole('textbox', { name: 'Find a setting' }).fill(speed.pattern);
+  await row(speed.pattern).locator('.st-key-name [data-provenance-trigger]').click();
+  const ds = page.getByRole('dialog', { name: `Provenance of ${speed.pattern}` });
+  await expect(ds.locator('[data-fact="Unit"] dd')).toHaveText(`m s^-1, settings.schema, x-rcfd-si-dimension of ${speed.pattern}`);
+  await page.keyboard.press('Escape');
+  await page.getByRole('textbox', { name: 'Find a setting' }).fill('');
+});
+
 test('every case key of settings.schema gets exactly one control in the window', async () => {
   test.setTimeout(240_000);
   // one entry in every named collection (made through the engine, as another writer would: it shows live)

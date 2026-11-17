@@ -301,3 +301,57 @@ export function provenanceText(title: string, facts: readonly Fact[], run: RunPr
   }
   return lines.join('\n');
 }
+
+// ---- a number of a service session (F-828: the settings surface, the plots' development view)
+
+/**
+ * Where a number of a live service session was read. A session is not a project run: it has no run.json, no stored
+ * snapshot and no reproduce command of its own; the facts are the session, the service method that answered, the engine
+ * that answered it (service.info) and the unit the engine gave. What the service does not record is said, not filled in.
+ */
+export interface SessionNumberSource {
+  /** The quantity, in the engine's name (`solver.alpha_u`, `res_u`, `lid_drag`, `iteration`). */
+  readonly quantity: string;
+  readonly shown: string;
+  readonly exact: string | null;
+  readonly unit: { readonly kind: 'engine'; readonly unit: string; readonly from: string } | { readonly kind: 'none'; readonly why: string };
+  readonly session: string;
+  /** The iteration the value belongs to, or why it has none. */
+  readonly at: { readonly iteration: number } | { readonly none: string };
+  /** The service method that answered, with the service's name. */
+  readonly readBy: string;
+  readonly more?: readonly Fact[];
+}
+
+/**
+ * What the service records about the file a session was made from: session.create reads a file, but neither
+ * session.list nor journal.get names it (journal.get gives the tree's hash and the edits since). An engine follow-up.
+ */
+export const SESSION_FILE_NOT_RECORDED = 'not recorded: the service names no file for a session (session.list and journal.get carry none)';
+
+/** Why a session number has no reproduce command (an engine follow-up; ADR 0801, the engine follow-ups). */
+export const SESSION_NO_REPRODUCE =
+  'Not recorded: a service session has no reproduce command. journal.get gives its edits, but the service writes no journal file for rcfd run --journal to read.';
+
+/** The facts of a session number, with the engine that answered (service.info) and the session's journal when read. */
+export function sessionFacts(
+  src: SessionNumberSource,
+  engine: { readonly name: string; readonly version: string } | null | 'reading',
+  journal: { readonly entries: number; readonly caseHash: string } | { readonly error: string } | null,
+): Fact[] {
+  const u = src.unit;
+  const rows: Fact[] = [
+    ['Value', src.exact !== null && src.exact !== src.shown ? `${src.shown} (${src.exact})` : src.shown],
+    ['Unit', u.kind === 'none' ? `none: ${u.why}` : u.unit === '' ? `none, empty in ${u.from}` : `${u.unit}, ${u.from}`],
+    ['Session', src.session],
+    ['Iteration', 'none' in src.at ? src.at.none : String(src.at.iteration)],
+    ['Read by', src.readBy],
+    ['Case file', SESSION_FILE_NOT_RECORDED],
+  ];
+  if (journal !== null) {
+    rows.push(['Journal', 'error' in journal ? `not read: ${journal.error}` : `${journal.entries} ${journal.entries === 1 ? 'edit' : 'edits'} since the session was made, case hash ${journal.caseHash} (journal.get)`]);
+  }
+  for (const m of src.more ?? []) rows.push(m);
+  rows.push(['Engine', engine === 'reading' ? 'reading…' : engine ? `${versionLine(engine)} (service.info)` : 'not known: no service answered service.info']);
+  return rows;
+}

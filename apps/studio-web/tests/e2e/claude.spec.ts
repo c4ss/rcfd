@@ -5,7 +5,8 @@
 // - the project's sessions are listed: one open in another process (mirrored read-only, no message field), one closed;
 // - the closed one is resumed and typed into from the keyboard; the reply streams in; the spawned argument list has the
 //   allow-list and no approve-everything flag; a second message while the first is answered is refused (one writer);
-// - the run id and the files in the reply are reference chips that open the run in Runs and the file on Home;
+// - the run id and the files in the reply are reference chips that open the run in Runs, the case file in the case
+//   editor (F-812) and the note on Home;
 // - the bridge is window.studioClaude with exactly its functions; the Studio writes nothing into the project folder.
 // Screenshots at 1440 by 900 go to test-results-visual/f814/ for the maintainer's view-and-report (G13).
 import { expect, test, type Page } from '@playwright/test';
@@ -13,7 +14,7 @@ import { mkdir, mkdtemp } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { launchStudio, type Studio } from '../support/studio.js';
-import { appRoot } from '../support/rcfd.js';
+import { appRoot, findRcfd, killIfRcfd, NO_RCFD, startRcfd, type RunningRcfd } from '../support/rcfd.js';
 import { copyExample, findMcp, NO_MCP, snapshot, stubDialog } from '../support/project.js';
 import { APPROVE_EVERYTHING, claudeFixture, FAKE_CLAUDE, sampleTranscript, type ClaudeFixture } from '../support/claude.js';
 import { until } from '../support/fake-service.js';
@@ -21,6 +22,9 @@ import { until } from '../support/fake-service.js';
 const SHOTS = path.join(appRoot, 'test-results-visual', 'f814');
 const mcp = findMcp();
 test.skip(!mcp, NO_MCP);
+// the case editor a case file opens in (F-812) makes its session on `rcfd serve`
+const rcfd = findRcfd();
+test.skip(!rcfd, NO_RCFD);
 test.describe.configure({ mode: 'serial', timeout: 120_000 });
 
 const S1 = '00000000-0000-4000-8000-000000000001';
@@ -31,6 +35,7 @@ let fx: ClaudeFixture;
 let quick = '';
 let before: Record<string, string> = {};
 let studio: Studio | null = null;
+let service: RunningRcfd | null = null;
 const consoleErrors: string[] = [];
 
 const shot = (page: Page, name: string) => page.screenshot({ path: path.join(SHOTS, `${name}.png`), scale: 'css' });
@@ -50,7 +55,9 @@ test.beforeAll(async () => {
   ]);
   await fx.setAgents([{ pid: process.pid, cwd: quick, sessionId: S2, name: 'terminal-chat' }]);
   before = await snapshot(quick);
+  service = await startRcfd(rcfd!);
   studio = await launchStudio({
+    RCFD_STUDIO_SERVICE: `127.0.0.1:${service.port}`,
     RCFD_STUDIO_MCP: mcp!,
     RCFD_STUDIO_RECENT: path.join(fx.root, 'recent.json'),
     RCFD_STUDIO_CLAUDE: FAKE_CLAUDE,
@@ -75,6 +82,8 @@ test.beforeAll(async () => {
 
 test.afterAll(async () => {
   await studio?.app.close();
+  await service?.stop();
+  if (service) killIfRcfd(service.pid);
 });
 
 test('the panel lists the project’s sessions: one open elsewhere (read-only), one closed', async () => {
@@ -155,19 +164,28 @@ test('resume: the closed session is typed into from the keyboard; the reply stre
   await shot(page, '04-reply-with-references');
 });
 
-test('a run id in the reply opens the run in Runs; a file opens it on the project home (keyboard)', async () => {
+test('a run id in the reply opens the run in Runs; a note opens on the project home, a case file in the case editor (keyboard)', async () => {
   const page = studio!.page;
-  const refs = panel(page).getByRole('group', { name: 'References in this reply' }).last();
-  await refs.getByRole('button', { name: `Open run ${RUN} in Runs` }).focus();
+  const refs = () => panel(page).getByRole('group', { name: 'References in this reply' }).last();
+  await refs().getByRole('button', { name: `Open run ${RUN} in Runs` }).focus();
   await page.keyboard.press('Enter');
   await expect(page.getByRole('tab', { name: 'Runs' })).toHaveAttribute('aria-selected', 'true');
   await expect(page.getByRole('row', { selected: true })).toContainText(RUN);
   await shot(page, '05-run-opened-from-reply');
-  await refs.getByRole('button', { name: 'Show cases/cavity-re100.toml on the project home' }).focus();
+  await refs().getByRole('button', { name: 'Show notes/README.md on the project home' }).focus();
   await page.keyboard.press('Enter');
   await expect(page.getByRole('tab', { name: 'Home' })).toHaveAttribute('aria-selected', 'true');
-  await expect(page.getByRole('textbox', { name: 'Filter by name' })).toHaveValue('cases/cavity-re100.toml');
-  await expect(page.locator('main').getByText('cases/cavity-re100.toml').first()).toBeVisible();
+  await expect(page.getByRole('textbox', { name: 'Filter by name' })).toHaveValue('notes/README.md');
+  await expect(page.locator('main').getByText('notes/README.md').first()).toBeVisible();
+  await expect(refs().getByRole('button', { name: 'Show cases/cavity-re100.toml on the project home' })).toHaveCount(0);
+  await refs().getByRole('button', { name: 'Edit cases/cavity-re100.toml in the case editor' }).focus();
+  await page.keyboard.press('Enter');
+  await expect.poll(() => page.evaluate(() => location.hash), { timeout: 20_000 }).toMatch(/^#\/case\/s\d+$/);
+  await expect(page.getByText('cases/cavity-re100.toml').first()).toBeVisible();
+  await shot(page, '05b-case-opened-from-reply');
+  // back to the project home: the panel and its transcript are as they were
+  await page.evaluate(() => (location.hash = ''));
+  await expect(refs().getByRole('button')).toHaveText([RUN, 'cases/cavity-re100.toml', 'notes/README.md'], { timeout: 20_000 });
 });
 
 test('tool approvals: the allow-list is shown from the keyboard, everything else denied', async () => {

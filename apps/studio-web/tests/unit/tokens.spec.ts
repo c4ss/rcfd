@@ -20,6 +20,7 @@ import {
   shadow,
   size,
   space,
+  themes,
   tint,
   tokensCssText,
   typeRamp,
@@ -86,7 +87,8 @@ test.describe('tokens.css and tokens.ts', () => {
   });
 
   test('tokens.css declares each custom property once, and every one is a token of tokens.ts', () => {
-    const file = read(renderer, 'design', 'tokens.css');
+    // the :root block (DESIGN.md's light theme); the theme blocks after it are tests/unit/theme.spec.ts's (F-818)
+    const file = read(renderer, 'design', 'tokens.css').split('\n}\n')[0]!;
     const declared = [...file.matchAll(/^\s*(--[a-z0-9-]+):\s*(.+);$/gm)].map((m) => [m[1]!, m[2]!] as const);
     expect(declared).toEqual(cssCustomProperties());
     expect(new Set(declared.map(([k]) => k)).size).toBe(declared.length);
@@ -121,6 +123,16 @@ test.describe('tokens.ts holds the values of DESIGN.md', () => {
     expect(fromPalette).toEqual(colors);
     for (const [k, v] of Object.entries(ext.colorMeta)) expect(palette[k as keyof typeof palette], k).toBe(v.canonical);
     expect(designMd).toContain(`light ink tint (${palette['ink-tint']}`);
+  });
+
+  test('themes (F-818, approved 2026-11-17): the frontmatter themes are tokens.ts’s, and the footer tints are in the prose', () => {
+    const t = design['themes'] as Record<string, { colors: Record<string, string> }>;
+    expect(Object.keys(t).sort()).toEqual(['contrast', 'dark']);
+    for (const name of ['dark', 'contrast'] as const) {
+      const fromTheme = Object.fromEntries(Object.entries(themes[name]).filter(([k]) => k !== 'ink-tint'));
+      expect(fromTheme, name).toEqual(t[name]!.colors);
+    }
+    expect(designMd).toContain(`#${themes.dark['ink-tint'].slice(1)} in Dark and ${themes.contrast['ink-tint']} in High contrast`);
   });
 
   test('type ramp: family, sizes, weights, line heights, tracking and tabular figures', () => {

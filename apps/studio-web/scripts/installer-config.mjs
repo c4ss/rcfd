@@ -1,4 +1,4 @@
-// What the Studio's installers are made of (F-820, ADR 0801 Addendum 17). Pure: scripts/package-installers.mjs builds
+// What the Studio's installers are made of (F-820, ADR 0801 Addendum 19). Pure: scripts/package-installers.mjs builds
 // with it, scripts/package-dir.mjs shares runtimePackage() with it, and tests/unit/installers.spec.ts checks the rules
 // that keep a user's settings across an update.
 //
@@ -60,7 +60,7 @@ export function builderConfig({ pkg, stage, output, sign }) {
     npmRebuild: false,
     nodeGypRebuild: false,
     files: ['package.json', 'dist/**'],
-    // The engine beside the app: <resources>/bin. Where a packaged Studio looks for it is open (ADR 0801 Addendum 17,
+    // The engine beside the app: <resources>/bin. Where a packaged Studio looks for it is open (ADR 0801 Addendum 19,
     // Q-F820-2); today the Studio still has to be told by RCFD_STUDIO_MCP / RCFD_STUDIO_RCFD.
     extraResources: [{ from: `${stage}/bin`, to: 'bin' }],
     // Never published from a build: artifacts only, the maintainer releases by hand (docs/releasing.md).

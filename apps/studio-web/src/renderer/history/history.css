@@ -73,6 +73,11 @@
 .hi-panel-body p {
   margin: 0;
 }
+/* F-837: the files and changes a close without saving loses */
+.hi-losses {
+  margin: 0;
+  padding-left: var(--space-lg);
+}
 .hi-choices {
   display: flex;
   flex-direction: column;

@@ -1,4 +1,4 @@
-# The Electron Studio's installers (F-820, ADR 0801 Addendum 17): NSIS on Windows, AppImage and .deb on Linux, each with
+# The Electron Studio's installers (F-820, ADR 0801 Addendum 19): NSIS on Windows, AppImage and .deb on Linux, each with
 # the engine's release binaries (rcfd, rcfd-mcp, rcfd-runner) in <resources>/bin. On manual dispatch and on a version
 # tag. The installers are uploaded as workflow artifacts only: nothing is published or attached to a release (release.yml
 # opens the draft release; the maintainer decides what goes into it). macOS is not built (not asked for).

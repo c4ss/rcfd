@@ -112,6 +112,83 @@ export const tint = {
   'popover-shadow': { color: 'ink', alpha: 0.18 },
 } as const satisfies Record<string, { color: PaletteName; alpha: number }>;
 
+// ---- themes (F-818) ------------------------------------------------------------------------------------------------
+//
+// A theme is a value for every colour of the palette (and, where a translucent tint would turn into its opposite, for
+// that tint). The roles above stay the same in every theme, so each job keeps its one colour (the Colour Has a Job
+// Rule): what changes is the value of the colour. Light is DESIGN.md and is `palette` itself; its CSS is the `:root`
+// block, unchanged, so the default theme is the same pixel for pixel. Dark and High contrast are PROPOSALS
+// (docs/design-themes-proposal.md): built and selectable, not in DESIGN.md until the maintainer approves them.
+// The field's colour map (viridis, field/colormap.ts) is never a token and is the same in every theme.
+
+/** The themes of the Studio, in the order the setting lists them. */
+export const THEME_NAMES = ['light', 'dark', 'contrast'] as const;
+export type ThemeName = (typeof THEME_NAMES)[number];
+
+/**
+ * Dark (proposed): the ground turns to a deep navy tinted from ink (never black), ink turns to the one light, and the
+ * flat fields that carry ink text (sky, meadow, orange) turn deep so the light ink still reads on them. The deep
+ * variants and failure red, which sit on the ground, turn light for the same reason. `white` keeps its name and its
+ * job (the ground); `ink` keeps its job (all text, rules, primary, footer, tooltips).
+ */
+const dark = {
+  ink: '#dce6f2',
+  'ink-2': '#9bb0c8',
+  'ink-hover': '#f3f7fb',
+  sky: '#245f8c',
+  'sky-wash': '#1a3350',
+  meadow: '#286b33',
+  'meadow-wash': '#183626',
+  'meadow-deep': '#78c884',
+  orange: '#c46810',
+  'orange-deep': '#f3a052',
+  fail: '#f07a82',
+  'fail-wash': '#3b1a22',
+  silver: '#34475d',
+  'silver-wash': '#16243a',
+  white: '#0f1c2c',
+  'ink-tint': '#3a5170',
+} as const satisfies Record<PaletteName, string>;
+
+/**
+ * High contrast (proposed), for bright rooms and projectors: the same light program with a deeper ink, darker
+ * secondary text and hairlines (silver lines and the hatch survive a washed-out projector), and fuller fields.
+ */
+const contrast = {
+  ink: '#0a2240',
+  'ink-2': '#2b4466',
+  'ink-hover': '#1b3d6a',
+  sky: '#55ade6',
+  'sky-wash': '#d2e7f7',
+  meadow: '#5cb86a',
+  'meadow-wash': '#d5ecd9',
+  'meadow-deep': '#1d6a2a',
+  orange: '#e87500',
+  'orange-deep': '#8f4500',
+  fail: '#8a0d17',
+  'fail-wash': '#f5d6d9',
+  silver: '#7b8794',
+  'silver-wash': '#e3e8ee',
+  white: '#ffffff',
+  'ink-tint': '#dce6f2',
+} as const satisfies Record<PaletteName, string>;
+
+/** Every theme's value of every palette colour; light is DESIGN.md's palette. */
+export const themes: Readonly<Record<ThemeName, Readonly<Record<PaletteName, string>>>> = { light: palette, dark, contrast };
+
+/**
+ * Tints that a theme sets differently. In dark, the popover lift tinted from ink would be a light glow, so its shadow
+ * is tinted from the (dark) ground instead; the popover keeps its 1px ink edge.
+ */
+export const themeTint: Readonly<Record<ThemeName, Partial<Record<keyof typeof tint, { color: PaletteName; alpha: number }>>>> = {
+  light: {},
+  dark: { 'popover-shadow': { color: 'white', alpha: 0.6 } },
+  contrast: {},
+};
+
+/** The CSS color-scheme of each theme (native scrollbars and form parts); light sets none, as before F-818. */
+export const themeColorScheme: Readonly<Record<ThemeName, 'light' | 'dark' | null>> = { light: null, dark: 'dark', contrast: 'light' };
+
 export const font = {
   family: "Archivo, 'Helvetica Neue', Arial, sans-serif",
   weights: { regular: 400, medium: 500, bold: 700 },
@@ -263,6 +340,21 @@ export function cssCustomProperties(): Array<readonly [string, string]> {
   return out;
 }
 
+/**
+ * The custom properties a theme other than light sets over the `:root` block: its palette colours and the tints made
+ * from them (roles refer to the palette by var(), so they follow), and its color-scheme.
+ */
+export function themeCustomProperties(name: ThemeName): Array<readonly [string, string]> {
+  const p = themes[name];
+  const out: Array<readonly [string, string]> = [];
+  for (const k of Object.keys(palette) as PaletteName[]) out.push([`--color-${k}`, p[k]]);
+  for (const [k, v] of Object.entries(tint) as Array<[keyof typeof tint, { color: PaletteName; alpha: number }]>) {
+    const t = themeTint[name][k] ?? v;
+    out.push([`--tint-${k}`, rgba(p[t.color], t.alpha)]);
+  }
+  return out;
+}
+
 /** The text of tokens.css, exactly. */
 export function tokensCssText(): string {
   const head = [
@@ -270,5 +362,23 @@ export function tokensCssText(): string {
     '   equal. The values are DESIGN.md\'s. */',
   ];
   const body = cssCustomProperties().map(([k, v]) => `  ${k}: ${v};`);
-  return [...head, ':root {', ...body, '}', ''].join('\n');
+  const out = [...head, ':root {', ...body, '}', ''];
+  // F-818: the other themes, chosen by <html data-theme> (src/renderer/theme/theme.ts). Light is the :root block
+  // above and adds nothing. Before the page's script sets data-theme, a dark system (the main process sets
+  // nativeTheme.themeSource from the setting) already gets the dark values, so a dark start never shows the light ground.
+  const block = (name: ThemeName, indent: string): string[] => {
+    const scheme = themeColorScheme[name];
+    return [
+      ...themeCustomProperties(name).map(([k, v]) => `${indent}${k}: ${v};`),
+      ...(scheme ? [`${indent}color-scheme: ${scheme};`] : []),
+    ];
+  };
+  for (const name of THEME_NAMES) {
+    if (name === 'light') continue;
+    out.push(`/* F-818: the ${name} theme (proposed, docs/design-themes-proposal.md). */`);
+    out.push(`:root[data-theme='${name}'] {`, ...block(name, '  '), '}', '');
+  }
+  out.push('/* F-818: a dark system before data-theme is set. */');
+  out.push('@media (prefers-color-scheme: dark) {', "  :root:not([data-theme]) {", ...block('dark', '    '), '  }', '}', '');
+  return out.join('\n');
 }

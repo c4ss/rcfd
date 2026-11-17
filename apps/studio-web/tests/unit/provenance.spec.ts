@@ -15,6 +15,9 @@ import {
   reproduceCommand,
   runFacts,
   sameHash,
+  SESSION_FILE_NOT_RECORDED,
+  SESSION_NO_REPRODUCE,
+  sessionFacts,
   shellLine,
   unitText,
   type HashCheck,
@@ -23,6 +26,7 @@ import {
   type RunRecordFacts,
 } from '../../src/shared/provenance.js';
 import { commandLine } from '../../src/shared/actions/runs.js';
+import { sessionSeriesValue, settingValue, snapshotFactValue } from '../../src/renderer/provenance/sources.js';
 import { parseProvenanceRequest, ProvenancePortBridge, type ProvenancePortLike } from '../../src/main/provenance/bridge.js';
 import { readRunProvenance, recordFacts } from '../../src/main/provenance/record.js';
 import type { Query } from '../../src/main/run/series.js';
@@ -343,7 +347,46 @@ test('the numbers of the time panel, the workspace, Runs and the field readout a
   expect(count(read('workspace/RunWorkspace.tsx'))).toBe(5);
   // the table's result, the selected run's id, steps, time, solver time, process, exit code, report values
   expect(count(read('runs/RunsView.tsx'))).toBe(8);
-  expect(count(read('field/FieldViewport.tsx'))).toBe(1);
+  // the readout; the caption's step and time, and the learner caption's round (F-813)
+  expect(count(read('field/FieldViewport.tsx'))).toBe(4);
+  // F-828: the numbers of a service session (no run behind them): a setting, the plots' latest values, the iteration
+  expect(count(read('settings/KeyRow.tsx'))).toBe(1);
+  expect(read('settings/KeyRow.tsx')).toContain("kind: 'session'");
+  expect(count(read('plots/ResidualPlot.tsx'))).toBe(1);
+  expect(count(read('plots/MonitorPlot.tsx'))).toBe(1);
+  expect(count(read('dev/PlotsDev.tsx'))).toBe(1);
+  // the first path's result: rounds, solver time, the report values (F-813)
+  expect(count(read('first/FirstPath.tsx'))).toBe(3);
+});
+
+test('a session number’s facts: the service’s own, and what it does not record said as not recorded', () => {
+  const src = settingValue({
+    session: 's3',
+    path: 'boundaries.lid.velocity',
+    shown: '[1, 0, 0]',
+    value: [1, 0, 0],
+    pattern: 'boundaries.*.velocity',
+    unit: { unit: 'm s^-1', kind: 'x-rcfd-si-dimension' },
+    set: true,
+  });
+  const rows = new Map(sessionFacts(src, { name: 'rcfd', version: '0.1.0' }, { entries: 2, caseHash: '00ff' }));
+  expect(rows.get('Unit')).toBe('m s^-1, settings.schema, x-rcfd-si-dimension of boundaries.*.velocity');
+  expect(rows.get('Session')).toBe('s3');
+  expect(rows.get('Case file')).toBe(SESSION_FILE_NOT_RECORDED);
+  expect(rows.get('Journal')).toBe('2 edits since the session was made, case hash 00ff (journal.get)');
+  expect(rows.get('Engine')).toBe('rcfd 0.1.0 (service.info)');
+  expect(rows.get('Iteration')).toMatch(/^none: /);
+  const none = new Map(sessionFacts(settingValue({ ...{ session: 's3', path: 'solver.alpha_u', shown: '0.9', value: 0.9, pattern: 'solver.alpha_u', set: false }, unit: null }), null, { error: 'no session' }));
+  expect(none.get('Unit')).toBe('none: the case schema names no unit for solver.alpha_u');
+  expect(none.get('Journal')).toBe('not read: no session');
+  expect(none.get('Engine')).toBe('not known: no service answered service.info');
+  const series = sessionSeriesValue({ session: 's1', name: 'res_u', shown: '1.2e-3', value: 0.0012, x: 40, xLabel: 'iteration', unit: '', residual: true });
+  expect(new Map(sessionFacts(series, 'reading', null)).get('Unit')).toBe('none, empty in monitors.get (the series’ unit)');
+  expect(new Map(sessionFacts(series, 'reading', null)).get('Iteration')).toBe('40');
+  expect(SESSION_NO_REPRODUCE).toMatch(/^Not recorded: /);
+  // a snapshot's time: the store gives no unit, said as not recorded (G2: no unit is guessed)
+  const t = snapshotFactValue({ run: 'r', quantity: 'time', shown: '0', value: 0, snapshot: 3, of: 24, step: 20, time: 0 });
+  expect(t.unit).toEqual({ kind: 'none', why: 'not recorded: runs/r/fields/store.rts gives a snapshot’s time without a unit' });
 });
 
 test('provenance.css uses only defined tokens and no colour literals; corners square, no shadow of its own', () => {

@@ -12,6 +12,7 @@ import type { ServiceState } from '../../shared/service.js';
 import { MonitorPlot, ResidualPlot, runKey, useRunFeed, type RunRef } from '../plots/index.js';
 import { pictogramOf } from '../plots/words.js';
 import { Button, Select, STATE_WORD, StateMark, StatePictogram, TextField } from '../ui/index.js';
+import { Provenance, sessionIterationValue } from '../provenance/index.js';
 import './plots-dev.css';
 
 interface SessionRow {
@@ -135,7 +136,14 @@ export default function PlotsDev() {
         <section className="plots-dev-panel" aria-label={`Plots of session ${s}`} data-run={runKey(run)}>
           <div className="plots-dev-state">
             <StateMark state={pictogramOf(view.status)} label={`${STATE_WORD[pictogramOf(view.status)]} · ${view.status?.state ?? 'reading'}`} />
-            {view.status?.simulation?.iteration !== undefined && <span>iteration {view.status.simulation.iteration}</span>}
+            {view.status?.simulation?.iteration !== undefined && (
+              <span>
+                iteration{' '}
+                <Provenance subject={{ kind: 'session', source: sessionIterationValue({ session: s, iteration: view.status.simulation.iteration }) }}>
+                  {view.status.simulation.iteration}
+                </Provenance>
+              </span>
+            )}
             {view.status?.state === 'failed' && view.status.error && <span className="plots-dev-fail">{view.status.error}</span>}
             {view.statusError && <span>run.status failed: {view.statusError}</span>}
           </div>

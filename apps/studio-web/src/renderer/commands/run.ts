@@ -15,7 +15,10 @@ import { availability, dispatch } from '../actions/index.js';
 import { projectActions, runAction, runActionAvailability, runActionConfirmation } from '../project/door.js';
 import { claudeActions } from '../claude/door.js';
 import { caseHash } from '../case/hash.js';
+import { closeProject } from '../case/closeGuard.js';
 import { commandFact, commandHandler, whenRegistered } from './host.js';
+import { setTheme } from '../theme/theme.js';
+import type { ThemeSetting } from '../../shared/theme.js';
 
 /** What the palette knows of the window when it asks. */
 export interface PaletteEnv {
@@ -98,9 +101,11 @@ function studioReason(id: string, env: PaletteEnv): string | null {
       return turnRunning(env) ? null : 'No Claude Code reply is being written: there is nothing to stop.';
     case 'provenance.show':
     case 'provenance.copy_command': {
-      // F-828: run by the provenance module's handlers (src/renderer/provenance/registry.ts)
-      if (!view(env)) return NO_PROJECT;
+      // F-828: run by the provenance module's handlers (src/renderer/provenance/registry.ts); a number of a service
+      // session (the settings, the plots) needs no project, a run's command does
+      if (id === 'provenance.copy_command' && !view(env)) return NO_PROJECT;
       const h = commandHandler(id);
+      if (!h && !view(env)) return NO_PROJECT;
       return h ? (h.unavailable?.() ?? null) : 'Open Runs or the Workspace of the project first.';
     }
     // F-837: run by the surface that shows them (runs/RunExtras.tsx, field/FieldViewport.tsx, workspace/TimePanel.tsx)
@@ -371,6 +376,8 @@ async function studio(e: PaletteEntry, values: Values): Promise<Outcome> {
       return close(() => inProject(e.id, values));
     case 'go.settings':
       return close(() => void (location.hash = '#/settings'));
+    case 'go.studio_settings':
+      return close(() => void (location.hash = '#/studio-settings'));
     case 'go.case_editor':
       return close(() => void (location.hash = caseHash.index));
     case 'project.open_folder':
@@ -383,9 +390,9 @@ async function studio(e: PaletteEntry, values: Values): Promise<Outcome> {
     case 'project.refresh':
       return close(() => projectActions.refresh());
     case 'project.close':
-      return close(() => {
-        location.hash = '';
-        projectActions.close();
+      // F-837: asks first when a case of the project has changes not saved (closeGuard.tsx)
+      return close(async () => {
+        if (await closeProject()) location.hash = '';
       });
     case 'claude.new_chat':
     case 'claude.select': {
@@ -415,6 +422,12 @@ async function studio(e: PaletteEntry, values: Values): Promise<Outcome> {
       const h = commandHandler(e.id);
       return h ? close(() => h.run(values)) : failed([F837_WHERE[e.id] ?? 'Open the surface first.']);
     }
+    // F-818: the theme, applied at once (src/renderer/theme/theme.ts); the palette closes on the new colours
+    case 'view.theme_light':
+    case 'view.theme_dark':
+    case 'view.theme_contrast':
+    case 'view.theme_system':
+      return close(() => void setTheme(e.id.slice('view.theme_'.length) as ThemeSetting));
     case 'runs.report':
     case 'field.save_png': {
       const h = commandHandler(e.id);

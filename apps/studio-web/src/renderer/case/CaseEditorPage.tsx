@@ -25,6 +25,7 @@ import { Button, Icon, Quiet, SegmentedToggle, Select, StatePictogram, TextField
 import { caseDoor } from './door.js';
 import { caseHash, caseRoute, replaceHash, type CaseRoute } from './hash.js';
 import { openCase, type OpenFailure } from './open.js';
+import { confirmClose } from './closeGuard.js';
 import '../settings/settings.css';
 import './case.css';
 
@@ -557,7 +558,6 @@ function CasePanel({ status, refresh }: { status: CaseStatus; refresh: () => Pro
   const pending = status.pending;
   const [busy, setBusy] = useState<string | null>(null);
   const [notice, setNotice] = useState<Notice | null>(null);
-  const [confirmClose, setConfirmClose] = useState(false);
   const [dupName, setDupName] = useState('');
   const [dup, setDup] = useState<{ ok: true; made: CreatedCase } | { ok: false; message: string } | null>(null);
   const [fileCheck, setFileCheck] = useState<FileCheck | { failed: string } | null>(null);
@@ -578,7 +578,6 @@ function CasePanel({ status, refresh }: { status: CaseStatus; refresh: () => Pro
   const save = useCallback(
     async (onto: 'opened' | 'current') => {
       setBusy('save');
-      setConfirmClose(false);
       // a value typed but not yet committed (Enter or leaving the field commits it): commit it first
       const active = document.activeElement as HTMLElement | null;
       if (active && active.closest('.st-key') && active.matches('input, textarea')) {
@@ -641,10 +640,8 @@ function CasePanel({ status, refresh }: { status: CaseStatus; refresh: () => Pro
   };
 
   const close = async () => {
-    if (pending.count > 0 && !confirmClose) {
-      setConfirmClose(true);
-      return;
-    }
+    // F-837: changes not saved: save, lose them or keep editing (closeGuard.tsx)
+    if (pending.count > 0 && (await confirmClose({ kind: 'session', session: b.session })) === 'cancel') return;
     setBusy('close');
     const r = await dispatch('session.close', { session: b.session });
     setBusy(null);
@@ -856,24 +853,9 @@ function CasePanel({ status, refresh }: { status: CaseStatus; refresh: () => Pro
           )}
         </div>
         <div className="ce-close">
-          {!confirmClose ? (
-            <Button icon="close" onPress={() => void close()} isDisabled={busy !== null}>
-              Close the session
-            </Button>
-          ) : (
-            <div className="ce-confirm" role="alert" data-words="exception">
-              <p>
-                Close session {b.session} and lose {plural(pending.count, 'change', 'changes')} not saved to {b.path}
-                {pending.paths.length > 0 ? ` (${pending.paths.slice(0, 4).join(', ')}${pending.paths.length > 4 ? ', …' : ''})` : ''}?
-              </p>
-              <div className="ce-row">
-                <Button onPress={() => void close()}>Close and lose them</Button>
-                <Button variant="primary" onPress={() => setConfirmClose(false)} autoFocus>
-                  Keep editing
-                </Button>
-              </div>
-            </div>
-          )}
+          <Button icon="close" onPress={() => void close()} isDisabled={busy !== null}>
+            Close the session
+          </Button>
         </div>
         <Quiet>
           From Claude Code, the same file: {CLAUDE('case.save').mcp} to save, {CLAUDE('case.check_file').mcp} to check. Command line: {CLAUDE('case.check_file').cli}.

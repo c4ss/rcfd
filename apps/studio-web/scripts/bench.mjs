@@ -21,6 +21,7 @@
 // | P4  | measure-data.mjs        | 1e6, 200 repeats per route and codec       | P12 over the 1e6 and 4e6 boxes (recorded)       |
 // | P5  | measure-scrub.mjs       | 1e6, 10 passes                             | P6 at 4e6 and Follow live (recorded)            |
 // | P7  | measure-field.mjs       | 1e6, 5 repeats per route (R2, and R1)      | (the same)                                      |
+// |     |                         | judged: the median, and the first open     |                                                 |
 // | P8  | measure-field.mjs       | 1e6 triangles, vertical sync and uncapped  | (the same)                                      |
 // | F819| measure-large.mjs       | -                                          | P7, P5, P8 on 4e6 and FAN-01, once (recorded)   |
 //
@@ -31,8 +32,10 @@
 // target/release/examples here or above); rcfd-mcp likewise (RCFD_MCP_BIN, $CARGO_TARGET_DIR/release, target/release).
 //
 // Judging, as the records of ADR 0801 did: P4 and P7 are met by route R1 or R2 (ADR 0350 §3), on the raw store for P4;
-// P8's frame rate is the better of the two runs (F-808: vertical sync on a fast display already gives more than 60 per
-// s), its p99 frame is the vertically synced run's. Exit code 0 when every judged line is met, 1 when one is missed, 2
+// P7 is judged twice, on the median of the 5 opens and on the first of them, the first open of the store in the launch
+// (F-819, the maintainer's answer to Q-819b-1 of 2026-11-17: what a user sees), each against 1.5 s and each on its
+// better route. P8's frame rate is the better of the two runs (F-808: vertical sync on a fast display already gives
+// more than 60 per s), its p99 frame is the vertically synced run's. Exit code 0 when every judged line is met, 1 when one is missed, 2
 // when a case could not run. The results (every line, every script's own JSON, the load) go to --out, else
 // out/bench/bench-<time>.json. Not part of npm test or CI (F-823 decides that).
 //
@@ -279,6 +282,10 @@ function linesFor(c, r) {
     const best = [...r.P7].sort((a, b) => a.ms.p50 - b.ms.p50)[0];
     line('P7', `first picture of the 1e6 surface, ${best.route}, median of ${best.all.length}`, best.ms.p50, 'ms', '<=', 1500, { note: `R1 or R2; first ${fmt(best.first)}` });
     for (const l of r.P7.filter((x) => x !== best)) line('P7', `first picture of the 1e6 surface, ${l.route}, median of ${l.all.length}`, l.ms.p50, 'ms', '<=', 1500, { judged: false, note: `first ${fmt(l.first)}` });
+    // F-819 (Q-819b-1): the first open of the 1e6 store in the launch, R1 or R2 as the median
+    const firstBest = [...r.P7].sort((a, b) => a.first - b.first)[0];
+    line('P7', `first picture of the 1e6 surface, ${firstBest.route}, first open of the launch`, firstBest.first, 'ms', '<=', 1500, { note: 'R1 or R2' });
+    for (const l of r.P7.filter((x) => x !== firstBest)) line('P7', `first picture of the 1e6 surface, ${l.route}, first open of the launch`, l.first, 'ms', '<=', 1500, { judged: false });
     const sync = r.P8.find((l) => !l.uncapped);
     const free = r.P8.find((l) => l.uncapped);
     const fast = [sync, free].filter(Boolean).sort((a, b) => b.fps - a.fps)[0];

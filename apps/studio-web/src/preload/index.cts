@@ -1,7 +1,7 @@
 // Preload script of the Studio window: the IPC allow-list of docs/studio-guardrails.md G10, exposed to the page through
 // contextBridge. The page never gets ipcRenderer, a generic invoke, a MessagePort or any Node object.
 //
-// - `window.studio`: the shell's channels of src/shared/ipc.ts (one function per channel, F-801).
+// - `window.studio`: the shell's channels of src/shared/ipc.ts (one function per channel, F-801; the theme, F-818).
 // - `window.studioData`: bulk field data (F-804, src/shared/data.ts), on a second port; see the end of this file.
 // - `window.studioService`: the solver service (F-803, src/shared/service.ts). The main process hands this script a
 //   MessagePort on SERVICE_PORT_CHANNEL after each load of the page; the port stays here. Each function below turns its
@@ -22,7 +22,8 @@
 // sandboxed preload can only require 'electron' and a few built-ins: the shared modules are imported for their types
 // only, and the two constants below are typed by theirs, so a change there fails to compile here.
 import { contextBridge, ipcRenderer, type IpcRendererEvent } from 'electron';
-import type { AppInfo, Channel, StudioBridge } from '../shared/ipc.js';
+import type { AppInfo, Channel, CloseAnswer, CLOSE_REQUEST_CHANNEL as CloseChannel, StudioBridge } from '../shared/ipc.js';
+import type { ThemeSetting, ThemeState } from '../shared/theme.js';
 import type {
   CLAUDE_PORT_CHANNEL as ClaudeChannel,
   ClaudeBridge,
@@ -91,12 +92,34 @@ const offerCancel = (options: CancelOptions | undefined, cancel: () => void): vo
   }
 };
 
-const invoke = <T,>(channel: Channel): Promise<T> => ipcRenderer.invoke(channel) as Promise<T>;
+const invoke = <T,>(channel: Channel, ...args: unknown[]): Promise<T> => ipcRenderer.invoke(channel, ...args) as Promise<T>;
+
+// F-837: the window's close requests (src/main/index.ts) go to the one listener the page set; with none, the request
+// is not answered and the main process closes after its wait for an answer
+const CLOSE_REQUEST_CHANNEL: typeof CloseChannel = 'studio.close-request';
+let closeListener: ((request: number) => void) | null = null;
+ipcRenderer.on(CLOSE_REQUEST_CHANNEL, (_event, request: unknown) => {
+  if (typeof request !== 'number' || closeListener === null) return;
+  try {
+    closeListener(request);
+  } catch {
+    // the page's listener failed: the main process's wait for an answer decides
+  }
+});
 
 const bridge: StudioBridge = {
   app: {
     info: () => invoke<AppInfo>('app.info'),
     ready: () => invoke<void>('app.ready'),
+    onCloseRequest: (listener) => {
+      closeListener = typeof listener === 'function' ? listener : null;
+    },
+    closeAnswer: (request: number, answer: CloseAnswer) => invoke<void>('app.closeAnswer', request, answer),
+  },
+  // F-818: the theme setting; the main process checks the value (src/main/theme.ts)
+  theme: {
+    get: () => invoke<ThemeState>('theme.get'),
+    set: (setting: ThemeSetting) => invoke<ThemeState>('theme.set', setting),
   },
 };
 

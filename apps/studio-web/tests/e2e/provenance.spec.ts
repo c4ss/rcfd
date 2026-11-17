@@ -7,7 +7,8 @@
 //   README registers (F-828, "The reproduce test"): the results byte for byte, the records with their times, process
 //   ids and own paths left out.
 // - Every number-bearing surface (the selected run of Runs, the runs table, the workspace's numbers, the time panel's
-//   residuals, monitor readout and snapshot counter, the field readout) opens its provenance: run, snapshot, file, the
+//   residuals, monitor readout and snapshot counter, the field readout and the field caption's step and time) opens its
+//   provenance (the settings and the plots' numbers of a service session: settings-rcfd.spec.ts, plots.spec.ts): run, snapshot, file, the
 //   engine version that made it, the unit exactly as the engine wrote it.
 // - The keyboard: Enter on a number, Ctrl+I on the focused number, row, scrubber or field view, Escape gives the focus
 //   back; the palette's Show provenance and Copy reproduce command.
@@ -364,4 +365,27 @@ test('the field readout: Ctrl+I on the field view opens the value at the centre,
   await shot(page, '07-field-provenance');
   await page.keyboard.press('Escape');
   await expect(d).toHaveCount(0);
+});
+
+test('the field caption: its step and its time open their provenance (Enter, click), the time’s unit said as not recorded', async () => {
+  const { page } = studio!;
+  const caption = page.locator('.ws .fv-caption');
+  const step = caption.getByRole('button', { name: /^Provenance of step: \d+$/ });
+  await expect(step).toHaveCount(1);
+  await quietAtRest(step, /^\d+$/);
+  const shownStep = (await step.textContent())!;
+  await press(step);
+  const d = dialogOf(page, 'Provenance of step');
+  await expect(fact(d, 'File')).toHaveText(`runs/${CAVITY}/fields/store.rts`);
+  await expect(fact(d, 'Snapshot')).toHaveText(new RegExp(`^\\d+ of \\d+, step ${shownStep}`));
+  await expect(fact(d, 'Engine')).toHaveText('rcfd 0.1.0');
+  await page.keyboard.press('Escape');
+  await expect(step).toBeFocused();
+  const time = caption.getByRole('button', { name: /^Provenance of time: / });
+  await time.click();
+  const t = dialogOf(page, 'Provenance of time');
+  await expect(fact(t, 'Unit')).toHaveText(`none: not recorded: runs/${CAVITY}/fields/store.rts gives a snapshot’s time without a unit`);
+  await shot(page, '08-caption-provenance');
+  await page.keyboard.press('Escape');
+  await expect(t).toHaveCount(0);
 });

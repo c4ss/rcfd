@@ -268,6 +268,19 @@ test('the project home with no project open, and the first path’s four station
   await surface('home-empty', '.ph-page');
 });
 
+test('the Studio’s settings, from the header’s Settings icon by keys: the theme by the arrow keys, Close settings back', async () => {
+  const icon = page.locator('.ph-top').getByRole('button', { name: 'Settings', exact: true });
+  await tabTo(icon);
+  await page.keyboard.press('Enter');
+  const group = page.getByRole('radiogroup', { name: 'Theme' });
+  await expect(group).toBeVisible();
+  await surface('studio-settings', '.ss-page');
+  const close = page.getByRole('button', { name: 'Close settings' });
+  await tabTo(close);
+  await page.keyboard.press('Enter');
+  await expect(page.getByRole('button', { name: 'Open project folder…' })).toBeEnabled();
+});
+
 test('the project home of an open project, its Claude Code panel and the project tabs', async () => {
   await stubDialog(studio.app, quick);
   await tabTo(page.getByRole('button', { name: 'Open project folder…' }));
@@ -611,6 +624,7 @@ test('every surface was walked', () => {
       'settings',
       'decision',
       'first-path',
+      'studio-settings',
     ].sort(),
   );
   // axe-core ran on every walked surface: home, case editor, runs, run workspace, compare, provenance, the palette and

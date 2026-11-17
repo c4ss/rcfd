@@ -179,6 +179,6 @@ from the DOM and fails past the budget, and raising a budget needs the maintaine
 
 - The UI framework and component approach (see `PRODUCT.md`, Stack).
 - Platforms beyond Windows 11: answered 2026-11-17 for Linux (tested in Docker first, then in CI; ADR 0801 Addendum
-  17); macOS not asked. Linux on a GPU is still unmeasured.
-- Installers: answered 2026-11-17, built in CI (ADR 0801 Addendum 17); signing waits for the maintainer's certificates,
+  19); macOS not asked. Linux on a GPU is still unmeasured.
+- Installers: answered 2026-11-17, built in CI (ADR 0801 Addendum 19); signing waits for the maintainer's certificates,
   and the update policy is ADR 0801 Q-F820-3.

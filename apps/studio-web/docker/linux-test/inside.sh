@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Runs inside the container of ./Dockerfile (started by ./run.mjs, or by the linux-test job of
-# .github/workflows/studio-installers.yml). F-821, ADR 0801 Addendum 17.
+# .github/workflows/studio-installers.yml). F-821, ADR 0801 Addendum 19.
 #
 #   /io/src.tar     the repository's committed files (git archive), read only
 #   /io/out/        what comes back: logs, Playwright JSON reports, summary.txt

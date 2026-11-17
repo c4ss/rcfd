@@ -29,7 +29,7 @@
   font-size: var(--type-label-size);
   color: var(--role-text-2);
   /* the fallback's reason is long: in a half-width view (compare, side by side) it ran out of the row and over the
-     other view's controls, taking their clicks (found on Linux, where WebGL 2 is the renderer; ADR 0801 Addendum 17) */
+     other view's controls, taking their clicks (found on Linux, where WebGL 2 is the renderer; ADR 0801 Addendum 19) */
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;

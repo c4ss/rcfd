@@ -8,6 +8,8 @@
 //   4. the trigger under the pointer, or the one the element under the pointer names (the field view names its readout);
 //   5. the run selected in Runs or the workspace: its own provenance (the record and the reproduce command).
 //
+// While the command palette is open, "the focus" is the element that had it before the palette took it.
+//
 // The palette commands `provenance.show` and `provenance.copy_command` (src/shared/commands/studio.ts) are run here, as
 // registered handlers (../commands/host.ts), so the palette needs no provenance code of its own.
 import { commandFact, registerCommand } from '../commands/host.js';
@@ -50,6 +52,9 @@ const live = (): TriggerEntry[] => [...triggers].filter((t) => t.el()?.isConnect
 
 /** The element last under the pointer (the field view while it is pointed at: its readout is the number shown). */
 let pointed: Element | null = null;
+/** The element that had the focus before the command palette took it: the palette's Show provenance is about it. */
+let lastFocus: HTMLElement | null = null;
+const PALETTE = '.cp-dialog';
 let listening = false;
 function listen(): void {
   if (listening || typeof document === 'undefined') return;
@@ -57,6 +62,9 @@ function listen(): void {
   document.addEventListener('pointerover', (e) => (pointed = e.target instanceof Element ? e.target : null), true);
   document.addEventListener('pointerout', (e) => {
     if (e.relatedTarget === null) pointed = null;
+  }, true);
+  document.addEventListener('focusin', (e) => {
+    if (e.target instanceof HTMLElement && !e.target.closest(`${PALETTE}, .pv-host`)) lastFocus = e.target;
   }, true);
 }
 
@@ -68,7 +76,9 @@ const byKey = (all: readonly TriggerEntry[], el: Element | null): TriggerEntry |
 /** The trigger "Show provenance" opens now, or null. */
 export function target(): TriggerEntry | null {
   const all = live();
-  const active = document.activeElement;
+  const focused = document.activeElement;
+  // while the palette is open its search field has the focus: the number meant is the one focused before it opened
+  const active = focused instanceof HTMLElement && focused.closest(PALETTE) ? (lastFocus?.isConnected ? lastFocus : null) : focused;
   if (active instanceof HTMLElement && active !== document.body) {
     const own = all.find((t) => t.el() === active);
     if (own) return own;
@@ -86,12 +96,19 @@ export function target(): TriggerEntry | null {
 
 const selectedRun = (): string | null => commandFact<string | null>('selectedRun') ?? null;
 
+/** Opens the trigger drawn by `el` (a host's own click on a passive number); false when none is. */
+export function openTrigger(el: Element): boolean {
+  const t = live().find((x) => x.el() === el);
+  if (t) t.open();
+  return t !== undefined;
+}
+
 /** Why "Show provenance" cannot open anything now, or null. */
 export function showUnavailable(): string | null {
   if (target()) return null;
   const run = selectedRun();
   if (run !== null && runOpeners.has(run)) return null;
-  return 'No number to show: focus or point at a number of Runs or the Workspace (or select a run), then Show provenance (Ctrl+I).';
+  return 'No number to show: focus or point at a number (in Runs, the Workspace, a field view, the settings or the plots), or select a run, then Show provenance (Ctrl+I).';
 }
 
 export function showNow(): boolean {

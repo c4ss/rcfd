@@ -13,6 +13,7 @@ import { UndoControls } from '../history/UndoControls.js';
 import { Button, IconButton, Quiet, Select } from '../ui/index.js';
 import { caseModel, type CaseModel } from './schema.js';
 import { SettingsSurface } from './SettingsSurface.js';
+import { STUDIO_SETTINGS_HASH } from '../studio-settings/hash.js';
 import './settings.css';
 
 export const SETTINGS_HASH = '#/settings';
@@ -235,6 +236,8 @@ export default function SettingsPage() {
             <IconButton variant="ghost" icon="close" label="Close session" onPress={() => void askClose(session!)} />
           )}
           {connected && <UndoControls scope={session} onRenamed={(_from, to) => choose(to)} />}
+          {/* F-818: the Studio's settings (the theme among them), an icon with no word at rest (G22) */}
+          <IconButton variant="ghost" icon="settings" label="Settings" onPress={() => void (location.hash = STUDIO_SETTINGS_HASH)} />
         </div>
       </header>
       {closing && (

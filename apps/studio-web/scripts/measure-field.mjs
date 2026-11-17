@@ -7,8 +7,10 @@
 //   first animation frame after the GPU finished it (measure `rcfd:field:first-picture`, src/renderer/field/
 //   FieldViewport.tsx). As ADR 0350: the device exists before (the viewport is open on the tiny box first, and switches
 //   store between repeats: its renderer stays, the surface's buffers and the material's pipeline are made inside the
-//   timed part); 5 repeats per route, judged on the median, the first reported separately. Route R2 (local) always,
-//   route R1 (service) when --bench-server is given. Limit: 1.5 s.
+//   timed part); 5 repeats per route, judged on the median. The first of them is the first open of the 1e6 store in
+//   the launch (of the Studio, and of the bench server for R1), before the reader's worker remembers its mesh check; it
+//   is reported separately and judged by scripts/bench.mjs against the same limit (F-819, the maintainer's answer to
+//   Q-819b-1 of 2026-11-17). Route R2 (local) always, route R1 (service) when --bench-server is given. Limit: 1.5 s.
 // - P8, 1e6 triangles orbiting: #/dev/field?bench=p8, the viewport's canvas on a synthetic 1000 x 500 x 2 surface with a
 //   value per triangle, coloured by the same material, one turn per 600 frames; 120 warm-up frames, 1200 timed frame
 //   intervals of requestAnimationFrame. Taken twice as ADR 0350: with vertical sync (the p99 frame is judged there,
@@ -163,9 +165,9 @@ try {
           await firstPicture(page, fieldHash(route, small));
         }
         const s = summary(ms);
-        const line = { route: route === 'local' ? 'R2' : 'R1', ms: s, first: ms[0], all: ms, met: s.p50 <= 1500 };
+        const line = { route: route === 'local' ? 'R2' : 'R1', ms: s, first: ms[0], all: ms, met: s.p50 <= 1500, firstMet: ms[0] <= 1500 };
         result.P7.push(line);
-        console.log(`P7 ${line.route} median ${s.p50.toFixed(0)} ms, first ${ms[0].toFixed(0)}, all ${ms.map((x) => x.toFixed(0)).join(', ')} ${line.met ? 'met' : 'NOT met'}`);
+        console.log(`P7 ${line.route} median ${s.p50.toFixed(0)} ms ${line.met ? 'met' : 'NOT met'}, first open of the launch ${ms[0].toFixed(0)} ms ${line.firstMet ? 'met' : 'NOT met'}, all ${ms.map((x) => x.toFixed(0)).join(', ')}`);
       }
       // the viewport mounted cold on the big store: renderer, device and pipeline inside the time too (recorded only)
       await page.evaluate(() => (location.hash = '#/dev/field'));

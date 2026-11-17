@@ -173,15 +173,6 @@
   padding-top: var(--space-md);
   border-top: var(--line-hair);
 }
-.ce-confirm {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-sm);
-  font-weight: var(--font-weight-medium);
-}
-.ce-confirm p {
-  margin: 0;
-}
 .ce-failed-title {
   display: flex;
   align-items: center;

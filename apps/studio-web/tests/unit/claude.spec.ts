@@ -28,7 +28,7 @@ import { ClaudePanel, ClaudeRefusal } from '../../src/main/claude/panel.js';
 import { parseLine, uncheckedProblem } from '../../src/main/claude/stream.js';
 import { parseEntry, readNew, tail } from '../../src/main/claude/transcript.js';
 import { scan } from '../../src/main/claude/trust.js';
-import { findRefs, paragraphs } from '../../src/renderer/claude/links.js';
+import { fileOpensIn, findRefs, paragraphs } from '../../src/renderer/claude/links.js';
 import { APPROVE_EVERYTHING, claudeFixture, FAKE_CLAUDE, sampleTranscript, type ClaudeFixture } from '../support/claude.js';
 import { until } from '../support/fake-service.js';
 import { appRoot } from '../support/rcfd.js';
@@ -255,7 +255,8 @@ test.describe('run ids and files in a reply become links', () => {
   const folder = 'C:\\Users\\x\\quick-start';
   const known = {
     runs: new Set([RUN, 'r-20261028T152641-5cc1']),
-    files: new Set(['cases/cavity-re100.toml', 'notes/README.md', 'meshes/README.md']),
+    files: new Set(['cases/cavity-re100.toml', 'cases/inlet.csv', 'notes/README.md', 'meshes/README.md']),
+    cases: new Set(['cases/cavity-re100.toml']),
     folder,
   };
   test('only what the project holds links; each once, in order; relative, ./ and absolute paths', () => {
@@ -269,6 +270,13 @@ test.describe('run ids and files in a reply become links', () => {
     ]);
     expect(findRefs('nothing to see: r-2026-11-16, cases/', known)).toEqual([]);
     expect(findRefs('cases/cavity-re100.toml.', known)).toEqual([{ kind: 'file', path: 'cases/cavity-re100.toml' }]);
+  });
+  test('a case file opens in the case editor; a data file, a mesh and a note on the project home', () => {
+    expect(fileOpensIn('cases/cavity-re100.toml', known)).toBe('case');
+    expect(fileOpensIn('cases/inlet.csv', known)).toBe('home');
+    expect(fileOpensIn('meshes/README.md', known)).toBe('home');
+    expect(fileOpensIn('notes/README.md', known)).toBe('home');
+    expect(fileOpensIn('cases/cavity-re100.toml', { ...known, cases: undefined })).toBe('home');
   });
   test('the reply text: paragraphs, and bold only where the reply bolds', () => {
     expect(paragraphs('Run **412** done.\n\nNext **one**')).toEqual([

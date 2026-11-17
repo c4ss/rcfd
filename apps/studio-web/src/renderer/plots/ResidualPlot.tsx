@@ -10,6 +10,8 @@ import type { SeriesData } from './series.js';
 import { isResidual, residualOrder, residualStyles, type LineStyle } from './style.js';
 import type { RunStatus } from './useRunFeed.js';
 import { noSeriesSentence, pictogramOf, runName } from './words.js';
+// F-828: the latest value of each line opens its provenance (the session, monitors.get, the engine)
+import { Provenance, sessionSeriesValue } from '../provenance/index.js';
 
 export interface ResidualPlotProps {
   readonly session: string;
@@ -47,14 +49,26 @@ export function ResidualPlot({ session, feed, status, height = 120 }: ResidualPl
         {title} <small>log scale</small>
       </h3>
       <PlotFrame series={series} version={feed!.version} log xCaption={xCaption} height={height}>
-        {(d) => <ResidualLegend drawn={d} series={series} xCaption={xCaption} />}
+        {(d) => <ResidualLegend session={session} xLabel={feed!.xLabel} drawn={d} series={series} xCaption={xCaption} />}
       </PlotFrame>
       {feed!.lastError && <p className="plot-note">The last update failed and the lines show what was read before: {feed!.lastError}</p>}
     </section>
   );
 }
 
-function ResidualLegend({ drawn, series, xCaption }: { drawn: Drawn | null; series: ReadonlyMap<string, { data: SeriesData; style: LineStyle }>; xCaption: string }) {
+function ResidualLegend({
+  session,
+  xLabel,
+  drawn,
+  series,
+  xCaption,
+}: {
+  session: string;
+  xLabel: string | null;
+  drawn: Drawn | null;
+  series: ReadonlyMap<string, { data: SeriesData; style: LineStyle }>;
+  xCaption: string;
+}) {
   const range =
     drawn && !drawn.extent.empty
       ? `log scale, 1e${drawn.y.lo} to 1e${drawn.y.hi}; ${xCaption} ${tickLabel(drawn.x.lo, drawn.x.hi - drawn.x.lo)} to ${tickLabel(drawn.x.hi, drawn.x.hi - drawn.x.lo)}`
@@ -70,7 +84,20 @@ function ResidualLegend({ drawn, series, xCaption }: { drawn: Drawn | null; seri
             <li key={name}>
               <Swatch style={style} />
               <span className="plot-legend-name">{name}</span>
-              <span className="plot-legend-value">{data.length > 0 ? fmtResidual(last) : 'no samples'}</span>
+              <span className="plot-legend-value">
+                {data.length > 0 ? (
+                  <Provenance
+                    subject={{
+                      kind: 'session',
+                      source: sessionSeriesValue({ session, name, shown: fmtResidual(last), value: last, x: data.xAt(data.length - 1), xLabel: xLabel ?? 'x', unit: data.unit, residual: true }),
+                    }}
+                  >
+                    {fmtResidual(last)}
+                  </Provenance>
+                ) : (
+                  'no samples'
+                )}
+              </span>
               {e && e.skipped > 0 && <span className="plot-legend-note">{notDrawn(e.skipped, 'zero, negative or not finite')}</span>}
             </li>
           );

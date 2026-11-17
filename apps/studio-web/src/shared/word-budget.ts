@@ -64,6 +64,9 @@ export const WORD_BUDGETS = {
   undo: { what: 'undo controls', rest: 'nothing to undo or redo', budget: 0 },
   decision: { what: 'decision panel', rest: 'Close session asked', budget: 0 },
   progress: { what: 'progress rows', rest: 'a project opening that lasts', budget: 3 },
+  // F-818 (2026-11-17): the Studio's settings page the maintainer asked for (Q-818-5), set at its count when it was
+  // built (the brand, the page's name, the Theme section's name and its four choices); for the maintainer to confirm
+  'studio-settings': { what: 'Studio settings', rest: 'opened from Ctrl+, with no project open, the theme Light', budget: 9 },
 } as const satisfies Readonly<Record<string, SurfaceBudget>>;
 
 export type SurfaceId = keyof typeof WORD_BUDGETS;

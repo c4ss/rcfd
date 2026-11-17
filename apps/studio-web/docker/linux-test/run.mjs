@@ -1,4 +1,4 @@
-// The Studio on Linux, in Docker (F-821, ADR 0801 Addendum 17): builds the image of ./Dockerfile, hands the container the
+// The Studio on Linux, in Docker (F-821, ADR 0801 Addendum 19): builds the image of ./Dockerfile, hands the container the
 // repository's committed files (git archive of HEAD, LF line endings as the repository stores them), and runs ./inside.sh
 // there: the engine's release binaries, the packaged Linux Studio, the unit tests and the e2e suite under Xvfb.
 //

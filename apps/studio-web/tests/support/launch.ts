@@ -6,7 +6,7 @@
 //
 // RCFD_TEST_ELECTRON_ARGS (space-separated, default none): Chromium switches for the test environment, not the app, such
 // as --ignore-gpu-blocklist to let a GPU-less Linux container draw WebGL 2 with Mesa's software rasteriser
-// (docker/linux-test/run.mjs --gpu-blocklist=ignore; ADR 0801 Addendum 17).
+// (docker/linux-test/run.mjs --gpu-blocklist=ignore; ADR 0801 Addendum 19).
 export function launchArgs(args: readonly string[] = []): { chromiumSandbox: true; args: string[] } {
   const extra = (process.env['RCFD_TEST_ELECTRON_ARGS'] ?? '').split(' ').filter(Boolean);
   return { chromiumSandbox: true, args: [...extra, ...args] };

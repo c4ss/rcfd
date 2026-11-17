@@ -17,6 +17,41 @@ colors:
   silver: "#c9cdd1"
   silver-wash: "#eef1f4"
   white: "#ffffff"
+themes:
+  dark:
+    colors:
+      ink: "#dce6f2"
+      ink-2: "#9bb0c8"
+      ink-hover: "#f3f7fb"
+      sky: "#245f8c"
+      sky-wash: "#1a3350"
+      meadow: "#286b33"
+      meadow-wash: "#183626"
+      meadow-deep: "#78c884"
+      orange: "#c46810"
+      orange-deep: "#f3a052"
+      fail: "#f07a82"
+      fail-wash: "#3b1a22"
+      silver: "#34475d"
+      silver-wash: "#16243a"
+      white: "#0f1c2c"
+  contrast:
+    colors:
+      ink: "#0a2240"
+      ink-2: "#2b4466"
+      ink-hover: "#1b3d6a"
+      sky: "#55ade6"
+      sky-wash: "#d2e7f7"
+      meadow: "#5cb86a"
+      meadow-wash: "#d5ecd9"
+      meadow-deep: "#1d6a2a"
+      orange: "#e87500"
+      orange-deep: "#8f4500"
+      fail: "#8a0d17"
+      fail-wash: "#f5d6d9"
+      silver: "#7b8794"
+      silver-wash: "#e3e8ee"
+      white: "#ffffff"
 typography:
   display:
     fontFamily: "Archivo, Helvetica Neue, Arial, sans-serif"
@@ -160,7 +195,7 @@ It refuses the grey docked workbench with a single blue accent: no grey chrome, 
 - Square corners everywhere; 1px rules and hairlines instead of cards and shadows.
 - One neo-grotesk (Archivo) with tabular figures throughout.
 - Hairline density, so many numbers fit on one screen, with selection bringing one run forward.
-- Light theme, desktop only (1180px minimum width).
+- Three themes on one program: Light (the default), Dark and High contrast; desktop only (1180px minimum width).
 
 ## Colors
 
@@ -199,6 +234,14 @@ A short Aicher scale of flat, mid-light colours, each with one job, read against
 **The No Black, No Grey Text Rule.** Deep ink replaces black; ink-2 replaces grey. Silver is for lines and hatch, never for words.
 
 **The Data Owns the Field Rule.** Inside the field view, colour comes from the data through viridis (a 256-entry table built from 9 control stops, #440154 to #fde725), and the same table draws the legend. The palette above never tints a field.
+
+## Themes
+
+A theme gives every colour token a value and changes no job. Light is the scale above and is the default. **Dark** is for dim rooms and long evenings. The ground is a deep ink navy, never black. Ink becomes the one light colour, and the fields that carry ink text (sky, meadow, orange) turn deep so light ink still reads on them. The deep variants and failure red, which sit on the ground, turn light. The footer band, tooltips and primary buttons stay ink, so in Dark they are light bands with dark text. **High contrast** is Light made for bright rooms and projectors: a deeper ink and ink-2, silver hairlines and the hatch dark enough to survive a washed-out projector, and fuller fields. The setting has a fourth value, System, which follows the operating system between Light and Dark. The values are the frontmatter's `themes`; the footer's light ink tint is #3a5170 in Dark and #dce6f2 in High contrast. In Dark the popover lift is tinted from the ground, not from ink, and native scrollbars and form parts are dark.
+
+**The Same Jobs Rule.** A theme changes values, never jobs: each token keeps its hue in every theme, and a component never takes a different token in another theme.
+
+**The Field Is Not Themed Rule.** The colour map, its legend and the overlays drawn on the field (iso-lines, arrows, streamlines, the mesh grid) are the same in every theme. Only the viewport's ground (silver-wash) follows the theme.
 
 ## Typography
 
@@ -317,4 +360,4 @@ A 24px deep ink band with white label text that is always visible, with secondar
 
 ## Open
 
-Not yet decided, and not covered by this record: a dark theme; the case editor and project home surfaces; density and layout beyond the run workspace (other panels, compare views); any layout below 1180px wide.
+Not yet decided, and not covered by this record: the case editor and project home surfaces; density and layout beyond the run workspace (other panels, compare views); any layout below 1180px wide.

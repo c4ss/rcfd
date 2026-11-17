@@ -1,4 +1,4 @@
-# The Electron Studio on Linux with its engine (F-821, ADR 0801 Addendum 17): the Docker run of
+# The Electron Studio on Linux with its engine (F-821, ADR 0801 Addendum 19): the Docker run of
 # apps/studio-web/docker/linux-test (Ubuntu 24.04, the engine's release binaries, the packaged Linux Studio, the unit
 # tests and the e2e suite under Xvfb, Chromium's sandbox on). ci.yml's studio-web job already runs the Studio's tests on
 # ubuntu-24.04, but without the engine, so the specs that need rcfd, rcfd-mcp or rcfd-runner skip there; this one has them.

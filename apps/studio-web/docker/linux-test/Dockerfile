@@ -1,4 +1,4 @@
-# The Linux test image of the Electron Studio (F-821, ADR 0801 Addendum 17): Ubuntu 24.04 (the CI runners' distribution,
+# The Linux test image of the Electron Studio (F-821, ADR 0801 Addendum 19): Ubuntu 24.04 (the CI runners' distribution,
 # glibc 2.39), the gate's Rust toolchain (RUST_GATE_TOOLCHAIN in .github/workflows/gate.yml), Node 22 (package.json
 # engines), the libraries Electron 45 needs on Linux, Xvfb for a display, and Mesa's software drivers. There is no GPU in
 # the container: Chromium gets no WebGPU adapter and the Studio draws with its WebGL 2 fallback, or not at all where WebGL 2

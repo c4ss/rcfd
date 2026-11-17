@@ -5,7 +5,9 @@
 // - first picture (P7): the field viewport of the development page (#/dev/field, route R2 local) opens the store, reads
 //   its surface and field `p` of the last snapshot, prepares, draws, waits for the GPU and one frame (the measure
 //   `rcfd:field:first-picture` of src/renderer/field/FieldViewport.tsx), as scripts/measure-field.mjs: the viewport is
-//   open on the tiny box first and switches store between the opens, 5 opens per mesh, judged on the median.
+//   open on the tiny box first and switches store between the opens, 5 opens per mesh, judged on the median, and the
+//   first of them, the first open of that store in the launch (each repeat is a launch of its own), judged as well
+//   (Q-819-1 and Q-819b-1, the maintainer's answer of 2026-11-17; ADR 0801 Addendum 16).
 // - scrubbing (P5): the run workspace of the packaged Studio, as scripts/measure-scrub.mjs: Home, then ArrowRight on the
 //   scrubber through every snapshot of the run, each key as soon as the one before is drawn (mark `rcfd:scrub:drawn`);
 //   one warm-up pass, then the timed passes; rate = requests / time, frame = request to next request.
@@ -57,6 +59,9 @@ import { profileArgs, profileRecord } from './profile.mjs';
 const LIMITS = {
   registered: 'F-819, 2026-11-17, before the first measurement; the G9 limits of docs/studio-guardrails.md unchanged',
   firstPicture: { id: 'P7', what: 'first picture of the surface, median of 5 opens', op: '<=', limit: 1500, unit: 'ms', judged: true },
+  // added 2026-11-17 on the maintainer's answer to Q-819b-1, before any measurement with it: the same limit, on the
+  // first open of the store in the launch (the mesh check not yet remembered: what a user sees)
+  firstOpen: { id: 'P7', what: 'first picture of the surface, first open of the store in the launch', op: '<=', limit: 1500, unit: 'ms', judged: true },
   scrubRate: { id: 'P5', what: 'scrubbing, snapshots per second', op: '>=', limit: 10, unit: 'snapshots/s', judged: true },
   scrubFrame: { id: 'P5', what: 'scrubbing, longest frame', op: '<=', limit: 150, unit: 'ms', judged: true },
   scrubRate4e6: { id: 'P6', what: 'scrubbing at 4e6 cells, snapshots per second (ADR 0350 P6, recorded)', op: '>=', limit: 3, unit: 'snapshots/s', judged: false },
@@ -592,6 +597,7 @@ try {
               const s = summary(ms);
               result.runs.push({ repeat: rep, mesh: m.name, check: 'first', ms, loadBefore: la, loadAfter: lb });
               line(LIMITS.firstPicture, m.name, rep, s.p50, { note: `opens ${ms.map((x) => x.toFixed(0)).join(', ')} ms`, load: ldPair(la, lb) });
+              line(LIMITS.firstOpen, m.name, rep, ms[0], { load: ldPair(la, lb) });
             }
             if (want('orbit')) {
               console.log(`   orbit ${m.name}: drags of ${SECONDS} s`);

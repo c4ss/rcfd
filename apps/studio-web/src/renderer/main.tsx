@@ -19,6 +19,12 @@ import './ui/primitives.css';
 import { ProjectHome } from './project/ProjectHome';
 // F-831: the command palette and the global shortcuts, beside every route (the palette loads on first use)
 import { PaletteHost } from './commands/PaletteHost';
+// F-837: save or discard before a close that would lose case changes (the window's close request included)
+import { CloseGuardHost } from './case/closeGuard';
+// F-818: the theme setting, drawn as soon as the main process answers (tokens.css follows the system until then)
+import { initTheme } from './theme/theme';
+
+initTheme();
 
 const GALLERY_HASH = '#/dev/primitives';
 
@@ -32,6 +38,9 @@ const SettingsPage = lazy(() => import('./settings/SettingsPage'));
 const FIELD_HASH = '#/dev/field';
 const FieldDev = lazy(() => import('./dev/FieldDev'));
 const CASE_HASH = '#/case';
+// F-818: the Studio's settings (the theme), loaded on demand
+const STUDIO_SETTINGS_HASH = '#/studio-settings';
+const StudioSettingsPage = lazy(() => import('./studio-settings/StudioSettingsPage'));
 const CaseEditorPage = lazy(() => import('./case/CaseEditorPage'));
 
 // React Aria's usePress adds a one-rule <style> element unless an element with this id exists; the Content Security
@@ -80,6 +89,13 @@ function Root() {
       </Suspense>
     );
   }
+  if (hash === STUDIO_SETTINGS_HASH) {
+    return (
+      <Suspense fallback={null}>
+        <StudioSettingsPage />
+      </Suspense>
+    );
+  }
   if (hash === CASE_HASH || hash.startsWith(`${CASE_HASH}/`)) {
     return (
       <Suspense fallback={null}>
@@ -97,5 +113,6 @@ createRoot(root).render(
   <StrictMode>
     <Root />
     <PaletteHost />
+    <CloseGuardHost />
   </StrictMode>,
 );
