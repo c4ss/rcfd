@@ -1908,3 +1908,260 @@ move per frame.
   them in serial files. Alone: `commands.spec.ts` 10 passed and `plots.spec.ts` 4 passed. `project.spec.ts` and
   `run-control.spec.ts` failed alone once ("Empty project"; the window inactive) and passed on the second run alone (10
   and 8 passed). No product source changed in this item.
+
+## Addendum F-819b: the three fixes of F-819 on the 4e6 box: surface values, the mesh check remembered, no pick during a drag (2026-11-17)
+
+This follows Addendum 15 (F-819), which measured the misses and proposed the fixes. The maintainer asked for the three
+proposals to be applied: Q-819-2 (a), Q-819-1's fixes (a) with (c), and Q-819-3 (a). The G9 limits and the script's
+`LIMITS` are unchanged. No Rust and no dependency were added.
+
+### What changed
+
+1. **Scrubbing: surface values, gathered where the whole field is.** The store reader's worker
+   (`src/main/data/worker.ts`) keeps the owner cell of every triangle of each open store's surface. It records them the
+   first time the surface is asked for, or makes the surface itself on the first `surfaceField`. A new op,
+   `surfaceField` (store, snapshot, field; the same checks as `field` in `bridge.ts`), reads the whole field as before
+   (`Store.field`, every checksum) and then gathers `out[t] = field[cells[t]]` (`src/shared/surface-values.ts`). The
+   gather copies 32-bit words, so each value keeps its stored bits, NaN payloads included. Only the 320 000 values
+   (1.22 MiB) cross to the renderer, against 4 000 000 (15.3 MiB) before, together with the store's `meshHash`.
+   - The page reaches the op through its own bridge, `window.studioSurfaceValues.field` (preload; `door.ts`
+     `loadSurfaceField`). F-804's `window.studioData` keeps exactly its four functions, as it did when F-815 added
+     `window.studioCompare`.
+   - The field viewport uses surface values for every stored field of a `local` store. The field worker's new
+     `surfaceField` op makes the corner scalars and the range from them (`surface.ts` `cornerScalarsOf`, `rangeOf`).
+     These take the same values, in the same order and with the same comparisons, as `cornerScalars` and `shownRange`
+     take from the whole field.
+   - `FieldCanvas` takes `valuesPer: 'triangle'`. The pick reads its value at the triangle's index; before, it read the
+     owner cell's. The count of cells outside a fixed range uses `cellsOutsideOf`. The whole run's range (F-837) also
+     uses surface values.
+   - The viewport refuses surface values whose `meshHash` or length does not match its surface, with the message "the
+     store's mesh is not the one its surface was read from".
+   - The whole field is still read for route `service` and for a comparison's values (`load`, F-815). The service's
+     `data.*` gathers nothing, so `surfaceField` answers `bad_request` there.
+2. **The first open: the mesh check remembered for the launch, and a faster loop.**
+   - `Store.verifyMesh` (`src/main/data/tsstore.ts`) keeps, in the worker's memory only, each file whose mesh checksum
+     matched. The key is the path and the value is an identity: the open file's device, file index, size, and
+     modification, change and creation times (nanoseconds, `fstat` with `bigint`), plus the mesh frame's length,
+     recorded checksum, hash and counts.
+   - A file with the same identity is not hashed again in that launch. Every other file is hashed: a file not verified
+     in this launch, another path to the same bytes, a file written in place (even with its modification time set
+     back, because the change time moves), a replaced file, and a file that grew. The identity is kept only when it is
+     the same before and after the hash.
+   - FNV-1a 64 moved to `src/main/data/fnv.ts`. The reference loop is unchanged (`fnv64UpdateJs`). For 4096 bytes or
+     more, a WebAssembly loop runs instead, assembled in the source from its instructions: one 64-bit load per eight
+     bytes, then the eight byte steps in order, with the bytes copied into the module 1 MiB at a time. FNV-1a must take
+     every byte in order whatever the loop, so each byte still costs at least one xor and one 64-bit multiply.
+   - Every payload checksum uses the new loop (mesh, DATA blocks, SNAP, FOOT). The mesh check also reuses one 16 MiB
+     read buffer instead of making a new array per chunk.
+3. **No pick while a button is held.** In `FieldViewport`, `onPointerMove` returns at once when `buttons` is not 0 (an
+   orbit or a pan). On the first such move it clears the readout, which would otherwise name a cell no longer under the
+   cursor. The later moves of the drag set no state. On `pointerup` on the canvas, it picks where the button was let
+   go, or clears the readout when that point is outside the frame (the orbit keeps the pointer captured). Hover without
+   a button, the keyboard readout at the centre and the pinned provenance readout work as before.
+
+The F-809 pictures needed no change. The cut plane clips the surface per fragment (rcfd-render's `View::clip`) and uses
+no other cell's value. When the arrows are on, they read their velocity components whole through `loadField`
+(`useArrows`, unchanged). So the shown field never needs its interior cells, and only those paths read whole fields.
+
+### Bit identity (evidence)
+
+- `tests/unit/data-routes.spec.ts` (new tests) checks the tiny and 1e5 stores, raw and deflated, every snapshot and
+  every field:
+  - `surfaceField` equals the gather of the Rust reader's reference bytes, with 0 differing bits.
+  - On the last snapshot, for every field, the corner scalars equal `cornerScalars` of the whole field byte for byte,
+    and `rangeOf` equals `shownRange` of the whole field.
+  - `surfaceField` gives the same values when no surface was read first, and its refusals carry their reason.
+- `tests/unit/field-surface-values.spec.ts` (new) uses fields with -0, +0, both infinities, two NaNs with payloads, the
+  largest and smallest f32, and repeated and skipped owner cells.
+  - The gathered words are the cells' words.
+  - The corner scalars, the range (`Object.is` on both ends), the cells outside three fixed ranges, and `values[t]`
+    against `values[cells[t]]` at every triangle all match the whole field's.
+  - The field worker's `surfaceField` answer equals its `field` answer, and the main-thread fallback gives the same.
+- These existing tests are unchanged and pass:
+  - P12 in Node and in the renderer (`data-routes`, `data.spec`).
+  - G3 on the GPU, and the readout bit for bit at every grid point on tiny and 1e5 (`field.spec`).
+  - The cut plane and the arrows (`field-derived.spec`).
+  - The F-815 difference bit for bit (`compare.spec`), provenance, and the work tests (`work.spec`, the field worker).
+
+### Measurements
+
+The runs were `npm run bench:large -- --no-gen --repeats=3 --profile-root=<scratch>` on box-4e6, fan01-F3 and
+fan01-F1. "Before" is studio-f819b at a8933a99, built and packaged unchanged. "After" is the working tree with the three
+fixes. The machine is the one of Addendum 15: Ryzen 7 9800X3D, Windows 11, a 60 Hz display, the test mode, and a
+scratch profile per launch.
+
+**Both sets were taken on a loaded machine**, with other jobs running throughout:
+
+- Before: busy 0.86 at the start, 6 cargo/rustc/link processes, 28.2 GB free.
+- After: busy 0.26 at the start, 1 cargo/rustc/link process, 29.1 GB free, but 0.48 to 1.00 around most measurements
+  (each pair is given in the tables).
+
+The after set started on a lighter machine, so load may account for part of each difference. Nothing was retried. Both
+sets met 63 of 63 judged lines, exit 0.
+
+First picture, box-4e6 (P7, limit: median <= 1500 ms). Each cell gives the median, then the five opens in order (ms),
+then the busy fraction before and after:
+
+| Run | Before | After |
+|---|---|---|
+| 1 | median 199: **1784**, 199, 199, 206, 188 (1.00/0.90) | median 114: **858**, 106, 114, 105, 114 (0.32/0.28) |
+| 2 | 202: **1653**, 175, 172, 202, 207 (0.74/0.80) | 146: **944**, 147, 146, 146, 140 (0.78/0.75) |
+| 3 | 161: **1505**, 137, 149, 163, 161 (0.64/0.51) | 132: **933**, 135, 132, 130, 112 (0.72/0.72) |
+
+The first open in a launch is not judged (P7 judges the median). It fell from 1505 to 1784 ms to 858 to 944 ms, so it
+is now inside 1.5 s as well. The FAN-01 medians are small and within the load noise in both sets:
+
+- F3: 21.6, 23.9 and 22.0 ms before; 19.1, 26.7 and 24.5 ms after.
+- F1: 25.1, 24.9 and 28.6 ms before; 29.7, 35.9 and 31.6 ms after.
+
+Scrubbing, box-4e6 (P5, limit: >= 10 per s, no frame > 150 ms). Each cell gives the rate, then the p50, p99 and longest
+frame:
+
+| Run | Before | After |
+|---|---|---|
+| 1 | 11.9 per s; 83.4, 100, 100 ms (0.76/0.87) | 20.1 per s; 50.0, 51.1, 65.6 ms (0.98/0.65) |
+| 2 | 14.8; 66.6, 83.3, 83.4 (0.37/0.31) | 20.1; 50.0, 50.6, 50.8 (0.85/0.93) |
+| 3 | 11.3; 83.6, 100, 101 (0.78/0.97) | 20.2; 50.0, 50.5, 51.3 (0.83/0.71) |
+
+- In every after run, the frame takes three display periods (50 ms at 60 Hz). Before, it took four to six.
+- The warm-up pass took 1339 to 1728 ms before and 1003 to 1010 ms after.
+- P6 (recorded) is met in all six runs.
+- The FAN-01 scrubs ran at the display's rate in both sets: 59.0 to 61.1 per s before, 60.4 to 61.5 per s after.
+
+Orbit, box-4e6 (P8, limits: >= 60 draws per s, the better of the two launches; p99 <= 25 ms with vertical sync). With
+vertical sync, every drag of both sets drew 60.0 per s with a p99 of 16.8 ms and a maximum of 16.8 to 17.2 ms. With no
+rate limit, in draws per s (busy before/after):
+
+| Run | Before, with the readout | Before, pick skipped | After, with the readout | After, pick skipped |
+|---|---|---|---|---|
+| 1 | 214 (0.76/0.64) | 941 (0.72/1.00) | 2586 (0.75/0.98) | 1365 (0.94/0.99) |
+| 2 | 244 (0.48/0.63) | 742 (0.38/0.79) | 2427 (0.86/0.72) | 2702 (0.72/0.81) |
+| 3 | 219 (0.95/0.78) | 767 (0.74/0.91) | 2879 (0.49/0.62) | 2794 (0.48/0.70) |
+
+- The drag holds the button, so the variant "with the readout" no longer picks. It now measures what a user gets
+  during an orbit, and it equals the pick-skipped control within the noise.
+- Both variants rose above the old pick-skipped figure. Before, the pick-skipped variant still set React state on every
+  move (it cleared the readout and stored the pointer's position). Now no move of a drag sets state.
+- The FAN-01 drags with no rate limit, before:
+  - with the readout: F3 777, 1061 and 805; F1 775, 819 and 766;
+  - pick skipped: F3 578, 533 and 594; F1 560, 935 and 979.
+- The FAN-01 drags with no rate limit, after:
+  - with the readout: F3 2184, 2002 and 1894; F1 2245, 2028 and 2344;
+  - pick skipped: F3 2294, 917 and 842; F1 2288, 971 and 918.
+- The after set also has single long frames of 105 to 261 ms in FAN-01 drags with no rate limit, like the ones
+  Addendum 15 left undiagnosed. Those drags judge only the rate.
+
+The reader was also timed outside the Studio: Node 22.19.0, the built `dist/`, the 4e6 store in the page cache, busy
+0.89 before and 0.77 after.
+
+| Step | Time |
+|---|---|
+| `verifyMesh`, WebAssembly loop, 737 MiB mesh frame | 842 ms |
+| The reference loop over the same frame (16 MiB chunks, a new array each, as before) | 1163 ms |
+| `verifyMesh` again on the same file in the same process (remembered) | 1 ms |
+| `surface()` | 56 ms |
+| `field(i, 'p')` (40 to 43 ms in Addendum 15; the DATA checksums now use the WebAssembly loop) | 24 to 27 ms |
+| The gather | 1 to 3 ms |
+
+On 256 MiB in plain Node, the reference loop ran at 1.1 to 1.2 ns per byte and the WebAssembly loop at 0.85 ns per byte.
+
+### Tests added
+
+- `tests/unit/data-fnv.spec.ts`:
+  - the WebAssembly loop runs in Node;
+  - the published test vectors;
+  - every length from 0 to 80 and from 4096 to 4176 bytes, at view offsets 0 to 7;
+  - inputs across the 1 MiB copy;
+  - four other start states;
+  - input streamed in odd-sized chunks;
+  - one changed byte is detected.
+- `tests/unit/data-routes.spec.ts` (appended):
+  - `surfaceField` bit for bit on the four stores;
+  - `surfaceField` before any surface was read, and its refusals (no such field, no such snapshot, `bad_request` on
+    the service route);
+  - the remembered mesh check, counted with the `meshChecks` counters: a first check hashes and a second is
+    remembered; another path is hashed; a byte changed in place, with the size, file index and modification time
+    kept, is hashed again and refused, twice; the byte put back is hashed and then remembered; a replacement by a copy
+    is hashed; a grown file is hashed and then remembered.
+- `tests/unit/data-bridge.spec.ts` (appended): `surfaceField` accepted in its exact shape, and refused wherever `field`
+  is refused.
+- `tests/unit/field-surface-values.spec.ts`: the tests listed under Bit identity.
+- `tests/e2e/field.spec.ts` (one test added): a press and drag on the tiny box. During the drag, the view moves, no
+  readout is shown, and the readout's point stays where the press was. At the release, the readout is at the release
+  point and shows the stored value of its cell, the same as a plain hover there. The test resets the view afterwards.
+
+### Decisions (options, the recommendation taken; each reversible)
+
+- D1, where the gather runs:
+  - (a) in the reader's worker, which holds the store and reads the whole field anyway, through a new op and a bridge
+    of its own (taken);
+  - (b) an option of `studioData.field` that changes the reply's length (one function would give two shapes, and the
+    bridge's key set is pinned);
+  - (c) on the main process's thread (against G21).
+
+  Recommendation: (a).
+- D2, what the renderer holds:
+  - (a) one value per triangle, with `valuesPer` on `FieldCanvas` (taken);
+  - (b) the values scattered back into an array of every cell in the field worker (15 MB allocated per step, with
+    every other cell's value silently missing);
+  - (c) one value per distinct surface cell, plus an index (about half the bytes, but one more array to keep in step).
+
+  Recommendation: (a).
+- D3, the colour range: F-808's range covers the cells that own a surface triangle (`shownRange`), not all cells. The
+  field worker computes it from the surface values with an identical result, so the reader sends no range.
+- D4, the service route:
+  - (a) `surfaceField` answers `bad_request` and the viewport reads the whole field (taken);
+  - (b) gather in the main process after `data.field` (a loop and a surface cache on the main thread).
+
+  Recommendation: (a), plus a `data.surface_field` method in the service if R1 is ever used for large stores.
+- D5, the cut plane and the arrows:
+  - (a) always surface values for the shown field, since neither picture needs its interior cells; the arrows read
+    their components whole, as before (taken);
+  - (b) read the shown field whole while either picture is on (15 MB per step that nothing uses).
+
+  Recommendation: (a).
+- D6, the remembered check:
+  - (a) in the worker's memory for the launch, keyed by path, with the identity above (taken);
+  - (b) kept in the state folder across launches (Addendum 15's (a)); this conflicts with "never skip a file not
+    verified in this launch";
+  - (c) a sampled checksum (not the store's checksum).
+
+  Recommendation: (a).
+- D7, the faster loop:
+  - (a) WebAssembly assembled in the source, eight bytes per load (taken: 842 ms against 1163 ms on the 4e6 frame);
+  - (b) a JavaScript loop over 32-bit words; the reference loop already works in 32-bit halves, and a variant with a
+    floating-point product ran at 3.4 ns per byte, about three times slower;
+  - (c) a worker per chunk (FNV-1a cannot be split).
+
+  Recommendation: (a). This is the only WebAssembly in the Studio. It runs in the main process's worker, which the
+  page's Content Security Policy does not cover.
+- D8, the readout during a drag:
+  - (a) cleared at the first held move and taken again at the release (taken);
+  - (b) kept as it was during the drag (it would name a cell no longer under the cursor);
+  - (c) at most one pick per animation frame (Addendum 15's (c); at this size each pick still costs about 4 ms of a
+    frame).
+
+  Recommendation: (a).
+
+### Open for the maintainer
+
+- Q-819b-1 (Q-819-1 again): should the first open of a store in a launch be judged as well? It now takes 858 to 944 ms
+  at 4e6 under load, inside 1.5 s. Recommendation: yes, as a fourth P7 line in `measure-large.mjs`. That changes the
+  script's registered limits, so it needs the maintainer.
+- Q-819b-2: the bench's drag "with the hover readout" no longer measures the pick, because no pick runs during a drag.
+  Should a hover sweep with no button held be added, picking on every move as a user's hover does? At 320 000
+  triangles a pick still costs about 4 ms per move (Addendum 15). Recommendation: yes, as a recorded line. Build the
+  bounding-volume tree of Addendum 15 (b) only if a larger surface makes the hover drop below 60 per s.
+- Q-819b-3: a comparison's views (F-815) still carry whole fields. The difference is computed in f64 over every cell
+  and sent whole (8 bytes per cell). The reader could apply the same gather to `difference`. Recommendation: yes, when
+  compare is measured at 4e6.
+
+### Verification (2026-11-17, on studio-f819b)
+
+- `npm ci`: exit 0, 0 vulnerabilities. `npm run typecheck`: clean. `python scripts/third_party_licenses.py --check`:
+  "THIRD_PARTY_LICENSES.md is up to date". No dependency was added.
+- `npm test` (headless, built and packaged): 654 passed, 0 failed, 12.6 min. None of the known load-flaky tests failed
+  in this run.
+- `npm run bench:large`: the two sets of three runs above, both with exit 0 and 63 of 63 judged lines met. The after
+  set ran on a package built before one change that only narrows a TypeScript type in `FieldViewport` (a cast replaced
+  by an `in` check) and does not change behaviour; `npm test` ran on the final tree.

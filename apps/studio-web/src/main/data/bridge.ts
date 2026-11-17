@@ -76,9 +76,9 @@ export function parseDataRequest(raw: unknown): ParsedData {
     if (!isTag(raw['tag'])) return bad('cancel: tag must be a string of at most 64 characters or a non-negative integer');
     return { ok: true, request: { op: 'cancel', id, tag: raw['tag'] } };
   }
-  if (op !== 'open' && op !== 'field' && op !== 'surface' && op !== 'difference') return bad(`unknown op '${String(op).slice(0, 40)}'`);
+  if (op !== 'open' && op !== 'field' && op !== 'surface' && op !== 'surfaceField' && op !== 'difference') return bad(`unknown op '${String(op).slice(0, 40)}'`);
   const required =
-    op === 'field'
+    op === 'field' || op === 'surfaceField'
       ? ['op', 'id', 'store', 'snapshot', 'field']
       : op === 'difference'
         ? ['op', 'id', 'store', 'snapshot', 'other', 'otherSnapshot', 'field']
@@ -109,11 +109,12 @@ export function parseDataRequest(raw: unknown): ParsedData {
     if (typeof field !== 'string' || field.length === 0 || field.length > MAX_FIELD_NAME) return bad(`difference: the field name must be a string of 1 to ${MAX_FIELD_NAME} characters`);
     return { ok: true, request: { op, store, snapshot, other, otherSnapshot, field, ...common } };
   }
-  if (op === 'field') {
+  if (op === 'field' || op === 'surfaceField') {
+    // F-819b: surfaceField has the arguments of field (the values come gathered on the store's surface)
     const snapshot = raw['snapshot'];
     const field = raw['field'];
-    if (!isId(snapshot)) return bad('field: snapshot must be a non-negative integer');
-    if (typeof field !== 'string' || field.length === 0 || field.length > MAX_FIELD_NAME) return bad(`field: the field name must be a string of 1 to ${MAX_FIELD_NAME} characters`);
+    if (!isId(snapshot)) return bad(`${op}: snapshot must be a non-negative integer`);
+    if (typeof field !== 'string' || field.length === 0 || field.length > MAX_FIELD_NAME) return bad(`${op}: the field name must be a string of 1 to ${MAX_FIELD_NAME} characters`);
     return { ok: true, request: { op, store, snapshot, field, ...common } };
   }
   return { ok: true, request: { op, store, ...common } };

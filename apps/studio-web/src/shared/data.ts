@@ -92,6 +92,19 @@ export interface SurfaceData {
   readonly cells: Uint32Array<ArrayBuffer>;
 }
 
+/**
+ * F-819b: one cell field of one snapshot on the boundary surface only: `values[t]` is the stored value (as `f32`, bit for
+ * bit the same as `FieldData`'s) of the owner cell of triangle `t` of the store's surface (`SurfaceData.cells[t]`).
+ * `meshHash` names the stored mesh the surface was made from, so a page can tell it holds that surface. Route `local`
+ * only (the store reader gathers it where it read the whole field).
+ */
+export interface SurfaceFieldData {
+  readonly snapshot: number;
+  readonly field: string;
+  readonly meshHash: string;
+  readonly values: Float32Array<ArrayBuffer>;
+}
+
 /** Errors of the data bridge itself; errors of the service keep their JSON-RPC codes (for example -32602, 1004). */
 export type DataErrorCode =
   | 'bad_request' // the message or its arguments have the wrong shape
@@ -143,6 +156,7 @@ export type DataRequest =
   | ({ readonly op: 'open'; readonly store: StoreRef } & Common)
   | ({ readonly op: 'field'; readonly store: StoreRef; readonly snapshot: number; readonly field: string } & Common)
   | ({ readonly op: 'surface'; readonly store: StoreRef } & Common)
+  | ({ readonly op: 'surfaceField'; readonly store: StoreRef; readonly snapshot: number; readonly field: string } & Common)
   | ({
       readonly op: 'difference';
       readonly store: StoreRef;
@@ -161,6 +175,7 @@ export type DataWireResult =
   | { readonly kind: 'open'; readonly info: StoreInfo }
   | { readonly kind: 'field'; readonly snapshot: number; readonly field: string; readonly values: ArrayBuffer }
   | { readonly kind: 'surface'; readonly points: ArrayBuffer; readonly triangles: ArrayBuffer; readonly cells: ArrayBuffer }
+  | { readonly kind: 'surfaceField'; readonly snapshot: number; readonly field: string; readonly meshHash: string; readonly values: ArrayBuffer }
   | { readonly kind: 'difference'; readonly snapshot: number; readonly otherSnapshot: number; readonly field: string; readonly values: ArrayBuffer }
   | { readonly kind: 'cancel'; readonly cancelled: number };
 
@@ -188,4 +203,18 @@ export interface CompareBridge {
    * (route `local` only; a refusal says why). A `tag` is cancelled by `window.studioData.cancel`.
    */
   difference(store: StoreRef, snapshot: number, other: StoreRef, otherSnapshot: number, field: string, options?: DataOptions): Promise<DataReply<DifferenceData>>;
+}
+
+/**
+ * F-819b: what the preload script puts on `window.studioSurfaceValues`, over the same data port as `window.studioData`
+ * (kept apart, as `window.studioCompare` is, so that F-804's bridge keeps exactly its four functions). Its arguments
+ * are checked again in main.
+ */
+export interface SurfaceValuesBridge {
+  /**
+   * Field `field` of snapshot `snapshot` on the store's boundary surface: one value per triangle of `surface(store)`
+   * (route `local` only; the service route answers `bad_request`, and the whole field is read with `studioData.field`).
+   * A `tag` is cancelled by `window.studioData.cancel`.
+   */
+  field(store: StoreRef, snapshot: number, field: string, options?: DataOptions): Promise<DataReply<SurfaceFieldData>>;
 }

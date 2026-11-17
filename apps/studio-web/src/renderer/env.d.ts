@@ -5,7 +5,7 @@
 import type { StudioBridge } from '../shared/ipc.js';
 import type { ProjectBridge, RunsBridge } from '../shared/project.js';
 import type { ServiceBridge } from '../shared/service.js';
-import type { CompareBridge, DataBridge } from '../shared/data.js';
+import type { CompareBridge, DataBridge, SurfaceValuesBridge } from '../shared/data.js';
 import type { CaseBridge } from '../shared/case.js';
 import type { RunBridge } from '../shared/run.js';
 import type { ClaudeBridge } from '../shared/claude.js';
@@ -21,6 +21,8 @@ declare global {
     readonly studioData: DataBridge;
     /** F-815: the difference of two runs' field, over the data port. */
     readonly studioCompare: CompareBridge;
+    /** F-819b: a field's values on the store's surface only (one per triangle), over the data port. */
+    readonly studioSurfaceValues: SurfaceValuesBridge;
     readonly studioCase: CaseBridge;
     /** F-810: a runner run's residual and monitor histories, read only (not run control: that is studioRuns). */
     readonly studioRunData: RunBridge;

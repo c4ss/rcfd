@@ -36,6 +36,11 @@ export class LocalData {
     return this.job(p, (dir) => ({ op: 'surface', dir }));
   }
 
+  /** F-819b: field `field` of snapshot `snapshot` on the store's surface, one value per triangle, gathered in the worker. */
+  surfaceField(p: string, snapshot: number, field: string): Job<DataWireResult> {
+    return this.job(p, (dir) => ({ op: 'surfaceField', dir, snapshot, field }));
+  }
+
   /** F-815: `other`'s field minus `p`'s, in f64, on the same mesh; both folders are checked against the data roots. */
   difference(p: string, snapshot: number, other: string, otherSnapshot: number, field: string): Job<DataWireResult> {
     return this.queue.push(async () => {

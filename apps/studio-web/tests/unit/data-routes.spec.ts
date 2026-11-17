@@ -9,7 +9,7 @@
 // Needs `f447_bench` (tests/support/f447.ts says where it is looked for) and the built worker (dist/, `npm run build`);
 // without the example these tests are skipped and say why.
 import { expect, test } from '@playwright/test';
-import { appendFileSync, copyFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { appendFileSync, copyFileSync, existsSync, mkdirSync, mkdtempSync, openSync, closeSync, readFileSync, readSync, rmSync, statSync, utimesSync, writeFileSync, writeSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { isMainThread, threadId } from 'node:worker_threads';
@@ -17,7 +17,10 @@ import { LocalData } from '../../src/main/data/local.js';
 import { DataFailure } from '../../src/main/data/queue.js';
 import { RemoteData } from '../../src/main/data/remote.js';
 import { DataRoots } from '../../src/main/data/roots.js';
-import { fnv64, Store, unshuffle } from '../../src/main/data/tsstore.js';
+import { fnv64, meshChecks, Store, unshuffle } from '../../src/main/data/tsstore.js';
+import { gatherSurface } from '../../src/shared/surface-values.js';
+import { StudioData } from '../../src/main/data/studio-data.js';
+import { cornerScalars, cornerScalarsOf, rangeOf, shownRange } from '../../src/renderer/field/surface.js';
 import type { DataWireResult, StoreInfo } from '../../src/shared/data.js';
 import { RpcConnection } from '../../src/main/service/rpc.js';
 import { appRoot, findRcfd, startRcfd } from '../support/rcfd.js';
@@ -310,4 +313,120 @@ test('R1 against a service without data.* answers no_data', async () => {
     c.close();
     await s.stop();
   }
+});
+
+// ---- F-819b: surface values gathered by the reader, and the mesh check remembered for a file that did not change
+
+for (const size of SIZES) {
+  for (const codec of CODECS) {
+    test(`F-819b, ${size} ${codec}: surfaceField is one value per surface triangle, its owner cell's Rust value bit for bit`, async () => {
+      test.setTimeout(120_000);
+      const dir = storeDir(root, size, codec);
+      const info = infoOf(await local.open(dir).promise);
+      const s = surfaceOf(await local.surface(dir).promise);
+      const cells = new Uint32Array(s.cells);
+      let bits = 0;
+      for (let i = 0; i < SNAPSHOTS; i++) {
+        for (const f of FIELDS) {
+          const r = await local.surfaceField(dir, i, f).promise;
+          if (r.kind !== 'surfaceField') throw new Error(`not surface values: ${r.kind}`);
+          expect([r.snapshot, r.field, r.meshHash]).toEqual([i, f, info.meshHash]);
+          const ref = refBytes(root, size, i, f);
+          const whole = new Float32Array(ref.buffer.slice(ref.byteOffset, ref.byteOffset + ref.byteLength));
+          const want = gatherSurface(cells, whole);
+          const got = new Float32Array(r.values);
+          expect(got.length, `${i}-${f}`).toBe(cells.length);
+          bits += differingBits(bytes(r.values), new Uint8Array(want.buffer));
+          // what the viewport makes of them: the corner scalars and F-808's range of the whole field
+          if (i === SNAPSHOTS - 1) {
+            expect(Buffer.from(cornerScalarsOf(got).buffer).equals(Buffer.from(cornerScalars(cells, whole).buffer)), `${f} scalars`).toBe(true);
+            expect(rangeOf(got), `${f} range`).toEqual(shownRange(cells, whole));
+          }
+        }
+      }
+      expect(bits).toBe(0);
+    });
+  }
+}
+
+test('F-819b: surfaceField before any surface is read (the reader makes the surface itself), and its refusals', async () => {
+  const copy = copyStore('surface-first', 'tiny', 'deflate', (b) => b);
+  const r = await local.surfaceField(copy.dir, 3, 'uy').promise;
+  if (r.kind !== 'surfaceField') throw new Error(`not surface values: ${r.kind}`);
+  const s = surfaceOf(await local.surface(copy.dir).promise);
+  const ref = refBytes(root, 'tiny', 3, 'uy');
+  const want = gatherSurface(new Uint32Array(s.cells), new Float32Array(ref.buffer.slice(ref.byteOffset, ref.byteOffset + ref.byteLength)));
+  expect(differingBits(bytes(r.values), new Uint8Array(want.buffer))).toBe(0);
+  expect((await failureOf(local.surfaceField(copy.dir, 0, 'T').promise)).message).toMatch(/has no field 'T'/);
+  expect((await failureOf(local.surfaceField(copy.dir, 20, 'p').promise)).message).toMatch(/no snapshot 20/);
+  // the service route gathers nothing: refused with the reason, the page reads the whole field there
+  const data = new StudioData({ state: { address: '127.0.0.1:1', instance: 1 }, call: () => Promise.reject(new Error('not called')) }, DataRoots.fromEnv({ RCFD_STUDIO_DATA_ROOTS: root }), WORKER);
+  try {
+    const e = await failureOf(data.run({ op: 'surfaceField', id: 1, store: { route: 'service', path: 'x' }, snapshot: 0, field: 'p' }, 5000).promise);
+    expect([e.code, e.message]).toEqual(['bad_request', expect.stringMatching(/service route has no surface values/)]);
+  } finally {
+    await data.close();
+  }
+});
+
+test('F-819b: a mesh frame verified in this process is not hashed again while its file is unchanged; a changed or replaced file is', () => {
+  const copy = copyStore('memo', 'tiny', 'raw', (b) => b);
+  const file = path.join(copy.dir, 'store.rts');
+  // whole seconds, so that setting the times back below restores them exactly
+  const T = 1_700_000_000;
+  utimesSync(file, T, T);
+  const check = () => {
+    const before = { ...meshChecks };
+    const s = new Store(copy.dir);
+    try {
+      s.verifyMesh();
+      return { hashed: meshChecks.hashed - before.hashed, remembered: meshChecks.remembered - before.remembered, error: null as string | null };
+    } catch (e) {
+      return { hashed: meshChecks.hashed - before.hashed, remembered: meshChecks.remembered - before.remembered, error: (e as Error).message };
+    } finally {
+      s.close();
+    }
+  };
+  expect(check()).toEqual({ hashed: 1, remembered: 0, error: null });
+  expect(check()).toEqual({ hashed: 0, remembered: 1, error: null });
+  // the same bytes under another path are another file: verified
+  const other = copyStore('memo-other', 'tiny', 'raw', (b) => b);
+  const so = new Store(other.dir);
+  const h0 = meshChecks.hashed;
+  so.verifyMesh();
+  so.close();
+  expect(meshChecks.hashed - h0).toBe(1);
+
+  // one byte of the mesh payload changed in place, the size and the modification time kept (set back): the change time
+  // moved, so it is verified again, and refused
+  const at = 20 + 28 + 24 + 8 + 40;
+  const was = statSync(file, { bigint: true });
+  const poke = (b: (x: number) => number) => {
+    const fd = openSync(file, 'r+');
+    const one = Buffer.alloc(1);
+    readSync(fd, one, 0, 1, at);
+    writeSync(fd, Buffer.from([b(one[0]!)]), 0, 1, at);
+    closeSync(fd);
+    utimesSync(file, T, T);
+  };
+  poke((x) => x ^ 0x01);
+  const now = statSync(file, { bigint: true });
+  expect([now.size, now.mtimeNs, now.ino]).toEqual([was.size, was.mtimeNs, was.ino]);
+  expect(now.ctimeNs).not.toBe(was.ctimeNs);
+  expect(check()).toEqual({ hashed: 1, remembered: 0, error: expect.stringMatching(/payload checksum mismatch in frame at offset 20/) });
+  expect(check()).toEqual({ hashed: 1, remembered: 0, error: expect.stringMatching(/payload checksum mismatch/) });
+  // the byte put back: verified (and remembered) again
+  poke((x) => x ^ 0x01);
+  expect(check()).toEqual({ hashed: 1, remembered: 0, error: null });
+  expect(check()).toEqual({ hashed: 0, remembered: 1, error: null });
+
+  // replaced by a copy of the same bytes (a new file under the same path, the copy keeping the modification time)
+  rmSync(file);
+  copyFileSync(path.join(storeDir(root, 'tiny', 'raw'), 'store.rts'), file);
+  expect(check()).toEqual({ hashed: 1, remembered: 0, error: null });
+
+  // a store that grows (a live run appends a snapshot): verified again
+  appendFileSync(file, Buffer.alloc(64));
+  expect(check()).toEqual({ hashed: 1, remembered: 0, error: null });
+  expect(check()).toEqual({ hashed: 0, remembered: 1, error: null });
 });

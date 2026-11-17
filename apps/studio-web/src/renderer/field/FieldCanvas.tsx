@@ -20,7 +20,7 @@ import type { SurfaceData } from '../../shared/data.js';
 import { palette } from '../design/tokens.js';
 import { LUT_SIZE, lutBytes, type ColourRange } from './colormap.js';
 import { clipPlane, keeps, type Cut } from './derived.js';
-import { bounds, cornerPositions, cornerScalars, gridEdges } from './surface.js';
+import { bounds, cornerPositions, cornerScalars, cornerScalarsOf, gridEdges } from './surface.js';
 import { drawOnDemand } from '../ui/onDemand.js';
 import type { PreparedSurface } from './prepare.js';
 
@@ -72,8 +72,10 @@ export interface FieldCanvasApi {
 export interface FieldCanvasProps {
   /** Null while there is nothing to draw (the canvas, its renderer and device stay). */
   readonly surface: SurfaceData | null;
-  /** One value per cell (a cell field). */
+  /** One value per cell (a cell field), or with `valuesPer` 'triangle' one per triangle of `surface` (its owner cell's). */
   readonly values: Float32Array | null;
+  /** F-819b: what `values` is indexed by (default 'cell'); 'triangle' is src/shared/surface-values.ts's gather. */
+  readonly valuesPer?: 'cell' | 'triangle';
   readonly range: ColourRange | null;
   readonly grid: boolean;
   readonly forceWebGL: boolean;
@@ -228,7 +230,7 @@ interface SceneProps extends Omit<FieldCanvasProps, 'forceWebGL' | 'onBackend'> 
 
 let gridIds = 0;
 
-function Scene({ surface, values, range, grid, onMoved, onView, onDrawn, onGridState, cut = null, arrows = null, apiRef, prepared, scalars }: SceneProps) {
+function Scene({ surface, values, valuesPer = 'cell', range, grid, onMoved, onView, onDrawn, onGridState, cut = null, arrows = null, apiRef, prepared, scalars }: SceneProps) {
   // F-832: the arrays made off the main thread, when they belong to this surface
   const prep = prepared && prepared.surface === surface ? prepared : null;
   const box = prep ? { min: prep.min, max: prep.max } : undefined;
@@ -364,6 +366,7 @@ function Scene({ surface, values, range, grid, onMoved, onView, onDrawn, onGridS
     if (!surface || !values || !range) return;
     const a = mesh.geometry.getAttribute('scalar') as THREE.BufferAttribute;
     if (scalars && scalars.length === a.array.length) (a.array as Float32Array).set(scalars);
+    else if (valuesPer === 'triangle') cornerScalarsOf(values, a.array as Float32Array<ArrayBuffer>);
     else cornerScalars(surface.cells, values, a.array as Float32Array<ArrayBuffer>);
     a.needsUpdate = true;
     mat.lo.value = range.loF32;
@@ -381,7 +384,7 @@ function Scene({ surface, values, range, grid, onMoved, onView, onDrawn, onGridS
       live = false;
     };
     // onDrawn is read when the picture is done; a new callback alone does not redraw
-  }, [surface, values, scalars, range, mesh, mat, renderer, scene, cam, invalidate]);
+  }, [surface, values, valuesPer, scalars, range, mesh, mat, renderer, scene, cam, invalidate]);
 
   // the mesh grid: computed once per surface, in a worker
   useEffect(() => {
@@ -458,7 +461,8 @@ function Scene({ surface, values, range, grid, onMoved, onView, onDrawn, onGridS
         const triangle = hit.faceIndex;
         const cell = surface.cells[triangle];
         if (cell === undefined) return null;
-        return { triangle, cell, value: values[cell]!, point: [hit.point.x, hit.point.y, hit.point.z] };
+        // F-819b: surface values are the owner cell's value at the triangle's index
+        return { triangle, cell, value: (valuesPer === 'triangle' ? values[triangle] : values[cell])!, point: [hit.point.x, hit.point.y, hit.point.z] };
       };
       const orbit = (dAzimuth: number, dPolar: number, scale: number) => {
         const c = controls.current;
@@ -608,7 +612,7 @@ function Scene({ surface, values, range, grid, onMoved, onView, onDrawn, onGridS
         },
       };
     },
-    [cam, mesh, surface, values, renderer, scene, invalidate],
+    [cam, mesh, surface, values, valuesPer, renderer, scene, invalidate],
   );
 
   return null;

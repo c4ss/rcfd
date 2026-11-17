@@ -7,18 +7,26 @@
 // ./colormap.ts, the range is the min and max of the shown values (rcfd-studio's snapshot range), the readout is the
 // stored value of the cell under the cursor, and the caption names the store, quantity, unit, snapshot, step and time.
 //
+// F-819b: a stored field of a local store comes as surface values, one per triangle (the store reader gathers them
+// where it read the whole field, src/main/data/worker.ts), since everything drawn, ranged and read out here is a value
+// of a cell that owns a surface triangle; the colour range is the min and max over those same values (F-808's), and
+// the readout at a triangle is its owner cell's stored value, bit for bit. The whole field is read for the service
+// route and for a comparison's values (`load`), as before. F-809's arrows read their own components whole (useArrows),
+// and the cut plane clips the surface, so neither needs the shown field's other cells. No pick runs while a button is
+// held (an orbit or a pan): the readout is cleared at the drag's first move and taken again where the button is let go.
+//
 // Timing marks (performance.mark / measure, read by scripts/measure-field.mjs for P7): `rcfd:field:open` when a store is
 // opened, then the measure `rcfd:field:first-picture` when its first field is drawn, finished on the GPU and one
 // animation frame has passed.
 import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent, type PointerEvent } from 'react';
 import type { DataOptions, DataReply, FieldInfo, StoreInfo, StoreRef, SurfaceData } from '../../shared/data.js';
-import { cancelLoads, loadField, loadSurface, openStore } from '../data/door.js';
+import { cancelLoads, loadField, loadSurface, loadSurfaceField, openStore } from '../data/door.js';
 import { Button, IconButton, NumberField, Quiet, Toggle } from '../ui/index.js';
 import { IconToggle } from '../ui/IconToggle.js';
 import { useCommandHandlers } from '../commands/host.js';
 import { savePagePng } from '../workspace/door.js';
-import { shownRange } from './surface.js';
-import { AXIS, LENGTH_UNIT, LENGTH_UNIT_WHY, cellsOutside, domainText, fixedRange, lengthText, pngName, scaleBar, type RangeMode } from './viewExtras.js';
+import { rangeOf, shownRange } from './surface.js';
+import { AXIS, LENGTH_UNIT, LENGTH_UNIT_WHY, cellsOutside, cellsOutsideOf, domainText, fixedRange, lengthText, pngName, scaleBar, type RangeMode } from './viewExtras.js';
 import { colourRange, f32Text, lutBytes, type ColourRange } from './colormap.js';
 import { FieldCanvas, type Backend, type FieldCanvasApi, type Pick } from './FieldCanvas.js';
 import { CutPanel, DerivedControls, useArrows } from './DerivedControls.js';
@@ -78,6 +86,8 @@ interface Shown {
   readonly fieldInfo: FieldInfo;
   readonly surface: SurfaceData;
   readonly values: Float32Array;
+  /** F-819b: `values` holds one value per cell, or one per triangle of `surface` (surface values). */
+  readonly per: 'cell' | 'triangle';
   /** F-832: the corner scalars, made off the main thread. */
   readonly scalars: Float32Array;
   readonly range: ColourRange;
@@ -328,8 +338,13 @@ export function FieldViewport({
       else setPhase({ kind: 'error', message: 'Loading was cancelled.', hint: 'Nothing was drawn; try again to load it.' });
       cancelledCb.current?.(kept ? before.snapshot : null);
     };
+    // F-819b: a local store's stored field comes as surface values (one per triangle); others whole, as before
+    const per: Shown['per'] = !loadRef.current && store.route === 'local' ? 'triangle' : 'cell';
     void (async () => {
-      const r = await (loadRef.current ? loadRef.current(snapshot, field, { tag: t }) : loadField(store, snapshot, field, { tag: t }));
+      const r =
+        per === 'triangle'
+          ? await loadSurfaceField(store, snapshot, field, { tag: t })
+          : await (loadRef.current ? loadRef.current(snapshot, field, { tag: t }) : loadField(store, snapshot, field, { tag: t }));
       if (!live) return;
       if (work.cancelled) return cancelled();
       if (!r.ok) {
@@ -341,14 +356,19 @@ export function FieldViewport({
         });
         return;
       }
-      if (r.result.values.length !== info.nCells) {
+      if (per === 'cell' && r.result.values.length !== info.nCells) {
         work.end();
         setPhase({ kind: 'error', message: `The field has ${r.result.values.length} values for ${info.nCells} cells.`, hint: 'The store does not match its mesh.' });
         return;
       }
+      if (per === 'triangle' && !('meshHash' in r.result && r.result.meshHash === info.meshHash && r.result.values.length === surface.cells.length)) {
+        work.end();
+        setPhase({ kind: 'error', message: 'The store’s mesh is not the one its surface was read from.', hint: 'The store was replaced; try again to open it.' });
+        return;
+      }
       let made: Awaited<ReturnType<FieldPrep['field']>>;
       try {
-        made = await prep.field(opened.prepared, r.result.values);
+        made = per === 'triangle' ? await prep.surfaceField(opened.prepared, r.result.values) : await prep.field(opened.prepared, r.result.values);
       } catch (e) {
         if (!live) return;
         work.end();
@@ -365,7 +385,7 @@ export function FieldViewport({
       }
       drawnFor.current = snapshot;
       shownCb.current?.({ snapshot, lo: span.lo, hi: span.hi });
-      setShown({ info, fieldInfo: fi, surface, values: made.values, scalars: made.scalars, range: colourRange(span.lo, span.hi), snapshot, key });
+      setShown({ info, fieldInfo: fi, surface, values: made.values, per, scalars: made.scalars, range: colourRange(span.lo, span.hi), snapshot, key });
       setPhase({ kind: 'ready' });
     })();
     return () => {
@@ -393,8 +413,10 @@ export function FieldViewport({
     void (async () => {
       let lo = Number.POSITIVE_INFINITY;
       let hi = Number.NEGATIVE_INFINITY;
+      // F-819b: a local store's snapshots as surface values (the same values shownRange takes from the whole field)
+      const onSurface = store.route === 'local';
       for (let i = 0; i < n; i++) {
-        const r = await loadField(store, i, field, { tag: t });
+        const r = onSurface ? await loadSurfaceField(store, i, field, { tag: t }) : await loadField(store, i, field, { tag: t });
         if (!live) return;
         if (work.cancelled) {
           setRangeMode('snapshot');
@@ -405,7 +427,12 @@ export function FieldViewport({
           setRunRangeError(`The whole run’s range was not found: snapshot ${i + 1} could not be read (${r.error.message}).`);
           return;
         }
-        const span = shownRange(opened.surface.cells, r.result.values);
+        if (onSurface && !('meshHash' in r.result && r.result.meshHash === opened.info.meshHash && r.result.values.length === opened.surface.cells.length)) {
+          work.end();
+          setRunRangeError(`The whole run’s range was not found: the store’s mesh is not the one its surface was read from.`);
+          return;
+        }
+        const span = onSurface ? rangeOf(r.result.values) : shownRange(opened.surface.cells, r.result.values);
         if (span) {
           if (span.lo < lo) lo = span.lo;
           if (span.hi > hi) hi = span.hi;
@@ -462,11 +489,28 @@ export function FieldViewport({
     }
   }, []);
 
-  const onPointerMove = (e: PointerEvent<HTMLDivElement>) => {
-    const pick = api.current?.pickAt(e.clientX, e.clientY) ?? null;
+  const readAt = (x: number, y: number) => {
+    const pick = api.current?.pickAt(x, y) ?? null;
     setHover(pick ? { pick, by: 'pointer' } : null);
     // F-809: where the readout was taken (the e2e tests wait for the readout of the point they moved to)
-    setPointerAt(`${e.clientX},${e.clientY}`);
+    setPointerAt(`${x},${y}`);
+  };
+  const onPointerMove = (e: PointerEvent<HTMLDivElement>) => {
+    // F-819b: no pick while a button is held (the view orbits or pans under the cursor): the readout goes at the first
+    // move, as it would name a cell that is no longer under the cursor, and comes back where the button is let go
+    if (e.buttons !== 0) {
+      setHover((h) => (h === null || pinned.current ? h : null));
+      return;
+    }
+    readAt(e.clientX, e.clientY);
+  };
+  const onPointerUp = (e: PointerEvent<HTMLDivElement>) => {
+    // a release on the canvas only (a press on a control drawn over the view is the control's)
+    if (pinned.current || !(e.target instanceof HTMLCanvasElement)) return;
+    const r = e.currentTarget.getBoundingClientRect();
+    // released outside the frame (the orbit holds the pointer): nothing is under the cursor there
+    if (e.clientX < r.left || e.clientX >= r.right || e.clientY < r.top || e.clientY >= r.bottom) setHover(null);
+    else readAt(e.clientX, e.clientY);
   };
   const onKeyDown = (e: KeyboardEvent<HTMLDivElement>) => {
     if (!api.current?.key(e.key)) return;
@@ -524,7 +568,10 @@ export function FieldViewport({
       run: faceOn,
     },
   });
-  const outside = ranged && rangeMode === 'fixed' && shown && !('problem' in fixed) ? cellsOutside(shown.surface.cells, shown.values, fixed.lo, fixed.hi) : null;
+  const outside =
+    ranged && rangeMode === 'fixed' && shown && !('problem' in fixed)
+      ? (shown.per === 'triangle' ? cellsOutsideOf : cellsOutside)(shown.surface.cells, shown.values, fixed.lo, fixed.hi)
+      : null;
   const bar = twoD && layers && scale && scale.axis === layers.thin ? scaleBar(scale.perPixel, scale.widthPx) : null;
   const rangeWords = rangeProp
     ? 'viridis, one range for both runs'
@@ -595,6 +642,7 @@ export function FieldViewport({
         aria-label={`${quantity} on the boundary surface. Arrow keys orbit, plus and minus zoom, Home resets the view; the value at the centre is read out.`}
         tabIndex={shown ? 0 : -1}
         onPointerMove={onPointerMove}
+        onPointerUp={onPointerUp}
         onPointerLeave={() => setHover((h) => (h?.by === 'pointer' && !pinned.current ? null : h))}
         onKeyDown={onKeyDown}
         data-ready={phase.kind === 'ready' ? '' : undefined}
@@ -609,6 +657,7 @@ export function FieldViewport({
           ref={api}
           surface={opened?.surface ?? null}
           values={shown?.values ?? null}
+          valuesPer={shown?.per ?? 'cell'}
           range={drawnRange}
           grid={grid}
           forceWebGL={forceWebGL}

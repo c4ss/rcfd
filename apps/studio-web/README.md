@@ -140,6 +140,13 @@ snapshot as a `Float32Array` (`field`) or the boundary surface (`surface`), nami
 - Nothing blocks (G21): local reads run in a worker thread, the service route is asynchronous, every request has a time
   limit and `cancel(tag)` answers waiting requests at once. Values cross from main to the renderer as one structured
   clone of an ArrayBuffer over a second MessagePort, then once more through `contextBridge` (ADR 0801 addendum 3).
+- F-819b: `window.studioSurfaceValues.field(store, snapshot, field)` (route `local`) gives a cell field on the boundary
+  surface only, one value per triangle of `surface` (its owner cell's stored value, bit for bit), gathered in the
+  reader's worker where the whole field was read (`src/shared/surface-values.ts`); the field viewport draws, ranges and
+  reads out from it. The reader remembers, for the launch, each store file whose mesh checksum it verified (path,
+  device, file index, size, modification, change and creation times, the mesh frame's length, checksum and hash) and
+  verifies any other file, or the same file changed. Its FNV-1a 64 runs a WebAssembly loop assembled in
+  `src/main/data/fnv.ts` for many bytes (the reference loop for few).
 
 ## The run list and run state (F-806)
 
@@ -267,7 +274,9 @@ fallback, a loss, is named above the canvas ("Drawn by WebGL 2 (fallback: <why>)
   title; the range is the min and max of the shown values (rcfd-studio's snapshot range).
 - **Hover readout**: the stored value of the cell under the cursor (a CPU pick with three's Raycaster on the drawn
   triangles), its shortest text that reads back as the same `f32`, with cell and triangle. From the keyboard the view
-  orbits with the arrow keys, zooms with + and -, resets with Home, and reads out the value at its centre.
+  orbits with the arrow keys, zooms with + and -, resets with Home, and reads out the value at its centre. F-819b: no
+  pick while a button is held (an orbit or pan); the readout goes at the drag's first move and is taken again where the
+  button is let go.
 - **Mesh grid** toggle (the faces' edges, 38% white, computed once per surface in a worker) and **Reset view** (top right
   once the view has moved).
 - **Data only through the door**: `src/renderer/data/door.ts` is the one renderer module that names `window.studioData`
@@ -882,6 +891,9 @@ processor's busy fraction before and after it. Nothing is retried.
   (`--fans`): its committed F3 run (4 920 cells) and an F1 run (38 184 cells, 20 iterations, a snapshot of every
   iteration) that the script makes once with `rcfd-runner` in `<data>/fan01` when missing (`--no-gen` refuses).
 - Exit code 0 when every judged line is met, 1 on a miss, 2 when a case could not run. Results with `--out=<file.json>`.
+- F-819b: since the viewport takes no pick while a button is held, the drag "with the hover readout" now measures
+  what the user has during an orbit (no pick); the pick-skipped drag is kept as the control. ADR 0801, Addendum F-819b,
+  has the numbers before and after the three fixes.
 
 ## Provenance and reproduce from the CLI (F-828)
 

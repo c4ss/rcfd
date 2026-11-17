@@ -62,6 +62,7 @@ import type {
   DataRequest,
   DataWireResult,
   DEFAULT_DATA_TIMEOUT_MS as DefaultDataTimeout,
+  SurfaceValuesBridge,
 } from '../shared/data.js';
 import type { CASE_PORT_CHANNEL as CaseChannel, CaseBridge, CasePortMessage, CaseReply, CaseRequest } from '../shared/case.js';
 import type { RUN_PORT_CHANNEL as RunChannel, RunBridge, RunPortMessage, RunReply, RunRequest } from '../shared/run.js';
@@ -463,6 +464,19 @@ const compare: CompareBridge = {
 };
 
 contextBridge.exposeInMainWorld('studioCompare', compare);
+
+// F-819b: a field's values on the store's surface only, one per triangle (src/main/data/worker.ts), over the same data port
+const surfaceValues: SurfaceValuesBridge = {
+  field: async (store, snapshot, field, options) => {
+    const r = await sendData({ op: 'surfaceField', id: nextDataId++, store, snapshot, field, ...dataCommon(options) });
+    if (!r.ok) return r;
+    const x = r.result;
+    if (x.kind !== 'surfaceField') return unexpected(x.kind);
+    return { ok: true, result: { snapshot: x.snapshot, field: x.field, meshHash: x.meshHash, values: new Float32Array(x.values) } };
+  },
+};
+
+contextBridge.exposeInMainWorld('studioSurfaceValues', surfaceValues);
 
 // ---- the case port (F-812, src/shared/case.ts)
 //

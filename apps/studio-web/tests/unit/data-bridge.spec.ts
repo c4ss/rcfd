@@ -71,6 +71,26 @@ test.describe('parseDataRequest', () => {
   });
 });
 
+test('F-819b: surfaceField has the exact shape of field, and the same refusals', () => {
+  expect(parseDataRequest({ op: 'surfaceField', id: 5, store: local, snapshot: 3, field: 'p', tag: 'scrub', timeoutMs: 500 })).toEqual({
+    ok: true,
+    request: { op: 'surfaceField', id: 5, store: local, snapshot: 3, field: 'p', tag: 'scrub', timeoutMs: 500 },
+  });
+  for (const r of [
+    { op: 'surfaceField', id: 1, store: local, snapshot: -1, field: 'p' },
+    { op: 'surfaceField', id: 1, store: local, snapshot: 1.5, field: 'p' },
+    { op: 'surfaceField', id: 1, store: local, snapshot: 1, field: '' },
+    { op: 'surfaceField', id: 1, store: local, snapshot: 1, field: 'x'.repeat(257) },
+    { op: 'surfaceField', id: 1, store: local, snapshot: 1 },
+    { op: 'surfaceField', id: 1, store: local, snapshot: 1, field: 'p', cells: [0] },
+    { op: 'surfaceField', id: 1, store: { route: 'file', path: abs }, snapshot: 1, field: 'p' },
+  ]) {
+    const p = parseDataRequest(r);
+    expect(p.ok, JSON.stringify(r)).toBe(false);
+    if (!p.ok) expect([p.id, p.error.code]).toEqual([1, 'bad_request']);
+  }
+});
+
 test.describe('data roots', () => {
   let dir = '';
   test.beforeAll(() => {
