@@ -316,3 +316,104 @@ ignored records `f779_fast_known_miss` and `f779_nh16_bracket_heavy_known_miss` 
 texts); the corrected tests `f779_fast_amended` and `f779_nh16_bracket_heavy_amended` are each run once. The mutations are not
 rerun (their run is the registered one, above). The decision can be at best **partial** (rows met only after an amendment; MU4
 not caught).
+
+## Addendum 1: results (2026-11-17)
+
+Logs in `w49i-work/f779-scratch`: the registered runs `run1-fast.log` and `run2-heavy.log` (166 s) on 5bb0d527; the probe
+`probe-pv.log` (scratch copy, diagnosis only); the corrected runs `run3-fast-amended.log` (2.7 s) and `run4-heavy-amended.log`
+(71 s) on d742636e; `mutations.log` and `mut-MU*.log`; `s7-lib.log`, `s7-tests.log`, `b-src-diff.log`, `s8-docs.log`. Each test
+was run once; no limit changed after a run.
+
+### The fast test (registered run, then `f779_fast_amended`)
+
+| Id | Measured | Limit | Result |
+|---|---|---|---|
+| LPT | `2/3` in the bracket; width `9.54e-8`; upper end lost; `cos(a)` equal to `1/sqrt(2.4)` (difference 0); "limit point" | as registered | met |
+| BFT | 1 in the bracket; width `2.86e-7`; `nu_b = 1`; `cos = 0` at both ends; `DS = 1`; "bifurcation" | as registered | met |
+| DSF | `-0.99998`; `2.2e-16` | `< 0`; `<= 1e-15` | met |
+| PB | `p_c = 0.0492533` in `[0.049253234863, 0.049253387451]`; width `1.53e-7`; `nu` 0 and 1; `cos` `1.4e-10`, `7.5e-10`; `DS = 1 - 1.5e-12`; MS (`+0.862`, `-4.53`); "bifurcation" | as registered | met |
+| PV | registered: `6.02e-6` (at the bisected state); corrected: `4.1e-11` (at the exact field) | `<= 1e-6` | missed, then met after amendment 1 |
+| NC8 | "no change"; `R` `2.3e-9`, `w_c` `6.4e-8` against ADR 0678; `cos(1.0) = 4.3e-13`, `|v_t| = 1.165` | as registered | met |
+
+### The heavy record (16^3)
+
+| Id | Measured | Limit | Result |
+|---|---|---|---|
+| OB | equal | equal | met |
+| H0 | `nu(u_c) = 0`; the upper end accepted, `nu = 1`; `R` `2.8e-10`, `w_c` `2.1e-8` against ADR 0694's `u*` | as registered | met |
+| BR | **`[0.964899444580, 0.964900207520]`**, width `7.6294e-7`, 12 bisections, every midpoint accepted on the branch (`|v_t| / c` from 1.00013 to 1.00026, smooth) | `<= 7.63e-7`; 12 | met |
+| MS | registered: the pair at `b` not converged (amendment 1); corrected: `mu_1(a) = +2.554`, `mu_1(b) = -0.8131`, backward residuals `<= 6.6e-9` | holds; `<= 1e-8` | missed, then met after amendment 1 |
+| LB | `cos(a) = 1.46e-12`, `cos(b) = 1.73e-12`; `DS = 1 - 1.3e-12`; `b_bif` `1.8e-6`, `5.6e-7`; `sigma(phi) = -1.000000000000` at both ends; `|f - P f| / |f|` `4e-12`, `|u - P u|_inf / |u|_inf` `1e-11` | reading | **bifurcation** |
+| FB0 | `1.3e-8`, `2.9e-8` | `<= 1e-6` | met |
+| FBP | F-bar converges at `0.9625`, `a`, `b`, `lt`; `nu_Fb = 0` at all four; at `b` `mu_1 = 2262.5 = 0.0362 mu h`, residual `9.0e-9` (`8.5e-9` backward) | as registered | met; **FS: F-bar stable** |
+| GP | `g_R = 3.933e-2`, `g_w = 2.922e-2` at `a` and `b`; changes from `u_c` `1.03e-4`, `7.3e-5` | `<= 0.15`; `<= 0.01` | met |
+
+**Reading.** The inertia of rule L's 16^3 punch path changes from 0 to 1 at a load in `[0.964899444580, 0.964900207520]`
+(linear interpolation of `mu_1`: `0.96490002`), 77 per cent of the way through the failing increment. It is a **bifurcation**,
+not a limit point. The critical mode is orthogonal to the load vector to `1.5e-12`; the path's tangent is smooth through the
+point (`|v_t|` changes by `1e-6` relative, `DS = 1`, so `lambda'` keeps its sign); and the primary path continues past it,
+unstable, to `0.965625` and on to full load (ADR 0694 IN-F). The cause is a symmetry. The block, its die constraints and the
+punch are symmetric under `x <-> y`, the path is symmetric to `1e-11`, and the critical mode is exactly antisymmetric (`sigma =
+-1` to 12 digits), so `phi . f = 0` by symmetry: a symmetry-breaking (pitchfork-type) bifurcation of the hourglass mode in
+element 3720, on the diagonal under the punch corner. F-bar on the same block is stable at the same loads (`nu = 0`, its lowest
+eigenvalue `+0.036 mu h` at `b`), so the bifurcation belongs to rule L's element, not to the continuum. The path is not folded,
+so the `lambda`-controlled solve passes the point and no arc-length trace is needed for the primary branch (D5). The bifurcated
+branch is not traced.
+
+### Default bits and static checks
+
+| Id | Result |
+|---|---|
+| B | `git diff --stat 5c79fb44 -- crates/*/src` empty: no library file changed, the default bits are unchanged by construction: met |
+| S7 | `--lib` 15 pass; `si_eas_hg14` (1 pass, 4 ignored), `si_eas_hg13` (1 pass, 3 ignored), `si_eas_hg12` (1 pass, 3 ignored): met |
+| S6 | `cargo fmt -p rcfd-fem --check` clean; `cargo clippy -p rcfd-fem --all-targets -- -D warnings` (release profile) clean: met |
+| S8 | `docs_site` passes on the results commit: met |
+| S9 | 4040fbfc (docs only), 5bb0d527 and d742636e built for the runs; c9c4d7a3 has the code of 5bb0d527: met |
+
+### Mutations (each on a scratch copy of 5bb0d527, run once against the registered `f779_fast`, its PV miss the baseline)
+
+| Id | Caught by | Result |
+|---|---|---|
+| MU1 | LPT, BFT, PB (the bracket misses the critical load) | caught |
+| MU2 | PB (`cos(a) = 1.6e-2`, NaN at `b`, PV 1.0), NC8 ("undecided") | caught |
+| MU3 | DSF (`+0.99998`) | caught |
+| MU4 | none (beyond the fold the toy's Newton fails outright, so the continuity test never decides) | **not caught** |
+| MU5 | LPT, BFT, PB (the readings) | caught |
+| MU6 | LPT, BFT, PB (the width) | caught |
+
+### Deviations
+
+- Amendment 1 (PV at the exact field; the backward-error residual of the pairs) was committed before the corrected runs; the
+  registered tests are kept as `f779_fast_known_miss` and `f779_nh16_bracket_heavy_known_miss`.
+- The mutations were run against the registered fast test, not the amended one (amendment 1 says so); PV was the baseline miss.
+- A probe on a scratch copy (`probe-pv.log`) was run after the registered run to diagnose PV; it is not a registered result.
+- The registered heavy record and the mutation builds ran side by side (separate target directories).
+
+### Decision
+
+**partial**: c1, c2 (a bifurcation), c3 (F-bar stable) and c4 are answered and every row is met, but PV and MS were met only
+after amendment 1, and MU4 was not caught.
+
+### Remaining questions
+
+1. **A control for the continuity test** (MU4). Options: (a) a toy whose Newton past the fold converges to a distant root, so
+   that only the continuity test marks the upper end lost; (b) leave it, since the 16^3 run accepted every midpoint far inside
+   the bound. Recommendation: (a), small, in the follow-up below.
+2. **The bifurcated branch.** Options: (a) trace it by a branch switch along `phi` (an antisymmetric perturbation of the
+   predictor past the bifurcation, then the indefinite Newton), measuring whether the pitchfork is supercritical (a stable
+   asymmetric branch) or subcritical, and what that branch does to `R`; (b) do not trace it, since the opt-in solve follows the
+   symmetric, unstable branch to full load. Recommendation: (a) before a driver retry with the indefinite tangent (F-780): a
+   solve that walks the symmetric branch past a symmetry-breaking bifurcation returns a state that a slightly imperfect block
+   would not take.
+3. **Rule L's coefficient** (ADR 0682 open question 2): still the maintainer's call. These results place the instability in rule
+   L's element (F-bar stable at the same loads) as a symmetric hourglass bifurcation, which points at the stabilisation rather
+   than the driver.
+4. **Whether either opt-in of ADR 0694 becomes a default**: still open (it would change default results).
+
+## For the lead: roadmap entries
+
+> Proposed status: partial.
+
+> F-779 (ADR 0697, 2026-11-17): the inertia of rule L's 16^3 neo-Hookean punch path changes from 0 to 1 between load factors 0.964899444580 and 0.964900207520 (12 bisections with the indefinite-tangent Newton from the converged neighbour, width 7.63e-7). It is a bifurcation, not a limit point: the critical mode is orthogonal to the load vector to 1.5e-12, the path's tangent is smooth through it (DS = 1, the load parameter's derivative keeps its sign), and the mode is exactly antisymmetric under the x <-> y symmetry of the block (a symmetry-breaking hourglass bifurcation in element 3720). F-bar is stable at the same loads (nu = 0, lowest eigenvalue +0.036 mu h). The same bracket and readings pass on a closed-form fold and pitchfork and find the ADR 0628 patch's zero 0.9507467. Test-only, default bits unchanged; partial because two rows were met only after amendment 1 and one of six mutations was not caught.
+
+> Follow-up proposed: The bifurcated branch of rule L's 16^3 punch path. Deps F-779. Acceptance: Every limit not stated here is registered in the ADR before the run. A branch switch at the bifurcation of ADR 0697 along its antisymmetric mode, traced with the indefinite-tangent Newton: whether the pitchfork is supercritical or subcritical, the inertia and R/mu along the bifurcated branch to full load against the symmetric branch and F-bar; a fast control on a closed-form pitchfork, and a control of the continuity test whose Newton converges to a distant root; the default bits unchanged.

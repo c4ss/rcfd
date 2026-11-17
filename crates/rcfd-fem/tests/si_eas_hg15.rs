@@ -1252,7 +1252,7 @@ fn f779_nh16_bracket_heavy_known_miss() {
 
 /// The corrected heavy record of ADR 0697 amendment 1: the lowest pairs by the normwise backward error.
 #[test]
-#[ignore = "ADR 0697: the corrected heavy record of the bracket on 16^3 (amendment 1), run once with --ignored"]
+#[ignore = "ADR 0697: the corrected heavy record of the bracket on 16^3 (amendment 1), run once with --ignored (71 s, every row met): the inertia changes 0 -> 1 in [0.964899444580, 0.964900207520] (width 7.63e-7); cos 1.5e-12 and 1.7e-12, DS 1 - 1.3e-12, phi antisymmetric under x <-> y (sigma -1): reading LB a bifurcation; F-bar stable (nu 0) at the four loads; f779_fast_amended covers the same bracket and readings on the fold, the pitchfork, the ADR 0628 patch and 8^3"]
 fn f779_nh16_bracket_heavy_amended() {
     heavy(true);
 }
