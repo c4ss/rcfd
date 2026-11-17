@@ -16,8 +16,8 @@ use rcfd_fem::nl_incompatible::{
     condensed_force_and_tangent, enhanced_force_and_tangent_with, modes_and_strains_with, IncompatibleStabilisation,
 };
 use rcfd_fem::nonlinear::{
-    initial_states, solve, solve_from, solve_with, tangent, DriverExtensions, LoadStep, NewtonOptions, NonlinearResult,
-    StepControl,
+    initial_states, internal_force, solve, solve_from, solve_with, tangent, DriverExtensions, LoadStep, NewtonOptions,
+    NonlinearResult, StepControl,
 };
 use rcfd_fem::solve::DirectFactor;
 use rcfd_fem::{BlockProperty, Constraint, ElementKind, Material, SolidFormulation, SolidMesh, SolidModel};
@@ -396,14 +396,71 @@ struct State {
     fint: Vec<f64>,
 }
 
-/// One attempt of P by `solve_from` from `prev` to the load factor `l` (the lifted start of reading c1).
-fn attempt(mesh: &SolidMesh, kind: Kind, opts: Opts, prev: &State, l: f64) -> Option<State> {
+/// How an attempt of P starts: the lifted start as registered (reading c1, defective: amendment 1) or the driver's linear
+/// predictor of amendment 1.
+#[derive(Clone, Copy, PartialEq)]
+enum Start {
+    Lifted,
+    Predictor,
+}
+
+/// The driver's factor and solve of a reduced system (`factor_solve` of `nonlinear.rs`); `None` on a refusal.
+fn driver_solve(a: &CsrMatrix, b: &[f64]) -> Option<Vec<f64>> {
+    let analysis = SupernodalAnalysis::nested_dissection(a).ok()?;
+    let diag = a.diag();
+    let f = SupernodalLdlt::factor_analysed(a, &analysis).ok()?;
+    if f.order()
+        .iter()
+        .zip(f.pivots())
+        .any(|(&row, &d)| d.is_nan() || d <= 1e-10 * diag[row])
+    {
+        return None;
+    }
+    Some(f.solve(b))
+}
+
+/// Amendment 1: the driver's first iteration from `prev` to `l`: the linear predictor with the increment `(l - lc) v` of the
+/// prescribed values, then the prescribed values set to `l v`. `None` if the driver's factor refuses.
+fn predictor(mesh: &SolidMesh, kind: Kind, opts: Opts, prev: &State, l: f64) -> Option<Vec<f64>> {
+    let m = block_model(mesh, kind, opts, -DELTA);
+    let fixed = prescribed_equations(&m, &[]).unwrap();
+    let fint = internal_force(&m, &prev.u, &prev.states).ok()?;
+    let k = tangent(&m, &prev.u, &prev.states, Some(4)).ok()?;
+    let r: Vec<f64> = fint.iter().map(|g| 0.0 - g).collect();
+    let increment: Vec<(usize, f64)> = fixed.iter().map(|&(eq, v)| (eq, (l - prev.load) * v)).collect();
+    let sys = reduce(&k, &r, &increment).unwrap();
+    let du = driver_solve(&sys.matrix, &sys.rhs)?;
+    let mut u = prev.u.clone();
+    for (&q, d) in sys.free().iter().zip(&du) {
+        u[q] += d;
+    }
+    for &(eq, v) in &fixed {
+        u[eq] = l * v;
+    }
+    Some(u)
+}
+
+/// One attempt of P by `solve_from` from `prev` to the load factor `l`, from the lifted start (as registered) or from the
+/// driver's predictor (amendment 1).
+fn attempt(mesh: &SolidMesh, kind: Kind, opts: Opts, prev: &State, l: f64, from: Start) -> Option<State> {
     let m = block_model(mesh, kind, opts, l * -DELTA);
     let dofs = m.dof_map();
-    let mut start = prev.u.clone();
-    for &n in m.mesh().node_set("punch").unwrap() {
-        start[dofs.equation(n, 2).unwrap()] = l * -DELTA;
-    }
+    let start = match from {
+        Start::Lifted => {
+            let mut start = prev.u.clone();
+            for &n in m.mesh().node_set("punch").unwrap() {
+                start[dofs.equation(n, 2).unwrap()] = l * -DELTA;
+            }
+            start
+        }
+        Start::Predictor => match predictor(mesh, kind, opts, prev, l) {
+            Some(u) => u,
+            None => {
+                println!("P {} at {l:.6}: the predictor's factor refused", kind.name);
+                return None;
+            }
+        },
+    };
     let load = vec![0.0; dofs.n_equations()];
     match solve_from(&m, &[], &load, &start, &prev.states, &options(10), &[]) {
         Ok(eq) => Some(State {
@@ -419,8 +476,8 @@ fn attempt(mesh: &SolidMesh, kind: Kind, opts: Opts, prev: &State, l: f64) -> Op
     }
 }
 
-/// The replicated path P on the converged load factors: every converged state (the last first failing ends the path).
-fn replicate(mesh: &SolidMesh, kind: Kind, opts: Opts, loads: &[f64]) -> Vec<State> {
+/// The replicated path P on the converged load factors: every converged state (the first failing attempt ends the path).
+fn replicate_from(mesh: &SolidMesh, kind: Kind, opts: Opts, loads: &[f64], from: Start) -> Vec<State> {
     let m = block_model(mesh, kind, opts, 0.0);
     let n = m.dof_map().n_equations();
     let mut path = vec![State {
@@ -432,11 +489,11 @@ fn replicate(mesh: &SolidMesh, kind: Kind, opts: Opts, loads: &[f64]) -> Vec<Sta
     let t0 = Instant::now();
     for &l in loads {
         let prev = path.last().unwrap();
-        let next = attempt(mesh, kind, opts, prev, l).or_else(|| {
+        let next = attempt(mesh, kind, opts, prev, l, from).or_else(|| {
             let mid = prev.load + 0.5 * (l - prev.load);
             println!("P {} at {l:.6}: retried in two halves (reading c1)", kind.name);
-            let half = attempt(mesh, kind, opts, prev, mid)?;
-            attempt(mesh, kind, opts, &half, l)
+            let half = attempt(mesh, kind, opts, prev, mid, from)?;
+            attempt(mesh, kind, opts, &half, l, from)
         });
         match next {
             Some(s) => path.push(s),
@@ -454,6 +511,18 @@ fn replicate(mesh: &SolidMesh, kind: Kind, opts: Opts, loads: &[f64]) -> Vec<Sta
     path.remove(0);
     path
 }
+
+/// P as registered (the lifted start; amendment 1: defective), kept for the ignored record.
+fn replicate_lifted(mesh: &SolidMesh, kind: Kind, opts: Opts, loads: &[f64]) -> Vec<State> {
+    replicate_from(mesh, kind, opts, loads, Start::Lifted)
+}
+
+/// P of amendment 1 (the driver's predictor).
+fn replicate(mesh: &SolidMesh, kind: Kind, opts: Opts, loads: &[f64]) -> Vec<State> {
+    replicate_from(mesh, kind, opts, loads, Start::Predictor)
+}
+
+type Replicate = fn(&SolidMesh, Kind, Opts, &[f64]) -> Vec<State>;
 
 /// `R`, `w_c` of a state of P (the reactions from the internal force: no external load).
 fn state_measures(m: &SolidModel, s: &State) -> (f64, f64) {
@@ -933,8 +1002,8 @@ fn analyse(mesh: &SolidMesh, n: usize, kind: Kind, s: &State, pencil: bool) -> A
 }
 
 /// `lambda_F` (or any element's `lambda_1`) over `mu h` at the last state of its own P, with the residual of its pairs.
-fn own_lowest(mesh: &SolidMesh, n: usize, kind: Kind, loads: &[f64]) -> (f64, f64, f64) {
-    let path = replicate(mesh, kind, DEFAULT, loads);
+fn own_lowest(rep: Replicate, mesh: &SolidMesh, n: usize, kind: Kind, loads: &[f64]) -> (f64, f64, f64) {
+    let path = rep(mesh, kind, DEFAULT, loads);
     let Some(s) = path
         .last()
         .filter(|s| (s.load - loads.last().copied().unwrap_or(0.0)).abs() < 1e-15)
@@ -958,7 +1027,17 @@ fn own_lowest(mesh: &SolidMesh, n: usize, kind: Kind, loads: &[f64]) -> (f64, f6
 // ============================================================================ the fast test
 
 #[test]
-fn f763_fast_setup() {
+#[ignore = "ADR 0682 amendment 1: the registered run, defective set-up: the lifted start of P stopped the plain element's path at 0.6 of 0.928125, so PC1 (I-S) had a missing measure; every other row met"]
+fn f763_fast_setup_known_miss() {
+    fast_rows(replicate_lifted);
+}
+
+#[test]
+fn f763_fast_setup_corrected() {
+    fast_rows(replicate);
+}
+
+fn fast_rows(rep: Replicate) {
     let mut ch = Checks::new();
     let mesh8 = block_mesh(8);
     let mesh16 = block_mesh(16);
@@ -1020,7 +1099,7 @@ fn f763_fast_setup() {
     ch.holds("F7 8^3 rule L: hooked R, w_c bit-equal to the plain solve", bits);
 
     // F1: the path P on 8^3 to load factor 1 against ADR 0678.
-    let path = replicate(&mesh8, K_L, DEFAULT, &hooked.converged);
+    let path = rep(&mesh8, K_L, DEFAULT, &hooked.converged);
     let m8 = block_model(&mesh8, K_L, DEFAULT, -DELTA);
     let end = path.last().filter(|s| s.load == 1.0);
     let (r1, w1) = end.map(|s| state_measures(&m8, s)).unwrap_or((f64::NAN, f64::NAN));
@@ -1098,7 +1177,7 @@ fn f763_fast_setup() {
     // PC1: the plain element on 8^3.
     let off = solve_hooked(&mesh8, "PC1 block 8^3", K_OFF, DEFAULT, 10);
     ch.holds("PC1 Off 8^3: the hooked solve fails", off.outcome.is_err());
-    let path = replicate(&mesh8, K_OFF, DEFAULT, &off.converged);
+    let path = rep(&mesh8, K_OFF, DEFAULT, &off.converged);
     let at = path.last().filter(|s| s.load == off.last && !off.converged.is_empty());
     let (l1, rho_f) = match at {
         Some(s) => {
@@ -1113,7 +1192,7 @@ fn f763_fast_setup() {
         }
         None => (f64::NAN, f64::NAN),
     };
-    let (lambda_f, res_f, _) = own_lowest(&mesh8, 8, K_FBAR, &off.converged);
+    let (lambda_f, res_f, _) = own_lowest(rep, &mesh8, 8, K_FBAR, &off.converged);
     println!("PC1: lambda_F / (mu h) {lambda_f:.6e} (residual {res_f:.2e})");
     let class = classify(l1, rho_f, lambda_f, None);
     println!("PC1 classification: {class}");
@@ -1227,13 +1306,13 @@ fn f763_nh16_tangent_heavy() {
     // CF: rho_F (in analyse) and lambda_F.
     ch.finite("CF rho_F", a.rho_f);
     ch.finite("CF rho_Full", a.rho_full);
-    let (lambda_f, res_f, at_f) = own_lowest(&mesh16, 16, K_FBAR, &rp1.converged);
+    let (lambda_f, res_f, at_f) = own_lowest(replicate, &mesh16, 16, K_FBAR, &rp1.converged);
     println!("CF: F-bar 16^3 at {at_f:.6}: lambda_F / (mu h) {lambda_f:.6e}");
     ch.finite("CF lambda_F", lambda_f);
     ch.at_most("CF: F-bar pairs, largest residual", res_f, 1e-8);
 
     // C8.
-    let (l8, res8, at8) = own_lowest(&mesh8, 8, K_L, &rp1.converged);
+    let (l8, res8, at8) = own_lowest(replicate, &mesh8, 8, K_L, &rp1.converged);
     println!("C8: rule L 8^3 at {at8:.6}: lambda_1 / (mu h) {l8:.6e} (residual {res8:.2e})");
     ch.finite("C8 lambda_1 (8^3)", l8);
 
