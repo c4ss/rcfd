@@ -1240,6 +1240,14 @@ pub struct NewtonOptions {
     /// whose predictor was backtracked names its `beta`. Off by default; refused with `unsymmetric`, with `predictor_damping`
     /// and in an attempt with a contribution (key `"predictor_backtracking"`).
     pub predictor_backtracking: bool,
+    /// The retry with the indefinite tangent (ADR 0719 D1): read only by [`solve`] and [`solve_with`]. An attempt that fails
+    /// with a refused factor (its cause starts with `"singular tangent"`) is made once more from the same committed state to
+    /// the same load factor with [`NewtonOptions::indefinite_tangent`]; a retry that also fails is the attempt's failure, its
+    /// cause followed by `"; retried with the indefinite tangent (ADR 0719 D1) after: "` and the first cause, and the driver
+    /// halves as without it. Every accepted state's inertia is recorded in [`LoadStep::inertia`] (ADR 0719 D2). Off by
+    /// default; refused (key `"indefinite_retry"`) with `indefinite_tangent`, with `unsymmetric`, with a contribution, and by
+    /// every other entry point that takes the options.
+    pub indefinite_retry: bool,
 }
 
 impl NewtonOptions {
@@ -1260,6 +1268,7 @@ impl NewtonOptions {
             predictor_damping: false,
             indefinite_tangent: false,
             predictor_backtracking: false,
+            indefinite_retry: false,
         }
     }
     /// The same options with the active-set record of [`LoadStep::yielded`] switched on or off.
@@ -1311,6 +1320,25 @@ impl NewtonOptions {
     pub fn predictor_backtracking(mut self, on: bool) -> NewtonOptions {
         self.predictor_backtracking = on;
         self
+    }
+    /// The same options with the retry with the indefinite tangent switched on or off (ADR 0719 D1).
+    pub fn indefinite_retry(mut self, on: bool) -> NewtonOptions {
+        self.indefinite_retry = on;
+        self
+    }
+
+    /// ADR 0719 D1: the refusal of [`NewtonOptions::indefinite_retry`] by an entry point that does not read it (`entry`
+    /// names it).
+    pub(crate) fn refuse_indefinite_retry(&self, entry: &str) -> Result<()> {
+        if self.indefinite_retry {
+            return Err(FemError::InvalidValue {
+                key: "indefinite_retry",
+                reason: format!(
+                    "{entry}: the retry with the indefinite tangent is read only by the load-stepping driver (ADR 0719 D1)"
+                ),
+            });
+        }
+        Ok(())
     }
 
     pub(crate) fn check(&self) -> Result<()> {
@@ -1394,6 +1422,20 @@ impl NewtonOptions {
                 reason: "with predictor_damping: both set the step length of the predictor (ADR 0694 D3)".to_string(),
             });
         }
+        if self.indefinite_retry && self.indefinite_tangent {
+            return Err(FemError::InvalidValue {
+                key: "indefinite_retry",
+                reason: "with indefinite_tangent: every factor is indefinite already, nothing to retry (ADR 0719 D1)"
+                    .to_string(),
+            });
+        }
+        if self.indefinite_retry && self.unsymmetric {
+            return Err(FemError::InvalidValue {
+                key: "indefinite_retry",
+                reason: "with the unsymmetric tangent: the retry takes the symmetric indefinite tangent (ADR 0719 D1)"
+                    .to_string(),
+            });
+        }
         Ok(())
     }
 }
@@ -1420,6 +1462,13 @@ pub struct LoadStep {
     /// With [`NewtonOptions::line_search`] or [`NewtonOptions::predictor_damping`], the step length of every correction
     /// (ADR 0607 D1, ADR 0688 D3); empty otherwise.
     pub step_lengths: Vec<f64>,
+    /// With [`NewtonOptions::indefinite_retry`], the inertia of the accepted state (ADR 0719 D2): the number of negative
+    /// pivots of the `L D L^T` with non-zero pivots of the reduced tangent at the converged iterate, `None` when that factor
+    /// refuses a pivot; `None` without the option.
+    pub inertia: Option<usize>,
+    /// With [`NewtonOptions::indefinite_retry`], whether the increment was accepted by the retry with the indefinite tangent
+    /// (ADR 0719 D1); `false` otherwise.
+    pub retried: bool,
 }
 
 /// The result of [`solve`]: the displacement, the reactions and the solver statistics at load factor 1, and the converged
@@ -2211,6 +2260,20 @@ impl Problem<'_> {
         Some(s)
     }
 
+    /// ADR 0719 D2: the inertia of the state `u` with the trial states from the committed `states_c`: the reduced tangent
+    /// there (the driver's assembly, zero increments on the prescribed equations) by [`negative_pivots`]; `Some(0)` with no
+    /// free equation, `None` when the assembly fails or a pivot is refused.
+    fn inertia_at(&self, u: &[f64], states_c: &[ElementState]) -> Option<usize> {
+        let (_, kt, _) =
+            force_and_tangent(self.model, u, states_c, self.options.threads, &self.context, self.field).ok()?;
+        let zero: Vec<(usize, f64)> = self.fixed.iter().map(|&(eq, _)| (eq, 0.0)).collect();
+        let sys = reduce(&kt, &vec![0.0; u.len()], &zero).ok()?;
+        if sys.free().is_empty() {
+            return Some(0);
+        }
+        negative_pivots(&sys.matrix, self.options.factor)
+    }
+
     /// The step length `beta` of the damped predictor (ADR 0688 D3): the rule of ADR 0607 D1 from the lifted iterate (`u`
     /// with the prescribed values at `lt`), `s_0` by a trial evaluation there, every trial admissible only when its reduced
     /// tangent passes the pivot test; 1 when `s_0` is not negative or its evaluation fails.
@@ -2492,6 +2555,76 @@ fn backtracked_failure(failure: Failure, beta: f64) -> Failure {
     }
 }
 
+/// ADR 0719 D1: the attempt of `problem`, and when it fails with a refused factor the same attempt of `retry` (the options
+/// with the indefinite tangent); `true` with an attempt accepted by the retry. A retry that fails gives its failure with the
+/// first cause appended.
+fn retrying(
+    problem: &Problem<'_>,
+    retry: &Problem<'_>,
+    u_c: &[f64],
+    lc: f64,
+    lt: f64,
+    states_c: &[ElementState],
+) -> std::result::Result<(Attempt, bool), Failure> {
+    match problem.attempt(u_c, lc, lt, states_c) {
+        Ok(a) => Ok((a, false)),
+        Err(Failure::Other(first)) if first.starts_with("singular tangent") => {
+            match retry.attempt(u_c, lc, lt, states_c) {
+                Ok(a) => Ok((a, true)),
+                Err(failure) => Err(retried_failure(failure, &first)),
+            }
+        }
+        Err(failure) => Err(failure),
+    }
+}
+
+/// ADR 0719 D1: the failure of a retry after the refused factor `first`, with that cause at the end of its own (the reason of
+/// a located inversion, or the text).
+fn retried_failure(failure: Failure, first: &str) -> Failure {
+    let note = format!("; retried with the indefinite tangent (ADR 0719 D1) after: {first}");
+    match failure {
+        Failure::Other(cause) => Failure::Other(format!("{cause}{note}")),
+        Failure::Inverted(FemError::Element { element, source }) => Failure::Inverted(FemError::Element {
+            element,
+            source: Box::new(match *source {
+                FemError::InvalidValue { key, reason } => FemError::InvalidValue {
+                    key,
+                    reason: format!("{reason}{note}"),
+                },
+                other => other,
+            }),
+        }),
+        other => other,
+    }
+}
+
+/// ADR 0719 D2: the number of negative pivots of the `L D L^T` with non-zero pivots of `a` by the factor `factor` (the
+/// factors of [`factor_solve_indefinite`]); `None` when a pivot is refused (`|d| <= PIVOT_TOLERANCE |a_ii|` or not finite).
+fn negative_pivots(a: &CsrMatrix, factor: DirectFactor) -> Option<usize> {
+    let diag = a.diag();
+    let passes = |order: &[usize], pivots: &[f64]| {
+        order
+            .iter()
+            .zip(pivots)
+            .all(|(&row, &d)| d.is_finite() && d.abs() > PIVOT_TOLERANCE * diag[row].abs())
+    };
+    if factor == DirectFactor::SupernodalNestedDissection {
+        let options = SparseOptions {
+            ordering: SparseOrdering::NestedDissection,
+            pivots: PivotRule::NonZero,
+            symmetry_tolerance: 1e-12,
+        };
+        let ldlt = SupernodalLdlt::factor_with(a, &options).ok()?;
+        return passes(ldlt.order(), ldlt.pivots()).then(|| ldlt.inertia().0);
+    }
+    let options = SkylineOptions {
+        pivots: PivotRule::NonZero,
+        ..SkylineOptions::default()
+    };
+    let ldlt = SkylineLdlt::factor_with(a, &options).ok()?;
+    passes(ldlt.order(), ldlt.pivots()).then(|| ldlt.inertia().0)
+}
+
 /// The most halvings of the backtracked predictor (ADR 0694 D3).
 pub const PREDICTOR_HALVINGS: usize = 10;
 
@@ -2740,6 +2873,16 @@ pub fn solve_with(
         });
     }
     options.check()?;
+    // ADR 0719 D1: the retry's inertia would need the contributions' tangents.
+    if options.indefinite_retry && !contributions.is_empty() {
+        return Err(FemError::InvalidValue {
+            key: "indefinite_retry",
+            reason:
+                "with a contribution: the inertia of the accepted state would need the contributions' tangents (ADR \
+                     0719 D1)"
+                    .to_string(),
+        });
+    }
     let dofs = model.dof_map();
     let n = dofs.n_equations();
     let f = nodal_load_vector(model, forces)?;
@@ -2762,6 +2905,23 @@ pub fn solve_with(
         context: PointContext::default(),
         field: None,
     };
+    // ADR 0719 D1: the retry's options and problem, only with the opt-in.
+    let retry_options = options.indefinite_retry.then(|| NewtonOptions {
+        indefinite_tangent: true,
+        indefinite_retry: false,
+        ..options.clone()
+    });
+    let retry = retry_options.as_ref().map(|o| Problem {
+        model,
+        f: problem.f.clone(),
+        fixed: problem.fixed.clone(),
+        free: problem.free.clone(),
+        options: o,
+        contributions: &contributions,
+        reuse: &reuse,
+        context: PointContext::default(),
+        field: None,
+    });
     let mut u = vec![0.0; n];
     let mut lambda = 0.0;
     let mut states = initial_states(model)?;
@@ -2796,8 +2956,17 @@ pub fn solve_with(
                     v
                 }
             };
-            match problem.attempt(&u, lambda, lt, &states) {
-                Ok(a) => {
+            let outcome = match &retry {
+                None => problem.attempt(&u, lambda, lt, &states).map(|a| (a, false)),
+                Some(rp) => retrying(&problem, rp, &u, lambda, lt, &states),
+            };
+            match outcome {
+                Ok((a, retried)) => {
+                    // ADR 0719 D2: the inertia of the accepted state, before its states are committed.
+                    let inertia = match &retry {
+                        None => None,
+                        Some(_) => problem.inertia_at(&a.u, &states),
+                    };
                     iterations += a.residuals.len() - 1;
                     last_residual = *a.residuals.last().expect("one residual at least");
                     u = a.u;
@@ -2812,6 +2981,8 @@ pub fn solve_with(
                         yielded: a.yielded,
                         set_changed: a.set_changed,
                         step_lengths: a.step_lengths,
+                        inertia,
+                        retried,
                     });
                     if let Some(hook) = step_control.as_mut() {
                         hook.converged(records.last().expect("just pushed"));
@@ -2913,6 +3084,7 @@ pub fn solve_increment(
     model.check_supported_nonlinear_shells()?;
     check_driver_model(model)?;
     options.check()?;
+    options.refuse_indefinite_retry("solve_increment")?;
     check_fields(model, committed, states)?;
     if !(lc.is_finite() && lt.is_finite() && 0.0 <= lc && lc < lt) {
         return Err(FemError::InvalidValue {
@@ -3116,6 +3288,7 @@ fn solve_from_field_reusing(
     model.check_supported_nonlinear_shells()?;
     check_driver_model(model)?;
     options.check()?;
+    options.refuse_indefinite_retry("solve_from")?;
     check_fields(model, start, states)?;
     let n = model.dof_map().n_equations();
     if load.len() != n {
@@ -3259,6 +3432,7 @@ impl TimeSteppingOptions {
                 reason: format!("{:e} must be positive", self.max_creep_increment),
             });
         }
+        self.newton.refuse_indefinite_retry("solve_in_time")?;
         self.newton.check()
     }
 }

@@ -308,6 +308,8 @@ impl ContactOptions {
                     .to_string(),
             });
         }
+        // ADR 0719 D1: the contact driver does not read the retry of the load-stepping driver.
+        self.newton.refuse_indefinite_retry("the contact solve")?;
         let mut o = self.newton.clone();
         o.steps = 1;
         o.check()

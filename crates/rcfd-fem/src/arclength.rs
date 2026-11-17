@@ -142,6 +142,8 @@ impl ArcLengthOptions {
                     .to_string(),
             });
         }
+        // ADR 0719 D1: nor the retry of the load-stepping driver.
+        self.newton.refuse_indefinite_retry("the arc-length trace")?;
         self.newton.check()
     }
 }
