@@ -31,7 +31,23 @@ import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { profileArgs, profileRecord } from './profile.mjs';
-import { Store } from '../src/main/data/tsstore.ts';
+import { registerHooks } from 'node:module';
+
+// src/main/data/tsstore.ts imports its neighbours as './x.js' (the build's convention); Node's type stripping loads the
+// .ts file itself, so a relative './x.js' with no such file is resolved to './x.ts' here.
+registerHooks({
+  resolve(specifier, context, next) {
+    try {
+      return next(specifier, context);
+    } catch (e) {
+      if (e?.code === 'ERR_MODULE_NOT_FOUND' && specifier.startsWith('.') && specifier.endsWith('.js')) {
+        return next(specifier.slice(0, -3) + '.ts', context);
+      }
+      throw e;
+    }
+  },
+});
+const { Store } = await import('../src/main/data/tsstore.ts');
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const repo = path.resolve(root, '..', '..');

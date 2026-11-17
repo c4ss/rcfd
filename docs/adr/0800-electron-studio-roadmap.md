@@ -317,6 +317,27 @@ measurements):
 
 63 of 63 judged lines were met in both sets, and no limit changed. ADR 0801, Addendum F-819b, has the numbers.
 
+### Idle baseline (Q4), 2026-11-17, test mode, scratch profiles (Q5)
+
+`npm run bench` at 09:39 to 09:43 UTC with no other jobs (processor busy 0.15 to 0.38, no cargo/rustc/link). This is the first
+run with the scratch profiles of Q5. Every judged line was met:
+
+| P | line | value | limit |
+|---|------|-------|-------|
+| P10 | cold start to the project view, median of 10 | 320 ms | <= 2500 |
+| P2 | solver event to renderer, p99 of 100 | 0.64 ms | <= 20 |
+| P4 | 1e6 scalar to GPU buffer, R2 raw, p50 / p99 | 13.8 / 20.6 ms | <= 30 / 60 |
+| P5 | scrubbing 1e6, 200 requests | 63.9 per s, longest 28.6 ms | >= 10, <= 150 |
+| P7 | first picture of the 1e6 surface, R2, median of 5 | 44.7 ms (first 278) | <= 1500 |
+| P8 | 1e6 triangles orbiting, vertical sync | 240 per s, p99 4.30 ms | >= 60, <= 25 |
+
+Recorded, not judged: P4 R1 raw p50 33.9 ms; P8 with no rate limit 56.4 per s (17.7 ms p50 frame, GPU done in 3.1 ms, so the
+CPU side of the frame sets it). The first of the ten P10 starts took 14.7 s: it was the first launch of a newly packaged
+copy, which the operating system scans; the median is unaffected. In the first run P5 did not start, because
+`scripts/measure-scrub.mjs` imports `tsstore.ts` under Node's type stripping, and F-819b gave that file a `./fnv.js` import
+that Node cannot map to `fnv.ts`. The script now registers a resolve hook for this, and P5 was run again alone. Results:
+`apps/studio-web/out/bench/idle-baseline-2026-11-17.json` and `-P5.json`, which are not committed.
+
 ## 10. Retiring the egui apps early (maintainer, 2026-11-16)
 
 The maintainer asked to "kill the old rcfd-studio and clear up some test bandwidth" and chose (a) of three options:
