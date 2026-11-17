@@ -15785,13 +15785,21 @@ fixed by the item's registration ADR before any code.
     check_mesh and the rules accept it on the reference fan; the schema golden is updated with the maintainer's
     approval; existing values and baseline hashes unchanged.
   - note: Follow-up of F-726 (ADR 0692, 2026-11-16).
-- [ ] **F-779** Where rule L's 16^3 punch path loses stability
+- [~] **F-779** Where rule L's 16^3 punch path loses stability
   - depends on: F-774
   - acceptance: Every limit not stated here is registered in the ADR before the run. The load between 0.9625 and
     0.965625 where the inertia of rule L's 16^3 neo-Hookean punch path changes, bracketed to a registered width; a limit
     point told from a bifurcation by a registered criterion (the load parameter's derivative and the critical mode's
     projection on the load); F-bar's path at the same loads with its inertia; the default bits unchanged.
-  - note: Follow-up of F-774 (ADR 0694, 2026-11-17).
+  - note: F-779 (ADR 0697, 2026-11-17): the inertia of rule L's 16^3 neo-Hookean punch path changes from 0 to 1 between
+    load factors 0.964899444580 and 0.964900207520 (12 bisections with the indefinite-tangent Newton from the converged
+    neighbour, width 7.63e-7). It is a bifurcation, not a limit point: the critical mode is orthogonal to the load
+    vector to 1.5e-12, the path's tangent is smooth through it (DS = 1, the load parameter's derivative keeps its sign),
+    and the mode is exactly antisymmetric under the x <-> y symmetry of the block (a symmetry-breaking hourglass
+    bifurcation in element 3720). F-bar is stable at the same loads (nu = 0, lowest eigenvalue +0.036 mu h). The same
+    bracket and readings pass on a closed-form fold and pitchfork and find the ADR 0628 patch's zero 0.9507467.
+    Test-only, default bits unchanged; partial because two rows were met only after amendment 1 and one of six mutations
+    was not caught. Follow-up F-783 (The bifurcated branch of rule L's 16^3 punch path).
 - [ ] **F-780** Driver retry with the indefinite tangent after a refused factor
   - depends on: F-774, F-779
   - acceptance: Every limit not stated here is registered in the ADR before the run. An opt-in driver retry with
@@ -15815,3 +15823,11 @@ fixed by the item's registration ADR before any code.
     and 4.0112 of ADR 0696 disclosed), with no folded cell within 85 deg non-orthogonality and aspect 1000 on both, and
     camber_seam_h, camber_seam_s and camber_seam_s_unstretched unchanged in bits.
   - note: Follow-up of F-777 (ADR 0696, 2026-11-16).
+- [ ] **F-783** The bifurcated branch of rule L's 16^3 punch path
+  - depends on: F-779
+  - acceptance: Every limit not stated here is registered in the ADR before the run. A branch switch at the bifurcation
+    of ADR 0697 along its antisymmetric mode, traced with the indefinite-tangent Newton: whether the pitchfork is
+    supercritical or subcritical, the inertia and R/mu along the bifurcated branch to full load against the symmetric
+    branch and F-bar; a fast control on a closed-form pitchfork, and a control of the continuity test whose Newton
+    converges to a distant root; the default bits unchanged.
+  - note: Follow-up of F-779 (ADR 0697, 2026-11-16).
