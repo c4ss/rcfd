@@ -1621,7 +1621,7 @@ field-view extras from the egui Studio (F-837)".
 - `python scripts/third_party_licenses.py --check`: up to date.
 - `cargo test -p rcfd-cli --release --test docs_site --test workspace_graph`: 2 and 3 passed.
 
-## Addendum F-817b: drawing on demand at rest, and a scratch profile per bench case (2026-11-17)
+## Addendum 14: F-817b, drawing on demand at rest, and a scratch profile per bench case (2026-11-17)
 
 Two follow-ups to F-817 (§9 of ADR 0800). No dependency, no Rust file, no service method, golden or default changed;
 `DESIGN.md`, `docs/studio-guardrails.md` and `PRODUCT.md` are not edited.

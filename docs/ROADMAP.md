@@ -14285,7 +14285,11 @@ Generated from `docs/studio-guardrails.md`, `PRODUCT.md` and `DESIGN.md` ([ADR 0
     machine: P4/P7 (R2) and P8 met every time; P10 missed in three of four runs (3.6-40.3 s vs 2.5 s, cause not
     diagnosed; shared Chromium profile suspected); P5 met once, missed twice. Left: an idle-machine baseline (Q4) and
     the maintainer's answers to Q1-Q6. Maintainer 2026-11-16: idle baseline before F-448 (Q4), scratch profile for every
-    case but P10 (Q5), bench stays out of CI (Q3); Q5 not yet implemented.
+    case but P10 (Q5), bench stays out of CI (Q3); Follow-up 2026-11-17 (Addendum 14): three.js's internal animation
+    loop kept requesting frames at rest (180/s at 60 Hz in the workspace, three renderers); drawOnDemand stops it 2
+    frames after the last draw, pictures unchanged, tests/e2e/idle-frames.spec.ts holds ≤ 5 per second at rest (measured
+    0); Q5 applied: every bench case but P10 gets its own scratch --user-data-dir. Left: the idle baseline (Q4), P10 and
+    P5 misses under load.
 - [ ] **F-818** Electron Studio: dark theme
   - depends on: F-802
   - acceptance: A dark variant of every DESIGN.md token that keeps each hue's single job; the field colour maps
