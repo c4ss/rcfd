@@ -384,5 +384,5 @@ eight mutations caught, no amendment.
 
 The test file of D5 was written on a branch made before ADR 0718 (F-796) merged, and both chose the name
 `crates/rcfd-fem/tests/si_eas_hg18.rs`. At the merge the lead kept ADR 0718's file under that name and moved this ADR's file,
-unchanged in content, to [`crates/rcfd-fem/tests/si_eas_hg19.rs`](../../crates/rcfd-fem/tests/si_eas_hg19.rs). Every test name,
+unchanged in content, to `crates/rcfd-fem/tests/si_eas_hg19.rs`. Every test name,
 check and result above refers to that file. Nothing above this heading was edited.
