@@ -20,9 +20,9 @@ T = "#[test]\nfn {}() {{}}\n"
 TESTS = "crates/rcfd-w/tests/"
 ADRS = {
     "docs/adr/0105-f020-registration-item.md": "# ADR 0105\nSee t_item.rs and t_both.rs and hdr.rs.\n",
-    "docs/adr/0120-first.md": "# ADR 0120\nSee t_init.rs, t_one.rs, t_both.rs and t_ren.rs.\n",
+    "docs/adr/0120-first.md": "# ADR 0120\nSee t_init.rs, t_one.rs, t_both.rs, t_readd.rs and t_ren.rs.\n",
     "docs/adr/0130-later.md": ("# ADR 0130\nSee t_init.rs, t_one.rs, t_item.rs, t_noreg.rs, t_notcited.rs, t_both.rs, t_ren.rs, "
-                                "hdr.rs and g_e3_distinctive_name.\n"),
+                                "hdr.rs, t_readd.rs and g_e3_distinctive_name.\n"),
     "docs/adr/0140-other.md": "# ADR 0140\nNothing cited here.\n",
     "docs/adr/0170-f021-notes.md": "# ADR 0170\nNot a registration of F-021 (no such file name).\n",
 }
@@ -35,6 +35,7 @@ EXPECT = {  # test name -> primary under rule G on the full history
     "g_both": "0120",        # T7: ADR before item
     "g_ren": "0120",         # T4: renamed by a commit that names ADR 0130
     "g_hdr": "0105",         # T8: E0 is not changed
+    "g_readd": "0120",       # T13
 }
 
 
@@ -81,6 +82,10 @@ def make_repo(repo, sub=""):
     commit("ADR 0130 touches t_one", [(TESTS + "t_one.rs", T.format("g_one") + "// touched\n")])
     commit("ADR 0130 renames t_old to t_ren", rename=(TESTS + "t_old.rs", TESTS + "t_ren.rs"))
     commit("ADR 0130 adds hdr", [(TESTS + "hdr.rs", "//! F-020 (ADR 0105)\n" + T.format("g_hdr"))])
+    commit("w: readd (ADR 0120)", [(TESTS + "t_readd.rs", T.format("g_readd"))])
+    os.remove(os.path.join(base, *(TESTS + "t_readd.rs").split("/")))
+    commit("ADR 0130 deletes t_readd (file)")
+    commit("ADR 0130 re-adds t_readd", [(TESTS + "t_readd.rs", T.format("g_readd"))])
     commit("ADR 0130 adds e3", [(TESTS + "t_e3.rs", T.format("g_e3_distinctive_name"))])
     return base
 
@@ -132,6 +137,11 @@ class GitPrimary(unittest.TestCase):
     def test_t3_later_commits_do_not_move_the_primary(self):
         self.assertEqual(self.t["g_one"]["primary_adr"], "0120")  # ADR 0130 touched the file in a later commit
 
+    def test_t13_a_file_deleted_and_added_again_keeps_its_first_commit(self):
+        t = self.t["g_readd"]
+        self.assertEqual(sorted(t["adrs"]), ["0120", "0130"])
+        self.assertEqual(t["primary_adr"], "0120")
+
     def test_t4_rename_chain_keeps_the_first_commit(self):
         t = self.t["g_ren"]
         self.assertEqual(sorted(t["adrs"]), ["0120", "0130"])
@@ -151,9 +161,9 @@ class GitPrimary(unittest.TestCase):
         g = self.idx["coverage"]["primary"]["git"]
         self.assertEqual(g["history"], "full")
         self.assertEqual(g["not_in_adrs"], 2)  # notcited (ADR 0140) and noreg (F-021 -> ADR 0170)
-        self.assertEqual(g["from_git"], 4)  # one, item, both, ren
+        self.assertEqual(g["from_git"], 5)  # one, item, both, ren, readd
         self.assertEqual(g["no_commit_rule"], 1)  # init
-        self.assertEqual(g["e2_tests"], 7)
+        self.assertEqual(g["e2_tests"], 8)
 
     def test_t7_adr_before_item(self):
         t = self.t["g_both"]
@@ -178,7 +188,7 @@ class GitPrimary(unittest.TestCase):
         self.assertEqual(g["e2_tests"], g["from_git"] + g["no_commit_rule"] + g["not_in_adrs"] + g["no_origin"])
         self.assertEqual(self.idx["coverage"]["primary"]["with_primary"], sum(self.idx["coverage"]["primary"]["by_evidence"].values()))
         self.assertEqual(self.idx["adrs"]["0120"]["primary_tests"],
-                         sorted(f"rcfd-w/{b}::{n}" for b, n in (("t_one", "g_one"), ("t_both", "g_both"), ("t_ren", "g_ren"))))
+                         sorted(f"rcfd-w/{b}::{n}" for b, n in (("t_one", "g_one"), ("t_both", "g_both"), ("t_ren", "g_ren"), ("t_readd", "g_readd"))))
 
     def test_t9_shallow_clone_and_copy_without_git_give_no_primary(self):
         clone = os.path.join(self.tmp, "shallow")
