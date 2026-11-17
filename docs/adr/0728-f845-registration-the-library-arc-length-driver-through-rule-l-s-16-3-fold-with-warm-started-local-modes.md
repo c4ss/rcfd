@@ -324,3 +324,127 @@ cause, "not converged in 20 iterations"); which one ends the trace is not determ
 does not pass `w_c`: it ends lost (an error) or at the cap of 600 points, every converged `w` is below `w_c`, and the last
 converged `w` is within `0.01` of `w_c`; the cause of the loss is reported. The limits of the other rows are unchanged. The
 mutations MU1 and MU2 are caught by TZ2 to TZ4 as registered, not by TZ-P.
+
+## Addendum 1: results (2026-11-17)
+
+Logs in `w49i-work/f845-scratch`: `run1-fast.log` (the registered fast run, 0.92 s, on 5d51935b), `run2-heavy.log` (the
+registered heavy run, 131.8 s, on 5d51935b), `mutations.log` and `mut-MU*.log`, `s7-*.log`, `b-src-diff.log`, `s6-*.log`,
+`s8-docs.log`; the arithmetic beforehand `scripts/toy_sbz.py`, the mutation script `scripts/mutate.py`. Each registered test
+was run once, after amendment 1 (written before any run); no limit changed after a run. The only code change after the runs
+is the heavy record's measured ignore text (checked by S6).
+
+### The fast test (`f845_fast`, run 1)
+
+The test's closed form: `w_c = 0.083503580`, `w_1 = 0.493382320 h`, `w_2 = 1.283613473 h`, `lambda_max = 0.317109990221`,
+`lambda_min = 0.185532706250`, as in the script.
+
+| Id | Measured | Limit | Result |
+|---|---|---|---|
+| TZ0 | `w_c < w_1 < h < w_2 < 1.8 h`; `r = 0.7816`, `1.0712` | holds | met |
+| TZ1 | `8.1e-15`; `9.1e-15` (191 points) | `<= 1e-9`; `<= 1e-12` | met |
+| TZ2 | 0 halvings; 0 fallbacks; stopped by the rule at 191 points; last `w = 0.2624 > w_2`; `w_c` passed | as registered | met |
+| TZ3 | the first fold read between `w = 0.096989` (`nu 0`) and `0.099463` (`nu 1`); `w_1 = 0.098676` inside; `lambda_max` in `[0.317089932, 0.317153482]` | holds | met |
+| TZ4 | the second fold read between `w = 0.254982` (`nu 1`) and `0.257481` (`nu 0`); `w_2 = 0.256723` inside; `lambda_min` in `[0.185520536, 0.185538021]` | holds | met |
+| TZ5 | the largest `e_j / limit_j` `2.6e-4` (the largest `e_j` `2.6e-14`) | each | met |
+| TZ6 | equal at every point | each | met |
+| TZ7 | equal at every point away from the folds | each | met |
+| TZ-P (amendment 1) | lost after 125 converged points, the largest and the last `w = 0.083503579639` against `w_c = 0.083503579652` (`1.3e-11` below); the cause reported: `contribution 'local z': ... local: not converged in 25 iterations`, at an arc of `7.5e-11` | lost or at the cap; below `w_c`, within `0.01` | met |
+| TZ-F | the warm solve from `1e3` fails, the fallback counted (1); `|z - z*(0.05)| = 0` | holds; `<= 1e-12` | met |
+| FW | 3 points (`lambda` 0.0995, 0.1981, 0.2958); every state of nine values; the driver's states equal the test-side chain bit for bit (64 elements) | holds | met |
+
+### The heavy record (`f845_nh16_fold_heavy`, 16^3, 131.8 s)
+
+| Id | Measured | Limit | Result |
+|---|---|---|---|
+| OB, R1, S5, W5 | equal; `9.95e-11`, `nu = 1`; rungs 1 to 5 accepted, `2.3e-13`, `2.2e-10`, `9.0e-8`, `mu_1` bit-identical (`0`); 0 failed, CW, the residual bit-identical, `sigma` bit-identical (`-5.382683486833375e-1`), `nu` 1 and 1 | ADR 0724's limits | met |
+| HA0 | point 1: `a = 2.167379e-4 > a_5`, `lambda 0.958472125418 < lambda_5` | holds | met |
+| HF1 | the fold read between points 1 and 2 | holds | met |
+| HF2 | `a_f = 2.170071672e-4` in `(2.167378951e-4, 2.171068826e-4)` | strictly inside | met |
+| HF3 | `lambda_f = 0.958472086948` in `[0.958472072691, 0.958472092233]` (strictly, without `tau`) | `[lo - 1e-9, hi + 1e-9]` | met |
+| HF4 | `a` strictly increasing over the 7 states; `sigma` `-0.538`, `-0.286` with `nu 1`, then `+0.106` to `+0.956` with `nu 0` at 5 points | holds | met |
+| HS1 | stopped by the rule after 6 points; 0 halvings; 4 to 5 iterations | holds; `0`; `<= 6` | met |
+| HL1 | 0 fallbacks and 0 failed elements over the six commits (4096 elements each) | `0`; `0` | met |
+| HL2 | the driver's states at point 6 equal the test-side commit chain bit for bit | bit-identical | met |
+| HN | the driver's negative pivots equal `nu` at all 6 points | each | met |
+| HB | converged at all 6 points (2 iterations each); `|Dlambda| <= 4.7e-14`; `|Du|_inf / |u|_inf <= 5.4e-14` | holds; `<= 1e-8`; `<= 1e-7` | met |
+| HC | `e_j` from `8.7e-11` to `7.7e-10` against floors of `4.6e-8` to `5.6e-8` | each | met |
+| HP | equal at every point | each | met |
+| HR | the table below | reported | reported |
+
+**The trace (HR).** `trace_from` from `S5_W` with `c = |v_t(B)|^2 = 8.779261` and `Ds = 5.306632e-7` (`|w_5| = 2.120`,
+`sigma_5 = -0.538`):
+
+| point | `a` | `lambda` | `dlambda/da` | `nu` (driver's) | iterations | driver, s |
+|---|---|---|---|---|---|---|
+| 0 (`S5_W`) | 2.164988e-4 | 0.958472223921 | -0.5383 | 1 | | |
+| 1 | 2.167379e-4 | 0.958472125418 | -0.2856 | 1 (1) | 4 | 9.5 |
+| 2 | 2.171069e-4 | 0.958472092233 | +0.1061 | 0 (0) | 5 | 12.6 |
+| 3 | 2.174064e-4 | 0.958472171752 | +0.4252 | 0 (0) | 5 | 12.5 |
+| 4 | 2.176087e-4 | 0.958472279690 | +0.6416 | 0 (0) | 4 | 10.0 |
+| 5 | 2.177677e-4 | 0.958472395245 | +0.8121 | 0 (0) | 4 | 10.1 |
+| 6 | 2.179022e-4 | 0.958472514123 | +0.9565 | 0 (0) | 4 | 9.9 |
+
+Every arc had the full length. At every point the plain iteration from `alpha = 0` reaches element 3720's committed modes
+(`1.4e-13` to `1.8e-10`). **The reading**: the library driver passes the fold between `a = 2.1674e-4` and `2.1711e-4`, with
+`nu` going from 1 to 0 and `dlambda/da` from `-0.286` to `+0.106`. ADR 0711's estimate on this bracket, `a = 2.1700699e-4`,
+`lambda = 0.95847208700`, lies `8.2e-7` relative in `a` and `4.8e-11` in `lambda` from ADR 0724's Moore-Spence fold. The
+bordered reference on the warm model, with the same committed states, agrees with every point to rounding (`5e-14`), in 2
+bordered iterations each.
+
+**The constraint (n3).** The measured `e_j` lie between `8.7e-11` and `7.7e-10`. Five of the six are above ADR 0726's
+unfloored limit `1e-10`, and all are far inside the floor of D5 (about `5e-8` at `Ds = 5.3e-7`). Without the floor, ADR 0726's
+AL4 would have missed here as well, on arcs of full length. The measure is limited by the rounding of the stored
+displacements, as ADR 0726 inferred.
+
+### Default bits and static checks
+
+| Id | Result |
+|---|---|
+| B | `git diff --stat cd548b33 -- crates/*/src` empty: met |
+| S7 | all release: `--lib` 15 pass; `sa_arclength_given_state_f797` 1 pass, 1 ignored; `sa_arclength` 2 pass; `si_eas_hg20` 1 pass, 1 ignored; `si_eas_hg21` 1 pass, 1 ignored; `sa_arclength_fold_f845` `f845_fast` pass (run 1): met |
+| S6 | `cargo fmt -p rcfd-fem --check` and `cargo clippy -p rcfd-fem --release --all-targets -- -D warnings` clean on the results tree: met |
+| S8 | `cargo test -p rcfd-cli --release --test docs_site` on the results tree (2 pass): met |
+| S9 | 2cb947f4 (docs), 24707c4b (docs, amendment 1), 5d51935b (built for the runs), the results commit (its only code change is the heavy record's ignore text, checked by S6): met |
+
+### Mutations (each on a scratch copy of 5d51935b, run once against `f845_fast`)
+
+| Id | Caught by | Result |
+|---|---|---|
+| MU1 | TZ2 (32 halvings, lost at `w_c` after 125 points), TZ3, TZ4; also TZ1, TZ5, TZ-F | caught |
+| MU2 | TZ2, TZ3, TZ4, TZ-F; also TZ5 | caught |
+| MU3 | TZ-F | caught |
+| MU4 | TZ4 (the second fold read "undecided") | caught |
+| MU5 | FW | caught |
+
+### Deviations
+
+- Amendment 1 (TZ-P without the cause of the loss) was written and committed before any run. The plain control was in fact
+  lost on a local failure (reported).
+- Arithmetic (i) assumed `|w_5| ~ 33`, from ADR 0726's points near `a = 2.05e-4`. The measured `|w_5|` is `2.12`, so the load
+  term `c sigma^2` was not negligible in `Ds`, and the steps in `a` were `2.0e-7` to `3.7e-7` instead of a uniform `2e-7`. The
+  fold fell between points 1 and 2 instead of 2 and 3, with margins of `1.4e-8` and `5.3e-9` in `lambda` (the arithmetic gave
+  `5.4e-9` and `4.6e-9`). The stop came after 6 points instead of about 7.
+- The heavy run took 131.8 s, below the estimate of 4 to 6 minutes, because the commit and the analysis took 0.5 to 0.6 s a
+  point, not 6 s. It stays an ignored heavy record (the rebuild alone takes 54 s).
+- The iterations per point were 4 to 5, above the estimate of 2 to 4 (taken from ADR 0726's short arcs) and within the limit of 6.
+
+### Decision
+
+**done** (by the registered rule): every check of `f845_fast` and of the heavy record was met in their single registered runs,
+B and S6 to S9 were met, and five of five mutations were caught. Amendment 1 was written before any run, so no check was met
+only after an amendment made after a run.
+
+### Remaining questions
+
+1. **The library trace on the warm model from 0.9645 to rung 5.** Not run, since the start is rung 5. Options: (a) a heavy
+   record from 0.9645 on the warm model through the fold (about 30 points at ADR 0726's steps, about 6 minutes); (b) leave it,
+   since ADR 0726 covered that stretch on the plain model up to `2.058e-4` and ADR 0723 the warm branch from rung 4 with
+   the bordered Newton. Recommendation: (b).
+2. **Whether the warm start becomes a default**: open (it would change default results); F-846 measures it.
+3. **Whether `trace` should accept non-zero prescribed values by default** (ADR 0726 question 3): open.
+
+## For the lead: roadmap entries
+
+> Proposed status: done.
+
+> F-845 (ADR 0728, 2026-11-17): test-only. ADR 0726's arclength::trace_from runs from ADR 0711's rung 5 (registered as the start instead of the state at 0.9645), committed on the model with the warm start of the incompatible modes (ADR 0660 D1), with the committed element states carried by the driver itself. At the last point the driver's states equal a test-side commit chain bit for bit. The trace passes the fold computed by ADR 0724 and reads it: dlambda/da changes sign from -0.286 to +0.106 with nu going from 1 to 0 between a 2.16738e-4 and 2.17107e-4. That bracket contains a_f 2.170072e-4, and the load factor bracket [0.958472072691, 0.958472092233] (the tangent-line bound and the lower end) contains lambda_f 0.958472086948. ADR 0711's two-point estimate lies 8e-7 relative in a and 5e-11 in lambda from ADR 0724's fold. Six points of one arc length (5.3e-7) were taken, with 4 to 5 iterations each, no halving and no local fallback in any of the 4096 elements; nu stayed 0 for five points past the fold. A bordered Newton on the warm model with the same committed states reproduces every point to 5e-14. The arc-length constraint measured from the stored displacements is 8.7e-11 to 7.7e-10, within a floor derived from their rounding (about 5e-8); ADR 0726's unfloored 1e-10 would have missed again. Fast control: ADR 0726's closed-form snap-back with a local unknown at the apex (ADR 0723's atan local energy) is traced by trace_from with the warm start and the commit through both closed-form folds (lambda to 8e-15, both folds bracketed, inertia 0, 1, 0). Without the warm start the same trace is lost 1.3e-11 below the threshold of the plain local iteration, before the first fold. A fallback control is included, and the driver's carry of the warm modes is checked bit for bit on a 4^3 block. Default bits unchanged (no library line); five of five mutations caught; one amendment before any run (the plain control's loss cause reported, not required).

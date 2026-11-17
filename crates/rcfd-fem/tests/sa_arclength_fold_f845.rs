@@ -1992,7 +1992,7 @@ struct HRow {
 }
 
 #[test]
-#[ignore = "ADR 0728: the heavy record on 16^3 (D1 to D3), run once with --ignored"]
+#[ignore = "ADR 0728: the heavy record on 16^3 (D1 to D3), run once with --ignored (131.8 s), every row met: rung 5 rebuilt and committed on the warm model bit-identical; trace_from from rung 5 on the warm model, 6 points of 4 to 5 iterations, no halving, no local fallback in 4096 elements, the driver's states equal the test-side commit chain bit for bit; the fold read between a 2.167379e-4 (nu 1) and 2.171069e-4 (nu 0), containing ADR 0724's a_f 2.170072e-4 and lambda_f 0.958472086948 (bracket [0.958472072691, 0.958472092233]); the bordered reference on the warm model to 4.7e-14; the constraint 7.7e-10 within its floor 4.6e-8; f845_fast covers the same library path"]
 fn f845_nh16_fold_heavy() {
     let mut ch = Checks::new();
     let t_all = Instant::now();
