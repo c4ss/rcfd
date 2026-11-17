@@ -266,3 +266,107 @@ The heavy record is not run under the mutations.
    stop rule and tolerances, the measures, the toy PW and its bracket, the file `si_eas_hg21.rs`): taken on the maintainer's
    standing instruction of 2026-11-11 (take the recommendation).
 2. **Whether the warm start becomes a default**: not taken (it would change default results); open (F-844 measures it).
+
+## Addendum 1: results (2026-11-17)
+
+Logs in `w49i-work/f843-scratch`: `run1-fast.log` (the registered fast run, on 4b5a2ef4), `run2-heavy.log` (the registered
+heavy run, 63.9 s, on 4b5a2ef4), `mutations.log` and `mut-MU*.log`, `s7-*.log`, `b-src-diff.log`, `s6-*.log`,
+`s8-docs.log`; the arithmetic beforehand `scripts/toy_ms.py`. Each registered test was run once; no limit changed after a
+run; no amendment.
+
+### The fast test (`f843_fast`, run 1)
+
+The closed form: `a_f = 0.9415412906318720`, `p_f = 0.8928104857885693`, the share `1 / (1 + a_f^2) = 0.5300821621831598`.
+
+| Id | Measured | Limit | Result |
+|---|---|---|---|
+| TB | the sign change between `a = 0.900000000000` (`nu 1`) and `0.950000000000` (`nu 0`), `a_f` between | holds | met |
+| MS-L1 | converged in 4 iterations | holds; `<= 6` | met |
+| MS-L2 | `2.7e-11`; `3.3e-15` | `<= 1e-10`; `<= 1e-12` | met |
+| MS-L3 | `1.4e-11` | `<= 1e-9` | met |
+| MS-L4 | `4.2e-12` | `<= 1e-11` | met |
+| MS-L5 | 0 fallbacks; `0`; bit-identical | `0`; `<= 1e-12`; holds | met |
+| MS-U1 | converged in 4 iterations | holds; `<= 6` | met |
+| MS-U2 | `8.1e-14`; `7.8e-16` | `<= 1e-10`; `<= 1e-12` | met |
+| MS-U3 | `4.2e-14` | `<= 1e-9` | met |
+| MS-U4 | `1.2e-14` | `<= 1e-11` | met |
+| MS-U5 | 0 fallbacks; `0`; bit-identical | `0`; `<= 1e-12`; holds | met |
+| MS-LU | `2.7e-11` | `<= 1e-10` | met |
+| NC1 | fails: `local: not finite at iteration 10` | fails, local | met |
+| NC2 | `4.3e-3` at 0.90, `9.5e-4` at 0.95 | `>= 1e-4` each | met |
+
+### The heavy record (`f843_nh16_fold_heavy`, 16^3, 63.9 s)
+
+| Id | Measured | Limit | Result |
+|---|---|---|---|
+| OB, R1, S5 | equal; `9.95e-11`, `nu = 1`; rungs 1 to 5, `2.3e-13`, `2.2e-10`, `9.0e-8`, `mu_1` bit-identical (`0`) | ADR 0723's limits | met |
+| W5 | 0 failed; CW bit-identical; the free residual: 0 entries differ; `sigma` bit-identical (`-5.382683486833375e-1`); `nu` 1 and 1 | as registered | met |
+| UB | accepted (3 iterations); `5.6e-14`; `2.1e-10`; `8.1e-8`; `nu 0` | holds; `<= 1e-9`; `<= 1e-8`; `<= 1e-5`; `0` | met |
+| MS1 | converged in **2 iterations** (`nu_r` `4.3e-5`, `7.8e-7`, `3.6e-11`) | holds, at most 12 | met |
+| MS2 | **`a_f = 2.170071672061e-4`** in `[2.164988e-4, 2.204620e-4]`; **`lambda_f = 0.958472086948445`** in `[0.9584711481, 0.958472223921]` | inside, inside | met |
+| MS3 | `nu_r = 3.6e-11`; `m_R = 3.4e-13`; `nu_r^u = 3.6e-11` | `<= 1e-9`; `<= 1e-10`; `<= 1e-8` | met |
+| MS4 | **share on element 3720 `0.5856`** | in `[0.30, 0.65]` | met |
+| LS | inertia `0` of `K_f + 1000 I`, `1` of `K_f - 1000 I` | `0`; `1` | met |
+| CF | 0 failed (0 fallbacks); CW bit-identical; the free residual at `F_W`: bit-identical | as registered | met |
+| MSR | below | reported | reported |
+
+**The fold (MSR).** The extended system started at `S5_W` (`nu_r = 4.3e-5`, the share of `psi_0` `0.5872`) and converged in
+two iterations (`m_R` `3.8e-9` then `3.4e-13`; `|l . psi - 1|` `5.5e-10` at the result, within its tolerance). At the fold:
+the Rayleigh quotient `psi . K psi / psi . psi = -2.6e-5` (against `mu_1 = -323.4` at `S5` and the next pair `2285`), `max
+|K_ii| = 7.50e6`, `psi . f / (|psi| |f|) = +1.96e-4` (non-zero: the fold is transversal in the load), the unsymmetrised
+tangent's asymmetry `1.2e-16` and its `nu_r` equal to the symmetrised one's to the printed digits, the residual along `psi`
+(the central difference of `R_F`) `6.8e-9` of `max |K_ii|` (the tangent and the residual agree to the noise estimated in
+D4). Element 3720 at the committed fold: `K_aa` `l_min = 3.763e4` (positive definite, as along ADR 0723's trace), and the
+plain iteration from `alpha = 0` reaches the same modes (`3.0e-11`). Against ADR 0723's `fold_between` estimate (`a
+2.16996e-4`, `lambda 0.95847209`): `a_f` higher by `5.1e-5` relative, `lambda_f` lower by `3.1e-9`. The fold lies 0.23 per
+cent of `a_5` past rung 5 and `1.4e-7` in `lambda` below it.
+
+### Default bits and static checks
+
+| Id | Result |
+|---|---|
+| B | `git diff --stat cea9dd0e -- crates/*/src` empty: met |
+| S7 | all release: `--lib` 15 pass; `si_eas_hg20` 1 pass, 1 ignored; `si_eas_hg18` 1 pass, 2 ignored; `si_eas_hg17` 1 pass, 1 ignored; `si_eas_hg21` 1 pass (`f843_fast`), 1 ignored: met |
+| S6 | `cargo fmt -p rcfd-fem --check` and `cargo clippy -p rcfd-fem --release --all-targets -- -D warnings` clean on the results tree: met |
+| S8 | `cargo test -p rcfd-cli --release --test docs_site` on the results tree (2 pass): met |
+| S9 | c75f4968 (docs), 4b5a2ef4 (built for the runs), the results commit (its only code change is the heavy record's ignore text, checked by S6): met |
+
+### Mutations (each on a scratch copy of 4b5a2ef4, run once against `f843_fast`)
+
+| Id | Caught by | Result |
+|---|---|---|
+| MU1 | MS-L1, MS-U1 (no convergence: the iterates leave the warm start's region, `local: not finite`), MS-LU | caught |
+| MU2 | MS-L1 (the factor refused at iteration 7), MS-LU | caught |
+| MU3 | MS-L3, MS-U3 (`6.0e-2`) | caught |
+| MU4 | MS-L1, MS-U1 (`local: not finite`), MS-LU | caught |
+| MU5 | MS-L5, MS-U5 (`z` NaN, the residual not bit-identical) | caught |
+| MU6 | MS-L1, MS-U1 (`local: not finite`), MS-LU | caught |
+
+### Deviations
+
+- None in the registered procedure. The copied `pw_trace` of ADR 0723 also checks ADR 0723's PW-0 (the start at 0.5 within
+  `1e-12`) with ADR 0723's limit: met; it is part of TB's procedure, not a new limit.
+- The heavy run took 63.9 s, below the estimate of D1 (about 115 s): two extended iterations instead of four to six, at about
+  1.2 s each.
+- MS-L2's `|a - a_f| = 2.7e-11` is above the script's `3.4e-12` (a different rounding of the same last step); within the
+  limit.
+
+### Decision
+
+**done** (by the registered rule). Every check of `f843_fast` and of the heavy record was met in their single registered
+runs, B and S6 to S9 were met, six of six mutations were caught, no amendment.
+
+### Remaining questions
+
+1. **Whether the warm start becomes a default**: open (it would change default results); F-844 measures it.
+2. **The library's arc-length driver at this fold.** The fold is now located to `nu_r = 3.6e-11`. Options: (a) once F-797's
+   arc-length opt-in is merged, a registered check that it passes this fold with the warm start and brackets `a_f` and
+   `lambda_f` of this ADR; (b) leave it. Recommendation: (a), proposed below.
+
+## For the lead: roadmap entries
+
+> Proposed status: done.
+
+> F-843 (ADR 0724, 2026-11-17): the fold of rule L's 16^3 punch branch computed at ADR 0723's bracket by a test-only Moore-Spence system (R_F = 0, K psi = 0, l . psi = 1), Newton by block elimination with the tangent's factor and central differences of the tangent (step 1e-8), on the model with the warm start of the incompatible modes and committed element states. ADR 0711's rung 5 is rebuilt and committed on the warm model (bit-identical to the plain evaluation), and the bracket's upper end is reproduced (lambda to 6e-14). From rung 5 the system converges in 2 iterations to a_f 2.170072e-4, lambda_f 0.958472086948, both inside the bracket; the null vector's residual |K psi| / (max |K_ii| |psi|) is 3.6e-11 (registered tolerance 1e-9), the Rayleigh quotient -2.6e-5 against -323 at rung 5, the critical value simple and lowest (inertia 0 and 1 at +1000 and -1000), and the critical vector's share on element 3720 is 0.586. The fold is 0.23 per cent of a_5 past rung 5; ADR 0723's two-point estimate was within 5e-5 relative in a and 3e-9 in lambda. Committing the fold state changes the residual by no bit, and element 3720's mode tangent stays positive definite there. Fast control: ADR 0723's toy with an atan local unknown, the closed-form fold reproduced from both ends of its bracket (a to 3e-11, lambda to 3e-15, the null vector's share to 1e-11); the same system on the toy without the warm start fails at its first evaluation. Default bits unchanged (no library line); six of six mutations caught; no amendment.
+
+> Follow-up proposed: The library arc-length driver through rule L's 16^3 fold with warm-started local modes. Deps F-797. Acceptance: Every limit not stated here is registered in the ADR before the run. From ADR 0711's rung 5, the arc-length opt-in of F-797 on the model with the warm start of the incompatible modes passes the fold computed by ADR 0724 and reads it: a sign change of dlambda/da with nu from 1 to 0 whose bracket contains a_f 2.170072e-4 and lambda_f 0.958472086948, the steps and the local fallbacks, to registered limits; a fast control on a closed-form fold with a local unknown; the default bits unchanged.

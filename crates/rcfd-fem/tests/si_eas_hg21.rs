@@ -2096,7 +2096,7 @@ const TOL_BLOCK: ExtTol = ExtTol {
 };
 
 #[test]
-#[ignore = "ADR 0724: the heavy record of the extended system at ADR 0723's fold bracket on 16^3, run once with --ignored"]
+#[ignore = "ADR 0724: the heavy record of the extended system at ADR 0723's fold bracket on 16^3, run once with --ignored (63.9 s), every row met: rung 5 rebuilt and committed on the warm model bit-identical to the plain one; the upper end reproduced (lambda to 5.6e-14); the Moore-Spence system from rung 5 converged in 2 iterations to a_f 2.170072e-4, lambda_f 0.958472086948 (inside the bracket), nu_r 3.6e-11, the critical vector's share on element 3720 0.586, the critical value simple and lowest; the commit bit-identical; f843_fast covers the same procedures"]
 fn f843_nh16_fold_heavy() {
     let mut ch = Checks::new();
     let t_all = Instant::now();
