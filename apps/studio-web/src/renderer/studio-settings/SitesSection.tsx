@@ -5,11 +5,17 @@
 // opened in the system's editor: the Studio does not edit it (no editor here).
 //
 // G22, P9: the section is not there while the user has no sites file, so the page at rest is the page before F-848.
+// G22 (the maintainer's answer of 2026-11-17, ADR 0801 Q-RL-1): the section has its own budget, its heading plus one
+// line per site (`studio-settings-sites`, src/shared/word-budget.ts). Site names, hosts and states are data; a site's
+// line has one chrome word, Check. The sites file's line is its path, as data, and the path is the Open button.
 import { useState } from 'react';
 import type { SiteCheck, SiteCheckResult } from '../../shared/sites.js';
-import { Button, StateMark } from '../ui/index.js';
+import { TooltipTrigger } from 'react-aria-components';
+import { Button, StateMark, Tooltip } from '../ui/index.js';
 import { checkSite, openSitesFile } from '../project/door.js';
 import { ConfirmSite, useSites } from '../runs/Sites.js';
+
+const OPEN_SITES_FILE = 'Open the sites file';
 
 type Checked = { readonly name: string; readonly result: SiteCheckResult };
 
@@ -84,18 +90,23 @@ export function SitesSection() {
           </ul>
         )}
         <div className="ss-sites-file">
-          <span className="ss-sites-path" data-words="data">
-            {state.file}
-          </span>
-          <Button
-            variant="ghost"
-            onPress={async () => {
-              const m = await openSitesFile();
-              setOpenError(m || null);
-            }}
-          >
-            Open the sites file
-          </Button>
+          {/* G22 (Q-RL-1's answer): the file's path is the button, so the line is data; its name and tooltip say what it does */}
+          <TooltipTrigger delay={600}>
+            <Button
+              variant="ghost"
+              className="ss-sites-open"
+              aria-label={`${OPEN_SITES_FILE} ${state.file}`}
+              onPress={async () => {
+                const m = await openSitesFile();
+                setOpenError(m || null);
+              }}
+            >
+              <span className="ss-sites-path" data-words="data">
+                {state.file}
+              </span>
+            </Button>
+            <Tooltip>{OPEN_SITES_FILE}</Tooltip>
+          </TooltipTrigger>
           {openError && (
             <span role="alert" data-words="exception">
               {openError}

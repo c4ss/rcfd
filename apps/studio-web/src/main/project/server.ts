@@ -8,6 +8,7 @@
 // No Electron import: the unit tests drive it with a stand-in executable.
 import { spawn, type ChildProcess } from 'node:child_process';
 import { RpcConnection, RpcError } from '../service/rpc.js';
+import { runnerStarterEnv } from './runner-lifetime.js';
 import type { BudgetsWriteTool, ProjectTool, TrashWriteTool } from '../../shared/project.js';
 import type { RunControlTool } from '../../shared/actions/runs.js';
 
@@ -91,7 +92,8 @@ export class ProjectServer implements ProjectServerLike {
       let child: ChildProcess;
       const args = options.readOnly === false ? ['--project', folder] : ['--project', folder, '--read-only'];
       try {
-        child = spawn(exe, args, { stdio: ['pipe', 'pipe', 'pipe'], windowsHide: true });
+        // Q-RL-2: a runner this server starts (the Studio's Run, through start_run) records this Studio as its starter
+        child = spawn(exe, args, { env: runnerStarterEnv(), stdio: ['pipe', 'pipe', 'pipe'], windowsHide: true });
       } catch (e) {
         reject(new StartFailure('engine', `The engine's project server ${exe} could not be started: ${String(e)}`, null));
         return;

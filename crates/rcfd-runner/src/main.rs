@@ -2,6 +2,7 @@
 
 use rcfd_runner::client::{Client, RerunOptions, RunnerOutput};
 use rcfd_runner::records::{LaunchSettings, RunSettings};
+use rcfd_runner::started_by::StartedBy;
 use rcfd_runner::store::RunTags;
 use std::path::PathBuf;
 use std::process::ExitCode;
@@ -113,7 +114,8 @@ fn run(args: &[String]) -> Result<u8, String> {
         }
     }
     let exe = std::env::current_exe().map_err(|e| e.to_string())?;
-    let client = Client::new(&project, exe);
+    // Q-RL-2 (ADR 0801): a runner these commands start records started_by "cli" (unless RCFD_RUNNER_STARTED_BY says)
+    let client = Client::new(&project, exe).with_started_by(Some(StartedBy::Cli));
     let id = || pos.first().copied().ok_or_else(|| format!("{cmd} needs a run id"));
     match cmd {
         "-h" | "--help" | "help" => print!("{USAGE}"),

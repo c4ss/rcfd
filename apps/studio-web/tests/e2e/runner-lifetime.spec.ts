@@ -10,6 +10,9 @@
 // - A runner the Studio started that holds no run: gone after the close, with no question; the Studio's own rcfd serve
 //   is gone too.
 // - A runner started from the CLI before the Studio opened the project: no question about it, still alive after.
+// - Q-RL-2 (the maintainer, 2026-11-17): the runner records who started it in .rcfd/runner.json. A runner the Studio
+//   started says "studio" with the Studio's pid; one the CLI started while the Studio has the project open says "cli" and
+//   is not the Studio's (before Q-RL-2 the looks made it the Studio's).
 // - Changes not saved and a run going: one panel asks both.
 // - --keep-runner, and the setting "Keep the runner going after the Studio closes": no question, the runner stays.
 //
@@ -100,6 +103,9 @@ async function ended(s: Studio): Promise<{ closed: Promise<void> }> {
 }
 
 const panel = (page: Page) => page.getByRole('alertdialog');
+
+/** The project's .rcfd/runner.json (Q-RL-2: started_by and studio_pid). */
+const record = (folder: string): Record<string, unknown> => JSON.parse(readFileSync(path.join(folder, '.rcfd', 'runner.json'), 'utf8')) as Record<string, unknown>;
 
 test.beforeAll(async () => {
   root = await mkdtemp(path.join(tmpdir(), 'rcfd-runner-lifetime-'));
@@ -217,6 +223,9 @@ test('a runner the Studio started that holds no run: gone after the close, with 
   const r = (await s.page.evaluate(() => window.studioRuns.dispatch('project.start_runner', {}))) as RunActionResult;
   expect(r.ok, JSON.stringify(r)).toBe(true);
   const runnerPid = await until(async () => runner.pid(), 15_000, 'the runner to hold the project');
+  // Q-RL-2: the record says this Studio started it (its main process's pid, as the main process knows it)
+  const mainPid = await s.app.evaluate(() => process.pid);
+  expect(record(folder)).toMatchObject({ pid: runnerPid, started_by: 'studio', studio_pid: mainPid });
   expect(await plan(s.page)).toEqual({ owned: true, kept: null, runs: [] });
   // the test-mode quit asks nothing either (playwright.config.ts: RCFD_TEST_HEADLESS); here the window's own close
   await closeWindow(s);
@@ -233,6 +242,8 @@ test('a runner started from the CLI before the Studio opened the project: no que
   const runnerPid = runner.pid()!;
   const id = runner.submit(RE100, LONG);
   await until(() => (runner.status(id).state === 'running' ? true : null), 60_000, 'the CLI run to run');
+  expect(record(folder)).toMatchObject({ pid: runnerPid, started_by: 'cli' });
+  expect(record(folder)['studio_pid']).toBeUndefined();
   const s = await launch(folder);
   expect(await plan(s.page)).toEqual({ owned: false, kept: null, runs: [] });
   await closeWindow(s);
@@ -241,6 +252,24 @@ test('a runner started from the CLI before the Studio opened the project: no que
   expect(alive(runnerPid)).toBe(true);
   expect(runner.status(id).state).toBe('running');
   await runner.cleanUp(id);
+  await closed;
+});
+
+test('Q-RL-2: a runner the CLI starts while the Studio has the project open is not the Studio’s; it is left at the close', async () => {
+  const { folder, runner } = await newProject('cli-open');
+  const s = await launch(folder);
+  expect(runner.pid()).toBeNull();
+  runner.ensure();
+  const runnerPid = runner.pid()!;
+  expect(record(folder)).toMatchObject({ pid: runnerPid, started_by: 'cli' });
+  // looks around it: before Q-RL-2, a runner that came up while the project was open with none before was owned
+  await until(async () => ((await plan(s.page)).owned === false ? true : null), 5_000, 'the plan to say not owned');
+  await new Promise((r) => setTimeout(r, 1500));
+  expect(await plan(s.page)).toEqual({ owned: false, kept: null, runs: [] });
+  await closeWindow(s);
+  const { closed } = await ended(s);
+  expect(alive(runnerPid)).toBe(true);
+  await runner.cleanUp(null);
   await closed;
 });
 

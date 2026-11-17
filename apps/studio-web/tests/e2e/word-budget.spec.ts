@@ -5,12 +5,16 @@
 // test-results-visual/f833/<phase>/ (RCFD_WORD_PHASE, default "after") and the counts, with every counted word, are
 // written to counts.json beside them, for the maintainer's view-and-report (G13).
 //
+// The Studio settings are counted with no sites file (studio-settings), then with a sites file of two ssh sites
+// (studio-settings-sites, the Sites section alone: its heading plus one line per site; the maintainer's answer of
+// 2026-11-17, ADR 0801 Q-RL-1). The file is removed again before the project surfaces, which a site would change.
+//
 // Needs rcfd and rcfd-mcp (tests/support/rcfd.ts, tests/support/project.ts); without them the tests are skipped.
 import { expect, test, type Page } from '@playwright/test';
-import { mkdirSync, writeFileSync } from 'node:fs';
+import { mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import { rm } from 'node:fs/promises';
 import path from 'node:path';
-import { WORD_BUDGETS, type SurfaceId } from '../../src/shared/word-budget.js';
+import { budgetOf, WORD_BUDGETS, type SurfaceId } from '../../src/shared/word-budget.js';
 import { claudeFixture, FAKE_CLAUDE, type ClaudeFixture } from '../support/claude.js';
 import { copyExample, emptyProject, findMcp, mcpPids, NO_MCP, scratch, stubDialog } from '../support/project.js';
 import { appRoot, findRcfd, killIfRcfd, killPid, NO_RCFD, startRcfd, type RunningRcfd } from '../support/rcfd.js';
@@ -32,6 +36,7 @@ const RE400 = 'r-20261028T152641-97f1';
 const OPEN_DELAY_MS = 2500;
 
 let dir = '';
+let sitesFile = '';
 let quick = '';
 let empty = '';
 let fx: ClaudeFixture;
@@ -59,16 +64,17 @@ const ROOTS: Record<SurfaceId, SurfaceRoot> = {
   undo: { root: '.hi-controls', exclude: ['.hi-panel'] },
   decision: { root: '.hi-panel' },
   progress: { root: '.wk' },
-  'studio-settings': { root: '.ss-page' },
+  'studio-settings': { root: '.ss-page', exclude: ['.ss-sites'] },
+  'studio-settings-sites': { root: '.ss-sites' },
 };
 
 /** Counts the surface and screenshots the window (the budgets are held by the last test, once every surface is counted). */
-async function atRest(id: SurfaceId): Promise<void> {
+async function atRest(id: SurfaceId, items = 0): Promise<void> {
   // the focus ring and a hover tooltip are not the surface at rest
   await page.mouse.move(1439, 899);
   await page.screenshot({ path: path.join(SHOTS, `${id}.png`), scale: 'css' });
   const c = await countWords(page, ROOTS[id]);
-  counts[id] = { ...c, budget: WORD_BUDGETS[id].budget };
+  counts[id] = { ...c, budget: budgetOf(WORD_BUDGETS[id], items) };
   expect(c.found, `${id}: ${ROOTS[id].root} is on the page`).toBe(true);
 }
 
@@ -77,12 +83,15 @@ test.beforeAll(async () => {
   dir = await scratch('f833');
   quick = await copyExample('quick-start', dir);
   empty = await emptyProject(dir, 'An empty project');
+  // absent until the Sites section is counted (the Studio looks for it each time a page asks)
+  sitesFile = path.join(dir, 'sites.toml');
   fx = await claudeFixture('f833');
   service = await startRcfd(rcfd!);
   studio = await launchStudio({
     RCFD_STUDIO_SERVICE: `127.0.0.1:${service.port}`,
     RCFD_STUDIO_MCP: mcp!,
     RCFD_STUDIO_RECENT: path.join(dir, 'recent.json'),
+    RCFD_SITES_FILE: sitesFile,
     RCFD_STUDIO_CLAUDE: FAKE_CLAUDE,
     RCFD_STUDIO_CLAUDE_STATE: fx.state,
     RCFD_STUDIO_TEST_DELAY: JSON.stringify({ projectOpen: OPEN_DELAY_MS }),
@@ -113,6 +122,22 @@ test('the project home with no project open, and the first path’s four station
   await atRest('studio-settings');
   await page.getByRole('button', { name: 'Close settings' }).click();
   await expect(page.getByRole('button', { name: 'Open project folder…' })).toBeEnabled();
+  // the Sites section, with two sites listed (no site is reached: ssh sites are only listed here)
+  const site = (name: string) => `[site.${name}]
+kind = "ssh"
+host = "me@${name}.example.org"
+engine = "/opt/rcfd/bin"
+work = "/scratch/me/rcfd"
+`;
+  writeFileSync(sitesFile, `${site('lab')}
+${site('cluster')}`);
+  await page.keyboard.press('Control+,');
+  const sites = page.getByRole('region', { name: 'Sites' });
+  await expect(sites.locator('.ss-site')).toHaveCount(2, { timeout: 20_000 });
+  await atRest('studio-settings-sites', 2);
+  await page.getByRole('button', { name: 'Close settings' }).click();
+  await expect(page.getByRole('button', { name: 'Open project folder…' })).toBeEnabled();
+  rmSync(sitesFile);
 });
 
 test('the progress row of a project opening that lasts', async () => {

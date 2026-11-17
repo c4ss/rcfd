@@ -3432,6 +3432,9 @@ env var is specified". For active runs, their answer was: ask.
 
 ### How ownership is detected (no engine change)
 
+Superseded for records that say who started the runner: see Q-RL-2 in the maintainer's answers below. The looks remain
+the rule for a record with no `started_by`.
+
 `RunnerWatch` (`src/main/project/runner-lifetime.ts`) reads `.rcfd/runner.json` and checks its pid every second, and
 also before and after each project action. The runner writes that file once it holds `.rcfd/runner.lock` and removes it
 at a clean shutdown. `observeRunner` (`src/shared/runner-lifetime.ts`, pure) works on two looks in a row:
@@ -3481,6 +3484,56 @@ at a clean shutdown. `observeRunner` (`src/shared/runner-lifetime.ts`, pure) wor
 
   The specs service, run-control, runs, close-guard, f837, project, word-budget, shell, data, service-security and
   first-path were restated where they assumed survival. No process the tests started is left behind.
+
+### The maintainer's answers (2026-11-17, branch settings-owner over main 30352ff5)
+
+- **Q-RL-1, settled: a visible label, and the budget raised.** The studio-settings page with no sites file keeps its
+  9 words, and the setting "Keep the runner going after the Studio closes" gains a visible label of 5 words or fewer,
+  which makes the page's budget 14 (`src/shared/word-budget.ts`; the table in `apps/studio-web/README.md`). The label
+  is "Keep the runner going" (4 words), the toggle's own text beside its `play` icon. The full sentence stays the
+  accessible name and the tooltip, and starts with the label (WCAG 2.5.3, label in name). This replaces RL-D6.
+  The same answer settles the budget note of Addendum 24: the Sites section has its own budget,
+  `studio-settings-sites`, its heading plus one line per site (1 + n words with n sites, by the new `perItem` of a
+  budget). Site names, hosts and confirmed states count as data, so a site's line has one chrome word, Check.
+  To fit that rule, the sites file's line is now its path (data), and the path is the Open button. Its accessible
+  name is "Open the sites file <path>" and its tooltip "Open the sites file" (SR-D1 below, reversible).
+  `tests/e2e/word-budget.spec.ts` counts the page with no sites file (the Sites section excluded), then writes a
+  sites file of two ssh sites, counts the Sites section alone against 1 + 2, and removes the file before the project
+  surfaces.
+- **Q-RL-2, settled: the runner records who started it.** The runner writes an additive `started_by` to
+  `.rcfd/runner.json`: "studio", "cli" or "mcp", and `studio_pid` (the Studio's main process) when the Studio started
+  it. Older readers ignore both fields (G4); no golden or baseline hash covers `runner.json`, which holds a pid and a
+  time and is removed at a clean shutdown. With no value the record is written as before, key for key.
+  - **How the value travels (SR-D2, the cleanest of a flag or a variable).** One environment variable,
+    `RCFD_RUNNER_STARTED_BY`, with the value `studio:<pid>`, `cli` or `mcp`. `rcfd-runner serve` reads it once at start
+    (`crates/rcfd-runner/src/started_by.rs`). The client's start (`Client::ensure_runner`, behind `rcfd-runner ensure`,
+    `start` and `rerun`, and the project tools' `start_run` and `queue_run`) always sets it on the `serve` it spawns:
+    to its own process's value when that parses, else to the client's surface, and removes it when there is neither.
+    The surface is `cli` for the `rcfd-runner` commands (`main.rs`). For the project workspace it is the journal
+    actor's client (`RunService::with_actor`): `mcp` in `rcfd-mcp`, `cli` in `rcfd project call`. The Studio sets
+    `studio:<its pid>` only on the processes it starts that may start a runner: `rcfd-runner ensure` (`control.ts`)
+    and its own `rcfd-mcp` (`server.ts`), through `runnerStarterEnv`. Claude Code and the CLI the user runs do not get
+    it. The exec site's agent has the variable removed (`site/link.rs`), so a site's runners are not this Studio's.
+    A variable and not a `serve` flag, because a newer client must not make an older `rcfd-runner serve` fail on an
+    unknown flag; an older runner ignores the variable. A malformed value is ignored for the surface.
+  - **The ownership rule (`src/shared/runner-lifetime.ts`, `observeRunner`, used by RunnerWatch).** The Studio owns a
+    runner whose record says `started_by` "studio" with this Studio's pid, at any look, including one alive when the
+    project opened (a runner this Studio started, kept by Close project, and opened again). A record with another
+    `started_by`, or another Studio's pid, is never owned. Only a record with no `started_by` falls back to the watch
+    rule of before. This replaces RL-D1: a runner the CLI or Claude Code starts while the Studio has the project open
+    is no longer the Studio's. RL-D2 now holds only for records with no `started_by`.
+  - **Tests.** Rust: `crates/rcfd-runner/tests/started_by_qrl2.rs` (S1 to S6: `ensure` records cli; the Studio's value
+    records studio and its pid; a malformed value falls back to cli; a library client records mcp; `serve` by hand
+    writes the keys of before and no more; the new keys sit beside every key of before), the unit tests of
+    `started_by.rs`, and `rcfd-workspace`'s `started_by_tests` (the actor's client names the starter). Unit:
+    `tests/unit/runner-lifetime.spec.ts`, restated with the Studio's pid (the record decides, the looks only without
+    it, `readRunnerSeen` of the new fields, RunnerWatch with this Studio's pid, `runnerStarterEnv`). e2e:
+    `tests/e2e/runner-lifetime.spec.ts` checks the record of a runner the Studio started and of one the CLI started, and
+    gains a test: a runner the CLI starts while the Studio has the project open is not the Studio's and is left at
+    the close.
+- **SR-D1 (recommendation taken; reversible), the sites file's Open button.** (a) The path is the button, named
+  "Open the sites file <path>". This is taken: the section then fits "its heading plus one line per site". (b) Keep the
+  worded "Open the sites file" button, which adds 4 chrome words to the section's budget.
 
 ## Addendum 24: Run sites in the Studio (2026-11-17, branch sites-studio over main 65c78c47)
 
@@ -3560,6 +3613,8 @@ phase 1 of ADR 0739 (F-848, test S11). The engine part was already on main.
 - With sites listed, the Studio settings page counts 16 words against its at-rest budget of 9. The section adds
   "Sites", a "Check" per site and "Open the sites file". The budget is measured at rest, so it is not broken, but it
   is too tight for this section once the user has sites (for the maintainer, together with Q-RL-1).
+- Settled by the maintainer 2026-11-17 (see "Addendum: Runner closes with the Studio", the maintainer's answers): the
+  page's budget with no sites file is 14, and the Sites section has its own budget, its heading plus one line per site.
 
 ### Verification (headless, engine built in the worktree's own target)
 

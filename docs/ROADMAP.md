@@ -16534,6 +16534,13 @@ Generated from `docs/studio-guardrails.md`, `PRODUCT.md` and `DESIGN.md` ([ADR 0
     F-837 close guard when it holds runs (Stop runs and close: cancel_run then rcfd-runner shutdown; Keep them running
     and close; Cancel), merged with save-or-discard; its own rcfd serve closes too; the setting "Keep the runner going
     after the Studio closes" and --keep-runner keep the runner; tests/unit and tests/e2e runner-lifetime.spec.ts.
+    2026-11-17, the maintainer (ADR 0801, Q-RL-1 settled): the setting shows a visible label, "Keep the runner going"
+    (at most 5 words), and the studio-settings word budget is 14 with no sites file; the Sites section has its own
+    budget, its heading plus one line per site (site names and states are data). Q-RL-2 settled the same day: the
+    runner writes an additive started_by ("studio", "cli" or "mcp", with studio_pid for the Studio) to
+    .rcfd/runner.json, passed by the variable RCFD_RUNNER_STARTED_BY (the Studio sets studio:<pid> on its rcfd-runner
+    ensure and its rcfd-mcp); the Studio owns a runner only when the record says "studio" with its own pid, and falls
+    back to the looks only for a record with no started_by; crates/rcfd-runner/tests/started_by_qrl2.rs.
 - [x] **F-808** Electron Studio: field viewport on three.js WebGPU
   - depends on: F-804, F-802
   - acceptance: Mesh and fields on surfaces drawn by three.js WebGPURenderer with a TSL material that colours from the

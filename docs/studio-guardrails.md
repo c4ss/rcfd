@@ -36,7 +36,9 @@ of `store.rts` (R2, ADR 0350 addendum 1). Case validation uses the engine's sche
 
 New service methods are opt-in, behind a minor protocol version. No existing method, reply shape, golden, CLI help
 text, MCP tool list or default changes without the maintainer (house rule 3). Existing tests are not edited (house
-rule 2). `crates/rcfd-api/tests/baseline_hashes.rs` is never re-recorded.
+rule 2). `crates/rcfd-api/tests/baseline_hashes.rs` is never re-recorded. A new field in a record the engine writes is
+an addition, and older readers ignore it: for example `started_by` and `studio_pid` in `.rcfd/runner.json` (the
+maintainer, 2026-11-17, ADR 0801 Q-RL-2), which no golden or baseline hash covers.
 
 ## G5. Dependencies
 
@@ -63,10 +65,13 @@ Amended 2026-11-17. The maintainer, after closing the Studio and finding `rcfd-r
 `rcfd run` still holding `target\release`: "the runner should close with studio by default if no external (existing)
 runner env var is specified". For active runs, their answer was: ask. So:
 
-- The Studio owns only the runner and the service it started itself in this session. A runner already alive when it
-  opened the project (an earlier Studio's, the CLI's, Claude Code's) and a service attached to through
-  `RCFD_STUDIO_SERVICE` or `--service` are never stopped by it. A runner that comes up while the Studio has the project
-  open, with none alive before, is the Studio's, whoever asked for it (its Run, or Claude Code's `start_run`).
+- The Studio owns only the runner and the service it started itself in this session. The runner records who started
+  it, as `started_by` ("studio", "cli" or "mcp") in `.rcfd/runner.json`, with `studio_pid` for the Studio (the
+  maintainer, 2026-11-17, Q-RL-2). The Studio owns a runner whose record says "studio" with its own pid, and no other:
+  not the CLI's, not Claude Code's (`mcp`), not another Studio's. Only a record without `started_by` (an older runner)
+  falls back to the looks: a runner already alive when the Studio opened the project is adopted, and one that comes up
+  while it has the project open, with none alive before, is the Studio's. A service attached to through
+  `RCFD_STUDIO_SERVICE` or `--service` is never stopped by it.
 - On a close (the window, Alt+F4, quit, Close project), an owned runner with no run queued, running or paused is shut
   down quietly (`rcfd-runner shutdown`). With active runs the close asks, naming each run: Stop runs and close (each run
   is cancelled through the engine and keeps its records; then the runner is shut down), Keep them running and close (the

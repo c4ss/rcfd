@@ -1,7 +1,9 @@
 // G7 as amended 2026-11-17 (the maintainer: "the runner should close with studio by default if no external (existing)
 // runner env var is specified"): the ownership and close rules of src/shared/runner-lifetime.ts as pure functions, the
 // main process's watch of the project's runner (src/main/project/runner-lifetime.ts) with a fake engine, the runner
-// setting kept in studio-preferences.json, and the project port's close with the runs' answer.
+// setting kept in studio-preferences.json, and the project port's close with the runs' answer. Q-RL-2 (the maintainer,
+// 2026-11-17): a runner record with `started_by` decides ownership by itself (this Studio's pid or not); only a record
+// without it falls back to the looks.
 import { expect, test } from '@playwright/test';
 import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
@@ -11,6 +13,9 @@ import {
   NOT_LOOKED,
   observeRunner,
   runLine,
+  STARTED_BY_ENV,
+  startedByThisStudio,
+  studioStartedBy,
   runnerCloseStep,
   runnerNeedsAsk,
   type ActiveRun,
@@ -18,7 +23,7 @@ import {
   type RunnerPlan,
   type RunnerSeen,
 } from '../../src/shared/runner-lifetime.js';
-import { readRunnerSeen, RunnerWatch, type RunnerEngine } from '../../src/main/project/runner-lifetime.js';
+import { readRunnerSeen, runnerStarterEnv, RunnerWatch, type RunnerEngine } from '../../src/main/project/runner-lifetime.js';
 import { formatPreferences, parseKeepRunner, parsePreferences, ThemePreference } from '../../src/main/theme.js';
 import { parseProjectRequest } from '../../src/main/project/bridge.js';
 import { keptForSolves } from '../../src/main/service/client.js';
@@ -27,9 +32,53 @@ const A: RunnerSeen = { pid: 101, started: '2026-11-17T10:00:00Z' };
 const B: RunnerSeen = { pid: 202, started: '2026-11-17T11:00:00Z' };
 const run = (id: string, state: string, step = 0, time: number | null = 0): ActiveRun => ({ id, case: 'cases/cavity-re100.toml', state, step, time });
 
-const looks = (...seen: (RunnerSeen | null)[]): Ownership => seen.reduce<Ownership>((o, s) => observeRunner(o, s), NOT_LOOKED);
+/** This Studio's pid in the tests, and another Studio's. */
+const SELF = 5150;
+const OTHER = 5151;
+const looks = (...seen: (RunnerSeen | null)[]): Ownership => seen.reduce<Ownership>((o, s) => observeRunner(o, s, SELF), NOT_LOOKED);
+const by = (r: RunnerSeen, startedBy: string, studioPid?: number): RunnerSeen => ({ ...r, startedBy, ...(studioPid !== undefined ? { studioPid } : {}) });
+const MINE = by(A, 'studio', SELF);
 
-test.describe('ownership: the Studio owns only the runner that came up while it had the project open', () => {
+test.describe('ownership by the record (Q-RL-2): started_by "studio" with this Studio’s pid, and nothing else', () => {
+  test('a runner this Studio started is owned at any look, even alive at the open or replacing another', () => {
+    expect(startedByThisStudio(MINE, SELF)).toBe(true);
+    expect(looks(MINE).owned).toEqual(MINE);
+    expect(looks(MINE, MINE).owned).toEqual(MINE);
+    expect(looks(B, MINE).owned).toEqual(MINE);
+    expect(looks(null, by(B, 'cli'), MINE).owned).toEqual(MINE);
+  });
+  test('a runner another Studio started is not owned, even when it came up after a look without one', () => {
+    const theirs = by(A, 'studio', OTHER);
+    expect(startedByThisStudio(theirs, SELF)).toBe(false);
+    expect(looks(null, theirs).owned).toBeNull();
+    expect(looks(theirs).owned).toBeNull();
+    // a "studio" record with no pid cannot be this Studio's
+    expect(looks(null, by(A, 'studio')).owned).toBeNull();
+  });
+  test('a runner the CLI or an MCP client started is not owned, even when it came up while the project was open', () => {
+    for (const who of ['cli', 'mcp', 'something-newer']) {
+      expect(startedByThisStudio(by(A, who), SELF)).toBe(false);
+      expect(looks(null, by(A, who)).owned).toBeNull();
+      expect(looks(null, null, by(A, who), by(A, who)).owned).toBeNull();
+    }
+  });
+  test('an owned runner that is gone is not owned; a record with no started_by after it falls back to the looks', () => {
+    expect(looks(MINE, null).owned).toBeNull();
+    expect(startedByThisStudio(A, SELF)).toBeNull();
+    expect(looks(MINE, null, B).owned).toEqual(B);
+    expect(looks(by(A, 'cli'), B).owned).toBeNull();
+  });
+  test('the Studio’s value of RCFD_RUNNER_STARTED_BY, given only to the processes it starts', () => {
+    expect(STARTED_BY_ENV).toBe('RCFD_RUNNER_STARTED_BY');
+    expect(studioStartedBy(SELF)).toBe('studio:5150');
+    const env = runnerStarterEnv({ PATH: 'x' }, SELF);
+    expect(env).toEqual({ PATH: 'x', RCFD_RUNNER_STARTED_BY: 'studio:5150' });
+    expect(runnerStarterEnv({ RCFD_RUNNER_STARTED_BY: 'cli' }, SELF)[STARTED_BY_ENV]).toBe('studio:5150');
+    expect(runnerStarterEnv()[STARTED_BY_ENV]).toBe(`studio:${process.pid}`);
+  });
+});
+
+test.describe('ownership by the looks, for a record with no started_by: the runner that came up while the project was open', () => {
   test('a runner alive when the project opened is adopted, never owned, however long it lives', () => {
     expect(looks(A).owned).toBeNull();
     expect(looks(A, A, A).owned).toBeNull();
@@ -154,6 +203,19 @@ test.describe('RunnerWatch (the main process, a fake engine)', () => {
     expect(await w.close('stop')).toBe('leave');
     expect(calls).toEqual([]);
   });
+  test('Q-RL-2: the record decides; this Studio’s runner alive at the open is owned, another surface’s never', async () => {
+    const mine = new RunnerWatch('/p', fakeEngine([MINE], []).engine, () => null, 0, SELF);
+    await mine.look();
+    expect(mine.owned).toEqual(MINE);
+    for (const r of [by(A, 'cli'), by(A, 'mcp'), by(A, 'studio', OTHER)]) {
+      const { engine, calls } = fakeEngine([null, r], [run('r-1', 'running')]);
+      const w = new RunnerWatch('/p', engine, () => null, 0, SELF);
+      await w.look();
+      expect(w.owned).toBeNull();
+      expect(await w.close('stop')).toBe('leave');
+      expect(calls).toEqual([]);
+    }
+  });
   test('the setting keeps an owned runner: no runs read, nothing stopped', async () => {
     const { engine, calls } = fakeEngine([null, A], [run('r-1', 'running')]);
     const w = new RunnerWatch('/p', engine, () => 'setting', 0);
@@ -184,6 +246,18 @@ test.describe('the runner’s record and the setting’s file', () => {
     expect(await readRunnerSeen(p)).toBeUndefined();
     await writeFile(path.join(p, '.rcfd', 'runner.json'), '{"pid": 12');
     expect(await readRunnerSeen(p)).toBeUndefined();
+  });
+  test('.rcfd/runner.json with started_by (Q-RL-2): who started it, and the Studio’s pid; other fields ignored', async () => {
+    const p = path.join(dir, 'q');
+    await mkdir(path.join(p, '.rcfd'), { recursive: true });
+    const base = { pid: process.pid, started: '2026-11-17T10:00:00Z', config: {}, rcfd_bin: 'rcfd' };
+    await writeFile(path.join(p, '.rcfd', 'runner.json'), JSON.stringify({ ...base, started_by: 'studio', studio_pid: 4242 }));
+    expect(await readRunnerSeen(p)).toEqual({ pid: process.pid, started: base.started, startedBy: 'studio', studioPid: 4242 });
+    await writeFile(path.join(p, '.rcfd', 'runner.json'), JSON.stringify({ ...base, started_by: 'cli' }));
+    expect(await readRunnerSeen(p)).toEqual({ pid: process.pid, started: base.started, startedBy: 'cli' });
+    // a value of the wrong type is not a starter: the record falls back to the looks
+    await writeFile(path.join(p, '.rcfd', 'runner.json'), JSON.stringify({ ...base, started_by: 7, studio_pid: 'x' }));
+    expect(await readRunnerSeen(p)).toEqual({ pid: process.pid, started: base.started });
   });
   test('the setting is off by default, kept only when on, and a theme change keeps it', async () => {
     expect(formatPreferences('light')).toBe(JSON.stringify({ format: 'rcfd-studio-preferences', version: 1, theme: 'light' }, null, 2) + '\n');

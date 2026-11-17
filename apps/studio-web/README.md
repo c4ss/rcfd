@@ -448,11 +448,14 @@ The maintainer: "the runner should close with studio by default if no external (
 specified"; for active runs: ask. The rules are in `src/shared/runner-lifetime.ts`, the main process's side in
 `src/main/project/runner-lifetime.ts` (ADR 0801, addendum "Runner closes with the Studio").
 
-- Ownership: the Studio looks at the project's `.rcfd/runner.json` (the pid and start time the runner writes once it
-  holds the project's lock) when the project opens, once a second, and before and after each of its run actions. A
-  runner alive at the open is adopted and never stopped by the Studio. A runner first seen after a look that found none
-  is the Studio's, whoever asked for it (the Studio's Run, Claude Code's `start_run` while the Studio has the project
-  open, the CLI). A runner that replaced another between two looks is not.
+- Ownership: the Studio looks at the project's `.rcfd/runner.json` (written by the runner once it holds the project's
+  lock) when the project opens, once a second, and before and after each of its run actions. The record says who
+  started the runner (Q-RL-2, the maintainer 2026-11-17): `started_by` "studio", "cli" or "mcp", with `studio_pid` for
+  the Studio. The Studio sets `RCFD_RUNNER_STARTED_BY=studio:<its pid>` on the `rcfd-runner ensure` and the `rcfd-mcp`
+  it starts (`runnerStarterEnv`), and owns a runner whose record says "studio" with its own pid, and no other. A record
+  with no `started_by` (an older runner) falls back to the looks: a runner alive at the open is adopted and never
+  stopped, a runner first seen after a look that found none is the Studio's, and one that replaced another between two
+  looks is not.
 - The close (the window's close button, Alt+F4, quit, Close project): an owned runner with no run queued, running or
   paused is shut down with no question (`rcfd-runner shutdown --project <folder>`). With active runs the F-837 close
   guard asks with the F-829 decision panel, naming each run (id, case, state, step or simulated time): **Stop runs and
@@ -1277,6 +1280,12 @@ unavailable and why, a value to act on (changes not saved).
 | undo controls | 6 | 0 | arrows named "Nothing to undo" and "Nothing to redo" |
 | decision panel | 0 | 0 | the whole panel is an exception |
 | progress rows | 3 | 3 | the work's name and Cancel (a work in progress is not at rest) |
+| Studio settings, no sites file | 9 | 14 | brand, Settings, Theme and its four choices, the runner toggle's label "Keep the runner going" (9 + at most 5, the maintainer 2026-11-17) |
+| Studio settings, the Sites section | 5 + 1 per site | 1 + 1 per site | the heading Sites and each site's Check; names, hosts, states and the file's path (the Open button) are data |
+
+The two Studio settings rows are the maintainer's answer of 2026-11-17 (ADR 0801, "Addendum: Runner closes with the
+Studio", Q-RL-1): the page is counted with no sites file, and the Sites section on its own, by `perItem` in
+`src/shared/word-budget.ts` (its budget with n sites is 1 + n).
 
 ## Keyboard and assistive technology (F-816, G8)
 
