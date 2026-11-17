@@ -15866,14 +15866,27 @@ fixed by the item's registration ADR before any code.
     unchanged in bits. f777, f726, cgrid_w35d, f722, fan01_p10_w36d c2, fan_design_w46a s4, --lib and baseline_hashes
     pass. Six of six mutations caught. Library only; no case value. Follow-up F-784 (ramp length of the S'' wake-stack
     remap from the wake line spacing).
-- [ ] **F-783** The bifurcated branch of rule L's 16^3 punch path
+- [~] **F-783** The bifurcated branch of rule L's 16^3 punch path
   - depends on: F-779
   - acceptance: Every limit not stated here is registered in the ADR before the run. A branch switch at the bifurcation
     of ADR 0697 along its antisymmetric mode, traced with the indefinite-tangent Newton: whether the pitchfork is
     supercritical or subcritical, the inertia and R/mu along the bifurcated branch to full load against the symmetric
     branch and F-bar; a fast control on a closed-form pitchfork, and a control of the continuity test whose Newton
     converges to a distant root; the default bits unchanged.
-  - note: Follow-up of F-779 (ADR 0697, 2026-11-16).
+  - note: F-783 (ADR 0700, 2026-11-17): the bifurcation of rule L's 16^3 neo-Hookean punch path at 0.96490003 (ADR 0697)
+    is a subcritical pitchfork. The cubic coefficient of its reduced equation, measured on the stable side at 0.9647
+    from the response to a force along the antisymmetric mode (k_0 within 1.0e-8 of mu_1 = 873.67, Z2-symmetric to
+    7.6e-9), is -1.16e12 (three levels within 0.2 per cent). The branch switch along +-phi with the indefinite-tangent
+    Newton at fixed loads finds the unstable asymmetric equilibrium at 0.9647 (amplitude 2.695e-5 against the predicted
+    2.747e-5, nu = 1, mirror images to 4e-15) and at 0.9645 (3.83e-5, nu = 1), with R/mu within 1.2e-7 of the symmetric
+    branch and 3.9 per cent above F-bar (stable, nu = 0 at 15 loads to full load); past the bifurcation no small
+    asymmetric state exists, so the symmetric state the indefinite-tangent solve reaches at full load is unstable with
+    no nearby stable branch. Controls: closed-form super- and subcritical pitchforks (the subcritical one with a
+    positive cubic term of its own, found only from the second-order start), a fold whose Newton converges to a distant
+    root (rejected by the continuity test: ADR 0697's MU4 now caught), the stable 8^3 block. Test-only, default bits
+    unchanged; six of six mutations caught. Partial: a subcritical branch does not reach full load under load control,
+    the trace fell back onto the symmetric branch at 0.964, and two rows were met only after amendments. Follow-up F-789
+    (The subcritical branch of rule L's 16^3 punch path past 0.9645).
 - [ ] **F-784** ramp length of the S'' wake-stack remap from the wake line spacing
   - depends on: F-782
   - acceptance: Every limit not stated here is registered in the ADR before the run. A new opt-in field of S'' sets the
@@ -15942,3 +15955,11 @@ fixed by the item's registration ADR before any code.
     reason; the agreement of each reader with the assigned primary is reported next to it; no limit of ADR 0684, 0690,
     0701 or 0704 is changed.
   - note: Follow-up of F-786 (ADR 0704, 2026-11-16).
+- [ ] **F-789** The subcritical branch of rule L's 16^3 punch path past 0.9645
+  - depends on: F-783
+  - acceptance: Every limit not stated here is registered in the ADR before the run. The bifurcated branch of ADR 0700
+    traced from its state at 0.9645 toward lower loads with a continuity test that also bounds the change of the
+    amplitude along the critical mode, and by the arc-length driver to its fold if it folds, with the inertia and R/mu
+    along it against the symmetric branch and F-bar; a fast control on the closed-form subcritical pitchfork of ADR 0700
+    and on a step that falls back onto the symmetric branch; the default bits unchanged.
+  - note: Follow-up of F-783 (ADR 0700, 2026-11-16).
