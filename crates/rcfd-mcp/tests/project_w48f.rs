@@ -103,6 +103,8 @@ fn f2_tool_names_pass_the_allow_list_rules() {
     // maintainer adds it)
     let mut read = read;
     assert!(read.remove("derive_picture"), "derive_picture is a read tool");
+    // ADR 0739 (restated for F-848): its read tool list_sites is not on it either (no answer of the maintainer adds it)
+    assert!(read.remove("list_sites"), "list_sites is a read tool");
     assert_eq!(read.len(), 17);
     assert_eq!(read, PROJECT_READ_TOOLS.into_iter().collect::<BTreeSet<_>>());
     eprintln!(
@@ -119,8 +121,8 @@ fn f3_access_classes_read_only_and_schema() {
     let s = server(&dir, Policy::default());
     let list = s.tool_list();
     // ADR 0733: and the two budgets tools; ADR 0734: and hash_project_file; ADR 0736: and the six trash tools; ADR 0737:
-    // and case_facts, refine_case_mesh; ADR 0738: and derive_picture
-    assert_eq!(names(&list).len(), 17 + 35);
+    // and case_facts, refine_case_mesh; ADR 0738: and derive_picture; ADR 0739: and list_sites
+    assert_eq!(names(&list).len(), 17 + 36);
     for (name, access) in PROJECT_TOOLS {
         let t = list["tools"]
             .as_array()

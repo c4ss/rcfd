@@ -84,7 +84,7 @@ pub const FILE_PAGE: usize = 32_000;
 pub const MAX_WAIT_S: f64 = 60.0;
 
 /// The names [`Workspace::call`] answers, in the order of the MCP project tools.
-pub const COMMANDS: [&str; 35] = [
+pub const COMMANDS: [&str; 36] = [
     "project_info",
     "list_runs",
     "run_status",
@@ -109,6 +109,7 @@ pub const COMMANDS: [&str; 35] = [
     "set_runner_config",
     "case_facts",
     "refine_case_mesh",
+    "list_sites",
     "start_run",
     "pause_run",
     "resume_run",
@@ -278,6 +279,7 @@ impl Workspace {
             "set_runner_config" => value(self.set_runner_config(args)),
             "case_facts" => value(self.case_facts(args)),
             "refine_case_mesh" => value(self.refine_case_mesh(args)),
+            "list_sites" => value(self.list_sites()),
             "start_run" => value(self.start_run(args)),
             "pause_run" | "resume_run" | "cancel_run" => value(self.control(name, args)),
             "wait_run" => value(self.wait_run(args)),

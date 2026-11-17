@@ -1,6 +1,7 @@
 # ADR 0739: F-848 proposal: run sites, a remote simulation service for the Studio, the CLI and the MCP server
 
-Status: **Proposed 2026-11-17.** Design only; nothing is built. The open questions at the end need the maintainer.
+Status: **Accepted 2026-11-17.** The maintainer answered all ten open questions with option (a) on 2026-11-17 (see
+"Answers" after the open questions). Q9 and the engine part of phase 1 are built; see "Built" at the end.
 
 Roadmap item F-848 (Electron Studio and engine: runs on a remote site). Parents:
 [ADR 0123](0123-wave47b-run-service.md) (the run service),
@@ -419,6 +420,22 @@ Each question stands alone; the first option is the recommendation.
     version after the user's yes per site, recorded in every run's `site.json` and `solver_version`. (b) Require the
     same `git_rev` on both sides. (c) Allow anything with a warning. Recommendation: (a).
 
+## Answers (maintainer, 2026-11-17)
+
+All ten with option (a):
+
+1. The project stays local; the site holds a mirror.
+2. SSH, running the stdio agent.
+3. G10 keeps its sentence and gains the one in (a), added in `docs/studio-guardrails.md` with this date.
+4. Everything is copied back at the end of a run; a per-site setting may come later.
+5. fnv64 and the length name an object; it is verified on arrival.
+6. Claude Code and other MCP clients may name only a site with `assistant = true` (default false).
+7. Slurm is the first scheduler adapter (phase 3).
+8. A user-level `sites.toml`; the Studio remembers the last site per project.
+9. `rcfd serve` refuses a non-loopback `--addr` unless `--allow-unauthenticated-remote` is given.
+10. Another protocol major is refused; another engine version is allowed after the user's yes for that site and
+    version, recorded.
+
 ## Tests that would prove it
 
 The fake remote for CI: a site of `kind = "exec"` (tests only, refused outside a test build) whose command is the
@@ -449,3 +466,102 @@ folder on the same machine is the remote. One ignored test does the same through
 
 F-848's phases; T2 and T3 for the cluster and cloud uses of the maintainer's direction; F-100 later meets it through
 `settings.ranks` and T2.
+
+## Built
+
+### Q9 (commit ebb57300)
+
+`rcfd serve` refuses an `--addr` that resolves to a non-loopback address unless `--allow-unauthenticated-remote` is
+given. The refusal names SSH and the flag and exits 2. The rule is in `docs/service-protocol.md`, and
+`crates/rcfd-cli/tests/serve_loopback_adr0739.rs` tests it with 4 tests. No test binds `0.0.0.0`.
+
+### Phase 1, the engine
+
+- **The `Site` seam** (`crates/rcfd-runner/src/site/mod.rs`): `hello`, `missing`, `put`, `submit`, `read`, `files`,
+  `request`, `list` and `ensure`. The protocol is `rcfd-site/1`: JSON-RPC 2.0, one object per line, on the agent's
+  standard streams. Local runs never use the seam. In `runner.rs`, `scan` hands a run whose `run.json` has `site`
+  to `site::remote::RemoteRuns`, which keeps one worker thread per site. `shutdown` stops it. No other line of the
+  local path changed.
+- **Sites** (`site/sites.rs`): a user-level `sites.toml` (`RCFD_SITES_FILE`, else `%APPDATA%\rcfd\sites.toml` or
+  `~/.config/rcfd/sites.toml`) with `[site.<name>]` tables. The fields are `kind` (`ssh`, or `exec` for tests),
+  `host`, `engine`, `work`, `max_runs`, `cpu_threads`, `mem_budget_mb`, `assistant` (default false), `confirmed` and
+  `accept_engines`. Unknown keys are refused, and every message names the file and the table. A host that starts
+  with `-` is refused, and so are quotes in `engine` or `work`.
+- **The link** (`site/link.rs`): ssh gets an argument list (`-o BatchMode=yes -o ServerAliveInterval=15 -T -e none --
+  <host> <engine>/rcfd-runner site --stdio --work <work>`) and never a local shell. OpenSSH checks the host key, and
+  rcfd stores no key and no secret. The agent's output is read on a thread, and its exit is seen by `try_wait`:
+  on Windows, the runner that the agent starts inherits its handles (ADR 0146).
+- **The agent** (`site/agent.rs`, `rcfd-runner site --stdio --work <dir>`) does the following:
+  - It creates the work root with mode 0700, and objects with mode 0600.
+  - It stores objects by content as `<fnv64>-<bytes>` (Q5). An upload resumes from the length of the partial
+    object already on the site, and the object is verified before it is renamed into place. Every received piece is
+    appended to `received.jsonl`.
+  - It mirrors a project as `<work>/projects/<name>-<hash>`, with the budgets written to the mirror's runner
+    config. Inputs are hard-linked or copied from the objects into the run's place.
+  - It creates the run folder through a temporary folder and a rename, then starts or reuses the site's own runner.
+- **What is sent** is `rcfd check <case> --inputs --json` (P4): every file the case reads, with its `filehash` hash
+  and size. The list comes from `crates/rcfd-api/src/inputs.rs`. The runner runs that command rather than linking
+  rcfd-api, because rcfd-api depends on rcfd-runner.
+- **What comes back**:
+  - `events.jsonl`, `residuals.jsonl` and `log.txt` are copied live by byte offset. The jsonl files are copied only
+    up to their last newline.
+  - The status is copied live.
+  - When the site's run ends, `output/` and `fields/` are downloaded. The downloads go to `.part` files, resume, and
+    are checked against their hash. The final `status.json` is written last (Q4).
+  - When the link is lost, it is retried after 100 ms, with the wait doubling to 5 s, and then every 30 s.
+- **Pause, resume and cancel** are written locally as usual, forwarded to the site, and cleared when the site's run
+  ends.
+- **The records**: `run.json` gains an optional `site`, which a local run never has. `site.json` records where the
+  run went: the site, the host, the remote folder, the engine, and whether that engine was accepted. `site.jsonl`
+  logs one line per event, with these kinds: `connected`, `lost`, `uploaded`, `submitted`, `request_sent`,
+  `downloaded`, `refused`, `error`, `unconfigured` and `diverged`.
+- **Versions (Q10)**: another protocol major is refused with a located message. A site engine whose
+  `version+git_rev` differs from this machine's is refused until `rcfd site check <name> --confirm` records it in
+  `accept_engines`. `site.json` records it for every run.
+- **Confirmation**: `rcfd site check <name> --confirm` (or `rcfd-runner site check`) starts the agent once. It shows
+  the host key fingerprints that OpenSSH holds (from `ssh -G`, then `ssh-keygen -l -F`) and the engine beside this
+  machine's. It writes `confirmed = "<fingerprints>"` into the file, keeping the file's comments, and replaces the
+  file atomically. A site without `confirmed` takes no run.
+- **The CLI**:
+  - `rcfd-runner start ... --site <name>` and `rcfd-runner rerun <id> --site <name>` start remote runs.
+  - `rcfd site list [--json]` and `rcfd site check <name> [--confirm]` read and confirm sites.
+  - `rcfd check <case> --inputs [--json] [--case-dir <dir>]` lists a case's inputs.
+  - `rcfd site gc` says that it comes in phase 2.
+- **MCP (Q6)**: `list_sites` is a read tool that comes right after `refine_case_mesh`. `start_run` gains `site`.
+  A site without `assistant = true`, an unknown site, or an unconfirmed one is refused (1002) before a case is made,
+  a file is written, or an agent starts. `list_sites` is not on the first Claude allow-list, because no answer adds
+  it. The tool-list tests are restated, not re-recorded: `project_list_f270.rs`, `tool_list_f275.rs`,
+  `project_w48f.rs` and `project_runs_w48f.rs`. The Studio's capability inventory is regenerated, with F-848
+  exemptions for the site commands.
+
+Decisions taken while building:
+
+- `exec` sites, and the agent's test overrides of its protocol and `git_rev`, work only when
+  `RCFD_TEST_EXEC_SITES=1` is set. The ADR's "refused outside a test build" could not be a cargo feature, because
+  the integration tests run the release binaries.
+- `start_run {site}` always requires `assistant = true`, whoever calls it. The Studio talks to the same MCP server,
+  so its remote runs are to go through `rcfd-runner start --site`, which is a direct user action.
+
+### Tests
+
+| file | count | covers |
+|---|---|---|
+| `crates/rcfd-runner/tests/sites_adr0739.rs` | 8 (9 on Unix) | S1, S2, S3, S4, S5, S6, S7, S8, S9, S12 (Unix) and an ssh localhost run with R6, skipped unless `ssh -o BatchMode=yes localhost` answers |
+| `crates/rcfd-cli/tests/check_inputs_adr0739.rs` | 3 | S10: the 11 shipped cases, a table, a `.wasm` user function and a mesh file, and a missing input (exit 3) |
+| `crates/rcfd-mcp/tests/sites_adr0739.rs` | 1 | S9 from MCP (`assistant = false`, unknown site, `new_case` with a closed site), and a finished run on an open site |
+| `crates/rcfd-cli/tests/serve_loopback_adr0739.rs` | 4 | Q9 |
+
+S1 compares `metrics.json` without the solver's wall-clock time. S8 checks the local run's `run.json` keys, and
+that there is no `site.json`, no `site.jsonl` and no agent. It does not mask and byte-compare the files; the
+unchanged `baseline_hashes` covers the defaults.
+
+### Left
+
+- **The Studio's part of phase 1 and S11**: the Where choice at Start, remembered per project (Q8); the site badge
+  and link state on remote runs; and a Sites page or sites.toml editor. Until they are built, the coverage map
+  exempts the site commands under F-848.
+- **R6 on the reference Linux**: there is no ssh server here (see the report of this build). The test is written
+  for Unix and skips here.
+- **Feed**: lines of `site.jsonl` are not yet events in the feed. A local run has no `site.jsonl`, so the feed of
+  local runs is unchanged.
+- **Phases 2 and 3**: S13, S14 and S15, `rcfd site gc`, studies on a site, download progress, and the Slurm adapter.

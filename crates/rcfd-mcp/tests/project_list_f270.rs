@@ -35,6 +35,9 @@
 //! ADR 0737 restates it for F-837 (P1 to P3): `case_facts` (read, required `case`) and `refine_case_mesh` (`write_files`,
 //! required `case`, `factor` and `base_hash`) come right after `set_runner_config`, and `start_run` gains exactly the
 //! properties `run_time` and `dry_run`; taken out like the others, the list is the one below.
+//!
+//! ADR 0739 restates it for F-848 (phase 1): `list_sites` (read, no argument) comes right after `refine_case_mesh`, and
+//! `start_run` gains the property `site`; taken out first, the list is the F-837 one above, byte for byte.
 
 use serde_json::{json, Value};
 use std::io::Write;
@@ -120,6 +123,26 @@ fn a2_tools_list_with_project_is_the_golden_with_the_f271_changes() {
     // live text
     assert_eq!(serde_json::to_string(&gold).unwrap(), GOLDEN);
     assert_eq!(serde_json::to_string(&live_value).unwrap(), got);
+    // ADR 0739 (F-848): list_sites right after refine_case_mesh and start_run's property site, taken out; the rest is
+    // the list the blocks below take apart
+    {
+        let tools = live_value["tools"].as_array_mut().unwrap();
+        let at = tools
+            .iter()
+            .position(|t| t["name"] == "list_sites")
+            .expect("list_sites listed");
+        assert_eq!(tools[at - 1]["name"], "refine_case_mesh");
+        assert_eq!(tools[at + 1]["name"], "start_run");
+        let l = &tools[at];
+        assert_eq!(l["_meta"]["rcfd/access"], "read");
+        assert_eq!(l["inputSchema"]["required"], json!([]));
+        assert_eq!(l["inputSchema"]["properties"], json!({}));
+        assert_eq!(l["inputSchema"]["additionalProperties"], false);
+        tools.remove(at);
+        let sr = tools.iter_mut().find(|t| t["name"] == "start_run").unwrap();
+        let props = sr["inputSchema"]["properties"].as_object_mut().unwrap();
+        assert_eq!(props.remove("site").expect("start_run has site")["type"], "string");
+    }
     // ADR 0736 P1: the six trash tools last, taken out; the rest is the F-828 list
     {
         let tools = live_value["tools"].as_array_mut().unwrap();

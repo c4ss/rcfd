@@ -86,7 +86,11 @@ hand (house rule 7).
 
 `contextIsolation` on, `nodeIntegration` off, the renderer sandboxed, a strict Content Security Policy, no remote
 content loaded, and an allow-list of IPC calls through the preload script. The service listens on loopback only unless
-the user says otherwise. Electron stays on a release its maintainers still support.
+the user says otherwise. The Studio reaches another machine only through a run site the user named in their sites file
+and confirmed once (host key fingerprint and engine version shown); project data goes there only for a run the user
+started there. Electron stays on a release its maintainers still support.
+
+(The sentence on run sites was added on 2026-11-17 by the maintainer's answer to ADR 0739 Q3, option (a).)
 
 ## G11. Claude Code
 

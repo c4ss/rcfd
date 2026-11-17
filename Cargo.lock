@@ -293,8 +293,10 @@ dependencies = [
  "rcfd-post",
  "rcfd-project",
  "rcfd-reactor",
+ "rcfd-runner",
  "rcfd-workspace",
  "serde_json",
+ "wat",
 ]
 
 [[package]]

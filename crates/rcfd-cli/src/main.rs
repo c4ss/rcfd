@@ -91,7 +91,9 @@ COMMANDS:
     check <case> [--json] [--set path=value]
                                validate, build, check the mesh and evaluate the setup rules; exit 0, 3 (invalid or
                                an error-level rule) or 4 (mesh); --json prints ok, exit_code, diagnostics, rules, mesh;
-                               --facts prints the case facts and run-time plan, --refine 2 the Refine x2 edits (JSON)
+                               --facts prints the case facts and run-time plan, --refine 2 the Refine x2 edits (JSON);
+                               --inputs [--case-dir <dir>] lists every file the case reads with its fnv64 hash and
+                               size (exit 3 when one is missing), what a run on a site uploads
     study <case> [--out dir] [--parallel n] [--resume] [--max-new-points n] [--no-fields] [--list] [--json] [--set path=value]
                                parametric study from the `study` section: one run per design point, table.csv/table.json
     map <case> --axis path=v1,v2,... [--axis path=start:stop:count]... [--out dir] [--cold] [--stop-on-failure] [--no-retry] [--serpentine] [--max-steps n] [--warm-start flow|extended] [--json] [--set path=value]
@@ -145,6 +147,11 @@ COMMANDS:
                                mesh.preview (rcfd-ui/1);
                                --journal-dir keeps each session's journal in <dir>/<session>-<created>.journal.json
                                (inside --root when given), a file that `rcfd run` can run
+    site list [--json]         the run sites of the user's sites file (ADR 0739; RCFD_SITES_FILE, else
+                               %APPDATA%\\rcfd\\sites.toml or ~/.config/rcfd/sites.toml); nothing is started
+    site check <name> [--confirm]
+                               start the site's agent once (over ssh) and show its host key and engine;
+                               --confirm records the user's yes in the sites file (exit 1: a run may not go there)
     call [--addr <host:port>] <method> [<json-params>]
                                call one method of a running service; prints the JSON result
                                (exit 1 and the JSON error on stderr if the call fails)
@@ -265,6 +272,7 @@ fn dispatch(args: &[String]) -> u8 {
         "reactor" => cmd_gapc::cmd_reactor(rest),
         "acoustics" => cmd_gapc::cmd_acoustics(rest),
         "fwh" => cmd_fwh::cmd_fwh(rest),
+        "site" => cmd_site(rest),
         other => usage_error(&format!("unknown command '{other}'")),
     }
 }
@@ -1020,6 +1028,21 @@ fn cmd_serve(args: &[String]) -> u8 {
         }
         Err(e) => {
             eprintln!("error: cannot listen on {addr}: {e}");
+            FAIL
+        }
+    }
+}
+
+/// `rcfd site list | check <name> [--confirm]` (ADR 0739 P3): the run sites of the user's sites file, through the site
+/// layer of rcfd-runner (the agent itself is `rcfd-runner site --stdio`).
+fn cmd_site(args: &[String]) -> u8 {
+    if flag(args, "--stdio") {
+        return usage_error("the site agent is `rcfd-runner site --stdio --work <dir>`");
+    }
+    match rcfd_runner::site::cmd::run(args) {
+        Ok(c) => c,
+        Err(e) => {
+            eprintln!("error: {e}");
             FAIL
         }
     }

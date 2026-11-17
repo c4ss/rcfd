@@ -288,6 +288,7 @@ impl Project {
             variant: None,
             condition: None,
             rerun_of: None,
+            site: None,
         };
         atomic::write_json_new(&dir.join("run.json"), &record)?;
         let status = RunStatus {

@@ -10,5 +10,6 @@ pub mod config;
 pub mod mesh;
 pub mod records;
 pub mod runner;
+pub mod site;
 pub mod store;
 pub mod sys;

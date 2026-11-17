@@ -16,12 +16,20 @@ COMMANDS:
     serve                      run the service in the foreground (exit 3 if one already runs for the project)
     ensure [output]            start the service, detached, unless it runs
     start <case> [--priority n] [--threads n] [--mem-mb n] [--set path=value]... [--continue-from <run-id>]
-          [--max-steps n] [--no-runner] [output]
+          [--max-steps n] [--site <name>] [--no-runner] [output]
                                queue a run (and start the service unless --no-runner); prints the run id.
-                               --continue-from: start from that run's output/restart.rcfd; --max-steps: at most n steps
-    rerun <run-id> [--priority n] [--threads n] [--mem-mb n] [--no-runner] [output]
+                               --continue-from: start from that run's output/restart.rcfd; --max-steps: at most n steps;
+                               --site: run it on that site of the sites file (ADR 0739); its inputs are sent there and
+                               its folder here is kept up to date from the site
+    rerun <run-id> [--priority n] [--threads n] [--mem-mb n] [--site <name>] [--no-runner] [output]
                                queue a new run of that run's case.snapshot with its settings (options given override
                                them); its run.json says rerun_of; prints the new run id
+    site list [--json]         the sites of the user's sites file (RCFD_SITES_FILE, else %APPDATA%\\rcfd\\sites.toml or
+                               ~/.config/rcfd/sites.toml); nothing is started
+    site check <name> [--confirm]
+                               start the site's agent once and show its host key and engine; --confirm records the
+                               user's yes (exit 1: a run may not go there)
+    site --stdio --work <dir>  the site agent (rcfd-site/1 on standard streams), what ssh starts on a site
     list                       every run and its status (JSON lines)
     status <id>                status.json of a run, with launch: its latest launch record (launch*.json) or null
     pause <id> | resume <id> | cancel <id>
@@ -109,6 +117,7 @@ fn run(args: &[String]) -> Result<u8, String> {
     let id = || pos.first().copied().ok_or_else(|| format!("{cmd} needs a run id"));
     match cmd {
         "-h" | "--help" | "help" => print!("{USAGE}"),
+        "site" => return rcfd_runner::site::cmd::run(rest),
         "serve" => return rcfd_runner::runner::serve(&project).map(|c| c as u8),
         "ensure" => client.with_output(output(rest)?).ensure_runner()?,
         "start" => {
@@ -135,7 +144,12 @@ fn run(args: &[String]) -> Result<u8, String> {
                     .transpose()
                     .map_err(|_| "--max-steps needs a number")?,
             };
-            let id = client.submit_with(case.as_ref(), &settings, &launch, &RunTags::default())?;
+            let id = match opt(rest, "--site") {
+                Some(site) => {
+                    client.submit_on_site(case.as_ref(), &settings, &launch, &RunTags::default(), site, false)?
+                }
+                None => client.submit_with(case.as_ref(), &settings, &launch, &RunTags::default())?,
+            };
             if !rest.iter().any(|a| a == "--no-runner") {
                 client.with_output(output(rest)?).ensure_runner()?;
             }
@@ -157,7 +171,10 @@ fn run(args: &[String]) -> Result<u8, String> {
                     .transpose()
                     .map_err(|_| "--mem-mb needs a number")?,
             };
-            let id = client.rerun(src, &over)?;
+            let id = match opt(rest, "--site") {
+                Some(site) => client.rerun_on_site(src, &over, site, false)?,
+                None => client.rerun(src, &over)?,
+            };
             if !rest.iter().any(|a| a == "--no-runner") {
                 client.with_output(output(rest)?).ensure_runner()?;
             }
