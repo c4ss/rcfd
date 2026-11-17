@@ -215,6 +215,10 @@
 .cc-mirror-word {
   font-weight: var(--font-weight-bold);
 }
+/* the log role's box (F-816): no box of its own, the list lays out as before */
+.cc-feed-log {
+  display: contents;
+}
 .cc-feed {
   flex: 1;
   min-height: 0;

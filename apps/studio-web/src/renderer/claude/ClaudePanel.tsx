@@ -230,20 +230,23 @@ function Feed({
           <span className="cc-mirror-word">Mirror</span> {row.readOnly}
         </p>
       )}
-      <ol className="cc-feed" role="log" aria-label={title}>
-        {/* G22: an empty transcript is the normal start: the composer's placeholder carries it, the rest is said to readers */}
-        {view.feed.length === 0 && (
-          <li className="cc-feed-empty sr-only">
-            {view.selected === null
-              ? 'Ask about this project: its cases, runs and results. Claude Code works in the project folder with the project tools below.'
-              : 'Nothing in this transcript yet.'}
-          </li>
-        )}
-        {view.feed.map((i) => (
-          <FeedEntry key={i.key} item={i} known={known} onOpenRun={onOpenRun} onOpenFile={onOpenFile} />
-        ))}
-        <li ref={end} className="cc-feed-end" aria-hidden="true" />
-      </ol>
+      {/* F-816 (axe listitem): the log role is on a box of its own, so the entries stay items of a list */}
+      <div className="cc-feed-log" role="log" aria-label={title}>
+        <ol className="cc-feed">
+          {/* G22: an empty transcript is the normal start: the composer's placeholder carries it, the rest is said to readers */}
+          {view.feed.length === 0 && (
+            <li className="cc-feed-empty sr-only">
+              {view.selected === null
+                ? 'Ask about this project: its cases, runs and results. Claude Code works in the project folder with the project tools below.'
+                : 'Nothing in this transcript yet.'}
+            </li>
+          )}
+          {view.feed.map((i) => (
+            <FeedEntry key={i.key} item={i} known={known} onOpenRun={onOpenRun} onOpenFile={onOpenFile} />
+          ))}
+          <li ref={end} className="cc-feed-end" aria-hidden="true" />
+        </ol>
+      </div>
       {view.feedError && (
         <p className="cc-line cc-line--fail" data-words="exception">
           {view.feedError}

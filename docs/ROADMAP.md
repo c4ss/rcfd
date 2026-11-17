@@ -14272,8 +14272,12 @@ Generated from `docs/studio-guardrails.md`, `PRODUCT.md` and `DESIGN.md` ([ADR 0
     reduced motion, state not by colour alone); fixed: run band names now a roving toolbar, decision panel and confirm
     strip keep Tab inside (aria-modal), Play steps at most every 500 ms under reduced motion, live band segment gets an
     ink edge and a 'live' description; manual pass in apps/studio-web/README.md. Own checks instead of axe-core (G5).
-    Open: axe-core under G5; the workspace keeps requesting animation frames at rest (743/s after an orbit key), a G9
-    power question.
+    Follow-up 2026-11-17 (maintainer: keep axe-core, no full accessibility work; Tab stays held in open dialogs):
+    axe-core 4.14.0 (dev, MPL-2.0) runs on each of the 16 walked surfaces in tests/e2e/a11y.spec.ts, fails on serious
+    or critical only, color-contrast off, exclusion list (tests/support/axe.ts EXCLUDED) empty; fixed: Claude Code
+    transcript list structure (listitem), Run again name, palette option names (label-content-name-mismatch), palette
+    field a combobox over its list (scrollable-region-focusable). Open: the workspace keeps requesting animation frames
+    at rest (743/s after an orbit key), a G9 power question (F-817 Addendum 14 since stopped the idle loop).
 - [~] **F-817** Electron Studio: performance regression bench for the product shell
   - depends on: F-808, F-810
   - acceptance: A script anyone can run that repeats P2, P4, P5, P7, P8 and P10 of docs/studio-guardrails.md G9 against
