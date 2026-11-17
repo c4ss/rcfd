@@ -11,8 +11,13 @@ Usage (from the workspace root):
 Tests are found without a build: each test target's root file is read, `mod x;` is followed, and `#[test]` functions get
 their libtest names from the `mod` nesting. Evidence per test, each with its kind:
   E1 item number in the file name (`_f123_`, `f123_x`, `x_f123`), E2 an ADR cites the file, E3 an ADR cites the test function
-  (distinctive names only), E4 a roadmap note cites the file or function, E5 (unit tests) an ADR cites the module path.
+  (distinctive names only), E4 a roadmap note cites the file or function, E5 (unit tests) an ADR cites the module path,
+  E0 (ADR 0679 amendment 1) the first `ADR NNNN` of the file's leading comment block, E6 (ADR 0679) the wave tag of the file or binary (`w34a`, `wave17a`) equals the tag of exactly one ADR named `NNNN-wave34a-...`
+  (a tag with several ADRs or only a prefix match is ambiguous and listed, not mapped), E7 (ADR 0679, integration tests) the binary
+  name occurs as a word in at most 3 ADRs.
 Items map to ADRs through ADR file names `NNNN-fMMM-...` and `ADR NNNN` in the item's roadmap note.
+Each test with an ADR also gets `primary_adr` (ADR 0679 rule P): the first tier of E0 > E1 > E6 > E2 > E3 > E7 > E5 > E4 that has an ADR;
+within the tier an ADR file named `registration` or `-wave` first, then the lowest number.
 """
 import argparse
 import json
@@ -26,12 +31,44 @@ ADR_FILE = re.compile(r"^(\d{4})((?:-f\d+)*)-")
 ADR_REF = re.compile(r"\bADRs? (\d{4})(?:\s*(?:-|to|–)\s*(\d{4}))?")
 RS_TOKEN = re.compile(r"[\w./\\-]*\w\.rs\b")
 MOD_PATH = re.compile(r"\brcfd_\w+(?:::\w+)+")
+WAVE_IN_STEM = re.compile(r"(?:^|_)(?:w|wave)(\d{2})([a-z]\d?)?(?=_|$)")
+WAVE_ADR = re.compile(r"^(\d{4})-wave(\d{2})([a-z]\d?)?-")
+NOT_EVIDENCE = {"0653", "0679"}  # ADRs that list test binaries: they are no evidence of which ADR registered one
+E7_MAX_ADRS, E7_MIN_LEN = 3, 10
+TIERS = ("E0", "E1", "E6", "E2", "E3", "E7", "E5", "E4")
 WORD = re.compile(r"\b[A-Za-z_]\w*\b")
 CRATE_IN_PATH = re.compile(r"(rcfd-[a-z0-9-]+)/((?:src|tests|benches|examples)/.+\.rs)$")
 
 
 def item_id(n):
     return f"F-{int(n):03d}"
+
+
+def header_adr(path, known, cache={}):
+    """E0 (ADR 0679 amendment 1): the first `ADR NNNN` of the leading comment block of a Rust file (lines before the first line of
+    code), when that ADR exists and is not one of the ADRs that list test binaries."""
+    if path not in cache:
+        found = None
+        try:
+            with open(path, encoding="utf-8", errors="replace") as fh:
+                for ln in fh:
+                    st = ln.strip()
+                    if st and not st.startswith("//"):
+                        break
+                    m = re.search(r"\bADR (\d{4})\b", st)
+                    if m:
+                        found = m.group(1)
+                        break
+        except OSError:
+            pass
+        cache[path] = found
+    n = cache[path]
+    return n if n in known and n not in NOT_EVIDENCE else None
+
+
+def waves_in_stem(stem):
+    """Wave tags of a file or binary stem: `w34a` and `wave34a` give `34a`, `w22` gives `22`."""
+    return sorted({n + (c or "") for n, c in WAVE_IN_STEM.findall(stem.lower())})
 
 
 def items_in_stem(stem):
@@ -218,8 +255,11 @@ def load_docs(root):
             continue
         text = open(os.path.join(adr_dir, fn), encoding="utf-8", errors="replace").read()
         items = sorted({item_id(x) for x in re.findall(r"f(\d+)", m.group(2))})
-        adrs.setdefault(m.group(1), {"files": [], "items": set(), "text": []})
+        adrs.setdefault(m.group(1), {"files": [], "items": set(), "text": [], "waves": set()})
         a = adrs[m.group(1)]
+        wm = WAVE_ADR.match(fn)
+        if wm:
+            a["waves"].add(wm.group(2) + (wm.group(3) or ""))
         a["files"].append("docs/adr/" + fn)
         a["items"].update(items)
         a["text"].append(text)
@@ -247,6 +287,44 @@ def load_docs(root):
 
 
 # ---------------------------------------------------------------- the index
+
+
+def wave_table(adrs):
+    """Tag -> sorted ADR numbers, from the ADR file names."""
+    tab = {}
+    for n, a in adrs.items():
+        for tag in a["waves"]:
+            tab.setdefault(tag, set()).add(n)
+    return {k: sorted(v) for k, v in tab.items()}
+
+
+def wave_resolve(tag, table):
+    """('map', [adr]) for exactly one ADR of the tag, ('ambiguous', candidates) for several ADRs of the tag or only a proper
+    prefix match (`48g` against `48g1`..), ('none', [])."""
+    if tag in table:
+        return ("map", table[tag]) if len(table[tag]) == 1 else ("ambiguous", table[tag])
+    cands = sorted({n for t, ns in table.items() if t.startswith(tag) and t != tag for n in ns})
+    return ("ambiguous", cands) if cands else ("none", [])
+
+
+def primary_adr(ev, item_adrs, adr_files):
+    """(ADR, evidence kind) of a test: the first tier of TIERS with an ADR; in the tier an ADR file named registration or -wave
+    first, then the lowest number."""
+    for kind in TIERS:
+        cands = set()
+        for e in ev:
+            if e["kind"] != kind:
+                continue
+            if "adr" in e:
+                cands.add(e["adr"])
+            elif kind in ("E1", "E4"):
+                cands |= item_adrs.get(e["item"], set())
+        if cands:
+            def key(n):
+                reg = any("registration" in f or "-wave" in f for f in adr_files.get(n, []))
+                return (0 if reg else 1, n)
+            return min(cands, key=key), kind
+    return None, None
 
 
 def metadata(root, path=None):
@@ -309,6 +387,9 @@ def build(root, meta):
     def distinctive(fn, t):
         return "_" in fn and len(fn) >= 12 and len(fn_bins.get(fn, ())) == 1
 
+    wtab = wave_table(adrs)
+    adr_files = {n: a["files"] for n, a in adrs.items()}
+    wave_map, wave_amb, wave_none, e7_common = {}, {}, set(), set()
     for t in tests:
         ev = []
         fn = t["name"].rsplit("::", 1)[-1]
@@ -316,6 +397,9 @@ def build(root, meta):
         for s in {stem, os.path.splitext(os.path.basename(binaries[t["binary"]][0]["file"]))[0]}:
             for it in items_in_stem(s):
                 ev.append({"kind": "E1", "item": it, "from": s})
+        h0 = header_adr(os.path.join(ws_root, t["file"]), adrs)
+        if h0:
+            ev.append({"kind": "E0", "adr": h0})
         fk = file_keys(t)
         dist = distinctive(fn, t)
         for n, a in adrs.items():
@@ -328,6 +412,24 @@ def build(root, meta):
                 ev.append({"kind": "E4", "item": it, "from": "file"})
             elif dist and fn in r["cite"].words:
                 ev.append({"kind": "E4", "item": it, "from": "function"})
+        tags = sorted({g for s_ in {stem, t["binary"]} for g in waves_in_stem(s_)})
+        t["wave"] = tags
+        for g in tags:
+            how, cands = wave_resolve(g, wtab)
+            if how == "map":
+                wave_map[g] = cands[0]
+                ev.append({"kind": "E6", "adr": cands[0], "tag": g})
+            elif how == "ambiguous":
+                wave_amb[g] = cands
+            else:
+                wave_none.add(g)
+        b_stem = t["binary"]
+        if t["kind"] == "test" and "_" in b_stem and len(b_stem) >= E7_MIN_LEN and stem_count.get(b_stem, 0) == 1:
+            hit = sorted(n for n, a in adrs.items() if n not in NOT_EVIDENCE and b_stem in a["cite"].words)
+            if len(hit) > E7_MAX_ADRS:
+                e7_common.add(b_stem)
+            else:
+                ev.extend({"kind": "E7", "adr": n, "binary": b_stem} for n in hit)
         if t["kind"] != "test":
             mods = t["name"].split("::")[:-1]
             lib = t["target"].replace("-", "_") if t["kind"] == "lib" else t["crate"].replace("-", "_")
@@ -344,21 +446,37 @@ def build(root, meta):
         t["adrs"] = sorted(found)
         t["items"] = sorted(set(items) | {i for n in found for i in adr_items.get(n, ())})
         t["evidence"] = ev
+        t["primary_adr"], t["primary_evidence"] = primary_adr(ev, item_adrs, adr_files)
 
-    by_adr = {}
+    by_adr, by_primary = {}, {}
     for t in tests:
         for n in t["adrs"]:
             by_adr.setdefault(n, []).append(f"{t['crate']}/{t['binary']}::{t['name']}")
+        if t["primary_adr"]:
+            by_primary.setdefault(t["primary_adr"], []).append(f"{t['crate']}/{t['binary']}::{t['name']}")
     idx = {
         "about": "ADR 0653 test-to-ADR index; tests keyed by crate, binary (times.tsv stem) and libtest name",
         "binaries": binaries,
         "crates": {c: {"dir": crate_dir[c], "deps": deps[c]} for c in sorted(names)},
         "tests": tests,
         "adrs": {n: {"files": a["files"], "items": sorted(adr_items.get(n, set()) | a["items"]),
-                     "tests": sorted(by_adr.get(n, []))} for n, a in sorted(adrs.items())},
+                     "tests": sorted(by_adr.get(n, [])), "primary_tests": sorted(by_primary.get(n, []))}
+                 for n, a in sorted(adrs.items())},
         "items": {it: sorted(ns) for it, ns in sorted(item_adrs.items())},
     }
     idx["coverage"] = coverage(idx)
+    idx["coverage"]["wave"] = {
+        "tagged_tests": sum(1 for t in tests if t["wave"]),
+        "mapped_tags": dict(sorted(wave_map.items())),
+        "ambiguous_tags": dict(sorted(wave_amb.items())),
+        "no_wave_adr_tags": sorted(wave_none),
+        "e7_too_common": sorted(e7_common),
+    }
+    pe = {}
+    for t in tests:
+        if t["primary_adr"]:
+            pe[t["primary_evidence"]] = pe.get(t["primary_evidence"], 0) + 1
+    idx["coverage"]["primary"] = {"with_primary": sum(pe.values()), "by_evidence": dict(sorted(pe.items()))}
     return idx
 
 
@@ -434,6 +552,10 @@ def main(argv=None):
         for k in ("all_tests", "non_ignored_tests", "integration_tests", "unit_tests"):
             print(f"{k}: {c[k]['mapped']} of {c[k]['tests']} mapped to an ADR ({100 * c[k]['share']:.1f} %), "
                   f"{c[k]['item_only']} to an item only")
+        w = c["wave"]
+        print(f"wave tags: {w['tagged_tests']} tagged tests, {len(w['mapped_tags'])} tags mapped, {len(w['ambiguous_tags'])} ambiguous "
+              f"{w['ambiguous_tags']}, {len(w['no_wave_adr_tags'])} without a wave ADR; E7 too common: {len(w['e7_too_common'])} binaries")
+        print(f"primary ADR: {c['primary']['with_primary']} tests {c['primary']['by_evidence']}")
         print(f"unmapped binaries ({len(c['unmapped_binaries'])}):")
         for u in c["unmapped_binaries"]:
             print("  " + u)
