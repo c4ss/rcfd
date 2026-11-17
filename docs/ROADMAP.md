@@ -15642,7 +15642,7 @@ fixed by the item's registration ADR before any code.
     522 E2-only tests (98 %): their first commit is the initial import or names an item without an ADR file. Follow-up
     F-772 (Retro-registration ADRs and ADR paths in file headers as primary evidence for file-citation-only tests).
     Follow-up F-773 (A git commit that names an ADR or an item as evidence of the files it adds).
-- [ ] **F-769** ADRs for the five feature groups that no ADR describes (the assistant setup helpers and workflow engine, the F-040 wall-function channel, the shipped turbulence and compressible examples through the binary, the mesh generator parameters, tables called from expressions)
+- [~] **F-769** ADRs for the five feature groups that no ADR describes (the assistant setup helpers and workflow engine, the F-040 wall-function channel, the shipped turbulence and compressible examples through the binary, the mesh generator parameters, tables called from expressions)
   - depends on: F-760
   - acceptance: Every limit not stated here is registered in the ADR before the run. A short registration ADR per group
     states what the files `rcfd-assistant/tests/physics_workflow.rs`, `rcfd-assistant/tests/workflow_engine.rs`,
@@ -15650,7 +15650,26 @@ fixed by the item's registration ADR before any code.
     `rcfd-core/tests/table_expr.rs` check and which limits they carry, read from the code and the roadmap notes, with no
     Rust file edited; the index maps these files by a reading of that ADR (evidence E2, not only a word); a registered
     sample is read.
-  - note: Follow-up of F-760 (ADR 0685, 2026-11-16).
+  - note: ADRs for the five feature groups that no ADR describes, follow-up of F-760 (ADR 0685, 2026-11-16). PARTIAL.
+    ADR 0705, 2026-11-17 (registration and index), ADRs 0706 to 0710 (one per group): each says plainly that the tests
+    predate it and records what they check, read from the code and the roadmap notes of F-040, F-043, F-105, F-120,
+    F-121, F-148; no Rust file, script, golden or hash table edited, the eight files not run. 0706 the assistant setup
+    helpers and workflow engine (`physics_workflow.rs`, `workflow_engine.rs`, and as ADR 0704 recommends
+    `rcfd-assistant/tests/workflow.rs` and `rcfd-api/tests/workflow.rs`; 24 limit rows), 0707 the F-040 wall-function
+    channel (`channel_wall_function.rs`; 1e-13 wall distance, y+ 5e-3, wall shear 2e-3, interior 0.03 against 2.1 to 2.4
+    percent recorded), 0708 the shipped turbulence and compressible examples through the binary (`physics_cases.rs`;
+    exit codes, fields, y+ within 0.01 of 1, bulk velocity within 10 percent of 17.4 against 18.17 recorded), 0709 the
+    mesh generator parameters (`mesh_params.rs`), 0710 tables called from expressions (`table_expr.rs`; 1e-15 absolute,
+    NaN outside the range, the test named "with a span" does not check the span). Measured: all 35 tests named (35 of
+    35), 24 of 25 tolerance literals of the six files carried (96 percent, limit 95), all 35 tests have their group ADR
+    with E2 evidence and none lost an ADR, sample of 10 rows read 10 of 10 agree (one imprecise count), unit tests of
+    `scripts` and docs_site pass. MISSED: at most 10 tests outside the eight files gain an ADR, measured 32 (19 `sim.rs`
+    and 8 `table.rs` tests through a cited module path, 5 `tables.rs` tests through a path named in a "does not check"
+    section). The primary ADR of the 35 tests is unchanged (0685, 0123, 0067: the lowest number wins inside a rule H
+    tier), a finding for the script, not for the ADRs. Not covered: a second reader, running the files, moving the notes
+    of 0067 and 0123. Follow-up F-793 (Primary ADR of the files that a retro-registration ADR describes (group ADRs 0706
+    to 0710 outranking the list notes of ADRs 0067, 0123 and 0685)). Follow-up F-794 (A second reader for the limit rows
+    of ADRs 0706 to 0710).
 - [x] **F-770** A fast check of the window condition of the repetition trigger
   - depends on: F-766
   - acceptance: a fast test on an observation sequence whose plain pick lies in the incumbent's basin and whose last d +
@@ -16025,3 +16044,17 @@ fixed by the item's registration ADR before any code.
     equal to the index before the commit in every field; `gate_attribute.py` is unchanged; a planted change of a tier in
     `retro_primaries` is caught; `python -m unittest discover -s scripts` passes.
   - note: Follow-up of F-790 (ADR 0712, 2026-11-16).
+- [ ] **F-793** Primary ADR of the files that a retro-registration ADR describes (group ADRs 0706 to 0710 outranking the list notes of ADRs 0067, 0123 and 0685)
+  - depends on: F-769, F-785
+  - acceptance: Every limit not stated here is registered in the ADR before the run. A rule in
+    `scripts/adr_test_index.py`, registered with its mutations, under which the ADR that carries a limits table for a
+    file and says that its tests predate it is the primary of the 35 tests of the eight files of ADR 0705, and no
+    primary of any other test changes by more than a registered count; the unit tests of `scripts` pass.
+  - note: Follow-up of F-769 (ADR 0705, 2026-11-16).
+- [ ] **F-794** A second reader for the limit rows of ADRs 0706 to 0710
+  - depends on: F-769
+  - acceptance: Every limit not stated here is registered in the ADR before the run. A reader other than the author of
+    the rows reads a registered sample of at least 15 rows of ADRs 0706 to 0710, including 10 of the 22 rows of 0706 not
+    read in ADR 0705, against the files and the roadmap notes they cite, with at least 90 percent agreement, and the
+    disagreements are listed with the line.
+  - note: Follow-up of F-769 (ADR 0705, 2026-11-16).
