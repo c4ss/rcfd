@@ -23,6 +23,7 @@ export type WorkerTask =
   | { readonly id: number; readonly op: 'field'; readonly dir: string; readonly snapshot: number; readonly field: string }
   | { readonly id: number; readonly op: 'surface'; readonly dir: string }
   | { readonly id: number; readonly op: 'surfaceField'; readonly dir: string; readonly snapshot: number; readonly field: string }
+  | { readonly id: number; readonly op: 'patchSurface'; readonly dir: string }
   | {
       readonly id: number;
       readonly op: 'difference';
@@ -44,6 +45,7 @@ export type WorkerResult =
   | { readonly kind: 'field'; readonly snapshot: number; readonly field: string; readonly values: ArrayBuffer }
   | { readonly kind: 'surface'; readonly points: ArrayBuffer; readonly triangles: ArrayBuffer; readonly cells: ArrayBuffer }
   | { readonly kind: 'surfaceField'; readonly snapshot: number; readonly field: string; readonly meshHash: string; readonly values: ArrayBuffer }
+  | { readonly kind: 'patchSurface'; readonly points: ArrayBuffer; readonly triangles: ArrayBuffer; readonly cells: ArrayBuffer; readonly patch: ArrayBuffer; readonly meshHash: string }
   | { readonly kind: 'difference'; readonly snapshot: number; readonly otherSnapshot: number; readonly field: string; readonly values: ArrayBuffer }
   | { readonly kind: 'hooks' };
 
@@ -164,6 +166,17 @@ function run(t: WorkerTask): { result: WorkerResult; transfer: ArrayBuffer[] } {
       const s = o.store.surface();
       keepCells(o, s.cells);
       return { result: { kind: 'surface', ...s }, transfer: [s.points, s.triangles, s.cells] };
+    }
+    case 'patchSurface': {
+      // F-836: the surface with the patch of each triangle (the mesh preview's colours)
+      const o = openFor(t.dir);
+      const s = o.store.surface(true);
+      keepCells(o, s.cells);
+      const patch = s.patch!;
+      return {
+        result: { kind: 'patchSurface', points: s.points, triangles: s.triangles, cells: s.cells, patch, meshHash: o.store.meshHash },
+        transfer: [s.points, s.triangles, s.cells, patch],
+      };
     }
     case 'surfaceField': {
       const o = openFor(t.dir);

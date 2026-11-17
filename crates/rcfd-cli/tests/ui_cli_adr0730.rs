@@ -84,7 +84,8 @@ fn serve_answers_help_only_with_ui() {
     assert!(on[0]["result"]["errors"].is_array(), "{}", on[0]);
 }
 
-/// P4 through the binary: `service.info` with `--ui` is the one without plus `ui` and the help methods at the end.
+/// P4 through the binary: `service.info` with `--ui` is the one without plus `ui` and the methods of the switch at the
+/// end: the two help methods and, since ADR 0732 (F-836, restated 2026-11-17), `mesh.preview`.
 #[test]
 fn serve_info_with_ui_is_the_plain_one_plus_the_additions() {
     let req = "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"service.info\"}
@@ -95,8 +96,12 @@ fn serve_info_with_ui_is_the_plain_one_plus_the_additions() {
     assert_eq!(on["ui"], "rcfd-ui/1");
     let m = on["methods"].as_array_mut().unwrap();
     assert_eq!(
-        m.split_off(m.len() - 2),
-        vec![Value::from("help.glossary"), Value::from("help.errors")]
+        m.split_off(m.len() - 3),
+        vec![
+            Value::from("help.glossary"),
+            Value::from("help.errors"),
+            Value::from("mesh.preview")
+        ]
     );
     on.as_object_mut().unwrap().remove("ui");
     assert_eq!(on, off);

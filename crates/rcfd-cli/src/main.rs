@@ -129,7 +129,8 @@ COMMANDS:
     serve [--addr <host:port>] [--root <dir>] [--stdio] [--cosim <case>] [--ui] [--journal-dir <dir>]
                                start the solver service (JSON-RPC 2.0, newline-delimited); --cosim hosts the
                                co-simulation fluid participant of the case's [cosim] table (protocol rcfd-cosim/1);
-                               --ui adds settings.schema {ui: true}, help.glossary and help.errors (rcfd-ui/1);
+                               --ui adds settings.schema {ui: true}, help.glossary, help.errors and
+                               mesh.preview (rcfd-ui/1);
                                --journal-dir keeps each session's journal in <dir>/<session>-<created>.journal.json
                                (inside --root when given), a file that `rcfd run` can run
     call [--addr <host:port>] <method> [<json-params>]

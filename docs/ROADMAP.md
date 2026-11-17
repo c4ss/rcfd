@@ -16982,14 +16982,23 @@ Generated from `docs/studio-guardrails.md`, `PRODUCT.md` and `DESIGN.md` ([ADR 0
     open the project (G4, G12: the Studio writes no rcfd-project.json); the first path's e2e walk makes its projects
     through them. Word budgets unchanged: New project… on the empty home is an icon button (a worded one needs
     home-empty raised from 6 to 8, for the maintainer).
-- [ ] **F-836** Electron Studio: mesh preview before a run
+- [x] **F-836** Electron Studio: mesh preview before a run
   - depends on: F-449, F-812, F-808
   - acceptance: The case editor shows the mesh a case will build (generator and imported meshes, including a
     [mesh.adapt] mesh) with patch visibility, from an engine entry point that builds the mesh without solving (ADR first
     if none exists); the preview equals the solver's mesh (test replacing preview_g1 and adaptive_preview_f475); e2e
     test.
-  - note: Lost with rcfd-studio (preview.rs, preview_ui.rs). Traces: G14, G15. ADR 0732 proposed; awaiting the
-    maintainer.
+  - note: Lost with rcfd-studio (preview.rs, preview_ui.rs). Traces: G14, G15. Done 2026-11-17 (ADR 0732, accepted by
+    the maintainer 2026-11-17 with every recommendation; branch adr0732): the service method mesh.preview {session, dir,
+    adapt?, force?} behind rcfd serve --ui (UI_METHODS; the plain replies unchanged, ADR 0730's tests restated, not
+    re-recorded) builds the mesh Simulation::new sets the run up on without solving and writes it as a mesh-only store
+    in <dir>/<mesh hash>/, reused when the hash matches; a [mesh.adapt] case gives its base mesh with adapt.pending and
+    the adapted mesh on adapt: "final"; a generator over 2 000 000 estimated cells is refused unless force. The case
+    editor draws the session's mesh (saved or not) from that store through the Studio's store reader, one colour per
+    patch, with the mesh grid, patch visibility, the adapted mesh on request with its cost said first, and the engine's
+    located message on failure. mesh_preview_adr0732.rs replaces preview_g1 (M1, every shipped case against
+    Simulation::new) and adaptive_preview_f475 (M2); e2e tests/e2e/f836.spec.ts. No MCP tool (Q6). Word budgets
+    unchanged (case editor 51 of 51 with the preview drawn).
 - [~] **F-837** Electron Studio: run setup, logs and field-view extras from rcfd-studio
   - depends on: F-449, F-807, F-810
   - acceptance: Each capability the deleted rcfd-studio had and the Electron Studio lacks is built or recorded as

@@ -285,6 +285,25 @@ const SPECS = {
     engine: { service: 'mesh.check', timeoutMs: 600_000 },
     mcp: { tool: 'check_mesh' },
   }),
+  'mesh.preview': action({
+    title: 'Preview the mesh',
+    description:
+      'Build the mesh the run will use, without solving, and write it as a mesh-only store in <dir>/<mesh hash>/ for the case editor to draw (rcfd serve --ui).',
+    group: 'mesh',
+    params: {
+      session,
+      dir: { type: 'string', description: 'The folder of previews; the Studio uses the project’s .rcfd/previews.' },
+      adapt: {
+        type: 'string',
+        enum: ['base', 'final'],
+        optional: true,
+        description: 'For a case with [mesh.adapt]: the mesh the run starts on (base, the default) or after its first step (final: runs the adaptive loop).',
+      },
+      force: { type: 'boolean', optional: true, description: 'Build even when the mesh.n* counts give more than 2 000 000 cells.' },
+    },
+    engine: { service: 'mesh.preview', timeoutMs: 600_000 },
+    mcp: { tool: null, note: 'No MCP tool (ADR 0732, open question 6); `rcfd call mesh.preview` reaches it, and the project tool preview_mesh draws a plane of the same mesh.' },
+  }),
 
   // ---- run control
   'run.initialize': action({

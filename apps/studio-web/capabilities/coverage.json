@@ -112,7 +112,7 @@
     {"id": "mcp:pause_run", "ui": "Project > Runs > the selected run: Pause (F-807)"},
     {"id": "mcp:runner_config", "ui": "Project > Runs: Runner budgets (F-837, ADR 0733: the budgets, the runner's defaults and the values in use, read through runner_config)"},
     {"id": "mcp:set_runner_config", "ui": "Project > Runs: Runner budgets: Write, Replace the file and Undo the write (F-837, ADR 0733: the runner writes its budgets through set_runner_config)"},
-    {"id": "mcp:preview_mesh", "exemption": {"item": "F-812", "date": "2026-11-16", "reason": "Mesh tools (partition, inflation layers, conversion, import, mesh preview): no Studio item names them; nearest homes the case editor (F-812) and project home (F-805).", "unplanned": true}},
+    {"id": "mcp:preview_mesh", "ui": "Case editor (F-836, ADR 0732): the mesh preview draws the session's mesh before any run, the solver's own mesh through mesh.preview (rcfd serve --ui), its boundary in 3D with one colour per patch and a patch visibility list; preview_mesh's quality-coloured plane image is the same mesh from the saved file."},
     {"id": "mcp:project_info", "ui": "Project home > project strip (name, created, solver, folder format) and Issues"},
     {"id": "mcp:read_feed", "ui": "Project home > Changes (and the live update of every list)"},
     {"id": "mcp:read_metrics", "exemption": {"item": "F-811", "date": "2026-11-16", "reason": "Residual and monitor plots (F-811); not built yet."}},

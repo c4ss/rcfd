@@ -5,7 +5,7 @@
 //
 // The data port is a main-process read of a store (`local`, R2) or the service's `data.*` methods (`service`, R1), not a
 // service method of SERVICE_METHODS, so it has no entry in the action registry (G16; reported with F-804 and F-808).
-import type { DataOptions, DataReply, DifferenceData, FieldData, StoreInfo, StoreRef, SurfaceData, SurfaceFieldData } from '../../shared/data.js';
+import type { DataOptions, DataReply, DifferenceData, FieldData, PatchSurfaceData, StoreInfo, StoreRef, SurfaceData, SurfaceFieldData } from '../../shared/data.js';
 
 const bridge = () => window.studioData;
 
@@ -51,6 +51,13 @@ export function loadDifference(
   // F-815: the difference has its own bridge over the same data port (window.studioCompare)
   const b = window.studioCompare as typeof window.studioCompare | undefined;
   return b ? b.difference(store, snapshot, other, otherSnapshot, field, options) : Promise.resolve(noBridge());
+}
+
+/** F-836: the boundary surface of a mesh preview's store with the patch of each triangle (route local). */
+export function loadPatchSurface(store: StoreRef, options?: DataOptions): Promise<DataReply<PatchSurfaceData>> {
+  // F-836: its own bridge over the same data port (window.studioMeshPreview)
+  const b = window.studioMeshPreview as typeof window.studioMeshPreview | undefined;
+  return b ? b.surface(store, options) : Promise.resolve(noBridge());
 }
 
 /** Cancels every waiting request with this tag (G21: a superseded load is dropped). */
