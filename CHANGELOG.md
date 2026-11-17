@@ -34,8 +34,8 @@ cases and its roadmap note states the gap.
 * For the computer-fan target, the parts that do not need a converged fan solve: parametric blade geometry and sector meshes,
   tolerance tools, a reduced-order fan performance model, rotor-dynamics checks and a design ledger that keeps every variant.
 * For the new desktop application (Studio), its libraries, tested without a window: the project folder format, a background run
-  service and a time-series store. (The wgpu render core and the Claude Code bridge library of the egui Studio were removed with
-  it, F-449 and F-838.)
+  service and a time-series store. (The wgpu render core and the Claude Code bridge library `rcfd-claude` of the egui Studio were
+  removed with it, F-449 and F-838.)
 * Tutorials that the test suite executes, a validation data pack with fetch scripts and checksums, and a suite of about 2,200 tests
   whose numeric limits were written down before each run.
 

@@ -1,5 +1,6 @@
 // The conservative allow-list (docs/ui-restart-plan.md section 8, decision 2; G11) and its mapping onto `claude -p`
-// flags. A TypeScript port of the rules of crates/rcfd-claude/src/allow.rs (ADR 0126, ADR 0128 finding 2, ADR 0134),
+// flags. A TypeScript port of the rules of crates/rcfd-claude/src/allow.rs (ADR 0126, ADR 0128 finding 2, ADR 0134;
+// that crate was removed and the Rust rules are test support of rcfd-mcp now, crates/rcfd-mcp/tests/claude_allow/),
 // because the engine has no entry point the Studio can call for them (F-814 report: missing engine entry point).
 //
 // Every chat runs with `--permission-mode dontAsk --permission-prompts none`: a tool call no rule allows is denied,

@@ -450,7 +450,8 @@ Decisions taken in building F-814 (options, the recommendation followed; each re
 - D8, MCP config: always `--strict-mcp-config` with an app-owned config (no server when there is no `rcfd-mcp`).
 - Missing in the engine (no Rust change here): a CLI, MCP or service entry point for Claude Code session discovery,
   transcript reading, resume and writing the allow-list file (`rcfd-claude` had the code for its only user, the egui
-  Studio `rcfd-studio`, removed by F-449; F-838 removed that code, and only the allow-list rules stay in the crate).
+  Studio `rcfd-studio`, removed by F-449; F-838 removed that code, and the crate went after it; its allow-list rules are
+  test support of `rcfd-mcp` now, `crates/rcfd-mcp/tests/claude_allow/`).
 
 ## Layout
 

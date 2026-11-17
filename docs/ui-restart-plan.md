@@ -116,7 +116,7 @@ Project folder contract (agents code against it; later changes are additive and 
   .rcfd/                   runner lock and socket, caches (not versioned)
 ```
 
-Crates (all new, library first): `rcfd-project` (47A), `rcfd-runner` (47B), `rcfd-tsstore` (47C), `rcfd-render` (47D), `rcfd-claude` (47E). Studio application and the plugin follow in wave 48. Since then (F-449, F-838): the egui Studio was replaced by the Electron app, `rcfd-render` was removed, and `rcfd-claude` keeps only the allow-list rules; the Studio has its own Claude Code bridge.
+Crates (all new, library first): `rcfd-project` (47A), `rcfd-runner` (47B), `rcfd-tsstore` (47C), `rcfd-render` (47D), `rcfd-claude` (47E). Studio application and the plugin follow in wave 48. Since then (F-449, F-838): the egui Studio was replaced by the Electron app, `rcfd-render` and `rcfd-claude` were removed (the allow-list rules of `rcfd-claude` live on as test support of `rcfd-mcp`, `crates/rcfd-mcp/tests/claude_allow/`); the Studio has its own Claude Code bridge.
 
 ## Where to go next
 

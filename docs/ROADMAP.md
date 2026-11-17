@@ -16929,4 +16929,6 @@ Generated from `docs/studio-guardrails.md`, `PRODUCT.md` and `DESIGN.md` ([ADR 0
     rules and file, which rcfd-mcp's tests F2 and C5-A check the tool names against (E5 moved to allow_file_w48e.rs).
     The Studio's colour-map reference now reads rcfd_post's colormap (the same map, values unchanged); its check of
     rcfd-render's shader text went. Cargo.lock 216 to 83 packages. Docs updated: the Studio's Claude Code panel is the
-    only assistant.
+    only assistant. Follow-up 2026-11-17 (maintainer): crates/rcfd-claude removed; its allow-list rules moved to
+    rcfd-mcp's test support module crates/rcfd-mcp/tests/claude_allow/ (F2 and C5-A use it unchanged), E5 and the rule
+    checks T1, T2, T5 to crates/rcfd-mcp/tests/allow_file_w48e.rs. Cargo.lock 83 to 82 packages.

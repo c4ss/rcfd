@@ -280,15 +280,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "rcfd-claude"
-version = "0.1.0"
-dependencies = [
- "rcfd-project",
- "serde",
- "serde_json",
-]
-
-[[package]]
 name = "rcfd-cli"
 version = "0.1.0"
 dependencies = [
@@ -374,13 +365,13 @@ name = "rcfd-mcp"
 version = "0.1.0"
 dependencies = [
  "rcfd-api",
- "rcfd-claude",
  "rcfd-io",
  "rcfd-post",
  "rcfd-project",
  "rcfd-runner",
  "rcfd-tsstore",
  "rcfd-workspace",
+ "serde",
  "serde_json",
 ]
 

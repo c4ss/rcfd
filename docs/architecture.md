@@ -29,7 +29,6 @@ rcfd-workspace -> api, project, runner, tsstore, post, io, mesh   (the project f
 rcfd-mcp    -> api, workspace, project, runner, tsstore, post   (project tools behind --project: their MCP descriptors over the workspace; ADR 0135, ADR 0185)
 rcfd-cli    -> core, mesh, io, post, fv, api
 rcfd-runner -> project   (Studio L2 run service: runs the `rcfd` binary as child processes, ADR 0123; on rcfd-project's records, ADR 0130)
-rcfd-claude -> project   (the Claude Code allow-list rules and the per-project allow-list file, ADR 0126, ADR 0134; only rcfd-mcp's tests use it, F-838)
 ```
 
 The desktop Studio is the Electron app in `apps/studio-web/` (ADR 0800), outside the Cargo workspace: it runs the `rcfd`,
@@ -37,11 +36,13 @@ The desktop Studio is the Electron app in `apps/studio-web/` (ADR 0800), outside
 `rcfd-gui` and `rcfd-studio`, were removed by roadmap item F-449 (the git history keeps them). The crates they left without
 users went with F-838 (ADR 0800 §10): `rcfd-assistant` (the local-model assistant of `rcfd-gui`), `rcfd-render` (the wgpu
 render core of `rcfd-studio`) and the Claude Code bridge part of `rcfd-claude` (session discovery, transcript and stream
-readers, chat driver, folder trust). The Studio has its own port of that bridge in `apps/studio-web/src/main/claude/`.
+readers, chat driver, folder trust). The rest of `rcfd-claude`, the allow-list rules that only `rcfd-mcp`'s tests used, moved
+into those tests (`crates/rcfd-mcp/tests/claude_allow/`) and the crate was removed (2026-11-17). The Studio has its own port
+of that bridge and of the allow-list rules in `apps/studio-web/src/main/claude/`.
 
 ## Layering rules
 
-Lower layers never depend on higher ones (`core` < `mesh`/`linalg`/`project` < `gpu`/`dist`/`runner`/`claude`/`fem` <
+Lower layers never depend on higher ones (`core` < `mesh`/`linalg`/`project` < `gpu`/`dist`/`runner`/`fem` <
 `io`/`fv`/`particles` < `turb`/`post`/`tsstore` < `api` < `workspace` < `mcp`/`cli`). The test
 `crates/rcfd-cli/tests/workspace_graph.rs` checks the graph for acyclicity and conformance.
 

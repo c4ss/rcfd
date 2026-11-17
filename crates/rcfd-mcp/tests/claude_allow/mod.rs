@@ -1,14 +1,73 @@
-//! The conservative allow-list (user decision 2026-10-26, ADR 0126): its rules, their flag values and the per-project
-//! allow-list file.
+#![allow(dead_code)]
+//! The Claude Code allow-list rules (ADR 0126, ADR 0128 finding 2, ADR 0134), kept as test support of `rcfd-mcp`: the
+//! typed allow-list rule, the conservative policy every rule is checked against, the per-project allow-list file
+//! ([`ALLOW_FILE`]) and the first list of a project ([`PROJECT_READ_TOOLS`]). Used by `project_w48f.rs` (F2),
+//! `tool_list_f275.rs` (C5-A) and `allow_file_w48e.rs` (E5, T1, T2, T5).
 //!
-//! The bridge of the removed egui Studio ran every session with `--permission-mode dontAsk --permission-prompts none`: a tool call that no rule allows is
-//! denied, never prompted and never auto-approved. The allow-list is the only thing the app adds. Observed on 2.1.310
-//! and stated in ADR 0126: the CLI also approves some read-only shell commands by its own classification
-//! (`echo bye` was accepted without a rule), user and project settings add their own rules, and an `Edit(path)` rule
-//! also permits `Write` to that path. The allow-list is therefore a floor the app controls, not the whole gate.
+//! This was the crate `rcfd-claude`, the Claude Code bridge of the removed egui Studio. Its bridge parts went with F-838
+//! (ADR 0800 §10); the allow-list rules were moved here and the crate removed (2026-11-17), since only these tests used
+//! them. The Electron Studio has its own port in `apps/studio-web/src/main/claude/allow.ts`.
+//!
+//! The bridge of the removed egui Studio ran every session with `--permission-mode dontAsk --permission-prompts none`: a
+//! tool call that no rule allows is denied, never prompted and never auto-approved. The allow-list is the only thing the
+//! app adds. Observed on 2.1.310 and stated in ADR 0126: the CLI also approves some read-only shell commands by its own
+//! classification (`echo bye` was accepted without a rule), user and project settings add their own rules, and an
+//! `Edit(path)` rule also permits `Write` to that path. The allow-list is therefore a floor the app controls, not the
+//! whole gate.
 
-use crate::Error;
-use std::path::Path;
+use std::fmt;
+use std::path::{Path, PathBuf};
+
+/// Errors of the allow-list. Each names the rule or path it is about.
+#[derive(Debug)]
+pub enum Error {
+    /// An allow-list rule that the conservative policy rejects.
+    InvalidRule {
+        /// The rule as given.
+        rule: String,
+        /// Why it is rejected.
+        reason: &'static str,
+    },
+    /// Reading or writing an allow-list file failed.
+    Io {
+        /// File or folder involved.
+        path: PathBuf,
+        /// Underlying error.
+        source: std::io::Error,
+    },
+    /// An allow-list file was refused as a whole (ADR 0134 W48-11 (a)); nothing from it is used.
+    AllowFile {
+        /// The file.
+        path: PathBuf,
+        /// 1-based line of the refused rule or syntax error (0 when not known).
+        line: usize,
+        /// 1-based column.
+        column: usize,
+        /// Why.
+        reason: String,
+    },
+}
+
+impl fmt::Display for Error {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Error::InvalidRule { rule, reason } => write!(f, "allow-list rule {rule:?} rejected: {reason}"),
+            Error::Io { path, source } => write!(f, "{}: {source}", path.display()),
+            Error::AllowFile {
+                path,
+                line,
+                column,
+                reason,
+            } => write!(
+                f,
+                "{}: line {line}, column {column}: {reason}; the allow-list file is not used",
+                path.display()
+            ),
+        }
+    }
+}
+
+impl std::error::Error for Error {}
 
 /// One allow-list rule. Shell and file rules always carry a pattern; a bare `Bash` or `Edit` cannot be expressed.
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
@@ -343,7 +402,7 @@ impl AllowList {
     }
 
     /// The allow-list file of `project` ([`ALLOW_FILE`]).
-    pub fn file_of(project: &Path) -> std::path::PathBuf {
+    pub fn file_of(project: &Path) -> PathBuf {
         project.join(ALLOW_FILE)
     }
 
@@ -418,7 +477,7 @@ impl AllowList {
 }
 
 /// An `rcfd-project` file error as a bridge error, keeping the I/O error (and so its kind) where there is one.
-pub(crate) fn project_err(path: &Path, e: rcfd_project::ProjectError) -> Error {
+fn project_err(path: &Path, e: rcfd_project::ProjectError) -> Error {
     use rcfd_project::ProjectError as P;
     match e {
         P::Io { path, source, .. } | P::Retry { path, source, .. } => Error::Io { path, source },
@@ -426,154 +485,5 @@ pub(crate) fn project_err(path: &Path, e: rcfd_project::ProjectError) -> Error {
             path: path.to_path_buf(),
             source: std::io::Error::other(other.to_string()),
         },
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    /// Registered table T1 (ADR 0126): rule -> exact flag value.
-    fn table() -> Vec<(AllowRule, &'static str)> {
-        vec![
-            (AllowRule::Tool("Grep".into()), "Grep"),
-            (AllowRule::Tool("mcp__rcfd__list_runs".into()), "mcp__rcfd__list_runs"),
-            (AllowRule::Bash("echo hello".into()), "Bash(echo hello)"),
-            (AllowRule::Bash("git status".into()), "Bash(git status)"),
-            (AllowRule::Bash("cargo test *".into()), "Bash(cargo test *)"),
-            (
-                AllowRule::PowerShell("Get-ChildItem cases".into()),
-                "PowerShell(Get-ChildItem cases)",
-            ),
-            (AllowRule::Edit("note.txt".into()), "Edit(./note.txt)"),
-            (AllowRule::Edit("./cases/**".into()), "Edit(./cases/**)"),
-            (
-                AllowRule::Read("runs/*/metrics.json".into()),
-                "Read(./runs/*/metrics.json)",
-            ),
-        ]
-    }
-
-    fn mismatches(map: fn(&AllowRule) -> String) -> usize {
-        table().iter().filter(|(r, want)| map(r) != *want).count()
-    }
-
-    #[test]
-    fn t1_mapping_is_exact_and_a_wrong_mapping_is_caught() {
-        assert_eq!(mismatches(AllowRule::to_flag_value), 0);
-        // negative control: Edit rendered without the './' anchor (relative to an unknown base) must be caught
-        fn wrong(r: &AllowRule) -> String {
-            match r {
-                AllowRule::Edit(p) => format!("Edit({p})"),
-                o => o.to_flag_value(),
-            }
-        }
-        assert_eq!(mismatches(wrong), 1); // Edit("note.txt"); Edit("./cases/**") already carries the anchor
-        let mut l = AllowList::new();
-        l.add(AllowRule::Bash("echo hello".into())).unwrap();
-        l.add(AllowRule::Edit("note.txt".into())).unwrap();
-        l.add(AllowRule::Edit("note.txt".into())).unwrap(); // duplicate ignored
-        assert_eq!(
-            l.rules().iter().map(AllowRule::to_flag_value).collect::<Vec<_>>(),
-            ["Bash(echo hello)", "Edit(./note.txt)"]
-        );
-        for (r, s) in table() {
-            assert_eq!(
-                AllowRule::parse(s).map(|p| p.to_flag_value()),
-                Some(r.to_flag_value()),
-                "round trip {s}"
-            );
-        }
-    }
-
-    #[test]
-    fn t2_policy_rejects_broad_or_injecting_rules() {
-        let bad = [
-            AllowRule::Tool("Bash".into()),
-            AllowRule::Tool("Edit".into()),
-            AllowRule::Tool("Write".into()),
-            AllowRule::Tool("Read".into()),
-            AllowRule::Tool("*".into()),
-            AllowRule::Tool("--dangerously-skip-permissions".into()),
-            AllowRule::Bash("*".into()),
-            AllowRule::Bash("* --help".into()),
-            AllowRule::Bash("".into()),
-            AllowRule::Bash("echo a),Bash(*".into()),
-            AllowRule::Bash("echo a\nrm -rf x".into()),
-            AllowRule::Bash(" echo".into()),
-            AllowRule::Bash("-rf".into()),
-            AllowRule::Edit("**".into()),
-            AllowRule::Edit("./**/*".into()),
-            AllowRule::Edit("/etc/passwd".into()),
-            AllowRule::Edit("//c/x".into()),
-            AllowRule::Edit("~/.ssh/x".into()),
-            AllowRule::Edit("C:/x".into()),
-            AllowRule::Edit("cases\\a.json".into()),
-            AllowRule::Edit("../outside.txt".into()),
-            AllowRule::Read("cases/../../x".into()),
-        ];
-        for r in bad {
-            assert!(r.validate().is_err(), "accepted {r:?}");
-            assert!(AllowList::new().add(r).is_err());
-        }
-    }
-
-    /// T5 (ADR 0128 finding 2): rules never reach the files that configure Claude or the project. (Its part on
-    /// suggestions went with `suggest`, F-838.)
-    #[test]
-    fn t5_control_files_are_refused() {
-        let names = [".mcp.json", "CLAUDE.md", ".claude", ".rcfd", "rcfd-project.json"];
-        let mut forms = Vec::new();
-        for n in names {
-            for x in [n.to_string(), n.to_ascii_uppercase(), n.to_ascii_lowercase()] {
-                forms.extend([
-                    x.clone(),
-                    format!("./{x}"),
-                    format!("{x}."),
-                    format!("cases/../{x}"),
-                    format!("a\\{x}"),
-                    format!("cases/{x}"),
-                ]);
-            }
-        }
-        for d in [".claude", ".rcfd", ".Claude", ".RCFD"] {
-            forms.extend([
-                format!("{d}/settings.json"),
-                format!("{d}/**"),
-                format!("./{d}/sub/f"),
-                format!("{d}./x"),
-            ]);
-        }
-        forms.extend(
-            [
-                "*.md",
-                ".c*",
-                "*.json",
-                "rcfd-*",
-                "**/CLAUDE.md",
-                "CLAUDE~1.MD",
-                ".//CLAUDE.md",
-            ]
-            .map(String::from),
-        );
-        let accepted: Vec<&String> = forms
-            .iter()
-            .filter(|f| {
-                AllowRule::Edit((*f).clone()).validate().is_ok() || AllowRule::Read((*f).clone()).validate().is_ok()
-            })
-            .collect();
-        assert!(accepted.is_empty(), "control-file rules accepted: {accepted:?}");
-        // ordinary paths stay allowed
-        for ok in [
-            "cases/x.json",
-            "notes/a.md",
-            "./cases/**",
-            "runs/*/metrics.json",
-            "note.txt",
-        ] {
-            assert!(AllowRule::Edit(ok.into()).validate().is_ok(), "{ok}");
-            assert!(AllowRule::Read(ok.into()).validate().is_ok(), "{ok}");
-        }
-        eprintln!("T5: {} control-file forms refused", forms.len());
     }
 }

@@ -5,6 +5,7 @@
 //! ADR 0196 B: under `--project`, `design_run_study` and `design_evaluate` have the class `execute` (C5-L's registered edit E1,
 //! and B1); without a project they keep `write_files`.
 
+mod claude_allow;
 mod common;
 
 use common::*;
@@ -259,7 +260,7 @@ fn c5s_hidden_tools_need_a_session_kept_tools_do_not() {
 /// written from main's 11 reads back as those 11 rules and is written back byte for byte (no migration).
 #[test]
 fn c5a_allow_list_has_the_read_tools_and_old_files_stay() {
-    use rcfd_claude::allow::{AllowList, AllowRule, PINNED_SERVER};
+    use claude_allow::{AllowList, AllowRule, PINNED_SERVER};
     const MAIN: [&str; 11] = [
         "project_info",
         "list_runs",

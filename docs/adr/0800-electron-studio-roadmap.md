@@ -344,7 +344,7 @@ The maintainer asked to "kill the old rcfd-studio and clear up some test bandwid
 (a) delete `crates/rcfd-studio` and `crates/rcfd-gui` now; (b) drop them from the workspace and keep the code until
 F-448; (c) delete only rcfd-studio. G14 now records them as retired. F-449 is done ahead of F-448; F-448 keeps its
 meaning (the Electron Studio covers what rcfd-studio did), judged against the capabilities listed when they were
-deleted. `rcfd-claude` stays, because `rcfd-mcp` uses it.
+deleted. `rcfd-claude` stays, because `rcfd-mcp` uses it (removed later, see the end of this section).
 
 F-838 (maintainer, 2026-11-17, option (a)): the local-model assistant is removed, not ported. `crates/rcfd-assistant`
 (provider presets, keychain key, read-only and approve-writes modes, quick actions) and `crates/rcfd-render` (the wgpu
@@ -352,3 +352,10 @@ render core) went with their tests; neither had a user left. Of `rcfd-claude` on
 allow-list file stay, because the tests F2 and C5-A of `rcfd-mcp` check its tool names against them; the session
 discovery, transcript and stream readers, chat driver and folder trust went (the Studio has its own port in
 `apps/studio-web/src/main/claude/`). The Studio's Claude Code panel is the only assistant. Cargo.lock: 216 to 83 packages.
+
+F-838 follow-up (maintainer, 2026-11-17): `crates/rcfd-claude` is removed. Its allow-list rules (the rule type and its
+policy, flag values, `AllowList` and its file, `ALLOW_FILE`, `PINNED_SERVER`, `PROJECT_READ_TOOLS`) had no user but two
+tests of `rcfd-mcp`, so they moved into those tests as a support module, `crates/rcfd-mcp/tests/claude_allow/`. F2
+(`project_w48f.rs`) and C5-A (`tool_list_f275.rs`) use it unchanged; E5 and the rule checks T1, T2 and T5 moved to
+`crates/rcfd-mcp/tests/allow_file_w48e.rs`, assertions unchanged. `rcfd-mcp` gains `serde` as a dev-dependency (already in
+the lock). Cargo.lock: 83 to 82 packages.

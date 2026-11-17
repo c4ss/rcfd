@@ -2,6 +2,7 @@
 //! protocol (access classes, read-only, schema), F4 path safety, F5 edit validation, F8 output size, F9 render,
 //! F10 field summary, F12 plugin files. F3 result shapes, F11 and F13 are in `project_runs_w48f.rs`.
 
+mod claude_allow;
 mod common;
 
 use common::*;
@@ -46,7 +47,7 @@ fn names(list: &Value) -> Vec<String> {
 /// `AllowRule::Tool` validation and is at most 128 characters; plugin, server and app-owned server names have no `-`.
 #[test]
 fn f2_tool_names_pass_the_allow_list_rules() {
-    use rcfd_claude::allow::{AllowRule, PINNED_SERVER, PROJECT_READ_TOOLS};
+    use claude_allow::{AllowRule, PINNED_SERVER, PROJECT_READ_TOOLS};
     let dir = project("f2");
     let s = server(&dir, Policy::default());
     let all = names(&s.tool_list());
