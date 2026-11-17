@@ -7582,9 +7582,9 @@
     "deps": [
       "F-742"
     ],
-    "status": "todo",
+    "status": "partial",
     "acceptance": "Every limit not stated here is registered in the ADR before the run. The punch block of ADR 0636 with the J2 material of ADR 0666 on 4^3, 8^3 and 16^3 (and the Hex20 on 8^3 if it runs), rule L and F-bar: the punch reaction and the corner bulge of each element against the finest reference with a registered order-of-convergence reading, a registered J2 tolerance derived from it, and the reason for the gap of ADR 0666 A1.2 identified or bounded; the default bits unchanged.",
-    "note": "Follow-up of F-742 (ADR 0666, 2026-11-16)."
+    "note": "Structural solver, intermediate tier. Follow-up of F-742 (ADR 0666). PARTIAL. ADR 0678, 2026-11-17 (tests only, no library file changed): rule L (with S) against the F-bar Hex8 with the J2 material of ADR 0666 on the punch block of ADR 0636 on 4^3, 8^3 and 16^3 (the 16^3 solves 67 s and 130 s, a heavy record run once), with a registered three-mesh Richardson reading (order band 0.5 to 4, factor of safety 1.25, a bound outside the band). Punch reaction: F-bar order 0.75, limit 0.0469 +- 0.0225; rule L order 1.14, limit 0.0454 +- 0.0092; the limits agree (the corner bulge's too), so the 17 to 20 per cent gap of ADR 0666 A1.2 is discretisation error carried mostly by F-bar (64 per cent above the limit on 8^3 against 32 for rule L, 38 against 12.5 on 16^3) and located at the edge row of the node-set punch; the Hex20 on 8^3 is 9.6 per cent above the limit. The J2 tolerance derived from the reading (rule L against F-bar on the same mesh: 3.21, 2.11, 1.54 for the reaction) is met on every mesh and on DB4 but uninformative; the per-element tolerances against the limit (rule L 1.25, 0.70, 0.46) are the useful reading. Missed: the registered Richardson formula had a sign error, caught by the synthetic control and corrected by amendment; the elastic positive control could not be read (rule L with the neo-Hookean material loses positive definiteness on 16^3 at load factor 0.966); the Full Hex8 negative control failed (inverted on 16^3, below F-bar on 8^3). The plain incompatible element fails with J2 on every mesh. Six of six mutations of the test's reading and set-up caught (one by a panic). No default bit changed (the bit records pass). Not covered: a 32^3 mesh, a smooth or contact punch, other J2 materials, the cause inside F-bar of its edge excess. Follow-up F-762 (A J2 punch reference without the edge jump). Follow-up F-763 (Rule L loses positive definiteness on the refined neo-Hookean punch block)."
   },
   {
     "id": "F-748",
@@ -7740,5 +7740,27 @@
     "status": "todo",
     "acceptance": "Every limit not stated here is registered in the ADR before the run. The daily gate runs cargo test -p rcfd-project --release --features test-hooks --test edit_lock_f755 as its own step with its failures attributed to ADR 0676, without enabling the feature in any other build step (cargo tree of the workspace step shows no test-hooks); the gate's other results unchanged.",
     "note": "Follow-up of F-755 (ADR 0676, 2026-11-16)."
+  },
+  {
+    "id": "F-762",
+    "title": "A J2 punch reference without the edge jump",
+    "phase": 9,
+    "deps": [
+      "F-747"
+    ],
+    "status": "todo",
+    "acceptance": "Every limit not stated here is registered in the ADR before the run. The block of ADR 0636 with the J2 material of ADR 0666 under a load without the node-set edge jump (a prescribed pressure or a punch displacement smoothed over a registered width) on 4^3, 8^3 and 16^3, rule L and F-bar (and the Hex20 on 8^3): the three-mesh reading of ADR 0678 with an uncertainty below a registered few per cent, a J2 tolerance derived from it that separates the Full Hex8 from the reference, and whether F-bar's edge excess of ADR 0678 disappears; the default bits unchanged.",
+    "note": "Follow-up of F-747 (ADR 0678, 2026-11-16)."
+  },
+  {
+    "id": "F-763",
+    "title": "Rule L loses positive definiteness on the refined neo-Hookean punch block",
+    "phase": 9,
+    "deps": [
+      "F-747"
+    ],
+    "status": "todo",
+    "acceptance": "Every limit not stated here is registered in the ADR before the run. The failing solve of ADR 0678 (rule L, the neo-Hookean material of ADR 0636, the punch block on 16^3, the default options) reproduced first; the lowest eigenvalue of the ADR 0628 sweep and of the free tangent at the last converged state located by element; the same solve with S and W of ADR 0658 and ADR 0660 and with finer increments; the cause identified or bounded against a registered criterion; the default bits unchanged.",
+    "note": "Follow-up of F-747 (ADR 0678, 2026-11-16)."
   }
 ]
