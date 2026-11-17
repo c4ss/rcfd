@@ -191,3 +191,86 @@ Mutations (scratch copy, one at a time; each must fail a registered fast check):
 * ADR 0624 (F-701), ADR 0662 (F-727), ADR 0670 (the record-format rule), ADR 0632 (`entry_ref`, `resolve`).
 
 ## Addenda
+
+## Addendum 1: results (2026-11-17)
+
+Code: commit 5aaab34a (registration af8e5ca4 before it). `crates/rcfd-api/src/design/hypothesis.rs`: additions only (the module
+doc bullet; `KIND_DRAWN`, `DrawSeed`, `entropy_seed`, `DrawnCheck`, `check_drawn`, the private `drawn_entry`, `verify_drawn`,
+`drawn_record_problems`, inserted before the `run` section); no existing function edited. New
+`crates/rcfd-api/tests/f745_drawn_sample.rs` (7 tests: 6 fast, the heavy 400-world record ignored). `docs/design-loop.md`: one
+bullet in the hypothesis section. No shared solver file, golden, hash table, case key or MCP tool.
+
+Runs (release throughout, `CARGO_TARGET_DIR` in the scratch folder): the registered fast run `--test f745_drawn_sample --
+--test-threads=2` once (`f745-scratch/run1.log`, 6 passed); the heavy record once (`heavy.log`, 21.9 s); C1 (`c1_fast.log`,
+`c1_heavy.log`, 309 s), C2 (`c2_fast.log`, `c2_heavy.log`, 39.7 s), C3 (`c3_f728.log`, `c3_f749.log`, `c3_lib.log`), C4
+(`docs_site.log`), fmt and clippy (clean, no code change after the registered run). Mutations on a `git archive` copy of 5aaab34a
+with its own target directory (`mutate.py`, `mutate_run.log`, `mut_M*.log`; the unmutated control M0 6 of 6).
+
+| Check | Limit | Measured | Met |
+|---|---|---|---|
+| D0 | (i) 0 problems, `Some(true)`; (ii) problems = drawn pairs outside S727, on drawn high arms, 6 re-run entries; (iii) 0 | (i) 0, `Some(true)`, S727 = [1, 6, 9, 11, 21, 27, 42, 45, 46, 52, 58, 59, 62]; (ii) drawn [13, 28, 37], 3 outside, 3 problems on drawn high arms, not reproduced, re-run [27, 28, 57, 58, 75, 76]; (iii) 0, reproduced | yes |
+| D1 | at least 380 of 400 | **399 of 400** (expected 397.25) | yes |
+| D2 | at least 380 of 400 | **394 of 400** (expected 394.1) | yes |
+| D3 | 800 of 800 | 800 of 800 | yes |
+| NC1 | 0 of 800; `Some(true)` 800 | **0 of 800**; 800 | yes (fails D1 and D2 as it must) |
+| NC2 | 0 of 400; draw = S727 400 | 0; 400 | yes |
+| NC3 | 287 to 350 of 400 | 305 (expected 318.75, z -1.7) | yes (below 380) |
+| H1 | 0 of 800 | 0 | yes |
+| H2 | counts in [50, 113] | 65 to 98 | yes |
+| E1 | prefix, one new `hypothesis_drawn_check` entry, seed / k / pairs equal, seed text absent before and present after, verify and lessons equal, no record problem | 95367 then 96463 bytes, prefix; 1 entry (index 130); seed 7267193595651574403, k 3, pairs [10, 42, 62] = `rerun_pairs(64, 3, s)`; decimal and hex absent before, decimal present after; `Verification` equal, lessons equal; no problem | yes |
+| E2 | 3 of 3 flagged naming the record; unedited empty | (a) "recorded pairs are not the draw of the recorded seed" (and the mismatched list differs); (b) "recorded outcome differs from the re-run"; (c) "parent 21 does not resolve" (and the mismatched list differs); 3 of 3; the re-serialised unedited file byte-equal | yes |
+| E3 | seeds differ; record `entropy`, seed equal, pairs the draw; no problem | 9063337041387391991 and 1092531133075791110; record seed 1832182879083502506 `entropy` = report; pairs [4, 21, 23]; no problem | yes |
+| DT | rtol 1e-9: 0, reproduced; rtol 0: 8, not | as stated | yes |
+| DR | 9 of 9 naming `drawn`; file unchanged | 9 of 9; unchanged | yes |
+| C1 | 19 fast; S1 1, S2 1592 / 1595, NC1 400, NC2 61, S4 118 | 19 passed (K1 1.33e-11, G1 hash, V1 22 of 22, NC3 75, R1 2347886 and 56361 bytes); S1 1, S2 1592 / 1595, NC1 400, NC2 61, S5 0, S3 0.047570, S4 118 | yes |
+| C2 | 8 fast; A1 394, A2 0, NC6 0, NC7 116, A3 60 to 107 | 8 passed (C2 literals: 34 entries, 26298 bytes, `ef3add9a434918c6`, the three hashes); A1 394, A1b 400, A2 0 of 400, A3 800 and 60..107, NC6 0 of 400 and None 400, NC7 116 | yes |
+| C3 | pass | f728 10 passed, f749 8 passed, `--lib` 141 passed 4 ignored | yes |
+| C4 | pass | docs_site 2 passed | yes |
+| R | clean | `cargo fmt -p rcfd-api --check` clean; `cargo clippy -p rcfd-api --all-targets -- -D warnings` clean | yes |
+
+Mutations (caught = at least one fast test fails):
+
+| Id | Mutation | Expected | Failing tests | Caught |
+|---|---|---|---|---|
+| M24 | verifier seed ignored (pairs from `rerun_seed`) | D0, worlds fast | d0, d_worlds_fast, e1_e2, e3 | yes |
+| M25 | only the low arm re-run | D0, DT | d0, d_worlds_fast, dt | yes |
+| M26 | no record appended | E1 | d_worlds_fast, e1_e2, e3 | yes |
+| M27 | record stores `seed ^ 1` | E1 | d_worlds_fast, e1_e2, e3 | yes |
+| M28 | tolerances ignored | DT | dt | yes |
+| M29 | k range refusal removed | DR | dr | yes |
+| M30 | `entropy_seed` constant | E3 | e3 | yes |
+| M31 | `drawn_record_problems` returns empty | E2 | e1_e2 | yes |
+| M32 | record written as evidence (kind `evaluation`, driver `hypothesis`) | E1 | d_worlds_fast, e1_e2, e3 | yes |
+
+Deviations: none in limits or set-ups. D0 also asserts that the drawn pairs equal `rerun_pairs(64, 3, s)` (the D2 recipe), written
+into the test before the run so that M24 is caught by D0 itself. E2's edits are made on the parsed entries and written back with
+`Entry::to_json`; the test asserts that rewriting the unedited entries gives the file byte for byte, so each edit is the only
+change. D2 caught 394, the same count as ADR 0662's A1: both are Binomial(400, 0.0147) miss counts from different draws, and 394 is
+the expected value (394.1). Not run: the whole workspace and whole integration suites (the daily gate), `baseline_hashes` (no
+shared solver file), rcfd-mcp tests (not touched).
+
+Decision by the registered rule: **done.** Every check met, NC1 to NC3 and H1 as stated, M24 to M32 all caught.
+
+### Remaining questions (each with a recommendation)
+
+1. **`lessons` and drawn records.** Options: (a) leave `lessons` blind to them (now); (b) drop a hypothesis whose latest drawn
+   record (consistent by `drawn_record_problems` with the caller's model) did not reproduce, and report the number of drawn checks
+   so repeated draws are visible. Recommendation: (b) as a follow-up; it changes no existing result since no ledger has drawn
+   records yet.
+2. **Who may write a drawn record.** A forger who can append to the ledger can also append a forged drawn record. Options: (a)
+   keep (anyone with the trusted model redoes a record by `drawn_record_problems`); (b) sign records with a verifier key.
+   Recommendation: (a) until the ledger is shared with outside writers; (b) needs a signature scheme the repository does not have
+   (no new crate), so it stays open for the maintainer.
+3. **Default k.** Options: (a) caller-chosen (now); (b) `rerun_sample_size(n, n - m, 0.02)` for the impostor honest on the m-pair
+   F-727 sample, together with F-727's own k for one dishonest on a quarter of the pairs. Recommendation: (b) as the MCP tool
+   default, decided with F-702.
+
+## For the lead: roadmap entries
+
+> Proposed status: done
+
+> Follow-up of F-727 (ADR 0662 question 1). ADR 0693, 2026-11-17. DONE. Library only, opt-in: design::hypothesis::verify_drawn reads the ledger, then draws k pairs from a verifier's seed that is not in the file (DrawSeed::Given, or DrawSeed::Entropy from std's OS-seeded RandomState; not cryptographic), re-runs both arms of each with the trusted evaluator, and only then appends one hypothesis_drawn_check entry with the seed, the pairs, the mismatched entries and hash references to every re-run entry; check_drawn is the pure check, drawn_record_problems redoes a recorded one. Closed form: an impostor honest on m of n pairs is missed with probability C(m,k)/C(n,k); for the 13-pair F-727 sample of 64 pairs, k = 3 (miss 0.0069). Checks on 400 synthetic worlds: an evaluator that reads the registration and is honest exactly on the F-727 sample is caught in 399 (limit 380) with k = 3, one dishonest on 16 pairs outside that sample in 394 (limit 380) with k = 13, while the F-727 sample catches neither, 0 of 800 (negative control); a "verifier" seed derived from the file catches 0 of 400; k = 1 catches 305 (287 to 350); the honest evaluator is never flagged; the problem count equals the drawn dishonest pairs in 800 of 800. The seed is absent from the file before the check, the file before is a byte prefix of the file after, verify and lessons are unchanged by the record, and edits of the recorded seed, the outcome or a checked entry are flagged (3 of 3). Every ADR 0624 and ADR 0662 check keeps its numbers (S1 1, S2 1592 of 1595, NC1 400, NC2 61, S4 118; A1 394, NC6 0, NC7 116, the C2 byte literals). Nine mutations caught. Not covered: a forger who can also append to the ledger (records are not signed), lessons does not read drawn records, no MCP tool (F-702).
+
+> Note for F-727 (append): ADR 0693 (F-745, 2026-11-17): a verifier-drawn sample from a seed outside the file (verify_drawn) catches an evaluator that is honest exactly on the F-727 sample, which that sample never catches.
+
+> Follow-up proposed: Lessons read the verifier-drawn checks. Deps F-745. Acceptance: Every limit not stated here is registered in the ADR before the run. lessons drops a hypothesis whose latest drawn record, redone consistently by drawn_record_problems with the caller's model, did not reproduce, and reports the number of drawn checks per hypothesis; on synthetic ledgers an impostor caught by a drawn check gives 0 rows and an honest one keeps its row; ledgers without drawn records give the lessons of ADR 0624 bit for bit; every ADR 0624, ADR 0662 and ADR 0693 check keeps its result.
