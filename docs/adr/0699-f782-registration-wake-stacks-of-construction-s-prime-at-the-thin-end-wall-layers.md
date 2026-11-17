@@ -198,3 +198,12 @@ s4). The **full-weight wake lines** are those with `p >= max(n_down / 4, 1)` (`o
 - The disclosed estimate covers four nodes per layer of lines 4 and 5 only.
 
 ## Addenda
+
+### Amendment 1 (2026-11-17, after the code, before any registered run; no limit changed)
+
+- No development build of S'' was made: the code (`wake_stack_remap`, `camber_seam_s_wake_remap_construction()`, the `write_layer`
+  change, the test file `f782_cgrid_wake_remap.rs`) was compiled only (`--no-run`).
+- HS' was computed as registered on a `git archive` copy of 2acf29d9 (`f782-scratch/base`) with one added test file
+  `zz_hs_base.rs` holding only the s4 spec, the two blades, the hash function and builds of
+  `camber_seam_s_unstretched_construction()` (`f782-scratch/base_hs.log`): REF `0x0d257b2fcee093ca`, B2 `0xefc53b8c413a845b`, 12 841
+  cells and step 5 on both. The constants `HS_PRIME_REF` and `HS_PRIME_B2` of the new test file are those values.

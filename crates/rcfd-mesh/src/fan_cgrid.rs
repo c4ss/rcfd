@@ -528,6 +528,11 @@ pub struct CGridOptions {
     /// ADR 0696 (opt-in, with `straight_lines`): the first cell along every straight segment is the next stack height `d1 g^nb`
     /// itself (no division by the cosine), so that the first free row continues the stack's geometric series along every line.
     pub unstretched_first_cell: bool,
+    /// ADR 0699 (opt-in, with `radial_remap`): in the span layers that have a remapped grid, the nodes of the wake lines (stack rows
+    /// included) move from the true section towards the remapped grid by a weight that is 0 on the trailing-edge line and rises
+    /// with a smooth step to 1 over a quarter of the wake lines, so that the wake stacks of the thin end-wall layers are near radial
+    /// extrusions of the end layer instead of following the true section of every thin layer.
+    pub wake_stack_remap: bool,
 }
 
 impl CGridOptions {
@@ -577,6 +582,16 @@ impl CGridOptions {
         CGridOptions {
             unstretched_first_cell: true,
             ..CGridOptions::camber_seam_s_construction()
+        }
+    }
+
+    /// Construction S'' of ADR 0699 (no case value): construction S' with the wake stacks of the span layers taken from the remapped
+    /// grid away from the trailing edge ([`CGridOptions::wake_stack_remap`]); ADR 0696 located the skewness maximum of S' at the
+    /// spanwise faces of the long wake-stack cells between the thin end-wall layers.
+    pub fn camber_seam_s_wake_remap_construction() -> Self {
+        CGridOptions {
+            wake_stack_remap: true,
+            ..CGridOptions::camber_seam_s_unstretched_construction()
         }
     }
 }
@@ -1570,7 +1585,7 @@ fn remapped_radii(radii: &[f64], n_span: usize) -> Vec<f64> {
 
 /// Write the nodes of layer `k` (radius `rk`) into `grid`. `a` is the in-plane grid of the true section; with `b` (the grid at the
 /// remapped radius, ADR 0072 W1) the nodes outside the stacks blend from `a` (near the stack edge) to `b` (beyond the blend length).
-fn write_layer(lay: &Layout, k: usize, rk: f64, a: &Layer2d, b: Option<&Layer2d>, grid: &mut [Vec3]) {
+fn write_layer(lay: &Layout, k: usize, rk: f64, a: &Layer2d, b: Option<&Layer2d>, wake_remap: bool, grid: &mut [Vec3]) {
     let (n_i, ns) = (lay.n_i(), lay.n_side);
     // (z, theta) of a node of a layer grid
     let zt = |l: &Layer2d, p: (f64, f64)| (p.0, p.1 / l.r);
@@ -1609,8 +1624,26 @@ fn write_layer(lay: &Layout, k: usize, rk: f64, a: &Layer2d, b: Option<&Layer2d>
                     arc[j] = arc[j - 1] + norm2((pa[j].0 - pa[j - 1].0, pa[j].1 - pa[j - 1].1));
                 }
                 let len = ell.min(0.5 * arc[ns]).max(1e-300);
+                // ADR 0699: on the wake lines the true section `a` is replaced by `a' = a + omega (b - a)`, omega 0 on the
+                // trailing-edge line and 1 from a quarter of the wake lines on
+                let nd = lay.n_down;
+                let omega = if wake_remap && (i < nd || i > n_i - nd) {
+                    let p = if i < nd { nd - i } else { i - (n_i - nd) };
+                    Some(1.0 - fade(p as f64 / (nd / 4).max(1) as f64))
+                } else {
+                    None
+                };
                 for j in 0..=ns {
-                    let p = if j <= nb {
+                    let p = if let Some(om) = omega {
+                        let (qa, qb) = (zt(a, a.c[i][j]), zt(b, b.c[i][j]));
+                        let qa = (qa.0 + om * (qb.0 - qa.0), qa.1 + om * (qb.1 - qa.1));
+                        if j <= nb {
+                            qa
+                        } else {
+                            let w = fade(arc[j] / len);
+                            (qb.0 + w * (qa.0 - qb.0), qb.1 + w * (qa.1 - qb.1))
+                        }
+                    } else if j <= nb {
                         zt(a, a.c[i][j])
                     } else {
                         let w = fade(arc[j] / len);
@@ -1963,7 +1996,7 @@ pub fn build_cgrid_mesh_with(
             } else {
                 None
             };
-            write_layer(&lay, k, r, &a, b.as_ref(), &mut grid);
+            write_layer(&lay, k, r, &a, b.as_ref(), opts.wake_stack_remap, &mut grid);
             normals.push(a.normals);
             stacks.push(a.stack_cells);
         }
