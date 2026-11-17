@@ -119,6 +119,26 @@ class Retro(unittest.TestCase):
         self.assertEqual(self.prim("p8_e1_stays"), ("0105", "E1"))
         self.assertEqual(self.prim("p8_e0_stays"), ("0105", "E0"))
 
+    def test_files_map_h1_h2(self):
+        """ADR 0714: the per-file list [tier, ADR] of the retro counts, whole map, literals derived by hand from FILES."""
+        r = self.idx["coverage"]["primary"]["retro"]
+        d = "crates/rcfd-w/tests/"
+        self.assertEqual(r["files"], {
+            d + "r_h1.rs": [1, "0110"],
+            d + "r_tier_a.rs": [1, "0130"],   # H1 over the H2 phrase of 0120
+            d + "r_h2.rs": [2, "0115"],
+            d + "r_tier_b.rs": [2, "0120"],
+            d + "r_low.rs": [2, "0125"],      # the lowest number of 0125 and 0140
+        })
+        for v in r["files"].values():
+            self.assertIn(v[0], (1, 2))
+
+    def test_retro_counts_agree_with_files(self):
+        r = self.idx["coverage"]["primary"]["retro"]
+        self.assertEqual((r["h1"], r["h2"], r["h3"]), (2, 3, 0))
+        tiers = [v[0] for v in r["files"].values()]
+        self.assertEqual((tiers.count(1), tiers.count(2)), (r["h1"], r["h2"]))
+
     def test_other_rules_and_retro_off_do_not_see_it(self):
         want = {"p2_h1": "0110", "p3_h2": "0115", "p4_h3": "0116"}
         for kw in ({"primary_rule": "git", "retro": False}, {"primary_rule": "registered"},
