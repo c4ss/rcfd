@@ -1,0 +1,359 @@
+# ADR 0692: F-726 registration: the camber-seam C-grid on strongly staggered blades (an opt-in construction beside camber_seam_h)
+
+Status: **REGISTERED 2026-11-17, written before any code of F-726 and before any run of its checks.** Not yet accepted by the
+maintainer. Before this text no library or test code of F-726 was written. One diagnostic run of the existing generator was made
+(disclosed below, in a `git archive` copy of ff7e9989 in the scratch folder, instrumentation never committed); no construction
+of this ADR existed when it ran, and it computed no quality metric. Results go in the addenda at the end; nothing above the
+addenda is changed after a run.
+
+Roadmap item F-726 (deps F-722), proposed by [ADR 0643](0643-f722-registration-reduced-order-reference-fan-in-the-schema.md)
+"For the lead" (follow-up) and its remaining questions 1 and 2. Parents: [ADR 0118](0118-wave46a-computer-fan-schema-checker-perturbations.md)
+(the schema `ComputerFan`, the s4 smoke specs), [ADR 0079](0079-wave35d-fan01-passage-mesh-and-cgrid-mechanisms.md) (construction
+G, `camber_seam`, and its control range), [ADR 0083](0083-wave36d-cgrid-fan-mesh-quality-and-robustness.md) (construction H,
+`camber_seam_h` = G + `post_untangle` + `lean_stack`), [ADR 0087](0087-wave37d-fan01-tip-corner-inclined-front-edge.md) (the
+structural constraint of the seam corner). Number 0692 given by the lead. Branch `f726-work` from ff7e9989, worktree
+`w49i-work/f726`, scratch `w49i-work/f726-scratch`.
+
+House rules (`w49i-work/AGENT_RULES.md`): limits fixed here and not changed after a run (a miss becomes an ignored
+`*_known_miss` test with the limit intact and the measured number); each registered run made once; existing tests not edited;
+defaults bit-identical; no edit of `baseline_hashes.rs`, of the case and mesh hash tables or of any golden file; no new
+dependency, no unsafe code; clean-room. The roadmap files are not edited. Every choice below that the maintainer would normally
+be asked about is taken on the maintainer's standing instruction of 2026-11-11 (take the recommendation).
+
+Clean-room: the construction is elementary plane geometry (the side of a line a point lies on, straight segments between two
+ordered curves, the area-preserving shear `s -> s - c(z)`); the quality measures are the repository's (`quality::compute_metrics`).
+No source outside the repository was read.
+
+## What F-726 asks
+
+> Every limit not stated here is registered in the ADR before the run. The camber_seam_h C-grid (or a new opt-in construction beside it, camber_seam_h unchanged in bits on every existing case) builds ComputerFan::rom_reference() blade 0 at the ADR 0118 s4 specs with no folded cell and registered non-orthogonality, skewness and aspect limits, and the ADR 0079 and ADR 0083 cases keep their results; the h_slit mesh of the reference is measured against the same limits.
+
+Clauses: **a1** every limit registered here; **a2** a new opt-in construction beside camber_seam_h (taken: the brief prefers it
+when bits would move, and the changes below would move them), camber_seam_h unchanged in bits on every existing case; **a3** it
+builds `rom_reference().axial_fan(0, 0.03, 0.04)` at the s4 `CGridSpec` with no folded cell; **a4** registered limits of
+non-orthogonality, skewness and aspect met; **a5** the ADR 0079 and ADR 0083 cases keep their results; **a6** the h_slit mesh
+of the reference at the s4 `SectorSpec` measured against the same limits.
+
+## What was read and run before this text (disclosed)
+
+Read: `fan_cgrid.rs` (all), `fan_design.rs` (`rom_reference`, `axial_fan`), `fan_mesh.rs` (`quality_summary`), `quality.rs`
+(the metric definitions and the default thresholds: non-orthogonality warn 70 / error 85 deg, skewness warn 4.0, aspect warn
+1000), ADR 0643 (A5b miss, its diagnosis, `diag1.log`), ADR 0079, ADR 0083, ADR 0087, the tests `cgrid_w35d.rs`,
+`fan01_p10_w36d.rs`, `fan_design_w46a.rs`, `f722_rom_reference_fan.rs`.
+
+The reference blade 0 in the s4 domain (printed by the run below): `axial_extent` 0.095, `z_le_root` 0.032, `r` 0.0215 to
+0.058, tip gap 0.001, stations r 0.0215 / 0.0398 / 0.0580 m, chord 0.016 / 0.029 / 0.036 m, stagger 69.8 / 75.4 / 77.6 deg,
+lean 0 / 0.00278 / 0.00810 m.
+
+Diagnostic run D0 (`f726-scratch/diag`, a copy of ff7e9989 with `eprintln!` hooks in `build_cgrid_mesh_with`, test
+`zz_diag.rs`; camber_seam_h at the s4 specs; fold locations only):
+
+- Every one of the eight steps of the camber-seam fallback chain fails. Steps 0 to 6 fail the fold check. The in-plane grids
+  of the layers are folded already before the radial blend and filter: at step 5 (no smoothing, the algebraic grid) in every
+  layer on the pressure-side lines 43 to 49 (of 64) in rows 7 to 9 (next to the upper seam) and on the trailing-edge line 8 in
+  rows 5 to 7; at steps 0 to 4 also on the lower wake lines 1 to 7 next to the stack; at step 6 around the leading edge (lines
+  31 to 41, row 2). Step 7 (Laplace start, plain spacing controls) passes the fold check of the quads but is refused by
+  `Mesh::from_cell_faces` ("internal face 10885: normal does not point from owner to neighbour"): 84 of 12 848 C and F hexes
+  have corner Jacobians of mixed sign (concave in the plane, positive area) at lines 5 and 6 and 32 to 34, row 2, in the hub
+  layers. The refusal printed by the generator is the step-0 message ("folded at layer 0 ... C block around line 1, row 2").
+- So the fold is not one place. It has two mechanisms, both set by the stagger.
+
+## The two mechanisms (pencil, from the code)
+
+Notation: unrolled plane `(z, s)`, blade direction `t = (cos g, sin g)` with `g` the stagger (77.6 deg at the tip), camber 0, so
+the camber line is straight. The suction-side normal is `n_s = (sin g, -cos g)` (it faces downstream), the pressure-side normal
+`-n_s`. Pitch `p = 2 pi r / 7` (0.0521 m at the tip, 1.45 chords).
+
+**M-a (leading-edge fan).** The front edge is the line `z_f = z_min - front_gap c`, and its nose target is `s_le`, straight
+ahead of the leading edge in `z`; the passage centre line turns axial over `front_gap c / 3` upstream of the leading edge
+(ADR 0079). A front-edge point `(z_f, s)` lies on the suction side of the extended camber line iff
+`(z_f - z_le) sin g - (s - s_le) cos g > 0`, i.e. `s < s_le - front_gap c tan g` = `s_le - 1.37 c` at the tip (front_gap 0.3).
+The lower half of the front edge (the targets of the suction-side nose lines) runs from the corner `centre(z_f) - p/2` =
+`s_le - 0.95 tan(g) front_gap c / 3 - p/2` = `s_le - 1.15 c` up to `s_le`: every point of it is on the pressure side. So every
+suction-side nose line has to wrap around the leading edge to reach its target, whatever `front_gap` and `n_nose` (the ratio is
+independent of the chord, which is why ADR 0643 found no in-range specification that builds). At 35 deg (blade B) the bound is
+`s_le - 0.21 c` and the corner `s_le - ...` below it: the targets are on the right side.
+
+**M-b (pursuit lines).** Each C line leaves its stack along the wall normal and turns smoothly to aim at its target over 70 % of
+its rows. On the blade sides the target is the seam point at the same `z` as the station (the seams are the same node list
+translated by the pitch), i.e. straight across in `s`, at `90 - g` = 12.4 deg from the wall at the tip: the lines must turn by
+77.6 deg after the stack, and neighbouring lines whose turn starts at different distances cross. The same holds for the wake
+lines near the trailing edge, where the wake curve still runs at the stagger.
+
+**What no construction of this topology can avoid.** A seam station and its periodic image are reached from the suction and the
+pressure side of the same chord station (`seam_nodes`), so the cells between the blade and the seam carry the shear of a
+parallelogram whose families meet at `90 - g`; at the seam corner the camber seam meets the pitchwise front edge at the same
+angle (ADR 0087: the corner node is one periodic node at one `z`). For uniform parallelograms the face non-orthogonality is the
+complement of that angle: about **77.6 deg at the tip** is a floor for every construction that keeps this topology, including
+camber_seam_h where it builds. The corner wedge of `90 - g` is split by the corner line into two cells, so cells with angles of
+about 5 to 8 deg (non-orthogonality up to about 85 deg in the algebraic grid) are expected there unless the smoothing opens them.
+
+## Design (fixed now): construction S, `camber_seam_s` = H + two new opt-in fields
+
+Two new fields of `CGridOptions`, default `false` (so `Default`, `camber_seam_construction()`, `camber_seam_h_construction()` and
+every struct literal with `..` are unchanged), set together by a new constructor `CGridOptions::camber_seam_s_construction()` =
+`camber_seam_h_construction()` + both fields. No case value is added (a schema enum value would change the schema golden; it is
+listed as a follow-up).
+
+**S1, `camber_front` (removes M-a; needs `camber_seam`).** With `sigma_le` the leading-edge camber slope (as now) and
+`cos_le = 1 / sqrt(1 + sigma_le^2)`, `sin_le = sigma_le cos_le`, `(z_le, s_le0)` = `cam[0]`:
+
+1. the front edge is `z_f = z_le - front_gap c cos_le` (the nose target `N` is `front_gap` chords from the leading edge along the
+   extended camber line, `N = (z_f, s_le0 - front_gap c sin_le)`); it must satisfy `z_f < z_min` and `z_f > 0`, else the
+   existing located errors (`z_le_root`) with the same wording;
+2. the passage centre line between `z_f` and `z_le` is the straight extension `s_le0 + sigma_le (z - z_le)` (so `centre(z_f)` =
+   `s_N`), and upstream of the front edge it turns axial, C1 at `z_f`: `s_N - sigma_le lam_f (1 - exp(-(z_f - z) / lam_f))` with
+   `lam_f = z_f / 3` (the ADR 0079 rule of a third of the distance, here front edge to inlet, so that the seams reach the inlet
+   within `atan(sigma_le e^-3)` of the axis); the F rows follow it as now;
+3. the nose target of the front edge is `s_n = s_N` (instead of `s_le`), the front edge runs from `s_N - p/2` to `s_N + p/2`.
+
+Derivation: a front-edge point `(z_f, s_N - u)`, `u` in `[0, p/2]`, is at `(z_f - z_le, s - s_le0) = (-front_gap c cos_le,
+-front_gap c sin_le - u)`; with `G = front_gap c` its side value `(z - z_le) sin_le - (s - s_le0) cos_le` is
+`-G cos_le sin_le + (G sin_le + u) cos_le = u cos_le`, positive (suction side) for the lower half `u > 0` and negative for the
+upper half: each nose line's target is on the side of its wall point, for every stagger below 90 deg.
+
+**S2, `straight_lines` (removes M-b).** Beyond its stack each C line is the straight segment from the stack edge to its target
+(the pursuit weight `beta = 1` on every line, as the existing code already does for the outlet lines `i = 0, n_i`), and the first
+cell along the segment is `first / max(cos_t, 0.1)` instead of `first` (`first = d1 g^nb` the next height of the stack, `cos_t`
+the cosine between the segment and the wall normal, as computed in the code), so that the wall-normal height of the first free
+cell continues the stack growth (`0.1` is the lean floor already used by `lean_stack`). Derivation: two straight segments
+`[e_i, o_i]`, `[e_{i+1}, o_{i+1}]` between two curves that are ordered the same way along the passage and do not cross each
+other do not intersect if the quad `e_i e_{i+1} o_{i+1} o_i` is positively oriented; on the blade sides `o - e` is nearly `+-s`
+for every line (targets at the same `z` as the stations up to the corner blend), on the nose the fan of S1 is ordered from the
+corner to `N`.
+
+Everything else is H: smoothing and its fallback chain, `post_untangle`, `lean_stack`, `radial_remap`, `radial_filter`,
+`gap_fit`, `checked_range` (the G range; the s4 spec is inside it: `n_nose / n_chord` 0.25, `n_side` 10, `front_gap` 0.3).
+Without the two fields every expression is the existing one (each new expression sits in an `if` on a field).
+
+Estimate on the reference (not a proof): the in-plane grid of S1 + S2 has no crossing segment in the four regions (blade sides,
+nose fan, wake, outlet lines); the cells are convex parallelograms on the blade sides; the smoothing chain stops at the first
+step whose mesh validates, the algebraic step at the latest.
+
+## Development protocol (registered)
+
+The code is written to this design. Before the registered run, development builds of S on the reference are allowed **only to
+fix defects** (code that does not do what this design says) and print only the build status, the construction step and, on a
+refusal, the generator's located message; no quality metric is computed or printed in development. If the design as registered
+folds, at most three design variants may be tried, each derived and written down (with its fold location) in an amendment
+before any registered run; the variant frozen is the first that builds. No limit below changes in any case. Every development
+build is listed in amendment 1.
+
+## Common set-up (fixed now)
+
+`af = ComputerFan::rom_reference().axial_fan(0, 0.03, 0.04)`; the s4 specs of `fan_design_w46a.rs` `smoke_specs()` copied
+verbatim (as ADR 0643): `CGridSpec { n_up 8, n_chord 24, n_down 8, n_side 10, n_nose 6, n_core 2, n_span 10, n_gap 7, n_bl 2,
+growth 1.2, first_cell Height(5e-5), front_gap 0.3, include_blade true }` and `SectorSpec { n_up 8, n_chord 16, n_down 8,
+n_side 10, n_mid 2, n_span 10, n_gap 7, n_bl 2, growth 1.2, first_cell Height(5e-5), trunc_le 0.02, trunc_te 0.01,
+include_blade true }`. Quality: `quality_summary(&mesh)` (maxima over every face and cell, boundary faces included).
+
+## Checks (limits fixed now)
+
+| id | clause | what | limit | estimate behind it |
+|---|---|---|---|---|
+| A1a | a3 | `build_cgrid_mesh_with(&af, &cs, &camber_seam_s_construction())` | Ok, cells > 0 | design |
+| A1b | a3 | no folded cell: every corner Jacobian (the 8 corners of each C- and F-block hex, from `grid` by `c_node` / `f_node`) has one common sign, none zero; `min_volume` > 0 | met | convex cells; the generator's own checks (quad areas, face orientation, volumes) pass by A1a |
+| A1c | a3 | periodicity: every lower seam node rotated by `2 pi / 7` against its upper partner (`seam_nodes(k)`, every layer) | <= 1e-12 m | the seam node lists are translates (ADR 0079 P4 limit) |
+| A2 | a4 | max non-orthogonality | <= 85 deg | floor 77.6 deg (tip shear and corner wedge, above); 85 is the repository's error threshold (`non_orthogonality_error`), i.e. `check_mesh` reports no error |
+| A3 | a4 | max skewness | <= 4.0 | stack-to-segment kink about 0.5 (pencil, with S2's first cell); FAN-01-C with H 3.98 (ADR 0083); 4.0 is the repository's warning threshold |
+| A4 | a4 | max aspect ratio | <= 1000 | radial first layer 5e-5 m against in-plane edges up to about 10 mm (wake and F cells): about 200; the trailing-edge wedge unknown; 1000 is the repository's warning threshold |
+| A5 | a6 | h_slit (`build_sector_mesh(&af, &ss)`) quality against A2 to A4 | measured, met or missed per limit, not a gate | ADR 0643: 85.37 deg / 16.7 / 827, so predicted: non-orthogonality **missed**, skewness **missed**, aspect met |
+| B1 | a2, a5 | the existing bit-identity tests of the constructions on the ADR 0079 / 0083 cases: `cgrid_w35d` `b1_existing_constructions_are_bit_identical` (pursuit and E on S and A'), `b1_construction_g_is_bit_identical` (G on S and FAN-01-C), `b1_construction_h_is_bit_identical` (H on S and FAN-01-C) | pass (recorded hashes) | no expression of these paths changes |
+| B2 | a2 | camber_seam_h on the default `ComputerFan` blade 0 at the s4 specs (the ADR 0118 S4 mesh): FNV-1a mesh hash (as ADR 0079 B1) computed by the new test on a `git archive` copy of ff7e9989 (test file only) and on the branch | equal | as B1 |
+| B3 | a5 | the ADR 0079 / 0083 case tests that exercise the C-grid, run by name: `cgrid_w35d` `p1_p8_fan01_mesh_builds_closes_is_periodic_and_exact`, `c1_fan01_h_mesh_builds_closes_is_periodic_and_exact`, `control_range_is_checked_only_by_the_camber_seam_construction`, `r_g_out_of_range_combinations_are_located_errors`; `fan01_p10_w36d` `c2_fan01_h_mesh_is_accepted_by_the_solver_and_the_rules`; `fan_design_w46a` `s4_realised_default_meshes`; `f722_rom_reference_fan` `a5_the_reference_meshes_at_the_s4_specs_met_limits` | pass | no line they run changes |
+| B4 | a2 | `cargo test -p rcfd-mesh --release --lib` | same pass count as on the base, 0 failed | |
+| R1 | reported | S on the reference: construction step, cell count, `QualitySummary`, the location (block, line, row, layer) of the face with the largest non-orthogonality and skewness and of the cell with the largest aspect | none | |
+| R2 | reported | S on the default `ComputerFan`, on blade B with the S counts and on FAN-01-C (the ADR 0079 / 0083 cases): builds or refusal, step, quality | none | not part of the acceptance (S is opt-in) |
+
+### Negative controls
+
+| id | control | limit |
+|---|---|---|
+| NC1 | camber_seam_h on the reference at the s4 specs (the ADR 0643 A5b miss reproduced) | refused, path `front_gap`, message exactly "the line family is folded at layer 0 (r = 0.02150), C block around line 1, row 2: the leading-edge fan cannot be built for this blade with the front_gap 0.3 and n_nose 6 given; reduce front_gap or change n_nose" |
+| NC2 | H + `straight_lines` only (no `camber_front`) | reported, predicted refused (M-a remains; the suction nose segments cross the leading-edge line, pencil above) |
+| NC3 | H + `camber_front` only (pursuit lines) | reported, predicted refused (M-b remains) |
+| NC4 | the A1b corner-Jacobian test applied to the step-7 mesh of D0 is not reproducible through the public API (the generator refuses it); instead A1b is applied to a hand-made hex with one corner pushed through the opposite face | detected (mixed sign) |
+
+## Planned mutations (scratch copy of the worktree, each run once against the new tests and B1)
+
+| id | mutation | expected to be caught by |
+|---|---|---|
+| MU1 | S1 centre line: the existing axial turn over `front_gap c / 3` kept upstream of the leading edge with `camber_front` | A1a (fold) |
+| MU2 | S1: nose target `s_n = s_le` (the existing) with `camber_front` | A1a (fold) |
+| MU3 | S2: pursuit weight kept (`straight_lines` ignored) | A1a (fold) |
+| MU4 | S2 first cell `first / max(cos_t, 0.1)` -> `first` | A2 or A3 (predicted: the stack-to-segment jump in wall-normal height raises skewness); may survive |
+| MU5 | an existing expression changed on the default path: `lam_u = front_gap c / 3` -> `/ 2.9` | B1 (G and H hashes), B2 |
+| MU6 | `s_hi_at` under `camber_front`: pitch times `1 + 1e-9` | A1c, or a refusal (A1a) by `set_periodic_rotation` |
+
+## Decision rule
+
+- **done**: A1a to A1c, A2, A3, A4 met, A5 measured, B1 to B4 met, NC1 and NC4 met.
+- **partial**: A1a to A1c, B1 to B4, NC1 met, but a quality limit A2 to A4 missed (an ignored `*_known_miss` record with the
+  limit intact and the cause located by R1).
+- **todo**: A1 missed (S does not build the reference fold-free, after the development protocol), or B1 to B4 missed (an existing
+  result changed).
+
+## Limits (not covered)
+
+- One blade (the reference) at one specification (s4); the control range of S is not scanned (the ADR 0079 R-G style scan on S
+  is a follow-up). Blade B and FAN-01-C with S are reported only (R2).
+- The topology is kept, so the 77.6 deg shear floor stays: a mesh within the limits is not a mesh of low non-orthogonality. A
+  topology change (an offset seam corner, ADR 0087 I-b, or an O/H topology) is outside this item.
+- No flow solve on the meshes; no case-file value for S (follow-up); no change of h_slit.
+
+## Addenda
+
+### Amendment 1 (2026-11-17, after the development builds, before any registered run; no limit changed)
+
+Development builds (the protocol above), all on the reference at the s4 specs, in scratch copies of the branch code
+(`f726-scratch/dev`, `f726-scratch/diag` with the D0 hooks; logs `dev1.log`, `dev2_diag.log`, `dev3_diag.log`); no quality
+metric was computed or printed:
+
+1. S as registered (`dev1.log`): refused, step-0 message "folded at layer 0 (r = 0.02150), C block around line 2, row 2".
+2. S as registered with the D0 hooks (`dev2_diag.log`): steps 0 to 4 (with smoothing) fold in the plane of the layers on the
+   wake and suction-side lines next to the stack edge (row 2); steps 6 and 7 (Laplace start) fold at the outlet line and the
+   leading edge (row 2). **Step 5, the algebraic grid of S1 + S2, is unfolded in every layer, also after the radial blend
+   (`pre-filter fold None`); the radial filter folds it** at layer 5 (r = 0.03975, the mid-span station), C block around line 0,
+   row 2.
+3. Variant V1 (below) with the D0 hooks (`dev3_diag.log`): builds at step 5, 12 841 cells; the D0 corner-Jacobian hook counts 0
+   of 12 848 C and F hexes with mixed signs (disclosed: this is the measure of A1b, seen once in development on the variant).
+
+No defect of the registered code was found (the step-5 grid is the design's algebraic grid and is unfolded); the fold is a design
+interaction, so the protocol's variant rule applies. One of the three permitted variants is used.
+
+**Variant V1 (frozen): S without the radial filter** (`radial_filter: false` in `camber_seam_s_construction()`, every other field
+as registered). Derivation of the fold, from the code: the filter (ADR 0079 F3) moves a far node of layer `k` towards the linear
+interpolation in `r` of layers `k - 1` and `k + 1`, with a weight that rises from 0 at the stack edge as `1 - fade((j - nb) /
+(ns - nb))`, i.e. 0.043 at the first free node `j = nb + 1` (two passes of half the weight: about 4.3 % of the deviation). The
+station distribution of the reference is piecewise linear with a kink at mid span, the radius of layer 5 (chord slopes 0.71 and
+0.38 m/m, stagger 5.6 and 2.2 deg per half span), so the wake and trailing-edge positions are kinked in `r` there: the wake offset
+`s_inf - s_te = sigma0 0.2 c`, about 0.9 c, alone deviates from the interpolation of layers 4 and 6 (9 mm away on either side)
+by about `0.9 x 0.33 x 0.009 / 2` = 1.3 mm, the trailing-edge position by a similar amount. 4.3 % of 2 to 3 mm is about 0.1 mm,
+above the length of the first free cell next to the outlet-side wake stack (`first` = 7.2e-5 m along a nearly pitchwise
+segment, `cos_t` about 1): the first free quad turns over. The algebraic grids of S vary smoothly with `r` between the kinks and
+need no filter; H keeps it (bits unchanged). The fold-free step-5 result is not an argument from the measured numbers but the
+registered fallback of the chain.
+
+Construction S as frozen: `CGridOptions::camber_seam_s_construction()` = `camber_seam_h_construction()` + `camber_front` +
+`straight_lines` + `radial_filter: false`. NC2 and NC3 stay as registered (H, with its filter, + one field). MU1 to MU6 are run on
+this S. Prediction for the registered run: A1a met at step 5 (the development build); A2 to A4 not seen.
+
+### Amendment 2 (2026-11-17, after the one registered run, before any further run; no limit changed)
+
+The registered run (`f726-scratch/run1.log`) missed A2 (86.97 deg against 85) and A3 (7.43 against 4.0); A1a to A1c and A4 were
+met (numbers in addendum 1). By rule 2 the test `a1_a4_construction_s_meshes_the_reference` becomes the ignored record
+`a1_a4_construction_s_meshes_the_reference_known_miss` with its limits intact (the code otherwise unchanged). So that the met
+clauses keep running, one test is added, `a1_a4_construction_s_meshes_the_reference_met_limits`: the same code and limits for
+A1a, A1b, A1c and A4, A2 and A3 printed only (the computation is deterministic, so its numbers are those of the registered run;
+it is run once to confirm that). One diagnosis run after the miss (scratch `f726-scratch/dev/.../zz_dev.rs`, log
+`diag_miss.log`, never committed) located the faces above the limits; it is reported in addendum 1 as diagnosis, not as a check,
+and changes no part of construction S.
+
+## Addendum 1: results (2026-11-17)
+
+One registered run (`f726-scratch/run1.log`, release, `cargo test -p rcfd-mesh --release --test f726_cgrid_staggered --
+--nocapture --test-threads 1`: 6 passed, 1 failed), then after amendment 2 one run of the split tests (`run2.log`: 7 passed, 1
+ignored; the numbers are those of run 1). Construction S as frozen in amendment 1.
+
+| id | limit | measured | met |
+|---|---|---|---|
+| A1a | S builds the reference, cells > 0 | 12 841 cells, construction step 5 (the algebraic grid; steps 0 to 4, with smoothing, fold in the plane) | yes |
+| A1b | corner Jacobians of one sign, none zero; min volume > 0 | 100 096 of 100 096 negative (the layout's orientation), 0 positive, 0 zero; min volume 2.67e-13 m^3 | yes |
+| A1c | periodicity <= 1e-12 m | within the limit (printed as 0.000000 at 1e-6 resolution; MU6 shows the check detects a 1e-9 relative pitch error) | yes |
+| A2 | max non-orthogonality <= 85 deg | **86.970 deg** (face between C (59, 1) and (59, 2), layer 7); mean 35.6, 99th percentile 83.4 | **no** (record `a1_a4_..._known_miss`) |
+| A3 | max skewness <= 4.0 | **7.435** (face between C (59, 2) and (59, 3), layer 9) | **no** (same record) |
+| A4 | max aspect <= 1000 | 525.6 (cell C (59, 9), layer 16, a tip-gap layer) | yes |
+| A5 | h_slit against the same limits (measured) | 11 648 cells: 85.374 deg (**missed**, as predicted), skewness 16.685 (**missed**, as predicted), aspect 826.7 (met, as predicted) | measured |
+| B1 | `cgrid_w35d` `b1_existing_constructions_are_bit_identical`, `b1_construction_g_is_bit_identical`, `b1_construction_h_is_bit_identical` | pass (`b1_b3_w35d.log`) | yes |
+| B2 | camber_seam_h on the default ComputerFan s4: hash equal to the base's | `0xa448fd08e65014f8` on the base copy (`base_b2.log`, 12 841 cells, step 0) and on the branch | yes |
+| B3 | the named case tests pass | `cgrid_w35d` p1_p8, c1, control_range, r_g_out_of_range (with B1: 7 passed); `fan_design_w46a` `s4_realised_default_meshes` passed; `f722_rom_reference_fan` `a5_..._met_limits` passed; `fan01_p10_w36d` `c2_fan01_h_mesh_is_accepted_by_the_solver_and_the_rules` passed | yes |
+| B4 | `--lib` count as the base | 77 passed, 2 ignored on the base copy and on the branch | yes |
+| NC1 | camber_seam_h refuses the reference with the ADR 0643 message | the exact message, path `front_gap` | yes |
+| NC2 | H + `straight_lines` (reported, predicted refused) | refused: folded at layer 0, C block around line 32 (the leading edge), row 2 | as predicted |
+| NC3 | H + `camber_front` (reported, predicted refused) | refused: folded at layer 0, C block around line 0, row 2 | as predicted |
+| NC4 | the A1b measure detects a hex with a corner pushed through | regular cube 8 x +1; pushed corner: +1, +1, +1, -0.5, +1, +0.2, +0.2, -2.1 (mixed) | yes |
+| R2 | S on the existing cases (reported) | default ComputerFan s4: 12 841 cells, step 5, 82.88 deg / 2.544 / 193.3 (H: 87.9 deg, ADR 0118); blade B S counts: 11 536 cells, step 0, 71.86 / 1.061 / 126.4; FAN-01-C: 11 536 cells, step 5, 88.03 / 4.302 / 178.5 (H: 83.26 / 3.98 / 227) | - |
+
+Also run: `cargo test -p rcfd-api --release --test baseline_hashes` (3 passed, 1 ignored; `fan_cgrid.rs` is a mesh generator the
+fan case builder calls), `cargo test -p rcfd-cli --release --test docs_site` (2 passed, with this ADR and the `docs/meshing.md`
+paragraph), `cargo fmt -p rcfd-mesh --check` clean, `cargo clippy -p rcfd-mesh --all-targets -- -D warnings` clean (after the
+run, two `type_complexity` findings in the new test file were fixed with a type alias; no behaviour change). Slowest new test:
+the whole file takes about 100 s in release (R2 builds three more fans); the met-limits test alone about 15 s.
+
+### Diagnosis of the A2 / A3 miss (after the run; `diag_miss.log`, and mutation MU4; not checks)
+
+- The miss is local: **36 faces above 85 deg**, all the face between the last stack cell and the first free cell (rows 1 / 2) of
+  the upper wake lines 58 and 59 and the lower wake line 4, in every layer; **12 faces with skewness above 4**, all on line 59
+  rows 2 / 3. Line 56 is the trailing edge; the wake axial cells grow from the trailing-edge spacing by about five times per cell
+  (`z` 0.03973, 0.03982, 0.04033, 0.04318, 0.05355 at lines 56 to 60), while the wake curve turns from the stagger to axial over
+  0.2 chords, so the wake normal along which the stack is built turns from 10 deg (line 57) to 22.7 (59), 41 (60) and 75 deg
+  (61) from the axis on neighbouring lines, against a nearly pitchwise segment (91 to 93 deg).
+- The cause is S2's first-cell rule: the first free cell is `first / cos_t`, and `cos_t` (segment against the stack direction)
+  is about 0.17, 0.34 and 0.65 on lines 58, 59, 60, so the first free row sits at 2.1e-4 m along line 59 and 1.1e-4 m along
+  line 60: the row-2 nodes of neighbouring wake lines are at very different distances, and the face between the thin stack cell
+  and the stretched free cell is nearly tangential. Mutation MU4 (the stretch removed, otherwise S) measured **84.688 deg and
+  skewness 3.240** on the reference (aspect 525.6, still fold-free): within both limits. The registered rule meant the stretch to
+  continue the wall-normal growth along the blade, where neighbouring lines have nearly the same `cos_t`; in the coarse, turning
+  wake it does the opposite. This number comes from a mutation run, not a registered one, so it decides nothing here; it is the
+  starting point of the follow-up below.
+
+### Mutations (`f726-scratch/mut`, `mutate.sh`, `mutate.py`, logs `mut_MU*.log`; each run once against the new tests and B1)
+
+| id | mutation | caught by |
+|---|---|---|
+| MU1 | `camber_front`: the existing axial turn kept upstream of the leading edge | **survived**: S still builds, A1 and A4 unchanged, the reference's maxima unchanged (they are in the wake); R2 changes (blade B 66.82 deg, FAN-01-C 88.14). With `z_f` only `front_gap c cos(g)` = 0.064 c upstream of the leading edge at the tip, the axial turn moves the nose target by about 0.08 c and leaves the front edge (except about 0.08 c next to the nose) on the suction side; no registered check looks at the nose region alone |
+| MU2 | nose target `s_le` with `camber_front` | A1a (folded at layer 0, line 2, row 2) |
+| MU3 | `straight_lines` ignored (pursuit) | A1a (folded at layer 0, line 0, row 2) |
+| MU4 | first cell `first` instead of `first / max(cos_t, 0.1)` | **not caught** by the met-limits test (A2 and A3 are record-only there); it lowers both maxima to 84.69 deg / 3.24 (the diagnosis above). The registered expectation (a rise of skewness) was wrong in direction |
+| MU5 | `lam_u` `/ 3` -> `/ 2.9` on the default path | B1 (`b1_construction_g_is_bit_identical`, `b1_construction_h_is_bit_identical` failed) and B2 (hash changed) |
+| MU6 | `s_hi_at` pitch times `1 + 1e-9` under `camber_front` | A1c (periodicity missed; `set_periodic_rotation` accepted the mesh) |
+
+Four of six caught; MU1 survives (no check of the nose region), MU4 is not caught and exposes the cause of the miss.
+
+### Deviations
+
+- Amendment 1: one design variant (V1, the radial filter off) after development builds, within the registered protocol. The
+  development builds saw the A1a result and the A1b count of the variant before the registered run (disclosed there).
+- The MU4 expectation was wrong in direction. The clippy fix in the test file after the run.
+- Nothing else.
+
+### Not run
+
+The ignored records of `cgrid_w35d`, `fan01_p10_w36d` and `f722_rom_reference_fan` (their results are records); the whole
+`rcfd-mesh` integration suite and the workspace (the daily gate); a control-range scan of S; flow solves on the S meshes.
+
+### Decision by the registered rule
+
+**partial.** Construction S (`CGridOptions::camber_seam_s_construction()`, opt-in, beside camber_seam_h) builds
+`ComputerFan::rom_reference()` blade 0 at the ADR 0118 s4 specs with no folded cell (every corner Jacobian of the C and F hexes
+of one sign, minimum volume 2.67e-13 m^3), periodic seams and aspect 525.6 within 1000; camber_seam_h is unchanged in bits on
+every existing case (B1, B2) and the ADR 0079 / 0083 case tests keep their results (B3); h_slit on the reference measured 85.37
+deg / 16.7 / 827 against the same limits. A2 (86.97 deg against 85) and A3 (7.43 against 4.0) are missed, located on 36 and 12
+faces at the stack edge of three wake lines next to the trailing edge, and diagnosed to S2's first-cell stretch in the turning
+wake.
+
+### Remaining questions (each with options and a recommendation)
+
+1. **The first-cell stretch in the wake.** Options: (a) a follow-up that registers S without the stretch on the wake lines (or
+   everywhere) and runs it on the reference and on a second strongly staggered blade, with the same limits, disclosing that MU4
+   already measured 84.69 deg / 3.24 on the reference; (b) wake stacks built along the segment direction instead of the wake
+   normal (removes the kink itself); (c) leave S as is. Recommendation: (a), with (b) as its registered alternative if (a) misses
+   on the second blade; a second blade is needed because the reference number is already known.
+2. **A case value `camber_seam_s`.** It needs a new value of the `mesh.fan.c_grid_construction` enum, which changes the schema
+   golden: not taken (rule 6); open, for the maintainer's approval, best after question 1 settles the construction.
+3. **The smoothing on sheared grids.** S builds through the algebraic step (5): the Winslow steps fold next to the stack edges at
+   this stagger. Options: (a) leave it (the algebraic grid is what S is); (b) a later item on the smoothing controls for sheared
+   passages. Recommendation: (a) now; (b) only if a flow solve on S meshes asks for it.
+4. **MU1 survived.** The straight extension of the centre line between the front edge and the leading edge is derived but not
+   needed at front_gap 0.3 on this blade. Recommendation: keep it (it is what keeps the whole front edge on the right side at
+   larger front gaps) and add a front_gap scan of S to the follow-up of question 1 so that a check sees it.
+
+## For the lead: roadmap entries
+
+> Proposed status: partial
+
+> Follow-up of F-722 (ADR 0643 questions 1 and 2). ADR 0692, 2026-11-17. PARTIAL (the non-orthogonality and skewness limits missed). Cause of the camber_seam_h fold on the reference located before the design: with the axial front edge every suction-side nose target lies on the pressure side of the extended camber line once front_gap tan(stagger) exceeds the corner offset (at every front_gap and n_nose), and the pursuit lines turn by up to the stagger after the stack. New opt-in construction S beside it, CGridOptions::camber_seam_s_construction() = camber_seam_h + camber_front (front edge front_gap chords along the extended leading-edge camber line, centre line straight to it and turning axial upstream) + straight_lines (straight segments from the stack edge to the targets, first cell stretched by 1/cos) + no radial filter (amendment 1: the filter folds the first free rows at the mid-span kink of the station distribution); no case value. ComputerFan::rom_reference() blade 0 at the ADR 0118 s4 specs: 12841 cells, no folded cell (all 100096 corner Jacobians of the C and F hexes of one sign, min volume 2.7e-13 m^3), periodic, aspect 525.6 (limit 1000); MISSED 86.97 deg (limit 85) and skewness 7.43 (limit 4.0), on 36 and 12 faces at the stack edge of three wake lines next to the trailing edge, diagnosed to the first-cell stretch in the coarse turning wake (a mutation without it measured 84.69 deg / 3.24). h_slit on the reference against the same limits: 85.37 deg and 16.7 missed, 827 met. camber_seam_h unchanged in bits (the cgrid_w35d B1 hashes of pursuit, E, G and H; its hash on the default ComputerFan s4 equal to the base's) and the ADR 0079 / 0083 case tests pass (p1_p8, c1, control_range, r_g_out_of_range, fan01_p10_w36d c2, fan_design_w46a s4, f722 a5 met limits); baseline_hashes pass. S also builds the default ComputerFan (82.9 deg, H 87.9), blade B and FAN-01-C. Negative controls: camber_seam_h refuses the reference with the ADR 0643 message; H with either field alone folds. Four of six mutations caught (the nose-region straight extension and the first-cell stretch are not seen by a check).
+
+> Follow-up proposed: construction S without the first-cell stretch on strongly staggered blades. Deps F-726. Acceptance: Every limit not stated here is registered in the ADR before the run. Construction S with the first free cell of the wake lines (or of every line) at the next stack height builds ComputerFan::rom_reference() blade 0 at the ADR 0118 s4 specs and a second strongly staggered blade (outer stagger at least 75 deg) with no folded cell within 85 deg non-orthogonality, skewness 4.0 and aspect 1000 (the reference's 84.69 deg / 3.24 from an ADR 0692 mutation disclosed as already seen), a registered front_gap and n_nose scan of S inside the camber_seam range builds a registered fraction, and camber_seam_h is unchanged in bits.
+
+> Follow-up proposed: case value camber_seam_s for mesh.fan.c_grid_construction. Deps F-726 and the follow-up above. Acceptance: Every limit not stated here is registered in the ADR before the run. A fan case with c_grid_construction = "camber_seam_s" builds the mesh of CGridOptions::camber_seam_s_construction() bit for bit, and FvGeometry, check_mesh and the rules accept it on the reference fan; the schema golden is updated with the maintainer's approval; existing values and baseline hashes unchanged.

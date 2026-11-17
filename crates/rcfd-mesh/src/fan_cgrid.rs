@@ -514,6 +514,17 @@ pub struct CGridOptions {
     /// ADR 0181 arm M-W (opt-in, experimental): the wake axial cells of every layer are `dz_te rho^m` with one ratio `rho` solved to
     /// fill the wake ([`geometric_cells`]) instead of the growth capped at 1.5 times the mean wake cell.
     pub wake_geometric: bool,
+    /// ADR 0692 S1 (opt-in, with `camber_seam`): the front edge lies `front_gap` chords from the leading edge along the extended
+    /// leading-edge camber line (`z_f = z_le - front_gap c cos(gamma_le)`), the passage centre line runs straight along that
+    /// line from the leading edge to the front edge and turns axial upstream of it over a third of the distance to the inlet, and
+    /// the nose target of the front edge is the centre line at `z_f`. So every front-edge target of a suction-side nose line lies
+    /// on the suction side of the extended camber line, at every stagger below 90 deg (without it the suction-side nose lines of a
+    /// strongly staggered blade wrap around the leading edge).
+    pub camber_front: bool,
+    /// ADR 0692 S2 (opt-in): every C line runs straight from its stack edge to its target (no pursuit turn), and its first cell
+    /// along the segment is the next stack height divided by the cosine between the segment and the wall normal (at least 0.1),
+    /// so that the wall-normal height continues the stack growth.
+    pub straight_lines: bool,
 }
 
 impl CGridOptions {
@@ -539,6 +550,20 @@ impl CGridOptions {
             post_untangle: true,
             lean_stack: true,
             ..CGridOptions::camber_seam_construction()
+        }
+    }
+
+    /// Construction S of ADR 0692 (no case value): construction H with the front edge on the extended leading-edge camber line
+    /// ([`CGridOptions::camber_front`]), straight lines beyond the stacks ([`CGridOptions::straight_lines`]) and without the radial
+    /// filter (ADR 0692 amendment 1: across a kink of the station distribution the filter moves the first free rows by more than
+    /// their height), for strongly staggered blades. The seam topology is H's, so the cells between blade and seam keep the shear
+    /// of `90 deg - stagger`.
+    pub fn camber_seam_s_construction() -> Self {
+        CGridOptions {
+            camber_front: true,
+            straight_lines: true,
+            radial_filter: false,
+            ..CGridOptions::camber_seam_h_construction()
         }
     }
 }
@@ -1007,7 +1032,24 @@ fn build_layer(
     let s_te = sp[nc].1;
     let s_le = sp[0].1;
     let z_min = sp.iter().chain(pp.iter()).map(|p| p.0).fold(f64::INFINITY, f64::min);
-    let z_f = z_min - spec.front_gap * chord;
+    // ADR 0692 S1: the front edge `front_gap` chords from the leading edge along the extended leading-edge camber line
+    let cf = opts.camber_front && opts.camber_seam;
+    let z_f = if cf {
+        let (a, b) = (fan.camber_zs(&st, 0.0), fan.camber_zs(&st, 1e-6));
+        let sig = (b.1 - a.1) / (b.0 - a.0);
+        a.0 - spec.front_gap * chord / (1.0 + sig * sig).sqrt()
+    } else {
+        z_min - spec.front_gap * chord
+    };
+    if cf && !(z_f < z_min) {
+        return Err(err(
+            "front_gap",
+            format!(
+                "the front edge z = {z_f:.4} ({} chords ahead of the leading edge along its camber line) is not upstream of the blade (z {z_min:.4}): increase front_gap (camber_front)",
+                spec.front_gap
+            ),
+        ));
+    }
     if !(z_f > 0.0) {
         return Err(err(
             "z_le_root",
@@ -1083,10 +1125,18 @@ fn build_layer(
     // upstream the centre line turns axial over a third of the front gap, so that the seams meet the front edge within
     // atan(sigma_le e^-3) of the axial direction (a seam parallel to the front edge folds the corner at high stagger)
     let lam_u = spec.front_gap * chord / 3.0;
+    // ADR 0692 S1: upstream of the front edge the centre line turns axial over a third of the distance to the inlet
+    let lam_f = z_f / 3.0;
     let centre = |z: f64| -> f64 {
         let (z_le, s_le0) = cam[0];
         if z >= z_te {
             s_wake(z)
+        } else if z <= z_le && cf {
+            if z >= z_f {
+                s_le0 + sigma_le * (z - z_le)
+            } else {
+                s_le0 + sigma_le * (z_f - z_le) - sigma_le * lam_f * (1.0 - (-(z_f - z) / lam_f).exp())
+            }
         } else if z <= z_le {
             s_le0 - sigma_le * lam_u * (1.0 - (-(z_le - z) / lam_u).exp())
         } else {
@@ -1323,7 +1373,10 @@ fn build_layer(
     // front-edge cells start at the nose with a few wall cells' width and grow towards the seam corners
     let d_nose = 3.0 * norm2((sp[1].0 - sp[0].0, sp[1].1 - sp[0].1));
     // the nose target of the front edge: straight ahead of the leading edge (straight seams) or on the centre line (camber seam)
-    let (s_n, s_lo_f, s_hi_f) = if follow {
+    let (s_n, s_lo_f, s_hi_f) = if follow && cf {
+        // ADR 0692 S1: the nose target on the extended camber line, the front edge centred on it
+        (centre_blend(z_f), s_lo_at(z_f), s_hi_at(z_f))
+    } else if follow {
         (s_le, s_lo_at(z_f), s_hi_at(z_f))
     } else {
         (s_le, s_lo, s_hi)
@@ -1359,6 +1412,13 @@ fn build_layer(
         let e = edge[i];
         let len = norm2((o.0 - e.0, o.1 - e.1));
         let first = d1s[i] * g.powi(nbi as i32);
+        // ADR 0692 S2: the first cell along the straight segment continues the stack growth in the wall-normal direction
+        let first = if opts.straight_lines {
+            let cos_t = ((o.0 - e.0) * normals[i][0] + (o.1 - e.1) * normals[i][1]) / len;
+            first / cos_t.max(0.1)
+        } else {
+            first
+        };
         if ns <= nbi {
             return Err(err(
                 "n_side",
@@ -1397,7 +1457,7 @@ fn build_layer(
             let th = cos_t.clamp(-1.0, 1.0).acos();
             let xt = ((th - PI / 6.0) / (PI / 6.0)).clamp(0.0, 1.0);
             let wt = xt * xt * (3.0 - 2.0 * xt);
-            let beta = if i == 0 || i == n_i {
+            let beta = if i == 0 || i == n_i || opts.straight_lines {
                 1.0
             } else {
                 1.0 - wt * (1.0 - x * x * (3.0 - 2.0 * x))

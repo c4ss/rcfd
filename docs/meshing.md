@@ -377,6 +377,26 @@ mid-span wake cell), persists at a tenth of the Reynolds number, and does not oc
 the ADR 0079 scan, 22 of 39 in-range FAN-01 combinations build (G: 20; one of the two gained meshes is above the 85 deg error
 threshold of `check_mesh`). A' 66.2 / 0.89 / 394 and B' 80.9 / 8.9 / 8805 with the H mesh options (gates still MISSED).
 
+**Construction S (ADR 0692, library only: `CGridOptions::camber_seam_s_construction()`, no case value yet).** For strongly
+staggered blades, where H folds (the reduced-order reference `ComputerFan::rom_reference()`, stagger 69.8 to 77.6 deg). H plus:
+
+* `camber_front`: the front edge lies `front_gap` chords from the leading edge along the extended leading-edge camber line, the
+  passage centre line runs straight along that line to the front edge and turns axial upstream of it. With H's axial front edge
+  every target of a suction-side nose line lies on the pressure side of the extended camber line once
+  `front_gap tan(stagger)` exceeds the corner offset, so those lines wrap around the leading edge at any `front_gap` or `n_nose`.
+* `straight_lines`: beyond its stack each C line runs straight to its seam or front-edge target (no pursuit turn of up to
+  `stagger` degrees), its first cell stretched so that the wall-normal height continues the stack growth.
+* no radial filter: at a kink of the station distribution it moves the first free rows by more than their height.
+
+On the reference at the ADR 0118 s4 specs S builds without a folded cell (12 841 cells, the algebraic step of the chain), periodic
+to round-off, aspect 525.6, but 86.97 deg and skewness 7.43 against the registered 85 / 4.0 (MISSED): 36 faces above 85 deg, all
+at the stack edge of the wake lines next to the trailing edge, where the coarse wake turns from the stagger to axial and the
+first-cell stretch of `straight_lines` puts the first free rows of neighbouring wake lines at very different distances (a mutation
+without the stretch gave 84.69 deg / 3.24; a follow-up registers it). h_slit on
+the same blade gives 85.37 deg / 16.7 / 827. Inherent to the seam topology (a seam station and its image are reached from the
+same chord station on both sides): a non-orthogonality floor of about the stagger, 77.6 deg at the reference tip. S also builds
+the default `ComputerFan` (82.9 deg / 2.54 / 193, where H gives 87.9 deg), blade B (S counts) and FAN-01-C; H is unchanged.
+
 ## Where to go next
 
 * [mesh-quality.md](mesh-quality.md): the quality report, its measures and the library mesh editing operations.
