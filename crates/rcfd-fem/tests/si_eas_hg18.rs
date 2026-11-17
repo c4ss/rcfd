@@ -1988,6 +1988,7 @@ fn toy_states(pl: &Pl, tag: &str, t: &FTrace, lp: f64, ls: f64, lg: f64, nu1: bo
 // ============================================================================ the fast test
 
 #[test]
+#[ignore = "ADR 0718: the registered fast run (run 1), every check of PL-F and PL-B met; E1 missed |alpha_replica - alpha|_inf / |alpha|_inf = NaN (its displacement leaves the modes at zero, one local iterate, 0 / 0: a defective set-up); superseded by f796_fast_amended (amendment 1)"]
 fn f796_fast() {
     let mut ch = Checks::new();
     let t_all = Instant::now();
@@ -2180,6 +2181,203 @@ fn f796_fast() {
         _ => ch.holds("E1: the converged modes", false),
     }
     println!("f796_fast: {:.1} s", t_all.elapsed().as_secs_f64());
+    ch.finish();
+}
+
+/// ADR 0718 amendment 1: `f796_fast` with E1a (the bending field, at least two local iterates).
+#[test]
+fn f796_fast_amended() {
+    let mut ch = Checks::new();
+    let t_all = Instant::now();
+
+    // PL-F: a closed-form fold with a regular local problem.
+    let pf = Pl {
+        b3: 0.5,
+        b5: 0.25,
+        cl: 1.0 / 16.0,
+    };
+    let (mut lo, mut hi) = (0.9, 1.2);
+    for _ in 0..200 {
+        let m = 0.5 * (lo + hi);
+        if pf.dp_da(m) < 0.0 {
+            lo = m;
+        } else {
+            hi = m;
+        }
+    }
+    let a_f = 0.5 * (lo + hi);
+    println!("PL-F: the closed-form fold a_f {a_f:.12}, p_f {:.12}", pf.p_of(a_f));
+    let of = FineOpts {
+        da: 0.05,
+        steps: 16,
+        halvings: 6,
+        cap: 60,
+    };
+    let tf = toy_trace(&pf, "PF", 0.8, &of, &mut ch);
+    toy_states(&pf, "PF", &tf, 1e-12, 1e-8, 1e-12, false, &mut ch);
+    ch.holds(
+        &format!("PF-2: no failed attempt ({})", tf.fails.len()),
+        tf.fails.is_empty(),
+    );
+    ch.holds(
+        &format!("PF-2: the stop 'fold + 2' ({})", tf.stop),
+        tf.stop == "fold + 2",
+    );
+    let rf = reading(&tf);
+    println!("PF READING: {rf}; {}", companions(&tf));
+    ch.holds(&format!("PF-3: the reading 'fold' ({rf})"), rf == "fold");
+    match tf.sign {
+        Some(j) => {
+            let (p0, p1) = (&tf.points[j - 1], &tf.points[j]);
+            ch.holds(
+                &format!("PF-3: a_f in [{:.6}, {:.6}]", p0.pt.a, p1.pt.a),
+                p0.pt.a <= a_f && a_f <= p1.pt.a,
+            );
+            ch.equals("PF-3: nu before the fold", p0.pt.info.nu.unwrap_or(usize::MAX), 1);
+            ch.equals("PF-3: nu after the fold", p1.pt.info.nu.unwrap_or(usize::MAX), 0);
+            for (k, name) in [(j - 1, "before"), (j, "after")] {
+                let rho = rho_of(&tf, k);
+                ch.holds(&format!("PF-3: rho {name} the fold {rho:.6} >= 0.1"), rho >= RHO_REG);
+            }
+        }
+        None => ch.holds("PF-3: the fold bracketed", false),
+    }
+
+    // PL-B: the local problem loses its root before the fold.
+    let pb = Pl {
+        b3: 0.5,
+        b5: 0.25,
+        cl: 0.390625,
+    };
+    let ob = FineOpts {
+        da: 0.07,
+        steps: 16,
+        halvings: 6,
+        cap: 60,
+    };
+    let tb = toy_trace(&pb, "PB", 0.5, &ob, &mut ch);
+    toy_states(&pb, "PB", &tb, 1e-10, 1e-6, 1e-8, true, &mut ch);
+    ch.holds(&format!("PB-2: the stop 'lost' ({})", tb.stop), tb.stop == "lost");
+    let n = tb.points.len();
+    let a_last = tb.points[n - 1].pt.a;
+    let t_fail = t_fail_min(&tb);
+    let a_star = pb.a_star();
+    ch.holds(
+        &format!("PB-2: a_last {a_last:.12} < a* {a_star} < t_fail,min {t_fail:.12}"),
+        a_last < a_star && a_star < t_fail,
+    );
+    ch.at_most("PB-2: t_fail,min - a_last", t_fail - a_last, 0.07 / 64.0);
+    let rb = reading(&tb);
+    println!("PB READING: {rb}; {}", companions(&tb));
+    ch.holds(
+        &format!("PB-3: the reading 'local breakdown: the mode tangent' ({rb})"),
+        rb == "local breakdown: the mode tangent",
+    );
+    let rho = rho_of(&tb, n - 1);
+    ch.holds(&format!("PB-3: rho at the last state {rho:.6} < 0.1"), rho < RHO_REG);
+    let sr = tb.points[n - 1].pt.sigma.abs() / tb.points[0].pt.sigma.abs();
+    ch.holds(&format!("PB-3: |sigma_last| / |sigma_0| {sr:.4} > 10"), sr > 10.0);
+    ch.holds(
+        &format!("PB-4: every failed attempt local ({} failed)", tb.fails.len()),
+        !tb.fails.is_empty() && tb.fails.iter().all(|f| f.local),
+    );
+    let mut warm_fails = true;
+    let mut above = 0;
+    for f in tb.fails.iter().filter(|f| f.target > a_star) {
+        above += 1;
+        let z_last = pb.local(tb.points[f.from].pt.a, 0.0).1.unwrap_or(f64::NAN);
+        let (cold, _) = pb.local(f.target, 0.0);
+        let (its, out) = pb.local(f.target, z_last);
+        println!(
+            "PB-4: the failed target {:.9}: the iterates from z = 0 {:?}; from z_last {z_last:.9}: {}",
+            f.target,
+            cold,
+            match &out {
+                Ok(z) => format!("converges to {z:.9} in {} iterations", its.len() - 1),
+                Err(e) => e.clone(),
+            }
+        );
+        warm_fails &= out.is_err();
+    }
+    ch.holds(
+        &format!("PB-4: above a* ({above} targets) the local Newton from the last accepted z fails as well"),
+        above > 0 && warm_fails,
+    );
+
+    // E1a: the replica of the local iteration on one element (amendment 1: the bending field).
+    let mut mesh1 = hex_box([0.0; 3], [1.0, 1.0, 1.0], [1, 1, 1]).unwrap();
+    mesh1.set_block_property(0, BlockProperty::solid(INC)).unwrap();
+    let mut m1 = SolidModel::new(mesh1);
+    m1.set_incompatible_stabilisation(LIN);
+    m1.add_material("all", neo_hookean()).unwrap();
+    let st1 = initial_states(&m1).unwrap();
+    let dofs1 = m1.dof_map();
+    let mut u1 = vec![0.0; dofs1.n_equations()];
+    for (i, p) in m1.mesh().nodes().iter().enumerate() {
+        let v = [0.05 * (2.0 * p[0] - 1.0) * (2.0 * p[2] - 1.0), 0.0, -0.15 * p[2]];
+        for (c, vc) in v.iter().enumerate() {
+            u1[dofs1.equation(i, c).unwrap()] = *vc;
+        }
+    }
+    let mat = neo_hookean();
+    let el = element_of(&m1, 0, &u1, &st1);
+    let (rec, out) = record_from(&mat, &el, None);
+    ch.holds(
+        &format!("E1: the record converges ({} iterates)", rec.len()),
+        out.is_ok(),
+    );
+    ch.holds(
+        &format!("E1a: the record has at least 2 iterates ({})", rec.len()),
+        rec.len() >= 2,
+    );
+    let (rep, refusal) = replica(&mat, &el, rec.len(), false);
+    let dr = rec
+        .iter()
+        .zip(&rep)
+        .map(|(a, b)| ((a.residual_norm - b.r2) / a.residual_norm.max(1e-300)).abs())
+        .fold(0.0f64, |w, x| if x.is_finite() { w.max(x) } else { f64::NAN });
+    for (k, r) in rep.iter().enumerate() {
+        println!(
+            "E1 iterate {k}: |r|_2 {:.6e} (record {:.6e}), |alpha|_inf {:.6e}, det F min {:.6}, l_min {:+.6e}, l_max {:+.6e}",
+            r.r2,
+            rec[k].residual_norm,
+            inf9(&r.alpha),
+            r.det,
+            r.lmin,
+            r.lmax
+        );
+    }
+    ch.holds(
+        "E1: the replica has the record's iterates and no refusal",
+        rep.len() == rec.len() && refusal.is_none(),
+    );
+    ch.at_most("E1: max |r|_2 replica against the record, relative", dr, 1e-14);
+    match (&out, rep.last()) {
+        (Ok(alpha), Some(r)) => {
+            // The replica's last iterate is the library's converged modes.
+            let d = alpha
+                .iter()
+                .zip(&r.alpha)
+                .map(|(x, y)| (x - y).abs())
+                .fold(0.0f64, f64::max)
+                / inf9(alpha);
+            ch.at_most("E1: |alpha_replica - alpha|_inf / |alpha|_inf", d, 1e-14);
+            match mode_block(&mat, &el, alpha) {
+                Ok((_, k)) => {
+                    let (asym, eig) = spectrum(&k);
+                    let tr: f64 = (0..MODES).map(|i| k[i][i]).sum();
+                    let sum: f64 = eig.iter().sum();
+                    let big = eig.iter().fold(0.0f64, |w, x| w.max(x.abs()));
+                    println!("E1: the eigenvalues of K_aa {eig:?}");
+                    ch.at_most("E1: the asymmetry of K_aa", asym, 1e-12);
+                    ch.at_most("E1: |sum l_i - tr K_aa| / max |l_i|", (sum - tr).abs() / big, 1e-12);
+                }
+                Err(e) => ch.holds(&format!("E1: K_aa ({e})"), false),
+            }
+        }
+        _ => ch.holds("E1: the converged modes", false),
+    }
+    println!("f796_fast_amended: {:.1} s", t_all.elapsed().as_secs_f64());
     ch.finish();
 }
 
