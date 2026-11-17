@@ -14759,7 +14759,9 @@ fixed by the item's registration ADR before any code.
     record ignores the sample. Every ADR 0624 check keeps its numbers (S1 1, S2 1592 of 1595, NC1 400, NC2 61, NC3 75,
     S4 118). Nine mutations caught. Not covered: the sample is derivable from the file, so it guards against mistakes
     and version drift, not a deliberate forger; no MCP tool (F-702). Follow-up F-745 (Verifier-drawn re-run sample for
-    hypotheses from evaluators outside the maintainer's control).
+    hypotheses from evaluators outside the maintainer's control). ADR 0693 (F-745, 2026-11-17): a verifier-drawn sample
+    from a seed outside the file (verify_drawn) catches an evaluator that is honest exactly on the F-727 sample, which
+    that sample never catches.
 - [x] **F-728** Coupled held metrics and the held-tolerance resolution floor for hypotheses
   - depends on: F-701
   - acceptance: two held metrics (flow and speed) solved together on a synthetic evaluator with a known joint solution
