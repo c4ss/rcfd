@@ -290,3 +290,92 @@ D4 except the `16^3` ones) and `f780_nh16_retry_heavy` (`#[ignore]`, run once wi
    recommendation): before, at the same increment (D1), because the refusal is a property of the path, not of the step length.
 3. **Whether `inertia` should be reported without the retry** (taken: no; with the opt-in only, so that the default path does no
    extra assembly and keeps its bits).
+
+## Addendum 1: results (2026-11-17)
+
+Logs in `w49i-work/f780-scratch`: the registered fast run `run1-fast.log` and the heavy record `run2-heavy.log` (both on
+df2ae6d2, `run-commit.txt`), `fmt.log`, `clippy.log`, `b1-baseline.log`, `b2-bits.log`, `s1-lib.log`, `s1-tests.log`,
+`s3-docs.log`, `s4-8a285601.log`, `mutations.log` and `mut-MU*.log`. Each registered test was run once; no limit changed after
+a run; no amendment.
+
+### The fast test (2.9 s)
+
+| Id | Measured | Limit | Result |
+|---|---|---|---|
+| RF | eight refusals, each `InvalidValue` key `"indefinite_retry"` | key | met |
+| DF0 | `inertia None`, `retried false` at all ten records | as registered | met |
+| SP-D | fails: `load step 8 of 10 (load factor 7.03125e-1 to 7.0625e-1) after 5 halvings: singular tangent: pivot -1.0708e5 at node 228` (the halving chain of D4 exactly) | `Solver`, step 8, singular tangent | met |
+| SP-R | full load, 10 records, none halved, 2 iterations each; retried at `[8, 9, 10]`; inertia `0` x 7, `5`, `11`, `21`; `|u - u_hom|_inf / h` 7.3e-15; own inertia 21 | as registered | met |
+| SP-E | retried and inertia equal to SP-R's at every increment; 1.7e-15 | equal; `<= 1e-6` | met |
+| NC-L | none retried; `Some(0)` x 10; `u` bit-equal to the default | as registered | met |
+| RT8 | 10 attempts converged; bit-equal to the default; none retried; `Some(0)` x 10; `R` 2.3e-9, `w_c` 6.4e-8 | as registered; `<= 1e-6` | met |
+| NR | default: `det F = -1.88e-1 at point 0` (inverted); retry: the same text | equal | met |
+| RFF | default cause `singular tangent: pivot -7.2012e6 at node 106 ...`; retry: `not converged in 2 iterations (relative residual 2.9e-16, ...); retried with the indefinite tangent (ADR 0719 D1) after: ` + that cause | as registered | met |
+
+### The heavy record (70.8 s)
+
+| Id | Measured | Limit | Result |
+|---|---|---|---|
+| OB16 | ADR 0678's text, equal (24.2 s) | equal | met |
+| IN16 | full load, `R/mu 0.33937627`, `w_c 0.06245308` (21.1 s) | full load | met |
+| RT16 | full load (25.0 s); 10 attempts, all converged; `u` bit-equal to IN16's; `R/mu` 1.2e-8, `w_c` 1.8e-8 relative; retried at `[8, 10]` (9 not); inertia `0` at 0.1 .. 0.9, `1` at 1.0; own inertia 1 | as registered | met |
+
+Prediction P1 held: the retry path is IN-F's bit for bit. The hook saw ten attempts; the default path's seven failed attempts
+are replaced by two retries (increments 8 and 10). The extra assembly and factor per increment cost about 4 s on `16^3`.
+
+### Default bits and static checks
+
+| Id | Result |
+|---|---|
+| B1 | `baseline_hashes`: 3 pass, 1 ignored: met |
+| B2 | `si_eas_hg_default_bits`, `si_eas_hg3_bits`, `si_eas_default_bits` pass: met |
+| S1 | `--lib` 15 pass; the fast tests of `si_eas_hg14`, `si_eas_hg15`, `si_eas_hg16`, `si_eas_hg17` pass; `sa_arclength` 2, `sa_contact_lifted_f608` 7, `sa_contact_line_search_f684` 1 pass (release): met |
+| S2 | `cargo fmt -p rcfd-fem --check` clean; `cargo clippy -p rcfd-fem --all-targets -- -D warnings` clean: met |
+| S3 | `docs_site` 2 pass (on df2ae6d2 and again on the results commit): met |
+| S4 | `cargo build -p rcfd-fem --release --tests` passes at 8a285601 (archive copy) and at df2ae6d2 (the runs); 9167bd8d changes only the ADR: met |
+
+### Mutations (each on a scratch copy of df2ae6d2, run once against `f780_fast`)
+
+| Id | Caught by | Result |
+|---|---|---|
+| MU1 (the retry never fires) | SP-R, SP-E (the default's refusal at step 8), RFF | caught |
+| MU2 (every failure retried) | NR (the inversion retried, its text carries the note) | caught |
+| MU3 (the retry with the positive factor) | SP-R, SP-E, RFF | caught |
+| MU4 (positive pivots counted) | SP-R (375 .. 354), NC-L, RT8 | caught |
+| MU5 (the committed state's inertia) | SP-R (increment 8 reads 0) | caught |
+| MU6 (`retried` never set) | SP-R | caught |
+| MU7 (the first cause dropped) | RFF | caught |
+| MU8 (the inertia also without the opt-in) | DF0 | caught |
+
+### Deviations
+
+None. The registration's D4 expected the inertia at increments 8 and 9 only as `>= 1`; the measured `5` and `11` are reported,
+not checked.
+
+### What was not run
+
+The other users of `NewtonOptions` (the time stepping, the transient driver, the contact driver) were run only through their
+refusal (RF) and the named contact files; the whole `rcfd-fem` integration suite was not run (rule 7; the daily CI gate runs it).
+
+### Decision
+
+**done**: every row of the fast test and of the heavy record met in its single registered run, B1, B2, S1 to S4 met, eight of
+eight mutations caught, no amendment.
+
+### Remaining questions
+
+1. **Whether the retry becomes a default** (open question 1, open). Options: (a) keep it off; (b) make it the default with the
+   inertia reported; (c) make it the default only for models with incompatible modes. Recommendation: (a), until the CLI, the
+   case file and the result writers show `LoadStep::inertia` (now only in the library's record), since a default that solves
+   past a loss of stability without showing `nu > 0` changes what a user reads as a stable result.
+2. **Reporting the inertia outside the library** (CLI summary, result file). Recommendation: a follow-up that writes `inertia`
+   and `retried` per increment where the solid case reports its increments, behind the same opt-in, without touching the hash
+   tables.
+
+## For the lead: roadmap entries
+
+> Proposed status: done.
+
+> F-780 (ADR 0719, 2026-11-17): the opt-in `NewtonOptions::indefinite_retry` (off by default) makes the load-stepping driver (`solve`, `solve_with`) repeat an increment whose attempt is refused by the positive pivot test once more, from the same committed state, with `indefinite_tangent`; a retry that also fails is the attempt's failure with both causes, and the driver then halves as before. Every accepted state's inertia (the negative pivots of the non-zero-pivot `L D L^T` of the reduced tangent at the converged iterate) and whether it was retried are in the new `LoadStep::inertia` and `LoadStep::retried`. The 16^3 punch block of ADR 0694 solves to full load with it in ten increments (R/mu 0.33937627, w_c 0.06245308, bit-equal to the indefinite-tangent solve; increments 8 and 10 retried; nu = 0 to 0.9 and nu = 1 at full load). Fast controls: the ADR 0628 saddle patch (the default refuses at step 8 exactly as derived; the retry reaches F_33 = 0.93 with nu 0, ..., 5, 11, 21, equal with both factors), rule L and the 8^3 block (no refusal: bits unchanged), an inversion not retried, a retry that fails. Every other entry point that takes NewtonOptions refuses the flag. Default bits unchanged (baseline_hashes, the default-bits tests); eight of eight mutations caught; no amendment.
+
+> Follow-up proposed: The inertia and the retry of the nonlinear driver in the solid case's output. Deps F-780. Acceptance: Every limit not stated here is registered in the ADR before the run. With the solid case's opt-in for NewtonOptions::indefinite_retry, the inertia and the retry flag of every accepted increment written where the case reports its increments and shown by the CLI summary, with a warning when an accepted state has nu > 0; the 16^3 block of ADR 0694 run through the case file reports nu = 1 at full load; off by default, the default bits, the schema golden and the hash tables unchanged.
