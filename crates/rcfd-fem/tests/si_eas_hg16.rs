@@ -1793,8 +1793,24 @@ const A_P: f64 = 0.964899444580078;
 const B_P: f64 = 0.9649002075195312;
 
 #[test]
-#[ignore = "ADR 0700: the heavy record of the bifurcated branch on 16^3 (D2 to D4), run once with --ignored"]
-fn f783_nh16_branch_heavy() {
+#[ignore = "ADR 0700: the registered heavy record of the bifurcated branch on 16^3 (D2 to D4), run once with --ignored (79 s), known miss (amendment 2): OB, HS1 to HS4, HM met (mu_1(lambda_f) 873.67, mu_1(A) 2.554, sigma -1); the forced ladder from a_0 = 2e-4 began above the fold of the forced path (amplitude scale ~3e-5): its first solve converged to a_+ = -5.44e-5, the sixth failed in the modes of element 3720, k_0 2180 against 873.7 (HF 1.50 > 1e-3), no window level, CF undecided, no switch; f783_nh16_branch_heavy_amended starts the ladder at 1e-7 with 13 levels"]
+fn f783_nh16_branch_heavy_known_miss() {
+    heavy(false);
+}
+
+/// The corrected heavy record of ADR 0700 amendment 2: the forced ladder from `1e-7` over 13 levels.
+#[test]
+#[ignore = "ADR 0700: the corrected heavy record of the bifurcated branch on 16^3 (amendment 2), run once with --ignored"]
+fn f783_nh16_branch_heavy_amended() {
+    heavy(true);
+}
+
+fn heavy(amended: bool) {
+    let (a0, levels) = if amended {
+        (1e-7, 13)
+    } else {
+        (LADDER_A0, LADDER_LEVELS)
+    };
     let mut ch = Checks::new();
     let t_all = Instant::now();
     let mesh16 = block_mesh(16);
@@ -1920,7 +1936,7 @@ fn f783_nh16_branch_heavy() {
     );
 
     // HF: the forced response at lambda_f.
-    let lad = forced(&fb, "HF", &sym[kf].0, &pf.phi, pf.mu, LADDER_A0, LADDER_LEVELS);
+    let lad = forced(&fb, "HF", &sym[kf].0, &pf.phi, pf.mu, a0, levels);
     ch.at_most("HF: k_0 against mu_1(lambda_f)", (lad.k0 / pf.mu - 1.0).abs(), 1e-3);
     let zl = lad
         .levels
