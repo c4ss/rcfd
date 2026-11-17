@@ -325,3 +325,140 @@ exactly, `0`). Corrected, before its run:
   test becomes `f796_fast_amended`: PL-F and PL-B unchanged (the same code, deterministic: their printed numbers must equal
   run 1's, compared on the logs) and E1a. The planned mutations are run against `f796_fast_amended`. The heavy record is
   unchanged and has not been run.
+
+## Addendum 1: results (2026-11-17)
+
+Logs in `w49i-work/f796-scratch`: `run1-fast.log` (the registered fast run, on a23967c3), `run2-fast-amended.log` (the
+corrected fast run of amendment 1, on 32fce1ef), `run3-heavy.log` (the registered heavy run, 171.8 s, on 32fce1ef),
+`mutations.log` and `mut-MU*.log`, `s7-*.log`, `b-src-diff.log`, `s6-*.log`, `s8-docs.log`; the hand arithmetic
+`scripts/toys.py` and, written after the test code and before any run, `scripts/toys_full.py` (the toys with the full
+bordered Newton and the continuity test, to check that every PL-B failure is local). Each registered test was run once; no
+limit changed after a run; one amendment (E1's set-up).
+
+### The fast test (`f796_fast` run 1, `f796_fast_amended` run 2)
+
+PL-F and PL-B are the same code in both runs; their printed lines are identical in the two logs (compared with `diff`).
+
+| Id | Measured | Limit | Result |
+|---|---|---|---|
+| PF-0 | `1.1e-16` | `<= 1e-12` | met |
+| PF-1 | `2.2e-16`; `6.7e-15`; `1.1e-16` (8 states) | `<= 1e-12`; `<= 1e-8`; `<= 1e-12` | met |
+| PF-2 | 0 failed attempts; stop "fold + 2" | as registered | met |
+| PF-3 | "fold"; `a_f = 1.009008` in `[1.00, 1.05]`; `nu` 1 then 0; `rho` 0.9449, 0.9286 | as registered | met |
+| PB-0 | `1.9e-15` | `<= 1e-12` | met |
+| PB-1 | `5.4e-14`; `9.7e-12`; `1.2e-13`; `nu = 1` (8 states) | `<= 1e-10`; `<= 1e-6`; `<= 1e-8`; `= 1` | met |
+| PB-2 | "lost"; `0.7999353 < 0.8 < 0.8007176`; `7.82e-4` | as registered; `<= 1.09e-3` | met |
+| PB-3 | "local breakdown: the mode tangent"; `rho = 0.0163`; `|sigma_last| / |sigma_0| = 50.5` | as registered | met |
+| PB-4 | 20 of 20 failures local; at all 20 targets above `a*` the local Newton from the last `z` fails too | holds; holds | met |
+| E1 (run 1) | the record converges (1 iterate, `alpha = 0`); replica `|r|_2` equal (`0`); `|alpha_rep - alpha| / |alpha|` **NaN** (`0 / 0`); asymmetry `2.7e-18`; trace `6.9e-16` | as registered | **missed** (a defect of the set-up, amendment 1) |
+| E1a (run 2) | 4 iterates (`>= 2`); replica `|r|_2` equal at each (`0`); the modes equal (`0`); asymmetry `2.1e-17`; trace `6.9e-16` | as registered | met |
+
+### The heavy record (`f796_nh16_end_of_branch_heavy`, 16^3)
+
+| Id | Measured | Limit | Result |
+|---|---|---|---|
+| OB | equal | equal | met |
+| R1 | `9.95e-11`; `nu = 1` | `<= 1e-8`; `= 1` | met |
+| S5 | rungs 1 to 5; `2.3e-13`; `2.2e-10`; `9.0e-8`; `mu_1` bit-identical (`0`) | as registered | met |
+| X1 | the five texts equal ADR 0711's, character for character; `E = 3720` | equal; `= 3720` | met |
+| X2 | per attempt: the record's outcome in the text (5 of 5); the replica's `|r|_2` equal to the record's at every iterate (26, 26, 5, 26, 13 iterates, difference `0`); the replica refused at the same `alpha` with the same text (attempts 3 and 5) | as registered | met |
+| X3 | asymmetry `7.2e-17`; eigenvalues of `K_aa` at `S5`: `3.749e4, 4.359e5, 5.448e5, 6.296e5, 8.056e5, 9.416e5, 1.557e7, 1.816e7, 2.040e7` (all positive), `l_min / l_max = 1.84e-3`, 12 local iterations, `det F >= 0.956`; element 3720 has the smallest ratio of the 4096 elements (next 3992 at `1.06e-2`) | `<= 1e-12`; reported | met |
+| X4 | per attempt: (c) from `S5`'s modes the local iteration converges in 4 to 7 iterations (`|alpha - alpha_5| / |alpha_5|` 0.24, 0.11, 0.055, 0.029, 0.014; `l_min` `+6.9e4` to `+3.9e4`); (d) `t*` 0.926, 0.283, 0.566, 0.163, 0.709 (not monotone in the step); (e) the continuation from `alpha_5` reaches `t = 1` every time, smallest `l_min = +3.75e4` | reported | reported |
+| FT0 | `t_8` not accepted: the fine trace is lost before rung 5 | (a reading, not a miss) | reported |
+| FT1 | constraint `9.0e-14`; continuity at every accepted state | `<= 1e-9`; holds | met |
+| FT2 | **"local breakdown: the local iteration"** | not "undecided" | met |
+| FT3 | the table below | reported | reported |
+
+**The fine trace (FT3).** From `S4` (`a = 1.5309e-4`, `lambda = 0.9600697`) with `Da = 7.926e-6`: `a`, `lambda`, `dlambda/da`,
+`nu`, the four lowest pairs, the share of the lowest vector on element 3720, `l_min` and `l_max` of its `K_aa`, its local
+iterations:
+
+- `1.5309e-4`, `0.96006974`, `-41.64`, 1, `-2.4656e4, 2278, 3057, 3936`, 0.645, `2.274e4`, `2.040e7`, 10;
+- `1.6101e-4`, `0.95974933`, `-39.10`, 1, `-2.3654e4, 2278, 3057, 3936`, 0.642, `2.427e4`, `2.040e7`, 12;
+- `1.6498e-4` (halved), `0.95959735`, `-37.57`, 1, `-2.2928e4, 2278, 3057, 3936`, 0.640, `2.507e4`, `2.040e7`, 16.
+
+The local iteration from the previous state's modes gives the same modes (`1.9e-10`, `6.7e-14`): one root, followed
+continuously. Ten solves: two accepted, eight rejected, all in element 3720 with an inverted point (`det F` from `-0.10` to
+`-6386`), all local by the registered test. The trace ends in `[1.649773e-4, 1.650393e-4]`, with `rho = 1.10` (the mode tangent
+stiffer than at `S4`), `|sigma_last| / max |sigma| = 0.90`; the linear extrapolations put `sigma = 0` at `a = 2.6e-4` and
+`l_min = 0` at `a = 4.1e-5`, behind the trace: neither is approached.
+
+**The iterates (c3).** Every failing attempt, in rung 6 of ADR 0711 and in the fine trace, has the same pattern in element
+3720. Iterate 0 (`alpha = 0`) has `l_min > 0`. The first Newton step lands where `K_aa` is indefinite (`l_min` from `-2.1e4`
+down to `+2.4`). After that the iteration either wanders without converging (rung 6, attempts 1, 2, 4: 25 iterations, `l_min`
+changing sign back and forth, relative residual `3.6e-5` to `0.23`) or takes a step of `|alpha|_inf ~ 2.6e-2`, 16 times the
+converged modes, into a region with `l_min ~ -1e7` and inverts a point (attempts 3 and 5, every fine-trace failure). At the
+same nodal displacements the iteration from the last converged modes converges in 3 to 7 iterations to a root whose `K_aa`
+is positive definite (`l_min >= 2.5e4`), and the continuation along the segment reaches every failing iterate. The root
+exists and is regular. The plain iteration from `alpha = 0`, the model's default, no longer reaches it.
+
+**Reading (c1).** By the registered criterion the trace ends at a **breakdown of the local mode problem of element 3720, in
+its local iteration**. It does not end at a fold of the branch: `dlambda/da` stays near `-38` (90 per cent of its largest
+value) and the element's mode tangent stays regular (`rho = 1.10`). Two facts beside the reading:
+
+- **Rung 5 is not reached.** The fine trace is lost at `a = 1.650e-4`, below `a_5 = 2.165e-4`. ADR 0711's rung step from
+  `S4` to `S5` was accepted across this interval.
+- **The slope `-0.54` and `mu_1 = -323` at `S5` are not those of the continued branch.** Up to `1.650e-4` the slope is `-37.6`
+  to `-41.6` and the lowest pair `-2.29e4` to `-2.47e4`, with 64 per cent of its squared norm on the 24 equations of element
+  3720.
+
+Not a measured row, an inference: at `S5` the plain iteration from `alpha = 0` probably lands on another root of element
+3720's local problem. Its `l_min` there is `3.75e4`, against `2.5e4` at the end of the fine trace, and the warm roots of X4
+(c) differ from `S5`'s modes by 1.4 to 24 per cent. ADR 0711's reading "dlambda/da -41.6 -> -0.54, a fold looks imminent"
+is therefore not supported. This run shows no sign of a fold of the branch up to `a = 1.65e-4`. The lowest negative pair is
+largely carried by element 3720 (c2, c4).
+
+### Default bits and static checks
+
+| Id | Result |
+|---|---|
+| B | `git diff --stat 07566125 -- crates/*/src` empty: met |
+| S7 | `--lib` 15 pass; `si_eas_hg18` 1 pass, 2 ignored; `si_eas_hg17` 1 pass, 1 ignored; `si_eas_hg16`, `si_eas_hg15`, `si_eas_hg14` 1 pass, 3 ignored each (all release): met |
+| S6 | `cargo fmt -p rcfd-fem --check`, `cargo clippy -p rcfd-fem --release --all-targets -- -D warnings` on the results tree: clean, met |
+| S8 | `cargo test -p rcfd-cli --release --test docs_site` on the results tree: met |
+| S9 | 4348c387 (docs), a23967c3, cf92d3ab (docs), 32fce1ef (built for the runs), the results commit (checked by S6): met |
+
+### Mutations (each on a scratch copy of 32fce1ef, run once against `f796_fast_amended`)
+
+| Id | Caught by | Result |
+|---|---|---|
+| MU1 | PF-2 (stop "steps"), PF-3 ("undecided", no bracket) | caught |
+| MU2 | PB-3 (reading "the local iteration", `rho = 61.4`) | caught |
+| MU3 | PF-1 (`2.5e3`), PB-1 (`1.0`), PB-3 | caught |
+| MU4 | E1a (`|r|_2` `1.9e16` relative, modes `8.0`) | caught |
+| MU5 | PB-2 (`3.3e-3`), PB-3 (`rho = 0.101`, `8.4`) | caught |
+| MU6 | PB-2 (lost at `a = 0.670`), PB-3, PB-4; not by PF-1 or PB-1 as registered (with `g_z = k_l - z` the local Newton still converges to the same root where it converges, so `g_z` and `p` keep their closed forms) | caught |
+
+### Deviations
+
+- Amendment 1 (E1's displacement; E1a). The heavy record was not affected.
+- MU6 was caught by other rows than those registered (above).
+- Nothing else. The heavy record took 171.8 s, about 1.5 times the brief's 120 s, because of the rank over 4096 elements and
+  the 12 local diagnostics. It is ignored.
+
+### Decision
+
+**partial** (by the registered rule): every check of the corrected fast test and of the heavy record met, B and S6 to S9
+met, six of six mutations caught, and the reading is not "undecided" (c1 answered: a breakdown of the local iteration of
+element 3720, not a fold). The rule's "done" also needs no amendment, and E1 was met only after amendment 1.
+
+### Remaining questions
+
+1. **The branch past `a = 1.65e-4`.** Options: (a) repeat the fine trace with the warm start of ADR 0660 D1 (the model's
+   opt-in: the local iteration from the committed modes). X4 shows that it reaches the root. This would tell whether the
+   branch continues smoothly to `a_5` and beyond, and whether it folds. (b) The same with the backtracking of ADR 0655.
+   (c) Leave it. Recommendation: (a), test-only, with the element states committed along the trace.
+2. **ADR 0711's reading at rung 5.** Its note says "a fold looks imminent". This run does not support that (above).
+   Recommendation: the lead adds a line to F-789's note pointing to ADR 0718.
+3. **Whether either opt-in of ADR 0694 or of the local update becomes a default**: still open (it would change default
+   results).
+
+## For the lead: roadmap entries
+
+> Proposed status: partial.
+
+> F-796 (ADR 0718, 2026-11-17): the end of ADR 0711's amplitude-controlled trace of rule L's 16^3 punch branch. ADR 0711's rung 5 (a 2.165e-4, lambda 0.958472) rebuilt bit for bit and its five failing attempts re-run with the same texts, all in element 3720. That element has the smallest l_min / l_max of the 4096 mode tangents K_aa (1.8e-3) but a positive-definite K_aa (l_min 3.75e4). A test-side replica of the plain local Newton reproduces the library's iterates bit for bit: from alpha = 0 the first step lands where K_aa is indefinite, then the iteration wanders or overshoots and inverts a point, while from the last converged modes it converges in 3 to 7 iterations and the continuation reaches every failing iterate. With finer amplitude steps from rung 4 (Da = (a_5 - a_4) / 8, halvings reset on acceptance), the trace is lost at a = 1.650e-4, before rung 5, with dlambda/da -37.6 (no fold approached), nu 1, the lowest pair -2.29e4 (64 per cent on element 3720), and element 3720's l_min 2.5e4 (rho 1.10). The registered reading is "local breakdown: the local iteration", not a fold: ADR 0711's slope -0.54 and mu_1 -323 at rung 5 are not those of the continued branch. Controls: a closed-form fold with a regular local problem (read as a fold) and a toy whose local problem loses its root before the fold (read as a breakdown of the mode tangent, lost within 7.8e-4 of the local fold), and the replica on one element. Test-only, default bits unchanged; six of six mutations caught; one amendment (the element control's set-up). Partial: the element control was met only after the amendment.
+
+> F-789 (ADR 0711, 2026-11-17), add at the end of its note: ADR 0718 finds that the trace's end at amplitude 2.2e-4 is a breakdown of element 3720's plain local iteration from alpha = 0, not an imminent fold: in finer steps the branch keeps dlambda/da near -38 and is lost at 1.65e-4.
+
+> Follow-up proposed: The subcritical branch of rule L's 16^3 punch path past amplitude 1.65e-4 with the warm start of the local modes. Deps F-796. Acceptance: Every limit not stated here is registered in the ADR before the run. ADR 0718's fine trace from rung 4 repeated with the model's warm start of the incompatible modes (ADR 0660 D1) and the element states committed along the trace, to its fold if it folds or to a registered cap: dlambda/da, the lowest pairs and element 3720's mode tangent along it, whether ADR 0711's rung 5 is reached on the same local root; a fast control on a toy whose plain local iteration from zero fails while its root exists; the default bits unchanged.

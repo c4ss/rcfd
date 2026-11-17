@@ -2486,7 +2486,7 @@ fn failing_local(
 }
 
 #[test]
-#[ignore = "ADR 0718: the heavy record of the end of the branch on 16^3 (D1 to D4), run once with --ignored"]
+#[ignore = "ADR 0718: the heavy record of the end of the branch on 16^3 (D1 to D4), run once with --ignored (171.8 s), every row met: ADR 0711 rung 5 rebuilt (lambda 0.958472223921, mu_1 -323.40057121476354 bit-identical) and its five failures re-run with the same texts, all in element 3720, the replica of the local iteration equal to the library record bit for bit; element 3720 has the smallest l_min / l_max of the 4096 elements (1.8e-3, K_aa l_min 3.75e4 > 0); the fine trace from rung 4 (Da 7.93e-6) is lost at a 1.6498e-4 (before rung 5) with dlambda/da -37.6, nu 1, l_min 2.51e4 (rho 1.10): reading local breakdown: the local iteration (from alpha = 0 the plain Newton overshoots into an indefinite K_aa and inverts a point, while the iteration from the last converged modes converges in 3 to 4 iterations); f796_fast_amended covers the same procedures"]
 fn f796_nh16_end_of_branch_heavy() {
     let mut ch = Checks::new();
     let t_all = Instant::now();
