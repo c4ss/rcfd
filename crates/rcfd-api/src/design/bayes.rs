@@ -81,11 +81,19 @@ pub struct Restart {
     pub tau: f64,
     /// Basin radius in length scales of the objective process.
     pub rho: f64,
+    /// Score the restart candidates by expected improvement of the step's own objective process (the one of the plain pick)
+    /// instead of a fresh process fitted outside the basin (ADR 0673 D1, the variant of ADR 0651 mutation R2). Default
+    /// `false`: the restart of ADR 0651 unchanged.
+    pub step_model: bool,
 }
 
 impl Default for Restart {
     fn default() -> Self {
-        Restart { tau: 1e-4, rho: 2.0 }
+        Restart {
+            tau: 1e-4,
+            rho: 2.0,
+            step_model: false,
+        }
     }
 }
 
@@ -862,7 +870,13 @@ fn basin_restart(r: &Restart, best: f64, rs: &RestartScope<'_>) -> Option<Restar
     let of: Vec<f64> = outside.iter().map(|&i| cn.ok_f[i]).collect();
     let mut go = rs.gpo.clone();
     go.seed = rs.seed;
-    let fresh = Gp::fit(&ou, &of, &go).ok()?;
+    // ADR 0673 D1: with `step_model` the step's own process scores the candidates and no fresh process is fitted
+    let fitted = if r.step_model {
+        None
+    } else {
+        Some(Gp::fit(&ou, &of, &go).ok()?)
+    };
+    let fresh = fitted.as_ref().unwrap_or(&rs.models.f);
     let score = |u: &Vec<f64>| -> f64 {
         if delta(u) < r.rho || rs.taken.iter().any(|t| dist(t, u) < rs.exclusion) {
             return f64::NEG_INFINITY;
