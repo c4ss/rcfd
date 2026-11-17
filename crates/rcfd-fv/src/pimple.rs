@@ -196,6 +196,11 @@ pub struct PimpleSettings {
     /// correctors. Not used by the fractional step, the pressure-lag estimate or the adaptive corrector count. Default `false`
     /// (bit-identical).
     pub coupled_non_orth: bool,
+    /// F-752 (ADR 0672): with `coupled_non_orth`, leave out its pressure part: the pressure equation and its flux take the
+    /// default path (the orthogonal coupling on the coupled faces, the face-value least-squares gradient), the momentum part
+    /// stays. A control for the effect of the pressure part. Read only with `coupled_non_orth`. Default `false`
+    /// (bit-identical).
+    pub coupled_non_orth_without_pressure: bool,
 }
 
 /// The outer iterations of one step with `PimpleSettings::outer_pressure_tolerance` (F-536, ADR 0458 C2).
@@ -1020,6 +1025,7 @@ impl PimpleSettings {
             lag_onset_refusal: None,
             rotational_periodic_implicit: false,
             coupled_non_orth: false,
+            coupled_non_orth_without_pressure: false,
         }
     }
 
@@ -2276,7 +2282,8 @@ impl PimpleSolver {
                 let mut p_new = p_old.clone();
                 // ADR 0204 K3: the gradient options of the pressure equation (`None`: as before)
                 // F-744 (ADR 0667, opt-in): the coupled faces' non-orthogonal correction in the pressure equation and its flux
-                let cn_p = s.coupled_non_orth.then(|| {
+                // (F-752, ADR 0672: not with `coupled_non_orth_without_pressure`)
+                let cn_p = (s.coupled_non_orth && !s.coupled_non_orth_without_pressure).then(|| {
                     assert!(
                         ib_src.is_none(),
                         "coupled_non_orth: not supported with an immersed volume source"

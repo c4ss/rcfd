@@ -68,7 +68,12 @@ case section see [case-schema.md](case-schema.md); for the full decision record 
   equation, its flux and the momentum diffusion, with the partner-point least-squares gradient of ADR 0077 F-H0; the wrap
   pairs' remainder `|k| / |S|` reaches `1.1`. With both opt-ins and one outer iteration the sector stays within `1.1e-4 U_in`
   of the annulus over the 400 steps (without the correction `5.9e-3`), within `3.8e-5` of the reference without any
-  non-orthogonal corrector. The default keeps the orthogonal coupling.
+  non-orthogonal corrector. The default keeps the orthogonal coupling. The pressure part of the correction (F-752, ADR 0672)
+  is shown on translational pairs: on a periodic channel whose cut is tilted by `0.3` under a body force across it, the
+  periodic run stays within `5.8e-15 U_ref` of its unrolled twin (the same cells with the cut where the faces are
+  orthogonal) over 200 steps, its converged corrected flux is divergence-free per cell to `3.6e-15`, and the setting with its
+  pressure part left out (`PimpleSettings::coupled_non_orth_without_pressure`, a control) misses the twin by `1.5e-3` to
+  `1.9e-3 U_ref` on every step.
   data set per face on rotor patches are the caller's to set on the new mesh; sectors of different pitch are refused. In the
   case tree since F-711 (ADR 0646) for the sector: `[mesh.sliding]` on `mesh.generator =
   "annulus_3d_sector_cylindrical_interface"` runs ADR 0634's turned loop (`mesh_turned`, `periodic_sliding_step`,
