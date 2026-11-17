@@ -81,7 +81,12 @@ case section see [case-schema.md](case-schema.md); for the full decision record 
   default it acts on internal faces only; the opt-in `PimpleSettings::coupled_ddt_correction` (F-754, ADR 0675; default
   `false`) gives the coupled pairs the same term with the partner cell (its old velocity rotated by `R`) and the pair mean of
   `rAU`. With `ddt_correction` on, the channel stays within `5.6e-15 U_ref` of its twin and the sector within `7.1e-15` of
-  its annulus over 200 steps; without the opt-in they miss by up to `1.4e-5` and `9.4e-5`. The default is unchanged.
+  its annulus over 200 steps; without the opt-in they miss by up to `1.4e-5` and `9.4e-5`. The default is unchanged. Since
+  F-757 (ADR 0687) the same opt-in acts in the fractional step with `fractional_step_consistent` (the pair-harmonic `Gamma`
+  of ADR 0356's carried-defect flux), checked on the channel's meshes together with the opt-in
+  `fractional_periodic_implicit` (the implicit periodic partner of the fractional predictor), and the PISO term is checked
+  with BDF2 together with the opt-in `periodic_partner_extrapolated` (the BDF2 deferred-correction state of the periodic
+  partner extrapolated in time, without which a BDF2 periodic run differs from its twin by up to `4.2e-4 U_ref`).
   data set per face on rotor patches are the caller's to set on the new mesh; sectors of different pitch are refused. In the
   case tree since F-711 (ADR 0646) for the sector: `[mesh.sliding]` on `mesh.generator =
   "annulus_3d_sector_cylindrical_interface"` runs ADR 0634's turned loop (`mesh_turned`, `periodic_sliding_step`,
