@@ -13,6 +13,7 @@
 //
 //   npm run build && node scripts/package-dir.mjs
 //   node scripts/measure-plots.mjs [--rcfd=<rcfd executable>] [--out=<file.json>] [--smoke]
+// --profile-root=<folder>: a fresh Chromium profile per launch under it (scripts/profile.mjs; F-817b, ADR 0800 §9 Q5).
 //
 // A heavy record (house rule 7): run by hand, once, and recorded in ADR 0801 addendum 4. Not part of npm test. --smoke
 // steps 300 times to check the script.
@@ -22,6 +23,7 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { profileArgs, profileRecord } from './profile.mjs';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const arg = (name) => process.argv.find((a) => a.startsWith(`--${name}=`))?.slice(name.length + 3) ?? '';
@@ -116,7 +118,7 @@ const port = await new Promise((resolve, reject) => {
 const { executable } = JSON.parse(readFileSync(path.join(root, 'out', 'packaged.json'), 'utf8'));
 const env = {};
 for (const [k, v] of Object.entries(process.env)) if (v !== undefined && !k.startsWith('RCFD_STUDIO_')) env[k] = v;
-const app = await electron.launch({ executablePath: executable, args: [], env: { ...env, RCFD_STUDIO_SERVICE: `127.0.0.1:${port}`, RCFD_STUDIO_BENCH: '1', RCFD_STUDIO_STATE_DIR: path.join(scratch, 'state') } });
+const app = await electron.launch({ executablePath: executable, args: [...profileArgs()], env: { ...env, RCFD_STUDIO_SERVICE: `127.0.0.1:${port}`, RCFD_STUDIO_BENCH: '1', RCFD_STUDIO_STATE_DIR: path.join(scratch, 'state') } });
 let result;
 try {
   const page = await app.firstWindow();
@@ -273,6 +275,7 @@ try {
   const loadAfter = await load();
   result = {
     smoke,
+    profile: profileRecord(),
     versions,
     rcfd,
     setup: { ...setup, steps: Q.steps, stepSeconds: stepS },

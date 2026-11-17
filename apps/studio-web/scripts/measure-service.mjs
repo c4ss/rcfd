@@ -15,6 +15,7 @@
 //
 //   npm run build && node scripts/package-dir.mjs
 //   node scripts/measure-service.mjs --bench-server=<path of f447_bench(.exe)> [--out=<file.json>] [--smoke] [--events=<n>]
+// --profile-root=<folder>: a fresh Chromium profile per launch under it (scripts/profile.mjs; F-817b, ADR 0800 §9 Q5).
 //
 // --events=<n> takes the first n iteration events for P2 in place of 300 (the light set of scripts/bench.mjs, F-817).
 // f447_bench is built by `cargo build --release -p rcfd-api --example f447_bench`. A heavy record (house rule 7): run by
@@ -25,6 +26,7 @@ import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { profileArgs, profileRecord } from './profile.mjs';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const arg = (name) => process.argv.find((a) => a.startsWith(`--${name}=`))?.slice(name.length + 3) ?? '';
@@ -124,7 +126,7 @@ const env = {};
 for (const [k, v] of Object.entries(process.env)) if (v !== undefined && !k.startsWith('RCFD_STUDIO_')) env[k] = v;
 const app = await electron.launch({
   executablePath: executable,
-  args: [],
+  args: [...profileArgs()],
   env: { ...env, RCFD_STUDIO_SERVICE: `127.0.0.1:${ports.rpc}`, RCFD_STUDIO_BENCH: '1', RCFD_STUDIO_STATE_DIR: path.join(scratch, 'state') },
 });
 let result;
@@ -249,6 +251,7 @@ try {
   result = {
     checks: 'P1, P2 (ADR 0350) through the product shell (F-803)',
     smoke,
+    profile: profileRecord(),
     machine: { cpu: os.cpus()[0]?.model, logical: os.cpus().length, totalMemGB: os.totalmem() / 2 ** 30, platform: `${os.platform()} ${os.release()}` },
     launcherNode: process.version,
     versions,

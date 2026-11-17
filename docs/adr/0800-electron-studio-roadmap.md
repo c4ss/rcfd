@@ -280,6 +280,14 @@ fraction of 1.00. Its cause was not diagnosed. The shared Chromium profile (Q5) 
 - **Q5:** yes, a scratch `--user-data-dir` for every bench case except P10, which keeps the user's own profile.
 - **Q3:** yes, the bench stays out of CI and is run by hand (hosted runners have no WebGPU adapter).
 
+Q5 applied (F-817b, 2026-11-17): `scripts/bench.mjs` makes a fresh folder in the temporary directory for every case but
+P10 and passes it to the script as `--profile-root`; each launch of the Studio in that case gets an empty Chromium
+profile of its own, `--user-data-dir=<folder>/launch-<n>` (`scripts/profile.mjs`, used by every `measure-*.mjs` that
+launches Electron), and the folder is removed when the case ends. P10 (`measure-cold-start.mjs`) keeps the user's own
+profile. The bench prints and keeps each case's profile; a script run alone uses the user's profile unless given
+`--profile-root`. No bench number above was taken this way; the idle baseline of Q4 will be the first. Details in ADR
+0801, Addendum F-817b.
+
 ## 10. Retiring the egui apps early (maintainer, 2026-11-16)
 
 The maintainer asked to "kill the old rcfd-studio and clear up some test bandwidth" and chose (a) of three options:

@@ -1620,3 +1620,111 @@ field-view extras from the egui Studio (F-837)".
   within its budget) and `f837.spec.ts` (14) passed in the full run.
 - `python scripts/third_party_licenses.py --check`: up to date.
 - `cargo test -p rcfd-cli --release --test docs_site --test workspace_graph`: 2 and 3 passed.
+
+## Addendum F-817b: drawing on demand at rest, and a scratch profile per bench case (2026-11-17)
+
+Two follow-ups to F-817 (§9 of ADR 0800). No dependency, no Rust file, no service method, golden or default changed;
+`DESIGN.md`, `docs/studio-guardrails.md` and `PRODUCT.md` are not edited.
+
+### 1. The idle frame loop (G9, power)
+
+F-816 saw the run workspace ask for animation frames while nothing moved (743 in the second after one orbit key). The
+owner is three.js, not the Studio's code: `WebGPURenderer.render()` (and `compute()`) starts three's own frame loop
+(`three/src/renderers/common/Animation.js`), which then asks for a frame on every display refresh for ever, to do its
+per-frame bookkeeping (`info.reset()`, `nodeFrame.update()`, a `setAnimationLoop` callback if any). The field canvas
+(react-three-fiber with `frameloop="demand"`, which itself stops) and each three.js plot (the residual and monitor
+plots, `src/renderer/plots/linePlot.ts`) have a renderer of their own, so the workspace had three such loops. The
+counter's stack showed one caller only, three's `Animation.start` loop. On the 60 Hz display of this run that is the
+180 per second measured below; at 238 Hz, as in F-816's run, about 714 plus the frames of the key itself.
+
+The fix, `src/renderer/ui/onDemand.ts` (`drawOnDemand(renderer)`, called once after `init()` by `FieldCanvas.tsx` and
+`linePlot.ts`): three's loop gets an animation context that lets it ask for two frames after the last `render()` or
+`compute()` and then stops it; the next draw starts it again the way three starts it the first time (the bookkeeping of
+a frame, then the draw). A draw every frame (an orbit drag, Play, Follow live) keeps the loop running exactly as
+before; a user loop set with `setAnimationLoop` keeps it running. What is drawn does not change: every draw sees the
+same per-frame state as before (two draws in one frame share three's frame id, draws in different frames do not), which
+`tests/unit/on-demand.spec.ts` checks against three's real `Animation` class on a script of draws with rests.
+
+Animation-frame callbacks per second at rest (`tests/e2e/idle-frames.spec.ts`; 1 s to settle, then 2 s counted; packaged
+Studio, test mode, 60 Hz display, machine fully loaded, processor busy 1.00):
+
+| Surface at rest | Before | After |
+|---|---|---|
+| start page (no project) | 0 | 0 |
+| project home | 0 | 0 |
+| Runs view | 0 | 0 |
+| run workspace, field shown, after one orbit key | 180 | 0 |
+| run workspace, field shown, after one scrub step | 181.5 | 0 |
+
+The test registers its limit (5 per second) before measuring, counts the callbacks that run (a wrapped
+`requestAnimationFrame`, with the callers of the requests in `test-results-visual/f817b/idle-frames.json`), and checks
+that the orbit key and the scrub did draw frames (20 and 6 in a run alone, 28 and 6 in the full run), so that a count
+of 0 is not a counter that sees nothing.
+
+Picture output: the field, compare, derived, plots and F-837 tests (Save PNG and the face-on view included) pass
+unchanged in the full run. P7 and P8 while interacting: `measure-field.mjs --smoke` after the change (scratch profile,
+loaded machine) gave P7 R2 median 44 ms, R1 243 ms, P8 60.0 frames per s with vertical sync at 59.9 Hz (p99 frame
+16.8 ms) and 54.1 uncapped (recorded, as in F-817's runs); the P8 orbit draws through `renderer.render` every frame,
+so the loop keeps running during it.
+
+### 2. Q5: a scratch Chromium profile for every bench case but P10
+
+- `scripts/profile.mjs`: with `--profile-root=<folder>`, `profileArgs()` gives each launch an empty profile
+  `<folder>/launch-<n>` as `--user-data-dir` (Electron then keeps userData and every cache there; checked:
+  `app.getPath('userData')` is the folder), and `profileRecord()` goes into the script's JSON. Without the flag a
+  script launches with the user's own profile, as before.
+- `measure-field.mjs` (3 launches), `measure-data.mjs`, `measure-service.mjs`, `measure-scrub.mjs` (one launch in the
+  light set, two with Follow live) and `measure-plots.mjs`: `...profileArgs()` in every `electron.launch`, and the
+  profile in their JSON. `measure-cold-start.mjs`: unchanged apart from a comment; P10 keeps the user's profile.
+- `bench.mjs`: a fresh folder per case in the temporary directory (`rcfd-f817-profile-<P>-*`), passed as
+  `--profile-root`, removed when the case has ended (20 tries, 250 ms apart, for helper processes that still hold a
+  file); P10 is marked `profile: 'own'`. Each case prints its profile and whether the folder was removed; the summary
+  says which cases ran with which; the results keep `cases[].profile`.
+
+Proof, under full load (processor busy 0.99 to 1.00 throughout; the numbers are not a baseline): each script's smoke
+case with `--profile-root` made its launch folders (`launch-1` to `launch-3` for the field script), Chromium wrote into
+them, and they were removed: field 92 s (numbers above), data 20 s (P4 R2 raw p50 4.5, p99 10.5 ms at 1e5), service
+18 s (P2 p99 0.75 ms over 8 events), scrub 21 s (P5 at 1e5: 41.8 per s, longest frame 33.3 ms), plots 28 s (P3 median
+0.9 ms). `npm run bench -- --only=P2,P10 --no-gen` (light): P10 with the user's own profile, median 1606 ms, first 1606,
+max 2739, met; P2 with a scratch profile (1 launch, folder removed), p99 0.80 ms over 100 events, met; verdict met, 2 of
+2 judged lines. The full light set was not run: the machine was fully loaded.
+
+### Decisions (options, the recommendation taken; each reversible)
+
+- D1, where to stop the loop. (a) Give three's loop an animation context that stops it after the last draw, one helper
+  for every renderer (taken); (b) patch `Animation.prototype` once for the page (also touches renderers made by code
+  that did not ask); (c) call `renderer._animation.stop()` after each draw (drops the bookkeeping tick the next frame's
+  draw expects, so two draws in different frames could share a frame id); (d) wait for a three.js release.
+  Recommendation: (a). It reads one private field (`_animation`); if a three.js upgrade removes it, `drawOnDemand`
+  returns false, the old loop runs again, and the e2e test fails and says so.
+- D2, frames after the last draw. (a) Two (taken): a draw every frame keeps the loop running as before, and it stops at
+  most three frames after the last draw; (b) one: also correct, but the loop stops and starts every frame while the
+  user drags. Recommendation: (a).
+- D3, the limit at rest: 5 callbacks per second (the brief's example), registered in the test before measuring; the
+  measured value is 0. Recommendation: keep 5, which leaves room for a one-off frame of a late data reply.
+- D4, who owns the scratch profile. (a) The bench makes one folder per case and removes it; the scripts take
+  `--profile-root` and give each launch a fresh sub-folder (taken); (b) each script makes and removes its own by
+  default (changes what a script run alone measures, and a removal while helper processes still run can fail inside
+  the script); (c) one folder per case shared by its launches (a case's second launch starts with warm caches).
+  Recommendation: (a), as F-817's D1 kept the scripts' defaults and added flags only.
+- D5, a script run alone: the user's profile unless `--profile-root` is given (taken), or a scratch profile by default.
+  Recommendation: as taken; Q5 names the bench cases.
+
+### Open for the maintainer
+
+- Q-817b-1: should a script run alone also default to a scratch profile (D5, the second option)? Recommendation: no,
+  unless a standalone record is to be compared with a bench record.
+- The idle baseline of Q4 will be the first bench run with the scratch profiles; the earlier §9 numbers used the shared
+  profile.
+- The display ran at 60 Hz in this session (238 Hz in F-817's runs); frames per second at rest before the fix scale
+  with it.
+
+### Verification (2026-11-17, on studio-f817b after merging studio-roadmap 40365341)
+
+- `npm ci`: exit 0, 0 vulnerabilities. `npm run typecheck`: clean.
+- `npm test` (headless, built and packaged): 632 passed, 2 failed, 4 did not run (20.7 min). The failures are the
+  known load-flaky `run-control.spec.ts:319` (pause by keyboard: engine answer 20.76 ms against 20; the 4 tests after it
+  in the serial file did not run) and `service.spec.ts:132` (kill and restart). Alone: `run-control.spec.ts` 8 passed,
+  `service.spec.ts` 9 passed. `idle-frames.spec.ts` (2), `on-demand.spec.ts` (5) and `f837.spec.ts` (14 e2e, 16 unit)
+  passed in the full run.
+- `python scripts/third_party_licenses.py --check`: up to date.

@@ -21,6 +21,7 @@ import { palette } from '../design/tokens.js';
 import { LUT_SIZE, lutBytes, type ColourRange } from './colormap.js';
 import { clipPlane, keeps, type Cut } from './derived.js';
 import { bounds, cornerPositions, cornerScalars, gridEdges } from './surface.js';
+import { drawOnDemand } from '../ui/onDemand.js';
 import type { PreparedSurface } from './prepare.js';
 
 export type Backend = { readonly kind: 'webgpu' } | { readonly kind: 'webgl2'; readonly reason: string };
@@ -626,6 +627,7 @@ export const FieldCanvas = forwardRef(function FieldCanvas({ forceWebGL, onBacke
       gl={async (defaults) => {
         const renderer = new THREE.WebGPURenderer({ canvas: defaults.canvas as HTMLCanvasElement, antialias: false, alpha: false, forceWebGL });
         await renderer.init();
+        drawOnDemand(renderer); // F-817b: no frames asked for at rest (frameloop="demand" draws; three's own loop stops)
         renderer.outputColorSpace = THREE.LinearSRGBColorSpace;
         renderer.toneMapping = THREE.NoToneMapping;
         renderer.setClearColor(raw(palette['silver-wash']), 1);

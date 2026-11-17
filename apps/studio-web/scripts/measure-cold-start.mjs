@@ -3,6 +3,7 @@
 // view is in the document and one animation frame has passed (the app.ready channel; the main process writes the time
 // to RCFD_STUDIO_STARTUP_REPORT and quits). 10 starts one second apart, judged on the median; the first start and the
 // maximum reported, with the machine's load before and after. A true cold start (after a reboot) is not taken.
+// The starts use the user's own Chromium profile, not a scratch one (ADR 0800 §9 Q5: P10 measures the user's own start).
 //
 //   npm run build && node scripts/package-dir.mjs && node scripts/measure-cold-start.mjs [--out=<file.json>]
 //

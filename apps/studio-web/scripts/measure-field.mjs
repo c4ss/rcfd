@@ -18,6 +18,7 @@
 //   npm run build && node scripts/package-dir.mjs
 //   f447_bench gen <folder> tiny 1e6                 (crates/rcfd-api/examples/f447_bench.rs; once, by hand)
 //   node scripts/measure-field.mjs --data=<folder> [--bench-server=<f447_bench(.exe)>] [--out=<file.json>] [--smoke]
+// --profile-root=<folder>: a fresh Chromium profile per launch under it (scripts/profile.mjs; F-817b, ADR 0800 §9 Q5).
 //
 // A heavy record (house rule 7): run by hand, once, and recorded in ADR 0801, addendum F-808. Not part of npm test. --smoke
 // uses the 1e5 box for P7 and 120 timed frames for P8, to check the script.
@@ -27,6 +28,7 @@ import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { profileArgs, profileRecord } from './profile.mjs';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const arg = (name) => process.argv.find((a) => a.startsWith(`--${name}=`))?.slice(name.length + 3) ?? '';
@@ -88,7 +90,7 @@ for (const [k, v] of Object.entries(process.env)) if (v !== undefined && !k.star
 const OCCLUSION = '--disable-features=CalculateNativeWinOcclusion';
 
 async function launch(extraArgs, env) {
-  const app = await electron.launch({ executablePath: executable, args: [OCCLUSION, ...extraArgs], env: { ...baseEnv, RCFD_STUDIO_DATA_ROOTS: data, RCFD_STUDIO_STATE_DIR: path.join(os.tmpdir(), 'rcfd-f808-state'), ...env } });
+  const app = await electron.launch({ executablePath: executable, args: [OCCLUSION, ...profileArgs(), ...extraArgs], env: { ...baseEnv, RCFD_STUDIO_DATA_ROOTS: data, RCFD_STUDIO_STATE_DIR: path.join(os.tmpdir(), 'rcfd-f808-state'), ...env } });
   const page = await app.firstWindow();
   await page.waitForFunction(() => document.querySelector('h1')?.textContent === 'No project open');
   await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].setContentSize(1280, 800));
@@ -206,4 +208,5 @@ try {
 result.loadAfter = await load();
 console.log(`backend ${result.backend}; GPU ${JSON.stringify(result.gpu)}; load after ${result.loadAfter.cpuBusyFraction.toFixed(2)}, ${result.loadAfter.cargoRustcLinkProcesses} cargo/rustc/link`);
 const out = arg('out');
+result.profile = profileRecord();
 if (out) writeFileSync(out, JSON.stringify(result, null, 1) + '\n');
