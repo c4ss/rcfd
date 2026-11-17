@@ -1,7 +1,7 @@
 # ADR 0731: F-835 proposal: an engine command that creates a project (`rcfd project init` and MCP `create_project`)
 
-Status: **PROPOSED 2026-11-17.** Not accepted by the maintainer. Nothing is built: no Rust, TypeScript or test code was
-written for this ADR, and nothing was run. The maintainer approves the commands below before any code.
+Status: **ACCEPTED 2026-11-17.** The maintainer approved the proposal on 2026-11-17 and answered every open question with
+its recommendation (see [Decisions](#decisions-2026-11-17)). Built on branch `adr0731` (see [Built](#built)).
 
 Roadmap item F-835 (Electron Studio: new project). Its acceptance asks for "rcfd project init and an MCP create_project,
 through rcfd_project::Project::create, ADR first". Parents: [ADR 0800](0800-electron-studio-roadmap.md), guardrails G2,
@@ -111,3 +111,33 @@ becomes available. The first-path test drops its stand-in. The Studio still writ
 - **P-T7** `baseline_hashes.rs` and the MCP project-mode list test pass unedited.
 - **Studio** e2e: from an empty folder, "Make a project here" (button and palette) runs the command and opens the new
   project; the first path runs on it with no stand-in.
+
+## Decisions (2026-11-17)
+
+The maintainer took the recommendation of each open question:
+
+1. Q1 (a): `rcfd-cli` may depend on `rcfd-workspace` (and `rcfd-project`). Built: `rcfd-cli -> rcfd-workspace` as a
+   dependency; `rcfd-project` is a dev-dependency only (the tests open what the command made), since the command needs
+   nothing of it directly. Both are workspace crates; no third-party crate is added.
+2. Q2 (a): `create_project` is on the default tool list, as its last tool. `default_f1.rs` is restated (the golden plus
+   exactly this tool); the golden is not re-recorded or edited.
+3. Q3 (a): a folder that exists and is not empty is allowed; nothing in it is replaced, and the reply's `existing` lists
+   the top-level entries that were already there.
+4. Q4 (a): `rcfd --help` gains one line, `project init <dir> [--name <name>]` with its purpose.
+5. Q5 (a): no journal line; the manifest's `created` is the record.
+6. Q6 (a): the solver version recorded is `rcfd <version>`, the text `rcfd --version` prints.
+
+## Built
+
+- P1: `rcfd_workspace::create_project` (`crates/rcfd-workspace/src/init.rs`), over `Project::create` unchanged, with the
+  errors of P1 and `existing` (Q3).
+- P2: `rcfd project init <dir> [--name <name>]` (`crates/rcfd-cli/src/cmd_project.rs`); a bad name is a usage error
+  (exit 2), a refusal or failure exit 1 with `error: <dir>: <reason>`.
+- P3: MCP `create_project {path, name?}` on the server without `--project` (`crates/rcfd-mcp/src/lib.rs`).
+- P4: the Studio's New project… (the empty home and the command palette) and Make a project here (a folder that is not a
+  project yet) run `rcfd project init <folder>` in the main process and open the project (F-835); the first-path e2e test
+  makes its projects through them (F-813).
+- Tests: P-T1 to P-T4 and Q3 in `crates/rcfd-cli/tests/project_init_f835.rs`; P-T3 (names) and P-T5 in
+  `crates/rcfd-mcp/tests/create_project_f835.rs`; P-T6 in `crates/rcfd-mcp/tests/default_f1.rs`; P-T7 by
+  `project_list_f270.rs`, `tool_list_f275.rs` and `baseline_hashes.rs`, unedited; the Studio in
+  `apps/studio-web/tests/e2e/first-path.spec.ts` and `tests/unit/project-home.spec.ts`.

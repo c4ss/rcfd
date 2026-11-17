@@ -430,6 +430,14 @@ export class ProjectSession {
     this.set({ runDetails: details, runDetailErrors: errors });
   }
 
+  /** F-837 (ADR 0733): the runner writes its budgets through the run-control server (made on first use, as for an action). */
+  setRunnerConfig(args: Record<string, unknown>): Promise<unknown> {
+    if (!this.deps.control) return Promise.reject(new Error('Run control is not set up in this Studio, so the runner’s budgets cannot be written.'));
+    if (this.closed) return Promise.reject(new Error('the project was closed'));
+    this.control ??= new RunControl(this.folder, this.deps.control);
+    return this.control.setRunnerConfig(args);
+  }
+
   /**
    * F-810: one query of this folder's read-only project server, for the run workspace (src/main/run/). Refused when
    * the session is closed or its server stopped.

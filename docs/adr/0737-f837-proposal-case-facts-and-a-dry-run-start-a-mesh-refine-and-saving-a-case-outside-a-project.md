@@ -1,0 +1,164 @@
+# ADR 0737: F-837 proposal: case facts and a dry-run start, a mesh refine, and saving a case outside a project
+
+Status: **PROPOSED 2026-11-17.** Not accepted by the maintainer. Nothing is built: no Rust, TypeScript or test code was
+written for this ADR, and nothing was run. The maintainer approves the commands below before any code.
+
+Roadmap item F-837 (Electron Studio: run setup, logs and field-view extras from rcfd-studio), ADR 0801 Addendum 13
+"Needs the engine" and "Engine follow-ups of the Studio items", rows E-837a, E-837b and E-837c. E-837d is
+[ADR 0733](0733-f837-proposal-set-runner-config-the-runner-writes-its-own-budgets.md) (accepted, built); the length unit
+F-837 also asks for is
+[ADR 0738](0738-f809-proposal-derived-pictures-of-a-stored-field-iso-surfaces-streamlines-slices-and-the-length-unit.md)
+P5. The three rows here are the egui Studio's run set-up helpers and its case file handling, which lived in the removed
+`crates/rcfd-studio` and must now come from the engine (G2). Parents:
+[ADR 0153](0153-job48s-time-step-set-when-a-run-starts.md) (the time step set when a run starts),
+[ADR 0156](0156-job48v-adaptive-pressure-correctors.md) and
+[ADR 0158](0158-job48x-studio-run-plan-adaptive-pressure-correctors.md) (adaptive correctors),
+[ADR 0148](0148-job48n-selected-case-middle-drag-units-scale-refine.md) (Refine x2),
+[ADR 0185](0185-adr-0173-amendment-1-f270-registration-the-rcfd-workspace-crate.md) (the save rule), guardrails G2, G4,
+G16 and G18. Number 0737 follows ADR 0736.
+
+## Context
+
+### Run set-up facts (E-837a)
+
+- The egui Studio computed, from a case text, what the time step depends on: `time_step::facts`
+  (`crates/rcfd-studio/src/time_step.rs:415` at 44e63df8): the kind of run, `solver.dt` and `solver.end_time` and
+  whether the text sets them, the case's own step control (`OWN_CONTROL`, 13 keys), the thinnest cell `h_min` (cell
+  volume over its largest face area, `empty` patches left out), the fastest speed at the start `u0` (initial field,
+  boundary faces at t = 0, or free fall `sqrt(|g| L)`), and the corrector facts (ADR 0158). `time_step::plan`
+  (`time_step.rs:485`) turned them and "Simulate for", a Courant target 0.5, a largest step and a mode into `rcfd run
+  --set` entries; `warning` (`time_step.rs:573`) warned above an estimated Courant number of 2. All of it went with the
+  crate (F-449).
+- What the engine has now: `Simulation::new` builds the mesh and the initial state (`crates/rcfd-api/src/sim.rs:1396`);
+  `runctl::check_only` returns `{ok, cells, diagnostics, rules, mesh}` without running
+  (`crates/rcfd-api/src/runctl.rs:149-205`), which the runner uses for its memory estimate
+  (`crates/rcfd-runner/src/runner.rs:543-583`); `rcfd_mesh::adapt::cell_lengths` (`crates/rcfd-mesh/src/adapt.rs:682`);
+  the start plan of the field store, its entries, snapshot count and size estimate
+  (`crates/rcfd-workspace/src/plan.rs:1-12`, `:47-192`), returned by `start_run` as `store`
+  (`crates/rcfd-workspace/src/runs.rs:292-296`).
+- `start_run` queues at once (`runs.rs:270-279`). There is no way to ask what a start would do.
+
+### Refine by 2 (E-837b)
+
+- The egui Studio's Refine x2 (ADR 0148; `crates/rcfd-studio/src/preview.rs:989-1119` at 44e63df8) doubled every cell
+  count of a generator (`count_keys`, `preview.rs:212-223`: `nx`, `ny`, `nz` and the `_right` counts of the interface
+  generators) as unsaved edits, refused a mesh file and generators counted by other keys (`mesh.fan.n_*`), refused a
+  count over its schema maximum, and showed cells before and after and the runner's memory estimate.
+- The engine has no entry point for it. `rcfd_mesh::adapt::AmrMesh` refines box meshes only (`adapt.rs:1-10`); nothing
+  refines an arbitrary mesh file.
+
+### One case file anywhere (E-837c)
+
+- A service session can be made from any sandboxed path (`session.create {path}`,
+  `crates/rcfd-api/src/service.rs:1463-1465`; `sandbox_path`, `service.rs:355-380`; no sandbox when `rcfd serve` has no
+  `--root`).
+- A session can be saved only into a project: the case editor saves with the project tool `edit_case` (base hash, edit
+  lock, journal; `crates/rcfd-workspace/src/write.rs:26-160`; the Studio, `apps/studio-web/src/main/case/editor.ts:422`)
+  or `save_case` (`crates/rcfd-workspace/src/save.rs:84-100`). Both need a project root (`replace_if_hash_with(root,
+  rel, ...)`, `crates/rcfd-project/src/atomic.rs:424`). The service has no method that writes a case; `Case::to_toml`
+  and `to_json_string` exist (`crates/rcfd-api/src/case.rs:330-337`).
+
+## Proposal
+
+### P1. Case facts (E-837a)
+
+- Library: `rcfd_api::facts::case_facts(&Case) -> CaseFacts`, the fields of the egui `Facts` above (with `hash`,
+  `kind`, `algorithm`, `dt` and `dt_in_text`, `end_time` and `end_in_text`, `own_control`, `write_times_last`, `cells`,
+  `two_d`, `bounds`, `h_min`, `h_max`, `u0` and `u0_from`, `correctors`), computed from `Simulation::new`'s mesh and
+  initial state; plus `memory_mb` by the runner's rule with the project's budgets, when there is a project. Units in the
+  reply (`h_min_unit: "m"`, `u0_unit: "m/s"`).
+- MCP project tool `case_facts {case}`, class `read`. Service method `case.facts {session}` (the editor's unsaved
+  state), opt-in like ADR 0730's `rcfd serve --ui` (Q1). CLI `rcfd check <case> --facts` prints the same JSON (G16).
+- Errors: 1003 with located diagnostics when the case does not build; 1004 over the service's `max_cells`.
+
+### P2. A run-time plan and a dry run (E-837a)
+
+- `start_run` gains `run_time: {simulate_s, courant, max_dt, mode: "adaptive" | "fixed" | "case", adaptive_correctors}`
+  (every member optional; the egui defaults 0.5, adaptive, adaptive correctors on). The engine makes the `--set` entries
+  by the rule of ADR 0153 and 0158, ported from `time_step::plan` with its constants, and puts them before the call's
+  own `set` (as the store plan's are, `runs.rs:263`).
+- `start_run {dry_run: true}` returns what the call would do and writes nothing: `{case, set: [..], store: {..},
+  run_time: {entries, dt0, steps_estimate, courant_estimate, warning}, check: <check_only's reply>, memory_mb,
+  runner: {would_start: bool}}`. Same errors as a real start.
+- Without `run_time` and `dry_run`, `start_run` is as now.
+
+### P3. Refine by 2 (E-837b)
+
+- Library: `rcfd_api::refine::count_refinement(&Case, factor) -> Refinement {edits: [{path, before, after}], cells,
+  cells_after, memory_mb}` or a refusal (a mesh file; a generator not in the count list; a count over its schema
+  maximum; `factor` not 2, Q4). The count list moves from the egui `count_keys` into `rcfd-api`, beside the generators
+  it names.
+- Service method `mesh.refine {session, factor, apply}` (opt-in as P1): the refinement; with `apply: true` it sets the
+  edits in the session (each with `base_value`, ADR 0736 P2) so they are unsaved edits, as in the egui Studio.
+- MCP project tool `refine_case_mesh {case, factor, base_hash, reason?}`, class `write_files`: the same edits written
+  through `edit_case`'s rule. CLI `rcfd check <case> --refine 2` prints the refinement without writing.
+- A mesh file is not refined (Q3).
+
+### P4. Save a session outside a project (E-837c)
+
+- Service method `case.save {session, path, base_hash, form: "whole" | "lines"}` (opt-in as P1): writes the session's
+  case to `path` (sandboxed), `.toml` or `.json` by extension, only if the file still has `base_hash` (`fnv64:`; null
+  means "no file there yet"), by write-then-rename. `lines` keeps the file's comments and layout where it can
+  (`rcfd_workspace::case_text::apply_sets`, the rule of `SaveForm::Lines`, `save.rs:20-30`).
+- Reply `{path, old_hash, new_hash, form}`. Errors: 1007 conflict with `data.current_hash` (ADR 0736's code); 1004
+  outside the sandbox; 1003 the session's case does not serialise; -32000 the write failed (nothing replaced).
+- A path inside a project is refused (1004, "use edit_case") so that project writes keep their journal and edit lock
+  (Q5).
+- The lock outside a project: an exclusive `<file>.rcfd-lock` created beside the file for the compare and the rename
+  (Q6).
+
+### How defaults and `baseline_hashes.rs` stay unchanged
+
+- `case_facts` and `count_refinement` only read; they build the mesh and initial state as `Simulation::new` does and run
+  no step. No solver path, default or scheme changes; `crates/rcfd-api/tests/baseline_hashes.rs` is not edited or
+  re-recorded.
+- `start_run` without `run_time` or `dry_run` writes the same `run.json` as now. A run started with `run_time` is a run
+  with `--set` entries, which `rcfd run` already reads.
+- The service methods are opt-in, so `service.info` and every method answer as now without the flag. The two project
+  tools are a registered restatement of the project tool list goldens, none edited.
+
+## Alternatives
+
+1. **Compute facts and the plan in the Studio.** A copy of the solver's rules in TypeScript (G2). Recommendation: no.
+2. **Only `dry_run`, no facts query.** The Studio's set-up line needs `h_min` and `u0` before a start is asked for.
+   Recommendation: both; `dry_run` reuses the facts.
+3. **Refine a mesh file by splitting cells.** A general polyhedral splitter is a new mesher feature, not a Studio
+   follow-up. Recommendation: not now (Q3).
+4. **Save outside a project by making a one-file project.** Adds `rcfd-project.json` next to a file the user picked.
+   Recommendation: no.
+
+## Open questions for the maintainer
+
+1. **Opt-in of the new service methods.** Recommendation: (a). (a) the same `rcfd serve --ui` family as ADR 0730 and
+   0732; (b) their own flag; (c) always on (changes `service.info`, G4).
+2. **Who owns the run-time rule.** Recommendation: (a). (a) the engine (`start_run {run_time}`, ported from ADR 0153
+   with its constants); (b) the engine gives facts only and the Studio keeps the rule (G2 says no).
+3. **Mesh files and Refine by 2.** Recommendation: (a). (a) refused with the reason, as in the egui Studio; (b) a mesh
+   splitter as a separate roadmap item.
+4. **Factors.** Recommendation: (a). (a) 2 only, as Refine x2; (b) any integer from 2 to 4; (c) also 1/2 (coarsen).
+5. **A path inside a project for `case.save`.** Recommendation: (a). (a) refused, pointing to `edit_case`; (b) allowed,
+   going through the project's write rule with its journal line.
+6. **The lock outside a project.** Recommendation: (a). (a) a `<file>.rcfd-lock` beside the file during the write;
+   (b) no lock, compare then rename (a small window); (c) a lock in the user's config folder.
+7. **`memory_mb` without a project.** Recommendation: (a). (a) the runner's default budgets, said as such;
+   (b) omitted.
+
+## Tests that would prove it
+
+- **C1** `case_facts` of the shipped cases equals the egui `time_step::facts` at 44e63df8 on the same texts (its own
+  test fixtures, run against the old commit in a separate worktree once and recorded with the commit named).
+- **C2** `start_run {run_time}` gives the entries of the egui `plan` for the same facts and settings; `dry_run` writes
+  nothing (the project's file list and `edits.jsonl` unchanged) and its `set` equals the `run.json` `settings.set` of
+  the same call without `dry_run`.
+- **C3** `count_refinement` of each generator in the list doubles exactly its counts and gives 4x (2D) or 8x (3D) cells,
+  equal to `Simulation::new` of the refined case; a mesh file, `axial_fan_sector` and a count over its maximum are
+  refused with the reason and nothing set.
+- **C4** `case.save` with the right base writes text that `Case::load` reads to the session's `case_hash`; with a stale
+  base 1007 and the file unchanged; inside a project 1004; `lines` keeps a comment line.
+- **C5** without the opt-in flag, `service.info` equals the base commit's and the new methods are -32601;
+  `baseline_hashes.rs` passes unedited; the tool lists equal the restated goldens.
+
+## Unblocks
+
+F-837 rows E-837a ("simulate N s", adaptive correctors and the Courant fix in the run set-up), E-837b (Refine by 2) and
+E-837c (open and save one case file anywhere).

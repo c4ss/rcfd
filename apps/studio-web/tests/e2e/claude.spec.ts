@@ -91,8 +91,8 @@ test('the panel lists the project’s sessions: one open elsewhere (read-only), 
   await expect(panel(page)).toBeVisible();
   await expect(panel(page).getByRole('heading', { name: 'Claude Code' })).toBeVisible();
   // the first listings start the CLI cold (an Electron-as-Node process for the fake), which is slow on a loaded machine
-  await expect(sessionButton(page, /^terminal-chat, open elsewhere, read-only, process \d+$/)).toBeVisible({ timeout: 45_000 });
-  await expect(sessionButton(page, /^Which runs converged\?, closed$/)).toBeVisible();
+  await expect(sessionButton(page, /^terminal-chat, open elsewhere, read-only, process \d+, \d{4}-\d\d-\d\d \d\d:\d\d$/)).toBeVisible({ timeout: 45_000 });
+  await expect(sessionButton(page, /^Which runs converged\?, closed, \d{4}-\d\d-\d\d \d\d:\d\d$/)).toBeVisible();
   await expect(panel(page).getByRole('heading', { name: 'Sessions 2' })).toBeVisible();
   await shot(page, '01-sessions');
 });
@@ -103,7 +103,7 @@ test('the bridge is window.studioClaude with exactly its functions, frozen; the 
     const c = window.studioClaude as unknown as Record<string, unknown>;
     return { keys: Object.keys(c).sort(), frozen: Object.isFrozen(c), fns: Object.values(c).every((v) => typeof v === 'function') };
   });
-  expect(shape).toEqual({ keys: ['cancel', 'confirm', 'offState', 'onState', 'refresh', 'select', 'send', 'state'], frozen: true, fns: true });
+  expect(shape).toEqual({ keys: ['allow', 'cancel', 'confirm', 'offState', 'onState', 'refresh', 'select', 'send', 'state', 'undoAllow'], frozen: true, fns: true });
   const odd = await page.evaluate(() => (window.studioClaude.send as unknown as (s: unknown, t: unknown) => Promise<{ ok: boolean; error?: { code: string } }>)('--dangerously-skip-permissions', 'hi'));
   expect(odd).toMatchObject({ ok: false, error: { code: 'bad_request' } });
   expect(await fx.chats()).toEqual([]);
@@ -128,7 +128,7 @@ test('mirror: the open session is shown read-only from the keyboard, with no mes
 
 test('resume: the closed session is typed into from the keyboard; the reply streams in; one writer; the argv is conservative', async () => {
   const page = studio!.page;
-  const closed = sessionButton(page, /^Which runs converged\?, closed$/);
+  const closed = sessionButton(page, /^Which runs converged\?, closed, \d{4}-\d\d-\d\d \d\d:\d\d$/);
   await closed.focus();
   await page.keyboard.press('Enter');
   await expect(closed).toHaveAttribute('aria-current', 'true');
@@ -152,7 +152,7 @@ test('resume: the closed session is typed into from the keyboard; the reply stre
   const argv = chats[0]!.argv;
   expect(argv.slice(-2)).toEqual(['--resume', S1]);
   expect(argv.slice(argv.indexOf('--permission-mode'), argv.indexOf('--permission-mode') + 4)).toEqual(['--permission-mode', 'dontAsk', '--permission-prompts', 'none']);
-  expect(argv.filter((a) => a.startsWith('mcp__rcfd_project__'))).toHaveLength(15);
+  expect(argv.filter((a) => a.startsWith('mcp__rcfd_project__'))).toHaveLength(16);
   expect(argv.filter((a) => APPROVE_EVERYTHING.some((re) => re.test(a)))).toEqual([]);
   expect(path.resolve(chats[0]!.cwd).toLowerCase()).toBe(path.resolve(quick).toLowerCase());
   // the reply and its reference chips
@@ -190,11 +190,11 @@ test('a run id in the reply opens the run in Runs; a note opens on the project h
 
 test('tool approvals: the allow-list is shown from the keyboard, everything else denied', async () => {
   const page = studio!.page;
-  const disclose = panel(page).getByRole('button', { name: '15 allowed, everything else denied' });
+  const disclose = panel(page).getByRole('button', { name: '16 allowed, everything else denied' });
   await disclose.focus();
   await page.keyboard.press('Enter');
   await expect(disclose).toHaveAttribute('aria-expanded', 'true');
-  await expect(panel(page).getByRole('list', { name: 'Allowed tools' }).getByRole('listitem')).toHaveCount(15);
+  await expect(panel(page).getByRole('list', { name: 'Allowed tools' }).getByRole('listitem')).toHaveCount(16);
   await expect(panel(page).getByText(/never asked and never approved/)).toBeVisible();
   await shot(page, '06-approvals');
   await page.keyboard.press('Enter');

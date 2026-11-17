@@ -9,6 +9,7 @@
 mod cmd_fwh;
 mod cmd_gapc;
 mod cmd_map;
+mod cmd_project;
 mod cmd_study;
 mod cmd_w19c;
 mod cmd_wiring;
@@ -145,6 +146,7 @@ COMMANDS:
                                list benchmark/validation cases
     help [glossary | errors]   print this help; glossary: the terms of docs/glossary.md as JSON; errors: every
                                error and exit code of the engine with what to do next, as JSON
+    project init <dir> [--name <name>]  make a project folder: rcfd-project.json and the standard folders
 
 OPTIONS:
     -h, --help       print this help (also valid after a command)
@@ -230,6 +232,7 @@ fn dispatch(args: &[String]) -> u8 {
         "serve" => cmd_serve(rest),
         "call" => cmd_call(rest),
         "cases" => cmd_cases(rest),
+        "project" => cmd_project::cmd_project(rest),
         "workflow" => cmd_workflow(rest),
         "data" => cmd_data(rest),
         "reactor" => cmd_gapc::cmd_reactor(rest),

@@ -94,7 +94,8 @@ fn f2_tool_names_pass_the_allow_list_rules() {
         .filter(|t| t["_meta"]["rcfd/access"] == "read" && !plain.iter().any(|p| t["name"] == p.as_str()))
         .map(|t| t["name"].as_str().unwrap())
         .collect();
-    assert_eq!(read.len(), 15);
+    // ADR 0733 (the maintainer, 2026-11-17): runner_config is on the first allow-list too
+    assert_eq!(read.len(), 16);
     assert_eq!(read, PROJECT_READ_TOOLS.into_iter().collect::<BTreeSet<_>>());
     eprintln!(
         "F2: {} tools x 2 forms valid, longest {longest} characters; plugin '{plugin_name}', server '{server_name}', app-owned '{PINNED_SERVER}'",
@@ -109,7 +110,8 @@ fn f3_access_classes_read_only_and_schema() {
     let dir = project("f3p");
     let s = server(&dir, Policy::default());
     let list = s.tool_list();
-    assert_eq!(names(&list).len(), 17 + 23);
+    // ADR 0733: and the two budgets tools
+    assert_eq!(names(&list).len(), 17 + 25);
     for (name, access) in PROJECT_TOOLS {
         let t = list["tools"]
             .as_array()

@@ -16,8 +16,8 @@
 # help line and every `see` heading, and reports the help coverage.
 
 [advanced_list]
-status = "proposed"
-note = "PROPOSED by the lead on 2026-11-17 (ADR 0730, open question 3, answer (a)): the maintainer approves this list once; after that the author of each new key sets its flag. Keys not on the list are common."
+status = "approved"
+note = "Proposed by the lead and approved by the maintainer as it stood on 2026-11-17 (ADR 0730, open question 3, answer (a)). From now on the author of each new key sets its flag. Keys not on the list are common."
 
 [keys."boundaries"]
 label = "Boundaries"
@@ -28,179 +28,179 @@ label = "Boundary"
 help = "One named edge of the mesh and its conditions."
 
 [keys."boundaries.*.backflow_direction"]
-advanced = "A setting of one catalogue kind (bc_kind) only."  # proposed
+advanced = "A setting of one catalogue kind (bc_kind) only."
 
 [keys."boundaries.*.backflow_pressure"]
-advanced = "A setting of one catalogue kind (bc_kind) only."  # proposed
+advanced = "A setting of one catalogue kind (bc_kind) only."
 
 [keys."boundaries.*.bc_kind"]
 label = "Condition from the catalogue"
 help = "A ready-made boundary type, such as mass_flow or pressure_outlet. none states the condition with the plain velocity and pressure keys."
-advanced = "The boundary-condition catalogue, another way to state a condition; the plain keys suit a first case."  # proposed
+advanced = "The boundary-condition catalogue, another way to state a condition; the plain keys suit a first case."
 
 [keys."boundaries.*.bc_pressure"]
-advanced = "A setting of one catalogue kind (bc_kind) only."  # proposed
+advanced = "A setting of one catalogue kind (bc_kind) only."
 
 [keys."boundaries.*.compressible_bc"]
-advanced = "The density-based compressible solver only."  # proposed
+advanced = "The density-based compressible solver only."
 
 [keys."boundaries.*.density_value"]
-advanced = "The variable-density (ideal gas) solver only."  # proposed
+advanced = "The variable-density (ideal gas) solver only."
 
 [keys."boundaries.*.electric"]
-advanced = "Electric conduction only (electric.enabled)."  # proposed
+advanced = "Electric conduction only (electric.enabled)."
 
 [keys."boundaries.*.electric_current"]
-advanced = "Electric conduction only (electric.enabled)."  # proposed
+advanced = "Electric conduction only (electric.enabled)."
 
 [keys."boundaries.*.electric_potential"]
-advanced = "Electric conduction only (electric.enabled)."  # proposed
+advanced = "Electric conduction only (electric.enabled)."
 
 [keys."boundaries.*.emissivity"]
-advanced = "The radiation model only."  # proposed
+advanced = "The radiation model only."
 
 [keys."boundaries.*.epsilon_value"]
 label = "Inlet epsilon"
 help = "Dissipation rate at an inlet, when turbulence is given by values (k-epsilon)."
-advanced = "Explicit inlet turbulence values; intensity and length scale are the usual way."  # proposed
+advanced = "Explicit inlet turbulence values; intensity and length scale are the usual way."
 
 [keys."boundaries.*.flow_angle"]
-advanced = "The density-based compressible solver only."  # proposed
+advanced = "The density-based compressible solver only."
 
 [keys."boundaries.*.flow_direction"]
-advanced = "The density-based compressible solver only."  # proposed
+advanced = "The density-based compressible solver only."
 
 [keys."boundaries.*.flow_rate_weight"]
-advanced = "A setting of one catalogue kind (bc_kind) only."  # proposed
+advanced = "A setting of one catalogue kind (bc_kind) only."
 
 [keys."boundaries.*.free_stream_temperature"]
-advanced = "Settings of temperature = convection only."  # proposed
+advanced = "Settings of temperature = convection only."
 
 [keys."boundaries.*.heat_flux_expression"]
-advanced = "A varying value from a formula, a user function or a table; a constant value is the usual start."  # proposed
+advanced = "A varying value from a formula, a user function or a table; a constant value is the usual start."
 
 [keys."boundaries.*.heat_flux_udf"]
-advanced = "A varying value from a formula, a user function or a table; a constant value is the usual start."  # proposed
+advanced = "A varying value from a formula, a user function or a table; a constant value is the usual start."
 
 [keys."boundaries.*.heat_flux_value"]
 label = "Heat flux"
 help = "Heat flowing in for a heat-flux condition. Positive heats the fluid."
 
 [keys."boundaries.*.heat_transfer_coefficient"]
-advanced = "Settings of temperature = convection only."  # proposed
+advanced = "Settings of temperature = convection only."
 
 [keys."boundaries.*.inlet"]
-advanced = "The variable-density (ideal gas) solver only."  # proposed
+advanced = "The variable-density (ideal gas) solver only."
 
 [keys."boundaries.*.k_value"]
 label = "Inlet k"
 help = "Turbulent kinetic energy at an inlet, when turbulence is given by values."
-advanced = "Explicit inlet turbulence values; intensity and length scale are the usual way."  # proposed
+advanced = "Explicit inlet turbulence values; intensity and length scale are the usual way."
 
 [keys."boundaries.*.loss_coefficient"]
-advanced = "A setting of one catalogue kind (bc_kind) only."  # proposed
+advanced = "A setting of one catalogue kind (bc_kind) only."
 
 [keys."boundaries.*.mach_value"]
-advanced = "The density-based compressible solver only."  # proposed
+advanced = "The density-based compressible solver only."
 
 [keys."boundaries.*.marangoni_coefficient"]
-advanced = "A special wall condition (shear, slip or Marangoni) only."  # proposed
+advanced = "A special wall condition (shear, slip or Marangoni) only."
 
 [keys."boundaries.*.mass_flow_fraction"]
-advanced = "A setting of one catalogue kind (bc_kind) only."  # proposed
+advanced = "A setting of one catalogue kind (bc_kind) only."
 
 [keys."boundaries.*.mass_flow_shape_expression"]
-advanced = "A setting of one catalogue kind (bc_kind) only."  # proposed
+advanced = "A setting of one catalogue kind (bc_kind) only."
 
 [keys."boundaries.*.mass_flow_source_patch"]
-advanced = "A setting of one catalogue kind (bc_kind) only."  # proposed
+advanced = "A setting of one catalogue kind (bc_kind) only."
 
 [keys."boundaries.*.mass_flow_value"]
-advanced = "A setting of one catalogue kind (bc_kind) only."  # proposed
+advanced = "A setting of one catalogue kind (bc_kind) only."
 
 [keys."boundaries.*.mean_free_path"]
-advanced = "A special wall condition (shear, slip or Marangoni) only."  # proposed
+advanced = "A special wall condition (shear, slip or Marangoni) only."
 
 [keys."boundaries.*.nutilde_value"]
-advanced = "Explicit inlet turbulence values; intensity and length scale are the usual way."  # proposed
+advanced = "Explicit inlet turbulence values; intensity and length scale are the usual way."
 
 [keys."boundaries.*.omega_value"]
 label = "Inlet omega"
 help = "Specific dissipation rate at an inlet, when turbulence is given by values (k-omega SST)."
-advanced = "Explicit inlet turbulence values; intensity and length scale are the usual way."  # proposed
+advanced = "Explicit inlet turbulence values; intensity and length scale are the usual way."
 
 [keys."boundaries.*.pressure"]
 label = "Pressure condition"
 help = "What the pressure does here: zero gradient on walls and inlets, fixed on an outlet."
 
 [keys."boundaries.*.pressure_average"]
-advanced = "A setting of one catalogue kind (bc_kind) only."  # proposed
+advanced = "A setting of one catalogue kind (bc_kind) only."
 
 [keys."boundaries.*.pressure_relax"]
-advanced = "A setting of one catalogue kind (bc_kind) only."  # proposed
+advanced = "A setting of one catalogue kind (bc_kind) only."
 
 [keys."boundaries.*.pressure_update"]
-advanced = "A setting of one catalogue kind (bc_kind) only."  # proposed
+advanced = "A setting of one catalogue kind (bc_kind) only."
 
 [keys."boundaries.*.pressure_value"]
 label = "Pressure"
 help = "The pressure for a fixed condition, divided by density."
 
 [keys."boundaries.*.prevent_reverse_flow"]
-advanced = "A setting of one catalogue kind (bc_kind) only."  # proposed
+advanced = "A setting of one catalogue kind (bc_kind) only."
 
 [keys."boundaries.*.profile"]
-advanced = "A varying value from a formula, a user function or a table; a constant value is the usual start."  # proposed
+advanced = "A varying value from a formula, a user function or a table; a constant value is the usual start."
 
 [keys."boundaries.*.radial_frame_rate"]
-advanced = "A setting of one catalogue kind (bc_kind) only."  # proposed
+advanced = "A setting of one catalogue kind (bc_kind) only."
 
 [keys."boundaries.*.radial_reference"]
-advanced = "A setting of one catalogue kind (bc_kind) only."  # proposed
+advanced = "A setting of one catalogue kind (bc_kind) only."
 
 [keys."boundaries.*.radiation_temperature"]
-advanced = "Settings of temperature = convection only."  # proposed
+advanced = "Settings of temperature = convection only."
 
 [keys."boundaries.*.reflection_value"]
-advanced = "The density-based compressible solver only."  # proposed
+advanced = "The density-based compressible solver only."
 
 [keys."boundaries.*.shear_stress"]
-advanced = "A special wall condition (shear, slip or Marangoni) only."  # proposed
+advanced = "A special wall condition (shear, slip or Marangoni) only."
 
 [keys."boundaries.*.slip_length"]
-advanced = "A special wall condition (shear, slip or Marangoni) only."  # proposed
+advanced = "A special wall condition (shear, slip or Marangoni) only."
 
 [keys."boundaries.*.specularity"]
-advanced = "A special wall condition (shear, slip or Marangoni) only."  # proposed
+advanced = "A special wall condition (shear, slip or Marangoni) only."
 
 [keys."boundaries.*.swirl_axis"]
-advanced = "A setting of one catalogue kind (bc_kind) only."  # proposed
+advanced = "A setting of one catalogue kind (bc_kind) only."
 
 [keys."boundaries.*.swirl_origin"]
-advanced = "A setting of one catalogue kind (bc_kind) only."  # proposed
+advanced = "A setting of one catalogue kind (bc_kind) only."
 
 [keys."boundaries.*.swirl_rate"]
-advanced = "A setting of one catalogue kind (bc_kind) only."  # proposed
+advanced = "A setting of one catalogue kind (bc_kind) only."
 
 [keys."boundaries.*.target_mass_flow"]
-advanced = "A setting of one catalogue kind (bc_kind) only."  # proposed
+advanced = "A setting of one catalogue kind (bc_kind) only."
 
 [keys."boundaries.*.temperature"]
 label = "Temperature condition"
 help = "Heat at this edge: none (adiabatic), a fixed temperature, a heat flux, or convection."
 
 [keys."boundaries.*.temperature_expression"]
-advanced = "A varying value from a formula, a user function or a table; a constant value is the usual start."  # proposed
+advanced = "A varying value from a formula, a user function or a table; a constant value is the usual start."
 
 [keys."boundaries.*.temperature_udf"]
-advanced = "A varying value from a formula, a user function or a table; a constant value is the usual start."  # proposed
+advanced = "A varying value from a formula, a user function or a table; a constant value is the usual start."
 
 [keys."boundaries.*.temperature_value"]
 label = "Temperature"
 help = "The temperature for a fixed condition."
 
 [keys."boundaries.*.total_pressure_value"]
-advanced = "The variable-density (ideal gas) solver only."  # proposed
+advanced = "The variable-density (ideal gas) solver only."
 
 [keys."boundaries.*.turbulence"]
 label = "Turbulence role"
@@ -229,20 +229,20 @@ help = "What the flow does here: fixed (a wall at 0, or an inlet), zero gradient
 [keys."boundaries.*.velocity_expression_x"]
 label = "Velocity x formula"
 help = "A formula for the x velocity, for example an inlet profile. It replaces the plain value."
-advanced = "A varying value from a formula, a user function or a table; a constant value is the usual start."  # proposed
+advanced = "A varying value from a formula, a user function or a table; a constant value is the usual start."
 
 [keys."boundaries.*.velocity_expression_y"]
 label = "Velocity y formula"
 help = "A formula for the y velocity (see the x formula)."
-advanced = "A varying value from a formula, a user function or a table; a constant value is the usual start."  # proposed
+advanced = "A varying value from a formula, a user function or a table; a constant value is the usual start."
 
 [keys."boundaries.*.velocity_expression_z"]
 label = "Velocity z formula"
 help = "A formula for the z velocity (see the x formula)."
-advanced = "A varying value from a formula, a user function or a table; a constant value is the usual start."  # proposed
+advanced = "A varying value from a formula, a user function or a table; a constant value is the usual start."
 
 [keys."boundaries.*.velocity_udf"]
-advanced = "A varying value from a formula, a user function or a table; a constant value is the usual start."  # proposed
+advanced = "A varying value from a formula, a user function or a table; a constant value is the usual start."
 
 [keys."boundaries.*.velocity_value"]
 label = "Velocity"
@@ -250,29 +250,29 @@ help = "The velocity for a fixed condition, as [ux, uy, uz]. All zero is a still
 unit = "m/s"
 
 [keys."boundaries.*.wall_conductivity"]
-advanced = "Settings of temperature = convection only."  # proposed
+advanced = "Settings of temperature = convection only."
 
 [keys."boundaries.*.wall_emissivity"]
-advanced = "Settings of temperature = convection only."  # proposed
+advanced = "Settings of temperature = convection only."
 
 [keys."boundaries.*.wall_rotation_axis"]
-advanced = "Moving or rotating walls only."  # proposed
+advanced = "Moving or rotating walls only."
 
 [keys."boundaries.*.wall_rotation_origin"]
-advanced = "Moving or rotating walls only."  # proposed
+advanced = "Moving or rotating walls only."
 
 [keys."boundaries.*.wall_rotation_rate"]
 label = "Wall rotation rate"
 help = "How fast a moving wall spins about its axis."
-advanced = "Moving or rotating walls only."  # proposed
+advanced = "Moving or rotating walls only."
 
 [keys."boundaries.*.wall_thickness"]
-advanced = "Settings of temperature = convection only."  # proposed
+advanced = "Settings of temperature = convection only."
 
 [keys."boundaries.*.wall_velocity_projection"]
 label = "Wall velocity projection"
 help = "Whether a moving wall’s velocity must already be along the wall, or is made so face by face."
-advanced = "Moving or rotating walls only."  # proposed
+advanced = "Moving or rotating walls only."
 
 [keys."chemistry"]
 see = "case-schema.md#chemistry-finite-rate-and-turbulent-combustion-chemistry-f-054-adr-0027"
@@ -306,13 +306,13 @@ label = "Solve for temperature"
 help = "Turn on the temperature equation alongside the flow."
 
 [keys."energy.heat_source"]
-advanced = "The ideal-gas solver only."  # proposed
+advanced = "The ideal-gas solver only."
 
 [keys."energy.relax"]
-advanced = "Numerics of the temperature equation; the default is tested."  # proposed
+advanced = "Numerics of the temperature equation; the default is tested."
 
 [keys."energy.viscous_heating"]
-advanced = "The ideal-gas solver only."  # proposed
+advanced = "The ideal-gas solver only."
 
 [keys."expressions"]
 label = "Expressions"
@@ -328,10 +328,10 @@ label = "Start values"
 help = "The flow the solver starts from. A good start can save iterations."
 
 [keys."initial.coarse_factor"]
-advanced = "Settings of method = coarse only."  # proposed
+advanced = "Settings of method = coarse only."
 
 [keys."initial.coarse_iterations"]
-advanced = "Settings of method = coarse only."  # proposed
+advanced = "Settings of method = coarse only."
 
 [keys."initial.method"]
 label = "Start method"
@@ -353,17 +353,17 @@ unit = "m/s"
 [keys."initial.velocity_expression_x"]
 label = "Start velocity x formula"
 help = "A formula of x, y, z for the start velocity in x. It replaces the plain value."
-advanced = "A varying start from a formula; a uniform start is the usual one."  # proposed
+advanced = "A varying start from a formula; a uniform start is the usual one."
 
 [keys."initial.velocity_expression_y"]
 label = "Start velocity y formula"
 help = "A formula of x, y, z for the start velocity in y."
-advanced = "A varying start from a formula; a uniform start is the usual one."  # proposed
+advanced = "A varying start from a formula; a uniform start is the usual one."
 
 [keys."initial.velocity_expression_z"]
 label = "Start velocity z formula"
 help = "A formula of x, y, z for the start velocity in z."
-advanced = "A varying start from a formula; a uniform start is the usual one."  # proposed
+advanced = "A varying start from a formula; a uniform start is the usual one."
 
 [keys."linear_solver"]
 see = "case-schema.md#wave-22-linear_solver-f-101-adr-0038"
@@ -377,14 +377,14 @@ see = "case-schema.md#mesh-generators-and-boundary-layer-inflation"
 see = "case-schema.md#solution-adaptive-steady-runs-meshadapt-f-342-adr-0262"
 
 [keys."mesh.core_fraction"]
-advanced = "One generator only (pipe_sweep, wedge_2d or nozzle_2d)."  # proposed
+advanced = "One generator only (pipe_sweep, wedge_2d or nozzle_2d)."
 
 [keys."mesh.depth"]
 label = "Depth of a 2D mesh"
 help = "How thick a 2D mesh is. It matters for forces and flow rates, not the flow pattern."
 
 [keys."mesh.exit_height"]
-advanced = "One generator only (pipe_sweep, wedge_2d or nozzle_2d)."  # proposed
+advanced = "One generator only (pipe_sweep, wedge_2d or nozzle_2d)."
 
 [keys."mesh.fan"]
 label = "Fan sector"
@@ -554,23 +554,23 @@ label = "Grading"
 help = "Ratio of the last cell size to the first. 1 keeps the cells even; more packs them at one end."
 
 [keys."mesh.isotropic_interface"]
-advanced = "Rotor-stator and sector generators only."  # proposed
+advanced = "Rotor-stator and sector generators only."
 
 [keys."mesh.layer_growth"]
 label = "Layer growth"
 help = "How much each wall layer grows over the one below it."
 
 [keys."mesh.layer_reference_length"]
-advanced = "Which walls get layers and the inputs of the y+ estimate; the defaults estimate them."  # proposed
+advanced = "Which walls get layers and the inputs of the y+ estimate; the defaults estimate them."
 
 [keys."mesh.layer_reference_velocity"]
-advanced = "Which walls get layers and the inputs of the y+ estimate; the defaults estimate them."  # proposed
+advanced = "Which walls get layers and the inputs of the y+ estimate; the defaults estimate them."
 
 [keys."mesh.layer_u_tau"]
-advanced = "Which walls get layers and the inputs of the y+ estimate; the defaults estimate them."  # proposed
+advanced = "Which walls get layers and the inputs of the y+ estimate; the defaults estimate them."
 
 [keys."mesh.layer_walls"]
-advanced = "Which walls get layers and the inputs of the y+ estimate; the defaults estimate them."  # proposed
+advanced = "Which walls get layers and the inputs of the y+ estimate; the defaults estimate them."
 
 [keys."mesh.lx"]
 label = "Length in x"
@@ -590,7 +590,7 @@ help = "How many cells across x. More cells show more detail but take longer."
 unit = "cells"
 
 [keys."mesh.nx_right"]
-advanced = "The second block of an interface or stage generator only."  # proposed
+advanced = "The second block of an interface or stage generator only."
 
 [keys."mesh.ny"]
 label = "Cells in y"
@@ -598,7 +598,7 @@ help = "How many cells across y. More cells show more detail but take longer."
 unit = "cells"
 
 [keys."mesh.ny_right"]
-advanced = "The second block of an interface or stage generator only."  # proposed
+advanced = "The second block of an interface or stage generator only."
 
 [keys."mesh.nz"]
 label = "Cells in z"
@@ -606,40 +606,40 @@ help = "How many cells along z, for the 3D generators."
 unit = "cells"
 
 [keys."mesh.nz_right"]
-advanced = "The second block of an interface or stage generator only."  # proposed
+advanced = "The second block of an interface or stage generator only."
 
 [keys."mesh.periodic_x"]
-advanced = "Cyclic sides, for periodic channel or pipe flows only."  # proposed
+advanced = "Cyclic sides, for periodic channel or pipe flows only."
 
 [keys."mesh.periodic_y"]
-advanced = "Cyclic sides, for periodic channel or pipe flows only."  # proposed
+advanced = "Cyclic sides, for periodic channel or pipe flows only."
 
 [keys."mesh.periodic_z"]
-advanced = "Cyclic sides, for periodic channel or pipe flows only."  # proposed
+advanced = "Cyclic sides, for periodic channel or pipe flows only."
 
 [keys."mesh.r_in"]
 label = "Inner radius"
 help = "Radius of the inner circle of a cylinder mesh (the body)."
 
 [keys."mesh.r_interface"]
-advanced = "Rotor-stator and sector generators only."  # proposed
+advanced = "Rotor-stator and sector generators only."
 
 [keys."mesh.r_out"]
 label = "Outer radius"
 help = "Radius of the outer edge of a cylinder mesh (the far field)."
 
 [keys."mesh.ramp_angle"]
-advanced = "One generator only (pipe_sweep, wedge_2d or nozzle_2d)."  # proposed
+advanced = "One generator only (pipe_sweep, wedge_2d or nozzle_2d)."
 
 [keys."mesh.ramp_start"]
-advanced = "One generator only (pipe_sweep, wedge_2d or nozzle_2d)."  # proposed
+advanced = "One generator only (pipe_sweep, wedge_2d or nozzle_2d)."
 
 [keys."mesh.scale"]
 label = "Scale"
 help = "Multiplies every coordinate of a mesh file, for example 0.001 for a file in millimetres."
 
 [keys."mesh.sector_angle"]
-advanced = "Rotor-stator and sector generators only."  # proposed
+advanced = "Rotor-stator and sector generators only."
 
 [keys."mesh.source"]
 label = "Mesh source"
@@ -650,7 +650,7 @@ label = "Target y+"
 help = "How fine the first wall cell should be, as y+. Used when the first layer height is 0."
 
 [keys."mesh.throat_height"]
-advanced = "One generator only (pipe_sweep, wedge_2d or nozzle_2d)."  # proposed
+advanced = "One generator only (pipe_sweep, wedge_2d or nozzle_2d)."
 
 [keys."mesh.transform"]
 label = "Move the mesh"
@@ -690,10 +690,10 @@ label = "Snapshot fields"
 help = "Which results go into the snapshot files. Empty writes them all."
 
 [keys."output.retain_checkpoints"]
-advanced = "Disk housekeeping; keeping everything is the default."  # proposed
+advanced = "Disk housekeeping; keeping everything is the default."
 
 [keys."output.retain_snapshots"]
-advanced = "Disk housekeeping; keeping everything is the default."  # proposed
+advanced = "Disk housekeeping; keeping everything is the default."
 
 [keys."output.store_fields"]
 label = "Stored fields"
@@ -711,7 +711,7 @@ help = "f64 keeps every digit; f32 halves the size with a small rounding."
 [keys."output.store_time_interval"]
 label = "Field store time interval"
 help = "Store the fields every this much simulated time (time-dependent runs). 0 is off."
-advanced = "Stores by simulated time instead of by step, for time-dependent runs only."  # proposed
+advanced = "Stores by simulated time instead of by step, for time-dependent runs only."
 
 [keys."output.write_interval"]
 label = "Snapshot interval"
@@ -719,10 +719,10 @@ help = "Write a full snapshot every this many iterations or steps. 0 writes only
 unit = "iterations"
 
 [keys."output.write_time_interval"]
-advanced = "Landing on exact times, for time-dependent runs only."  # proposed
+advanced = "Landing on exact times, for time-dependent runs only."
 
 [keys."output.write_times"]
-advanced = "Landing on exact times, for time-dependent runs only."  # proposed
+advanced = "Landing on exact times, for time-dependent runs only."
 
 [keys."particles"]
 see = "case-schema.md#particles"
@@ -737,7 +737,7 @@ help = "The properties of the fluid: viscosity, density, heat capacity and gravi
 [keys."physics.body_force"]
 label = "Body force"
 help = "A steady push on all the fluid, for example to drive a periodic channel."
-advanced = "A uniform driving force, mainly for periodic flows."  # proposed
+advanced = "A uniform driving force, mainly for periodic flows."
 
 [keys."physics.conductivity"]
 label = "Thermal conductivity"
@@ -792,10 +792,10 @@ help = "The area that turns a force into a coefficient."
 [keys."reports.*.component"]
 label = "Force part"
 help = "Which part of the force to report: total, pressure only or viscous only."
-advanced = "Splits a force into its pressure and viscous parts; total is the usual choice."  # proposed
+advanced = "Splits a force into its pressure and viscous parts; total is the usual choice."
 
 [keys."reports.*.conductivity"]
-advanced = "heat_flow reports at constant density only; 0 takes the fluid’s conductivity."  # proposed
+advanced = "heat_flow reports at constant density only; 0 takes the fluid’s conductivity."
 
 [keys."reports.*.direction"]
 label = "Direction"
@@ -810,20 +810,20 @@ label = "Field"
 help = "The field to average, integrate or probe, such as p or T."
 
 [keys."reports.*.l_ref"]
-advanced = "Moment reports only."  # proposed
+advanced = "Moment reports only."
 
 [keys."reports.*.origin"]
-advanced = "Moment reports only."  # proposed
+advanced = "Moment reports only."
 
 [keys."reports.*.patch"]
 label = "Boundary"
 help = "The boundary the report measures, for forces, flow rates and heat flows."
 
 [keys."reports.*.scalar"]
-advanced = "Scalar reports only."  # proposed
+advanced = "Scalar reports only."
 
 [keys."reports.*.statistic"]
-advanced = "y_plus reports only."  # proposed
+advanced = "y_plus reports only."
 
 [keys."reports.*.type"]
 label = "What to compute"
@@ -856,19 +856,19 @@ label = "Velocity relaxation"
 help = "How much of each new velocity a steady run takes per iteration. Lower is steadier but slower."
 
 [keys."solver.blend_factor"]
-advanced = "Tunes one convection scheme only, when solver.convection picks it."  # proposed
+advanced = "Tunes one convection scheme only, when solver.convection picks it."
 
 [keys."solver.bulk_direction"]
-advanced = "Drives periodic channel and pipe flows only."  # proposed
+advanced = "Drives periodic channel and pipe flows only."
 
 [keys."solver.bulk_velocity"]
-advanced = "Drives periodic channel and pipe flows only."  # proposed
+advanced = "Drives periodic channel and pipe flows only."
 
 [keys."solver.component_diagonal"]
-advanced = "A discretisation detail of the solver kernel; the default is the tested choice."  # proposed
+advanced = "A discretisation detail of the solver kernel; the default is the tested choice."
 
 [keys."solver.compressive_k"]
-advanced = "Tunes one convection scheme only, when solver.convection picks it."  # proposed
+advanced = "Tunes one convection scheme only, when solver.convection picks it."
 
 [keys."solver.consistent_correctors"]
 see = "case-schema.md#consistent-pressure-correctors-solverconsistent_correctors-adr-0214-adr-0223"
@@ -878,27 +878,27 @@ label = "Convection scheme"
 help = "How flow carries momentum between cells. linear_upwind is accurate and stable for most cases."
 
 [keys."solver.corrector_control"]
-advanced = "A variant of the transient loop; the default PISO/PIMPLE loop suits most runs."  # proposed
+advanced = "A variant of the transient loop; the default PISO/PIMPLE loop suits most runs."
 
 [keys."solver.ddt_correction"]
-advanced = "A discretisation detail of the solver kernel; the default is the tested choice."  # proposed
+advanced = "A discretisation detail of the solver kernel; the default is the tested choice."
 
 [keys."solver.divergence_courant_limit"]
 see = "case-schema.md#divergence-guard-of-the-transient-solvers-solverdivergence_courant_limit"
-advanced = "A safety check of the solver; its default already watches for trouble."  # proposed
+advanced = "A safety check of the solver; its default already watches for trouble."
 
 [keys."solver.dt"]
 label = "Time step"
 help = "How far time moves in one step of a time-dependent run."
 
 [keys."solver.dt_growth"]
-advanced = "Fine control of adaptive time stepping; the Courant target alone is enough to start."  # proposed
+advanced = "Fine control of adaptive time stepping; the Courant target alone is enough to start."
 
 [keys."solver.dt_safety"]
-advanced = "Fine control of adaptive time stepping; the Courant target alone is enough to start."  # proposed
+advanced = "Fine control of adaptive time stepping; the Courant target alone is enough to start."
 
 [keys."solver.dt_shrink"]
-advanced = "Fine control of adaptive time stepping; the Courant target alone is enough to start."  # proposed
+advanced = "Fine control of adaptive time stepping; the Courant target alone is enough to start."
 
 [keys."solver.end_time"]
 label = "End time"
@@ -906,55 +906,55 @@ help = "A time-dependent run stops when it reaches this time."
 see = "case-schema.md#landing-on-solverend_time-adr-0145"
 
 [keys."solver.error_tolerance"]
-advanced = "Fine control of adaptive time stepping; the Courant target alone is enough to start."  # proposed
+advanced = "Fine control of adaptive time stepping; the Courant target alone is enough to start."
 
 [keys."solver.extrapolate_initial"]
-advanced = "A variant of the transient loop; the default PISO/PIMPLE loop suits most runs."  # proposed
+advanced = "A variant of the transient loop; the default PISO/PIMPLE loop suits most runs."
 
 [keys."solver.fractional_boundary"]
-advanced = "A variant of the transient loop; the default PISO/PIMPLE loop suits most runs."  # proposed
+advanced = "A variant of the transient loop; the default PISO/PIMPLE loop suits most runs."
 
 [keys."solver.fractional_form"]
-advanced = "A variant of the transient loop; the default PISO/PIMPLE loop suits most runs."  # proposed
+advanced = "A variant of the transient loop; the default PISO/PIMPLE loop suits most runs."
 
 [keys."solver.frozen_flow"]
 see = "case-schema.md#solverfrozen_flow"
-advanced = "Prescribes the flow instead of solving it, for heat or scalar studies only."  # proposed
+advanced = "Prescribes the flow instead of solving it, for heat or scalar studies only."
 
 [keys."solver.gradient_boundary"]
-advanced = "A discretisation detail of the solver kernel; the default is the tested choice."  # proposed
+advanced = "A discretisation detail of the solver kernel; the default is the tested choice."
 
 [keys."solver.gradient_equations"]
 see = "case-schema.md#further-equations-solvergradient_equations"
 
 [keys."solver.gradient_face_correction"]
-advanced = "A discretisation detail of the solver kernel; the default is the tested choice."  # proposed
+advanced = "A discretisation detail of the solver kernel; the default is the tested choice."
 
 [keys."solver.gradient_limiter_k"]
-advanced = "A discretisation detail of the solver kernel; the default is the tested choice."  # proposed
+advanced = "A discretisation detail of the solver kernel; the default is the tested choice."
 
 [keys."solver.gradient_secondary_limiter"]
-advanced = "A discretisation detail of the solver kernel; the default is the tested choice."  # proposed
+advanced = "A discretisation detail of the solver kernel; the default is the tested choice."
 
 [keys."solver.h_operator"]
-advanced = "A discretisation detail of the solver kernel; the default is the tested choice."  # proposed
+advanced = "A discretisation detail of the solver kernel; the default is the tested choice."
 
 [keys."solver.high_resolution_beta"]
-advanced = "Tunes one convection scheme only, when solver.convection picks it."  # proposed
+advanced = "Tunes one convection scheme only, when solver.convection picks it."
 
 [keys."solver.linear_upwind_limiter"]
 see = "case-schema.md#limited-linear-upwind-extrapolation-solverlinear_upwind_limiter"
-advanced = "A discretisation detail of the solver kernel; the default is the tested choice."  # proposed
+advanced = "A discretisation detail of the solver kernel; the default is the tested choice."
 
 [keys."solver.max_courant"]
 label = "Courant target"
 help = "Adapts the time step to keep the Courant number near this. 0 keeps the step fixed."
 
 [keys."solver.max_courant_rms"]
-advanced = "Fine control of adaptive time stepping; the Courant target alone is enough to start."  # proposed
+advanced = "Fine control of adaptive time stepping; the Courant target alone is enough to start."
 
 [keys."solver.max_dt"]
-advanced = "Fine control of adaptive time stepping; the Courant target alone is enough to start."  # proposed
+advanced = "Fine control of adaptive time stepping; the Courant target alone is enough to start."
 
 [keys."solver.max_iterations"]
 label = "Iteration limit"
@@ -962,16 +962,16 @@ help = "A steady run stops after this many iterations, settled or not."
 unit = "iterations"
 
 [keys."solver.min_dt"]
-advanced = "Fine control of adaptive time stepping; the Courant target alone is enough to start."  # proposed
+advanced = "Fine control of adaptive time stepping; the Courant target alone is enough to start."
 
 [keys."solver.min_iterations"]
-advanced = "Only matters with the stop conditions of the convergence section."  # proposed
+advanced = "Only matters with the stop conditions of the convergence section."
 
 [keys."solver.momentum_max_iter"]
-advanced = "Inner linear-solver limits; 0 keeps the algorithm’s tested default."  # proposed
+advanced = "Inner linear-solver limits; 0 keeps the algorithm’s tested default."
 
 [keys."solver.momentum_rel_tol"]
-advanced = "Inner linear-solver limits; 0 keeps the algorithm’s tested default."  # proposed
+advanced = "Inner linear-solver limits; 0 keeps the algorithm’s tested default."
 
 [keys."solver.n_correctors"]
 label = "Pressure correctors"
@@ -986,77 +986,77 @@ label = "Non-orthogonal correctors"
 help = "Extra pressure solves for skewed meshes. 0 is fine for square cells."
 
 [keys."solver.p_ref_cell"]
-advanced = "Pins the pressure level when no boundary fixes it; the default cell works."  # proposed
+advanced = "Pins the pressure level when no boundary fixes it; the default cell works."
 
 [keys."solver.p_ref_value"]
-advanced = "Pins the pressure level when no boundary fixes it; the default cell works."  # proposed
+advanced = "Pins the pressure level when no boundary fixes it; the default cell works."
 
 [keys."solver.period"]
-advanced = "Fine control of adaptive time stepping; the Courant target alone is enough to start."  # proposed
+advanced = "Fine control of adaptive time stepping; the Courant target alone is enough to start."
 
 [keys."solver.periodic_gradient"]
 see = "case-schema.md#least-squares-velocity-gradient-on-periodic-faces-solverperiodic_gradient"
-advanced = "A discretisation detail of the solver kernel; the default is the tested choice."  # proposed
+advanced = "A discretisation detail of the solver kernel; the default is the tested choice."
 
 [keys."solver.pressure_abs_tol"]
-advanced = "Inner linear-solver limits; 0 keeps the algorithm’s tested default."  # proposed
+advanced = "Inner linear-solver limits; 0 keeps the algorithm’s tested default."
 
 [keys."solver.pressure_interpolation"]
 see = "case-schema.md#pressure-interpolation-of-the-steady-kernel-solverpressure_interpolation"
-advanced = "A discretisation detail of the solver kernel; the default is the tested choice."  # proposed
+advanced = "A discretisation detail of the solver kernel; the default is the tested choice."
 
 [keys."solver.pressure_lag_check"]
 see = "case-schema.md#pressure-lag-check-of-pimple-solverpressure_lag_check"
-advanced = "A safety check of the solver; its default already watches for trouble."  # proposed
+advanced = "A safety check of the solver; its default already watches for trouble."
 
 [keys."solver.pressure_max_iter"]
-advanced = "Inner linear-solver limits; 0 keeps the algorithm’s tested default."  # proposed
+advanced = "Inner linear-solver limits; 0 keeps the algorithm’s tested default."
 
 [keys."solver.pressure_rel_tol"]
-advanced = "Inner linear-solver limits; 0 keeps the algorithm’s tested default."  # proposed
+advanced = "Inner linear-solver limits; 0 keeps the algorithm’s tested default."
 
 [keys."solver.pseudo_cfl"]
-advanced = "Pseudo-transient steady solving, a way to rescue hard cases; off by default."  # proposed
+advanced = "Pseudo-transient steady solving, a way to rescue hard cases; off by default."
 
 [keys."solver.pseudo_control"]
-advanced = "Pseudo-transient steady solving, a way to rescue hard cases; off by default."  # proposed
+advanced = "Pseudo-transient steady solving, a way to rescue hard cases; off by default."
 
 [keys."solver.pseudo_dt"]
-advanced = "Pseudo-transient steady solving, a way to rescue hard cases; off by default."  # proposed
+advanced = "Pseudo-transient steady solving, a way to rescue hard cases; off by default."
 
 [keys."solver.pseudo_factor"]
-advanced = "Pseudo-transient steady solving, a way to rescue hard cases; off by default."  # proposed
+advanced = "Pseudo-transient steady solving, a way to rescue hard cases; off by default."
 
 [keys."solver.pseudo_mode"]
-advanced = "Pseudo-transient steady solving, a way to rescue hard cases; off by default."  # proposed
+advanced = "Pseudo-transient steady solving, a way to rescue hard cases; off by default."
 
 [keys."solver.pseudo_scale_max"]
-advanced = "Pseudo-transient steady solving, a way to rescue hard cases; off by default."  # proposed
+advanced = "Pseudo-transient steady solving, a way to rescue hard cases; off by default."
 
 [keys."solver.residual_norm"]
-advanced = "A discretisation detail of the solver kernel; the default is the tested choice."  # proposed
+advanced = "A discretisation detail of the solver kernel; the default is the tested choice."
 
 [keys."solver.rhie_chow"]
 see = "case-schema.md#step-consistent-face-flux-solverrhie_chow-adr-0245-adr-0352"
 
 [keys."solver.simplec_boundary_compensation"]
-advanced = "A SIMPLEC flux correction for skewed or sheared meshes; off suits most meshes."  # proposed
+advanced = "A SIMPLEC flux correction for skewed or sheared meshes; off suits most meshes."
 
 [keys."solver.simplec_non_orthogonal_compensation"]
-advanced = "A SIMPLEC flux correction for skewed or sheared meshes; off suits most meshes."  # proposed
+advanced = "A SIMPLEC flux correction for skewed or sheared meshes; off suits most meshes."
 
 [keys."solver.steady_divergence_guard"]
 see = "case-schema.md#divergence-guard-of-the-steady-solvers-solversteady_divergence_guard"
-advanced = "A safety check of the solver; its default already watches for trouble."  # proposed
+advanced = "A safety check of the solver; its default already watches for trouble."
 
 [keys."solver.steps_per_period"]
-advanced = "Fine control of adaptive time stepping; the Courant target alone is enough to start."  # proposed
+advanced = "Fine control of adaptive time stepping; the Courant target alone is enough to start."
 
 [keys."solver.stop_when"]
-advanced = "Only matters with the stop conditions of the convergence section."  # proposed
+advanced = "Only matters with the stop conditions of the convergence section."
 
 [keys."solver.time_advance"]
-advanced = "A variant of the transient loop; the default PISO/PIMPLE loop suits most runs."  # proposed
+advanced = "A variant of the transient loop; the default PISO/PIMPLE loop suits most runs."
 
 [keys."solver.time_scheme"]
 label = "Time scheme"
@@ -1071,10 +1071,10 @@ label = "Velocity tolerance"
 help = "A steady run has settled when the velocity residual falls below this."
 
 [keys."solver.velocity_correction"]
-advanced = "A discretisation detail of the solver kernel; the default is the tested choice."  # proposed
+advanced = "A discretisation detail of the solver kernel; the default is the tested choice."
 
 [keys."solver.viscous_stress"]
-advanced = "A discretisation detail of the solver kernel; the default is the tested choice."  # proposed
+advanced = "A discretisation detail of the solver kernel; the default is the tested choice."
 
 [keys."sources"]
 label = "Sources"
@@ -1123,13 +1123,13 @@ help = "Whether and how the run models turbulence. Laminar means no model."
 see = "case-schema.md#turbulence"
 
 [keys."turbulence.convection"]
-advanced = "Numerics of the turbulence equations; the defaults are tested."  # proposed
+advanced = "Numerics of the turbulence equations; the defaults are tested."
 
 [keys."turbulence.e_wall"]
-advanced = "A model constant; change it only to reproduce a published set-up."  # proposed
+advanced = "A model constant; change it only to reproduce a published set-up."
 
 [keys."turbulence.epsilon_initial"]
-advanced = "Explicit start values; by default they come from the start intensity and viscosity ratio."  # proposed
+advanced = "Explicit start values; by default they come from the start intensity and viscosity ratio."
 
 [keys."turbulence.initial_intensity"]
 label = "Start turbulence intensity"
@@ -1140,16 +1140,16 @@ label = "Start viscosity ratio"
 help = "Turbulent over molecular viscosity the run starts from."
 
 [keys."turbulence.k_initial"]
-advanced = "Explicit start values; by default they come from the start intensity and viscosity ratio."  # proposed
+advanced = "Explicit start values; by default they come from the start intensity and viscosity ratio."
 
 [keys."turbulence.kappa"]
-advanced = "A model constant; change it only to reproduce a published set-up."  # proposed
+advanced = "A model constant; change it only to reproduce a published set-up."
 
 [keys."turbulence.length_scale"]
-advanced = "For the algebraic models (smagorinsky, wale, mixing_length) only."  # proposed
+advanced = "For the algebraic models (smagorinsky, wale, mixing_length) only."
 
 [keys."turbulence.mixing_profile"]
-advanced = "For the algebraic models (smagorinsky, wale, mixing_length) only."  # proposed
+advanced = "For the algebraic models (smagorinsky, wale, mixing_length) only."
 
 [keys."turbulence.model"]
 label = "Turbulence model"
@@ -1161,45 +1161,45 @@ help = "nuTilda over nu for the start field and for inlets without a value (Spal
 recommended = { minimum = 3.0, maximum = 5.0, source = "P. R. Spalart and C. L. Rumsey, \"Effective Inflow Conditions for Turbulence Models in Aerodynamic Calculations\", AIAA Journal 45(10), 2007" }
 
 [keys."turbulence.omega_initial"]
-advanced = "Explicit start values; by default they come from the start intensity and viscosity ratio."  # proposed
+advanced = "Explicit start values; by default they come from the start intensity and viscosity ratio."
 
 [keys."turbulence.plugin"]
-advanced = "For a registered plugin model only."  # proposed
+advanced = "For a registered plugin model only."
 
 [keys."turbulence.realizable_a0"]
-advanced = "A model constant; change it only to reproduce a published set-up."  # proposed
+advanced = "A model constant; change it only to reproduce a published set-up."
 
 [keys."turbulence.relax"]
-advanced = "Numerics of the turbulence equations; the defaults are tested."  # proposed
+advanced = "Numerics of the turbulence equations; the defaults are tested."
 
 [keys."turbulence.relax_nut"]
-advanced = "Numerics of the turbulence equations; the defaults are tested."  # proposed
+advanced = "Numerics of the turbulence equations; the defaults are tested."
 
 [keys."turbulence.roughness_constant"]
-advanced = "Rough walls only; walls are smooth by default."  # proposed
+advanced = "Rough walls only; walls are smooth by default."
 
 [keys."turbulence.roughness_height"]
-advanced = "Rough walls only; walls are smooth by default."  # proposed
+advanced = "Rough walls only; walls are smooth by default."
 
 [keys."turbulence.sst_variant"]
-advanced = "A model variant or wall treatment; the default is the standard form."  # proposed
+advanced = "A model variant or wall treatment; the default is the standard form."
 
 [keys."turbulence.variant"]
 label = "k-epsilon variant"
 help = "Which k-epsilon form to use: standard, rng or realizable."
 
 [keys."turbulence.wall_damping"]
-advanced = "For the algebraic models (smagorinsky, wale, mixing_length) only."  # proposed
+advanced = "For the algebraic models (smagorinsky, wale, mixing_length) only."
 
 [keys."turbulence.wall_function"]
 label = "Wall function"
 help = "How k-epsilon treats the cells next to a wall."
 
 [keys."turbulence.wall_omega"]
-advanced = "A model variant or wall treatment; the default is the standard form."  # proposed
+advanced = "A model variant or wall treatment; the default is the standard form."
 
 [keys."turbulence.wall_treatment"]
-advanced = "A model variant or wall treatment; the default is the standard form."  # proposed
+advanced = "A model variant or wall treatment; the default is the standard form."
 
 [keys."udf"]
 see = "case-schema.md#udf-user-functions-f-122"

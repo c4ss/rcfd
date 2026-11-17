@@ -5,7 +5,7 @@
 //
 // No Electron import: the port is any object with postMessage and message and close callbacks (the unit tests use
 // Node's MessageChannel; port.ts adapts Electron's MessagePortMain).
-import { isUuid, MAX_MESSAGE_CHARS, type ClaudeError, type ClaudePortMessage, type ClaudeReply, type ClaudeRequest, type ClaudeState } from '../../shared/claude.js';
+import { isUuid, MAX_MESSAGE_CHARS, MAX_RULE_CHARS, type ClaudeError, type ClaudePortMessage, type ClaudeReply, type ClaudeRequest, type ClaudeState } from '../../shared/claude.js';
 import { ClaudeRefusal } from './panel.js';
 
 export interface ClaudePortLike {
@@ -24,6 +24,8 @@ export interface BridgePanel {
   cancel(): void;
   confirm(token: string): Promise<void>;
   refresh(): Promise<void>;
+  allowRule(rule: string, base: string | null): Promise<void>;
+  undoAllow(force: boolean): Promise<void>;
 }
 
 const isPlainObject = (v: unknown): v is Record<string, unknown> => {
@@ -72,6 +74,19 @@ export function parseClaudeRequest(raw: unknown): ParsedClaude {
       const token = raw['token'];
       if (typeof token !== 'string' || !/^[0-9a-f]{32}$/.test(token)) return bad('confirm: the token is the one the state shows');
       return { ok: true, request: { op, id, token } };
+    }
+    case 'allow': {
+      if (keys !== 'base,id,op,rule') return bad('allow: takes exactly a rule and a base');
+      const rule = raw['rule'];
+      const base = raw['base'];
+      if (typeof rule !== 'string' || rule.length === 0 || rule.length > MAX_RULE_CHARS) return bad(`allow: the rule is a non-empty string of at most ${MAX_RULE_CHARS} characters`);
+      if (base !== null && (typeof base !== 'string' || !/^[0-9a-f]{64}$/.test(base))) return bad('allow: the base is null (no file) or the hash the state shows');
+      return { ok: true, request: { op, id, rule, base: base as string | null } };
+    }
+    case 'undoAllow': {
+      if (keys !== 'force,id,op') return bad('undoAllow: takes exactly force');
+      if (typeof raw['force'] !== 'boolean') return bad('undoAllow: force is true or false');
+      return { ok: true, request: { op, id, force: raw['force'] } };
     }
     default:
       return bad(`unknown op '${String(op).slice(0, 40)}'`);
@@ -147,6 +162,12 @@ export class ClaudePortBridge {
           break;
         case 'refresh':
           await this.panel.refresh();
+          break;
+        case 'allow':
+          await this.panel.allowRule(r.rule, r.base);
+          break;
+        case 'undoAllow':
+          await this.panel.undoAllow(r.force);
           break;
       }
       this.reply(r.id, { ok: true, result });

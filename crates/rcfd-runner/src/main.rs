@@ -22,6 +22,10 @@ COMMANDS:
     wait <id> [--timeout seconds]
                                wait until the run is finished, failed or cancelled (exit 1 unless finished)
     shutdown                   stop the service cleanly; solvers keep running and the next service adopts them
+    config                     the budgets (.rcfd/runner-config.json), the defaults and what the service uses (JSON)
+    config set <key>=<number>... [--unset <key>]... [--base <hash>] [--replace]
+                               change the budgets with the service's checks, atomically; they apply at its next start
+                               (exit 1 refused, 4 the file changed since --base: nothing written)
 
 OUTPUT OPTIONS of ensure and start (at most one): where the service they start writes its standard output and
 error. Its standard input is always the null device.
@@ -86,7 +90,10 @@ fn run(args: &[String]) -> Result<u8, String> {
         if skip {
             skip = false;
         } else if a.starts_with("--") {
-            skip = !matches!(a.as_str(), "--no-runner" | "--stdout" | "--foreground" | "--quiet");
+            skip = !matches!(
+                a.as_str(),
+                "--no-runner" | "--stdout" | "--foreground" | "--quiet" | "--replace"
+            );
         } else {
             pos.push(a.as_str());
         }
@@ -144,9 +151,66 @@ fn run(args: &[String]) -> Result<u8, String> {
             return Ok(u8::from(st.state != rcfd_runner::records::RunState::Finished));
         }
         "shutdown" => client.shutdown(Duration::from_secs(30))?,
+        "config" => return config(&project, &pos, rest),
         other => return Err(format!("unknown command '{other}' (see rcfd-runner --help)")),
     }
     Ok(0)
+}
+
+/// Exit code of `rcfd-runner config set` when the file changed since `--base` (ADR 0733 Q3 (a)).
+const EXIT_CONFLICT: u8 = 4;
+
+/// `config` and `config set` (ADR 0733 P2).
+fn config(project: &std::path::Path, pos: &[&str], rest: &[String]) -> Result<u8, String> {
+    use rcfd_runner::config::{Base, ConfigError, SetOptions};
+    use rcfd_runner::runner::Config;
+    let pretty = |v: &serde_json::Value| serde_json::to_string_pretty(v).unwrap_or_default();
+    match pos.first().copied() {
+        None => {
+            println!("{}", pretty(&Config::state(project).map_err(|e| e.to_string())?));
+            Ok(0)
+        }
+        Some("set") => {
+            let mut changes = serde_json::Map::new();
+            for a in &pos[1..] {
+                let (k, v) = a
+                    .split_once('=')
+                    .ok_or_else(|| format!("config set: '{a}' is not <key>=<number>"))?;
+                let n: serde_json::Value = serde_json::from_str(v)
+                    .ok()
+                    .filter(serde_json::Value::is_number)
+                    .ok_or_else(|| format!("config set: {k} needs a number, got '{v}'"))?;
+                changes.insert(k.to_string(), n);
+            }
+            for (i, a) in rest.iter().enumerate() {
+                if a == "--unset" {
+                    let k = rest
+                        .get(i + 1)
+                        .filter(|v| !v.starts_with("--"))
+                        .ok_or("--unset needs a key")?;
+                    changes.insert(k.clone(), serde_json::Value::Null);
+                }
+            }
+            let base = opt(rest, "--base").map_or(Base::Any, Base::Hash);
+            let opts = SetOptions {
+                replace: rest.iter().any(|a| a == "--replace"),
+                who: "rcfd-runner config set".into(),
+                extra: serde_json::Map::new(),
+            };
+            match Config::set(project, &changes, base, opts) {
+                Ok(v) => {
+                    println!("{}", pretty(&v));
+                    Ok(0)
+                }
+                Err(e @ ConfigError::Conflict { .. }) => {
+                    eprintln!("rcfd-runner: {e}");
+                    Ok(EXIT_CONFLICT)
+                }
+                Err(e) => Err(e.to_string()),
+            }
+        }
+        Some(other) => Err(format!("config: unknown subcommand '{other}' (config, or config set)")),
+    }
 }
 
 fn main() -> ExitCode {

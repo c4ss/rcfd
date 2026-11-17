@@ -20,12 +20,12 @@ Engine read: rcfd 0.1.0, service protocol rcfd-service/1 version 1.1, MCP server
 | Kind | Capabilities | UI path | Exemption | Exemption whose item does not name it |
 |---|---|---|---|---|
 | Service methods | 69 | 19 | 50 | 40 |
-| MCP tools | 56 | 21 | 35 | 27 |
-| CLI commands | 37 | 10 | 27 | 22 |
-| CLI options | 158 | 8 | 150 | 122 |
+| MCP tools | 59 | 24 | 35 | 27 |
+| CLI commands | 40 | 13 | 27 | 22 |
+| CLI options | 162 | 11 | 151 | 122 |
 | Case schema keys | 951 | 951 | 0 | 0 |
 | Monitor format keys | 6 | 6 | 0 | 0 |
-| **All** | **1277** | **1015** (79.5 %) | **262** | **211** |
+| **All** | **1287** | **1024** (79.6 %) | **263** | **211** |
 
 A case key stands for every value of its enumeration (the solver options of that key, listed in the inventory): the
 schema-driven surface of F-825 offers them all. A CLI option is mapped with its command. "Item does not name it" marks an
@@ -73,7 +73,7 @@ new item (see the last sections).
 | F-827 one action layer for every UI action | 1 | `rcfd call` (not named) |
 | F-828 provenance inspector and reproduce-from-CLI | 3 | `rcfd data list` (not named), `rcfd data provenance` (not named), `rcfd data verify` (not named) |
 
-### CLI options (150 without a UI path)
+### CLI options (151 without a UI path)
 
 | Item | Count | Capabilities |
 |---|---|---|
@@ -88,6 +88,7 @@ new item (see the last sections).
 | F-827 one action layer for every UI action | 1 | `rcfd call` (1) |
 | F-828 provenance inspector and reproduce-from-CLI | 11 | `rcfd` (1), `rcfd data list` (3), `rcfd data provenance` (3), `rcfd data verify` (3), `rcfd run` (1) |
 | F-830 explain in place from the engine's docs | 1 | `rcfd` (1) |
+| F-835 new project | 1 | `rcfd project init` (1) |
 
 ## Capabilities no Studio item names yet
 

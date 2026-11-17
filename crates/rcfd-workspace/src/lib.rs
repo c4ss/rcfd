@@ -4,7 +4,7 @@
 //!
 //! [`Workspace`] is one open project with its run service and change watcher. [`Workspace::call`] runs one command or
 //! query by the name of its MCP project tool (`project_info`, `list_runs`, ..., `edit_case`, `write_note`, `new_case`,
-//! the mesh commands of [`meshes`], `start_run`, `wait_run`) with that tool's arguments and returns the tool's result
+//! the mesh commands of [`meshes`], the run service's budgets of [`runner_config`] (ADR 0733), `start_run`, `wait_run`) with that tool's arguments and returns the tool's result
 //! object ([`Answer`]); errors are
 //! [`RpcError`]s with the codes of ADR 0135 ([`CONFLICT`], [`LOCK_BUSY`], [`NOT_FOUND`] and the service codes). The MCP
 //! descriptors (names, schemas, access classes) stay in `rcfd-mcp`, which wraps these answers as MCP results.
@@ -33,10 +33,12 @@ mod create;
 pub mod design;
 pub mod examples;
 pub mod feed;
+mod init;
 pub mod journal;
 pub mod meshes;
 pub mod plan;
 mod queries;
+pub mod runner_config;
 pub mod runs;
 pub mod save;
 pub mod series;
@@ -50,6 +52,7 @@ use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 
 pub use create::SOURCES;
+pub use init::{create_project, MAX_NAME, SOLVER_VERSION};
 pub use rcfd_api::service::RpcError;
 pub use save::{save_case, SaveError, SaveForm, Saved};
 pub use series::{decimate_minmax, residual_series};
@@ -75,7 +78,7 @@ pub const FILE_PAGE: usize = 32_000;
 pub const MAX_WAIT_S: f64 = 60.0;
 
 /// The names [`Workspace::call`] answers, in the order of the MCP project tools.
-pub const COMMANDS: [&str; 23] = [
+pub const COMMANDS: [&str; 25] = [
     "project_info",
     "list_runs",
     "run_status",
@@ -94,6 +97,8 @@ pub const COMMANDS: [&str; 23] = [
     "preview_mesh",
     "import_mesh",
     "list_meshes",
+    "runner_config",
+    "set_runner_config",
     "start_run",
     "pause_run",
     "resume_run",
@@ -251,6 +256,8 @@ impl Workspace {
             "preview_mesh" => self.preview_mesh(args),
             "import_mesh" => value(self.import_mesh(args)),
             "list_meshes" => value(self.list_meshes(args)),
+            "runner_config" => value(self.runner_config()),
+            "set_runner_config" => value(self.set_runner_config(args)),
             "start_run" => value(self.start_run(args)),
             "pause_run" | "resume_run" | "cancel_run" => value(self.control(name, args)),
             "wait_run" => value(self.wait_run(args)),

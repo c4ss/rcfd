@@ -192,6 +192,19 @@ export const STUDIO_COMMANDS: readonly StudioCommand[] = [
     note: 'The folder dialog is the main process’s; what is shown is what the project server answers Claude Code too.',
   },
   {
+    id: 'project.new',
+    title: 'New project…',
+    description:
+      'Choose or make a folder in the system’s folder dialog; the engine makes it a project (rcfd-project.json and the folders cases, meshes, runs, designs and notes; what the folder holds already stays) and the Studio opens it.',
+    group: 'Project',
+    effect: 'change',
+    params: [],
+    engine: 'rcfd project init <folder> (ADR 0731), then rcfd-mcp --project <folder> --read-only',
+    cli: 'rcfd project init <folder> [--name <name>]',
+    mcp: 'create_project',
+    note: 'The engine writes the project file, never the Studio (G4, G12); the project is named after its folder. Claude Code makes one with create_project {path, name} on a server without --project.',
+  },
+  {
     id: 'project.open_recent',
     title: 'Open a recent project',
     description: 'Open one of the folders opened before, from the recent list (paths and times only).',
@@ -295,14 +308,14 @@ export const STUDIO_COMMANDS: readonly StudioCommand[] = [
   {
     id: 'runs.budgets',
     title: 'Runner budgets',
-    description: 'Show or hide the runner’s budgets (.rcfd/runner-config.json: runs at once, threads, memory, polling) to read and set them; the runner reads them when it starts.',
+    description: 'Show or hide the runner’s budgets (.rcfd/runner-config.json: runs at once, threads, memory, polling) to read and set them; a change applies at the next runner start.',
     group: 'Project runs',
     effect: 'change',
     params: [],
-    engine: 'the main process reads and writes .rcfd/runner-config.json (rcfd-runner’s Config, ADR 0123 section 6) and reads .rcfd/runner.json',
-    cli: null,
-    mcp: null,
-    note: 'No engine command sets the budgets (proposed: an rcfd-runner or MCP command); the file is the runner’s own, edited by hand or by Claude Code’s file tools. Every key is optional; the runner refuses unknown keys.',
+    engine: 'runner_config (rcfd-mcp --project <folder> --read-only) reads the budgets; set_runner_config (the run-control server, rcfd-mcp --project <folder>) has the runner write them with its own checks (ADR 0733)',
+    cli: 'rcfd-runner config set <key>=<number>... [--unset <key>]... [--base <hash>] --project <folder>',
+    mcp: 'set_runner_config',
+    note: 'The runner owns the file and writes it atomically, never over a change made since it was read (error 1200, exit 4). Every key is optional; the runner refuses unknown keys. Undo sends the keys back with their values before.',
   },
   {
     id: 'field.save_png',
@@ -401,6 +414,19 @@ export const STUDIO_COMMANDS: readonly StudioCommand[] = [
     cli: 'claude agents --json',
     mcp: null,
     note: CLAUDE_NOTE,
+  },
+  {
+    id: 'claude.undo_allow',
+    title: 'Undo the last allowed rule',
+    description:
+      'Take the rule last added by “Allow this from now on” out of the project’s .rcfd/claude-allow.json again; a file another writer changed since is not overwritten.',
+    group: 'Claude Code',
+    effect: 'change',
+    params: [],
+    engine: 'the main process rewrites .rcfd/claude-allow.json (write, then rename), if it is still as the Studio left it',
+    cli: null,
+    mcp: null,
+    note: 'The allow-list file is the project’s own, edited by hand or by this command; the engine has no entry point for Claude Code’s allow-list (F-814).',
   },
 
   // ---- the theme (F-818)

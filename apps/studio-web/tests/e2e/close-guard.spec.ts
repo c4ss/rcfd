@@ -126,6 +126,40 @@ test('Close the session with a change not saved: the panel names it, holds Tab, 
   expect(await sessions()).not.toContain(s);
 });
 
+test('the case settings’ own Close session (F-837): unsaved case edits ask with the shared prompt, not the older loss question', async () => {
+  const s = await edit(page, RE100);
+  await setNu(page, '0.03');
+  await page.evaluate((id) => (location.hash = `#/settings/${encodeURIComponent(id)}`), s);
+  const close = page.getByRole('button', { name: 'Close session' });
+  await expect(close).toBeVisible({ timeout: 30_000 });
+  await close.focus();
+  await page.keyboard.press('Enter');
+  const ask = page.getByRole('alertdialog', { name: `Close ${RE100} with 1 change not saved?` });
+  await expect(ask).toBeVisible();
+  await expect(ask.getByRole('button')).toHaveText(['Save and close', 'Close and lose them', 'Keep editing']);
+  await expect(page.getByRole('alertdialog', { name: /^Close session / })).toHaveCount(0);
+  // Keep editing is the default (focused, and Escape): the session stays
+  expect(await page.evaluate(() => document.activeElement?.textContent)).toBe('Keep editing');
+  await page.mouse.move(1439, 899);
+  await shot('22-settings-close-session-asks');
+  await page.keyboard.press('Escape');
+  await expect(panel()).toHaveCount(0);
+  await expect(close).toBeFocused();
+  expect(await sessions()).toContain(s);
+  // Close and lose them: the session closes, the file is untouched, and no second question follows
+  await page.keyboard.press('Enter');
+  await expect(ask).toBeVisible();
+  await page.keyboard.press('Shift+Tab');
+  await expect(ask.getByRole('button', { name: 'Close and lose them' })).toBeFocused();
+  await page.keyboard.press('Enter');
+  await expect(panel()).toHaveCount(0);
+  await expect.poll(() => page.evaluate(() => location.hash), { timeout: 20_000 }).toBe('#/settings');
+  await expect.poll(sessions, { timeout: 20_000 }).not.toContain(s);
+  expect(file(RE100)).not.toMatch(/nu = 0\.03/);
+  await page.evaluate(() => (location.hash = ''));
+  await expect(page.locator(`tr[data-path="${RE100}"]`)).toBeVisible({ timeout: 30_000 });
+});
+
 test('Close project with a change not saved: Keep editing keeps the project; Close and lose them closes the session and the project', async () => {
   const s = await edit(page, RE400);
   await setNu(page, '0.005');

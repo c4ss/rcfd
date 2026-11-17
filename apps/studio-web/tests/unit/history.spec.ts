@@ -333,8 +333,11 @@ test.describe('deletes of runs, results and cases', () => {
     // the only removals and renames: the Studio's own record of a service it started (user data), the recent list's
     // write-then-rename (user data), and the Claude Code panel's write-then-rename of its MCP config and its record of
     // confirmed control files (F-814, user data; trust.ts refuses a store inside the project), and the theme
-    // setting's write-then-rename (F-818, user data); none is in a project folder
+    // setting's write-then-rename (F-818, user data); none of those is in a project folder. The one rename in a project
+    // folder: the Claude Code allow-list file's write-then-rename (F-814, "Allow this from now on", the maintainer's
+    // word of 2026-11-17), only over a file unchanged since it was read
     expect(uses.sort()).toEqual([
+      'src/main/claude/allow.ts: rename',
       'src/main/claude/panel.ts: rename',
       'src/main/claude/trust.ts: rename',
       'src/main/project/recent.ts: rename',

@@ -111,6 +111,8 @@ export default function CaseEditorPage() {
         <div className="st-brand">
           rcfd <span>Studio</span>
         </div>
+        {/* F-816: the page's heading, for readers only (axe page-has-heading-one); the tab beside it shows the title */}
+        <h1 className="sr-only">{title === 'Case editor' ? title : `Case editor: ${title}`}</h1>
         <div className="ce-tab" title={title} data-words={editing ? 'data' : undefined}>
           {title}
         </div>

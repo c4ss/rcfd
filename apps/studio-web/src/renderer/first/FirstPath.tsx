@@ -9,9 +9,9 @@
 //
 // Three parts, all shown by the project home:
 // - FirstPathIntro: with no project open, the four stations of the path.
-// - NotAProjectYet: a folder the engine refused as no project: what is missing (the project file, which the Studio cannot
-//   make: the engine has no command for it) and the next step; the home opens the folder by itself once the file is there
-//   (src/main/project/home.ts).
+// - NotAProjectYet: a folder the engine refused as no project: what is missing (the project file) and the next step,
+//   Make a project here (F-835: the engine's `rcfd project init`, ADR 0731; the Studio writes nothing itself); the home
+//   also opens the folder by itself once the file is there, made by anyone (src/main/project/home.ts).
 // - FirstPath: an open project with nothing but the path's case and runs: make the example (the engine's new_case
 //   through the case port, F-812), run it (start_run with the engine's start plan through run control, F-807), watch it,
 //   and the result: the engine's numbers, the stored field drawn by the field viewport (F-808), the limits and the
@@ -28,7 +28,7 @@ import { commandLine } from '../../shared/actions/runs.js';
 import { Button, IconButton, SegmentedToggle, StatePictogram, Unavailable } from '../ui/index.js';
 import { caseDoor } from '../case/door.js';
 import { caseHash } from '../case/hash.js';
-import { runAction } from '../project/door.js';
+import { projectActions, runAction } from '../project/door.js';
 import { openStore } from '../data/door.js';
 import { FieldViewport } from '../field/FieldViewport.js';
 import { plain, type RunRow } from '../runs/model.js';
@@ -175,8 +175,8 @@ export function FirstPathIntro() {
           square box of fluid whose lid slides sideways and stirs the fluid round.
         </p>
         <p>
-          First, a project folder: the place where your examples, runs and results are kept. Choose one with Open project folder… above. A folder
-          rcfd made before opens at once; an empty folder needs rcfd’s project file first, and the Studio says how once you choose it.
+          First, a project folder: the place where your examples, runs and results are kept. New project… above makes one in a folder you choose
+          or make; Open project folder… opens one rcfd made before.
         </p>
         <p>
           In a copy of the rcfd repository, <span className="ph-file">example-projects/quick-start</span> is a finished project with runs to look at
@@ -189,7 +189,9 @@ export function FirstPathIntro() {
 
 // ---- a folder that is not a project
 
-const MAKE_PROJECT_GAP = 'The engine has no command that makes a new project yet, and the Studio changes a project folder only through the engine.';
+/** F-835: what Make a project here does (its description for readers and in Explain). */
+const MAKE_PROJECT =
+  'The engine makes the project file and the folders cases, meshes, runs, designs and notes here (rcfd project init); what the folder holds already stays. Then it opens.';
 
 /** A folder the engine refused as no project (an exception, so in words): what is missing and the next step. */
 export function NotAProjectYet({ failure }: { failure: OpenFailure }) {
@@ -203,25 +205,27 @@ export function NotAProjectYet({ failure }: { failure: OpenFailure }) {
       <p className="fp-missing">
         {holds}no <span className="ph-file">rcfd-project.json</span>.
       </p>
-      <p className="fp-next">
-        {st?.watching
-          ? 'Next: make it with Claude Code or the older rcfd-studio; the folder then opens by itself.'
-          : 'Next: make it with Claude Code or the older rcfd-studio, then open the folder again.'}
-      </p>
+      <p className="fp-next">Next: make it a project here.</p>
       <div className="fp-actions">
-        <Unavailable label="Make a project here" reason={`Not available: ${MAKE_PROJECT_GAP}`} />
+        <Button variant="primary" onPress={projectActions.createHere} aria-describedby="fp-make-what">
+          Make a project here
+        </Button>
+        <span className="sr-only" id="fp-make-what">
+          {MAKE_PROJECT}
+        </span>
         <Explain name="what a project needs">
           <p>
-            Every rcfd project starts with a small project file, <span className="ph-file">rcfd-project.json</span>, at the top of its folder. The
-            Studio cannot make it here: {MAKE_PROJECT_GAP}
+            Every rcfd project starts with a small project file, <span className="ph-file">rcfd-project.json</span>, at the top of its folder. Make a
+            project here: {MAKE_PROJECT}
           </p>
           <ul>
-            <li>Ask Claude Code, in a terminal opened in this folder, to make it an rcfd project.</li>
-            <li>Or use Project &gt; New project in the older rcfd-studio app.</li>
+            <li>
+              The same from a terminal: <span className="ph-file">rcfd project init {failure.folder}</span>; Claude Code makes it with create_project.
+            </li>
             <li>
               {st?.watching
-                ? 'Keep this window open: the Studio checks the folder every second and opens it as soon as the project file is there.'
-                : 'Then open the folder again with Open project folder….'}
+                ? 'Made elsewhere, the project opens by itself: the Studio checks the folder every second and opens it as soon as the project file is there.'
+                : 'Made elsewhere, open the folder again with Open project folder….'}
             </li>
             <li>Or choose another folder, one that already holds a project.</li>
           </ul>

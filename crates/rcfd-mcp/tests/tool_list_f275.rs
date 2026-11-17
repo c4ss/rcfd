@@ -45,8 +45,9 @@ fn hidden() -> Vec<(&'static str, Value)> {
 /// `design_run_operating_map` since ADR 0200 S9 (registered edit E1).
 const EXECUTE: [&str; 3] = ["design_run_study", "design_evaluate", "design_run_operating_map"];
 
-/// ADR 0195 P1: the 23 project tools in the order of the F-273 list.
-const PROJECT_TOOLS: [&str; 23] = [
+/// ADR 0195 P1: the 23 project tools in the order of the F-273 list, and ADR 0733 P3's two budgets tools right after
+/// `list_meshes` (C5-L restated for F-837).
+const PROJECT_TOOLS: [&str; 25] = [
     "project_info",
     "list_runs",
     "run_status",
@@ -65,6 +66,8 @@ const PROJECT_TOOLS: [&str; 23] = [
     "preview_mesh",
     "import_mesh",
     "list_meshes",
+    "runner_config",
+    "set_runner_config",
     "start_run",
     "pause_run",
     "resume_run",
@@ -91,7 +94,7 @@ fn files(dir: &Path) -> Vec<(String, Vec<u8>)> {
     out
 }
 
-/// C5-L: under `--project`, 40 tools: the list without `--project` less the 16 of P1, in its order and byte for byte (but the
+/// C5-L: under `--project`, 42 tools (40 and ADR 0733's two): the list without `--project` less the 16 of P1, in its order and byte for byte (but the
 /// class `execute` of `design_run_study` and `design_evaluate`, ADR 0196 B), then the 23 project tools.
 #[test]
 fn c5l_project_list_has_no_session_only_tool() {
@@ -109,7 +112,11 @@ fn c5l_project_list_has_no_session_only_tool() {
         .filter(|t| !hidden.contains(&t["name"].as_str().unwrap()))
         .collect();
     assert_eq!(kept.len(), 17);
-    assert_eq!(live.len(), 40, "17 session tools and 23 project tools");
+    assert_eq!(
+        live.len(),
+        42,
+        "17 session tools and 25 project tools (ADR 0733: two budgets tools)"
+    );
     let mut execute = 0;
     for (l, k) in live.iter().zip(&kept) {
         let mut l = l.clone();
@@ -274,12 +281,19 @@ fn c5a_allow_list_has_the_read_tools_and_old_files_stay() {
         "read_project_file",
         "wait_run",
     ];
-    // a new project's first list: main's 11 in their order, then the four (the set is checked against the live list by
+    // a new project's first list: main's 11 in their order, then the five (ADR 0733: runner_config, the maintainer,
+    // 2026-11-17) (the set is checked against the live list by
     // project_w48f.rs F2)
     let first = AllowList::project_initial();
     let want: Vec<AllowRule> = MAIN
         .iter()
-        .chain(&["read_feed", "check_case_mesh", "preview_mesh", "list_meshes"])
+        .chain(&[
+            "read_feed",
+            "check_case_mesh",
+            "preview_mesh",
+            "list_meshes",
+            "runner_config",
+        ])
         .map(|t| AllowRule::Tool(format!("mcp__{PINNED_SERVER}__{t}")))
         .collect();
     assert_eq!(first.rules(), &want[..]);

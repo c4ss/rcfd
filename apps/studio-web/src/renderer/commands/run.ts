@@ -77,6 +77,7 @@ function studioReason(id: string, env: PaletteEnv): string | null {
     case 'claude.refresh':
       return view(env) ? null : NO_PROJECT;
     case 'project.open_folder':
+    case 'project.new':
       if (p && !p.engine.configured) return p.engine.reason;
       if (p?.opening) return `${p.opening} is being opened; wait for it.`;
       return null;
@@ -99,6 +100,11 @@ function studioReason(id: string, env: PaletteEnv): string | null {
     case 'claude.stop':
       if (!view(env)) return NO_PROJECT;
       return turnRunning(env) ? null : 'No Claude Code reply is being written: there is nothing to stop.';
+    case 'claude.undo_allow':
+      if (!view(env)) return NO_PROJECT;
+      return env.claude?.project?.allow.undo
+        ? null
+        : 'This Studio has added no rule to this project’s allow-list: there is nothing to undo (Allow this from now on, on a denied call).';
     case 'provenance.show':
     case 'provenance.copy_command': {
       // F-828: run by the provenance module's handlers (src/renderer/provenance/registry.ts); a number of a service
@@ -359,11 +365,11 @@ async function executeInner(e: PaletteEntry, values: Values, env: PaletteEnv): P
       return close(() => h.run(values));
     }
     case 'studio':
-      return studio(e, values);
+      return studio(e, values, env);
   }
 }
 
-async function studio(e: PaletteEntry, values: Values): Promise<Outcome> {
+async function studio(e: PaletteEntry, values: Values, env: PaletteEnv): Promise<Outcome> {
   const failed = (lines: string[]): Outcome => ({ kind: 'done', ok: false, title: `Failed: ${e.title}`, lines, reply: null, equivalents: [], run: null });
   const done = (lines: string[]): Outcome => ({ kind: 'done', ok: true, title: `${e.title}: done`, lines, reply: null, equivalents: [], run: null });
   switch (e.id) {
@@ -382,6 +388,8 @@ async function studio(e: PaletteEntry, values: Values): Promise<Outcome> {
       return close(() => void (location.hash = caseHash.index));
     case 'project.open_folder':
       return close(() => projectActions.pick());
+    case 'project.new':
+      return close(() => projectActions.create());
     case 'project.open_recent':
       return close(() => projectActions.open(String(values['path'])));
     case 'project.forget_recent':
@@ -407,6 +415,11 @@ async function studio(e: PaletteEntry, values: Values): Promise<Outcome> {
     case 'claude.refresh': {
       const r = await claudeActions.refresh();
       return r.ok ? done(['The sessions were listed again; the panel shows them.']) : failed([r.error.message]);
+    }
+    case 'claude.undo_allow': {
+      const rule = env.claude?.project?.allow.undo ?? 'the rule';
+      const r = await claudeActions.undoAllow(false);
+      return r.ok ? done([`${rule} is out of the allow-list again.`]) : failed([r.error.message]);
     }
     case 'provenance.show': {
       // F-828: the palette closes first, so the focus is back on the number it was opened from

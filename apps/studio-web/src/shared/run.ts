@@ -98,7 +98,7 @@ export type RunRequest =
   | { readonly op: 'log'; readonly id: number; readonly run: string }
   | { readonly op: 'openReport'; readonly id: number; readonly run: string }
   | { readonly op: 'budgets'; readonly id: number }
-  | { readonly op: 'setBudgets'; readonly id: number; readonly values: Readonly<Partial<Record<BudgetKey, number | null>>>; readonly base: string | null }
+  | { readonly op: 'setBudgets'; readonly id: number; readonly values: Readonly<Partial<Record<BudgetKey, number | null>>>; readonly base: string | null; readonly replace: boolean }
   | { readonly op: 'undoBudgets'; readonly id: number; readonly force: boolean }
   | { readonly op: 'savePng'; readonly id: number; readonly rect: PageRect; readonly name: string };
 
@@ -149,12 +149,14 @@ export interface RunLog {
 
 /**
  * The runner's budgets, `.rcfd/runner-config.json` (rcfd-runner's `Config`, ADR 0123 section 6): every key optional,
- * no other key allowed (the runner refuses the file then). The runner reads the file when it starts.
+ * no other key allowed (the runner refuses the file then). The runner reads the file when it starts. The runner itself
+ * reads and writes it, with its own checks (ADR 0733: the project tools `runner_config` and `set_runner_config`).
  */
 export const BUDGET_KEYS = ['max_runs', 'cpu_threads', 'mem_budget_mb', 'mem_base_mb', 'mem_kb_per_cell', 'poll_ms', 'adopt_probe_ms', 'cancel_grace_ms'] as const;
 export type BudgetKey = (typeof BUDGET_KEYS)[number];
 
-/** A budget's kind as the runner reads it: a positive whole number, a whole number, or a number not below zero. */
+/** A budget's kind as the runner reads it (for the field's hint and step; the runner makes the check): a positive whole
+ * number, a whole number, or a number not below zero. */
 export const BUDGET_KIND: Readonly<Record<BudgetKey, 'positive' | 'count' | 'real'>> = {
   max_runs: 'positive',
   cpu_threads: 'positive',
@@ -166,7 +168,7 @@ export const BUDGET_KIND: Readonly<Record<BudgetKey, 'positive' | 'count' | 'rea
   cancel_grace_ms: 'count',
 };
 
-/** What `budgets` answers. */
+/** What `budgets` answers: the engine's `runner_config`. */
 export interface RunnerBudgets {
   /** `.rcfd/runner-config.json`, project-relative. */
   readonly path: string;
@@ -174,16 +176,18 @@ export interface RunnerBudgets {
   readonly exists: boolean;
   /** The file's values (keys the file sets); empty when it is absent or unreadable. */
   readonly values: Readonly<Partial<Record<BudgetKey, number>>>;
-  /** sha256 of the file's bytes as read (null: no file): the base of the next write, which refuses a file changed since. */
+  /** The engine's hash of the file (`fnv64:`, null: no file): the base of the next write, which refuses a file changed since. */
   readonly hash: string | null;
   /** Why the runner would refuse the file (it is not JSON, an unknown key, a value of the wrong kind), or null. */
   readonly problem: string | null;
+  /** The runner cannot read the file as it is (not a JSON object, an unknown key): a write replaces it whole. */
+  readonly needsReplace: boolean;
   /**
    * The budgets the runner used when it last started (`.rcfd/runner.json`, `config`), and where it took them from
    * (`config_source`); null when no runner has started in this project.
    */
   readonly inUse: { readonly values: Readonly<Partial<Record<BudgetKey, number>>>; readonly source: string; readonly started: string } | null;
-  /** True when this window wrote the file last and that write can be undone. */
+  /** True when this window wrote the file last and that write can be undone (its keys set back to their values before). */
   readonly undo: boolean;
 }
 
@@ -191,7 +195,7 @@ export type BudgetsOutcome =
   | { readonly kind: 'written'; readonly budgets: RunnerBudgets }
   /** Another writer changed the file since it was read: nothing written; `budgets` is the file now. */
   | { readonly kind: 'conflict'; readonly budgets: RunnerBudgets }
-  /** A value the runner would refuse, or nothing to undo: nothing written. */
+  /** A value the runner refuses (its message), or nothing to undo: nothing written. */
   | { readonly kind: 'refused'; readonly message: string };
 
 /** A rectangle of the page in CSS pixels (the field view's frame and its legend, for Save PNG). */
@@ -230,9 +234,12 @@ export interface RunBridge {
   openReport(run: string): Promise<RunReply<{ readonly path: string }>>;
   /** F-837: the project's runner budgets (.rcfd/runner-config.json) and the ones the runner last started with. */
   budgets(): Promise<RunReply<RunnerBudgets>>;
-  /** F-837: writes the budgets (null removes a key: the runner's default), only if the file still has `base`. */
-  setBudgets(values: Readonly<Partial<Record<BudgetKey, number | null>>>, base: string | null): Promise<RunReply<BudgetsOutcome>>;
-  /** F-837: puts back the file as it was before this window's last write (`force`: even when another writer changed it since). */
+  /**
+   * F-837: the runner writes the budgets (null removes a key: the runner's default), only if the file still has `base`;
+   * `replace`: exactly these keys (every one) over a file the runner cannot read.
+   */
+  setBudgets(values: Readonly<Partial<Record<BudgetKey, number | null>>>, base: string | null, replace: boolean): Promise<RunReply<BudgetsOutcome>>;
+  /** F-837: sets the keys of this window's last write back to their values before it (`force`: even when another writer changed the file since). */
   undoBudgets(force: boolean): Promise<RunReply<BudgetsOutcome>>;
   /** F-837: saves a picture of a rectangle of the page (the field view) as a PNG file the user names in a dialog. */
   savePng(rect: PageRect, name: string): Promise<RunReply<SavedPng>>;

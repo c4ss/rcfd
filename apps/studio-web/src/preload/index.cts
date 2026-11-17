@@ -257,7 +257,7 @@ contextBridge.exposeInMainWorld('studioService', service);
 // ---- the project port (F-805): the same pattern as the service port, its own ids and listeners
 
 const PROJECT_PORT_CHANNEL: typeof ProjectChannel = 'studio.project-port';
-/** The folder dialog waits for the user, so `pick` has no time limit of its own; the others are answered at once. */
+/** The folder dialog waits for the user, so `pick` and `create` (F-835) have no time limit of their own; the others are answered at once. */
 const PROJECT_TIMEOUT_MS = 120_000;
 
 let projectPort: Port | null = null;
@@ -286,7 +286,7 @@ const projectPost = (req: ProjectRequest): void => {
 const projectSend = <T,>(req: ProjectRequest): Promise<ProjectReply<T>> =>
   new Promise((resolve) => {
     const timer =
-      req.op === 'pick'
+      req.op === 'pick' || req.op === 'create'
         ? null
         : setTimeout(() => {
             projectSettle(req.id, {
@@ -353,6 +353,11 @@ const project: ProjectBridge = {
   close: () => projectSend({ op: 'close', id: nextProjectId++ }),
   refresh: () => projectSend({ op: 'refresh', id: nextProjectId++ }),
   dismiss: () => projectSend({ op: 'dismiss', id: nextProjectId++ }),
+  // F-835: the engine makes the project (rcfd project init), then it opens; main checks `where` again
+  create: (where, options) => {
+    offerCancel(options, () => void projectSend({ op: 'cancel', id: nextProjectId++ }));
+    return projectSend({ op: 'create', id: nextProjectId++, where });
+  },
 };
 
 contextBridge.exposeInMainWorld('studioProject', project);
@@ -665,6 +670,8 @@ const claude: ClaudeBridge = {
   cancel: () => claudeSend({ op: 'cancel', id: nextClaudeId++ }),
   confirm: (token) => claudeSend({ op: 'confirm', id: nextClaudeId++, token }),
   refresh: () => claudeSend({ op: 'refresh', id: nextClaudeId++ }),
+  allow: (rule, base) => claudeSend({ op: 'allow', id: nextClaudeId++, rule, base }),
+  undoAllow: (force) => claudeSend({ op: 'undoAllow', id: nextClaudeId++, force }),
 };
 
 contextBridge.exposeInMainWorld('studioClaude', claude);
@@ -733,7 +740,7 @@ const runHistories: RunBridge = {
   log: (run) => runSend({ op: 'log', id: nextRunId++, run }),
   openReport: (run) => runSend({ op: 'openReport', id: nextRunId++, run }),
   budgets: () => runSend({ op: 'budgets', id: nextRunId++ }),
-  setBudgets: (values, base) => runSend({ op: 'setBudgets', id: nextRunId++, values, base }),
+  setBudgets: (values, base, replace) => runSend({ op: 'setBudgets', id: nextRunId++, values, base, replace }),
   undoBudgets: (force) => runSend({ op: 'undoBudgets', id: nextRunId++, force }),
   // the save dialog waits for the user: an hour
   savePng: (rect, name) => runSend({ op: 'savePng', id: nextRunId++, rect, name }, 3_600_000),

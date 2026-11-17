@@ -39,6 +39,12 @@ export interface RunWorkspaceProps {
   readonly compareRequest?: { readonly run: string; readonly n: number } | null;
 }
 
+/** F-816: the workspace's readers-only heading: the run shown, and in compare mode the run it is compared with. */
+export function workspaceHeading(run: string | null, other: string | null): string {
+  if (run === null) return 'Run workspace';
+  return other === null ? `Run workspace: ${run}` : `Compare: ${run} with ${other}`;
+}
+
 const ACTIVE = new Set(['queued', 'running', 'paused']);
 
 /** How soon a running run's store is opened again after the last open answered (Follow live sees new snapshots). */
@@ -308,6 +314,7 @@ export default function RunWorkspace({ view, selected, onSelect, compareRequest 
   if (rows.length === 0) {
     return (
       <div className="ws ws--empty">
+        <h1 className="sr-only">Run workspace</h1>
         <EmptyMark
           className="ws-empty"
           text="No runs yet. The run workspace shows a run’s field, residuals and monitors together once the project holds a run: start one from Claude Code (start_run) or the CLI (rcfd-runner start)."
@@ -318,6 +325,8 @@ export default function RunWorkspace({ view, selected, onSelect, compareRequest 
 
   return (
     <div className="ws" data-run={row?.id} data-index={index} data-step={position?.step} data-snapshot={position?.snapshot ?? undefined}>
+      {/* F-816: the page's heading, for readers only (axe page-has-heading-one); nothing is shown (G22) */}
+      <h1 className="sr-only">{workspaceHeading(row?.id ?? null, otherRow?.id ?? null)}</h1>
       <div className="ws-top">
         <section className="ws-runs" aria-labelledby="ws-runs-title">
           <h2 id="ws-runs-title" className="ws-head sr-only">

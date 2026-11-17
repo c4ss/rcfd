@@ -22,7 +22,7 @@ import {
 } from '../../shared/actions/runs.js';
 import { getFirstRunAction } from '../../shared/actions/first.js';
 import type { JsonObject } from '../../shared/actions/params.js';
-import { RUN_SLOW_MS, type ProjectView, type RunActionFailure, type RunActionResult, type RunRequest } from '../../shared/project.js';
+import { BUDGETS_WRITE_TOOL, RUN_SLOW_MS, type ProjectView, type RunActionFailure, type RunActionResult, type RunRequest } from '../../shared/project.js';
 import { RpcError } from '../service/rpc.js';
 import { StartFailure, type ProjectServerLike } from './server.js';
 
@@ -206,6 +206,15 @@ export class RunControl {
     }
     this.server = s;
     return s;
+  }
+
+  /**
+   * F-837 (ADR 0733): the runner writes its budgets, `set_runner_config` on the run-control server. The engine's error
+   * (1200 a conflict, 1003 the runner's refusal) is the rejection.
+   */
+  async setRunnerConfig(args: Record<string, unknown>): Promise<unknown> {
+    const server = await this.controlServer();
+    return server.call(BUDGETS_WRITE_TOOL, args);
   }
 
   /** Whether the run-control server is running (for tests and diagnostics). */

@@ -2615,24 +2615,34 @@ local to this list.
 
 | Id | Item | What the engine needs to give | Today in the Studio |
 | --- | --- | --- | --- |
-| E-809a | F-809 | An iso-surface of a stored cell field (triangles with their cells), as a `data.*` method or an MCP tool | shown unavailable |
-| E-809b | F-809 | Streamlines of a stored velocity field (seeds, polylines with the cell of each point) | shown unavailable |
-| E-809c | F-809 | A cut or slice of a stored 3D field with values; `render_field` with `axis`, `slice` and `vectors` for a store | the cut and arrows are drawn by the Studio within tolerances T1 to T3 |
-| E-809d | F-809, G16 | A CLI or MCP way to draw the Studio's cut and arrows of a store, so Claude Code can make the same picture | none |
-| E-809e | F-809, F-837 | The length unit of the stored mesh coordinates | the cut position has no unit; the domain size and the scale bar say m from the SI settings, and say why |
-| E-813 | F-813 | A command that creates a project (`rcfd project init`, MCP `create_project` over `Project::create`; ADR 0731, proposed) | the empty folder says it is missing; the walk's test writes `rcfd-project.json` |
-| E-814 | F-814 | An engine entry point that lists a project's Claude Code sessions (rcfd-claude) | a TypeScript stopgap in the main process |
-| E-828a | F-828 | run.json records the solver's launch argv and a build id (`solver_version` is a release name) | the reproduce command is built from the runner's start options |
-| E-828b | F-828 | A unit for `status.json`'s `time`, and for a snapshot's time in store.rts | "Time, s" is the Studio's caption; the provenance says not recorded |
-| E-828c | F-828 | A service session's record: the file `session.create` read, and a journal file that `rcfd run --journal` can run | the provenance says not recorded, with no command |
-| E-828d | F-828 | `rcfd-runner start` options for `continue_from` and `max_steps`, or `rcfd-runner rerun <id>` / `start_run {from_run}` | said as a gap beside the command |
-| E-828e | F-828 | A read-only hash of a mesh file a run names | said as a gap beside the command |
-| E-829a | F-829 | Delete or trash for runs, results and cases (`trash_run`, `trash_case`, `list_trash`, `restore_trash`) | the Studio offers no delete |
-| E-829b | F-829 | Compare-and-set for `settings.set` (a base value or hash) | the Studio reads the value again before it sends |
-| E-837a | F-837 | A case-facts query (cell sizes, a velocity scale) or `start_run {dry_run: true}`, for "simulate N s", adaptive correctors and the Courant fix | not built |
-| E-837b | F-837 | A mesh refine entry point (`refine_mesh {mesh, factor}` or a service method), for Refine by 2 | not built |
-| E-837c | F-837 | A service save of a case session to a path outside a project, for one case file anywhere | not built |
-| E-837d | F-837 | `rcfd-runner config set` or MCP `set_runner_config` (ADR 0733, proposed) | the Studio writes `.rcfd/runner-config.json` conflict-safe, and the runner checks it |
+| E-809a | F-809 | An iso-surface of a stored cell field (triangles with their cells), as a `data.*` method or an MCP tool (ADR 0738 proposed; awaiting the maintainer) | shown unavailable |
+| E-809b | F-809 | Streamlines of a stored velocity field (seeds, polylines with the cell of each point) (ADR 0738 proposed; awaiting the maintainer) | shown unavailable |
+| E-809c | F-809 | A cut or slice of a stored 3D field with values; `render_field` with `axis`, `slice` and `vectors` for a store (ADR 0738 proposed; awaiting the maintainer) | the cut and arrows are drawn by the Studio within tolerances T1 to T3 |
+| E-809d | F-809, G16 | A CLI or MCP way to draw the Studio's cut and arrows of a store, so Claude Code can make the same picture (ADR 0738 proposed; awaiting the maintainer) | none |
+| E-809e | F-809, F-837 | The length unit of the stored mesh coordinates (ADR 0738 proposed; awaiting the maintainer) | the cut position has no unit; the domain size and the scale bar say m from the SI settings, and say why |
+| E-813 | F-813 | A command that creates a project (`rcfd project init`, MCP `create_project` over `Project::create`; ADR 0731, accepted and built 2026-11-17) | done: New project… and Make a project here run `rcfd project init`; the walk's test makes its projects through them |
+| E-814 | F-814 | An engine entry point that lists a project's Claude Code sessions (rcfd-claude) (ADR 0735 proposed; awaiting the maintainer) | a TypeScript stopgap in the main process |
+| E-828a | F-828 | run.json records the solver's launch argv and a build id (`solver_version` is a release name) (ADR 0734 proposed; awaiting the maintainer) | the reproduce command is built from the runner's start options |
+| E-828b | F-828 | A unit for `status.json`'s `time`, and for a snapshot's time in store.rts (ADR 0734 proposed; awaiting the maintainer) | "Time, s" is the Studio's caption; the provenance says not recorded |
+| E-828c | F-828 | A service session's record: the file `session.create` read, and a journal file that `rcfd run --journal` can run (ADR 0735 proposed; awaiting the maintainer) | the provenance says not recorded, with no command |
+| E-828d | F-828 | `rcfd-runner start` options for `continue_from` and `max_steps`, or `rcfd-runner rerun <id>` / `start_run {from_run}` (ADR 0734 proposed; awaiting the maintainer) | said as a gap beside the command |
+| E-828e | F-828 | A read-only hash of a mesh file a run names (ADR 0734 proposed; awaiting the maintainer) | said as a gap beside the command |
+| E-829a | F-829 | Delete or trash for runs, results and cases (`trash_run`, `trash_case`, `list_trash`, `restore_trash`) (ADR 0736 proposed; awaiting the maintainer) | the Studio offers no delete |
+| E-829b | F-829 | Compare-and-set for `settings.set` (a base value or hash) (ADR 0736 proposed; awaiting the maintainer) | the Studio reads the value again before it sends |
+| E-837a | F-837 | A case-facts query (cell sizes, a velocity scale) or `start_run {dry_run: true}`, for "simulate N s", adaptive correctors and the Courant fix (ADR 0737 proposed; awaiting the maintainer) | not built |
+| E-837b | F-837 | A mesh refine entry point (`refine_mesh {mesh, factor}` or a service method), for Refine by 2 (ADR 0737 proposed; awaiting the maintainer) | not built |
+| E-837c | F-837 | A service save of a case session to a path outside a project, for one case file anywhere (ADR 0737 proposed; awaiting the maintainer) | not built |
+| E-837d | F-837 | `rcfd-runner config set` or MCP `set_runner_config` (ADR 0733, accepted 2026-11-17) | built 2026-11-17: the panel reads with `runner_config` and writes with `set_runner_config` (the runner's checks, atomic, conflict 1200); the Studio no longer writes `.rcfd/runner-config.json` |
+
+(2026-11-17) Engine ADRs proposed for these rows, status Proposed, nothing built:
+[ADR 0734](0734-f828-proposal-run-records-launch-argv-build-id-time-unit-rerun-and-mesh-hash.md) (E-828a, E-828b,
+E-828d, E-828e), [ADR 0735](0735-f828-f814-proposal-session-journals-on-disk-and-claude-code-session-discovery.md)
+(E-828c, E-814), [ADR 0736](0736-f829-proposal-a-project-trash-with-restore-and-compare-and-set-for-settings-set.md)
+(E-829a, E-829b),
+[ADR 0737](0737-f837-proposal-case-facts-and-a-dry-run-start-a-mesh-refine-and-saving-a-case-outside-a-project.md)
+(E-837a to E-837c),
+[ADR 0738](0738-f809-proposal-derived-pictures-of-a-stored-field-iso-surfaces-streamlines-slices-and-the-length-unit.md)
+(E-809a to E-809e). E-813 is ADR 0731 and E-837d is ADR 0733, both built.
 
 ## Addendum 19: F-820 and F-821, installers built in CI and the Studio on Linux in Docker (2026-11-17)
 
@@ -3016,3 +3026,102 @@ P2 and P1 ran there; P5, P7 and P8 have not been run with the WebGL 2 fallback (
 - `actionlint` 1.7.7 (Docker `rhysd/actionlint:1.7.7`) over `.github/workflows/`: no finding. Neither workflow has run
   on GitHub; the Linux packages were not rebuilt or installed after the `executableName` and `desktopName` changes.
 - No Rust file, golden or `baseline_hashes.rs` changed; `DESIGN.md` untouched.
+
+## Addendum 20: the maintainer's answers of 2026-11-17 and the small items they approved (F-808, F-814, F-816, F-818, F-819, F-828, F-833, F-837)
+
+### Answers recorded
+
+- **F-818, the studio-settings word budget:** 9, approved (`src/shared/word-budget.ts`; the comment now says so).
+- **F-828 D-L1 (Addendum 18):** the engine records a session's journal (E-828c of the engine follow-ups); the Studio
+  writes none. A session number's reproduce command stays said as not recorded until the engine gives one.
+- **F-819 Q-819b-2 and Q-819b-3 (Addendum 16):** skipped. With Q-819-4 skipped before and every registered line met,
+  F-819 is done, by the view-and-report precedent of F-810 and F-812.
+- **F-808 F808-D1:** option (a). The tolerance is written into F-808's acceptance: exact at the 256 points of the table
+  and at and beyond both ends, within 3/255 per channel elsewhere. F-808 is done by the same precedent.
+
+### Changes (each approved by the maintainer on 2026-11-17)
+
+- **F-816, a heading for readers.** A visually hidden `h1` (`.sr-only`, no word counted) on the run workspace ("Run
+  workspace: <run>", or "Run workspace" with no run), compare ("Compare: <run> with <run>") and the case editor with
+  its undo controls ("Case editor: <file>"). axe's moderate `page-has-heading-one` is gone from those four surfaces;
+  `a11y.spec.ts` checks the heading text and the absence. Compare's other moderate findings (`empty-table-header`,
+  `landmark-unique`, `region`) are unchanged and not this item's.
+- **F-814, the claude-head role.** DESIGN.md gains the colour role `claude-head` (frontmatter, Dark and High contrast
+  following meadow's values, a Colors bullet, the Colour Has a Job Rule). `tokens.ts` has the role `claude-head =
+  meadow`; `claude.css` uses `var(--role-claude-head)` in place of the raw meadow. `tokens.spec.ts` checks that a
+  frontmatter role equals its palette colour in each theme. Nothing visible changes.
+- **F-814, Allow this from now on.** A denied call with a suggested rule offers "Allow this from now on" (on its latest
+  denial only, when a rule was denied more than once). A confirm (the F-829 decision panel, alertdialog, Tab held)
+  names the exact rule and the file; Keep it denied is the default and Escape keeps it. On confirm the renderer sends
+  `allow {rule, base}` on the Claude port (op allow-list: `allow`, `undoAllow`; exact keys, rule 1 to 2000 characters,
+  base null or a SHA-256). The main process (`panel.ts`, `allow.ts`):
+  - accepts only the rule it suggested for a denied call in the feed it shows (`bad_request` otherwise), only while the
+    folder's control files are confirmed (`not_confirmed`);
+  - refuses when the file's hash is not the base (`stale`, and the file is read again);
+  - validates the result as rules read from the file are validated (`ruleShape`, `ruleProblem`, `parseAllowFile`) and
+    through `checkArgs`, so no approve-everything rule, wildcard, control-file edit or path outside the project can be
+    written; a duplicate or a refused file is not added to (`refused`);
+  - writes `<file>.<pid>.<hex>.tmp`, then renames it over `.rcfd/claude-allow.json`.
+  The Studio's own write keeps the folder confirmed only when it was confirmed before and the other control files are
+  unchanged. Undo is the panel's Undo chip and the palette command `claude.undo_allow` ("Undo the last allowed rule"):
+  it puts back the file as it was, refused (`stale`) when another writer changed it since, with Undo anyway. The
+  denials of a turn stay in the feed when the transcript replaces the stream, so the offer stays reachable. Tests:
+  `tests/unit/claude.spec.ts` (port, refusals, the flow, trust), `tests/e2e/claude-allow.spec.ts` (fake claude: keyboard
+  confirm, the file, the next argv, palette undo, the conflict, refusals, axe on the denied entry and the confirm),
+  `tests/unit/history.spec.ts` (the one rename in a project folder). The claude panel's budget at rest (13) is unchanged.
+- **F-833, four DESIGN.md lines** from Addendum 11: under The Quiet Rule, the "not yet" hatch (48 by 8 px) with its
+  sentence as accessible name and tooltip, and the approved word budget per surface enforced by a test; under Buttons,
+  the icon button whose name is its tooltip and accessible name; under Inputs / Fields, a settings row's description,
+  default and range as focus detail.
+- **F-837, the settings page's Close session** asks first with the shared save-or-discard prompt (`confirmClose`, kind
+  session) when its session holds case-editor changes not saved; on Save or Discard the session closes and the case
+  door forgets it. A session with none keeps the older loss question. The window-close and close-project split and
+  Keep editing as the default are unchanged. Test: `close-guard.spec.ts`.
+
+### Decisions taken here (reversible; for the maintainer)
+
+- **A20-D1, where the undo lives.** The undo of an allowed rule is the panel's Undo and a palette command, as the F-837
+  budgets are, not a step in the F-829 History (undo and redo of case edits). Alternative: a History step.
+- **A20-D2, no palette command that allows a rule.** Allowing starts only from a denied call in the panel.
+- **A20-D1 and A20-D2 accepted by the maintainer (2026-11-17).** The undo stays the panel's Undo chip plus the palette
+  command `claude.undo_allow`; a rule is allowed only from a denied call in the panel.
+- **A20-D3, a first file.** With no `.rcfd/claude-allow.json`, the file written is the Studio's first list, then the
+  rule (so the list in force only gains the rule).
+- **A20-D4, undo of a first file** writes the Studio's first list to the file rather than deleting it (the Studio
+  deletes no file of a project).
+- **A20-D5, trust after the Studio's own write** stays confirmed (see above); any other change asks again.
+- **A20-D6, the check and the rename** are moments apart: a writer between the hash check and the rename is not seen.
+- **A20-D7, axe on the new surfaces only.** The e2e axe check runs on the denied entry and the confirm. Run on the whole
+  page with a chat open, axe reports `label-content-name-mismatch` (serious) on the current session's button of the
+  session list ("Write a file, closed"), which predates this item; it is not fixed here.
+  **Resolved 2026-11-17 (branch axe-session-button over main d6eba150).** Two causes, both in `ClaudePanel.tsx`'s
+  session buttons: (1) the shown text had no space between the title and the state (two flex items), so axe read
+  "Write a fileclosed", a word not in the name; (2) the last-change time was shown but left out of the name. Fixed: a
+  space text node between the title and the state (a flex column draws no whitespace, so nothing visible changes), and
+  the name is built by `sessionLabel` from the shown parts in their order ("<title>, <state>, process <pid>,
+  <yyyy-mm-dd hh:mm>"), so it still starts with the title (claude.spec, f837.spec match on that; their anchored
+  patterns now include the time). The a11y walk now covers the list with every kind of entry: the fixture has a closed
+  session and one open in another process, listed beside New chat (surface `claude`), then a new chat sent from the
+  keyboard ("Write a file", the current entry; surface `claude-chat`) and the closed session resumed and answered
+  (surface `claude-resumed`), each with axe on the whole page and the full walk. Before the fix the walk failed on the
+  `claude` surface; after it, a11y 14 passed. No word budget changed (word-budget 10 passed).
+
+### Later the same day (2026-11-17, branch axe-session-button over main d6eba150)
+
+- **F-814 done.** The maintainer amended its acceptance: "through rcfd-claude" became "through the Studio's own
+  implementation of the same rules (rcfd-claude was removed 2026-11-17)", which `apps/studio-web/src/main/claude` is.
+  The rest of the acceptance was met before (see this addendum and Addendum 18); the view-and-report step follows the
+  F-810 and F-812 precedent (screenshots in `test-results-visual/f814/`). Engine session discovery (E-814 of the engine
+  follow-ups) stays an optional engine follow-up.
+- **`runner_config` on the first allow-list** (ADR 0733's open question, answered (b)): 16 tools; see ADR 0733.
+- **A20-D7 resolved** (above).
+
+### Verification (2026-11-17, on studio-small over main e3fb058b)
+
+- Windows 11: `npm ci`, `npm run typecheck` clean; `npm run build && npm run package:dir` exit 0.
+- Unit (touched specs: claude, history, tokens, theme, commands-palette, commands-shortcuts, workspace, case-editor,
+  settings-static, f837, capabilities, security): 168 passed.
+- e2e headless, touched specs only: claude-allow 5, then claude, a11y, word-budget, theme, close-guard, undo 51 passed;
+  case-editor, settings, commands, f837, workspace, compare, theme-surfaces, undo-case 64 passed. The full `npm test`
+  was not run (CI runs it).
+- No Rust file, golden or `baseline_hashes.rs` changed; the light theme's colours are unchanged.

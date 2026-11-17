@@ -1,33 +1,18 @@
-//! ADR 0730 T1, T2 and T6: without the UI switch every reply is the one of the base commit, byte for byte.
+//! ADR 0730 T1, T2, P2, P4 and T6: without the UI switch every reply is the one the engine gave before the ADR, and with
+//! it the reply is the plain one plus exactly the listed additions.
 //!
-//! The replies were recorded from the release binaries of the base commit f86339e8 before any ADR 0730 code was written
-//! (`fixtures/adr0730_base_replies.json`): the byte count and the FNV-1a hash (`rcfd_core::hash::fnv64`) of the result of
-//! `settings.schema`, the whole result of `service.info`, and the errors of `help.*`. `rcfd schema` is checked through
-//! the binary in `crates/rcfd-cli/tests/ui_cli_adr0730.rs`, and the MCP tool lists in
-//! `crates/rcfd-mcp/tests/tool_list_adr0730.rs` (M3).
+//! Restated 2026-11-17 (ADR 0730, "Result", the fixture note): the tests compare the same build with and without `--ui`,
+//! and the plain replies with what the code paths the ADR does not touch produce (`case_schema().to_json_schema()`,
+//! `monitor_json_schema()`, `METHODS`), never with a frozen recording, so a merge that adds a method, a tool or a key
+//! needs no re-recording. The byte-identity of the plain MCP tool lists is held by the pinned tests
+//! `crates/rcfd-mcp/tests/default_f1.rs` and `tool_list_f275.rs`; the case and run hashes by `baseline_hashes.rs` (T9).
 
-use rcfd_api::service::{Service, ServiceConfig};
-use rcfd_core::hash::fnv64;
+use rcfd_api::schema::case_schema;
+use rcfd_api::service::{Service, ServiceConfig, METHODS};
+use rcfd_api::ui::{UI_METHODS, UI_PROTOCOL};
+use rcfd_post::monitors::monitor_json_schema;
 use serde_json::{json, Value};
 use std::sync::Arc;
-
-const BASE: &str = include_str!("fixtures/adr0730_base_replies.json");
-
-fn base() -> Value {
-    serde_json::from_str(BASE).unwrap()
-}
-
-fn digest(text: &str) -> (u64, String) {
-    (text.len() as u64, format!("{:#018x}", fnv64(text.as_bytes())))
-}
-
-fn recorded(key: &str) -> (u64, String) {
-    let v = base();
-    (
-        v[key]["bytes"].as_u64().unwrap(),
-        v[key]["fnv64"].as_str().unwrap().into(),
-    )
-}
 
 /// The result text of a call as `rcfd serve` writes it (the reply line holds `to_string()` of the result).
 fn result(svc: &Arc<Service>, method: &str, params: Value) -> String {
@@ -55,11 +40,16 @@ fn with_ui() -> Arc<Service> {
     s
 }
 
+/// The `settings.schema` result as the code before ADR 0730 builds it (the arm the ADR leaves as it was).
+fn untouched_schema() -> String {
+    serde_json::to_string(&json!({"case": case_schema().to_json_schema(), "monitors": monitor_json_schema()})).unwrap()
+}
+
 /// T1: `settings.schema` without the switch, with any parameters (it ignores them, as before), and with the switch but
-/// without `ui: true`, is the base commit's reply.
+/// without `ui: true`, is the untouched export byte for byte.
 #[test]
-fn t1_settings_schema_is_the_base_commit_s_without_ui_true() {
-    let want = recorded("settings_schema_result");
+fn t1_settings_schema_is_the_plain_export_without_ui_true() {
+    let want = untouched_schema();
     let off = plain();
     for p in [
         Value::Null,
@@ -68,54 +58,60 @@ fn t1_settings_schema_is_the_base_commit_s_without_ui_true() {
         json!({"ui": true}),
         json!({"ui": "x"}),
     ] {
-        assert_eq!(
-            digest(&result(&off, "settings.schema", p.clone())),
-            want,
+        assert!(
+            result(&off, "settings.schema", p.clone()) == want,
             "no --ui, params {p}"
         );
     }
     let on = with_ui();
     for p in [Value::Null, json!({}), json!({"ui": false}), json!({"ui": null})] {
-        assert_eq!(
-            digest(&result(&on, "settings.schema", p.clone())),
-            want,
-            "--ui, params {p}"
-        );
+        assert!(result(&on, "settings.schema", p.clone()) == want, "--ui, params {p}");
     }
-    eprintln!("T1: settings.schema {} bytes, {} as at f86339e8", want.0, want.1);
-}
-
-/// T2: `service.info` without the switch is the base commit's reply, and `help.*` is the same -32601.
-#[test]
-fn t2_service_info_and_help_without_ui_are_the_base_commit_s() {
-    let b = base();
-    let svc = plain();
-    assert_eq!(
-        result(&svc, "service.info", json!({})),
-        b["service_info_result"].as_str().unwrap()
+    // the --ui reply is a different text: the switch is what adds the metadata
+    assert_ne!(result(&on, "settings.schema", json!({"ui": true})), want);
+    eprintln!(
+        "T1: settings.schema {} bytes without ui: true, with and without --ui",
+        want.len()
     );
-    assert_eq!(error(&svc, "help.glossary", json!({})), b["help_glossary_error"]);
-    assert_eq!(error(&svc, "help.errors", json!({})), b["help_errors_error"]);
-    assert_eq!(rcfd_api::service::METHODS.len(), 69, "the method list of protocol 1.1");
 }
 
-/// P4: with the switch, `service.info` adds `ui` and the two help methods and changes nothing else.
+/// T2: `service.info` without the switch has no `ui` key and lists exactly `METHODS`; `help.*` is the same -32601 as
+/// any unknown method.
 #[test]
-fn p4_service_info_with_ui_adds_ui_and_two_methods() {
-    let b: Value = serde_json::from_str(base()["service_info_result"].as_str().unwrap()).unwrap();
+fn t2_service_info_and_help_without_ui_are_as_before() {
+    let svc = plain();
+    let info: Value = serde_json::from_str(&result(&svc, "service.info", json!({}))).unwrap();
+    assert!(info.get("ui").is_none());
+    assert_eq!(info["methods"], json!(METHODS));
+    for m in UI_METHODS {
+        assert!(!METHODS.contains(&m), "{m} is not a method of the plain service");
+        let e = error(&svc, m, json!({}));
+        assert_eq!(
+            e,
+            json!({"code": -32601, "message": format!("unknown method '{m}'")}),
+            "{m}"
+        );
+        // the same shape as a name that never existed
+        let other = error(&svc, "nothing.here", json!({}));
+        assert_eq!(e["code"], other["code"]);
+    }
+}
+
+/// P4: with the switch, `service.info` is the plain reply plus `ui` and the two help methods at the end; nothing else.
+#[test]
+fn p4_service_info_with_ui_is_the_plain_one_plus_ui_and_two_methods() {
+    let plain_info: Value = serde_json::from_str(&result(&plain(), "service.info", json!({}))).unwrap();
     let mut on: Value = serde_json::from_str(&result(&with_ui(), "service.info", json!({}))).unwrap();
-    assert_eq!(on["ui"], "rcfd-ui/1");
+    assert_eq!(on["ui"], UI_PROTOCOL);
     assert_eq!(
-        on["protocol_version"], "1.1",
-        "the version stays a property of the method families"
+        on["protocol_version"], plain_info["protocol_version"],
+        "the version stays a property of the families"
     );
     let methods = on["methods"].as_array_mut().unwrap();
-    assert_eq!(
-        methods.split_off(methods.len() - 2),
-        vec![json!("help.glossary"), json!("help.errors")]
-    );
+    let tail = methods.split_off(methods.len() - UI_METHODS.len());
+    assert_eq!(tail, UI_METHODS.iter().map(|m| json!(m)).collect::<Vec<_>>());
     on.as_object_mut().unwrap().remove("ui");
-    assert_eq!(on, b);
+    assert_eq!(on, plain_info);
 }
 
 /// P2: `ui` that is not a boolean, or parameters that are not an object, are -32602 once the switch is on; `help.*`
@@ -126,7 +122,7 @@ fn p2_bad_parameters_are_refused_with_ui() {
     for p in [json!({"ui": "yes"}), json!({"ui": 1}), json!([true]), json!("ui")] {
         assert_eq!(error(&on, "settings.schema", p.clone())["code"], -32602, "{p}");
     }
-    for m in ["help.glossary", "help.errors"] {
+    for m in UI_METHODS {
         assert_eq!(error(&on, m, json!({"x": 1}))["code"], -32602, "{m}");
         assert_eq!(error(&on, m, json!([]))["code"], -32602, "{m}");
         assert!(error(&on, m, Value::Null).is_null(), "{m} without params");
@@ -134,21 +130,21 @@ fn p2_bad_parameters_are_refused_with_ui() {
     assert_eq!(error(&on, "help.nothing", json!({}))["code"], -32601);
 }
 
+/// The keys ADR 0730 adds to schema nodes.
+const UI_KEYS: [&str; 7] = [
+    "x-rcfd-ui",
+    "x-rcfd-label",
+    "x-rcfd-help",
+    "x-rcfd-help-from",
+    "x-rcfd-advanced",
+    "x-rcfd-recommended",
+    "x-rcfd-see",
+];
+
 fn strip(v: &mut Value) {
     match v {
         Value::Object(m) => {
-            m.retain(|k, _| {
-                !matches!(
-                    k.as_str(),
-                    "x-rcfd-ui"
-                        | "x-rcfd-label"
-                        | "x-rcfd-help"
-                        | "x-rcfd-help-from"
-                        | "x-rcfd-advanced"
-                        | "x-rcfd-recommended"
-                        | "x-rcfd-see"
-                )
-            });
+            m.retain(|k, _| !UI_KEYS.contains(&k.as_str()));
             for x in m.values_mut() {
                 strip(x);
             }
@@ -159,13 +155,13 @@ fn strip(v: &mut Value) {
 }
 
 /// T6: the export with `ui: true`, with every key this ADR adds removed (and the `x-rcfd-unit` it adds to nodes that
-/// had none), is the default export.
+/// had none), is the plain export of the same build.
 #[test]
-fn t6_ui_export_less_its_keys_is_the_default_export() {
+fn t6_ui_export_less_its_keys_is_the_plain_export() {
     let on = with_ui();
-    let default: Value = serde_json::from_str(&result(&on, "settings.schema", json!({}))).unwrap();
+    let plain_reply: Value = serde_json::from_str(&result(&plain(), "settings.schema", json!({}))).unwrap();
     let mut ui: Value = serde_json::from_str(&result(&on, "settings.schema", json!({"ui": true}))).unwrap();
-    // the units ADR 0730 adds are the data file's `unit` entries: drop them where the default export has none
+    // the units ADR 0730 adds are the data file's `unit` entries: drop them where the plain export has none
     let meta = rcfd_api::ui::metadata().unwrap();
     for (path, m) in &meta.keys {
         if m.unit.is_some() {
@@ -181,5 +177,5 @@ fn t6_ui_export_less_its_keys_is_the_default_export() {
         }
     }
     strip(&mut ui);
-    assert_eq!(ui, default);
+    assert_eq!(ui, plain_reply);
 }

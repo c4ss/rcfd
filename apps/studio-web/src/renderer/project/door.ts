@@ -59,6 +59,10 @@ export const projectActions = {
   close: () => void bridge()?.close(),
   refresh: () => void bridge()?.refresh(),
   dismiss: () => void bridge()?.dismiss(),
+  /** F-835: the engine makes a project in a folder chosen in the folder dialog, then it opens. */
+  create: () => void bridge()?.create('pick', keepCancel),
+  /** F-835: the engine makes a project in the folder it has just refused as no project, then it opens. */
+  createHere: () => void bridge()?.create('here', keepCancel),
 };
 
 /** F-807: dispatches a run-control action; resolves with the engine's answer or the refusal in words (never rejects). */

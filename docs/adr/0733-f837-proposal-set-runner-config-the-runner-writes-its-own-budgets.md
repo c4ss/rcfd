@@ -1,8 +1,8 @@
 # ADR 0733: F-837 proposal: `set_runner_config`, the runner writes its own budgets file
 
-Status: **PROPOSED 2026-11-17.** The maintainer approved an engine `set_runner_config` command for F-837 (the runner writes
-its own budgets file instead of the Studio writing it). This ADR proposes its details; they are not yet accepted. Nothing
-is built and nothing was run.
+Status: **ACCEPTED 2026-11-17.** The maintainer approved an engine `set_runner_config` command for F-837 (the runner writes
+its own budgets file instead of the Studio writing it), then accepted this ADR on 2026-11-17, taking every open question on
+its recommendation (answers below). Built the same day; see "As built".
 
 Roadmap item F-837 (run setup, logs and field-view extras), ADR 0801 addendum 13, "Needs the engine": "`rcfd-runner config
 set` or an MCP `set_runner_config`, so the budgets are written by their owner, atomically". Parents:
@@ -103,6 +103,15 @@ writes into `.rcfd/`.
 5. **Restart hint.** (a) the reply says `applies: "next_start"` and nothing else; (b) also offer to restart the runner
    when no run is active. Recommendation: (a); a restart is a separate action.
 
+## The maintainer's answers (2026-11-17)
+
+1. Q1 (a): a read tool, `runner_config`, beside the write tool.
+2. Q2 (a): undo is the client sending the previous values back; there is no engine undo.
+3. Q3 (a): `rcfd-runner config set` exits with 4 on a conflict (1 refused, 3 stays `serve`'s).
+4. Q4 (a): a current file the runner cannot read is refused unless the call passes `replace: true` (CLI `--replace`) with
+   every key given.
+5. Q5 (a): the reply says `applies: "next_start"` and nothing else; no restart offer.
+
 ## Tests that would prove it
 
 - **R1** `config set` then `Config::load` gives the values set; `--unset` gives the default for that key.
@@ -116,3 +125,60 @@ writes into `.rcfd/`.
 - **R7** `baseline_hashes.rs` and every existing runner test pass unedited.
 - **Studio** e2e: the budgets panel sets, conflicts and undoes through the engine; a static check that nothing under
   `apps/studio-web/src/main` writes `runner-config.json`.
+
+## As built (2026-11-17)
+
+- **Library.** `crates/rcfd-runner/src/config.rs`: `Config::state(project)` and `Config::set(project, changes, base,
+  opts)`, with `Base::{Any, Absent, Hash}` (`Any` is the CLI without `--base`: the hash read is still compared again under
+  the edit lock) and `SetOptions {replace, who, extra}`. The write is `rcfd_project::atomic::replace_if_hash_with` on
+  `.rcfd/runner-config.json`; its journal line carries `changes` [{`path`, `old`, `new`}] per key and the caller's fields
+  (the MCP actor and reason). The file is written in `Config`'s key order, two-space indented, with a final newline (`{}`
+  when every key is removed: the file stays). The checks after the parse moved from `Config::load` into `Config::check`,
+  which `load` calls with the same message; `load`, `Config`, `Config::default` and `serve` behave as before.
+- **ConfigState** has two fields beyond P1's list, for the Studio's "the runner would refuse this file" line and its
+  Replace button: `problem` (why the runner would refuse the file as it is, or null) and `needs_replace` (the file is not
+  a JSON object of known keys, Q4's case). A readable file with a value the runner refuses (say `max_runs: 0`) is not
+  Q4's case: a `set` of that key fixes it without `replace`. With `replace`, every key must be in `set` (a number, or null
+  for the default); the first missing key is named.
+- **CLI.** `rcfd-runner config [--project <dir>]`, `rcfd-runner config set <key>=<number>... [--unset <key>]... [--base
+  <hash>] [--replace]`; the usage text gains these lines. Exit 0, 1 refused (the runner's message), 4 conflict.
+- **MCP.** `runner_config` (read, no argument) and `set_runner_config` (`write_files`; `set`, `base_hash` required,
+  `replace`, `reason`) in `crates/rcfd-workspace/src/runner_config.rs`, right after `list_meshes`; errors 1003 with
+  `data.key`, 1200 with `data.current_hash`, 1201, -32602 for a value that is not a number or null, a missing or ill-typed
+  `base_hash` or an empty `set`; 1100 under `--read-only` (the policy). The `initialize` text names the two tools.
+- **Tool-list tests restated, no golden edited.** `project_list_f270.rs` (the two tools taken out at their place, then the
+  F-275 list as before), `tool_list_f275.rs` C5-L (42 tools, 25 project tools), `project_w48f.rs` F3 (17 + 25) and
+  `project_runs_w48f.rs` F3/F13 (42). `project_w48f.rs` F2 says the first allow-list is exactly the read-class project
+  tools; it was restated to leave `runner_config` out, because whether the Studio's first allow-list gains it was not
+  decided then (below; decided 2026-11-17, (b): F2 is the plain read-class set again).
+- **Studio (F-837).** The budgets panel reads with `runner_config` on the read-only project server and writes with
+  `set_runner_config` on the run-control server (`apps/studio-web/src/main/run/extras.ts` `RunnerBudgetsEngine`, through
+  `RunControl.setRunnerConfig`). A conflict shows as before. Undo sends the keys of the last write back with their values
+  before it, with the hash that write left as base (Undo anyway: the file's hash now). The written note says "applies at
+  the next runner start". A file the runner cannot read gets a "Replace the file" button that sends every key. The
+  Studio's copy of the runner's checks (`budgetProblem`, `valuesOf`) and its writer are removed; a unit check fails if code
+  under `src/main` names `runner-config.json`. The capability inventory gains the two tools and the CLI command with its
+  three options, mapped to the panel.
+
+### Tests run (2026-11-17, release, headless)
+
+- `cargo test -p rcfd-runner --lib --test config_adr0733 --test runner_wfix`: R1 to R5 and Q4 pass; existing runner lib
+  tests and `runner_wfix` pass unedited.
+- `cargo test -p rcfd-mcp --lib --test runner_config_adr0733 --test project_list_f270 --test tool_list_f275 --test
+  project_w48f --test project_runs_w48f` and `cargo test -p rcfd-workspace --lib`: pass (R3 MCP, R5, R6).
+- Studio: `npm run typecheck`, build and `package:dir`; unit `f837`, `capabilities`, `run-control`, `commands-palette`;
+  e2e `f837` (14), `word-budget` and `a11y`: pass.
+- R7: `baseline_hashes.rs` is not edited; no solver path changed. The full suites run in CI.
+
+### Decided after acceptance (was: not decided)
+
+- Whether `runner_config` joins the Studio bridge's first allow-list (`PROJECT_READ_TOOLS`, ADR 0195 P5), so Claude Code
+  in the Studio reads the budgets without asking. As ADR 0187 Q6 and ADR 0188 Q6: (a) leave the list as it is (built);
+  (b) add `runner_config`, which restates C5-A and F2 again.
+- **Decided 2026-11-17 by the maintainer: (b).** `runner_config` is added to the first allow-list, after `list_meshes`:
+  `PROJECT_READ_TOOLS` in `apps/studio-web/src/main/claude/allow.ts` and its Rust twin in
+  `crates/rcfd-mcp/tests/claude_allow/mod.rs` (16 tools). Restated, no golden re-recorded: `tool_list_f275.rs` C5-A (the
+  first list is main's 11, then `read_feed`, `check_case_mesh`, `preview_mesh`, `list_meshes`, `runner_config`),
+  `project_w48f.rs` F2 (the first list is exactly the 16 read-class project tools, no exception), the Studio unit test
+  (`claude.spec.ts`, 16) and the e2e disclosure (`16 allowed, everything else denied`). An existing allow-list file is not
+  changed. The README's list says 16.

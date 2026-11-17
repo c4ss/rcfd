@@ -62,7 +62,7 @@ pub const SESSION_ONLY: [&str; 16] = [
 pub const PROJECT_EXECUTE: [&str; 3] = ["design_run_study", "design_evaluate", "design_run_operating_map"];
 
 /// Added to the `initialize` instructions when the server has a project (ADR 0135).
-const PROJECT_INSTRUCTIONS: &str = " This server also has a project folder: project_info and list_runs describe it; run_status, read_residuals, read_metrics, field_summary, render_field and compare_runs read runs; read_project_file gives a file with its hash, edit_case and write_note change files only if that hash still holds; new_case makes a case file in cases/; check_case_mesh and preview_mesh check and draw a case's mesh, import_mesh brings a mesh file into meshes/ and list_meshes lists them (a case's mesh settings change through edit_case, which checks the edited mesh); start_run (which can make its case first), wait_run, pause_run, resume_run and cancel_run drive the project's run service; the tools that change the project take an optional reason, kept with the change in the project journal, and read_feed lists who changed what and why.";
+const PROJECT_INSTRUCTIONS: &str = " This server also has a project folder: project_info and list_runs describe it; run_status, read_residuals, read_metrics, field_summary, render_field and compare_runs read runs; read_project_file gives a file with its hash, edit_case and write_note change files only if that hash still holds; new_case makes a case file in cases/; check_case_mesh and preview_mesh check and draw a case's mesh, import_mesh brings a mesh file into meshes/ and list_meshes lists them (a case's mesh settings change through edit_case, which checks the edited mesh); runner_config reads the run service's budgets and set_runner_config changes them (at the next runner start); start_run (which can make its case first), wait_run, pause_run, resume_run and cancel_run drive the project's run service; the tools that change the project take an optional reason, kept with the change in the project journal, and read_feed lists who changed what and why.";
 
 pub(crate) struct Tool {
     pub(crate) name: &'static str,
@@ -524,6 +524,24 @@ fn tools() -> Vec<Tool> {
     ]
 }
 
+/// ADR 0731 P3: `create_project`, listed only without a project (a server with a project already has one).
+fn create_project_tool() -> Tool {
+    Tool {
+        name: "create_project",
+        description: "Make an rcfd project folder: rcfd-project.json and the folders cases, meshes, runs, designs, notes and .rcfd. The folder may exist and hold other files; nothing is replaced, and the result lists what was already there. Refused when the folder already holds rcfd-project.json. Returns root, name, schema_version, created, solver_version_created and existing.",
+        access: Access::WriteFiles,
+        schema: || {
+            obj(
+                json!({
+                    "path": {"type": "string", "description": "the project folder (inside the sandbox when the server has --root)"},
+                    "name": {"type": "string", "description": "project name (default: the folder's name)"}
+                }),
+                &["path"],
+            )
+        },
+    }
+}
+
 /// Check `value` against the small JSON Schema subset used by the tools
 /// (`type`, `properties`, `required`, `additionalProperties`, `items`, `enum`,
 /// `minimum`, `maximum`).
@@ -640,6 +658,9 @@ impl McpServer {
                 x.access = Access::Execute;
             }
             t.extend(project::tools());
+        } else {
+            // ADR 0731 P3: a server without a project can make one; it is the last tool of that list
+            t.push(create_project_tool());
         }
         t
     }
@@ -962,6 +983,11 @@ impl McpServer {
                     return Ok(ok_result(proj.workspace().design_call(svc, method, &p)?));
                 }
                 Ok(ok_result(svc.call(method, &p)?))
+            }
+            "create_project" => {
+                let dir = svc.sandbox_path(args["path"].as_str().unwrap_or_default())?;
+                let name = args.get("name").and_then(Value::as_str);
+                Ok(ok_result(rcfd_workspace::create_project(&dir, name)?))
             }
             "render_image" => {
                 let mut p = Map::new();

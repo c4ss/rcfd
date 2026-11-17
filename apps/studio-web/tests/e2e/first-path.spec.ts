@@ -4,20 +4,21 @@
 // docs/tutorials/quick-start-cli.md).
 //
 // - No project open: the four steps of the path and what the first one needs.
-// - An empty folder: the engine refuses it as no project; the page says what is missing (the project file, which the
-//   Studio cannot make: the engine has no command for it) and the next step, and opens the folder by itself once the file
-//   is there. The test stands in for the missing engine command and writes what rcfd_project's Project::create writes.
+// - An empty folder: the engine refuses it as no project; the page says what is missing (the project file) and the next
+//   step, Make a project here, which runs the engine's `rcfd project init` (F-835, ADR 0731) and opens the new project.
+//   Nothing in this file writes rcfd-project.json: the engine does (G4, G12).
 // - An empty project: Make the example (the engine's new_case), Run the example (start_run with the engine's start plan,
 //   through run control), and the result: the engine's numbers equal to the run's own records, the stored field drawn,
 //   the limits and the disclaimer visible (G6), the run opened in the run workspace (the result link, F-810).
-// - The same walk by keyboard only, focus following each new step.
+// - The same walk by keyboard only, from New project… of the empty home, focus following each new step.
+// - New project… from the command palette in a folder that holds other files: they stay, and the project opens.
 // - The precise terms behind Explain are the engine's glossary rows (F-830, `help.glossary`): the walk attaches the Studio
 //   to an `rcfd serve --ui` it starts (with the rcfd beside rcfd-mcp) and stops at the end.
 // Screenshots at 1440 by 900 go to test-results-visual/f813/ for the maintainer's view-and-report (G13).
 import { expect, test, type Locator, type Page } from '@playwright/test';
 import { execFileSync } from 'node:child_process';
 import { existsSync, readFileSync } from 'node:fs';
-import { mkdir, mkdtemp, readdir, rm, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { launchStudio, type Studio } from '../support/studio.js';
@@ -33,6 +34,7 @@ const mcp = findMcp();
 const runnerExe = findRunner();
 test.skip(!mcp, NO_MCP);
 test.skip(!runnerExe, NO_RUNNER);
+test.skip(!!mcp && !existsSync(rcfdExe()), 'rcfd was not found beside rcfd-mcp: build it with `cargo build --release -p rcfd-cli`');
 test.describe.configure({ mode: 'serial' });
 
 let dir = '';
@@ -52,19 +54,19 @@ async function launch(): Promise<Studio> {
   return s;
 }
 
-/**
- * Stands in for the engine command that does not exist yet (F-813 report: a project-creation entry point): writes what
- * rcfd_project::Project::create writes (the manifest of schema 1 and the standard folders), with the version `rcfd
- * --version` reports. Not the Studio: the Studio writes nothing to a project folder (G2, G12).
- */
-async function makeProjectFileOutside(folder: string, name: string): Promise<void> {
-  for (const d of ['cases', 'meshes', 'runs', 'designs', 'notes', '.rcfd']) await mkdir(path.join(folder, d), { recursive: true });
-  const rcfd = path.join(path.dirname(mcp!), process.platform === 'win32' ? 'rcfd.exe' : 'rcfd');
-  const version = existsSync(rcfd) ? execFileSync(rcfd, ['--version'], { encoding: 'utf8' }).trim() : 'rcfd 0.1.0';
-  await writeFile(
-    path.join(folder, 'rcfd-project.json'),
-    JSON.stringify({ schema_version: 1, name, created: new Date().toISOString(), solver_version_created: version }, null, 2) + '\n',
-  );
+/** The rcfd beside the engine's project server: the one the Studio runs for `rcfd project init` (F-835). */
+function rcfdExe(): string {
+  return path.join(path.dirname(mcp!), process.platform === 'win32' ? 'rcfd.exe' : 'rcfd');
+}
+/** What rcfd_project's Project::create makes (ADR 0731 P1): the manifest and the six standard folders. */
+const MADE = ['.rcfd/', 'cases/', 'designs/', 'meshes/', 'notes/', 'rcfd-project.json', 'runs/'];
+
+/** The project file the engine wrote: named after the folder, with the version `rcfd --version` reports (ADR 0731 Q6). */
+async function expectEngineManifest(folder: string): Promise<void> {
+  const m = JSON.parse(await readFile(path.join(folder, 'rcfd-project.json'), 'utf8')) as Record<string, unknown>;
+  expect(m['name']).toBe(path.basename(folder));
+  expect(m['schema_version']).toBe(1);
+  expect(m['solver_version_created']).toBe(execFileSync(rcfdExe(), ['--version'], { encoding: 'utf8' }).trim());
 }
 
 const path_ = (page: Page): Locator => page.locator('section.fp--open');
@@ -92,8 +94,7 @@ test.beforeAll(async () => {
   recentFile = path.join(dir, 'recent.json');
   await mkdir(SHOTS, { recursive: true });
   // the solver service the Explain terms come from (help.glossary, rcfd serve --ui)
-  const rcfd = path.join(path.dirname(mcp!), process.platform === 'win32' ? 'rcfd.exe' : 'rcfd');
-  if (existsSync(rcfd)) service = await startRcfd(rcfd, 0, ['--ui']);
+  if (existsSync(rcfdExe())) service = await startRcfd(rcfdExe(), 0, ['--ui']);
 });
 
 /** Ends the Studio this file started, and the project servers it left (as the F-806/F-807 walks do). */
@@ -134,14 +135,14 @@ test('no project open: the four steps of the path, their explanation one step aw
   await shot(page, '01-no-project');
   await intro.getByRole('button', { name: 'Explain the first steps' }).click();
   const about = intro.getByRole('region', { name: 'About the first steps' });
-  await expect(about).toContainText('an empty folder needs rcfd’s project file first');
+  await expect(about).toContainText('New project… above makes one in a folder you choose or make');
   await expect(about).toContainText('example-projects/quick-start');
   await intro.getByRole('button', { name: 'Hide the first steps' }).click();
   await expect(about).toHaveCount(0);
   await expect(page.locator('footer')).toContainText('Not validated for engineering decisions or for safety-critical use. No warranty.');
 });
 
-test('an empty folder: what is missing and the next step; it opens by itself once the project file is there', async () => {
+test('an empty folder: what is missing and the next step; Make a project here runs the engine’s command and opens the project', async () => {
   const { app, page } = studio!;
   const empty = path.join(dir, 'my-first-project');
   await mkdir(empty);
@@ -153,28 +154,30 @@ test('an empty folder: what is missing and the next step; it opens by itself onc
   await expect(why).toBeVisible();
   // an exception, so in words, short: what is missing and the next step
   await expect(why.locator('.fp-missing')).toHaveText('Empty folder: no rcfd-project.json.');
-  await expect(why.locator('.fp-next')).toHaveText('Next: make it with Claude Code or the older rcfd-studio; the folder then opens by itself.');
-  const unavailable = why.getByRole('button', { name: 'Make a project here' });
-  await expect(unavailable).toHaveAttribute('aria-disabled', 'true');
-  // its reason is its tooltip, on keyboard focus (the alert's Dismiss comes just before it)
+  await expect(why.locator('.fp-next')).toHaveText('Next: make it a project here.');
+  // F-835: the next step is the engine's command; what it does is its description (G22), after the alert's Dismiss
+  const make = why.getByRole('button', { name: 'Make a project here' });
+  await expect(make).toBeEnabled();
+  await expect(make).not.toHaveAttribute('aria-disabled', 'true');
+  await expect(make).toHaveAccessibleDescription(/The engine makes the project file .* \(rcfd project init\)/);
   await page.getByRole('alert').getByRole('button', { name: 'Dismiss' }).focus();
   await page.keyboard.press('Tab');
-  await expect(unavailable).toBeFocused();
-  await expect(page.getByRole('tooltip')).toContainText('The engine has no command that makes a new project yet');
+  await expect(make).toBeFocused();
   await expect(why).toHaveAttribute('data-folder-state', 'watching');
   await why.getByRole('button', { name: 'Explain what a project needs' }).click();
   const about = why.getByRole('region', { name: 'About what a project needs' });
+  await expect(about).toContainText(`rcfd project init ${empty}`);
+  await expect(about).toContainText('Claude Code makes it with create_project');
   await expect(about).toContainText('the Studio checks the folder every second and opens it as soon as the project file is there');
-  await expect(about).toContainText('Project > New project in the older rcfd-studio app');
   expect(await readdir(empty)).toEqual([]);
   await shot(page, '02-empty-folder');
-  // what the missing engine command would do, done outside the Studio
-  await makeProjectFileOutside(empty, 'My first project');
-  const before = await snapshot(empty);
-  await expect(page.getByRole('heading', { level: 1, name: 'My first project' })).toBeVisible({ timeout: 20_000 });
-  await expect(page.getByRole('alert').filter({ hasText: 'Failed to open' })).toHaveCount(0);
-  // opening wrote nothing (G12)
-  expect(await snapshot(empty)).toEqual(before);
+  // the engine makes the project (rcfd project init), and it opens
+  await make.click();
+  await expect(page.getByRole('heading', { level: 1, name: 'my-first-project' })).toBeVisible({ timeout: 20_000 });
+  await expect(page.getByRole('alert').filter({ hasText: /Failed to (open|make)/ })).toHaveCount(0);
+  await expectEngineManifest(empty);
+  // what the engine made and nothing else: opening wrote nothing (G12)
+  expect(Object.keys(await snapshot(empty)).sort()).toEqual(MADE);
 });
 
 test('an empty project: one action, the example made by the engine; the explanation, full control and precise terms one step away', async () => {
@@ -298,15 +301,15 @@ test('the same walk by keyboard only, the focus following each new step', async 
   const { app, page } = studio!;
   await page.getByRole('button', { name: 'Close project' }).click();
   await expect(page.getByRole('heading', { level: 1, name: 'No project open' })).toBeVisible();
+  // F-835: New project… of the empty home, by keyboard; the folder dialog (stubbed) gives a folder that is not there yet
   const second = path.join(dir, 'keyboard-project');
-  await mkdir(second);
   folders.push(second);
-  await makeProjectFileOutside(second, 'Keyboard project');
   await stubDialog(app, second);
   await page.locator('body').focus();
-  await tabTo(page, 'Open project folder…');
+  await tabTo(page, 'New project…');
   await page.keyboard.press('Enter');
-  await expect(page.getByRole('heading', { level: 1, name: 'Keyboard project' })).toBeVisible({ timeout: 20_000 });
+  await expect(page.getByRole('heading', { level: 1, name: 'keyboard-project' })).toBeVisible({ timeout: 20_000 });
+  await expectEngineManifest(second);
   await tabTo(page, 'Make the example');
   await page.keyboard.press('Enter');
   // the focus goes on to the next step's action
@@ -325,4 +328,26 @@ test('the same walk by keyboard only, the focus following each new step', async 
   await page.keyboard.press('Enter');
   await expect(page.getByRole('tab', { name: 'Workspace', selected: true })).toBeVisible();
   await expect(page.locator('.ws[data-run]')).toBeVisible({ timeout: 20_000 });
+});
+
+test('New project… from the command palette, in a folder that holds other files: they stay, and the project opens', async () => {
+  const { app, page } = studio!;
+  await page.getByRole('button', { name: 'Close project' }).click();
+  await expect(page.getByRole('heading', { level: 1, name: 'No project open' })).toBeVisible();
+  const third = path.join(dir, 'palette-project');
+  await mkdir(third);
+  await writeFile(path.join(third, 'my-notes.txt'), 'mine\n');
+  folders.push(third);
+  await stubDialog(app, third);
+  await page.keyboard.press('Control+K');
+  const palette = page.getByRole('dialog', { name: 'Command palette' });
+  await expect(palette).toBeVisible();
+  await page.keyboard.type('New project');
+  await expect(palette.getByRole('option', { name: /^New project…/ })).toBeVisible();
+  await page.keyboard.press('Enter');
+  await expect(page.getByRole('heading', { level: 1, name: 'palette-project' })).toBeVisible({ timeout: 20_000 });
+  await expectEngineManifest(third);
+  // the engine keeps what was there (ADR 0731 Q3 (a))
+  expect(await readFile(path.join(third, 'my-notes.txt'), 'utf8')).toBe('mine\n');
+  expect(Object.keys(await snapshot(third)).sort()).toEqual([...MADE, 'my-notes.txt'].sort());
 });

@@ -17,6 +17,8 @@ colors:
   silver: "#c9cdd1"
   silver-wash: "#eef1f4"
   white: "#ffffff"
+  # a role named beside the scale: the Claude Code head, meadow's value in every theme
+  claude-head: "#6cc078"
 themes:
   dark:
     colors:
@@ -35,6 +37,7 @@ themes:
       silver: "#34475d"
       silver-wash: "#16243a"
       white: "#0f1c2c"
+      claude-head: "#286b33"
   contrast:
     colors:
       ink: "#0a2240"
@@ -52,6 +55,7 @@ themes:
       silver: "#7b8794"
       silver-wash: "#e3e8ee"
       white: "#ffffff"
+      claude-head: "#5cb86a"
 typography:
   display:
     fontFamily: "Archivo, Helvetica Neue, Arial, sans-serif"
@@ -185,7 +189,7 @@ The Studio is drawn the way Otl Aicher drew the Munich 1972 Games: one strict pr
 
 The world is white ground, deep ink rules and flat colour fields. Density comes from hairlines rather than card padding: panels sit edge to edge, divided by 1px ink or silver lines, and the workspace reflows by whole modules instead of floating boxes. Selection pulls the chosen run's numbers forward while everything else fades. The one place the world gives way is the field view: there the data owns the colour, through a perceptual colour map, and the chrome stays ink and white around it.
 
-**The Quiet Rule (guardrail G22).** Normal is implicit; the exception speaks. A wayfinding program does not label the corridor, only the turn. At rest a surface carries its state in pictograms, position and layout, and shows visible words only for a failure, a loss, a conflict, something blocked, or a value the user must act on. Help, reasons and next steps are one step away (tooltip, focus detail, help, command palette), not standing on the screen. The disclaimer footer, failures and known misses always stay visible.
+**The Quiet Rule (guardrail G22).** Normal is implicit; the exception speaks. A wayfinding program does not label the corridor, only the turn. At rest a surface carries its state in pictograms, position and layout, and shows visible words only for a failure, a loss, a conflict, something blocked, or a value the user must act on. Help, reasons and next steps are one step away (tooltip, focus detail, help, command palette), not standing on the screen. The disclaimer footer, failures and known misses always stay visible. An empty state at rest is the "not yet" hatch (48 by 8 px), its sentence the accessible name and tooltip. Every surface has an approved budget of visible chrome words at rest, kept in `apps/studio-web/src/shared/word-budget.ts` and enforced by a test; raising one needs the maintainer's word (G22).
 
 It refuses the grey docked workbench with a single blue accent: no grey chrome, no black, no grey text, no rounded panels.
 
@@ -210,6 +214,7 @@ A short Aicher scale of flat, mid-light colours, each with one job, read against
 - **Sky Wash** (sky-wash): hover on buttons and list items, the selected run row, the user's chat message, and selects that sit on the header band.
 - **Meadow** (meadow): the active sub-tab, the Claude Code head, the switch track when on, and the converged phase of a run band.
 - **Meadow Wash** (meadow-wash): sub-tab hover.
+- **Claude Head** (claude-head): the head of the Claude Code panel. A role, not a new hue: it is meadow in every theme, named so that the head's colour is one token.
 - **Meadow Deep** (meadow-deep): the converged pictogram (and the related residual p line) where it stands on white, so the mark holds contrast (5.1:1).
 
 ### Tertiary
@@ -225,7 +230,7 @@ A short Aicher scale of flat, mid-light colours, each with one job, read against
 - **Silver Wash** (silver-wash): the field viewport ground, table row and column hover.
 
 ### Named Rules
-**The Colour Has a Job Rule.** Each hue means one thing: sky = header band and iterating; meadow = active sub-tab, Claude Code and converged; orange = the running run's live segment, plus focus and caret; deep red = failure. A new surface may not give a hue a second meaning.
+**The Colour Has a Job Rule.** Each hue means one thing: sky = header band and iterating; meadow = active sub-tab, Claude Code (the claude-head role) and converged; orange = the running run's live segment, plus focus and caret; deep red = failure. A new surface may not give a hue a second meaning.
 
 **The One Live Thing Rule.** Orange fills exactly one band segment at a time: the live segment of the running run. Other emphasis uses ink.
 
@@ -297,6 +302,7 @@ Plain, ruled and square: a white face inside a 1px ink line.
 - **Primary:** deep ink with white text; ink-hover on hover. Used for New run, Send and Play.
 - **Ghost:** no border or fill, used on the header band; a 35% white lift on hover.
 - **Reference chip:** 22px tall with a silver hairline and label type, for run and log references in chat.
+- **Icon button:** an action whose icon says it (close, play, pause, a row's run, undo and redo with nothing to take back) is an icon button with no visible word; its name is its tooltip and its accessible name.
 - **Focus:** 2px orange outline, 1px offset, on every focusable element.
 
 ### Segmented toggles
@@ -307,6 +313,7 @@ A row of joined buttons sharing their 1px ink rules (Surface, Iso-lines, Streaml
 - **Focus:** the border turns deep ink.
 - **Select:** a field-styled button with a rotated square caret; on the header band it takes an ink border over sky-wash.
 - **Switch:** a 28 by 14px ink-ruled track with a square knob; meadow when on.
+- **Settings rows:** on the settings surface a key's description, default and range are focus detail: kept for readers at rest, shown while the row holds the focus.
 
 ### Navigation
 - **Project tabs** live in the sky header band: 13px, 500 weight, divided by 35% ink lines; the selected project becomes a white tab at 700 weight that opens into the page.

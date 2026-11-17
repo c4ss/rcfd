@@ -9,7 +9,8 @@
 // approve-everything flag, any other permission mode, and any `--allowedTools` value that is not a valid rule.
 //
 // No Electron import: unit-tested in Node.
-import { readFile, realpath, stat } from 'node:fs/promises';
+import { createHash, randomBytes } from 'node:crypto';
+import { mkdir, readFile, realpath, rename, stat, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 
 /** One rule. Shell and file rules always carry a pattern; a bare `Bash` or `Edit` cannot be expressed. */
@@ -52,6 +53,8 @@ export const PROJECT_READ_TOOLS = [
   'check_case_mesh',
   'preview_mesh',
   'list_meshes',
+  // ADR 0733 (the maintainer, 2026-11-17): the runner's budgets, read-only
+  'runner_config',
 ] as const;
 
 export class RuleError extends Error {
@@ -324,7 +327,8 @@ export function projectRelative(project: string, file: string): string | null {
 
 /**
  * The narrowest rule that would allow a denied call, for display ("this rule would allow it"). Null when no safe exact
- * rule exists (a file outside the project, a command with wildcards). The Studio does not add it (F-814 decision D5).
+ * rule exists (a file outside the project, a command with wildcards). The Studio adds it to the allow-list file only
+ * when the user confirms that exact rule ("Allow this from now on", `addAllowRule` below; the maintainer, 2026-11-17).
  */
 export function suggest(tool: string, input: unknown, project: string): AllowRule | null {
   const field = (k: string): string | null => {
@@ -404,4 +408,74 @@ export function parseAllowFile(text: string): AllowFileResult {
     list.add(shape);
   }
   return { kind: 'list', list };
+}
+
+// ---- adding a rule to the allow-list file (F-814, the maintainer's approval of 2026-11-17)
+//
+// "Allow this from now on" on a denied call: the rule the Studio suggested for it, after the user confirmed that exact
+// rule, is added to `.rcfd/claude-allow.json`. The main process writes the file: never over a file another writer
+// changed since it was read (G18, the hash the panel was shown), as a whole new file renamed over the old one (the one
+// rename in a project folder, tests/unit/history.spec.ts), and only a list that passes the same validation as a list
+// read from the file, and the argument check of every spawn (checkArgs).
+
+/** The SHA-256 (hex) of the allow-list file's text, or null when there is no file. */
+export const allowFileHash = (text: string | null): string | null => (text === null ? null : createHash('sha256').update(text).digest('hex'));
+
+/** The allow-list file's text, or null when there is none. */
+export async function readAllowText(project: string): Promise<string | null> {
+  try {
+    return await readFile(path.join(project, ...ALLOW_FILE.split('/')), 'utf8');
+  } catch (e) {
+    if ((e as NodeJS.ErrnoException).code === 'ENOENT') return null;
+    throw e;
+  }
+}
+
+/** The text of an allow-list file holding exactly `rules` (as flag values), in the one shape `parseAllowFile` reads. */
+export const allowFileText = (rules: readonly string[]): string => `${JSON.stringify({ version: 1, rules }, null, 2)}
+`;
+
+/**
+ * The new text of the allow-list file with `rule` added, or why it is refused. `text` is the file as it is (null: no
+ * file, so the list in use is the Studio's first list, which the new file keeps, then the rule). Refused: a value that
+ * is not a valid rule (the policy of the file's own rules: no bare shell or file tool, no wildcard-only rule, no control
+ * file, nothing outside the project), a rule already in the list, a file that is refused as it is, and a list the
+ * argument check of a spawn would refuse.
+ */
+export function withRule(text: string | null, rule: string): { readonly text: string; readonly rules: readonly string[] } | { readonly refused: string } {
+  const shape = ruleShape(rule);
+  if (!shape) return { refused: `${JSON.stringify(rule)} is not a rule (a tool name, Bash(..), PowerShell(..), Edit(..) or Read(..))` };
+  const why = ruleProblem(shape);
+  if (why) return { refused: `the rule ${JSON.stringify(rule)} is refused: ${why}` };
+  const current = text === null ? { kind: 'list' as const, list: AllowList.initial() } : parseAllowFile(text);
+  if (current.kind === 'refused') return { refused: `${current.reason}; correct the file before a rule is added to it` };
+  if (current.kind !== 'list') return { refused: `${ALLOW_FILE} cannot be read` };
+  const value = flagValue(shape);
+  if (current.list.values.includes(value)) return { refused: `${value} is already allowed by ${ALLOW_FILE}` };
+  const rules = [...current.list.values, value];
+  const next = allowFileText(rules);
+  // the same validation as a file read from the folder, and the argument check of every spawn
+  const again = parseAllowFile(next);
+  if (again.kind !== 'list') return { refused: again.kind === 'refused' ? again.reason : 'the new list cannot be read back' };
+  try {
+    checkArgs(again.list.permissionArgs());
+  } catch (e) {
+    return { refused: (e as Error).message };
+  }
+  return { text: next, rules: again.list.values };
+}
+
+/**
+ * Writes `text` as the allow-list file if the file still has the hash `base` (null: there is still no file): a new
+ * file beside it, then renamed over it. Returns false, and writes nothing, when the file changed since it was read.
+ * The check and the rename are moments apart; a writer in that gap is not seen (as with the service's settings).
+ */
+export async function writeAllowFile(project: string, text: string, base: string | null): Promise<boolean> {
+  const file = path.join(project, ...ALLOW_FILE.split('/'));
+  if (allowFileHash(await readAllowText(project)) !== base) return false;
+  await mkdir(path.dirname(file), { recursive: true });
+  const tmp = `${file}.${process.pid}.${randomBytes(4).toString('hex')}.tmp`;
+  await writeFile(tmp, text, 'utf8');
+  await rename(tmp, file);
+  return true;
 }

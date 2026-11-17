@@ -36,4 +36,6 @@ export const claudeActions = {
   cancel: (): Promise<ClaudeReply<null>> => bridge()?.cancel() ?? none(),
   confirm: (token: string): Promise<ClaudeReply<null>> => bridge()?.confirm(token) ?? none(),
   refresh: (): Promise<ClaudeReply<null>> => bridge()?.refresh() ?? none(),
+  allow: (rule: string, base: string | null): Promise<ClaudeReply<null>> => bridge()?.allow(rule, base) ?? none(),
+  undoAllow: (force: boolean): Promise<ClaudeReply<null>> => bridge()?.undoAllow(force) ?? none(),
 };

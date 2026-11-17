@@ -103,7 +103,7 @@ what to set, and "Open project folder" is unavailable with the reason.
   read or the server stops, the header says "Not live", a notice says why and what is shown, and Reconnect starts a new
   server.
 - The renderer reaches the home only through `window.studioProject` (`state`, `onState`, `offState`, `pick`, `open`,
-  `forget`, `close`, `refresh`, `dismiss`), from one module, `src/renderer/project/door.ts`. A second MessagePort on
+  `forget`, `close`, `refresh`, `dismiss`, and F-835's `create`), from one module, `src/renderer/project/door.ts`. A second MessagePort on
   `studio.project-port`, like the service port; `src/main/project/bridge.ts` checks every message (exact fields, a path
   of at most 4096 characters). The page cannot name a folder: `open` takes only a folder of the recent list, and new
   folders come from the main process's dialog. The ipcMain channels are `app.info`, `app.ready` and (F-837)
@@ -131,6 +131,33 @@ engine):
   an addendum if preferred.
 - The folder dialog, the recent list and the project server's queries are main-process operations behind the project
   port, not service methods, so they have no entry in the action registry (F-827) yet (G16).
+
+### New project (F-835)
+
+The engine makes a project, never the Studio (G4, G12): `rcfd project init <folder>` (ADR 0731, over
+`rcfd_project::Project::create`; Claude Code's equivalent is the MCP tool `create_project`). Three ways in, one engine
+call:
+
+- New project… on the empty home (an icon button beside Open project folder…, named and with its tooltip) and the
+  palette's New project… (`project.new`, group Project): the main process's folder dialog, which can make a new folder,
+  then `rcfd project init <folder>`, then the folder opens as Open does.
+- Make a project here, on a folder the engine has just refused as no project (F-813's "not a project yet" section): the
+  same command on that folder. The page names no path: the port's `create` takes only `where`, `pick` or `here`, and
+  `here` is the folder of the failed open (`src/main/project/bridge.ts`, `home.ts`).
+- The `rcfd` run is the one beside the engine's project server (`src/main/project/create.ts`), never one from `PATH`.
+  A refusal or failure of the engine is a failure notice, "Failed to make the project", with the engine's message; the
+  project open before stays open. When the engine refuses because the folder already holds a project file (made
+  meanwhile), the folder is opened.
+
+Decisions taken in building F-835 (options, the recommendation followed; each reversible without touching the engine):
+
+- D1, the empty home's word budget (G22, 6 words, all used): (a) New project… as an icon button (a folder with a plus),
+  its name and tooltip "New project…", so the budget holds; (b) a worded button, which needs the budget raised to 8 (the
+  maintainer's word, G22). Taken: (a); (b) is for the maintainer.
+- D2, the name: the engine's default, the folder's name; the Studio has no name field (`--name` is left to the CLI and
+  `create_project`). The coverage file records `--name` as an exemption.
+- D3, where it lives: the project port (`create`) and `STUDIO_COMMANDS`, with the folder operations of F-805, rather than
+  the run-control list: it is a main-process folder operation followed by an open.
 
 ## Bulk field data (F-804)
 
@@ -424,11 +451,12 @@ are chips that open the run in Runs or the file on Home. The panel hides to a sl
   `--add-dir`, `--permission-prompt-tool` and malformed rules. A turn whose `system/init` does not report `dontAsk` is
   killed before any action. Stop kills the process tree.
 - Tool approvals: the allow-list file `.rcfd/claude-allow.json` (`{"version":1,"rules":[...]}`) when valid (one bad
-  rule refuses the whole file and no chat starts), else the conservative first list: the 15 read-class tools of the
+  rule refuses the whole file and no chat starts), else the conservative first list: the 16 read-class tools of the
   engine's project server (`mcp__rcfd_project__project_info`, `list_runs`, `run_status`, `read_metrics`,
   `read_residuals`, `field_summary`, `render_field`, `compare_runs`, `list_changes`, `read_project_file`, `wait_run`,
-  `read_feed`, `check_case_mesh`, `preview_mesh`, `list_meshes`). Everything else is denied without asking; a denied
-  call shows the narrowest rule that would allow it.
+  `read_feed`, `check_case_mesh`, `preview_mesh`, `list_meshes`, `runner_config`; the last since ADR 0733, the
+  maintainer's word of 2026-11-17). Everything else is denied without asking; a denied call shows the narrowest rule
+  that would allow it.
 - The project server Claude Code is given: `rcfd-mcp --project <folder> --root <folder>` (`RCFD_STUDIO_MCP`), in an MCP
   config the Studio writes in its own state folder; with `--strict-mcp-config` no other server is loaded. Without
   `RCFD_STUDIO_MCP` the config lists no server.
@@ -813,18 +841,18 @@ Nothing on the path writes to a project folder or keeps project state (G2, G12):
 lists every time (`model.ts`), and the result link is one function, `openFirstResult` in `target.ts` (it opens the run in
 Runs today; repoint it there when F-810's run workspace lands).
 
-Missing engine entry point: no CLI, MCP or service call makes a project in an empty folder (only the library's
-`rcfd_project::Project::create`, used by the egui `rcfd-studio` removed by F-449). Until one exists the Studio shows the
-folder as not a project yet, with "Make a project here" unavailable and the reason in its tooltip, watches the folder
-(every second, no writes) and opens it by itself when `rcfd-project.json` appears. Proposed:
-`rcfd project init <dir> [--name]` and an MCP `create_project` wrapping `Project::create`.
+Making the project (F-835): a folder that is not a project yet offers Make a project here, which runs the engine's
+`rcfd project init <folder>` (ADR 0731) and opens the new project; the Studio writes nothing itself. The home also watches
+the folder (every second, no writes) and opens it by itself when `rcfd-project.json` appears, made by Claude Code
+(`create_project`), the CLI or anyone else. The e2e walk makes its projects through Make a project here, New project… and
+the palette, with no stand-in.
 
 Decisions taken in building F-813 (options, the recommendation followed; each reversible without touching the engine):
 
 - D1, an empty folder: (a) say what is missing, watch the folder and open it when the project file appears; (b) write
   the manifest from the Studio (refused: G2, G12); (c) an engine entry point (proposed above, Rust). Taken: (a).
 - D2, the missing command: show "Make a project here" as unavailable with its reason, rather than leave it out, so the
-  learner sees it is a known gap (G6). Taken.
+  learner sees it is a known gap (G6). Taken; superseded by F-835, which makes it available (the engine's command).
 - D3, how the example runs: (a) `start_run` with the engine's start plan (a picture to show); (b) F-807's
   `project.run_case` (stores no fields, so no picture); (c) one `start_run {new_case}` call (no separate make step to
   explain). Taken: (a), as a separate action list (`src/shared/actions/first.ts`), because `RUN_ACTIONS` is pinned by
@@ -1234,7 +1262,7 @@ word budgets of `src/shared/word-budget.ts` are unchanged). The tests are `tests
 | The selected run's warnings at rest; its log's end (200 lines) and last events on demand, warnings named as such | Runs, a run selected | `read_project_file` of `runs/<id>/log.txt` from its end; `run_status {events: 50}` (the tool's maximum) |
 | Open the report | Runs, a run selected | `read_project_file` says `runs/<id>/output/report.html` is there; the system's program for HTML opens it (`shell.openPath`) |
 | Run again with fields stored | Runs, a run selected | `start_run {case, store: "plan"}` (ADR 0140) |
-| The runner's budgets: read, set, undo | Runs, beside the run bar | `.rcfd/runner-config.json` and `.rcfd/runner.json` (rcfd-runner's own files; no engine command sets them) |
+| The runner's budgets: read, set, undo | Runs, beside the run bar | `runner_config` and `set_runner_config` (ADR 0733): the runner reads and writes its own `.rcfd/runner-config.json` and reports `.rcfd/runner.json` |
 | Colour range of the whole run, or fixed | Field view | `data.field` of every stored snapshot (a cancellable work, F-832) |
 | View face on (2D), with a scale bar | Field view | none (the camera) |
 | The domain's extents in the caption | Field view | the stored mesh's points |
@@ -1256,9 +1284,12 @@ Seven palette commands (G20): `runs.log`, `runs.report`, `runs.budgets` (group P
   whole numbers, positive counts), only the keys set, never over a change since it was read (a hash), and keeps the
   last write to undo; (b) hand it to Claude Code; (c) wait for an engine command. Taken: (a). The write is not atomic
   (a rename is outside the house rule of `tests/unit/history.spec.ts`); the runner reads the file once, when it starts.
-  Proposed engine command: `rcfd-runner config set` or an MCP `set_runner_config`.
+  Proposed engine command: `rcfd-runner config set` or an MCP `set_runner_config`. Superseded 2026-11-17 by (c), ADR
+  0733 accepted and built: the runner writes the file itself (`set_runner_config` on the run-control server, its own
+  checks, atomic, conflict 1200), and the Studio's checks and writer are gone.
 - D2, the budgets' undo. (a) The panel's own Undo of its last write, refused over another writer's change unless asked
-  ("Undo anyway"); (b) a step in F-829's history, which is per case-editor session. Taken: (a). Undo of a write to a
+  ("Undo anyway"); (b) a step in F-829's history, which is per case-editor session. Taken: (a). Since ADR 0733 (Q2 (a))
+  the undo sends the keys of that write back with their values before it, through `set_runner_config`. Undo of a write to a
   file that was not there leaves `{}` (every key at the runner's default): the Studio removes no file.
 - D3, the report. (a) `shell.openPath` (the system's program for HTML); (b) show the file in its folder; (c) copy the
   path. Taken: (a).

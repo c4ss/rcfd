@@ -49,13 +49,13 @@ export function runnerBudgets(): Promise<RunReply<RunnerBudgets>> {
   return b ? b.budgets() : Promise.resolve(noBridge());
 }
 
-/** Sets (number) or clears (null) budgets, if the file still has `base`. */
-export function setRunnerBudgets(values: Readonly<Partial<Record<BudgetKey, number | null>>>, base: string | null): Promise<RunReply<BudgetsOutcome>> {
+/** The runner sets (number) or clears (null) budgets, if the file still has `base`; `replace`: every key, over an unreadable file. */
+export function setRunnerBudgets(values: Readonly<Partial<Record<BudgetKey, number | null>>>, base: string | null, replace = false): Promise<RunReply<BudgetsOutcome>> {
   const b = bridge();
-  return b ? b.setBudgets(values, base) : Promise.resolve(noBridge());
+  return b ? b.setBudgets(values, base, replace) : Promise.resolve(noBridge());
 }
 
-/** Puts back the budgets file as it was before this window's last write. */
+/** Sets the keys of this window's last budgets write back to their values before it. */
 export function undoRunnerBudgets(force: boolean): Promise<RunReply<BudgetsOutcome>> {
   const b = bridge();
   return b ? b.undoBudgets(force) : Promise.resolve(noBridge());

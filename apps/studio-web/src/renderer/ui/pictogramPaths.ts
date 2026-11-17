@@ -81,6 +81,8 @@ export const ICON_NAMES = [
   // F-818
   'theme',
   'settings',
+  // F-835
+  'new-project',
 ] as const;
 export type IconName = (typeof ICON_NAMES)[number];
 
@@ -119,4 +121,6 @@ export const ICON_PATHS: Record<IconName, { readonly path: string; readonly fill
   theme: { path: 'M2 2H12V12H2ZM2 12L12 2M5 12L12 5M8 12L12 8' },
   // F-818: the Studio's settings (three rails, each with its stop at a different place)
   settings: { path: 'M1 3H13M1 7H13M1 11H13M4 1V5M10 5V9M6 9V13' },
+  // F-835: New project… (a folder with its tab, a plus inside)
+  'new-project': { path: 'M1 3H5L6 4H13V12H1ZM7 6V10M5 8H9' },
 };

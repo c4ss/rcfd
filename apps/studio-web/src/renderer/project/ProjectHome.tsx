@@ -161,11 +161,20 @@ function NoProject({ state }: { state: ProjectState | null }) {
         </Quiet>
         <div className="ph-empty-actions">
           {engine === undefined || engine.configured ? (
-            <Button variant="primary" icon="plus" onPress={actions.pick} isDisabled={state?.opening != null} aria-describedby="ph-what">
-              Open project folder…
-            </Button>
+            <>
+              <Button variant="primary" icon="plus" onPress={actions.pick} isDisabled={state?.opening != null} aria-describedby="ph-what">
+                Open project folder…
+              </Button>
+              {/* F-835: the engine makes the project (rcfd project init), then it opens. G22: an icon at rest, its name
+                  and tooltip "New project…", so the empty home keeps its budget of six words */}
+              <IconButton icon="new-project" label="New project…" onPress={actions.create} isDisabled={state?.opening != null} aria-describedby="ph-new-what" />
+              <Quiet id="ph-new-what">Choose or make a folder; the engine makes it a project, and it opens.</Quiet>
+            </>
           ) : (
-            <Unavailable label="Open project folder…" reason={NOT_CONFIGURED_SHORT} />
+            <>
+              <Unavailable label="Open project folder…" reason={NOT_CONFIGURED_SHORT} />
+              <Unavailable label="New project…" reason={NOT_CONFIGURED_SHORT} />
+            </>
           )}
         </div>
         {engine && !engine.configured && (
@@ -254,6 +263,7 @@ const FAILURE_TITLE: Record<OpenFailure['kind'], string> = {
   not_found: 'Failed to open: folder not found',
   not_a_project: 'Failed to open: not an rcfd project',
   engine: 'Failed to open: the engine could not read the folder',
+  not_created: 'Failed to make the project',
 };
 
 function FailureNotice({ failure, recent }: { failure: OpenFailure; recent: readonly RecentProject[] }) {
