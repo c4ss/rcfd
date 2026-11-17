@@ -161,3 +161,108 @@ code line is not read. New mutation M7: E0 dropped from the tier list, caught by
 
 Decision rule as above, with P2' and P3' in place of P2 and P3; the first-run P2 miss is stated in the addendum whatever the result
 of P2'. If P2' is met, the proposed status is done with that disclosure; if it is missed, partial.
+
+## Addendum 1: results (2026-11-17)
+
+Code: `scripts/adr_test_index.py` (evidence E0, E6 and E7, `primary_adr`, `primary_evidence`, `wave` per test; `coverage.wave` and
+`coverage.primary`; `adrs[n].primary_tests`), new tests `scripts/test_adr_test_index_wave.py` (13 tests, N1 to N9). The existing
+tests of the index and of `gate_attribute.py` are not edited; `gate.yml` and `gate_attribute.py` are unchanged. No Rust file, golden
+or hash table touched. Inputs and logs in `w49i-work/f737-scratch` (`base_index.json` the unchanged index, `new_index.json` the
+first run, `new_index2.json` the corrected run, `sample.json`, `sample2.json`, `measure.py`, `mutate.py`, `mutations.log`,
+`docs_site.log`). Each index run was made once: the baseline, the first run of the registered rule, and the corrected run of
+Amendment 1.
+
+| id | limit | measured (corrected run, rule P') | met |
+|---|---|---|---|
+| W1 | all binaries with an exact one-ADR tag mapped; at least 9 of the 10 listed leave the unmapped list | 10 of 10 (`cgrid_case_w34a` 0072, `convergence_wave17a` 0023, `divergence_guard_w32c` 0067, `radial_frame_w35c` 0078, `w26c_reports` 0048, `w37a_velocity_correction` 0084, `run_flags_w48a`, `events_w48a` and `contract_w48a` 0130, `sst_moving_wall_w34d` 0075); 56 tags have exactly one ADR | yes |
+| W2 | ambiguous and no-ADR tags listed, not mapped | 1 ambiguous (`31`: 0062, 0063, 0064), 25 tags without a wave ADR (`48i` to `48z`, `49a` to `49r`); controls N1, N2 | yes |
+| U1' | unmapped integration binaries with tests at most 65 (baseline 79) | **25** (first run, before E0: 49). Remaining: rcfd-api 8 (`mesh_params`, `non_conformal_case`, `properties`, `runctl`, `scalars`, `sources`, `udf`, `workflow`), rcfd-assistant 6, rcfd-cli 3, rcfd-core 1, rcfd-fv 2, rcfd-io 2, rcfd-post 2, rcfd-turb 1 | yes |
+| P1' | every mapped test has exactly one primary ADR in its `adrs`; none without ADR | 0 violations in 7713 tests (7577 have a primary: E0 7121, E2 417, E4 17, E5 14, E7 7, E3 1) | yes |
+| A1' | no test loses an ADR; at most 12 % of tests gain one | 0 lost; **1222 of 7713 (15.8 %) gained one** (first run, wave and E7 only: 835, 10.8 %) | **no** |
+| A2' | all tests mapped at least 93.7 % | 98.2 % (7577 of 7713; integration binaries 1143 of 1170, 97.7 %) | yes |
+| P2' | sample A' (20 of 1272 files, seed 7370, no overlap with sample A) at least 17 agree | **17 agree**, 3 disagree | yes (at the limit) |
+| P3' | sample B' (E6 or E7 primary: the pool has only 4 files after E0 took over the wave files) at least 12 of 15 | **1 of 4 agree**; 12 of 15 cannot be reached | **no** |
+| C1 | unit tests pass | `python -m unittest discover -s scripts`: 85 run, OK, 4 skipped (the E2E tests behind `GATE_TEST_E2E`); the two index test files are 12 existing and 13 new tests | yes |
+| C2 | `test_gate_attribute.py` unchanged and passing; the ADR 0653 T5 failing test keeps its ADRs | passes; `w49r_default_meshes_are_bit_identical` has ADRs 0181, 0653 before and after, primary 0181 | yes |
+| C3 | docs_site passes (an ADR file was added under docs/) | `cargo test -q --release -p rcfd-cli --test docs_site`: 2 passed, 0 failed | yes |
+
+Mutations (`mutations.log`, run on a scratch copy of `scripts/`): M1 a prefix match accepted for a tag (caught by
+`test_n2_ambiguous_not_mapped`), M2 E7 threshold 99 (`test_n4_binary_named_in_adr_text`), M3 E2 before E1
+(`test_n5_primary_tier_order`, `test_wave_is_added_to_a_file_that_is_already_mapped`), M4 `registration` preference dropped
+(`test_n5_registration_before_lower_number`), M5 E6 skipped for tests that already have an ADR (the same two as M3), M6 highest
+number first (`test_n4_binary_named_in_adr_text`, `test_n5_registration_before_lower_number`), M7 E0 dropped
+(`test_n7_header_adr_is_primary`): 7 of 7 caught.
+
+**Sample A (first run, rule P, seed 737): 11 of 20 agree, the limit of 17 was missed** (the nine disagreements are named in Amendment 1).
+Sample B (first run, 15 files, seed 737): 14 agree, one disagrees (`tick_cost_r6.rs`), so E6 itself is accurate.
+
+**Sample A' (corrected run, rule P', seed 7370)**, each file read with its primary ADR (the header comment of the file and the ADR text):
+
+| file | primary (evidence) | reading |
+|---|---|---|
+| `rcfd-mesh/src/gen.rs` | 0047 (E2) | disagree: the F-012 generators are older than wave 26b; the ADR only cites the file |
+| `rcfd-fem/tests/sb_fan_blade_builder.rs` | 0505 (E0) | agree (F-593 registration) |
+| `rcfd-fv/tests/natural_convection.rs` | 0029 (E2) | agree (wave 19a coupled solves, F-050; the ADR lists the file) |
+| `rcfd-api/src/rheology.rs` | 0212 (E2) | disagree: F-110 code; 0212 is F-296 and only names it |
+| `rcfd-mcp/tests/project_w48f.rs` | 0135 (E0) | agree |
+| `rcfd-fv/tests/mixture_drift.rs` | 0056 (E0) | agree |
+| `rcfd-api/src/design/cmaes.rs` | 0222 (E0) | agree (F-260 registration) |
+| `rcfd-fem/tests/sa_gyro_sector_schur.rs` | 0492 (E0) | agree |
+| `rcfd-api/tests/postprocessing.rs` | 0021 (E0) | agree |
+| `rcfd-fem/tests/sa_cms_residual_default_bits.rs` | 0474 (E0) | agree |
+| `rcfd-fv/tests/immersed_start_projection_f515.rs` | 0425 (E0) | agree |
+| `rcfd-fv/tests/remesh_f247.rs` | 0215 (E0) | agree |
+| `rcfd-fv/tests/overset_motion_f442.rs` | 0359 (E0) | agree |
+| `rcfd-fem/tests/sa_visco_default_bits.rs` | 0485 (E0) | agree |
+| `rcfd-api/tests/f295_seam_diffusivity.rs` | 0205 (E0) | agree |
+| `rcfd-api/tests/compressible_bc_case.rs` | 0006 (E0) | agree |
+| `rcfd-studio/tests/followups_n.rs` | 0148 (E0) | agree |
+| `rcfd-particles/tests/film_gas.rs` | 0206 (E0) | agree |
+| `rcfd-fv/tests/transient_buoyancy.rs` | 0352 (E2) | disagree: the file belongs to F-050 (transient gaps); 0352 (F-443) lists it among files run |
+| `rcfd-fv/src/radiation.rs` | 0012 (E0) | agree |
+
+Sample B' (the whole pool of 4): `rcfd-fv/tests/guarded_secant.rs` 0055 (E7) agree (its header names `docs/adr/0055-wave29a-...` G2);
+`rcfd-api/tests/library_api.rs` 0014 (E7) disagree (the ADR lists suites that passed; the file is F-082); `physics_service.rs` 0144 (E7)
+disagree (a list of tests run); `transient_energy.rs` 0160 (E7) disagree (a list of hashes). So E7 gives ADRs that name a binary, not its
+registering ADR.
+
+Deviations, all disclosed:
+
+1. **P2 was missed on the first run and rule P was amended** (Amendment 1, committed before the corrected run). Sample A' met the
+   unchanged limit of 17 only at its edge (17 of 20); with a binomial spread of about two on 20 the true rate is between 75 % and 95 %.
+2. **A1 was missed by the amendment.** E0 adds the header ADR to `adrs` of many tests; the share of tests that gained any ADR is
+   15.8 % against 12 %. No test lost an ADR. The limit is kept and the number recorded. The extra ADRs are the ADRs the files name
+   themselves, so the cost is more candidates per failure in `gate_attribute.py`, not wrong ones.
+3. **P3' could not be met** because the E6 or E7 pool is 4 files: E0 takes the wave files first (their headers name the wave ADR).
+   The registered "12 of 15" is not reachable on 4 files and is recorded as missed; E6 itself was judged on sample B of the first run (14 of 15).
+4. The report line of the first run printed the whole `E7 too common` list (335 binaries, a count that includes binaries other evidence
+   maps); it was changed to print the count only. No number of a check changed.
+5. The `docs/` change is this ADR; `docs/test-process.md` is not changed (its section 7 does not describe the new fields).
+
+**Decision by the registered rule: partial.** W1, W2, U1', P1', A2', P2', C1, C2 and C3 are met and all seven mutations are caught,
+but A1' (15.8 % against 12 %) and P3' (1 of 4) are missed, and the first-run P2 miss is on record.
+
+Remaining questions, each with options and a recommendation:
+
+1. **Primary from E7?** Options: (a) keep E7 as the tier before E5 (now); (b) take E7 out of the primary tiers and keep it as plain
+   evidence (membership only). Recommendation (b): 3 of 4 E7 primaries were wrong and only 7 tests have E7 as primary, so (b) costs
+   nothing in coverage and gives "no primary" instead of a wrong one.
+2. **Primary for E2-only source files** (all 3 disagreements of sample A' are E2 on an old file or on a list of files run). Options:
+   (a) leave; (b) take the earliest ADR that names the file by git order; (c) no primary without E0, E1 or E6. Recommendation (b), as a
+   follow-up with its own registered rule.
+3. **The 12 % limit of A1.** Options: keep the miss on record (done) or accept 16 % as the measured cost of E0. Recommendation: keep it
+   on record; the limit was an estimate made before the headers were read.
+4. **The 25 binaries still unmapped** have no header ADR, no item and no tag. Options: write the ADR text that names them, or add a
+   header comment to each file (a Rust edit, not allowed here). Recommendation: a follow-up that writes the ADR text; the index does not guess.
+
+## For the lead: roadmap entries
+
+Proposed status and note of F-737:
+
+> Proposed status: partial.
+
+> Test-to-ADR index, wave tags and a primary ADR (follow-up of F-723, ADR 0653). PARTIAL. ADR 0679, 2026-11-17: the index maps wave-named test files to the ADR named after their wave by an exact tag rule (`w34a` and `wave17a` to the ADRs `wave34a` and `wave17a`; a bare tag with several ADRs, `w31`, is listed as ambiguous and not mapped; 25 tags have no wave ADR), reads the first `ADR NNNN` of a test file's own header comment as evidence, and gives each test a `primary_adr` with its evidence (additive fields; `gate_attribute.py` and `gate.yml` unchanged and passing). Integration binaries unmapped with tests fell from 79 to 25 (limit 65); all tests mapped 93.7 % to 98.2 %; no test lost an ADR. Sample check by reading: the first rule (without the header tier) gave 11 of 20 and missed 17; the amended rule (Amendment 1) gave 17 of 20 on a fresh draw (limit 17). Missed: the share of tests that gained an ADR is 15.8 % (limit 12 %), and the evidence "binary named in an ADR" is not a registering ADR (1 of 4). 7 of 7 mutations caught.
+
+> Follow-up proposed: Primary ADR only from registering evidence in the test-to-ADR index. Deps F-737. Acceptance: Every limit not stated here is registered in the ADR before the run. The primary ADR is taken from the header ADR, the item's registration, the wave ADR and a file citation only, never from a binary named in an ADR's text or a list of tests run; the 7 tests whose primary was E7 and the E2-only source files named in ADR 0679 sample A' (`gen.rs`, `rheology.rs`, `transient_buoyancy.rs`) get the earliest ADR that names the file, or none, by a registered rule; a registered sample of at least 30 primary ADRs is read with at least 90 % agreement; the attribution JSON of `gate_attribute.py` is unchanged for the existing consumers.
+
+> Follow-up proposed: ADR text for the 25 integration-test binaries still unmapped in the test-to-ADR index. Deps F-737. Acceptance: Every limit not stated here is registered in the ADR before the run. Each of the 25 binaries listed in ADR 0679 addendum 1 is named in the ADR that registered or first described it, found by reading the code and the git history, with no Rust file edited; the index shows at most 5 unmapped integration binaries with tests; a registered sample of the new mappings is read.
