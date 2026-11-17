@@ -7,7 +7,8 @@
 //   refuses a 3D one), on the quick-start and axial-fan runs;
 // - availability: a cut plane on a 2D case, an iso-surface and streamlines everywhere, and vectors without their
 //   components are unavailable, each with its reason in words (G6); the rest are available;
-// - T2: rcfd-render's cut-plane rule, read from its shader and its documentation, and the Studio's mirror of it;
+// - T2: the cut-plane rule of the removed rcfd-render (n . p <= d; F-838 removed the crate and the check of its shader
+//   text), and the Studio's mirror of it;
 // - T3: the constants of overlay_vectors and render.png read from the Rust source; every arrow against an independent
 //   f64 recomputation (the same arrows, each point within 2^-20 of the largest extent) and the stored components bit
 //   for bit (the Rust reader's reference bytes);
@@ -173,10 +174,8 @@ test('on a 3D store the cut plane and the arrows apply; without uz the arrows do
 
 // ---- T2 ------------------------------------------------------------------------------------------------------------
 
-test('T2: the cut plane is rcfd-render’s rule, read from its shader and documentation', () => {
-  // the reference: discard where dot(n, p) > d; the documented rule: only points with n . p <= d are drawn
-  expect(rust('crates/rcfd-render/src/shader.wgsl')).toContain('(u.params.z > 0.5 && dot(u.clip.xyz, v.world) > u.clip.w)');
-  expect(rust('crates/rcfd-render/src/gpu.rs')).toContain('/// Cut plane `(n, d)`: only points with `n . p <= d` are drawn (clipped per fragment in the shader).');
+test('T2: the cut plane is rcfd-render’s rule, only points with n . p <= d are drawn', () => {
+  // the reference was rcfd-render's shader (discard where dot(n, p) > d); the crate was removed (F-838), the rule stays
   // the Studio's shader mask says the same (FieldCanvas.tsx)
   expect(rust('apps/studio-web/src/renderer/field/FieldCanvas.tsx')).toContain('dot(vec3(n), positionWorld).lessThanEqual(d)');
   // the planes: n = e_a keeps p[a] <= d; n = -e_a keeps p[a] >= d; d is the f32 of the position

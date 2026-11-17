@@ -52,7 +52,7 @@ The first target is a 120 mm axial computer fan. The aim is a parametric fan tha
 
 ### Studio, the new desktop application
 
-Studio will render with wgpu and treat a project as a folder holding many runs. You will be able to play a run back through time, run several in the background, and chat with Claude Code in a sidebar. The libraries underneath exist and are tested without a window: the project format, a background run service, a time-series store, a wgpu render core and the Claude Code bridge. The application shell and the Claude Code plugin come next. See [the Studio plan](ui-restart-plan.md).
+Studio treats a project as a folder holding many runs. You will be able to play a run back through time, run several in the background, and chat with Claude Code in a side panel, the Studio's only assistant: the local-model assistant of the old egui app was removed (F-838). The libraries underneath exist and are tested without a window: the project format, a background run service and a time-series store. The Studio is an Electron app that draws with three.js (WebGPU, or WebGL 2); see [the Studio plan](ui-restart-plan.md) and ADR 0800.
 
 ### Faster tests that stay strict
 

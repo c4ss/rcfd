@@ -33,17 +33,7 @@ fn graph() -> BTreeMap<String, BTreeSet<String>> {
 fn all_required_crates_exist() {
     let g = graph();
     for c in [
-        "core",
-        "mesh",
-        "linalg",
-        "fv",
-        "turb",
-        "io",
-        "post",
-        "cli",
-        "api",
-        "mcp",
-        "assistant",
+        "core", "mesh", "linalg", "fv", "turb", "io", "post", "cli", "api", "mcp",
     ] {
         assert!(g.contains_key(&format!("rcfd-{c}")), "missing crate rcfd-{c}");
     }
@@ -86,11 +76,10 @@ fn layering_matches_architecture_doc() {
         "rcfd-fem" => 2,
         "rcfd-io" | "rcfd-fv" | "rcfd-particles" => 3,
         "rcfd-turb" | "rcfd-post" | "rcfd-tsstore" => 4,
-        "rcfd-api" | "rcfd-render" => 5,
+        "rcfd-api" => 5,
         // ADR 0173 D1 (a), ADR 0185 E8: the project workspace, above api and below mcp
         "rcfd-workspace" => 6,
         "rcfd-mcp" | "rcfd-cli" => 7,
-        "rcfd-assistant" => 8,
         other => panic!("unknown crate {other}"),
     };
     for (c, deps) in &g {

@@ -6,7 +6,7 @@
 //   by a cell field; there is no streamline integrator). The Studio does not draw a picture it cannot check against the
 //   engine, so both are unavailable, with the reason (G6), and recorded as missing engine entry points.
 // - the cut plane: rcfd-render's rule, `View::clip = (n, d)`: only points with `n . p <= d` are drawn, per fragment
-//   (`crates/rcfd-render/src/shader.wgsl`). The Studio applies the same rule on the GPU and in the pick (T2).
+//   (`crates/rcfd-render/src/shader.wgsl`, removed by F-838). The Studio applies the same rule on the GPU and in the pick (T2).
 // - vectors: rcfd-post's `overlay_vectors` (the arrows of the service's `render.png`), carried to the boundary surface
 //   (T3). The arrows carry the stored components unchanged.
 //

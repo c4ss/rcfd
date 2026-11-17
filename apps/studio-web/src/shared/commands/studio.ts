@@ -314,7 +314,7 @@ export const STUDIO_COMMANDS: readonly StudioCommand[] = [
     engine: 'the main process captures the window’s picture and writes the file the save dialog names',
     cli: null,
     mcp: null,
-    note: 'The picture the Studio shows; the engine’s own renderer (rcfd-render) draws a store’s field with its own camera and colours.',
+    note: 'The picture the Studio shows; the engine’s own renderer (rcfd-post’s, behind the MCP render_field tool) draws a store’s field with its own camera and colours.',
   },
   {
     id: 'field.range',

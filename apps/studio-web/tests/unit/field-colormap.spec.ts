@@ -1,6 +1,7 @@
 // The field viewport's colour table against rcfd-render's colour map (F-808, guardrail G3; DESIGN.md, the Data Owns the
 // Field Rule). The reference is read from the Rust source (tests/support/rcfd-render-map.ts): rcfd_post's stops, and
-// rcfd-render's ColorMap::eval repeated operation for operation.
+// rcfd-render's ColorMap::eval (rcfd_post's colormap on the same stops; the crate was removed by F-838) repeated
+// operation for operation.
 //
 // - Every one of the 256 entries equals rcfd-render's colour at k / 255, and both ends equal its end colours.
 // - How a value finds its entry (lutIndex, the shader's arithmetic in f32): over the full range the Studio's colour is

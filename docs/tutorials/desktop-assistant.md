@@ -268,10 +268,10 @@ Ctrl is Cmd on macOS.
   point). Copy an example project. The removed `rcfd-studio` had Project > New project....
 * No delete of a run, a result or a case: the engine has none, so the Studio offers none.
 * No picture of a case's mesh before a run (the removed `rcfd-studio` had one), no iso-surfaces and no streamlines.
-* No model of your own choice: the panel talks to Claude Code only. The removed `rcfd-gui` had an assistant sidebar for a
-  model you choose, with provider presets (`ollama`, `lm-studio`, `llama-cpp`, `vllm`, `openai`, `anthropic`), four quick
-  actions that need no model (Assess mesh, Validate case, Suggest BCs, Explain residuals) and an Approve writes mode; the
-  Studio has none of these yet.
+* No model of your own choice: the Claude Code panel is the only assistant. The local-model assistant of the removed
+  `rcfd-gui` (provider presets `ollama`, `lm-studio`, `llama-cpp`, `vllm`, `openai`, `anthropic`, an API key in the OS
+  keychain, read-only and Approve writes modes, and four quick actions: Assess mesh, Validate case, Suggest BCs, Explain
+  residuals) was removed with its crate `rcfd-assistant` (F-838), and is not planned for the Studio.
 
 The removed egui apps had more that this Studio does not have yet:
 

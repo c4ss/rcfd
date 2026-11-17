@@ -61,12 +61,11 @@ Prerequisites:
 
 * Rust 1.90 or later. With 1.90, CI type-checks the whole workspace. With
   1.99, it builds and tests everything. Tests have not been run on 1.90. Each
-  crate's `rust-version` states its own minimum (1.75 to 1.90): 1.75, or the
+  crate's `rust-version` states its own minimum (1.75 to 1.85): 1.75, or the
   highest minimum its dependencies declare if that is higher. Older
   toolchains are not tested.
-* The render crate uses the GPU through wgpu. Without a GPU or a software
-  adapter its tests print a skip message and pass. CUDA support is an
-  optional feature, off by default ([docs/gpu.md](docs/gpu.md)).
+* CUDA support is an optional feature, off by default
+  ([docs/gpu.md](docs/gpu.md)).
 * Node.js 22.12 or later with npm, for the desktop Studio only.
 * Python 3.9 or later is optional: the test-gate script and the data fetch
   script use it, and the Python tests skip without it.
@@ -92,7 +91,10 @@ lines and the steps in the window):
     RCFD_STUDIO_RCFD="$PWD/../../target/release/rcfd" npm start
 
 The older egui desktop apps, `rcfd-studio` and `rcfd-gui`, were removed
-(roadmap item F-449); the git history keeps them.
+(roadmap item F-449); the git history keeps them. The local-model assistant
+of `rcfd-gui` (crate `rcfd-assistant`) and the wgpu render crate
+`rcfd-render` were removed after them (F-838): the Studio's Claude Code panel
+is the only assistant.
 
 Finished example projects that open straight to a picture are in
 `example-projects/` (runs made on Windows) and `example-projects-linux/` (the

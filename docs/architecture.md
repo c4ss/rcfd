@@ -28,20 +28,21 @@ rcfd-api    -> core, fv, io, particles, tsstore (and the crates above)
 rcfd-workspace -> api, project, runner, tsstore, post, io, mesh   (the project folder's commands, queries and write rule, shared by the MCP server and the Studio; ADR 0173, ADR 0185; io and mesh for the mesh commands, ADR 0187; the project journal's entries and the change feed, ADR 0188)
 rcfd-mcp    -> api, workspace, project, runner, tsstore, post   (project tools behind --project: their MCP descriptors over the workspace; ADR 0135, ADR 0185)
 rcfd-cli    -> core, mesh, io, post, fv, api
-rcfd-assistant -> api, mcp   (provider adapters, agent loop, setup tools; no UI; its one user, the egui app rcfd-gui, was removed by F-449)
 rcfd-runner -> project   (Studio L2 run service: runs the `rcfd` binary as child processes, ADR 0123; on rcfd-project's records, ADR 0130)
-rcfd-render -> core, mesh, post   (Studio L4: wgpu offscreen render core, ADR 0125; no workspace crate depends on it since the egui Studio rcfd-studio was removed by F-449)
-rcfd-claude -> project   (Studio L6: Claude Code bridge, ADR 0126; atomic allow-list file, ADR 0134)
+rcfd-claude -> project   (the Claude Code allow-list rules and the per-project allow-list file, ADR 0126, ADR 0134; only rcfd-mcp's tests use it, F-838)
 ```
 
 The desktop Studio is the Electron app in `apps/studio-web/` (ADR 0800), outside the Cargo workspace: it runs the `rcfd`,
 `rcfd-runner` and `rcfd-mcp` binaries and depends on no crate. The two egui desktop apps that were workspace crates,
-`rcfd-gui` and `rcfd-studio`, were removed by roadmap item F-449 (the git history keeps them).
+`rcfd-gui` and `rcfd-studio`, were removed by roadmap item F-449 (the git history keeps them). The crates they left without
+users went with F-838 (ADR 0800 §10): `rcfd-assistant` (the local-model assistant of `rcfd-gui`), `rcfd-render` (the wgpu
+render core of `rcfd-studio`) and the Claude Code bridge part of `rcfd-claude` (session discovery, transcript and stream
+readers, chat driver, folder trust). The Studio has its own port of that bridge in `apps/studio-web/src/main/claude/`.
 
 ## Layering rules
 
 Lower layers never depend on higher ones (`core` < `mesh`/`linalg`/`project` < `gpu`/`dist`/`runner`/`claude`/`fem` <
-`io`/`fv`/`particles` < `turb`/`post`/`tsstore` < `api`/`render` < `workspace` < `mcp`/`cli` < `assistant`). The test
+`io`/`fv`/`particles` < `turb`/`post`/`tsstore` < `api` < `workspace` < `mcp`/`cli`). The test
 `crates/rcfd-cli/tests/workspace_graph.rs` checks the graph for acyclicity and conformance.
 
 ## Where to go next

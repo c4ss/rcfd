@@ -1,6 +1,7 @@
-//! The conservative allow-list (user decision 2026-10-26, ADR 0126) and its mapping onto `claude -p` flags.
+//! The conservative allow-list (user decision 2026-10-26, ADR 0126): its rules, their flag values and the per-project
+//! allow-list file.
 //!
-//! Every session runs with `--permission-mode dontAsk --permission-prompts none`: a tool call that no rule allows is
+//! The bridge of the removed egui Studio ran every session with `--permission-mode dontAsk --permission-prompts none`: a tool call that no rule allows is
 //! denied, never prompted and never auto-approved. The allow-list is the only thing the app adds. Observed on 2.1.310
 //! and stated in ADR 0126: the CLI also approves some read-only shell commands by its own classification
 //! (`echo bye` was accepted without a rule), user and project settings add their own rules, and an `Edit(path)` rule
@@ -34,13 +35,6 @@ const NEED_PATTERN: [&str; 8] = [
     "Read",
     "NotebookEdit",
     "WebFetch",
-];
-/// Flags the bridge never passes: they change who approves or widen access beyond the project folder.
-const FORBIDDEN_FLAGS: [&str; 4] = [
-    "--settings",
-    "--permission-prompt-tool",
-    "--add-dir",
-    "--allow-dangerously-skip-permissions",
 ];
 
 fn check_text(s: &str) -> Result<(), &'static str> {
@@ -186,7 +180,7 @@ impl AllowRule {
         })
     }
 
-    /// The same rule with the `./` anchor of a file pattern removed (the form [`suggest`] gives), so a rule read back
+    /// The same rule with the `./` anchor of a file pattern removed, so a rule read back
     /// from its flag value equals the rule that was written.
     fn normalized(self) -> AllowRule {
         match self {
@@ -218,74 +212,10 @@ impl AllowList {
         Ok(())
     }
 
-    /// Removes a rule.
-    pub fn remove(&mut self, rule: &AllowRule) {
-        self.rules.retain(|r| r != rule);
-    }
-
     /// The rules in insertion order.
     pub fn rules(&self) -> &[AllowRule] {
         &self.rules
     }
-
-    /// The permission flags for `claude -p`: always `dontAsk` with prompts off, then the rules (one argument each).
-    pub fn permission_args(&self) -> Vec<String> {
-        let mut a: Vec<String> = ["--permission-mode", "dontAsk", "--permission-prompts", "none"]
-            .map(String::from)
-            .to_vec();
-        if !self.rules.is_empty() {
-            a.push("--allowedTools".into());
-            a.extend(self.rules.iter().map(AllowRule::to_flag_value));
-        }
-        a
-    }
-}
-
-/// Independent check of a complete argument list before spawn: refuses any bypass or auto-approve flag, any
-/// permission mode other than `dontAsk`, prompts other than `none`, and any `--allowedTools` value that is not a valid rule.
-pub fn check_args(args: &[String]) -> Result<(), Error> {
-    let bad = |a: &str| Err(Error::ForbiddenArgument(a.to_string()));
-    let next = |i: usize| args.get(i + 1).map(String::as_str);
-    let (mut modes, mut prompts, mut in_tools) = (0, 0, false);
-    for (i, a) in args.iter().enumerate() {
-        let low = a.to_ascii_lowercase();
-        if low.contains("dangerously") || low.contains("bypasspermissions") {
-            return bad(a);
-        }
-        if FORBIDDEN_FLAGS
-            .iter()
-            .any(|f| low == *f || low.starts_with(&format!("{f}=")))
-        {
-            return bad(a);
-        }
-        if low.starts_with("--allowedtools=") || low.starts_with("--allowed-tools=") {
-            return bad(a); // the CLI splits such values on commas; only one-rule-per-argument is passed
-        }
-        if a.starts_with('-') {
-            in_tools = false;
-        } else if in_tools && AllowRule::parse(a).is_none() {
-            return bad(a);
-        }
-        if low.starts_with("--permission-mode") {
-            modes += 1;
-            if a != "--permission-mode" || next(i) != Some("dontAsk") {
-                return bad(a);
-            }
-        }
-        if low.starts_with("--permission-prompts") {
-            prompts += 1;
-            if a != "--permission-prompts" || next(i) != Some("none") {
-                return bad(a);
-            }
-        }
-        if a == "--allowedTools" || a == "--allowed-tools" {
-            in_tools = true;
-        }
-    }
-    if modes != 1 || prompts != 1 {
-        return bad("exactly one '--permission-mode dontAsk' and one '--permission-prompts none' are required");
-    }
-    Ok(())
 }
 
 /// Where the per-project allow-list file lives, relative to the project folder (ADR 0134 W48-11 (a)). `.rcfd/` is a
@@ -499,168 +429,9 @@ pub(crate) fn project_err(path: &Path, e: rcfd_project::ProjectError) -> Error {
     }
 }
 
-/// The app-owned MCP config for `--mcp-config` (ADR 0134 W48-10 (a)): one stdio server named [`PINNED_SERVER`] that
-/// starts `rcfd_mcp --project <project> --root <project>` (ADR 0135 W48-13 (a)). The Studio writes it into its own
-/// config folder, never into the project.
-pub fn pinned_mcp_config(rcfd_mcp: &Path, project: &Path) -> String {
-    let p = project.to_string_lossy();
-    let v = serde_json::json!({
-        "mcpServers": {
-            PINNED_SERVER: {
-                "type": "stdio",
-                "command": rcfd_mcp.to_string_lossy(),
-                "args": ["--project", p, "--root", p],
-            }
-        }
-    });
-    serde_json::to_string_pretty(&v).expect("strings serialize") + "\n"
-}
-
-/// [`check_args`] plus the MCP pinning rules of ADR 0134 W48-10 (a) for a chat whose working folder is `project`.
-/// `--strict-mcp-config` and `--mcp-config` are accepted only as separate arguments, each at most once, and
-/// `--mcp-config` only together with `--strict-mcp-config` and followed by exactly one value: an absolute path of an
-/// existing file outside `project`, lexically and after resolving links and short names. Inline JSON, a relative path
-/// (it would resolve inside the project) and the `=` forms are refused. Argument lists without these flags get exactly
-/// the verdict of [`check_args`].
-pub fn check_args_in(args: &[String], project: &Path) -> Result<(), Error> {
-    check_args(args)?;
-    let bad = |a: &str| Err(Error::ForbiddenArgument(a.to_string()));
-    let (mut strict, mut configs) = (0, 0);
-    for (i, a) in args.iter().enumerate() {
-        let low = a.to_ascii_lowercase();
-        if low.starts_with("--strict-mcp-config") {
-            if a != "--strict-mcp-config" {
-                return bad(a);
-            }
-            strict += 1;
-        } else if low.starts_with("--mcp-config") {
-            if a != "--mcp-config" {
-                return bad(a);
-            }
-            configs += 1;
-            let Some(value) = args.get(i + 1) else {
-                return bad("--mcp-config without a file");
-            };
-            if let Some(next) = args.get(i + 2).filter(|n| !n.starts_with('-')) {
-                return bad(next); // the option takes several values; exactly one file is passed
-            }
-            if let Err(why) = mcp_config_outside(value, project) {
-                return Err(Error::ForbiddenArgument(format!("--mcp-config {value}: {why}")));
-            }
-        }
-    }
-    if strict > 1 || configs > 1 {
-        return bad("--strict-mcp-config and --mcp-config may each appear only once");
-    }
-    if configs == 1 && strict == 0 {
-        return bad("--mcp-config without --strict-mcp-config");
-    }
-    Ok(())
-}
-
-/// Is `value` an absolute path of an existing file outside `project`?
-fn mcp_config_outside(value: &str, project: &Path) -> Result<(), String> {
-    let t = value.trim_start();
-    if t.is_empty() || t.starts_with(['-', '{', '[']) {
-        return Err("a config file path is required (no inline JSON, no flag)".into());
-    }
-    let path = Path::new(value);
-    if !path.is_absolute() {
-        return Err("the path must be absolute (a relative one resolves inside the project folder)".into());
-    }
-    if inside(&lexical(project), &lexical(path)) {
-        return Err("the file is inside the project folder".into());
-    }
-    let canon = |p: &Path| rcfd_project::paths::canonicalize(p).map_err(|e| format!("{}: {e}", p.display()));
-    let (cp, cf) = (canon(project)?, canon(path)?);
-    if !std::fs::metadata(&cf).is_ok_and(|m| m.is_file()) {
-        return Err("not a file".into());
-    }
-    if inside(&lexical(&cp), &lexical(&cf)) {
-        return Err("the file resolves inside the project folder".into());
-    }
-    Ok(())
-}
-
-/// The components of `p` with `.` dropped and `..` applied, as strings (ASCII-lowercased on Windows).
-pub(crate) fn lexical(p: &Path) -> Vec<String> {
-    use std::path::Component;
-    let (mut out, mut roots): (Vec<String>, usize) = (Vec::new(), 0);
-    for c in p.components() {
-        match c {
-            Component::CurDir => continue,
-            Component::ParentDir => {
-                if out.len() > roots {
-                    out.pop(); // never above the root
-                }
-                continue;
-            }
-            Component::Prefix(_) | Component::RootDir => roots += 1,
-            Component::Normal(_) => {}
-        }
-        let s = c.as_os_str().to_string_lossy().replace('\\', "/");
-        out.push(if cfg!(windows) { s.to_ascii_lowercase() } else { s });
-    }
-    out
-}
-
-/// Is `p` equal to `base` or below it (whole components, so `proj2` is not below `proj`)?
-pub(crate) fn inside(base: &[String], p: &[String]) -> bool {
-    p.len() >= base.len() && p[..base.len()] == *base
-}
-
-/// The narrowest rule that would allow a denied call, for an "allow this" button. `None` when no safe exact rule
-/// exists (a file outside the project, a command with wildcards or several lines). Accepting it only edits the list.
-pub fn suggest(tool_name: &str, input: Option<&serde_json::Value>, project: &Path) -> Option<AllowRule> {
-    let field = |k: &str| input.and_then(|v| v.get(k)).and_then(|v| v.as_str());
-    let rule = match tool_name {
-        "Bash" | "PowerShell" => {
-            let cmd = field("command")?;
-            if cmd.contains(['*', '?']) {
-                return None; // a wildcard in a suggestion would widen it beyond the denied call
-            }
-            if tool_name == "Bash" {
-                AllowRule::Bash(cmd.to_string())
-            } else {
-                AllowRule::PowerShell(cmd.to_string())
-            }
-        }
-        "Write" | "Edit" | "MultiEdit" | "NotebookEdit" | "Read" => {
-            let rel = project_relative(project, field("file_path").or_else(|| field("notebook_path"))?)?;
-            if rel.contains(['*', '?', '[', ']', '!']) {
-                return None;
-            }
-            if tool_name == "Read" {
-                AllowRule::Read(rel)
-            } else {
-                AllowRule::Edit(rel)
-            }
-        }
-        other => AllowRule::Tool(other.to_string()),
-    };
-    rule.validate().ok().map(|_| rule)
-}
-
-/// `file` relative to `project` with '/' separators, or `None` when it is outside (ASCII case-insensitive on Windows).
-pub fn project_relative(project: &Path, file: &str) -> Option<String> {
-    let norm = |s: &str| s.replace('\\', "/").trim_end_matches('/').to_string();
-    let f = norm(file);
-    if !Path::new(file).is_absolute() && !f.starts_with('/') {
-        return Some(f);
-    }
-    let p = norm(&project.to_string_lossy());
-    let (pc, fc) = if cfg!(windows) {
-        (p.to_ascii_lowercase(), f.to_ascii_lowercase())
-    } else {
-        (p.clone(), f.clone())
-    };
-    fc.strip_prefix(&format!("{pc}/")).map(|_| f[p.len() + 1..].to_string())
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
-    use serde_json::json;
 
     /// Registered table T1 (ADR 0126): rule -> exact flag value.
     fn table() -> Vec<(AllowRule, &'static str)> {
@@ -698,26 +469,13 @@ mod tests {
             }
         }
         assert_eq!(mismatches(wrong), 1); // Edit("note.txt"); Edit("./cases/**") already carries the anchor
-                                          // and the full argument list is exact
         let mut l = AllowList::new();
         l.add(AllowRule::Bash("echo hello".into())).unwrap();
         l.add(AllowRule::Edit("note.txt".into())).unwrap();
         l.add(AllowRule::Edit("note.txt".into())).unwrap(); // duplicate ignored
         assert_eq!(
-            l.permission_args(),
-            [
-                "--permission-mode",
-                "dontAsk",
-                "--permission-prompts",
-                "none",
-                "--allowedTools",
-                "Bash(echo hello)",
-                "Edit(./note.txt)"
-            ]
-        );
-        assert_eq!(
-            AllowList::new().permission_args(),
-            ["--permission-mode", "dontAsk", "--permission-prompts", "none"]
+            l.rules().iter().map(AllowRule::to_flag_value).collect::<Vec<_>>(),
+            ["Bash(echo hello)", "Edit(./note.txt)"]
         );
         for (r, s) in table() {
             assert_eq!(
@@ -760,152 +518,8 @@ mod tests {
         }
     }
 
-    #[test]
-    fn t3_forbidden_flags_never_generated_and_checker_discriminates() {
-        // generated space: every subset (up to 4 rules) of candidates built from adversarial fragments; invalid ones are
-        // rejected by `add`, valid ones must give an argument list that passes the independent checker and carries
-        // no forbidden token
-        let frags = [
-            "echo hi",
-            "bypassPermissions",
-            "--dangerously-skip-permissions",
-            "auto",
-            "acceptEdits",
-            "*",
-            "a,b",
-            "x)",
-            "note.txt",
-            "cases/**",
-            "..",
-            "-p",
-            "git status",
-            "Grep",
-        ];
-        let mut cands = Vec::new();
-        for f in frags {
-            for r in [
-                AllowRule::Tool(f.into()),
-                AllowRule::Bash(f.into()),
-                AllowRule::PowerShell(f.into()),
-                AllowRule::Edit(f.into()),
-                AllowRule::Read(f.into()),
-            ] {
-                cands.push(r);
-            }
-        }
-        let n = cands.len();
-        let (mut lists, mut accepted_rules) = (0usize, 0usize);
-        for a in 0..n {
-            for b in (a..n).step_by(3) {
-                for c in (b..n).step_by(7) {
-                    for d in (c..n).step_by(11) {
-                        let mut l = AllowList::new();
-                        for &i in &[a, b, c, d] {
-                            if l.add(cands[i].clone()).is_ok() {
-                                accepted_rules += 1;
-                            }
-                        }
-                        let args = l.permission_args();
-                        check_args(&args).unwrap_or_else(|e| panic!("{e}: {args:?}"));
-                        for x in &args {
-                            let low = x.to_ascii_lowercase();
-                            assert!(
-                                !low.contains("dangerously") && !low.contains("bypasspermissions"),
-                                "{x}"
-                            );
-                        }
-                        assert_eq!(
-                            args[..4],
-                            ["--permission-mode", "dontAsk", "--permission-prompts", "none"]
-                        );
-                        assert_eq!(args.iter().filter(|x| x.starts_with("--permission-mode")).count(), 1);
-                        lists += 1;
-                    }
-                }
-            }
-        }
-        assert!(
-            lists >= 5000 && accepted_rules >= 10_000,
-            "space too small: {lists} lists, {accepted_rules} rules"
-        );
-        // negative controls: hand-built bad argument lists are refused
-        let base = AllowList::new().permission_args();
-        let with = |extra: &[&str]| {
-            let mut v = base.clone();
-            v.extend(extra.iter().map(|s| s.to_string()));
-            v
-        };
-        let bad_lists = vec![
-            with(&["--dangerously-skip-permissions"]),
-            with(&["--allow-dangerously-skip-permissions"]),
-            with(&["--permission-mode", "bypassPermissions"]),
-            ["--permission-mode", "auto", "--permission-prompts", "none"]
-                .map(String::from)
-                .to_vec(),
-            ["--permission-mode", "acceptEdits", "--permission-prompts", "none"]
-                .map(String::from)
-                .to_vec(),
-            ["--permission-mode=dontAsk", "--permission-prompts", "none"]
-                .map(String::from)
-                .to_vec(),
-            ["--permission-mode", "dontAsk", "--permission-prompts", "host"]
-                .map(String::from)
-                .to_vec(),
-            ["--permission-prompts", "none"].map(String::from).to_vec(),
-            with(&["--settings", "{}"]),
-            with(&["--permission-prompt-tool", "mcp__x__y"]),
-            with(&["--add-dir", "C:/"]),
-            with(&["--allowedTools", "Bash"]),
-            with(&["--allowedTools", "Edit(**)"]),
-            with(&["--allowedTools", "Grep", "Bash(*)"]),
-            with(&["--allowedTools=Grep,Bash"]),
-        ];
-        for b in bad_lists {
-            assert!(check_args(&b).is_err(), "checker accepted {b:?}");
-        }
-    }
-
-    #[test]
-    fn t4_suggestions_are_exact_and_stay_in_the_project() {
-        let proj = if cfg!(windows) {
-            Path::new("C:\\proj\\demo")
-        } else {
-            Path::new("/proj/demo")
-        };
-        let inside = if cfg!(windows) {
-            "c:\\PROJ\\demo\\cases\\a.json"
-        } else {
-            "/proj/demo/cases/a.json"
-        };
-        let outside = if cfg!(windows) {
-            "C:\\proj\\demo2\\a.json"
-        } else {
-            "/proj/demo2/a.json"
-        };
-        assert_eq!(
-            suggest("Write", Some(&json!({"file_path": inside})), proj),
-            Some(AllowRule::Edit("cases/a.json".into()))
-        );
-        assert_eq!(
-            suggest("Read", Some(&json!({"file_path": inside})), proj),
-            Some(AllowRule::Read("cases/a.json".into()))
-        );
-        assert_eq!(suggest("Write", Some(&json!({"file_path": outside})), proj), None);
-        assert_eq!(
-            suggest("Bash", Some(&json!({"command": "echo hello > x.txt"})), proj),
-            Some(AllowRule::Bash("echo hello > x.txt".into()))
-        );
-        assert_eq!(suggest("Bash", Some(&json!({"command": "rm *"})), proj), None);
-        assert_eq!(suggest("Bash", Some(&json!({"command": "a\nb"})), proj), None);
-        assert_eq!(suggest("Bash", None, proj), None);
-        assert_eq!(suggest("WebFetch", None, proj), None);
-        assert_eq!(
-            suggest("mcp__rcfd__start_run", None, proj),
-            Some(AllowRule::Tool("mcp__rcfd__start_run".into()))
-        );
-    }
-
-    /// T5 (ADR 0128 finding 2): rules and suggestions never reach the files that configure Claude or the project.
+    /// T5 (ADR 0128 finding 2): rules never reach the files that configure Claude or the project. (Its part on
+    /// suggestions went with `suggest`, F-838.)
     #[test]
     fn t5_control_files_are_refused() {
         let names = [".mcp.json", "CLAUDE.md", ".claude", ".rcfd", "rcfd-project.json"];
@@ -949,31 +563,6 @@ mod tests {
             })
             .collect();
         assert!(accepted.is_empty(), "control-file rules accepted: {accepted:?}");
-        let (proj, sep) = if cfg!(windows) {
-            (Path::new("C:\\proj\\demo"), "\\")
-        } else {
-            (Path::new("/proj/demo"), "/")
-        };
-        for f in [
-            ".mcp.json",
-            "CLAUDE.md",
-            ".claude/settings.json",
-            ".rcfd/runner-config.json",
-            "rcfd-project.json",
-        ] {
-            let mut abs = format!("{}{sep}{}", proj.display(), f.replace('/', sep));
-            for tool in ["Write", "Edit", "Read"] {
-                assert_eq!(
-                    suggest(tool, Some(&json!({"file_path": abs})), proj),
-                    None,
-                    "{tool} {abs}"
-                );
-            }
-            if cfg!(windows) {
-                abs = abs.to_ascii_uppercase();
-                assert_eq!(suggest("Write", Some(&json!({"file_path": abs})), proj), None, "{abs}");
-            }
-        }
         // ordinary paths stay allowed
         for ok in [
             "cases/x.json",
@@ -985,14 +574,6 @@ mod tests {
             assert!(AllowRule::Edit(ok.into()).validate().is_ok(), "{ok}");
             assert!(AllowRule::Read(ok.into()).validate().is_ok(), "{ok}");
         }
-        assert_eq!(
-            suggest(
-                "Write",
-                Some(&json!({"file_path": format!("{}{sep}notes{sep}a.md", proj.display())})),
-                proj
-            ),
-            Some(AllowRule::Edit("notes/a.md".into()))
-        );
         eprintln!("T5: {} control-file forms refused", forms.len());
     }
 }

@@ -22,10 +22,16 @@ const RECORD: &str = "tests/fixtures/case_hashes_6867e40.txt";
 
 /// Recorded sources whose file left the repository after R0 together with the crate that held it, so they are not
 /// compared; the record itself is kept as written. (source, why)
-const REMOVED: [(&str, &str); 1] = [(
-    "crates/rcfd-studio/tests/fixtures/cavity.toml",
-    "the egui Studio crate rcfd-studio was removed (F-449)",
-)];
+const REMOVED: [(&str, &str); 2] = [
+    (
+        "crates/rcfd-studio/tests/fixtures/cavity.toml",
+        "the egui Studio crate rcfd-studio was removed (F-449)",
+    ),
+    (
+        "crates/rcfd-claude/tests/fixtures/v2.1.310/agents.json",
+        "the Claude Code session fixtures went with rcfd-claude's chat driver and readers (F-838)",
+    ),
+];
 
 /// A case with the table, the text of R0's control.
 const WITH_TABLE: &str = "[mesh]\ngenerator = \"cavity_2d\"\nnx = 4\nny = 4\n\n[mesh.transform]\nrotate_z_deg = -4.0\nrotate_origin = [0.25, 0.0, 0.0]\n";

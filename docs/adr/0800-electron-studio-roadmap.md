@@ -345,3 +345,10 @@ The maintainer asked to "kill the old rcfd-studio and clear up some test bandwid
 F-448; (c) delete only rcfd-studio. G14 now records them as retired. F-449 is done ahead of F-448; F-448 keeps its
 meaning (the Electron Studio covers what rcfd-studio did), judged against the capabilities listed when they were
 deleted. `rcfd-claude` stays, because `rcfd-mcp` uses it.
+
+F-838 (maintainer, 2026-11-17, option (a)): the local-model assistant is removed, not ported. `crates/rcfd-assistant`
+(provider presets, keychain key, read-only and approve-writes modes, quick actions) and `crates/rcfd-render` (the wgpu
+render core) went with their tests; neither had a user left. Of `rcfd-claude` only the allow-list rules and the
+allow-list file stay, because the tests F2 and C5-A of `rcfd-mcp` check its tool names against them; the session
+discovery, transcript and stream readers, chat driver and folder trust went (the Studio has its own port in
+`apps/studio-web/src/main/claude/`). The Studio's Claude Code panel is the only assistant. Cargo.lock: 216 to 83 packages.
