@@ -549,3 +549,45 @@ fn a5_a6_no_model_no_drop() {
     assert!(d0.dropped.is_empty() && d0.rows.len() == 1 && d0.rows[0].drawn_checks == 0);
     let _ = std::fs::remove_dir_all(&dir);
 }
+
+// ---------------------------------------------------------------- A0b (amendment 1)
+
+#[test]
+fn a0b_two_hypotheses_order() {
+    let dir = tmp("a0b");
+    let (mut equal, mut ordered, mut total) = (0, 0, 0);
+    for w in 0..40u64 {
+        let seed = 776_000 + w;
+        let real = w5(seed);
+        let path = dir.join("two.jsonl");
+        let _ = std::fs::remove_file(&path);
+        let l = ledger_at(&path);
+        for s in [seed, seed + 1] {
+            let reg = register(&l, &w5_claim(&real, s, true)).unwrap();
+            run(&l, &reg.id, &real, &RunOptions::default()).unwrap();
+        }
+        let es = entries(&l);
+        for (i, q) in queries().iter().enumerate() {
+            let none: [&dyn Model; 0] = [];
+            let held: [&dyn Model; 1] = [&real];
+            let rr: &[&dyn Model] = if i == 2 { &none } else { &held };
+            let base = lessons(&es, q, rr);
+            let d = lessons_drawn(&es, q, rr);
+            total += 1;
+            if d.plain() == base && format!("{:?}", d.plain()) == format!("{base:?}") {
+                equal += 1;
+            }
+            if i == 0 {
+                let ids: Vec<&str> = d.rows.iter().map(|r| r.lesson.id.as_str()).collect();
+                if ids == ["H-1", "H-2"] {
+                    ordered += 1;
+                }
+            }
+        }
+    }
+    eprintln!("A0b: {equal} of {total} equal, {ordered} of 40 in order");
+    assert_eq!(total, 200);
+    assert_eq!(equal, 200, "A0b: 200 of 200");
+    assert_eq!(ordered, 40, "A0b: 40 of 40 in order");
+    let _ = std::fs::remove_dir_all(&dir);
+}
