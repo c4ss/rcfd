@@ -272,3 +272,126 @@ ADR of its item).
   the 20 rows the E0 primary is also among the E8 ADRs of the file, as the last ADR of the subject; the 2 exceptions are rows 13
   (subject names only 0195) and 18 (the E8 ADR comes from the item).
 - C2: 22 of 22 read, each with a verdict and a reason. **Met.**
+
+## Addendum 2: comparison with the first reading (2026-11-17)
+
+Written after commit b1db574e (Addendum 1). Only then were ADR 0720 from line 145 on and `f773-scratch/samples_e8.json`,
+`sup_list.txt` opened (the two scratch files hold paths, ADR numbers and commit hashes, no verdict; `f773-scratch/addendum.md`
+was not needed and not opened). Addendum 1 is unchanged.
+
+### How the first reading is recorded
+
+- The 2 E8-primary files: a table with a verdict and a reason for each (ADR 0720, "E7: the two files with an E8 primary").
+- The 20 supplementary files: **no per-file table.** ADR 0720 gives the totals ("E0 right, E8 first wrong: 19 of 20", "E8 right,
+  E0 wrong: 1 of 20"), names the one E8 file (`edit_hook.rs`) with its reason, gives a reason by name for three of the 19
+  (`sb_loads.rs`, `mesh_transform_u.rs`, `w27c_registry.rs`) and one common reason for the others ("the commit subject names the
+  ADR that the work builds on before the ADR that registers it"), and lists the 20 files with their ADRs. The first reader's
+  category of every file is therefore determined: `edit_hook.rs` is E8, each of the other 19 is E0; there is no "both" and no
+  "neither". I count on that (the registered rule: the category "derived from what ADR 0720 records for the file"). This is a
+  deviation in kind, not in count: 16 of the 20 categories are known by exclusion and without a reason of their own, so for those
+  16 I can compare the category but not the reasoning.
+
+### Results
+
+| # | Check | Limit | Measured | Met |
+|---|---|---|---|---|
+| C1 | E8-primary files; population; sample; paths found in ADR 0720's addendum | 2; 29; 20; 20 of 20 and 2 of 2 | 2 (`discover.rs` 0126, `time.rs` 0122); 29; 20; 20 of 20 and 2 of 2. After opening: the 20 paths equal `f773-scratch/sup_list.txt` in the same order | yes |
+| C2 | files read with verdict and reason | 22 of 22 | 22 of 22 | yes |
+| C3 | agreement of the two readings over 22 | at least 19 of 22 (85 %) | **22 of 22 (100 %)**: 2 of 2 E8-primary files (agree, agree), 20 of 20 supplementary categories (19 E0, 1 E8, the same file) | yes |
+| C4 | every differing file listed with both readings and a reason | all | no file differs; the differences below the level of the verdict are listed in the next section | yes |
+| C5 | `git diff 1b26b8a9 -- docs/adr/0720-* docs/adr/0704-* scripts/` | empty | empty; the only file changed on the branch is this ADR | yes |
+| C6 | `cargo test -q --release -p rcfd-cli --test docs_site` | passes | 2 passed, 0 failed (run twice: on the tree of Addendum 1, and on the tree with Addendum 2 in place except this cell) | yes |
+
+Reported next to C3 (no limit):
+
+- Over the 2: 2 of 2. Over the 20: 20 of 20.
+- Categories, second reader against first: E0 19 / 19, E8 1 / 1, both 0 / 0, neither 0 / 0.
+- "E8 right and E0 not": 1 of 20 in both readings, the same file. ADR 0720's decision aid (at least 16 of 20 to move E8 above
+  E0) is missed in both readings by the same margin; its conclusion (E8 stays below E0) is not touched here.
+- My borderline rows: 2 (`discover.rs`, `edit_hook.rs`). The first reader's: 1 (`time.rs`).
+- Cohen's kappa over the 20 (four categories): observed agreement 1.00, agreement expected by chance from the two marginals
+  `0.95^2 + 0.05^2 = 0.905`, kappa `(1 - 0.905) / (1 - 0.905) = 1.00`. The chance figure is the point: two readers who each
+  put 19 of 20 files in E0 at random would agree on 90.5 % of the files and meet the 85 % limit on the supplementary files
+  without reading anything. What separates the readings from chance is the one E8 file, which both readers picked
+  independently out of 20 (chance of the same pick 1 in 20).
+- Counted only on the files for which ADR 0720 gives a reason of its own (2 + 4 = 6 files: the two E8-primary files,
+  `edit_hook.rs`, `sb_loads.rs`, `mesh_transform_u.rs`, `w27c_registry.rs`): 6 of 6, and the reasons match mine in substance
+  for all six.
+- The controls of the registration: not all 20 in one category (19 and 1); both E8-primary verdicts are those the registration
+  of ADR 0720 predicted, with the evidence found in the ADR text (Addendum 1).
+
+### No file differs in verdict; what differs below the verdict
+
+1. **Which E8-primary file is borderline.** The first reader marks `time.rs` borderline (ADR 0122 does not name the file) and
+   `discover.rs` plain. I mark `discover.rs` borderline and `time.rs` plain. Reason for the difference: I weighed "states the
+   limits the file asserts" (the question of ADR 0704) above "cites the file by name" (its evidence (b)). ADR 0122's check T1
+   states the two tests of `time.rs` with their values, so only the name is missing; ADR 0126 names `discover.rs` but registers
+   the integration tests `d7_*`, not the file's three unit tests. Both readings resolve the doubt to agree, so the count is the
+   same. It shows that the criterion's (b) "for that file by name" and its question pull apart for library modules added with a
+   crate, which is the whole E8-primary population.
+2. **A count in the first reason for `discover.rs`.** ADR 0720 says ADR 0126 "cites the file in four lines". By
+   `grep -c 'discover.rs'` it is one line (the clippy deviation); the module is also named in D1 (`discover`), in the file list
+   as `src/{lib,allow,discover,...}.rs` and described in D6, which may be the four meant. The verdict does not depend on it.
+3. **`edit_hook.rs`.** Same category (E8) and same reason (ADR 0195 is the registration that lists the module and its checks;
+   the commit names only 0195). I marked it borderline because ADR 0195 is by its own title an amendment of ADR 0173 and the
+   header names 0173 first; the first reader did not. Under my registered order (rule 1 before "both") it is E8 either way.
+4. **`w27c_registry.rs`.** The first reader writes that the file "was touched by an F-237 commit". The commit (29b97e3e) is the
+   one that *adds* the file; its subject names the item F-237 and no ADR, and ADR 0244 is the registration ADR that F-237
+   received four weeks later for another extension. Same category (E0); the wording of the reason is loose, the fact behind it
+   is the one I found.
+5. **The origin commit of two files** (`sa_gyro_sector_split_schur_default_bits.rs`, `si_eas_hg3.rs`): `git log --follow`
+   names another file's commit (Addendum 1, deviation 1); the index and the first reading use the right one. No effect on a
+   verdict.
+
+### Deviations
+
+- The first reading has no per-file record for 16 of the 20 supplementary files (above). The registered fallback for a coarser
+  record (map my category to "E8 right and E0 not: yes / no") was not needed, because the totals and the one named file fix
+  every category; on that coarser record the agreement is also 20 of 20.
+- Addendum 1, deviations 1 to 3.
+- Nothing was re-read after the first reading was opened; no row of Addendum 1 was changed.
+
+### Decision by the registered rule: **done**
+
+C1 to C6 are met and my 20 categories are not all the same.
+
+What the result does and does not show:
+
+- It shows that a reader who did not write rule E8 reaches the first reader's verdict on every one of the 22 files, and picks
+  the same single file as the exception.
+- It does not show much about the criterion's power to separate readers. The supplementary sample is nearly one-sided by its
+  construction: where the header and the first ADR of the subject differ, the header names the ADR that registers the file and
+  the subject names a parent ADR first, and that is visible from the header line and the subject alone in 18 of the 20 rows. The
+  agreement expected by chance on such a sample is 90.5 %. ADR 0704 met a harder sample (7 of 28 differing); this one is easy.
+- The two readers are agents of the same kind, and I knew the first reader's expectation for both E8-primary files and for the
+  sample as a whole before reading (disclosed in the registration).
+- No limit of ADR 0720 is changed. Its E7 clause ("at least 20 files") stays missed by construction and F-773 stays partial; its
+  decision on the tier order (E8 below E0) is supported by this reading with the same number, 1 of 20.
+
+### Remaining questions
+
+1. **Is a third reading by a person wanted for these 22 files?** Options: (a) no: 22 of 22, and the only row that needs judgment
+   (`edit_hook.rs`, an amendment against the ADR it amends) was decided the same way by both readers; (b) the maintainer looks at
+   rows 1, 2 and 13 only. Recommendation: (a), taken on the maintainer's standing instruction of 2026-11-11 (take the
+   recommendation).
+2. **An observation for the tier rule, not a proposal to change it.** In 18 of the 20 rows the E0 primary is the *last* ADR of
+   the origin commit's subject, and ADR 0720 counts the last E8 ADR equal to the E0 primary on 898 of 948 files against 919 for
+   the first. So neither "first" nor "last" of the subject beats the header, and for the 2-file E8-primary population the
+   subject names one ADR only. Options: (a) leave rule E8 as registered (first ADR of the subject); (b) a follow-up that
+   registers a rule for subjects naming several ADRs. Recommendation: (a): the choice between first and last matters only for
+   files without a header ADR, and there are none with two subject ADRs in the present tree (both E8-primary files name one).
+   Not taken as a decision here, because it is ADR 0720's rule; listed for the lead.
+3. **Criterion (b) "by name" against "states the limits"** (difference 1 above). For a later second reading of library modules
+   it would help to say which wins. Options: (a) leave it to rule 5 (both readers resolved it to agree); (b) add a sentence to
+   the next registration that adopts ADR 0704: an ADR that states the file's tests with their values registers the file even if
+   it does not name it. Recommendation: (b), in the next registration that adopts the criterion; ADR 0704 itself is not edited.
+
+## For the lead: roadmap entries
+
+Proposed status and note of F-839:
+
+> Proposed status: done.
+
+> Test-to-ADR index, gate attribution. Follow-up of F-773 (ADR 0720, 2026-11-17). DONE. ADR 0721, 2026-11-17: a second reading of the 2 files with an E8 primary (`discover.rs` 0126, `time.rs` 0122) and of the 20 files of ADR 0720's supplementary sample (`random.Random(7730)`, reproduced from the index: population 29, the same 20 paths), by an agent that did not write rule E8, against the criterion of ADR 0704 quoted in the registration; registration, the 22 readings and the comparison committed in that order, ADR 0720's addendum opened only after the readings were committed. Agreement with the first reading 22 of 22 (limit 19 of 22, 85 %): both E8-primary files agree; of the 20 supplementary files 19 are E0 right and 1 is E8 right in both readings, the same file (`rcfd-mcp/src/edit_hook.rs`, header ADR 0173, registration ADR 0195). No file differs in verdict; differences below the verdict are listed (which of the two E8-primary files is borderline, wording of two reasons). The first reading records the 20 supplementary files as totals with one file named, so 16 categories are known by exclusion. Agreement expected by chance on this near one-sided sample is 90.5 %, so the result says little about the criterion's power to separate readers; the readers are agents of the same kind and the second knew the first reader's registered expectations. No limit of ADR 0720 changed; ADR 0720, ADR 0704 and the scripts unedited; `docs_site` passes. F-773 stays partial (its sample of 20 E8-primary files is not drawable).
+
+No change is proposed to the status or note of F-773. No follow-up is proposed.
