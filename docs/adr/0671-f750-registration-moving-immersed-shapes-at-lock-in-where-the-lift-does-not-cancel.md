@@ -285,3 +285,36 @@ free stream speed `U = 1`) at every candidate, with and without the velocity; th
 T3b (with the motion velocity left out the solid cells hold 0 while the body moves at up to `A omega` = 0.22 to 0.60, far above
 1e-3). By the decision rule T3 counts as a check met only after an amendment (the rule's partial clause); this is stated here and
 not changed.
+
+## Amendment 1 (2026-11-17, the scan of D2; written after the scan and before any main run)
+
+The scan record `f750_scan_record` was run once (test file 5616fa14, release, twelve threads, 4 342 s wall on the shared machine;
+log `w49i-work/f750-scratch/logs/scan_record.log`). Every run finished (SS1): largest step continuity 7.7e-10, largest Courant
+0.76; every series written to `w49i-work/f750-scratch/series` and read back bit for bit (K1).
+
+| Run | A/D | f | L1 | `abs(Lhat)` | `abs(Lhat) / S731` | phase (deg) | mean drag | `C_a`, `C_v` | series hash |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| BFc | 0.5 | 0.17 | 3.5e-4 | 0.12997 | 0.732 | +23.29 | 0.9682 | 0.27, -0.10 | 383ecfcb802eea27 |
+| BFc | 0.5 | 0.18 (C1) | 2.3e-3 | 0.33026 | 1.859 | +19.87 | 1.0030 | 0.62, -0.22 | 232e417fbbe7b96a |
+| BFc | 0.5 | 0.19 (C2) | 1.9e-2 | 1.10663 | 6.230 | -4.78 | 0.7858 | 1.97, 0.18 | b68fe1109cbb771f |
+| BFc | 0.5 | 0.20 | 3.4e-2 | 1.17643 | 6.623 | -5.00 | 0.8502 | 1.89, 0.20 | 9e0e5ba41560dfe5 |
+| BFc | 0.25 | 0.13 | 1.8e-3 | 0.02923 | 0.165 | -178.54 | 0.6880 | -0.22, 0.00 | f2d02cf1e90eeef9 |
+| BFc | 0.25 | 0.14 (C3) | 2.8e-6 | 0.05203 | 0.293 | +148.78 | 0.7178 | -0.29, -0.05 | 5957d2499f7d31bd |
+| BFc | 0.25 | 0.15 (C4) | 2.7e-8 | 0.09247 | 0.521 | +122.04 | 0.7533 | -0.28, -0.16 | 969cbe4ca2528289 |
+| BFc | 0.25 | 0.16 | 3.0e-8 | 0.15414 | 0.868 | +96.98 | 0.7926 | -0.09, -0.31 | b9c5ea2e1b480351 |
+| N1 G20 | 0.5 | 0.18 | 2.9e-2 | 0.82779 | | +28.74 | 0.7262 | 1.45, -0.80 | 298ba6edc9914642 |
+| N1 G20 | 0.5 | 0.19 | 3.3e-2 | 0.85492 | | +28.58 | 0.7652 | 1.34, -0.82 | b8d6c9f778120efe |
+| N1 G20 | 0.25 | 0.14 | 9.4e-8 | 1.05711 | | +46.60 | 0.9152 | 4.78, -1.54 | d2e10dd0e774316b |
+| N1 G20 | 0.25 | 0.15 | 3.9e-5 | 1.04323 | | +37.12 | 0.9393 | 4.77, -1.26 | c81d057c1ac63189 |
+
+The rule of D2:
+
+| Candidate | S1 (L1 <= 0.01, c and both neighbours) | S2 (`abs(Lhat) >= 0.133215`) | S3 (neighbours: amplitude <= 0.25, phase <= 30 deg) | S4 (N1 G20: phase >= 24 deg, amplitude >= 0.24) | `m_c` | qualifies |
+| --- | --- | --- | --- | --- | --- | --- |
+| C1 (0.5, 0.18) | no (f 0.19: 1.9e-2) | yes (0.330) | no (amplitude 0.61 and 2.35) | no (phase 8.9 deg) | 2.351 | no |
+| C2 (0.5, 0.19) | no (itself 1.9e-2, f 0.20 3.4e-2) | yes (1.107) | no (amplitude 0.70) | no (amplitude 0.227; phase 33.4 met) | 0.702 | no |
+| C3 (0.25, 0.14) | yes | no (0.052) | no (amplitude 0.44 and 0.78, phase 32.7 deg) | yes (102 deg) | 0.777 | no |
+| C4 (0.25, 0.15) | yes | no (0.092) | no (amplitude 0.44 and 0.67) | yes (85 deg) | 0.667 | no |
+
+**No candidate qualifies.** By D2 no main record is run and the decision is partial; `SELECTED` stays `None` in the test file and
+`f750_lockin_record` stays ignored and not run. Nothing else of this registration changes.
