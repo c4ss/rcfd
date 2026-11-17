@@ -15742,7 +15742,7 @@ fixed by the item's registration ADR before any code.
     28 (85.7 %). H0, H1 and H2 read 22 of 22, H3 1 of 5 (audit and test-list rows). Open: remove or restrict H3.
     Follow-up F-785 (Restrict or remove rule H3 of the retro-registration rule). Follow-up F-786 (A second reader for
     the primary-ADR samples of the test-to-ADR index).
-- [ ] **F-773** A git commit that names an ADR or an item as evidence of the files it adds
+- [~] **F-773** A git commit that names an ADR or an item as evidence of the files it adds
   - depends on: F-768
   - acceptance: Every limit not stated here is registered in the ADR before the run. The ADR named in the subject of the
     commit that adds a test file, and the ADR of an item named there that has a registration ADR, are evidence of kind
@@ -15750,7 +15750,22 @@ fixed by the item's registration ADR before any code.
     step); the added evidence is counted before the run, the index of the final tree is compared with that of ADR 0690
     in every field except the added `adrs`, `items`, `evidence` and the primary, a shallow clone gets no E8 evidence,
     and a fresh registered sample of at least 20 files with an E8 primary is read with at least 80 % agreement.
-  - note: Follow-up of F-768 (ADR 0690, 2026-11-16).
+  - note: Test-to-ADR index, gate attribution. Follow-up of F-768 (ADR 0690, 2026-11-17). PARTIAL. ADR 0720, 2026-11-17:
+    evidence of kind E8 in `scripts/adr_test_index.py` (command-line default on, `--no-e8` gives the output of ADR 0690,
+    library default off): on a full git history the ADRs named in the subject of the commit that first adds a test's
+    file (every `ADR dddd` that exists, then the registration ADR of every `F-ddd` that has one) extend `adrs`, `items`
+    and `evidence` of its tests, with no coherence step; the primary tier order is E0 > E1 > E6 > E8 > E2 and the first
+    E8 ADR is the primary. Counted before the code and met exactly: 5695 tests in 950 files, 6089 links, 271 links in
+    216 tests naming an ADR the test did not have. The index of the final tree differs from that of ADR 0690 in no field
+    but the extended ones and the primary (0 differences in 7847 tests, 5 tests change primary: `discover.rs` 0126 and
+    `time.rs` 0122); a shallow clone and a git archive copy get 0 E8 entries and the same index; 2 git processes, 20.9
+    s; 11 of 11 mutations caught; 149 unit tests OK. The acceptance's sample of at least 20 files with an E8 primary
+    cannot be drawn: the population is 2 files (948 of the 950 files with E8 already have an E0 primary), both read
+    agree by the implementing agent (no second reader). A supplementary reading of 20 of the 29 files whose first E8 ADR
+    differs from the E0 primary found E8 right in 1 and E0 right in 19, so E8 stays below E0. Maintainer's question
+    open: F-787, F-793. Follow-up F-839 (A second reader for the E8-primary files and the supplementary sample of ADR
+    0720). Follow-up F-840 (Items named in a commit subject whose ADRs are named only in the roadmap note as evidence of
+    the files the commit adds).
 - [~] **F-774** The corner element of rule L at the punch corner and the equilibrium past the predictor
   - depends on: F-767
   - acceptance: Every limit not stated here is registered in the ADR before the run. On the punch block of ADR 0688
@@ -16180,3 +16195,22 @@ fixed by the item's registration ADR before any code.
     loads within 2 percent of the tabulated values and the deflection of the rising branch at the tabulated loads within
     a registered limit.
   - note: Follow-up of F-610 (ADR 0716, 2026-11-16).
+- [ ] **F-839** A second reader for the E8-primary files and the supplementary sample of ADR 0720
+  - depends on: F-773
+  - acceptance: Every limit not stated here is registered in the ADR before the reading. The 2 files with an E8 primary
+    and the 20 files of the supplementary sample of ADR 0720 (`random.Random(7730)`, listed in its addendum) are read by
+    a reader who did not write the rule, against the criterion of ADR 0704 registered before the reading, and agree with
+    the first reading on at least 85 % of the files; the disagreements are listed with a reason; no limit of ADR 0720 is
+    changed by the second reading.
+  - note: Follow-up of F-773 (ADR 0720, 2026-11-16).
+- [ ] **F-840** Items named in a commit subject whose ADRs are named only in the roadmap note as evidence of the files the commit adds
+  - depends on: F-773
+  - acceptance: Every limit not stated here is registered in the ADR before the run. The ADRs that the roadmap note of
+    an item names (`ADR dddd` in the note, the mapping the index already uses for E4) are evidence of kind E8b of the
+    tests of a file whose first commit names that item in its subject and whose item has no registration ADR by file
+    name; the added evidence is counted before the run, the index of the final tree is compared with that of ADR 0720 in
+    every field except the added `adrs`, `items`, `evidence` and the primary, a shallow clone gets no E8b evidence, the
+    tier of E8b in the order is registered before the run, and a fresh registered sample of at least 20 files with an
+    E8b primary is read by a reader and a second reader with at least 80 % agreement, or the population is counted and
+    the sample limit stated as missed by construction.
+  - note: Follow-up of F-773 (ADR 0720, 2026-11-16).
