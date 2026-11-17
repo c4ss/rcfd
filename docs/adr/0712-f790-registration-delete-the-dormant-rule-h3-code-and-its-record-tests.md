@@ -102,3 +102,52 @@ recorded with the number, the limit is not changed). Todo if the index differs a
 * The test fixtures that name H3 remain; they are inert.
 * The `h3` key stays in the index: the dead key is not removed (see above).
 * Only `scripts/` tests were run; no Rust crate is touched, so no cargo test of a solver crate is run (only `docs_site`).
+
+## Addendum 1: results (2026-11-17)
+
+Commits on branch `f790-work`: b0d49dd3 (this ADR alone, the registration), 5770b343 (the removal, one commit, 3 files), and the
+commit of this addendum. The "before" indexes were made at b0d49dd3, the "after" indexes at 5770b343 (working tree equal to the
+commit), all with `f790-scratch/meta.json`, once each. Files in `f790-scratch`: `before_*.json`, `after_*.json`, `report_*.txt`.
+
+| id | check | limit | measured | met |
+|---|---|---|---|---|
+| C1 | `RETRO_H3` and tier 3 gone | 0 lines of `RETRO_H3` in `scripts/*.py`; no tier-3 tuple | 0 lines (grep over `*.py`); the loop, `cells` and `RETRO_LIMIT` (no other use) deleted | yes |
+| C2 | `--primary git` index | `cmp` identical, `h3` = 0 | identical (11 791 224 bytes before and after) | yes |
+| C3 | `--primary registered`, `p0679` | `cmp` identical | identical (11 811 933 and 11 815 035 bytes) | yes |
+| C4 | `gate_attribute.py` | diff empty | empty | yes |
+| C5 | `python -m unittest discover -s scripts` | OK; 136 tests; 4 skipped | `Ran 136 tests`, `OK (skipped=4)` | yes |
+| C6 | one commit, 3 files | exactly 3 files, ADR not in it | `adr_test_index.py`, `test_adr_test_index_retro.py`, `test_adr_test_index_h3.py` (3 insertions, 26 deletions) | yes |
+| C7 | `--report` output | 0 differing lines | identical for the three values of `--primary` | yes |
+| C8 | `docs_site` | passes | `cargo test -q --release -p rcfd-cli --test docs_site`: 2 passed, 0 failed | yes |
+| C9 | no file outside `scripts/` in the removal commit | none | none | yes |
+
+Mutations (on a scratch copy `f790-scratch/mut`, one at a time, the two test files, 19 tests): M1 a tier-3 emission caught (2 failures:
+the row-with-a-limit test and the `h3` key test); M2 the `h3` key removed caught (1 error, the `h3` key test); M3 H1 dropped in table
+rows caught (2 failures, `test_a6_a7_*` and the `h3` key test, which counts h1); M4 H2 dropped in table rows caught (same 2). 4 of 4
+caught. fmt and clippy do not apply (no Rust file touched).
+
+Deviations: none from the registration. Not run: any solver crate test (no Rust file is touched). `docs_site` was run once after the
+addendum was written (table). The removed tests of ADR 0701 (`test_p2_p3_p4_tiers`, `test_counts`) lose the assertion on the exact file list
+`r_h1.rs -> [1, "0110"]`, which no remaining test makes (the H1 and H2 primaries are still asserted by the tests of
+`test_adr_test_index_h3.py`).
+
+**Decision by the registered rule: done.**
+
+### Remaining questions
+
+1. The dead key `h3` (always 0) in `coverage.primary.retro`, the "H3 removed" text of the report line and the inert H3 fixtures of
+   the retro tests. Options: (a) keep as now; (b) a later item removes the key together with a documented, deliberate change of the
+   index and the fixtures. Recommendation: (a); the key costs nothing, and a change of the index shape needs the consumers
+   (`gate_attribute.py`) read first.
+2. The lost assertion on the exact `files` list of the retro counts (above). Options: (a) accept; (b) a new test of that list for H1
+   and H2 only. Recommendation: (b), small, in the next change to these scripts.
+
+## For the lead: roadmap entries
+
+Proposed status and note of F-790:
+
+> Proposed status: done.
+
+> Test-to-ADR index, gate attribution. Follow-up of F-785 (ADR 0703) and F-786 (ADR 0704), 2026-11-17. DONE. ADR 0712, 2026-11-17: the dormant rule H3 code of `scripts/adr_test_index.py` is deleted in one commit: the constant `RETRO_H3`, the tier-3 loop of `retro_units` and `RETRO_LIMIT`, with the 3 tests that depended on them (`test_p2_p3_p4_tiers` and `test_counts` of the tests of ADR 0701, `test_constant_is_off` of the tests of ADR 0703) and the setUp/tearDown lines of the constant; 3 files, 3 insertions and 26 deletions. The index of `--primary git`, `--primary registered` and `p0679` is byte-identical before and after (11 791 224, 11 811 933 and 11 815 035 bytes, `cmp`; the `--report` output too; the key `h3` stays, always 0), `gate_attribute.py` is unchanged, `python -m unittest discover -s scripts` runs 136 tests (139 before), OK; 4 of 4 mutations caught. The exact file list of the retro counts is no longer asserted by a test.
+
+> Follow-up proposed: A test of the per-file tier list of the retro counts for rules H1 and H2. Deps F-790. Acceptance: Every limit not stated here is registered in the ADR before the run. A test of `scripts/test_adr_test_index_retro.py` asserts the `files` map of `coverage.primary.retro` (tier and ADR of each file) on its fake workspace for H1 and H2 files; the index of `--primary git`, `--primary registered` and `p0679` is equal to the index before the commit in every field; `gate_attribute.py` is unchanged; a planted change of a tier in `retro_primaries` is caught; `python -m unittest discover -s scripts` passes.
