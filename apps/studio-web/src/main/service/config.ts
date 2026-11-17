@@ -1,24 +1,31 @@
-// Which service the Studio talks to, from its environment. Pure: the unit tests call it with plain objects.
+// Which service the Studio talks to. Pure: the unit tests call it with plain objects.
 //
-//   RCFD_STUDIO_SERVICE=127.0.0.1:7878   attach to a service someone else started (loopback only, G10)
-//   RCFD_STUDIO_RCFD=<path to rcfd>      start `rcfd serve --addr 127.0.0.1:0 --ui` and own it
-//   RCFD_STUDIO_SERVICE_ROOT=<dir>       with RCFD_STUDIO_RCFD: passed as `--root` (the service's sandbox)
+//   --service <host:port>                attach to a service someone else started (loopback only, G10); wins over all
+//   RCFD_STUDIO_SERVICE=127.0.0.1:7878   the same, as a variable
+//   RCFD_STUDIO_RCFD=<path to rcfd>      start `rcfd serve --addr 127.0.0.1:0 --ui` at launch and own it
+//   RCFD_STUDIO_SERVICE_ROOT=<dir>       with a started service: passed as `--root` (the service's sandbox)
 //   RCFD_STUDIO_STATE_DIR=<dir>          where a started service's address and log are kept (default: the user data dir)
 //
-// Neither RCFD_STUDIO_SERVICE nor RCFD_STUDIO_RCFD: an installed Studio starts the rcfd it ships with
-// (`<resources>/bin`, F-820, ADR 0801 Addendum 19), and only when the first project is opened (`start: 'project'`), so
-// its launch costs nothing more (P10); a service an earlier start left running is still found again at launch (G7).
-// Without a shipped rcfd either: no service (state `off`). Never from PATH.
+// No attach: the engine chosen by src/main/engine/locate.ts (ADR 0801 Addendum 21) gives the rcfd to start.
+// --engine-dir <folder> or the default folder (<resources>/bin when packaged, the checkout's target/release with
+// `electron .`): that folder's rcfd, started only when the first project is opened (`start: 'project'`), so the launch
+// costs nothing more (P10); a service an earlier start left running is still found again at launch (G7). The variables:
+// RCFD_STUDIO_RCFD as above; RCFD_STUDIO_MCP alone: the rcfd beside that rcfd-mcp, started with the first project (one
+// folder gives the whole engine; a named engine is never mixed with the default one). --no-engine, or a folder without
+// the whole engine: no service (state `off`, with the reason). Never from PATH. The attach is where a service on another machine (cloud, cluster) will plug in later.
+
+import path from 'node:path';
+import { buildCommand, exe, missingReason, partPath, type EngineChoice } from '../engine/locate.js';
 
 export type ServiceConfig =
-  | { readonly mode: 'off' }
+  | { readonly mode: 'off'; readonly reason: string }
   | { readonly mode: 'attach'; readonly host: string; readonly port: number }
   | {
       readonly mode: 'spawn';
       readonly rcfd: string;
       readonly root: string | null;
       readonly stateDir: string;
-      /** `launch`: started with the Studio (RCFD_STUDIO_RCFD); `project`: when the first project opens (the shipped rcfd). */
+      /** `launch`: started with the Studio (RCFD_STUDIO_RCFD); `project`: when the first project opens (an engine folder's rcfd). */
       readonly start: 'launch' | 'project';
     }
   | { readonly mode: 'invalid'; readonly reason: string };
@@ -38,14 +45,20 @@ export function parseLoopbackAddress(text: string): { host: string; port: number
   return { host: host === '[::1]' ? '::1' : host, port };
 }
 
-/** `bundledRcfd`: the rcfd an installed Studio ships with, when it is there (src/main/project/config.ts bundledBin). */
 export function serviceConfig(
   env: Readonly<Record<string, string | undefined>>,
   defaultStateDir: string,
-  bundledRcfd: string | null = null,
+  choice: EngineChoice,
+  attachSwitch: string | null = null,
+  isFile: (p: string) => boolean = () => false,
 ): ServiceConfig {
+  if (attachSwitch) {
+    const a = parseLoopbackAddress(attachSwitch);
+    if ('error' in a) return { mode: 'invalid', reason: `--service: ${a.error}` };
+    return { mode: 'attach', host: a.host, port: a.port };
+  }
   const attach = env['RCFD_STUDIO_SERVICE']?.trim() ?? '';
-  const rcfd = env['RCFD_STUDIO_RCFD']?.trim() ?? '';
+  const rcfd = choice.from === 'variables' ? (env['RCFD_STUDIO_RCFD']?.trim() ?? '') : '';
   if (attach && rcfd) {
     return { mode: 'invalid', reason: 'RCFD_STUDIO_SERVICE and RCFD_STUDIO_RCFD are both set: give one of them' };
   }
@@ -54,17 +67,21 @@ export function serviceConfig(
     if ('error' in a) return { mode: 'invalid', reason: `RCFD_STUDIO_SERVICE: ${a.error}` };
     return { mode: 'attach', host: a.host, port: a.port };
   }
-  if (rcfd) {
-    const root = env['RCFD_STUDIO_SERVICE_ROOT']?.trim() || null;
-    const stateDir = env['RCFD_STUDIO_STATE_DIR']?.trim() || defaultStateDir;
-    return { mode: 'spawn', rcfd, root, stateDir, start: 'launch' };
+  const root = env['RCFD_STUDIO_SERVICE_ROOT']?.trim() || null;
+  const stateDir = env['RCFD_STUDIO_STATE_DIR']?.trim() || defaultStateDir;
+  if (choice.from === 'variables') {
+    if (rcfd) return { mode: 'spawn', rcfd, root, stateDir, start: 'launch' };
+    const mcp = env['RCFD_STUDIO_MCP']?.trim() ?? '';
+    const beside = path.join(path.dirname(mcp), exe('rcfd'));
+    if (isFile(beside)) return { mode: 'spawn', rcfd: beside, root, stateDir, start: 'project' };
+    return {
+      mode: 'off',
+      reason: `RCFD_STUDIO_MCP names ${mcp}, but there is no ${exe('rcfd')} beside it (build it with: ${buildCommand([{ name: 'rcfd', pkg: 'rcfd-cli' }])}).`,
+    };
   }
-  if (bundledRcfd) {
-    const root = env['RCFD_STUDIO_SERVICE_ROOT']?.trim() || null;
-    const stateDir = env['RCFD_STUDIO_STATE_DIR']?.trim() || defaultStateDir;
-    return { mode: 'spawn', rcfd: bundledRcfd, root, stateDir, start: 'project' };
-  }
-  return { mode: 'off' };
+  const own = partPath(choice, 'rcfd');
+  if (own) return { mode: 'spawn', rcfd: own, root, stateDir, start: 'project' };
+  return { mode: 'off', reason: missingReason(choice) ?? 'No engine.' };
 }
 
 /** Delay before reconnection attempt `attempt` (0 = the first retry): 100 ms, doubling, at most 5 s. */

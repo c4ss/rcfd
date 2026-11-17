@@ -173,7 +173,7 @@ export default function SettingsPage() {
           {service === null
             ? 'Reading the connection state.'
             : service.status === 'off'
-              ? 'The Studio was not told which service to use. Start it with RCFD_STUDIO_SERVICE (attach to a running rcfd serve) or RCFD_STUDIO_RCFD (start one).'
+              ? `This Studio has no rcfd service${service.lastError ? `: ${service.lastError}` : '.'} To use one started elsewhere, start the Studio with --service host:port.`
               : service.status === 'waiting'
                 ? 'The rcfd service starts when a project is opened. Open a project folder first.'
               : `The connection is ${service.status}${service.lastError ? `: ${service.lastError}` : ''}. The settings appear when it is back.`}

@@ -61,7 +61,7 @@ export class ClaudeRefusal extends Error {
 
 export interface PanelDeps {
   readonly config: ClaudeConfig;
-  /** The engine's project server for the app-owned MCP config; null when the Studio was not told where it is. */
+  /** The engine's project server for the app-owned MCP config; null when the Studio has no engine. */
   readonly rcfdMcp: string | null;
   listAgents?(cwd: string): Promise<Listing>;
   alive?(pid: number): boolean;
@@ -416,7 +416,7 @@ export class ClaudePanel {
       server: this.deps.rcfdMcp ? `${this.deps.rcfdMcp} --project <folder> --root <folder>` : null,
       note: this.deps.rcfdMcp
         ? null
-        : "No project tools: the Studio was not told where the engine's project server is (RCFD_STUDIO_MCP), so Claude Code gets no MCP server.",
+        : "No project tools: the Studio has no engine (the project home says what is missing), so Claude Code gets no MCP server.",
     };
     return file;
   }

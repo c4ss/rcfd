@@ -10,7 +10,8 @@ import { MessageChannel, type MessagePort } from 'node:worker_threads';
 import { cssCustomProperties } from '../../src/renderer/design/tokens.js';
 import { MAX_CHANGES, type ProjectPortMessage, type ProjectState, type ProjectTool } from '../../src/shared/project.js';
 import { parseProjectRequest, ProjectPortBridge, type ProjectPortLike } from '../../src/main/project/bridge.js';
-import { bundledBin, engineConfig, recentFile } from '../../src/main/project/config.js';
+import { engineConfig, recentFile } from '../../src/main/project/config.js';
+import { exe, type EngineChoice } from '../../src/main/engine/locate.js';
 import { HomeRefusal, ProjectHome, type RecentLike } from '../../src/main/project/home.js';
 import { filesUnder, isTempName } from '../../src/main/project/listing.js';
 import { formatRecent, MAX_RECENT, parseRecent, RecentStore, sameFolder, withOpened, without, type StoredRecent } from '../../src/main/project/recent.js';
@@ -25,45 +26,37 @@ const abs = (p: string) => path.resolve(p);
 test.describe('engineConfig', () => {
   const files = new Set([abs('/e/rcfd-mcp.exe'), path.join(abs('/b'), 'rcfd-mcp.exe')]);
   const isFile = (p: string) => files.has(p);
+  /** chooseEngine's answer when a variable names the engine (tests/unit/engine-locate.spec.ts checks chooseEngine). */
+  const VARS: EngineChoice = { from: 'variables' };
   test('RCFD_STUDIO_MCP first, then the rcfd-mcp beside RCFD_STUDIO_RCFD, and nothing from PATH', () => {
-    expect(engineConfig({ RCFD_STUDIO_MCP: abs('/e/rcfd-mcp.exe'), RCFD_STUDIO_RCFD: abs('/b/rcfd.exe') }, isFile, 'rcfd-mcp.exe')).toEqual({
+    expect(engineConfig({ RCFD_STUDIO_MCP: abs('/e/rcfd-mcp.exe'), RCFD_STUDIO_RCFD: abs('/b/rcfd.exe') }, isFile, VARS, 'rcfd-mcp.exe')).toEqual({
       configured: true,
       path: abs('/e/rcfd-mcp.exe'),
       from: 'RCFD_STUDIO_MCP',
     });
-    expect(engineConfig({ RCFD_STUDIO_RCFD: abs('/b/rcfd.exe') }, isFile, 'rcfd-mcp.exe')).toEqual({
+    expect(engineConfig({ RCFD_STUDIO_RCFD: abs('/b/rcfd.exe') }, isFile, VARS, 'rcfd-mcp.exe')).toEqual({
       configured: true,
       path: path.join(abs('/b'), 'rcfd-mcp.exe'),
       from: 'RCFD_STUDIO_RCFD',
     });
-    const none = engineConfig({ PATH: abs('/e') }, isFile, 'rcfd-mcp.exe');
-    expect(none.configured).toBe(false);
-    if (!none.configured) expect(none.reason).toContain('RCFD_STUDIO_MCP');
   });
   test('a name that is not a file is not configured, and says which variable and how to build it', () => {
-    const r = engineConfig({ RCFD_STUDIO_MCP: abs('/nope/rcfd-mcp.exe') }, isFile, 'rcfd-mcp.exe');
+    const r = engineConfig({ RCFD_STUDIO_MCP: abs('/nope/rcfd-mcp.exe') }, isFile, VARS, 'rcfd-mcp.exe');
     expect(r.configured).toBe(false);
     if (!r.configured) expect(r.reason).toMatch(/RCFD_STUDIO_MCP names .* not a file .*cargo build --release -p rcfd-mcp/);
-    const b = engineConfig({ RCFD_STUDIO_RCFD: abs('/c/rcfd.exe') }, isFile, 'rcfd-mcp.exe');
+    const b = engineConfig({ RCFD_STUDIO_RCFD: abs('/c/rcfd.exe') }, isFile, VARS, 'rcfd-mcp.exe');
     expect(b.configured).toBe(false);
   });
-  test('F-820: an installed Studio uses the rcfd-mcp it ships with when no variable names one; never PATH', () => {
-    const shipped = new Set([...files, path.join(abs('/res/bin'), 'rcfd-mcp.exe')]);
-    const has = (p: string) => shipped.has(p);
-    expect(engineConfig({}, has, 'rcfd-mcp.exe', abs('/res/bin'))).toEqual({ configured: true, path: path.join(abs('/res/bin'), 'rcfd-mcp.exe'), from: 'bundled' });
-    // the variables win over it
-    expect(engineConfig({ RCFD_STUDIO_MCP: abs('/e/rcfd-mcp.exe') }, has, 'rcfd-mcp.exe', abs('/res/bin'))).toMatchObject({ from: 'RCFD_STUDIO_MCP' });
-    expect(engineConfig({ RCFD_STUDIO_RCFD: abs('/b/rcfd.exe') }, has, 'rcfd-mcp.exe', abs('/res/bin'))).toMatchObject({ from: 'RCFD_STUDIO_RCFD' });
-    // a variable that names nothing is an error, not a reason to fall back
-    expect(engineConfig({ RCFD_STUDIO_MCP: abs('/nope/rcfd-mcp.exe') }, has, 'rcfd-mcp.exe', abs('/res/bin')).configured).toBe(false);
-    // packaged without a bin folder (out/packaged): not configured, as before
-    expect(engineConfig({ PATH: abs('/e') }, has, 'rcfd-mcp.exe', abs('/other/bin')).configured).toBe(false);
-  });
-  test('F-820: the shipped engine is <resources>/bin when packaged; RCFD_TEST_BUNDLED_BIN only in test mode', () => {
-    expect(bundledBin({}, true, abs('/app/resources'))).toBe(path.join(abs('/app/resources'), 'bin'));
-    expect(bundledBin({}, false, abs('/app/resources'))).toBeNull();
-    expect(bundledBin({ RCFD_TEST_BUNDLED_BIN: abs('/t/bin') }, true, abs('/app/resources'))).toBe(path.join(abs('/app/resources'), 'bin'));
-    expect(bundledBin({ RCFD_TEST_HEADLESS: '1', RCFD_TEST_BUNDLED_BIN: abs('/t/bin') }, false, '')).toBe(abs('/t/bin'));
+  test('F-820: an installed Studio uses the rcfd-mcp of its complete <resources>/bin; an incomplete one says what is missing', () => {
+    const bin = abs('/res/bin');
+    expect(engineConfig({}, isFile, { from: 'bundled', dir: bin, missing: [] }, 'rcfd-mcp.exe')).toEqual({
+      configured: true,
+      path: path.join(bin, 'rcfd-mcp.exe'),
+      from: 'bundled',
+    });
+    const r = engineConfig({}, isFile, { from: 'bundled', dir: bin, missing: [{ name: 'rcfd-runner', pkg: 'rcfd-runner' }] }, 'rcfd-mcp.exe');
+    expect(r.configured).toBe(false);
+    if (!r.configured) expect(r.reason).toContain(`${exe('rcfd-runner')} is not in ${bin}`);
   });
   test('the recent list lives in the user data unless RCFD_STUDIO_RECENT names a file', () => {
     expect(recentFile({}, abs('/u'))).toBe(path.join(abs('/u'), 'recent-projects.json'));
@@ -489,10 +482,10 @@ test.describe('the home', () => {
     }
   });
 
-  test('without an engine, nothing starts and the failure says what to set', async () => {
+  test('without an engine, nothing starts and the failure says why', async () => {
     let started = 0;
     const home = new ProjectHome({
-      engine: { configured: false, reason: 'Set RCFD_STUDIO_MCP.' },
+      engine: { configured: false, reason: 'The Studio was started without an engine (--no-engine).' },
       recent: memoryRecent(),
       pickFolder: async () => tmpdir(),
       startServer: async () => {
@@ -503,7 +496,7 @@ test.describe('the home', () => {
     await home.init();
     await home.pick();
     expect(started).toBe(0);
-    expect(home.state.failure).toMatchObject({ kind: 'not_configured', message: 'Set RCFD_STUDIO_MCP.' });
+    expect(home.state.failure).toMatchObject({ kind: 'not_configured', message: 'The Studio was started without an engine (--no-engine).' });
   });
 });
 

@@ -10,16 +10,17 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import type { ProjectState } from '../../src/shared/project.js';
 import { ProjectServer } from '../../src/main/project/server.js';
+import { checkoutRelease } from '../../src/main/engine/locate.js';
 import { appRoot } from './rcfd.js';
 
 const exe = process.platform === 'win32' ? 'rcfd-mcp.exe' : 'rcfd-mcp';
 export const repoRoot = path.resolve(appRoot, '..', '..');
 
-/** rcfd-mcp: RCFD_MCP_BIN, then $CARGO_TARGET_DIR/release, then target/release of this checkout or a folder above. */
+/** rcfd-mcp: RCFD_MCP_BIN, then the checkout's engine folder (checkoutRelease, as the Studio), then target/release above. */
 export function findMcp(): string | null {
   const candidates: string[] = [];
   if (process.env['RCFD_MCP_BIN']) candidates.push(process.env['RCFD_MCP_BIN']);
-  if (process.env['CARGO_TARGET_DIR']) candidates.push(path.join(process.env['CARGO_TARGET_DIR'], 'release', exe));
+  candidates.push(path.join(checkoutRelease(process.env, appRoot), exe));
   for (let dir = appRoot; ; dir = path.dirname(dir)) {
     candidates.push(path.join(dir, 'target', 'release', exe));
     if (path.dirname(dir) === dir) break;

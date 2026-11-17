@@ -86,9 +86,17 @@ export const RUN_POLL_MS = 1000;
 /** Events of a run's events.jsonl the Studio asks `run_status` for (its state changes and the solver's start event). */
 export const RUN_EVENTS = 50;
 
-/** Where the engine's project server comes from (src/main/project/config.ts); `bundled`: an installed Studio's own. */
+/**
+ * Where the engine's project server comes from (src/main/project/config.ts, src/main/engine/locate.ts): `bundled`, a
+ * packaged Studio's own <resources>/bin; `checkout`, the target folder of the checkout `electron .` runs from;
+ * `--engine-dir`, the folder that switch names.
+ */
 export type EngineStatus =
-  | { readonly configured: true; readonly path: string; readonly from: 'RCFD_STUDIO_MCP' | 'RCFD_STUDIO_RCFD' | 'bundled' }
+  | {
+      readonly configured: true;
+      readonly path: string;
+      readonly from: 'RCFD_STUDIO_MCP' | 'RCFD_STUDIO_RCFD' | 'bundled' | 'checkout' | '--engine-dir';
+    }
   | { readonly configured: false; readonly reason: string };
 
 /** One folder of the recent list: the folder and when it was last opened. Nothing of the project itself is kept. */
