@@ -2176,7 +2176,7 @@ const X_WFB: usize = 8;
 const X_NFB: usize = 9;
 
 #[test]
-#[ignore = "ADR 0723: the heavy record of the warm trace on 16^3 (D1 to D4), run once with --ignored"]
+#[ignore = "ADR 0723: the heavy record of the warm trace on 16^3 (D1 to D4), run once with --ignored (168.2 s), every row met: ADR 0711 rung 5 rebuilt; the warm model at rung 4 bit-identical to the plain one; the committed states equal to the driver's warm trial states; the warm trace from rung 4 (Da 7.93e-6) follows one local root of element 3720 (no fallback in 4096 elements) through rung 5 (the same root: modes to 9.0e-12, lambda to 1.2e-14, mu_1 -323.4) to a fold between a 2.165e-4 (dlambda/da -0.54, nu 1) and 2.205e-4 (+3.75, nu 0), K_aa of element 3720 positive definite throughout (l_min 2.27e4 to 4.21e4); reading fold; f841_fast covers the same procedures"]
 fn f841_nh16_warm_trace_heavy() {
     let mut ch = Checks::new();
     let t_all = Instant::now();

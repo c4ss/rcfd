@@ -279,3 +279,150 @@ The heavy record is not run under the mutations.
    16 steps, the one-root criterion and the classifier of RS, the toy PW with `c = 2.84`, `d = 0.01`, the file
    `si_eas_hg20.rs`): taken on the maintainer's standing instruction of 2026-11-11 (take the recommendation).
 2. **Whether the warm start becomes a default**: not taken (it would change default results); open.
+
+## Addendum 1: results (2026-11-17)
+
+Logs in `w49i-work/f841-scratch`: `run1-fast.log` (the registered fast run, on 1f12cb13), `run2-heavy.log` (the registered
+heavy run, 168.2 s, on 1f12cb13), `mutations.log` and `mut-MU*.log`, `s7-*.log`, `b-src-diff.log`, `s6-*.log`,
+`s8-docs.log`; the arithmetic beforehand `scripts/toy_pw.py`. Each registered test was run once; no limit changed after a
+run; no amendment.
+
+### The fast test (`f841_fast`, run 1)
+
+The test's bisections give `a_c = 0.7005357469` and `a_f = 0.9415412906` (`p_f 0.8928104858`), as in the script.
+
+| Id | Measured | Limit | Result |
+|---|---|---|---|
+| PP-0 | within `1e-12` | `<= 1e-12` | met |
+| PP-1 | `p`, `sigma`, `g_z` against the closed form at 5 states | `<= 1e-12`; `<= 1e-8`; `<= 1e-12` | met |
+| PP-2 | "lost"; `0.70 < 0.7005357 < 0.7007813`; `7.81e-4` | as registered; `<= 1.5625e-3` | met |
+| PP-3 | "local breakdown: the local iteration"; 7 of 7 failures local (`local: not finite`); smallest `g_z` at the failed targets `>= 0.99`; the local Newton from the last accepted `z` reaches `z*` at all 7 targets | as registered | met |
+| PW-0 | within `1e-12` | `<= 1e-12` | met |
+| PW-1 | as PP-1 at 12 states; `|z_committed - z*(a)|` within `1e-12` | as registered | met |
+| PW-2 | 0 failed attempts; 0 fallbacks; "fold + 2"; last `a = 1.05 > a_c` | as registered | met |
+| PW-3 | "fold"; `a_f` in `[0.90, 0.95]`; `nu` 1 then 0; `rho` 0.99999 and 0.99998 | as registered | met |
+| PW-F | the fallback flagged; `z = z*(0.5)` within `1e-12` | as registered | met |
+| RC | "same root", "another root", "undecided" | as registered | met |
+
+### The heavy record (`f841_nh16_warm_trace_heavy`, 16^3, 168.2 s)
+
+| Id | Measured | Limit | Result |
+|---|---|---|---|
+| OB, R1, S5 | equal; `9.95e-11`, `nu = 1`; rungs 1 to 5, `2.3e-13`, `2.2e-10`, `9.0e-8`, `mu_1` bit-identical (`0`) | ADR 0718's limits | met |
+| W0 | the free residual at `S4_W`: 0 entries differ; `sigma` bit-identical (`-4.163800829103926e1`); `nu` 1 and 1 | bit-identical, equal | met |
+| LP0 | `5.1e-15` | `<= 1e-7` | met |
+| CW | bit-identical at the commit of `S4` and at all 11 commits along the trace (no element failed) | bit-identical | met |
+| W1 | `7.0e-14`; `7.1e-8`; `1.6e-7` | `<= 1e-9`; `<= 1e-6`; `<= 1e-6` | met |
+| FW1 | constraint `8.1e-14`; continuity at every accepted state | `<= 1e-9`; holds | met |
+| FW2 | **"fold"** | not "undecided" | met |
+| FW3 | the table below | reported | reported |
+| RT | **one local root of element 3720** along the trace: 12 accepted states, no fallback of any of the 4096 elements in any commit, `delta_j` from `1.0e-2` to `2.03e-2` | reported | reported |
+| RS | **"same root"**: at `t_8` (`a = 2.164988000533e-4`) `d = 9.0e-12`, `dl = 1.2e-14`; `mu_1 = -3.234006e2` and `sigma = -5.382683e-1`, as at `S5` | not "undecided" | met |
+
+**The warm trace (FW3).** From `S4_W` with `Da = 7.926379e-6`. The table gives, per accepted state: `a`, `lambda`,
+`dlambda/da`, `nu`, the lowest pair, its share on element 3720, element 3720's `K_aa` `l_min`, and whether the plain
+iteration from `alpha = 0` (the model's default) reaches the same modes at that state. The next three pairs stay at `2278`,
+`3057` and `3936` up to the fold. `l_max` stays between `2.0397e7` and `2.0400e7` and the asymmetry at or below `1.7e-16`.
+
+| step | `a` | `lambda` | `dlambda/da` | `nu` | `mu_1` | share | `l_min` | plain from 0 |
+|---|---|---|---|---|---|---|---|---|
+| 0 (`S4`) | 1.530878e-4 | 0.960069738280 | -41.64 | 1 | -2.4656e4 | 0.645 | 2.2735e4 | same (0) |
+| 1 | 1.610141e-4 | 0.959749331159 | -39.10 | 1 | -2.3654e4 | 0.642 | 2.4268e4 | same (1.9e-10) |
+| 2 | 1.689405e-4 | 0.959451768229 | -35.87 | 1 | -2.2048e4 | 0.637 | 2.5888e4 | **fails** (`det F = -0.57`) |
+| 3 | 1.768669e-4 | 0.959182592554 | -31.93 | 1 | -1.9829e4 | 0.633 | 2.7595e4 | same (1.4e-11) |
+| 4 | 1.847933e-4 | 0.958947573323 | -27.25 | 1 | -1.7003e4 | 0.627 | 2.9391e4 | **fails** (`det F = -17.4`) |
+| 5 | 1.927197e-4 | 0.958752703253 | -21.79 | 1 | -1.3594e4 | 0.620 | 3.1277e4 | same (1.3e-11) |
+| 6 | 2.006460e-4 | 0.958604196347 | -15.54 | 1 | -9.638e3 | 0.612 | 3.3254e4 | same (1.1e-11) |
+| 7 | 2.085724e-4 | 0.958508486055 | -8.467 | 1 | -5.189e3 | 0.602 | 3.5324e4 | same (9.4e-12) |
+| 8 (`a_5`) | 2.164988e-4 | 0.958472223921 | -0.5383 | 1 | -323.4 | 0.587 | 3.7486e4 | same (9.0e-12) |
+| 9 (halved) | 2.204620e-4 | 0.958478523962 | +3.755 | 0 | +2108 | 0.316 | 3.8603e4 | **fails** (25 iterations) |
+| 9 | 2.244252e-4 | 0.958502278853 | +8.271 | 0 | +2267 | 0.002 | 3.9743e4 | same (3.2e-14) |
+| 10 | 2.323516e-4 | 0.958605737154 | +17.99 | 0 | +2274 | 0.0004 | 4.2096e4 | **fails** (25 iterations) |
+
+There were twelve solves: eleven accepted and one rejected. The rejected one was step 9's first attempt, from `a_5` to
+`2.244e-4`; it was discontinuous (`4.03e-6 > 3.52e-6`), not a local failure, and the step was accepted after one halving.
+Every accepted state converged in 3 bordered iterations. The lowest pairs took 3.3 to 12.3 s per state. From step 3 to step
+8 the nearby bracket of D2 failed, because `|mu_1|` fell by more than 10 per cent per step, and `lowest_any` was used there,
+as registered. LP0 shows the two methods agree at `S4`.
+
+**Reading (c2).** By the registered criterion the branch **folds**. `sigma` changes sign between `a_5 = 2.165e-4` (`-0.538`,
+`nu = 1`) and `2.205e-4` (`+3.75`, `nu = 0`). Element 3720's `K_aa` is regular at both states (`rho = 1.65` and `1.70`).
+`l_min` rises along the whole trace (`rho_last = 1.85`) and changes sign on no segment. The fold estimate is `a_f =
+2.170e-4`, `lambda_f = 0.95847209`, within `[0.9584711, 0.9584722]`; it comes from ADR 0711's `fold_between` applied to the
+bracket's printed numbers. At the fold the lowest pair passes through zero and element 3720 stops carrying it. Its share
+falls from 0.59 at `a_5` to 0.32 just past the fold and to 0.002 one state later, where the lowest value `+2267` is the
+former second pair (`2278`). The trace stopped at "fold + 2" (`a = 2.324e-4`), inside the cap.
+
+**Rung 5 (c4).** The warm trace reaches ADR 0711's rung 5 **on the same local root**. Its state at `t_8` is `S5`: `lambda`
+agrees to `1.2e-14`, element 3720's modes to `9.0e-12`, and `mu_1 = -323.4` and `sigma = -0.538` are reproduced. The trace
+follows one root of element 3720 from `S4` to past the fold.
+
+**What this corrects.** ADR 0718 inferred, without a measured row, that `S5` lies on another root of element 3720's local
+problem. That inference is wrong. ADR 0711's rung step from `S4` to `S5` landed on the continued branch, and ADR 0711's
+reading "a fold looks imminent" (`dlambda/da -0.54`) was right: the fold lies 0.2 per cent of `a_5` beyond rung 5. ADR 0718's
+fine trace was lost at `1.65e-4` for a different reason. On this single root the plain iteration from `alpha = 0` fails at
+isolated states (steps 2 and 4, the halved step 9, and step 10 above) and reaches the root at others (steps 1, 3 and 5 to
+8). Whether a plain trace survives a step depends on where its targets fall, and ADR 0711's rungs happened to land on
+states where it succeeds.
+
+### Default bits and static checks
+
+| Id | Result |
+|---|---|
+| B | `git diff --stat cec33559 -- crates/*/src` empty: met |
+| S7 | all release: `--lib` 15 pass; `si_eas_hg18` 1 pass, 2 ignored; `si_eas_hg17` 1 pass, 1 ignored; `si_eas_hg16`, `si_eas_hg15`, `si_eas_hg14` 1 pass, 3 ignored each; `si_eas_hg8` 5 pass, 2 ignored; `si_eas_hg20` `f841_fast` pass (run 1): met |
+| S6 | `cargo fmt -p rcfd-fem --check` and `cargo clippy -p rcfd-fem --release --all-targets -- -D warnings` clean on 1f12cb13: met |
+| S8 | `cargo test -p rcfd-cli --release --test docs_site` on the results tree: met |
+| S9 | 59ad6bf0 (docs), 1f12cb13 (built for the runs), the results commit (its only code change is the heavy record's ignore text, checked by S6): met |
+
+### Mutations (each on a scratch copy of 1f12cb13, run once against `f841_fast`)
+
+| Id | Caught by | Result |
+|---|---|---|
+| MU1 | PW-2 (19 failures, lost), PW-3; also PW-1 (`z` and `g_z` off the closed form after the fallback) | caught |
+| MU2 | PW-2 (7 failures, lost at 0.70), PW-3, PW-F | caught |
+| MU3 | RC (the perturbed root read "same root") | caught |
+| MU4 | PW-F (the fallback not flagged) | caught |
+| MU5 | PW-F (`z` NaN) | caught |
+
+### Deviations
+
+- None in the registered procedure. Beyond the registered rows, PW-1 also caught MU1 and PW-F also caught MU2.
+- The heavy record took 168.2 s. That is inside the brief's 170 s and below the estimate of 3 to 5 minutes, because the trace
+  stopped at "fold + 2" after 11 states instead of 16.
+- At six states the nearby bracket fell back to `lowest_any`. This was registered behaviour, but it kept the cost there at 8
+  to 12 s per state.
+- A cosmetic one: the S5 print line of the heavy record has a run of spaces before "local iterations" (a line continuation in
+  the format string). Not changed after the run.
+
+### Decision
+
+**done** (by the registered rule). Every check of `f841_fast` and of the heavy record was met in their single registered
+runs, and B and S6 to S9 were met. Five of five mutations were caught, with no amendment. FW2 reads "fold" (c2 answered)
+and RS reads "same root" (c4 answered).
+
+### Remaining questions
+
+1. **The model's default from `alpha = 0` on this branch.** The plain local iteration fails at regular states of the root
+   that the warm start follows (`l_min >= 2.5e4`, positive definite). Options: (a) a registered comparison of the warm start,
+   the backtracking of ADR 0655 and the trust region of ADR 0660 D2 as defaults, on the ADR 0658 set-ups and on this path;
+   (b) leave the defaults. Recommendation: (a), as a separate item. Changing a default is the maintainer's decision, so this
+   question stays open (not taken).
+2. **The fold itself.** The bracket `[2.165e-4, 2.205e-4]` fixes `a` to `2e-3` relative and `lambda` to about `1e-6`.
+   Options: (a) an extended (Moore-Spence) system at the bracket, test-only, with the warm start, for `lambda_f`, the critical
+   vector and its share on element 3720; (b) leave it at the bracket. Recommendation: (a), proposed below.
+3. **Whether the warm start becomes a default**: still open (it would change default results).
+
+## For the lead: roadmap entries
+
+> Proposed status: done.
+
+> F-841 (ADR 0723, 2026-11-17): ADR 0718's fine trace of rule L's 16^3 punch branch repeated from ADR 0711's rung 4, test-only, on the model with the warm start of the incompatible modes (ADR 0660 D1). After each accepted state every element's state was committed (its converged modes), and the committed states equal the driver's warm trial states bit for bit. At rung 4 the warm model reproduces the plain residual and dlambda/da bit for bit, and the first step reproduces ADR 0718's plain state (lambda to 7e-14). The branch continues smoothly past ADR 0718's loss at 1.65e-4 and folds. At a = a_4 + j (a_5 - a_4) / 8, dlambda/da runs -41.6, -39.1, -35.9, -31.9, -27.2, -21.8, -15.5, -8.5, -0.54, then +3.75 at 2.205e-4 with nu going from 1 to 0; the fold estimate is a 2.170e-4, lambda 0.95847209. Element 3720's mode tangent stays positive definite and stiffens (l_min 2.27e4 to 4.21e4). Element 3720 carries the lowest pair (-2.47e4 rising to -323, share 0.64 to 0.59) up to the fold, and the pair leaves it past the fold (share 0.002). The trace stays on one local root: no fallback in any of the 4096 elements, and the modes move 1 to 2 per cent per step. ADR 0711's rung 5 is reached on the same local root (modes to 9e-12, lambda to 1e-14, mu_1 -323.4 reproduced). So ADR 0718's inference of another root is wrong, and ADR 0711's imminent fold is confirmed 0.2 per cent of a_5 beyond rung 5. What ended ADR 0718's fine trace is that the plain iteration from alpha = 0 fails at isolated regular states of this same root (4 of 12). Fast control: a toy (ADR 0711's PT with an atan local unknown) whose plain local Newton from zero fails above a_c = 0.7005 although its root exists. Its plain trace is lost at a_c and read as a breakdown of the local iteration; its warm, committed trace reads the closed-form fold at 0.9415. A fallback control and a root-classifier control are added. Default bits unchanged (no library line); five of five mutations caught; no amendment.
+
+> F-796 (ADR 0718, 2026-11-17), add at the end of its note: ADR 0723 shows with the warm start that rung 5 lies on the same local root as the continued branch and that the branch folds at a 2.17e-4. The end at 1.65e-4 came from the plain iteration from alpha = 0 failing at isolated regular states of that root, and the inference of another root is withdrawn.
+
+> F-789 (ADR 0711, 2026-11-17), add at the end of its note: ADR 0723 confirms the imminent fold: with the warm start of the modes the branch folds at a 2.17e-4 (lambda 0.95847209), just past rung 5.
+
+> Follow-up proposed: The fold of rule L's 16^3 punch branch by an extended system with warm-started local modes. Deps F-841. Acceptance: Every limit not stated here is registered in the ADR before the run. At ADR 0723's fold bracket, a test-only extended (Moore-Spence) system on the model with the warm start of the incompatible modes and committed element states, converged to a registered tolerance: lambda_f and a_f inside the bracket, the critical vector's share on element 3720, the null vector's residual; a fast control on a closed-form fold with a local unknown; the default bits unchanged.
+
+> Follow-up proposed: The local mode update of the incompatible Hex8 as a default, compared on the ADR 0658 set-ups and on rule L's 16^3 punch branch. Deps F-841. Acceptance: Every limit not stated here is registered in the ADR before the run. The warm start of ADR 0660 D1, the backtracking of ADR 0655 and the trust region of ADR 0660 D2, each measured as the would-be default on the ADR 0658 set-ups and on ADR 0723's fine trace from rung 4 without committed states beyond the driver's own: solves passed, iterations, and the states where the plain iteration from alpha = 0 fails at a regular root; a recommendation registered before the run; the default bits unchanged.
