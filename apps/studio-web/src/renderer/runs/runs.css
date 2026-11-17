@@ -394,3 +394,7 @@
   padding: 0;
   justify-content: center;
 }
+/* F-828 (ADR 0734): How this ran, the selected run's launch record, build and mesh */
+.rv-how-facts dd {
+  font-size: var(--type-label-size);
+}

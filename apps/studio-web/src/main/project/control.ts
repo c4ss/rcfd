@@ -53,6 +53,7 @@ const target = (p: Readonly<Record<string, unknown>>): string =>
 const VERB: Record<string, string> = {
   'project.run_case': 'start a run of',
   'project.queue_case': 'queue',
+  'project.rerun_run': 'rerun',
   'project.pause_run': 'pause',
   'project.resume_run': 'resume',
   'project.stop_run': 'stop',

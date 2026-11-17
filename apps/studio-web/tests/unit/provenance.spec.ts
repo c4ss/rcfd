@@ -9,10 +9,13 @@ import { MessageChannel } from 'node:worker_threads';
 import path from 'node:path';
 import {
   COPY_MAX_CHARS,
+  howItRanFacts,
+  NO_LAUNCH_RECORD,
   numberFacts,
   PROVENANCE_OPS,
   provenanceText,
   reproduceCommand,
+  rerunCommand,
   runFacts,
   sameHash,
   SESSION_FILE_NOT_RECORDED,
@@ -28,7 +31,7 @@ import {
 import { commandLine } from '../../src/shared/actions/runs.js';
 import { sessionSeriesValue, settingValue, snapshotFactValue } from '../../src/renderer/provenance/sources.js';
 import { parseProvenanceRequest, ProvenancePortBridge, type ProvenancePortLike } from '../../src/main/provenance/bridge.js';
-import { readRunProvenance, recordFacts } from '../../src/main/provenance/record.js';
+import { launchFacts, readRunProvenance, recordFacts } from '../../src/main/provenance/record.js';
 import type { Query } from '../../src/main/run/series.js';
 import { STUDIO_COMMANDS } from '../../src/shared/commands/studio.js';
 import { paletteModel } from '../../src/shared/commands/index.js';
@@ -48,6 +51,7 @@ const record = (o: Partial<RunRecordFacts> = {}): RunRecordFacts => ({
   settings: { mem_mb: null, priority: 0, set: [], threads: 1 },
   mesh: null,
   labels: {},
+  rerunOf: null,
   ...o,
 });
 const same = (p: string): HashCheck => ({ path: p, hash: 'fnv64:00000000000000aa', recorded: 'fnv64:00000000000000aa', matches: true, error: null });
@@ -98,10 +102,13 @@ test('the shell line quotes what needs it (Windows paths, spaces, quotes) the wa
 });
 
 test('every fact the command cannot carry, or that would change the result, is a gap in words', () => {
+  // ADR 0734 P3: continue_from and max_steps are options of rcfd-runner start now, so no gap
   const launch = reproduceCommand(input({ record: record({ settings: { threads: 1, priority: 0, set: [], continue_from: 'r-20261116T090000-0001', max_steps: 10 } }) }));
-  expect(launch.gaps).toHaveLength(2);
-  expect(launch.gaps[0]).toContain('settings.continue_from is "r-20261116T090000-0001"; rcfd-runner start has no option for it');
-  expect(launch.gaps[1]).toContain('settings.max_steps is 10');
+  expect(launch.gaps).toEqual([]);
+  expect(launch.argv!.slice(5)).toEqual(['--threads', '1', '--priority', '0', '--continue-from', 'r-20261116T090000-0001', '--max-steps', '10']);
+  expect(reproduceCommand(input({ record: record({ settings: { max_steps: 0 } }) })).gaps[0]).toContain('settings.max_steps is 0');
+  // a key the runner has no option for is still a gap
+  expect(reproduceCommand(input({ record: record({ settings: { threads: 1, later_key: 3 } }) })).gaps[0]).toContain('settings.later_key is 3; rcfd-runner start has no option for it');
   // null launch settings are no gap (the runner writes none)
   expect(reproduceCommand(input({ record: record({ settings: { threads: 1, continue_from: null } }) })).gaps).toEqual([]);
   const changed = reproduceCommand(input({ caseCheck: { ...same('cases/cavity-re100.toml'), hash: 'fnv64:00000000000000bb', matches: false } }));
@@ -117,7 +124,20 @@ test('every fact the command cannot carry, or that would change the result, is a
   expect(reproduceCommand(input({ record: record({ solverVersion: 'unknown' }) })).gaps).toEqual(['run.json does not say which engine version made the run.']);
   expect(reproduceCommand(input({ record: record({ settings: { threads: 0 } }) })).gaps[0]).toContain('settings.threads is 0');
   expect(reproduceCommand(input({ record: record({ settings: { set: 'a=1' } }) })).gaps[0]).toContain('settings.set is "a=1"');
-  expect(reproduceCommand(input({ record: record({ mesh: { path: 'meshes/a.msh', hash: 'fnv64:2' } }) })).gaps[0]).toContain('names the mesh meshes/a.msh');
+  // ADR 0734 P4, P5: a recorded mesh is checked by its hash now; only a changed, unhashed or unreadable mesh is a gap
+  const mesh = record({ mesh: { path: 'meshes/a.msh', hash: 'fnv64:0000000000000002' } });
+  const meshSame: HashCheck = { path: 'meshes/a.msh', hash: 'fnv64:0000000000000002', recorded: 'fnv64:0000000000000002', matches: true, error: null };
+  expect(reproduceCommand(input({ record: mesh, meshCheck: meshSame })).gaps).toEqual([]);
+  expect(reproduceCommand(input({ record: mesh, meshCheck: { ...meshSame, hash: 'fnv64:0000000000000003', matches: false } })).gaps).toEqual([
+    'The mesh meshes/a.msh changed since the run (hash fnv64:0000000000000003 now, fnv64:0000000000000002 when the run was made).',
+  ]);
+  expect(reproduceCommand(input({ record: mesh, meshCheck: null })).gaps[0]).toContain('outside the project folder');
+  expect(reproduceCommand(input({ record: record({ mesh: { path: 'meshes/a.msh', hash: null } }) })).gaps[0]).toContain('records no hash of it');
+  // the rerun command: the run's own snapshot, so a changed case is no gap; a changed mesh or engine is
+  const rerun = rerunCommand({ run: 'r-20261116T100000-abcd', folder: '/p/quick', record: mesh, snapshotCheck: same('runs/r/case.snapshot'), meshCheck: meshSame, engineNow: engine });
+  expect(rerun.argv).toEqual(['rcfd-runner', 'rerun', 'r-20261116T100000-abcd', '--project', '/p/quick']);
+  expect(rerun.gaps).toEqual([]);
+  expect(rerunCommand({ run: 'r', folder: '/p', record: mesh, snapshotCheck: null, meshCheck: { ...meshSame, matches: false }, engineNow: { name: 'rcfd', version: '0.2.0' } }).gaps).toHaveLength(2);
   // a design study's labels do not change the result: left out, not a gap
   const labelled = reproduceCommand(input({ record: record({ labels: { study: 'designs/s1', variant: 'a=1' } }) }));
   expect(labelled.gaps).toEqual([]);
@@ -133,10 +153,20 @@ test('the runner’s legacy hash spelling names the same bytes', () => {
 // ---- reading a run's provenance through the engine
 
 /** A fake project server: read_project_file of a few files, in pages of `page` characters, recording what was asked. */
-function fakeServer(files: Record<string, { text: string; hash: string }>, page = 10) {
+function fakeServer(files: Record<string, { text: string; hash: string }>, page = 10, status: Record<string, unknown> | null = null) {
   const calls: { tool: string; args: Record<string, unknown> }[] = [];
   const query: Query = async (tool, args) => {
     calls.push({ tool, args });
+    // ADR 0734: run_status's launch and time_unit, and hash_project_file of a mesh (the hash of the file's entry)
+    if (tool === 'run_status') {
+      if (!status) throw new Error('run_status: no such run');
+      return status;
+    }
+    if (tool === 'hash_project_file') {
+      const f = files[args['path'] as string];
+      if (!f) throw new Error(`${String(args['path'])}: no such file or folder`);
+      return { path: args['path'], kind: 'file', hash: f.hash, bytes: f.text.length, files: 1 };
+    }
     if (tool !== 'read_project_file') throw new Error(`unexpected tool ${tool}`);
     const f = files[args['path'] as string];
     if (!f) throw new Error(`read ${String(args['path'])}: The system cannot find the file specified. (os error 2)`);
@@ -177,8 +207,12 @@ test('a run’s provenance: run.json whole through read_project_file, the hashes
   expect(p.units).toEqual({ lid_drag: 'N', res_u: '' });
   expect(p.reproduce.argv).toEqual(['rcfd-runner', 'start', path.join(folder, 'cases', 'cavity-re100.toml'), '--project', folder, '--threads', '1', '--priority', '0', '--set', 'output.store_interval=5']);
   expect(p.reproduce.gaps).toEqual([]);
-  // only the read-only tool, never a write, and the record read whole page by page
-  expect(new Set(s.calls.map((c) => c.tool))).toEqual(new Set(['read_project_file']));
+  // ADR 0734: no launch record from this fake (run_status failed), said; the rerun command from the record alone
+  expect(p.launch).toBeNull();
+  expect(p.launchNote).toContain('Not read: run_status of');
+  expect(p.rerun.argv).toEqual(['rcfd-runner', 'rerun', RUN, '--project', folder]);
+  // only read-only tools, never a write, and the record read whole page by page
+  expect(new Set(s.calls.map((c) => c.tool))).toEqual(new Set(['read_project_file', 'run_status']));
   expect(s.calls.filter((c) => c.args['path'] === `runs/${RUN}/run.json`).length).toBe(Math.ceil(RUN_JSON.length / 10));
 });
 
@@ -384,9 +418,63 @@ test('a session number’s facts: the service’s own, and what it does not reco
   expect(new Map(sessionFacts(series, 'reading', null)).get('Unit')).toBe('none, empty in monitors.get (the series’ unit)');
   expect(new Map(sessionFacts(series, 'reading', null)).get('Iteration')).toBe('40');
   expect(SESSION_NO_REPRODUCE).toMatch(/^Not recorded: /);
-  // a snapshot's time: the store gives no unit, said as not recorded (G2: no unit is guessed)
+  // a snapshot's time: ADR 0734 P2, the unit run_status names (store.rts keeps its bytes; G2: no unit is guessed)
   const t = snapshotFactValue({ run: 'r', quantity: 'time', shown: '0', value: 0, snapshot: 3, of: 24, step: 20, time: 0 });
-  expect(t.unit).toEqual({ kind: 'none', why: 'not recorded: runs/r/fields/store.rts gives a snapshot’s time without a unit' });
+  expect(t.unit).toEqual({ kind: 'time' });
+});
+
+// ---- ADR 0734: how a run ran (its launch record, build and mesh) and its time unit
+
+const LAUNCH = {
+  launch_seq: 1,
+  argv: ['C:\\bin\\rcfd.exe', 'run', 'C:\\p\\runs\\r\\case.snapshot', '--case-dir', 'C:\\p\\cases', '--threads', '1'],
+  cwd: 'C:\\p\\runs\\r',
+  solver: { path: 'C:\\bin\\rcfd.exe', version: 'rcfd 0.1.0', build: { exe_hash: 'fnv64:3af0108be1275f3d', git_rev: null } },
+  started: '2026-11-17T15:17:46.798804600Z',
+};
+
+test('how a run ran: the launch record, the build, the mesh checked by its hash now, the rerun command, the time unit', async () => {
+  const withMesh = JSON.stringify({ ...JSON.parse(RUN_JSON), mesh: 'meshes/a.msh', mesh_hash: 'fnv64:0000000000000002', rerun_of: 'r-20261116T090000-0001' });
+  const files = (meshHash: string) => ({
+    [`runs/${RUN}/run.json`]: { text: withMesh, hash: 'r' },
+    [`runs/${RUN}/case.snapshot`]: { text: 'a', hash: 'fnv64:00000000000000aa' },
+    'cases/cavity-re100.toml': { text: 'a', hash: 'fnv64:00000000000000aa' },
+    'meshes/a.msh': { text: 'm', hash: meshHash },
+  });
+  const s = fakeServer(files('fnv64:0000000000000002'), 10, { run: RUN, launch: LAUNCH, time_unit: 's' });
+  const p = await readRunProvenance(s.query, RUN, 'C:\\p', engine, () => 'now');
+  expect(p.launch).toEqual(launchFacts(LAUNCH));
+  expect(p.launch?.exeHash).toBe('fnv64:3af0108be1275f3d');
+  expect(p.timeUnit).toBe('s');
+  expect(p.meshCheck).toMatchObject({ path: 'meshes/a.msh', matches: true });
+  expect(p.record?.rerunOf).toBe('r-20261116T090000-0001');
+  expect(p.reproduce.gaps).toEqual([]);
+  const f = new Map(howItRanFacts(p));
+  expect(f.get('Command')).toBe(shellLine(LAUNCH.argv));
+  expect(f.get('Build')).toBe('fnv64:3af0108be1275f3d, no git revision (the build set none)');
+  expect(f.get('Solver')).toBe('rcfd 0.1.0, C:\\bin\\rcfd.exe');
+  expect(f.get('Mesh')).toBe('meshes/a.msh, fnv64:0000000000000002; unchanged');
+  expect(f.get('Rerun of')).toBe('r-20261116T090000-0001');
+  expect(f.get('Rerun')).toBe(`rcfd-runner rerun ${RUN} --project 'C:\\p'`);
+  expect(new Set(s.calls.map((c) => c.tool))).toEqual(new Set(['read_project_file', 'run_status', 'hash_project_file']));
+  // the time unit of a run's and a snapshot's time comes from run_status
+  const t = snapshotFactValue({ run: RUN, quantity: 'time', shown: '0.5', value: 0.5, snapshot: 3, of: 24, step: 20, time: 0.5 });
+  expect(unitText(t, p)).toBe('s, time_unit of run_status (simulated time; 0 for a steady run)');
+  // a changed mesh is said, with its hash now
+  const changed = await readRunProvenance(fakeServer(files('fnv64:0000000000000009'), 10, { run: RUN, launch: LAUNCH, time_unit: 's' }).query, RUN, 'C:\\p', engine, () => 'now');
+  expect(new Map(howItRanFacts(changed)).get('Mesh')).toBe('meshes/a.msh, fnv64:0000000000000002; changed: fnv64:0000000000000009 now');
+  expect(changed.reproduce.gaps).toEqual(['The mesh meshes/a.msh changed since the run (hash fnv64:0000000000000009 now, fnv64:0000000000000002 when the run was made).']);
+  expect(changed.rerun.gaps).toEqual(changed.reproduce.gaps);
+  // a run without a launch record (not launched, or launched before ADR 0734): said, never filled in
+  const old = await readRunProvenance(fakeServer(files('x'), 10, { run: RUN, launch: null, time_unit: 's' }).query, RUN, 'C:\\p', engine, () => 'now');
+  expect(old.launch).toBeNull();
+  expect(new Map(howItRanFacts(old)).get('Command')).toBe(NO_LAUNCH_RECORD);
+  // an engine before ADR 0734: no launch member and no time unit
+  const before = await readRunProvenance(fakeServer(files('x'), 10, { run: RUN }).query, RUN, 'C:\\p', engine, () => 'now');
+  expect(before.launchNote).toContain('an engine before ADR 0734');
+  expect(unitText(t, before)).toBe('none: run_status gives no time_unit (an engine before ADR 0734)');
+  expect(launchFacts({ argv: [] })).toBeNull();
+  expect(launchFacts('x')).toBeNull();
 });
 
 test('provenance.css uses only defined tokens and no colour literals; corners square, no shadow of its own', () => {

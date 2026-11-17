@@ -11,7 +11,7 @@
 //
 // G22: every control is an icon with its name as tooltip and accessible name; at rest the surfaces gain no chrome word
 // (a column head is the engine's equation name, a warning speaks as an exception).
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import { BUDGET_KEYS, BUDGET_KIND, type BudgetKey, type BudgetsOutcome, type RunLog, type RunnerBudgets } from '../../shared/run.js';
 import { Button, IconButton, NumberField, Quiet, StateMark } from '../ui/index.js';
 import { IconToggle } from '../ui/IconToggle.js';
@@ -51,7 +51,7 @@ const LOG_POLL_MS = 2000;
 /** Warnings shown at rest (the latest ones). */
 const WARNINGS_AT_REST = 3;
 
-export function RunLogTools({ row }: { row: RunRow }) {
+export function RunLogTools({ row, extra }: { row: RunRow; extra?: ReactNode }) {
   const [open, setOpen] = useState(false);
   const [log, setLog] = useState<RunLog | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -116,6 +116,7 @@ export function RunLogTools({ row }: { row: RunRow }) {
             data-report={report.path}
           />
         )}
+        {extra}
       </div>
       {reportError && (
         <p className="rv-why rv-why--failed" role="alert" data-words="exception">
