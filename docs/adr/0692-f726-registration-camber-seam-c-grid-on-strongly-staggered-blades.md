@@ -202,3 +202,38 @@ include_blade true }`. Quality: `quality_summary(&mesh)` (maxima over every face
 - No flow solve on the meshes; no case-file value for S (follow-up); no change of h_slit.
 
 ## Addenda
+
+### Amendment 1 (2026-11-17, after the development builds, before any registered run; no limit changed)
+
+Development builds (the protocol above), all on the reference at the s4 specs, in scratch copies of the branch code
+(`f726-scratch/dev`, `f726-scratch/diag` with the D0 hooks; logs `dev1.log`, `dev2_diag.log`, `dev3_diag.log`); no quality
+metric was computed or printed:
+
+1. S as registered (`dev1.log`): refused, step-0 message "folded at layer 0 (r = 0.02150), C block around line 2, row 2".
+2. S as registered with the D0 hooks (`dev2_diag.log`): steps 0 to 4 (with smoothing) fold in the plane of the layers on the
+   wake and suction-side lines next to the stack edge (row 2); steps 6 and 7 (Laplace start) fold at the outlet line and the
+   leading edge (row 2). **Step 5, the algebraic grid of S1 + S2, is unfolded in every layer, also after the radial blend
+   (`pre-filter fold None`); the radial filter folds it** at layer 5 (r = 0.03975, the mid-span station), C block around line 0,
+   row 2.
+3. Variant V1 (below) with the D0 hooks (`dev3_diag.log`): builds at step 5, 12 841 cells; the D0 corner-Jacobian hook counts 0
+   of 12 848 C and F hexes with mixed signs (disclosed: this is the measure of A1b, seen once in development on the variant).
+
+No defect of the registered code was found (the step-5 grid is the design's algebraic grid and is unfolded); the fold is a design
+interaction, so the protocol's variant rule applies. One of the three permitted variants is used.
+
+**Variant V1 (frozen): S without the radial filter** (`radial_filter: false` in `camber_seam_s_construction()`, every other field
+as registered). Derivation of the fold, from the code: the filter (ADR 0079 F3) moves a far node of layer `k` towards the linear
+interpolation in `r` of layers `k - 1` and `k + 1`, with a weight that rises from 0 at the stack edge as `1 - fade((j - nb) /
+(ns - nb))`, i.e. 0.043 at the first free node `j = nb + 1` (two passes of half the weight: about 4.3 % of the deviation). The
+station distribution of the reference is piecewise linear with a kink at mid span, the radius of layer 5 (chord slopes 0.71 and
+0.38 m/m, stagger 5.6 and 2.2 deg per half span), so the wake and trailing-edge positions are kinked in `r` there: the wake offset
+`s_inf - s_te = sigma0 0.2 c`, about 0.9 c, alone deviates from the interpolation of layers 4 and 6 (9 mm away on either side)
+by about `0.9 x 0.33 x 0.009 / 2` = 1.3 mm, the trailing-edge position by a similar amount. 4.3 % of 2 to 3 mm is about 0.1 mm,
+above the length of the first free cell next to the outlet-side wake stack (`first` = 7.2e-5 m along a nearly pitchwise
+segment, `cos_t` about 1): the first free quad turns over. The algebraic grids of S vary smoothly with `r` between the kinks and
+need no filter; H keeps it (bits unchanged). The fold-free step-5 result is not an argument from the measured numbers but the
+registered fallback of the chain.
+
+Construction S as frozen: `CGridOptions::camber_seam_s_construction()` = `camber_seam_h_construction()` + `camber_front` +
+`straight_lines` + `radial_filter: false`. NC2 and NC3 stay as registered (H, with its filter, + one field). MU1 to MU6 are run on
+this S. Prediction for the registered run: A1a met at step 5 (the development build); A2 to A4 not seen.
