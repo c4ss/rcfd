@@ -5,7 +5,7 @@
 // Every value, message, template and example name is the engine's. The session actions (session.create,
 // session.close, settings.*, mesh.check) go through the F-827 dispatcher; the case-file actions (bind, save, new,
 // duplicate, check the saved file) through the case port (door.ts), whose main-process side calls the engine's project
-// server (src/main/case/editor.ts).
+// server (src/main/case/editor.ts). The mesh preview (F-836, MeshPreview.tsx) draws the session's mesh before any run.
 import { abortable, beginWork, cancelHook } from '../work/work.js';
 import { WorkProgress } from '../work/WorkProgress.js';
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode, type RefObject } from 'react';
@@ -18,6 +18,7 @@ import type { ServiceState } from '../../shared/service.js';
 import { dispatch, watchEvents, watchServiceState } from '../actions/index.js';
 import { watchProjectState } from '../project/door.js';
 import { caseModel, formatValue, type CaseModel } from '../settings/schema.js';
+import { EngineRecovery } from '../help/Recovery.js';
 import { useSettings } from '../settings/context.js';
 import { SettingsSurface } from '../settings/SettingsSurface.js';
 import { UndoControls } from '../history/UndoControls.js';
@@ -26,6 +27,7 @@ import { caseDoor } from './door.js';
 import { caseHash, caseRoute, replaceHash, type CaseRoute } from './hash.js';
 import { openCase, type OpenFailure } from './open.js';
 import { confirmClose } from './closeGuard.js';
+import { MeshPreview } from './MeshPreview.js';
 import '../settings/settings.css';
 import './case.css';
 
@@ -66,7 +68,7 @@ function useEngine(): { service: ServiceState | null; model: CaseModel | null; s
   useEffect(() => {
     if (!connected) return;
     let live = true;
-    void dispatch('settings.schema', {}).then((r) => {
+    void dispatch('settings.schema', { ui: true }).then((r) => {
       if (!live) return;
       if (!r.ok) return setSchemaError(r.error.message);
       try {
@@ -266,7 +268,12 @@ function OpenFailureText({ failure, path }: { failure: OpenFailure; path: string
       </p>
     );
   }
-  return <p>The engine answered: {failure.message}</p>;
+  return (
+    <>
+      <p>The engine answered: {failure.message}</p>
+      <EngineRecovery code={failure.code} />
+    </>
+  );
 }
 
 // ---- #/case/new
@@ -514,7 +521,7 @@ function EditorView({ session, engine, project, setTitle, setStateWord }: Editor
       address={service?.address ?? null}
       settingsEpoch={epochs.settings}
       stateEpoch={epochs.state}
-      aside={<CasePanel status={status} refresh={refresh} />}
+      aside={<CasePanel status={status} refresh={refresh} settingsEpoch={epochs.settings} />}
     />
   );
 }
@@ -554,7 +561,7 @@ const WORK_SCOPE = 'case-editor';
 
 // ---- the case file panel at the head of the right column (inside the settings surface's context)
 
-function CasePanel({ status, refresh }: { status: CaseStatus; refresh: () => Promise<void> }) {
+function CasePanel({ status, refresh, settingsEpoch }: { status: CaseStatus; refresh: () => Promise<void>; settingsEpoch: number }) {
   const settings = useSettings();
   const b = status.binding;
   const pending = status.pending;
@@ -803,6 +810,14 @@ function CasePanel({ status, refresh }: { status: CaseStatus; refresh: () => Pro
           </div>
         )}
         {notice && <NoticeView notice={notice} titleRef={noticeRef} path={b.path} pendingCount={pending.count} onGo={settings.goTo} onMine={() => void save('current')} onReload={reload} onDismiss={() => setNotice(null)} />}
+      </section>
+
+      {/* F-836 (ADR 0732): the mesh the session's case runs on, drawn before any run; G22: its heading is for readers */}
+      <section className="ce-panel" aria-labelledby="ce-mesh-title">
+        <h2 id="ce-mesh-title" className="sr-only">
+          Mesh preview
+        </h2>
+        <MeshPreview session={b.session} folder={b.folder} settingsEpoch={settingsEpoch} />
       </section>
 
       <section className="ce-panel" aria-labelledby="ce-actions-title">

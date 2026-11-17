@@ -105,6 +105,17 @@ export interface SurfaceFieldData {
   readonly values: Float32Array<ArrayBuffer>;
 }
 
+/**
+ * F-836: the boundary surface of a store's mesh as `SurfaceData` gives it, with the patch of each triangle: `patch[t]` is
+ * the index, in the stored mesh's patch order (the order of `mesh.preview`'s `patches`), of the patch whose boundary face
+ * triangle `t` was cut from. Route `local` only.
+ */
+export interface PatchSurfaceData extends SurfaceData {
+  readonly patch: Uint32Array<ArrayBuffer>;
+  /** The stored mesh's content hash, 16 hexadecimal digits. */
+  readonly meshHash: string;
+}
+
 /** Errors of the data bridge itself; errors of the service keep their JSON-RPC codes (for example -32602, 1004). */
 export type DataErrorCode =
   | 'bad_request' // the message or its arguments have the wrong shape
@@ -157,6 +168,7 @@ export type DataRequest =
   | ({ readonly op: 'field'; readonly store: StoreRef; readonly snapshot: number; readonly field: string } & Common)
   | ({ readonly op: 'surface'; readonly store: StoreRef } & Common)
   | ({ readonly op: 'surfaceField'; readonly store: StoreRef; readonly snapshot: number; readonly field: string } & Common)
+  | ({ readonly op: 'patchSurface'; readonly store: StoreRef } & Common)
   | ({
       readonly op: 'difference';
       readonly store: StoreRef;
@@ -176,6 +188,7 @@ export type DataWireResult =
   | { readonly kind: 'field'; readonly snapshot: number; readonly field: string; readonly values: ArrayBuffer }
   | { readonly kind: 'surface'; readonly points: ArrayBuffer; readonly triangles: ArrayBuffer; readonly cells: ArrayBuffer }
   | { readonly kind: 'surfaceField'; readonly snapshot: number; readonly field: string; readonly meshHash: string; readonly values: ArrayBuffer }
+  | { readonly kind: 'patchSurface'; readonly points: ArrayBuffer; readonly triangles: ArrayBuffer; readonly cells: ArrayBuffer; readonly patch: ArrayBuffer; readonly meshHash: string }
   | { readonly kind: 'difference'; readonly snapshot: number; readonly otherSnapshot: number; readonly field: string; readonly values: ArrayBuffer }
   | { readonly kind: 'cancel'; readonly cancelled: number };
 
@@ -217,4 +230,15 @@ export interface SurfaceValuesBridge {
    * A `tag` is cancelled by `window.studioData.cancel`.
    */
   field(store: StoreRef, snapshot: number, field: string, options?: DataOptions): Promise<DataReply<SurfaceFieldData>>;
+}
+
+/**
+ * F-836 (ADR 0732): what the preload script puts on `window.studioMeshPreview`, over the same data port as
+ * `window.studioData` (kept apart, as `window.studioCompare` is, so that F-804's bridge keeps exactly its four functions).
+ * The case editor draws the mesh store `mesh.preview` wrote with it, one colour per patch. Its arguments are checked
+ * again in main.
+ */
+export interface MeshPreviewBridge {
+  /** The boundary surface of the store's mesh with the patch of each triangle (route `local` only). */
+  surface(store: StoreRef, options?: DataOptions): Promise<DataReply<PatchSurfaceData>>;
 }

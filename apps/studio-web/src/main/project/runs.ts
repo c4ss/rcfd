@@ -87,6 +87,7 @@ export function runDetail(id: string, answer: unknown, readAt: string): RunDetai
     finish,
     history,
     ...lastResidualOf(a['last_residual']),
+    ...(typeof a['time_unit'] === 'string' ? { timeUnit: a['time_unit'] } : {}),
     readAt,
   };
 }

@@ -21,8 +21,9 @@ export const PROJECT_PORT_CHANNEL = 'studio.project-port';
  * one run's status.json, its last events and its record, for the runs table. `read_residuals` and `read_project_file`
  * (F-810): a run's residual and monitor histories and its output/monitors.json, for the run workspace (src/shared/run.ts).
  * `runner_config` (F-837, ADR 0733): the runner's budgets, which the runner itself writes (`set_runner_config`, on the
- * run-control server: BUDGETS_WRITE_TOOL). */
-export const PROJECT_TOOLS = ['project_info', 'list_runs', 'list_meshes', 'read_feed', 'run_status', 'read_residuals', 'read_project_file', 'compare_runs', 'runner_config', 'list_trash'] as const;
+ * run-control server: BUDGETS_WRITE_TOOL). `hash_project_file` (F-828, ADR 0734 P4): the hash of the mesh a run names
+ * now, against its run.json mesh_hash. `list_trash` (ADR 0736): the project trash. */
+export const PROJECT_TOOLS = ['project_info', 'list_runs', 'list_meshes', 'read_feed', 'run_status', 'read_residuals', 'read_project_file', 'compare_runs', 'runner_config', 'hash_project_file', 'list_trash'] as const;
 export type ProjectTool = (typeof PROJECT_TOOLS)[number];
 
 /** F-837 (ADR 0733): the one write tool of the runner's budgets, called on the run-control server only. */
@@ -203,6 +204,8 @@ export interface RunDetail {
    * equation name (`u`, `p`, `continuity`, ...); absent when the run has written none.
    */
   readonly lastResidual?: Readonly<Record<string, number>> | undefined;
+  /** ADR 0734 P2: the unit of `time` as run_status names it (`s`); absent from an engine that names none. */
+  readonly timeUnit?: string | undefined;
   /** When the Studio read it (RFC 3339). */
   readonly readAt: string;
 }

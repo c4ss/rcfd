@@ -141,9 +141,32 @@ const SPECS = {
     title: 'Show the case schema',
     description: 'The JSON Schema of a case and of the monitor format, from the engine.',
     group: 'service',
-    params: {},
+    params: {
+      ui: {
+        type: 'boolean',
+        optional: true,
+        description:
+          'Add the engine’s labels, help, advanced flags and recommended ranges (ADR 0730); a service started without --ui ignores it.',
+      },
+    },
     engine: { service: 'settings.schema' },
-    mcp: { tool: null, note: 'No MCP tool; `rcfd call settings.schema` prints it.' },
+    mcp: { tool: null, note: 'No MCP tool; `rcfd call settings.schema` prints it, and `rcfd schema --ui` the labels and help.' },
+  }),
+  'help.glossary': action({
+    title: 'Show the glossary',
+    description: 'The project’s terms and what they mean, from docs/glossary.md as the engine holds it (rcfd serve --ui).',
+    group: 'service',
+    params: {},
+    engine: { service: 'help.glossary' },
+    mcp: { tool: null, note: 'No MCP tool (ADR 0730, open question 8); `rcfd help glossary` prints it.' },
+  }),
+  'help.errors': action({
+    title: 'Show the error catalogue',
+    description: 'Every error and exit code of the engine with what to do next (rcfd serve --ui).',
+    group: 'service',
+    params: {},
+    engine: { service: 'help.errors' },
+    mcp: { tool: null, note: 'No MCP tool (ADR 0730, open question 8); `rcfd help errors` prints it.' },
   }),
   'data.info': action({
     title: 'Show the data route',
@@ -276,6 +299,25 @@ const SPECS = {
     params: ON_SESSION,
     engine: { service: 'mesh.check', timeoutMs: 600_000 },
     mcp: { tool: 'check_mesh' },
+  }),
+  'mesh.preview': action({
+    title: 'Preview the mesh',
+    description:
+      'Build the mesh the run will use, without solving, and write it as a mesh-only store in <dir>/<mesh hash>/ for the case editor to draw (rcfd serve --ui).',
+    group: 'mesh',
+    params: {
+      session,
+      dir: { type: 'string', description: 'The folder of previews; the Studio uses the project’s .rcfd/previews.' },
+      adapt: {
+        type: 'string',
+        enum: ['base', 'final'],
+        optional: true,
+        description: 'For a case with [mesh.adapt]: the mesh the run starts on (base, the default) or after its first step (final: runs the adaptive loop).',
+      },
+      force: { type: 'boolean', optional: true, description: 'Build even when the mesh.n* counts give more than 2 000 000 cells.' },
+    },
+    engine: { service: 'mesh.preview', timeoutMs: 600_000 },
+    mcp: { tool: null, note: 'No MCP tool (ADR 0732, open question 6); `rcfd call mesh.preview` reaches it, and the project tool preview_mesh draws a plane of the same mesh.' },
   }),
 
   // ---- run control

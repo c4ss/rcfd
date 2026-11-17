@@ -5,6 +5,8 @@ import type { JsonValue } from '../../shared/actions/params.js';
 
 export interface SettingsContext {
   readonly session: string;
+  /** The schema carries the engine's UI metadata (F-826): the advanced flag decides what sits behind "Show all". */
+  readonly ui?: boolean;
   /** The session's settings (settings.get without a path), or null while it loads. */
   readonly tree: unknown;
   /** False while the action layer says settings.set is unavailable (a run is going); then readOnlyReason says why. */

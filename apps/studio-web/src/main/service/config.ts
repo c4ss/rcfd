@@ -1,7 +1,7 @@
 // Which service the Studio talks to, from its environment. Pure: the unit tests call it with plain objects.
 //
 //   RCFD_STUDIO_SERVICE=127.0.0.1:7878   attach to a service someone else started (loopback only, G10)
-//   RCFD_STUDIO_RCFD=<path to rcfd>      start `rcfd serve --addr 127.0.0.1:0` and own it
+//   RCFD_STUDIO_RCFD=<path to rcfd>      start `rcfd serve --addr 127.0.0.1:0 --ui` and own it
 //   RCFD_STUDIO_SERVICE_ROOT=<dir>       with RCFD_STUDIO_RCFD: passed as `--root` (the service's sandbox)
 //   RCFD_STUDIO_STATE_DIR=<dir>          where a started service's address and log are kept (default: the user data dir)
 //

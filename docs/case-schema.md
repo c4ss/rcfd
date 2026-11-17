@@ -48,6 +48,7 @@ On this page:
 - Least-squares velocity gradient on periodic faces, and momentum convection on high-aspect wall cells
 - Limited linear-upwind extrapolation
 - Design-loop files (not part of the case schema)
+- Labels, help and the advanced flag (`rcfd schema --ui`)
 
 The case file (TOML or JSON) is a settings tree. `rcfd schema` prints its JSON Schema, the
 service returns it from `settings.schema`, and the Studio's case editor and the assistant tools
@@ -3125,6 +3126,16 @@ With `linear` every result is unchanged bit for bit, and the settings hash leave
 Operating maps (`rcfd map`), design studies and the `design_*` tools do not add a section to the case: a map or a study is a driver
 that overrides settings of a base case (`rcfd map <case> --axis path=v1,v2,...`; `study.json` next to `evaluations.jsonl` in a study
 directory). Their formats are described in `docs/design-loop.md`. The existing `study` section (ADR 0034) is unchanged.
+
+## Labels, help and the advanced flag (`rcfd schema --ui`)
+
+`rcfd schema --ui`, and `settings.schema {ui: true}` on a service started with `rcfd serve --ui`, add labels and help to
+the schema (ADR 0730). They come from `crates/rcfd-api/src/schema_ui.toml`, one entry per dotted path. A node may carry a
+short label, one line of help, a display unit, the heading of this page that explains it, and an advanced flag: an
+advanced key sits one step away in the Studio, behind "Show all". A usual range is given only with its published source,
+as advice; the allowed range is still the key's `minimum` and `maximum`. Where no help is written, the help is the first
+sentence of the docs heading, else of the key's description. Validation, parsing, unit conversion and the case hash never
+read these keys, and without `--ui` the schema is unchanged.
 
 ## Where to go next
 

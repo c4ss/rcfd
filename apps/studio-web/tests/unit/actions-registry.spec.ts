@@ -34,7 +34,12 @@ function rustList(src: string, name: string): string[] {
 
 /** What the engine offers, from its sources. */
 function engine() {
-  const methods = new Set([...rustList(rust('crates/rcfd-api/src/service.rs'), 'METHODS'), ...rustList(rust('crates/rcfd-api/src/data_service.rs'), 'DATA_METHODS')]);
+  // the opt-in families: data.* (protocol 1.2) and help.* (rcfd serve --ui, ADR 0730)
+  const methods = new Set([
+    ...rustList(rust('crates/rcfd-api/src/service.rs'), 'METHODS'),
+    ...rustList(rust('crates/rcfd-api/src/data_service.rs'), 'DATA_METHODS'),
+    ...rustList(rust('crates/rcfd-api/src/ui.rs'), 'UI_METHODS'),
+  ]);
   const cli = rust('crates/rcfd-cli/src/main.rs');
   const hasCall = cli.includes('"call" => cmd_call(rest)') && /\n {4}call \[--addr <host:port>\] <method> \[<json-params>\]/.test(cli);
   const mcp = rust('crates/rcfd-mcp/src/lib.rs');

@@ -46,7 +46,10 @@ async function outcome(port: number, session: string) {
 
 test.describe('actions on the real service', () => {
   test('every action calls a method the service offers (data.info only with data.* on)', async () => {
-    const s = await serve();
+    // restated 2026-11-17 (ADR 0732): the service as the Studio starts it, with --ui, whose methods (help.* of ADR 0730,
+    // mesh.preview of ADR 0732) have actions; without it this list also held the --ui methods
+    const s = await startRcfd(rcfd!, 0, ['--ui']);
+    leftovers.add(s.pid);
     const c = await RpcConnection.connectTcp('127.0.0.1', s.port);
     const info = (await c.request('service.info')) as { methods: string[] };
     c.close();

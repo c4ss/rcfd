@@ -240,6 +240,8 @@ pub(crate) fn call(svc: &Service, method: &str, p: &Value) -> Rpc {
             Ok(json!({
                 "protocol": DATA_PROTOCOL, "n_cells": r.n_cells(), "n_points": r.n_points(),
                 "mesh_hash": format!("{:016x}", r.mesh_hash()), "snapshots": snaps, "fields": fields,
+                // ADR 0734 P2: the unit of each snapshot's time (the store does not write it)
+                "time_unit": rcfd_tsstore::TIME_UNIT,
             }))
         }
         "data.field" => {

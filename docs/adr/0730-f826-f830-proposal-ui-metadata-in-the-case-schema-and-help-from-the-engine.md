@@ -1,7 +1,8 @@
 # ADR 0730: F-826 and F-830 proposal: UI metadata in the case schema, and help and an error catalogue from the engine
 
-Status: **PROPOSED 2026-11-17.** Not accepted by the maintainer. Nothing is built: no Rust, TypeScript or test code was
-written for this ADR, and nothing was run. The maintainer approves the commands below before any code.
+Status: **ACCEPTED 2026-11-17.** The maintainer took every open question on its recommendation (the answers are recorded
+under "Answers"). Built on branch adr0730 the same day; the results are under "Result". The advanced list below was
+proposed by the lead and **approved by the maintainer as it stood, 2026-11-17**.
 
 Roadmap items F-826 (Engine: UI metadata in the case schema) and F-830 (Electron Studio: explain in place from the engine's
 docs). F-830 depends on F-826 (`docs/roadmap.json`, F-830 `deps`), and both need the same thing from the engine: text and
@@ -139,6 +140,205 @@ Without `--ui`, `service.info` and every method answer as now, and `help.*` is -
 8. **Should `help.*` and `rcfd help` also be MCP tools?** (a) no, `rcfd help` covers Claude Code; (b) yes, two read
    tools (changes the tool list goldens, needs a registered restatement). Recommendation: (a).
 
+## Answers (the maintainer, 2026-11-17)
+
+1. (a) The metadata lives in a separate data file keyed by setting path, beside the schema code
+   (`crates/rcfd-api/src/schema_ui.toml`). A test checks that every path in it exists in the schema and reports the
+   schema paths it lacks.
+2. (a) Opt-in behind `rcfd serve --ui` (the `ui` key of `service.info`); the schema and protocol version stay at 1.1.
+   Without the switch `settings.schema`, `rcfd schema`, `service.info` and the method list are byte-identical to the
+   code before this ADR; T1, T2, P4 and the pinned MCP tests prove it (restated without a frozen recording, see
+   "Result", the fixture note).
+3. (a) The lead proposes the advanced list and the maintainer approves it once. The list is in the data file, marked
+   proposed at first and approved by the maintainer as it stood on 2026-11-17 (`[advanced_list] status = "approved"`),
+   and as the table below with one reason per setting. Settings not on it are not advanced.
+4. (a) Hand-written help, falling back to the first sentence of the matching docs section and then of the schema
+   description. Coverage is reported, not gated. Every key the example projects set has a written help line and label.
+5. (a), tightened: a recommended range only with a cited source, public literature (author, title, year) or one of this
+   repository's validation ADRs. No source, no range; no citation is invented; the project is clean-room.
+6. (a) The docs are built into the binary with `include_str!` (`docs/glossary.md`, `docs/case-schema.md`).
+7. (a) The catalogue covers every surface: the service, the project tools, the MCP server, and the exit codes of `rcfd`,
+   `rcfd-runner`, `rcfd-mcp` and its edit hook, one recovery line per code. A test reads the codes from the sources and
+   fails on one that is not in the catalogue.
+8. (a) No help MCP tools; `rcfd help glossary|errors` covers Claude Code. M3 checks that no help tool is listed.
+
+### The advanced list (approved by the maintainer, 2026-11-17)
+
+169 settings. Each sits one step away, behind "Show all" in the Studio (G15: never hidden for good; a setting the case
+sets is always shown). Every other setting is common. From the approval on, the author of each new key sets its flag.
+
+| Setting | Why it is one step away |
+|---|---|
+| `boundaries.*.backflow_direction` | A setting of one catalogue kind (bc_kind) only. |
+| `boundaries.*.backflow_pressure` | A setting of one catalogue kind (bc_kind) only. |
+| `boundaries.*.bc_kind` | The boundary-condition catalogue, another way to state a condition; the plain keys suit a first case. |
+| `boundaries.*.bc_pressure` | A setting of one catalogue kind (bc_kind) only. |
+| `boundaries.*.compressible_bc` | The density-based compressible solver only. |
+| `boundaries.*.density_value` | The variable-density (ideal gas) solver only. |
+| `boundaries.*.electric` | Electric conduction only (electric.enabled). |
+| `boundaries.*.electric_current` | Electric conduction only (electric.enabled). |
+| `boundaries.*.electric_potential` | Electric conduction only (electric.enabled). |
+| `boundaries.*.emissivity` | The radiation model only. |
+| `boundaries.*.epsilon_value` | Explicit inlet turbulence values; intensity and length scale are the usual way. |
+| `boundaries.*.flow_angle` | The density-based compressible solver only. |
+| `boundaries.*.flow_direction` | The density-based compressible solver only. |
+| `boundaries.*.flow_rate_weight` | A setting of one catalogue kind (bc_kind) only. |
+| `boundaries.*.free_stream_temperature` | Settings of temperature = convection only. |
+| `boundaries.*.heat_flux_expression` | A varying value from a formula, a user function or a table; a constant value is the usual start. |
+| `boundaries.*.heat_flux_udf` | A varying value from a formula, a user function or a table; a constant value is the usual start. |
+| `boundaries.*.heat_transfer_coefficient` | Settings of temperature = convection only. |
+| `boundaries.*.inlet` | The variable-density (ideal gas) solver only. |
+| `boundaries.*.k_value` | Explicit inlet turbulence values; intensity and length scale are the usual way. |
+| `boundaries.*.loss_coefficient` | A setting of one catalogue kind (bc_kind) only. |
+| `boundaries.*.mach_value` | The density-based compressible solver only. |
+| `boundaries.*.marangoni_coefficient` | A special wall condition (shear, slip or Marangoni) only. |
+| `boundaries.*.mass_flow_fraction` | A setting of one catalogue kind (bc_kind) only. |
+| `boundaries.*.mass_flow_shape_expression` | A setting of one catalogue kind (bc_kind) only. |
+| `boundaries.*.mass_flow_source_patch` | A setting of one catalogue kind (bc_kind) only. |
+| `boundaries.*.mass_flow_value` | A setting of one catalogue kind (bc_kind) only. |
+| `boundaries.*.mean_free_path` | A special wall condition (shear, slip or Marangoni) only. |
+| `boundaries.*.nutilde_value` | Explicit inlet turbulence values; intensity and length scale are the usual way. |
+| `boundaries.*.omega_value` | Explicit inlet turbulence values; intensity and length scale are the usual way. |
+| `boundaries.*.pressure_average` | A setting of one catalogue kind (bc_kind) only. |
+| `boundaries.*.pressure_relax` | A setting of one catalogue kind (bc_kind) only. |
+| `boundaries.*.pressure_update` | A setting of one catalogue kind (bc_kind) only. |
+| `boundaries.*.prevent_reverse_flow` | A setting of one catalogue kind (bc_kind) only. |
+| `boundaries.*.profile` | A varying value from a formula, a user function or a table; a constant value is the usual start. |
+| `boundaries.*.radial_frame_rate` | A setting of one catalogue kind (bc_kind) only. |
+| `boundaries.*.radial_reference` | A setting of one catalogue kind (bc_kind) only. |
+| `boundaries.*.radiation_temperature` | Settings of temperature = convection only. |
+| `boundaries.*.reflection_value` | The density-based compressible solver only. |
+| `boundaries.*.shear_stress` | A special wall condition (shear, slip or Marangoni) only. |
+| `boundaries.*.slip_length` | A special wall condition (shear, slip or Marangoni) only. |
+| `boundaries.*.specularity` | A special wall condition (shear, slip or Marangoni) only. |
+| `boundaries.*.swirl_axis` | A setting of one catalogue kind (bc_kind) only. |
+| `boundaries.*.swirl_origin` | A setting of one catalogue kind (bc_kind) only. |
+| `boundaries.*.swirl_rate` | A setting of one catalogue kind (bc_kind) only. |
+| `boundaries.*.target_mass_flow` | A setting of one catalogue kind (bc_kind) only. |
+| `boundaries.*.temperature_expression` | A varying value from a formula, a user function or a table; a constant value is the usual start. |
+| `boundaries.*.temperature_udf` | A varying value from a formula, a user function or a table; a constant value is the usual start. |
+| `boundaries.*.total_pressure_value` | The variable-density (ideal gas) solver only. |
+| `boundaries.*.velocity_expression_x` | A varying value from a formula, a user function or a table; a constant value is the usual start. |
+| `boundaries.*.velocity_expression_y` | A varying value from a formula, a user function or a table; a constant value is the usual start. |
+| `boundaries.*.velocity_expression_z` | A varying value from a formula, a user function or a table; a constant value is the usual start. |
+| `boundaries.*.velocity_udf` | A varying value from a formula, a user function or a table; a constant value is the usual start. |
+| `boundaries.*.wall_conductivity` | Settings of temperature = convection only. |
+| `boundaries.*.wall_emissivity` | Settings of temperature = convection only. |
+| `boundaries.*.wall_rotation_axis` | Moving or rotating walls only. |
+| `boundaries.*.wall_rotation_origin` | Moving or rotating walls only. |
+| `boundaries.*.wall_rotation_rate` | Moving or rotating walls only. |
+| `boundaries.*.wall_thickness` | Settings of temperature = convection only. |
+| `boundaries.*.wall_velocity_projection` | Moving or rotating walls only. |
+| `energy.heat_source` | The ideal-gas solver only. |
+| `energy.relax` | Numerics of the temperature equation; the default is tested. |
+| `energy.viscous_heating` | The ideal-gas solver only. |
+| `initial.coarse_factor` | Settings of method = coarse only. |
+| `initial.coarse_iterations` | Settings of method = coarse only. |
+| `initial.velocity_expression_x` | A varying start from a formula; a uniform start is the usual one. |
+| `initial.velocity_expression_y` | A varying start from a formula; a uniform start is the usual one. |
+| `initial.velocity_expression_z` | A varying start from a formula; a uniform start is the usual one. |
+| `mesh.core_fraction` | One generator only (pipe_sweep, wedge_2d or nozzle_2d). |
+| `mesh.exit_height` | One generator only (pipe_sweep, wedge_2d or nozzle_2d). |
+| `mesh.isotropic_interface` | Rotor-stator and sector generators only. |
+| `mesh.layer_reference_length` | Which walls get layers and the inputs of the y+ estimate; the defaults estimate them. |
+| `mesh.layer_reference_velocity` | Which walls get layers and the inputs of the y+ estimate; the defaults estimate them. |
+| `mesh.layer_u_tau` | Which walls get layers and the inputs of the y+ estimate; the defaults estimate them. |
+| `mesh.layer_walls` | Which walls get layers and the inputs of the y+ estimate; the defaults estimate them. |
+| `mesh.nx_right` | The second block of an interface or stage generator only. |
+| `mesh.ny_right` | The second block of an interface or stage generator only. |
+| `mesh.nz_right` | The second block of an interface or stage generator only. |
+| `mesh.periodic_x` | Cyclic sides, for periodic channel or pipe flows only. |
+| `mesh.periodic_y` | Cyclic sides, for periodic channel or pipe flows only. |
+| `mesh.periodic_z` | Cyclic sides, for periodic channel or pipe flows only. |
+| `mesh.r_interface` | Rotor-stator and sector generators only. |
+| `mesh.ramp_angle` | One generator only (pipe_sweep, wedge_2d or nozzle_2d). |
+| `mesh.ramp_start` | One generator only (pipe_sweep, wedge_2d or nozzle_2d). |
+| `mesh.sector_angle` | Rotor-stator and sector generators only. |
+| `mesh.throat_height` | One generator only (pipe_sweep, wedge_2d or nozzle_2d). |
+| `output.retain_checkpoints` | Disk housekeeping; keeping everything is the default. |
+| `output.retain_snapshots` | Disk housekeeping; keeping everything is the default. |
+| `output.store_time_interval` | Stores by simulated time instead of by step, for time-dependent runs only. |
+| `output.write_time_interval` | Landing on exact times, for time-dependent runs only. |
+| `output.write_times` | Landing on exact times, for time-dependent runs only. |
+| `physics.body_force` | A uniform driving force, mainly for periodic flows. |
+| `reports.*.component` | Splits a force into its pressure and viscous parts; total is the usual choice. |
+| `reports.*.conductivity` | heat_flow reports at constant density only; 0 takes the fluid’s conductivity. |
+| `reports.*.l_ref` | Moment reports only. |
+| `reports.*.origin` | Moment reports only. |
+| `reports.*.scalar` | Scalar reports only. |
+| `reports.*.statistic` | y_plus reports only. |
+| `solver.blend_factor` | Tunes one convection scheme only, when solver.convection picks it. |
+| `solver.bulk_direction` | Drives periodic channel and pipe flows only. |
+| `solver.bulk_velocity` | Drives periodic channel and pipe flows only. |
+| `solver.component_diagonal` | A discretisation detail of the solver kernel; the default is the tested choice. |
+| `solver.compressive_k` | Tunes one convection scheme only, when solver.convection picks it. |
+| `solver.corrector_control` | A variant of the transient loop; the default PISO/PIMPLE loop suits most runs. |
+| `solver.ddt_correction` | A discretisation detail of the solver kernel; the default is the tested choice. |
+| `solver.divergence_courant_limit` | A safety check of the solver; its default already watches for trouble. |
+| `solver.dt_growth` | Fine control of adaptive time stepping; the Courant target alone is enough to start. |
+| `solver.dt_safety` | Fine control of adaptive time stepping; the Courant target alone is enough to start. |
+| `solver.dt_shrink` | Fine control of adaptive time stepping; the Courant target alone is enough to start. |
+| `solver.error_tolerance` | Fine control of adaptive time stepping; the Courant target alone is enough to start. |
+| `solver.extrapolate_initial` | A variant of the transient loop; the default PISO/PIMPLE loop suits most runs. |
+| `solver.fractional_boundary` | A variant of the transient loop; the default PISO/PIMPLE loop suits most runs. |
+| `solver.fractional_form` | A variant of the transient loop; the default PISO/PIMPLE loop suits most runs. |
+| `solver.frozen_flow` | Prescribes the flow instead of solving it, for heat or scalar studies only. |
+| `solver.gradient_boundary` | A discretisation detail of the solver kernel; the default is the tested choice. |
+| `solver.gradient_face_correction` | A discretisation detail of the solver kernel; the default is the tested choice. |
+| `solver.gradient_limiter_k` | A discretisation detail of the solver kernel; the default is the tested choice. |
+| `solver.gradient_secondary_limiter` | A discretisation detail of the solver kernel; the default is the tested choice. |
+| `solver.h_operator` | A discretisation detail of the solver kernel; the default is the tested choice. |
+| `solver.high_resolution_beta` | Tunes one convection scheme only, when solver.convection picks it. |
+| `solver.linear_upwind_limiter` | A discretisation detail of the solver kernel; the default is the tested choice. |
+| `solver.max_courant_rms` | Fine control of adaptive time stepping; the Courant target alone is enough to start. |
+| `solver.max_dt` | Fine control of adaptive time stepping; the Courant target alone is enough to start. |
+| `solver.min_dt` | Fine control of adaptive time stepping; the Courant target alone is enough to start. |
+| `solver.min_iterations` | Only matters with the stop conditions of the convergence section. |
+| `solver.momentum_max_iter` | Inner linear-solver limits; 0 keeps the algorithm’s tested default. |
+| `solver.momentum_rel_tol` | Inner linear-solver limits; 0 keeps the algorithm’s tested default. |
+| `solver.p_ref_cell` | Pins the pressure level when no boundary fixes it; the default cell works. |
+| `solver.p_ref_value` | Pins the pressure level when no boundary fixes it; the default cell works. |
+| `solver.period` | Fine control of adaptive time stepping; the Courant target alone is enough to start. |
+| `solver.periodic_gradient` | A discretisation detail of the solver kernel; the default is the tested choice. |
+| `solver.pressure_abs_tol` | Inner linear-solver limits; 0 keeps the algorithm’s tested default. |
+| `solver.pressure_interpolation` | A discretisation detail of the solver kernel; the default is the tested choice. |
+| `solver.pressure_lag_check` | A safety check of the solver; its default already watches for trouble. |
+| `solver.pressure_max_iter` | Inner linear-solver limits; 0 keeps the algorithm’s tested default. |
+| `solver.pressure_rel_tol` | Inner linear-solver limits; 0 keeps the algorithm’s tested default. |
+| `solver.pseudo_cfl` | Pseudo-transient steady solving, a way to rescue hard cases; off by default. |
+| `solver.pseudo_control` | Pseudo-transient steady solving, a way to rescue hard cases; off by default. |
+| `solver.pseudo_dt` | Pseudo-transient steady solving, a way to rescue hard cases; off by default. |
+| `solver.pseudo_factor` | Pseudo-transient steady solving, a way to rescue hard cases; off by default. |
+| `solver.pseudo_mode` | Pseudo-transient steady solving, a way to rescue hard cases; off by default. |
+| `solver.pseudo_scale_max` | Pseudo-transient steady solving, a way to rescue hard cases; off by default. |
+| `solver.residual_norm` | A discretisation detail of the solver kernel; the default is the tested choice. |
+| `solver.simplec_boundary_compensation` | A SIMPLEC flux correction for skewed or sheared meshes; off suits most meshes. |
+| `solver.simplec_non_orthogonal_compensation` | A SIMPLEC flux correction for skewed or sheared meshes; off suits most meshes. |
+| `solver.steady_divergence_guard` | A safety check of the solver; its default already watches for trouble. |
+| `solver.steps_per_period` | Fine control of adaptive time stepping; the Courant target alone is enough to start. |
+| `solver.stop_when` | Only matters with the stop conditions of the convergence section. |
+| `solver.time_advance` | A variant of the transient loop; the default PISO/PIMPLE loop suits most runs. |
+| `solver.velocity_correction` | A discretisation detail of the solver kernel; the default is the tested choice. |
+| `solver.viscous_stress` | A discretisation detail of the solver kernel; the default is the tested choice. |
+| `turbulence.convection` | Numerics of the turbulence equations; the defaults are tested. |
+| `turbulence.e_wall` | A model constant; change it only to reproduce a published set-up. |
+| `turbulence.epsilon_initial` | Explicit start values; by default they come from the start intensity and viscosity ratio. |
+| `turbulence.k_initial` | Explicit start values; by default they come from the start intensity and viscosity ratio. |
+| `turbulence.kappa` | A model constant; change it only to reproduce a published set-up. |
+| `turbulence.length_scale` | For the algebraic models (smagorinsky, wale, mixing_length) only. |
+| `turbulence.mixing_profile` | For the algebraic models (smagorinsky, wale, mixing_length) only. |
+| `turbulence.omega_initial` | Explicit start values; by default they come from the start intensity and viscosity ratio. |
+| `turbulence.plugin` | For a registered plugin model only. |
+| `turbulence.realizable_a0` | A model constant; change it only to reproduce a published set-up. |
+| `turbulence.relax` | Numerics of the turbulence equations; the defaults are tested. |
+| `turbulence.relax_nut` | Numerics of the turbulence equations; the defaults are tested. |
+| `turbulence.roughness_constant` | Rough walls only; walls are smooth by default. |
+| `turbulence.roughness_height` | Rough walls only; walls are smooth by default. |
+| `turbulence.sst_variant` | A model variant or wall treatment; the default is the standard form. |
+| `turbulence.wall_damping` | For the algebraic models (smagorinsky, wale, mixing_length) only. |
+| `turbulence.wall_omega` | A model variant or wall treatment; the default is the standard form. |
+| `turbulence.wall_treatment` | A model variant or wall treatment; the default is the standard form. |
+
 ## Tests that would prove it
 
 - **T1** `settings.schema` with no params and with `{ui: false}` equals, byte for byte, the reply saved from the base
@@ -152,9 +352,73 @@ Without `--ui`, `service.info` and every method answer as now, and `help.*` is -
 - **T7** `help.glossary` returns every row of `docs/glossary.md`; a changed table shape fails the test.
 - **T8** the catalogue holds every constant of `service::code` and every workspace code, each with a non-empty recovery,
   and agrees with the tables in `docs/service-protocol.md` and `docs/mcp-tools.md`.
+- **M3** the MCP `tools/list` result, without and with `--project`, names no help tool: the ADR adds no MCP tool. The
+  bytes of the plain lists are held by the pinned `default_f1.rs` and `tool_list_f275.rs`.
 - **T9** the existing case and run hash tests (`baseline_hashes.rs`, `case_hashes_w48u.rs`, `w48v_case_hashes.rs`) pass
   unedited.
 - **Studio (F-825, F-830)** the disclosure reads `x-rcfd-advanced` instead of `COMMON_KEYS` when present; a test adds a
   key with metadata to a test schema and sees it placed with no Studio change; an e2e test calls every catalogue code's
   error and checks the shown text names the recovery; a static check that `first/words.ts` keeps no help text of its own;
   a view-and-report step (G19).
+
+## Result (2026-11-17, branch adr0730)
+
+Built:
+
+- Engine: `crates/rcfd-api/src/ui.rs` (the metadata layer, `help.*`, the `--ui` family `rcfd-ui/1`),
+  `crates/rcfd-api/src/schema_ui.toml` (the data file), `crates/rcfd-api/src/errors.rs` (the error catalogue),
+  `Service::enable_ui`; `rcfd schema --ui`, `rcfd serve --ui`, `rcfd help [glossary | errors]`.
+- Docs: `docs/service-protocol.md` (the `rcfd-ui/1` section), 13 new rows of `docs/glossary.md` (the terms the first
+  path explains).
+- Studio (F-826): the schema model reads `x-rcfd-label`, `-help`, `-help-from`, `-see`, `-advanced`, `-recommended` and a
+  list's own `x-rcfd-unit`. With `x-rcfd-ui` on the root the disclosure shows the common keys and every set key, and
+  puts the advanced ones behind "Show all: N advanced keys of X"; without it the old first-eight rule stays. A key row is
+  named by the engine's label (its path beside it), its tooltip is the help line, and its focus detail adds the help,
+  "Usually a to b (source: ...)" and the docs heading. Search reads label and help. The Studio starts `rcfd serve --ui`
+  and asks `settings.schema {ui: true}`.
+- Studio (F-830): `src/renderer/help/engine.ts` asks `help.glossary` and `help.errors` once per service instance. The
+  first path's Explain terms name a glossary term and show the engine's row with its source; `first/words.ts` keeps no
+  meaning of its own. An engine error in the settings surface, the case editor's open failure and run control's
+  refusals gets the catalogue's recovery line for its code.
+
+Counts: 327 entries in the data file (746 of 1073 schema paths have none); 169 advanced (approved); **1 recommended
+range with a source** (`turbulence.nutilde_ratio` 3 to 5, Spalart and Rumsey, AIAA Journal 45(10), 2007; no other range
+had a source this lead could cite with confidence). Help coverage over 1073 nodes (951 leaves): written 148 (130
+leaves), first sentence of the docs 19, first sentence of the schema text 762, none 144.
+
+Word budgets (G22): unchanged. Labels are marked `data-words="data"` like the key names they replace; help, ranges and
+sources are focus detail, and the recovery lines are exception text, so the budgets at rest hold with no change.
+
+Tests: T1 to T8, P2, P4, M3 and the CLI test (`crates/rcfd-api/tests/ui_byte_identity_adr0730.rs`,
+`ui_metadata_adr0730.rs`, `errors_catalogue_adr0730.rs`, `crates/rcfd-cli/tests/ui_cli_adr0730.rs`,
+`crates/rcfd-mcp/tests/tool_list_adr0730.rs`) pass; T9 passes with the hash tests unedited. The Studio's specs for the
+schema model, the first path, the action registry, the help catalogue and the affected e2e walks (settings, case editor,
+first path, run control, service, word budget, a11y) pass.
+
+View-and-report for F-826 (the F-810/F-812 precedent): `apps/studio-web/tests/e2e/settings-ui-f826.spec.ts` runs the
+settings surface against `rcfd serve --ui` and writes four screenshots at 1440 by 900 to
+`apps/studio-web/test-results-visual/f826/` (solver at rest, Show all open, a focus detail with the help line, the usual
+range of `turbulence.nutilde_ratio` with its source). With the list approved, F-826 is done; F-830 stays partial.
+
+Not as planned: the catalogue check on the Studio side is a unit test over the real `rcfd help errors`
+(`apps/studio-web/tests/unit/help-engine.spec.ts`: every JSON-RPC code gives its recovery line), not an e2e walk that
+provokes each error; and no screenshot view-and-report was made for the new focus detail. Both are left for the
+maintainer to ask for.
+
+The fixture note (restated 2026-11-17, on merging main 14a2d490). T1, T2, P4, T6 and M3 were first written against
+replies recorded from the f86339e8 binaries before any code (`crates/rcfd-api/tests/fixtures/adr0730_base_replies.json`).
+Main had added MCP tools since (ADR 0731 `create_project`, runner_config on the allow-list) and more are coming (ADRs
+0734 to 0736), so a frozen recording would need re-recording on every merge, which the maintainer does not do. The fixture
+is removed (it stays in the history of branch adr0730, commit d7b68d88, as evidence that the base replies were taken before
+the code); nothing asserts against a recording now. The tests are restated:
+
+- T1: `settings.schema` without `ui: true`, with and without `--ui`, equals byte for byte the serialisation of
+  `{case: case_schema().to_json_schema(), monitors: monitor_json_schema()}`, the code path this ADR leaves as it was;
+  `rcfd schema` equals `to_string_pretty` of the same export (`crates/rcfd-cli/tests/ui_cli_adr0730.rs`).
+- T2: `service.info` without `--ui` has no `ui` key and lists exactly `METHODS`; `help.*` is the plain -32601.
+- P4: the `--ui` reply equals the plain reply of the same build plus `ui` and `UI_METHODS` at the end of the method list,
+  in process and through `rcfd serve --stdio`.
+- T6: the `ui: true` export less the keys this ADR adds equals the plain export of the same build.
+- M3: no help tool in either MCP list; the bytes of the plain lists are the pinned `default_f1.rs` (the ADR 0135 golden)
+  and `tool_list_f275.rs`, which every ADR that adds a tool restates. No byte-pinned test of the schema text exists in
+  the repository; T1's comparison with the untouched builder and T9's case hashes stand for it.

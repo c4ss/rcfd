@@ -62,15 +62,24 @@ function Note({ children, set }: { children: ReactNode; set?: boolean }) {
 /** A group's keys at a concrete path: the shown ones, "Show N more keys", then its nested objects and collections. */
 export function GroupBody({ group, path }: { group: Group; path: string }) {
   const c = useSettings();
-  const { shown, more, nested } = ownKeys(group, c.tree, path);
+  const { shown, more, nested } = ownKeys(group, c.tree, path, c.ui === true);
   const where = path === '' ? 'the case' : path;
+  const moreId = `more:${path}`;
+  // with the engine's advanced flag (F-826, G15) the rest are its advanced keys, one step away behind Show all
+  const moreTitle = c.ui
+    ? c.isOpen(moreId)
+      ? `${plural(more.length, 'advanced key', 'advanced keys')} of ${where}`
+      : `Show all: ${plural(more.length, 'advanced key', 'advanced keys')} of ${where}`
+    : c.isOpen(moreId)
+      ? `${plural(more.length, 'more key', 'more keys')} of ${where}`
+      : `Show ${plural(more.length, 'more key', 'more keys')} of ${where}`;
   return (
     <>
       {shown.map((l) => (
         <KeyRow key={l.pattern} leaf={l} path={concrete(l.pattern, path, group.pattern)} />
       ))}
       {more.length > 0 && (
-        <Disclosure id={`more:${path}`} title={c.isOpen(`more:${path}`) ? `${plural(more.length, 'more key', 'more keys')} of ${where}` : `Show ${plural(more.length, 'more key', 'more keys')} of ${where}`}>
+        <Disclosure id={moreId} title={moreTitle}>
           {more.map((l) => (
             <KeyRow key={l.pattern} leaf={l} path={concrete(l.pattern, path, group.pattern)} />
           ))}
@@ -103,7 +112,7 @@ export function NestedNode({ node, path }: { node: Group | Collection; path: str
     </>
   );
   return (
-    <Disclosure id={`group:${path}`} title={node.name} notes={notes} description={node.description} path={path}>
+    <Disclosure id={`group:${path}`} title={node.label ?? node.name} notes={notes} description={node.help ?? node.description} path={path}>
       <div className="st-nested">
         {node.description && <p className="st-head-inline sr-only">{node.description}</p>}
         {node.kind === 'group' ? <GroupBody group={node} path={path} /> : <CollectionBody collection={node} path={path} />}

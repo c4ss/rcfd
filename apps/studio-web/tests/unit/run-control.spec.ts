@@ -102,6 +102,7 @@ test.describe('the run-control actions (G16)', () => {
     expect(RUN_ACTIONS.map((a) => a.id)).toEqual([
       'project.run_case',
       'project.queue_case',
+      'project.rerun_run',
       'project.pause_run',
       'project.resume_run',
       'project.stop_run',
@@ -163,6 +164,10 @@ test.describe('the run-control actions (G16)', () => {
       expect(r.mcp).toEqual({ tool, arguments: { run: 'r-1' } });
       expect(r.cli.argv).toEqual(['rcfd-runner', cmd, 'r-1', '--project', PROJECT]);
     }
+    // F-828 (ADR 0734 P3): Rerun, start_run from_run and rcfd-runner rerun
+    const rerun = eq('project.rerun_run', { run: 'r-1' });
+    expect(rerun.mcp).toEqual({ tool: 'start_run', arguments: { from_run: 'r-1' } });
+    expect(rerun.cli.argv).toEqual(['rcfd-runner', 'rerun', 'r-1', '--project', PROJECT]);
     const ensure = eq('project.start_runner', {});
     expect(ensure.mcp).toBeNull();
     expect(ensure.mcpNote).toBe('No MCP tool: start_run starts the runner when none is alive.');

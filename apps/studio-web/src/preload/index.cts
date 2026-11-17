@@ -64,6 +64,7 @@ import type {
   DataRequest,
   DataWireResult,
   DEFAULT_DATA_TIMEOUT_MS as DefaultDataTimeout,
+  MeshPreviewBridge,
   SurfaceValuesBridge,
 } from '../shared/data.js';
 import type { CASE_PORT_CHANNEL as CaseChannel, CaseBridge, CasePortMessage, CaseReply, CaseRequest } from '../shared/case.js';
@@ -511,6 +512,22 @@ const surfaceValues: SurfaceValuesBridge = {
 };
 
 contextBridge.exposeInMainWorld('studioSurfaceValues', surfaceValues);
+
+// F-836 (ADR 0732): the mesh preview's surface with the patch of each triangle (src/main/data/worker.ts), same data port
+const meshPreview: MeshPreviewBridge = {
+  surface: async (store, options) => {
+    const r = await sendData({ op: 'patchSurface', id: nextDataId++, store, ...dataCommon(options) });
+    if (!r.ok) return r;
+    const x = r.result;
+    if (x.kind !== 'patchSurface') return unexpected(x.kind);
+    return {
+      ok: true,
+      result: { points: new Float32Array(x.points), triangles: new Uint32Array(x.triangles), cells: new Uint32Array(x.cells), patch: new Uint32Array(x.patch), meshHash: x.meshHash },
+    };
+  },
+};
+
+contextBridge.exposeInMainWorld('studioMeshPreview', meshPreview);
 
 // ---- the case port (F-812, src/shared/case.ts)
 //

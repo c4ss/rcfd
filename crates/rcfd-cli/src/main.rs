@@ -41,7 +41,9 @@ USAGE:
 
 COMMANDS:
     validate <case>            check a case file (.toml or .json); prints diagnostics with line numbers
-    schema [--out <file>]      print (or write) the JSON schema of the case file
+    schema [--out <file>] [--ui]
+                               print (or write) the JSON schema of the case file; --ui adds the labels, help,
+                               advanced flags and recommended ranges of ADR 0730
     run <case> [options]       run a case
         --out <dir>              output directory (default: output.directory of the case)
         --max-iterations <n>     override solver.max_iterations
@@ -71,7 +73,9 @@ COMMANDS:
                                  run counts from its checkpoint); not with chain.sequence
         --threads <n>            worker threads (sets RAYON_NUM_THREADS; results do not depend on it)
         --precision double       only double precision is supported
-        --journal <file>         run the case recorded in a service journal (journal.get) instead of a file
+        --journal <file>         run the case recorded in a service journal (journal.get) instead of a file;
+                                 a case file it names must still have the recorded hash (exit 3 otherwise)
+        --journal-ignore-hash    with --journal: run even when that case file changed since it was recorded
         --set <path=json>        override a setting (repeatable), e.g. --set solver.dt=0.05; exit 2 if malformed,
                                  3 if the path or value is invalid
         --print-settings         print the resolved settings as JSON and exit (no run)
@@ -122,9 +126,13 @@ COMMANDS:
                                (XDMF + binary heavy data); an .stl input can only be re-encoded to .stl
     post <results-dir> [--format html|csv|json] [--out <file>]
                                re-create reports from <results-dir>/monitors.json written by `run`
-    serve [--addr <host:port>] [--root <dir>] [--stdio] [--cosim <case>]
+    serve [--addr <host:port>] [--root <dir>] [--stdio] [--cosim <case>] [--ui] [--journal-dir <dir>]
                                start the solver service (JSON-RPC 2.0, newline-delimited); --cosim hosts the
-                               co-simulation fluid participant of the case's [cosim] table (protocol rcfd-cosim/1)
+                               co-simulation fluid participant of the case's [cosim] table (protocol rcfd-cosim/1);
+                               --ui adds settings.schema {ui: true}, help.glossary, help.errors and
+                               mesh.preview (rcfd-ui/1);
+                               --journal-dir keeps each session's journal in <dir>/<session>-<created>.journal.json
+                               (inside --root when given), a file that `rcfd run` can run
     call [--addr <host:port>] <method> [<json-params>]
                                call one method of a running service; prints the JSON result
                                (exit 1 and the JSON error on stderr if the call fails)
@@ -141,6 +149,8 @@ COMMANDS:
                                SPL/OASPL/dB(A) and 1/3-octave spectra
     cases [list] [--dir <cases-dir>]
                                list benchmark/validation cases
+    help [glossary | errors]   print this help; glossary: the terms of docs/glossary.md as JSON; errors: every
+                               error and exit code of the engine with what to do next, as JSON
     project init <dir> [--name <name>]  make a project folder: rcfd-project.json and the standard folders
     project trash <dir> (--run <id> | --results <id> [--parts fields,output] | --case <path> --base-hash <hash>)
         [--reason <text>]      move an ended run, its results or a case file to the project trash (.rcfd/trash/)
@@ -149,6 +159,8 @@ COMMANDS:
                                move a trashed item back (refused when its path is taken)
     project empty-trash <dir> [--token <token>]... [--older-than-days <n>] [--reason <text>]
                                remove trashed items for good
+    project hash <path>        the fnv64 hash of a mesh file or OpenFOAM mesh folder, as run.json mesh_hash (JSON)
+    version [--json]           the version; --json: {name, version, git_rev, profile, target}
 
 OPTIONS:
     -h, --help       print this help (also valid after a command)
@@ -203,6 +215,12 @@ fn dispatch(args: &[String]) -> u8 {
         return OK;
     };
     let rest = &args[1..];
+    // ADR 0730: `help glossary` and `help errors` print the engine's glossary and error catalogue
+    if cmd == "help" && !flag(rest, "--help") && !flag(rest, "-h") {
+        if let Some(code) = cmd_help(rest) {
+            return code;
+        }
+    }
     if matches!(cmd, "-h" | "--help" | "help") || (flag(rest, "--help") || flag(rest, "-h")) {
         print!("{USAGE}");
         return OK;
@@ -212,6 +230,7 @@ fn dispatch(args: &[String]) -> u8 {
             println!("rcfd {}", env!("CARGO_PKG_VERSION"));
             OK
         }
+        "version" => cmd_version(rest),
         "validate" => cmd_validate(rest),
         "schema" => cmd_schema(rest),
         "run" => cmd_run(rest),
@@ -235,6 +254,32 @@ fn dispatch(args: &[String]) -> u8 {
         "acoustics" => cmd_gapc::cmd_acoustics(rest),
         "fwh" => cmd_fwh::cmd_fwh(rest),
         other => usage_error(&format!("unknown command '{other}'")),
+    }
+}
+
+/// `rcfd version [--json]` (ADR 0734 P1): the text of `rcfd --version`, or with `--json` the build as one JSON line:
+/// `git_rev` is `RCFD_GIT_REV` of the build (null when it set none, as a `git archive` build), `profile` `release` or
+/// `debug`, `target` `<arch>-<os>`.
+fn cmd_version(args: &[String]) -> u8 {
+    match args {
+        [] => {
+            println!("rcfd {}", env!("CARGO_PKG_VERSION"));
+            OK
+        }
+        [j] if j == "--json" => {
+            println!(
+                "{}",
+                serde_json::json!({
+                    "name": "rcfd",
+                    "version": env!("CARGO_PKG_VERSION"),
+                    "git_rev": option_env!("RCFD_GIT_REV").filter(|r| !r.is_empty()),
+                    "profile": if cfg!(debug_assertions) { "debug" } else { "release" },
+                    "target": format!("{}-{}", std::env::consts::ARCH, std::env::consts::OS),
+                })
+            );
+            OK
+        }
+        _ => usage_error("version takes only --json"),
     }
 }
 
@@ -308,8 +353,40 @@ fn cmd_validate(args: &[String]) -> u8 {
     }
 }
 
+/// `help glossary` / `help errors` (ADR 0730 P3): the JSON of `help.glossary` / `help.errors`; None for any other
+/// argument, which prints the usage as before.
+fn cmd_help(args: &[String]) -> Option<u8> {
+    let value = match args.first().map(String::as_str) {
+        Some("glossary") => rcfd_api::ui::glossary_json(),
+        Some("errors") => Ok(rcfd_api::errors::catalogue_json()),
+        _ => return None,
+    };
+    Some(match value {
+        Ok(v) => {
+            println!("{}", serde_json::to_string_pretty(&v).unwrap_or_default());
+            OK
+        }
+        Err(e) => {
+            eprintln!("error: {e}");
+            FAIL
+        }
+    })
+}
+
 fn cmd_schema(args: &[String]) -> u8 {
-    let text = serde_json::to_string_pretty(&case_schema().to_json_schema()).unwrap_or_default();
+    // ADR 0730: --ui lays the UI metadata onto the export; without it the text is the one of every earlier version
+    let schema = if flag(args, "--ui") {
+        match rcfd_api::ui::case_schema_ui() {
+            Ok(v) => v,
+            Err(e) => {
+                eprintln!("error: {e}");
+                return FAIL;
+            }
+        }
+    } else {
+        case_schema().to_json_schema()
+    };
+    let text = serde_json::to_string_pretty(&schema).unwrap_or_default();
     match opt(args, "--out") {
         Some(p) => match std::fs::write(p, text + "\n") {
             Ok(()) => {
@@ -433,6 +510,13 @@ fn cmd_run(args: &[String]) -> u8 {
         let base = Path::new(jp)
             .parent()
             .map_or_else(|| PathBuf::from("."), Path::to_path_buf);
+        // ADR 0735 Q3 (a): a case file that changed since the service read it is refused, unless asked otherwise
+        if !flag(args, "--journal-ignore-hash") {
+            if let Err(m) = rcfd_api::session_journal::check_source(&doc, &base) {
+                eprintln!("error: {jp}: {m}");
+                return INVALID;
+            }
+        }
         match runctl::case_from_journal(&doc, &base, None) {
             Ok(c) => (c, jp.to_string()),
             Err(diags) => {
@@ -865,6 +949,20 @@ fn cmd_serve(args: &[String]) -> u8 {
         ..Default::default()
     };
     let svc = Service::new(cfg);
+    // ADR 0730 P4: the UI metadata and the help methods only with --ui
+    if flag(args, "--ui") {
+        svc.enable_ui();
+    }
+    // ADR 0735 P2: one journal file per session, only with the flag
+    if let Some(dir) = opt(args, "--journal-dir") {
+        match svc.enable_journal_files(dir) {
+            Ok(d) => eprintln!("session journals: {}", d.display()),
+            Err(e) => {
+                eprintln!("error: --journal-dir {dir}: {}", e.message);
+                return FAIL;
+            }
+        }
+    }
     // F-444, ADR 0380 D2: the co-simulation fluid participant of a case, built before the service listens
     if let Some(path) = opt(args, "--cosim") {
         let hosted = rcfd_api::case::Case::load(path).and_then(|case| rcfd_api::cosim_case::host(&svc, &case));

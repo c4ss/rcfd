@@ -12,6 +12,8 @@
 //   the limits and the disclaimer visible (G6), the run opened in the run workspace (the result link, F-810).
 // - The same walk by keyboard only, from New project… of the empty home, focus following each new step.
 // - New project… from the command palette in a folder that holds other files: they stay, and the project opens.
+// - The precise terms behind Explain are the engine's glossary rows (F-830, `help.glossary`): the walk attaches the Studio
+//   to an `rcfd serve --ui` it starts (with the rcfd beside rcfd-mcp) and stops at the end.
 // Screenshots at 1440 by 900 go to test-results-visual/f813/ for the maintainer's view-and-report (G13).
 import { expect, test, type Locator, type Page } from '@playwright/test';
 import { execFileSync } from 'node:child_process';
@@ -20,7 +22,7 @@ import { mkdir, mkdtemp, readdir, readFile, rm, writeFile } from 'node:fs/promis
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { launchStudio, type Studio } from '../support/studio.js';
-import { alive, appRoot, killPid } from '../support/rcfd.js';
+import { alive, appRoot, killIfRcfd, killPid, startRcfd, type RunningRcfd } from '../support/rcfd.js';
 import { findMcp, mcpPids, NO_MCP, projectState, snapshot, stubDialog } from '../support/project.js';
 import { until } from '../support/fake-service.js';
 import { findRunner, NO_RUNNER, Runner } from '../support/runner.js';
@@ -38,12 +40,15 @@ test.describe.configure({ mode: 'serial' });
 let dir = '';
 let recentFile = '';
 let studio: Studio | null = null;
+let service: RunningRcfd | null = null;
 const folders: string[] = [];
 
 const shot = (page: Page, name: string) => page.screenshot({ path: path.join(SHOTS, `${name}.png`), scale: 'css' });
 
 async function launch(): Promise<Studio> {
-  const s = await launchStudio({ RCFD_STUDIO_MCP: mcp!, RCFD_STUDIO_RECENT: recentFile });
+  const env: Record<string, string> = { RCFD_STUDIO_MCP: mcp!, RCFD_STUDIO_RECENT: recentFile };
+  if (service) env['RCFD_STUDIO_SERVICE'] = `127.0.0.1:${service.port}`;
+  const s = await launchStudio(env);
   await s.app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0]!.setContentSize(1440, 900));
   await expect.poll(() => s.page.evaluate(() => [innerWidth, innerHeight])).toEqual([1440, 900]);
   return s;
@@ -88,6 +93,8 @@ test.beforeAll(async () => {
   dir = await mkdtemp(path.join(tmpdir(), 'rcfd-f813-'));
   recentFile = path.join(dir, 'recent.json');
   await mkdir(SHOTS, { recursive: true });
+  // the solver service the Explain terms come from (help.glossary, rcfd serve --ui)
+  if (existsSync(rcfdExe())) service = await startRcfd(rcfdExe(), 0, ['--ui']);
 });
 
 /** Ends the Studio this file started, and the project servers it left (as the F-806/F-807 walks do). */
@@ -104,6 +111,11 @@ test.afterAll(async () => {
   // the runners the path started (they outlive the window, G7): stopped cleanly, then the folders removed
   for (const f of folders) await new Runner(runnerExe!, f).cleanUp(null).catch(() => undefined);
   await rm(dir, { recursive: true, force: true }).catch(() => undefined);
+  if (service) {
+    await service.stop().catch(() => undefined);
+    killIfRcfd(service.pid);
+  }
+  service = null;
 });
 
 test('no project open: the four steps of the path, their explanation one step away, and the disclaimer', async () => {
@@ -185,7 +197,9 @@ test('an empty project: one action, the example made by the engine; the explanat
   await expect(about).toContainText('a square box of fluid whose top, the lid, slides sideways');
   await expect(about).toContainText('New case in the header band');
   await expect(about.getByRole('term').filter({ hasText: 'a square box whose lid slides' })).toBeVisible();
-  await expect(about).toContainText('the engine’s built-in template lid_driven_cavity');
+  // the precise term is the engine's glossary row, with its source (F-830, G19)
+  await expect(about).toContainText('Template: A ready-made case the engine can write into a project');
+  await expect(about).toContainText('docs/glossary.md, Template');
   await shot(page, '03b-make-explained');
   await path_(page).getByRole('button', { name: 'Make the example', exact: true }).click();
   await expect(page.locator(`tr[data-path="${FIRST_CASE}"]`)).toBeVisible({ timeout: 20_000 });
@@ -271,7 +285,7 @@ test('run it, and the first honest result: the engine’s numbers, the stored pi
   await expect(about).toContainText('Runs: every number of the run');
   await expect(about).toContainText('The run workspace: every stored picture of the run');
   // the precise terms of the caption, one step away (G19)
-  await expect(about).toContainText('step: the solver iteration at which the picture was stored');
+  await expect(about).toContainText("Snapshot: One stored state of the fields in a run's field store");
   await shot(page, '05b-result-explained');
   // the result link: the run in the run workspace (F-810)
   await p.getByRole('button', { name: 'Open the run in the workspace' }).click();

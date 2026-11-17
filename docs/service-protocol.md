@@ -76,7 +76,16 @@ All session methods take `session`.
 - `log.tail {lines?}`
 - `field.grid {name, cols?, rows?}`: field averaged onto a coarse grid (first row is the top), `null` where empty
 - `panel.snapshot {since?, field?, cols?, rows?, log_lines?}`: status, new monitor samples, reports, log tail and optional grid in one call (used by the sidebar panel)
-- `journal.get`: returns `{format: "rcfd-journal", version: 1, entries, case_hash}` (create + accepted settings changes)
+- `journal.get`: returns `{format: "rcfd-journal", version: 1, entries, case_hash, source, file}` (create + accepted
+  settings changes). `source` is `{kind: "path" | "toml" | "settings" | "empty", path, hash}`; `path` and `hash` are null
+  unless the session was made from a case file. The create entry of such a session also records `source.resolved` (the
+  absolute path the service read) and `source.hash` (`fnv64:` of the file's bytes). `file` is the session's journal file,
+  null unless the service was started with `--journal-dir` (ADR 0735). `session.list` gives the same `source` per session
+- `rcfd serve --journal-dir <dir>` (sandboxed; ADR 0735): the service keeps one file per session,
+  `<dir>/<session>-<created yyyymmddThhmmss UTC>.journal.json`, holding the `journal.get` reply, replaced by
+  write-then-rename at `session.create` and after every accepted `settings.set` and `settings.remove`.
+  `rcfd run --journal <file>` runs it. Only such a service has `journal_dir` in `service.info` and `journal.save {path}`
+  (sandboxed; writes the document once) at the end of `methods`. Without the flag nothing is written
 - `journal.replay {journal}`: builds a new session and reports `matches` against the recorded hash
 - `workflow.create {template?|workflow?, name?}`, `workflow.list`, `workflow.get`, `workflow.run {task?, with_prerequisites?, max_steps?}`, `workflow.insert {task, after?}`, `workflow.delete {id}`, `workflow.save {path}`, `workflow.load {path}`: task-based workflow over the session (F-120; see `docs/run-control.md`). `workflow.run` blocks until the planned tasks ran or one failed and returns `{ok, ran: [{id, ok, message, result}], workflow}`
 - `run.check {session | path}`: check-only launch (`{ok, exit_code, event}`; exit code 0, 3 invalid, 4 bad mesh). `run.headless {max_steps?, max_elapsed_s?, stop_file?, continue_from?, interpolate_case?, interpolate_checkpoint?, interpolate_mode?, checkpoint?, checkpoint_every?, status_path?, status_every?, out_dir?}`: runs the session under the run-control driver and returns `{outcome, ok, events, status}`. `status.read {path}`: summarises an `rcfd-status` JSON-lines file (F-121). All paths are sandboxed; step and time limits of the service apply
@@ -146,6 +155,49 @@ keeps one connection to `port` on the service's host, writes the ticket as 8 byt
 section in order, the byte length as `u64` little-endian and then the values, little-endian. A ticket is used once. An
 unknown ticket is answered with the length 2^64 - 1 and the connection is closed. A store that cannot be read answers
 -32602, a path outside the sandbox 1004.
+
+## UI metadata and help (`rcfd-ui/1`, opt-in with `rcfd serve --ui`)
+
+ADR 0730. Without `--ui` nothing below exists and every reply is as before, byte for byte. With it, `service.info` adds
+`ui: "rcfd-ui/1"` and lists `help.glossary`, `help.errors` and `mesh.preview` after the others; `protocol_version`
+stays 1.1.
+
+- `settings.schema {ui: true}`: the case schema with the UI metadata of `crates/rcfd-api/src/schema_ui.toml` on its
+  nodes, and `x-rcfd-ui` on the root. A node may carry `x-rcfd-label` (a short name), `x-rcfd-help` (one line, at most
+  160 characters; `x-rcfd-help-from: "docs" | "schema"` when it is the first sentence of the docs page or of the
+  description rather than written for the key), `x-rcfd-advanced: true` (one step away in a learner-first layout),
+  `x-rcfd-unit`, `x-rcfd-see` (`page.md#heading`) and `x-rcfd-recommended {minimum, maximum, source}` (a usual range,
+  advice only, always with its published source; the hard `minimum` and `maximum` still decide what is valid).
+  `ui: false`, `ui: null` or no `ui` give the plain schema; a `ui` that is not a boolean answers -32602.
+- `help.glossary`: `{source: "docs/glossary.md", terms: [{term, meaning, page}]}`, every row of the glossary.
+- `help.errors`: `{errors: [{surface, code, name, meaning, recovery}]}`, every error and exit code of the engine with one
+  line on what to do next. `surface` is `service`, `workspace`, `mcp` (one JSON-RPC number space), `cli_exit`,
+  `runner_exit`, `mcp_exit` or `mcp_hook_exit`.
+
+Both help methods take no parameters (`{}` or none). `rcfd schema --ui`, `rcfd help glossary` and `rcfd help errors`
+print the same on the command line.
+
+### `mesh.preview` (F-836, ADR 0732)
+
+`mesh.preview {session, dir, adapt?, force?}` builds the mesh the session's case runs on, without solving, and writes
+it as a field store with no snapshot (`store.rts`, the mesh frame only) at `<dir>/<mesh_hash>/`, by a temporary folder
+beside it and a rename. A folder of that name that already holds a store of the same mesh is used again (`reused:
+true`). The case is read from the session, so changes not saved are previewed.
+
+- `adapt`: `"base"` (default) or `"final"`. For a case with `[mesh.adapt]`, `base` is the mesh the run starts on
+  (`adapt.pending: true`: its first step changes it) and `final` runs the run's adaptive loop (`cycles + 1` solves) for
+  the mesh it solves on after that step. Without the table both give the one mesh and `adapt` is null.
+- `force`: a generator mesh whose `mesh.n*` counts give more than 2 000 000 cells is refused (1004) before it is built
+  unless `force: true`. Any built mesh over the service's `max_cells` is refused (1004) before anything is written.
+- Reply: `{path, mesh_hash, cells, faces, points, patches: [{name, kind, faces}], bounds: {min, max}, two_d, adapt:
+  null | {pending, cycles, solves}, reused}`. `mesh_hash` is `Mesh::content_hash` as 16 hexadecimal digits, the hash
+  the store records; `two_d` is true when the mesh has an `Empty` patch.
+- Errors: 1001 unknown session; 1003 the mesh cannot be built (`data.diagnostics`, as `mesh.check`); 1004 `dir` outside
+  the sandbox, the estimate or `max_cells`; -32602 a missing `session` or `dir`, a bad `adapt` or `force`, or an
+  unknown parameter; -32000 the store cannot be written (nothing is left behind).
+
+`rcfd call mesh.preview '{"session": "s1", "dir": ".rcfd/previews"}'` reaches it from a script. There is no MCP tool
+(ADR 0732 Q6).
 
 ## Where to go next
 

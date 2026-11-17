@@ -102,8 +102,8 @@ export function statusValue(o: {
   quantity: string;
   shown: string;
   value: number | null;
-  /** The engine's unit when its key says one (elapsed_s), else null with why. */
-  unit: { unit: string; from: string } | { why: string };
+  /** The engine's unit when its key says one (elapsed_s), the run's time unit (`time`, ADR 0734), else null with why. */
+  unit: { unit: string; from: string } | { why: string } | 'time';
   file?: string;
   readBy?: string;
 }): NumberSource {
@@ -111,7 +111,7 @@ export function statusValue(o: {
     quantity: o.quantity,
     shown: o.shown,
     exact: o.value === null ? null : String(o.value),
-    unit: 'unit' in o.unit ? { kind: 'engine', unit: o.unit.unit, from: o.unit.from } : { kind: 'none', why: o.unit.why },
+    unit: o.unit === 'time' ? { kind: 'time' } : 'unit' in o.unit ? { kind: 'engine', unit: o.unit.unit, from: o.unit.from } : { kind: 'none', why: o.unit.why },
     run: o.run,
     snapshot: { none: 'none: a fact of the run, not of a snapshot' },
     step: null,
@@ -239,7 +239,8 @@ export function snapshotFactValue(o: {
     unit:
       o.quantity === 'step'
         ? { kind: 'none', why: 'a count of the solver’s steps' }
-        : { kind: 'none', why: `not recorded: runs/${o.run}/fields/store.rts gives a snapshot’s time without a unit` },
+        : // ADR 0734 P2: store.rts keeps its bytes; the engine names the unit of a snapshot's time in its replies
+          { kind: 'time' },
     run: o.run,
     snapshot: { index: o.snapshot, of: o.of, step: o.step, time: o.time },
     step: o.step,

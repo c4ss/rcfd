@@ -30,7 +30,7 @@ rcfd run <case> [--out dir] [--max-iterations n] [--quiet]
          [--continue-from checkpoint] [--checkpoint file] [--checkpoint-every n]
          [--stop-file file] [--pause-file file] [--case-dir dir] [--store-dir dir] [--status-monitors]
          [--max-elapsed seconds] [--max-steps n]
-         [--threads n] [--precision double] [--journal file]
+         [--threads n] [--precision double] [--journal file [--journal-ignore-hash]]
          [--set path=json]... [--print-settings] [--restart-from file] [--source-case case] [--method m] [--no-chain]
 rcfd restart <case> --from file [--mesh mesh] [--source-case case] [--method m]   (plus every run flag)
 rcfd check <case> [--json] [--set path=json]...
@@ -56,6 +56,7 @@ rcfd check <case> [--json] [--set path=json]...
 | `--threads n` | number of worker threads (`RAYON_NUM_THREADS`); results are bit-identical for any thread count (measured, see below) |
 | `--precision double` | the only supported value; `single` is rejected with exit 2 |
 | `--journal f` | run the case recorded in a service journal (`journal.get`) instead of a case file |
+| `--journal-ignore-hash` | with `--journal`: a journal whose create entry records `source.hash` (a session made from a case file, ADR 0735) is refused with exit 3 and both hashes when the file's bytes changed since the service read it; this flag runs it anyway. A journal without `source.hash` is not checked. The file is read relative to the journal's folder, else at the recorded `source.resolved` path |
 | `--set path=json` | override one setting before anything else (repeatable): `--set solver.dt=0.05`, `--set solver.algorithm=piso` (a bare word is a string). Malformed argument: exit 2; unknown path or invalid value: exit 3 |
 | `--print-settings` | print the resolved settings (defaults filled in, overrides applied) as JSON and exit 0 without running or writing anything |
 | `--restart-from f` | start from the solution in restart file `f`; on another mesh the fields are transferred (`--method`, default `gradient`; `--source-case` for files that do not embed their mesh). `rcfd restart <case> --from f` is the same; its `--mesh m` replaces the case mesh by a mesh file. Not combinable with `--continue-from` (which restores the exact state) |

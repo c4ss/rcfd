@@ -549,8 +549,11 @@ export class Store {
    * `mesh_to_bytes`): u64 hash | u64 cells | u64 points | u64 json length | json | points (3 f64 each) | face_offsets (u64,
    * faces + 1) | face_points (u64) | owner (u64, faces) | neighbour (u64, internal faces). Boundary faces come after the
    * internal ones. The MESH frame's checksum is verified first.
+   *
+   * F-836: with `withPatches`, also the patch of each triangle (`u32`, its index in the metadata's `patches`, which hold
+   * contiguous face ranges `start`, `size`); a boundary face no patch holds is refused.
    */
-  surface(): { points: ArrayBuffer; triangles: ArrayBuffer; cells: ArrayBuffer } {
+  surface(withPatches = false): { points: ArrayBuffer; triangles: ArrayBuffer; cells: ArrayBuffer; patch?: ArrayBuffer } {
     this.verifyMesh();
     const frameEnd = this.mesh.end;
     const base = HEADER_LEN + FRAME_HEAD_LEN + 24;
@@ -600,6 +603,9 @@ export class Store {
     for (let f = 0; f < nb; f++) nTri += Math.max(0, offsets[f + 1]! - offsets[f]! - 2);
     const triangles = new Uint32Array(3 * nTri);
     const cells = new Uint32Array(nTri);
+    const patchOf = withPatches ? new Uint32Array(nTri) : null;
+    const ranges = withPatches ? patchRanges(meta['patches']) : [];
+    let pi = 0;
     const used: number[] = [];
     let t = 0;
     for (let f = 0; f < nb; f++) {
@@ -612,7 +618,13 @@ export class Store {
           used.push(c);
         }
       }
+      if (patchOf) {
+        const gf = first + f;
+        while (pi < ranges.length && gf >= ranges[pi]![0] + ranges[pi]![1]) pi++;
+        if (pi >= ranges.length || gf < ranges[pi]![0]) throw bad(`boundary face ${gf} is in no patch`);
+      }
       for (let k = 1; k + 1 < n; k++) {
+        if (patchOf) patchOf[t] = ranges[pi]![2];
         triangles[3 * t] = newId[facePoints[a]!]!;
         triangles[3 * t + 1] = newId[facePoints[a + k]!]!;
         triangles[3 * t + 2] = newId[facePoints[a + k + 1]!]!;
@@ -627,8 +639,20 @@ export class Store {
       points[3 * i + 1] = xyz[3 * u + 1]!;
       points[3 * i + 2] = xyz[3 * u + 2]!;
     }
-    return { points: points.buffer, triangles: triangles.buffer, cells: cells.buffer };
+    return { points: points.buffer, triangles: triangles.buffer, cells: cells.buffer, ...(patchOf ? { patch: patchOf.buffer } : {}) };
   }
+}
+
+/** F-836: the patches of the mesh metadata as `[start, size, index]`, sorted by start (the writer stores them so). */
+function patchRanges(v: unknown): [number, number, number][] {
+  if (!Array.isArray(v)) throw bad('mesh metadata: no patches');
+  const out = v.map((p, i): [number, number, number] => {
+    const start = (p as Record<string, unknown> | null)?.['start'];
+    const size = (p as Record<string, unknown> | null)?.['size'];
+    if (!isCount(start) || !isCount(size)) throw bad('mesh metadata: a patch without start and size');
+    return [start, size, i];
+  });
+  return out.sort((a, b) => a[0] - b[0]);
 }
 
 interface ScanOut {

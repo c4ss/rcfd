@@ -24,5 +24,5 @@ export interface CancelOptions {
 }
 
 /** The operations of F-832 that show progress and can be cancelled (G21). */
-export const WORK_KINDS = ['project.open', 'run.open', 'field.load', 'case.check', 'case.save', 'mesh.check'] as const;
+export const WORK_KINDS = ['project.open', 'run.open', 'field.load', 'case.check', 'case.save', 'mesh.check', 'mesh.preview'] as const;
 export type WorkKind = (typeof WORK_KINDS)[number];

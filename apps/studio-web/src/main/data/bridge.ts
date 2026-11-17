@@ -76,7 +76,7 @@ export function parseDataRequest(raw: unknown): ParsedData {
     if (!isTag(raw['tag'])) return bad('cancel: tag must be a string of at most 64 characters or a non-negative integer');
     return { ok: true, request: { op: 'cancel', id, tag: raw['tag'] } };
   }
-  if (op !== 'open' && op !== 'field' && op !== 'surface' && op !== 'surfaceField' && op !== 'difference') return bad(`unknown op '${String(op).slice(0, 40)}'`);
+  if (op !== 'open' && op !== 'field' && op !== 'surface' && op !== 'surfaceField' && op !== 'patchSurface' && op !== 'difference') return bad(`unknown op '${String(op).slice(0, 40)}'`);
   const required =
     op === 'field' || op === 'surfaceField'
       ? ['op', 'id', 'store', 'snapshot', 'field']

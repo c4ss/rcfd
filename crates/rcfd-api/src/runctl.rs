@@ -692,8 +692,12 @@ pub fn case_from_journal(journal: &Value, base_dir: &Path, sandbox: Option<&Path
         .ok_or_else(|| vec![diag("journal has no entries".into())])?;
     let first = entries.first().filter(|e| e["op"] == "create");
     let src = first.map_or(json!({}), |e| e["source"].clone());
-    let mut case = if let Some(p) = src["path"].as_str() {
-        Case::load_with(base_dir.join(p), sandbox)?
+    // a `path` source relative to the journal's folder, else (ADR 0735) the `source.resolved` file the service read
+    let mut case = if let Some(file) = src["path"]
+        .as_str()
+        .and(crate::session_journal::source_file(journal, base_dir))
+    {
+        Case::load_with(file, sandbox)?
     } else if let Some(t) = src["toml"].as_str() {
         Case::parse_toml_with(t, base_dir, sandbox)?
     } else if src["settings"].is_object() {

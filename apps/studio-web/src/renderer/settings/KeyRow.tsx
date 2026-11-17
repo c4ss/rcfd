@@ -1,10 +1,13 @@
 // One case key as a row (F-825): its name with its unit, the engine's description, a control made from its schema node,
 // its default and range, whether the case set it, and the engine's message when a change was refused. The control kind
 // comes from the schema (schema.ts): a switch for a boolean, a select for an enumeration, a text field for the rest.
+// F-826, F-830 (ADR 0730): with the engine's UI metadata the row is named by the engine's label (the key's path stays
+// beside it), its tooltip is the engine's one line of help, and its focus detail adds the usual range with the source the
+// engine cites and the docs heading that explains it (G19). None of these words is the Studio's.
 import { useId, useState, type KeyboardEvent } from 'react';
 import { Button, Select, StatePictogram, Switch, TextField } from '../ui/index.js';
 import { useSettings } from './context.js';
-import { encode, formatValue, isSet, rangeText, unitOf, valueAt, type Leaf } from './schema.js';
+import { encode, formatValue, isSet, rangeText, recommendedText, unitOf, valueAt, type Leaf } from './schema.js';
 import { openTrigger, Provenance, settingValue } from '../provenance/index.js';
 import '../history/history.css';
 
@@ -33,7 +36,10 @@ export function KeyRow({ leaf, path, label }: KeyRowProps) {
   const descId = useId();
   const errId = useId();
   const accessibleName = unit ? `${path}, ${unit}` : path;
-  const name = label ?? (leaf.name === '*' ? (path.split('.').pop() ?? path) : leaf.name);
+  const name = label ?? leaf.label ?? (leaf.name === '*' ? (path.split('.').pop() ?? path) : leaf.name);
+  const usual = recommendedText(leaf);
+  // the tooltip: the engine's one line of help, else its description (G19)
+  const tip = leaf.help ?? leaf.description;
   const dimension = leaf.siDimension ?? leaf.item?.siDimension;
   const describedBy = [descId, error ? errId : null].filter(Boolean).join(' ');
   // F-828: a number's provenance (the session, settings.get, the schema's unit, the engine): Show provenance (Ctrl+I, the
@@ -101,7 +107,7 @@ export function KeyRow({ leaf, path, label }: KeyRowProps) {
       }
     >
       <div className="st-key-head">
-        <span className="st-key-name" data-words="data" title={leaf.description || undefined}>
+        <span className="st-key-name" data-words="data" title={tip || undefined}>
           {numeric ? (
             <Provenance
               tabStop={false}
@@ -132,8 +138,10 @@ export function KeyRow({ leaf, path, label }: KeyRowProps) {
         )}
         {/* G22: the engine's description is the field's description, shown as focus detail (and in the name's tooltip) */}
         <p className="st-key-desc st-key-detail" id={descId}>
+          {leaf.help && leaf.help !== leaf.description && <span className="st-key-help">{leaf.help}</span>}
           {leaf.description || 'The schema gives no description of this key.'}
           {dimension && <span className="st-key-si">Stored in SI ({dimension}); a number with a unit is converted by the engine.</span>}
+          {leaf.see && <span className="st-key-see">Explained in docs/{leaf.see.replace('#', ', heading ')}.</span>}
         </p>
       </div>
       <div className="st-key-control" data-words="data">
@@ -160,6 +168,11 @@ export function KeyRow({ leaf, path, label }: KeyRowProps) {
         {range && (
           <span>
             Range <span data-words="data">{range}</span>
+          </span>
+        )}
+        {usual && (
+          <span className="st-key-usual">
+            Usually <span data-words="data">{usual.range}</span> (source: <span data-words="data">{usual.source}</span>)
           </span>
         )}
         {leaf.control === 'enum' && leaf.options && (

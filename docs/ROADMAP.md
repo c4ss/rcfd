@@ -16639,6 +16639,8 @@ Generated from `docs/studio-guardrails.md`, `PRODUCT.md` and `DESIGN.md` ([ADR 0
     chip plus the palette command) and A20-D2 (a rule is allowed only from a denied call; no palette command allows
     one). runner_config joined the first allow-list (ADR 0733, 16 tools). Optional engine follow-up E-814
     (session discovery): ADR 0735 proposed; awaiting the maintainer.
+    2026-11-17 (ADR 0735): E-814 declined by the maintainer; session discovery stays in the Studio
+    (apps/studio-web/src/main/claude/discover.ts), with no engine module, MCP tool or CLI command.
 - [x] **F-815** Electron Studio: compare two runs
   - depends on: F-810
   - acceptance: Two runs side by side or overlaid at the same time and the same colour range, with the difference field
@@ -16820,13 +16822,21 @@ Generated from `docs/studio-guardrails.md`, `PRODUCT.md` and `DESIGN.md` ([ADR 0
     one control generated from settings.schema (real-engine e2e); structural learner-first tiers until F-826 metadata;
     engine validation messages shown unchanged; coverage 0 -> 957 of 1271. A DESIGN.md subsection the agent added was
     held back as a proposal for the maintainer.
-- [ ] **F-826** Engine: UI metadata in the case schema (labels, units, ranges, advanced flag)
+- [x] **F-826** Engine: UI metadata in the case schema (labels, units, ranges, advanced flag)
   - depends on: F-824
   - acceptance: Opt-in, additive metadata on settings.schema entries (human label, unit, recommended range, an advanced
     flag, a one-line help text from the existing docs) so that F-825 lays keys out without a Studio-side table; no
     existing key, golden, default or reply field changes (G4); docs/case-schema.md updated.
-  - note: ADR 0800, needs its own ADR before code (engine change, additive under G4). Traces: G15, G4. ADR 0730 proposed
-    (shared with F-830); awaiting the maintainer.
+  - note: ADR 0800, needs its own ADR before code (engine change, additive under G4). Traces: G15, G4. ADR 0730 accepted
+    2026-11-17 (shared with F-830), every open question on its recommendation. Done 2026-11-17 (branch adr0730): opt-in
+    behind rcfd serve --ui (family rcfd-ui/1, protocol 1.1): settings.schema {ui: true} and rcfd schema --ui lay
+    crates/rcfd-api/src/schema_ui.toml onto the schema (x-rcfd-label, -help with docs/schema-text fallback, -unit, -see,
+    -advanced, -recommended); 327 entries, 148 written help lines (every example-project key has one), 1 recommended
+    range with a published source; docs/case-schema.md and docs/service-protocol.md updated; without --ui every reply
+    byte-identical to f86339e8 (T1, T2, M3 tests). The advanced list (169 keys, table in ADR 0730) was approved by the
+    maintainer as it stood on 2026-11-17 (status approved in schema_ui.toml); the Studio shows labels, help, the usual
+    range with its source and the advanced keys behind Show all (tests/e2e/settings-ui-f826.spec.ts); screenshots in
+    apps/studio-web/test-results-visual/f826 for the maintainer's view-and-report.
 - [x] **F-827** Electron Studio: one action layer for every UI action
   - depends on: F-803
   - acceptance: Every UI action is a typed, named action in one registry that calls the engine (a service method, an MCP
@@ -16858,8 +16868,20 @@ Generated from `docs/studio-guardrails.md`, `PRODUCT.md` and `DESIGN.md` ([ADR 0
     run.json records no launch argv or build id; status.json and store time have no unit; a session records no file or
     journal file; no rerun options; no mesh hash. 2026-11-17 (ADR 0801 Addendum 20): the maintainer answered D-L1: the
     engine records a session's journal (E-828c), the Studio writes none; a session number's reproduce command stays said
-    as not recorded until the engine gives one. 2026-11-17: engine follow-ups E-828a, E-828b, E-828d and E-828e:
-    ADR 0734 proposed; E-828c: ADR 0735 proposed; awaiting the maintainer.
+    as not recorded until the engine gives one. 2026-11-17: engine follow-ups E-828a, E-828b, E-828d and E-828e: ADR
+    0734 proposed; E-828c: ADR 0735 proposed; awaiting the maintainer. 2026-11-17 (ADR 0735, accepted with Q4 declined):
+    E-828c built: session.create records a case file's resolved path and hash (`source` in journal.get and
+    session.list); rcfd serve --journal-dir keeps one `<session>-<created>.journal.json` per session; rcfd run --journal
+    refuses a case file changed since (--journal-ignore-hash); the Studio starts its service with `--journal-dir <state
+    dir>/journals`, and a session number's provenance names its case file and hash and shows and copies `rcfd run
+    --journal <file>`. 2026-11-17 (ADR 0734 accepted and built): E-828a, E-828b, E-828d and E-828e are done: each launch
+    writes runs/<id>/launch.json (argv, cwd, solver path and version, build exe_hash and git_rev; rcfd version --json),
+    run_status, list_runs and data.open reply time_unit "s", rcfd-runner start takes --continue-from and --max-steps,
+    rcfd-runner rerun <id> and start_run from_run rerun a run from its case.snapshot (rerun_of), and the runner records
+    mesh_hash of a mesh-file case with hash_project_file and rcfd project hash to check it. The Studio's selected run
+    shows How this ran (command line, build, mesh hash unchanged or changed, rerun command) and Rerun as it ran through
+    start_run; the reproduce command carries --continue-from and --max-steps; time units come from the engine. Still
+    partial: the Studio items Left above.
 - [x] **F-829** Electron Studio: undo, safe deletes and edit conflicts
   - depends on: F-827, F-805
   - acceptance: Undo and redo for every edit made through the action layer; deleting a run, result or case is
@@ -16881,13 +16903,19 @@ Generated from `docs/studio-guardrails.md`, `PRODUCT.md` and `DESIGN.md` ([ADR 0
     sends base_value (compare-and-set, code 1007 shown as a conflict with Set mine or Keep), and undo/redo writes carry
     the value they expect. Tests: tests/e2e/trash.spec.ts (the real engine), tests/unit/trash.spec.ts, history.spec.ts,
     claude.spec.ts (no allow-list holds the delete class, also crates/rcfd-mcp/tests/trash_adr0736.rs).
-- [ ] **F-830** Electron Studio: explain in place from the engine's docs
+- [~] **F-830** Electron Studio: explain in place from the engine's docs
   - depends on: F-826, F-825
   - acceptance: Help on every control, term and value taken from the engine's case schema help text (F-826), docs and
     glossary, with no help text kept only in the Studio; every error message names the problem and the recovery, checked
     by a test over the engine's error catalogue; a learner's view-and-report step (G19).
-  - note: ADR 0800 (G16 to G21 added 2026-11-16). Traces: G19, G2; PRODUCT Users, Principle 5. ADR 0730 proposed (shared
-    with F-826); awaiting the maintainer.
+  - note: ADR 0800 (G16 to G21 added 2026-11-16). Traces: G19, G2; PRODUCT Users, Principle 5. ADR 0730 accepted
+    2026-11-17 (shared with F-826). Partial 2026-11-17 (branch adr0730): help.glossary and help.errors (rcfd serve --ui;
+    rcfd help glossary|errors on the CLI, no MCP tool) with an error catalogue of every code on every surface, one
+    recovery line each, checked against the sources and docs tables; the Studio starts rcfd serve --ui, key rows take
+    label, help, usual range with its source and the docs heading from the engine, advanced keys behind Show all; the
+    first path's Explain terms are glossary rows (13 terms added to docs/glossary.md), words.ts keeps no meaning of its
+    own; engine errors in settings, the case editor and run control get the catalogue's recovery line (unit test over
+    the real catalogue). Left: a learner's view-and-report step (G19); an e2e walk provoking each catalogue error.
 - [x] **F-831** Electron Studio: command palette and keyboard shortcuts
   - depends on: F-827, F-802
   - acceptance: A command palette generated from the action registry that finds every action by name; shortcuts for
@@ -16961,14 +16989,23 @@ Generated from `docs/studio-guardrails.md`, `PRODUCT.md` and `DESIGN.md` ([ADR 0
     open the project (G4, G12: the Studio writes no rcfd-project.json); the first path's e2e walk makes its projects
     through them. Word budgets unchanged: New project… on the empty home is an icon button (a worded one needs
     home-empty raised from 6 to 8, for the maintainer).
-- [ ] **F-836** Electron Studio: mesh preview before a run
+- [x] **F-836** Electron Studio: mesh preview before a run
   - depends on: F-449, F-812, F-808
   - acceptance: The case editor shows the mesh a case will build (generator and imported meshes, including a
     [mesh.adapt] mesh) with patch visibility, from an engine entry point that builds the mesh without solving (ADR first
     if none exists); the preview equals the solver's mesh (test replacing preview_g1 and adaptive_preview_f475); e2e
     test.
-  - note: Lost with rcfd-studio (preview.rs, preview_ui.rs). Traces: G14, G15. ADR 0732 proposed; awaiting the
-    maintainer.
+  - note: Lost with rcfd-studio (preview.rs, preview_ui.rs). Traces: G14, G15. Done 2026-11-17 (ADR 0732, accepted by
+    the maintainer 2026-11-17 with every recommendation; branch adr0732): the service method mesh.preview {session, dir,
+    adapt?, force?} behind rcfd serve --ui (UI_METHODS; the plain replies unchanged, ADR 0730's tests restated, not
+    re-recorded) builds the mesh Simulation::new sets the run up on without solving and writes it as a mesh-only store
+    in <dir>/<mesh hash>/, reused when the hash matches; a [mesh.adapt] case gives its base mesh with adapt.pending and
+    the adapted mesh on adapt: "final"; a generator over 2 000 000 estimated cells is refused unless force. The case
+    editor draws the session's mesh (saved or not) from that store through the Studio's store reader, one colour per
+    patch, with the mesh grid, patch visibility, the adapted mesh on request with its cost said first, and the engine's
+    located message on failure. mesh_preview_adr0732.rs replaces preview_g1 (M1, every shipped case against
+    Simulation::new) and adaptive_preview_f475 (M2); e2e tests/e2e/f836.spec.ts. No MCP tool (Q6). Word budgets
+    unchanged (case editor 51 of 51 with the preview drawn).
 - [~] **F-837** Electron Studio: run setup, logs and field-view extras from rcfd-studio
   - depends on: F-449, F-807, F-810
   - acceptance: Each capability the deleted rcfd-studio had and the Electron Studio lacks is built or recorded as

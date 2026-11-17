@@ -20,6 +20,9 @@ import {
   provenanceText,
   runFacts,
   sessionFacts,
+  sessionJournal,
+  sessionReproduce,
+  type SessionJournal,
   SESSION_NO_REPRODUCE,
   versionLine,
   type Fact,
@@ -290,16 +293,15 @@ function ProvenancePopover({ subject, triggerRef, onClose }: { subject: Exclude<
   );
 }
 
-/** The session's journal as journal.get answers it: the number of edits and the case tree's hash. */
-function useJournal(session: string): { readonly entries: number; readonly caseHash: string } | { readonly error: string } | null {
-  const [got, setGot] = useState<{ readonly entries: number; readonly caseHash: string } | { readonly error: string } | null>(null);
+/** The session's journal as journal.get answers it: the number of edits, the case tree's hash, its source and file. */
+function useJournal(session: string): SessionJournal | { readonly error: string } | null {
+  const [got, setGot] = useState<SessionJournal | { readonly error: string } | null>(null);
   useEffect(() => {
     let alive = true;
     void dispatch('journal.get', { session }, { undo: false }).then((r) => {
       if (!alive) return;
       if (!r.ok) return setGot({ error: r.error.message });
-      const o = r.result as { entries?: unknown; case_hash?: unknown };
-      setGot(Array.isArray(o.entries) && typeof o.case_hash === 'string' ? { entries: o.entries.length, caseHash: o.case_hash } : { error: 'journal.get answered without entries or case_hash' });
+      setGot(sessionJournal(r.result));
     });
     return () => {
       alive = false;
@@ -322,9 +324,10 @@ function SessionPopover({ source, triggerRef, onClose }: { source: SessionNumber
   }, []);
   const journal = useJournal(source.session);
   const facts = sessionFacts(source, engine, journal);
+  const command = sessionReproduce(journal);
   const [copied, setCopied] = useState<{ ok: boolean; message: string } | null>(null);
   const copy = async () => {
-    const text = [`Provenance of ${source.quantity}`, ...facts.map(([k, v]) => `${k}: ${v}`), SESSION_NO_REPRODUCE].join('\n');
+    const text = [`Provenance of ${source.quantity}`, ...facts.map(([k, v]) => `${k}: ${v}`), command ? `Reproduce: ${command}` : SESSION_NO_REPRODUCE].join('\n');
     const r = await copyText(text);
     setCopied({ ok: r.ok, message: r.ok ? 'Provenance copied' : `Not copied: ${r.error.message}` });
   };
@@ -345,9 +348,15 @@ function SessionPopover({ source, triggerRef, onClose }: { source: SessionNumber
           ))}
         </dl>
         <section className="pv-repro" aria-label={`Reproduce session ${source.session} from the command line`}>
-          <p className="pv-reading" data-words="exception">
-            {SESSION_NO_REPRODUCE}
-          </p>
+          {command ? (
+            <p className="pv-cmd" data-command="" data-words="data">
+              {command}
+            </p>
+          ) : (
+            <p className="pv-reading" data-words="exception">
+              {SESSION_NO_REPRODUCE}
+            </p>
+          )}
         </section>
         <div className="pv-actions">
           <Button icon={copied?.ok ? 'check' : undefined} onPress={() => void copy()}>
@@ -378,5 +387,10 @@ function fallback(run: string, error: string): RunProvenance {
     unitsNote: null,
     reproduce: { argv: null, text: null, gaps: [], leftOut: [] },
     readAt: '',
+    launch: null,
+    launchNote: null,
+    meshCheck: null,
+    timeUnit: null,
+    rerun: { argv: null, text: null, gaps: [], leftOut: [] },
   };
 }
