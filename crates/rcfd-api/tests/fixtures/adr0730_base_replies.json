@@ -1,0 +1,29 @@
+{
+ "note": "ADR 0730 T1, T2 and M3: the replies of the base commit f86339e8 (main), recorded from its release binaries before any ADR 0730 code was written. Bytes are counted and hashed with rcfd_core::hash::fnv64 (FNV-1a, 64 bit). Never re-recorded to make a test pass; a deliberate change of the case schema, the method list or the MCP tool list re-records this file in the same commit, with the maintainer's word.",
+ "commit": "f86339e8",
+ "rcfd_schema_stdout": {
+  "bytes": 372723,
+  "fnv64": "0x03d9d859e7694157"
+ },
+ "settings_schema_result": {
+  "bytes": 247432,
+  "fnv64": "0x6f68e8a6689f9a65"
+ },
+ "service_info_result": "{\"cosim\":\"rcfd-cosim/1\",\"limits\":{\"max_cells\":2000000,\"max_run_seconds\":null,\"max_steps_per_call\":10000000},\"methods\":[\"service.info\",\"settings.schema\",\"session.create\",\"session.list\",\"session.close\",\"settings.get\",\"settings.set\",\"settings.remove\",\"settings.validate\",\"mesh.check\",\"mesh.partition\",\"mesh.inflate\",\"field.sample\",\"run.initialize\",\"run.start\",\"run.pause\",\"run.resume\",\"run.stop\",\"run.step\",\"run.status\",\"run.wait\",\"monitors.get\",\"particles.report\",\"reports.get\",\"report.export\",\"field.stats\",\"field.slice\",\"field.export_vtk\",\"render.png\",\"render.glb\",\"log.tail\",\"journal.get\",\"journal.replay\",\"field.grid\",\"panel.snapshot\",\"events.poll\",\"workflow.create\",\"workflow.list\",\"workflow.get\",\"workflow.run\",\"workflow.insert\",\"workflow.delete\",\"workflow.save\",\"workflow.load\",\"run.check\",\"run.headless\",\"status.read\",\"design.create_study\",\"design.create_variant\",\"design.run_map\",\"design.run_study\",\"design.evaluate\",\"design.record\",\"design.get_metrics\",\"design.compare\",\"design.propose\",\"design.list_study\",\"design.ledger_append\",\"design.ledger_query\",\"design.ledger_export\",\"design.ledger_rerun_check\",\"cosim.list\",\"cosim.open\",\"cosim.describe\",\"cosim.time\",\"cosim.checkpoint\",\"cosim.restore\",\"cosim.forces\",\"cosim.advance\"],\"name\":\"rcfd\",\"protocol\":\"rcfd-service/1\",\"protocol_version\":\"1.1\",\"sandbox_root\":null,\"version\":\"0.1.0\"}",
+ "help_glossary_error": {
+  "code": -32601,
+  "message": "unknown method 'help.glossary'"
+ },
+ "help_errors_error": {
+  "code": -32601,
+  "message": "unknown method 'help.errors'"
+ },
+ "mcp_tools_list_result": {
+  "bytes": 27188,
+  "fnv64": "0xd1742b99f06461c4"
+ },
+ "mcp_tools_list_project_result": {
+  "bytes": 36958,
+  "fnv64": "0x4a78fabb5e679d50"
+ }
+}
