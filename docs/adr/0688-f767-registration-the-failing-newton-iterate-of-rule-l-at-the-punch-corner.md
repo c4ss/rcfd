@@ -316,3 +316,184 @@ c8 is answered whichever way the full solves end: a remedy that fails is a resul
    maintainer's standing instruction of 2026-11-11 (take the recommendation).
 2. **Whether a remedy may change rule L's coefficient**: not taken; open for the maintainer.
 3. **Whether the damping should become a default**: not taken (it would change default results); open.
+
+## Addendum 1: results (2026-11-17)
+
+The registered fast run once on f3cc91fe (`run1-fast.log`, 17.7 s); the two heavy records once each on 46775888, side by side
+(`run2-heavy-iterates.log`, 257 s; `run3-heavy-remedies.log`, 187 s; the machine shared, the mutation builds running beside
+them); the mutations once each on a scratch copy of 46775888 against `f767_fast_rows` (`mutations.log`, `mut-MU*.log`); B6,
+S6, S7, S8 once (`b6-bits.log`, `b6-baseline.log`, `fmt.log`, `clippy.log`, `s7-lib.log`, `s7-tests.log`, `s8-docs.log`).
+One diagnosis probe after the registered runs (`probe1.log`; its source `zz_probe_f767.rs`, a copy of the test file with one
+extra ignored test, built in the worktree, run once and deleted; it reran nothing registered and changed no record). All in
+`w49i-work/f767-scratch`. No limit, set-up or measure was changed after a run; there is no amendment. The records:
+`f767_fast_known_miss` (the registered fast run, renamed from `f767_fast`, its one miss in the ignore text), `f767_fast_rows`
+(default, 20 s: every other row of the registered run, on the same path as the heavy records), `f767_nh16_iterates_heavy` and
+`f767_nh16_remedies_heavy` (ignored, every limit met, the measured values in their ignore texts).
+
+### What was found
+
+- **The failing attempt is recorded bit for bit.** The observer leaves the solve unchanged (OB8: `R`, `w_c` bit-equal; OB16:
+  the error text of ADR 0678 to the character); every observed iterate is rebuilt from the one before it (BI8: 45 pairs; BI16),
+  and `solve_increment` from the observed committed state reproduces the driver's attempt (BX8 bit-equal; BX16 the same
+  refusal). The attempt `0.9625 -> 0.965625` has **two iterates**: `u_0 = u_c` and the predictor's iterate `u_1`; the driver
+  refuses the factor at `u_1` with the pivot `-4.651826504388123e6` at node 4768 component 0, bit for bit (BI16). **K = 1: the
+  failure is at the predictor's iterate.** The residual there is `1.78e-4`; the predictor moved at most `3.68e-4` (node 4461,
+  `(0.4375, 0.4375, 0.9375)`, the inner lower node of the corner element 3959). Every failed attempt of the tenth step fails at
+  the same place (OT): `0.95 -> 0.975`, `0.95 -> 0.9625`, `0.9625 -> 0.96875` and `0.9625 -> 0.965625` at `u_1`, `0.95 -> 1.0`
+  at `u_2`; the converged attempts take 4 iterates with quadratic convergence (`7.2e-4, 3.8e-7, 3.1e-13`).
+- **At `u_c`** (I0): `nu = 0`, the driver's factor passes, the isolated pencil mode of ADR 0682 again (`m_1 = 6.286570e-2`,
+  `2.3e-8` relative to ADR 0682's, element 3720, `H = 0.88`); `lambda_1 / (mu h) = 0.03633` (smooth, global).
+- **At `u_1`**: `nu = 1`. The free tangent's lowest eigenvalue `lambda_1 / (mu h) = -0.0761`, its mode in **one element, 3720**
+  (`|A| = 1`, `H = 0.934`, hourglass form, `s_E = 0.059`); the pencil's lowest `m_1 = -0.0291 mu`, the same element, `H =
+  0.933`; the next eigenvalues are unchanged (`0.0365 mu h`, `0.615 mu`). One step of `3.7e-4` moves the isolated mode of ADR
+  0682 from `+0.063 mu` to `-0.029 mu` while nothing else moves. KA at `u_1`: `35.1 mu h^3` in 3720 (the condensation stays
+  well posed).
+- **The predictor does not load the mode** (c2): `S_P = share(d_0) = 4.1e-27` (Euclidean `1.1e-30`), rounding: the predictor is
+  orthogonal to the isolated mode, and so is the total change `u_1 - u_c` (`4.1e-27`). The load and the block are symmetric
+  about the plane `x = y`, which suggests a mode antisymmetric about it (not measured). **CP: refuted.**
+- **The force is smooth along the step** (JM): `TC = 1.42e-7` at `u_c` along `d_0` and `1.42e-7` at `u_1` (an exact tangent at
+  both ends); the largest change of the modes `4.1e-5` (element 3959), at most `0.049` of the element's nodal change: no jump.
+  The tangent changes fast in one direction of one element: the mode's pencil value falls by `0.092 mu` over the step.
+- **The ADR 0628 sweep at the corner elements' states** (c5, SH): the homogeneous states of the centre gradients of 3959 and
+  3720, at `u_c` and at `u_1`, are stable for every element on the `6^3` patch: `m_L = 1.0575, 1.0572` (3959), `1.0601, 1.0601`
+  (3720); `m_Inc = 1.040, 1.046`; `m_Full = 1.166, 1.186`; `m_Fbar = 0.968, 0.991`; interior equilibrium `<= 9.3e-14`. Along
+  the ray `I + t (F - I)` rule L first reaches `m_L <= 0` at `t = 1.4` (3959) and `1.5` (3720), the plain element at `t = 1.3`.
+  **Reading SH: not a homogeneous-state property** (the instability needs the non-homogeneous field at the corner).
+- **The line search and the damping on the same attempt** (c6, c7): LS-A, PD-A and LP-A fail with the text of ADR 0678, bit
+  for bit. The line search cannot act (the refusal is at the predictor's iterate, which ADR 0607 does not search). The damping
+  took `beta = 1` by its registered rule because **the lifted iterate cannot be evaluated**: the probe found element 3959
+  inverted there (`det F = -0.060` at point 4). The probe along the predictor line `u_L + beta du`: `beta = 1` slope `+4.0e-3`,
+  the factor refused (`nu = 1`); `beta = 0.5, 0.25, 0.03125` slopes `-12.9, -19.0, -24.2`, the factor passes (`nu = 0`); `beta =
+  0.125, 0.0625` and `0` element 3959 inverted. The full predictor sits at the minimum of the energy along its line (the slope
+  crosses zero just below `beta = 1`), and the corner element's admissibility along the line is not monotone.
+- **The whole solve** (c8): **no remedy solves the `16^3` block to full load.** LS-F fails exactly as the default (the same
+  attempts and pivot); PD-F takes another path (`0.7 -> 0.8` converges without the halving of the default) and fails from
+  `0.9625` with the pivot `-4.651826502107e6` at node 4768; LP-F also from `0.9625` (pivot `-4.651826502726e6`, node 4768).
+- **The positive control** (c9, PC): the plain element on the ADR 0628 patch at `lambda = 0.93` (below its zero `0.9507`):
+  `nu = 21`; the sparse tools give `lambda_1 = -8.909508e5` for `(K_ff, I)` and `-1.828336 mu` for the pencil, equal to the
+  dense values to `1.2e-15` and `1.1e-15`, inside their Sturm brackets; the driver's factor refuses; LC1 `2.1e-16`; the mode in
+  `17` elements, `H = 0.77`. Above the zero (`0.97`) and for rule L at `0.93`: `nu = 0`, the factor passes, positive values
+  equal to the dense ones (`1.1e-15`, `1.5e-14`, `8.9e-16`), except the plain element's pencil at `0.97` (below).
+
+### Results
+
+| Id | Limit | Measured | Met |
+|---|---|---|---|
+| OB8 | bit-equal | bit-equal (`R/mu 0.36659596`) | yes |
+| BI8 | bit-equal; `>= 20` pairs | 45 pairs, all bit-equal | yes |
+| BX8 | bit-equal; equal | bit-equal; `6 = 6` | yes |
+| PD8 | `<= 1e-6` | `2.3e-9`, `6.4e-8` (every `beta = 1`) | yes |
+| LS8 | `<= 1e-6` | `2.3e-9`, `6.4e-8` (every `alpha = 1`) | yes |
+| PD1 | reported; `<= 1e-6` if converged | both converge after one halving; `4.4e-16`, `0` | yes |
+| RF | refused, each | `predictor_damping` named, three times | yes |
+| NC-S | `>= 1 - 1e-10`; `<= 1e-8` | `1.0`; `6.9e-34` | yes |
+| TC8 | `<= 1e-6` | `5.8e-8` | yes |
+| PC | `nu >= 1`; `< 0`, `<= 1e-6`; SB; LC1 `<= 1e-10`; refuses | `21`; `1.2e-15`, `1.1e-15`; holds; `2.1e-16`; refuses | yes |
+| NC-P plain 0.97 | `nu = 0`; `> 0`, `<= 1e-6`; passes | `0`; `(K, I)` `1.1e-15`; **the pencil pairs did not converge** (the tool of ADR 0682, `Shift::Auto`, 300 iterations: residuals `6.9e-8 .. 2.8e-6`; dense `0.955471 mu`); passes | **no** (known miss) |
+| NC-P rule L 0.93 | the same | `0`; `1.5e-14`, `8.9e-16`; passes | yes |
+| OB16 | the text of ADR 0678 | equal | yes |
+| BI16 | bit-equal; the pivot's bits | bit-equal; `-4.651826504388123e6` at node 4768 component 0 | yes |
+| BX16 | contains | contains | yes |
+| I0 | `0`; passes; `<= 1e-4`; 3720 | `0`; passes; `2.3e-8`; 3720 | yes |
+| EI (`u_0`, `u_1`) | `<= 1e-8`; `min(nu, 4)`; SB | `9.7e-9`, `9.99e-9`; `8.8e-9`, `9.1e-9`; `0, 0, 1, 1`; holds | yes |
+| LCI | `<= 1e-10` | `4.9e-16`, `6.1e-16`, `1.1e-16`, `8.7e-17` | yes |
+| TC0 | `<= 1e-6` | `1.42e-7` | yes |
+| LOCI, TCI, SP, SH, OT | finite | as above | yes |
+| LS-A, PD-A, LP-A | classified | each fails with the text of ADR 0678 | reported |
+| LS-F, PD-F, LP-F | classified; the sanity limits if a solve passes | each fails from `0.9625`; no solve passes (the limits do not apply) | reported |
+| B6 | pass | `si_eas_hg_default_bits`, `si_eas_hg3_bits`, `si_eas_default_bits` pass; `baseline_hashes` 3 passed | yes |
+| S6 | clean | fmt and clippy (`--all-targets -D warnings`) clean | yes |
+| S7 | pass | `--lib` 15; `si_eas_hg10` 2, `si_eas_hg11` 1, `si_eas_hg12` 1, `sa_contact_lifted_f608` 7, `sa_contact_line_search_f684` 1, `si_eas_hg13` 1 passed | yes |
+| S8 | pass | `docs_site` 2 passed | yes |
+
+Readings: **the failing iterate** `K = 1`, "the predictor's iterate"; **CP refuted** (`S_P = 4.1e-27 <= 0.1`); **JM smooth**
+(`TC <= 1.4e-7`, ratio `0.049`); **SH** "not a homogeneous-state property".
+
+### Mutations (scratch copy of 46775888, `f767_fast_rows`, each run once)
+
+| Id | Caught | By |
+|---|---|---|
+| MU1 (`share` Euclidean) | **no** | NC-S met: the two `8^3` pencil modes are orthogonal in the Euclidean product too (`3.4e-25`; they seem to belong to different symmetry classes), so NC-S does not tell the products apart |
+| MU2 (shift `1.05 s_lo`) | **no** | the bracket after 10 bisections is so narrow (`8.9088e5 .. 8.9141e5`) that `1.05 s_lo` still exceeds `-lambda_1`: the mutation leaves the tool working |
+| MU3 (no prescribed increment in the replica) | yes | BI8 |
+| MU4 (`solve_increment` with `lc = lt`) | yes | BX8 (not converged in 20 iterations) |
+| MU5 (the damping also scales the prescribed values) | yes (its condition held) | PD1 (`R` off by `0.996`: a damped first attempt then converged at a partial punch) |
+| MU6 (inertia counting positive pivots) | yes | NC-S, PC, NC-P (`nu = 375`) |
+| MU7 (the observer adds `1e-9`) | yes | OB8, BI8, BX8 |
+
+Five of seven caught.
+
+### The clauses
+
+- c1 to c4: met (the attempt recorded at both iterates; the share; both eigenvalues located by element at both).
+- c5: met (SH at four states).
+- c6, c7: met as runs; neither changes the attempt (the line search does not act on the predictor; the damping falls back to
+  `beta = 1` because its lifted iterate inverts element 3959).
+- c8: answered: **no** remedy solves the block to full load.
+- c9: met (PC); one of its negative controls missed a value (NC-P plain 0.97 pencil: the eigensolver of ADR 0682 did not
+  converge in 300 iterations on a clustered spectrum; the dense value is positive).
+- c10: met (no default path changed; the bit records and `baseline_hashes` pass).
+
+### What the record says about the cause
+
+The negative pivot of ADR 0678 is the factor of the tangent at the **predictor's iterate** of an attempt from a stable converged
+state. The predictor is small (`3.7e-4`), smooth along its line (`TC 1.4e-7`), at the energy minimum of its line, and orthogonal
+to the soft mode, so the candidate of ADR 0682 (the predictor carrying the corner through the soft mode) is refuted. Instead,
+the isolated one-element hourglass mode of rule L in element 3720 (one layer under the punch corner) is very sensitive to the
+state there: a step that changes nothing else turns its pencil value from `+0.063 mu` to `-0.029 mu` and leaves the tangent
+with exactly one negative eigenvalue, in that element. The neighbouring corner element 3959 is at the edge of inversion (the
+probe: inverted at the lifted iterate and at two of six points along the predictor line, admissible at the others). The
+homogeneous states of both elements are stable with a wide margin (`m_L 1.06`), so the instability is a property of the
+non-homogeneous corner field with rule L, not of the material or of the element's homogeneous response. The converged state at
+`0.9625` is stable while every predictor of the tenth step, from `0.95` or from `0.9625`, lands on an indefinite tangent: by
+this record the equilibrium path of rule L on `16^3` passes within a predictor's error of a loss of positive definiteness at
+the punch corner near `0.963 .. 0.966`; whether the equilibrium itself crosses it is not measured (the driver refuses to iterate
+on an indefinite tangent). Line search and damping act on the length of a step; they do not remove an indefinite tangent next
+to the solution.
+
+### Deviations
+
+- `f767_fast` became `f767_fast_known_miss` (NC-P plain 0.97, pencil not converged); `f767_fast_rows` runs the other rows and
+  was the target of the mutations (the registration named `f767_fast`).
+- The diagnosis probe (disclosed above) after the registered runs, to explain why the damping took `beta = 1`.
+- MU1 and MU2 were registered as caught and are not: recorded, not tuned.
+- The heavy records ran side by side with the mutation builds (shared-machine wall times).
+
+### Not run
+
+Nothing registered was skipped. Not run by design: a remedy that changes rule L's coefficient (out of scope), the equilibrium at
+`0.965625` itself (the driver refuses an indefinite tangent), other meshes, the whole rcfd-fem suite (rule 7).
+
+### Decision
+
+**partial**, by the registered rule: B6 met (no default bit changed, `baseline_hashes` passes), CP identified (refuted), every
+clause run and c8 answered (no remedy reaches full load), but one check missed (NC-P plain 0.97 pencil) and two mutations were
+not caught (MU1, MU2).
+
+### Remaining questions
+
+1. **The corner field.** Options: (a) a follow-up measuring element 3959's integration points (`det F`, the local mode
+   solution cold and warm, its root) at `u_c` and along the predictor line, and the equilibrium at `0.965625` by a path that
+   accepts an indefinite tangent (for instance the arc-length path of ADR 0480 with its indefinite envelope factor), to tell a
+   loss of stability of the equilibrium from one of the predictor's neighbourhood; (b) record the punch corner as a limit of
+   rule L on node-set punches and stop. Recommendation: (a), proposed below.
+2. **A damping that does not need the lifted iterate.** The probe shows admissible points at `beta = 0.5` and `0.25`. Options:
+   (a) a backtracking of the predictor from `beta = 1` while the trial is inadmissible (evaluation, pivot test), opt-in; (b)
+   none (the iterate after it would still lie next to the indefinite region). Recommendation: (a), inside the follow-up of
+   question 1, as a measured question.
+3. **Whether a remedy may change rule L's coefficient**: open for the maintainer (unchanged from ADR 0682).
+4. **The negative-control eigensolver.** NC-P's pencil on the plain element's clustered spectrum needs more than 300
+   iterations with `Shift::Auto`. Options: (a) the tool of D5 with 500 iterations in both branches in later items; (b) keep 300.
+   Recommendation: (a), registered in the next item that uses it.
+5. **The mutations that survived.** MU1 needs a control with two modes of one symmetry class (a non-symmetric state); MU2
+   needs a wider bracket (fewer bisections). Recommendation: register both in the follow-up.
+
+## For the lead: roadmap entries
+
+> Proposed status: partial.
+
+> Structural solver, intermediate tier. Follow-up of F-763 (ADR 0682). PARTIAL. ADR 0688, 2026-11-17: the failing attempt of ADR 0682 (rule L, neo-Hookean, the punch block on 16^3, 0.9625 to 0.965625) recorded iterate by iterate through a contribution that adds nothing (the solve unchanged to the bit) and rebuilt step by step bit for bit; new opt-in NewtonOptions::predictor_damping (the ADR 0607 step-length rule from the lifted iterate, a trial admissible only if its tangent passes the pivot test; default off, defaults bit-identical, baseline_hashes passes) and new public nonlinear::solve_increment (one driver attempt from a committed state, bit for bit the driver's). The attempt fails at the predictor's iterate: the predictor (3.7e-4, its tangent consistent to 1.4e-7, at the energy minimum of its line) is orthogonal to the isolated pencil mode of ADR 0682 (share 4.1e-27), so the candidate of ADR 0682 is refuted; at that iterate the tangent has one negative eigenvalue (-0.076 mu h; the ADR 0628 pencil -0.029 mu, from +0.063 at the converged state) in the single element 3720 under the punch corner, hourglass form (share 0.93), with nothing else moved and no jump of the modes. The ADR 0628 sweep at the centre gradients of the corner elements 3959 and 3720 is stable (m_L 1.057 and 1.060, zero only 40 to 50 per cent further along the ray): not a homogeneous-state property. The line search cannot act on the predictor; the damping falls back to the full step because the lifted iterate inverts the corner element 3959 (a probe); no remedy (line search, damping, both) solves the 16^3 block to full load. Positive control: the plain element on the ADR 0628 patch at 0.93 (below its zero 0.9507) has 21 negative eigenvalues, found by the sparse tools equal to the dense ones to 1.2e-15. Missed: the pencil of one negative control (the plain element at 0.97) not converged in 300 iterations; two of seven mutations not caught. Not covered: the equilibrium at 0.965625 (the driver refuses an indefinite tangent), a change of rule L's coefficient (the maintainer's call), other meshes.
+
+> F-763 (note, ADR 0688, 2026-11-17): the failing iterate of the 16^3 rule L solve is the predictor's; the soft mode is not carried by the predictor (share 4e-27) but turns negative in one element under the punch corner within one small step (F-767).
+
+> Follow-up proposed: The corner element of rule L at the punch corner and the equilibrium past the predictor. Deps F-767. Acceptance: Every limit not stated here is registered in the ADR before the run. On the punch block of ADR 0688 (rule L, neo-Hookean, 16^3) at the converged state 0.9625 and along the predictor line of the failing attempt: det F at the integration points of element 3959 and its neighbours and the local mode solution there (cold and warm, its root), and whether the inversions found by the probe of ADR 0688 are a jump of that solution; the equilibrium at 0.965625 by a path that accepts an indefinite tangent, with its inertia, against F-bar at the same load; a backtracking of the predictor from the full step on an inadmissible trial, opt-in, and whether the block then solves to full load; the default bits unchanged.
