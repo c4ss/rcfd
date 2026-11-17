@@ -237,3 +237,14 @@ registered fallback of the chain.
 Construction S as frozen: `CGridOptions::camber_seam_s_construction()` = `camber_seam_h_construction()` + `camber_front` +
 `straight_lines` + `radial_filter: false`. NC2 and NC3 stay as registered (H, with its filter, + one field). MU1 to MU6 are run on
 this S. Prediction for the registered run: A1a met at step 5 (the development build); A2 to A4 not seen.
+
+### Amendment 2 (2026-11-17, after the one registered run, before any further run; no limit changed)
+
+The registered run (`f726-scratch/run1.log`) missed A2 (86.97 deg against 85) and A3 (7.43 against 4.0); A1a to A1c and A4 were
+met (numbers in addendum 1). By rule 2 the test `a1_a4_construction_s_meshes_the_reference` becomes the ignored record
+`a1_a4_construction_s_meshes_the_reference_known_miss` with its limits intact (the code otherwise unchanged). So that the met
+clauses keep running, one test is added, `a1_a4_construction_s_meshes_the_reference_met_limits`: the same code and limits for
+A1a, A1b, A1c and A4, A2 and A3 printed only (the computation is deterministic, so its numbers are those of the registered run;
+it is run once to confirm that). One diagnosis run after the miss (scratch `f726-scratch/dev/.../zz_dev.rs`, log
+`diag_miss.log`, never committed) located the faces above the limits; it is reported in addendum 1 as diagnosis, not as a check,
+and changes no part of construction S.
