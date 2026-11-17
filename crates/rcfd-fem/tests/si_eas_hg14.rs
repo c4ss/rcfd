@@ -1982,7 +1982,7 @@ fn fast(corrected: bool) {
 // ============================================================================ the heavy records
 
 #[test]
-#[ignore = "ADR 0694: the heavy record of the corner field on 16^3 (D1), run once with --ignored; f774_fast covers the same helpers on 8^3"]
+#[ignore = "ADR 0694: the heavy record of the corner field on 16^3 (D1), run once with --ignored (59 s, every row met): cold 3959 fails at 7 of 81 points, warm and continued converge at all 81 in the 18 elements with no root switch; reading JR: a jump of the local solution; f774_fast_amended covers the same helpers on 8^3"]
 fn f774_nh16_corner_heavy() {
     let mut ch = Checks::new();
     let t_all = Instant::now();
@@ -2137,7 +2137,7 @@ fn f774_nh16_corner_heavy() {
 }
 
 #[test]
-#[ignore = "ADR 0694: the heavy record of the indefinite Newton, the F-bar comparison and the backtracking on 16^3 (D2, D3), run once with --ignored; f774_fast covers the opt-ins on 8^3, the column and the saddle"]
+#[ignore = "ADR 0694: the heavy record of the indefinite Newton, the F-bar comparison and the backtracking on 16^3 (D2, D3), run once with --ignored (189 s, every row met): the indefinite Newton converges at 0.965625 with nu 1, 3.9 per cent from F-bar (reading EQ: an unstable equilibrium on the branch of u_c); IN-F and IB-F solve to full load, BT-F fails; f774_fast_amended covers the opt-ins on 8^3, the column and the saddle"]
 fn f774_nh16_paths_heavy() {
     let mut ch = Checks::new();
     let t_all = Instant::now();

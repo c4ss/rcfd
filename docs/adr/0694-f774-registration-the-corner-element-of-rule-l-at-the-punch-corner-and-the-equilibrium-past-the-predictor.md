@@ -391,3 +391,124 @@ and `0.0` elsewhere, the value the driver itself commits at `lc = 0`. DC is made
 inverted point (`inverted`), so that a refusal at the input cannot meet it. No limit changes. The registered test becomes the
 ignored record `f774_fast_known_miss` (unchanged, the measured texts in its ignore text); the corrected test `f774_fast_amended`
 (the same rows, the corrected column) is run once and is the target of the mutations.
+
+## Addendum 1: results (2026-11-17)
+
+Logs in `w49i-work/f774-scratch`: the registered fast run `run1-fast.log` (on 5d958e8f), the corrected fast run
+`run4-fast-amended.log` (on 18b30f75), the heavy records `run2-heavy-corner.log` (59 s) and `run3-heavy-paths.log` (189 s),
+`b6-bits.log`, `b6-baseline.log`, `s7-lib.log`, `s7-tests.log`, `fmt.log`, `clippy.log`, `s8-docs.log`, `s9.log`,
+`mutations.log` and `mut-MU*.log`. Each test was run once; no limit changed after a run.
+
+### The fast test
+
+| Id | Measured | Limit | Result |
+|---|---|---|---|
+| IN8, BT8, IB8 | `R` 2.29e-9, `w_c` 6.36e-8 relative each | `<= 1e-6` | met |
+| INX | 0 (bit-equal) | `<= 1e-12` | met |
+| BT1 | converges; `R` 4.4e-16, `w_c` 0 against BT8 | `<= 1e-6` | met |
+| RF2 | six refusals, each naming its key | refused | met (D4 says "seven"; its list has six, see deviations) |
+| INC | default refuses (pivot -7.169e6 at node 106); indefinite converges in 3 iterations; 5.1e-15; `nu = 21` | as registered | met |
+| NC-I | both converge, bit-equal | bit-equal | met |
+| BTC | registered run: refused at the input (amendment 1); corrected run: replica `beta = 1/2`, the library fails with the replica's text (`det F = -1.0056526950039935e-1 at point 0`) and `the predictor backtracked to beta = 5e-1` | as registered | missed, then met after amendment 1 |
+| DC | registered run: met vacuously; corrected run: both fail with equal texts naming `det F = -1.880000000000006e-1` (the derived `-0.188`) | equal, inverted | met after amendment 1 |
+| NC-S3 | 2.5e-34; `share_l(phi, phi) = 1.0` | `<= 1e-20`; `>= 1 - 1e-10` | met |
+| SS | 0, 0 | `<= 1e-15` | met |
+| DG | `nu = 2`; values within 8.9e-16; SB | as registered | met |
+| CR8 | end points bit-equal; 18 converge; warm returns the root bit-equal | as registered | met |
+
+### The corner record (16^3)
+
+OB, PL, RT (18), WC and PB met: 3959 cold fails at `beta = 0` (I1), `1/16` (I2) and `1/8` (I4) with the probe's texts, and
+converges at `1/32, 1/4, 1/2, 1`. AS: the whole model fails at 11 of the 81 points (cold `det F` down to -8.5e4); its texts equal
+the probe's at `0, 1/16, 1/8`: met.
+
+DF and CT: cold 3959 fails at 7 of 81 points (lift `t = 0.9375`; `beta = 0, 3/64, 4/64, 5/64, 6/64, 8/64`); cold 3943 and 3958
+fail at 4 points (lift `t = 0.25`; `beta = 0.6875, 0.703, 0.719`); the other 15 elements never fail. The warm iteration and the
+continuation converge at every point in all 18 elements, with no root switch. The continued root keeps `det F >= 0.9498` in
+3959, the compatible part keeps `det F_c >= 0.516` (3959, point 7), and the continuity ratios stay `<= 0.364`.
+
+**Reading JR: a jump of the local solution.** The probe inversions of ADR 0688 come from the cold local Newton (`alpha = 0`)
+leaving the continuous branch of the modes. The branch itself does not invert: the continued solution exists and is admissible
+along the whole lift and predictor line.
+
+WL: the warm model is admissible at every `beta = j/16`. `nu = 0` and the driver's factor passes for `beta <= 9/16`; `nu = 1`
+from `10/16`. The slope is negative up to `15/16` and `+4.0e-3` at `1`.
+
+### The paths (16^3)
+
+| Id | Measured | Limit | Result |
+|---|---|---|---|
+| OB | equal | equal | met |
+| FB | F-bar converges: `R/mu` 0.31425746, `w_c` 0.05849960 at 0.9625; 0.31524232, 0.05867666 at 0.965625 | both | met |
+| IN-A | converges in 3 iterations (residuals 3.1e-13, 1.8e-4, 2.4e-8, 1.1e-14); `nu_k = 0, 1, 1, 1` | classified | converges |
+| EI* | residuals 6.6e-9 (`(K, I)`) and 9.8e-9 (pencil); one negative each (`nu* = 1`); SB | `<= 1e-8`; 1; holds | met |
+| EQ | `R*/mu` 0.32765165, `w*` 0.06039238; 3.94e-2 and 2.92e-2 against F-bar; the gaps at `u_c` 3.92e-2 and 2.91e-2 (change 1.3e-4, 9.6e-5) | `<= 0.15` | met |
+| BT-A | `beta_0 = 0.5`; fails with a singular tangent (pivot -1.935e4 at node 4768) | `0.5` | met |
+| IB-A | `beta_0 = 0.5`; converges in 6 iterations; `|u_IB - u*| / |u*|` 2.8e-15 | `0.5` | met |
+| BT-F | fails at step 10 after 5 halvings, singular tangent (the same pivot), note `beta = 5e-1` | classified | fails |
+| IN-F, IB-F | both solve to full load and agree: `R/mu` 0.33937627, `w_c` 0.06245308; 4.10e-2 and 3.04e-2 against ADR 0688 LS-F; `nu = 1` at full load | `<= 0.15` | met (the `nu = 0` agreement does not apply) |
+
+**Reading EQ: an unstable equilibrium on the branch of `u_c`.** The equilibrium at 0.965625 exists. It is 3.3e-7 from the
+predictor's first iterate, it keeps the F-bar gaps of `u_c` (continuous), and it has one negative eigenvalue. Its mode sits in
+element 3720 (8, 8, 14) under the punch corner and is 93 per cent hourglass. Rule L's path loses stability between 0.9625 and
+0.965625. The default refuses there because its factor demands a positive tangent; the elements do not invert. The backtracking
+alone cannot pass, because the half step is admissible but its tangent is indefinite. With the indefinite tangent the
+backtracking is not needed (IN-F takes full steps).
+
+### Default bits and static checks
+
+| Id | Result |
+|---|---|
+| B6 | `si_eas_hg_default_bits`, `si_eas_hg3_bits`, `si_eas_default_bits` pass; `baseline_hashes` 3 pass, 1 ignored: met |
+| S7 | `--lib` 15 pass; `si_eas_hg13`, `si_eas_hg12`, `si_eas_hg11`, `si_eas_hg10`, `sa_contact_lifted_f608`, `sa_contact_line_search_f684`, `sa_arclength` pass: met |
+| S6 | fmt clean; clippy `-D warnings` clean: met |
+| S8 | `docs_site` 2 pass (on 18b30f75 and again on the results commit): met |
+| S9 | `cargo build -p rcfd-fem --release --tests` passes at 2349e36e, 3cdef8ee, 5d958e8f (archive copies) and at 18b30f75 and the results commit (the runs): met |
+
+### Mutations (each on a scratch copy of 18b30f75, run once against `f774_fast_amended`)
+
+| Id | Caught by | Result |
+|---|---|---|
+| MU1 | NC-S3 (9.26e-6) | caught |
+| MU2 | SS (5.99e-4, 5.91e-4) | caught |
+| MU3 | INC (the indefinite iteration refuses) | caught |
+| MU4 | INC (the same) | caught |
+| MU5 | BTC (two rows) | caught |
+| MU6 | BTC (the library's attempt differs from the replica's) | caught |
+| MU7 | INC (the default no longer refuses) | caught |
+
+### Deviations
+
+- Amendment 1 (the column's committed displacement) was committed before the corrected run; the registered test is kept as the
+  ignored `f774_fast_known_miss`.
+- D4 and RF2 say "seven refusals", but D4's list has six, and the six were run. No refusal was dropped.
+- The two heavy records ran side by side with the registered fast run (separate processes, the same build).
+
+### Decision
+
+**partial**: every check is met, both questions are answered (JR: a jump; EQ: an unstable equilibrium with its inertia), and
+every mutation is caught, but BTC was met only after amendment 1.
+
+### Remaining questions
+
+1. **Whether either opt-in becomes a default** (open question 3). Options: (a) keep both off; (b) make `indefinite_tangent` the
+   default for the incompatible-modes rules; (c) keep it off and have the driver retry an increment with it after a refused
+   positive factor. Recommendation: (a) for now, since a default that walks onto an unstable branch without saying so changes
+   results; (c) as a follow-up if the maintainer wants the block to solve by default, with the inertia reported in the result.
+2. **Rule L's coefficient** (open question 2): still the maintainer's call. These results argue against changing it for this
+   block: the local modes are well posed along the path (JR), and the failure is a loss of stability of the global path.
+3. **Where the path loses stability**: between 0.9625 and 0.965625, located only to the increment. Recommendation: a follow-up
+   that brackets the load where `nu` changes and tells a limit point from a bifurcation (and checks F-bar at the same load),
+   before either opt-in becomes a default.
+4. **The cold local start**: the warm start (ADR 0660) avoids every jump on this path. Recommendation: no change, since the warm
+   start is already available as an opt-in.
+
+## For the lead: roadmap entries
+
+> Proposed status: partial.
+
+> F-774 (ADR 0694, 2026-11-17): the probe inversions at the punch corner come from the cold local Newton of rule L's modes jumping off a continuous, admissible branch (the warm and continued solutions converge at all 81 points in the 18 elements around 3959). The equilibrium at 0.965625 exists and is unstable (one negative eigenvalue, an hourglass mode in element 3720, 3.9 per cent from F-bar). The opt-in `NewtonOptions::indefinite_tangent` solves the 16^3 block to full load (R/mu 0.33937627, w_c 0.06245308, `nu = 1`); the opt-in `predictor_backtracking` alone does not (the half step is admissible, its tangent indefinite). Default bits unchanged; partial because the column check was met only after amendment 1.
+
+> Follow-up proposed: locate the loss of stability of rule L's 16^3 punch path between 0.9625 and 0.965625 (limit point or bifurcation, and F-bar's path at the same load); depends on F-774.
+
+> Follow-up proposed: a driver retry with `indefinite_tangent` after a refused positive factor, reporting the inertia, off by default; depends on F-774 and the stability follow-up above.
