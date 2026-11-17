@@ -216,3 +216,82 @@ written: all but seven. The seven, each explained, none changing a reading:
 * The code comment at CH 189 announces "symmetry about the centre line"; no assert checks it. Row W8 does not claim it.
 * Row W8's word "column" (see its remark) follows the code's variable name; a reader who takes it geometrically reads it as the
   cells across the height. Remaining question 1 of Addendum 2.
+
+## Addendum 2: the corrections, the checks, ADR 0715 compared, decision (2026-11-17)
+
+Written after Addendum 1 was committed (b3e80cf5) and after the addenda of ADRs 0706 and 0707 were committed (a6f15a74). Only
+then were the addenda of ADR 0715 (its lines 146 to 265) opened.
+
+**The corrections.** ADR 0706 has "Addendum 1: corrections of rows (ADR 0717, 2026-11-17)" with the corrected row H22 (its lines
+99 to 116); ADR 0707 has the same heading with the corrected row W1 (its lines 56 to 73). The reading found no disagreement among
+the 18 rows, so no other row is corrected and ADRs 0708, 0709 and 0710 are not edited.
+
+**Checks.**
+
+| # | check | limit | measured | met |
+|---|---|---|---|---|
+| K1 | the rows read | the 18 of the acceptance, each once | the 18, each once (Addendum 1) | yes |
+| K2 | agreement | at least 16 of 18 | **18 of 18** | yes |
+| K3 | disagreements listed with the line | all | none to list | yes |
+| K4 | disagreements, H22 and W1 corrected by addenda | all | H22 in ADR 0706, W1 in ADR 0707; no disagreement | yes |
+| K5 | text above each addendum unchanged | 0 deleted lines, first N lines byte-identical | `git diff --numstat 85313e53`: 0706 `18 0`, 0707 `18 0`; `f795-scratch/k5_check.sh`: the first 98 lines of 0706 and the first 55 of 0707 are identical to 85313e53 (`cmp`); the hunks are `@@ -98,0 +99,18 @@` and `@@ -55,0 +56,18 @@` | yes |
+| K6 | files changed | only `docs/adr/*.md` | `git diff --name-only 85313e53`: ADRs 0706, 0707 and 0717; no Rust file, script, golden or hash table | yes |
+| K7 | `cargo test -q --release -p rcfd-cli --test docs_site` | passes | 2 passed, 0 failed, on the tree of a6f15a74 (target directory `f795-scratch/target`, 4 jobs); the run on the text of this addendum is recorded at the end of it | yes |
+| K8 | `python -m unittest discover -s scripts` | 0 failures, 0 errors | Ran 138 tests, OK (skipped=4), on the tree of a6f15a74; the run on the text of this addendum is recorded at the end of it | yes |
+| K9 | tests whose `primary_adr` changed against the baseline | 0 | 0 of 7842 tests on the tree of a6f15a74; `coverage.primary` equal. Reported: 47 tests gain 0717 in `adrs` (the 31 tests of the seven test files and 16 unit tests of `rcfd-mesh/src/gen.rs` and `rcfd-api/src/workflow.rs`, the two source files this ADR cites); no other change of any `adrs` list | yes |
+| K10 | reported | none | by ADR: 0706 12 of 12, 0707 3 of 3, 0708 2 of 2, 0710 1 of 1. No reservation, so 18 of 18 either way. All 48 rows over the three readings: 46 read as agreeing with the files as written (9 by ADR 0705, 19 by ADR 0715, 18 here), 2 wrong and now corrected (H22, found by ADR 0715; W1, which ADR 0705 read as agreeing with a reservation and which is a disagreement under clause D) | - |
+
+**Negative controls.** N1: in Addendum 1; no reading changed. N2: on a scratch copy of ADR 0707 with `MixingLength` changed to
+`Mixinglength` in line 20, `k5_check.sh` reports "deleted or changed base lines 1, first 55 lines DIFFERENT"; the control fires.
+N3: none planted, as registered.
+
+**Deviations.**
+
+* N2 was made twice. The first mutation (a `sed` replacement of a word that line 20 does not contain) changed nothing, and the
+  check reported "identical" on what was an unmutated copy. That was a defective set-up of the control, not a result; the second
+  mutation is the one above. Nothing of the reading or of K5 on the real files was repeated.
+* No test was run for the reading (no row needed runtime output).
+
+**ADR 0715 next to this reading** (opened after the commits above). Its sample shares no row with the 18. On the two rows
+corrected here:
+
+* H22: ADR 0715 read it as a disagreement under clause B with the same lines (the test's 212 and 213), the same origin of the
+  words (the comment of line 202) and the same lookup (`setup` is the task of kind `validate`). My reading, made before opening
+  it, is the same. The corrected row of ADR 0706's addendum says what ADR 0715 proposed, with the first half spelled out.
+* W1: ADR 0715 (Addendum 2, outside its sample) calls "12-cell" for a 4 x 12 mesh a disagreement under clause D and notes that
+  "20-cell" means 20 across the channel. Same here; the corrected row gives both meshes as n x m with the cell totals.
+* ADR 0715's remaining question 3 gave an upper bound of about 22 percent on the share of rows of the H22 kind. The census finds
+  none among the 18: of the 48 rows, one takes a comment for an assert (H22) and one misstates a mesh (W1).
+
+**Not run, not covered.** The seven test files were not run. The two corrected rows were written by me and have not been read by
+another reader. The prose of the five ADRs outside the row tables was not judged.
+
+**Decision by the registered rule: done.** K1 and K3 to K9 hold, and K2 is 18 of 18 against at least 16 of 18. H22 and W1 are
+corrected as the acceptance words it, and the source supports both.
+
+**Remaining questions.**
+
+1. Row W8 (ADR 0707 line 43) calls the group of 4 cells compared for streamwise uniformity "a column"; it is the 4 cells of one
+   height along the flow (the code's variable is `col0`). The row agrees under the criterion. Options: (a) leave it, with the
+   remark of Addendum 1 as the record; (b) a one-line note in a later addendum of ADR 0707. Recommendation: (a). Taken on the
+   maintainer's standing instruction of 2026-11-11 (take the recommendation).
+2. The corrected rows H22 and W1 have only their writer's reading. Options: (a) the lead reads the two rows against
+   `crates/rcfd-api/tests/workflow.rs` lines 183 to 213 and `crates/rcfd-turb/tests/channel_wall_function.rs` lines 33 and 95 to
+   126 at the merge; (b) a follow-up item for a third reader; (c) leave. Recommendation: (a): two rows and about 60 lines do not
+   carry an item. Taken on the standing instruction; no follow-up is proposed.
+3. Two comments of the tests say more than the asserts: "fails the validate task" (`rcfd-api/tests/workflow.rs` line 202) and
+   "symmetry about the centre line" (`channel_wall_function.rs` line 189). Options: (a) leave: the ADR rows do not repeat either
+   any more, and existing tests are not edited; (b) a new test that asserts the id of the failed task (`setup`) and the symmetry
+   of the profile. Recommendation: (a). Taken on the standing instruction.
+
+**Runs on the text of this addendum** (a docs check of a second version of the files, not a registered run made twice): `docs_site`
+2 passed, 0 failed; the scripts' unit tests Ran 138, OK (skipped=4); the index against the baseline: 0 of 7842 primaries changed,
+47 tests gain 0717, no other change. This paragraph was added after those runs and is the only text they did not see.
+
+## For the lead: roadmap entries
+
+Proposed status and note of F-795:
+
+> Proposed status: done.
+
+> Follow-up of F-794 (ADR 0715, 2026-11-16). DONE. ADR 0717, 2026-11-17: a reader who wrote neither the rows, ADR 0705, ADR 0715 nor the tests read the 18 limit rows of ADRs 0706 to 0710 that ADR 0705 and ADR 0715 had not read (H5, H7, H9, H10, H11, H13, H14, H15, H17, H20, H21, H23, W6, W7, W8, C3, C6, T5) against the seven test files and the F-040 note, by the criterion of ADR 0715 adopted by reference (its clauses A to E and the recorded-values clause quoted) and registered with the limit and the addendum rule before any row was read. Result: 18 of 18 agree (limit 16 of 18 met); by ADR 12 of 12, 3 of 3, 2 of 2, 1 of 1; no reservation, no disagreement to list. A literal search of every number of the 18 limit cells in the test files found all but seven, each explained (`0..50`, the suffixed literals `1.15f64` and `8usize`, the derived 1e-9.8 of H5, the three recorded deviations of W7, which are in the F-040 note). Rows H22 and W1 were read against the code before their corrections and the code supports the acceptance: "Addendum 1: corrections of rows (ADR 0717, 2026-11-17)" of ADR 0706 gives the corrected H22 (the first failed task has a message containing `nonexistent`; the test does not assert which task it is; `rcfd-api/tests/workflow.rs` lines 212 and 213) and the same addendum of ADR 0707 the corrected W1 (a uniform 4 x 12 mesh, 48 cells, and a graded 3 x 20 mesh, 60 cells; `channel_wall_function.rs` lines 33 and 107 to 115). The text above each addendum is unchanged: 18 lines added and 0 deleted in each file, the first 98 and 55 lines byte-identical to 85313e53, and the check was shown to fire on a mutated copy. ADRs 0708 to 0710 needed no correction and are not edited. No Rust file, script, golden or hash table edited; docs_site passes (2 tests); the scripts' unit tests pass (138); the test-to-ADR index changes no primary ADR (47 tests gain 0717 as evidence). No test was needed for the reading. All 48 rows have now been read once: 46 agree as written, 2 were wrong and are corrected. The two corrected rows have only their writer's reading (the lead may read them at the merge: about 60 lines). Remark, not a disagreement: row W8 calls the 4 cells of one height along the flow "a column", the code's name. No follow-up is proposed.
