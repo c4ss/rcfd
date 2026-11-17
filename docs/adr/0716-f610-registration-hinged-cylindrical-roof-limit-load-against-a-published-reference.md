@@ -150,3 +150,74 @@ miss with a diagnosis) or a control misbehaves; **todo** if the reference could 
 
 - **Q1** (the thin roof, `t = 6.35`, one of Tables 9d to 9f, not read here) as a follow-up: proposed in the addendum only if the run gives
   reason; recommendation: a follow-up, as it exercises the arc length through a snap-back, which this roof does not.
+
+## Addendum 1 (2026-11-17): results
+
+Runs (release, `--nocapture --test-threads 1`, logs in `f610-scratch`): the reference and the tests committed at 328ada56,
+then the fast tests once (`run1-fast.log`, 19.6 s) and the registered record `b1_b2_roof_16_against_sze_2004` once with
+`--ignored` (`run1-record.log`, 22.6 s). No amendment; no limit changed; nothing rerun. Afterwards, as regressions:
+`rcfd-fem --lib` (15 passed), `sa_corot_shell_dyn` (5 passed, 10 ignored), `sa_arclength` (2 passed), `sa_arclength_sphere_f649`
+(1 passed, 2 ignored), `docs_site` of `rcfd-cli` (2 passed) (`checks.log`). `baseline_hashes` not run: no library line changed.
+
+| Id | Limit | Measured | Met |
+|---|---|---|---|
+| R0 `P_ref = 0.7421 x 3000` in `docs/reference-data.md` and the test | holds | `2226.3` N, Table 9a and Figure 9a of the paper read, URL and SHA-256 recorded | yes |
+| B1 Shell4 `16 x 16` | `<= 2e-2` | `1.77e-3` (`2222.37` N, below) | yes |
+| B2 Shell3 `16 x 16` | `<= 2e-2` | `2.27e-3` (`2221.26` N, below) | yes |
+| B3 the four traces | holds | stopped by the rule after 208 or 209 points, no halving, a negative pivot after the limit, vertex fit on each | yes |
+| B5 Shell4 `8 x 8`, Shell3 `8 x 8` (fast) | each `<= 2e-2` | `1.22e-3` (`2223.58` N), `3.23e-3` (`2219.10` N) | yes |
+| H1 the Hex20 record kept | holds | `sa_corot_shell_dyn.rs`, ADR 0522 and `crates/rcfd-fem/src` unchanged against 80281ea9 (empty diff); values and ratios in `docs/reference-data.md` | yes |
+| NC1 `E x 1.05` | `> 2e-2`; `<= 1e-3` | `4.87e-2`; `1.30e-7` | yes |
+| NC2 clamped straight edges | `> 2e-2` | `1.75` (`6120` N at the cap of 300 points, no limit point reached, `w = 20.0`) | yes |
+
+Records. Against the vertex value `2231.2` N (arithmetic 1): Shell4 `16` `-3.97e-3`, Shell3 `16` `-4.47e-3`. The apex
+deflection at the limit: Shell4 `16` `10.862`, Shell3 `16` `10.831` (against the tabulated point's `11.293`: `-3.8e-2`, `-4.1e-2`;
+against the vertex `10.876` of the tabulated points: `-1.3e-3`, `-4.2e-3`; the tabulated point is past the peak of its own
+path). The rising branch at the seven tabulated loads, the deflection relative to Table 9a: Shell4 `16` from `-1.8e-3` to
+`+1.0e-2`, Shell3 `16` from `-6.4e-3` to `+8.5e-3`, the largest at `P/Pmax = 0.7246` next to the limit, where the slope is
+smallest; Shell4 `8` and Shell3 `8` within `1.1e-2` and `2.0e-2`. Wall times: Shell4 `16` 12.3 s, Shell3 `16` 10.3 s, each
+`8 x 8` about 3.7 s.
+
+### Mutations (scratch copies of 328ada56 by `git archive`, one at a time, the fast tests; `f610-scratch/mutate.py`, `mutations.log`, `mut-MU*.log`)
+
+| Id | Caught by |
+|---|---|
+| MU1 `Pmax` 3090 | R0, B5 (`3.03e-2`, `3.23e-2`), NC1 (`1.82e-2`, not above `2e-2`) |
+| MU2 `t = 12.0` | B5 (`1.02e-1`, `1.04e-1`) |
+| MU3 hinge rotations held | B5 (`1.75`, `1.72`), B3, NC1 |
+| MU4 `arclength.rs` root reversed | B5 and the controls (the trace fails) |
+| MU5 vertex rule disabled | not caught (B5 `1.23e-3`, `3.24e-3`), as registered |
+
+Four of the four mutations expected to be caught were caught; MU5 was not, as registered. Deviation: the first MU5 run reused
+the library compiled for MU4 (the archive restored `arclength.rs` with its commit time, older than the mutated build, so cargo
+did not rebuild it); that log is kept as `mut-MU5-stale-lib.log` and MU5 was run again with fresh times (`tar -m`,
+`mutations-mu5-rerun.log`). MU1 to MU4 are unaffected (each changed a file after the previous build).
+
+### Deviations
+
+- None in the registered checks. The mutation set-up defect above (MU5 run twice, the first with a stale library).
+- fmt (`cargo fmt -p rcfd-fem --check`) and clippy (`-p rcfd-fem --all-targets -D warnings`) clean.
+
+### Decision
+
+**done** by the registered rule: R0, B1, B2, B3, B5 and H1 met, NC1 and NC2 behave as registered. Clauses: (c1) met, the paper
+itself read, Table 9a; (c2) met, Shell4 `1.8e-3` and Shell3 `2.3e-3` below the published limit load at `16 x 16`, and within
+`3.3e-3` at `8 x 8`; (c3) met, the Hex20 sequence kept unedited and entered beside the published value (`-2.64e-2` at
+`n = 16`, falling with refinement). The result agrees with what ADR 0522 recorded (disclosed in the registration).
+
+### Remaining questions (recommendations for the lead)
+
+- **Q1** (the thin roof, `t = 6.35`, with snap-back): a follow-up that traces it through the snap-back against the paper's
+  table. Recommendation: propose it (below); it exercises the arc length where the load and the deflection both reverse, which
+  the `12.7` roof does not.
+- **Q2** (the record status of ADR 0522 A1): its known miss stays as it is (a defect of the registered solid reference); the
+  roof clause of F-585 is now met against the published value by this ADR. Recommendation: the lead may move F-585 to done
+  with a note pointing here, if the roadmap counts a clause met by a follow-up; otherwise leave F-585 partial.
+
+## For the lead: roadmap entries
+
+> Proposed status: done
+
+> Structural solver, advanced tier. Follow-up of F-585 (ADR 0522). DONE. ADR 0716, 2026-11-17: test-only (no library line changed). The published limit load of the hinged cylindrical roof (R 2540, edges 508, 0.1 rad, t 12.7, E 3102.75, nu 0.3, central point load) read from Sze, Liu and Lo (2004), Table 9a (the authors' copy, HKU Scholars Hub; the paper itself, not a secondary source): the largest tabulated P/Pmax before the snap, 0.7421, Pmax 3000, so 2226.3 N, recorded in docs/reference-data.md with its table, figure and URL (the paper's reference is itself a 16 x 16 S4R Riks solution). The Shell4 and Shell3 quarter models of ADR 0522 traced through the limit point by arc length (the extraction of ADR 0522 D5): Shell4 16 x 16 2222.4 N (1.8e-3 below), Shell3 16 x 16 2221.3 N (2.3e-3 below), 8 x 8 within 3.3e-3 (limit 2 percent); the rising branch within 1 percent of the table at 16 x 16. The Hex20 sequence of ADR 0522 kept unedited as the record of the singular hinge (2213.9, 2184.5, 2167.5 N at n 4, 8, 16, falling away from the published value). Negative controls: E x 1.05 gives 4.9e-2 and scales the limit load to 1.3e-7; clamped edges give no limit point. Four of four expected mutations caught.
+
+> Follow-up proposed: Hinged cylindrical roof of thickness 6.35 through its snap-back against the published table. Deps F-610. Acceptance: Every limit not stated here is registered in the ADR before the run. The tabulated path of the isotropic hinged cylindrical roof of Sze, Liu and Lo (2004) for t = 6.35 recorded in docs/reference-data.md from the paper; the Shell4 and Shell3 quarter models traced by arc length through its limit points and its snap-back, the two limit loads within 2 percent of the tabulated values and the deflection of the rising branch at the tabulated loads within a registered limit.
