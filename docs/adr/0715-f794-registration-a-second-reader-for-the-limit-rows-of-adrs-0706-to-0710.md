@@ -234,8 +234,9 @@ reservation; the same row says "20-cell mesh ... (3 x 20 cells)" for the graded 
 the channel, and the row is unclear, the limit 1e-13 right. The first reader's criterion had no mesh clause. This does not change
 R2: W1 is not in the sample.
 
-**R5.** `cargo test -q --release -p rcfd-cli --test docs_site` (target directory `f794-scratch/target`, 4 jobs), run once after
-Addendum 1: 2 passed, 0 failed. Met. Nothing else was run; no fmt or clippy because no crate was touched.
+**R5.** `cargo test -q --release -p rcfd-cli --test docs_site` (target directory `f794-scratch/target`, 4 jobs), run after
+Addendum 1 and again on the text of Addendum 2 (a docs check of two versions of the file, not a registered run made twice): 2 passed,
+0 failed both times. Met. Nothing else was run; no fmt or clippy because no crate was touched.
 
 **Decision by the registered rule: done.** R1, R3 and R5 hold and R2 is 19 of 20 (95 percent) against at least 18 of 20.
 
