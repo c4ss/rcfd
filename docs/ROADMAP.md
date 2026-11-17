@@ -14873,13 +14873,29 @@ fixed by the item's registration ADR before any code.
     0658 (F-739, 2026-11-16): the combination reported by ADR 0655 is registered and checked in F-739: it passes the
     eight distorted meshes of ADR 0649 (DB4 at 7.5 and 2.9 per cent, positive definite) and one of three further seeds
     of the 8^3 block at 0.25 h; the mutations of the backtracking that escaped ADR 0655 are all caught there.
-- [ ] **F-733** Basin restart on a second multimodal function and on the fan
+- [~] **F-733** Basin restart on a second multimodal function and on the fan
   - depends on: F-715
   - acceptance: on Shekel 10 or a registered second multimodal function, and on the F-698 R1 fan set-up, the restart of
     ADR 0651 with its registered tau and rho reaches the target on at least as many seeds as plain expected improvement,
     a check decides whether the fresh process of the restart is needed (the surviving mutation R2), and a hash of the
     default proposal points of the F-698 O1 run pins the default bits.
-  - note: Follow-up of F-715 (ADR 0651, 2026-11-16).
+  - note: Follow-up of F-715 (ADR 0651, 2026-11-16). ADR 0673, 2026-11-17. PARTIAL (library, opt-in). The basin restart
+    of ADR 0651 with its registered tau 1e-4 and rho 2 was run on a second multimodal function and on the fan. On Shekel
+    10 (n0 10, budget 150, seeds 1 to 20) it reached the minimum within 1 percent on 17 of 20 seeds against 18 of 20 for
+    plain expected improvement: registered limit missed, kept as a known-miss record. On the seeds it misses (two of
+    them solved by plain expected improvement), the restart fires at evaluations 44 to 53 from a local basin and its 91
+    to 103 picks never come near the narrow global basin that plain expected improvement still finds later, so a small
+    acquisition does not mean plain expected improvement is stuck. On the F-698 R1 fan set-up (seeds 1 to 10, 50
+    evaluations) every run is bit-equal to plain expected improvement (10 of 10 within 1 percent of the grid optimum,
+    F-698 failed counts reproduced exactly): the restart never fires, because the fitted length scales (2 to 10 in the
+    unit cube) put the whole box inside the basin. BayesOptions::restart gains Restart::step_model (default false),
+    which scores the restart by the step's own process; on Shekel 10 it does 11 of 20 against 17 for the fresh process,
+    so the fresh process is needed and the surviving F-715 mutation R2 is now caught. A hash of the 1200 default O1
+    points (Branin, seeds 1 to 20) equals the hash computed on the base 5f501379 and differs with the restart on. Shekel
+    10 minimum (from memory) confirmed numerically at -10.536443. Six of six mutations caught; a fast check that made no
+    restart pick within 40 evaluations was corrected under a recorded amendment. Not covered: a trigger that detects
+    repetition rather than a small acquisition, a multimodal fan objective, tau and rho beyond Hartmann 6. Follow-up
+    F-758 (A repetition trigger for the basin restart).
 - [~] **F-734** Fidelity driver R3: the leave-one-out standard deviation through the Cholesky factor
   - depends on: F-718
   - acceptance: the predictive standard deviation of R3 is evaluated without the cancellation of a^T C a, it equals
@@ -15287,3 +15303,11 @@ fixed by the item's registration ADR before any code.
     PISO run are each within a registered limit of the twin on every step where the run without the opt-in is not. Every
     limit not stated here is registered in the ADR before the run.
   - note: Follow-up of F-754 (ADR 0675, 2026-11-16).
+- [ ] **F-758** A repetition trigger for the basin restart
+  - depends on: F-733
+  - acceptance: with a trigger registered before the run that fires when the recent picks of plain expected improvement
+    stay in the incumbent's basin (instead of on the size of the acquisition), the restart reaches the target on at
+    least as many seeds as plain expected improvement on both Hartmann 6 (n0 30, budget 200, seeds 1 to 10) and Shekel
+    10 (n0 10, budget 150, seeds 1 to 20), every F-715 and F-733 check keeps its result, and the O1 points hash of ADR
+    0673 is unchanged.
+  - note: Follow-up of F-733 (ADR 0673, 2026-11-16).
