@@ -352,3 +352,27 @@ not of a registered measure: nothing was measured, and the heavy record was not 
 function changes. The registered test becomes the ignored record `f783_fast_known_miss` (its set-up unchanged, the panic in its
 ignore text); the corrected test `f783_fast_amended` is run once. The planned mutations are run against `f783_fast_amended`
 (the registered test measures nothing). The decision can be at best **partial** (a check met only after an amendment).
+
+## Amendment 2 (2026-11-17, written and committed before the corrected heavy run)
+
+**The defect.** The registered heavy record (on 158385e5 with amendment 1, `f783-scratch/run3-heavy.log`, 79 s) met OB, HS1 to
+HS4 and HM (`mu_1(lambda_f) = 873.67`, `mu_1(A) = 2.554`, `mu_1^sym(lt) = -3271.88`, `sigma(phi_f) = -1` to `2e-15`, `|phi_f .
+phi_A| = 0.998`, `lambda_c^ = 0.964900029`), but the forced ladder of D2 missed: from its first level (`a_0 = 2e-4`, `eta =
+0.175`) the fixed-load Newton converged to an equilibrium with the amplitude of the **opposite** sign (`a_+ = -5.44e-5`), the
+amplitudes then grew like `eta^(1/4)`, the sixth level failed (the internal modes of element 3720 did not converge), `k_0 =
+2180` against `mu_1 = 873.7` (HF `1.50 > 1e-3`), no level in the window, CF "undecided", so no switch (HW missed). A probe after
+the run on a scratch copy (`f783-scratch/probe-forced.log`, diagnosis only, not a registered result) measured the internal
+force along `phi_f` at `u_s + t phi_f`: the secant stiffness is `873.7` at `t = 1e-8`, `881.4` at `1e-6`, `943` at `3e-6`, `1642`
+at `1e-5` (a frozen cubic coefficient about `7.7e12`), and the forced solve from `u_s` gives `a / a_target = 1.0000`, `1.0013`,
+`1.281` at the targets `1e-7`, `1e-6`, `1e-5` and fails at `5e-5`: the amplitude scale of the reduced equation is `~3e-5`, not
+the `7e-3` of arithmetic (ii) (my dimensional estimate of `beta` was low by five orders: the hourglass mode of rule L's element
+is far stiffer in its cubic term than the continuum estimate). The registered ladder began above the fold of the forced path
+(`eta_max / mu ~ 1e-5`), so its first Newton solve could not find the near equilibrium. A defect of the set-up's parameter
+`a_0`, from a wrong estimate, not of a measure.
+
+**The correction.** The heavy record's ladder starts at `a_0 = 1e-7` (ten times the worst-case amplitude noise `1e-8` of
+arithmetic (iii)) and has 13 levels (`a_0 2^12 = 4.1e-4`), ending at the first failure as registered; it then spans the window
+of D2 wherever the amplitude scale lies between about `1e-6` and `4e-4`, without a prior value of `beta`. Everything else of
+D2 to D4 and every limit is unchanged; the fast test (whose toys keep `a_0 = 2e-4`, 9 levels) is unchanged. The registered heavy
+test becomes the ignored record `f783_nh16_branch_heavy_known_miss` (unchanged, the measured numbers in its ignore text); the
+corrected `f783_nh16_branch_heavy_amended` is run once. The decision can be at best **partial**.
