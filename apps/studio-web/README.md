@@ -338,31 +338,37 @@ fallback, a loss, is named above the canvas ("Drawn by WebGL 2 (fallback: <why>)
 The field viewport's tool row has one pictogram per derived picture, named in its accessible name and tooltip (G22):
 cut plane, vectors, iso-surface, streamlines (`src/renderer/field/derived.ts`, `DerivedControls.tsx`). One that does
 not apply is a dashed chip that says why in its accessible name and in the tooltip its focus shows (G6), never as
-standing text. What the engine computes was read first (ADR 0801, addendum F-809), and the tolerances were registered
-there before the code (G3):
+standing text.
 
-- **Cut plane**: rcfd-render's own cut (`View::clip`, only points with `n . p <= d` are drawn; the crate was removed by
-  F-838 and the rule kept), on the GPU for the
-  surface, the mesh grid and the arrows (`maskNode` of each TSL material), and in the pick, so the readout names what is
-  seen. A plane normal to x, y or z: axis, position (a slider in mesh coordinates; the store gives no length unit) and
-  the side kept, in a small panel in the frame's top left corner. Unavailable on a 2D case (one cell layer, the
-  engine's own test of `render_field`).
-- **Vectors**: the arrows of `render.png` (`rcfd_post::render::overlay_vectors`: a 24-per-axis lattice, the largest
-  arrow 0.8 of a step, the head 0.3 back and half that out) carried to the boundary surface: one arrow per lattice bin,
-  at the centroid of the first surface triangle in it, carrying its owner cell's stored components unchanged (on a 2D
-  case the in-plane components, on the face the view looks at). Deep ink. The components come through the data door
-  for the shown snapshot, with the view's tag.
-- **Iso-surface, streamlines**: unavailable everywhere: the engine has no entry point for either on a stored field, and
-  the Studio does not draw a picture it cannot check against the engine.
-- Tests: `tests/unit/field-derived.spec.ts` (the 2D verdict against `render_field` on the quick-start and axial-fan
-  runs; availability and reasons; the cut rule and the arrows' constants read from the Rust source; every arrow against
-  an independent recomputation, components bit for bit the Rust reader's; the pictograms on the grid) and
-  `tests/e2e/field-derived.spec.ts` (the packaged Studio: reasons by role and accessible name, tooltips on keyboard focus;
-  the cut plane pixel by pixel on the tiny and 1e5-cell boxes; the arrows change only pixels to deep ink and their number
-  is the recomputation's; keyboard; screenshots at 1440 x 900 in `test-results-visual/f809/`).
-- Missing in the engine (no Rust change here): an iso-surface of a stored cell field, streamlines, and a store-based
-  slice, sample or vector picture of a 3D case (`render_field` refuses 3D; `render.png`, `field.sample` and
-  `render_image` work on live sessions only).
+Every derived picture is the engine's (ADR 0738): main runs `rcfd post derive` (the library of the MCP tool
+`derive_picture`) on the shown snapshot of a local store inside a data root (`src/main/data/derive.ts`, the data port's
+`derive` operation, `window.studioDerived`), and the viewport draws the GLB it writes as it is (`src/renderer/field/glb.ts`).
+rcfd is `RCFD_STUDIO_RCFD`, else the one beside `RCFD_STUDIO_MCP`, else the engine the Studio ships with. A store read
+through the service has no derived pictures (said in the reason).
+
+- **Cut plane**: the engine's cut of the boundary surface (`cut_surface`; the rule of the removed rcfd-render, `n . p
+  <= d`), drawn in place of the surface, each piece coloured by the value of the surface triangle it was cut from; the
+  readout names that triangle. The mesh grid keeps the same rule as a mask on the GPU. A plane normal to x, y or z:
+  axis, position (a slider in mesh coordinates, m) and the side kept, in a panel in the frame's top left corner.
+  Unavailable on a 2D case (one cell layer, the engine's own test of `render_field`).
+- **Vectors**: the engine's arrows of `render.png`'s rule (a 24-per-axis lattice, the largest arrow 0.8 of a step, the
+  head 0.3 back and half that out) carried to the boundary surface, carrying the owner cell's stored components
+  unchanged (on a 2D case the in-plane components, on the face the view looks at). Deep ink.
+- **Iso-surface**: of the shown stored cell field at a level set in its panel (within the shown range), drawn in place
+  of the surface in the colour of its level. Marching tetrahedra on the cell field, values at points and face centres
+  the mean of the neighbouring cells. Unavailable on a 2D case and for a difference of two runs.
+- **Streamlines**: from a seed line through the middle of the domain (the mid-plane of a 2D case) along x, y or z, with
+  2 to 60 seeds, both directions, at most 2 000 RK4 steps each (velocity linear on each cell's tetrahedra). Deep ink,
+  drawn over the surface.
+- The frame names what it draws, once drawn on the GPU: `data-cut`, `data-arrows`, `data-iso`, `data-streamlines`.
+- Tests: `tests/unit/derive-bridge.spec.ts` (the request, the flags, the GLB is the CLI's file, refusals and the
+  engine's codes), `tests/unit/field-derived.spec.ts` (availability and reasons; the cut rule and the arrows' constants
+  read from the Rust source; the Studio's own arrows against a recomputation; G2: the engine's cut and arrows are the
+  Studio's T2 and T3 sets; the engine's iso-surface and streamlines read back) and `tests/e2e/field-derived.spec.ts`
+  (the packaged Studio: reasons, tooltips on keyboard focus; the cut plane pixel by pixel on the tiny and 1e5-cell
+  boxes; the arrows change only pixels to deep ink and their number is the recomputation's; the iso-surface's colour and
+  level; the streamlines' ink and seeds; keyboard; screenshots at 1440 x 900 in `test-results-visual/f809/`).
+- Not in the engine yet: `render_field` with an axis, slice and vectors of a 3D store, and `rcfd post render`.
 
 ## Run control (F-807)
 

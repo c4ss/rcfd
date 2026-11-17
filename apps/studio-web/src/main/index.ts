@@ -71,6 +71,7 @@ import { RecentStore } from './project/recent.js';
 import { PortBridge, type PortLike } from './service/bridge.js';
 import { ServiceClient } from './service/client.js';
 import { serviceConfig } from './service/config.js';
+import { deriveEngine } from './data/derive.js';
 import { DataPorts } from './data/port.js';
 import { DataRoots } from './data/roots.js';
 import { StudioData } from './data/studio-data.js';
@@ -110,7 +111,8 @@ const serviceSetup = serviceConfig(process.env, path.join(app.getPath('userData'
 const service = new ServiceClient(serviceSetup);
 /** Bulk field data (F-804): R2 reads local stores inside the data roots, R1 goes through the service (src/main/data/). */
 const roots = DataRoots.fromEnv(process.env);
-const data = new StudioData(service, roots);
+// ADR 0738: the engine's rcfd makes the derived pictures of a local store (src/main/data/derive.ts)
+const data = new StudioData(service, roots, undefined, deriveEngine(process.env, isFile, bundled));
 const dataPorts = new DataPorts(data);
 /** P1 and P2 measurement only (scripts/measure-service.mjs): the client, reachable from Playwright's main-process evaluate. */
 if (process.env['RCFD_STUDIO_BENCH'] === '1') (globalThis as { rcfdStudioBench?: unknown }).rcfdStudioBench = { service };

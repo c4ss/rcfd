@@ -5,10 +5,11 @@
 //
 // - T1: the Studio's 2D verdict equals the engine's (`render_field` of the project server draws 2D cases only and
 //   refuses a 3D one), on the quick-start and axial-fan runs;
-// - availability: a cut plane on a 2D case, an iso-surface and streamlines everywhere, and vectors without their
-//   components are unavailable, each with its reason in words (G6); the rest are available;
+// - availability: a cut plane and an iso-surface on a 2D case, vectors and streamlines without their components, and
+//   every derived picture of a store read through the service (the engine makes them of a local store, ADR 0738) are
+//   unavailable, each with its reason in words (G6); the rest are available;
 // - T2: the cut-plane rule of the removed rcfd-render (n . p <= d; F-838 removed the crate and the check of its shader
-//   text), and the Studio's mirror of it;
+//   text), and the Studio's statement of it (the mesh grid's mask; the cut surface is the engine's, G2 below);
 // - T3: the constants of overlay_vectors and render.png read from the Rust source; every arrow against an independent
 //   f64 recomputation (the same arrows, each point within 2^-20 of the largest extent) and the stored components bit
 //   for bit (the Rust reader's reference bytes);
@@ -45,6 +46,7 @@ import type { SurfaceArrays } from '../../src/renderer/field/surface.js';
 import { findBench, generate, NO_BENCH, refBytes, storeDir } from '../support/f447.js';
 import { findMcp, NO_MCP, repoRoot } from '../support/project.js';
 import { findRcfd, NO_RCFD } from '../support/rcfd.js';
+import { cutOf, isoOf, linesOf, readGlb as readStudioGlb } from '../../src/renderer/field/glb.js';
 import { execFileSync } from 'node:child_process';
 
 test.describe.configure({ mode: 'serial' });
@@ -138,23 +140,30 @@ test('T1: the f447 boxes are 3D', () => {
 
 // ---- availability (G6) -----------------------------------------------------------------------------------------------
 
-test('a cut plane on a 2D case, iso-surfaces and streamlines everywhere, and vectors without components are unavailable, with the reason', () => {
+test('a cut plane and an iso-surface on a 2D case, vectors and streamlines without components, and the service route are unavailable, with the reason', () => {
   const qs = open(exampleRun('quick-start').dir);
   const layers = meshLayers(qs.surface, qs.nCells);
   expect(layers.twoD).toBe(true);
-  const ctx2 = { layers, fields: qs.fields, nCells: qs.nCells };
+  const ctx2 = { layers, fields: qs.fields, nCells: qs.nCells, route: 'local' as const, storedField: 'ux' };
   const cut2 = availability('cut', ctx2);
   expect(cut2.ok).toBe(false);
   if (!cut2.ok) expect(cut2.reason).toMatch(/2D case \(one cell layer, thinnest along z\)/);
-  // the quick-start store holds ux, uy, p: the in-plane arrows apply
+  // the quick-start store holds ux, uy, p: the in-plane arrows and the streamlines (ADR 0738) apply
   expect(availability('vectors', ctx2)).toEqual({ ok: true });
-  for (const k of ['iso', 'streamlines'] as const) {
-    const a = availability(k, ctx2);
-    expect(a.ok, k).toBe(false);
-    if (!a.ok) expect(a.reason, k).toMatch(/The engine has no/);
-  }
+  expect(availability('streamlines', ctx2)).toEqual({ ok: true });
   const iso2 = availability('iso', ctx2);
-  if (!iso2.ok) expect(iso2.reason).toMatch(/2D case/);
+  expect(iso2.ok).toBe(false);
+  if (!iso2.ok) expect(iso2.reason).toBe('A 2D case (one cell layer) has no volume for an iso-surface.');
+  // without uy the streamlines say which component is missing too
+  const noUyS = availability('streamlines', { ...ctx2, fields: qs.fields.filter((f) => f.name !== 'uy') });
+  if (noUyS.ok) throw new Error('streamlines without uy');
+  expect(noUyS.reason).toMatch(/no cell field uy; streamlines of a 2D case need ux, uy/);
+  // a store read through the service: the engine makes derived pictures of local stores only
+  for (const k of ['vectors', 'streamlines'] as const) {
+    const a = availability(k, { ...ctx2, route: 'service' });
+    if (a.ok) throw new Error(`${k} on the service route`);
+    expect(a.reason, k).toMatch(/^The engine makes derived pictures of a store on this machine \(rcfd post derive\)/);
+  }
   // without uy (a store of p only) the arrows say which component is missing
   const noUy = availability('vectors', { ...ctx2, fields: qs.fields.filter((f) => f.name !== 'uy') });
   expect(noUy.ok).toBe(false);
@@ -166,14 +175,20 @@ test('a cut plane on a 2D case, iso-surfaces and streamlines everywhere, and vec
 test('on a 3D store the cut plane and the arrows apply; without uz the arrows do not', () => {
   test.skip(!bench, NO_BENCH);
   const b = boxes['tiny']!;
-  const ctx = { layers: meshLayers(b.surface, b.nCells), fields: b.fields, nCells: b.nCells };
+  const ctx = { layers: meshLayers(b.surface, b.nCells), fields: b.fields, nCells: b.nCells, route: 'local' as const, storedField: 'p' };
   expect(availability('cut', ctx)).toEqual({ ok: true });
   expect(availability('vectors', ctx)).toEqual({ ok: true });
   const noUz = availability('vectors', { ...ctx, fields: b.fields.filter((f) => f.name !== 'uz') });
   expect(noUz.ok).toBe(false);
   if (!noUz.ok) expect(noUz.reason).toMatch(/no cell field uz.*arrows of a 3D case need ux, uy, uz/);
-  expect(availability('iso', ctx).ok).toBe(false);
-  expect(availability('streamlines', ctx).ok).toBe(false);
+  // ADR 0738: the engine's iso-surface and streamlines apply; an iso-surface of values that are not one stored field
+  // (a difference of two runs) does not, nor any picture on the service route
+  expect(availability('iso', ctx)).toEqual({ ok: true });
+  expect(availability('streamlines', ctx)).toEqual({ ok: true });
+  const diff = availability('iso', { ...ctx, storedField: null });
+  if (diff.ok) throw new Error('an iso-surface of a difference');
+  expect(diff.reason).toMatch(/not one stored cell field/);
+  for (const k of DERIVED_KINDS) expect(availability(k, { ...ctx, route: 'service' }).ok, k).toBe(false);
 });
 
 // ---- T2 ------------------------------------------------------------------------------------------------------------
@@ -350,7 +365,7 @@ interface GlbPrimitive {
 }
 
 /** The primitives of a GLB the engine wrote (non-indexed, f32 and u32 accessors only, as rcfd_post::picture writes). */
-function readGlb(bytes: Buffer): { asset: Record<string, unknown>; primitives: GlbPrimitive[] } {
+function readGlb(bytes: Buffer): { asset: Record<string, unknown>; primitives: GlbPrimitive[]; bytes: Buffer } {
   const u32 = (o: number) => bytes.readUInt32LE(o);
   expect(u32(0)).toBe(0x46546c67);
   const jsonLen = u32(12);
@@ -372,7 +387,7 @@ function readGlb(bytes: Buffer): { asset: Record<string, unknown>; primitives: G
       primitives.push({ mode: p.mode, attributes, extras: p.extras ?? {} });
     }
   }
-  return { asset: doc.asset, primitives };
+  return { asset: doc.asset, primitives, bytes };
 }
 
 const rcfd = findRcfd();
@@ -400,6 +415,11 @@ test('G2: the engine’s cut_surface is the Studio’s surface, cut (T2) and arr
     const g = vectorGlyphs(s, layers.twoD ? comps.map((c, k) => (k === layers.thin ? null : c)) : comps, layers, o.nCells);
     // no cut: every surface triangle, its corners and cell exactly; the arrows within 2^-20 of the largest extent
     const whole = engineCut(dir, []);
+    // the reader the viewport uses (src/renderer/field/glb.ts) reads the same arrays
+    const viewportCut = cutOf(readStudioGlb(whole.bytes.buffer.slice(whole.bytes.byteOffset, whole.bytes.byteOffset + whole.bytes.byteLength) as ArrayBuffer));
+    expect(viewportCut.arrowCount, project).toBe(g.cells.length);
+    expect(viewportCut.source.length, project).toBe(s.triangles.length / 3);
+    expect(Buffer.from(viewportCut.arrows!.buffer).equals(Buffer.from((whole.primitives.find((p) => p.mode === 1)!.attributes['POSITION'] as Float32Array).buffer)), project).toBe(true);
     expect(whole.asset['extras'] && (whole.asset['extras'] as Record<string, unknown>)['length_unit'], project).toBe('m');
     const tri = whole.primitives.find((p) => p.mode === 4)!;
     const nt = s.triangles.length / 3;
@@ -451,5 +471,64 @@ test('G2: the engine’s cut_surface is the Studio’s surface, cut (T2) and arr
       expect(bad, `${project} ${keep}: no triangle T2 drops, no corner outside, the whole ones unchanged`).toEqual({ dropped: 0, outside: 0, moved: 0 });
       expect([...whole3].sort((x, y) => x - y), `${project} ${keep}: the triangles kept whole`).toEqual([...kept]);
     }
+  }
+});
+
+test('ADR 0738: the viewport reads the engine’s iso-surface and streamlines of the axial-fan passage (3D) and the quick-start cavity (2D)', () => {
+  test.skip(rcfd === null, NO_RCFD);
+  test.setTimeout(120_000);
+  const scratch = mkdtempSync(path.join(os.tmpdir(), 'rcfd-adr0738-iso-'));
+  try {
+    const run = (dir: string, flags: string[]) => {
+      const out = path.join(scratch, 'p.glb');
+      const reply = JSON.parse(execFileSync(rcfd!, ['post', 'derive', dir, ...flags, '--out', out]).toString('utf8'));
+      const b = readFileSync(out);
+      return { reply, glb: readStudioGlb(b.buffer.slice(b.byteOffset, b.byteOffset + b.byteLength) as ArrayBuffer) };
+    };
+    const fan = exampleRun('axial-fan').dir;
+    const o = open(fan);
+    const p = o.field('p');
+    let lo = Infinity;
+    let hi = -Infinity;
+    for (const v of p) {
+      lo = Math.min(lo, v);
+      hi = Math.max(hi, v);
+    }
+    const level = Math.fround(0.5 * (lo + hi));
+    const iso = run(fan, ['--kind', 'iso', '--field', 'p', '--level', String(level)]);
+    const surf = isoOf(iso.glb);
+    expect(surf.triangles, 'the engine’s count').toBe(iso.reply.triangles);
+    expect(surf.triangles).toBeGreaterThan(0);
+    // every corner's value is the level (no colour field), and every corner is inside the stored mesh's box
+    const layers = meshLayers(o.surface, o.nCells);
+    // (counted, not expected one by one: some 10^4 triangles)
+    let off = 0;
+    for (let i = 0; i < surf.values.length; i++) if (surf.values[i] !== level) off++;
+    let outside = 0;
+    for (let i = 0; i < surf.positions.length; i++) {
+      const k = i % 3;
+      if (!(surf.positions[i]! >= layers.min[k]! - 1e-6 && surf.positions[i]! <= layers.max[k]! + 1e-6)) outside++;
+    }
+    expect({ off, outside }).toEqual({ off: 0, outside: 0 });
+    // streamlines of the 2D cavity from the viewport's rake: one line per seed and direction, each segment joined
+    const qs = exampleRun('quick-start').dir;
+    const ql = meshLayers(open(qs).surface, open(qs).nCells);
+    const rake = { axis: 1 as const, n: 5 };
+    const ends = [0, 1, 2].map((k) => 0.5 * (ql.min[k]! + ql.max[k]!));
+    const p0 = [...ends];
+    const p1 = [...ends];
+    p0[1] = ql.min[1]! + 0.02 * (ql.max[1]! - ql.min[1]!);
+    p1[1] = ql.max[1]! - 0.02 * (ql.max[1]! - ql.min[1]!);
+    const st = run(qs, ['--kind', 'streamlines', '--rake', [...p0, ...p1, rake.n].join(','), '--direction', 'both', '--max-steps', '2000']);
+    const lines = linesOf(st.glb);
+    expect(lines.lines).toBe(st.reply.lines_drawn);
+    expect(lines.lines).toBeLessThanOrEqual(2 * rake.n);
+    expect(lines.segments.length % 6).toBe(0);
+    expect(lines.segments.length).toBeGreaterThan(0);
+    let offPlane = 0;
+    for (let i = 2; i < lines.segments.length; i += 3) if (!(Math.abs(lines.segments[i]! - Math.fround(ends[2]!)) < 1e-6)) offPlane++;
+    expect(offPlane, 'the 2D lines stay in the mid-plane').toBe(0);
+  } finally {
+    rmSync(scratch, { recursive: true, force: true });
   }
 });
