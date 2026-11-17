@@ -7993,9 +7993,9 @@
     "deps": [
       "F-782"
     ],
-    "status": "todo",
+    "status": "partial",
     "acceptance": "Every limit not stated here is registered in the ADR before the run. A new opt-in field of S'' sets the length of the trailing-edge ramp of wake_stack_remap from the wake line spacing so that, at the ADR 0118 s4 specs, ComputerFan::rom_reference() blade 0 and the ADR 0696 second blade build with no folded cell within 84.5 deg non-orthogonality (the 84.953 and 84.472 deg of ADR 0699 at the first ramp cell disclosed), skewness 4.0 and aspect 1000, the wake-stack spanwise skewness stays within 1.0, a registered front_gap and n_nose scan inside the camber_seam range builds a registered fraction, and camber_seam_h, camber_seam_s, camber_seam_s_unstretched and camber_seam_s_wake_remap are unchanged in bits.",
-    "note": "Follow-up of F-782 (ADR 0699, 2026-11-16)."
+    "note": "Follow-up of F-782 (ADR 0699 questions 1 and 3). ADR 0702, 2026-11-17. PARTIAL (the reference's 84.688 deg blade-line face, predicted in the registration, is outside the ramp's reach). New opt-in construction S''' = CGridOptions::camber_seam_s_wake_ramp_construction() = camber_seam_s_wake_remap + wake_ramp_from_spacing: the weight of the wake-stack remap is 1 - fade(x / L) with x the distance along the wake from the trailing edge and L = 1.5 D / tan(1 deg), D the largest shift of a wake-stack node (CGridMesh::wake_ramp_length reports L). Derived: the smooth step's slope is at most 1.5, so the ramp rotates an in-plane edge of any wake cell by at most 1 deg whatever the line spacing, and its flat start gives the shortest (first) wake cell a weight of about 0.003 instead of the 0.5 of S''. At the ADR 0118 s4 specs, L = 7.0e-3 / 7.7e-3 m; ComputerFan::rom_reference() blade 0 and the ADR 0696 second blade build with no folded cell, periodic; the first ramp face returns to within 0.01 deg of S' (84.397 / 83.564 deg against S'' 84.953 / 84.472), every wake-cell face is within 84.5 deg, the second blade is within 84.5 deg / 4.0 / 1000 overall (84.218 / 2.831 / 551.7), and the reference has skewness 2.761 and aspect 525.6 but a global 84.688 deg at the blade-line face C (45, 2) / (45, 3), layer 3 (MISSED against 84.5, unchanged from S' and S'', predicted). Wake-stack spanwise skewness 0.420 / 0.377 (within 1.0). A front_gap 0.15 to 1.0 x n_nose 4 / 6 / 9 scan builds 12 of 12 on each blade (limit 9 of 12). Locality: only the wake lines p = 1, 2 of the span layers change. camber_seam_h (cgrid_w35d B1, the ADR 0692 H hash), camber_seam_s, camber_seam_s_unstretched and camber_seam_s_wake_remap (hashes against the base) are unchanged in bits; f782, f777, f726, cgrid_w35d, f722, fan01_p10_w36d c2, fan_design_w46a s4, --lib and baseline_hashes pass. Six of six mutations caught. Library only; no case value. Follow-up F-791 (non-orthogonality of the blade-line faces next to the stack at the thin-to-thick span transition of S''')."
   },
   {
     "id": "F-785",
@@ -8065,5 +8065,16 @@
     "status": "todo",
     "acceptance": "Every limit not stated here is registered in the ADR before the run. The constant `RETRO_H3`, the tier-3 branch of `retro_units` and the tests of ADR 0701 and ADR 0703 that depend on it are removed in one commit; the index of `--primary git` is equal to the index before the commit in every field, `--primary registered` and `p0679` are equal, `gate_attribute.py` is unchanged, and `python -m unittest discover -s scripts` passes.",
     "note": "Follow-up of F-785 (ADR 0703, 2026-11-16)."
+  },
+  {
+    "id": "F-791",
+    "title": "non-orthogonality of the blade-line faces next to the stack at the thin-to-thick span transition of S'''",
+    "phase": 9,
+    "deps": [
+      "F-784"
+    ],
+    "status": "todo",
+    "acceptance": "Every limit not stated here is registered in the ADR before the run. A new opt-in field of S''' builds the first free rows of the blade lines between the last thin and the first thick span layers so that, at the ADR 0118 s4 specs, ComputerFan::rom_reference() blade 0 and the ADR 0696 second blade build with no folded cell within 84.5 deg non-orthogonality (the 84.688 deg of ADR 0702 at C (45, 2) / (45, 3), layer 3 of the reference disclosed), skewness 4.0 and aspect 1000, the wake-stack spanwise skewness stays within 1.0, a registered front_gap and n_nose scan inside the camber_seam range builds a registered fraction, and camber_seam_h, camber_seam_s, camber_seam_s_unstretched, camber_seam_s_wake_remap and camber_seam_s_wake_ramp are unchanged in bits.",
+    "note": "Follow-up of F-784 (ADR 0702, 2026-11-16)."
   }
 ]
