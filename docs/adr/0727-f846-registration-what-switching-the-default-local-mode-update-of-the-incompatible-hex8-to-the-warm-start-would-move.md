@@ -341,3 +341,222 @@ been written or run); the in-process file had been run once (its registered run)
 
 By the registered decision rule a row met only after an amendment, or not run, makes the outcome **partial**; the reason
 will be stated in the results.
+
+## Addendum 1: results (2026-11-17)
+
+Logs in `w49i-work/f846-scratch`: `run1-b.log` (the new file's three default tests, its single registered run on 3e14b06b,
+0.4 s), `mutations.log` and `mut-MU*.log`; the census: `logs-base/`, `logs-flip/` (one libtest log per binary, `_build.log`,
+`_summary.log`), `dump-base/`, `dump-flip/` (the records, 19 MB and 25 MB), `census-compare.log` (the output of
+`compare.py`); `instrument.py`, `run_census.sh`, `compare.py`; `s7-*.log`, `b-src-diff.log`, `bh-worktree.log`,
+`bh-flip.log`, `s8-docs.log`. The two census copies are `git archive` of 3e14b06b with the instrument; they differ in the one
+line of the flip (checked by `diff -r`). Each registered run was made once. No limit was changed after a run. Amendment 1 was
+written and committed before the census was compared.
+
+### The census: what the switch moves in the existing tests
+
+Both copies ran the default tests of all 34 binaries (base 4 min, flip 5 min, after a 30 s build each). **Base: every
+binary passed** (C0). The records: base 321, flip 305; 305 paired, 16 base-only (the four tests below that stop in flip
+after their first solve). 23 binaries make records. 11 make none: `si_eas_default_bits`, `si_eas_hg2`, `si_eas_hg3`,
+`si_eas_hg18`, `si_eas_hg20`, `si_eas_hg21`, `si_fbar`, `si_hex8x`, `si_hex8x_estimate`, `si_hex8x_linear`, `si_scaffold`.
+Their default tests call no driver on a model with an Incompatible Hex8, or only element-level and assembled entry points from
+the initial states.
+
+| Paired records | Count | Reading |
+|---|---|---|
+| `ok` in both, **switched** (flip's states carry the nine modes) | 140 | the switch acts (binaries `si_eas`, `si_eas_hg`, `si_eas_hg3_bits`, `_rd`, `_rl`, `si_eas_hg4` to `si_eas_hg7`, `si_eas_hg14` to `si_eas_hg17`, `si_eas_hg19`, `si_eas_hg_default_bits`) |
+| `ok` in both, **explicit** (equal state lengths: the model sets the flag itself) | 119 | the switch cannot act (`si_eas_hg8` to `si_eas_hg13`, part of `si_eas_hg14`, `si_eas_hg_smooth`, `si_eas_local_update_f844`): **0 values differ, 0 counts differ** (CX) |
+| `err` in both, same error text | 33 | unchanged failures (`si_eas_hg8` 4, `si_eas_hg13` 3, `si_eas_hg14` 7, `si_eas_hg19` 10, `si_eas_local_update_f844` 9) |
+| `err` in base, `ok` in flip | 13 | outcome changes (N6) |
+| `ok` in base, `err` in flip | **0** | |
+
+**c4 (N4).** Of the 140 switched records, **112 change bits**. Over the 137 whose outcome did not change, 102 714 of 259 875
+recorded values differ (displacement, velocity, acceleration, reactions, internal force, load factors, the material part of
+the states). The 28 that do not move are 9 solves of one increment (CF1) and 19 records where the modes are reached from
+`alpha = 0` and from the committed modes in the same rounding: `si_eas_hg14` (3 `solve_from`), `si_eas_hg15` (12
+`solve_increment`), `si_eas_hg19` (4 solves of 10 increments). Per binary the records that change: `si_eas` 7, `si_eas_hg` 6,
+`si_eas_hg3_rd` 6, `si_eas_hg3_rl` 6, `si_eas_hg3_bits` 1, `si_eas_hg4` 8, `si_eas_hg5` 14, `si_eas_hg6` 14, `si_eas_hg7` 28,
+`si_eas_hg15` 7, `si_eas_hg16` 7, `si_eas_hg17` 3, `si_eas_hg19` 2, `si_eas_hg_default_bits` 3.
+
+**c5 (N5).** The largest relative change of each value group over the switched records without an outcome change, against
+`T = 1e-6`:
+
+| Value group | Largest `|b - a|_inf / |a|_inf` | Record | Within `T` |
+|---|---|---|---|
+| displacement `u` | `7.8e-11` | `si_eas_hg15` `f779_fast_amended`, `solve_increment` 15 | yes |
+| velocity `v` | `7.9e-18` | `si_eas` `nt1_strain_energy_of_an_incompatible_bar` | yes |
+| acceleration `a` | `4.8e-17` | the same | yes |
+| reactions | `6.6e-14` | `si_eas_hg4` `pc_cantilever_against_fbar`, solve 3 | yes |
+| internal force | `1.6e-11` | `si_eas_hg15` `f779_fast_amended`, `solve_increment` 15 | yes |
+| load factors | `0` | (equal wherever the increments are equal) | yes |
+| states, material part | `8.5e-15` | `si_eas` `rf1_incompatible_taken_after_f596_amended`, `solve_in_time` (a history material) | yes |
+
+**No measure is above `T`**; the largest is 13 000 times below it. (The residuals at convergence, recorded but not a value
+group, are rounding noise: their relative change reaches `4e-3` on values of `1e-16`.)
+
+**c6 (N6): the 16 solves whose outcome changes, every one toward convergence.**
+
+- 13 solves that fail in base converge in flip: the inverted points of the distorted `8^3` block DB4 (element 476 at
+  `0.675`; `si_eas_hg5` 1, `si_eas_hg6` 2, `si_eas_hg7` 1) and of the distorted `4^3` block (element 53 at load step 7;
+  `si_eas_hg5` 1, `si_eas_hg6` 2); the backtracking alone on DB4 (element 475, `0.8906`) and the seeds of ADR 0658 under the
+  opt-ins of `si_eas_hg7` (elements 420 and 476; `si_eas_hg7` 5 in all); and the punch block of
+  `si_eas_hg4` `pb_punch_block_against_fbar` (base: a singular tangent after 5 halvings in load step 10), which converges.
+- 3 solves that converge in both need fewer halvings in flip: `si_eas_hg6` `ca_cause_of_the_inverted_point` solve 3 (12
+  increments with 5 halvings to 10 with none), `si_eas_hg6` `plain_element_4_cubed_reported` solve 2 (2 halvings to none),
+  `si_eas_hg7` `r_and_s_on_the_four_blocks` solve 9 (2 halvings to none).
+- 1 iteration change without an outcome change: `si_eas_hg6` `plain_element_4_cubed_reported` solve 3 (one increment 5
+  Newton iterations to 4).
+
+No solve that converges in base fails in flip.
+
+**NT: the 8 tests whose outcome changes** (all pass in base and fail in flip; none the reverse):
+
+| Class | Tests | The failing assertion |
+|---|---|---|
+| (i) a bit record of the default path | `si_eas_hg_default_bits` `b1_...`, `si_eas_hg3_bits` `b3_...` | "B1 ADR 0608 Q1 block Incompatible solve: digest changed"; "B3 opted CB2 cantilever 25 x 1 x 1 alpha 1 solve: digest changed" |
+| (ii) a control of an opt-in against the default | none | the tests with such controls (`si_eas_hg8`, `si_eas_hg9`, `si_eas_local_update_f844`) set the flag on every variant themselves |
+| (iii) an assertion on the default's outcome | `si_eas_hg6` `db4_met_rows`, `si_eas_hg7` `r_and_s_on_the_four_blocks` | NC1 "default: solve failed", "error names element 476", the failing load factor in `[0.67, 0.68]` (now NaN: no failure); in `si_eas_hg7` also NCB "backtracking alone on DB4: solve failed" |
+| (iv) other | `si_eas` `pt1_to_pt4_pm_ps_patch_at_finite_strain`, and its copies `si_eas_hg` `r_pt1_...`, `si_eas_hg3_rd` `r_pt1_...`, `si_eas_hg3_rl` `r_pt1_...` | `called Result::unwrap() on an Err value: FieldLength { key: "state", expected: 0, found: 9 }` |
+
+**The class (iv) finding is not a change of accuracy but a refusal.** The four patch tests hand the driver's committed states
+(`NonlinearResult::states`) to the public element entry point `nl_incompatible::modes_and_strains` to read the modes.
+Every public element-level entry point of the element (`modes_and_strains`, `modes_and_strains_with`,
+`condensed_force_and_tangent*`, `mode_iteration_record*`, `trust_region_record`, `enhanced_force_and_tangent*`, and the
+`nonlinear::hex8_*` entries with the Incompatible formulation) checks the state against the material layout (`check_state`,
+`points x state_size` values). A warm state has nine more, so they refuse it. Under the switch every caller that reuses the
+driver's committed states at the element level breaks, until those entries accept a warm state: cut it to its material
+part, as ADR 0668 D1 did for the creep and viscoelastic readings, and start the local iteration from the modes, as the
+crate-internal `modes_and_strains_warm` of ADR 0666 D2 does.
+
+**c3 (BH-F).** `baseline_hashes` on the flip copy passes (3 passed, the registered ignored one ignored). No rcfd-api baseline
+case uses the element (reading c3), so the switch moves none of them.
+
+### The in-process file and the save and restart paths (B)
+
+All of B's rows were met in its single run (`run1-b.log`):
+
+- DF: the nine digests of the copied cases equal the records' `EXPECTED` (the copies are faithful).
+- Z1: the patches' tangent and force at the initial states and the E state: `0` values differ. Z2: the first increment's
+  residuals of the three solves: `0` bits differ (arithmetic 1 holds).
+- WB: the Q1 block (4 increments, 16 Newton iterations in both), the CB2 cantilever and the opted CB2 cantilever (5
+  increments, 29 iterations in both) keep their increments, halvings and iterations. Values differing: `u` 50 of 192, 293 of
+  312, 293 of 312; reactions 73, 12, 11. Largest relative change: `u` `9.3e-17`, `1.8e-15`, `1.3e-15`; reactions `2.5e-16`,
+  `9.5e-16`, `2.2e-15`. The NT1 bar (3 steps, 2 iterations each in both): 26 of 61 recorded values, `v` 25, `a` 26; `u`
+  `2.7e-18`, `v` `7.9e-18`, `a` `4.8e-17`, the strain energy `1.4e-16`. NCW: 293 values of `u` differ on CB2.
+- WL: every warm state has 9 values (`state_size 0`), every default state 0.
+- **The transient save and restart (c7).** R1: every element of the warm state at step 3 has 9 values. R2: through
+  `to_bytes` (2320 bytes) and `from_bytes`, `0` values differ. **The nine modes survive the bytes.** R3: restored into a
+  fresh warm integrator, 3 more steps against the uninterrupted 6: `0` values differ in `u`, `v`, `a`, the internal force and
+  the states. **The restart is bit-identical.** NCR1: the default integrator refuses the warm state, with the text "material
+  states of 4 elements that do not match the model's layout (4 elements)". The refusal is right, but the text names the
+  element count where it means the per-element lengths (remaining question 3). NCR2: the warm state without its modes is
+  accepted and moves 58 values of `u`, `v`, `a`, so the restart uses the saved modes. RM (migration): a default state, saved
+  before a switch, is accepted by the warm integrator, and after 3 steps differs from the warm reference in 30, 28 and 15
+  values of `u`, `v`, `a`, by `1.1e-17`, `1.1e-17` and `1.1e-16` relative. Every element then carries its modes.
+- **The static restart (c7).** S1: the chain of four `solve_increment` calls from the committed states equals `solve` with 4
+  increments bit for bit (`u` and states). S2: every element's state carries the nine modes after every link. NCS1: the
+  default model refuses the warm states (`element 0: key 'state': length 9, expected 0`). NCS2: with the modes cut off at the
+  second link, 53 values of the final `u` move. SM (migration): the warm model accepts the default states and converges;
+  53 of 192 values of `u` differ from the warm reference, by `9.3e-17`. There is no file-level save of the static driver's
+  states in the repository (arithmetic 5): the in-memory restart is the static path.
+
+### The checked rows
+
+| Id | Limit | Measured | Met |
+|---|---|---|---|
+| C0 | every base test passes | 34 binaries, every default test passed | yes |
+| C1 | `si_eas_default_bits` passes in flip | passed (and makes no record) | yes |
+| C2 | `si_eas_hg_default_bits` fails in flip | fails (B1 Q1 digest changed) | yes |
+| CF1 | `0` values differ (first clause) | 9 records, `0` | yes |
+| CF1, second clause | `0` | **not run** (the records hold no input states; Amendment 1) | not run |
+| SL (as registered) | holds for every element of every record | **missed on 119 records**, the explicit ones, by construction; holds on all 140 switched | **no** |
+| SL' (Amendment 1) | no record in neither class | `0` | yes, after the amendment |
+| CX (Amendment 1) | `0` differences on the explicit records | `0` of 119 | yes, after the amendment |
+| N0, N4, N5, N6, NT | reported | above | reported |
+| BH-F | passes | passed (3 passed, 1 ignored as registered there; 126 s with the build) | yes |
+| DF | equal | 9 of 9 equal | yes |
+| Z1 | `0` | `0`, `0`, `0`, `0` | yes |
+| Z2 | `0` | `0` on each of 3 | yes |
+| NCW | `> 0` | 293 | yes |
+| WL | holds | holds (4 cases) | yes |
+| R1 | holds | holds | yes |
+| R2 | `0` | `0` | yes |
+| R3 | `0` | `0` | yes |
+| NCR1 | refused | refused | yes |
+| NCR2 | accepted; `> 0` | accepted; 58 | yes |
+| RM | accepted; reported | accepted; `1.1e-16` largest (within `T`) | yes |
+| S1 | `0` | `0` | yes |
+| S2 | 9 values | 9 at every link | yes |
+| NCS1 | refused (key `"state"`) | refused, key `'state'` | yes |
+| NCS2 | `> 0` | 53 | yes |
+| SM | accepted; reported | accepted; `9.3e-17` (within `T`) | yes |
+| B | empty | empty (`b-src-diff.log`, 0 bytes) | yes |
+| BH | passes | passed (3 passed, 1 ignored as registered there) | yes |
+| S6 | clean | `cargo fmt -p rcfd-fem --check` and `cargo clippy -p rcfd-fem --release --all-targets -- -D warnings` clean | yes |
+| S7 | pass | release: `--lib` 15 passed; `si_eas_hg6` 4 passed (2 ignored), `si_eas_hg7` 4 (2), `si_eas_hg8` 5 (2), `si_eas_local_update_f844` 4 (3); the new file 3 passed | yes |
+| S8 | pass | `cargo test -p rcfd-cli --release --test docs_site`: 2 passed | yes |
+| S9 | builds | 36e89fee (docs), 3e14b06b (built for the runs), 595dbd58 (docs), the results commit | yes |
+
+### Mutations (each on a scratch copy of 3e14b06b, run once against the new file's three tests)
+
+| Id | Caught | By |
+|---|---|---|
+| MU1 (the warm builder ignores the flag) | yes | NCW (`0`), WL (4 cases), R1, S2; and NCS1, NCS2, NCR1, NCR2 |
+| MU2 (the transient restart restores without the modes) | yes | R3 (133 values differ); NCR2 (`0`) |
+| MU3 (the default Q1 copy with 5 increments) | yes | DF (digest `0x208b96098c8727b8`) |
+| MU4 (the bit counter compares a vector with itself) | yes | NCW, NCS2, NCR2 (`0`) |
+| MU5 (the static chain from the initial states at every link) | yes | S1 (lengths differ), S2, NCS1, NCS2 |
+| MU6 (the census without the flip) | realised | the base run: C2's binary passes there and fails in flip |
+
+### Deviations
+
+- SL was defective as registered (Amendment 1). It missed on the 119 records of models that set the flag themselves, and
+  SL' and CX replace it for the reading.
+- CF1's second clause was not evaluated (Amendment 1).
+- Estimate 4 was wrong in two places. Class (ii) is empty, because the tests with such controls set the flag on every
+  variant. Class (iv) is not empty: the four patch tests, a refusal rather than a change of accuracy.
+- The census of 34 binaries' default tests is wider than a usual per-item check (house rule 7), but it is the measurement
+  the item asks for, and it took 9 minutes in all. The ignored heavy records were not run (Limits).
+
+### Not run
+
+The ignored heavy records of the 34 binaries (Limits); CF1's second clause. The whole rcfd-fem suite was not run (rule 7;
+the daily gate).
+
+### Decision
+
+**partial**, by the registered rule: a limit row (SL) missed as registered, two rows (SL', CX) were met only after Amendment
+1, and a clause of a row (CF1, second) was not run. The cause is a defect of the registration, not of the measurement:
+SL assumed that every base model is a default model. Every other row was met, every mutation registered as catchable was
+caught, and every clause of the acceptance was measured on the default tests: c4 (112 of 140 switched results change bits),
+c5 (every measure within `T`, largest `7.8e-11`), c6 (16 solves change outcome, all toward convergence, none the reverse; 8
+tests change outcome, 4 of them by a refusal of the warm state at the element entry points), c7 (the nine modes survive the
+bytes and both restarts bit for bit; the default refuses them), c8 (no library line changed; `baseline_hashes` unchanged).
+
+### Remaining questions
+
+1. **The default switch** (open, for the maintainer; not taken because it changes default results, two bit records and
+   existing tests). What it would move, measured: the last bits of 112 of the 140 switched results (largest relative change
+   `7.8e-11`); 13 failing solves that converge and 3 with fewer halvings; the records B1 and B3 (class i, a re-record needing
+   approval); two default-outcome rows (class iii: `si_eas_hg6` NC1, `si_eas_hg7` NC1 and NCB, which would have to set the
+   flag to `false` themselves, an edit of existing tests); and the four patch tests of class (iv), which break until the
+   element entry points accept a warm state. Options: (a) switch now, with those edits; (b) first make the public element
+   entry points accept a warm state (the follow-up below), then switch with (a)'s record and test edits; (c) keep the opt-in.
+   Recommendation: (b). The refusal of class (iv) would otherwise reach every caller that reads the driver's states at the
+   element level, inside and outside the tests.
+2. **The heavy records under the switch.** They were not measured. Options: (a) a separate item; (b) run them as part of the
+   switch item, which has to run them anyway. Recommendation: (b). The fast companions moved by at most `7.8e-11`, with no
+   accuracy class change.
+3. **The text of the transient restore's refusal** names the element count ("material states of 4 elements that do not
+   match the model's layout (4 elements)") where the per-element lengths differ. Options: (a) name the first element and
+   its two lengths in a later item; (b) leave it. Recommendation: (a), with the follow-up below; it changes an error text, not
+   a result.
+
+## For the lead: roadmap entries
+
+> Proposed status: partial.
+
+> F-846 (ADR 0727, 2026-11-17): what switching the default local mode update of the incompatible Hex8 to the warm start of ADR 0660 D1 would move, measured test-only, no default changed. A census ran the default tests of all 34 test binaries of the element on two scratch copies, one with the constructor's default flipped, and recorded every outermost driver solve on a model with the element (321 records; rcfd-api has no baseline case with the element, and baseline_hashes passes on the flipped copy). Of the 140 results the switch reaches, 112 change bits, by at most 7.8e-11 relative (registered tolerance 1e-6). The 119 results of models that set the flag themselves do not move. Sixteen solves change outcome, every one toward convergence: 13 that fail today converge (the inverted points of the distorted blocks and the ADR 0658 seeds, a singular punch tangent) and 3 need fewer halvings; none that converges fails. Eight tests would fail: the two default bit records (B1, B3), two rows asserting the default's failure on DB4, and four patch tests. Those four break because the public element entry points (modes_and_strains and the others) refuse a committed state with the nine modes. The modes survive the transient save through bytes and both restarts bit for bit, and the default model refuses them. Partial because the state-length row was registered too strictly (it assumed every base model was a default one, corrected by an amendment before the comparison) and one clause of a control could not be evaluated. Five of five mutations of the in-process file caught; the heavy records not run.
+
+> F-844 (ADR 0725, 2026-11-17), add at the end of its note: ADR 0727 measures what the switch would move in the existing tests: no measure beyond 7.8e-11 relative, 16 solves toward convergence and none away, and four tests that break because the element entry points refuse a warm state.
+
+> Follow-up proposed: The element entry points of the incompatible Hex8 given a committed state with the nine modes of the warm start. Deps F-846. Acceptance: Every limit not stated here is registered in the ADR before the run. The public element-level entry points of the incompatible Hex8 (modes_and_strains and its variants, condensed_force_and_tangent and its variants, the mode iteration records, enhanced_force_and_tangent and its variants, and nonlinear::hex8_* with the Incompatible formulation) accept a state of the material layout followed by nine modes, by an opt-in or by a rule that leaves every current call bit-identical: the material part used as now and the modes as the start of the local iteration, measured against the driver's own evaluation on the ADR 0727 patch tests under the warm start; the transient restore's refusal names the first element and its two lengths; the default bits unchanged.
