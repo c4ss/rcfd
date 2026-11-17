@@ -15054,7 +15054,9 @@ fixed by the item's registration ADR before any code.
     arc-length and contact paths, the line search with W. Follow-up F-747 (Rule L against F-bar with a J2 material on a
     refined reference). Follow-up F-748 (The creep and viscoelastic readings of the committed modes of the warm start).
     ADR 0668 (F-748, 2026-11-16): the creep reading of the committed modes (creep_increment) is fixed behind the warm
-    start (F-748); the viscoelastic material had no reader that misread them.
+    start (F-748); the viscoelastic material had no reader that misread them. ADR 0678 (F-747, 2026-11-17): the reaction
+    gap of rule L against F-bar with J2 (JB1, JB2) is F-bar's larger discretisation error at the punch edge; both
+    elements reach a common limit within the uncertainty of a three-mesh reading (F-747).
 - [ ] **F-741** Stall pre-check: the named point and the saving against a dearer model
   - depends on: F-716
   - acceptance: Every limit not stated here is registered in the ADR before the run. A fast fan check in which the
