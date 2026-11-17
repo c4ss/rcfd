@@ -283,3 +283,36 @@ The heavy record is not run under the mutations (it uses the same functions, che
    |v_t(u_c)|`, the toys, the patch control, the F-bar chain with the indefinite tangent, the new test file `si_eas_hg15.rs`):
    taken on the maintainer's standing instruction of 2026-11-11 (take the recommendation).
 2. **Whether either opt-in of ADR 0694 becomes a default**: not taken (it would change default results); open, as in ADR 0694.
+
+## Amendment 1 (2026-11-17, written and committed before the corrected runs)
+
+**The defects.** The registered runs (on 5bb0d527: `f779-scratch/run1-fast.log`, `run2-heavy.log`) missed two rows, both by a
+set-up that measures something other than what the row registers:
+
+1. **PV** (`6.02e-6` against `<= 1e-6`). The row registers that the load vector and the factor's solve give the exact path
+   tangent `v` of the homogeneous path. It was evaluated at the bisected state `u_a`, a Newton iterate converged to the residual
+   tolerance `1e-10`, whose error along the soft mode `phi` (`mu_1 = 0.86` against the second pair `~1e5`) is amplified by
+   `1/mu_1` into the tangent `K(u_a)^{-1} f(u_a)`. Diagnosed by a probe after the run (`f779-scratch/probe-pv.log`, a scratch copy,
+   not a registered run): at the exact homogeneous field `p v` with the same `p_a` the same function gives `2.3e-11`
+   (`|K v - f| / |f| = 3.4e-16`), and the error at `u_a` lies entirely along `phi` (share 1.0000). My estimate counted rounding
+   only and missed the state's own error.
+2. **MS at `b` on 16^3** (the lowest pair not returned: `NotConverged`, 500 iterations, residual `2.57e-8` against the tolerance
+   `1e-8`). The eigen tool's default residual measure `||A x - mu x|| / ||A x||` has the rounding floor `c eps ||A|| / |mu|`
+   (its own documentation, `ResidualTest::Relative`, ADR 0354): with `|mu_1| ~ 2.5` against `||A|| ~ 1e7` the floor is about
+   `1e-8`. The registered tolerance came from ADR 0694 at `|mu_1| = 3272`; at a bracket end `mu_1` is near zero by design. With
+   the pair at `b` missing, reading LB read "undecided" (at `a`: `cos = 1.5e-12`, `phi` antisymmetric under `P`, `sigma =
+   -1.000000000000`; `DS = 1 - 1.3e-12`; the upper end accepted, `nu_b = 1`).
+
+Every other row of both runs was met (the bracket `[0.964899444580, 0.964900207520]`, width `7.63e-7`, 12 bisections; F-bar
+stable, `nu_Fb = 0` at the four loads). The mutations were run once against the registered `f779_fast` (its PV miss the baseline):
+MU1, MU2, MU3, MU5, MU6 caught, **MU4 not caught** (beyond the fold the toy's Newton does not converge at all, so the continuity
+test is never the deciding one).
+
+**The corrections.** (1) PV is evaluated at the exact homogeneous field `p_a v` (initial states), the state the row is about;
+limit unchanged. (2) The lowest pairs of the FEM case are computed with the normwise backward error
+(`ResidualTest::Backward`, ADR 0354 D1: floor `c eps` whatever the spectrum), tolerance `1e-8` and 500 iterations unchanged; MS
+then compares that residual against the same `1e-8`. No limit changes, no other row changes. The registered tests become the
+ignored records `f779_fast_known_miss` and `f779_nh16_bracket_heavy_known_miss` (unchanged, the measured numbers in their ignore
+texts); the corrected tests `f779_fast_amended` and `f779_nh16_bracket_heavy_amended` are each run once. The mutations are not
+rerun (their run is the registered one, above). The decision can be at best **partial** (rows met only after an amendment; MU4
+not caught).
