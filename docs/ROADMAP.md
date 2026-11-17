@@ -15576,13 +15576,23 @@ fixed by the item's registration ADR before any code.
     Rust file edited; the index maps these files by a reading of that ADR (evidence E2, not only a word); a registered
     sample is read.
   - note: Follow-up of F-760 (ADR 0685, 2026-11-16).
-- [ ] **F-770** A fast check of the window condition of the repetition trigger
+- [x] **F-770** A fast check of the window condition of the repetition trigger
   - depends on: F-766
   - acceptance: a fast test on an observation sequence whose plain pick lies in the incumbent's basin and whose last d +
     1 evaluated points do not all lie in it shows that the repetition trigger makes no restart pick, the survivor of ADR
     0686 (mutation M4, the window condition dropped) is caught by it, a twin with the window inside gets a restart pick,
     and the O1 points hash of ADR 0673 is unchanged.
-  - note: Follow-up of F-766 (ADR 0686, 2026-11-16).
+  - note: Follow-up of F-766 (ADR 0686, 2026-11-17). DONE. ADR 0689, 2026-11-17: test-only, no library line changed. A
+    fast test (crates/rcfd-api/tests/f770_window_condition.rs, 0.01 s) on the 18-observation sequence of ADR 0686 in two
+    dimensions with the default exclusion, the last of the d + 1 window points moved to (0.9, 0.9): the plain pick lies
+    inside the incumbent's basin (delta 0.15 of radius 2), the last window point outside (delta 8.2, 15 evaluated points
+    outside), and the repetition trigger makes no restart pick (its pick is bit-equal to the plain pick); the
+    preconditions are asserted inside the test so it cannot pass vacuously. A twin with the window point next to the
+    incumbent gets a restart pick at delta 3.27. The surviving ADR 0686 mutation M4 (the window condition dropped) is
+    caught by the first test and not by the twin; the dropped plain-pick condition (M2) is not caught by it (ADR 0686 N1
+    catches that). The O1 points hash of ADR 0673 and the f766, f758, f715 and lib tests are unchanged. Not covered: the
+    outside point at the first or middle window position, failed or pending observations in the window, a window other
+    than d + 1, one function and one seed.
 - [ ] **F-771** Body force in the fractional step
   - depends on: F-757
   - acceptance: the fractional step reads PimpleSolver::body_force behind an opt-in (the predictor's cell term, the
