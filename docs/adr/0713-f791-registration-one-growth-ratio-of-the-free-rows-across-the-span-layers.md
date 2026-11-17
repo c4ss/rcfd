@@ -244,3 +244,126 @@ between C (i, nb) and C (i, nb + 1) (s4: rows 2 / 3) of every blade line `n_down
 - The ratio recorded per line is `(x_2 - x_1) / (x_1 - x_0)` of whichever distribution the hub line used (the existing one, the
   hub being built without ratios).
 - The constants of HS''' in the test file are the base probe's values (`f791-scratch/probe.log`).
+
+## Addendum 1: results (2026-11-17)
+
+One registered run of the new test file (`f791-scratch/run1.log`, release, `cargo test -p rcfd-mesh --release --test
+f791_cgrid_free_rows -- --nocapture --test-threads 2`: 8 passed, 0 failed, 1 ignored, 53 s) and one run of the heavy scan record
+(`run_sc.log`, 52 s on three threads).
+
+| id | limit | measured | met |
+|---|---|---|---|
+| R1a | S'''' builds REF and B2, cells > 0 | 12 841 cells each, construction step 5 (as predicted) | yes |
+| R1b | corner Jacobians of one sign, none zero; min volume > 0 | 100 096 of 100 096 negative, 0 zero on both; min volume 1.20e-13 / 1.58e-13 m^3 | yes |
+| R1c | periodicity <= 1e-12 m | 1.96e-17 / 2.19e-17 m | yes |
+| R2 | <= 84.5 deg (all faces) | REF **84.122** at C (41, 6) / (41, 7), layer 16 (tip gap); B2 83.887 at C (42, 6) / (42, 7), layer 16 (predicted about 83.8 and 83.3 to 83.9: the REF value is 0.3 deg above the estimate, at a face the estimate did not name) | yes |
+| R2f | first-free-row faces, layers 3 to 6, <= 84.0 deg | REF 83.540 (line 44, layer 6; S''' 84.688), B2 83.178 (line 43, layer 6; S''' 84.218) | yes |
+| R2m | <= 0.60 | 0.4253 (predicted about 0.48; S''' 0.710) | yes |
+| R2w | wake-cell faces <= 84.5 deg | REF 83.371, B2 82.518 (both at C (58, 2) / (58, 3), layer 7); the first ramp face 82.206 / 80.993 (S''' 84.397 / 83.564) | yes |
+| R3 | <= 4.0 | REF 2.5376 (C (37, 7) / (38, 7), layer 16), B2 2.7200 (S''' 2.7609 / 2.8312) | yes |
+| R4 | <= 1000 | 525.6 / 551.7 (unchanged) | yes |
+| R5 | wake-stack spanwise skewness <= 1.0 | 0.41955 / 0.37726, equal to S''' (the stack rows are not moved) | yes |
+| Rrow | in [0.95, 1.05] | 1.01512 (predicted 1.016; S''' 1.17368) | yes |
+| Rfirst | relative difference <= 1e-6 | 0 on both blades (bit-equal steps) | yes |
+| R7 | nodes outside the free rows equal in bits | 0 differ on both; free nodes that differ: 6 555 (REF), 6 549 (B2) | yes |
+| R8 | REF line 45 ratio in [3.1, 3.3] | 3.19051 | yes |
+| SC | per blade >= 9 of 12 build | 12 of 12 and 12 of 12, fold-free and periodic, all at step 5 | yes |
+| SC0 | 24 of 24 inside the range | 24 of 24 | yes |
+| HS | `0x0105a2fcca924d23` | equal | yes |
+| HS' / HS'' / HS''' | the base hashes | equal on both blades | yes |
+| HB1 | `cgrid_w35d` b1 tests | pass (whole non-ignored file: 7 passed, 15 ignored) | yes |
+| HB2 | `f726_cgrid_staggered` b2 | pass (whole non-ignored file: 7 passed, 1 ignored) | yes |
+| E1 | named tests | `f784_cgrid_wake_ramp` 7 passed, 2 ignored; `f782_cgrid_wake_remap` 6 passed; `f777_cgrid_unstretched` 10 passed, 2 ignored; `f726` 7 / 1; `cgrid_w35d` 7 / 15; `fan_design_w46a` `s4_realised_default_meshes` passed; `fan01_p10_w36d` c2 passed; `f722_rom_reference_fan` 6 passed, 1 ignored | yes |
+| E2 | `--lib` 0 failed | 77 passed, 2 ignored | yes |
+| E3 | baseline_hashes | 3 passed, 1 ignored | yes |
+| NC-R2 | S''' 84.688 at C (45, 2) / (45, 3), layer 3 (1e-3) | 84.68837 at that face | yes |
+| NC-R2m | S''' 0.710 (0.005) | 0.70999 | yes |
+| NC-Rrow | S''' 1.174 (0.005) | 1.17368 | yes |
+| NC-R7 | some free node differs | 6 555 / 6 549 | yes |
+| NC-R8 | S''' `free_row_ratios` None | None on both | yes |
+
+Reported (Rep): the first-free-row face of REF line 45 per cell layer 0 to 9, S'''' (S'''): 80.033 (80.032), 80.457 (80.457),
+80.971 (80.973), **82.803 (84.688)**, 82.645 (83.889), **83.416 (84.604)**, 83.522 (84.277), 83.667 (83.613), 83.697 (83.652), 83.721
+(83.684). B2 line 45: 82.110 (84.133) at layer 3, 82.973 (84.218) at layer 5. Hub ratios REF lines 44 to 48 and 56: 3.225, 3.191,
+3.159, 3.131, 3.105, 3.008; B2 3.287 to 3.142, 3.023. The five largest faces of both blades are the faces between the sixth and
+seventh free cells of lines 41 / 42 in the tip-gap layers 12 to 16 (REF 84.10 to 84.12, B2 83.81 to 83.89). `wake_ramp_length`
+equal to S'''. Scan quality (not a gate): within 84.5 / 4.0 / 1000 REF 4 of 12 (0.15 / 6, 0.15 / 9, 0.3 / 4, 0.3 / 6) and B2 4 of
+12 (0.15 / 6, 0.15 / 9, 0.3 / 4, 0.3 / 6); S''' of ADR 0702: 2 and 4. The non-orthogonality still grows with front_gap and n_nose
+(to 87.92 / 87.70 deg at 1.0 / 9, now on the first-free-row faces at layer 3), and the skewness exceeds 4.0 at front_gap 1.0
+with n_nose 9 (5.29 / 6.97) and on B2 at 1.0 / 6 (4.66).
+
+**The predictions of the first-free-row faces were too low by 0.5 to 2.1 deg** (REF line 45: predicted 80.7 / 81.3 / 82.6 / 83.0
+at layers 3 to 6, measured 82.80 / 82.65 / 83.42 / 83.52; B2 80.3 / 81.9 at layers 3 / 5, measured 82.11 / 82.97), beyond the
+stated 0.5 deg. The radial part was predicted to 12 % (R2m 0.425 against 0.48); the error is in the in-plane part, which the
+estimate kept at its S''' value although the second free cell is now shorter at node layer 4 (diagnosis below). The limits held.
+
+Diagnosis after the run (`f791-scratch/diag`, a `git archive` copy of the code commit with one added print test
+`zz_diag.rs`, log `diag.log`, run once; a first attempt reused a stale library of the mutation copy from a shared target
+directory, gave the MU6 numbers, and was discarded and rerun with its own target directory):
+
+- **The former worst face** (REF C (45, 2) / (45, 3), layer 3): `n` is unchanged to 1e-4 ((0.9522, 0.2835, -0.1142)); `d` went
+  from (-0.0271, 0.7037, 0.7100) to (-0.0856, 0.9010, 0.4253). The radial part fell as predicted, but the in-plane direction of
+  `d` turned by 3.3 deg away from `n` (the second free cell at node layer 4 is now 2.30e-4 instead of 2.66e-4 m, so the centroid
+  vector leans more on the slanted first cell), which the estimate had held fixed: in-plane 79.4 instead of 75.6 deg, total 82.80.
+- **The new maximum** (REF C (41, 6) / (41, 7), tip-gap layer 16, 84.122 deg; S''' 83.292): `d` is the same as on S''' to 1e-3,
+  the face normal turned by 0.8 deg in plane. In the long tip layers row 7 now ends five growth cells (steps 7.2e-5, 2.4e-4,
+  8.1e-4, 2.69e-3, 8.95e-3 m on line 41) instead of lying in the capped part, so its distance along the line goes as `rho_i^5`;
+  the hub ratios of neighbouring lines differ by about 1 % (REF lines 44 to 48: 3.225 to 3.105), which shifts row 7 of line 41
+  against that of line 42 by about 5 % of that distance and tilts the row edge. The same face is 84.03 deg in the thin tip layer 9
+  and 82.82 deg at layer 5.
+
+Also run: `cargo fmt -p rcfd-mesh --check` clean; `cargo clippy -p rcfd-mesh --all-targets -- -D warnings` clean; `cargo test -p
+rcfd-cli --release --test docs_site` passed (with this ADR and the `docs/meshing.md` paragraph).
+
+### Mutations (`f791-scratch/mut`, `mutate.py`, logs `mut_MU*.log`; each run once against the new test file, HB1 and HB2)
+
+| id | mutation | caught by |
+|---|---|---|
+| MU1 | hub ratios not used (the S''' distribution) | R2 on REF (84.688), R2f (84.688 / 84.218), R2m (0.710), Rrow (1.174), NC-R7 (0 free nodes differ), as predicted |
+| MU2 | cap kept at 1.5 mean, sizes scaled to fit | Rrow (1.102), Rfirst (0.191 / 0.191), as predicted; not R2f (predicted "likely") |
+| MU3 | ratio inverted (every line falls back) | as MU1, and R8 (0.313) |
+| MU4 | reference layer the tip | R8 only (5.140), as predicted; R2 met (REF 83.808, B2 83.407) |
+| MU5 | first free cell skipped | Rfirst (2.21 / 2.26), as predicted |
+| MU6 | `CAP_FACTOR` 1.5 -> 1.51 | HS, HS' / HS'' / HS''' (the first failing assertion of each test), HB1 (three hashes), HB2, also NC-R2 (84.667) |
+
+Six of six caught; MU4 only by the ratio check (it does not break the property the item asks for, as the registration said).
+
+### Deviations
+
+- R2 on REF met with 0.38 deg of margin at a face (the sixth / seventh free cells of line 41 in the tip-gap layers) that the
+  registration did not name; the estimate (about 83.8) was 0.3 deg low there.
+- The first-free-row face predictions were 0.5 to 2.1 deg low (above); the radial-offset prediction held.
+- MU2 was predicted to be caught "likely" also by R2f; it was not (caught by Rrow and Rfirst). MU4 was predicted to be caught by R8
+  only (see the table).
+- No development build; no other deviation.
+
+### Not run
+
+The other ignored records of the named files; the whole `rcfd-mesh` integration suite and the workspace (the daily gate); flow
+solves on S'''' meshes; other specs; a scan of `n_span`, `n_side`, `n_bl`, `growth` or of the reference layer.
+
+### Decision by the registered rule
+
+**done.** Every registered check is met: S'''' builds the reference and the second blade at s4 fold-free and periodic within
+84.5 deg / 4.0 / 1000 (REF 84.122 / 2.538 / 525.6, B2 83.887 / 2.720 / 551.7), the reference's 84.688 deg face is 82.803 deg,
+the wake-stack spanwise skewness stays 0.420 / 0.377, the scan builds 24 of 24, and S, S', S'', S''' and H are unchanged in bits.
+
+### Remaining questions (each with options and a recommendation)
+
+1. **The margin of the reference is 0.38 deg**, now at the faces between the sixth and seventh free cells of the lines 41 / 42 in
+   the tip-gap layers (84.12 deg; B2 83.89). Options: (a) a follow-up that diagnoses those faces and the residual blend bend of
+   the first free rows (part (ii) of the registration); (b) leave it, the clause is met. Recommendation: (b) for now; (a) only if a
+   later change moves them above 84.5.
+2. **The reference layer.** MU4 (the tip's ratios instead of the hub's) also met every quality limit and gave a lower maximum
+   (REF 83.808, B2 83.407 deg). Options: (a) a registered item that compares hub, tip and mid-span references on both blades and
+   the scan; (b) keep the hub (registered, derived: the smallest ratio and the largest neighbour ratio bound). Recommendation:
+   (b); the MU4 number is one unregistered run and is not a basis for a change.
+3. **A case value for S''''** needs a schema enum value and the schema golden (rule 6). Open for the maintainer, with F-778.
+4. **The scan's quality at front_gap >= 0.6 and n_nose 9** (to 87.9 deg, skewness to 7.0) is unchanged in kind from ADRs 0696 and
+   0702. Recommendation: keep the documented S-family quality range front_gap <= 0.3 with n_nose <= 6 (`docs/meshing.md`).
+
+## For the lead: roadmap entries
+
+> Proposed status: done
+
+> Follow-up of F-784 (ADR 0702 question 1). ADR 0713, 2026-11-17. DONE. Diagnosis on the base: the 84.688 deg face of S''' (C (45, 2) / (45, 3), layer 3, the face between the first and second free cells at the thin-to-thick span transition) is a radial offset of the cell centroids (unit centroid vector radial 0.71): in a 9 mm thick span cell the second free cell grows by a different factor between its two node layers (the line distribution is solved per layer and the line length grows with the pitch) than the first, and the centroid of a prism moves by H (A1 - A0) / (6 (A0 + A1)). New opt-in construction S'''' = CGridOptions::camber_seam_s_free_rows_construction() = camber_seam_s_wake_ramp + free_row_hub_ratio: the free cells of every C line grow by the ratio the line has in the hub layer's true section, in every layer, and only the cap that ends the growth is solved per layer (CGridMesh::free_row_ratios reports the ratios). At the ADR 0118 s4 specs ComputerFan::rom_reference() blade 0 and the ADR 0696 second blade build with no folded cell, periodic, within 84.5 deg / 4.0 / 1000 (84.122 / 2.538 / 525.6 and 83.887 / 2.720 / 551.7); the former worst face is 82.803 deg, the radial part of its centroid vector 0.425; the first free cell is unchanged in bits, the second varies by 1.5 % between the node layers (S''' 17 %); wake-stack spanwise skewness 0.420 / 0.377 (unchanged); a front_gap 0.15 to 1.0 x n_nose 4 / 6 / 9 scan builds 12 of 12 on each blade (limit 9 of 12). Locality: only the free C rows change. camber_seam_h, camber_seam_s, camber_seam_s_unstretched, camber_seam_s_wake_remap and camber_seam_s_wake_ramp unchanged in bits; f784, f782, f777, f726, cgrid_w35d, f722, fan01_p10_w36d c2, fan_design_w46a s4, --lib and baseline_hashes pass. Six of six mutations caught. Library only; no case value.
