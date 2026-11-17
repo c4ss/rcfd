@@ -254,12 +254,45 @@ pub fn edit_claim_path(root: &Path, rel: &str) -> PathBuf {
     edit_lock_path(root, rel).with_extension("claim")
 }
 
-struct EditLock(PathBuf);
+/// A held edit lock; removed when dropped. The removal is retried on a transient error ([`DEFAULT_RETRY`]) and a removal
+/// that still fails is logged as `edit_lock_remove_failed` (ADR 0676 R); `NotFound` (another writer broke it) is not a
+/// failure.
+struct EditLock {
+    lock: PathBuf,
+    root: PathBuf,
+    rel: String,
+    who: String,
+}
 
 impl Drop for EditLock {
     fn drop(&mut self) {
-        let _ = fs::remove_file(&self.0);
+        if hooks::old_drop() {
+            let _ = remove_lock(&self.lock);
+            return;
+        }
+        let res = with_retry("remove edit lock", &self.lock, &DEFAULT_RETRY, || {
+            remove_lock(&self.lock)
+        });
+        let attempts = match &res {
+            Ok(()) => return,
+            Err(ProjectError::Io { source, .. }) if source.kind() == io::ErrorKind::NotFound => return,
+            Err(ProjectError::Retry { attempts, .. }) => *attempts,
+            Err(_) => 1,
+        };
+        let error = res.err().map(|e| e.to_string()).unwrap_or_default();
+        log_edit(
+            &self.root,
+            serde_json::json!({"t": crate::time::now(), "kind": "edit_lock_remove_failed", "who": self.who,
+                "path": self.rel, "error": error, "attempts": attempts}),
+        );
     }
+}
+
+fn remove_lock(lock: &Path) -> io::Result<()> {
+    if hooks::fail_removal() {
+        return Err(io::Error::from(io::ErrorKind::PermissionDenied));
+    }
+    fs::remove_file(lock)
 }
 
 /// A claim this writer made; removed when dropped (the lock is held, or the wait ended).
@@ -301,9 +334,11 @@ fn acquire(root: &Path, rel: &str, file: &Path, who: &str) -> Result<(EditLock, 
     let mut claim = Claim(None);
     let t0 = std::time::Instant::now();
     let mut broke = false;
+    let claim_on = !hooks::claim_off();
     loop {
+        hooks::before_attempt(&lock);
         // ADR 0669 D2: a fresh claim of another writer is a busy lock
-        let attempt = if claim.0.is_none() && claimed_by_other(&claim_path) {
+        let attempt = if claim_on && claim.0.is_none() && claimed_by_other(&claim_path) {
             Err(io::Error::from(io::ErrorKind::AlreadyExists))
         } else {
             OpenOptions::new().write(true).create_new(true).open(&lock)
@@ -312,7 +347,13 @@ fn acquire(root: &Path, rel: &str, file: &Path, who: &str) -> Result<(EditLock, 
             Ok(mut f) => {
                 let _ = writeln!(f, "{} {} {}", std::process::id(), who, crate::time::now());
                 drop(claim);
-                return Ok((EditLock(lock), broke));
+                let held = EditLock {
+                    lock,
+                    root: root.to_path_buf(),
+                    rel: rel.to_string(),
+                    who: who.to_string(),
+                };
+                return Ok((held, broke));
             }
             Err(e) if e.kind() == io::ErrorKind::NotFound => {
                 if let Some(d) = lock.parent() {
@@ -341,7 +382,7 @@ fn acquire(root: &Path, rel: &str, file: &Path, who: &str) -> Result<(EditLock, 
                         lock,
                     });
                 }
-                if claim.0.is_none() && t0.elapsed() >= EDIT_CLAIM_AFTER {
+                if claim_on && claim.0.is_none() && t0.elapsed() >= EDIT_CLAIM_AFTER {
                     if let Ok(mut f) = OpenOptions::new().write(true).create_new(true).open(&claim_path) {
                         let _ = writeln!(f, "{} {} {}", std::process::id(), who, crate::time::now());
                         claim.0 = Some(claim_path.clone());
@@ -388,7 +429,7 @@ pub fn replace_if_hash_with(
     who: &str,
     extra: serde_json::Map<String, serde_json::Value>,
 ) -> Result<Replaced> {
-    let (path, norm, (_lock, broke)) = match crate::paths::resolve_in(root, rel) {
+    let (path, norm, (held_lock, broke)) = match crate::paths::resolve_in(root, rel) {
         Ok(path) => {
             let norm = crate::paths::rel_string(root, &path).unwrap_or_else(|| rel.to_string());
             let held = acquire(root, &norm, &path, who)?;
@@ -406,6 +447,7 @@ pub fn replace_if_hash_with(
         }
         Err(e) => return Err(e),
     };
+    hooks::after_lock(&held_lock.lock);
     let current = match read(&path) {
         Ok(b) => Some(b),
         Err(ProjectError::Io { source, .. }) if source.kind() == io::ErrorKind::NotFound => None,
@@ -462,4 +504,136 @@ fn may_have_raced(e: &ProjectError) -> bool {
 /// Create a directory and its parents.
 pub(crate) fn mkdirs(path: &Path) -> Result<()> {
     fs::create_dir_all(path).map_err(io_err("create directory", path))
+}
+
+/// The call sites of the test hooks; constant in a build without the feature `test-hooks`.
+#[cfg(not(feature = "test-hooks"))]
+mod hooks {
+    use std::path::Path;
+    #[inline(always)]
+    pub(super) fn claim_off() -> bool {
+        false
+    }
+    #[inline(always)]
+    pub(super) fn old_drop() -> bool {
+        false
+    }
+    #[inline(always)]
+    pub(super) fn fail_removal() -> bool {
+        false
+    }
+    #[inline(always)]
+    pub(super) fn before_attempt(_: &Path) {}
+    #[inline(always)]
+    pub(super) fn after_lock(_: &Path) {}
+}
+
+#[cfg(feature = "test-hooks")]
+mod hooks {
+    use super::test_hooks::HOOKS;
+    use std::path::Path;
+    pub(super) fn claim_off() -> bool {
+        HOOKS.with(|h| h.borrow().claim_off)
+    }
+    pub(super) fn old_drop() -> bool {
+        HOOKS.with(|h| h.borrow().old_drop)
+    }
+    pub(super) fn fail_removal() -> bool {
+        HOOKS.with(|h| {
+            let mut h = h.borrow_mut();
+            if h.fail_removals > 0 {
+                h.fail_removals -= 1;
+                true
+            } else {
+                false
+            }
+        })
+    }
+    pub(super) fn before_attempt(lock: &Path) {
+        // taken out while it runs, so that the callback may itself touch the hooks
+        let f = HOOKS.with(|h| h.borrow_mut().before_attempt.take());
+        if let Some(mut f) = f {
+            f(lock);
+            HOOKS.with(|h| {
+                let mut h = h.borrow_mut();
+                if h.before_attempt.is_none() {
+                    h.before_attempt = Some(f);
+                }
+            });
+        }
+    }
+    pub(super) fn after_lock(lock: &Path) {
+        let f = HOOKS.with(|h| h.borrow_mut().after_lock.take());
+        if let Some(mut f) = f {
+            f(lock);
+            HOOKS.with(|h| {
+                let mut h = h.borrow_mut();
+                if h.after_lock.is_none() {
+                    h.after_lock = Some(f);
+                }
+            });
+        }
+    }
+}
+
+/// Test-only hooks of the edit lock (ADR 0676 H), compiled only with the feature `test-hooks`, which no default build and no
+/// other crate enables. They are thread-local: they act on the thread that calls [`replace_if_hash`].
+#[cfg(feature = "test-hooks")]
+pub mod test_hooks {
+    use std::cell::RefCell;
+    use std::path::Path;
+
+    /// A callback of a hook, given the lock path.
+    pub type Callback = Box<dyn FnMut(&Path)>;
+
+    /// The hooks of the calling thread.
+    #[derive(Default)]
+    pub struct Hooks {
+        /// Called with the lock path before every attempt of the acquire to take the lock (a delay of the waiter's
+        /// attempt).
+        pub before_attempt: Option<Callback>,
+        /// The old acquire: another writer's claim is not respected and no claim is made (ADR 0669 mutation M1).
+        pub claim_off: bool,
+        /// The old drop of the edit lock: one removal, its error ignored.
+        pub old_drop: bool,
+        /// Called with the lock path right after the lock is held, before the read and the write.
+        pub after_lock: Option<Callback>,
+        /// The next this many removal attempts of the lock fail with a synthetic `PermissionDenied`.
+        pub fail_removals: u32,
+    }
+
+    thread_local! {
+        pub(super) static HOOKS: RefCell<Hooks> = RefCell::new(Hooks::default());
+    }
+
+    /// Set the calling thread's hooks.
+    pub fn set(h: Hooks) {
+        HOOKS.with(|c| *c.borrow_mut() = h);
+    }
+
+    /// Clear the calling thread's hooks.
+    pub fn clear() {
+        set(Hooks::default());
+    }
+
+    /// Open `path` for reading without delete sharing (`FILE_SHARE_READ | FILE_SHARE_WRITE`) and keep the handle open for
+    /// `hold` on a thread; while it is open, a removal of the file fails with a sharing violation. Windows only (on other
+    /// platforms an open file can be unlinked).
+    #[cfg(windows)]
+    pub fn hold_without_delete_sharing(
+        path: &Path,
+        hold: std::time::Duration,
+    ) -> std::io::Result<std::thread::JoinHandle<()>> {
+        use std::os::windows::fs::OpenOptionsExt;
+        const FILE_SHARE_READ: u32 = 1;
+        const FILE_SHARE_WRITE: u32 = 2;
+        let f = std::fs::OpenOptions::new()
+            .read(true)
+            .share_mode(FILE_SHARE_READ | FILE_SHARE_WRITE)
+            .open(path)?;
+        Ok(std::thread::spawn(move || {
+            std::thread::sleep(hold);
+            drop(f);
+        }))
+    }
 }
