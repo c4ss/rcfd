@@ -1563,12 +1563,24 @@ fn trace<B: Branch>(case: &B, tag: &str, from: (St, Info), grid: &[f64], up: boo
 
 // ============================================================================ the fast test
 
-/// The symmetric state of PT at `p`.
-fn pt_sym(t: &Pitch, p: f64) -> St {
+/// The symmetric state of PT at `p`: the toy's Newton from `u = 0` (the registered set-up), or from the closed form `u_0 = 0`,
+/// `u_1 = 0.05 p`, `u_i = p b_i / k_i` (ADR 0700 amendment 1: at `p = 1` the tangent's first entry vanishes at `u = 0`).
+fn pt_sym(t: &Pitch, p: f64, amended: bool) -> St {
+    let u = if amended {
+        (0..TOY_N)
+            .map(|i| match i {
+                0 => 0.0,
+                1 => 0.05 * p,
+                _ => p * b_i(i) / k_i(i),
+            })
+            .collect()
+    } else {
+        vec![0.0; TOY_N]
+    };
     t.solve(
         &St {
             p,
-            u: vec![0.0; TOY_N],
+            u,
             states: Vec::new(),
         },
         p,
@@ -1577,12 +1589,16 @@ fn pt_sym(t: &Pitch, p: f64) -> St {
 }
 
 /// PT-S (`b3 = 2`, `beta = +1`) or PT-U (`b3 = 0.5`, `beta = -0.5`).
-fn pt_case(ch: &mut Checks, tag: &str, b3: f64) {
+fn pt_case(ch: &mut Checks, tag: &str, b3: f64, amended: bool) {
     let t = Pitch { b3 };
     let beta = b3 - PT_C * PT_C;
     let sup = beta > 0.0;
     let (lf, ap, lt) = (1.0, 1.11, 1.2);
-    let (sf, sa, sh) = (pt_sym(&t, lf), pt_sym(&t, ap), pt_sym(&t, lt));
+    let (sf, sa, sh) = (
+        pt_sym(&t, lf, amended),
+        pt_sym(&t, ap, amended),
+        pt_sym(&t, lt, amended),
+    );
     let (_, pf) = mode_at(&t, tag, &sf);
     let (_, pa) = mode_at(&t, tag, &sa);
     let (_, ph) = mode_at(&t, tag, &sh);
@@ -1674,13 +1690,24 @@ fn pt_case(ch: &mut Checks, tag: &str, b3: f64) {
 }
 
 #[test]
-fn f783_fast() {
+#[ignore = "ADR 0700: the registered fast run (on aaa276f9), known miss (amendment 1): the set-up panics before any check, the symmetric state of PT solved from u = 0 where the tangent's first entry 1 - p vanishes at p = 1.0 (the dense elimination refuses the zero pivot); f783_fast_amended starts it from the closed form"]
+fn f783_fast_known_miss() {
+    fast(false);
+}
+
+/// The corrected fast test of ADR 0700 amendment 1: the symmetric state of PT from its closed form.
+#[test]
+fn f783_fast_amended() {
+    fast(true);
+}
+
+fn fast(amended: bool) {
     let mut ch = Checks::new();
     let t_all = Instant::now();
 
     // PT-S, PT-U: the closed-form pitchforks.
-    pt_case(&mut ch, "PT-S", 2.0);
-    pt_case(&mut ch, "PT-U", 0.5);
+    pt_case(&mut ch, "PT-S", 2.0, amended);
+    pt_case(&mut ch, "PT-U", 0.5, amended);
 
     // C5: the continuity test against a distant root.
     let lo = Dist
