@@ -5,7 +5,7 @@ could have broken it.
 
 Usage (from the workspace root, after scripts/gate_test.py):
     python scripts/gate_attribute.py attribute --tsv gate-out/times.tsv --log gate-out/test.log --index gate-out/adr_test_index.json
-        [--base SHA] [--head SHA] [--rerun] [--rerun-timeout S] [--bisect] [--bisect-minutes M] [--probe-cmd CMD]
+        [--feature-binary BINARY=FEATURE] [--base SHA] [--head SHA] [--rerun] [--rerun-timeout S] [--bisect] [--bisect-minutes M] [--probe-cmd CMD]
         [--max-commits N] [--work DIR] [--json gate-out/attribution.json] [--summary FILE]
     python scripts/gate_attribute.py issues --json gate-out/attribution.json [--dry-run] [--include-flaky]
 attribute  --base: the SHA of the last green gate (empty or unknown: the last --max-commits first-parent commits).
@@ -13,6 +13,8 @@ attribute  --base: the SHA of the last green gate (empty or unknown: the last --
            --bisect: when more than one candidate commit remains, find the first candidate at which the test fails (assumes
            it passes at base and fails at head); each probe builds only that test's target in a git worktree under --work and
            runs the one test, or runs --probe-cmd there (exit 0 = pass). Stops when --bisect-minutes are used up.
+--tsv, --log  one or more files (ADR 0681: the gate's second step writes times_hooks.tsv and test_hooks.log); a missing file is skipped.
+--feature-binary  repeatable; the bisect probe of that test binary builds with `--features FEATURE` (a feature-gated test file).
 issues     one GitHub issue per non-flaky failure with `gh issue create`, skipped when an open issue has the same title.
 """
 import argparse
@@ -44,28 +46,38 @@ def git(repo, *args, check=True):
 # ---------------------------------------------------------------- reading the gate output
 
 
+def as_list(x):
+    """A path, a list of paths or None as a list (ADR 0681: several tsv and log files)."""
+    return [] if not x else [x] if isinstance(x, str) else list(x)
+
+
 def read_failures(tsv, log):
-    """Failed and timed-out tests from times.tsv; executables, a build failure and failed doc-tests from test.log."""
+    """Failed and timed-out tests from times.tsv; executables, a build failure and failed doc-tests from test.log.
+    Each argument is one path or a list of paths; a build failure in several logs is reported joined by "; "."""
     fails = []
-    if tsv and os.path.isfile(tsv):
-        for ln in open(tsv, encoding="utf-8").read().splitlines()[1:]:
+    for path in as_list(tsv):
+        if not os.path.isfile(path):
+            continue
+        for ln in open(path, encoding="utf-8").read().splitlines()[1:]:
             f = ln.split("\t")
             if len(f) >= 3 and f[2] in ("FAILED", "TIMEOUT"):
                 fails.append({"binary": f[0], "test": f[1], "outcome": f[2],
                               "seconds": float(f[3]) if len(f) > 3 and f[3] else None})
-    exes, build_failed, docs = {}, None, []
-    if log and os.path.isfile(log):
-        for ln in open(log, encoding="utf-8", errors="replace").read().splitlines():
+    exes, builds, docs = {}, [], []
+    for path in as_list(log):
+        if not os.path.isfile(path):
+            continue
+        for ln in open(path, encoding="utf-8", errors="replace").read().splitlines():
             m = RUNNING.match(ln)
             if m:
                 exes.setdefault(stem_of(m.group(2)), []).append({"src": m.group(1), "exe": m.group(2)})
             elif ln.startswith("gate_test: build failed"):
-                build_failed = ln.strip()
+                builds.append(ln.strip())
             else:
                 d = DOC_FAILED.match(ln)
                 if d:
                     docs.append(d.group(1))
-    return fails, exes, build_failed, docs
+    return fails, exes, "; ".join(builds) or None, docs
 
 
 # ---------------------------------------------------------------- index lookup
@@ -185,11 +197,13 @@ def run_test(exe, test, cwd, timeout):
     return ("ok" if ok else "FAILED"), time.time() - t
 
 
-def cargo_probe(entry, binary_rec):
-    """Shell command that builds only the test's target and runs the one test (cwd: the worktree)."""
+def cargo_probe(entry, binary_rec, features=None):
+    """Shell command that builds only the test's target and runs the one test (cwd: the worktree).
+    features: the feature of a feature-gated test binary (ADR 0681), added as `--features`."""
     kind, target, crate = binary_rec["kind"], binary_rec["target"], binary_rec["crate"]
     sel = "--lib" if kind == "lib" else f"--bin {target}" if kind == "bin" else f"--test {target}"
-    return f"cargo test -p {crate} --release {sel} -- --exact {shlex.quote(entry['test'])} --test-threads=1"
+    feat = f" --features {features}" if features else ""
+    return f"cargo test -p {crate}{feat} --release {sel} -- --exact {shlex.quote(entry['test'])} --test-threads=1"
 
 
 def bisect(cands, probe, minutes):
@@ -230,6 +244,14 @@ def worktree_probe(repo, work, cmd, timeout):
 # ---------------------------------------------------------------- output
 
 
+def adr_cell(f):
+    """ADR cell of the table: the primary ADR (ADR 0679) in bold first when the test has one, then the others."""
+    p = f.get("primary_adr")
+    if not p:
+        return ", ".join(f["adrs"]) or "unmapped"
+    return ", ".join([f"**{p}**"] + [a for a in f["adrs"] if a != p])
+
+
 def summary_md(res):
     head, base = res["head"], res["base"]
     lines = [f"### Failure attribution at {head[:12]} (ADR 0653)", ""]
@@ -250,7 +272,7 @@ def summary_md(res):
             if f.get("bisect") and f["bisect"].get("first_failing"):
                 cands = f"**bisect: `{f['bisect']['first_failing'][:10]}`**<br>" + cands
             lines.append(f"| `{f['crate'] or '?'}/{f['binary']}::{f['test']}` | {f['outcome']} | {rr} | "
-                         f"{', '.join(f['adrs']) or 'unmapped'} | {', '.join(f['items']) or '-'} | {cands or 'none'} |")
+                         f"{adr_cell(f)} | {', '.join(f['items']) or '-'} | {cands or 'none'} |")
     for d in res["doc_failures"]:
         lines.append(f"- doc-test failed: `{d['name']}` (crate {d['crate'] or '?'}, {len(d['candidates'])} candidates)")
     return "\n".join(lines) + "\n"
@@ -263,6 +285,7 @@ def attribute(a):
     base = (a.base or "").strip()
     commits, base_ok = first_parent_range(repo, base, head, a.max_commits)
     fails, exes, build_failed, docs = read_failures(a.tsv, a.log)
+    features = dict(x.split("=", 1) for x in a.feature_binary)
     cache, res = {}, {"head": head, "base": base, "base_found": base_ok, "max_commits": a.max_commits, "commits": commits,
                       "build_failed": build_failed, "failures": [], "doc_failures": []}
     t_start = time.time()
@@ -271,6 +294,7 @@ def attribute(a):
         crate = entry["crate"] if entry else b["crate"] if b else None
         test_file = entry["file"] if entry else b["file"] if b else None
         rec = {**f, "crate": crate, "file": test_file, "adrs": entry["adrs"] if entry else [],
+               "primary_adr": entry.get("primary_adr") if entry else None,
                "items": entry["items"] if entry else [], "evidence": entry["evidence"] if entry else [],
                "in_index": entry is not None, "rerun": None, "flaky": False, "bisect": None}
         if a.rerun:
@@ -288,7 +312,7 @@ def attribute(a):
             if left <= 0:
                 rec["bisect"] = {"skipped": "budget used up"}
             else:
-                cmd = a.probe_cmd or cargo_probe(rec, b)
+                cmd = a.probe_cmd or cargo_probe(rec, b, features.get(f["binary"]))
                 os.makedirs(a.work, exist_ok=True)
                 rec["bisect"] = bisect(rec["candidates"], worktree_probe(repo, a.work, cmd, a.probe_timeout), left)
                 rec["bisect"]["command"] = cmd
@@ -346,8 +370,9 @@ def main(argv=None):
     ap = argparse.ArgumentParser()
     sub = ap.add_subparsers(dest="cmd", required=True)
     p = sub.add_parser("attribute")
-    p.add_argument("--tsv", required=True)
-    p.add_argument("--log", required=True)
+    p.add_argument("--tsv", required=True, nargs="+")
+    p.add_argument("--log", required=True, nargs="+")
+    p.add_argument("--feature-binary", action="append", default=[], metavar="BINARY=FEATURE")
     p.add_argument("--index", required=True)
     p.add_argument("--repo", default=".")
     p.add_argument("--base", default=os.environ.get("GATE_LAST_GREEN", ""))

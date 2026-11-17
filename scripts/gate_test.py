@@ -9,6 +9,8 @@ Usage (from the workspace root):
 --tsv      write binary, test, outcome, seconds, peak working set (MB) for every test.
 --heartbeat S  every S seconds (default 300; 0 off) write a progress line to stderr: tests done of total, failures so far,
            elapsed, estimated time left, and the longest-running tests still going.
+--no-doc   skip the closing doc-tests (ADR 0681: a run restricted with `--test NAME`, where `cargo test --doc` is an error). Cargo options
+           in the selection come after `--`: gate_test.py --no-doc -- -p CRATE --features F --test NAME.
 --timeout-factor F, --timeout-min S, --timeout-max S (ADR 0129; defaults 5, 600, 3600): a test's time limit is
            clamp(F * its seconds in the --order TSV, min, max), max if it has no record; --timeout-max 0 turns the limit off. On expiry
            the test's process tree (never cargo) is killed and the test fails with outcome TIMEOUT; the other tests go on.
@@ -178,6 +180,7 @@ def main():
     ap.add_argument("--timeout-factor", type=float, default=5.0)
     ap.add_argument("--timeout-min", type=float, default=600.0)
     ap.add_argument("--timeout-max", type=float, default=3600.0)
+    ap.add_argument("--no-doc", action="store_true")
     ap.add_argument("select", nargs="*")
     a = ap.parse_args()
     select = a.select or ["--workspace"]
@@ -309,6 +312,9 @@ def main():
         open(a.tsv, "w", encoding="utf-8").write("\n".join(rows) + "\n")
 
     sys.stdout.flush()
+    if a.no_doc:
+        progress(f"gate_test: tests finished in {hms(wall)}, {fails} failed; doc-tests skipped (--no-doc)")
+        return 101 if fails else 0
     progress(f"gate_test: tests finished in {hms(wall)}, {fails} failed; running the doc-tests")
     t_doc = time.time()
     doc = subprocess.run(["cargo", "test", *select, "--release", "--no-fail-fast", "--doc"])
