@@ -265,3 +265,118 @@ model's `5.5e-3`). New test `fractional_start_up_channel_with_the_implicit_partn
 
 **Decision rule (amended).** In the registered rule read S2a' and S1a' in place of S2a (S1a stays as measured). S2a stays
 recorded as missed with the cause above. If S2a' is missed, partial as registered.
+
+## Addendum 1: results (2026-11-17)
+
+Measured against the limits registered above and in amendment 1; no limit was changed. Release builds on Windows, on a machine
+shared with other building agents. Commits: the registration bf69d23e (alone, first); the library change and the test file
+b2ac49e3 (before their run); amendment 1 bce614fa (after the registered run's S2a miss, before any code of the correction); the
+known-miss record and the corrected test 0a7d2693 (before its run). Each registered run was made once: the test file at b2ac49e3
+(5 tests, 3.3 s, `fast.log`), the amendment-1 test at 0a7d2693 (0.3 s, `amend1.log`), `rcfd-fv --lib`, the named files,
+`baseline_hashes`, `docs_site`. Logs in `w49i-work/f771-scratch`.
+
+**Built.** `crates/rcfd-fv/src/pressure.rs` 91 to 110: `apply_body_force_wall_gradient` (the PISO step's wall-gradient code
+moved, same operations). `crates/rcfd-fv/src/pimple.rs`: the import (29 to 30), the field `fractional_body_force` with its doc
+(222 to 230), its default (1059), the PISO call of the helper in place of the inline loop (1846).
+`crates/rcfd-fv/src/pimple/fractional.rs`: the module doc, the opt-in and its Chorin refusal, the wall gradient after
+`pressure_bc`, the predictor's cell term, the face term `c_f (b_f . S - B_f . S)` on internal, coupled and free-velocity
+boundary faces. The new test file `crates/rcfd-fv/tests/fractional_body_force_f771.rs`. One passage of
+`docs/dynamic-mesh.md`. No case key, no golden, no hash table.
+
+### Results
+
+| Check | Limit | Measured | Verdict |
+| --- | --- | --- | --- |
+| P1 (a3) twin `G_on(n)`, 200 steps | `<= 1e-8` each step | `1.84e-14` (step 32; step 1 `1.5e-15`) | met |
+| NC1 (a3 control) | `> 1e-8` on one step | largest `1.50e-3` (step 1); every step at least `4.4e-4` | held |
+| P2 pressure / `(abs(g_y) H)` | `<= 1e-8` each step | `3.8e-14` | met |
+| D1L divergence / `(U_ref h dz)` | `<= 1e-9` each step | `5.3e-15` | met |
+| C1 pair sums / `(U_ref h dz)` | `<= 1e-12` each step | `4.4e-16` | met |
+| G0 | `1e-12`, one-to-one | `8.9e-16`, yes | met |
+| R1, R1p (a4, twin settings) | `<= 1e-10` each step | `0`, `0` (exactly at rest) | met |
+| R2, R2p (a4, plain fractional) | `<= 1e-10` each step | `0`, `0` | met |
+| NR1 (a4 control) | `> 1e-6` on one step | `2.21e-3` (step 1) | held |
+| S1a (as registered) | `<= 2e-2` | `3.57e-4` | met |
+| S1b | `<= 2e-2` | `5.46e-3` | met |
+| S2a (as registered) | `<= 1e-9` each step | `5.79e-2` (step 1) | **missed** (known miss, amendment 1) |
+| S2b | `<= 1e-9` each step | `5.43e-14` | met |
+| NS | `> 0.5` | `1.0` | held |
+| S1a' (amendment 1) | `<= 2e-2` | `5.46e-3` | met |
+| S2a' (amendment 1) | `<= 1e-9` each step | `5.43e-14` | met |
+| DB1, DB2 | bit for bit, 20 steps | equal | met |
+| DB3 Chorin refusal | panics | panics with the message | met |
+| B1 | pass | see below | met |
+
+Printed, no limit: `T_on` against `T_off` `1.3e-7 U_ref`; the largest old-level defect on `T_on`'s faces at the images of
+`P`'s cut `5.6e-3 U_ref h dz` (estimate `3e-3`); C1 of `P_off` `3.3e-16`; `T_on`'s mean `u_x` at `t = 2` `0.5795`; R1 and R2
+largest `abs(phi)` `0`; the start-up `U_b` S-a `0.575194`, S-b and S-a' `0.578542` (the 1-D model `0.578542`, the closed form
+`0.575399`). NC1's control is largest at step 1, not from step 2 as in ADR 0687: with the hydrostatic start `P_off` and `T_on`
+already differ at step 1 by the coupled faces' coefficient (`dte` in `P_off` against the harmonic `Gamma` of `T`'s internal
+face, in front of the non-zero `R_f` of the hydrostatic pressure on the tilted cut), not by the carried defect; that is the
+same opt-in's other half (ADR 0687), so NC1 still measures `coupled_ddt_correction`.
+
+Suites (release, run once, all passed; ignored records not run): `baseline_hashes` 3 passed, 1 ignored; `rcfd-fv --lib` 115
+passed, 6 ignored; `coupled_ddt_fractional_bdf2_f757` 5 (1 ignored); `coupled_ddt_correction_f754` 2;
+`skewed_periodic_channel_f752` 3; `fractional_step` 13 (3 ignored); `fractional_step_consistent_f454` 3; `w33b_default_bits`
+1; `w33b_transient_order` 6 (9 ignored); `periodic` 3; `transient_buoyancy` 3; `rotational_sector_pressure_part_f753` 3;
+`consistent_periodic_f367` 13 (2 ignored); `step_consistent_paths_f443` 5 (2 ignored; 57 s); `piso_thin_gap_f299` 18 (2
+ignored; 52 s). `cargo fmt -p rcfd-fv --check` clean; `cargo clippy --release -p rcfd-fv --all-targets -- -D warnings` clean.
+`docs_site` 2 passed.
+
+### Mutations (scratch copy `w49i-work/f771-scratch/mut` of 0a7d2693, script `mutate.py`, target `target-mut`; the new test file run once per mutation)
+
+| Mutation | Must fail | Result |
+| --- | --- | --- |
+| M0 (harness, none) | none | every test passes with the registered numbers |
+| MB1 opt-in not read | R1 (S1a) | caught: R1 `2.2e-3`, R1p, R2, R2p; S1a' `1.0`, S2a' |
+| MB2 cell term dropped | R1, S1a | caught: R1 `1.2e-2`, R2; S1a' `1.0`, S2a' |
+| MB3 face term dropped | R1 | caught: R1 `5.4e-3`, R2 `5.7e-3`; the twin and start-up met (uniform force) |
+| MB4 coupled faces' face term dropped | R1 | caught: R1 `3.3e-3`, R2 `3.5e-3` |
+| MB5 wall gradient dropped | R1 | caught: R1 `1.2e-2`, R2; S2a' `0.86` |
+| MB6 `dte` in place of `c_f` | R1 (R2 met) | caught: R1 `5.7e-3`, R1p; R2 met as predicted |
+| MF1 coupled ddt term not read | P1 | caught: P1 `1.5e-3` (the control's value), P2 |
+
+Seven of seven required mutations caught. MB1 and MB2 are judged on S1a' (amendment 1); the known-miss record is ignored and
+was not run under the mutations.
+
+### Deviations
+
+- Amendment 1 (registered before its code and run): the plain fractional start-up run missed S2a by the pre-existing lagged
+  periodic partner of the fractional predictor (ADR 0687 read 3), not by the body force; the record is kept as
+  `fractional_start_up_channel_against_the_model_and_the_closed_form_known_miss`; S2a' with `fractional_periodic_implicit`
+  met at `5.4e-14`.
+- NC1's control peaks at step 1 (explained above); the registered check ("at least one step") is unaffected.
+
+### Not covered
+
+The Chorin form (refused); BDF2 (same coefficients, not run); `non_orth_correctors > 0` (the fractional step has no coupled
+non-orthogonal correction); rotational pairs (the coupled `B_f` takes the partner's cell value unrotated, as `gf` does);
+fixed-pressure boundary faces (the term is coded, no run has one); moving meshes; the hook's `source_force`; a physical
+non-uniform force (the rest state is a discrete potential force); no case key; the defaults unchanged.
+
+### Decision
+
+By the rule as amended: P1, NC1, R1, R2, R1p, R2p, NR1, DB1, DB2, DB3 and B1 met (a1 to a4); P2, D1L, C1, G0 held; S1a, S1b,
+S1a', S2a', S2b and NS met; MB1 to MB6 and MF1 caught. S2a of the first set-up is missed with its cause diagnosed (amendment
+1). **Done** on the amended rule; on the rule as first registered a missed supporting check gives partial.
+
+### Remaining questions
+
+1. **The default.** Should the fractional step read the body force without the opt-in? Options: (a) make
+   `fractional_body_force` the default (changes default results of every fractional run with a body force, which today
+   silently ignores it; hashes not checked for such a case); (b) keep it opt-in; (c) keep the default but refuse a body force
+   without the opt-in. Recommendation (a) together with ADR 0687's coupled-face opt-ins, for the maintainer; (c) as the
+   smaller step if (a) is not wanted. Not taken (changes default results).
+2. **The Chorin form.** Refused (Q1 taken). Options: (a) keep the refusal; (b) a balanced Chorin form as a follow-up.
+   Recommendation (a) unless Chorin runs with gravity are needed.
+3. **The plain fractional step's lagged periodic partner.** It costs `5.8e-2` of the start-up channel's mean at step 1 at the
+   cut (S2a) and `1.9e-2 U_ref` on the channel (ADR 0687 NCL). Recommendation: make `fractional_periodic_implicit` the
+   default with ADR 0687's Q3 (maintainer).
+
+## For the lead: roadmap entries
+
+> Proposed status: done.
+
+> ADR 0691, 2026-11-17: with the opt-in PimpleSettings::fractional_body_force (incremental form only, the Chorin form refused; default false, bit-identical) the fractional step reads PimpleSolver::body_force in the PISO step's three places: the walls' balancing pressure gradient (pressure::apply_body_force_wall_gradient, now shared with the PISO step), the predictor's cell term, and the balanced-force face term c_f (b_f . S - B_f . S) with each face's pressure coefficient (dte, or the harmonic Gamma with fractional_step_consistent and on coupled faces with coupled_ddt_correction). On ADR 0672's channel with its body force (0.8, -2) from the hydrostatic start the fractional run with coupled_ddt_correction stays within 1.8e-14 U_ref of its unrolled twin on every one of 200 steps (limit 1e-8) against 4.4e-4 to 1.5e-3 without it; pair fluxes opposite to 4.4e-16. A discrete hydrostatic rest state (a non-uniform potential force on the skewed periodic mesh) stays exactly at rest (limit 1e-10) with the twin settings and with the plain fractional step, against 2.2e-3 without the opt-in; the start-up channel matches its 1-D discrete model to 5.4e-14 and the closed form to 5.5e-3. The plain start-up run first missed its model by 5.8e-2 (kept as a known miss): the lagged periodic partner of the default fractional predictor, not the body force; with fractional_periodic_implicit it is within 5.4e-14. Seven of seven mutations caught (opt-in not read, cell term, face term, coupled face term, wall gradient, dte in place of Gamma, coupled ddt term). Not covered: BDF2, non-orthogonal correction, rotational pairs, fixed-pressure faces, the hook's source_force; whether the opt-in becomes the default is open for the maintainer.
+
+> Follow-up proposed: "Fractional-step coupled-face opt-ins as defaults". Deps F-771, F-757. Acceptance: the maintainer decides whether fractional_body_force, fractional_periodic_implicit and coupled_ddt_correction (with fractional_step_consistent) become the fractional step's defaults; if so, the changed default results are listed case by case, the hash tables are re-recorded only with the maintainer's approval, and ADR 0687's and ADR 0691's twin checks pass with the defaults alone.
