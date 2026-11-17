@@ -512,6 +512,77 @@ test('Addendum 22: middle-drag pans (the view direction kept); Alt and the left 
   await shot('camera-after-orbit');
 });
 
+test('Q-A22-2: Alt used for an orbit drag does not open the menu bar when let go; a plain Alt still does', async () => {
+  await home();
+  // the window's menu bar hidden until Alt shows it (autohide), so Electron's Alt handling can be read from the window.
+  // The input goes through webContents.sendInputEvent: Electron's menu bar sees the key events the page did not
+  // handle on that path (Playwright's keyboard, through the DevTools protocol, never reaches it).
+  const menu = () => app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0]!.isMenuBarVisible());
+  const hide = () =>
+    app.evaluate(({ BrowserWindow }) => {
+      const w = BrowserWindow.getAllWindows()[0]!;
+      w.setAutoHideMenuBar(true);
+      w.setMenuBarVisibility(false);
+    });
+  type Input = Parameters<Electron.WebContents['sendInputEvent']>[0];
+  const send = (events: Input[]) =>
+    app.evaluate(({ BrowserWindow }, list) => {
+      const wc = BrowserWindow.getAllWindows()[0]!.webContents;
+      for (const e of list) wc.sendInputEvent(e);
+    }, events);
+  const altDown = { type: 'rawKeyDown', keyCode: 'Alt', modifiers: ['alt'] } as unknown as Input;
+  const altUp = { type: 'keyUp', keyCode: 'Alt' } as Input;
+  // Alt shows the bar and gives it the keyboard; Escape gives the keyboard back and hides it again (hiding it through
+  // the window alone leaves the keyboard in the bar)
+  const dismiss = async () => {
+    await send([{ type: 'rawKeyDown', keyCode: 'Escape' } as unknown as Input, { type: 'keyUp', keyCode: 'Escape' } as Input]);
+    await expect.poll(menu).toBe(false);
+  };
+  const canvas = page.locator('.fv-frame canvas');
+  // the count of key-ups taken so far (the earlier Alt orbit tests on this canvas took theirs)
+  const before = Number((await canvas.getAttribute('data-camera-alt-swallowed')) ?? '0');
+  const after = String(before + 1);
+  try {
+    await hide();
+    expect(await menu()).toBe(false);
+    // the control: a plain Alt press and release reaches the menu bar
+    await send([altDown, altUp]);
+    await expect.poll(menu, { message: 'a plain Alt shows the menu bar' }).toBe(true);
+    await dismiss();
+    await page.evaluate(() => new Promise((done) => requestAnimationFrame(() => requestAnimationFrame(done))));
+    // Alt with an orbit drag: the release is the page's, the menu bar stays hidden (the frame read with the bar hidden)
+    const box = await frameBox();
+    const x = Math.round(box.x + box.width * 0.45);
+    const y = Math.round(box.y + box.height * 0.55);
+    const held = ['alt', 'leftButtonDown'] as Input['modifiers'];
+    await send([
+      altDown,
+      { type: 'mouseMove', x, y, modifiers: ['alt'] } as Input,
+      { type: 'mouseDown', x, y, button: 'left', clickCount: 1, modifiers: ['alt'] } as Input,
+      ...[1, 2, 3, 4].map((k) => ({ type: 'mouseMove', x: x + 15 * k, y: y + 5 * k, button: 'left', modifiers: held }) as Input),
+      { type: 'mouseUp', x: x + 60, y: y + 20, button: 'left', clickCount: 1, modifiers: ['alt'] } as Input,
+      altUp,
+    ]);
+    await expect(canvas).toHaveAttribute('data-camera-alt-swallowed', after);
+    await expect(canvas).toHaveAttribute('data-camera-moved', 'true');
+    await page.waitForTimeout(200);
+    expect(await menu(), 'Alt of an orbit drag leaves the menu bar alone').toBe(false);
+    // and the next plain Alt reaches it again
+    await send([altDown, altUp]);
+    await expect.poll(menu).toBe(true);
+    await expect(canvas).toHaveAttribute('data-camera-alt-swallowed', after);
+    await dismiss();
+  } finally {
+    await app.evaluate(({ BrowserWindow }) => {
+      const w = BrowserWindow.getAllWindows()[0]!;
+      w.setAutoHideMenuBar(false);
+      w.setMenuBarVisibility(true);
+    });
+  }
+  await expect.poll(() => page.evaluate(() => [innerWidth, innerHeight])).toEqual([1440, 900]);
+  await home();
+});
+
 test('Addendum 22: the wheel dollies toward the point under the cursor; a double-click puts the pivot there', async () => {
   let c0 = await home();
   const box = await frameBox();

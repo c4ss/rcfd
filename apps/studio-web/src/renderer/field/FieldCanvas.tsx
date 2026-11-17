@@ -461,6 +461,20 @@ function Scene({ surface, values, valuesPer = 'cell', range, grid, onMoved, onVi
       e.stopPropagation();
       held.delete(e.code);
     };
+    // Q-A22-2 (the maintainer, 2026-11-17): Alt used for an orbit drag does not also move the focus to the window's menu
+    // bar when it is let go. Electron toggles the menu bar on an Alt key-up the page did not handle, so the page handles
+    // (prevents) that one key-up; a plain Alt press and release still reaches the menu.
+    let altDragged = false;
+    const onAlt = (e: KeyboardEvent) => {
+      if (e.key !== 'Alt') return;
+      if (e.type === 'keydown') {
+        if (!e.repeat) altDragged = false;
+      } else if (altDragged) {
+        altDragged = false;
+        e.preventDefault();
+        el.dataset['cameraAltSwallowed'] = String(Number(el.dataset['cameraAltSwallowed'] ?? '0') + 1);
+      }
+    };
     const endFly = () => {
       held.clear();
       cancelAnimationFrame(raf);
@@ -478,6 +492,7 @@ function Scene({ surface, values, valuesPer = 'cell', range, grid, onMoved, onVi
       if (!mode) return;
       e.preventDefault();
       if (mode === 'orbit') {
+        altDragged = true;
         const p = hitAt.current(...ndc(e));
         if (p) view.setPivot(p);
       }
@@ -536,8 +551,12 @@ function Scene({ surface, values, valuesPer = 'cell', range, grid, onMoved, onVi
     el.addEventListener('dblclick', onDouble);
     el.addEventListener('contextmenu', noMenu);
     el.addEventListener('mousedown', noAutoscroll);
+    window.addEventListener('keydown', onAlt, true);
+    window.addEventListener('keyup', onAlt, true);
     return () => {
       endFly();
+      window.removeEventListener('keydown', onAlt, true);
+      window.removeEventListener('keyup', onAlt, true);
       el.removeEventListener('pointerdown', onDown);
       el.removeEventListener('pointermove', onMove);
       el.removeEventListener('pointerup', onUp);
