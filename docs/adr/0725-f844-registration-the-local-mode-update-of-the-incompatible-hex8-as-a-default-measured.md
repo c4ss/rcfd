@@ -319,3 +319,178 @@ The heavy records are not run under the mutations.
    on the maintainer's standing instruction of 2026-11-11 (take the recommendation).
 2. **Whether any option becomes the default**: not taken (it changes default results); open for the maintainer. This item
    only measures and recommends.
+
+## Addendum 1: results (2026-11-17)
+
+Logs in `w49i-work/f844-scratch`: `run1-default.log` (the four default tests, one after the other, on the test commit
+e025242c; 51 s), `run2-heavy-ws.log` (79.5 s), `run3-heavy-bt.log` (93.7 s), `run4-heavy-tr.log` (198.4 s), each heavy record
+run once on e025242c; `mutations.log` and `mut-MU*.log`; `s7-*.log`; `b-src-diff.log`; `s6-*.log`; `s8-docs.log`. Each
+registered test was run once. No limit was changed after a run, and there was no amendment. The only code change after the
+runs is the measured ignore text of the three heavy records (checked by S6).
+
+### The set-ups (reading c4: converged, within the ADR 0636 tolerances of F-bar, positive definite)
+
+| Set-up | P (default) | WS (warm start) | BT (backtracking) | TR (trust region) |
+|---|---|---|---|---|
+| DB1 block `4^3` `0.1 h` | passed | passed | passed | passed |
+| DB2 block `4^3` `0.25 h` | passed | passed | passed | passed |
+| DB3 block `8^3` `0.1 h` | passed | passed | passed | passed |
+| DB4 block `8^3` `0.25 h` | fails: element 476 inverted, load factor `0.675` | **passed** (`0.0750`, `0.0287`; 10 increments, 45 iterations) | fails: element 475, modes not converged, `0.8906` | passed (`0.0750`, `0.0287`; 45) |
+| DC1 to DC4 cantilevers | passed | passed | passed | passed |
+| DS1 seed `0xF739_0001` | fails: element 475 inverted, `0.809` | **passed** (`0.0743`, `0.0495`; 46) | passed (`0.0743`, `0.0495`; 46) | passed (`0.0743`, `0.0495`; 46) |
+| DS2 seed `0xF739_0002` | fails: element 420 inverted, `0.9375` | **passed** (`0.0821`, `0.0441`; 11 increments, 2 halved, 46) | fails: element 420, modes not converged, `0.9375` | fails: element 420, `0.9406` |
+| DS3 seed `0xF739_0003` | fails: element 476, modes not converged, `0.856` | **passed** (`0.0787`, `0.0490`; 47) | fails: element 476, `0.856` | fails: element 476, step rejected 21 times, `0.8469` |
+| **passed of 11** | **7** | **11** | **8** | **9** |
+
+On the set-ups that every variant passed, the four variants needed the same global iterations: 125 on DB1 to DB3 and 176 on DC1
+to DC4, with 10 increments each and no halving. They agreed in their measures to the printed digits (`e_R`, `e_w` of DB1
+`0.1202`, `0.0406`; DC2 `e_P`, `e_d` `0.0694`, `0.0045`) and in SL (`6.63e-3` to `4.54e-6`). No variant regresses: each passes
+every set-up that P passes. The set-up rows of the warm start alone equal those of ADR 0660's W (warm start, backtracking and
+decrease test) in every printed digit: the extra protections of W are not needed on these set-ups once the start is warm.
+
+### The fast local tally (`f844_local_tally_at_the_stall_of_seed_3`, 4.4 s)
+
+At ADR 0660's trial state `u_T` of seed 3, the plain iteration from `alpha = 0` fails at one element of 512, element 476 (an
+inverted point, `det F = -0.329`, after 2 iterates). There BT from 0 does not converge in 25 iterates, and TR from 0 is
+rejected 21 times at `|r|_2 = 97.74`, as ADR 0660 recorded. The continuation from the element's root at `u_b` converges in 4
+iterates. The tally's entry agrees (LT4). The option of this tally is BT, which has no root there, so the entry is not
+counted as regular.
+
+### The traces (reading c3: the driver's own states)
+
+| Trace | Stop, reading | Accepted after `S4` | Last `a` | Solves, failures | Bordered iterations | Brackets the fold |
+|---|---|---|---|---|---|---|
+| P (plain control PLN) | lost, "local breakdown: the local iteration" | 2 | `1.649773e-4` | 10, 8 (all local: element 3720 inverted) | 3, 3 | no |
+| **WS** | **fold + 2, "fold"** | **11** | `2.323516e-4` | **12, 1** (discontinuous, not local) | 3 at every state | **yes**: `[2.164988e-4, 2.204620e-4]` |
+| BT | lost, "undecided" | 7 | `1.830594e-4` | 20, 13 (12 local: element 3720, modes not converged in 25; then the bordered Newton not converged in 20) | 3, 3, 3, 3, 3, 3, 2 | no |
+| TR | lost, "undecided" | 10, all halved toward step 2 | `1.689173e-4` | 27, 17 (12 local: element 3720, the step rejected 21 times at `|r|_2` 7.65; then 5 bordered Newtons not converged in 20 iterations, 15 to 18 s each) | 3, 3, 3, 3, 2, 2, 2, 3, 5, 17 | no |
+
+"Undecided" for BT and TR follows ADR 0718 D4, unchanged. Their last failure was a bordered Newton that did not converge,
+which is not a local failure, so D4 does not read it as a local breakdown. Every failure before that one was local, in
+element 3720.
+
+**The states where the plain iteration from `alpha = 0` fails at a regular root (c6).** On every trace and at every accepted
+state, the only element in which the plain iteration from 0 fails is **element 3720**. In the other 4095 elements it reaches
+the option's root at every state of every trace.
+
+- On WS's trace this happens at **4 of 12 states**, the four of ADR 0723: steps 2 and 4, the halved step 9 and step 10 (`a`
+  `1.689405e-4`, `1.847933e-4`, `2.204620e-4`, `2.323516e-4`). At each the warm root is regular (`l_min` `2.589e4`,
+  `2.939e4`, `3.860e4`, `4.210e4`), is the continuation root, and needed no fallback: none of the 4096 elements fell back in
+  any of the 12 commits. At the same four states **BT from 0 reaches that root once** (step 2), and **TR from 0 never**.
+- On BT's trace this happens at **1 state** (`a = 1.689405e-4`). There BT's iteration from 0 converges in 19 iterates to the
+  continuation root (`l_min 2.589e4`). At step 4 (`1.8479e-4`) BT itself fails in element 3720. The plain iteration from 0
+  fails there too, at a regular root, as WS's trace shows.
+- On TR's trace this happens at **8 states**, all between `1.6696e-4` and `1.68917e-4`. TR converges there in 7 to 17 iterates
+  to the continuation root (`l_min 2.55e4` to `2.59e4`). Its trace halves toward step 2's target `1.6894e-4` without reaching
+  it.
+
+### The checked rows
+
+| Id | Limit | Measured | Met |
+|---|---|---|---|
+| M0, M1 | `> 0`; exactly | as ADR 0658 (block `0.6977`, ..., seeds `0.0680`, `0.0957`, `0.1788`); `27`, `343`, `9`, `171`, `343` | yes |
+| RP0 | P passed on the seven, failed on DB4, DS1 to DS3 | as registered | yes |
+| RP1 | `476`, `475`, `420`, `476` | `476`, `475`, `420`, `476` | yes |
+| RB0 | BT fails DB4 at `475` | fails, `475` (`0.8906`) | yes |
+| RB1 | `0` bits on the seven | `0` on each | yes |
+| RT0 | TR passes the eight meshes and DS1; fails DS2 (`420`), DS3 (`476`) | as registered | yes |
+| NCW | `> 0` | `252` | yes |
+| NCT | `> 0` | `240` | yes |
+| NCW0 | `0` | `0` | yes |
+| LT1 | fails | fails (26 iterates, not converged) | yes |
+| LT2 | fails | fails (16 iterates, rejected 21 times, `|r|_2 97.74`) | yes |
+| LT3 | converges within 25 | 4 iterates | yes |
+| LT4 | equal | equal (element 476 is in the list) | yes |
+| OB, R1, S5 (three runs) | ADR 0718's limits | equal; `9.95e-11`, `nu 1`; rungs 1 to 5, `2.3e-13`, `2.2e-10`, `9.0e-8` (each run identical) | yes |
+| W0 | `0`; bit-identical; equal | `0` failed commits, `0` entries; `-4.163800829103926e1` both; `1`, `1` | yes |
+| RW1 | `<= 1e-11`, 11 states | 11 states, largest `4.2e-13` | yes |
+| RW2 | "fold + 2"; `12`; brackets | "fold + 2"; `12`; `[2.164988e-4, 2.204620e-4]` | yes |
+| RW3 | exactly 4 states, `<= 1e-8` | 4, `2.4e-10` | yes |
+| PLN | `<= 1e-9`; `<= 1e-9`; "lost"; local breakdown | `6.8e-14`; `2.4e-10`; "lost"; "local breakdown: the local iteration" | yes |
+| B0 | `0` | `0` | yes |
+| T0 | `> 0` if it evaluates | evaluates, `12808` | yes |
+| FW1 (four traces) | `<= 1e-9`; holds | `8.1e-14` (WS), `9.0e-14` (PLN, BT), `1.6e-13` (TR); holds | yes |
+| B | empty | empty | yes |
+| S6 | clean | `cargo fmt -p rcfd-fem --check`, `cargo clippy -p rcfd-fem --release --all-targets -- -D warnings` clean | yes |
+| S7 | pass | release: `--lib` 15 passed; `si_eas_hg6` 4 passed (2 ignored), `si_eas_hg7` 4 (2), `si_eas_hg8` 5 (2), `si_eas_hg20` 1 (1); the new file 4 passed, 3 ignored | yes |
+| S8 | pass | `cargo test -p rcfd-cli --release --test docs_site` passed | yes |
+| S9 | builds | 006d8687 (docs), e025242c (built for the runs), the results commit | yes |
+
+### The recommendation by rule D4
+
+- regress: none (WS, BT and TR each pass the seven set-ups P passes).
+- `N`: WS 11, TR 9, BT 8 (P 7).
+- The trace brackets ADR 0723's fold: WS only.
+- **One option qualifies: WS.** By rule 3 **the recommendation is the warm start of ADR 0660 D1 as the default local update
+  of the incompatible Hex8 at finite strain** (rule L, the plain update, the fallback to `alpha = 0`). The tie-break was not
+  needed. `C(BT) = 1` and `C(TR) = 0` of the four c6 states of WS's trace.
+
+The default switch is the maintainer's decision and is not made here. It would change the default results of every
+nonlinear solve with an Incompatible Hex8 in their last bits (NCW: 252 values on DC2, the measures equal to the printed
+digits), it would change the default outcome where the default fails today (DB4, DS1 to DS3, the `16^3` trace), and it would
+lengthen the committed state of every Incompatible Hex8 by its nine modes (ADR 0660 Q2).
+
+### Mutations (each on a scratch copy of e025242c, run once against the four default tests)
+
+| Id | Caught | By |
+|---|---|---|
+| MU1 (WS's flag ignored) | yes | NCW (`0` bits) |
+| MU2 (TR's flag ignored) | yes | NCT (`0` bits), RT0 on DB4 and DS1 (TR then fails as P) |
+| MU3 (BT's flag ignored) | yes | RB0 (DB4 fails at element 476, not 475) |
+| MU4 ("passed" without the tolerance and SL) | **no** (registered as possibly not caught) | every check passes: every converged run here is within the tolerances and positive definite |
+| MU5 (the tally's continuation from `alpha = 0`) | yes | LT4 (the entry's continuation fails while the direct one converges); LT3 was registered as the catcher but computes the continuation directly, so it does not see the tally's code (a deviation in the catching row, not in the outcome) |
+| MU6 (a failed solve counted as passed) | yes | RP0 on DB4, DS1 to DS3; RT0 on DS2, DS3 |
+
+Five of six caught: every mutation registered as catchable; MU4, registered as possibly not caught, is not.
+
+### Deviations
+
+- The TR record took 198.4 s, above the brief's 170 s. It stayed inside the registered time cap of 300 s, which did not
+  act. Five bordered Newtons that did not converge cost 15 to 18 s each. This is reported as slow, not stopped.
+- MU5 was caught by LT4, not by LT3 as registered (see the mutation table).
+- The seeds test was estimated at about 90 s and took 24.7 s, and all four default tests together took 51 s. No default test
+  became a heavy record.
+- Reading c5 asks for the local iterates of the option at each tallied element. For BT and TR they are reported (19; 7 to
+  17). For WS the tally reads the committed modes, so it reports 0 iterates: the warm iteration of the commit is not
+  recorded. ADR 0723 X4 measured that iteration at 3 to 7 iterates.
+
+### Not run
+
+Everything registered was run. Not run by design (Limits): ADR 0660's combination W on the trace, the line search, history
+materials, the transient and rotating paths, the lowest pairs along the traces. The whole rcfd-fem suite was not run (rule 7;
+the daily gate). `baseline_hashes` was not run (no library line changed, B).
+
+### Decision
+
+**done**, by the registered rule: every checked row of the set-up tests, the fast tally and the three heavy records met in
+their single registered runs; every option measured on the eleven set-ups and on the trace; the recommendation stated by rule
+D4 (the warm start); B and S6 to S9 met; MU1, MU2, MU3, MU5, MU6 caught (MU4 recorded, not caught, as registered as possible);
+no amendment. The default is unchanged; the switch is the maintainer's decision (remaining question 1).
+
+### Remaining questions
+
+1. **The default switch** (open, for the maintainer; not taken because it changes default results). Options: (a) make the
+   warm start the default local update (the recommendation of rule D4). This changes the last bits of every Incompatible
+   Hex8 nonlinear result and the length of the committed states, so it needs the maintainer's approval for any hash or golden
+   it moves. (b) Keep it opt-in and document it as the recommended setting for rule L at finite strain. (c) Make ADR 0660's
+   combination W the default after measuring W on the trace. Recommendation: (a), after the follow-up proposed below has
+   measured what the switch would move; (b) until then.
+2. **The fallback of the warm start.** A failed warm iteration falls back to the plain iteration from 0. On every set-up and
+   trace here that fallback never acted, but it is exactly the iteration that fails at element 3720. Options: (a) a later
+   item measuring a fallback with the backtracking (BT rescued 1 of 4 states; ADR 0660's W uses BT and the decrease test);
+   (b) leave it. Recommendation: (b) until a case is found where the warm iteration fails.
+3. **The trust region.** On the trace TR never got past the first state where the plain iteration fails and it fails there
+   (step 2), and on the WS trace TR from 0 reached the root at none of the four states. That matches ADR 0660 TR2 (a stall
+   at a regular state). Recommendation: record it as not recommended as a default (ADR 0660 question 1 (a)).
+
+## For the lead: roadmap entries
+
+> Proposed status: done.
+
+> F-844 (ADR 0725, 2026-11-17): the three local mode updates of the incompatible Hex8 with rule L, each measured alone as the would-be default beside today's default, test-only, no default changed. On the eleven set-ups of ADR 0658 the default passes 7, the backtracking of ADR 0655 8, the trust region of ADR 0660 D2 9 and the warm start of ADR 0660 D1 all 11 (the 8^3 block at 0.25 h and the three seeds of ADR 0658 within 8.2 per cent of the F-bar punch reaction, positive definite). None fails a set-up the default passes, and where all four pass they take the same increments and Newton iterations. On ADR 0723's fine trace from rung 4, carrying only the element states the driver itself commits, the warm start reproduces ADR 0723's branch to the fold (11 states, lambda to 4e-13, the fold bracketed in 12 solves). The plain control is lost after 1.65e-4 as in ADR 0718, the backtracking after 1.83e-4, and the trust region never reaches 1.69e-4. Along the whole trace the plain iteration from alpha = 0 fails in one element only, element 3720, at 4 of the warm trace's 12 states, each at a regular root (l_min 2.6e4 to 4.2e4) that the warm start follows without a fallback. From alpha = 0 the backtracking reaches that root at 1 of the 4 states and the trust region at none. By the rule registered before the run, the warm start is the recommended default local update. The switch changes default bits and the length of the committed element states, so it is left to the maintainer. A fast tally at ADR 0660's stall state of seed 3 covers the trace's tally code. Default bits unchanged (no library line); five of six mutations of the measurement caught (the sixth registered as possibly not caught); no amendment.
+
+> F-740 (ADR 0660, 2026-11-16), add at the end of its note: ADR 0725 measures the warm start alone (without the backtracking and the decrease test) as the would-be default: it passes all eleven set-ups of ADR 0658 with W's values and ADR 0723's trace to the fold, while the trust region alone passes 9 of 11 and is lost on the trace before 1.69e-4.
+
+> F-841 (ADR 0723, 2026-11-17), add at the end of its note: ADR 0725 repeats the warm trace with the commit taken from the library's per-element warm evaluation (the driver's own trial states) and reproduces it (lambda to 4e-13); the plain iteration from alpha = 0 fails at element 3720 alone among the 4096 elements.
+
+> Follow-up proposed: What switching the default local mode update of the incompatible Hex8 to the warm start would move. Deps F-844. Acceptance: Every limit not stated here is registered in the ADR before the run. With the model's warm start turned on in test-only copies of each case (no default changed), the existing nonlinear tests of the incompatible Hex8 and the rcfd-api baseline cases that use the element: the number of results whose bits change, the largest relative change of each recorded measure against a registered tolerance, every solve whose outcome changes, and the committed element states through the save and restart path; the default bits unchanged.

@@ -3022,7 +3022,7 @@ mod trace {
     }
 
     #[test]
-    #[ignore = "ADR 0725: the heavy record of WS on ADR 0723's trace (D2), run once with --ignored"]
+    #[ignore = "ADR 0725: the heavy record of WS on ADR 0723's trace (D2), run once with --ignored (79.5 s), every row met: OB, R1, S5; W0 bit-identical; ADR 0723's 11 accepted states reproduced (lambda to 4.2e-13), fold + 2 in 12 solves, the fold bracketed; the plain iteration from 0 fails at element 3720 alone, at 4 of 12 states, each at a regular warm root (l_min 2.59e4 to 4.21e4); BT from 0 reaches it at 1 of 4, TR at 0; f844_local_tally_at_the_stall_of_seed_3 covers the tally"]
     fn f844_trace_warm_heavy() {
         let mut ch = Checks::new();
         let t_all = Instant::now();
@@ -3100,7 +3100,7 @@ mod trace {
     }
 
     #[test]
-    #[ignore = "ADR 0725: the heavy record of BT on ADR 0723's trace with the plain control PLN (D2), run once with --ignored"]
+    #[ignore = "ADR 0725: the heavy record of BT on ADR 0723's trace with the plain control PLN (D2), run once with --ignored (93.7 s), every row met: OB, R1, S5; PLN reproduces ADR 0718 (lost after 1.6498e-4, local breakdown); B0 bit-identical; BT passes the plain failure at 1.6894e-4 (19 local iterates, the continuation root) and is lost at 1.8306e-4 (12 local failures of element 3720, then a bordered Newton not converged), 7 states, 20 solves, reading undecided"]
     fn f844_trace_backtracking_heavy() {
         let mut ch = Checks::new();
         let t_all = Instant::now();
@@ -3135,7 +3135,7 @@ mod trace {
     }
 
     #[test]
-    #[ignore = "ADR 0725: the heavy record of TR on ADR 0723's trace (D2), run once with --ignored"]
+    #[ignore = "ADR 0725: the heavy record of TR on ADR 0723's trace (D2), run once with --ignored (198.4 s), every row met: OB, R1, S5; T0 (12808 entries differ); TR never reaches the target 1.6894e-4: 10 states halved toward it to 1.68917e-4, 27 solves (12 local failures of element 3720, the step rejected 21 times at |r|_2 7.65; 5 bordered Newtons not converged), reading undecided"]
     fn f844_trace_trust_region_heavy() {
         let mut ch = Checks::new();
         let t_all = Instant::now();
