@@ -29,6 +29,7 @@ FILES = {
     "crates/rcfd-w/tests/r_n2.rs": T.format("n2_other_heading"),
     "crates/rcfd-w/tests/r_n3.rs": T.format("n3_phrase_elsewhere"),
     "crates/rcfd-w/tests/r_n4.rs": T.format("n4_listing_adrs"),
+    "crates/rcfd-w/tests/r_n7.rs": T.format("n7_row_without_a_limit"),
     "crates/rcfd-w/tests/r_tier_a.rs": T.format("p5_h1_over_h2_h3"),
     "crates/rcfd-w/tests/r_tier_b.rs": T.format("p5_h2_over_h3"),
     "crates/rcfd-w/tests/r_low.rs": T.format("p6_lowest_in_tier"),
@@ -46,6 +47,7 @@ FILES = {
     "docs/adr/0118-other-heading.md": "# ADR 0118\n## Tests\n\nSee r_n2.rs for the check.\n",
     "docs/adr/0119-elsewhere.md": "# ADR 0119\nSomething else was committed without an ADR.\n\nSee r_n3.rs.\n",
     "docs/adr/0120-phrase.md": "# ADR 0120\nr_tier_a.rs and r_tier_b.rs had no ADR.\n",
+    "docs/adr/0121-row.md": "# ADR 0121\n| id | file | note |\n|---|---|---|\n| T | r_n7.rs | runs fine |\n",
     "docs/adr/0125-low.md": "# ADR 0125\nr_low.rs was committed without an ADR.\n",
     "docs/adr/0130-note.md": "# ADR 0130\n## Test files (added 2026-11-17, ADR 0685)\n\nr_tier_a.rs checks it.\n",
     "docs/adr/0140-low.md": "# ADR 0140\nr_low.rs was ADR-less.\n",
@@ -106,6 +108,10 @@ class Retro(unittest.TestCase):
     def test_n4_listing_adrs_are_no_source(self):
         self.assertEqual(self.t["n4_listing_adrs"]["adrs"], ["0684", "0690", "0701"])
         self.assertIsNone(self.t["n4_listing_adrs"]["primary_adr"])
+
+    def test_n7_table_row_without_a_limit_is_no_registration(self):
+        self.assertEqual(self.t["n7_row_without_a_limit"]["adrs"], ["0121"])
+        self.assertIsNone(self.t["n7_row_without_a_limit"]["primary_adr"])
 
     def test_p5_tier_beats_a_lower_number_of_a_lower_tier(self):
         self.assertEqual(self.prim("p5_h1_over_h2_h3"), ("0130", "E2"))   # H1 0130 over H2 0120 over H3 0100
