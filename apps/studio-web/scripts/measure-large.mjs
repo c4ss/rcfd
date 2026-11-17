@@ -29,14 +29,16 @@
 //   project the way scripts/measure-scrub.mjs prepares it (run-id folders and the files the run list needs).
 // - fan01-F3: the FAN-01 blade passage of example-projects/axial-fan (C-grid, F3 counts, 4 920 cells, 7 patches) with
 //   its committed engine run r-20261030T223519-0489 (1500 iterations, 10 snapshots).
-// - fan01-F1, fan01-F1x2: the same case on the finest registered member F1 of the ADR 0086 family (38 184 cells) and
-//   on F1's counts doubled (beyond the family, for size only), each run for 20 iterations with a snapshot of every
-//   iteration by the engine (rcfd-runner start ... --set), in --fan (else <data>/fan01, a copy of
-//   example-projects/axial-fan). The runs are made once when missing (not timed, not counted) unless --no-gen.
+// - fan01-F1: the same case on the finest registered member F1 of the ADR 0086 family (38 184 cells, 7 patches), run
+//   for 20 iterations with a snapshot of every iteration by the engine (rcfd-runner start ... --set), in --fan (else
+//   <data>/fan01, a copy of example-projects/axial-fan). The run is made once when missing (about 80 s under load; not
+//   timed, not counted) unless --no-gen. F1's counts doubled do not build: the C-grid's leading-edge fan folds
+//   ("mesh.fan.front_gap: the line family is folded at layer 14", the pre-launch check after 75 min, 2026-11-17), so
+//   there is no larger FAN-01 mesh to measure.
 //
 //   npm run build && npm run package:dir
 //   node scripts/measure-large.mjs [--data=<folder>] [--fan=<project folder>] [--sizes=4e6]
-//        [--fans=F3,F1,F1x2] [--repeats=3] [--only=first,scrub,orbit] [--seconds=6] [--no-gen] [--smoke]
+//        [--fans=F3,F1] [--repeats=3] [--only=first,scrub,orbit] [--seconds=6] [--no-gen] [--smoke]
 //        [--profile-root=<folder>] [--out=<file.json>]
 //
 // --profile-root: a fresh Chromium profile per launch under it (scripts/profile.mjs; ADR 0800 §9 Q5). --smoke:
@@ -79,7 +81,7 @@ const WARM_S = 1;
 const data = path.resolve(arg('data') || process.env.RCFD_BENCH_DATA || path.join(os.tmpdir(), 'rcfd-studio-bench-data'));
 const fanProject = path.resolve(arg('fan') || path.join(data, 'fan01'));
 const SIZES = smoke ? [] : (arg('sizes') || '4e6').split(',').filter(Boolean);
-const FANS = smoke ? ['F3'] : (arg('fans') || 'F3,F1,F1x2').split(',').filter(Boolean);
+const FANS = smoke ? ['F3'] : (arg('fans') || 'F3,F1').split(',').filter(Boolean);
 
 const exe = (n) => (process.platform === 'win32' ? `${n}.exe` : n);
 function findBin(name, envName) {
@@ -250,7 +252,6 @@ function prepareBox(size) {
 const FAN_SPECS = {
   F3: { counts: null, run: 'r-20261030T223519-0489', note: 'F3 counts (6, 12, 6, 8, 3, 10, 5), the committed run of example-projects/axial-fan (1500 iterations, a snapshot every 150)' },
   F1: { counts: [12, 24, 12, 15, 6, 21, 10], note: 'F1 counts (12, 24, 12, 15, 6, 21, 10), the finest member of the ADR 0086 family; 20 iterations, a snapshot of every iteration' },
-  F1x2: { counts: [24, 48, 24, 30, 12, 42, 20], note: "F1's counts doubled (beyond the registered family, for size only); 20 iterations, a snapshot of every iteration" },
 };
 const COUNT_KEYS = ['n_up', 'n_chord', 'n_down', 'n_side', 'n_nose', 'n_span', 'n_gap'];
 const FAN_CASE = 'cases/fan01-passage-upwind.toml';
@@ -395,8 +396,17 @@ async function orbit(page, { pick, seconds }) {
   const canvas = page.locator('.fv-frame canvas').first();
   const b = await canvas.boundingBox();
   if (!b) throw new Error('no canvas');
-  const cx = b.x + b.width / 2;
-  const cy = b.y + b.height / 2;
+  // the press lands on the canvas itself: a point of the view not covered by what is drawn over it (the readout of the
+  // drag before, the reset button), else OrbitControls never sees it
+  const at = await page.evaluate(({ x, y, w, h }) => {
+    const c = document.querySelector('.fv-frame canvas');
+    for (const [fx, fy] of [[0.5, 0.5], [0.4, 0.6], [0.6, 0.4], [0.3, 0.3], [0.7, 0.7], [0.5, 0.25], [0.5, 0.75]]) {
+      if (document.elementFromPoint(x + fx * w, y + fy * h) === c) return [x + fx * w, y + fy * h];
+    }
+    return null;
+  }, { x: b.x, y: b.y, w: b.width, h: b.height });
+  if (!at) throw new Error('no point of the view reaches the canvas');
+  const [cx, cy] = at;
   // the drag starts with a trusted press (OrbitControls takes the mouse pointer and listens for its moves), then one move
   // of that pointer per animation frame, as Chromium delivers a real mouse's moves (aligned to the frames); Playwright's
   // mouse.move round trips (20 to 30 ms each under load) would make the input, not the Studio, set the rate
@@ -443,7 +453,7 @@ async function orbit(page, { pick, seconds }) {
     allFrames.push(t - r.frames[k - 1][0]);
     if (s > r.frames[k - 1][1]) draws.push(t);
   }
-  if (draws.length < 2) throw new Error(`the drag drew ${draws.length} frames: the orbit did not move the view`);
+  if (draws.length < 2) throw new Error(`the drag drew ${draws.length} frames in ${r.frames.length} animation frames and ${r.moves} moves (pressed at ${cx.toFixed(0)}, ${cy.toFixed(0)}): the orbit did not move the view`);
   const between = draws.slice(1).map((t, k) => t - draws[k]);
   const span = draws.length > 1 ? draws[draws.length - 1] - draws[0] : 0;
   return {

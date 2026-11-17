@@ -1728,3 +1728,183 @@ max 2739, met; P2 with a scratch profile (1 launch, folder removed), p99 0.80 ms
   `service.spec.ts` 9 passed. `idle-frames.spec.ts` (2), `on-demand.spec.ts` (5) and `f837.spec.ts` (14 e2e, 16 unit)
   passed in the full run.
 - `python scripts/third_party_licenses.py --check`: up to date.
+
+## Addendum F-819: the Studio on large meshes and on the FAN-01 fan mesh (2026-11-17)
+
+F-819's acceptance: first picture, scrubbing and draw rate measured on a mesh of several million cells and on the FAN-01
+mesh with many patches, with the limits registered before the measurement, and any miss stated with its numbers. ADR 0350
+§6 left it open: "a fan mesh with many patches and polyhedral cells may change P7".
+
+### What is built
+
+- `scripts/measure-large.mjs` (`npm run bench:large`). Its `LIMITS` are the G9 limits, unchanged: P7 first picture
+  <= 1.5 s (median of 5 opens); P5 scrubbing >= 10 snapshots per s with no frame > 150 ms; P8 orbit >= 60 draws per s
+  (the better of vertical sync and no rate limit) with a p99 time between draws <= 25 ms (vertical sync); and P6
+  >= 3 per s at 4e6, recorded. They are judged on every mesh and in every repeat. They were committed (89090900, "F-819
+  limits") before the first measurement and are printed before anything else.
+- First picture: the development page's viewport, route R2, field `p` of the last snapshot, 5 opens per mesh, each after
+  the tiny box, as `measure-field.mjs`. Scrubbing: the run workspace, Home then ArrowRight through every snapshot of the
+  run, about 200 requests per mesh after a warm-up pass, as `measure-scrub.mjs`. Draw rate: a drag on the viewport. The
+  drag starts with a trusted press, so OrbitControls takes the mouse pointer, and then the script sends one move of that
+  pointer per animation frame, held for 6 s after 1 s of warm-up. A draw is a frame in which the page submitted GPU work
+  (a hook on `GPUQueue.submit`, which also times each submit to `onSubmittedWorkDone`). There are two variants: with the
+  hover readout (each move picks the cell under the cursor, FieldCanvas `pickAt`), and with the pick skipped (for the
+  measurement, the canvas's `getBoundingClientRect` returns an empty rectangle, so `pickAt` returns at once). Each runs
+  with vertical sync and with `--disable-frame-rate-limit --disable-gpu-vsync`.
+- The processor's busy fraction is taken over 1 s before and after every measurement; the cargo/rustc/link count only at
+  the start and the end, because `tasklist` took about 5 minutes once on this machine. Every launch takes
+  `--profile-root` (`scripts/profile.mjs`), so each launch gets a fresh profile.
+- `scripts/bench.mjs`: under `--heavy` only, one case `F819` runs the script with `--repeats=1` (and `--no-gen` when
+  the bench has it). Its lines are printed as recorded, so they do not change the bench's verdict. `--only=F819` runs
+  it alone. The README has a section "Large meshes and the FAN-01 mesh (F-819)". No product code changed.
+
+### The meshes
+
+| Name | Cells | Points | Faces (boundary) | Surface triangles | Patches | Cells by faces | Source |
+|---|---|---|---|---|---|---|---|
+| box-4e6 | 4 000 000 | 4 080 501 | 12 080 000 (160 000) | 320 000 | 6 walls | all 6 | `f447_bench gen 4e6`: the lid-driven box 200 x 200 x 100, 20 steps through the run path, store 1958 MiB (raw f32), made for F-817 |
+| fan01-F3 | 4 920 | 5 888 | 15 691 (1 872) | 3 740 | 7: inlet, outlet, seam_lo and seam_hi (cyclic, 40 degrees), hub, shroud, blade | 4910 with 6, 10 with 5 (12 triangular faces) | the committed engine run `example-projects/axial-fan/runs/r-20261030T223519-0489` (1500 iterations, 10 snapshots), copied |
+| fan01-F1 | 38 184 | 41 952 | 118 247 (7 410) | 14 816 | the same 7 | 38 164 with 6, 20 with 5 (22 triangular faces) | an engine run made here: `rcfd-runner start cases/fan01-passage-upwind.toml` with F1's counts (12, 24, 12, 15, 6, 21, 10), `solver.max_iterations=20`, `output.store_interval=1`; 20 snapshots, 22 MiB, 78 s |
+
+- No polyhedral FAN-01 mesh exists. FAN-01's mesh is the C-grid passage generator's (`axial_fan_sector`, `c_grid`,
+  `camber_seam_h`): hexahedra plus 10 or 20 prism cells, stored in rcfd's face-based format. The only polyhedral path,
+  `rcfd_mesh::polydual` (the dual of a tetrahedral mesh), is not reachable from a case. A polyhedral FAN-01 mesh would
+  need Rust, which is outside this item.
+- 7 patches is what the FAN-01 passage has. The Studio's surface path (`src/main/data/tsstore.ts` `surface()`) does not
+  read the patches. It draws every boundary face, the cyclic seams included, as one triangle soup, and fans an n-point
+  face into n - 2 triangles. The patch count enters the timed paths only through the number of boundary faces.
+- A larger FAN-01 mesh was tried and does not build: F1's counts doubled (24, 48, 24, 30, 12, 42, 20) failed the
+  pre-launch check after 75 min ("mesh.fan.front_gap: the line family is folded at layer 14 ... the leading-edge fan
+  cannot be built for this blade with the front_gap 0.3 and n_nose 12 given"). The run folder was deleted.
+
+### Results
+
+Machine: AMD Ryzen 7 9800X3D (16 logical), 93.6 GB, Windows 11 (10.0.26300); WebGPU; the display ran at 60 Hz in this
+session; Electron 45.3.3 (Chromium 156.0.8078.100); the packaged copy of studio-f819 after merging studio-roadmap
+8c31c7e2; the test mode (RCFD_TEST_HEADLESS=1); a scratch profile per launch. **Every number below was taken under
+load**: other jobs' test binaries, rustc and cargo ran throughout, 5 to 11 cargo/rustc/link processes, about 29 GB free,
+and the processor busy fraction was 0.56 to 1.00 around the measurements (each pair is given). Runs 1 to 3 are one call
+of the script (`--repeats=3`, 02:00 to 02:09 UTC). Run 4 is `npm run bench -- --heavy --only=F819 --no-gen` (02:09 to
+02:13 UTC). Nothing was retried. An earlier attempt is listed after the tables.
+
+First picture (P7, limit: median <= 1500 ms), the five opens in order, ms:
+
+| Mesh | Run 1 | Run 2 | Run 3 | Run 4 |
+|---|---|---|---|---|
+| box-4e6 | median 233: 2147, 218, 236, 219, 233 (busy 1.00/1.00) | 179: 1752, 179, 177, 191, 172 (0.85/0.87) | 200: 1834, 201, 200, 183, 197 (0.86/0.82) | 197: 1704, 194, 197, 196, 200 (0.76/0.64) |
+| fan01-F3 | 22.6: 29, 16, 19, 23, 27 (0.92/0.93) | 22.9: 20, 23, 26, 31, 18 (1.00/1.00) | 19.5: 19, 20, 25, 16, 20 (0.68/0.74) | 28.5: 29, 32, 22, 23, 29 (1.00/1.00) |
+| fan01-F1 | 31.6: 43, 31, 37, 28, 32 (0.81/0.82) | 30.4: 51, 24, 30, 33, 22 (0.97/1.00) | 23.9: 46, 21, 24, 27, 18 (0.65/0.68) | 28.6: 56, 29, 20, 24, 29 (0.99/0.89) |
+
+Scrubbing (P5, limit: >= 10 per s, no frame > 150 ms), the rate, then the longest frame and the p50 and p99 frame:
+
+| Mesh | Run 1 | Run 2 | Run 3 | Run 4 |
+|---|---|---|---|---|
+| box-4e6 (200 requests) | 11.6 per s; 102, 83.5, 100 ms (0.71/0.88) | 11.1; 117, 85.6, 102 (0.94/0.87) | 11.2; 110, 83.7, 102 (0.94/0.88) | **9.91; 167**, 99.8, 150 (1.00/0.86): **missed** |
+| fan01-F3 (20 passes of 10) | 55.2; 32.6, 16.7, 32.5 (0.98/0.88) | 60.3; 32.7, 16.6, 30.5 (0.85/0.82) | 58.4; 33.1, 16.6, 32.6 (0.94/0.82) | 61.6; 17.4, 16.6, 17.1 (0.70/0.56) |
+| fan01-F1 (10 passes of 20) | 56.7; 33.5, 16.7, 32.6 (0.90/0.81) | 60.8; 20.1, 16.6, 18.0 (0.81/0.78) | 59.1; 32.2, 16.6, 27.8 (0.84/0.88) | 59.2; 32.9, 16.7, 32.6 (0.78/0.79) |
+
+P6 for box-4e6 (>= 3 per s, recorded) is met in all four runs. The fan scrubs run at the display's 60 Hz.
+
+Draw rate while orbiting (P8, limits: >= 60 draws per s, the better of the two launches; p99 between draws <= 25 ms,
+vertical sync). With vertical sync, every drag on every mesh in every run drew 60.0 draws per s (59.8 once, run 4,
+fan01-F3 with the pick skipped), with a p99 of 16.8 ms and a maximum of 16.8 to 17.2 ms (33.4 ms once, that same drag).
+That meets both limits, but only at the display's rate: 60 is the limit itself, so the rate line is decided by the drags
+with no rate limit. Each cell gives the draws per s; the p99 and the maximum time between draws; the GPU time per submit
+at p50 and p99 (ms); and the busy fraction before and after:
+
+| Mesh, variant | Run 1 | Run 2 | Run 3 | Run 4 |
+|---|---|---|---|---|
+| box-4e6, with the readout | 190; 17.4, 32.2; 2.7, 31.6 (1.00/0.97) | 190; 18.3, 32.2; 2.6, 31.7 (1.00/1.00) | 228; 15.0, 16.3; 1.6, 15.0 (0.78/0.64) | 223; 16.0, 17.5; 2.1, 28.6 (0.66/0.69) |
+| box-4e6, pick skipped | 909; 2.0, 17.8; 1.4, 3.0 (0.97/0.93) | 913; 2.1, 18.3; 1.3, 3.2 (1.00/0.99) | 757; 2.4, 140; 1.3, 20.3 (0.66/0.81) | 751; 2.6, 139; 2.0, 25.7 (1.00/1.00) |
+| fan01-F3, with the readout | 814; 2.5, 19.2; 1.4, 3.4 (0.89/0.87) | 855; 2.3, 18.6; 1.3, 2.9 (0.87/0.92) | 836; 2.3, 21.5; 1.4, 2.9 (0.87/0.86) | 784; 2.6, 19.1; 1.9, 9.8 (1.00/1.00) |
+| fan01-F3, pick skipped | 629; 18.6, 248; 1.3, 3.2 (0.92/0.88) | 982; 1.6, 19.2; 1.2, 2.4 (0.80/0.71) | 872; 1.8, 36.3; 1.3, 2.5 (0.86/0.81) | 589; 18.8, 246; 1.8, 66.9 (0.98/1.00) |
+| fan01-F1, with the readout | 814; 2.6, 18.7; 1.3, 3.7 (0.91/0.82) | 832; 2.5, 18.6; 1.2, 3.5 (0.71/0.90) | 789; 2.7, 19.0; 1.3, 3.8 (0.83/0.83) | 703; 3.1, 22.5; 2.0, 4.7 (1.00/1.00) |
+| fan01-F1, pick skipped | 648; 18.2, 245; 1.2, 3.2 (0.75/0.75) | 611; 18.5, 260; 1.2, 3.1 (0.89/0.82) | 561; 18.8, 261; 1.2, 2.5 (0.78/0.87) | 860; 2.1, 19.6; 1.8, 15.9 (1.00/1.00) |
+
+Verdict: runs 1 to 3 met all 63 judged lines (script exit 0). Run 4 met every line but the 4e6 scrub (P5: 9.91 per s
+and a 167 ms frame); the bench prints its lines as recorded.
+
+Earlier attempt (01:56 to 01:58 UTC, the same meshes, run 1 only, then stopped by a fault of the script): P7 box-4e6
+median 248 ms (opens 2516, 223, 246, 248, 254; busy 1.00/1.00), fan01-F3 26.3 (31, 33, 23, 26, 16), fan01-F1 35.8 (61,
+36, 26, 32, 36). Orbit with vertical sync: 60.0 draws per s, p99 16.8 ms on all six drags. With no rate limit: box-4e6
+188 per s with the readout and 927 with the pick skipped, fan01-F3 807 with the readout. The next drag, fan01-F3 with
+the pick skipped, drew nothing. The press had landed on what was drawn over the canvas, so OrbitControls never started.
+The script now presses at a point where `elementFromPoint` is the canvas, and it stops with the reason when a drag
+draws fewer than 2 frames. The script's check runs (`--smoke`, fan01-F3 only) first drove the drag with Playwright's
+`mouse.move`. Each call is a round trip of 20 to 30 ms under load, so the drag gave 27.8 to 52.9 draws per s: the
+input set that rate, not the Studio. Those runs measured the harness and are not results. They led to the drag of one
+move per frame.
+
+### Causes, and fixes proposed (not applied)
+
+- **4e6 scrub, the miss of run 4, and a margin of 11 to 16 % in runs 1 to 3.** Each frame (p50 84 to 100 ms) starts
+  with the reader's read of the whole field: 4 000 000 f32 values, 16 MB. Timed outside the Studio, `Store.field` takes
+  40 to 43 ms (three fresh Node processes, a warm page cache, busy 0.89). The 16 MB then cross to the renderer, which
+  needs only the 320 000 values of the cells that own a surface triangle. Proposed: (a) gather the surface cells' values
+  in the data worker and send those (1.3 MB at 4e6), keeping the whole field for the readout's provenance on request;
+  (b) cache decoded fields ahead of the scrub direction; (c) leave it as is and record P6 (met) for 4e6. Recommendation:
+  (a). It cuts the transfer and the corner-scalar input by 12x at this size and changes no value drawn.
+- **The first open of a 4e6 store in a launch (1704 to 2516 ms; judged on the median, so recorded).** Timed outside the
+  Studio: `verifyMesh` 1549 to 1644 ms (the FNV-64 of the whole MESH frame, 773 MB, in JavaScript), `surface()` 61 to 66
+  ms, the field 40 to 43 ms. Proposed: (a) remember a verified mesh per file identity (path, size, modification time,
+  mesh hash) in the Studio's state folder, so the check runs once per store and not once per launch; (b) draw first and
+  verify in the background, taking the picture back with the error on a mismatch; (c) a faster checksum loop (32-bit
+  halves without BigInt, or WebAssembly); (d) leave it to route R1, where the Rust reader checks. Recommendation: (a)
+  with (c). (b) shows a picture before its integrity is known, which DESIGN.md's "what is shown traces to the store"
+  argues against.
+- **The pick under the cursor at 4e6** (not a miss): with the readout the drag draws 190 to 228 per s, against 751 to
+  913 with the pick skipped. That is about 4 ms of pointer handling per move: three's Raycaster tests all 320 000
+  triangles, because the geometry has no bounding-volume tree. At 1e6 surface triangles the same cost would be about
+  12 ms (extrapolated, not measured), still above 60 per s. Proposed: (a) no pick while a button is held (the readout
+  follows the cursor only at rest), with one pick when the drag ends; (b) a bounding-volume tree built in the prepare
+  worker, hand-written (no new dependency); (c) one pick per animation frame at most. Recommendation: (a), then (b) if a
+  larger surface needs it.
+- **Single long frames of about 250 ms** in 5 of the 24 drags with no rate limit (fan01-F3 and F1 with the pick skipped,
+  and 139 to 140 ms on box-4e6). This happened once per drag, and the synced drags show nothing like it. Not diagnosed
+  (a collection pause or the GPU process are candidates). These drags judge the rate only, not the p99.
+
+### Decisions (options, the recommendation taken; each reversible)
+
+- D1, the FAN-01 mesh. (a) The committed F3 run and an F1 engine run, the finest registered member (taken); (b) F3
+  only; (c) a FAN-01 mesh beyond the family (tried: F1 doubled does not build); (d) the `h_slit` topology at high
+  counts (a different, lower-fidelity mesh, not FAN-01's registered C-grid). Recommendation: (a).
+- D2, the several-million-cell mesh. (a) The generator's largest case, the 4e6 box already stored for F-817 (taken);
+  (b) a new engine run of a larger box with the rcfd CLI (over 30 min under this load, with no larger generator size
+  without Rust). Recommendation: (a).
+- D3, which limits apply to the larger meshes. (a) G9's P7, P5 and P8 unchanged on every mesh, with P6 recorded at 4e6
+  (taken: the stricter reading); (b) ADR 0350's P6 instead of P5 at 4e6; (c) limits scaled by surface size.
+  Recommendation: (a).
+- D4, how the drag is driven. (a) A trusted press, then one pointer move per animation frame from the page (taken);
+  (b) Playwright's `mouse.move` (bound by its round trip, tried and dropped); (c) expose `FieldCanvas.bench` on the
+  viewport (a product change). Recommendation: (a).
+- D5, the hover readout. Both variants are measured and judged (taken), rather than the readout alone or the draw alone.
+  The pair separates the cost of the pick from the cost of the draw.
+- D6, the bench hook. `--heavy` only, one repeat, lines recorded (taken), rather than judged or kept out of the bench.
+  Recommendation: as taken. G9's judged limits belong to the 1e6 sizes.
+- D7, the first open. Judged on the median of 5, as P7 has been since ADR 0350, with every open printed (taken), rather
+  than judging the first open. Recommendation: as taken, with Q-819-1.
+
+### Open for the maintainer
+
+- Q-819-1: judge the first open of a store in a launch as well (it is what a user sees), and if so with which fix of the
+  mesh check (a to d above)? Recommendation: yes, after fix (a) with (c).
+- Q-819-2: the 4e6 scrub, at 9.9 to 11.6 per s against 10: apply the surface-cell gather (a)? Recommendation: yes.
+- Q-819-3: the pick during a drag (a to c above)? Recommendation: (a).
+- Q-819-4: a FAN-01 mesh larger than F1, or a polyhedral one, needs the mesher (other counts, `h_slit`, or a reachable
+  polyhedral dual, which needs Rust). Is one wanted for F-448? Recommendation: no. The FAN-01 surfaces are 30 to 100
+  times smaller than the 1e6 box's, so the box cases bound them.
+- The display ran at 60 Hz in this session (238 Hz in F-817's runs). The synced rates and the fan scrubs are the
+  display's, and the idle baseline of ADR 0800 §9 Q4 should state its display rate.
+
+### Verification (2026-11-17, on studio-f819 after merging studio-roadmap 8c31c7e2)
+
+- `npm ci`: exit 0, 0 vulnerabilities. `npm run typecheck`: clean. `python scripts/third_party_licenses.py --check`: up
+  to date. No dependency was added.
+- `scripts/measure-large.mjs`: the three-repeat run above (exit 0), the bench's `--heavy --only=F819 --no-gen` (exit 0,
+  its lines recorded, the scratch profile folder removed) and `--smoke` runs (fan01-F3).
+- `npm test` (headless, built and packaged): 614 passed, 4 failed, 20 did not run (8.7 min). The failures were
+  `commands.spec.ts:90` (Ctrl+K, the focus found on `body`), `plots.spec.ts:134` (increments), `project.spec.ts:241`
+  (close) and `run-control.spec.ts:192` (quick run by keyboard, the window inactive), and the 20 that did not run follow
+  them in serial files. Alone: `commands.spec.ts` 10 passed and `plots.spec.ts` 4 passed. `project.spec.ts` and
+  `run-control.spec.ts` failed alone once ("Empty project"; the window inactive) and passed on the second run alone (10
+  and 8 passed). No product source changed in this item.

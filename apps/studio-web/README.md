@@ -860,6 +860,29 @@ Decisions taken in building F-813 (options, the recommendation followed; each re
 - Results: `out/bench/bench-<time>.json` (every line, the machine, the load, each script's own JSON). The bench is not
   part of `npm test` or CI; results are recorded by hand in ADR 0800 §9.
 
+### Large meshes and the FAN-01 mesh (F-819)
+
+`npm run bench:large` (`scripts/measure-large.mjs`) applies the G9 limits of P7, P5 and P8, unchanged, to meshes larger
+and less regular than the 1e6 box they were set on. The limits are registered in the script (`LIMITS`) and printed
+before anything is measured; every case runs `--repeats` times (default 3) and every run is printed with the
+processor's busy fraction before and after it. Nothing is retried.
+
+    npm run bench:large -- --profile-root=<scratch folder>          # 4e6 box, FAN-01 F3 and F1, 3 repeats
+    npm run bench:large -- --smoke                                  # FAN-01 F3, one repeat, to check the script
+    npm run bench -- --heavy                                        # runs it once (--repeats=1), its lines recorded
+
+- First picture (P7): the development page's viewport, 5 opens per mesh after the tiny box, judged on the median as
+  `measure-field.mjs` does; the first open of each launch is printed with the others.
+- Scrubbing (P5): the run workspace, Home then ArrowRight through every snapshot of the run, about 200 requests per
+  mesh, as `measure-scrub.mjs`; P6 (at least 3 per second) is printed beside it for the 4e6 box, recorded.
+- Draw rate (P8): a drag on the viewport, a trusted press and then one move of that pointer per animation frame, held
+  6 s after a 1 s warm-up; a draw is a frame in which the page submitted GPU work. Taken with the hover readout (each
+  move picks the cell under the cursor) and with the pick skipped, each with vertical sync and with no rate limit.
+- Meshes: the 4e6 box of `f447_bench gen` (`--sizes`), and the FAN-01 blade passage of `example-projects/axial-fan`
+  (`--fans`): its committed F3 run (4 920 cells) and an F1 run (38 184 cells, 20 iterations, a snapshot of every
+  iteration) that the script makes once with `rcfd-runner` in `<data>/fan01` when missing (`--no-gen` refuses).
+- Exit code 0 when every judged line is met, 1 on a miss, 2 when a case could not run. Results with `--out=<file.json>`.
+
 ## Provenance and reproduce from the CLI (F-828)
 
 Any number of the runs view, the run workspace, the time panel and the field readout opens where it came from, and every
