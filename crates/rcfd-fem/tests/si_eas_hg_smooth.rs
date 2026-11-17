@@ -806,9 +806,9 @@ fn report_series(s: &Series, reference: (&Reading, &Reading), fbar16: &Run) {
 }
 
 #[test]
-#[ignore = "ADR 0683: the heavy record (three 16^3 solves, the Hex20 8^3), run once; the fast test j2_smooth_reference_setup covers the same path"]
+#[ignore = "ADR 0683: the heavy record (three 16^3 solves, the Hex20 8^3), run once (241 s), known miss: NC1c (the Full Hex8 S sequence is outside the order band, p 0.22, so its bound U 5.65e-3 covers |S_inf,Full - S_inf,Fbar| 3.16e-3: G1 holds); every other row met (NC1a, NC1b separate the Full Hex8 on every mesh); the fast test j2_smooth_reference_setup covers the same path"]
 /// RC0, SG, JY, RU, TJ, CJ, DB, NC1a, NC1b, NC1c and the reports of c2, c3, c5.
-fn j2_smooth_reference_heavy_record() {
+fn j2_smooth_reference_heavy_record_known_miss() {
     let mut ch = Checks::new();
     let t0 = Instant::now();
     let fbar = series("J2 Fbar", |m, t| solve_smooth(m, t, K_FBAR, DEFAULT, SUPERNODAL));

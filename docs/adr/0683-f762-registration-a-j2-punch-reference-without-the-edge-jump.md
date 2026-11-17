@@ -236,3 +236,151 @@ checked by NC2, LS1 to LS3 and SM).
    standing instruction of 2026-11-11 (take the recommendation).
 2. **Whether a J2 tolerance from this load replaces the ADR 0636 tolerances in ADR 0666 JB1, JB2** (the open question 2 of ADR
    0678): not taken (it would re-judge another item's registered checks); open for the maintainer, with the numbers of this item.
+
+## Addendum 1: results (2026-11-17)
+
+The registered fast run once on 0c88dd78 (`run1-fast.log`, 10 s); the heavy record once on 0c88dd78 (`run2-heavy.log`, 241 s,
+the mutation builds beside it: F-bar `16^3` 83 s, rule L 59 s, Full 58 s, Hex20 `8^3` 25 s); the mutations once each on a
+scratch copy of 0c88dd78 (`mutations.log`, `mut-MU*.log`); S6, S7, B6, S8 once after the run (`fmt.log`, `clippy.log`,
+`clippy2.log`, `s7-lib.log`, `s7-tests.log`, `b6.log`, `s8-docs.log`). All in `w49i-work/f762-scratch`. No limit, set-up or
+measure was changed after a run and there is no amendment. The heavy record missed one row and is kept as the ignored
+`j2_smooth_reference_heavy_record_known_miss` (the code and the limits unchanged; only its name and its ignore text, with the
+measured values, changed). It is the only run of the `16^3` meshes; the fast test `j2_smooth_reference_setup` (10 s) covers
+the same solve path, the load and the reading on `4^3`, `8^3` and DB4.
+
+### The values (J2, `S`, `w_c`)
+
+| Mesh | F-bar | rule L (S) | Full Hex8 | Hex20 |
+|---|---|---|---|---|
+| `4^3` | `0.01533274`, `0.00824069` | `0.01444837`, `0.00791147` | `0.00879466`, `0.00426498` | |
+| `8^3` | `0.01688592`, `0.00837112` | `0.01645032`, `0.00826431` | `0.01151962`, `0.00644468` | `0.01689947`, `0.00835921` |
+| `16^3` | `0.01700672`, `0.00836871` | `0.01692684`, `0.00834677` | `0.01386010`, `0.00755857` | |
+| DB4 | `0.01672035`, `0.00837123` | `0.01599633`, `0.00812055` | | |
+
+Every solve converged in ten increments without a halving (rule L with S on every mesh; W not needed). Plastic points at the
+end: F-bar `69`, `633`, `5402`; rule L `59`, `624`, `5224`; Full `0`, `221`, `3680` (of `512`, `4096`, `32768`); the Hex20
+`2232` of `13824`. The settlement is about a fifth of arithmetic 3's estimate (`0.017` against `0.03` to `0.08`): the order
+estimate ignored the confinement of the box; it was used only to say that the load is moderate, and it is.
+
+The readings (c3): F-bar `S` asymptotic, `p = 3.68`, `S_inf = 0.01701691`, `U = 1.27e-5` (`0.07` per cent); F-bar `w_c` not
+asymptotic (`d1 d2 < 0`: the `8^3` and `16^3` values differ by `2.4e-6`), `w_inf = 0.00836871`, the bound `U = 1.30e-4`
+(`1.6` per cent); rule L `S` asymptotic, `p = 2.07`, `0.01707569`, `U = 1.86e-4` (`1.1` per cent); rule L `w_c` asymptotic,
+`p = 2.10`, `0.00837192`, `U = 3.1e-5` (`0.4` per cent). The Full Hex8: `S` not asymptotic (`p = 0.22`, below the band), the
+bound `U = 5.65e-3` (`41` per cent of its `16^3` value); `w_c` asymptotic, `p = 0.97`. Against the reference (the F-bar limit
+of `S`): F-bar `-9.9`, `-0.8`, `-0.06` per cent on `4^3`, `8^3`, `16^3`; rule L `-15.1`, `-3.3`, `-0.53`; Full `-48`, `-32`,
+`-19`; the Hex20 on `8^3` `-0.7` (`w_c` `-0.1`).
+
+### Results
+
+| Id | Limit | Measured | Met |
+|---|---|---|---|
+| NC2 | (i) `<= 1e-10`; (ii), (iii) `<= 1e-12` | `3.8e-15`, `0`, `2.3e-17`; `0`, `2.8e-17`; `2.1e-17` | yes |
+| LS1 | `<= 1e-12` | largest `7.8e-16` (Hex20) | yes |
+| LS2 | `<= 1e-12` | largest `3.3e-16` | yes |
+| LS3 | `<= 1e-12` | `5.8e-16` (Hex8 `4^3`), `1.3e-15` (Hex20 `8^3`) | yes |
+| SM | `<= 1e-12` | `2.2e-16` | yes |
+| FC | `<= 1e-9` | largest `2.2e-16` | yes |
+| SG | `S > 0`, `w_c > 0` | every F-bar and L solve, every mesh and DB4 (smallest `S` `0.0144`, `w_c` `0.0079`) | yes |
+| JY | `> 0` | every F-bar and L solve (smallest `59`, rule L `4^3`) | yes |
+| M0, M1 | `> 0`; `343` | `0.0762`; `343` | yes |
+| RC0 | the `16^3` F-bar and L solves succeed | both, no halving | yes |
+| RU (`S`) | `U / |a_inf| <= 0.03` | F-bar `7.5e-4`, rule L `1.09e-2` | yes |
+| RU (`w_c`) | `<= 0.05` | F-bar `1.56e-2` (the bound), rule L `3.8e-3` | yes |
+| TJ | finite | `T_S = 0.34`, `0.07`, `0.03`; `T_w = 0.12`, `0.05`, `0.03` (`4^3`, `8^3`, `16^3`) | yes |
+| CJ | `<= T(n)` | `S`: `0.058`, `0.026`, `0.0047`; `w_c`: `0.040`, `0.013`, `0.0026` | yes |
+| DB | `<= T(8)` | `0.043` (`S`, against `0.07`), `0.030` (`w_c`, against `0.05`) | yes |
+| NC1a | `|S_Full / S_ref - 1| > T_S(n)` | `0.483`, `0.323`, `0.186` against `0.34`, `0.07`, `0.03` (margins `0.143`, `0.253`, `0.156`) | yes |
+| NC1b | `|S_Full / S_Fbar(n) - 1| > T_S(n)` | `0.426`, `0.318`, `0.185` (margins `0.086`, `0.248`, `0.155`) | yes |
+| NC1c | G1 does not hold for the Full Hex8 | **`|S_inf,Full - S_inf,Fbar| = 3.16e-3` against `U_Full + U_Fbar = 5.66e-3`: G1 holds** | **no** (known miss) |
+| B6 | pass; the diff only tests and docs | the three bit records pass; `git diff --stat 524249e1` touches `crates/rcfd-fem/tests/si_eas_hg_smooth.rs` and this ADR only | yes |
+| S6 | clean | fmt and clippy (`--all-targets -D warnings`) clean, before and after the rename | yes |
+| S7 | pass | `--lib` 15; `si_eas_hg9` 4, `si_eas_hg10` 2, `si_eas_hg11` 1, `si_eas_hg_smooth` 1 passed (the ignored records not run) | yes |
+| S8 | pass | `docs_site` 2 passed | yes |
+
+### NC1c, diagnosed
+
+The Full Hex8's `S` rises by `0.00272` from `4^3` to `8^3` and by `0.00234` from `8^3` to `16^3`: an observed order of `0.22`,
+below the band `[0.5, 4]`. The registered reading then puts the limit at the `16^3` value and the uncertainty at the bound of
+the slowest admitted order, `2.414 |d2| = 5.65e-3`, wide enough to reach the F-bar limit (`3.16e-3` away). So the miss is the
+one ADR 0678 arithmetic 5 named as the risk: a locking element converges so slowly that the three-mesh bound cannot place its
+limit, and G1 cannot reject a common limit. It is not a failure of the separation the acceptance asks for: the derived
+tolerance separates the Full Hex8 from the reference and from F-bar on every mesh (NC1a, NC1b, margins `0.09` to `0.25`). The
+Full Hex8 is `19` per cent below the reference on `16^3` with `3680` plastic points of `32768` against F-bar's `5402`: the
+locking reduces the plastic flow itself, as the constraint count of ADR 0678 c2 predicts.
+
+### c5: F-bar's edge excess of ADR 0678
+
+**X1: disappears.** G1 holds for `S` (`|S_inf,L - S_inf,Fbar| = 5.9e-5` against `U_L + U_Fbar = 2.0e-4`) and for `w_c`
+(`3.2e-6` against `1.6e-4`), and `d_Fbar = 0.0077`, `0.0006` against `d_L = 0.0366`, `0.0087` on `8^3`, `16^3`: F-bar is the
+nearer of the two to the common limit on every mesh and converges faster (`p = 3.7` against `2.1`). Under the node-set punch
+of ADR 0678 the order was reversed (F-bar `+64`, `+38` per cent from the limit on `8^3`, `16^3`, rule L `+32`, `+12.5`; `p =
+0.75` against `1.14`). With the edge jump removed and nothing else changed (the block, the material, the elements, the
+options, the factor, the reading), F-bar's excess goes, so it was the edge's: F-bar's constant dilatation in the elements under
+the jump of the prescribed displacement, which ADR 0678 located there by the edge share and did not diagnose further (the
+mechanism inside the element is still not diagnosed here; only the dependence on the edge is shown). The band share `gamma_b =
+0.08`, `0.27`, `0.66` (`4^3`, `8^3`, `16^3`) is reported for completeness: the gap it divides is `-5.8`, `-2.6`, `-0.47` per
+cent (rule L below F-bar) and is now rule L's larger discretisation error, not an excess. The Hex20 on `8^3` agrees with the
+F-bar `8^3` value within `0.08` per cent (`S`) and `0.14` (`w_c`).
+
+### The J2 tolerance (c4)
+
+`T_S(n) = 0.34`, `0.07`, `0.03` and `T_w(n) = 0.12`, `0.05`, `0.03` on `4^3`, `8^3`, `16^3`: derived from a reading with
+uncertainties of `0.07` to `1.6` per cent, met by rule L on every regular mesh and on DB4, and **informative**: on `8^3` and
+`16^3` it is tighter than the ADR 0636 tolerances (`0.15`, `0.10`), and the Full Hex8 lies outside it by `0.25` and `0.16`. The
+`4^3` tolerance is loose (`0.34`; rule L is `15` per cent from the limit there) but still excludes the Full Hex8.
+
+### Mutations (scratch copy of 0c88dd78, `j2_smooth_reference_setup`, each run once)
+
+| Id | Caught | By |
+|---|---|---|
+| MU1 (linear ramp) | **yes** | LS2 (`4.6e-2` off on every mesh; LS1 met, as arithmetic 1 said) |
+| MU2 (2 x 2 face rule) | **yes** | LS2 (`7.2e-4`, `9.0e-5`, `6.3e-6` on `4^3`, `8^3`, `16^3`; Hex20 `9.0e-5`) and SM; **LS1 not** (`<= 6.7e-16`): the profile is antisymmetric about `0.5`, so the 2-point rule's errors on the two halves of the transition cancel in the total |
+| MU3 (load direction flipped) | **yes** | SG (`S`, `w_c` negative on every solve) |
+| MU4 (the Richardson sign of ADR 0678 as registered) | **yes** | NC2 (i) (`9.375e-3`) |
+| MU5 (`sigma_y` times 1000) | **yes** | JY (`0` plastic points on every solve) |
+| MU6 (`S` as a plain mean) | **yes** | SM (`0.24` off) |
+
+Six of six caught, each by a row registered against it; MU2 by LS2 of its pair LS1, LS2 (disclosed above).
+
+### Deviations
+
+- NC1c missed (diagnosed above); no corrected test is registered, since it is not a defect of the set-up but the stated limit
+  of a three-mesh reading for a slowly converging element.
+- Arithmetic 3 over-estimated the settlement about four times; arithmetic 4 expected `p` between `1.5` and `2`: rule L `2.07`,
+  F-bar `3.68` (near the top of the band; its `8^3` to `16^3` step is `0.7` per cent of the value, so its `U` is small whatever
+  the true order).
+- The F-bar `w_c` sequence is not monotone at the `2e-6` level and is read by the bound (`1.6` per cent, within `5`).
+
+### Not run
+
+Nothing registered was skipped. Not run by design: the smoothed-displacement variant, a `32^3` mesh, a follower pressure,
+other J2 materials and load levels, the plain incompatible element, any neo-Hookean solve, `baseline_hashes` (no shared solver
+file touched). The whole rcfd-fem suite was not run (rule 7).
+
+### Decision
+
+**partial**, by the registered rule: B6 met (no library file changed, the bit records pass), the `16^3` J2 block solved for
+both elements, the three-mesh reading below the registered few per cent for both measures and both elements, the J2 tolerance
+derived and separating the Full Hex8 on every mesh, X1 classified (F-bar's edge excess disappears), six of six mutations
+caught; but NC1c missed (the Full Hex8's limit cannot be told from the reference's by the bound reading of a sequence of order
+`0.22`).
+
+### Remaining questions
+
+1. **NC1c.** Options: (a) take the tolerance separation (NC1a, NC1b) as the negative control of this load and record NC1c as a
+   limit of the three-mesh reading; (b) a `32^3` Full Hex8 run (about eight times the `16^3` cost); (c) a one-sided limit for
+   monotone sequences outside the band in a later reading. Recommendation: (a); no follow-up.
+2. **Whether this J2 tolerance (`0.07`, `0.03` on `8^3`, `16^3`) re-judges ADR 0666 JB1, JB2** (open question 2 of ADR 0678 and
+   of this registration): open for the maintainer, not taken; the numbers say rule L with J2 is within `2.6` and `0.5` per cent
+   of F-bar on `8^3` and `16^3` once the load has no edge jump.
+3. **Which reference later J2 items use.** Options: (a) the F-bar limit of this load (`S_inf = 0.017017 +- 1.3e-5`); (b) keep
+   the node-set punch for comparability with ADR 0636. Recommendation: (a) for any J2 accuracy limit, keeping the punch only
+   where an edge is the subject.
+
+## For the lead: roadmap entries
+
+> Proposed status: partial.
+
+> Structural solver, intermediate tier. Follow-up of F-747 (ADR 0678). PARTIAL. ADR 0683, 2026-11-17 (tests only, no library file changed): the block of ADR 0636 with the J2 material of ADR 0666 under a smoothed dead pressure in place of the node-set punch (peak 1.5e5, a quintic step over a registered width of two 4^3 element widths, the consistent forces checked exactly against the profile's integrals and the library's pressure load) on 4^3, 8^3 and 16^3, rule L (with S) and F-bar, with the Full Hex8 and the Hex20 on 8^3 (the 16^3 solves 58 to 83 s, a heavy record run once). The three-mesh reading of ADR 0678 of the load-weighted settlement: F-bar order 3.7, limit 0.017017 within 0.07 per cent; rule L order 2.1, 0.017076 within 1.1 per cent (the corner bulge 1.6 and 0.4 per cent; registered limits 3 and 5 per cent): a common limit. The derived J2 tolerance (0.34, 0.07, 0.03 on 4^3, 8^3, 16^3) holds for rule L on every mesh and on DB4 and separates the Full Hex8 (19 to 48 per cent from the reference) on every mesh. F-bar's edge excess of ADR 0678 disappears (F-bar 0.8 and 0.06 per cent from its limit on 8^3 and 16^3 against rule L's 3.7 and 0.9), so it belonged to the punch edge; the Hex20 on 8^3 is within 0.1 per cent of F-bar. Missed: the Full Hex8's own limit cannot be told from the reference's (its sequence has order 0.22, outside the band, and the bound covers the gap). Six of six mutations caught. No default bit changed. Not covered: the smoothed-displacement variant, a 32^3 mesh, a follower pressure, other J2 materials and load levels.
+
+> F-747 (note, ADR 0683, 2026-11-17): with the edge jump of the node-set punch replaced by a smoothed pressure, rule L and F-bar with J2 agree within 0.5 per cent on 16^3 and F-bar's excess disappears; the uninformative tolerance of ADR 0678 was the punch edge's (F-762).
