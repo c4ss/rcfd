@@ -562,7 +562,13 @@ someone kept:
   and was honest exactly on the F-727 sample is caught with probability `1 - C(m, k) / C(n, k)` (m the honest pairs); for 64 pairs
   and the 13-pair F-727 sample, k = 3 catches it in 0.993 of worlds while the F-727 sample never does. `check_drawn` is the same
   check without the append, `drawn_record_problems` redoes a recorded check. `verify`, `lessons` and every existing record are
-  unchanged by drawn records; `lessons` does not read them yet.
+  unchanged by drawn records; `lessons` does not read them.
+* `lessons_drawn(entries, query, rerun)` (ADR 0695) is `lessons` plus the drawn checks, as a new function (`lessons` and its output
+  type are unchanged). A drawn record of a row counts only when `drawn_record_problems` with the caller's model is empty and it
+  names the row's registration hash; the latest such record in ledger order decides: a row whose latest consistent drawn record did
+  not reproduce is dropped (listed in `dropped`), any other row stays. Each row reports `drawn_checks`, `drawn_failed`,
+  `drawn_ignored` (inconsistent records, never believed either way) and `drawn_unchecked` (no model of the evaluator held). Without
+  drawn records `plain()` equals `lessons` exactly.
 * Two held metrics (ADR 0665; "at equal flow and speed") are registered with `register_with_floor(ledger, h, model)`: the two
   compensating parameters are solved together in each arm by a damped Newton iteration on the held residuals (forward-difference
   Jacobian, backtracking on the tolerance-scaled residual, kept inside the brackets), and the registration computes the

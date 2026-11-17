@@ -130,3 +130,18 @@ Mutations (scratch copy of the final code, one at a time; each must fail a regis
 ## References
 
 ADR 0624, ADR 0662, ADR 0693 (`check_drawn`, `drawn_record_problems`); first principles.
+
+## Amendment 1 (2026-11-17, written after the registered run of A0 to A6 and mutations M33 to M40, before the corrected run)
+
+The registered run met A0 to A6 (see addendum 1) and M33 to M39 were caught, but **M40 survived** (all five tests passed): every A0
+ledger holds one hypothesis, so reversing the row order is a no-op. This is a defect of the set-up, not of the code: the clause
+"bit for bit" includes the row order, which a one-row ledger cannot test. The registered tests stay as they are (the old tests are
+the record). Added before its run:
+
+| Id | What | Limit |
+|---|---|---|
+| A0b | worlds w = 0 to 39, seed `776_000 + w`: one ledger with two hypotheses, H-1 (W5 claim, seed) and H-2 (W5 claim, seed + 1), both run by the real model, no drawn records; under the five queries of A0 (the third with an empty `rerun`): `lessons_drawn(..).plain() == lessons(..)` (struct equality and Debug text), and under the default query the rows are H-1 then H-2 | 200 of 200 equal; 40 of 40 in order |
+
+M40 is re-run against the test file with A0b added (mutation made once, on a fresh archive of the amended code); it must fail
+`a0b_two_hypotheses_order`. The decision rule is applied to the amended set: done if everything else is met and M40 is caught by A0b;
+otherwise partial.
