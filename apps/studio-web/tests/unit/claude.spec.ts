@@ -71,7 +71,7 @@ test.describe('the conservative allow-list (G11)', () => {
   test('the first list is exactly the read-class project tools of the app-owned server', () => {
     const l = AllowList.initial();
     expect(l.values).toEqual(PROJECT_READ_TOOLS.map((t) => `mcp__rcfd_project__${t}`));
-    expect(l.values).toHaveLength(15);
+    expect(l.values).toHaveLength(16);
     // nothing that edits, runs, cancels or deletes
     expect(l.values.filter((v) => /edit|create|start|cancel|delete|write|run_case|Bash|PowerShell/.test(v))).toEqual([]);
     expect(l.permissionArgs()).toEqual(['--permission-mode', 'dontAsk', '--permission-prompts', 'none', '--allowedTools', ...l.values]);
@@ -407,7 +407,7 @@ test.describe('the panel (main process) against the fake claude', () => {
     expect(argv).not.toContain('Which run converged?');
     expect(argv.slice(argv.indexOf('--resume'))).toEqual(['--resume', S1]);
     expect(argv).not.toContain('--session-id');
-    // the allow-list, recorded: dontAsk, prompts off, exactly the 15 read-class project tools
+    // the allow-list, recorded: dontAsk, prompts off, exactly the 16 read-class project tools
     const i = argv.indexOf('--allowedTools');
     expect(argv.slice(argv.indexOf('--permission-mode'), i)).toEqual(['--permission-mode', 'dontAsk', '--permission-prompts', 'none']);
     expect(argv.slice(i + 1, argv.indexOf('--resume'))).toEqual(AllowList.initial().values);

@@ -53,6 +53,8 @@ export const PROJECT_READ_TOOLS = [
   'check_case_mesh',
   'preview_mesh',
   'list_meshes',
+  // ADR 0733 (the maintainer, 2026-11-17): the runner's budgets, read-only
+  'runner_config',
 ] as const;
 
 export class RuleError extends Error {
