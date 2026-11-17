@@ -100,3 +100,49 @@ tuned further.
 ## Limits
 
 One function, one seed, d = 2, batch 1; a test of one step, not of a run. The window condition (M4) is not tested here.
+
+## Addendum 1: results
+
+Run once on 2026-11-17 (`cargo test -p rcfd-api --release --test f766_plain_pick_condition`; the tests are
+`crates/rcfd-api/tests/f766_plain_pick_condition.rs`, 0.01 s). No library line changed.
+
+| check | limit | measured | met |
+| --- | --- | --- | --- |
+| N1a window deltas (the last 3 observations) | all `< 1` | 0.239, 0.219, 0.324 | yes |
+| N1b plain-pick delta, exclusion 0.25 | `>= 3` | 6.975 | yes |
+| N1c evaluated points outside the basin | `>= 4` | 13 | yes |
+| N1d repetition restart pick | `Ei`, bits equal to the plain pick | `Ei`, bit-equal | yes |
+| P1a plain-pick delta (default exclusion); window deltas | `< 1`; all `< 1` | 0.696; as above | yes |
+| P1b repetition restart pick | `Restart`, delta `>= 2` | `Restart`, delta 3.270 | yes |
+| M2 on the scratch copy | N1 fails, P1 passes | N1 failed at "N1d no restart pick", P1 passed | yes |
+| M3 (plain-pick condition inverted) | N1 and P1 fail | both failed | yes |
+| M4 (window condition dropped), not an acceptance item | expected to survive | survived (both passed) | as expected |
+| H1 O1 points hash (`h1_default_o1_points_hash_unchanged`) | `== 0xe2cf141320774cfc` | passed (f758 file: 5 passed, 2 ignored) | yes |
+| B1 `f733_restart_second_function` | pass | 5 passed, 3 ignored | yes |
+| B1 `f715_robust_ei` | pass | 6 passed, 2 ignored | yes |
+| B1 `--lib` | pass | 141 passed, 4 ignored | yes |
+| `docs_site` (rcfd-cli) | pass | 2 passed | yes |
+| fmt, clippy `-D warnings` (rcfd-api, all targets) | clean | clean | yes |
+
+Deviations: none. The probes before the registration are disclosed above. Not run: the heavy ignored records of F-758, F-733 and
+F-715 (no library line changed), `baseline_hashes` (no shared solver file touched).
+
+Decision by the registered rule: **done**. The plain-pick condition of the repetition trigger now has a fast check that cannot
+pass vacuously: N1 asserts its precondition (window inside, plain pick outside by a margin, at least 4 points outside) before the
+no-restart assertion, and P1 is the twin. M2 is caught by N1 alone; M3 by both.
+
+Not covered: the window condition (M4 survives: both tests have the window inside, so a dropped window condition is invisible);
+windows with a failed observation or a pending one; one function, one seed, d = 2, batch 1; the plain pick being outside through
+a large exclusion radius rather than through a natural plain-pick leaving the basin.
+
+Remaining question 1: the window condition has no fast test. Options: (a) leave it (the heavy W1 check of ADR 0680 sees it on
+every restart pick); (b) a third test on the same observations with the window's last point moved outside the basin, the plain
+pick inside, expecting no restart pick. Recommendation: (b), small and test-only.
+
+## For the lead: roadmap entries
+
+F-766 proposed status: **done**.
+
+> Follow-up of F-758 (ADR 0680, 2026-11-17). DONE. ADR 0686, 2026-11-17: test-only, no library line changed. A fast test (crates/rcfd-api/tests/f766_plain_pick_condition.rs, 0.01 s) on a hand-built 18-observation sequence in two dimensions whose last d + 1 points lie in the incumbent's basin (deltas 0.22 to 0.32 of radius 2) while the plain pick of the step lies outside it (delta 6.98, 13 evaluated points outside): the repetition trigger makes no restart pick and its pick is bit-equal to the plain pick; the preconditions are asserted inside the test so it cannot pass vacuously. A positive twin on the same observations with the default exclusion (plain pick inside at delta 0.70) gets a restart pick at delta 3.27. The surviving ADR 0680 mutation M2 (the plain-pick condition dropped) is caught by the first test and not by the twin; the inverted condition is caught by both. The O1 points hash of ADR 0673 and the f758, f733, f715 and lib tests are unchanged. Not covered: the window condition (dropping it survives), failed or pending observations in the window, one function and one seed.
+
+> Follow-up proposed: A fast check of the window condition of the repetition trigger. Deps F-766. Acceptance: a fast test on an observation sequence whose plain pick lies in the incumbent's basin and whose last d + 1 evaluated points do not all lie in it shows that the repetition trigger makes no restart pick, the survivor of ADR 0686 (mutation M4, the window condition dropped) is caught by it, a twin with the window inside gets a restart pick, and the O1 points hash of ADR 0673 is unchanged.
