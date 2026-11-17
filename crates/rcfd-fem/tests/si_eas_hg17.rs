@@ -1699,7 +1699,7 @@ fn chain_to<B: Branch>(case: &B, from: &St, p: f64) -> Result<St, String> {
 }
 
 #[test]
-#[ignore = "ADR 0711: the heavy record of the subcritical branch on 16^3 (D2 to D4), run once with --ignored"]
+#[ignore = "ADR 0711: the heavy record of the subcritical branch on 16^3 (D2 to D4), run once with --ignored (118.5 s), every row met: ADR 0700's state at 0.9645 reproduced (a 3.827194476e-5, nu 1); its fall-back to 0.964 rejected by the amplitude bound (accepted by the D1 test), the halved load-controlled trace on the branch to 0.9625 (a 9.843e-5, nu 1, a / a_red 0.996 to 1.035); the amplitude-controlled trace to a 2.165e-4 at lambda 0.958472 (dlambda/da -41.6 to -0.54, mu_1 -323, nu 1), then lost (element 3720 inverted or its modes not converged): no fold bracketed; R/mu within 6.8e-7 of the symmetric branch, 3.9 per cent above F-bar (nu 0); f789_fast covers the same procedures"]
 fn f789_nh16_subcritical_heavy() {
     let mut ch = Checks::new();
     let t_all = Instant::now();

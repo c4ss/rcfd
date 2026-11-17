@@ -309,3 +309,117 @@ The heavy record is not run under the mutations.
 2. **The arc-length driver from a given state under prescribed-displacement loading**: not taken here (a change of the
    shared Newton iteration); proposed as a follow-up item.
 3. **Whether either opt-in of ADR 0694 becomes a default**: not taken (it would change default results); open.
+
+## Addendum 1: results (2026-11-17)
+
+Logs in `w49i-work/f789-scratch`: `run1-fast.log` (the registered fast run, 1.5 s, on b227645e), `run2-heavy.log` (the
+registered heavy run, 118.5 s, on b227645e), `mutations.log` and `mut-MU*.log`, `s7-lib.log`, `s7-tests.log`,
+`b-src-diff.log`, `fmt.log`, `clippy.log`, `s8-docs.log`; the hand arithmetic `scripts/toys.py`. Each test was run once; no
+limit changed after a run; no amendment.
+
+### The fast test (`f789_fast`)
+
+| Id | Measured | Limit | Result |
+|---|---|---|---|
+| PU-a | 4 of 4 steps accepted at the first attempt; `a(p)` within `3.2e-15` of the closed form; `nu = 1` each; `a` increasing | as registered | met |
+| PU-b | both rungs accepted; `p` within `2.2e-16`; `nu = 1`; "no fold up to a = 0.894427" | as registered | met |
+| PU-c | 4 states inside; `|lambda_H - lambda| <= 1.8e-15` | `<= 1e-12`, `>= 3` | met |
+| PF-a | the step 1.0 to 0.8 converges to `u_0 = -1.6e-22`; D1 accepts; the amplitude bound rejects (`Da = -0.447` against `Da_pred = +0.402`) | as registered | met |
+| PF-b | 0.8 reached (1.0 to 0.8 rejected, 0.9 and 0.8 accepted); 1 rejection; `a(0.8)` exact to `2e-16`; `nu = 1` | as registered | met |
+| P5 | 5 of 5 rungs; `p` within `4.4e-16`; "fold", `a` in `[0.94953, 1.34284]`, `p_f = 0.833333` in `[0.812521, 0.836022]`, estimate `0.834395` (`1.06e-3` off); `nu` 1 then 0 | as registered | met |
+| N8 | (a) `3.8e-14`, `|lambda - 0.99| = 0`; (b) `3.7e-14`, `4.0e-15` (3 iterations each) | `<= 1e-8`, `<= 1e-14`; `<= 1e-8`, `<= 1e-8` | met |
+
+### The heavy record (`f789_nh16_subcritical_heavy`, 16^3)
+
+| Id | Measured | Limit | Result |
+|---|---|---|---|
+| OB | equal | equal | met |
+| R0 | chain converges; `1.4e-8`; `mu_1(0.9647)` bit-identical to ADR 0700 (`0`); `2.1e-15`; `|phi_f . u_s| = 2.3e-12` | as registered | met |
+| R1 | `a(0.9647)` bit-identical (`0`); `a(0.9645) = 3.827194475619e-5` (`9.95e-11`), `R/mu` `9.1e-9`, `nu = 1` (lowest pair `-3498.7`) | as registered | met |
+| HL0 | the first attempt to 0.964 converges to `a = -1.45e-11` (ADR 0700's fall-back, reproduced); D1 accepts; the amplitude bound rejects (`Da = -3.83e-5` against `+2.43e-5`, ratio 2.57) | as registered | met |
+| HL1 | 4 of 4 grid loads, 6 solves (one halving at the first step: 0.96425, then 0.964); prediction errors of the accepted steps 0.04 to 0.11 | holds | met |
+| HL2 | `nu = 1` each; `a` = `5.804e-5`, `7.324e-5`, `8.640e-5`, `9.843e-5` at 0.964, 0.9635, 0.963, 0.9625 (increasing); `a / a_red` 0.996, 1.008, 1.021, 1.035 | as registered | met |
+| HL3 | `|R_bif / R_sym - 1|` `2.3e-7` to `6.8e-7`; against F-bar `g_R = 3.92e-2`, `g_w = 2.91e-2` (both branches) | `<= 1e-5`; `<= 0.15` | met |
+| AT0 | `2.3e-10`, `2.7e-10` (3 iterations) | `<= 1e-9`, `<= 1e-8` | met |
+| AT1 | ratio 1.013 | `[0.25, 4]` | met |
+| AT2 | constraint `4.6e-13`; rungs 1 to 5 accepted at the first attempt (3 to 4 iterations, continuity ratio at most 0.39); stop: **lost** at rung 6 (5 attempts from `a = 2.165e-4`, down to `+5.6e-6`, each failing in element 3720: "the modes did not converge" or "det F < 0") | as registered (lost is a reading) | met |
+| AT3 | `1.7e-5`, `8.3e-6`, `6.8e-5`, `5.3e-5` (4 states inside) | `<= 1e-2` | met |
+| AF | **"lost at a = 2.164988e-4, lambda = 0.958472224 (dlambda/da -0.538)"** | not "undecided" | met |
+| AC | at the 5 rung states: symmetric states symmetric to `7.5e-15`; `g_R`, `g_w` `3.91e-2` to `3.93e-2`, `2.90e-2` to `2.92e-2` | as registered | met |
+| HFB | chain converges; `5.3e-9` | as registered | met |
+
+**The branch (the table).** Load-controlled (D2), bifurcated / symmetric / F-bar `R/mu`: 0.964 `0.32709742 / 0.32709750 /
+0.31473030`; 0.9635 `0.32692687 / 0.32692699 / 0.31457271`; 0.963 `0.32675632 / 0.32675649 / 0.31441509`; 0.9625 `0.32658576 /
+0.32658599 / 0.31425746`; `nu` 1 / 0 / 0 at each. Amplitude-controlled (D3), `a`, `lambda`, `dlambda/da`, `nu`: `5.41e-5`,
+`0.9641133`, `-28.1`, 1; `7.65e-5`, `0.9633797`, `-37.0`, 1; `1.082e-4`, `0.9620701`, `-44.5`, 1; `1.531e-4`, `0.9600697`,
+`-41.6`, 1; `2.165e-4`, `0.9584722`, `-0.54`, 1 (lowest pair `-323.4`, against `-3498.7` at 0.9645); `R/mu` there `0.32521137`
+against the symmetric `0.32521253` (`nu = 0`) and F-bar `0.31298684` (`nu = 0`). The asymmetry `|u - P u|_inf / |u|_inf` grows
+from `2.7e-4` to `1.6e-3`.
+
+**Reading.** (c1) With the amplitude bound the load-controlled trace stays on the subcritical branch from 0.9645 to 0.9625:
+ADR 0700's fall-back is rejected (the D1 test alone still accepts it), one halving suffices, and the amplitude follows the
+reduced equation of ADR 0700 within 3.5 per cent (`nu = 1`, unstable, throughout). (c2) The amplitude-controlled trace, the
+substitute for the arc-length driver (D1), follows the branch to `a = 2.165e-4` at `lambda = 0.958472`; it agrees with the
+load-controlled states to `7e-5` of `lambda_c - lambda`. **The fold is not bracketed.** What the trace bounds: `dlambda/da < 0`
+at every accepted state, so any fold of this branch lies at `a > 2.165e-4` and below `lambda = 0.958472224` (the load decreases
+monotonically up to there). Not a registered measure, an extrapolation: between the last two states the slope fell from `-41.6`
+to `-0.54` and the lowest pair rose from `-3499` (0.9645) to `-323`; a slope linear in `a` would vanish at `a ~ 2.17e-4`,
+`lambda ~ 0.95847`, so a fold looks imminent, but the next attempts (amplitude steps of `+2.6` per cent and less) failed in the
+element of the mode, 3720, either in its local mode iteration or with an inverted Gauss point. It is not settled whether the
+branch folds there or ends where rule L's element 3720 loses its local solution (the softening along the mode would then come
+from the element's own mode problem rather than from the continuum). (c3) Along the traced branch `R/mu` is within `1.2e-6` of
+the symmetric branch and 3.9 per cent above F-bar, which stays stable (`nu = 0`) at every compared load.
+
+### Default bits and static checks
+
+| Id | Result |
+|---|---|
+| B | `git diff --stat b3af848a -- crates/*/src` empty: no library file changed: met |
+| S7 | `--lib` 15 pass; `si_eas_hg17` 1 pass 1 ignored; `si_eas_hg16`, `si_eas_hg15`, `si_eas_hg14`, `si_eas_hg13` 1 pass 3 ignored each; `sa_arclength` 2 pass; `sa_arclength_sphere_f649` 1 pass 2 ignored (all release): met |
+| S6 | `cargo fmt -p rcfd-fem --check` clean; `cargo clippy -p rcfd-fem --release --all-targets -- -D warnings` clean: met |
+| S8 | `cargo test -p rcfd-cli --release --test docs_site` on the results tree (`s8-docs.log`): met |
+| S9 | 56822410 (docs only) and b227645e (built for the runs); the results commit is the clippy-checked tree: met |
+
+### Mutations (each on a scratch copy of b227645e, run once against `f789_fast`)
+
+| Id | Caught by | Result |
+|---|---|---|
+| MU1 | PF-a, PF-b (the fall-back accepted, `a(0.8) = 0`, `nu = 0`) | caught |
+| MU2 | PU-a (0 of 4 steps), PU-c, PF-a, PF-b | caught |
+| MU3 | PU-b, P5 (lost at the first rung), N8a, N8b (inverted elements) | caught |
+| MU4 | PU-c (`7.7e-3` to `2.6e-2`) | caught |
+| MU5 | P5 ("no fold") | caught |
+
+### Deviations
+
+- None from the registered procedure. The arc-length driver was not extended (D1, registered); c2 is answered by the
+  amplitude-controlled trace, which was lost before a fold.
+
+### Decision
+
+**partial** (by the registered rule): c1, c3, c4, c5 and c6 are answered with every check met, every mutation caught and no
+amendment; c2 is answered by the amplitude-controlled trace in place of the arc-length driver (registered as partial), and that
+trace did not reach a fold: it bounds the fold to `a > 2.165e-4`, `lambda < 0.958472` and is lost there in the local mode
+problem of element 3720.
+
+### Remaining questions
+
+1. **The end of the branch at `a ~ 2.2e-4`.** Options: (a) diagnose the local mode iteration of element 3720 on the last
+   state (its mode tangent's eigenvalues, the iterates of the failing attempts) to tell an element breakdown from a fold of
+   the continuum branch; (b) retry with smaller rungs (needs a registration; the halvings already went to 2.6 per cent);
+   (c) leave it. Recommendation: (a), test-only and short.
+2. **The arc-length driver from a given state under prescribed-displacement loading** (D1). Options: (a) a library opt-in
+   (start state, load-factor-scaled prescribed values and their load column in the controlled iteration), off by default,
+   with `baseline_hashes`; (b) keep the test-side bordered Newton. Recommendation: (a) only if (1) shows a fold the
+   continuum has; otherwise (b) is enough for this block.
+3. **Whether either opt-in of ADR 0694 becomes a default**: still open (it would change default results).
+
+## For the lead: roadmap entries
+
+> Proposed status: partial.
+
+> F-789 (ADR 0711, 2026-11-17): the subcritical branch of rule L's 16^3 punch path (ADR 0700) traced past 0.9645 toward lower loads. A continuity test that also bounds the change of the amplitude along the critical mode (|Da - Da_pred| <= 0.5 |Da_pred|) rejects ADR 0700's fall-back to the symmetric root at 0.964 (which ADR 0697's test still accepts); with one halving the load-controlled trace stays on the branch to 0.9625 (amplitude 9.84e-5, within 3.5 per cent of the reduced equation, nu = 1). An amplitude-controlled bordered Newton (test-side, in place of the arc-length driver, which cannot start from a state under a prescribed-displacement load) follows it to amplitude 2.165e-4 at load 0.958472 (dlambda/da from -44.5 to -0.54, lowest pair -323, nu = 1) and agrees with the load-controlled states to 7e-5 of lambda_c - lambda; beyond, element 3720 inverts or its modes do not converge, so no fold is bracketed: any fold lies above amplitude 2.165e-4 and below load 0.958472. R/mu stays within 1.2e-6 of the symmetric branch and 3.9 per cent above F-bar (nu = 0). Controls: ADR 0700's closed-form subcritical pitchfork, a toy step that falls back and passes the old test, a closed-form fold (bracketed and bounded), the bordered Newton on the stable 8^3 block. Test-only, default bits unchanged; five of five mutations caught; no amendment. Partial: the arc-length driver was not used and the fold was not reached.
+
+> Follow-up proposed: The end of the subcritical branch of rule L's 16^3 punch path at amplitude 2.2e-4. Deps F-789. Acceptance: Every limit not stated here is registered in the ADR before the run. At the last state of ADR 0711's amplitude-controlled trace, whether the trace ends at a fold of the branch or at a breakdown of the local mode problem of element 3720: the eigenvalues of that element's mode tangent and the iterates of the failing attempts, the lowest pair and dlambda/da of the branch approached with smaller registered amplitude steps; a fast control on a closed-form fold and on a toy whose local problem loses its solution before the fold; the default bits unchanged.
+
+> Follow-up proposed: The arc-length driver from a given state under prescribed-displacement loading. Deps F-789. Acceptance: Every limit not stated here is registered in the ADR before the run. A library opt-in, off by default, that starts the arc-length trace of ADR 0480 from a given converged state and increment with the prescribed values scaled by the load factor and their load column in the controlled correction; a closed-form control under a prescribed displacement through a limit point and ADR 0711's bordered trace of the 16^3 punch branch reproduced; baseline_hashes and the default-path bits unchanged.
