@@ -15897,7 +15897,7 @@ fixed by the item's registration ADR before any code.
     camber_seam range builds a registered fraction, and camber_seam_h, camber_seam_s, camber_seam_s_unstretched and
     camber_seam_s_wake_remap are unchanged in bits.
   - note: Follow-up of F-782 (ADR 0699, 2026-11-16).
-- [ ] **F-785** Restrict or remove rule H3 of the retro-registration rule
+- [~] **F-785** Restrict or remove rule H3 of the retro-registration rule
   - depends on: F-772
   - acceptance: Every limit not stated here is registered in the ADR before the run. A table row that cites a file and
     has a limit in another cell takes the primary only where its ADR registers the file (the ADR file name carries
@@ -15906,7 +15906,18 @@ fixed by the item's registration ADR before any code.
     rules H0 to H3 as they stand are read with at least 90 % agreement counting only the files with a primary, and the
     number of files with a primary is reported next to the agreement; the attribution data of `gate_attribute.py` is
     unchanged for the existing consumers.
-  - note: Follow-up of F-772 (ADR 0701, 2026-11-16).
+  - note: Test-to-ADR index, gate attribution. Follow-up of F-772 (ADR 0701, 2026-11-17). DONE. ADR 0703, 2026-11-17:
+    rule H3 of ADR 0701 (a table row that cites a file in one cell and has a limit in another) is removed from
+    `scripts/adr_test_index.py --primary git` (constant `RETRO_H3 = False`; restricting it by the ADR file name would
+    have kept `pimple.rs` and `bc.rs`, which an ADR only edits). The 54 tests of its 8 files have no primary again
+    (tests with an ADR and no primary 351 to 405); H0, H1 and H2 are unchanged, `--primary registered` and `p0679` are
+    bit-identical, `gate_attribute.py` and `gate.yml` are byte-identical, the only changed test fields are `primary_adr`
+    and `primary_evidence` of those 54 tests, 2 git processes, 18.7 s. A sample of 20 files drawn from the 31 files with
+    a primary under H0 to H2 (seed 7850; 13 of them were read in ADR 0701, 7 are new) reads 20 of 20 with a primary (H0
+    4, H1 13, H2 3), 100 % against 90 %, by one reader who wrote the rule; 4 readings are borderline and would give 80 %
+    if read the other way. The 8 H3 files read 5 agree-null and 3 disagree-null. Open: the independent second reading
+    (F-786) of ADR 0701's files. Follow-up F-790 (Delete the dormant rule H3 code and its record tests after the second
+    reading).
 - [~] **F-786** A second reader for the primary-ADR samples of the test-to-ADR index
   - depends on: F-772
   - acceptance: Every limit not stated here is registered in the ADR before the run. The 28 files with a primary read in
@@ -15963,3 +15974,10 @@ fixed by the item's registration ADR before any code.
     along it against the symmetric branch and F-bar; a fast control on the closed-form subcritical pitchfork of ADR 0700
     and on a step that falls back onto the symmetric branch; the default bits unchanged.
   - note: Follow-up of F-783 (ADR 0700, 2026-11-16).
+- [ ] **F-790** Delete the dormant rule H3 code and its record tests after the second reading
+  - depends on: F-786
+  - acceptance: Every limit not stated here is registered in the ADR before the run. The constant `RETRO_H3`, the tier-3
+    branch of `retro_units` and the tests of ADR 0701 and ADR 0703 that depend on it are removed in one commit; the
+    index of `--primary git` is equal to the index before the commit in every field, `--primary registered` and `p0679`
+    are equal, `gate_attribute.py` is unchanged, and `python -m unittest discover -s scripts` passes.
+  - note: Follow-up of F-785 (ADR 0703, 2026-11-16).
