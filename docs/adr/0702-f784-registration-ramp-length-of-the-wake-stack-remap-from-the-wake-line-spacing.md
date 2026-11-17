@@ -222,3 +222,11 @@ layer). The **first ramp face** is the face between C (56, 2) and C (56, 3) at l
 - No flow solve; no case value (a schema enum value needs the schema golden, rule 6); construction S''' is library only.
 
 ## Addenda
+
+### Amendment 1 (2026-11-17, after the code, before any registered run; no limit changed)
+
+- No development build of S''' was made: the code (`wake_ramp_from_spacing`, `camber_seam_s_wake_ramp_construction()`, the
+  `CGridMesh::wake_ramp_length` field, `WakeRamp` and `wake_shift_max` in `fan_cgrid.rs`, the deferred writing of the layers, the
+  test file `f784_cgrid_wake_ramp.rs`) was compiled only (`--no-run`).
+- The rows of `D` are `j <= min(n_bl, n_side)` (the same set at s4, `n_bl` 2 < `n_side` 10).
+- The constants of HS'' in the test file are the base probe's values (`f784-scratch/probe.log`).

@@ -157,6 +157,8 @@ pub struct CGridMesh {
     /// smoothing 1 = one-dimensional controls, 2 = first quarter of the outer rows kept algebraic, 3 / 4 / 5 = smoothing displacement
     /// scaled by 0.5 / 0.25 / 0.
     pub construction_step: usize,
+    /// ADR 0702: the ramp length `L` [m] of the wake-stack remap with [`CGridOptions::wake_ramp_from_spacing`], `None` without it.
+    pub wake_ramp_length: Option<f64>,
 }
 
 impl CGridMesh {
@@ -437,6 +439,10 @@ const WAKE_ASPECT: f64 = 300.0;
 /// Chord samples of the camber line that carries the camber seam (ADR 0079).
 const CAMBER_SAMPLES: usize = 256;
 
+/// ADR 0702: the largest rotation [deg] that the ramp of the wake-stack remap may add to an in-plane edge of a wake cell
+/// ([`CGridOptions::wake_ramp_from_spacing`]).
+const WAKE_RAMP_TILT_DEG: f64 = 1.0;
+
 /// Union of faces that share edges (each shared edge is traversed in opposite directions): the outline polygon.
 fn merge_faces(faces: &[Vec<usize>]) -> Option<Vec<usize>> {
     let mut edges: Vec<(usize, usize)> = Vec::new();
@@ -533,6 +539,12 @@ pub struct CGridOptions {
     /// with a smooth step to 1 over a quarter of the wake lines, so that the wake stacks of the thin end-wall layers are near radial
     /// extrusions of the end layer instead of following the true section of every thin layer.
     pub wake_stack_remap: bool,
+    /// ADR 0702 (opt-in, with `wake_stack_remap`): the weight of the wake-stack remap is `1 - fade(x / L)` with `x` the distance
+    /// along the wake from the trailing edge in the layer's true section and `L = 1.5 D / tan(1 deg)`, `D` the largest shift
+    /// `|b - a|` of a wake-stack node over the span layers, so that the ramp adds at most 1 deg of rotation to an in-plane edge
+    /// of any wake cell whatever the wake line spacing (instead of the ADR 0699 ramp over a quarter of the wake lines, which put
+    /// its first step on the shortest wake cell).
+    pub wake_ramp_from_spacing: bool,
 }
 
 impl CGridOptions {
@@ -592,6 +604,16 @@ impl CGridOptions {
         CGridOptions {
             wake_stack_remap: true,
             ..CGridOptions::camber_seam_s_unstretched_construction()
+        }
+    }
+
+    /// Construction S''' of ADR 0702 (no case value): construction S'' with the ramp length of the wake-stack remap set from the
+    /// wake line spacing ([`CGridOptions::wake_ramp_from_spacing`]); ADR 0699 located the non-orthogonality maximum of S'' at the
+    /// first wake cell, where its ramp rose by 0.5 over the shortest wake cell.
+    pub fn camber_seam_s_wake_ramp_construction() -> Self {
+        CGridOptions {
+            wake_ramp_from_spacing: true,
+            ..CGridOptions::camber_seam_s_wake_remap_construction()
         }
     }
 }
@@ -1583,9 +1605,41 @@ fn remapped_radii(radii: &[f64], n_span: usize) -> Vec<f64> {
     out
 }
 
+/// The ramp of the wake-stack remap in [`write_layer`]: none, ADR 0699's (over a quarter of the wake lines) or ADR 0702's (over the
+/// length `L` along the wake).
+#[derive(Debug, Clone, Copy, PartialEq)]
+enum WakeRamp {
+    Off,
+    Lines,
+    Length(f64),
+}
+
+/// ADR 0702: the largest shift `|b - a|` of a wake-stack node (C wake lines `p >= 1`, rows `j <= nb`) of a span layer in the
+/// layer's physical in-plane coordinates `(z, rk theta)`.
+fn wake_shift_max(lay: &Layout, rk: f64, a: &Layer2d, b: &Layer2d, nb: usize) -> f64 {
+    let (n_i, nd) = (lay.n_i(), lay.n_down);
+    let ph = |l: &Layer2d, p: (f64, f64)| (p.0, rk * p.1 / l.r);
+    let mut d: f64 = 0.0;
+    for i in (0..nd).chain(n_i - nd + 1..=n_i) {
+        for j in 0..=nb.min(lay.n_side) {
+            let (pa, pb) = (ph(a, a.c[i][j]), ph(b, b.c[i][j]));
+            d = d.max(norm2((pb.0 - pa.0, pb.1 - pa.1)));
+        }
+    }
+    d
+}
+
 /// Write the nodes of layer `k` (radius `rk`) into `grid`. `a` is the in-plane grid of the true section; with `b` (the grid at the
 /// remapped radius, ADR 0072 W1) the nodes outside the stacks blend from `a` (near the stack edge) to `b` (beyond the blend length).
-fn write_layer(lay: &Layout, k: usize, rk: f64, a: &Layer2d, b: Option<&Layer2d>, wake_remap: bool, grid: &mut [Vec3]) {
+fn write_layer(
+    lay: &Layout,
+    k: usize,
+    rk: f64,
+    a: &Layer2d,
+    b: Option<&Layer2d>,
+    wake_remap: WakeRamp,
+    grid: &mut [Vec3],
+) {
     let (n_i, ns) = (lay.n_i(), lay.n_side);
     // (z, theta) of a node of a layer grid
     let zt = |l: &Layer2d, p: (f64, f64)| (p.0, p.1 / l.r);
@@ -1616,6 +1670,18 @@ fn write_layer(lay: &Layout, k: usize, rk: f64, a: &Layer2d, b: Option<&Layer2d>
                 dmax = dmax.max(norm2((pa.0 - pb.0, pa.1 - pb.1)));
             }
             let ell = (0.05 * a.chord).max(4.0 * dmax);
+            // ADR 0702: distance along the wake from the trailing edge to wake line `p`, on the shared wake cut of `a`
+            let xw: Vec<f64> = if let WakeRamp::Length(_) = wake_remap {
+                let nd = lay.n_down;
+                let mut x = vec![0.0; nd + 1];
+                for q in 1..=nd {
+                    let (p0, p1) = (phys(zt(a, a.c[nd - q + 1][0])), phys(zt(a, a.c[nd - q][0])));
+                    x[q] = x[q - 1] + norm2((p1.0 - p0.0, p1.1 - p0.1));
+                }
+                x
+            } else {
+                Vec::new()
+            };
             for i in 0..=n_i {
                 let nb = a.stack_cells[i];
                 let pa: Vec<(f64, f64)> = (0..=ns).map(|j| phys(zt(a, a.c[i][j]))).collect();
@@ -1627,9 +1693,13 @@ fn write_layer(lay: &Layout, k: usize, rk: f64, a: &Layer2d, b: Option<&Layer2d>
                 // ADR 0699: on the wake lines the true section `a` is replaced by `a' = a + omega (b - a)`, omega 0 on the
                 // trailing-edge line and 1 from a quarter of the wake lines on
                 let nd = lay.n_down;
-                let omega = if wake_remap && (i < nd || i > n_i - nd) {
+                let omega = if wake_remap != WakeRamp::Off && (i < nd || i > n_i - nd) {
                     let p = if i < nd { nd - i } else { i - (n_i - nd) };
-                    Some(1.0 - fade(p as f64 / (nd / 4).max(1) as f64))
+                    if let WakeRamp::Length(len_w) = wake_remap {
+                        Some(1.0 - fade(xw[p] / len_w))
+                    } else {
+                        Some(1.0 - fade(p as f64 / (nd / 4).max(1) as f64))
+                    }
                 } else {
                     None
                 };
@@ -1949,6 +2019,9 @@ pub fn build_cgrid_mesh_with(
         let mut normals = Vec::with_capacity(n_k + 1);
         let mut stacks = Vec::with_capacity(n_k + 1);
         let mut cache: Vec<(f64, Layer2d)> = Vec::new();
+        // ADR 0702: with the ramp from the wake line spacing the layers are written after all are built (one ramp length)
+        let spacing_ramp = opts.wake_stack_remap && opts.wake_ramp_from_spacing;
+        let mut deferred: Vec<(usize, f64, Layer2d, Option<Layer2d>)> = Vec::new();
         for (k, &r) in radii.iter().enumerate() {
             // W1: the tip gap is a radial extrusion of the tip layer; the far grid is built at the remapped radius
             let r_true = if opts.radial_remap { r.min(fan.r_tip) } else { r };
@@ -1996,9 +2069,32 @@ pub fn build_cgrid_mesh_with(
             } else {
                 None
             };
-            write_layer(&lay, k, r, &a, b.as_ref(), opts.wake_stack_remap, &mut grid);
+            if spacing_ramp {
+                deferred.push((k, r, a, b));
+                continue;
+            }
+            let ramp = if opts.wake_stack_remap {
+                WakeRamp::Lines
+            } else {
+                WakeRamp::Off
+            };
+            write_layer(&lay, k, r, &a, b.as_ref(), ramp, &mut grid);
             normals.push(a.normals);
             stacks.push(a.stack_cells);
+        }
+        let mut ramp_len = None;
+        if spacing_ramp {
+            let d = deferred
+                .iter()
+                .filter_map(|(_, r, a, b)| b.as_ref().map(|b| wake_shift_max(&lay, *r, a, b, nb)))
+                .fold(0.0, f64::max);
+            let len_w = (1.5 * d / WAKE_RAMP_TILT_DEG.to_radians().tan()).max(1e-300);
+            ramp_len = Some(len_w);
+            for (k, r, a, b) in deferred {
+                write_layer(&lay, k, r, &a, b.as_ref(), WakeRamp::Length(len_w), &mut grid);
+                normals.push(a.normals);
+                stacks.push(a.stack_cells);
+            }
         }
         if opts.radial_filter {
             radial_filter(&lay, &radii, &stacks, &mut grid);
@@ -2247,6 +2343,7 @@ pub fn build_cgrid_mesh_with(
             stack_cells: stacks,
             cell_tags,
             construction_step: step,
+            wake_ramp_length: ramp_len,
         })
     };
     let mut last = None;
