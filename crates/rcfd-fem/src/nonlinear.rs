@@ -620,7 +620,8 @@ fn hex8_evaluate(
             context,
             crate::nl_incompatible::IncompatibleStabilisation::Off,
             false,
-            false,
+            // ADR 0729 D2: a state with the nine committed modes after the material state is the driver's warm evaluation.
+            crate::nl_incompatible::given_warm(material, state),
         ),
     }
 }
