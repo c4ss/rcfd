@@ -15752,7 +15752,7 @@ fixed by the item's registration ADR before any code.
     ADR 0624 bit for bit in 600 of 600 (one hypothesis) and 200 of 200 (two, row order); every ADR 0624, 0662 and 0693
     check keeps its result; 8 of 8 mutations caught (M40, the row order, by the check added in amendment 1 after the
     one-row ledgers missed it). Follow-up F-781 (Drawn checks must be newer than the evidence they check).
-- [ ] **F-777** construction S without the first-cell stretch on strongly staggered blades
+- [~] **F-777** construction S without the first-cell stretch on strongly staggered blades
   - depends on: F-726
   - acceptance: Every limit not stated here is registered in the ADR before the run. Construction S with the first free
     cell of the wake lines (or of every line) at the next stack height builds ComputerFan::rom_reference() blade 0 at
@@ -15760,7 +15760,24 @@ fixed by the item's registration ADR before any code.
     within 85 deg non-orthogonality, skewness 4.0 and aspect 1000 (the reference's 84.69 deg / 3.24 from an ADR 0692
     mutation disclosed as already seen), a registered front_gap and n_nose scan of S inside the camber_seam range builds
     a registered fraction, and camber_seam_h is unchanged in bits.
-  - note: Follow-up of F-726 (ADR 0692, 2026-11-16).
+  - note: Follow-up of F-726 (ADR 0692 question 1). ADR 0696, 2026-11-17. PARTIAL (the second blade's skewness missed by
+    0.3 %). New opt-in construction S' = CGridOptions::camber_seam_s_unstretched_construction() = camber_seam_s +
+    unstretched_first_cell (the first free cell of every straight line is the next stack height d1 g^nb, no 1/cos
+    stretch; derived: the stretch continues the wall-normal growth only where neighbouring lines have nearly the same
+    cosine, which fails in the turning wake and around the nose); no case value. At the ADR 0118 s4 specs:
+    ComputerFan::rom_reference() blade 0 builds with no folded cell, periodic, 84.69 deg / skewness 3.24 / aspect 525.6
+    within 85 / 4.0 / 1000 (numbers seen before as ADR 0692 mutation MU4, disclosed); a second blade (the reference with
+    the per-blade deviation stagger -1 deg, chord +20 %, outer stagger 76.6 deg) builds fold-free and periodic with
+    84.22 deg and aspect 551.7 but skewness 4.0112 against 4.0 (MISSED), at a spanwise face of the lower wake stack
+    between the two thin layers below the tip, which the first-cell rule does not touch (same value under S; the
+    reference's 3.24 maximum is the same face, growing with the chord). A front_gap 0.15 to 1.0 x n_nose 4 / 6 / 9 scan
+    inside the camber_seam range builds 12 of 12 on each blade fold-free and periodic (limit 9 of 12); within the
+    quality limits 3 of 12 and 0 of 12 (non-orthogonality rises with front_gap, up to 88.3 deg). New checks: the nose
+    target on the extended camber line to 1e-9 m in every layer (catches ADR 0692's surviving MU1) and the first free
+    cell equal to the next stack term to 1e-9. camber_seam_h and camber_seam_s unchanged in bits (cgrid_w35d B1 hashes,
+    the ADR 0692 default-fan H hash, the S hash of the reference against the base); the ADR 0079 / 0083 case tests,
+    f722, fan01_p10_w36d c2, fan_design_w46a s4, --lib and baseline_hashes pass. Six of six mutations caught. Follow-up
+    F-782 (wake stacks of construction S' at the thin end-wall layers).
 - [ ] **F-778** case value camber_seam_s for mesh.fan.c_grid_construction
   - depends on: F-726
   - acceptance: Every limit not stated here is registered in the ADR before the run. A fan case with c_grid_construction
@@ -15790,3 +15807,11 @@ fixed by the item's registration ADR before any code.
     its row; ledgers without drawn records give the lessons of ADR 0624 bit for bit; every ADR 0624, ADR 0662, ADR 0693
     and ADR 0695 check keeps its result.
   - note: Follow-up of F-776 (ADR 0695, 2026-11-16).
+- [ ] **F-782** wake stacks of construction S' at the thin end-wall layers
+  - depends on: F-777
+  - acceptance: Every limit not stated here is registered in the ADR before the run. A new opt-in field of S' builds the
+    wake-stack nodes of the thin end-wall layers so that the spanwise faces of the wake stack meet skewness 4.0 on
+    ComputerFan::rom_reference() blade 0 and on the ADR 0696 second blade at the ADR 0118 s4 specs (the measured 3.24
+    and 4.0112 of ADR 0696 disclosed), with no folded cell within 85 deg non-orthogonality and aspect 1000 on both, and
+    camber_seam_h, camber_seam_s and camber_seam_s_unstretched unchanged in bits.
+  - note: Follow-up of F-777 (ADR 0696, 2026-11-16).
