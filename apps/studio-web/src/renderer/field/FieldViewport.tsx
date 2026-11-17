@@ -27,7 +27,7 @@ import { IconToggle } from '../ui/IconToggle.js';
 import { useCommandHandlers } from '../commands/host.js';
 import { savePagePng } from '../workspace/door.js';
 import { rangeOf, shownRange } from './surface.js';
-import { AXIS, LENGTH_UNIT, LENGTH_UNIT_WHY, cellsOutside, cellsOutsideOf, domainText, fixedRange, lengthText, pngName, scaleBar, type RangeMode } from './viewExtras.js';
+import { AXIS, cellsOutside, cellsOutsideOf, domainText, fixedRange, lengthText, lengthUnitOf, pngName, scaleBar, type RangeMode } from './viewExtras.js';
 import { colourRange, f32Text, lutBytes, type ColourRange } from './colormap.js';
 import { FieldCanvas, type Backend, type FieldCanvasApi, type Pick } from './FieldCanvas.js';
 import { CutPanel, DerivedControls, IsoPanel, StreamPanel, pictureKey, useDerived } from './DerivedControls.js';
@@ -230,6 +230,16 @@ export function FieldViewport({
     pic.kind === 'on' && !pic.loading && args !== null && shownSnapshot !== null && pic.key === pictureKey(storeKey, shownSnapshot, args);
   const drawnNow = pictureDrawn !== null && pictureDrawn === (engineCut ?? iso ?? engineArrows ?? streamlines);
   const derivedErrors = [cutPic, isoPic, streamPic].flatMap((p) => (p.kind === 'error' ? [p.message] : []));
+  // ADR 0738 P5 (F-837): the unit of the stored mesh's lengths as the engine names it: data.open's on the service route,
+  // else the `length_unit` of a derived picture of this store (remembered for the store once named)
+  const [namedUnit, setNamedUnit] = useState<{ store: string; unit: string } | null>(null);
+  const pictureUnit = [cutPic, isoPic, streamPic]
+    .map((p) => (p.kind === 'on' && p.key.startsWith(`${storeKey} `) ? p.glb.extras['length_unit'] : undefined))
+    .find((u): u is string => typeof u === 'string' && u !== '');
+  useEffect(() => {
+    if (pictureUnit) setNamedUnit((n) => (n?.store === storeKey && n.unit === pictureUnit ? n : { store: storeKey, unit: pictureUnit }));
+  }, [storeKey, pictureUnit]);
+  const length = lengthUnitOf(opened?.info.lengthUnit ?? null, pictureUnit ?? (namedUnit?.store === storeKey ? namedUnit.unit : null));
 
   // the store: open it and read its surface (once per store)
   useEffect(() => {
@@ -754,7 +764,7 @@ export function FieldViewport({
         />
         {(cut || isoOn || rake) && layers && shown && (
           <div className="fv-panels">
-            {cut && <CutPanel cut={cut} layers={layers} onCut={setCut} />}
+            {cut && <CutPanel cut={cut} layers={layers} unit={length.unit} onCut={setCut} />}
             {isoOn && drawnRange && (
               <IsoPanel level={isoLevel!} lo={drawnRange.lo} hi={drawnRange.hi} quantity={word} unit={unit} onLevel={(v) => setIsoLevel(Math.fround(v))} />
             )}
@@ -775,9 +785,9 @@ export function FieldViewport({
         )}
         {bar && (
           // F-837: the scale bar of a face-on 2D view (the egui Studio's rule), in the picture Save PNG writes
-          <div className="fv-scalebar" data-length={bar.length} title={LENGTH_UNIT_WHY}>
+          <div className="fv-scalebar" data-length={bar.length} data-length-unit={length.from} title={length.why}>
             <span className="fv-scalebar-bar" style={{ width: `${bar.px}px` }} aria-hidden="true" />
-            <span data-words="data">{`${lengthText(bar.length)} ${LENGTH_UNIT}`}</span>
+            <span data-words="data">{`${lengthText(bar.length)} ${length.unit}`}</span>
           </div>
         )}
         <WorkProgress scope={tagBase} />
@@ -845,10 +855,10 @@ export function FieldViewport({
                 cells
               </Quiet>
               {layers && (
-                // F-837: the domain's size (the egui Studio's "domain 2 x 1 m"): the stored mesh's extents, m from the
-                // engine's SI settings (the store names no unit), said in the tooltip
-                <span className="fv-domain" data-words="data" data-domain={domainText(layers)} title={`Domain${layers.twoD ? ' (2D: the two in-plane extents)' : ''}. ${LENGTH_UNIT_WHY}`}>
-                  {` · ${domainText(layers)} ${LENGTH_UNIT}`}
+                // F-837: the domain's size (the egui Studio's "domain 2 x 1 m"): the stored mesh's extents in the unit
+                // the engine names for them (ADR 0738 P5), where it comes from said in the tooltip
+                <span className="fv-domain" data-words="data" data-domain={domainText(layers)} data-length-unit={length.from} title={`Domain${layers.twoD ? ' (2D: the two in-plane extents)' : ''}. ${length.why}`}>
+                  {` · ${domainText(layers)} ${length.unit}`}
                 </span>
               )}
               {outside && outside.outside > 0 && (

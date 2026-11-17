@@ -73,7 +73,9 @@ test('the data bridge is window.studioData with exactly its four functions, froz
 test('open: both routes describe the same store', async () => {
   const infos = await page.evaluate(async (list) => Promise.all(list.map((x) => window.studioData.open(x.store))), stores('1e5'));
   for (const r of infos) expect(r.ok).toBe(true);
-  const plain = infos.map((r) => (r.ok ? { ...r.result, route: '', path: '', index: null } : null));
+  const plain = infos.map((r) => (r.ok ? { ...r.result, route: '', path: '', index: null, lengthUnit: null } : null));
+  // ADR 0738 P5: data.open names the stored mesh's length unit; store.rts does not, so the local reader says none
+  expect(infos.map((r) => (r.ok ? [r.result.route, r.result.lengthUnit] : null))).toEqual(stores('1e5').map((x) => [x.store.route, x.store.route === 'service' ? 'm' : null]));
   expect(plain[1]).toEqual(plain[0]);
   expect(plain[3]).toEqual(plain[2]);
   const first = infos[0]!;

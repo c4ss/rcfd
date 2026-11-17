@@ -4,6 +4,7 @@
 // field view's range, domain and scale bar, the latest residuals of run_status, and the palette's new commands.
 import { expect, test } from '@playwright/test';
 import { mkdtemp, readFile, readdir, rm, writeFile, mkdir } from 'node:fs/promises';
+import { readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { BUDGET_KEYS, RUN_COMPARE_OPS, RUN_EXTRA_OPS, RUN_OPS } from '../../src/shared/run.js';
@@ -14,7 +15,7 @@ import { projectArgument } from '../../src/main/project/argv.js';
 import { appRoot } from '../support/rcfd.js';
 import { entriesOf } from '../../src/main/project/listing.js';
 import { runDetail } from '../../src/main/project/runs.js';
-import { cellsOutside, domainText, fixedRange, lengthText, pngName, scaleBar } from '../../src/renderer/field/viewExtras.js';
+import { cellsOutside, domainText, fixedRange, lengthText, lengthUnitOf, pngName, scaleBar, STORE_LENGTH_UNIT } from '../../src/renderer/field/viewExtras.js';
 import { ICON_NAMES } from '../../src/renderer/ui/pictogramPaths.js';
 import { STUDIO_COMMANDS, GROUP_ORDER } from '../../src/shared/commands/studio.js';
 import { getRunAction, runEquivalents } from '../../src/shared/actions/runs.js';
@@ -287,6 +288,17 @@ test.describe('the field view’s range, domain and scale bar', () => {
     expect(domainText({ twoD: true, thin: 2, min: [0, 0, 0], max: [2, 1, 0.05] })).toBe('2 × 1');
     expect(domainText({ twoD: false, thin: 2, min: [0, 0, 0], max: [1, 0.5, 0.25] })).toBe('1 × 0.5 × 0.25');
     expect(lengthText(0.1 + 0.2)).toBe('0.3');
+  });
+
+  test('the length unit is the engine’s: data.open’s, else a derived picture’s, else the engine’s documented store unit', () => {
+    // ADR 0738 P5: crates/rcfd-tsstore/src/lib.rs LENGTH_UNIT, named in replies as length_unit, not written in store.rts
+    const tsstore = readFileSync(path.join(appRoot, '..', '..', 'crates', 'rcfd-tsstore', 'src', 'lib.rs'), 'utf8');
+    expect(tsstore).toContain(`pub const LENGTH_UNIT: &str = "${STORE_LENGTH_UNIT}";`);
+    expect(lengthUnitOf('m', 'mm')).toMatchObject({ unit: 'm', from: 'data.open' });
+    expect(lengthUnitOf(null, 'm')).toMatchObject({ unit: 'm', from: 'derive' });
+    expect(lengthUnitOf(null, null)).toMatchObject({ unit: STORE_LENGTH_UNIT, from: 'documented' });
+    expect(lengthUnitOf('m', null).why).toBe('Lengths in m, the unit the engine names for the stored mesh (data.open, length_unit).');
+    expect(lengthUnitOf(null, null).why).toMatch(/after mesh\.scale and \[mesh\.transform\] \(ADR 0738\); store\.rts does not write the unit\.$/);
   });
 
   test('a fixed range needs two ends, the top above the bottom; the cells outside it are counted once each', () => {

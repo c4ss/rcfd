@@ -159,7 +159,7 @@ const isTable = (got: number[], v: number, r: ColourRange) => allowedEntries(v, 
 /** The cut plane as the page holds it, read back from its panel's controls. */
 async function cutNow(): Promise<Cut> {
   const axis = (await page.getByRole('group', { name: 'Cut plane', exact: true }).getByRole('radio', { checked: true }).textContent()) ?? '';
-  const at = Number(await page.getByRole('slider', { name: /^Plane at [xyz]$/ }).inputValue());
+  const at = Number(await page.getByRole('slider', { name: /^Plane at [xyz], m$/ }).inputValue());
   const label = (await page.getByRole('group', { name: 'Cut plane', exact: true }).getByRole('button').last().getAttribute('aria-label')) ?? '';
   return { axis: (['x', 'y', 'z'].indexOf(axis.trim()) as 0 | 1 | 2), at: Math.fround(at), keep: label.includes('now below') ? 'below' : 'above' };
 }
@@ -235,6 +235,8 @@ async function checkCut(size: string, n: [number, number], minChanged: number) {
       before.set(`${x},${y}`, await hoverAt(x, y));
     }
   const first = await shot();
+  // ADR 0738 P5: a local store names no length unit; the lengths say the engine's documented one until a reply names it
+  await expect(page.locator('.fv-domain')).toHaveAttribute('data-length-unit', 'documented');
   // the cut plane on, from the keyboard
   await page.getByRole('button', { name: 'Cut plane', exact: true }).focus();
   await page.keyboard.press('Space');
@@ -242,6 +244,11 @@ async function checkCut(size: string, n: [number, number], minChanged: number) {
   const cut = await cutDrawn();
   expect(cut.axis).toBe(0);
   expect(cut.keep).toBe('below');
+  // the engine's cut surface names the stored mesh's length unit (length_unit of its reply): the domain and the
+  // cut panel's position (its slider's name, read by cutNow) say it
+  await expect(page.locator('.fv-domain')).toHaveAttribute('data-length-unit', 'derive');
+  await expect(page.locator('.fv-domain')).toHaveText(/ m$/);
+  await expect(page.locator('.fv-domain')).toHaveAttribute('title', /the unit the engine names for the stored mesh \(its derived picture, length_unit\)/);
   const after = await shot(`${size}-cut-x`);
   const panel = (await page.getByRole('group', { name: 'Cut plane', exact: true }).boundingBox())!;
   const r = Math.ceil(2 * after.dpr);
@@ -287,7 +294,7 @@ test('T2: the cut plane of the 1e5-cell box follows rcfd-render’s rule; axis, 
   test.setTimeout(300_000);
   const cut = await checkCut('1e5', [36, 24], 5);
   // the position from the keyboard: Page Up moves the plane, the shown position is the plane's
-  const slider = page.getByRole('slider', { name: /^Plane at [xyz]$/ });
+  const slider = page.getByRole('slider', { name: /^Plane at [xyz], m$/ });
   await slider.focus();
   await page.keyboard.press('ArrowLeft');
   await page.keyboard.press('ArrowLeft');

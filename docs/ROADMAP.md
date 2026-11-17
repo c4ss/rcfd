@@ -17036,7 +17036,7 @@ Generated from `docs/studio-guardrails.md`, `PRODUCT.md` and `DESIGN.md` ([ADR 0
     located message on failure. mesh_preview_adr0732.rs replaces preview_g1 (M1, every shipped case against
     Simulation::new) and adaptive_preview_f475 (M2); e2e tests/e2e/f836.spec.ts. No MCP tool (Q6). Word budgets
     unchanged (case editor 51 of 51 with the preview drawn).
-- [~] **F-837** Electron Studio: run setup, logs and field-view extras from rcfd-studio
+- [x] **F-837** Electron Studio: run setup, logs and field-view extras from rcfd-studio
   - depends on: F-449, F-807, F-810
   - acceptance: Each capability the deleted rcfd-studio had and the Electron Studio lacks is built or recorded as
     declined by the maintainer: run setup for "simulate N s" (time step, adaptive correctors, store plan, Courant
@@ -17086,8 +17086,13 @@ Generated from `docs/studio-guardrails.md`, `PRODUCT.md` and `DESIGN.md` ([ADR 0
     adr0737.spec.ts (4); word budgets unchanged. 2026-11-17 (branch small-fixes): an undo of Refine x2 checks the counts
     the refine left (each edits[].after of its reply) and sends them as base_value, as the undo of settings.set does, so
     a count another writer set since is the conflict panel with its three choices (the read before, or the engine's
-    1007), never overwritten silently; unit history.spec.ts (2), e2e case-file-adr0737.spec.ts (5). Left: the store
-    length unit (ADR 0738).
+    1007), never overwritten silently; unit history.spec.ts (2), e2e case-file-adr0737.spec.ts (5). The store length
+    unit 2026-11-17 (ADR 0738 P5, branch small-fixes): the field view's lengths (the cut panel's position, Plane at x,
+    m; the domain size; the scale bar) are in the unit the engine names for the store: data.open's length_unit on the
+    service route, else the length_unit of a derived picture of it (rcfd post derive), else the engine's documented
+    store unit (rcfd_tsstore::LENGTH_UNIT, read from the source by the unit test), since store.rts does not write it
+    (Q5); each length's tooltip says which; word budgets unchanged; unit f837.spec.ts and derive-bridge.spec.ts, e2e
+    f837.spec.ts, field-derived.spec.ts, data.spec.ts. Nothing left.
 - [x] **F-838** Local-model assistant: keep, port or remove
   - depends on: F-449
   - acceptance: The maintainer decides what becomes of the local-model assistant that only rcfd-gui offered (presets

@@ -60,6 +60,11 @@ export interface StoreInfo {
    * interrupted run; a later `open` picks up new snapshots). `null` for `service` (data.open does not say).
    */
   readonly index: 'footer' | 'scanned' | null;
+  /**
+   * ADR 0738 P5: the unit of the stored mesh's coordinates as the engine names it (`data.open`'s `length_unit`).
+   * `null` for `local`: store.rts does not write it (the engine's derived pictures name it, `length_unit` of their reply).
+   */
+  readonly lengthUnit: string | null;
 }
 
 /** One field of one snapshot, as `f32` (a field stored as `f64` is rounded to the nearest single, as `as f32` does). */

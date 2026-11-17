@@ -131,6 +131,8 @@ function info(s: Store, p: string): StoreInfo {
     snapshots: s.snapshots.map((x) => ({ step: x.step, time: x.time })),
     fields,
     index: s.indexSource.kind,
+    // store.rts names no length unit (ADR 0738 Q5); the engine's replies do
+    lengthUnit: null,
   };
 }
 

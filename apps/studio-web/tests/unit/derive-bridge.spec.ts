@@ -22,6 +22,7 @@ import { StudioData } from '../../src/main/data/studio-data.js';
 import { DataFailure } from '../../src/main/data/queue.js';
 import type { DataWireResult, DeriveArgs } from '../../src/shared/data.js';
 import { cutOf, readGlb } from '../../src/renderer/field/glb.js';
+import { STORE_LENGTH_UNIT } from '../../src/renderer/field/viewExtras.js';
 import { repoRoot } from '../support/project.js';
 import { appRoot, findRcfd, NO_RCFD } from '../support/rcfd.js';
 
@@ -112,7 +113,8 @@ test('StudioData derive: the CLI’s file, the data roots, the refusals and the 
     const r = (await ask(args).promise) as Extract<DataWireResult, { kind: 'derive' }>;
     expect(r.kind).toBe('derive');
     const summary = JSON.parse(r.summary);
-    expect(summary.length_unit).toBe('m');
+    // the engine's unit of the stored mesh is the one the Studio shows before a reply names it (ADR 0738 P5)
+    expect(summary.length_unit).toBe(STORE_LENGTH_UNIT);
     expect(summary.snapshot.index).toBe(0);
     // the same file the CLI writes of the same arguments
     const out = path.join(root, 'cli.glb');
