@@ -1,6 +1,9 @@
 //! ADR 0135 F1: without `--project` the server is unchanged. `tools/list` is byte-identical to the golden recorded from
 //! the `rcfd-mcp` binary of main 15b00ef (amendment 1 item 1; `crates/rcfd-mcp` equals 1248a76 there), and `initialize`
 //! answers as before. The golden is never re-recorded.
+//!
+//! ADR 0731 P3 (Q2 (a)) restates the list check for F-835: without `--project` the list is the golden with exactly one
+//! tool added, `create_project`, as the last tool; every other byte is the golden's. The golden is not edited.
 
 use std::io::Write;
 use std::process::{Command, Stdio};
@@ -34,23 +37,48 @@ fn result_text(line: &str) -> &str {
 }
 
 #[test]
-fn f1_tools_list_without_project_is_byte_identical_to_the_golden() {
+fn f1_tools_list_without_project_is_the_golden_plus_create_project() {
     let req = r#"{"jsonrpc":"2.0","id":1,"method":"tools/list","params":{}}"#;
+    let gold: serde_json::Value = serde_json::from_str(GOLDEN).unwrap();
+    // the golden's text is the serialisation of its value, so equal values are equal bytes
+    assert_eq!(serde_json::to_string(&gold).unwrap(), GOLDEN);
+    let gold = gold["tools"].as_array().unwrap();
+    assert_eq!(gold.len(), 33);
     for args in [&[][..], &["--root", "."][..], &["--read-only"][..]] {
         let lines = exchange(args, &[req]);
         assert_eq!(lines.len(), 1, "{args:?}");
         let got = result_text(&lines[0]);
+        let live: serde_json::Value = serde_json::from_str(got).unwrap();
+        assert_eq!(serde_json::to_string(&live).unwrap(), got);
+        let live = live["tools"].as_array().unwrap();
+        assert_eq!(
+            live.len(),
+            34,
+            "{args:?}: the 33 tools of the golden and create_project"
+        );
+        // ADR 0731 P3: create_project last, writes files, takes path and an optional name
+        let cp = &live[33];
+        assert_eq!(cp["name"], "create_project");
+        assert_eq!(cp["_meta"]["rcfd/access"], "write_files");
+        assert_eq!(cp["_meta"]["rcfd/needsApproval"], true);
+        assert_eq!(cp["inputSchema"]["required"], serde_json::json!(["path"]));
+        assert_eq!(cp["inputSchema"]["additionalProperties"], false);
+        let mut props: Vec<&String> = cp["inputSchema"]["properties"].as_object().unwrap().keys().collect();
+        props.sort();
+        assert_eq!(props, ["name", "path"]);
+        // the whole text: the golden with create_project appended is the live text, byte for byte
+        let mut want = gold.clone();
+        want.push(cp.clone());
         assert!(
-            got == GOLDEN,
-            "{args:?}: tools/list differs from the golden ({} vs {} bytes)",
+            serde_json::to_string(&serde_json::json!({"tools": want})).unwrap() == got,
+            "{args:?}: tools/list differs from the golden with create_project ({} vs {} bytes)",
             got.len(),
             GOLDEN.len()
         );
     }
-    let v: serde_json::Value = serde_json::from_str(GOLDEN).unwrap();
     eprintln!(
-        "F1: {} tools, {} bytes, byte-identical",
-        v["tools"].as_array().unwrap().len(),
+        "F1/ADR 0731: {} golden tools + create_project, golden {} bytes",
+        gold.len(),
         GOLDEN.len()
     );
 }

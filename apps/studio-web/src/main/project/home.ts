@@ -6,7 +6,8 @@
 import { existsSync } from 'node:fs';
 import { readdir, stat } from 'node:fs/promises';
 import path from 'node:path';
-import { FIRST_WATCH_MS, type EngineStatus, type OpenFailure, type PickResult, type ProjectState, type ProjectTool, type ProjectView, type RunActionResult } from '../../shared/project.js';
+import { FIRST_WATCH_MS, type CreateWhere, type EngineStatus, type OpenFailure, type PickResult, type ProjectState, type ProjectTool, type ProjectView, type RunActionResult } from '../../shared/project.js';
+import { initProjectCli, rcfdBeside, type InitResult } from './create.js';
 import { ensureRunnerCli, type ControlDeps } from './control.js';
 import { filesUnder, type Names } from './listing.js';
 import { sameFolder, withExistence, withOpened, without, type StoredRecent } from './recent.js';
@@ -24,6 +25,10 @@ export interface HomeDeps {
   readonly recent: RecentLike;
   /** Shows the folder dialog; null when cancelled. */
   pickFolder(): Promise<string | null>;
+  /** F-835: the folder dialog for a new project (it can make a folder); default: pickFolder. */
+  pickNewFolder?(): Promise<string | null>;
+  /** F-835: the engine makes the project (default: `rcfd project init <folder>` with the rcfd beside the engine). */
+  initProject?(folder: string): Promise<InitResult>;
   startServer?(exe: string, folder: string): Promise<ProjectServerLike>;
   listFiles?(root: string, top: string): Promise<Names>;
   isDirectory?(p: string): Promise<boolean>;
@@ -54,7 +59,7 @@ export const RUNNER_EXE = process.platform === 'win32' ? 'rcfd-runner.exe' : 'rc
 /** A request the home refuses (bridge.ts turns it into the reply's error). */
 export class HomeRefusal extends Error {
   constructor(
-    readonly code: 'not_recent',
+    readonly code: 'not_recent' | 'no_folder',
     message: string,
   ) {
     super(message);
@@ -145,6 +150,52 @@ export class ProjectHome {
   async pick(): Promise<PickResult> {
     const folder = await this.deps.pickFolder();
     if (folder !== null) await this.open(folder);
+    return { folder };
+  }
+
+  /**
+   * F-835: makes a project with the engine (`rcfd project init <folder>`, ADR 0731) and opens it. `pick`: in a folder
+   * chosen in the folder dialog; `here`: in the folder of the failed open the engine refused as no project (the page
+   * cannot name any other). The Studio writes nothing itself (G4, G12). When the engine refuses because the folder
+   * already holds a project file (made meanwhile by someone else), the folder is opened.
+   */
+  async create(where: CreateWhere): Promise<PickResult> {
+    let folder: string | null;
+    if (where === 'here') {
+      const f = this.failure;
+      if (f === null || f.kind !== 'not_a_project') throw new HomeRefusal('no_folder', 'there is no folder that is not a project yet; choose one with New project…');
+      folder = f.folder;
+    } else {
+      folder = await (this.deps.pickNewFolder ?? this.deps.pickFolder)();
+      if (folder === null) return { folder };
+    }
+    const engine = this.deps.engine;
+    if (!engine.configured) {
+      this.fail({ kind: 'not_configured', folder, message: engine.reason, detail: null });
+      this.emit();
+      return { folder };
+    }
+    const seq = ++this.openSeq;
+    this.stopWatch();
+    this.opening = folder;
+    this.failure = null;
+    this.emit();
+    const init = this.deps.initProject ?? ((f: string) => initProjectCli(rcfdBeside(engine.path), f));
+    const r = await init(folder);
+    // F-832: cancelled while the engine worked; what it made stays (it is the engine's), nothing is opened
+    if (seq !== this.openSeq) return { folder };
+    this.opening = null;
+    if (!r.ok && !existsSync(path.join(folder, PROJECT_FILE))) {
+      this.fail({
+        kind: 'not_created',
+        folder,
+        message: `The engine did not make a project in ${folder}. Choose another folder, or see what the engine said.`,
+        detail: r.message,
+      });
+      this.emit();
+      return { folder };
+    }
+    await this.open(folder);
     return { folder };
   }
 

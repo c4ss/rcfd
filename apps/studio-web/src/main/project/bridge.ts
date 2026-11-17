@@ -5,7 +5,7 @@
 //
 // No Electron import: the port is any object with postMessage and message and close callbacks (the unit tests use
 // Node's MessageChannel; src/main/index.ts adapts Electron's MessagePortMain).
-import type { ProjectError, ProjectPortMessage, ProjectReply, ProjectRequest, ProjectState, RunActionResult } from '../../shared/project.js';
+import { CREATE_WHERE, type CreateWhere, type ProjectError, type ProjectPortMessage, type ProjectReply, type ProjectRequest, type ProjectState, type RunActionResult } from '../../shared/project.js';
 import { HomeRefusal } from './home.js';
 
 export const MAX_PATH_CHARS = 4096;
@@ -31,6 +31,8 @@ export interface BridgeHome {
   action?(id: string, params: Readonly<Record<string, unknown>>): Promise<RunActionResult>;
   /** F-832: cancels the opening that is going; true when there was one. */
   cancelOpen?(): boolean;
+  /** F-835: makes a project with the engine and opens it (optional so that a home without it refuses it). */
+  create?(where: CreateWhere): Promise<unknown>;
 }
 
 /** F-807: the longest action id the port accepts, and the most bytes of an action's parameters as JSON. */
@@ -96,6 +98,12 @@ export function parseProjectRequest(raw: unknown): ParsedProject {
         return bad(`${op}: the path must be a non-empty string of at most ${MAX_PATH_CHARS} characters`);
       }
       return { ok: true, request: { op, id, path } };
+    }
+    case 'create': {
+      if (keys !== 'id,op,where') return bad('create: takes exactly where');
+      const where = raw['where'];
+      if (typeof where !== 'string' || !(CREATE_WHERE as readonly string[]).includes(where)) return bad(`create: where must be one of ${CREATE_WHERE.join(', ')}`);
+      return { ok: true, request: { op, id, where: where as CreateWhere } };
     }
     case 'action': {
       if (keys !== 'action,id,op,params') return bad('action: takes exactly an action and its params');
@@ -190,6 +198,10 @@ export class ProjectPortBridge {
           break;
         case 'cancel':
           result = { cancelled: this.home.cancelOpen?.() ?? false };
+          break;
+        case 'create':
+          if (!this.home.create) throw new Error('this Studio cannot make a project');
+          result = await this.home.create(r.where);
           break;
         case 'action':
           result = this.home.action

@@ -121,6 +121,21 @@ test.describe('parseProjectRequest', () => {
     for (const op of ['state', 'pick', 'close', 'refresh', 'dismiss'] as const) expect(parseProjectRequest({ op, id: 3 })).toEqual({ ok: true, request: { op, id: 3 } });
     expect(parseProjectRequest({ op: 'open', id: 4, path: abs('/p') })).toEqual({ ok: true, request: { op: 'open', id: 4, path: abs('/p') } });
     expect(parseProjectRequest({ op: 'forget', id: 5, path: abs('/p') })).toEqual({ ok: true, request: { op: 'forget', id: 5, path: abs('/p') } });
+    // F-835: create takes exactly where, pick or here; the page names no path
+    for (const where of ['pick', 'here'] as const) expect(parseProjectRequest({ op: 'create', id: 6, where })).toEqual({ ok: true, request: { op: 'create', id: 6, where } });
+  });
+  test('F-835: create is refused in any other shape', () => {
+    for (const raw of [
+      { op: 'create', id: 6 },
+      { op: 'create', id: 6, where: 'there' },
+      { op: 'create', id: 6, where: 7 },
+      { op: 'create', id: 6, where: 'pick', path: abs('/p') },
+      { op: 'create', id: 6, path: abs('/p') },
+    ]) {
+      const r = parseProjectRequest(raw);
+      expect(r.ok, JSON.stringify(raw)).toBe(false);
+      if (!r.ok) expect(r.error.code).toBe('bad_request');
+    }
   });
   test('refuses anything else, with the id when there is one', () => {
     const refused = (raw: unknown) => {
@@ -382,6 +397,74 @@ test.describe('the home', () => {
       await home.forget(a);
       expect(home.state.recent).toEqual([]);
       expect(home.state.failure).toBeNull();
+      await home.shutdown();
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+  });
+
+  test('F-835: create runs the engine on the folder chosen or the folder refused, then opens it; a refusal is said with the engine’s words', async () => {
+    const dir = await mkdtemp(path.join(tmpdir(), 'rcfd-home-create-'));
+    try {
+      const a = path.join(dir, 'a');
+      const b = path.join(dir, 'b');
+      const c = path.join(dir, 'c');
+      await mkdir(b);
+      await mkdir(c);
+      const made: string[] = [];
+      let refuse: string | null = null;
+      let pick: string | null = a;
+      const projects = new Set<string>();
+      const home = new ProjectHome({
+        engine,
+        recent: memoryRecent(),
+        pickFolder: async () => c,
+        pickNewFolder: async () => pick,
+        // the fake engine: it records the folder (the Studio itself writes nothing)
+        initProject: async (f) => {
+          made.push(f);
+          if (refuse !== null) return { ok: false, message: refuse };
+          await mkdir(f, { recursive: true });
+          projects.add(f);
+          return { ok: true, result: { root: f, name: path.basename(f) } };
+        },
+        startServer: async (_e, f) => {
+          if (!projects.has(f)) throw new StartFailure('not_a_project', 'no', 'error: --project: not an rcfd project folder');
+          return new FakeServer(world());
+        },
+        listFiles: names([], []),
+        pollMs: 50,
+        firstWatchMs: 0,
+      });
+      await home.init();
+      // here, with no folder refused as no project: refused, nothing run
+      await expect(home.create('here')).rejects.toMatchObject({ code: 'no_folder' });
+      expect(made).toEqual([]);
+      // pick: a folder that is not there yet; the engine makes it, and the project opens
+      expect(await home.create('pick')).toEqual({ folder: a });
+      expect(made).toEqual([a]);
+      expect(home.state.project?.folder).toBe(a);
+      expect(home.state.recent.map((r) => r.path)).toEqual([a]);
+      // the dialog cancelled: nothing run
+      pick = null;
+      expect(await home.create('pick')).toEqual({ folder: null });
+      expect(made).toEqual([a]);
+      // a folder the engine refused as no project, then Make a project here
+      await home.pick();
+      expect(home.state.failure).toMatchObject({ kind: 'not_a_project', folder: c });
+      expect(home.state.project?.folder).toBe(a);
+      expect(await home.create('here')).toEqual({ folder: c });
+      expect(made).toEqual([a, c]);
+      expect(home.state.failure).toBeNull();
+      expect(home.state.project?.folder).toBe(c);
+      // the engine refuses: the failure names the folder and carries the engine's message; the open project stays
+      refuse = 'error: /b: is a file, not a folder';
+      pick = b;
+      expect(await home.create('pick')).toEqual({ folder: b });
+      expect(home.state.failure).toMatchObject({ kind: 'not_created', folder: b, detail: refuse });
+      expect(home.state.failure?.message).toContain(b);
+      expect(home.state.opening).toBeNull();
+      expect(home.state.project?.folder).toBe(c);
       await home.shutdown();
     } finally {
       await rm(dir, { recursive: true, force: true });

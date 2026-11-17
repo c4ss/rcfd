@@ -16595,9 +16595,10 @@ Generated from `docs/studio-guardrails.md`, `PRODUCT.md` and `DESIGN.md` ([ADR 0
     visible), quiet under G22 with words behind Explain; Playwright and keyboard walks against real rcfd binaries.
     2026-11-17 (ADR 0801 Addendum 18): the result opens the run in the F-810 run workspace; the field caption is plain
     for a learner (the plain word, its unit, the round), with the stored name, snapshot, step, time, range and cells
-    said to readers and the precise terms behind Explain (G22, G19); the result's numbers open their provenance. Left:
-    no engine command creates a project (ADR 0731 proposed; E-813 of ADR 0801's engine follow-ups), so the walk's test
-    writes rcfd-project.json in its place; maintainer's first-time view-and-report.
+    said to readers and the precise terms behind Explain (G22, G19); the result's numbers open their provenance.
+    2026-11-17 (F-835, ADR 0731): an empty folder's Make a project here runs the engine's rcfd project init and opens
+    the project; the walk's test makes its projects through it, New project… and the palette, and no longer writes
+    rcfd-project.json. Left: maintainer's first-time view-and-report.
 - [~] **F-814** Electron Studio: Claude Code panel
   - depends on: F-805
   - acceptance: The Claude Code chat for the project through rcfd-claude: open sessions mirrored read-only, closed
@@ -16879,12 +16880,19 @@ Generated from `docs/studio-guardrails.md`, `PRODUCT.md` and `DESIGN.md` ([ADR 0
     estimates, time step, correctors) not ported, listed in the merge report. Open: process tests need release
     rcfd-runner and rcfd built first (fail loudly, current); Follow-up 8d600082: series_plan_f834b.rs restores M3
     (decimate_minmax) and the engine parts of DV1 and DV5.
-- [ ] **F-835** Electron Studio: new project
+- [x] **F-835** Electron Studio: new project
   - depends on: F-449, F-805
   - acceptance: An engine entry point creates a project (rcfd project init and an MCP create_project, through
     rcfd_project::Project::create, ADR first); the Studio's project home offers it (button and palette) and opens the
     new project; the learner's first path uses it instead of a copied example; e2e test.
-  - note: Lost with rcfd-studio (S/ui.rs). Traces: G14, G4, G15. ADR 0731 proposed; awaiting the maintainer.
+  - note: Lost with rcfd-studio (S/ui.rs). Traces: G14, G4, G15. Done 2026-11-17 (ADR 0731, accepted by the maintainer
+    2026-11-17 with every recommendation; branch adr0731): rcfd_workspace::create_project over Project::create
+    unchanged, rcfd project init <dir> [--name] (one rcfd --help line) and the MCP create_project on the server without
+    --project (default_f1.rs restated, the golden not re-recorded); the Studio's New project… on the empty home and in
+    the palette and Make a project here on a folder that is not a project run rcfd project init in the main process and
+    open the project (G4, G12: the Studio writes no rcfd-project.json); the first path's e2e walk makes its projects
+    through them. Word budgets unchanged: New project… on the empty home is an icon button (a worded one needs
+    home-empty raised from 6 to 8, for the maintainer).
 - [ ] **F-836** Electron Studio: mesh preview before a run
   - depends on: F-449, F-812, F-808
   - acceptance: The case editor shows the mesh a case will build (generator and imported meshes, including a

@@ -192,6 +192,19 @@ export const STUDIO_COMMANDS: readonly StudioCommand[] = [
     note: 'The folder dialog is the main process’s; what is shown is what the project server answers Claude Code too.',
   },
   {
+    id: 'project.new',
+    title: 'New project…',
+    description:
+      'Choose or make a folder in the system’s folder dialog; the engine makes it a project (rcfd-project.json and the folders cases, meshes, runs, designs and notes; what the folder holds already stays) and the Studio opens it.',
+    group: 'Project',
+    effect: 'change',
+    params: [],
+    engine: 'rcfd project init <folder> (ADR 0731), then rcfd-mcp --project <folder> --read-only',
+    cli: 'rcfd project init <folder> [--name <name>]',
+    mcp: 'create_project',
+    note: 'The engine writes the project file, never the Studio (G4, G12); the project is named after its folder. Claude Code makes one with create_project {path, name} on a server without --project.',
+  },
+  {
     id: 'project.open_recent',
     title: 'Open a recent project',
     description: 'Open one of the folders opened before, from the recent list (paths and times only).',

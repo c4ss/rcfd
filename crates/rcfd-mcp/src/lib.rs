@@ -524,6 +524,24 @@ fn tools() -> Vec<Tool> {
     ]
 }
 
+/// ADR 0731 P3: `create_project`, listed only without a project (a server with a project already has one).
+fn create_project_tool() -> Tool {
+    Tool {
+        name: "create_project",
+        description: "Make an rcfd project folder: rcfd-project.json and the folders cases, meshes, runs, designs, notes and .rcfd. The folder may exist and hold other files; nothing is replaced, and the result lists what was already there. Refused when the folder already holds rcfd-project.json. Returns root, name, schema_version, created, solver_version_created and existing.",
+        access: Access::WriteFiles,
+        schema: || {
+            obj(
+                json!({
+                    "path": {"type": "string", "description": "the project folder (inside the sandbox when the server has --root)"},
+                    "name": {"type": "string", "description": "project name (default: the folder's name)"}
+                }),
+                &["path"],
+            )
+        },
+    }
+}
+
 /// Check `value` against the small JSON Schema subset used by the tools
 /// (`type`, `properties`, `required`, `additionalProperties`, `items`, `enum`,
 /// `minimum`, `maximum`).
@@ -640,6 +658,9 @@ impl McpServer {
                 x.access = Access::Execute;
             }
             t.extend(project::tools());
+        } else {
+            // ADR 0731 P3: a server without a project can make one; it is the last tool of that list
+            t.push(create_project_tool());
         }
         t
     }
@@ -962,6 +983,11 @@ impl McpServer {
                     return Ok(ok_result(proj.workspace().design_call(svc, method, &p)?));
                 }
                 Ok(ok_result(svc.call(method, &p)?))
+            }
+            "create_project" => {
+                let dir = svc.sandbox_path(args["path"].as_str().unwrap_or_default())?;
+                let name = args.get("name").and_then(Value::as_str);
+                Ok(ok_result(rcfd_workspace::create_project(&dir, name)?))
             }
             "render_image" => {
                 let mut p = Map::new();
