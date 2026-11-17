@@ -16409,15 +16409,35 @@ fixed by the item's registration ADR before any code.
     too strictly (it assumed every base model was a default one, corrected by an amendment before the comparison) and
     one clause of a control could not be evaluated. Five of five mutations of the in-process file caught; the heavy
     records not run. Follow-up F-847 (The element entry points of the incompatible Hex8 given a committed state with the
-    nine modes of the warm start).
-- [ ] **F-847** The arc-length trace of rule L's 16^3 punch branch through its fold on the warm model
-  - depends on: F-797, F-841
-  - acceptance: Every limit not stated here is registered in the ADR before the run. arclength::trace_from from ADR
-    0711's state at 0.9645 on the model with the warm start of the incompatible modes (ADR 0660 D1), the committed
-    element states carried by the driver, through ADR 0723's fold (a ~ 2.170e-4) to a registered cap: the fold read from
-    the load factor and the inertia against ADR 0723's estimate, the states against a bordered reference on the warm
-    model, the constraint measured with a floor for short arcs; the default bits unchanged.
-  - note: Follow-up of F-797 (ADR 0726, 2026-11-16).
+    nine modes of the warm start). ADR 0729 makes the element entry points accept a warm state; under the switch the
+    four patch tests of class (iv) then fail only at their own PT4 set-up line (index 12 of a 9-value chunk), an edit
+    for the switch item.
+- [~] **F-847** The element entry points of the incompatible Hex8 given a committed state with the nine modes of the warm start
+  - depends on: F-846
+  - acceptance: Every limit not stated here is registered in the ADR before the run. The public element-level entry
+    points of the incompatible Hex8 (modes_and_strains and its variants, condensed_force_and_tangent and its variants,
+    the mode iteration records, enhanced_force_and_tangent and its variants, and nonlinear::hex8_* with the Incompatible
+    formulation) accept a state of the material layout followed by nine modes, by an opt-in or by a rule that leaves
+    every current call bit-identical: the material part used as now and the modes as the start of the local iteration,
+    measured against the driver's own evaluation on the ADR 0727 patch tests under the warm start; the transient
+    restore's refusal names the first element and its two lengths; the default bits unchanged.
+  - note: F-847 (ADR 0729, 2026-11-17): the public element entry points of the incompatible Hex8 accept a committed
+    state of the warm start by a length rule. A state of the material layout (8 x state_size values) takes the code it
+    took before. A state with nine more values is a warm state: its material part is used as now, and its last nine
+    values are the committed modes, the start of the local iteration (if that iteration fails, it restarts from zero,
+    ADR 0660 D1). Every other length is refused with the error it got before. The rule covers modes_and_strains{,_with},
+    condensed_force_and_tangent{,_backtracked,_update}, mode_iteration_record{,_from} and trust_region_record (a start
+    given by the caller wins), enhanced_force_and_tangent{,_with} (the modes are given, the trailing ones ignored), and
+    nonlinear::hex8_force_and_tangent_at, hex8_internal_force_at and hex8_second_piola_kirchhoff with Incompatible. On
+    the ADR 0727 patch tests under the warm start (4 rules, 5 cases, 36 elements each), every entry point returns the
+    driver's own evaluation bit for bit and every patch row meets its limit. The patch modes are exactly zero, so the
+    use of the modes as the start is shown on one element: from the committed root 1 local iterate instead of 4, other
+    bits from another start, and the restart from zero for NaN modes. The transient restore now names the first element
+    and its two lengths. A digest of every default call and every refusal is equal before and after; the default bit
+    records and baseline_hashes pass. Under a flipped default the four patch tests no longer fail at an entry point, but
+    still fail at their own PT4 set-up line, which reads the J2 state by the material layout. Seven of seven mutations
+    were caught. Lead (2026-11-17): recorded partial by the status rule (the patch rows were met only after amendment 1,
+    written after the first run panicked on the J2 case); the agent proposed done; done is the maintainer call.
 - [ ] **F-847** The element entry points of the incompatible Hex8 given a committed state with the nine modes of the warm start
   - depends on: F-846
   - acceptance: Every limit not stated here is registered in the ADR before the run. The public element-level entry
