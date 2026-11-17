@@ -475,6 +475,12 @@ jitter. `predict`, `loo` and the likelihood gradient follow the mode. Rung R3 of
   it never fires: the fitted length scales are 2 to 10 in the unit cube, so the basin covers the box, and the runs are bit
   for bit those of plain expected improvement. `Restart { step_model: true, .. }` scores the restart by the step's own
   process instead of a fresh one; on Shekel 10 that does worse (11 of 20), so the fresh process is kept.
+  ADR 0680 adds a second trigger, `Restart { trigger: Trigger::Repetition { window: None }, .. }`: the restart fires when
+  the plain pick of the step and each of the last `d + 1` evaluated observations (in the order given, so `propose` then
+  depends on the order of the observations) lie in the incumbent's basin, instead of when the acquisition is small. It
+  takes at most one pick in `d + 2` while plain expected improvement keeps choosing the basin. On Hartmann 6 it reaches the
+  minimum within 1 percent on 8 of 10 seeds (plain 6 of 10), and on Shekel 10 on 19 of 20 (plain 18 of 20), so it helps on
+  both functions where the acquisition trigger helped on Hartmann 6 only. The default trigger stays `Trigger::Acquisition`.
 * `minimise` has the batch interface of the other optimisers; `run(spec, model, ledger)` drives a `ledger::Model` and appends
   one entry per evaluation with the predicted mean and standard deviation in the provenance (`driver: gp_ei`), then a
   `surrogate_summary` with the fitted model's identity (`fitted`) and its training entries (`parents`). A run resumes from the

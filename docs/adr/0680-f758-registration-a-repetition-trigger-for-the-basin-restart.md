@@ -174,3 +174,87 @@ pick outside the basin would count).
 3. Whether to keep `tau` as a second condition: no; the acceptance asks for the trigger "instead of on the size of the
    acquisition".
 4. Default off (opt-in), as the brief requires.
+
+## Addendum 1 (2026-11-17): results
+
+Code: 5183606e (`Restart::trigger` and `Trigger` in `bayes.rs`, the test file), then this addendum and `docs/design-loop.md`.
+Each registered check ran once, in the release profile, with no amendment; logs in `f758-scratch/logs` (`run_fast.log`,
+`run_k1.log`, `run_k2.log`, `run_b1_*.log`, `run_b1h_*.log`, `clippy.log`, `mutations.log`, `mut_*.log`).
+
+### Results
+
+| Check | Limit | Measured | Met |
+|---|---|---|---|
+| K1 Hartmann 6, rep against plain (seeds 1 to 10) | rep >= plain | **rep 8, plain 6**; first hits rep `[52, -, 57, 42, 52, 174, 52, 53, 174, -]`; rescued seeds 6 and 9, none lost; 279 s | yes |
+| K2 Shekel 10, rep against plain (seeds 1 to 20) | rep >= plain | **rep 19, plain 18**; rescued seeds 5 and 18, lost seed 19 (best -2.79029, 20 restart picks); 156 s | yes |
+| P0 plain runs reproduce the records | Hartmann `[48, -, 55, 41, 52, -, 54, 50, -, -]`; Shekel misses 5, 18 | the same; the same | yes |
+| K3 the trigger fires | >= 1 per function | 129 restart picks on Hartmann (6 to 19 per run), 259 on Shekel (5 to 20 per run) | yes |
+| K4 W1; A6; E2 over the rep runs | 0; 0; 0 | 0; 0; 0 (388 restart picks, each with its plain pick recomputed) | yes |
+| K5 record | recorded | Ei steps where the condition held and no restart was made: 0 to 1 per Hartmann run, 0 to 10 per Shekel run (fewer than `d + 2` points outside the basin, or no fresh fit) | recorded |
+| D0 default trigger | Acquisition | Acquisition | yes |
+| H1 O1 points hash | == 0xe2cf141320774cfc | 0xe2cf141320774cfc | yes |
+| HR hash with `Restart::default()` | == 0xfcb394c67ca8392f | 0xfcb394c67ca8392f | yes |
+| NCR hash with the rep restart | differs from both | 0xd1ec15694c878503 | yes |
+| T1 Shekel fast path, seed 1 | >= 1; 0; 0; 0 | 13 restart picks; W1 0; A6 0; E2 0 (35 s) | yes |
+| T2 workers 1 and 8 | bit-equal | true | yes |
+| B1 regression | pass | f715_robust_ei 6 passed (2 ignored), f733_restart_second_function 5 (3 ignored), f698_surrogate 19 (3 ignored), f716_stall_precheck 7 (2 ignored), `--lib` 141 (4 ignored), baseline_hashes 3 (1 ignored), docs_site 2 | yes |
+| B1h F-715 / F-733 heavy records rerun by name | equal to their addenda | A1 9 of 10, first hits `[48, 167, 55, 41, 52, 147, 54, 50, 166, -]`, restart picks `[100, 45, 98, 103, 91, 44, 92, 102, 36, 32]`; A2b the P0 list; S0 -10.53644315, S1 plain 18 fresh 17, S2 step 11, S3 3535 picks, 0 inside, E2 0 (fails at its S1 assertion, as recorded); F1 10, 10, 10, bit-equal, NC1 `[37, 35, 34, 36, 36, 36, 39, 36, 34, 36]`, located, E2 0 | yes |
+| B2 fmt, clippy, files | clean; as stated | `cargo fmt -p rcfd-api --check` clean; `cargo clippy -p rcfd-api --all-targets --release -- -D warnings` clean; `git diff fcb0e65e --stat`: `bayes.rs`, the new test, this ADR, `docs/design-loop.md` | yes |
+
+Reading of K1 and K2: the repetition trigger helps on both functions. The acquisition trigger helped on Hartmann 6 (9 of 10)
+and hurt on Shekel 10 (17 of 20). On Shekel 10 the repetition trigger rescues the two seeds that plain expected improvement
+misses and keeps seeds 9 and 13, which the acquisition trigger lost. It loses seed 19, where the incumbent's basin is the
+local minimum -2.79 and the run made 20 restart picks. From the record alone (no diagnostic run): the restart picks changed the
+later data, and plain expected improvement never drifted into the global basin, as it did at evaluation 87 without them. On
+Hartmann 6 it rescues two of the four stalled seeds, both at evaluation 174, with 14 and 12 restart picks; seeds 2 and 10 stay
+at -3.20316. As registered (D1, Limits), it rescues fewer Hartmann seeds than the acquisition trigger, whose restart takes most
+of the budget.
+
+### Mutations
+
+| Id | Mutation | Caught by |
+|---|---|---|
+| M1 | window length 0 | T1 (W1: 133 of 134 restart picks) |
+| M2 | the plain-pick condition dropped | **survived** T1 (13 picks, W1 0: on seed 1 every fire was on a step whose plain pick was in the basin anyway). The NCR hash moved (0x2a759462027cd843), but NCR only tests against H1 and HR. A registered doubt |
+| M3 | the window over the first observations | T1 (0 restart picks) |
+| M4 | `Repetition` read as `Acquisition` | NCR (equals HR), T1 (W1: 80 of 82) |
+| M5 | `Restart::default()` with the repetition trigger | HR (0xd1ec15694c878503); D0 printed `Repetition`, its assertion comes after HR in the same test |
+| M6 | the window's basin in the unit cube | T1 (W1: 137 of 139) |
+| R4 | `restart` defaulting to `Some(Restart::default())` | H1 (0xfcb394c67ca8392f) |
+
+Control: the unmutated copy passes every non-ignored test of the file (`mut_CONTROL.log`).
+
+### Deviations
+
+None to the registered checks. The records and the B1 runs shared the machine with other agents' builds; the times are
+wall-clock under that load. docs_site ran once before and once after the docs edits of this branch.
+
+### Decision
+
+By the registered rule: **done**. Every check K1 to B2 was met in its one run with no amendment; M1, M3 to M6 and R4 were
+caught; M2 survived, as registered. On Hartmann 6 the restart with the repetition trigger reaches the target on 8 of 10 seeds
+against 6 of 10 for plain expected improvement, and on Shekel 10 on 19 of 20 against 18 of 20. Every F-715 and F-733 check was
+re-run and kept its result. The O1 points hash and the hash of the ADR 0651 restart are unchanged.
+
+### Remaining questions (taken on the maintainer's standing instruction of 2026-11-11; the recommendation is given in each)
+
+1. M2 survived: no fast check sees the plain-pick condition. Options: (a) leave it (W1 b checks it on every restart pick of
+   the records, 388 picks, 0 violations, but it sees only a wrong fire, never a missing condition); (b) a fast test that
+   builds an observation sequence whose window lies in the basin while the plain pick lies outside it, and checks that no
+   restart is made. Recommend (b) as a small follow-up.
+2. Default trigger. Options: (a) keep `Acquisition` as the default of `Restart` (the hashes stay); (b) make `Repetition` the
+   default of `Restart` (changes HR and every recorded restart result of ADR 0651 / 0673). Recommend (a). The restart itself
+   stays off by default either way. A change of default would change recorded results, so it is not taken here.
+3. Order dependence: with the repetition trigger, the ledger driver `run` reads the observations in ledger order, so a
+   reordered ledger can give other picks. Options: (a) document it (done here and in `docs/design-loop.md`); (b) store the
+   pick order in the ledger entries and sort by it. Recommend (a) until the trigger is used through `run`.
+4. Shekel 10 seed 19 is lost by the rep restart. It was not diagnosed by a run. Recommend no action: the clause is met, and a
+   diagnosis of one seed would invite tuning `W`.
+
+## For the lead: roadmap entries
+
+> Proposed status: done
+
+> Follow-up of F-733 (ADR 0673, 2026-11-17). ADR 0680, 2026-11-17. DONE (library, opt-in). The basin restart of ADR 0651 gains Restart::trigger (default Trigger::Acquisition, so every F-715 and F-733 result and the default bits are unchanged) with a second trigger, Trigger::Repetition: the restart fires when the plain pick of the step and each of the last d + 1 evaluated observations lie in the incumbent's basin (radius 2 in the fitted length scales), instead of when the acquisition is small. The window d + 1 (a simplex of consecutive evaluations) and the radius were fixed before any run and not tuned. It takes at most one pick in d + 2 while plain expected improvement keeps choosing the basin, and stays quiet when plain expected improvement drifts out of it. Hartmann 6 (n0 30, budget 200, seeds 1 to 10): 8 of 10 within 1 percent against 6 of 10 for plain expected improvement (seeds 6 and 9 rescued, none lost). Shekel 10 (n0 10, budget 150, seeds 1 to 20): 19 of 20 against 18 of 20 (seeds 5 and 18 rescued, seed 19 lost), where the acquisition trigger did 17 of 20. Every restart pick was checked from outside: its window and its recomputed plain pick in the basin, the pick itself outside it (388 picks, 0 violations). The F-715 and F-733 heavy records and fast tests were re-run with their recorded results; the O1 points hash of ADR 0673 and the hash of the ADR 0651 restart are unchanged. Six of seven mutations caught; dropping the plain-pick condition survived, as registered. With the repetition trigger, propose depends on the order of the observations. Not covered: the fan (the basin covers the box there), other functions, batches larger than one.
+
+> Follow-up proposed: A fast check of the plain-pick condition of the repetition trigger. Deps F-758. Acceptance: a fast test with an observation sequence whose last d + 1 points lie in the incumbent's basin while the plain pick of the step lies outside it shows that the repetition trigger makes no restart pick, the surviving ADR 0680 mutation M2 (the plain-pick condition dropped) is caught by it, and the O1 points hash of ADR 0673 is unchanged.
