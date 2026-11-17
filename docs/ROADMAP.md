@@ -16050,7 +16050,7 @@ fixed by the item's registration ADR before any code.
     unittest discover -s scripts` runs 136 tests (139 before), OK; 4 of 4 mutations caught. The exact file list of the
     retro counts is no longer asserted by a test. Follow-up F-792 (A test of the per-file tier list of the retro counts
     for rules H1 and H2).
-- [ ] **F-791** non-orthogonality of the blade-line faces next to the stack at the thin-to-thick span transition of S'''
+- [x] **F-791** non-orthogonality of the blade-line faces next to the stack at the thin-to-thick span transition of S'''
   - depends on: F-784
   - acceptance: Every limit not stated here is registered in the ADR before the run. A new opt-in field of S''' builds
     the first free rows of the blade lines between the last thin and the first thick span layers so that, at the ADR
@@ -16059,7 +16059,23 @@ fixed by the item's registration ADR before any code.
     skewness 4.0 and aspect 1000, the wake-stack spanwise skewness stays within 1.0, a registered front_gap and n_nose
     scan inside the camber_seam range builds a registered fraction, and camber_seam_h, camber_seam_s,
     camber_seam_s_unstretched, camber_seam_s_wake_remap and camber_seam_s_wake_ramp are unchanged in bits.
-  - note: Follow-up of F-784 (ADR 0702, 2026-11-16).
+  - note: Follow-up of F-784 (ADR 0702 question 1). ADR 0713, 2026-11-17. DONE. Diagnosis on the base: the 84.688 deg
+    face of S''' (C (45, 2) / (45, 3), layer 3, the face between the first and second free cells at the thin-to-thick
+    span transition) is a radial offset of the cell centroids (unit centroid vector radial 0.71): in a 9 mm thick span
+    cell the second free cell grows by a different factor between its two node layers (the line distribution is solved
+    per layer and the line length grows with the pitch) than the first, and the centroid of a prism moves by H (A1 - A0)
+    / (6 (A0 + A1)). New opt-in construction S'''' = CGridOptions::camber_seam_s_free_rows_construction() =
+    camber_seam_s_wake_ramp + free_row_hub_ratio: the free cells of every C line grow by the ratio the line has in the
+    hub layer's true section, in every layer, and only the cap that ends the growth is solved per layer
+    (CGridMesh::free_row_ratios reports the ratios). At the ADR 0118 s4 specs ComputerFan::rom_reference() blade 0 and
+    the ADR 0696 second blade build with no folded cell, periodic, within 84.5 deg / 4.0 / 1000 (84.122 / 2.538 / 525.6
+    and 83.887 / 2.720 / 551.7); the former worst face is 82.803 deg, the radial part of its centroid vector 0.425; the
+    first free cell is unchanged in bits, the second varies by 1.5 % between the node layers (S''' 17 %); wake-stack
+    spanwise skewness 0.420 / 0.377 (unchanged); a front_gap 0.15 to 1.0 x n_nose 4 / 6 / 9 scan builds 12 of 12 on each
+    blade (limit 9 of 12). Locality: only the free C rows change. camber_seam_h, camber_seam_s,
+    camber_seam_s_unstretched, camber_seam_s_wake_remap and camber_seam_s_wake_ramp unchanged in bits; f784, f782, f777,
+    f726, cgrid_w35d, f722, fan01_p10_w36d c2, fan_design_w46a s4, --lib and baseline_hashes pass. Six of six mutations
+    caught. Library only; no case value.
 - [x] **F-792** A test of the per-file tier list of the retro counts for rules H1 and H2
   - depends on: F-790
   - acceptance: Every limit not stated here is registered in the ADR before the run. A test of
