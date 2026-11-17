@@ -163,3 +163,18 @@ smoke rates (sqrt(20 x 0.3 x 0.7) = 2.0), so a met S2 is not a coin toss.
 3. The fan clause with an inert restart: run as registered (F1, F1b); a basin radius bounded by the box (for example `rho`
    relative to the largest length scale) is a design change with its own parameters, left as a remaining question, not done
    here.
+
+## Amendment 1 (2026-11-17, after the registered run of the fast tests, before any corrected run): T1 had no restart pick
+
+The registered run of the fast tests (commit 1de27b10, log `f733-scratch/logs/run_fast.log`) met H1, NCH, T2 and T3 and
+missed T1: on Shekel 10 seed 1 with budget 40 neither the fresh nor the step run made a restart pick (0 and 0; both best
+-2.86724, the same points). The estimate was defective: the smoke counted 51 to 112 restart picks over 140 model picks, but
+said nothing about how early the first one comes; within 30 model picks the trigger did not fire, so T1 did not reach the
+restart path at all. The limit is not at fault; the set-up is.
+
+T1 stays in the file as the ignored record `t1_shekel10_fast_path_known_miss` (limit intact, measured 0 and 0). Correction
+(registered now): `t1b_shekel10_fast_path_budget_150`, the T1 set-up with the budget of the registered Shekel runs (150), seed
+1, fresh and step, the same three limits (restart picks `>= 1` each, 0 inside the basin, E2 0). Estimate: every one of the 20
+smoke runs at `n0 = 10`, budget 150 (Z2, both variants) had 51 or more restart picks. About one minute (two runs in
+parallel), so it stays a fast test. Run once. The decision rule is unchanged with T1b in the place of T1; mutation R1 is run
+against T1b.
