@@ -525,6 +525,9 @@ pub struct CGridOptions {
     /// along the segment is the next stack height divided by the cosine between the segment and the wall normal (at least 0.1),
     /// so that the wall-normal height continues the stack growth.
     pub straight_lines: bool,
+    /// ADR 0696 (opt-in, with `straight_lines`): the first cell along every straight segment is the next stack height `d1 g^nb`
+    /// itself (no division by the cosine), so that the first free row continues the stack's geometric series along every line.
+    pub unstretched_first_cell: bool,
 }
 
 impl CGridOptions {
@@ -564,6 +567,16 @@ impl CGridOptions {
             straight_lines: true,
             radial_filter: false,
             ..CGridOptions::camber_seam_h_construction()
+        }
+    }
+
+    /// Construction S' of ADR 0696 (no case value): construction S with the first free cell of every straight line at the next
+    /// stack height ([`CGridOptions::unstretched_first_cell`]); ADR 0692 located its non-orthogonality and skewness maxima at the
+    /// stretched first cells of the wake lines next to the trailing edge.
+    pub fn camber_seam_s_unstretched_construction() -> Self {
+        CGridOptions {
+            unstretched_first_cell: true,
+            ..CGridOptions::camber_seam_s_construction()
         }
     }
 }
@@ -1413,7 +1426,8 @@ fn build_layer(
         let len = norm2((o.0 - e.0, o.1 - e.1));
         let first = d1s[i] * g.powi(nbi as i32);
         // ADR 0692 S2: the first cell along the straight segment continues the stack growth in the wall-normal direction
-        let first = if opts.straight_lines {
+        // ADR 0696: with `unstretched_first_cell` the first cell is the next stack height along every segment
+        let first = if opts.straight_lines && !opts.unstretched_first_cell {
             let cos_t = ((o.0 - e.0) * normals[i][0] + (o.1 - e.1) * normals[i][1]) / len;
             first / cos_t.max(0.1)
         } else {
