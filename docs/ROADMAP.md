@@ -15148,7 +15148,9 @@ fixed by the item's registration ADR before any code.
     without the edge jump). Follow-up F-763 (Rule L loses positive definiteness on the refined neo-Hookean punch block).
     ADR 0683 (F-762, 2026-11-17): with the edge jump of the node-set punch replaced by a smoothed pressure, rule L and
     F-bar with J2 agree within 0.5 per cent on 16^3 and F-bar's excess disappears; the uninformative tolerance of ADR
-    0678 was the punch edge's (F-762).
+    0678 was the punch edge's (F-762). ADR 0682 (F-763, 2026-11-17): the failed 16^3 neo-Hookean rule L solve of EC1
+    fails at a Newton iterate from a stable converged state at the punch corner; every converged state is positive
+    definite (F-763).
 - [x] **F-748** The creep and viscoelastic readings of the committed modes of the warm start
   - depends on: F-742
   - acceptance: Every limit not stated here is registered in the ADR before the run. W of ADR 0660 with a creep material
@@ -15407,13 +15409,25 @@ fixed by the item's registration ADR before any code.
     initial import and the earliest ADR that names one only edits or mentions it; the three files of ADR 0679 sample A'
     keep their primary (it is already the earliest) and are still not the registering ADR. 7 of 7 mutations caught.
     Follow-up F-768 (Primary ADR of file-citation-only tests from the commit that adds the file).
-- [ ] **F-760** ADR text for the 25 integration-test binaries still unmapped in the test-to-ADR index
+- [x] **F-760** ADR text for the 25 integration-test binaries still unmapped in the test-to-ADR index
   - depends on: F-737
   - acceptance: Every limit not stated here is registered in the ADR before the run. Each of the 25 binaries listed in
     ADR 0679 addendum 1 is named in the ADR that registered or first described it, found by reading the code and the git
     history, with no Rust file edited; the index shows at most 5 unmapped integration binaries with tests; a registered
     sample of the new mappings is read.
-  - note: Follow-up of F-737 (ADR 0679, 2026-11-16).
+  - note: Test-to-ADR index, ADR text for the unmapped integration-test binaries (follow-up of F-737, ADR 0679). DONE.
+    ADR 0685, 2026-11-17: each of the 25 integration-test binaries left unmapped in ADR 0679 addendum 1 is named, by
+    path, in the ADR that registered or first described it, found by reading the code and the git history (20 binaries
+    in short "Test files" notes appended to 12 ADRs: 0004, 0008, 0011, 0024, 0025, 0027, 0031, 0036, 0060, 0067, 0088,
+    0123) or in ADR 0685 with the reason (5: `mesh_params`, `channel_wall_function`, `physics_cases`,
+    `physics_workflow`, `table_expr`). Most were committed on 2026-10-13 or 2026-10-14 without an ADR; where no ADR
+    described the feature the note says so. The index shows 0 unmapped integration binaries with tests (baseline 25,
+    limit 5; the 5 named in 0685 are mapped to it by a word match), 109 tests gained an ADR and none lost one (all tests
+    mapped 98.2 % to 99.7 %), no Rust file or script edited, unit tests of `scripts` pass, docs_site passes. Sample of 8
+    of the 20 new mappings read (seed 7600): 7 agree, 1 disagrees (`workflow_engine` to 0123, which does not describe
+    the workflow engine). Follow-up F-769 (ADRs for the five feature groups that no ADR describes (the assistant setup
+    helpers and workflow engine, the F-040 wall-function channel, the shipped turbulence and compressible examples
+    through the binary, the mesh generator parameters, tables called from expressions)).
 - [x] **F-761** The daily gate runs the feature-gated edit-lock controls
   - depends on: F-755, F-723
   - acceptance: Every limit not stated here is registered in the ADR before the run. The daily gate runs cargo test -p
@@ -15529,3 +15543,12 @@ fixed by the item's registration ADR before any code.
     0684 sample D (seed 7590) and a fresh registered sample of at least 20 file-citation-only files are read with at
     least 80 % agreement; the attribution data of `gate_attribute.py` is unchanged for the existing consumers.
   - note: Follow-up of F-759 (ADR 0684, 2026-11-16).
+- [ ] **F-769** ADRs for the five feature groups that no ADR describes (the assistant setup helpers and workflow engine, the F-040 wall-function channel, the shipped turbulence and compressible examples through the binary, the mesh generator parameters, tables called from expressions)
+  - depends on: F-760
+  - acceptance: Every limit not stated here is registered in the ADR before the run. A short registration ADR per group
+    states what the files `rcfd-assistant/tests/physics_workflow.rs`, `rcfd-assistant/tests/workflow_engine.rs`,
+    `rcfd-turb/tests/channel_wall_function.rs`, `rcfd-cli/tests/physics_cases.rs`, `rcfd-api/tests/mesh_params.rs` and
+    `rcfd-core/tests/table_expr.rs` check and which limits they carry, read from the code and the roadmap notes, with no
+    Rust file edited; the index maps these files by a reading of that ADR (evidence E2, not only a word); a registered
+    sample is read.
+  - note: Follow-up of F-760 (ADR 0685, 2026-11-16).
