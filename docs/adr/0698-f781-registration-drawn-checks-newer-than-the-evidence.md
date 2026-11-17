@@ -131,3 +131,74 @@ Mutations (scratch copy of the final code, one at a time; each must fail a regis
 ## References
 
 ADR 0624, ADR 0662, ADR 0693, ADR 0695; first principles.
+
+## Addendum 1: results (2026-11-17)
+
+Code: `crates/rcfd-api/src/design/hypothesis.rs`: additions only (module doc lines; `DrawnRow::drawn_stale`, `DrawnStale`,
+`DrawnLessons::stale`, `drawn_newer_evidence`, the stale step inside `lessons_drawn`); `lessons`, `Lesson`, `Lessons`,
+`verify` and every drawn function of ADR 0693 are untouched. New `crates/rcfd-api/tests/f781_drawn_newer.rs` (7 tests, about 18 s
+in release). `docs/design-loop.md`: one added sentence. No shared solver file, golden, hash table, case key or MCP tool;
+`baseline_hashes` not run (no solver file touched). Commits: registration 387272df; code, tests and docs 87eb251b; this addendum.
+
+Runs (release, `CARGO_TARGET_DIR` in the scratch folder): the registered run once (`run1.log`, 7 passed, 18.0 s; before it two
+unused helper functions and an unused enum variant copied from the f776 file were removed to keep clippy clean, no limit or
+check touched); C1 and C2 (`c_tests.log`), `--lib`, docs_site, fmt, clippy (`c_rest.log`); mutations on a `git archive` copy with its own
+target directory (`mutate.py`, `mutate_run.log`, `mut_M*.log`; control M0 passes). No run was slow; the heavy `--ignored` records
+were not run (disclosed in the registration).
+
+| Check | Limit | Measured | Met |
+|---|---|---|---|
+| B0 | 160 of 160 equal, all counts 0 | 160 of 160 | yes |
+| B1 | 40 of 40 honest rows kept, 1 check, 0 stale | 40 of 40 | yes |
+| B2 | default 40 of 40 (0 rows, plain = lessons); stored 40 of 40 (row kept, 0 checks, 1 stale, listed, flagged) | 40 of 40; 40 of 40 | yes |
+| B3 | stale failure not dropping 40 of 40; control (no second set) dropped 40 of 40 | 40 of 40; 40 of 40 | yes |
+| B4 | a, b, c each 40 of 40; order 120 of 120 | 40, 40, 40; 120 of 120 | yes |
+| B5 | 40 of 40 (evidence at index `entries_seen` is newer) | 40 of 40 | yes |
+| B6 | 40 of 40 (helper boundary) | 40 of 40 | yes |
+| C1 | `f776_lessons_drawn` 6 of 6, unedited | 6 passed (9.4 s) | yes |
+| C2 | f745 6, f701 19, f727 8, f728 10, f749 8, `--lib` 141 (4 ignored) | 6, 19 (30.4 s), 8, 10, 8, 141 (43.7 s, 4 ignored) | yes |
+| C3 | docs_site pass | 2 passed | yes |
+| R | fmt, clippy clean | clean, clean | yes |
+
+No ADR 0695 result changed (the registered "partial" condition did not arise).
+
+Mutations (caught = at least one test fails; M0, the unmodified copy, passes 7 of 7):
+
+| Id | Failing tests | Caught | As expected |
+|---|---|---|---|
+| M41 stale step skipped | b2, b3, b4, b5 | yes | yes |
+| M42 `> entries_seen` | b5, b6 | yes | yes |
+| M43 `>= entries_seen - 1` | b6 only | yes | B1 was expected to fail too and did not: in B1 the result entry follows the last evidence, so no evidence sits at `entries_seen - 1`; only B6 (no result entry) reaches that boundary |
+| M44 any later entry is newer | b4 (a and b) | yes | yes |
+| M45 stale also counted as a check | b2, b3, b4, b5 | yes | yes |
+| M46 stale failure still drops / is latest | b2, b3 | yes | b2 also fails (the record becomes `drawn_latest`) |
+| M47 list and flag not written | b2, b3, b4, b5 | yes | yes |
+| M48 rows reversed when stale | b4 (order) | yes | yes |
+
+Deviations: none in limits. The one expectation that was not met is the extra failing test for M43 (above); the mutation is caught.
+
+Not run: heavy `--ignored` records, `baseline_hashes`, the whole workspace and whole integration suites (daily gate), rcfd-mcp
+and rcfd-cli tests other than `docs_site`.
+
+Decision by the rule: done (every check met, M41 to M48 caught).
+
+Remaining questions:
+
+1. A stale failing record is ignored, so an evaluator that appends evidence after a failed check clears the failure for
+   `lessons_drawn` (the row then shows `drawn_checks` 0, `drawn_stale` 1). Options: (a) as built (a record is believed only for the
+   evidence it saw); (b) a stale failure still drops the row (the check saw real evidence that failed). In the default mode the
+   second set already removes the row through `verify`, so (b) matters only for `trust_stored` and other readers. Recommendation (a)
+   for now; revisit if a retraction mechanism for failures is ever added (F-702 territory).
+2. The rule is library only. Recommendation: leave until F-702 decides the MCP / CLI surface (golden lists change).
+3. A row with `drawn_checks` 0 and `drawn_stale` >= 1 is still returned when `lessons` returns it. Option: drop rows whose only
+   records are stale. Recommendation: no; a never-checked row is already returned with `drawn_checks` 0, and dropping would punish
+   the honest case of a repaired ledger that is waiting for a new check.
+
+## For the lead: roadmap entries
+
+> Proposed status: done
+
+> Follow-up of F-776 (ADR 0695 question 3). ADR 0698, 2026-11-17. DONE. Library only, opt-in: design::hypothesis::lessons_drawn counts a drawn record for a row only when no evidence entry of the row is newer than the record (an evidence entry at an index of at least entries_seen, new helper drawn_newer_evidence); a consistent record with newer evidence is ignored, never drops or keeps a row, and is reported separately (drawn_stale per row, DrawnLessons::stale, a drawn_flags entry). Checks on 40 synthetic worlds: an honest ledger keeps its row with 1 check and 0 stale in 40 of 40; the impostor that appends a second evidence set after a passing record is not reported by lessons in the default mode (40 of 40) and, with the stored-result switch where lessons still returns the row, its passing record is not counted (0 checks, 1 stale, 40 of 40); a stale failing record does not drop the row (40 of 40, control without the second set drops 40 of 40); two-hypothesis ledgers (evidence of another hypothesis newer than the record is not stale, order kept, 120 of 120); the boundary at entries_seen (80 of 80); ledgers without drawn records give the lessons of ADR 0624 bit for bit (160 of 160); every ADR 0624, 0662, 0693 and 0695 check keeps its result (f776 6 of 6 unedited); 8 of 8 mutations caught.
+
+> Note for F-776 (append): ADR 0698 (F-781, 2026-11-17): lessons_drawn counts a drawn record only when no evidence of its row is newer than the entries the record saw.
+
