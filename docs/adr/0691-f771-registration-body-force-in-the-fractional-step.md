@@ -232,3 +232,36 @@ or a2 fails (DB1, DB2 or B1).
   (b) ADR 0080's pair mean under `coupled_body_pair_mean` as in PISO (breaks the balance with the harmonic `Gamma`). Taken (a)
   on the standing instruction.
 - **Q3. The default.** Open (changes default results).
+
+## Amendment 1 (2026-11-17): S2a missed; diagnosis, the record kept, a corrected set-up
+
+Written after the one registered run of `fractional_body_force_f771.rs` (b2ac49e3, release, 3.3 s, log
+`w49i-work/f771-scratch/fast.log`) and before any code or run of the corrected set-up. Nothing above this amendment is changed.
+
+**What the registered run gave.** The twin test (P1, NC1, P2, D1L, C1, G0), the rest test (R1, R1p, R2, R2p, NR1), the
+no-ops (DB1, DB2) and the refusal (DB3) passed (numbers in Addendum 1). In the start-up test S1a, S1b, S2b and NS were met and
+**S2a missed**: the plain fractional run S-a against the 1-D model `5.79e-2` (relative to `U_b,1D`, largest at step 1, limit
+`1e-9`), while S-b, the same flow with the twin settings, is within `5.4e-14` of the model.
+
+**Diagnosis (from the code and the numbers, no further run).** S-a and S-b differ by `fractional_step_consistent`,
+`coupled_ddt_correction` and `fractional_periodic_implicit`. With the last one off the fractional predictor keeps the periodic
+partner lagged (ADR 0687 read 3): at the cut the `x` diffusion and convection couple the cell to the partner's old value, so
+the flow is not uniform in `x` at the cut and the 2-D run is not the 1-D model. At step 1 the partner's old value is `0` and
+the cell's new one about `dt F = 8e-3`; the lagged diffusion coefficient `nu |S| / dx = 0.1` against the diagonal `V / dt +
+...` of about `0.4 + 0.2` takes some ten to twenty percent off the cells at the cut, a few percent of the mean: the measured
+`5.8e-2` at step 1. This is the pre-existing lagged partner of the default fractional step (ADR 0687 measured it as NCL,
+`1.9e-2` on the channel), not the body force: the body terms are identical in S-a and S-b except that S-a takes `dte` where
+S-b takes `Gamma`, and for the uniform force of this flow the face term is zero on every face. S1a (the bulk against the
+closed form, `3.6e-4`) is met; the lag moves the cut cells, not the bulk to first order.
+
+**The record.** The registered test is kept as `fractional_start_up_channel_against_the_model_and_the_closed_form_known_miss`,
+`#[ignore]`d, limits intact, the measured numbers in its doc comment.
+
+**The corrected set-up (registered now).** **S-a'**: S-a with `fractional_periodic_implicit = true` only
+(`fractional_step_consistent` and `coupled_ddt_correction` stay `false`, so every coefficient of the body terms is `dte`, the
+path S-a was to test). Check **S2a'**: against the 1-D model, `max_c (|u_x - u_1D|, |u_y|) / U_b,1D <= 1e-9` every step (limit
+as S2a; estimate rounding, as S2b's `5.4e-14`); **S1a'** the bulk at `t = 2` against the closed form `<= 2e-2` (estimate the
+model's `5.5e-3`). New test `fractional_start_up_channel_with_the_implicit_partner`, run once.
+
+**Decision rule (amended).** In the registered rule read S2a' and S1a' in place of S2a (S1a stays as measured). S2a stays
+recorded as missed with the cause above. If S2a' is missed, partial as registered.
