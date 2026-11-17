@@ -15285,7 +15285,7 @@ fixed by the item's registration ADR before any code.
     only (not the fractional step), implicit Euler in the runs, not on a moving mesh or with rhie_chow_step_consistent;
     whether it becomes the default is open for the maintainer. Follow-up F-757 (Rhie-Chow ddt correction on coupled
     faces in the fractional step and with BDF2).
-- [ ] **F-755** A forced control of the edit lock's starvation and of a lock left behind
+- [x] **F-755** A forced control of the edit lock's starvation and of a lock left behind
   - depends on: F-751
   - acceptance: Every limit not stated here is registered in the ADR before the run. Test-only hooks (feature-gated, off
     in every default build) that delay a waiter's attempt and that hold a handle on the lock file without delete
@@ -15293,7 +15293,21 @@ fixed by the item's registration ADR before any code.
     never does; the removal of the lock in EditLock::drop retried on a transient error with a logged failure, a lock
     left behind shown before and removed after; the default bits and every ADR 0135 and ADR 0669 check keep their
     results.
-  - note: Follow-up of F-751 (ADR 0669, 2026-11-16).
+  - note: Gate and test reliability. Follow-up of F-751 (ADR 0669). DONE. ADR 0676, 2026-11-17: a forced control of the
+    edit lock's starvation and of a lock left behind. Test-only hooks in rcfd-project under the feature test-hooks
+    (thread-local; off in every default build and enabled by no other crate, shown by cargo tree --workspace -e
+    features): a delay before each attempt of the acquire, the old acquire by a claim_off knob (ADR 0669's M1), the old
+    drop, a callback after the lock is held, synthetic removal failures, and on Windows a handle on the lock file
+    without FILE_SHARE_DELETE (non-Windows: those three tests are not compiled; the retry is checked there with the
+    synthetic error). Under a delay that lets the waiter try only while the holder has at least 50 ms of hold left, the
+    old acquire starved to LockBusy in 10 of 10 trials and the claim was accepted in 10 of 10 within 177 ms; ADR 0669's
+    surviving mutation M1 is now caught. EditLock::drop now retries a transient removal error with the default retry
+    (527 ms) and logs edit_lock_remove_failed when it still fails: a handle held 300 ms left the lock behind with the
+    old drop (the next edit LockBusy) and the new drop removed it 348 ms after the handle opened; a 2 s handle was
+    logged with the sharing violation. Defaults unchanged (an ordinary edit's removal succeeds at once and logs
+    nothing); every ADR 0135 and ADR 0669 test passed, ADR 0669's L1 200 of 200 again; seven of seven mutations caught.
+    The daily gate does not build the feature, so the new tests run only by their own command. Follow-up F-761 (The
+    daily gate runs the feature-gated edit-lock controls).
 - [ ] **F-756** Moving immersed shapes at lock-in near the natural frequency at the smaller amplitude
   - depends on: F-750
   - acceptance: Every limit not stated here is registered in the ADR before the run. A cylinder oscillating across a
@@ -15337,3 +15351,10 @@ fixed by the item's registration ADR before any code.
     history, with no Rust file edited; the index shows at most 5 unmapped integration binaries with tests; a registered
     sample of the new mappings is read.
   - note: Follow-up of F-737 (ADR 0679, 2026-11-16).
+- [ ] **F-761** The daily gate runs the feature-gated edit-lock controls
+  - depends on: F-755, F-723
+  - acceptance: Every limit not stated here is registered in the ADR before the run. The daily gate runs cargo test -p
+    rcfd-project --release --features test-hooks --test edit_lock_f755 as its own step with its failures attributed to
+    ADR 0676, without enabling the feature in any other build step (cargo tree of the workspace step shows no
+    test-hooks); the gate's other results unchanged.
+  - note: Follow-up of F-755 (ADR 0676, 2026-11-16).
