@@ -15151,7 +15151,8 @@ fixed by the item's registration ADR before any code.
     entry are flagged (3 of 3). Every ADR 0624 and ADR 0662 check keeps its numbers (S1 1, S2 1592 of 1595, NC1 400, NC2
     61, S4 118; A1 394, NC6 0, NC7 116, the C2 byte literals). Nine mutations caught. Not covered: a forger who can also
     append to the ledger (records are not signed), lessons does not read drawn records, no MCP tool (F-702). Follow-up
-    F-776 (Lessons read the verifier-drawn checks).
+    F-776 (Lessons read the verifier-drawn checks). ADR 0695 (F-776, 2026-11-17): lessons_drawn reads the drawn records,
+    so the verifier-drawn check now decides whether a hypothesis is reported.
 - [ ] **F-746** Implicit rotational periodic pairs by default and as a case key
   - depends on: F-743
   - acceptance: the implicit rotational pair of ADR 0664 is the default of the transient step or selected by a case key
@@ -15732,14 +15733,25 @@ fixed by the item's registration ADR before any code.
     default results are listed case by case, the hash tables are re-recorded only with the maintainer's approval, and
     ADR 0687's and ADR 0691's twin checks pass with the defaults alone.
   - note: Follow-up of F-771 (ADR 0691, 2026-11-16).
-- [ ] **F-776** Lessons read the verifier-drawn checks
+- [~] **F-776** Lessons read the verifier-drawn checks
   - depends on: F-745
   - acceptance: Every limit not stated here is registered in the ADR before the run. lessons drops a hypothesis whose
     latest drawn record, redone consistently by drawn_record_problems with the caller's model, did not reproduce, and
     reports the number of drawn checks per hypothesis; on synthetic ledgers an impostor caught by a drawn check gives 0
     rows and an honest one keeps its row; ledgers without drawn records give the lessons of ADR 0624 bit for bit; every
     ADR 0624, ADR 0662 and ADR 0693 check keeps its result.
-  - note: Follow-up of F-745 (ADR 0693, 2026-11-16).
+  - note: Follow-up of F-745 (ADR 0693 limit). ADR 0695, 2026-11-17. DONE. Library only, opt-in:
+    design::hypothesis::lessons_drawn(entries, query, rerun) is lessons (unchanged, with its output type) plus the
+    verifier-drawn checks: a drawn record counts for a row only when drawn_record_problems with the caller's model is
+    empty and it names the row's registration hash; the latest such record in ledger order decides, a row whose latest
+    consistent drawn record did not reproduce is dropped (listed in dropped), and every row reports drawn_checks,
+    drawn_failed, drawn_ignored (inconsistent records, believed neither way) and drawn_unchecked (no model of the
+    evaluator held). Checks on 40 synthetic worlds: the D1 impostor caught by a k = 4 drawn check gives 0 rows in 40 of
+    40 (limit 38), the honest evaluator keeps its row, equal to the lessons row, in 40 of 40; a genuine failure followed
+    by a forged pass still drops the row, forged edits are ignored; ledgers without drawn records give the lessons of
+    ADR 0624 bit for bit in 600 of 600 (one hypothesis) and 200 of 200 (two, row order); every ADR 0624, 0662 and 0693
+    check keeps its result; 8 of 8 mutations caught (M40, the row order, by the check added in amendment 1 after the
+    one-row ledgers missed it). Follow-up F-781 (Drawn checks must be newer than the evidence they check).
 - [ ] **F-777** construction S without the first-cell stretch on strongly staggered blades
   - depends on: F-726
   - acceptance: Every limit not stated here is registered in the ADR before the run. Construction S with the first free
@@ -15769,3 +15781,12 @@ fixed by the item's registration ADR before any code.
     NewtonOptions::indefinite_tangent after a refused positive factor, reporting the inertia of every accepted state;
     the 16^3 block of ADR 0694 solves to full load with it; off by default, the default bits unchanged.
   - note: Follow-up of F-774 (ADR 0694, 2026-11-17); after F-779.
+- [ ] **F-781** Drawn checks must be newer than the evidence they check
+  - depends on: F-776
+  - acceptance: Every limit not stated here is registered in the ADR before the run. lessons_drawn counts a drawn record
+    for a row only when no evidence entry of the row is newer than the record (entries_seen covers every evidence entry
+    of the row), and reports the records it ignored for that reason separately; on synthetic ledgers an impostor that
+    appends a second evidence set after a passing drawn record is dropped or not reported, and an honest ledger keeps
+    its row; ledgers without drawn records give the lessons of ADR 0624 bit for bit; every ADR 0624, ADR 0662, ADR 0693
+    and ADR 0695 check keeps its result.
+  - note: Follow-up of F-776 (ADR 0695, 2026-11-16).
