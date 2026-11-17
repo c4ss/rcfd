@@ -110,3 +110,89 @@ code is saved in the scratch folder, so the draw can be repeated.
 * The sample is 10 of the rows, read by the author of the rows. It is not a second reading.
 * The primary ADR of a test is decided by the script on this base. It may still be 0685, 0123 or 0067 after this item (B6).
 * The notes in ADR 0067 and ADR 0123 on the two `workflow.rs` files are not moved or edited.
+
+## Addendum 1: results (2026-11-17)
+
+The five group ADRs (0706 to 0710) were written and committed (`d07421bf`) after this registration (`1dabf4b3`). B2 and B3 were measured with
+`f769-scratch/b23.py` (written after the ADRs, before its single run on them; it matches a literal as written in the ADR, accepting `X.0`
+for `X`), the index was run once after the edit (`after.json`, 46 s) against `before.json`, the sample was drawn and read once. No Rust
+file, golden, hash table or script is edited; the eight files were not run.
+
+| id | limit | measured | met |
+|---|---|---|---|
+| B1 | 8 files named by path with a limit table | 8 of 8 (0706: 4 files, 0707 to 0710: 1 each) | yes |
+| B2 | 35 of 35 `#[test]` names in the group ADR | **35 of 35** | yes |
+| B3 | at least 95 % of the (file, literal) pairs of the assert lines of the six files | **24 of 25 (96.0 %)**; the miss is `0.10` of `physics_cases.rs` (`assert!((col("u_mean") / 17.4 - 1.0).abs() < 0.10`), which ADR 0708 writes as "10 %". Control N2 (the 0708 text removed): 21 of 25 (84 %), and the script lists `0.01` and `0.10`, so it does report misses | yes |
+| B4 | the word `predate` in each of the 5 ADRs | 5 of 5 (first section of each) | yes |
+| B5 | every test of the 8 files has its group ADR in `adrs` with an E2 entry: 35 of 35; tests losing an ADR 0; tests outside the 8 files whose `adrs` change at most 10 | 35 of 35 with E2; 0 lose an ADR; **32 outside tests gain an ADR, limit 10: missed** (below) | **no** |
+| B6 | primary ADR of the 35 tests, reported | **unchanged for all 35**: `table_expr`, `channel_wall_function`, `physics_cases`, `mesh_params`, `physics_workflow` (20 tests) stay at 0685, `workflow_engine` and `rcfd-api/tests/workflow.rs` (6) at 0123, `rcfd-assistant/tests/workflow.rs` (9) at 0067; the number of tests with a primary is 7451 before and after | reported (as estimated) |
+| B7 | sample of 10 rows, at least 9 agree | **10 of 10 agree**, one with a reservation (below) | yes |
+| B8 | only files in `docs/adr/` | 6 files, all in `docs/adr/` (389 lines added before this addendum), 0 removed | yes |
+| C1 | `python -m unittest discover -s scripts` | 132 run, OK, 4 skipped | yes |
+| C2 | `cargo test -q --release -p rcfd-cli --test docs_site` | 2 passed, 0 failed (`CARGO_TARGET_DIR=w49i-work/f769-scratch/target`) | yes |
+
+**B5, the miss.** The 32 tests outside the 8 files that gained an ADR are 19 tests of `crates/rcfd-api/src/sim.rs` (ADR 0709, evidence
+E5: the ADR text cites the path `rcfd_api::sim::build_mesh`, and the index maps every unit test of a cited module), 8 of
+`crates/rcfd-core/src/table.rs` (ADR 0710, E5, `rcfd_core::table::Table`) and 5 of `crates/rcfd-api/tests/tables.rs` (ADR 0710, E2: the
+"does not check" section names that file by path to say what it holds). The limit of 10 had an allowance for a shared stem and a word of the
+index, and did not foresee the module rule. The limit is not changed. Diagnosis: the 8 `table.rs` tests (unit tests of the tables the file
+uses) and the `tables.rs` tests (the settings-tree route of the same F-105 feature) are related to ADR 0710 in a way a reader would accept;
+the 19 `sim.rs` tests are not about the generator parameters (they run cases) and the gain for them is an artifact of citing
+`build_mesh`. I did not remove the citations to get under the limit.
+
+**Primary (B6).** Rule H of the script gives the tier-2 note of ADR 0685 (H2) and the tier-1 "Test files" notes of 0067 and 0123 priority
+over a table row of a higher-numbered ADR (H3, or H2 from the same tier with a higher number). So the index reads each of the 8 files
+as described by an ADR (E2, `adrs` has the group ADR) but still names 0685, 0123 or 0067 as the primary. A group ADR would become the
+primary only by a tier-1 section of the form `## Test files (added <date>, ADR dddd)` (a heading made for the notes that ADR 0685
+appended, and still behind the lower number of 0067/0123), or by a change of the script (F-785 changes H3 on another branch). I did not
+write a section of that form to win the rule.
+
+**Sample (B7).** Drawn after the five ADRs were committed, as registered: `random.Random(769).sample(rows, 2)` for each of 0706 (24
+rows), 0707 (8), 0708 (7), 0709 (4), 0710 (5), giving H1, H6; W1, W2; C1, C2; M1, M4; T1, T2. Each row was read against the file:
+
+| row | file and test | reading |
+|---|---|---|
+| H1 | `physics_workflow.rs`, `laminar_settings_leave_the_suggestions_unchanged` | agree: `assert_eq!` of the two calls on `{"turbulence": {"model": "laminar"}, "solver": {"algorithm": "simplec"}}` |
+| H6 | `workflow_engine.rs` | agree: the `asked` list is the nine names of the row, in that order; the three read-only calls (`list_workflow_tasks`, `check_case_headless`, `read_status_stream`) are scripted and not in it |
+| W1 | `channel_wall_function.rs`, `wall_distance_is_exact_on_the_channel_mesh` | agree with a reservation: 1e-13 on the uniform mesh, on the 3 x 20 graded mesh (`Symmetric(5.0)`) and for `xmin` equal to x, and `nope` is an error, as the row says; but the row says "12-cell uniform channel mesh", and the mesh is 4 x 12 cells (12 across the channel); the row is imprecise in the count, the limit is the stated one |
+| W2 | same, `channel_recovers_the_log_law_and_the_wall_shear` | agree: `ch.res < 1e-10` and the loop `for it in 0..8000` with the break at `res < 1e-10` |
+| C1 | `physics_cases.rs`, `every_physics_example_validates` | agree: the five paths of the row, `status.code() == Some(0)` |
+| C2 | same, `sod_runs_and_writes_compressible_fields` | agree: exit 0, the three arrays `"rho"`, `"mach"`, `"T"`, `monitors.csv` `is_file()` |
+| M1 | `mesh_params.rs`, `cavity_2d_honours_ny` | agree: `nx = 20`, `ny = 2`, 40 cells |
+| M4 | same, `unsupported_mesh_options_are_rejected_not_ignored` | agree: seven `rejects` calls with the seven paths of the row (two `mesh.wall_layers`, `mesh.periodic_x`, `mesh.periodic_y`, three `mesh.grading`) |
+| T1 | `table_expr.rs`, `table_calls_are_dimension_checked_and_interpolate` | agree: `Dimension::KINEMATIC_VISCOSITY * Dimension::DENSITY` for `nu_t(Tw) * nu_t_rho(Tw)` |
+| T2 | same | agree: `(c.eval - want).abs() < 1e-15 * want.abs().max(1.0)`, with `want` about 7.10e-4 so the bound is 1e-15 absolute (computed by hand: 0.715e-6 times 993.2) |
+
+Not read: the other 22 rows of 0706, 6 of 0707, 5 of 0708, 2 of 0709, 3 of 0710 (38 in all). The author of the rows read them; there was no second reader.
+
+Deviations: the miss of B5; the script of B2/B3 accepts `X.0` for `X`, written after the ADRs and before its run, which is a choice not
+registered in the text of B3 (the `.0` forms in ADRs 0707 to 0710 are written as in the code, so the figure does not depend on it here, but
+that was not checked by a second run); the imprecision of W1 above. Not run: the eight test files, the other `--primary` rules of the index
+(`registered`, `p0679`).
+
+Decision by the registered rule: **partial** (B5 missed, with a diagnosed cause; B1 to B4, B7, B8, C1, C2 met; B6 reported).
+
+Remaining questions:
+
+1. The group ADRs are not the primary of the files (B6). Options: (a) leave: E2 evidence stays, and the lowest-numbered ADR stays the
+   attribution of the daily gate; (b) a rule in the script that a retro ADR that carries a limits table for the file outranks an older
+   list note (F-785 touches H3 on another branch; coordinate); (c) move the notes of 0067, 0123 and 0685 into these ADRs (not allowed by
+   ADR 0685's "the text above it is not edited"). Recommendation: (b), after F-785 is merged.
+2. The module citations raise the E5 mapping of unrelated unit tests (19 of `sim.rs`). Options: (a) accept; (b) rewrite the citation in 0709
+   without the module path (an edit of an ADR after the run, which needs an amendment under the house rule); (c) leave to the script
+   (E5 of a cited module path maps all unit tests of that module). Recommendation: (a) now, (c) at the next change of the index.
+3. The limit rows have one reader. Options: a second reading of a larger sample (ADR 0704 style), or none. Recommendation: a second reader
+   of at least 15 rows, in particular rows of 0706 not read here, because H11 to H24 were written from tests whose thresholds are rule of
+   thumb.
+
+## For the lead: roadmap entries
+
+Proposed status and note of F-769:
+
+> Proposed status: partial.
+
+> ADRs for the five feature groups that no ADR describes, follow-up of F-760 (ADR 0685, 2026-11-16). PARTIAL. ADR 0705, 2026-11-17 (registration and index), ADRs 0706 to 0710 (one per group): each says plainly that the tests predate it and records what they check, read from the code and the roadmap notes of F-040, F-043, F-105, F-120, F-121, F-148; no Rust file, script, golden or hash table edited, the eight files not run. 0706 the assistant setup helpers and workflow engine (`physics_workflow.rs`, `workflow_engine.rs`, and as ADR 0704 recommends `rcfd-assistant/tests/workflow.rs` and `rcfd-api/tests/workflow.rs`; 24 limit rows), 0707 the F-040 wall-function channel (`channel_wall_function.rs`; 1e-13 wall distance, y+ 5e-3, wall shear 2e-3, interior 0.03 against 2.1 to 2.4 percent recorded), 0708 the shipped turbulence and compressible examples through the binary (`physics_cases.rs`; exit codes, fields, y+ within 0.01 of 1, bulk velocity within 10 percent of 17.4 against 18.17 recorded), 0709 the mesh generator parameters (`mesh_params.rs`), 0710 tables called from expressions (`table_expr.rs`; 1e-15 absolute, NaN outside the range, the test named "with a span" does not check the span). Measured: all 35 tests named (35 of 35), 24 of 25 tolerance literals of the six files carried (96 percent, limit 95), all 35 tests have their group ADR with E2 evidence and none lost an ADR, sample of 10 rows read 10 of 10 agree (one imprecise count), unit tests of `scripts` and docs_site pass. MISSED: at most 10 tests outside the eight files gain an ADR, measured 32 (19 `sim.rs` and 8 `table.rs` tests through a cited module path, 5 `tables.rs` tests through a path named in a "does not check" section). The primary ADR of the 35 tests is unchanged (0685, 0123, 0067: the lowest number wins inside a rule H tier), a finding for the script, not for the ADRs. Not covered: a second reader, running the files, moving the notes of 0067 and 0123.
+
+> Follow-up proposed: Primary ADR of the files that a retro-registration ADR describes (group ADRs 0706 to 0710 outranking the list notes of ADRs 0067, 0123 and 0685). Deps F-769, F-785. Acceptance: Every limit not stated here is registered in the ADR before the run. A rule in `scripts/adr_test_index.py`, registered with its mutations, under which the ADR that carries a limits table for a file and says that its tests predate it is the primary of the 35 tests of the eight files of ADR 0705, and no primary of any other test changes by more than a registered count; the unit tests of `scripts` pass.
+
+> Follow-up proposed: A second reader for the limit rows of ADRs 0706 to 0710. Deps F-769. Acceptance: Every limit not stated here is registered in the ADR before the run. A reader other than the author of the rows reads a registered sample of at least 15 rows of ADRs 0706 to 0710, including 10 of the 22 rows of 0706 not read in ADR 0705, against the files and the roadmap notes they cite, with at least 90 percent agreement, and the disagreements are listed with the line.
