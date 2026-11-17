@@ -293,3 +293,7 @@ change was reverted.
 Visual correctness of the viewport and plots; human-perceived update latency; the real OS keychain, native file dialogs and unix
 0600 permissions; any real hosted provider or local model server and the tool-calling quality of small models; behaviour on
 other hardware for R2. F-094's optional real-model run is not done. The wave did not touch the Claude Code mod extras (F-092, F-093).
+
+## Test files (added 2026-11-17, ADR 0685)
+
+Added by ADR 0685 (F-760), by reading the code and the git history; nothing above this section is changed. `crates/rcfd-assistant/tests/eval.rs` (F-094, 2026-10-14, 430b4bb7) is the deterministic eval harness that the audit above reports ("F-094: eval harness C1-C8 all pass"): five scripted scenarios through the real agent loop with the mock provider; its criteria C1 to C8 are registered in the roadmap note of F-094, not in an ADR.

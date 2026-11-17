@@ -235,3 +235,7 @@ hook in the tool layer (library only), any real-fan study.
 Unverified references: the Sobol (Joe-Kuo) direction numbers were typed from memory and are checked by net properties
 only; Nelder-Mead, Storn-Price, Deb, McKay-Beckman-Conover, Warnock and xoshiro/SplitMix texts were not read (see
 docs/reference-data.md, Wave 32C).
+
+## Test files (added 2026-11-17, ADR 0685)
+
+Added by ADR 0685 (F-760), by reading the code and the git history; nothing above this section is changed. This ADR is the first to name F-148 ("tool layer: F-090, F-147, F-148" above), the setup-workflow analysis of the assistant. Its test file `crates/rcfd-assistant/tests/workflow.rs` (committed 2026-10-13 in the first import, f71f6e2c) checks that analysis on synthetic residual series (diverging, NaN with location, oscillation, stagnation), the mesh assessment thresholds, boundary-condition suggestions that only propose, case validation, and the tools against a real service that change nothing. No earlier ADR describes it; this ADR only names the item.

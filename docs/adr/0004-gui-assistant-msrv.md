@@ -33,3 +33,7 @@ Decisions:
 - Tools run in-process: the assistant reuses the `rcfd-mcp` tool definitions and permission model; the GUI approval
   card is the approval hook, and the gate is enforced below the UI so a model cannot bypass it.
 - Linux builds need the usual X11/Wayland development packages; CI changes for that are not made here.
+
+## Test files (added 2026-11-17, ADR 0685)
+
+Added by ADR 0685 (F-760), by reading the code and the git history; nothing above this section is changed. Two integration-test files of `rcfd-assistant` were committed with the first import (2026-10-13, f71f6e2c) and on 2026-10-14 (e14221c9) and are described by the decisions above: `crates/rcfd-assistant/tests/full_loop.rs` (F-147, the whole assistant loop with the mock provider; its `the_gate_is_enforced_below_the_ui` is the decision "the gate is enforced below the UI so a model cannot bypass it", and the tools run in process) and `crates/rcfd-assistant/tests/keychain.rs` (F-149, the key storage order environment, OS keychain, `keys.json`; the in-memory backend, the read-back after a write, keys scrubbed from error text).

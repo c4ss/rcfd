@@ -384,3 +384,7 @@ test `cargo test -p rcfd-cli --test data` currently fails with
 
 Moved from unverified to verified: see docs/reference-data.md, wave 30B section. Not obtained: Armaly (1983), Gartling
 and Ghia originals, Ghia v at Re 400/1000, Moody/Colebrook/Dean, Williamson original.
+
+## Test files (added 2026-11-17, ADR 0685)
+
+Added by ADR 0685 (F-760), by reading the code and the git history; nothing above this section is changed. The section "Data pack" above names `cargo test -p rcfd-cli --test data`. The two test files of the public validation-data pack (F-125, committed 2026-10-13 in f67e3c16 without an ADR) are `crates/rcfd-cli/tests/data.rs` (`rcfd data` listing, verification and provenance, offline) and `crates/rcfd-io/tests/datapack.rs` (the manifest `validation-data/manifest.json`: it is valid, covers the roadmap datasets, checks the recorded checksums, catches tampering and proprietary sources, and lists the licence of every dataset). ADR 0013 already mentions the git-ignored fetch of the pack.

@@ -316,3 +316,7 @@ Registered limits above are unchanged.
 
 Per-region energy, radiation and species models, regions coupled through interfaces, the conjugate benchmark;
 blade-element, tip loss and trim; the model-rotor comparison; A5.
+
+## Test files (added 2026-11-17, ADR 0685)
+
+Added by ADR 0685 (F-760), by reading the code and the git history; nothing above this section is changed. `crates/rcfd-api/tests/properties.rs` (temperature-dependent properties, F-053, committed 2026-10-13 in e75d6470 without an ADR) is the test that P1, P4 and P6 above build on: its plane Couette case with `mu = 0.01 (1 + 0.02 (T - 300))` and its conduction case with `k = k0 (1 + beta (T - 300))` (the Kirchhoff transform) are the baselines for the piecewise-linear and Vogel laws; the property-conflict diagnostics are its third test.

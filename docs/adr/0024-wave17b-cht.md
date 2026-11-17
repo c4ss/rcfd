@@ -348,3 +348,7 @@ Registered limits were not changed. Library checks are in `crates/rcfd-fv/tests/
 * F-216 (per-region model sets), F-212 (solidification) and F-213 (Joule heating as a dedicated feature; a `zone_sources` source in a solid
   works) were not attempted. F-215 (interface physics) is NOT marked done: only the contact-resistance and thin-wall evidence (E1, E2) exists.
 * Curved or partially overlapping non-conformal interfaces (F-114 limits); an unequal-area non-conformal solid-solid check beyond C1/C2.
+
+## Test files (added 2026-11-17, ADR 0685)
+
+Added by ADR 0685 (F-760), by reading the code and the git history; nothing above this section is changed. The non-conformal join of two channel blocks, section C above, was committed as F-114 on 2026-10-13 (e79f7db0) without an ADR. Two integration-test files of that commit belong to it: `crates/rcfd-api/tests/non_conformal_case.rs` (the `channel_2d_interface` generator through the settings tree, as in C2: mass balance through the interface and the located errors for invalid block counts) and `crates/rcfd-fv/tests/non_conformal.rs` (the 20 and 27 cell blocks joined by `join_non_conformal`, the Poiseuille channel against conformal blocks and a linear temperature field across the interface; this ADR describes the join and a conduction check, not the Poiseuille check, which is registered in the file's own header).
