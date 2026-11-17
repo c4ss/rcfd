@@ -16604,11 +16604,12 @@ Generated from `docs/studio-guardrails.md`, `PRODUCT.md` and `DESIGN.md` ([ADR 0
     2026-11-17 (F-835, ADR 0731): an empty folder's Make a project here runs the engine's rcfd project init and opens
     the project; the walk's test makes its projects through it, New project… and the palette, and no longer writes
     rcfd-project.json. Left: maintainer's first-time view-and-report.
-- [~] **F-814** Electron Studio: Claude Code panel
+- [x] **F-814** Electron Studio: Claude Code panel
   - depends on: F-805
-  - acceptance: The Claude Code chat for the project through rcfd-claude: open sessions mirrored read-only, closed
-    sessions resumed and typed into, one writer per session, tool approvals by a conservative allow-list and never
-    approve-everything (G11); run ids and files in a reply link to the run or file in the Studio; a test for each rule.
+  - acceptance: The Claude Code chat for the project through the Studio's own implementation of the same rules
+    (rcfd-claude was removed 2026-11-17): open sessions mirrored read-only, closed sessions resumed and typed into, one
+    writer per session, tool approvals by a conservative allow-list and never approve-everything (G11); run ids and
+    files in a reply link to the run or file in the Studio; a test for each rule.
   - note: ADR 0800. Traces: G11; PRODUCT Positioning; DESIGN Claude Code panel. Partial 2026-11-16: panel lists
     sessions, mirrors open ones read-only, resumes closed ones with claude -p --resume, single writer, conservative
     allow-list asserted in argv (dontAsk, no approve-everything flag), run/file links; tests use a fake claude.
@@ -16626,7 +16627,16 @@ Generated from `docs/studio-guardrails.md`, `PRODUCT.md` and `DESIGN.md` ([ADR 0
     another writer's change refused with Undo anyway; the turn's denials stay in the feed after the transcript replaces
     the stream; unit tests and tests/e2e/claude-allow.spec.ts (fake claude). Left: no engine entry point for session
     discovery (E-814; the TypeScript port of the removed rcfd-claude stands in); whether that meets "through
-    rcfd-claude" is the maintainer's call.
+    rcfd-claude" is the maintainer's call. Done 2026-11-17 (the maintainer's word of 2026-11-17; ADR 0801 Addendum 20):
+    the acceptance now reads "through the Studio's own implementation of the same rules (rcfd-claude was removed
+    2026-11-17)", which apps/studio-web/src/main/claude (allow.ts, discover.ts, panel.ts) is; the rest is met (sessions
+    mirrored read-only, closed ones resumed and typed into, one writer, the conservative allow-list asserted in argv
+    with no approve-everything flag, run and file links, a test for each rule in tests/unit/claude.spec.ts,
+    tests/e2e/claude.spec.ts and claude-allow.spec.ts); view-and-report as F-810 and F-812: screenshots in
+    test-results-visual/f814 for the maintainer. Engine session discovery (E-814) stays an optional engine follow-up,
+    not part of this item. The maintainer accepted Addendum 20's A20-D1 (the undo of an allowed rule is the panel's Undo
+    chip plus the palette command) and A20-D2 (a rule is allowed only from a denied call; no palette command allows
+    one). runner_config joined the first allow-list (ADR 0733, 16 tools).
 - [x] **F-815** Electron Studio: compare two runs
   - depends on: F-810
   - acceptance: Two runs side by side or overlaid at the same time and the same colour range, with the difference field
