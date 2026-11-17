@@ -88,3 +88,47 @@ outside the basin 15, 14, 15, 15; repetition pick kind `Ei` bit-equal to the pla
 One function, one seed, d = 2, batch 1; a test of one step, not of a run. The outside window point is the most recent; the other
 positions (first, middle) and windows containing a failed or pending observation are not tested. `window: Some(w)` other than
 the default d + 1 is not tested.
+
+## Addendum 1: results
+
+Run once on 2026-11-17 (`cargo test -p rcfd-api --release --test f770_window_condition`; tests in
+`crates/rcfd-api/tests/f770_window_condition.rs`, 0.01 s). No library line changed.
+
+| check | limit | measured | met |
+| --- | --- | --- | --- |
+| W1a plain-pick delta (default exclusion) | `< 1` | 0.151 | yes |
+| W1b first two window deltas | both `< 1` | 0.317, 0.261 | yes |
+| W1c last window delta | `>= 3` | 8.208 | yes |
+| W1d evaluated points outside the basin | `>= 4` | 15 | yes |
+| W1e repetition restart pick | `Ei`, bits equal to the plain pick | `Ei`, bit-equal | yes |
+| W2a plain-pick delta; window deltas | `< 1`; all `< 1` | 0.696; 0.239, 0.219, 0.324 | yes |
+| W2b repetition restart pick | `Restart`, delta `>= 2` | `Restart`, delta 3.270 | yes |
+| M4 (window condition dropped), scratch copy | W1 fails, W2 passes | W1 failed (restart pick returned), W2 passed; N1, P1 of ADR 0686 passed (survive, as recorded there) | yes |
+| M2 (plain-pick condition dropped), cross-check | W1 passes | W1 and W2 passed; N1 of ADR 0686 failed | yes |
+| H1 O1 points hash (f758 file) | `== 0xe2cf141320774cfc` | f758: 5 passed, 2 ignored | yes |
+| B1 `f766_plain_pick_condition` | pass | 2 passed | yes |
+| B1 `f715_robust_ei` | pass | 6 passed, 2 ignored | yes |
+| B1 `--lib` | pass | 141 passed, 4 ignored | yes |
+| fmt, clippy `-D warnings` (rcfd-api, all targets) | clean | clean | yes |
+
+Deviations: none. The first M2 run used both test files without `--no-fail-fast`, so cargo stopped after N1 failed and W1 did not
+run; W1 under M2 was then run alone (the result in the table). Not run: the heavy ignored records of F-758, F-733, F-715,
+`baseline_hashes` and `docs_site` (no library line, no docs page touched beyond this ADR).
+
+Decision by the registered rule: **done**. The window condition of the repetition trigger has a fast check that cannot pass
+vacuously: W1 asserts the plain pick inside, two window points inside, the last outside by a margin and at least 4 points outside
+before asserting no restart pick; W2 is the twin. M4 is caught by W1 alone; M2 is not caught by W1 (N1 of ADR 0686 catches it).
+
+Not covered: the outside point at the first or middle window position (only the most recent is moved); windows with a failed or
+pending observation; `window: Some(w)` other than d + 1; one function, one seed, d = 2, batch 1.
+
+Remaining question 1: window position. Options: (a) leave it (the condition is one `all` over the window, position-symmetric);
+(b) parametrise W1 over the three positions. Recommendation: (a).
+
+## For the lead: roadmap entries
+
+F-770 proposed status: **done**.
+
+> Follow-up of F-766 (ADR 0686, 2026-11-17). DONE. ADR 0689, 2026-11-17: test-only, no library line changed. A fast test (crates/rcfd-api/tests/f770_window_condition.rs, 0.01 s) on the 18-observation sequence of ADR 0686 in two dimensions with the default exclusion, the last of the d + 1 window points moved to (0.9, 0.9): the plain pick lies inside the incumbent's basin (delta 0.15 of radius 2), the last window point outside (delta 8.2, 15 evaluated points outside), and the repetition trigger makes no restart pick (its pick is bit-equal to the plain pick); the preconditions are asserted inside the test so it cannot pass vacuously. A twin with the window point next to the incumbent gets a restart pick at delta 3.27. The surviving ADR 0686 mutation M4 (the window condition dropped) is caught by the first test and not by the twin; the dropped plain-pick condition (M2) is not caught by it (ADR 0686 N1 catches that). The O1 points hash of ADR 0673 and the f766, f758, f715 and lib tests are unchanged. Not covered: the outside point at the first or middle window position, failed or pending observations in the window, a window other than d + 1, one function and one seed.
+
+No follow-up is proposed (remaining question 1 recommends leaving the window position).
