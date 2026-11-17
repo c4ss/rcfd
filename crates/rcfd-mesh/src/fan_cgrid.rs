@@ -159,6 +159,10 @@ pub struct CGridMesh {
     pub construction_step: usize,
     /// ADR 0702: the ramp length `L` [m] of the wake-stack remap with [`CGridOptions::wake_ramp_from_spacing`], `None` without it.
     pub wake_ramp_length: Option<f64>,
+    /// ADR 0713: with [`CGridOptions::free_row_hub_ratio`], the growth ratio of the free cells of every C line `i` in the hub layer's
+    /// true section, used in every layer (`NaN` where the hub line has fewer than two free cells; such a line keeps its own
+    /// distribution), `None` without it.
+    pub free_row_ratios: Option<Vec<f64>>,
 }
 
 impl CGridMesh {
@@ -418,6 +422,31 @@ fn geometric_two_sided(len: f64, n: usize, h1: f64) -> Result<Vec<f64>, String> 
     Ok(x)
 }
 
+/// ADR 0713: `n + 1` offsets `0 .. len` of cells `min(first rho^m, C)` with the ratio `rho` given and the cap `C` solved by
+/// bisection to fill the length, then scaled to end exactly at `len` (as [`capped_cells`]). `None` when `rho` is not at least 1,
+/// the inputs are not positive or the uncapped cells do not reach `len` (the caller keeps [`capped_cells`]).
+fn hub_ratio_cells(len: f64, n: usize, first: f64, rho: f64) -> Option<Vec<f64>> {
+    if n == 0 || !(len > 0.0) || !(first > 0.0) || !(rho >= 1.0) {
+        return None;
+    }
+    let sizes = |cap: f64| -> Vec<f64> { (0..n).map(|m| (first * rho.powi(m as i32)).min(cap)).collect() };
+    let top = first * rho.powi(n as i32 - 1);
+    if !(sizes(top).iter().sum::<f64>() >= len) {
+        return None;
+    }
+    let (mut a, mut b) = (0.0, top);
+    for _ in 0..200 {
+        let c = 0.5 * (a + b);
+        if sizes(c).iter().sum::<f64>() > len {
+            b = c;
+        } else {
+            a = c;
+        }
+    }
+    let h = sizes(0.5 * (a + b));
+    Some(offsets(len, &h))
+}
+
 /// Largest cell as a multiple of the mean cell in the outer parts of a line (see [`capped_cells`]).
 const CAP_FACTOR: f64 = 1.5;
 
@@ -545,6 +574,11 @@ pub struct CGridOptions {
     /// of any wake cell whatever the wake line spacing (instead of the ADR 0699 ramp over a quarter of the wake lines, which put
     /// its first step on the shortest wake cell).
     pub wake_ramp_from_spacing: bool,
+    /// ADR 0713 (opt-in): the free cells of every C line grow by one ratio in every layer, the ratio of that line in the hub
+    /// layer's true section, and only the cap that ends the growth is solved per layer to fill the line ([`hub_ratio_cells`]), so
+    /// that the near-wall free rows have the same sizes in every span layer; ADR 0713 located the non-orthogonality maximum of S'''
+    /// at the first free rows of the thick span layers, whose cells change size from one node layer to the next.
+    pub free_row_hub_ratio: bool,
 }
 
 impl CGridOptions {
@@ -614,6 +648,16 @@ impl CGridOptions {
         CGridOptions {
             wake_ramp_from_spacing: true,
             ..CGridOptions::camber_seam_s_wake_remap_construction()
+        }
+    }
+
+    /// Construction S'''' of ADR 0713 (no case value): construction S''' with the free cells of every C line grown by the hub
+    /// layer's ratio of that line in every layer ([`CGridOptions::free_row_hub_ratio`]); ADR 0713 located the non-orthogonality
+    /// maximum of S''' at the faces between the first and second free cells of the blade lines in the thick span layers.
+    pub fn camber_seam_s_free_rows_construction() -> Self {
+        CGridOptions {
+            free_row_hub_ratio: true,
+            ..CGridOptions::camber_seam_s_wake_ramp_construction()
         }
     }
 }
@@ -1045,6 +1089,8 @@ struct Layer2d {
     stack_cells: Vec<usize>,
     /// Local chord.
     chord: f64,
+    /// ADR 0713: per line `i`, the ratio of the second to the first free cell (`NaN` with fewer than two free cells).
+    ratios: Vec<f64>,
 }
 
 /// Geometry of one layer in the unrolled plane of radius `r` (`k` only names the layer in error messages).
@@ -1057,6 +1103,7 @@ fn build_layer(
     r: f64,
     h1: f64,
     opts: &CGridOptions,
+    hub_ratios: Option<&[f64]>,
 ) -> Result<Layer2d, FanError> {
     let ctx = format!("layer k={k} (r = {r:.5})");
     let err = |path: &str, m: String| FanError::new(path, format!("{m} [{ctx}]"));
@@ -1445,6 +1492,7 @@ fn build_layer(
 
     // C block (in-plane points)
     let mut cp: Vec<Vec<(f64, f64)>> = vec![vec![(0.0, 0.0); ns + 1]; n_i + 1];
+    let mut ratios = vec![f64::NAN; n_i + 1];
     for i in 0..=n_i {
         let hh = i.min(n_i - i);
         let o = if i < h_c {
@@ -1476,15 +1524,23 @@ fn build_layer(
                 format!("needs more than the {nbi} stack cells on line {i}"),
             ));
         }
-        let rest = capped_cells(len, ns - nbi, first, false).map_err(|m| {
-            err(
-                "n_side",
-                format!(
-                    "line {i}: {m}; the stack (thickness {:.3e}) leaves no room before the seam",
-                    norm2((e.0 - w[i].0, e.1 - w[i].1))
-                ),
-            )
-        })?;
+        // ADR 0713: with the hub ratios the free cells grow by the hub layer's ratio of this line and only the cap is solved
+        let hub = hub_ratios.and_then(|r| hub_ratio_cells(len, ns - nbi, first, r[i]));
+        let rest = match hub {
+            Some(x) => x,
+            None => capped_cells(len, ns - nbi, first, false).map_err(|m| {
+                err(
+                    "n_side",
+                    format!(
+                        "line {i}: {m}; the stack (thickness {:.3e}) leaves no room before the seam",
+                        norm2((e.0 - w[i].0, e.1 - w[i].1))
+                    ),
+                )
+            })?,
+        };
+        if rest.len() > 2 {
+            ratios[i] = (rest[2] - rest[1]) / (rest[1] - rest[0]);
+        }
         for q in 0..=nbi {
             let p = stack_pt(i, q);
             cp[i][q] = p;
@@ -1570,6 +1626,7 @@ fn build_layer(
         normals,
         stack_cells,
         chord,
+        ratios,
     })
 }
 
@@ -2019,6 +2076,21 @@ pub fn build_cgrid_mesh_with(
         let mut normals = Vec::with_capacity(n_k + 1);
         let mut stacks = Vec::with_capacity(n_k + 1);
         let mut cache: Vec<(f64, Layer2d)> = Vec::new();
+        // ADR 0713: the growth ratio of every line in the hub layer's true section (the algebraic grid)
+        let hub_ratios: Option<Vec<f64>> = if opts.free_row_hub_ratio {
+            let r0 = if opts.radial_remap {
+                radii[0].min(fan.r_tip)
+            } else {
+                radii[0]
+            };
+            Some(
+                build_layer(fan, spec, &lay, 0, r0, h1, opts, None)
+                    .map_err(|e| vec![e])?
+                    .ratios,
+            )
+        } else {
+            None
+        };
         // ADR 0702: with the ramp from the wake line spacing the layers are written after all are built (one ramp length)
         let spacing_ramp = opts.wake_stack_remap && opts.wake_ramp_from_spacing;
         let mut deferred: Vec<(usize, f64, Layer2d, Option<Layer2d>)> = Vec::new();
@@ -2029,7 +2101,8 @@ pub fn build_cgrid_mesh_with(
                 if let Some((_, l)) = cache.iter().find(|(rc, _)| *rc == rb) {
                     return Ok(l.clone());
                 }
-                let mut l = build_layer(fan, spec, &lay, k, rb, h1, opts).map_err(|e| vec![e])?;
+                let mut l =
+                    build_layer(fan, spec, &lay, k, rb, h1, opts, hub_ratios.as_deref()).map_err(|e| vec![e])?;
                 if lambda > 0.0 {
                     let alg = l.clone();
                     smooth_layer(
@@ -2344,6 +2417,7 @@ pub fn build_cgrid_mesh_with(
             cell_tags,
             construction_step: step,
             wake_ramp_length: ramp_len,
+            free_row_ratios: hub_ratios.clone(),
         })
     };
     let mut last = None;

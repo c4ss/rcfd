@@ -428,6 +428,18 @@ jumped by 0.5 across that cell. At the s4 specs `L` is 7.0e-3 m (reference) and 
 face is back within 0.01 deg of S' (84.40 / 83.56 deg), the wake-stack spanwise skewness is 0.42 / 0.38, and the second blade's
 maximum is 84.22 deg. The reference's maximum stays at 84.69 deg on a blade line the ramp does not touch (layer 3, line 45).
 
+**Construction S'''' (ADR 0713, library only: `CGridOptions::camber_seam_s_free_rows_construction()`).** S''' with
+`free_row_hub_ratio`: the free cells of every C line grow by one ratio in every layer, the ratio the line has in the hub layer,
+and only the cap where the growth stops is solved per layer to fill the line. Why: the lines get longer from hub to tip (the
+pitch grows with the radius), and with the per-layer distribution every free cell except the first changed size from one node
+layer to the next. A thick span cell (9 mm at s4) whose cross-section grows by a different factor than its neighbour's has its
+centroid displaced radially by up to `H (A1 - A0) / (6 (A0 + A1))`. Next to the stack that displacement (1.6e-4 m) matched the
+in-plane distance of the two thin first cells, which put the S''' maximum of 84.69 deg on the face between the first and second
+free cells at the thin-to-thick transition. With one ratio the near-wall rows are the same in every layer, and the length change
+goes into the capped cells, the largest of the line. At the s4 specs: the reference 84.12 deg / 2.54 / 525.6, the second blade
+83.89 deg / 2.72 / 551.7 (both within 84.5 / 4.0 / 1000). The face that was worst is 82.80 deg. The new maximum is on the faces
+between the sixth and seventh free cells of two pressure-side lines in the tip-gap layers. The wake-stack spanwise skewness is unchanged (0.42 / 0.38). The scan builds 24 of 24.
+
 ## Where to go next
 
 * [mesh-quality.md](mesh-quality.md): the quality report, its measures and the library mesh editing operations.
