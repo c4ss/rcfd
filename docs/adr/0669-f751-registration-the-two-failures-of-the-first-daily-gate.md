@@ -199,3 +199,86 @@ folder that logs every run.
 * Not added: retrying the lock file's removal in `EditLock::drop` on a transient error (a stuck lock, left when the remove fails,
   would also give `LockBusy` to both writers; the gate log shows only the first thread's panic, so this alternative cause is not
   excluded). It cannot be forced by a test here without a hook in the library; left as remaining question 1 of addendum 1.
+
+## Addendum 1: results (2026-11-17)
+
+Runs: release, `CARGO_TARGET_DIR=f751-scratch/target`, the gate's per-test command (`<exe> <name> --exact --test-threads=1`
+from the package directory, `CARGO_MANIFEST_DIR` set), counted by the gate's rule. The machine was shared with other building
+agents throughout (a run of the w48f test took 2.5 s to 10 s, against 3.98 s on the gate). Logs in `f751-scratch` (`nc0.log`,
+`l1.log`, `f_run.log`, `f1c_run.log`, `e1.log`, `mut_*.log`).
+
+| Check | Limit | Measured | Met |
+|---|---|---|---|
+| R1a | P4 in the `--ignored` listing | listed; the gate reports it `ignored` | yes |
+| R1b | P4c passes | `1 passed; 0 failed`, 0.06 s | yes |
+| R1c | `f699_fidelity.rs` unchanged against 6600f7c9 | empty diff at the tip | yes |
+| NC0 | at least 1 of 200 fails (old code) | **59 of 200 failed**: 55 kind A (`resolves outside the project root`), 2 kind B (`canonicalize`: access denied), **2 `LockBusy`** (the gate's kind; runs 33 and 80, test times 2.62 s and 4.49 s) | yes |
+| L1 | 200 of 200 pass (fixed code) | **200 of 200 passed** (test times 4.83 s to 13.19 s) | yes |
+| L1t | median at most 2 x NC0's median of its passing runs (7.57 s) | median 6.02 s (limit 15.14 s) | yes |
+| F1 | 10 of 10 accepted, each under 1.0 s, no claim left | 10 of 10, max 109.7 ms, 0 claims left | yes |
+| F1c (amendment 1) | as F1 | 10 of 10, 59.3 to 163.8 ms, 0 claims left | yes |
+| F2 | 10000 of 10000 probe calls `Conflict`, racer 0 errors | met (both assertions passed; 82.8 s). The printed counts of this one run were dropped by the output filter of the command that ran it, so only the asserted values are recorded | yes |
+| F3a | `LockBusy` after 2.0 to 30 s, file not written, claim kept | `LockBusy` (test time 2.03 s), file absent, claim present | yes |
+| F3b | stale claim removed, edit accepted, no lock left | accepted, claim gone, `.rcfd/locks` empty | yes |
+| E1 | every listed existing test passes | 44 of 44 run tests passed (rcfd-project `edit_lock_w48f` 4, `journal_f273` 4; rcfd-workspace `save_f270` 8, `journal_f273` 9, `mesh_f272` 7, `feed_replay_f275` 1, `feed_f273` 3; rcfd-mcp `edit_hook_f275` 1, `feed_f273` 3 with deviation 2; rcfd-studio `workspace_f270` 4), 1 ignored record not run (`c5r_a_real_session_refuses_case_edits`); `rcfd-project --lib` 2 of 2 | yes |
+| E2 | fmt and clippy clean | `cargo fmt -p rcfd-project --check` clean; `cargo clippy -p rcfd-project --all-targets -- -D warnings` clean | yes |
+| docs | `rcfd-cli` `docs_site` | 2 of 2 | yes |
+
+Mutations (scratch copy `f751-scratch/mut`, scripts `mutate.py`, `runmut.sh`):
+
+| | Mutation | Run against | Result |
+|---|---|---|---|
+| M1 | no claim (the old acquire) | F1: **survived** (10 of 10, max 375.0 ms); F1c: **survived** (10 of 10, max 973.4 ms) | not caught |
+| M2 | no second resolve under the lock | F2: 13 of 10000 probe calls refused (`resolves outside the project root`) | caught |
+| M3 | the claim not removed on taking the lock | F1 (7 claim files left), F1c (10 left) | caught |
+| M4 | a fresh claim of another writer ignored | F3a (the edit accepted) | caught |
+| M5 | a stale claim never removed | F3b (`LockBusy`) | caught |
+| M6 | the lexical key joined with `\` | F2: 1 of 10000 refused (the retry ran under another lock than the racer's); `create_replace_and_conflict` passed | caught (by F2 alone) |
+
+Deviations:
+
+1. F1's set-up did not starve the old waiter (amendment 1), and neither did F1c's: the old code got the lock within 375 ms and
+   973 ms. The claim's effect shows in the waits (worst 110 ms and 164 ms with it, 375 ms and 973 ms without), but no registered
+   check separates the two. M1 is not caught; by the rule that alone makes the item **partial**.
+2. E1: `rcfd-mcp` `feed_f273::c3r_run_submissions_and_requests_are_journaled_and_their_states_are_in_the_feed` failed at its first
+   run because `rcfd.exe` was not built in the scratch target (its helper says so: "the project run tools need it next to
+   rcfd-mcp"); `rcfd-cli` and `rcfd-runner` were built and it passed (1.32 s). A set-up defect of the run, not of the code.
+3. The `rcfd-workspace` `feed_f273` binary was built and run too, because the named `--test feed_f273` applies to every selected
+   package.
+
+What the measurements say about clause (2):
+
+* The cause is located, and it is in the library, not in the test: two independent defects of `replace_if_hash` under a
+  cooperating second writer. (A, B) `resolve_in` outside the lock races the other writer's rename (57 of NC0's 59 failures;
+  removed by D1, shown by F2 and M2). (C) the lock is unfair: the gate's `LockBusy` was reproduced twice in NC0 on the old code;
+  with D2, none in L1's 200 runs. F1 and F1c could not force (C) on the old code, so the evidence that D2 is what removed (C),
+  rather than chance, is L1 alone: at NC0's rate of 2 in 200, 0 in 200 happens by chance with probability about e^-2 = 0.14. The
+  alternative cause of `LockBusy` named in amendment 1 (a lock left behind when its removal fails) is not excluded.
+* No default result changes: an edit whose first resolve succeeds and whose wait is under 50 ms makes the same file operations as
+  before (no claim file, no second resolve); error kinds, messages and codes are unchanged; `EDIT_LOCK_WAIT` and `EDIT_LOCK_STALE`
+  are unchanged. Callers: no source change in `rcfd-workspace` (`save.rs`, `write.rs`), `rcfd-mcp` or `rcfd-studio`; under
+  contention the Studio save and the MCP edit tools return fewer 1201 and no spurious 1004 or 1200. Public additions:
+  `edit_claim_path`, `EDIT_CLAIM_AFTER`, `EDIT_CLAIM_STALE`.
+
+Decision by the registered rule: **partial** (L1 met, M1 survives).
+
+Remaining questions (none taken; each needs a test hook or a gate observation):
+
+1. The stuck-lock alternative for `LockBusy`. Options: (a) retry the removal in `EditLock::drop` on a transient error with
+   `DEFAULT_RETRY` and log a failed removal; (b) leave it until the daily gate shows a `LockBusy` again. Recommendation: (a), as
+   the follow-up below, with a test hook that holds a handle on the lock file without delete sharing.
+2. A negative control that forces the old waiter to starve. Options: (a) a test-only hook in `acquire` (feature-gated, off by
+   default) that delays the waiter's attempt; (b) accept L1's statistics and the next daily gates. Recommendation: (a), in the
+   same follow-up.
+3. The journal's own lock (`journal::lock`) has the same unfair shape (1 ms sleeps, 2 s); its timeout only drops the `seq` of a
+   line. Recommendation: leave it unless the gate shows a journal line without `seq`.
+4. F2 takes about 83 s in release on this loaded machine (inside rule 7's two minutes). Recommendation: keep it; if the gate's
+   timeouts are tight, make it an ignored heavy record with a 2000-call fast form.
+
+## For the lead: roadmap entries
+
+> Proposed status: partial.
+
+> Gate and test reliability. Follow-up of F-723 (ADR 0653). PARTIAL. ADR 0669, 2026-11-16: the two failures of the first daily gate (run 43919555816, commit d55c43c4). (1) f699_fidelity P4 matched the cell '198' in the runner's temporary path: already fixed on main by F-717 (ADR 0642), P4 an ignored set-up record with its body unchanged and P4c searching with the path removed; with the gate's command P4 is listed ignored and P4c passes; no test edited. (2) edit_lock_w48f two_writers_with_base_hashes_lose_no_update: the cause is in rcfd-project's replace_if_hash, two defects under a cooperating second writer: the path was resolved outside the edit lock, so the other writer's rename made the canonical path fall under $Extend\$Deleted (refused as outside the root) or delete-pending (access denied), and the lock was unfair (a waiter polling every 2 ms could miss every short release: the gate's LockBusy). Fixed by a second resolve under the lock after a resolve error a rename can cause, and a claim file beside the lock that a writer waiting 50 ms creates and the others respect (stale after 4 s); defaults unchanged (no claim and no second resolve on an ordinary edit; errors, codes and timeouts unchanged; no caller changed). With the gate's per-test command, 200 runs each: old code 59 failures (55 refused, 2 access denied, 2 LockBusy), fixed code 200 of 200 passed. New tests F1, F1c, F2, F3a, F3b met; mutations M2 to M6 caught; M1 (no claim) survived both forced-contention controls (the old waiter slowed to 973 ms but never starved to 2 s), so the claim's share of the fix rests on L1's statistics, and a lock left behind by a failed removal is not excluded as a cause of LockBusy.
+
+> Follow-up proposed: A forced control of the edit lock's starvation and of a lock left behind. Deps F-751. Acceptance: Every limit not stated here is registered in the ADR before the run. Test-only hooks (feature-gated, off in every default build) that delay a waiter's attempt and that hold a handle on the lock file without delete sharing; with them the old acquire starves to LockBusy in a registered share of trials and the claim of ADR 0669 never does; the removal of the lock in EditLock::drop retried on a transient error with a logged failure, a lock left behind shown before and removed after; the default bits and every ADR 0135 and ADR 0669 check keep their results.
