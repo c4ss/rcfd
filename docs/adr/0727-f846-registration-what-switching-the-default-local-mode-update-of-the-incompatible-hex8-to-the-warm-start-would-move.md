@@ -315,3 +315,29 @@ the item asks for.
    on the maintainer's standing instruction of 2026-11-11 (take the recommendation).
 2. **Whether the warm start becomes the default**: not taken (it changes default results, two bit records and the length of
    the committed states); open for the maintainer, informed by this measurement.
+
+## Amendment 1 (2026-11-17, before the comparison of the census)
+
+Written while the census runs of both copies were under way and before any record of them was compared (`compare.py` had not
+been written or run); the in-process file had been run once (its registered run) and its mutations made.
+
+1. **SL is defective as registered.** Its clause "base has no such extra" assumes every model of the base copy is a default
+   model. It is not: eleven of the 34 binaries call `set_incompatible_mode_warm_start` themselves (`si_eas_hg8` to
+   `si_eas_hg14`, `si_eas_hg20`, `si_eas_hg21`, `si_eas_hg_smooth`, `si_eas_local_update_f844`; found by `grep -rn
+   set_incompatible_mode_warm_start crates/rcfd-fem/tests`), with `true` for their warm variants and with a variable that is
+   `false` for some default variants. A model that sets the flag itself, either way, is the same model in both copies: the
+   flip of the constructor's default cannot reach it. SL is kept and evaluated as registered (it will miss on those records,
+   by construction). The corrected rows, used for the reading:
+   - **SL'**: every paired `ok/ok` record with states falls in one of two classes: **switched** (every Incompatible element's
+     state in flip is base's plus 9 values, every other element's equal) or **explicit** (every element's state length equal
+     in both copies: the model sets the flag itself). Limit: no record in neither class.
+   - **CX** (a new control): every explicit record: `0` values differ in every value group, and the same counts. Expected:
+     the flip does not reach a model that sets the flag (reading c1).
+   - The measures N4, N5, N6 are reported over the switched records; the explicit records are listed by count only.
+   Records without states (an `err` in either copy, or an entry without states) are classified by their test.
+2. **CF1's second clause cannot be evaluated**: the records do not hold a solve's input states, so "a `solve_increment` /
+   `solve_from` from states with no committed modes" is not identifiable from them. CF1 is evaluated on its first clause
+   (the `solve_with` records of one increment and no halving); the second is recorded as not run.
+
+By the registered decision rule a row met only after an amendment, or not run, makes the outcome **partial**; the reason
+will be stated in the results.
