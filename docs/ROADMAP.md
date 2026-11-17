@@ -16100,7 +16100,7 @@ fixed by the item's registration ADR before any code.
     "12-cell" for a 4 x 12 mesh (the first reader's reservation; a disagreement under the mesh clause of ADR 0715).
     Follow-up proposed below (correct H22 and W1 by addendum, read the 18 remaining rows). Follow-up F-795 (Correct rows
     H22 and W1 and read the 18 unread limit rows of ADRs 0706 to 0710).
-- [ ] **F-795** Correct rows H22 and W1 and read the 18 unread limit rows of ADRs 0706 to 0710
+- [x] **F-795** Correct rows H22 and W1 and read the 18 unread limit rows of ADRs 0706 to 0710
   - depends on: F-794
   - acceptance: Every limit not stated here is registered in the ADR before the run. An addendum to ADR 0706 corrects
     row H22 (the test asserts that the first failed task has a message containing `nonexistent`, not which task it is)
@@ -16109,7 +16109,27 @@ fixed by the item's registration ADR before any code.
     C3, C6, T5) are read by a reader other than the author of the rows against the criterion of ADR 0715, every
     disagreement is listed with the line and corrected by the same addenda, and at least 16 of the 18 agree; no Rust
     file is edited and docs_site passes.
-  - note: Follow-up of F-794 (ADR 0715, 2026-11-16).
+  - note: Follow-up of F-794 (ADR 0715, 2026-11-16). DONE. ADR 0717, 2026-11-17: a reader who wrote neither the rows,
+    ADR 0705, ADR 0715 nor the tests read the 18 limit rows of ADRs 0706 to 0710 that ADR 0705 and ADR 0715 had not read
+    (H5, H7, H9, H10, H11, H13, H14, H15, H17, H20, H21, H23, W6, W7, W8, C3, C6, T5) against the seven test files and
+    the F-040 note, by the criterion of ADR 0715 adopted by reference (its clauses A to E and the recorded-values clause
+    quoted) and registered with the limit and the addendum rule before any row was read. Result: 18 of 18 agree (limit
+    16 of 18 met); by ADR 12 of 12, 3 of 3, 2 of 2, 1 of 1; no reservation, no disagreement to list. A literal search of
+    every number of the 18 limit cells in the test files found all but seven, each explained (`0..50`, the suffixed
+    literals `1.15f64` and `8usize`, the derived 1e-9.8 of H5, the three recorded deviations of W7, which are in the
+    F-040 note). Rows H22 and W1 were read against the code before their corrections and the code supports the
+    acceptance: "Addendum 1: corrections of rows (ADR 0717, 2026-11-17)" of ADR 0706 gives the corrected H22 (the first
+    failed task has a message containing `nonexistent`; the test does not assert which task it is;
+    `rcfd-api/tests/workflow.rs` lines 212 and 213) and the same addendum of ADR 0707 the corrected W1 (a uniform 4 x 12
+    mesh, 48 cells, and a graded 3 x 20 mesh, 60 cells; `channel_wall_function.rs` lines 33 and 107 to 115). The text
+    above each addendum is unchanged: 18 lines added and 0 deleted in each file, the first 98 and 55 lines
+    byte-identical to 85313e53, and the check was shown to fire on a mutated copy. ADRs 0708 to 0710 needed no
+    correction and are not edited. No Rust file, script, golden or hash table edited; docs_site passes (2 tests); the
+    scripts' unit tests pass (138); the test-to-ADR index changes no primary ADR (47 tests gain 0717 as evidence). No
+    test was needed for the reading. All 48 rows have now been read once: 46 agree as written, 2 were wrong and are
+    corrected. The two corrected rows have only their writer's reading (the lead may read them at the merge: about 60
+    lines). Remark, not a disagreement: row W8 calls the 4 cells of one height along the flow "a column", the code's
+    name. No follow-up is proposed.
 - [ ] **F-796** The end of the subcritical branch of rule L's 16^3 punch path at amplitude 2.2e-4
   - depends on: F-789
   - acceptance: Every limit not stated here is registered in the ADR before the run. At the last state of ADR 0711's
