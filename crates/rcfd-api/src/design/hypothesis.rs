@@ -20,6 +20,8 @@
 //! * [`verify_drawn`] (ADR 0693) re-runs k pairs drawn from a verifier's seed that is not in the file (caller-supplied or
 //!   [`entropy_seed`]) after the evidence exists, then appends the seed in a `hypothesis_drawn_check` record; an evaluator that
 //!   reads the file cannot be honest exactly on those pairs. [`drawn_record_problems`] redoes a recorded check.
+//! * [`lessons_drawn`] (ADR 0695) is [`lessons`] plus the drawn checks: a row whose latest consistent drawn record did not
+//!   reproduce is dropped, and every row reports the number of its drawn checks.
 //! * Verdicts: `confirmed` when the one-sided lower bound of the mean paired difference is at least the smallest effect that
 //!   matters, `refuted` when the upper bound is below it, `inconclusive` otherwise, `void` when too many pairs failed or a held
 //!   metric was not matched. A verdict is a statement about the evaluator at its tier, never about a product.
@@ -3575,6 +3577,150 @@ pub fn lessons(entries: &[Entry], q: &LessonQuery, rerun: &[&dyn Model]) -> Less
         .filter(|l| q.finding.is_none_or(|f| f == l.finding))
         .filter(|l| q.min_tier.is_none_or(|t| tier_rank(l.scope.tier) >= tier_rank(t)))
         .collect();
+    out
+}
+
+// ---------------------------------------------------------------- lessons that read the drawn checks (ADR 0695)
+
+/// A [`Lesson`] with the verifier-drawn checks of its hypothesis counted (ADR 0695 D2).
+#[derive(Debug, Clone, PartialEq)]
+pub struct DrawnRow {
+    /// The row [`lessons`] gives.
+    pub lesson: Lesson,
+    /// Consistent drawn records of the hypothesis (reproduced or not).
+    pub drawn_checks: usize,
+    /// Of those, the ones that did not reproduce.
+    pub drawn_failed: usize,
+    /// Drawn records of the hypothesis whose redo is inconsistent (ignored).
+    pub drawn_ignored: usize,
+    /// Drawn records that could not be redone because the caller holds no model of the evaluator (ignored).
+    pub drawn_unchecked: usize,
+    /// Entry index of the latest consistent drawn record.
+    pub drawn_latest: Option<usize>,
+}
+
+/// A row dropped because its latest consistent drawn record did not reproduce.
+#[derive(Debug, Clone, PartialEq)]
+pub struct DrawnDrop {
+    /// Hypothesis id.
+    pub id: String,
+    /// Registration entry.
+    pub registration: usize,
+    /// The drawn record.
+    pub record: usize,
+    /// Evidence entries the record names as not reproduced.
+    pub mismatched: Vec<usize>,
+}
+
+/// Output of [`lessons_drawn`].
+#[derive(Debug, Clone, PartialEq, Default)]
+pub struct DrawnLessons {
+    /// Surviving rows, in the order of [`lessons`].
+    pub rows: Vec<DrawnRow>,
+    /// Exactly the flags of [`lessons`].
+    pub flagged: Vec<Flag>,
+    /// Ignored drawn records and dropped rows, each with its reason.
+    pub drawn_flags: Vec<Flag>,
+    /// Rows dropped.
+    pub dropped: Vec<DrawnDrop>,
+}
+
+impl DrawnLessons {
+    /// The surviving rows and the flags of [`lessons`] as a [`Lessons`].
+    pub fn plain(&self) -> Lessons {
+        Lessons {
+            rows: self.rows.iter().map(|r| r.lesson.clone()).collect(),
+            flagged: self.flagged.clone(),
+        }
+    }
+}
+
+/// [`lessons`] (unchanged) followed by the verifier-drawn checks (ADR 0695 D2): a row whose latest consistent drawn record (ledger
+/// order; consistent = [`drawn_record_problems`] with the caller's model is empty and the record names the row's registration
+/// hash) did not reproduce is dropped; every row carries the number of its drawn checks. Records that are inconsistent, or that
+/// cannot be redone for lack of a model among `rerun`, are ignored and counted. Without drawn records the result is that of
+/// [`lessons`].
+pub fn lessons_drawn(entries: &[Entry], q: &LessonQuery, rerun: &[&dyn Model]) -> DrawnLessons {
+    let base = lessons(entries, q, rerun);
+    let mut out = DrawnLessons {
+        flagged: base.flagged,
+        ..Default::default()
+    };
+    for lesson in base.rows {
+        let hash = entries
+            .get(lesson.registration)
+            .and_then(|e| e.provenance.get("hash"))
+            .and_then(Value::as_str)
+            .unwrap_or("")
+            .to_string();
+        let model = rerun
+            .iter()
+            .copied()
+            .find(|m| m.id() == lesson.scope.id && m.version() == lesson.scope.version);
+        let mut row = DrawnRow {
+            lesson,
+            drawn_checks: 0,
+            drawn_failed: 0,
+            drawn_ignored: 0,
+            drawn_unchecked: 0,
+            drawn_latest: None,
+        };
+        let mut latest: Option<(usize, bool, Vec<usize>)> = None;
+        for (k, e) in entries.iter().enumerate() {
+            let of_row = e.kind == KIND_DRAWN
+                && e.variant == row.lesson.id
+                && e.parents.first().map(|p| p.index) == Some(row.lesson.registration);
+            if !of_row {
+                continue;
+            }
+            let Some(model) = model else {
+                row.drawn_unchecked += 1;
+                continue;
+            };
+            let mut why = drawn_record_problems(entries, k, model);
+            if e.settings.get("record_hash").and_then(Value::as_str) != Some(hash.as_str()) {
+                why.push(format!("entry {k}: the record names another registration hash"));
+            }
+            if !why.is_empty() {
+                row.drawn_ignored += 1;
+                out.drawn_flags.push(Flag {
+                    index: k,
+                    hypothesis: row.lesson.id.clone(),
+                    problem: format!("drawn record ignored: {}", why.join("; ")),
+                });
+                continue;
+            }
+            let reproduced = e.settings.get("reproduced").and_then(Value::as_bool) == Some(true);
+            let mismatched: Vec<usize> = e
+                .settings
+                .get("mismatched")
+                .and_then(Value::as_array)
+                .map(|a| a.iter().filter_map(|x| x.as_u64().map(|x| x as usize)).collect())
+                .unwrap_or_default();
+            row.drawn_checks += 1;
+            if !reproduced {
+                row.drawn_failed += 1;
+            }
+            latest = Some((k, reproduced, mismatched));
+        }
+        row.drawn_latest = latest.as_ref().map(|l| l.0);
+        match latest {
+            Some((k, false, mismatched)) => {
+                out.drawn_flags.push(Flag {
+                    index: k,
+                    hypothesis: row.lesson.id.clone(),
+                    problem: format!("row dropped: its latest drawn check did not reproduce (entries {mismatched:?})"),
+                });
+                out.dropped.push(DrawnDrop {
+                    id: row.lesson.id.clone(),
+                    registration: row.lesson.registration,
+                    record: k,
+                    mismatched,
+                });
+            }
+            _ => out.rows.push(row),
+        }
+    }
     out
 }
 
