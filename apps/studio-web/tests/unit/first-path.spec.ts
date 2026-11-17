@@ -393,7 +393,6 @@ test.describe('the words of the path (G6, G15, G19)', () => {
       expect(runs, label).toContain(label);
     }
     expect(runs).toContain('label="Pause"');
-    expect(src('renderer', 'claude', 'ClaudePanel.tsx')).toContain('Claude Code');
     // no command palette is named until one exists in this build (G6: never suggest a capability that does not exist)
     expect(Object.values(FULL_CONTROL).join(' ')).not.toMatch(/palette/i);
     expect(RESULT_LINK.label).toBe('Open the run');

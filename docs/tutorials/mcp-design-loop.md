@@ -6,8 +6,8 @@ assistant sends, on two examples: the contraction duct of the design loop (a pre
 fan passage. The fan part of the page stops at checking the mesh on purpose; the reason is in that section.
 
 The page is for people who connect an AI assistant to rcfd or write their own MCP client. If you want the desktop Studio instead,
-see the [desktop tutorial](desktop-assistant.md): its Claude Code panel gives Claude Code this server with the project tools of
-one folder.
+see the [desktop tutorial](desktop-assistant.md): its Use with Claude Code registers this server with Claude Code, with the
+project tools of one folder.
 
 `rcfd-mcp` is a Model Context Protocol server on stdio. An MCP client (an AI assistant such as Claude, or any program that speaks
 JSON-RPC 2.0) lists its tools, sets up and runs cases, and iterates on a design with the `design_*` tools. [MCP tools](../mcp-tools.md)
@@ -242,7 +242,7 @@ same history, and every evaluation is stored and resumable.
 
 ## Where to go next
 
-* [The desktop Studio and the Claude Code panel](desktop-assistant.md): the same server, given to Claude Code for one project
+* [The desktop Studio and Claude Code](desktop-assistant.md): the same server, given to Claude Code for one project
   folder.
 * [MCP tools](../mcp-tools.md): every tool, its access class and the approval model.
 * [The design loop](../design-loop.md): how studies, optimisers, operating maps and the evaluation store work.

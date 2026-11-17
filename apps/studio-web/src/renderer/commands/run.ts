@@ -1,10 +1,9 @@
 // What the command palette does with each command (F-831): whether it is available now and why not (G19), the values a
 // parameter can be chosen from, the confirmation it asks for (G18), and the run itself, each through the surface's own
 // door (G16): service actions through the dispatcher (../actions), run control and the project folder through
-// ../project/door, Claude Code through ../claude/door, and the commands of a mounted surface through its registered
-// handler (./host). Nothing here makes up a value: a session, a case, a run or a folder is chosen from what the engine or
-// the main process lists, and an action whose form already exists (New case, Duplicate as, a Claude message) opens it.
-import type { ClaudeState } from '../../shared/claude.js';
+// ../project/door, Claude Code's registration and terminal through ../project/claudeCode, and the commands of a
+// mounted surface through its registered handler (./host). Nothing here makes up a value: a session, a case, a run or
+// a folder is chosen from what the engine or the main process lists, and an action whose form already exists (New case, Duplicate as) opens it.
 import type { ProjectState, ProjectView } from '../../shared/project.js';
 import type { ServiceState } from '../../shared/service.js';
 import type { JsonObject } from '../../shared/actions/params.js';
@@ -13,7 +12,7 @@ import { commandLine, getRunAction, runEquivalents, type Confirmation, type RunA
 import { CHOICE_KINDS, type PaletteEntry, type PaletteParam } from '../../shared/commands/index.js';
 import { availability, dispatch } from '../actions/index.js';
 import { projectActions, runAction, runActionAvailability, runActionConfirmation } from '../project/door.js';
-import { claudeActions } from '../claude/door.js';
+import { claudeCodeActions, registrationWords } from '../project/claudeCode.js';
 import { caseHash } from '../case/hash.js';
 import { closeProject } from '../case/closeGuard.js';
 import { commandFact, commandHandler, whenRegistered } from './host.js';
@@ -23,7 +22,6 @@ import type { ThemeSetting } from '../../shared/theme.js';
 /** What the palette knows of the window when it asks. */
 export interface PaletteEnv {
   readonly project: ProjectState | null;
-  readonly claude: ClaudeState | null;
   readonly service: ServiceState | null;
 }
 
@@ -33,11 +31,6 @@ const NO_PROJECT = 'No project is open: open a project folder first (Open projec
 const NOT_IN_EDITOR = 'No case file is open in the case editor: open one first (Open a case file, or Edit on a case of Home).';
 
 const view = (env: PaletteEnv): ProjectView | null => env.project?.project ?? null;
-
-const turnRunning = (env: PaletteEnv): boolean => {
-  const s = env.claude?.project?.turn?.status;
-  return s === 'starting' || s === 'running';
-};
 
 /** Why a command cannot run now (before any value is chosen), with the way out; null when it can. */
 export function unavailableReason(e: PaletteEntry, env: PaletteEnv): string | null {
@@ -70,11 +63,10 @@ function studioReason(id: string, env: PaletteEnv): string | null {
   switch (id) {
     case 'go.home':
     case 'go.runs':
-    case 'go.claude':
-    case 'view.toggle_claude':
     case 'project.refresh':
     case 'project.close':
-    case 'claude.refresh':
+    case 'claude_code.register':
+    case 'claude_code.open':
       return view(env) ? null : NO_PROJECT;
     case 'project.open_folder':
     case 'project.new':
@@ -86,25 +78,11 @@ function studioReason(id: string, env: PaletteEnv): string | null {
       return p && p.recent.length === 0 ? 'The recent list is empty: the folders you open appear there, the latest first.' : null;
     case 'project.forget_recent':
       return p && p.recent.length === 0 ? 'The recent list is empty: there is nothing to forget.' : null;
-    case 'claude.new_chat':
-    case 'claude.select': {
-      if (!view(env)) return NO_PROJECT;
-      if (env.claude?.project?.writer) return 'A message is being answered; wait for the reply or stop it (Stop the Claude Code reply), then choose another session.';
-      return null;
-    }
     case 'workspace.compare': {
       const v = view(env);
       if (!v) return NO_PROJECT;
       return v.runs.items.length < 2 ? 'The project has fewer than two runs: there is nothing to compare yet. Run a case again (Run the case, F5).' : null;
     }
-    case 'claude.stop':
-      if (!view(env)) return NO_PROJECT;
-      return turnRunning(env) ? null : 'No Claude Code reply is being written: there is nothing to stop.';
-    case 'claude.undo_allow':
-      if (!view(env)) return NO_PROJECT;
-      return env.claude?.project?.allow.undo
-        ? null
-        : 'This Studio has added no rule to this project’s allow-list: there is nothing to undo (Allow this from now on, on a denied call).';
     case 'provenance.show':
     case 'provenance.copy_command': {
       // F-828: run by the provenance module's handlers (src/renderer/provenance/registry.ts); a number of a service
@@ -218,20 +196,6 @@ export async function choicesFor(e: PaletteEntry, p: PaletteParam, values: Value
           mark: null,
         })),
         empty: 'The recent list is empty: the folders you open appear there, the latest first.',
-      };
-    }
-    case 'claude-session': {
-      const cv = env.claude?.project;
-      if (!cv) return { choices: [], empty: NO_PROJECT };
-      return {
-        choices: cv.sessions.map((s) => ({
-          value: s.id,
-          label: s.name ?? s.title ?? s.id,
-          detail: `${s.open}${s.readOnly ? ` · read-only: ${s.readOnly}` : ''}`,
-          reason: null,
-          mark: s.id === cv.selected ? 'shown now' : null,
-        })),
-        empty: 'Claude Code has no session in this project yet: start one (New Claude Code chat).',
       };
     }
     default:
@@ -366,18 +330,16 @@ async function executeInner(e: PaletteEntry, values: Values, env: PaletteEnv): P
       return close(() => h.run(values));
     }
     case 'studio':
-      return studio(e, values, env);
+      return studio(e, values);
   }
 }
 
-async function studio(e: PaletteEntry, values: Values, env: PaletteEnv): Promise<Outcome> {
+async function studio(e: PaletteEntry, values: Values): Promise<Outcome> {
   const failed = (lines: string[]): Outcome => ({ kind: 'done', ok: false, title: `Failed: ${e.title}`, lines, reply: null, equivalents: [], run: null });
   const done = (lines: string[]): Outcome => ({ kind: 'done', ok: true, title: `${e.title}: done`, lines, reply: null, equivalents: [], run: null });
   switch (e.id) {
     case 'go.home':
     case 'go.runs':
-    case 'go.claude':
-    case 'view.toggle_claude':
       return close(() => inProject(e.id, values));
     case 'workspace.compare':
       return close(() => inProject(e.id, values));
@@ -403,24 +365,17 @@ async function studio(e: PaletteEntry, values: Values, env: PaletteEnv): Promise
       return close(async () => {
         if (await closeProject()) location.hash = '';
       });
-    case 'claude.new_chat':
-    case 'claude.select': {
-      const r = await claudeActions.select(e.id === 'claude.new_chat' ? null : String(values['session']));
-      if (!r.ok) return failed([r.error.message]);
-      return close(() => inProject('go.claude'));
+    // ADR 0801 Addendum 23: Claude Code registered with Claude Code itself, opened in its own terminal
+    case 'claude_code.register': {
+      // the panel of the project home: the registration's state, the command to copy, and Register
+      const h = commandHandler('claude_code.show');
+      if (h) return close(() => h.run({}));
+      const s = await claudeCodeActions.status();
+      return failed([registrationWords(s), ...(s.command ? [`In the project folder: ${s.command}`] : [])]);
     }
-    case 'claude.stop': {
-      const r = await claudeActions.cancel();
-      return r.ok ? done(['The reply was stopped.']) : failed([r.error.message]);
-    }
-    case 'claude.refresh': {
-      const r = await claudeActions.refresh();
-      return r.ok ? done(['The sessions were listed again; the panel shows them.']) : failed([r.error.message]);
-    }
-    case 'claude.undo_allow': {
-      const rule = env.claude?.project?.allow.undo ?? 'the rule';
-      const r = await claudeActions.undoAllow(false);
-      return r.ok ? done([`${rule} is out of the allow-list again.`]) : failed([r.error.message]);
+    case 'claude_code.open': {
+      const r = await claudeCodeActions.open();
+      return r.ok ? done([r.message]) : failed([r.message]);
     }
     case 'provenance.show': {
       // F-828: the palette closes first, so the focus is back on the number it was opened from

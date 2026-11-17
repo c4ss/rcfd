@@ -6,7 +6,9 @@
 // No Electron import: the port is any object with postMessage and message and close callbacks (the unit tests use
 // Node's MessageChannel; src/main/index.ts adapts Electron's MessagePortMain).
 import {
+  CLAUDE_CODE_OPS,
   CREATE_WHERE,
+  type ClaudeCodeWhat,
   TRASH_OPS,
   type CreateWhere,
   type ProjectError,
@@ -47,6 +49,11 @@ export interface BridgeHome {
   create?(where: CreateWhere): Promise<unknown>;
   /** ADR 0736: a trash operation of the engine on the open project (optional so that a home without it refuses it). */
   trash?(what: TrashWhat, params: Readonly<Record<string, unknown>>): Promise<TrashOutcome>;
+}
+
+/** ADR 0801 Addendum 23: Claude Code's registration and launch (src/main/claudecode/register.ts). */
+export interface BridgeClaudeCode {
+  do(what: ClaudeCodeWhat): Promise<unknown>;
 }
 
 /** F-807: the longest action id the port accepts, and the most bytes of an action's parameters as JSON. */
@@ -143,6 +150,12 @@ export function parseProjectRequest(raw: unknown): ParsedProject {
       if (JSON.stringify(params).length > MAX_ACTION_PARAMS_BYTES) return bad(`trash: params are larger than ${MAX_ACTION_PARAMS_BYTES} bytes`);
       return { ok: true, request: { op, id, what: what as TrashWhat, params } };
     }
+    case 'claudeCode': {
+      if (keys !== 'id,op,what') return bad('claudeCode: takes exactly what');
+      const what = raw['what'];
+      if (typeof what !== 'string' || !(CLAUDE_CODE_OPS as readonly string[]).includes(what)) return bad(`claudeCode: what must be one of ${CLAUDE_CODE_OPS.join(', ')}`);
+      return { ok: true, request: { op, id, what: what as ClaudeCodeWhat } };
+    }
     default:
       return bad(`unknown op '${String(op).slice(0, 40)}'`);
   }
@@ -158,6 +171,7 @@ export class ProjectPortBridge {
   constructor(
     private readonly port: ProjectPortLike,
     private readonly home: BridgeHome,
+    private readonly claudeCode: BridgeClaudeCode | null = null,
   ) {
     port.onMessage((data) => void this.onMessage(data));
     port.onClose(() => this.dispose());
@@ -241,6 +255,10 @@ export class ProjectPortBridge {
           result = this.home.trash
             ? await this.home.trash(r.what, r.params)
             : ({ ok: false, code: 'unavailable', message: 'This Studio has no project trash.', data: null } satisfies TrashOutcome);
+          break;
+        case 'claudeCode':
+          if (!this.claudeCode) throw new Error('this Studio cannot register or open Claude Code');
+          result = await this.claudeCode.do(r.what);
           break;
       }
       this.reply(r.id, { ok: true, result });

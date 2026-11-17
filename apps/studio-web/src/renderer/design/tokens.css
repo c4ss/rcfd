@@ -64,8 +64,6 @@
   --role-band-live: var(--color-orange);
   --role-band-failed: var(--color-fail);
   --role-hatch: var(--color-silver);
-  --role-claude-head: var(--color-meadow);
-  --role-chat-own: var(--color-sky-wash);
   --role-tooltip: var(--color-ink);
   --role-tooltip-text: var(--color-white);
   --role-popover: var(--color-white);
@@ -122,7 +120,6 @@
   --size-icon: 14px;
   --size-switch-width: 28px;
   --size-switch-height: 14px;
-  --size-measure-chat: 60ch;
   --size-measure-empty: 46ch;
   --line-rule: 1px solid var(--role-rule);
   --line-hair: 1px solid var(--role-hair);

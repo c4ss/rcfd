@@ -25,10 +25,6 @@ rcfd-runner = { path = "../rcfd-runner" }
 rcfd-tsstore.workspace = true
 rcfd-post.workspace = true
 
-[dev-dependencies]
-# The Claude Code allow-list rules of the tests (tests/claude_allow/, from the removed rcfd-claude): their file format.
-serde.workspace = true
-
 [[bin]]
 name = "rcfd-mcp"
 path = "src/main.rs"

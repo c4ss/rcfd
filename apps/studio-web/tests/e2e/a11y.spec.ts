@@ -1,7 +1,7 @@
 // F-816 (G8): the keyboard and assistive-technology pass over every built surface of the packaged Studio, against the
-// real engine (rcfd serve, rcfd-mcp, the fake claude), at 1440 by 900. Every surface is reached and operated with the
-// keyboard alone (Tab, Shift+Tab, the arrow keys, Enter, Space, Escape and the Studio's shortcuts); the folder dialog is
-// the only thing stubbed, as the other e2e tests do. On each surface:
+// real engine (rcfd serve, rcfd-mcp, the fake claude of Use with Claude Code), at 1440 by 900. Every surface is reached
+// and operated with the keyboard alone (Tab, Shift+Tab, the arrow keys, Enter, Space, Escape and the Studio's
+// shortcuts); the folder dialog is the only thing stubbed, as the other e2e tests do. On each surface:
 //
 // - the Tab walk goes round the whole window and comes back to where it started (no trap); Shift+Tab goes round the
 //   same stops in the opposite order;
@@ -24,8 +24,7 @@ import { rm } from 'node:fs/promises';
 import path from 'node:path';
 import { arrowWalk, cycleOf, framesDuring, installA11y, motionOf, pointerOnly, reach, rolesOf, tabWalk, unnamed, NO_ROLE, type Stop, type Walk } from '../support/a11y.js';
 import { axeCheck, EXCLUDED, OFF, type AxeReport } from '../support/axe.js';
-import { claudeFixture, FAKE_CLAUDE, sampleTranscript, type ClaudeFixture } from '../support/claude.js';
-import { until } from '../support/fake-service.js';
+import { claudeCodeFake } from '../support/claude-code.js';
 import { copyExample, emptyProject, findMcp, mcpPids, NO_MCP, scratch, stubDialog } from '../support/project.js';
 import { appRoot, findRcfd, killIfRcfd, killPid, NO_RCFD, startRcfd, type RunningRcfd } from '../support/rcfd.js';
 import { launchStudio, type Studio } from '../support/studio.js';
@@ -42,13 +41,10 @@ const RE400 = 'r-20261028T152641-97f1';
 /** Motion shorter than this is not motion (a 0 s transition still reports 0). */
 const MOTION_MS = 50;
 /** A closed session (a transcript, no process) and one open in another process (this test's own, alive). */
-const S1 = '00000000-0000-4000-8000-000000000001';
-const S2 = '00000000-0000-4000-8000-000000000002';
 
 let dir = '';
 let quick = '';
 let empty = '';
-let fx: ClaudeFixture;
 let service: RunningRcfd;
 let studio: Studio;
 let page: Page;
@@ -79,22 +75,12 @@ test.beforeAll(async () => {
   dir = await scratch('f816');
   quick = await copyExample('quick-start', dir);
   empty = await emptyProject(dir, 'An empty project');
-  fx = await claudeFixture('f816');
-  // the session list shows every kind of entry: closed, open elsewhere, and (later) a new chat and a resumed one
-  await fx.transcript(quick, S1, sampleTranscript(quick, S1));
-  await fx.transcript(quick, S2, [
-    { type: 'user', cwd: quick, sessionId: S2, timestamp: '2026-11-16T10:00:00.000Z', message: { role: 'user', content: 'Plot the residuals of the heated cavity' } },
-    { type: 'assistant', cwd: quick, sessionId: S2, timestamp: '2026-11-16T10:00:04.000Z', message: { role: 'assistant', content: [{ type: 'text', text: 'Working on it in the terminal.' }] } },
-  ]);
-  await fx.setAgents([{ pid: process.pid, cwd: quick, sessionId: S2, name: 'terminal-chat' }]);
   service = await startRcfd(rcfd!);
   studio = await launchStudio({
     RCFD_STUDIO_SERVICE: `127.0.0.1:${service.port}`,
     RCFD_STUDIO_MCP: mcp!,
     RCFD_STUDIO_RECENT: path.join(dir, 'recent.json'),
-    RCFD_STUDIO_CLAUDE: FAKE_CLAUDE,
-    RCFD_STUDIO_CLAUDE_STATE: fx.state,
-    ...fx.env(),
+    ...claudeCodeFake(dir).env,
   });
   page = studio.page;
   await studio.app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0]!.setContentSize(1440, 900));
@@ -113,7 +99,6 @@ test.afterAll(async () => {
   if (service) killIfRcfd(service.pid);
   for (const f of [quick, empty]) for (const p of mcpPids(f)) killPid(p);
   await rm(dir, { recursive: true, force: true }).catch(() => undefined);
-  await rm(fx.root, { recursive: true, force: true }).catch(() => undefined);
 });
 
 // ---- keyboard-only navigation -----------------------------------------------------------------------------------------
@@ -292,56 +277,23 @@ test('the Studio’s settings, from the header’s Settings icon by keys: the th
   await expect(page.getByRole('button', { name: 'Open project folder…' })).toBeEnabled();
 });
 
-test('the project home of an open project, its Claude Code panel and the project tabs', async () => {
+test('the project home of an open project, and Use with Claude Code opened from the keyboard', async () => {
   await stubDialog(studio.app, quick);
   await tabTo(page.getByRole('button', { name: 'Open project folder…' }));
   await page.keyboard.press('Enter');
   await expect(page.getByRole('heading', { level: 1, name: /Quick start/ })).toBeVisible({ timeout: 30_000 });
   await expect(page.locator('.ph-group[data-group="runs"] tr[data-run]').first()).toBeVisible({ timeout: 20_000 });
-  const panel = page.getByRole('complementary', { name: 'Claude Code' });
-  await expect(panel.getByRole('list', { name: 'Claude Code sessions of this project' })).toBeVisible({ timeout: 20_000 });
-  // the listed entries: closed and open elsewhere, beside New chat
-  await expect(panel.getByRole('button', { name: /^terminal-chat, open elsewhere, read-only, process \d+/ })).toBeVisible({ timeout: 45_000 });
-  await expect(panel.getByRole('button', { name: /^Which runs converged\?, closed/ })).toBeVisible();
-  await surface('home-open', '.ph-page', { exclude: ['.cc'] });
-  await surface('claude', '.cc');
-});
-
-/** Types `text` into the panel's message field from the keyboard, sends it with Enter and waits for the turn's end. */
-async function chatByKeys(text: string): Promise<void> {
-  const panel = page.getByRole('complementary', { name: 'Claude Code' });
-  const before = (await fx.chats()).length;
-  await tabTo(panel.getByRole('textbox', { name: /^Message to Claude Code/ }));
-  await page.keyboard.type(text);
+  await surface('home-open', '.ph-page');
+  // ADR 0801 Addendum 23: the registration panel under the band, from its icon by keys; Escape closes it
+  const icon = page.getByRole('button', { name: 'Use with Claude Code' });
+  await tabTo(icon);
   await page.keyboard.press('Enter');
-  await until(async () => ((await fx.chats()).length > before ? true : null), 30_000, 'the chat to start');
-  await expect
-    .poll(() => page.evaluate(() => window.studioClaude.state()).then((s) => s.project?.writer === null && s.project?.turn?.status), { timeout: 30_000 })
-    .toBe('finished');
-}
-
-// ADR 0801 Addendum 20, A20-D7: with a chat open, the session list's current entry was named without the words it
-// shows (label-content-name-mismatch); these two surfaces hold the whole page, the list showing, to axe and the walk
-test('the Claude Code panel with a chat open: a new chat sent from the keyboard, the session list showing it', async () => {
-  const panel = page.getByRole('complementary', { name: 'Claude Code' });
-  await chatByKeys('Write a file');
-  const current = panel.locator('.cc-session[aria-current="true"]');
-  await expect(current).toHaveAccessibleName(/^Write a file, /, { timeout: 20_000 });
-  await expect(panel.getByRole('button', { name: /^terminal-chat, open elsewhere/ })).toBeVisible();
-  await expect(panel.getByRole('button', { name: /^Which runs converged\?, closed/ })).toBeVisible();
-  await surface('claude-chat', '.cc');
-});
-
-test('the Claude Code panel with a closed session resumed from the keyboard and answered', async () => {
-  const panel = page.getByRole('complementary', { name: 'Claude Code' });
-  const closed = panel.getByRole('button', { name: /^Which runs converged\?, closed/ });
-  await tabTo(closed);
-  await page.keyboard.press('Enter');
-  await expect(closed).toHaveAttribute('aria-current', 'true');
-  await chatByKeys('Which run converged, and where is its case?');
-  await expect(panel.locator('.cc-session[aria-current="true"]')).toHaveAccessibleName(/^Which runs converged\?, /);
-  await expect(panel.getByRole('button', { name: /^Write a file, / })).toBeVisible();
-  await surface('claude-resumed', '.cc');
+  const panel = page.getByRole('region', { name: 'Use with Claude Code' });
+  await expect(panel.getByText('Not registered with Claude Code for this folder.')).toBeVisible({ timeout: 20_000 });
+  await surface('claude-code', '.ph-claude');
+  await tabTo(panel.getByRole('button', { name: 'Copy' }));
+  await page.keyboard.press('Escape');
+  await expect(panel).toHaveCount(0);
 });
 
 test('the Runs view, a run selected from the keyboard, and the provenance popover of its step count', async () => {
@@ -608,8 +560,6 @@ test('state is never carried by colour alone: each state colour has a pictogram,
       '<div class="ui-switch" id="sw-off"><span class="ui-switch-track"><span class="ui-switch-knob"></span></span></div>',
       '<div class="ui-switch" data-selected="true" id="sw-on"><span class="ui-switch-track"><span class="ui-switch-knob"></span></span></div>',
       '<button class="ui-button" id="b-on">x</button><button class="ui-button" data-disabled="true" id="b-off">x</button>',
-      '<button class="cc-session" id="s-on">x</button><button class="cc-session" aria-disabled="true" id="s-off">x</button>',
-      '<button class="cc-session" id="c-off">x</button><button class="cc-session cc-session--current" id="c-on">x</button>',
       '<div class="ui-tabs--sub"><div class="ui-tab" id="t-off">x</div><div class="ui-tab" data-selected="true" id="t-on">x</div></div>',
       '<div class="ui-tabs--project"><div class="ui-tab" id="pt-off">x</div><div class="ui-tab" data-selected="true" id="pt-on">x</div></div>',
       '<div class="ui-option" id="o-off">x</div><div class="ui-option" data-selected="true" id="o-on">x</div>',
@@ -626,12 +576,6 @@ test('state is never carried by colour alone: each state colour has a pictogram,
     const out = [
       { state: 'switch on', carrier: 'knob position', ok: knob('sw-on') !== knob('sw-off') },
       { state: 'unavailable control', carrier: 'dashed border', ok: cs('b-off').borderTopStyle === 'dashed' && cs('b-on').borderTopStyle !== 'dashed' },
-      {
-        state: 'unavailable Claude Code session (while a reply runs)',
-        carrier: 'dashed border',
-        ok: cs('s-off').borderTopStyle === 'dashed' && cs('s-on').borderTopStyle !== 'dashed',
-      },
-      { state: 'current Claude Code session', carrier: 'ink box + aria-current', ok: cs('c-on').boxShadow !== 'none' && cs('c-off').boxShadow === 'none' },
       { state: 'selected sub-tab', carrier: 'bold', ok: w('t-on') > w('t-off') },
       { state: 'selected project tab', carrier: 'bold, a white tab open to the page', ok: w('pt-on') > w('pt-off') },
       { state: 'selected option', carrier: 'bold + check mark', ok: w('o-on') > w('o-off') },
@@ -664,9 +608,7 @@ test('every surface was walked', () => {
     [
       'home-empty',
       'home-open',
-      'claude',
-      'claude-chat',
-      'claude-resumed',
+      'claude-code',
       'runs',
       'runs-selected',
       'provenance',

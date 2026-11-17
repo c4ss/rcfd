@@ -375,7 +375,6 @@ dependencies = [
  "rcfd-runner",
  "rcfd-tsstore",
  "rcfd-workspace",
- "serde",
  "serde_json",
 ]
 

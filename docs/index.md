@@ -1,7 +1,7 @@
 # rcfd documentation
 
 rcfd is a clean-room, open source (AGPL-3.0) finite-volume CFD suite in Rust: a command-line solver, a solver service, an
-MCP server for AI assistants and a desktop Studio, in development, with a Claude Code panel.
+MCP server for AI assistants and a desktop Studio, in development, that works with Claude Code.
 
 rcfd is early-stage software and has not been validated for engineering decisions: read the
 [roadmap overview](roadmap-overview.md) first to see what works today and what does not. If you are new, then work through the
@@ -19,7 +19,7 @@ The test suite executes the tutorials (`cargo test -p rcfd-cli --test tutorials`
 2. [Run a lid-driven cavity and compare it with published data](tutorials/cavity.md)
 3. [Example gallery](tutorials/gallery.md)
 4. [Drive rcfd from an assistant: the MCP design loop](tutorials/mcp-design-loop.md)
-5. [The desktop Studio and the Claude Code panel](tutorials/desktop-assistant.md)
+5. [The desktop Studio and Claude Code](tutorials/desktop-assistant.md)
 
 ## Do a task
 

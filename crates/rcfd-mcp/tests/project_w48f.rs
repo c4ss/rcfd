@@ -2,7 +2,6 @@
 //! protocol (access classes, read-only, schema), F4 path safety, F5 edit validation, F8 output size, F9 render,
 //! F10 field summary, F12 plugin files. F3 result shapes, F11 and F13 are in `project_runs_w48f.rs`.
 
-mod claude_allow;
 mod common;
 
 use common::*;
@@ -43,11 +42,12 @@ fn names(list: &Value) -> Vec<String> {
         .collect()
 }
 
-/// F2: every project tool's full name, in the plugin form and the Studio's app-owned form, passes
-/// `AllowRule::Tool` validation and is at most 128 characters; plugin, server and app-owned server names have no `-`.
+/// F2: every project tool's full name in the plugin form is letters, digits and `_` and at most 128 characters; the
+/// plugin and server names have no `-`. Restated by ADR 0801 Addendum 23, which removed the Studio's Claude Code panel:
+/// no Studio allow-list (and no app-owned server name) is checked any more; the read-class project tools of the live list
+/// (of the tools a server without a project does not have) are named here.
 #[test]
-fn f2_tool_names_pass_the_allow_list_rules() {
-    use claude_allow::{AllowRule, PINNED_SERVER, PROJECT_READ_TOOLS};
+fn f2_tool_names_are_valid_plugin_tool_names() {
     let dir = project("f2");
     let s = server(&dir, Policy::default());
     let all = names(&s.tool_list());
@@ -60,29 +60,24 @@ fn f2_tool_names_pass_the_allow_list_rules() {
     let servers: Vec<&String> = mcp["mcpServers"].as_object().unwrap().keys().collect();
     assert_eq!(servers.len(), 1);
     let server_name = servers[0].as_str();
-    for n in [plugin_name, server_name, PINNED_SERVER] {
+    for n in [plugin_name, server_name] {
         assert!(!n.contains('-'), "{n}");
     }
+    let valid = |n: &str| {
+        let mut cs = n.chars();
+        cs.next().is_some_and(|c| c.is_ascii_alphabetic()) && cs.all(|c| c.is_ascii_alphanumeric() || c == '_')
+    };
     let mut longest = 0;
     for t in &project {
         assert!(all.iter().any(|a| a == t), "{t} not listed");
-        for full in [
-            format!("mcp__plugin_{plugin_name}_{server_name}__{t}"),
-            format!("mcp__{PINNED_SERVER}__{t}"),
-        ] {
-            AllowRule::Tool(full.clone())
-                .validate()
-                .unwrap_or_else(|e| panic!("{full}: {e}"));
-            assert!(full.len() <= 128, "{full}");
-            longest = longest.max(full.len());
-        }
+        let full = format!("mcp__plugin_{plugin_name}_{server_name}__{t}");
+        assert!(valid(&full), "{full}");
+        assert!(full.len() <= 128, "{full}");
+        longest = longest.max(full.len());
     }
-    // negative control: a hyphen (as in the demoted rcfd-panel plugin) is refused
-    assert!(AllowRule::Tool("mcp__plugin_rcfd-panel_project__list_runs".into())
-        .validate()
-        .is_err());
-    // the bridge's first allow-list is exactly the read-class project tools (ADR 0195 C5-A: of the live list, the tools a
-    // server without a project does not have)
+    // negative control: a hyphen (as in the demoted rcfd-panel plugin) is not a valid name
+    assert!(!valid("mcp__plugin_rcfd-panel_project__list_runs"));
+    // the read-class project tools of the live list
     let plain = names(
         &rcfd_mcp::McpServer::new(rcfd_api::service::Service::new(Default::default()), Policy::default()).tool_list(),
     );
@@ -93,21 +88,37 @@ fn f2_tool_names_pass_the_allow_list_rules() {
         .iter()
         .filter(|t| t["_meta"]["rcfd/access"] == "read" && !plain.iter().any(|p| t["name"] == p.as_str()))
         .map(|t| t["name"].as_str().unwrap())
-        // ADR 0737 (restated): case_facts is a read tool not on the first allow-list (not asked; as ADR 0188 Q6 (a))
-        .filter(|n| *n != "case_facts")
-        // ADR 0736 (restated): list_trash is a read tool not on the first allow-list (not asked; as ADR 0188 Q6 (a))
-        .filter(|n| *n != "list_trash")
         .collect();
-    // ADR 0733 and ADR 0734 (the maintainer, 2026-11-17): runner_config and hash_project_file are on the first
-    // allow-list too. ADR 0738 (restated for F-809): its read tool derive_picture is not on it (no answer of the
-    // maintainer adds it)
-    let mut read = read;
-    assert!(read.remove("derive_picture"), "derive_picture is a read tool");
-    assert_eq!(read.len(), 17);
-    assert_eq!(read, PROJECT_READ_TOOLS.into_iter().collect::<BTreeSet<_>>());
+    let want: BTreeSet<&str> = [
+        "project_info",
+        "list_runs",
+        "run_status",
+        "read_metrics",
+        "read_residuals",
+        "field_summary",
+        "render_field",
+        "compare_runs",
+        "list_changes",
+        "read_project_file",
+        "wait_run",
+        "read_feed",
+        "check_case_mesh",
+        "preview_mesh",
+        "list_meshes",
+        "runner_config",
+        "hash_project_file",
+        // ADR 0737, ADR 0736, ADR 0738
+        "case_facts",
+        "list_trash",
+        "derive_picture",
+    ]
+    .into_iter()
+    .collect();
+    assert_eq!(read, want);
     eprintln!(
-        "F2: {} tools x 2 forms valid, longest {longest} characters; plugin '{plugin_name}', server '{server_name}', app-owned '{PINNED_SERVER}'",
-        project.len()
+        "F2: {} tools valid in the plugin form, longest {longest} characters; plugin '{plugin_name}', server '{server_name}'; {} read-class project tools",
+        project.len(),
+        read.len()
     );
 }
 

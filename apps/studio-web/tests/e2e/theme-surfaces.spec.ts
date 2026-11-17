@@ -1,5 +1,5 @@
 // F-818: the main surfaces in each theme, in the packaged Studio at 1440 by 900 against the real engine (rcfd serve,
-// rcfd-mcp, the fake claude for the Claude Code panel), screenshotted to test-results-visual/f818/<theme>/ for the
+// rcfd-mcp, the fake claude for Use with Claude Code), screenshotted to test-results-visual/f818/<theme>/ for the
 // maintainer's view-and-report (G13). On the run workspace the three.js canvases are checked too: the field viewport's
 // ground and the plots' ground are the theme's tokens, redrawn at once on a change, while the field keeps its colour
 // map (the same pixels inside the frame in every theme, except where the ground shows). The theme is chosen through the
@@ -11,7 +11,7 @@ import { mkdirSync } from 'node:fs';
 import { rm } from 'node:fs/promises';
 import path from 'node:path';
 import { themes, type ThemeName } from '../../src/renderer/design/tokens.js';
-import { claudeFixture, FAKE_CLAUDE, type ClaudeFixture } from '../support/claude.js';
+import { claudeCodeFake } from '../support/claude-code.js';
 import { decodePng, pixel, type Rgba } from '../support/png.js';
 import { copyExample, findMcp, mcpPids, NO_MCP, scratch, stubDialog } from '../support/project.js';
 import { appRoot, findRcfd, killIfRcfd, killPid, NO_RCFD, startRcfd, type RunningRcfd } from '../support/rcfd.js';
@@ -31,7 +31,6 @@ const RE100 = 'r-20261028T152641-f8c2';
 
 let dir = '';
 let quick = '';
-let fx: ClaudeFixture;
 let service: RunningRcfd;
 let studio: Studio;
 let page: Page;
@@ -94,16 +93,13 @@ test.beforeAll(async () => {
   for (const t of THEMES) mkdirSync(path.join(SHOTS, t), { recursive: true });
   dir = await scratch('f818');
   quick = await copyExample('quick-start', dir);
-  fx = await claudeFixture('f818');
   service = await startRcfd(rcfd!);
   studio = await launchStudio({
     RCFD_STUDIO_SERVICE: `127.0.0.1:${service.port}`,
     RCFD_STUDIO_MCP: mcp!,
     RCFD_STUDIO_RECENT: path.join(dir, 'recent.json'),
     RCFD_STUDIO_PREFERENCES: path.join(dir, 'studio-preferences.json'),
-    RCFD_STUDIO_CLAUDE: FAKE_CLAUDE,
-    RCFD_STUDIO_CLAUDE_STATE: fx.state,
-    ...fx.env(),
+    ...claudeCodeFake(dir).env,
   });
   page = studio.page;
   await studio.app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0]!.setContentSize(1440, 900));
@@ -116,7 +112,6 @@ test.afterAll(async () => {
   if (service) killIfRcfd(service.pid);
   for (const p of mcpPids(quick)) killPid(p);
   await rm(dir, { recursive: true, force: true }).catch(() => undefined);
-  await rm(fx.root, { recursive: true, force: true }).catch(() => undefined);
 });
 
 test('the project home with no project open, and the Studio’s settings page', async () => {
@@ -129,14 +124,19 @@ test('the project home with no project open, and the Studio’s settings page', 
   await expect(page.getByRole('heading', { name: 'No project open' })).toBeVisible();
 });
 
-test('the project home of an open project, with the Claude Code panel beside it', async () => {
+test('the project home of an open project, and its Use with Claude Code panel', async () => {
   await stubDialog(studio.app, quick);
   await page.getByRole('button', { name: 'Open project folder…' }).click();
   await expect(page.getByRole('heading', { level: 1, name: /Quick start/ })).toBeVisible({ timeout: 30_000 });
   await expect(page.locator('.ph-group[data-group="runs"] tr[data-run]').first()).toBeVisible({ timeout: 20_000 });
-  const panel = page.getByRole('complementary', { name: 'Claude Code' });
-  await expect(panel.getByRole('list', { name: 'Claude Code sessions of this project' })).toBeVisible({ timeout: 20_000 });
   await everyTheme('home-open');
+  // ADR 0801 Addendum 23: the registration panel under the band (the fake claude: not registered yet)
+  await page.getByRole('button', { name: 'Use with Claude Code' }).click();
+  const panel = page.getByRole('region', { name: 'Use with Claude Code' });
+  await expect(panel.getByText('Not registered with Claude Code for this folder.')).toBeVisible({ timeout: 20_000 });
+  await everyTheme('claude-code');
+  await panel.getByRole('button', { name: 'Close Use with Claude Code' }).click();
+  await expect(panel).toHaveCount(0);
 });
 
 test('the Runs view with a run selected', async () => {

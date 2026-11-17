@@ -11,6 +11,8 @@
 //   --engine-dir <folder>    use the engine in <folder> (rcfd, rcfd-mcp and rcfd-runner inside it)
 //   --no-engine              start without an engine: no project server, no service started by the Studio
 //   --service <host:port>    attach to a service someone else started (loopback only), as RCFD_STUDIO_SERVICE does
+//   --claude <path>          the Claude Code program to register the project with and to open (ADR 0801 Addendum 23;
+//                            RCFD_STUDIO_CLAUDE comes first, src/main/engine/locate.ts locateClaude)
 //
 // Each also takes the `--name=value` form. The arguments after the program (packaged) or after the app's path
 // (`electron .`), without Chromium's and Node's switches (`--inspect=0`, `--remote-debugging-port=0`, which Playwright
@@ -19,7 +21,7 @@
 import path from 'node:path';
 
 /** The engine switches that take a value (the next argument, or after `=`). */
-const VALUED = ['--engine-dir', '--service'] as const;
+const VALUED = ['--engine-dir', '--service', '--claude'] as const;
 
 export interface EngineSwitches {
   /** `--engine-dir`: the folder of the engine to use, resolved against the working folder; null when not given. */
@@ -28,6 +30,8 @@ export interface EngineSwitches {
   readonly noEngine: boolean;
   /** `--service`: the `host:port` to attach to, as written; null when not given. */
   readonly service: string | null;
+  /** `--claude`: the claude program, resolved against the working folder; null when not given. */
+  readonly claude: string | null;
   /** Switches given without their value, in words (the last of a repeated switch wins; that is not a problem). */
   readonly problems: readonly string[];
 }
@@ -38,6 +42,7 @@ export function engineSwitches(argv: readonly string[], defaultApp: boolean, cwd
   const args = ownArgs(argv, defaultApp);
   let engineDir: string | null = null;
   let service: string | null = null;
+  let claude: string | null = null;
   let noEngine = false;
   const problems: string[] = [];
   for (let i = 0; i < args.length; i++) {
@@ -65,10 +70,11 @@ export function engineSwitches(argv: readonly string[], defaultApp: boolean, cwd
         }
       } else continue;
       if (name === '--engine-dir') engineDir = path.resolve(cwd, value.trim());
+      else if (name === '--claude') claude = path.resolve(cwd, value.trim());
       else service = value.trim();
     }
   }
-  return { engineDir, noEngine, service, problems };
+  return { engineDir, noEngine, service, claude, problems };
 }
 
 export function projectArgument(argv: readonly string[], defaultApp: boolean, cwd: string): string | null {

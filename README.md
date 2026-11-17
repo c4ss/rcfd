@@ -96,8 +96,8 @@ The older egui desktop apps, `rcfd-studio` and `rcfd-gui`, were removed
 (roadmap item F-449); the git history keeps them. The local-model assistant
 of `rcfd-gui` (crate `rcfd-assistant`) and the wgpu render crate
 `rcfd-render` were removed after them (F-838), and then `rcfd-claude`, the
-Claude Code bridge of the egui Studio: the Studio's Claude Code panel is the
-only assistant.
+Claude Code bridge of the egui Studio. Claude Code, in its own terminal with
+the project server registered for the folder, is the only assistant.
 
 Finished example projects that open straight to a picture are in
 `example-projects/` (runs made on Windows) and `example-projects-linux/` (the

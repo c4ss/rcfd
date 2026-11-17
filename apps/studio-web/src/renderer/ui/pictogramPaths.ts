@@ -90,6 +90,9 @@ export const ICON_NAMES = [
   'trash',
   'refine',
   'open-file',
+  // ADR 0801 Addendum 23
+  'claude-register',
+  'claude-here',
 ] as const;
 export type IconName = (typeof ICON_NAMES)[number];
 
@@ -139,4 +142,8 @@ export const ICON_PATHS: Record<IconName, { readonly path: string; readonly fill
   // an arrow coming out of it)
   refine: { path: 'M2 2H12V12H2ZM7 2V12M2 7H12' },
   'open-file': { path: 'M3 1H8L11 4V13H3ZM8 1V4H11M7 11V6M5 8L7 6L9 8' },
+  // ADR 0801 Addendum 23: Use with Claude Code (two blocks joined by a link: the project server plugged into Claude
+  // Code), Open Claude Code here (a terminal window with its prompt)
+  'claude-register': { path: 'M1 4H5V10H1ZM9 4H13V10H9ZM5 7H9' },
+  'claude-here': { path: 'M1 2H13V12H1ZM1 4H13M3 6L5 8L3 10M6 10H9' },
 };

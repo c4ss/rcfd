@@ -17,6 +17,9 @@ export const CALL_TIMEOUT_MS = 30_000;
 /** Bytes of the server's standard error kept for messages. */
 const STDERR_KEEP = 4096;
 
+/** The actor client the Studio's project servers name in the project journal (`rcfd-mcp --client`). */
+export const STUDIO_CLIENT = 'studio';
+
 /** The MCP protocol version the Studio asks for; rcfd-mcp answers with the version it was asked for. */
 export const MCP_PROTOCOL_VERSION = '2025-03-26';
 
@@ -89,7 +92,8 @@ export class ProjectServer implements ProjectServerLike {
   static start(exe: string, folder: string, timeoutMs = START_TIMEOUT_MS, options: StartOptions = {}): Promise<ProjectServer> {
     return new Promise((resolve, reject) => {
       let child: ChildProcess;
-      const args = options.readOnly === false ? ['--project', folder] : ['--project', folder, '--read-only'];
+      // ADR 0801 Addendum 23: `--client studio`, so the journal lines of the Studio's writes name the Studio, not `mcp`
+      const args = [...(options.readOnly === false ? ['--project', folder] : ['--project', folder, '--read-only']), '--client', STUDIO_CLIENT];
       try {
         child = spawn(exe, args, { stdio: ['pipe', 'pipe', 'pipe'], windowsHide: true });
       } catch (e) {

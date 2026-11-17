@@ -22,10 +22,10 @@ Engine read: rcfd 0.1.0, service protocol rcfd-service/1 version 1.1, MCP server
 | Service methods | 69 | 20 | 49 | 40 |
 | MCP tools | 69 | 34 | 35 | 26 |
 | CLI commands | 48 | 18 | 30 | 22 |
-| CLI options | 202 | 18 | 184 | 123 |
+| CLI options | 203 | 18 | 185 | 123 |
 | Case schema keys | 951 | 951 | 0 | 0 |
 | Monitor format keys | 6 | 6 | 0 | 0 |
-| **All** | **1345** | **1047** (77.8 %) | **298** | **211** |
+| **All** | **1346** | **1047** (77.8 %) | **299** | **211** |
 
 A case key stands for every value of its enumeration (the solver options of that key, listed in the inventory): the
 schema-driven surface of F-825 offers them all. A CLI option is mapped with its command. "Item does not name it" marks an
@@ -73,7 +73,7 @@ new item (see the last sections).
 | F-827 one action layer for every UI action | 1 | `rcfd call` (not named) |
 | F-828 provenance inspector and reproduce-from-CLI | 5 | `rcfd data list` (not named), `rcfd data provenance` (not named), `rcfd data verify` (not named), `rcfd project hash`, `rcfd version` |
 
-### CLI options (184 without a UI path)
+### CLI options (185 without a UI path)
 
 | Item | Count | Capabilities |
 |---|---|---|
@@ -83,7 +83,7 @@ new item (see the last sections).
 | F-811 residual and monitor plots | 2 | `rcfd post` (2) |
 | F-812 case editor validated by the engine's schema | 32 | `rcfd check` (4), `rcfd check-mesh` (1), `rcfd inflate` (12), `rcfd partition` (15) |
 | F-813 a learner's first path | 1 | `rcfd cases` (1) |
-| F-814 Claude Code panel | 6 | `rcfd-mcp` (6) |
+| F-814 Claude Code, registered with Claude Code and followed live | 7 | `rcfd-mcp` (7) |
 | F-825 schema-driven case and settings surface | 2 | `rcfd schema` (2) |
 | F-827 one action layer for every UI action | 1 | `rcfd call` (1) |
 | F-828 provenance inspector and reproduce-from-CLI | 18 | `rcfd` (1), `rcfd data list` (3), `rcfd data provenance` (3), `rcfd data verify` (3), `rcfd run` (1), `rcfd version` (1), `rcfd-runner rerun` (4), `rcfd-runner start` (2) |
@@ -113,9 +113,9 @@ holds the other way round). The reasons are in `coverage.json`.
 - Restarts from a checkpoint or another solution, headless runs under the run-control contract, status streams and the runner's shutdown: F-807 names quick run, stop, pause and queue only; nearest home F-807. (F-807): `run.headless`, `status.read`, `read_status_stream`, `run_headless`, `rcfd restart`, `rcfd-runner shutdown`, `rcfd restart --*`, `rcfd run --checkpoint`, `rcfd run --checkpoint-every`, `rcfd run --continue-from`, `rcfd run --interpolate-case`, `rcfd run --interpolate-checkpoint`, `rcfd run --interpolate-mode`, `rcfd run --method`, `rcfd run --restart-from`, `rcfd run --source-case`.
 - Runs of an in-memory service session (the run methods of a session, the MCP run and status tools): F-807 runs through the runner only, and whether the Studio also runs service sessions is open; nearest home F-807. (F-807): `run.wait`, `run`, `status`.
 - Task workflows (the workflow methods, tools and commands): no Studio item covers them; nearest home run control (F-807). (F-807): `workflow.create`, `workflow.delete`, `workflow.get`, `workflow.insert`, `workflow.list`, `workflow.load`, `workflow.run`, `workflow.save`, `create_workflow`, `edit_workflow`, `list_workflow_tasks`, `run_workflow_task`, `rcfd workflow run`, `rcfd workflow show`, `rcfd workflow templates`, `rcfd workflow run --*`, `rcfd workflow show --*`.
-- The Claude Code panel (F-814) runs rcfd-mcp with the engine's defaults for case roots, the edit hook and the run and design limits; settings for them are not part of F-814. (F-814): `rcfd-mcp --*`.
 - The public validation-data pack (rcfd data): no Studio item covers it; nearest home provenance (F-828). (F-828): `rcfd data list`, `rcfd data provenance`, `rcfd data verify`, `rcfd data list --*`, `rcfd data provenance --*`, `rcfd data verify --*`.
 - The runner itself in the foreground: the Studio never runs serve directly; Start the runner runs rcfd-runner ensure, which starts serve detached (F-807). (F-807): `rcfd-runner serve`.
+- Use with Claude Code (F-814, ADR 0801 Addendum 23) registers rcfd-mcp --project with the engine's defaults for case roots, the edit hook and the run and design limits; settings for them are not part of F-814. (F-814): `rcfd-mcp --*`.
 - Waiting for a run to end is a call for scripts: the Studio shows the end live in Project > Runs (F-806) and needs no waiting call; nearest home run control (F-807). (F-807): `wait_run`, `rcfd-runner wait`, `rcfd-runner wait --*`.
 - Writing notes: F-805 lists notes but names no editor; nearest home F-805. (F-805): `write_note`.
 

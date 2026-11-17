@@ -4,7 +4,7 @@
 //
 // - Ctrl+K opens the palette on its search field; an unavailable command is listed with its reason; Escape closes it and
 //   the focus is back where it was;
-// - Ctrl+O opens a project folder; Ctrl+1, Ctrl+2 and Ctrl+L go to Home, Runs and the Claude Code panel;
+// - Ctrl+O opens a project folder; Ctrl+1 and Ctrl+2 go to Home and Runs;
 // - every command is reached with the arrow keys, Home and End go to the ends;
 // - an action is found by its name and run (List sessions); New session asks its optional parameters; Show run status
 //   asks for the session, chosen from the service's list;
@@ -222,15 +222,13 @@ test('F5 and Ctrl+. ask which case and which run, from the project’s lists; a 
   await closePalette();
 });
 
-test('Ctrl+1, Ctrl+2 and Ctrl+L go to Home, Runs and the Claude Code panel; the palette goes to Case settings and back', async () => {
+test('Ctrl+1 and Ctrl+2 go to Home and Runs; the palette goes to Case settings and back', async () => {
   await page.keyboard.press('Control+2');
   await expect(page.getByRole('tab', { name: 'Runs' })).toHaveAttribute('aria-selected', 'true');
   await expect(page.getByRole('tab', { name: 'Runs' })).toBeFocused();
   await page.keyboard.press('Control+1');
   await expect(page.getByRole('tab', { name: 'Home' })).toHaveAttribute('aria-selected', 'true');
   await expect(page.getByRole('tab', { name: 'Home' })).toBeFocused();
-  await page.keyboard.press('Control+L');
-  await expect.poll(() => page.evaluate(() => document.activeElement?.closest('aside')?.getAttribute('aria-labelledby') ?? null)).toBe('cc-title');
 
   await page.keyboard.press('Control+K');
   await page.keyboard.type('case settings');

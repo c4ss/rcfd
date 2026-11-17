@@ -22,6 +22,16 @@
 // nothing). That attach is where engines on other machines (a cloud or a cluster) will plug in later; today it is
 // loopback only (G10).
 //
+// Claude Code (ADR 0801 Addendum 23), which the Studio registers the project server with and opens in a terminal, is
+// found the same way, first match wins (locateClaude below):
+//
+//   1. RCFD_STUDIO_CLAUDE             the claude program the variable names
+//   2. --claude <path>                the claude program the switch names
+//   3. its installer's folder         %USERPROFILE%\.local\bin\claude.exe on Windows, $HOME/.local/bin/claude
+//                                     elsewhere (where the native installer of Claude Code puts it)
+//
+// Not found, the Studio shows the command to run and says Claude Code was not found where its installer puts it.
+//
 // Nothing is looked for on PATH (F-805 decision D3, ADR 0801 Addendum 19, Q-F820-2 answer (a)): the default folder is
 // one known place inside the installed Studio or inside the checkout, never a search.
 import path from 'node:path';
@@ -122,4 +132,41 @@ export function missingReason(choice: EngineChoice, platform: NodeJS.Platform = 
     return `The engine that comes with the Studio is incomplete: ${files} ${what} not in ${choice.dir}. Install the Studio again, or start it with --engine-dir <folder>.`;
   }
   return `--engine-dir names ${choice.dir}, but ${files} ${what} not there.`;
+}
+
+/** Where the Studio found `claude` (ADR 0801 Addendum 23), or why not, in words. */
+export type ClaudeLocation =
+  | { readonly found: true; readonly path: string; readonly from: 'RCFD_STUDIO_CLAUDE' | '--claude' | 'installer' }
+  | { readonly found: false; readonly reason: string };
+
+/** The folder Claude Code's native installer puts `claude` in: <home>/.local/bin. */
+export function claudeInstallerPath(env: Readonly<Record<string, string | undefined>>, platform: NodeJS.Platform = process.platform): string | null {
+  const home = platform === 'win32' ? env['USERPROFILE']?.trim() : env['HOME']?.trim();
+  if (!home) return null;
+  const p = platform === 'win32' ? path.win32 : path.posix;
+  return p.join(home, '.local', 'bin', exe('claude', platform));
+}
+
+/** `claude`: RCFD_STUDIO_CLAUDE, then --claude, then the installer's folder; never PATH. */
+export function locateClaude(
+  env: Readonly<Record<string, string | undefined>>,
+  switchPath: string | null,
+  isFile: (p: string) => boolean,
+  platform: NodeJS.Platform = process.platform,
+): ClaudeLocation {
+  const variable = env['RCFD_STUDIO_CLAUDE']?.trim();
+  if (variable) {
+    return isFile(variable)
+      ? { found: true, path: variable, from: 'RCFD_STUDIO_CLAUDE' }
+      : { found: false, reason: `RCFD_STUDIO_CLAUDE names ${variable}, which is not a file.` };
+  }
+  if (switchPath) {
+    return isFile(switchPath) ? { found: true, path: switchPath, from: '--claude' } : { found: false, reason: `--claude names ${switchPath}, which is not a file.` };
+  }
+  const installed = claudeInstallerPath(env, platform);
+  if (installed && isFile(installed)) return { found: true, path: installed, from: 'installer' };
+  return {
+    found: false,
+    reason: `Claude Code was not found where its installer puts it (${installed ?? (platform === 'win32' ? '%USERPROFILE%\\.local\\bin\\claude.exe' : '~/.local/bin/claude')}). Run the command below in a terminal, or start the Studio with --claude <path>.`,
+  };
 }

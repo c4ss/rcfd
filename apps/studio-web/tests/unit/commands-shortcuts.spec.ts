@@ -76,7 +76,7 @@ test.describe('no two shortcuts collide', () => {
     expect(add({ keys: 'Ctrl+R' })).toHaveLength(1); // the Electron menu's reload
     expect(add({ keys: 'Ctrl+Z' })).toHaveLength(1); // F-829's undo
     expect(add({ keys: 'Home', scope: 'time-panel' })).toHaveLength(1); // F-810's scrub to the start
-    expect(add({ keys: 'Ctrl+ArrowLeft', scope: 'claude-message' })).toHaveLength(1); // a text field's word move
+    expect(add({ keys: 'Ctrl+ArrowLeft', scope: 'case-editor' })).toHaveLength(1); // a text field's word move
     expect(add({ keys: 'Escape', scope: 'palette' })).toHaveLength(1); // the palette's own Escape
     expect(add({ keys: 'Enter', scope: 'field-view' })).toEqual([]); // field view and palette are never live together
     expect(add({ keys: 'ArrowLeft', scope: 'runs-table' })).toEqual([]); // nor the runs table and the time panel
@@ -114,12 +114,9 @@ test.describe('the table is the one the window uses', () => {
     }
   });
 
-  test('the case editor saves on Ctrl+S, the Claude field sends on Enter, the field view has the keys the table lists', () => {
+  test('the case editor saves on Ctrl+S, the field view has the keys the table lists', () => {
     const editor = readFileSync(path.join(renderer, 'case', 'CaseEditorPage.tsx'), 'utf8');
     expect(editor).toMatch(/\(e\.ctrlKey \|\| e\.metaKey\) && !e\.altKey && !e\.shiftKey && e\.key\.toLowerCase\(\) === 's'/);
-    const claude = readFileSync(path.join(renderer, 'claude', 'ClaudePanel.tsx'), 'utf8');
-    expect(claude).toContain("e.key === 'Enter' && !e.shiftKey");
-    expect(claude).toContain("e.key === 'Escape' && running");
     const canvas = readFileSync(path.join(renderer, 'field', 'FieldCanvas.tsx'), 'utf8');
     const block = canvas.slice(canvas.indexOf('key(key) {'), canvas.indexOf('default:', canvas.indexOf('key(key) {')));
     const cases = [...block.matchAll(/case '([^']+)':/g)].map((m) => chord(m[1]!)).sort();

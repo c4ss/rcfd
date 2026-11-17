@@ -179,5 +179,5 @@ An untagged block fails the test. See [ADR 0089](../adr/0089-wave38b-docs-site-t
   Reynolds-number sweep.
 * [The example gallery](gallery.md)
 * [Drive rcfd from an assistant through MCP](mcp-design-loop.md)
-* [The desktop Studio and the Claude Code panel](desktop-assistant.md)
+* [The desktop Studio and Claude Code](desktop-assistant.md)
 * [The case schema](../case-schema.md): every setting you can put in a case file.

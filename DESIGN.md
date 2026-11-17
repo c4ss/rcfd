@@ -17,8 +17,6 @@ colors:
   silver: "#c9cdd1"
   silver-wash: "#eef1f4"
   white: "#ffffff"
-  # a role named beside the scale: the Claude Code head, meadow's value in every theme
-  claude-head: "#6cc078"
 themes:
   dark:
     colors:
@@ -37,7 +35,6 @@ themes:
       silver: "#34475d"
       silver-wash: "#16243a"
       white: "#0f1c2c"
-      claude-head: "#286b33"
   contrast:
     colors:
       ink: "#0a2240"
@@ -55,7 +52,6 @@ themes:
       silver: "#7b8794"
       silver-wash: "#e3e8ee"
       white: "#ffffff"
-      claude-head: "#5cb86a"
 typography:
   display:
     fontFamily: "Archivo, Helvetica Neue, Arial, sans-serif"
@@ -211,10 +207,9 @@ A short Aicher scale of flat, mid-light colours, each with one job, read against
 
 ### Secondary
 - **Sky** (sky): the header band, and the iterating phase of a run band. Never body text (2.28:1 on white).
-- **Sky Wash** (sky-wash): hover on buttons and list items, the selected run row, the user's chat message, and selects that sit on the header band.
-- **Meadow** (meadow): the active sub-tab, the Claude Code head, the switch track when on, and the converged phase of a run band.
+- **Sky Wash** (sky-wash): hover on buttons and list items, the selected run row, and selects that sit on the header band.
+- **Meadow** (meadow): the active sub-tab, the switch track when on, and the converged phase of a run band.
 - **Meadow Wash** (meadow-wash): sub-tab hover.
-- **Claude Head** (claude-head): the head of the Claude Code panel. A role, not a new hue: it is meadow in every theme, named so that the head's colour is one token.
 - **Meadow Deep** (meadow-deep): the converged pictogram (and the related residual p line) where it stands on white, so the mark holds contrast (5.1:1).
 
 ### Tertiary
@@ -230,7 +225,7 @@ A short Aicher scale of flat, mid-light colours, each with one job, read against
 - **Silver Wash** (silver-wash): the field viewport ground, table row and column hover.
 
 ### Named Rules
-**The Colour Has a Job Rule.** Each hue means one thing: sky = header band and iterating; meadow = active sub-tab, Claude Code (the claude-head role) and converged; orange = the running run's live segment, plus focus and caret; deep red = failure. A new surface may not give a hue a second meaning.
+**The Colour Has a Job Rule.** Each hue means one thing: sky = header band and iterating; meadow = active sub-tab and converged; orange = the running run's live segment, plus focus and caret; deep red = failure. A new surface may not give a hue a second meaning.
 
 **The One Live Thing Rule.** Orange fills exactly one band segment at a time: the live segment of the running run. Other emphasis uses ink.
 
@@ -260,7 +255,7 @@ A theme gives every colour token a value and changes no job. Light is the scale 
 - **Headline** (700, 22px, -0.02em): values in the selected run's number grid.
 - **Title** (700, 15px, -0.01em): the brand mark in the header band.
 - **Title small** (700, 13px): case names in the runs table and the view title; 500 weight for project tabs.
-- **Body** (400 and 500, 12px, 1.35): the default for controls, table cells, chat and panel heads (700 for heads). Chat paragraphs are capped at 60ch; empty-state copy at 42 to 46ch.
+- **Body** (400 and 500, 12px, 1.35): the default for controls, table cells and panel heads (700 for heads). Empty-state copy is capped at 42 to 46ch.
 - **Label** (400 and 500, 11px): column heads, number captions, legends, captions, tooltips, footer.
 - **Chart micro** (500, 10px): text inside the time panel only (band segment labels, band end labels, axis ticks, residual decades, the scrubber flag, the not-computed note).
 
@@ -332,9 +327,6 @@ One deep ink scrubber line, with its own 18px flag lane above the bands, crosses
 
 ### Field view
 A three.js WebGPU canvas whose colour comes from the raw scalar on the GPU through the viridis table that also draws the CSS legend. The frame keeps the domain's aspect ratio, labelled with inlet and outlet above. Annotations are small ink chips with white text; they and the end labels hide as soon as the view is moved, and a Reset view button appears in the top right corner. The overlays (iso-lines in ink, streamlines in white, mesh grid in 38% white) are first-class states. Under the frame are the legend (ink-ruled bar with ticks) and a caption naming the case, quantity, unit, time, iteration and colour map.
-
-### Claude Code panel
-A meadow head with a square ink dot. Your messages sit in sky-wash on the right; Claude's answers sit between silver hairlines with no box, bold on the numbers that matter, and reference chips beneath.
 
 ### Disclaimer footer
 A 24px deep ink band with white label text that is always visible, with secondary text in a light ink tint (#c7d3e2, 7.6:1).

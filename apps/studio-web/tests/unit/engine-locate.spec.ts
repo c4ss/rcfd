@@ -164,20 +164,23 @@ test.describe('the switches on the command line', () => {
       engineDir: path.resolve(cwd, 'eng'),
       noEngine: false,
       service: '127.0.0.1:9',
+      claude: null,
       problems: [],
     });
     expect(engineSwitches(['electron', '.', '--no-engine', '--engine-dir=/x', '--service', 'localhost:7'], true, cwd)).toEqual({
       engineDir: path.resolve(cwd, '/x'),
       noEngine: true,
       service: 'localhost:7',
+      claude: null,
       problems: [],
     });
     // electron . : the app path is not a switch value
-    expect(engineSwitches(['electron', '.'], true, cwd)).toEqual({ engineDir: null, noEngine: false, service: null, problems: [] });
+    expect(engineSwitches(['electron', '.'], true, cwd)).toEqual({ engineDir: null, noEngine: false, service: null, claude: null, problems: [] });
     expect(engineSwitches(['rcfd-studio', '--engine-dir', '--no-engine', '--service='], false, cwd)).toEqual({
       engineDir: null,
       noEngine: true,
       service: null,
+      claude: null,
       problems: ['--engine-dir needs a value', '--service needs a value'],
     });
   });

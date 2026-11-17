@@ -207,7 +207,15 @@ export function BudgetsButton({ open, onChange }: { open: boolean; onChange: (v:
   return <IconToggle icon="budgets" label="Runner budgets (.rcfd/runner-config.json)" isSelected={open} onChange={onChange} className="rv-budgets-toggle" />;
 }
 
-export function BudgetsPanel({ onClose }: { onClose: () => void }) {
+/** The runner's budgets file, project-relative, as the engine's change feed names it. */
+export const BUDGETS_FILE = '.rcfd/runner-config.json';
+
+/**
+ * The runner's budgets. `fileChange` (ADR 0801 Addendum 23): the number of the change feed's latest entry about the
+ * budgets file; when it moves on while the panel is open, the file is read again (with nothing typed), or the panel says
+ * another writer changed it (with values typed, which are kept).
+ */
+export function BudgetsPanel({ onClose, fileChange = 0 }: { onClose: () => void; fileChange?: number }) {
   const [b, setB] = useState<RunnerBudgets | null>(null);
   const [draft, setDraft] = useState<Draft | null>(null);
   const [note, setNote] = useState<{ kind: 'done' | 'conflict' | 'refused' | 'undo-conflict'; text: string } | null>(null);
@@ -232,6 +240,15 @@ export function BudgetsPanel({ onClose }: { onClose: () => void }) {
   useEffect(() => {
     void load();
   }, [load]);
+  // a change of the file by another writer: read it again, or say so when values are typed here
+  const seenChange = useRef(fileChange);
+  const typedRef = useRef(false);
+  useEffect(() => {
+    if (fileChange === seenChange.current) return;
+    seenChange.current = fileChange;
+    if (!typedRef.current) void load();
+    else setNote({ kind: 'conflict', text: `${BUDGETS_FILE} was changed by another writer; the values typed here are kept. Read it again to see its values.` });
+  }, [fileChange, load]);
   const outcome = (o: BudgetsOutcome, undo: boolean) => {
     if (o.kind === 'written') {
       setB(o.budgets);
@@ -279,6 +296,7 @@ export function BudgetsPanel({ onClose }: { onClose: () => void }) {
     else outcome(r.result, true);
   };
   const changed = Object.keys(changes()).length > 0;
+  typedRef.current = changed;
   const differs = b?.inUse ? BUDGET_KEYS.filter((k) => b.values[k] !== undefined && b.inUse!.values[k] !== b.values[k]) : [];
   return (
     <section

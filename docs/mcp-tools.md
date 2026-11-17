@@ -257,11 +257,16 @@ arguments cannot be used there. `initialize`'s first sentence then names no sess
 | `run_headless` | `start_run`; no equivalent for `continue_from`, interpolation, checkpoints, `out_dir` and `max_elapsed_s` |
 | `list_workflow_tasks`, `create_workflow`, `edit_workflow`, `run_workflow_task` | none yet |
 
-The Claude Code panel of the desktop Studio (`apps/studio-web/`) allows the project's read tools without asking: it uses
-the allow-list file (`.rcfd/claude-allow.json`) when it is valid, else the 17 read-class project tools (`read_feed`,
-`check_case_mesh`, `preview_mesh`, `list_meshes`, `runner_config` and `hash_project_file` among them), and refuses every
-other tool without asking; it never writes the file. The removed egui Studio `rcfd-studio` (F-449) wrote that file with
-the 15 tools of its day when a project had none (ADR 0195 P5); the desktop Studio does not.
+The desktop Studio (`apps/studio-web/`) embeds no Claude Code and keeps no allow-list (ADR 0801 Addendum 23; its Claude
+Code panel and the allow-list file `.rcfd/claude-allow.json` it read were removed). Its Use with Claude Code registers
+this server for the project folder with Claude Code itself (`claude mcp add rcfd-project --scope local -- <rcfd-mcp>
+--project <folder>`), with full access; Claude Code's own permission prompts govern each call. The removed egui Studio
+`rcfd-studio` (F-449) wrote that file with the 15 tools of its day when a project had none (ADR 0195 P5).
+
+`--client <name>` names the actor client of the project journal's lines (default `mcp`; 1 to 32 of `a-z`, `0-9`, `_`,
+`-`). The Studio's own servers run with `--client studio`, so a change Claude Code makes through its server (client
+`mcp`) can be told from the Studio's own in the change feed (`read_feed`, each entry's `actor.client`). The default
+changes nothing.
 
 ### The plugin's edit hook
 

@@ -1,20 +1,19 @@
 // The Studio's own commands (F-831; G20): moving between the views, the project folder operations of the project home
-// (F-805) and the Claude Code panel's operations (F-814). They are commands of the palette like the actions of the
+// (F-805) and Claude Code's registration and terminal (ADR 0801 Addendum 23). They are commands of the palette like the actions of the
 // registries, so every thing the window can do is findable by name (G20), but they are not engine actions: a view
 // change reaches no result, the folder operations are the main process's (the folder dialog, the recent list, the
-// read-only project server), and Claude Code is the `claude` CLI (no engine entry point yet, reported with F-814).
+// read-only project server), and Claude Code is the `claude` CLI, run in its own terminal (no engine entry point).
 // G16 still holds: none of them makes a result the CLI or Claude Code could not make; `engine`, `cli` and `mcp` name
 // what the command uses, or say there is nothing.
 //
 // Shared by the renderer and the tests: no Node or DOM types.
 
-/** The kinds of a command's parameter, as the palette asks for them. The first five are chosen from a list. */
+/** The kinds of a command's parameter, as the palette asks for them. The first four are chosen from a list. */
 export type ParamKind =
   | 'session'
   | 'case'
   | 'run'
   | 'recent'
-  | 'claude-session'
   | 'string'
   | 'integer'
   | 'number'
@@ -24,7 +23,7 @@ export type ParamKind =
   | 'json';
 
 /** Parameters whose value is chosen from what the engine or the main process lists, never typed or made up. */
-export const CHOICE_KINDS: ReadonlySet<ParamKind> = new Set(['session', 'case', 'run', 'recent', 'claude-session']);
+export const CHOICE_KINDS: ReadonlySet<ParamKind> = new Set(['session', 'case', 'run', 'recent']);
 
 export interface PaletteParam {
   readonly name: string;
@@ -74,7 +73,8 @@ const theme = (id: string, title: string, description: string): StudioCommand =>
   mcp: null,
   note: THEME_NOTE,
 });
-const CLAUDE_NOTE = 'Claude Code itself: the Studio runs the `claude` CLI named by RCFD_STUDIO_CLAUDE; the engine has no entry point for it (F-814).';
+const CLAUDE_NOTE =
+  'Claude Code itself, in its own terminal: the Studio runs the `claude` CLI (RCFD_STUDIO_CLAUDE, --claude, or its installer’s folder); the engine has no entry point for it (ADR 0801 Addendum 23).';
 
 export const STUDIO_COMMANDS: readonly StudioCommand[] = [
   // ---- going places
@@ -94,30 +94,6 @@ export const STUDIO_COMMANDS: readonly StudioCommand[] = [
     id: 'go.runs',
     title: 'Go to Runs',
     description: 'The runs of the open project, with the run bar and the selected run’s panel.',
-    group: 'Go to',
-    effect: 'navigate',
-    params: [],
-    engine: null,
-    cli: null,
-    mcp: null,
-    note: NAV_NOTE,
-  },
-  {
-    id: 'go.claude',
-    title: 'Go to Claude Code',
-    description: 'Show the Claude Code panel and put the focus in its message field.',
-    group: 'Go to',
-    effect: 'navigate',
-    params: [],
-    engine: null,
-    cli: null,
-    mcp: null,
-    note: NAV_NOTE,
-  },
-  {
-    id: 'view.toggle_claude',
-    title: 'Show or hide the Claude Code panel',
-    description: 'Hide the panel to a slim strip beside the project views, or show it again.',
     group: 'Go to',
     effect: 'navigate',
     params: [],
@@ -366,67 +342,31 @@ export const STUDIO_COMMANDS: readonly StudioCommand[] = [
     note: NAV_NOTE,
   },
 
-  // ---- Claude Code (F-814)
+  // ---- Claude Code (ADR 0801 Addendum 23): registered with Claude Code itself, used from its own terminal
   {
-    id: 'claude.new_chat',
-    title: 'New Claude Code chat',
-    description: 'Start a new Claude Code session in the project folder at the next message, and put the focus in the message field.',
-    group: 'Claude Code',
-    effect: 'change',
-    params: [],
-    engine: 'claude -p --session-id <uuid> (at the first message)',
-    cli: 'claude -p --session-id <uuid>',
-    mcp: null,
-    note: CLAUDE_NOTE,
-  },
-  {
-    id: 'claude.select',
-    title: 'Choose a Claude Code session',
-    description: 'Show the transcript of one of the project’s Claude Code sessions; one open elsewhere is mirrored read-only.',
-    group: 'Claude Code',
-    effect: 'change',
-    params: [{ name: 'session', kind: 'claude-session', optional: false, description: 'A Claude Code session of this project.' }],
-    engine: 'the transcripts under Claude Code’s home and claude agents --json',
-    cli: 'claude -p --resume <id>',
-    mcp: null,
-    note: CLAUDE_NOTE,
-  },
-  {
-    id: 'claude.stop',
-    title: 'Stop the Claude Code reply',
-    description: 'Stop the reply being written: the claude process of the turn is ended.',
-    group: 'Claude Code',
-    effect: 'change',
-    params: [],
-    engine: 'ends the running claude -p process tree',
-    cli: null,
-    mcp: null,
-    note: CLAUDE_NOTE,
-  },
-  {
-    id: 'claude.refresh',
-    title: 'List the Claude Code sessions again',
-    description: 'Read the project’s Claude Code sessions and which ones are open elsewhere now.',
-    group: 'Claude Code',
-    effect: 'change',
-    params: [],
-    engine: 'the transcripts under Claude Code’s home and claude agents --json',
-    cli: 'claude agents --json',
-    mcp: null,
-    note: CLAUDE_NOTE,
-  },
-  {
-    id: 'claude.undo_allow',
-    title: 'Undo the last allowed rule',
+    id: 'claude_code.register',
+    title: 'Use with Claude Code',
     description:
-      'Take the rule last added by “Allow this from now on” out of the project’s .rcfd/claude-allow.json again; a file another writer changed since is not overwritten.',
+      'Show whether this folder’s project server is registered with Claude Code, the command to run, and Register (local scope, full access; Claude Code asks before each tool).',
     group: 'Claude Code',
     effect: 'change',
     params: [],
-    engine: 'the main process rewrites .rcfd/claude-allow.json (write, then rename), if it is still as the Studio left it',
-    cli: null,
+    engine: 'claude mcp add rcfd-project --scope local -- <rcfd-mcp> --project <folder>, run in the folder',
+    cli: 'claude mcp add rcfd-project --scope local -- <rcfd-mcp> --project <folder>',
     mcp: null,
-    note: 'The allow-list file is the project’s own, edited by hand or by this command; the engine has no entry point for Claude Code’s allow-list (F-814).',
+    note: CLAUDE_NOTE,
+  },
+  {
+    id: 'claude_code.open',
+    title: 'Open Claude Code here',
+    description: 'Open a terminal window in the project folder running claude.',
+    group: 'Claude Code',
+    effect: 'change',
+    params: [],
+    engine: 'wt.exe -d <folder> claude, or cmd /k claude (Windows); x-terminal-emulator -e claude (Linux)',
+    cli: 'cd <folder> && claude',
+    mcp: null,
+    note: CLAUDE_NOTE,
   },
 
   // ---- the theme (F-818)
