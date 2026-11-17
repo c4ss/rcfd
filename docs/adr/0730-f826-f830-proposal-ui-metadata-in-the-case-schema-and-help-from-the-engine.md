@@ -257,7 +257,6 @@ sets is always shown). Every other setting is common. From the approval on, the 
 | `mesh.throat_height` | One generator only (pipe_sweep, wedge_2d or nozzle_2d). |
 | `output.retain_checkpoints` | Disk housekeeping; keeping everything is the default. |
 | `output.retain_snapshots` | Disk housekeeping; keeping everything is the default. |
-| `output.store_time_interval` | Stores by simulated time instead of by step, for time-dependent runs only. |
 | `output.write_time_interval` | Landing on exact times, for time-dependent runs only. |
 | `output.write_times` | Landing on exact times, for time-dependent runs only. |
 | `physics.body_force` | A uniform driving force, mainly for periodic flows. |
@@ -422,3 +421,9 @@ the code); nothing asserts against a recording now. The tests are restated:
 - M3: no help tool in either MCP list; the bytes of the plain lists are the pinned `default_f1.rs` (the ADR 0135 golden)
   and `tool_list_f275.rs`, which every ADR that adds a tool restates. No byte-pinned test of the schema text exists in
   the repository; T1's comparison with the untouched builder and T9's case hashes stand for it.
+
+## Change of 2026-11-17: output.store_time_interval shown at rest
+
+The maintainer, after a Studio-started transient run saved no fields: the two field-store keys show at rest. `output.store_interval`
+was never on the advanced list; `output.store_time_interval` is taken off it (168 advanced keys now). Its row is removed
+from the table above.

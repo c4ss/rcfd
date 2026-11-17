@@ -11,8 +11,25 @@
 import { readFileSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { findRcfd, NO_RCFD } from '../tests/support/rcfd.ts';
-import { checkCoverage, coverageReport, engineBinaries, inventoryText, readEngine } from '../tests/support/capabilities.ts';
+import { registerHooks } from 'node:module';
+
+// Type stripping does not map an import of `./x.js` to `./x.ts` (the TypeScript sources import with .js, as tsc wants);
+// this hook does, so tests/support/rcfd.ts can import src/main/engine/locate.js.
+registerHooks({
+  resolve(specifier, context, next) {
+    try {
+      return next(specifier, context);
+    } catch (e) {
+      if (e?.code === 'ERR_MODULE_NOT_FOUND' && specifier.startsWith('.') && specifier.endsWith('.js')) {
+        return next(specifier.slice(0, -3) + '.ts', context);
+      }
+      throw e;
+    }
+  },
+});
+
+const { findRcfd, NO_RCFD } = await import('../tests/support/rcfd.ts');
+const { checkCoverage, coverageReport, engineBinaries, inventoryText, readEngine } = await import('../tests/support/capabilities.ts');
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const app = path.resolve(here, '..');

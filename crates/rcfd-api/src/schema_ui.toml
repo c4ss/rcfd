@@ -711,7 +711,6 @@ help = "f64 keeps every digit; f32 halves the size with a small rounding."
 [keys."output.store_time_interval"]
 label = "Field store time interval"
 help = "Store the fields every this much simulated time (time-dependent runs). 0 is off."
-advanced = "Stores by simulated time instead of by step, for time-dependent runs only."
 
 [keys."output.write_interval"]
 label = "Snapshot interval"
