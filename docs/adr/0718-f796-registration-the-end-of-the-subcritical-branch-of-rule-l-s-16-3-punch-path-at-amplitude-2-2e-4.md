@@ -308,3 +308,20 @@ The heavy record is not run under the mutations.
    maintainer's standing instruction of 2026-11-11 (take the recommendation).
 2. **Whether either opt-in of ADR 0694 or of the local update becomes a default**: not taken (it would change default
    results); open.
+
+## Amendment 1 (2026-11-17, after the registered fast run, before the corrected run)
+
+The registered fast run (`f796-scratch/run1-fast.log`, on a23967c3) met every check of PL-F and PL-B and four of the five of
+E1, and missed `E1: |alpha_replica - alpha|_inf / |alpha|_inf` with the value NaN: the displacement of E1 (`u = (0.02 (2y -
+1)(2z - 1), 0.02 (2x - 1)(2z - 1), -0.15 z)`) gives a mode residual at `alpha = 0` already inside the local tolerance (the
+record has one iterate, `|r|_2 = 1.16e-9`, the converged modes are `alpha = 0`), so the measure is `0 / 0` and the replica's
+step is never exercised. This is a defect of the set-up, not a reading of the replica (its one residual equals the record's
+exactly, `0`). Corrected, before its run:
+
+- **E1a**: the same element, material and checks with the displacement `u = (0.05 (2x - 1)(2z - 1), 0, -0.15 z)` (bending in
+  the `x, z` plane under compression: the field whose parasitic shear the incompatible modes remove, so the converged modes
+  are non-zero), and one more check: **the record has at least 2 iterates** (the replica's step is exercised). Limits as E1.
+- The registered test `f796_fast` stays as an ignored record of run 1 with the measured NaN in its ignore text; the default
+  test becomes `f796_fast_amended`: PL-F and PL-B unchanged (the same code, deterministic: their printed numbers must equal
+  run 1's, compared on the logs) and E1a. The planned mutations are run against `f796_fast_amended`. The heavy record is
+  unchanged and has not been run.
