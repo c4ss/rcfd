@@ -235,3 +235,12 @@ between C (i, nb) and C (i, nb + 1) (s4: rows 2 / 3) of every blade line `n_down
 - No flow solve; no case value (a schema enum value needs the schema golden, rule 6); construction S'''' is library only.
 
 ## Addenda
+
+### Amendment 1 (2026-11-17, after the code, before any registered run; no limit changed)
+
+- No development build of S'''' was made: the code (`free_row_hub_ratio`, `camber_seam_s_free_rows_construction()`, the
+  `CGridMesh::free_row_ratios` field, `hub_ratio_cells`, the per-line ratio of `Layer2d` and the hub pre-build in
+  `fan_cgrid.rs`, the test file `f791_cgrid_free_rows.rs`) was compiled only (`--no-run`, clippy).
+- The ratio recorded per line is `(x_2 - x_1) / (x_1 - x_0)` of whichever distribution the hub line used (the existing one, the
+  hub being built without ratios).
+- The constants of HS''' in the test file are the base probe's values (`f791-scratch/probe.log`).
