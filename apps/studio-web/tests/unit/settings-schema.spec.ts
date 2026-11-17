@@ -9,7 +9,7 @@ import path from 'node:path';
 import { schemaLeaves, type Inventory } from '../support/capabilities.js';
 import { addKey, testSchema } from '../support/fake-case-service.js';
 import { appRoot, findRcfd, NO_RCFD } from '../support/rcfd.js';
-import { caseModel, encode, entrySeed, formatValue, isSet, rangeText, unitOf, type Leaf } from '../../src/renderer/settings/schema.js';
+import { caseModel, encode, entrySeed, formatValue, isSet, rangeText, recommendedText, unitOf, type Leaf } from '../../src/renderer/settings/schema.js';
 import { COMMON_KEYS, instances, ownKeys, search, sections, setKeys } from '../../src/renderer/settings/disclosure.js';
 
 const leafAt = (leaves: readonly Leaf[], pattern: string): Leaf => {
@@ -159,6 +159,65 @@ test.describe('learner-first disclosure (PRODUCT Principle 5, G15)', () => {
   });
 });
 
+test.describe('the engine’s UI metadata (F-826, ADR 0730)', () => {
+  /** The test schema as `settings.schema {ui: true}` sends it: x-rcfd-ui on the root, metadata on some nodes. */
+  const withMeta = () => {
+    const schema = testSchema() as Record<string, any>;
+    schema['x-rcfd-ui'] = 'rcfd-ui/1';
+    const solver = schema['properties']['solver'];
+    solver['x-rcfd-label'] = 'Solver';
+    const alpha = solver['properties']['alpha_u'];
+    Object.assign(alpha, {
+      'x-rcfd-label': 'Velocity relaxation',
+      'x-rcfd-help': 'How much of each new velocity a steady run takes.',
+      'x-rcfd-recommended': { minimum: 0.5, maximum: 0.8, source: 'A. Author, A Book, 1999' },
+      'x-rcfd-see': 'case-schema.md#solver',
+    });
+    for (const k of ['dt', 'adaptive', 'note']) solver['properties'][k]['x-rcfd-advanced'] = true;
+    solver['properties']['max_iterations']['x-rcfd-unit'] = 'iterations';
+    return schema;
+  };
+
+  test('labels, help, see, recommended ranges with their source and units are read as the engine sends them', () => {
+    const m = caseModel({ case: withMeta(), monitors: {} });
+    expect(m.ui).toBe(true);
+    const alpha = leafAt(m.leaves, 'solver.alpha_u');
+    expect([alpha.label, alpha.help, alpha.see, alpha.advanced]).toEqual(['Velocity relaxation', 'How much of each new velocity a steady run takes.', 'case-schema.md#solver', false]);
+    expect(recommendedText(alpha)).toEqual({ range: '0.5 to 0.8', source: 'A. Author, A Book, 1999' });
+    expect(unitOf(leafAt(m.leaves, 'solver.max_iterations'))).toBe('iterations');
+    // a range without its source is not a recommendation (ADR 0730 Q5: no source, no range)
+    const bare = withMeta();
+    bare['properties']['solver']['properties']['alpha_u']['x-rcfd-recommended'] = { minimum: 0.5, maximum: 0.8 };
+    expect(recommendedText(leafAt(caseModel(bare).leaves, 'solver.alpha_u'))).toBeNull();
+    // without the metadata the model is as before
+    const plain = caseModel({ case: testSchema(), monitors: {} });
+    expect(plain.ui).toBe(false);
+    expect(leafAt(plain.leaves, 'solver.alpha_u')).toMatchObject({ advanced: false });
+    expect(leafAt(plain.leaves, 'solver.alpha_u').label).toBeUndefined();
+  });
+
+  test('the advanced flag decides what sits behind Show all; a set key is always shown; nothing is hidden for good', () => {
+    const m = caseModel({ case: withMeta(), monitors: {} });
+    const solver = m.root.children.find((c) => c.name === 'solver')!;
+    if (solver.kind !== 'group') throw new Error('solver is a group');
+    const fresh = ownKeys(solver, {}, 'solver', m.ui);
+    expect(fresh.more.map((l) => l.name)).toEqual(['dt', 'adaptive', 'note']);
+    expect(fresh.shown.map((l) => l.name)).not.toContain('dt');
+    expect(fresh.shown.length + fresh.more.length).toBe(solver.children.filter((c) => c.kind === 'leaf').length);
+    const set = ownKeys(solver, { solver: { dt: 0.5 } }, 'solver', m.ui);
+    expect(set.shown.map((l) => l.name)).toContain('dt');
+    // a key added to the schema with the flag is placed with no Studio change
+    const added = withMeta();
+    added['properties']['solver']['properties']['brand_new'] = { type: 'number', default: 1, 'x-rcfd-advanced': true, 'x-rcfd-label': 'Brand new' };
+    const m2 = caseModel(added);
+    const s2 = m2.root.children.find((c) => c.name === 'solver')!;
+    if (s2.kind !== 'group') throw new Error('solver is a group');
+    expect(ownKeys(s2, {}, 'solver', m2.ui).more.map((l) => l.name)).toContain('brand_new');
+    // search reads the engine's label and help too
+    expect(search(m, {}, 'velocity relaxation').map((h) => h.path)).toEqual(['solver.alpha_u']);
+  });
+});
+
 test.describe('the real engine', () => {
   const rcfd = findRcfd();
   test('every case key of settings.schema gets exactly one control, and each matches the F-824 inventory', () => {
@@ -183,6 +242,25 @@ test.describe('the real engine', () => {
       if (s.node.kind !== 'group') continue;
       const k = ownKeys(s.node, {}, s.id);
       expect(k.shown.length, s.id).toBe(Math.min(COMMON_KEYS, k.shown.length + k.more.length));
+    }
+  });
+
+  test('with rcfd serve --ui the same keys come with the engine’s labels and advanced flags (F-826, ADR 0730)', () => {
+    test.skip(rcfd === null, NO_RCFD);
+    const req = '{"jsonrpc":"2.0","id":1,"method":"settings.schema","params":{"ui":true}}\n';
+    const r = spawnSync(rcfd!, ['serve', '--stdio', '--ui'], { input: req, encoding: 'utf8', timeout: 60_000, maxBuffer: 64 << 20 });
+    const reply = JSON.parse(r.stdout.split('\n').find((l) => l.trim() !== '')!) as { result: { case: Record<string, unknown> } };
+    const m = caseModel(reply.result);
+    expect(m.ui).toBe(true);
+    expect(m.leaves.map((l) => l.pattern).sort()).toEqual(schemaLeaves(reply.result.case).map((l) => l.path).sort());
+    expect(m.leaves.filter((l) => l.advanced).length).toBeGreaterThan(50);
+    expect(leafAt(m.leaves, 'solver.alpha_u').label).toBeTruthy();
+    expect(leafAt(m.leaves, 'solver.alpha_u').advanced).toBe(false);
+    // G15: every key of every section has its place, shown or one step away
+    for (const s of sections(m)) {
+      if (s.node.kind !== 'group') continue;
+      const k = ownKeys(s.node, {}, s.id, true);
+      expect(k.shown.length + k.more.length, s.id).toBe(s.node.children.filter((c) => c.kind === 'leaf').length);
     }
   });
 });

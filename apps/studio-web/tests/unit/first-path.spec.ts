@@ -26,7 +26,7 @@ import { countEntries, PROJECT_FILE, ProjectHome, type RecentLike } from '../../
 import { StartFailure, type ProjectServerLike } from '../../src/main/project/server.js';
 import type { StoredRecent } from '../../src/main/project/recent.js';
 import { fieldsFolder, firstStep, outcomeSentence, plainState, sameRunCommand, STATIONS } from '../../src/renderer/first/model.js';
-import { DISCLAIMER, EXAMPLE_LIMITS, TERMS } from '../../src/renderer/first/words.js';
+import { DISCLAIMER, EXAMPLE_LIMITS, TERMS, TERMS_SOURCE } from '../../src/renderer/first/words.js';
 import { RESULT_LINK } from '../../src/renderer/first/target.js';
 import { requestWords, withStartedRuns } from '../../src/renderer/runs/control-model.js';
 import { runRows } from '../../src/renderer/runs/model.js';
@@ -363,15 +363,23 @@ test.describe('the words of the path (G6, G15, G19)', () => {
     expect(EXAMPLE_LIMITS).toContain('not that the answer is right');
   });
 
-  test('every precise term names a source that exists', () => {
+  test('every precise term is a row of the engine’s glossary, and words.ts keeps no help text of its own (F-830, G19)', () => {
+    expect(TERMS_SOURCE).toBe('docs/glossary.md');
+    const glossary = read(TERMS_SOURCE);
+    const rows = new Set([...glossary.matchAll(/^\| ([^|]+?) \| [^|]+ \| [^|]+ \|$/gm)].map((m) => m[1]!));
     for (const [step, terms] of Object.entries(TERMS)) {
       expect(terms.length, step).toBeGreaterThan(0);
       for (const t of terms) {
-        const file = t.source.split(/[ ,§]/)[0]!;
-        if (file.startsWith('docs/') || file === 'README.md') expect(existsSync(path.join(repo, file)), `${step}: ${t.source}`).toBe(true);
-        expect(t.precise.length).toBeGreaterThan(t.plain.length);
+        expect(rows.has(t.term), `${step}: '${t.term}' is not a term of docs/glossary.md`).toBe(true);
+        expect(Object.keys(t).sort(), `${step}: ${t.plain}`).toEqual(['plain', 'term']);
       }
     }
+    // the meanings are the engine's (help.glossary): none of them is written in the Studio's words file
+    const words = src('renderer', 'first', 'words.ts');
+    for (const m of glossary.matchAll(/^\| ([^|]+?) \| ([^|]+?) \| [^|]+ \|$/gm)) {
+      expect(words, `the meaning of ${m[1]}`).not.toContain(m[2]!.slice(0, 40));
+    }
+    expect(words).not.toMatch(/precise:/);
   });
 
   test('the full controls each step names are controls this Studio has', () => {

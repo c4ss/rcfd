@@ -9,6 +9,12 @@
 // `description`, and for a number with a physical dimension `x-rcfd-si-dimension` (stored in SI), or a display unit
 // `x-rcfd-unit`. Anything else a later schema adds becomes a JSON control, so every key still gets one.
 //
+// With `settings.schema {ui: true}` (a service started with `rcfd serve --ui`, ADR 0730) the root carries `x-rcfd-ui`
+// and a node may carry the engine's UI metadata: `x-rcfd-label` (a short name), `x-rcfd-help` (one line, with
+// `x-rcfd-help-from` when it is the first sentence of the docs or of the description), `x-rcfd-advanced` (one step away),
+// `x-rcfd-recommended` ({minimum, maximum, source}: a usual range, always with its source) and `x-rcfd-see` (the docs
+// heading). The Studio shows them as the engine wrote them and keeps none of its own (G2, G19).
+//
 // The Studio checks nothing here (G2): `encode` turns typed text into the JSON value to send (a number when the text is a
 // number, otherwise the text, which the engine may read as a value with a unit or refuse), and the engine's reply says
 // whether it was taken.
@@ -27,6 +33,23 @@ interface Common {
   readonly pattern: string;
   /** The engine's description of the key (G19), or ''. */
   readonly description: string;
+  /** `x-rcfd-label`: the engine's short name of the key, when it gives one. */
+  readonly label?: string;
+  /** `x-rcfd-help`: one line of help from the engine. */
+  readonly help?: string;
+  /** `x-rcfd-help-from`: where a help line not written for the key came from (`docs` or `schema`). */
+  readonly helpFrom?: string;
+  /** `x-rcfd-see`: the docs page and heading that explain the key (`case-schema.md#turbulence`). */
+  readonly see?: string;
+  /** `x-rcfd-advanced`: one step away in the learner-first layout (G15: never hidden for good). */
+  readonly advanced: boolean;
+}
+
+/** `x-rcfd-recommended`: a usual working range, advice only, always with the source the engine cites. */
+export interface Recommended {
+  readonly minimum?: number;
+  readonly maximum?: number;
+  readonly source: string;
 }
 
 /** The facts of a scalar schema node a control is made from. */
@@ -51,6 +74,8 @@ export interface Leaf extends Common, Omit<ScalarSpec, 'control'> {
   readonly item?: ScalarSpec;
   /** The schema node as the engine sent it. */
   readonly node: SchemaNode;
+  /** `x-rcfd-recommended`, when the engine gives a range with its source. */
+  readonly recommended?: Recommended;
 }
 
 export interface Group extends Common {
@@ -74,6 +99,8 @@ export interface CaseModel {
   readonly root: Group;
   /** Every leaf, depth first in declaration order. */
   readonly leaves: readonly Leaf[];
+  /** `x-rcfd-ui` on the root: the engine sent its UI metadata, so the advanced flag decides the layout (disclosure.ts). */
+  readonly ui: boolean;
 }
 
 const isObject = (v: unknown): v is SchemaNode => typeof v === 'object' && v !== null && !Array.isArray(v);
@@ -117,8 +144,28 @@ export function fieldOrder(node: SchemaNode): string[] {
   return [...required, ...props.filter((k) => !required.includes(k))];
 }
 
+/** The UI metadata every node may carry (ADR 0730). */
+function meta(node: SchemaNode): Pick<Common, 'label' | 'help' | 'helpFrom' | 'see' | 'advanced'> {
+  const out: { -readonly [K in keyof Common]?: Common[K] } = { advanced: node['x-rcfd-advanced'] === true };
+  if (typeof node['x-rcfd-label'] === 'string' && node['x-rcfd-label'] !== '') out.label = node['x-rcfd-label'];
+  if (typeof node['x-rcfd-help'] === 'string' && node['x-rcfd-help'] !== '') out.help = node['x-rcfd-help'];
+  if (typeof node['x-rcfd-help-from'] === 'string') out.helpFrom = node['x-rcfd-help-from'];
+  if (typeof node['x-rcfd-see'] === 'string') out.see = node['x-rcfd-see'];
+  return out as Pick<Common, 'label' | 'help' | 'helpFrom' | 'see' | 'advanced'>;
+}
+
+function recommended(node: SchemaNode): { recommended?: Recommended } {
+  const r = node['x-rcfd-recommended'];
+  if (!isObject(r) || typeof r['source'] !== 'string' || r['source'] === '') return {};
+  const lo = num(r['minimum']);
+  const hi = num(r['maximum']);
+  if (lo === undefined && hi === undefined) return {};
+  return { recommended: { ...(lo !== undefined ? { minimum: lo } : {}), ...(hi !== undefined ? { maximum: hi } : {}), source: r['source'] } };
+}
+
 function build(node: SchemaNode, name: string, at: string): SettingNode {
   const description = str(node['description']);
+  const m = meta(node);
   const props = node['properties'];
   const ap = node['additionalProperties'];
   // An object without fields is a key of its own (the inventory counts it as one): a JSON control.
@@ -127,21 +174,23 @@ function build(node: SchemaNode, name: string, at: string): SettingNode {
       const child = props[k];
       return build(isObject(child) ? child : {}, k, join(at, k));
     });
-    return { kind: 'group', name, pattern: at, description, optional: node['x-rcfd-optional'] === true, children };
+    return { kind: 'group', name, pattern: at, description, ...m, optional: node['x-rcfd-optional'] === true, children };
   }
   if (isObject(ap)) {
-    return { kind: 'collection', name, pattern: at, description, entry: build(ap, '*', join(at, '*')) };
+    return { kind: 'collection', name, pattern: at, description, ...m, entry: build(ap, '*', join(at, '*')) };
   }
-  if (isObject(props)) return { kind: 'leaf', name, pattern: at, description, control: 'json', node };
+  if (isObject(props)) return { kind: 'leaf', name, pattern: at, description, ...m, control: 'json', node };
   if (node['type'] === 'array') {
     const items = node['items'];
     // A list of objects has no item control of its own: the whole list is one JSON control.
     if (isObject(items) && !isObject(items['properties']) && !isObject(items['additionalProperties'])) {
-      return { kind: 'leaf', name, pattern: at, description, control: 'list', item: scalarSpec(items), node, ...listUnit(items) };
+      // a list's unit is its items' (their SI dimension); else the engine's display unit of the list itself
+      const own = typeof node['x-rcfd-unit'] === 'string' ? { unit: node['x-rcfd-unit'] } : {};
+      return { kind: 'leaf', name, pattern: at, description, ...m, control: 'list', item: scalarSpec(items), node, ...own, ...listUnit(items) };
     }
-    return { kind: 'leaf', name, pattern: at, description, control: 'json', node };
+    return { kind: 'leaf', name, pattern: at, description, ...m, control: 'json', node };
   }
-  return { kind: 'leaf', name, pattern: at, description, ...scalarSpec(node), node };
+  return { kind: 'leaf', name, pattern: at, description, ...m, ...scalarSpec(node), node, ...recommended(node) };
 }
 
 function listUnit(items: SchemaNode): Pick<ScalarSpec, 'siDimension' | 'unit'> {
@@ -162,7 +211,7 @@ export function caseModel(reply: unknown): CaseModel {
     else walk(n.entry);
   };
   walk(root);
-  return { root, leaves };
+  return { root, leaves, ui: typeof schema['x-rcfd-ui'] === 'string' };
 }
 
 // ---- values
@@ -276,6 +325,14 @@ export function rangeText(spec: Pick<ScalarSpec, 'minimum' | 'maximum'>): string
   if (lo !== undefined) return `at least ${lo}`;
   if (hi !== undefined) return `at most ${hi}`;
   return null;
+}
+
+/** The recommended range as words with its source: `usually 3 to 5 (source)`, or null when the engine gives none. */
+export function recommendedText(leaf: Pick<Leaf, 'recommended'>): { range: string; source: string } | null {
+  const r = leaf.recommended;
+  if (!r) return null;
+  const range = rangeText(r);
+  return range ? { range, source: r.source } : null;
 }
 
 /** The unit a key's label carries (DESIGN.md: the unit sits in the label), or null. */

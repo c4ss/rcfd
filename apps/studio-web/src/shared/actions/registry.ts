@@ -128,9 +128,32 @@ const SPECS = {
     title: 'Show the case schema',
     description: 'The JSON Schema of a case and of the monitor format, from the engine.',
     group: 'service',
-    params: {},
+    params: {
+      ui: {
+        type: 'boolean',
+        optional: true,
+        description:
+          'Add the engine’s labels, help, advanced flags and recommended ranges (ADR 0730); a service started without --ui ignores it.',
+      },
+    },
     engine: { service: 'settings.schema' },
-    mcp: { tool: null, note: 'No MCP tool; `rcfd call settings.schema` prints it.' },
+    mcp: { tool: null, note: 'No MCP tool; `rcfd call settings.schema` prints it, and `rcfd schema --ui` the labels and help.' },
+  }),
+  'help.glossary': action({
+    title: 'Show the glossary',
+    description: 'The project’s terms and what they mean, from docs/glossary.md as the engine holds it (rcfd serve --ui).',
+    group: 'service',
+    params: {},
+    engine: { service: 'help.glossary' },
+    mcp: { tool: null, note: 'No MCP tool (ADR 0730, open question 8); `rcfd help glossary` prints it.' },
+  }),
+  'help.errors': action({
+    title: 'Show the error catalogue',
+    description: 'Every error and exit code of the engine with what to do next (rcfd serve --ui).',
+    group: 'service',
+    params: {},
+    engine: { service: 'help.errors' },
+    mcp: { tool: null, note: 'No MCP tool (ADR 0730, open question 8); `rcfd help errors` prints it.' },
   }),
   'data.info': action({
     title: 'Show the data route',

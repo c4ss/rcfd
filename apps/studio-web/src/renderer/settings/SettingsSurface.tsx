@@ -13,6 +13,7 @@ import { filledCollections, keyCount, search, sectionOf, sections, setCount, set
 import { CollectionBody, GroupBody } from './Groups.js';
 import { KeyRow } from './KeyRow.js';
 import { entryNames, entrySeed, formatValue, type CaseModel, type SettingNode } from './schema.js';
+import { recoveryOf, useErrorCatalogue, type CatalogueEntry } from '../help/engine.js';
 
 export interface SettingsSurfaceProps {
   readonly model: CaseModel;
@@ -47,13 +48,19 @@ interface LastChange {
   readonly stored?: JsonValue | undefined;
 }
 
-/** The engine's words for a refused call: the diagnostics of 1003 for this path (or all of them), else its message. */
-function engineMessage(error: { code: unknown; message: string; data?: unknown }, path: string): string {
+/**
+ * The engine's words for a refused call: the diagnostics of 1003 for this path (or all of them), else its message; then
+ * the error catalogue's recovery line for its code (F-830, `help.errors`), when the engine has one. The message names
+ * the problem, the catalogue the way out (G19); neither is the Studio's.
+ */
+function engineMessage(error: { code: unknown; message: string; data?: unknown }, path: string, catalogue: readonly CatalogueEntry[] | null): string {
   const data = error.data as { diagnostics?: unknown } | undefined;
   const diags = Array.isArray(data?.diagnostics) ? (data.diagnostics as { path?: unknown; message?: unknown }[]) : [];
   const mine = diags.filter((d) => d.path === path);
   const pick = (mine.length ? mine : diags).map((d) => String(d.message ?? '')).filter((m) => m !== '');
-  return pick.length ? pick.join('; ') : error.message;
+  const problem = pick.length ? pick.join('; ') : error.message;
+  const recovery = recoveryOf(catalogue, error.code);
+  return recovery ? `${problem} ${recovery}` : problem;
 }
 
 /** A shell word in single quotes. */
@@ -90,6 +97,7 @@ export function SettingsSurface({ model, session, address, settingsEpoch, stateE
   const [announce, setAnnounce] = useState('');
   const [focusTarget, setFocusTarget] = useState<{ path: string; n: number } | null>(null);
   const mainRef = useRef<HTMLDivElement>(null);
+  const catalogue = useErrorCatalogue();
 
   const ctxSession = useMemo(() => ({ session: { id: session, ...(runState !== undefined ? { state: runState } : {}) } }), [session, runState]);
 
@@ -147,7 +155,7 @@ export function SettingsSurface({ model, session, address, settingsEpoch, stateE
       const r = await dispatch('settings.set', { session, path, value }, { context: ctxSession });
       mark(path, false);
       if (!r.ok) {
-        const msg = engineMessage(r.error, path);
+        const msg = engineMessage(r.error, path, catalogue);
         putError(path, msg);
         setAnnounce(`${path}: change failed. ${msg}`);
         return false;
@@ -160,11 +168,12 @@ export function SettingsSurface({ model, session, address, settingsEpoch, stateE
       void refresh();
       return true;
     },
-    [session, ctxSession, refresh],
+    [session, ctxSession, refresh, catalogue],
   );
 
   const ctx: SettingsContext = {
     session,
+    ui: model.ui,
     tree,
     editable,
     readOnlyReason: editable ? null : setAvail.reason,
@@ -209,7 +218,7 @@ export function SettingsSurface({ model, session, address, settingsEpoch, stateE
       const r = await dispatch('settings.set', { session, path: seed.path, value: seed.value }, { context: ctxSession, undo });
       mark(key, false);
       if (!r.ok) {
-        const msg = engineMessage(r.error, seed.path);
+        const msg = engineMessage(r.error, seed.path, catalogue);
         putError(key, msg);
         setAnnounce(`Adding ${name} failed. ${msg}`);
         return false;
@@ -231,7 +240,7 @@ export function SettingsSurface({ model, session, address, settingsEpoch, stateE
       const r = await dispatch('settings.remove', { session, path }, { context: ctxSession });
       mark(path, false);
       if (!r.ok) {
-        const msg = engineMessage(r.error, path);
+        const msg = engineMessage(r.error, path, catalogue);
         putError(path, msg);
         setAnnounce(`Removing ${path} failed. ${msg}`);
         return false;
@@ -297,7 +306,7 @@ export function SettingsSurface({ model, session, address, settingsEpoch, stateE
     setCheckedAt(changes);
     const r = await dispatch('settings.validate', { session });
     if (!r.ok) {
-      setCheck({ failed: engineMessage(r.error, '') });
+      setCheck({ failed: engineMessage(r.error, '', catalogue) });
       return;
     }
     const res = r.result as { ok?: unknown; diagnostics?: unknown };

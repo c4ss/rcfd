@@ -34,7 +34,7 @@ const tempDir = () => {
 };
 
 test.describe('rcfd serve without the Studio', () => {
-  test('the allow-list names methods the service has (data.info only when data.* is on)', async () => {
+  test('the allow-list names methods the service has (data.info only when data.* is on, help.* only with --ui)', async () => {
     const s = await startRcfd(rcfd!);
     leftovers.add(s.pid);
     const c = await RpcConnection.connectTcp('127.0.0.1', s.port);
@@ -42,7 +42,16 @@ test.describe('rcfd serve without the Studio', () => {
     c.close();
     await s.stop();
     expect(info.protocol).toBe('rcfd-service/1');
-    expect(SERVICE_METHODS.filter((m) => !info.methods.includes(m))).toEqual(['data.info']);
+    expect(SERVICE_METHODS.filter((m) => !info.methods.includes(m))).toEqual(['data.info', 'help.glossary', 'help.errors']);
+    // ADR 0730: the switch the Studio's spawn passes adds the help methods and the ui key
+    const u = await startRcfd(rcfd!, 0, ['--ui']);
+    leftovers.add(u.pid);
+    const cu = await RpcConnection.connectTcp('127.0.0.1', u.port);
+    const withUi = (await cu.request('service.info')) as { ui?: string; methods: string[] };
+    cu.close();
+    await u.stop();
+    expect(withUi.ui).toBe('rcfd-ui/1');
+    expect(SERVICE_METHODS.filter((m) => !withUi.methods.includes(m))).toEqual(['data.info']);
   });
 
   test('the client over stdio: `rcfd serve --stdio` answers service.info and run.status', async () => {

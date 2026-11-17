@@ -3,6 +3,12 @@
 Status: **PROPOSED 2026-11-17.** Not accepted by the maintainer. Nothing is built: no Rust, TypeScript or test code was
 written for this ADR, and nothing was run. The maintainer approves the command below before any code.
 
+Record, 2026-11-17: ADR 0730 was accepted and built (branch adr0730), so the `rcfd serve --ui` switch now exists. It
+gives the family `rcfd-ui/1`: a `ui` key in `service.info` and its methods appended to the method list, with
+`protocol_version` left at 1.1 (`Service::enable_ui`, `crates/rcfd-api/src/ui.rs::UI_METHODS`). The Studio already starts
+`rcfd serve --ui`. This ADR is built next on it: under Q1 (a), `mesh.preview` joins `UI_METHODS`, and the byte-identity
+tests of ADR 0730 (`crates/rcfd-api/tests/ui_byte_identity_adr0730.rs`) keep the replies without the switch unchanged.
+
 Roadmap item F-836 (Electron Studio: mesh preview before a run). Its acceptance asks for "an engine entry point that builds
 the mesh without solving (ADR first if none exists)" and a test that the preview equals the solver's mesh, replacing
 `preview_g1` and `adaptive_preview_f475`. Parents: [ADR 0800](0800-electron-studio-roadmap.md), guardrails G2, G3, G4, G15

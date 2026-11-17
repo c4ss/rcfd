@@ -16780,13 +16780,19 @@ Generated from `docs/studio-guardrails.md`, `PRODUCT.md` and `DESIGN.md` ([ADR 0
     one control generated from settings.schema (real-engine e2e); structural learner-first tiers until F-826 metadata;
     engine validation messages shown unchanged; coverage 0 -> 957 of 1271. A DESIGN.md subsection the agent added was
     held back as a proposal for the maintainer.
-- [ ] **F-826** Engine: UI metadata in the case schema (labels, units, ranges, advanced flag)
+- [~] **F-826** Engine: UI metadata in the case schema (labels, units, ranges, advanced flag)
   - depends on: F-824
   - acceptance: Opt-in, additive metadata on settings.schema entries (human label, unit, recommended range, an advanced
     flag, a one-line help text from the existing docs) so that F-825 lays keys out without a Studio-side table; no
     existing key, golden, default or reply field changes (G4); docs/case-schema.md updated.
-  - note: ADR 0800, needs its own ADR before code (engine change, additive under G4). Traces: G15, G4. ADR 0730 proposed
-    (shared with F-830); awaiting the maintainer.
+  - note: ADR 0800, needs its own ADR before code (engine change, additive under G4). Traces: G15, G4. ADR 0730 accepted
+    2026-11-17 (shared with F-830), every open question on its recommendation. Partial 2026-11-17 (branch adr0730):
+    opt-in behind rcfd serve --ui (family rcfd-ui/1, protocol 1.1): settings.schema {ui: true} and rcfd schema --ui lay
+    crates/rcfd-api/src/schema_ui.toml onto the schema (x-rcfd-label, -help with docs/schema-text fallback, -unit, -see,
+    -advanced, -recommended); 327 entries, 148 written help lines (every example-project key has one), 1 recommended
+    range with a published source; docs/case-schema.md and docs/service-protocol.md updated; without --ui every reply
+    byte-identical to f86339e8 (T1, T2, M3 tests). Left: the maintainer approves the proposed advanced list (169 keys,
+    table in ADR 0730) once.
 - [x] **F-827** Electron Studio: one action layer for every UI action
   - depends on: F-803
   - acceptance: Every UI action is a typed, named action in one registry that calls the engine (a service method, an MCP
@@ -16830,13 +16836,19 @@ Generated from `docs/studio-guardrails.md`, `PRODUCT.md` and `DESIGN.md` ([ADR 0
     delete or trash for runs/results/cases, so the Studio offers none (engine tools
     trash_run/trash_case/list_trash/restore_trash proposed, needs an ADR); engine compare-and-set for settings.set
     proposed. Engine needs listed in ADR 0801, "Engine follow-ups of the Studio items" (2026-11-17).
-- [ ] **F-830** Electron Studio: explain in place from the engine's docs
+- [~] **F-830** Electron Studio: explain in place from the engine's docs
   - depends on: F-826, F-825
   - acceptance: Help on every control, term and value taken from the engine's case schema help text (F-826), docs and
     glossary, with no help text kept only in the Studio; every error message names the problem and the recovery, checked
     by a test over the engine's error catalogue; a learner's view-and-report step (G19).
-  - note: ADR 0800 (G16 to G21 added 2026-11-16). Traces: G19, G2; PRODUCT Users, Principle 5. ADR 0730 proposed (shared
-    with F-826); awaiting the maintainer.
+  - note: ADR 0800 (G16 to G21 added 2026-11-16). Traces: G19, G2; PRODUCT Users, Principle 5. ADR 0730 accepted
+    2026-11-17 (shared with F-826). Partial 2026-11-17 (branch adr0730): help.glossary and help.errors (rcfd serve --ui;
+    rcfd help glossary|errors on the CLI, no MCP tool) with an error catalogue of every code on every surface, one
+    recovery line each, checked against the sources and docs tables; the Studio starts rcfd serve --ui, key rows take
+    label, help, usual range with its source and the docs heading from the engine, advanced keys behind Show all; the
+    first path's Explain terms are glossary rows (13 terms added to docs/glossary.md), words.ts keeps no meaning of its
+    own; engine errors in settings, the case editor and run control get the catalogue's recovery line (unit test over
+    the real catalogue). Left: a learner's view-and-report step (G19); an e2e walk provoking each catalogue error.
 - [x] **F-831** Electron Studio: command palette and keyboard shortcuts
   - depends on: F-827, F-802
   - acceptance: A command palette generated from the action registry that finds every action by name; shortcuts for

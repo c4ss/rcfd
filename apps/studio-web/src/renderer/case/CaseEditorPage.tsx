@@ -18,6 +18,7 @@ import type { ServiceState } from '../../shared/service.js';
 import { dispatch, watchEvents, watchServiceState } from '../actions/index.js';
 import { watchProjectState } from '../project/door.js';
 import { caseModel, formatValue, type CaseModel } from '../settings/schema.js';
+import { EngineRecovery } from '../help/Recovery.js';
 import { useSettings } from '../settings/context.js';
 import { SettingsSurface } from '../settings/SettingsSurface.js';
 import { UndoControls } from '../history/UndoControls.js';
@@ -66,7 +67,7 @@ function useEngine(): { service: ServiceState | null; model: CaseModel | null; s
   useEffect(() => {
     if (!connected) return;
     let live = true;
-    void dispatch('settings.schema', {}).then((r) => {
+    void dispatch('settings.schema', { ui: true }).then((r) => {
       if (!live) return;
       if (!r.ok) return setSchemaError(r.error.message);
       try {
@@ -264,7 +265,12 @@ function OpenFailureText({ failure, path }: { failure: OpenFailure; path: string
       </p>
     );
   }
-  return <p>The engine answered: {failure.message}</p>;
+  return (
+    <>
+      <p>The engine answered: {failure.message}</p>
+      <EngineRecovery code={failure.code} />
+    </>
+  );
 }
 
 // ---- #/case/new

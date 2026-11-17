@@ -1,0 +1,1208 @@
+# UI metadata of the case schema (F-826, ADR 0730). Read by crates/rcfd-api/src/ui.rs with include_str! and laid
+# onto the JSON Schema export by `settings.schema {ui: true}` (rcfd serve --ui) and `rcfd schema --ui`. Validation,
+# parsing, unit conversion and hashing never read this file.
+#
+# Keys are dotted schema paths, `*` for a named entry (boundaries.*.velocity). Each entry may give:
+#   label        a short human name (x-rcfd-label)
+#   help         one line of help, at most 160 characters, plain words (x-rcfd-help); without it the engine falls
+#                back to the first sentence of the `see` docs section, else of the key's schema text
+#   unit         a display unit, only for a node with neither x-rcfd-unit nor an SI dimension (a count, a list)
+#   see          the docs page and heading slug that explain the key (x-rcfd-see); the page must be built in
+#   advanced     the reason the key sits one step away (x-rcfd-advanced = true); absent means common
+#   recommended  {minimum, maximum, source}: a usual working range, ONLY with a cited source: public literature
+#                (author, title, year) or a validation ADR of this repository. No source, no range.
+#
+# tests/ui_metadata_adr0730.rs checks every path against the schema, every range against the hard range, every
+# help line and every `see` heading, and reports the help coverage.
+
+[advanced_list]
+status = "proposed"
+note = "PROPOSED by the lead on 2026-11-17 (ADR 0730, open question 3, answer (a)): the maintainer approves this list once; after that the author of each new key sets its flag. Keys not on the list are common."
+
+[keys."boundaries"]
+label = "Boundaries"
+help = "What happens at each named edge of the mesh: walls, inlets, outlets."
+
+[keys."boundaries.*"]
+label = "Boundary"
+help = "One named edge of the mesh and its conditions."
+
+[keys."boundaries.*.backflow_direction"]
+advanced = "A setting of one catalogue kind (bc_kind) only."  # proposed
+
+[keys."boundaries.*.backflow_pressure"]
+advanced = "A setting of one catalogue kind (bc_kind) only."  # proposed
+
+[keys."boundaries.*.bc_kind"]
+label = "Condition from the catalogue"
+help = "A ready-made boundary type, such as mass_flow or pressure_outlet. none states the condition with the plain velocity and pressure keys."
+advanced = "The boundary-condition catalogue, another way to state a condition; the plain keys suit a first case."  # proposed
+
+[keys."boundaries.*.bc_pressure"]
+advanced = "A setting of one catalogue kind (bc_kind) only."  # proposed
+
+[keys."boundaries.*.compressible_bc"]
+advanced = "The density-based compressible solver only."  # proposed
+
+[keys."boundaries.*.density_value"]
+advanced = "The variable-density (ideal gas) solver only."  # proposed
+
+[keys."boundaries.*.electric"]
+advanced = "Electric conduction only (electric.enabled)."  # proposed
+
+[keys."boundaries.*.electric_current"]
+advanced = "Electric conduction only (electric.enabled)."  # proposed
+
+[keys."boundaries.*.electric_potential"]
+advanced = "Electric conduction only (electric.enabled)."  # proposed
+
+[keys."boundaries.*.emissivity"]
+advanced = "The radiation model only."  # proposed
+
+[keys."boundaries.*.epsilon_value"]
+label = "Inlet epsilon"
+help = "Dissipation rate at an inlet, when turbulence is given by values (k-epsilon)."
+advanced = "Explicit inlet turbulence values; intensity and length scale are the usual way."  # proposed
+
+[keys."boundaries.*.flow_angle"]
+advanced = "The density-based compressible solver only."  # proposed
+
+[keys."boundaries.*.flow_direction"]
+advanced = "The density-based compressible solver only."  # proposed
+
+[keys."boundaries.*.flow_rate_weight"]
+advanced = "A setting of one catalogue kind (bc_kind) only."  # proposed
+
+[keys."boundaries.*.free_stream_temperature"]
+advanced = "Settings of temperature = convection only."  # proposed
+
+[keys."boundaries.*.heat_flux_expression"]
+advanced = "A varying value from a formula, a user function or a table; a constant value is the usual start."  # proposed
+
+[keys."boundaries.*.heat_flux_udf"]
+advanced = "A varying value from a formula, a user function or a table; a constant value is the usual start."  # proposed
+
+[keys."boundaries.*.heat_flux_value"]
+label = "Heat flux"
+help = "Heat flowing in for a heat-flux condition. Positive heats the fluid."
+
+[keys."boundaries.*.heat_transfer_coefficient"]
+advanced = "Settings of temperature = convection only."  # proposed
+
+[keys."boundaries.*.inlet"]
+advanced = "The variable-density (ideal gas) solver only."  # proposed
+
+[keys."boundaries.*.k_value"]
+label = "Inlet k"
+help = "Turbulent kinetic energy at an inlet, when turbulence is given by values."
+advanced = "Explicit inlet turbulence values; intensity and length scale are the usual way."  # proposed
+
+[keys."boundaries.*.loss_coefficient"]
+advanced = "A setting of one catalogue kind (bc_kind) only."  # proposed
+
+[keys."boundaries.*.mach_value"]
+advanced = "The density-based compressible solver only."  # proposed
+
+[keys."boundaries.*.marangoni_coefficient"]
+advanced = "A special wall condition (shear, slip or Marangoni) only."  # proposed
+
+[keys."boundaries.*.mass_flow_fraction"]
+advanced = "A setting of one catalogue kind (bc_kind) only."  # proposed
+
+[keys."boundaries.*.mass_flow_shape_expression"]
+advanced = "A setting of one catalogue kind (bc_kind) only."  # proposed
+
+[keys."boundaries.*.mass_flow_source_patch"]
+advanced = "A setting of one catalogue kind (bc_kind) only."  # proposed
+
+[keys."boundaries.*.mass_flow_value"]
+advanced = "A setting of one catalogue kind (bc_kind) only."  # proposed
+
+[keys."boundaries.*.mean_free_path"]
+advanced = "A special wall condition (shear, slip or Marangoni) only."  # proposed
+
+[keys."boundaries.*.nutilde_value"]
+advanced = "Explicit inlet turbulence values; intensity and length scale are the usual way."  # proposed
+
+[keys."boundaries.*.omega_value"]
+label = "Inlet omega"
+help = "Specific dissipation rate at an inlet, when turbulence is given by values (k-omega SST)."
+advanced = "Explicit inlet turbulence values; intensity and length scale are the usual way."  # proposed
+
+[keys."boundaries.*.pressure"]
+label = "Pressure condition"
+help = "What the pressure does here: zero gradient on walls and inlets, fixed on an outlet."
+
+[keys."boundaries.*.pressure_average"]
+advanced = "A setting of one catalogue kind (bc_kind) only."  # proposed
+
+[keys."boundaries.*.pressure_relax"]
+advanced = "A setting of one catalogue kind (bc_kind) only."  # proposed
+
+[keys."boundaries.*.pressure_update"]
+advanced = "A setting of one catalogue kind (bc_kind) only."  # proposed
+
+[keys."boundaries.*.pressure_value"]
+label = "Pressure"
+help = "The pressure for a fixed condition, divided by density."
+
+[keys."boundaries.*.prevent_reverse_flow"]
+advanced = "A setting of one catalogue kind (bc_kind) only."  # proposed
+
+[keys."boundaries.*.profile"]
+advanced = "A varying value from a formula, a user function or a table; a constant value is the usual start."  # proposed
+
+[keys."boundaries.*.radial_frame_rate"]
+advanced = "A setting of one catalogue kind (bc_kind) only."  # proposed
+
+[keys."boundaries.*.radial_reference"]
+advanced = "A setting of one catalogue kind (bc_kind) only."  # proposed
+
+[keys."boundaries.*.radiation_temperature"]
+advanced = "Settings of temperature = convection only."  # proposed
+
+[keys."boundaries.*.reflection_value"]
+advanced = "The density-based compressible solver only."  # proposed
+
+[keys."boundaries.*.shear_stress"]
+advanced = "A special wall condition (shear, slip or Marangoni) only."  # proposed
+
+[keys."boundaries.*.slip_length"]
+advanced = "A special wall condition (shear, slip or Marangoni) only."  # proposed
+
+[keys."boundaries.*.specularity"]
+advanced = "A special wall condition (shear, slip or Marangoni) only."  # proposed
+
+[keys."boundaries.*.swirl_axis"]
+advanced = "A setting of one catalogue kind (bc_kind) only."  # proposed
+
+[keys."boundaries.*.swirl_origin"]
+advanced = "A setting of one catalogue kind (bc_kind) only."  # proposed
+
+[keys."boundaries.*.swirl_rate"]
+advanced = "A setting of one catalogue kind (bc_kind) only."  # proposed
+
+[keys."boundaries.*.target_mass_flow"]
+advanced = "A setting of one catalogue kind (bc_kind) only."  # proposed
+
+[keys."boundaries.*.temperature"]
+label = "Temperature condition"
+help = "Heat at this edge: none (adiabatic), a fixed temperature, a heat flux, or convection."
+
+[keys."boundaries.*.temperature_expression"]
+advanced = "A varying value from a formula, a user function or a table; a constant value is the usual start."  # proposed
+
+[keys."boundaries.*.temperature_udf"]
+advanced = "A varying value from a formula, a user function or a table; a constant value is the usual start."  # proposed
+
+[keys."boundaries.*.temperature_value"]
+label = "Temperature"
+help = "The temperature for a fixed condition."
+
+[keys."boundaries.*.total_pressure_value"]
+advanced = "The variable-density (ideal gas) solver only."  # proposed
+
+[keys."boundaries.*.turbulence"]
+label = "Turbulence role"
+help = "How the turbulence model treats this edge: wall, inlet, or found from the velocity condition."
+
+[keys."boundaries.*.turbulence_intensity"]
+label = "Inlet turbulence intensity"
+help = "How strong the turbulence at an inlet is, as a fraction of the speed. 0.05 is 5 percent."
+
+[keys."boundaries.*.turbulence_length"]
+label = "Inlet turbulence length"
+help = "Size of the largest eddies at an inlet."
+
+[keys."boundaries.*.turbulence_spec"]
+label = "Inlet turbulence given by"
+help = "How an inlet states its turbulence: intensity and length, intensity and viscosity ratio, or values."
+
+[keys."boundaries.*.turbulence_viscosity_ratio"]
+label = "Inlet viscosity ratio"
+help = "Turbulent viscosity over molecular viscosity at an inlet."
+
+[keys."boundaries.*.velocity"]
+label = "Velocity condition"
+help = "What the flow does here: fixed (a wall at 0, or an inlet), zero gradient (an outlet), and more."
+
+[keys."boundaries.*.velocity_expression_x"]
+label = "Velocity x formula"
+help = "A formula for the x velocity, for example an inlet profile. It replaces the plain value."
+advanced = "A varying value from a formula, a user function or a table; a constant value is the usual start."  # proposed
+
+[keys."boundaries.*.velocity_expression_y"]
+label = "Velocity y formula"
+help = "A formula for the y velocity (see the x formula)."
+advanced = "A varying value from a formula, a user function or a table; a constant value is the usual start."  # proposed
+
+[keys."boundaries.*.velocity_expression_z"]
+label = "Velocity z formula"
+help = "A formula for the z velocity (see the x formula)."
+advanced = "A varying value from a formula, a user function or a table; a constant value is the usual start."  # proposed
+
+[keys."boundaries.*.velocity_udf"]
+advanced = "A varying value from a formula, a user function or a table; a constant value is the usual start."  # proposed
+
+[keys."boundaries.*.velocity_value"]
+label = "Velocity"
+help = "The velocity for a fixed condition, as [ux, uy, uz]. All zero is a still wall."
+unit = "m/s"
+
+[keys."boundaries.*.wall_conductivity"]
+advanced = "Settings of temperature = convection only."  # proposed
+
+[keys."boundaries.*.wall_emissivity"]
+advanced = "Settings of temperature = convection only."  # proposed
+
+[keys."boundaries.*.wall_rotation_axis"]
+advanced = "Moving or rotating walls only."  # proposed
+
+[keys."boundaries.*.wall_rotation_origin"]
+advanced = "Moving or rotating walls only."  # proposed
+
+[keys."boundaries.*.wall_rotation_rate"]
+label = "Wall rotation rate"
+help = "How fast a moving wall spins about its axis."
+advanced = "Moving or rotating walls only."  # proposed
+
+[keys."boundaries.*.wall_thickness"]
+advanced = "Settings of temperature = convection only."  # proposed
+
+[keys."boundaries.*.wall_velocity_projection"]
+label = "Wall velocity projection"
+help = "Whether a moving wall’s velocity must already be along the wall, or is made so face by face."
+advanced = "Moving or rotating walls only."  # proposed
+
+[keys."chemistry"]
+see = "case-schema.md#chemistry-finite-rate-and-turbulent-combustion-chemistry-f-054-adr-0027"
+
+[keys."components"]
+see = "case-schema.md#components-lumped-zone-components-f-113-adr-0012"
+
+[keys."convergence"]
+label = "Stop conditions"
+help = "Extra rules that stop a run early when a report stops changing."
+
+[keys."cosim"]
+see = "case-schema.md#co-simulation-fluid-participant-cosim-f-444-adr-0380"
+
+[keys."dynamic_mesh"]
+see = "case-schema.md#wave-20b-dynamic_mesh-f-063-f-229-adr-0033"
+
+[keys."electric"]
+see = "case-schema.md#electric-f-213-adr-0035-d2"
+
+[keys."energy"]
+label = "Heat"
+help = "Turn on the temperature equation, for heated flows and buoyancy."
+
+[keys."energy.buoyancy"]
+label = "Buoyancy"
+help = "Let warm fluid rise and cool fluid sink (Boussinesq)."
+
+[keys."energy.enabled"]
+label = "Solve for temperature"
+help = "Turn on the temperature equation alongside the flow."
+
+[keys."energy.heat_source"]
+advanced = "The ideal-gas solver only."  # proposed
+
+[keys."energy.relax"]
+advanced = "Numerics of the temperature equation; the default is tested."  # proposed
+
+[keys."energy.viscous_heating"]
+advanced = "The ideal-gas solver only."  # proposed
+
+[keys."expressions"]
+label = "Expressions"
+help = "Named formulas that boundaries and reports can use."
+
+[keys."fluid"]
+label = "Fluid model"
+help = "Constant density, or a gas whose density changes with pressure and temperature."
+see = "case-schema.md#fluid-variable-density-solver-ideal-gas-and-real-gas-f-050-f-061-adr-0005-adr-0007"
+
+[keys."initial"]
+label = "Start values"
+help = "The flow the solver starts from. A good start can save iterations."
+
+[keys."initial.coarse_factor"]
+advanced = "Settings of method = coarse only."  # proposed
+
+[keys."initial.coarse_iterations"]
+advanced = "Settings of method = coarse only."  # proposed
+
+[keys."initial.method"]
+label = "Start method"
+help = "How the start flow is built: uniform values, or a quick rough solve first."
+
+[keys."initial.pressure"]
+label = "Start pressure"
+help = "The pressure the run starts from everywhere."
+
+[keys."initial.temperature"]
+label = "Start temperature"
+help = "The temperature the run starts from everywhere."
+
+[keys."initial.velocity"]
+label = "Start velocity"
+help = "The velocity the run starts from everywhere, as [ux, uy, uz]."
+unit = "m/s"
+
+[keys."initial.velocity_expression_x"]
+label = "Start velocity x formula"
+help = "A formula of x, y, z for the start velocity in x. It replaces the plain value."
+advanced = "A varying start from a formula; a uniform start is the usual one."  # proposed
+
+[keys."initial.velocity_expression_y"]
+label = "Start velocity y formula"
+help = "A formula of x, y, z for the start velocity in y."
+advanced = "A varying start from a formula; a uniform start is the usual one."  # proposed
+
+[keys."initial.velocity_expression_z"]
+label = "Start velocity z formula"
+help = "A formula of x, y, z for the start velocity in z."
+advanced = "A varying start from a formula; a uniform start is the usual one."  # proposed
+
+[keys."linear_solver"]
+see = "case-schema.md#wave-22-linear_solver-f-101-adr-0038"
+
+[keys."mesh"]
+label = "Mesh"
+help = "The cells the flow is computed on: made by a built-in generator or read from a mesh file."
+see = "case-schema.md#mesh-generators-and-boundary-layer-inflation"
+
+[keys."mesh.adapt"]
+see = "case-schema.md#solution-adaptive-steady-runs-meshadapt-f-342-adr-0262"
+
+[keys."mesh.core_fraction"]
+advanced = "One generator only (pipe_sweep, wedge_2d or nozzle_2d)."  # proposed
+
+[keys."mesh.depth"]
+label = "Depth of a 2D mesh"
+help = "How thick a 2D mesh is. It matters for forces and flow rates, not the flow pattern."
+
+[keys."mesh.exit_height"]
+advanced = "One generator only (pipe_sweep, wedge_2d or nozzle_2d)."  # proposed
+
+[keys."mesh.fan"]
+label = "Fan sector"
+help = "The blade and passage of the axial-fan sector generator."
+see = "case-schema.md#axial-fan-periodic-sector-meshgenerator--axial_fan_sector-f-133-partial-adr-0065"
+
+[keys."mesh.fan.axial_extent"]
+label = "Axial length"
+help = "Length of the domain along the axis, from the inlet at z = 0."
+
+[keys."mesh.fan.c_grid_construction"]
+label = "C-grid construction"
+help = "How the C-grid around the blade is built."
+
+[keys."mesh.fan.family"]
+label = "Blade section"
+help = "The shape family of the blade sections."
+
+[keys."mesh.fan.first_cell_height"]
+label = "First cell height"
+help = "Height of the cell touching the blade. 0 works it out from y+."
+
+[keys."mesh.fan.front_gap"]
+label = "Front gap"
+help = "How far ahead of the leading edge the C-grid starts, in chords."
+unit = "chords"
+
+[keys."mesh.fan.growth"]
+label = "Layer growth"
+help = "How much each boundary-layer cell grows over the one below it."
+
+[keys."mesh.fan.n_bl"]
+label = "Boundary-layer cells"
+help = "How many thin cells sit on every wall."
+unit = "cells"
+
+[keys."mesh.fan.n_blades"]
+label = "Blades"
+help = "How many blades the fan has. The mesh holds one blade passage."
+unit = "blades"
+
+[keys."mesh.fan.n_chord"]
+label = "Cells along the chord"
+help = "Cells along the blade from front to back."
+unit = "cells"
+
+[keys."mesh.fan.n_core"]
+label = "Cells across the blade tip"
+help = "Cells across the blade thickness in the tip gap (C-grid only)."
+unit = "cells"
+
+[keys."mesh.fan.n_down"]
+label = "Cells behind the blade"
+help = "Cells from the back of the blade to the outlet."
+unit = "cells"
+
+[keys."mesh.fan.n_gap"]
+label = "Cells in the tip gap"
+help = "Cells across the gap between the blade tip and the casing."
+unit = "cells"
+
+[keys."mesh.fan.n_nose"]
+label = "Cells round the nose"
+help = "Cells from the leading edge to each seam corner (C-grid only)."
+unit = "cells"
+
+[keys."mesh.fan.n_side"]
+label = "Cells to the blade"
+help = "Cells from each passage seam to the blade."
+unit = "cells"
+
+[keys."mesh.fan.n_span"]
+label = "Cells along the span"
+help = "Cells from the hub to the blade tip."
+unit = "cells"
+
+[keys."mesh.fan.n_up"]
+label = "Cells ahead of the blade"
+help = "Cells from the inlet to the front of the blade."
+unit = "cells"
+
+[keys."mesh.fan.nu"]
+label = "Viscosity for y+"
+help = "Kinematic viscosity used only to estimate the first cell height."
+unit = "m^2/s"
+
+[keys."mesh.fan.r_hub"]
+label = "Hub radius"
+help = "Radius of the hub, where the blade starts."
+
+[keys."mesh.fan.r_tip"]
+label = "Tip radius"
+help = "Radius of the blade tip."
+
+[keys."mesh.fan.ref_speed"]
+label = "Speed for y+"
+help = "Blade speed used only to estimate the first cell height."
+unit = "m/s"
+
+[keys."mesh.fan.station_camber"]
+label = "Camber at each station"
+help = "How curved the blade section is at each station radius, as a fraction of the chord."
+
+[keys."mesh.fan.station_camber_pos"]
+label = "Camber position at each station"
+help = "Where along the chord the most camber sits, at each station radius."
+
+[keys."mesh.fan.station_chord"]
+label = "Chord at each station"
+help = "Blade chord at each station radius."
+unit = "m"
+
+[keys."mesh.fan.station_lean"]
+label = "Lean at each station"
+help = "Sideways shift of the leading edge at each station radius."
+unit = "m"
+
+[keys."mesh.fan.station_radius"]
+label = "Station radii"
+help = "Radii where the blade shape is given, from hub to tip. Empty keeps one shape."
+unit = "m"
+
+[keys."mesh.fan.station_stagger"]
+label = "Stagger at each station"
+help = "Angle of the chord from the axis at each station radius."
+unit = "deg"
+
+[keys."mesh.fan.station_sweep"]
+label = "Sweep at each station"
+help = "Shift of the leading edge along the axis at each station radius."
+unit = "m"
+
+[keys."mesh.fan.station_thickness"]
+label = "Thickness at each station"
+help = "Greatest blade thickness at each station radius, as a fraction of the chord."
+
+[keys."mesh.fan.tip_clearance"]
+label = "Tip clearance"
+help = "Gap between the blade tip and the casing."
+
+[keys."mesh.fan.topology"]
+label = "Topology"
+help = "The cell layout round the blade: h_slit or the body-fitted c_grid."
+
+[keys."mesh.fan.y_plus"]
+label = "Target y+"
+help = "How fine the first blade cell should be, as y+. Used when the first cell height is 0."
+
+[keys."mesh.fan.z_le_root"]
+label = "Leading edge at the hub"
+help = "Position along the axis of the blade front at the hub."
+
+[keys."mesh.file"]
+label = "Mesh file"
+help = "Path of the mesh file to read, relative to the case."
+
+[keys."mesh.first_layer_height"]
+label = "First layer height"
+help = "Height of the cell touching the wall. 0 works it out from the target y+."
+
+[keys."mesh.generator"]
+label = "Generator"
+help = "Which built-in shape to mesh, for example a square cavity or a channel."
+
+[keys."mesh.grading"]
+label = "Grading"
+help = "Ratio of the last cell size to the first. 1 keeps the cells even; more packs them at one end."
+
+[keys."mesh.isotropic_interface"]
+advanced = "Rotor-stator and sector generators only."  # proposed
+
+[keys."mesh.layer_growth"]
+label = "Layer growth"
+help = "How much each wall layer grows over the one below it."
+
+[keys."mesh.layer_reference_length"]
+advanced = "Which walls get layers and the inputs of the y+ estimate; the defaults estimate them."  # proposed
+
+[keys."mesh.layer_reference_velocity"]
+advanced = "Which walls get layers and the inputs of the y+ estimate; the defaults estimate them."  # proposed
+
+[keys."mesh.layer_u_tau"]
+advanced = "Which walls get layers and the inputs of the y+ estimate; the defaults estimate them."  # proposed
+
+[keys."mesh.layer_walls"]
+advanced = "Which walls get layers and the inputs of the y+ estimate; the defaults estimate them."  # proposed
+
+[keys."mesh.lx"]
+label = "Length in x"
+help = "Size of the domain along x."
+
+[keys."mesh.ly"]
+label = "Length in y"
+help = "Size of the domain along y."
+
+[keys."mesh.lz"]
+label = "Length in z"
+help = "Size of the domain along z, for the 3D generators."
+
+[keys."mesh.nx"]
+label = "Cells in x"
+help = "How many cells across x. More cells show more detail but take longer."
+unit = "cells"
+
+[keys."mesh.nx_right"]
+advanced = "The second block of an interface or stage generator only."  # proposed
+
+[keys."mesh.ny"]
+label = "Cells in y"
+help = "How many cells across y. More cells show more detail but take longer."
+unit = "cells"
+
+[keys."mesh.ny_right"]
+advanced = "The second block of an interface or stage generator only."  # proposed
+
+[keys."mesh.nz"]
+label = "Cells in z"
+help = "How many cells along z, for the 3D generators."
+unit = "cells"
+
+[keys."mesh.nz_right"]
+advanced = "The second block of an interface or stage generator only."  # proposed
+
+[keys."mesh.periodic_x"]
+advanced = "Cyclic sides, for periodic channel or pipe flows only."  # proposed
+
+[keys."mesh.periodic_y"]
+advanced = "Cyclic sides, for periodic channel or pipe flows only."  # proposed
+
+[keys."mesh.periodic_z"]
+advanced = "Cyclic sides, for periodic channel or pipe flows only."  # proposed
+
+[keys."mesh.r_in"]
+label = "Inner radius"
+help = "Radius of the inner circle of a cylinder mesh (the body)."
+
+[keys."mesh.r_interface"]
+advanced = "Rotor-stator and sector generators only."  # proposed
+
+[keys."mesh.r_out"]
+label = "Outer radius"
+help = "Radius of the outer edge of a cylinder mesh (the far field)."
+
+[keys."mesh.ramp_angle"]
+advanced = "One generator only (pipe_sweep, wedge_2d or nozzle_2d)."  # proposed
+
+[keys."mesh.ramp_start"]
+advanced = "One generator only (pipe_sweep, wedge_2d or nozzle_2d)."  # proposed
+
+[keys."mesh.scale"]
+label = "Scale"
+help = "Multiplies every coordinate of a mesh file, for example 0.001 for a file in millimetres."
+
+[keys."mesh.sector_angle"]
+advanced = "Rotor-stator and sector generators only."  # proposed
+
+[keys."mesh.source"]
+label = "Mesh source"
+help = "Make the mesh with a built-in generator, or read it from a file."
+
+[keys."mesh.target_y_plus"]
+label = "Target y+"
+help = "How fine the first wall cell should be, as y+. Used when the first layer height is 0."
+
+[keys."mesh.throat_height"]
+advanced = "One generator only (pipe_sweep, wedge_2d or nozzle_2d)."  # proposed
+
+[keys."mesh.transform"]
+label = "Move the mesh"
+help = "Rotate or move the mesh after it is made or read."
+see = "case-schema.md#mesh-transform-meshtransform-adr-0155"
+
+[keys."mesh.transform.rotate_origin"]
+label = "Rotation centre"
+help = "A point on the rotation axis. Empty means the origin."
+
+[keys."mesh.transform.rotate_z_deg"]
+label = "Rotation about z"
+help = "Turns the mesh about the z axis, in degrees. Positive turns counter-clockwise."
+
+[keys."mesh.wall_layers"]
+label = "Wall layers"
+help = "Thin cell layers stacked on the walls to catch the boundary layer. 0 means none."
+unit = "layers"
+see = "case-schema.md#boundary-layer-inflation-meshwall_layers-f-108"
+
+[keys."mixing_plane"]
+see = "case-schema.md#mixing_plane"
+
+[keys."multiphase"]
+see = "case-schema.md#wave-27a-multiphase-f-055-adr-0049"
+
+[keys."output"]
+label = "Results"
+help = "What the run writes to disk, and how often."
+
+[keys."output.directory"]
+label = "Results folder"
+help = "Where the run writes its results, relative to the case."
+
+[keys."output.fields"]
+label = "Snapshot fields"
+help = "Which results go into the snapshot files. Empty writes them all."
+
+[keys."output.retain_checkpoints"]
+advanced = "Disk housekeeping; keeping everything is the default."  # proposed
+
+[keys."output.retain_snapshots"]
+advanced = "Disk housekeeping; keeping everything is the default."  # proposed
+
+[keys."output.store_fields"]
+label = "Stored fields"
+help = "Which fields the field store keeps, such as ux, uy, p, T. Empty keeps velocity and pressure."
+
+[keys."output.store_interval"]
+label = "Field store interval"
+help = "Store the fields every this many iterations or steps, so the Studio can play them back. 0 is off."
+unit = "iterations"
+
+[keys."output.store_precision"]
+label = "Store precision"
+help = "f64 keeps every digit; f32 halves the size with a small rounding."
+
+[keys."output.store_time_interval"]
+label = "Field store time interval"
+help = "Store the fields every this much simulated time (time-dependent runs). 0 is off."
+advanced = "Stores by simulated time instead of by step, for time-dependent runs only."  # proposed
+
+[keys."output.write_interval"]
+label = "Snapshot interval"
+help = "Write a full snapshot every this many iterations or steps. 0 writes only the end."
+unit = "iterations"
+
+[keys."output.write_time_interval"]
+advanced = "Landing on exact times, for time-dependent runs only."  # proposed
+
+[keys."output.write_times"]
+advanced = "Landing on exact times, for time-dependent runs only."  # proposed
+
+[keys."particles"]
+see = "case-schema.md#particles"
+
+[keys."phase_change"]
+see = "case-schema.md#phase_change-f-212-adr-0035-d3"
+
+[keys."physics"]
+label = "Fluid properties"
+help = "The properties of the fluid: viscosity, density, heat capacity and gravity."
+
+[keys."physics.body_force"]
+label = "Body force"
+help = "A steady push on all the fluid, for example to drive a periodic channel."
+advanced = "A uniform driving force, mainly for periodic flows."  # proposed
+
+[keys."physics.conductivity"]
+label = "Thermal conductivity"
+help = "How well the fluid conducts heat."
+
+[keys."physics.cp"]
+label = "Specific heat"
+help = "Heat needed to warm a kilogram of fluid by one kelvin."
+
+[keys."physics.gravity"]
+label = "Gravity"
+help = "The gravity vector. Empty means no gravity."
+unit = "m/s^2"
+
+[keys."physics.nu"]
+label = "Kinematic viscosity"
+help = "How thick the fluid is: viscosity divided by density. Air is about 1.5e-5, water 1e-6."
+
+[keys."physics.reference_temperature"]
+label = "Reference temperature"
+help = "The temperature at which buoyancy is zero."
+
+[keys."physics.rho"]
+label = "Density"
+help = "Mass per volume. It turns the solver’s results into forces and pressures."
+
+[keys."physics.thermal_expansion"]
+label = "Thermal expansion"
+help = "How much the fluid expands as it warms. It drives buoyancy."
+
+[keys."radiation"]
+see = "case-schema.md#radiation-grey-radiation-f-130-f-052-adr-0012"
+
+[keys."regions"]
+see = "case-schema.md#wave-21b-regions-f-216-adr-0036"
+
+[keys."registers"]
+see = "case-schema.md#registers-and-initialpatches-f-124-adr-0011"
+
+[keys."reports"]
+label = "Reports"
+help = "Numbers the run computes as it goes, such as forces and averages."
+
+[keys."reports.*"]
+label = "Report"
+help = "One named number the run computes."
+
+[keys."reports.*.a_ref"]
+label = "Reference area"
+help = "The area that turns a force into a coefficient."
+
+[keys."reports.*.component"]
+label = "Force part"
+help = "Which part of the force to report: total, pressure only or viscous only."
+advanced = "Splits a force into its pressure and viscous parts; total is the usual choice."  # proposed
+
+[keys."reports.*.conductivity"]
+advanced = "heat_flow reports at constant density only; 0 takes the fluid’s conductivity."  # proposed
+
+[keys."reports.*.direction"]
+label = "Direction"
+help = "The direction of a force, or the axis of a moment, as [x, y, z]."
+
+[keys."reports.*.expression"]
+label = "Formula"
+help = "A formula of other reports and constants (type = expression)."
+
+[keys."reports.*.field"]
+label = "Field"
+help = "The field to average, integrate or probe, such as p or T."
+
+[keys."reports.*.l_ref"]
+advanced = "Moment reports only."  # proposed
+
+[keys."reports.*.origin"]
+advanced = "Moment reports only."  # proposed
+
+[keys."reports.*.patch"]
+label = "Boundary"
+help = "The boundary the report measures, for forces, flow rates and heat flows."
+
+[keys."reports.*.scalar"]
+advanced = "Scalar reports only."  # proposed
+
+[keys."reports.*.statistic"]
+advanced = "y_plus reports only."  # proposed
+
+[keys."reports.*.type"]
+label = "What to compute"
+help = "The kind of number: a force, an average, a flow rate, a probe, an expression and more."
+
+[keys."reports.*.u_ref"]
+label = "Reference speed"
+help = "The speed that turns a force into a coefficient."
+
+[keys."rheology"]
+see = "case-schema.md#rheology-viscosity-laws-f-110"
+
+[keys."scalars"]
+see = "case-schema.md#scalars-species-and-properties-f-053"
+
+[keys."solver"]
+label = "Solver"
+help = "How the equations are solved, and when the run stops."
+
+[keys."solver.algorithm"]
+label = "Algorithm"
+help = "How pressure and velocity are solved together. simplec suits steady flows; pimple suits time-dependent ones."
+
+[keys."solver.alpha_p"]
+label = "Pressure relaxation"
+help = "How much of each new pressure a steady run takes per iteration."
+
+[keys."solver.alpha_u"]
+label = "Velocity relaxation"
+help = "How much of each new velocity a steady run takes per iteration. Lower is steadier but slower."
+
+[keys."solver.blend_factor"]
+advanced = "Tunes one convection scheme only, when solver.convection picks it."  # proposed
+
+[keys."solver.bulk_direction"]
+advanced = "Drives periodic channel and pipe flows only."  # proposed
+
+[keys."solver.bulk_velocity"]
+advanced = "Drives periodic channel and pipe flows only."  # proposed
+
+[keys."solver.component_diagonal"]
+advanced = "A discretisation detail of the solver kernel; the default is the tested choice."  # proposed
+
+[keys."solver.compressive_k"]
+advanced = "Tunes one convection scheme only, when solver.convection picks it."  # proposed
+
+[keys."solver.consistent_correctors"]
+see = "case-schema.md#consistent-pressure-correctors-solverconsistent_correctors-adr-0214-adr-0223"
+
+[keys."solver.convection"]
+label = "Convection scheme"
+help = "How flow carries momentum between cells. linear_upwind is accurate and stable for most cases."
+
+[keys."solver.corrector_control"]
+advanced = "A variant of the transient loop; the default PISO/PIMPLE loop suits most runs."  # proposed
+
+[keys."solver.ddt_correction"]
+advanced = "A discretisation detail of the solver kernel; the default is the tested choice."  # proposed
+
+[keys."solver.divergence_courant_limit"]
+see = "case-schema.md#divergence-guard-of-the-transient-solvers-solverdivergence_courant_limit"
+advanced = "A safety check of the solver; its default already watches for trouble."  # proposed
+
+[keys."solver.dt"]
+label = "Time step"
+help = "How far time moves in one step of a time-dependent run."
+
+[keys."solver.dt_growth"]
+advanced = "Fine control of adaptive time stepping; the Courant target alone is enough to start."  # proposed
+
+[keys."solver.dt_safety"]
+advanced = "Fine control of adaptive time stepping; the Courant target alone is enough to start."  # proposed
+
+[keys."solver.dt_shrink"]
+advanced = "Fine control of adaptive time stepping; the Courant target alone is enough to start."  # proposed
+
+[keys."solver.end_time"]
+label = "End time"
+help = "A time-dependent run stops when it reaches this time."
+see = "case-schema.md#landing-on-solverend_time-adr-0145"
+
+[keys."solver.error_tolerance"]
+advanced = "Fine control of adaptive time stepping; the Courant target alone is enough to start."  # proposed
+
+[keys."solver.extrapolate_initial"]
+advanced = "A variant of the transient loop; the default PISO/PIMPLE loop suits most runs."  # proposed
+
+[keys."solver.fractional_boundary"]
+advanced = "A variant of the transient loop; the default PISO/PIMPLE loop suits most runs."  # proposed
+
+[keys."solver.fractional_form"]
+advanced = "A variant of the transient loop; the default PISO/PIMPLE loop suits most runs."  # proposed
+
+[keys."solver.frozen_flow"]
+see = "case-schema.md#solverfrozen_flow"
+advanced = "Prescribes the flow instead of solving it, for heat or scalar studies only."  # proposed
+
+[keys."solver.gradient_boundary"]
+advanced = "A discretisation detail of the solver kernel; the default is the tested choice."  # proposed
+
+[keys."solver.gradient_equations"]
+see = "case-schema.md#further-equations-solvergradient_equations"
+
+[keys."solver.gradient_face_correction"]
+advanced = "A discretisation detail of the solver kernel; the default is the tested choice."  # proposed
+
+[keys."solver.gradient_limiter_k"]
+advanced = "A discretisation detail of the solver kernel; the default is the tested choice."  # proposed
+
+[keys."solver.gradient_secondary_limiter"]
+advanced = "A discretisation detail of the solver kernel; the default is the tested choice."  # proposed
+
+[keys."solver.h_operator"]
+advanced = "A discretisation detail of the solver kernel; the default is the tested choice."  # proposed
+
+[keys."solver.high_resolution_beta"]
+advanced = "Tunes one convection scheme only, when solver.convection picks it."  # proposed
+
+[keys."solver.linear_upwind_limiter"]
+see = "case-schema.md#limited-linear-upwind-extrapolation-solverlinear_upwind_limiter"
+advanced = "A discretisation detail of the solver kernel; the default is the tested choice."  # proposed
+
+[keys."solver.max_courant"]
+label = "Courant target"
+help = "Adapts the time step to keep the Courant number near this. 0 keeps the step fixed."
+
+[keys."solver.max_courant_rms"]
+advanced = "Fine control of adaptive time stepping; the Courant target alone is enough to start."  # proposed
+
+[keys."solver.max_dt"]
+advanced = "Fine control of adaptive time stepping; the Courant target alone is enough to start."  # proposed
+
+[keys."solver.max_iterations"]
+label = "Iteration limit"
+help = "A steady run stops after this many iterations, settled or not."
+unit = "iterations"
+
+[keys."solver.min_dt"]
+advanced = "Fine control of adaptive time stepping; the Courant target alone is enough to start."  # proposed
+
+[keys."solver.min_iterations"]
+advanced = "Only matters with the stop conditions of the convergence section."  # proposed
+
+[keys."solver.momentum_max_iter"]
+advanced = "Inner linear-solver limits; 0 keeps the algorithm’s tested default."  # proposed
+
+[keys."solver.momentum_rel_tol"]
+advanced = "Inner linear-solver limits; 0 keeps the algorithm’s tested default."  # proposed
+
+[keys."solver.n_correctors"]
+label = "Pressure correctors"
+help = "Pressure solves per pass of a time-dependent run."
+
+[keys."solver.n_outer"]
+label = "Outer iterations"
+help = "PIMPLE passes per time step. More passes allow bigger steps."
+
+[keys."solver.non_orthogonal_correctors"]
+label = "Non-orthogonal correctors"
+help = "Extra pressure solves for skewed meshes. 0 is fine for square cells."
+
+[keys."solver.p_ref_cell"]
+advanced = "Pins the pressure level when no boundary fixes it; the default cell works."  # proposed
+
+[keys."solver.p_ref_value"]
+advanced = "Pins the pressure level when no boundary fixes it; the default cell works."  # proposed
+
+[keys."solver.period"]
+advanced = "Fine control of adaptive time stepping; the Courant target alone is enough to start."  # proposed
+
+[keys."solver.periodic_gradient"]
+see = "case-schema.md#least-squares-velocity-gradient-on-periodic-faces-solverperiodic_gradient"
+advanced = "A discretisation detail of the solver kernel; the default is the tested choice."  # proposed
+
+[keys."solver.pressure_abs_tol"]
+advanced = "Inner linear-solver limits; 0 keeps the algorithm’s tested default."  # proposed
+
+[keys."solver.pressure_interpolation"]
+see = "case-schema.md#pressure-interpolation-of-the-steady-kernel-solverpressure_interpolation"
+advanced = "A discretisation detail of the solver kernel; the default is the tested choice."  # proposed
+
+[keys."solver.pressure_lag_check"]
+see = "case-schema.md#pressure-lag-check-of-pimple-solverpressure_lag_check"
+advanced = "A safety check of the solver; its default already watches for trouble."  # proposed
+
+[keys."solver.pressure_max_iter"]
+advanced = "Inner linear-solver limits; 0 keeps the algorithm’s tested default."  # proposed
+
+[keys."solver.pressure_rel_tol"]
+advanced = "Inner linear-solver limits; 0 keeps the algorithm’s tested default."  # proposed
+
+[keys."solver.pseudo_cfl"]
+advanced = "Pseudo-transient steady solving, a way to rescue hard cases; off by default."  # proposed
+
+[keys."solver.pseudo_control"]
+advanced = "Pseudo-transient steady solving, a way to rescue hard cases; off by default."  # proposed
+
+[keys."solver.pseudo_dt"]
+advanced = "Pseudo-transient steady solving, a way to rescue hard cases; off by default."  # proposed
+
+[keys."solver.pseudo_factor"]
+advanced = "Pseudo-transient steady solving, a way to rescue hard cases; off by default."  # proposed
+
+[keys."solver.pseudo_mode"]
+advanced = "Pseudo-transient steady solving, a way to rescue hard cases; off by default."  # proposed
+
+[keys."solver.pseudo_scale_max"]
+advanced = "Pseudo-transient steady solving, a way to rescue hard cases; off by default."  # proposed
+
+[keys."solver.residual_norm"]
+advanced = "A discretisation detail of the solver kernel; the default is the tested choice."  # proposed
+
+[keys."solver.rhie_chow"]
+see = "case-schema.md#step-consistent-face-flux-solverrhie_chow-adr-0245-adr-0352"
+
+[keys."solver.simplec_boundary_compensation"]
+advanced = "A SIMPLEC flux correction for skewed or sheared meshes; off suits most meshes."  # proposed
+
+[keys."solver.simplec_non_orthogonal_compensation"]
+advanced = "A SIMPLEC flux correction for skewed or sheared meshes; off suits most meshes."  # proposed
+
+[keys."solver.steady_divergence_guard"]
+see = "case-schema.md#divergence-guard-of-the-steady-solvers-solversteady_divergence_guard"
+advanced = "A safety check of the solver; its default already watches for trouble."  # proposed
+
+[keys."solver.steps_per_period"]
+advanced = "Fine control of adaptive time stepping; the Courant target alone is enough to start."  # proposed
+
+[keys."solver.stop_when"]
+advanced = "Only matters with the stop conditions of the convergence section."  # proposed
+
+[keys."solver.time_advance"]
+advanced = "A variant of the transient loop; the default PISO/PIMPLE loop suits most runs."  # proposed
+
+[keys."solver.time_scheme"]
+label = "Time scheme"
+help = "How each time step is taken: euler (first order) or bdf2 (second order)."
+
+[keys."solver.tolerance_p"]
+label = "Pressure tolerance"
+help = "A steady run has settled when the pressure residual falls below this."
+
+[keys."solver.tolerance_u"]
+label = "Velocity tolerance"
+help = "A steady run has settled when the velocity residual falls below this."
+
+[keys."solver.velocity_correction"]
+advanced = "A discretisation detail of the solver kernel; the default is the tested choice."  # proposed
+
+[keys."solver.viscous_stress"]
+advanced = "A discretisation detail of the solver kernel; the default is the tested choice."  # proposed
+
+[keys."sources"]
+label = "Sources"
+help = "Extra forces in parts of the mesh: porous zones, rotating frames, fans."
+see = "case-schema.md#sources-momentum-sources-f-031"
+
+[keys."sources.*"]
+label = "Source"
+help = "One named source and the cells it acts on."
+
+[keys."sources.*.angular_velocity"]
+label = "Rotation rate"
+help = "How fast the rotating frame turns. Wall speeds are then given in that frame."
+
+[keys."sources.*.centrifugal"]
+label = "Centrifugal force"
+help = "Include the centrifugal force of the rotating frame. Periodic sectors need it off."
+
+[keys."sources.*.rotation_axis"]
+label = "Rotation axis"
+help = "The direction the frame turns about. Empty means +z."
+
+[keys."sources.*.type"]
+label = "Source type"
+help = "What the source does: a porous zone, a rotating frame, a fan disk, and more."
+
+[keys."species"]
+see = "case-schema.md#scalars-species-and-properties-f-053"
+
+[keys."statistics"]
+see = "case-schema.md#statistics-and-output-policy-f-116"
+
+[keys."study"]
+see = "case-schema.md#wave-20c-study-f-095-adr-0034"
+
+[keys."tables"]
+see = "case-schema.md#tables-and-profile-inputs-f-105"
+
+[keys."title"]
+label = "Title"
+help = "A name for the case, shown in reports and run lists."
+
+[keys."turbulence"]
+label = "Turbulence"
+help = "Whether and how the run models turbulence. Laminar means no model."
+see = "case-schema.md#turbulence"
+
+[keys."turbulence.convection"]
+advanced = "Numerics of the turbulence equations; the defaults are tested."  # proposed
+
+[keys."turbulence.e_wall"]
+advanced = "A model constant; change it only to reproduce a published set-up."  # proposed
+
+[keys."turbulence.epsilon_initial"]
+advanced = "Explicit start values; by default they come from the start intensity and viscosity ratio."  # proposed
+
+[keys."turbulence.initial_intensity"]
+label = "Start turbulence intensity"
+help = "Turbulence strength the run starts from, as a fraction of the speed."
+
+[keys."turbulence.initial_viscosity_ratio"]
+label = "Start viscosity ratio"
+help = "Turbulent over molecular viscosity the run starts from."
+
+[keys."turbulence.k_initial"]
+advanced = "Explicit start values; by default they come from the start intensity and viscosity ratio."  # proposed
+
+[keys."turbulence.kappa"]
+advanced = "A model constant; change it only to reproduce a published set-up."  # proposed
+
+[keys."turbulence.length_scale"]
+advanced = "For the algebraic models (smagorinsky, wale, mixing_length) only."  # proposed
+
+[keys."turbulence.mixing_profile"]
+advanced = "For the algebraic models (smagorinsky, wale, mixing_length) only."  # proposed
+
+[keys."turbulence.model"]
+label = "Turbulence model"
+help = "laminar for slow, smooth flow; a RANS model such as k_omega_sst for turbulent flow."
+
+[keys."turbulence.nutilde_ratio"]
+label = "Spalart-Allmaras start ratio"
+help = "nuTilda over nu for the start field and for inlets without a value (Spalart-Allmaras)."
+recommended = { minimum = 3.0, maximum = 5.0, source = "P. R. Spalart and C. L. Rumsey, \"Effective Inflow Conditions for Turbulence Models in Aerodynamic Calculations\", AIAA Journal 45(10), 2007" }
+
+[keys."turbulence.omega_initial"]
+advanced = "Explicit start values; by default they come from the start intensity and viscosity ratio."  # proposed
+
+[keys."turbulence.plugin"]
+advanced = "For a registered plugin model only."  # proposed
+
+[keys."turbulence.realizable_a0"]
+advanced = "A model constant; change it only to reproduce a published set-up."  # proposed
+
+[keys."turbulence.relax"]
+advanced = "Numerics of the turbulence equations; the defaults are tested."  # proposed
+
+[keys."turbulence.relax_nut"]
+advanced = "Numerics of the turbulence equations; the defaults are tested."  # proposed
+
+[keys."turbulence.roughness_constant"]
+advanced = "Rough walls only; walls are smooth by default."  # proposed
+
+[keys."turbulence.roughness_height"]
+advanced = "Rough walls only; walls are smooth by default."  # proposed
+
+[keys."turbulence.sst_variant"]
+advanced = "A model variant or wall treatment; the default is the standard form."  # proposed
+
+[keys."turbulence.variant"]
+label = "k-epsilon variant"
+help = "Which k-epsilon form to use: standard, rng or realizable."
+
+[keys."turbulence.wall_damping"]
+advanced = "For the algebraic models (smagorinsky, wale, mixing_length) only."  # proposed
+
+[keys."turbulence.wall_function"]
+label = "Wall function"
+help = "How k-epsilon treats the cells next to a wall."
+
+[keys."turbulence.wall_omega"]
+advanced = "A model variant or wall treatment; the default is the standard form."  # proposed
+
+[keys."turbulence.wall_treatment"]
+advanced = "A model variant or wall treatment; the default is the standard form."  # proposed
+
+[keys."udf"]
+see = "case-schema.md#udf-user-functions-f-122"
+
+[keys."zone_sources"]
+see = "case-schema.md#zone_sourcesname-f-201"
