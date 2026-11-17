@@ -569,6 +569,8 @@ someone kept:
   not reproduce is dropped (listed in `dropped`), any other row stays. Each row reports `drawn_checks`, `drawn_failed`,
   `drawn_ignored` (inconsistent records, never believed either way) and `drawn_unchecked` (no model of the evaluator held). Without
   drawn records `plain()` equals `lessons` exactly.
+  A drawn record also counts only when no evidence entry of its row is newer than the entries it saw (ADR 0698): a consistent
+  record with such evidence is ignored as stale, counted in `drawn_stale` and listed in `stale`, and never drops or keeps a row.
 * Two held metrics (ADR 0665; "at equal flow and speed") are registered with `register_with_floor(ledger, h, model)`: the two
   compensating parameters are solved together in each arm by a damped Newton iteration on the held residuals (forward-difference
   Jacobian, backtracking on the tolerance-scaled residual, kept inside the brackets), and the registration computes the
