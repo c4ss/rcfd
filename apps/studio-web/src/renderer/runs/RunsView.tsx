@@ -35,6 +35,7 @@ import { pendingByRun, requestWords, withStartedRuns } from './control-model.js'
 import { RunBar, SelectedRunControls } from './RunControls.js';
 import type { RunRequest } from '../../shared/project.js';
 import { Provenance, reportValue, statusValue } from '../provenance/index.js';
+import { BudgetsButton, BudgetsPanel, ResidualValue, RunLogTools, residualColumns } from './RunExtras.js';
 import './runs.css';
 
 /** The order of the state filter's options. */
@@ -67,10 +68,14 @@ export function RunsView({ view, selected, onSelect, onOpenWorkspace }: RunsView
     ...(counts.has('other') ? [{ id: 'other', label: `Other, ${counts.get('other')}` }] : []),
   ];
   const filtered = filter.trim() !== '' || stateFilter !== 'all';
+  // F-837: the latest residuals of the engine's equations u and p, when some run has them
+  const resCols = useMemo(() => residualColumns(all), [all]);
+  const [budgetsOpen, setBudgetsOpen] = useState(false);
   return (
     <div className="rv">
       <section className="rv-list" aria-labelledby="rv-title">
-        <RunBar view={view} onStarted={onSelect} />
+        <RunBar view={view} onStarted={onSelect} lead={<BudgetsButton open={budgetsOpen} onChange={setBudgetsOpen} />} />
+        {budgetsOpen && <BudgetsPanel onClose={() => setBudgetsOpen(false)} />}
         <div className="rv-tools">
           <h1 id="rv-title" className="rv-title sr-only">
             Runs <span className="rv-total" data-words="data">{view.runs.total}</span>
@@ -128,10 +133,16 @@ export function RunsView({ view, selected, onSelect, onOpenWorkspace }: RunsView
                 <Column id="result" allowsSorting className="rv-col-result">
                   Result
                 </Column>
+                {resCols.map((k) => (
+                  <Column key={k} id={`res-${k}`} className="rv-col-res" textValue={`Last residual of ${k}`}>
+                    <span className="sr-only">Last residual of </span>
+                    <span data-words="data">{k}</span>
+                  </Column>
+                ))}
               </TableHeader>
               <TableBody
                 items={rows}
-                dependencies={[selected, view.runDetails, view.runRequests]}
+                dependencies={[selected, view.runDetails, view.runRequests, resCols]}
                 renderEmptyState={() => (
                   <div className="rv-nomatch" data-words="exception">
                     <p>No run matches this filter.</p>
@@ -147,7 +158,7 @@ export function RunsView({ view, selected, onSelect, onOpenWorkspace }: RunsView
                   </div>
                 )}
               >
-                {(r) => <RunTableRow row={r} faded={selected !== null && r.id !== selected} pending={pending.get(r.id) ?? null} />}
+                {(r) => <RunTableRow row={r} faded={selected !== null && r.id !== selected} pending={pending.get(r.id) ?? null} resCols={resCols} />}
               </TableBody>
             </Table>
           </div>
@@ -178,7 +189,7 @@ function StateCell({ row, faded }: { row: RunRow; faded: boolean }) {
   );
 }
 
-function RunTableRow({ row, faded, pending }: { row: RunRow; faded: boolean; pending: RunRequest | null }) {
+function RunTableRow({ row, faded, pending, resCols }: { row: RunRow; faded: boolean; pending: RunRequest | null; resCols: readonly string[] }) {
   const r = result(row);
   const failed = row.state === 'failed';
   return (
@@ -223,6 +234,11 @@ function RunTableRow({ row, faded, pending }: { row: RunRow; faded: boolean; pen
           </span>
         )}
       </Cell>
+      {resCols.map((k) => (
+        <Cell key={k} className="rv-cell-res">
+          <ResidualValue row={row} equation={k} />
+        </Cell>
+      ))}
     </Row>
   );
 }
@@ -314,6 +330,7 @@ function SelectedRun({
         </div>
       )}
       <SelectedRunControls view={view} row={row} onStarted={onSelect} />
+      <RunLogTools row={row} />
       <dl className="rv-grid" aria-label={`Numbers of ${row.id}`}>
         <Num caption={steady === true ? 'Iterations' : 'Steps'}>
           <Provenance subject={{ kind: 'number', source: statusValue({ run: row.id, quantity: steady === true ? 'iterations' : 'steps', shown: String(row.step), value: row.step, unit: { why: 'a count of the solver’s steps, status.json step' } }) }}>

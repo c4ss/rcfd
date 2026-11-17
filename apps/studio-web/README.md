@@ -1164,6 +1164,86 @@ from a case row's Run in the project home, or with `rcfd-runner start`):
 Open for the maintainer: whether to add a checker library under G5 (axe-core, MPL-2.0) on top of these checks. The
 written checks cover the rules of F-816 and need no dependency (ADR 0801, Addendum F-816, D1).
 
+## Run logs, runner budgets and field-view extras from the egui Studio (F-837)
+
+What the removed egui Studio (`crates/rcfd-studio`, read at 44e63df8 for what it offered, not how it looked) had beside
+its run list, field view and project view, rebuilt in this Studio's design with no new engine entry point. Every
+control is a pictogram with its name as tooltip and accessible name (G22); at rest no surface gains a chrome word (the
+word budgets of `src/shared/word-budget.ts` are unchanged). The tests are `tests/unit/f837.spec.ts` and
+`tests/e2e/f837.spec.ts`; the screenshots go to `test-results-visual/f837/`.
+
+| Built | Where | From the engine |
+|---|---|---|
+| The latest residuals of u and p, one column each, headed by the engine's names | Runs list | `run_status` `last_residual` (the last line of `residuals.jsonl`) |
+| The selected run's warnings at rest; its log's end (200 lines) and last events on demand, warnings named as such | Runs, a run selected | `read_project_file` of `runs/<id>/log.txt` from its end; `run_status {events: 50}` (the tool's maximum) |
+| Open the report | Runs, a run selected | `read_project_file` says `runs/<id>/output/report.html` is there; the system's program for HTML opens it (`shell.openPath`) |
+| Run again with fields stored | Runs, a run selected | `start_run {case, store: "plan"}` (ADR 0140) |
+| The runner's budgets: read, set, undo | Runs, beside the run bar | `.rcfd/runner-config.json` and `.rcfd/runner.json` (rcfd-runner's own files; no engine command sets them) |
+| Colour range of the whole run, or fixed | Field view | `data.field` of every stored snapshot (a cancellable work, F-832) |
+| View face on (2D), with a scale bar | Field view | none (the camera) |
+| The domain's extents in the caption | Field view | the stored mesh's points |
+| Save the view as PNG | Field view | none (the window's picture, the save dialog) |
+| The monitor on a log scale | Run workspace | none (values not above zero are counted and said, not drawn) |
+| designs/ and its entries | Project home | the folder (the engine's count from `project_info` shown when it differs) |
+| Data files of cases/ apart (no Edit or Run) | Project home | the engine's rule: a case is `.toml` or `.json` (ADR 0148) |
+| A case file with unsaved changes in the case editor marked `*`, a link to the session that holds them | Project home | the case port's pending changes |
+| The model and the session's summed cost of a finished Claude Code turn | Claude Code panel | Claude Code's own `result` and `system` lines |
+| A project folder named on the command line opens at start | start | none |
+
+Seven palette commands (G20): `runs.log`, `runs.report`, `runs.budgets` (group Project runs), `field.save_png`,
+`field.range`, `field.face_on`, `plots.monitor_log` (a new group, Run workspace). `project.queue_case` takes an optional
+`store` (`none`, the default as before, or `plan`).
+
+### Decisions (options, the recommendation taken; each reversible)
+
+- D1, the budgets' writer. (a) The main process writes `.rcfd/runner-config.json` with the runner's own checks (keys,
+  whole numbers, positive counts), only the keys set, never over a change since it was read (a hash), and keeps the
+  last write to undo; (b) hand it to Claude Code; (c) wait for an engine command. Taken: (a). The write is not atomic
+  (a rename is outside the house rule of `tests/unit/history.spec.ts`); the runner reads the file once, when it starts.
+  Proposed engine command: `rcfd-runner config set` or an MCP `set_runner_config`.
+- D2, the budgets' undo. (a) The panel's own Undo of its last write, refused over another writer's change unless asked
+  ("Undo anyway"); (b) a step in F-829's history, which is per case-editor session. Taken: (a). Undo of a write to a
+  file that was not there leaves `{}` (every key at the runner's default): the Studio removes no file.
+- D3, the report. (a) `shell.openPath` (the system's program for HTML); (b) show the file in its folder; (c) copy the
+  path. Taken: (a).
+- D4, the residual columns' heads. (a) The engine's names `u` and `p`, as data; (b) "Residual u" (a chrome word each).
+  Taken: (a); the accessible name is "Last residual of u".
+- D5, designs/ on the home. (a) Headed by the folder's own name `designs/` as data; (b) a group title "Designs" (+1
+  chrome word on home-open, a maintainer decision). Taken: (a). A folder entry ends in `/`.
+- D6, the unsaved mark. (a) `*`, a link to the case-editor session that holds the changes (Edit opens the file in a new
+  session, without them); (b) a word ("unsaved"). Taken: (a).
+- D7, the length unit. (a) Metres, from the engine's SI settings, with the reason as the tooltip; (b) no unit. Taken:
+  (a). The store names no length unit (a gap for the engine).
+- D8, face on. (a) A button that looks along the thin axis and keeps the view until Reset view; (b) make the fit face on
+  for every 2D case (changes F-808's default view). Taken: (a). The scale bar shows only while the view is within 0.1
+  degrees of an axis, so it is true across the picture.
+- D9, the whole run's range. (a) Read every stored snapshot in the renderer, as a cancellable work, and colour by the
+  min and max; (b) wait for an engine range query. Taken: (a); a cancel goes back to the snapshot's range.
+- D10, Run again with fields stored. (a) `start_run` with `store: "plan"` (the engine's store plan); (b) a `--set
+  output.store_interval=...` the Studio chooses. Taken: (a).
+- D11, the project argument. (a) The first argument that is not a switch, opened once the project state is read; (b)
+  only a `--project <folder>` switch. Taken: (a).
+- D12, the session's cost. (a) The sum of the `total_cost_usd` of the turns sent from this Studio window, shown after a
+  sum sign; (b) the session's whole history, turns from the terminal included (the Studio reads no cost from a
+  transcript). Taken: (a).
+
+### Needs the engine (not built)
+
+- The egui run setup's "simulate N s" helper (time step and step count from a duration), adaptive correctors and the
+  Courant fix: needs a case-facts query (cell sizes, a velocity scale) or `start_run {dry_run: true}` returning the
+  plan and its estimates.
+- Refine the mesh by 2: needs a mesh refine entry point (`refine_mesh {mesh, factor}` or a service method).
+- Open and save one case file anywhere, outside a project: the case editor's save is project-relative; needs a service
+  save to a path outside a project.
+- The store's length unit: needs a unit for the coordinates in the store's info.
+
+### Not built, no engine needed (open for the maintainer)
+
+- The egui Studio's save-or-discard question when the window closes with unsaved case changes: buildable from the case
+  port's pending changes, but it changes the quit path that G7 and `service.spec.ts` hold (a run goes on when the
+  Studio closes). Recommendation: a decision panel (F-829) on close only when a case-editor session has pending
+  changes, as a follow-up item.
+
 ## Security (G10)
 
 - The renderer is sandboxed (`app.enableSandbox()` and the window's settings), context-isolated, with Node integration

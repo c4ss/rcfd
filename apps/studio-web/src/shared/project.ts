@@ -145,6 +145,11 @@ export interface RunDetail {
   readonly finish: RunFinish | null;
   /** State changes among the last RUN_EVENTS events, oldest first. */
   readonly history: readonly RunStateChange[];
+  /**
+   * F-837: the residuals of the last line of residuals.jsonl (run_status `last_residual.residuals`), by the engine's
+   * equation name (`u`, `p`, `continuity`, ...); absent when the run has written none.
+   */
+  readonly lastResidual?: Readonly<Record<string, number>> | undefined;
   /** When the Studio read it (RFC 3339). */
   readonly readAt: string;
 }
@@ -152,6 +157,12 @@ export interface RunDetail {
 /** A file under `notes/`. */
 export interface NoteEntry {
   readonly path: string;
+}
+
+/** F-837: a top-level entry of `designs/` (a file, or a folder of a design's files), as the engine counts them. */
+export interface DesignEntry {
+  readonly path: string;
+  readonly folder: boolean;
 }
 
 /** One list of the project home: its entries, how many there are in all, and why it could not be read, if so. */
@@ -196,6 +207,8 @@ export interface ProjectView {
   readonly meshes: Listing<MeshEntry>;
   readonly runs: Listing<RunEntry>;
   readonly notes: Listing<NoteEntry>;
+  /** F-837: the top-level entries of designs/ (absent from a view made before F-837). */
+  readonly designs?: Listing<DesignEntry>;
   /** Run folders the engine could not read (`list_runs`, `skipped`). */
   readonly skippedRuns: readonly { readonly path: string; readonly message: string }[];
   /**

@@ -584,3 +584,35 @@
 .ph-change-text {
   overflow-wrap: anywhere;
 }
+
+/* F-837: the unsaved mark of a case file (the egui Studio's asterisk, a shape: its words are for readers and the
+   tooltip); the data files of cases/ under the cases table, and the entries of designs/, as plain rows of names */
+.ph-unsaved {
+  margin-left: var(--space-xs);
+  padding: 0 var(--space-xs);
+  font-weight: var(--font-weight-bold);
+  color: var(--role-text);
+  text-decoration: none;
+}
+.ph-datafiles ul,
+.ph-designs {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.ph-datafiles li,
+.ph-designs li {
+  height: 30px;
+  display: flex;
+  align-items: center;
+  gap: var(--space-lg);
+  padding: 0 var(--space-lg) 0 var(--space-xl);
+  border-bottom: var(--line-hair);
+}
+.ph-datafiles li {
+  color: var(--role-text-2);
+}
+.ph-datafiles li:last-child,
+.ph-designs li:last-child {
+  border-bottom: 0;
+}

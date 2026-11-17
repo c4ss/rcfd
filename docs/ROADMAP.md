@@ -14455,7 +14455,7 @@ Generated from `docs/studio-guardrails.md`, `PRODUCT.md` and `DESIGN.md` ([ADR 0
     if none exists); the preview equals the solver's mesh (test replacing preview_g1 and adaptive_preview_f475); e2e
     test.
   - note: Lost with rcfd-studio (preview.rs, preview_ui.rs). Traces: G14, G15.
-- [ ] **F-837** Electron Studio: run setup, logs and field-view extras from rcfd-studio
+- [~] **F-837** Electron Studio: run setup, logs and field-view extras from rcfd-studio
   - depends on: F-449, F-807, F-810
   - acceptance: Each capability the deleted rcfd-studio had and the Electron Studio lacks is built or recorded as
     declined by the maintainer: run setup for "simulate N s" (time step, adaptive correctors, store plan, Courant
@@ -14465,7 +14465,15 @@ Generated from `docs/studio-guardrails.md`, `PRODUCT.md` and `DESIGN.md` ([ADR 0
     Designs group, data files apart from cases, unsaved marks and save-or-discard on exit, the Claude model name and
     session cost; rcfd-gui's open-and-save of a single case file anywhere and the monitors plot log scale; one e2e test
     per built capability.
-  - note: Lost with rcfd-studio and rcfd-gui (list in the F-449 merge report). Traces: G14, G15.
+  - note: Lost with rcfd-studio and rcfd-gui (list in the F-449 merge report). Traces: G14, G15. Partial 2026-11-17
+    (merge, ADR 0801 Addendum 13): built with one e2e test each: residual columns u and p, run log tail and events with
+    warnings, open report.html, run again with fields stored (store plan), runner budgets panel
+    (.rcfd/runner-config.json, runner's checks, conflict-safe, undo), colour range of snapshot / whole run / fixed,
+    face-on view with scale bar and domain size, Save PNG, monitor log scale, designs/ group and data files apart,
+    unsaved mark, Claude model and session cost, project folder argument at start, seven palette commands; word budgets
+    unchanged. Needs engine: simulate-N-s helper with correctors and Courant fix (case-facts query or start_run dry
+    run), Refine x2 (refine_mesh), open/save one case file outside a project, store length unit. Not built:
+    save-or-discard on window close (proposed as an F-829 decision panel).
 - [ ] **F-838** Local-model assistant: keep, port or remove
   - depends on: F-449
   - acceptance: The maintainer decides what becomes of the local-model assistant that only rcfd-gui offered (presets

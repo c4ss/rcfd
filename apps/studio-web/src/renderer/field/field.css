@@ -196,3 +196,50 @@
 .fv-cut-slider.ui-slider {
   width: 200px;
 }
+
+/* F-837: the colour range modes, the face-on view and Save PNG in the tool row: pictograms only, as the derived
+   controls (G22); the fixed range's two ends in the frame's top right corner, as the cut plane's panel; the scale bar of
+   a face-on 2D view in the frame's bottom left corner, deep ink on white. */
+.fv-range {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-xs);
+}
+.fv-range .ui-segment {
+  width: var(--size-control);
+  padding: 0;
+  justify-content: center;
+}
+.fv-fixed {
+  position: absolute;
+  top: var(--space-lg);
+  right: var(--space-lg);
+  display: flex;
+  align-items: center;
+  gap: var(--space-md);
+  padding: var(--space-md);
+  background: var(--role-ground);
+  border: var(--line-rule);
+}
+.fv-fixed-field .ui-input {
+  width: 96px;
+}
+.fv-scalebar {
+  position: absolute;
+  left: var(--space-lg);
+  bottom: var(--space-lg);
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  padding: var(--space-xs) var(--space-sm);
+  background: var(--role-ground);
+  border: var(--line-rule);
+  font-size: var(--type-label-size);
+  pointer-events: none;
+}
+.fv-scalebar-bar {
+  display: block;
+  height: 6px;
+  border: var(--line-rule);
+  border-top: none;
+}

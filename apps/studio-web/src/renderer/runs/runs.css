@@ -301,3 +301,96 @@
 .rv-open-workspace {
   padding: var(--space-md) var(--space-xl) 0;
 }
+
+/* F-837: the latest residual columns (numbers, right-aligned), the selected run's tools (pictograms only), its warnings
+   at rest, its log and events when opened, and the runner's budgets under the run bar */
+.rv-col-res {
+  width: 88px;
+}
+.rv-cell-res {
+  text-align: right;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+.rv-res {
+  font-size: var(--type-label-size);
+}
+.rv-run-tools {
+  display: flex;
+  align-items: center;
+  gap: var(--space-xs);
+  padding: var(--space-sm) var(--space-xl) 0;
+}
+.rv-run-tools .ui-segment {
+  width: var(--size-control);
+  padding: 0;
+  justify-content: center;
+}
+.rv-warnings {
+  margin: 0;
+  padding: var(--space-sm) var(--space-xl) 0;
+  list-style: none;
+  color: var(--role-text-fail);
+  font-size: var(--type-label-size);
+  overflow-wrap: anywhere;
+}
+.rv-events {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: var(--type-label-size);
+  max-height: 200px;
+  overflow-y: auto;
+}
+.rv-event {
+  display: flex;
+  gap: var(--space-md);
+  overflow-wrap: anywhere;
+}
+.rv-event time {
+  flex: none;
+  color: var(--role-text-2);
+}
+.rv-event--warning {
+  color: var(--role-text-fail);
+  font-weight: var(--font-weight-medium);
+}
+.rv-log-file {
+  margin: 0;
+  font-size: var(--type-label-size);
+  font-weight: var(--font-weight-bold);
+}
+.rv-log-tail {
+  margin: 0;
+  max-height: 240px;
+  overflow: auto;
+  padding: var(--space-sm);
+  border: var(--line-hair);
+  font-size: var(--type-label-size);
+  white-space: pre;
+}
+.rv-budgets {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-md);
+  padding: var(--space-md) var(--space-xl);
+  border-bottom: var(--line-hair);
+}
+.rv-budgets-file {
+  margin: 0;
+  font-weight: var(--font-weight-medium);
+}
+.rv-budgets-fields {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: var(--space-md) var(--space-lg);
+}
+.rv-budgets-actions {
+  display: flex;
+  gap: var(--space-md);
+}
+.rv-budgets-toggle.ui-segment {
+  width: var(--size-control);
+  padding: 0;
+  justify-content: center;
+}

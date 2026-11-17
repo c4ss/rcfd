@@ -55,6 +55,16 @@ export interface FieldCanvasApi {
   pickCentre(): Pick | null;
   /** Orbit, zoom and reset from the keyboard; true when the key was used. */
   key(key: string): boolean;
+  /**
+   * F-837: looks straight along `axis` (the thin axis of a 2D case) from its + side at the whole surface, the other two
+   * axes across the view (a move of the view: Reset goes back to the fitted one).
+   */
+  faceOn(axis: 0 | 1 | 2): void;
+  /**
+   * F-837: the axis the camera looks straight along (within 0.1 degree), and the length of one CSS pixel on the surface's
+   * face toward the camera there (in the stored mesh's length unit); null when the view looks along no axis.
+   */
+  faceScale(): { readonly axis: 0 | 1 | 2; readonly perPixel: number; readonly widthPx: number } | null;
   /** P8 of ADR 0350: orbit one turn per 600 frames, `warm` frames, then `frames` timed frame intervals. */
   bench(options: { warm: number; frames: number; uncapped: boolean }): Promise<BenchResult>;
 }
@@ -70,6 +80,8 @@ export interface FieldCanvasProps {
   readonly onBackend: (b: Backend) => void;
   /** The view was moved by the user (true) or reset (false). */
   readonly onMoved: (moved: boolean) => void;
+  /** F-837: the camera changed (any move, fit or resize), for what is drawn over the view (the scale bar). */
+  readonly onView?: () => void;
   /** The first picture of this surface, values and range: drawn, finished on the GPU, and one animation frame later. */
   readonly onDrawn?: () => void;
   readonly onGridState?: (state: 'off' | 'computing' | 'on') => void;
@@ -216,7 +228,7 @@ interface SceneProps extends Omit<FieldCanvasProps, 'forceWebGL' | 'onBackend'> 
 
 let gridIds = 0;
 
-function Scene({ surface, values, range, grid, onMoved, onDrawn, onGridState, cut = null, arrows = null, apiRef, prepared, scalars }: SceneProps) {
+function Scene({ surface, values, range, grid, onMoved, onView, onDrawn, onGridState, cut = null, arrows = null, apiRef, prepared, scalars }: SceneProps) {
   // F-832: the arrays made off the main thread, when they belong to this surface
   const prep = prepared && prepared.surface === surface ? prepared : null;
   const box = prep ? { min: prep.min, max: prep.max } : undefined;
@@ -251,6 +263,9 @@ function Scene({ surface, values, range, grid, onMoved, onDrawn, onGridState, cu
   const controls = useRef<OrbitControls | null>(null);
   const report = useRef(onMoved);
   report.current = onMoved;
+  const viewCb = useRef(onView);
+  viewCb.current = onView;
+  const viewed = () => viewCb.current?.();
   // whether the user has moved the view since it was fitted (a resize refits an unmoved view)
   const userMoved = useRef(false);
   const moved = useRef((m: boolean) => {
@@ -303,7 +318,10 @@ function Scene({ surface, values, range, grid, onMoved, onDrawn, onGridState, cu
     c.enableDamping = false;
     c.screenSpacePanning = true;
     c.addEventListener('start', () => moved.current(true));
-    c.addEventListener('change', () => invalidate());
+    c.addEventListener('change', () => {
+      invalidate();
+      viewed();
+    });
     return () => {
       c.dispose();
       controls.current = null;
@@ -337,6 +355,7 @@ function Scene({ surface, values, range, grid, onMoved, onDrawn, onGridState, cu
     mesh.visible = false; // until its values are in
     fit(cam, controls.current, surface, aspectRef.current, boxRef.current);
     moved.current(false);
+    viewed();
     // `prep` is made from `surface` (a new surface comes with its own); it is read when the surface is set
   }, [surface, mesh, lines, cam, invalidate]);
 
@@ -422,6 +441,7 @@ function Scene({ surface, values, range, grid, onMoved, onDrawn, onGridState, cu
     cam.updateProjectionMatrix();
     if (surface && !userMoved.current) fit(cam, controls.current, surface, aspect, boxRef.current);
     invalidate();
+    viewed();
   }, [aspect, cam, invalidate, surface]);
 
   useImperativeHandle(
@@ -456,15 +476,64 @@ function Scene({ surface, values, range, grid, onMoved, onDrawn, onGridState, cu
         c?.update();
         moved.current(true);
         invalidate();
+        viewed();
       };
       const reset = () => {
         if (!surface) return;
         fit(cam, controls.current, surface, aspectRef.current, boxRef.current);
         moved.current(false);
         invalidate();
+        viewed();
       };
+      const boxNow = () => boxRef.current ?? (surface ? bounds(surface.points) : null);
       return {
         reset,
+        faceOn(axis) {
+          const b = boxNow();
+          if (!b) return;
+          const c = new THREE.Vector3((b.min[0]! + b.max[0]!) / 2, (b.min[1]! + b.max[1]!) / 2, (b.min[2]! + b.max[2]!) / 2);
+          const across = [0, 1, 2].filter((k) => k !== axis);
+          const w = b.max[across[0]!]! - b.min[across[0]!]!;
+          const h = b.max[across[1]!]! - b.min[across[1]!]!;
+          const half = THREE.MathUtils.degToRad(cam.fov / 2);
+          // the whole face in the view: its height in the vertical angle, its width in the horizontal one
+          const dist = 1.08 * Math.max(h / 2 / Math.tan(half), w / 2 / (Math.tan(half) * aspectRef.current)) + (b.max[axis]! - b.min[axis]!) / 2;
+          const dir = new THREE.Vector3();
+          dir.setComponent(axis, 1);
+          const up = new THREE.Vector3();
+          up.setComponent(across[1]!, 1);
+          cam.up.copy(up);
+          cam.position.copy(c).addScaledVector(dir, dist || 1);
+          cam.near = (dist || 1) / 100;
+          cam.far = (dist || 1) * 100;
+          cam.lookAt(c);
+          cam.updateProjectionMatrix();
+          const ctl = controls.current;
+          if (ctl) {
+            ctl.target.copy(c);
+            ctl.update();
+          }
+          moved.current(true);
+          invalidate();
+          viewed();
+        },
+        faceScale() {
+          const b = boxNow();
+          const el = renderer.domElement;
+          if (!b || el.clientHeight === 0) return null;
+          const target = controls.current ? controls.current.target : new THREE.Vector3();
+          const look = target.clone().sub(cam.position).normalize();
+          for (const axis of [0, 1, 2] as const) {
+            const along = Math.abs(look.getComponent(axis));
+            if (along < Math.cos(THREE.MathUtils.degToRad(0.1))) continue;
+            // the face toward the camera: the box's side on the camera's side of the axis
+            const face = look.getComponent(axis) < 0 ? b.max[axis]! : b.min[axis]!;
+            const d = Math.abs(cam.position.getComponent(axis) - face);
+            const height = 2 * d * Math.tan(THREE.MathUtils.degToRad(cam.fov / 2));
+            return { axis, perPixel: height / el.clientHeight, widthPx: el.clientWidth };
+          }
+          return null;
+        },
         pickAt(clientX, clientY) {
           const r = renderer.domElement.getBoundingClientRect();
           if (r.width === 0 || r.height === 0) return null;

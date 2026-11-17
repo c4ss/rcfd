@@ -37,10 +37,10 @@ export interface PaletteParam {
   readonly enum?: readonly string[];
 }
 
-export type PaletteGroup = 'Go to' | 'Project' | 'Project runs' | 'Case file' | 'Claude Code' | 'Service session' | 'Help';
+export type PaletteGroup = 'Go to' | 'Project' | 'Project runs' | 'Run workspace' | 'Case file' | 'Claude Code' | 'Service session' | 'Help';
 
 /** The order of the groups when nothing is typed: the frequent ones first. */
-export const GROUP_ORDER: readonly PaletteGroup[] = ['Go to', 'Project', 'Project runs', 'Case file', 'Claude Code', 'Service session', 'Help'];
+export const GROUP_ORDER: readonly PaletteGroup[] = ['Go to', 'Project', 'Project runs', 'Run workspace', 'Case file', 'Claude Code', 'Service session', 'Help'];
 
 export interface StudioCommand {
   readonly id: string;
@@ -238,6 +238,92 @@ export const STUDIO_COMMANDS: readonly StudioCommand[] = [
     cli: 'rcfd-runner start <case> --project <folder> --threads <n> --priority <n> [--mem-mb <n>] [--set path=value]...',
     mcp: 'read_project_file',
     note: 'The command is the run record’s; the clipboard is written by the main process.',
+  },
+
+  // ---- F-837: the run list's and the run workspace's extras of the removed egui Studio
+  {
+    id: 'runs.log',
+    title: 'Show the run log',
+    description: 'Show or hide the end of the selected run’s log.txt and its last events, with the runner’s and the solver’s warnings named as warnings.',
+    group: 'Project runs',
+    effect: 'navigate',
+    params: [],
+    engine: 'read_project_file of runs/<id>/log.txt and run_status {events} (rcfd-mcp --project <folder> --read-only)',
+    cli: 'rcfd-runner status <run> --project <folder>',
+    mcp: 'run_status',
+    note: 'Reads only. The CLI prints the status and the last events; the log is the file runs/<id>/log.txt.',
+  },
+  {
+    id: 'runs.report',
+    title: 'Open the run report',
+    description: 'Open the selected run’s report (runs/<id>/output/report.html, written by the solver with its results) in the system’s program for HTML.',
+    group: 'Project runs',
+    effect: 'navigate',
+    params: [],
+    engine: 'read_project_file of runs/<id>/output/report.html (whether it is there); the system’s program for HTML opens it',
+    cli: null,
+    mcp: 'read_project_file',
+    note: 'Opening a file in a browser is the system’s, not the engine’s; Claude Code reads the same report with read_project_file.',
+  },
+  {
+    id: 'runs.budgets',
+    title: 'Runner budgets',
+    description: 'Show or hide the runner’s budgets (.rcfd/runner-config.json: runs at once, threads, memory, polling) to read and set them; the runner reads them when it starts.',
+    group: 'Project runs',
+    effect: 'change',
+    params: [],
+    engine: 'the main process reads and writes .rcfd/runner-config.json (rcfd-runner’s Config, ADR 0123 section 6) and reads .rcfd/runner.json',
+    cli: null,
+    mcp: null,
+    note: 'No engine command sets the budgets (proposed: an rcfd-runner or MCP command); the file is the runner’s own, edited by hand or by Claude Code’s file tools. Every key is optional; the runner refuses unknown keys.',
+  },
+  {
+    id: 'field.save_png',
+    title: 'Save the field view as PNG',
+    description: 'Save the field view as it is drawn, with its legend and caption, as a PNG file you name in a dialog.',
+    group: 'Run workspace',
+    effect: 'change',
+    params: [],
+    engine: 'the main process captures the window’s picture and writes the file the save dialog names',
+    cli: null,
+    mcp: null,
+    note: 'The picture the Studio shows; the engine’s own renderer (rcfd-render) draws a store’s field with its own camera and colours.',
+  },
+  {
+    id: 'field.range',
+    title: 'Set the colour range',
+    description: 'Colour the field by the range of the shown snapshot, of the whole run (every stored snapshot), or by a fixed range you type.',
+    group: 'Run workspace',
+    effect: 'navigate',
+    params: [{ name: 'mode', kind: 'string', optional: false, enum: ['snapshot', 'run', 'fixed'], description: 'snapshot (the shown values), run (all stored snapshots) or fixed (typed in the view).' }],
+    engine: 'data.field of each stored snapshot (route local or the service), for the whole run',
+    cli: null,
+    mcp: null,
+    note: 'A view setting: it changes how the stored values are coloured, not the values.',
+  },
+  {
+    id: 'field.face_on',
+    title: 'View the field face on',
+    description: 'Look straight at a 2D case’s plane (along its one-cell axis), with a scale bar; Reset view goes back to the fitted view.',
+    group: 'Run workspace',
+    effect: 'navigate',
+    params: [],
+    engine: null,
+    cli: null,
+    mcp: null,
+    note: NAV_NOTE,
+  },
+  {
+    id: 'plots.monitor_log',
+    title: 'Monitor on a log scale',
+    description: 'Draw the run workspace’s monitor plot on a log scale, or back on a linear one; values not above zero are not drawn on a log scale, and how many is said.',
+    group: 'Run workspace',
+    effect: 'navigate',
+    params: [],
+    engine: null,
+    cli: null,
+    mcp: null,
+    note: NAV_NOTE,
   },
 
   // ---- Claude Code (F-814)

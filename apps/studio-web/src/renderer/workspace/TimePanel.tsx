@@ -13,6 +13,8 @@ import { SeriesData } from '../plots/series.js';
 import { MONITOR_STYLE, residualOrder, residualStyles, type LineStyle } from '../plots/style.js';
 import { caseName, type RunRow } from '../runs/model.js';
 import { IconButton, Quiet, Select, StatePictogram, Toggle } from '../ui/index.js';
+import { IconToggle } from '../ui/IconToggle.js';
+import { useCommandHandlers } from '../commands/host.js';
 import '../plots/plots.css';
 import { counterText, flagText, fraction, labelAfter, nearestPosition, valueText, type Band, type Position } from './model.js';
 import { Provenance, counterValue, seriesValue, type StopFacts } from '../provenance/index.js';
@@ -97,6 +99,16 @@ export function TimePanel(props: TimePanelProps) {
   const monitor = monitorChoice && monitorChoice.run === row.id && monitorNames.includes(monitorChoice.name) ? monitorChoice.name : (monitorNames[0] ?? null);
   const monitorSeries = useSeriesMap(series, version, (n) => new Map(n.map((k) => [k, MONITOR_STYLE])), 'monitor', monitor);
   const monitorEntry = series?.series.find((s) => s.name === monitor) ?? null;
+  // F-837: the monitor plot on a log scale (the egui Studio's linear/log switch); values not above zero are not drawn
+  // there, and how many is said (G6)
+  const [monitorLog, setMonitorLog] = useState(false);
+  const notPositive = useMemo(() => (monitorEntry ? monitorEntry.y.filter((v) => !(v > 0)).length : 0), [monitorEntry]);
+  useCommandHandlers({
+    'plots.monitor_log': {
+      unavailable: () => (monitorEntry ? null : 'The run shows no monitor plot: its case records no monitor besides its residuals.'),
+      run: () => setMonitorLog((v) => !v),
+    },
+  });
   // F-815: the compared run's residuals, and its line of the same monitor, over the selected run's
   const comparedResiduals = useSeriesMap(compare?.series ?? null, compare?.version ?? 0, residualStyles, 'residual');
   const comparedMonitor = useSeriesMap(compare?.series ?? null, compare?.version ?? 0, (n) => new Map(n.map((k) => [k, MONITOR_STYLE])), 'monitor', monitor ?? '');
@@ -292,6 +304,7 @@ export function TimePanel(props: TimePanelProps) {
           ) : (
             <small data-words="data">{monitor ?? name}</small>
           )}
+          {monitorEntry && <IconToggle icon="log-scale" label="Monitor on a log scale" isSelected={monitorLog} onChange={setMonitorLog} className="tp-monitor-log" />}
         </div>
         {monitor !== null && monitorEntry ? (
           <>
@@ -314,8 +327,13 @@ export function TimePanel(props: TimePanelProps) {
               </output>
             </div>
             <div className="tp-monitor-plot">
-              <PlotFrame series={monitorLines} version={plotVersion} log={false} xCaption="iteration" height={36} cursor={position?.step ?? null} />
+              <PlotFrame series={monitorLines} version={plotVersion} log={monitorLog} xCaption="iteration" height={36} cursor={position?.step ?? null} />
             </div>
+            {monitorLog && notPositive > 0 && (
+              <p className="tp-monitor-skipped" data-words="exception" data-skipped={notPositive}>
+                {`${notPositive} of ${monitorEntry.y.length} values are not above zero and are not drawn on a log scale.`}
+              </p>
+            )}
           </>
         ) : (
           <p className="tp-empty tp-empty--monitor" role="status">

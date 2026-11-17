@@ -100,6 +100,11 @@ export interface TurnView {
   readonly version: string | null;
   readonly model: string | null;
   readonly costUsd: number | null;
+  /**
+   * F-837: the costs the CLI reported (`total_cost_usd` of each result line) for the turns this Studio sent to the session
+   * since it started, summed; null when none reported one. Turns made elsewhere (a terminal) are not in it.
+   */
+  readonly sessionCostUsd: number | null;
 }
 
 /** The allow-list passed to claude (`--allowedTools`). */

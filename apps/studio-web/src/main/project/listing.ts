@@ -48,3 +48,20 @@ export async function filesUnder(root: string, top: string, max = MAX_NAMES): Pr
   out.sort((a, b) => (a < b ? -1 : a > b ? 1 : 0));
   return { names: out, total };
 }
+
+/**
+ * F-837: the top-level entries of `<root>/<top>` (files and folders), as the engine lists `designs/`
+ * (`rcfd_project::Project::designs`, which `project_info` counts): names only, no temporary file, sorted. Missing: empty.
+ */
+export async function entriesOf(root: string, top: string, max = MAX_NAMES): Promise<{ entries: readonly { path: string; folder: boolean }[]; total: number }> {
+  let list;
+  try {
+    list = await readdir(path.join(root, top), { withFileTypes: true });
+  } catch (e) {
+    if ((e as NodeJS.ErrnoException).code === 'ENOENT') return { entries: [], total: 0 };
+    throw e;
+  }
+  const all = list.filter((e) => !isTempName(e.name)).map((e) => ({ path: `${top}/${e.name}`, folder: e.isDirectory() }));
+  all.sort((a, b) => (a.path < b.path ? -1 : a.path > b.path ? 1 : 0));
+  return { entries: all.slice(0, max), total: all.length };
+}
