@@ -15860,12 +15860,24 @@ fixed by the item's registration ADR before any code.
     bracket and readings pass on a closed-form fold and pitchfork and find the ADR 0628 patch's zero 0.9507467.
     Test-only, default bits unchanged; partial because two rows were met only after amendment 1 and one of six mutations
     was not caught. Follow-up F-783 (The bifurcated branch of rule L's 16^3 punch path).
-- [ ] **F-780** Driver retry with the indefinite tangent after a refused factor
-  - depends on: F-774, F-779
+- [x] **F-780** Driver retry with the indefinite tangent after a refused factor
+  - depends on: F-774, F-779, F-783
   - acceptance: Every limit not stated here is registered in the ADR before the run. An opt-in driver retry with
     NewtonOptions::indefinite_tangent after a refused positive factor, reporting the inertia of every accepted state;
     the 16^3 block of ADR 0694 solves to full load with it; off by default, the default bits unchanged.
-  - note: Follow-up of F-774 (ADR 0694, 2026-11-17); after F-779.
+  - note: F-780 (ADR 0719, 2026-11-17): the opt-in `NewtonOptions::indefinite_retry` (off by default) makes the
+    load-stepping driver (`solve`, `solve_with`) repeat an increment whose attempt is refused by the positive pivot test
+    once more, from the same committed state, with `indefinite_tangent`; a retry that also fails is the attempt's
+    failure with both causes, and the driver then halves as before. Every accepted state's inertia (the negative pivots
+    of the non-zero-pivot `L D L^T` of the reduced tangent at the converged iterate) and whether it was retried are in
+    the new `LoadStep::inertia` and `LoadStep::retried`. The 16^3 punch block of ADR 0694 solves to full load with it in
+    ten increments (R/mu 0.33937627, w_c 0.06245308, bit-equal to the indefinite-tangent solve; increments 8 and 10
+    retried; nu = 0 to 0.9 and nu = 1 at full load). Fast controls: the ADR 0628 saddle patch (the default refuses at
+    step 8 exactly as derived; the retry reaches F_33 = 0.93 with nu 0, ..., 5, 11, 21, equal with both factors), rule L
+    and the 8^3 block (no refusal: bits unchanged), an inversion not retried, a retry that fails. Every other entry
+    point that takes NewtonOptions refuses the flag. Default bits unchanged (baseline_hashes, the default-bits tests);
+    eight of eight mutations caught; no amendment. Follow-up F-842 (The inertia and the retry of the nonlinear driver in
+    the solid case's output).
 - [x] **F-781** Drawn checks must be newer than the evidence they check
   - depends on: F-776
   - acceptance: Every limit not stated here is registered in the ADR before the run. lessons_drawn counts a drawn record
@@ -16241,3 +16253,11 @@ fixed by the item's registration ADR before any code.
     tangent along it, whether ADR 0711's rung 5 is reached on the same local root; a fast control on a toy whose plain
     local iteration from zero fails while its root exists; the default bits unchanged.
   - note: Follow-up of F-796 (ADR 0718, 2026-11-16).
+- [ ] **F-842** The inertia and the retry of the nonlinear driver in the solid case's output
+  - depends on: F-780
+  - acceptance: Every limit not stated here is registered in the ADR before the run. With the solid case's opt-in for
+    NewtonOptions::indefinite_retry, the inertia and the retry flag of every accepted increment written where the case
+    reports its increments and shown by the CLI summary, with a warning when an accepted state has nu > 0; the 16^3
+    block of ADR 0694 run through the case file reports nu = 1 at full load; off by default, the default bits, the
+    schema golden and the hash tables unchanged.
+  - note: Follow-up of F-780 (ADR 0719, 2026-11-16).
