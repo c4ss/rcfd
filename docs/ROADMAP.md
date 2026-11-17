@@ -15241,15 +15241,24 @@ fixed by the item's registration ADR before any code.
     dropped (P1 5.6e-3) or transposed (5.3e-3) in the pressure part's face gradient. Tests only, no library change;
     defaults bit-identical (baseline_hashes and the periodic, sliding and non-orthogonal suites pass). Static mesh, 2-D,
     ddt_correction off in the runs.
-- [ ] **F-754** Rhie-Chow ddt correction on coupled faces
+- [x] **F-754** Rhie-Chow ddt correction on coupled faces
   - depends on: F-752
   - acceptance: an opt-in giving the coupled (periodic) pairs the ddt correction the internal faces carry, defaults
     bit-identical; on ADR 0672's channel against its twin with ddt_correction on, the periodic run is within a
     registered limit of the twin on every step where the run without the opt-in is not. Every limit not stated here is
     registered in the ADR before the run.
-  - note: Follow-up of F-752 (ADR 0672, 2026-11-16). ADR 0674's sector against its annulus (rotational pairs, the same
-    settings with ddt_correction off) is a second case for its check; on rotational pairs the face velocity defect needs
-    R.
+  - note: ADR 0675, 2026-11-17: the opt-in PimpleSettings::coupled_ddt_correction (default false) gives the coupled
+    (periodic) pairs the transient Rhie-Chow term the internal faces carry, with the partner cell in the place of the
+    neighbour (its old velocity rotated by R on a rotational pair) and the pair mean of rAU. On ADR 0672's skewed
+    channel with ddt_correction on, the periodic run stays within 5.6e-15 U_ref of its unrolled twin on every one of 200
+    steps (limit 1e-8); without the opt-in it misses by 5.1e-6 to 1.4e-5 U_ref on every step from step 2 (at step 1 the
+    defect is zero by construction); the pair fluxes stay opposite to 3.3e-16. Supporting: on ADR 0674's warped sector
+    the run stays within 7.1e-15 of its annulus (without the opt-in up to 9.4e-5). Five of five mutations caught
+    (partner from the wrong time level, sign, owner rAU, the field not read, and the rotation dropped, caught on the
+    sector). Defaults bit-identical (baseline_hashes and the periodic, sliding and non-orthogonal suites pass). PISO
+    only (not the fractional step), implicit Euler in the runs, not on a moving mesh or with rhie_chow_step_consistent;
+    whether it becomes the default is open for the maintainer. Follow-up F-757 (Rhie-Chow ddt correction on coupled
+    faces in the fractional step and with BDF2).
 - [ ] **F-755** A forced control of the edit lock's starvation and of a lock left behind
   - depends on: F-751
   - acceptance: Every limit not stated here is registered in the ADR before the run. Test-only hooks (feature-gated, off
@@ -15271,3 +15280,10 @@ fixed by the item's registration ADR before any code.
     series are kept for diagnosis; a negative control with the body velocity left out of the forcing misses the lift
     amplitude and phase.
   - note: Follow-up of F-750 (ADR 0671, 2026-11-16).
+- [ ] **F-757** Rhie-Chow ddt correction on coupled faces in the fractional step and with BDF2
+  - depends on: F-754
+  - acceptance: the fractional step's ddt correction gives the coupled pairs the term behind the same opt-in, defaults
+    bit-identical; on ADR 0672's channel against its twin with ddt_correction on, the fractional-step run and a BDF2
+    PISO run are each within a registered limit of the twin on every step where the run without the opt-in is not. Every
+    limit not stated here is registered in the ADR before the run.
+  - note: Follow-up of F-754 (ADR 0675, 2026-11-16).
