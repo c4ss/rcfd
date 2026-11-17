@@ -14261,12 +14261,19 @@ Generated from `docs/studio-guardrails.md`, `PRODUCT.md` and `DESIGN.md` ([ADR 0
     equal bit for bit to an f64 subtraction of the stored bytes where the meshes match (cell count and MESH hash),
     refusal in words where they do not (ADR 0801 Addendum 10). Engine gaps: no field-difference entry point
     (compare_fields proposed), no mesh-identity query.
-- [ ] **F-816** Electron Studio: keyboard and assistive-technology pass
+- [x] **F-816** Electron Studio: keyboard and assistive-technology pass
   - depends on: F-806, F-808, F-810
   - acceptance: Every parity check passable by keyboard alone with visible focus; names and roles for every control;
     reduced motion respected; state never carried by colour alone; an automated check where a checker is approved under
     G5 and a written manual pass otherwise. No contrast requirement (maintainer, 2026-11-16).
-  - note: ADR 0800. Traces: G8; DESIGN Do's and Don'ts.
+  - note: ADR 0800. Traces: G8; DESIGN Do's and Don'ts. Done 2026-11-17 (merge, ADR 0801 Addendum 12):
+    tests/e2e/a11y.spec.ts walks 16 surface states by keys only (no trap, Escape returns focus, visible focus change on
+    every stop, every control reachable, no pointer-only handler, names and roles from the Chromium accessibility tree,
+    reduced motion, state not by colour alone); fixed: run band names now a roving toolbar, decision panel and confirm
+    strip keep Tab inside (aria-modal), Play steps at most every 500 ms under reduced motion, live band segment gets an
+    ink edge and a 'live' description; manual pass in apps/studio-web/README.md. Own checks instead of axe-core (G5).
+    Open: axe-core under G5; the workspace keeps requesting animation frames at rest (743/s after an orbit key), a G9
+    power question.
 - [~] **F-817** Electron Studio: performance regression bench for the product shell
   - depends on: F-808, F-810
   - acceptance: A script anyone can run that repeats P2, P4, P5, P7, P8 and P10 of docs/studio-guardrails.md G9 against

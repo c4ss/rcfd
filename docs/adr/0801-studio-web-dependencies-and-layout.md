@@ -1460,7 +1460,7 @@ cannot be made, refusals, conflicts and the decision panel; a work in progress (
 - `python scripts/third_party_licenses.py --check`: up to date.
 - `cargo test -p rcfd-cli --release --test docs_site --test workspace_graph`: 2 and 4 passed.
 
-## Addendum F-816: the keyboard and assistive-technology pass (2026-11-16)
+## Addendum 12: F-816, the keyboard and assistive-technology pass (2026-11-16)
 
 F-816 (G8, with G13, G20 and G22) checks every built surface of the Studio from the keyboard and the accessibility tree
 and fixes what failed. It adds **no dependency** and changes no Rust file, service method, reply shape, golden or
