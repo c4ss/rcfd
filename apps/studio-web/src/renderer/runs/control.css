@@ -1,0 +1,150 @@
+/* Run control (runs/RunControls.tsx, F-807): the run bar above the runs table, the queue form, the controls of the
+   selected run, the confirmation strip and the refusals. Flat and ruled like the rest of the Runs view: no shadows, square
+   corners, tokens only (tests/unit/run-control.spec.ts). */
+
+.rc-bar {
+  flex: none;
+  border-bottom: var(--line-rule);
+}
+.rc-bar-row {
+  min-height: 40px;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--space-sm) var(--space-md);
+  padding: var(--space-xs) var(--space-xl);
+}
+.rc-bar-title {
+  font-weight: var(--font-weight-bold);
+}
+.rc-case {
+  width: 260px;
+}
+.rc-spacer {
+  flex: 1;
+}
+.rc-quiet {
+  color: var(--role-text-2);
+}
+
+.rc-queue {
+  padding: var(--space-md) var(--space-xl) var(--space-lg);
+  border-top: var(--line-hair);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-md);
+}
+.rc-queue-fields {
+  display: grid;
+  grid-template-columns: repeat(3, 160px) minmax(240px, 1fr);
+  gap: var(--space-md) var(--space-lg);
+  align-items: start;
+}
+.rc-set-input {
+  height: auto;
+  min-height: calc(3 * var(--size-control));
+  padding-top: var(--space-xs);
+  resize: vertical;
+  font-family: var(--font-family);
+}
+.rc-queue-actions,
+.rc-run-row,
+.rc-confirm-actions,
+.rc-slow-actions,
+.rc-failure-actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--space-sm) var(--space-md);
+}
+
+.rc-feedback {
+  padding: 0 var(--space-xl) var(--space-md);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+}
+.rc-run .rc-feedback {
+  padding: 0;
+}
+.rc-status {
+  margin: 0;
+  max-width: 72ch;
+  overflow-wrap: anywhere;
+}
+.rc-status--slow {
+  font-weight: var(--font-weight-medium);
+}
+.rc-equiv {
+  margin: 0;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--space-xs) var(--space-sm);
+  font-size: var(--type-label-size);
+  color: var(--role-text-2);
+}
+.rc-code {
+  font-family: var(--font-family);
+  color: var(--role-text);
+  overflow-wrap: anywhere;
+}
+
+.rc-failure {
+  display: flex;
+  align-items: flex-start;
+  flex-wrap: wrap;
+  gap: var(--space-sm) var(--space-lg);
+  padding: var(--space-md) var(--space-lg);
+  background: var(--role-row-failed);
+  border-left: var(--line-rule);
+}
+.rc-failure-text {
+  flex: 1;
+  min-width: 240px;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+}
+.rc-problem {
+  margin: 0;
+  color: var(--role-text-fail);
+  font-weight: var(--font-weight-medium);
+  overflow-wrap: anywhere;
+}
+.rc-recovery {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.rc-confirm {
+  padding: var(--space-md) var(--space-lg);
+  border: var(--line-rule);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+}
+.rc-confirm-title {
+  margin: 0;
+  font-weight: var(--font-weight-bold);
+}
+.rc-confirm-body {
+  margin: 0;
+  max-width: 64ch;
+}
+
+/* a request the runner has not acted on yet, in the run list's result cell */
+.rc-pending {
+  display: block;
+  font-size: var(--type-label-size);
+  font-weight: var(--font-weight-medium);
+}
+
+/* the Run column of the project home's cases */
+.rc-case-run {
+  width: 1%;
+  white-space: nowrap;
+}
+.rc-slot {
+  display: contents;
+}

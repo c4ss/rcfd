@@ -23,12 +23,13 @@ step, step height and inlet height h = H / 2, a parabolic inflow of mean velocit
   comes out negative: the flow slows down behind the expansion and its pressure rises more than friction takes away
   over the 15 H.
 
-## What to click
+## What to look at
 
-1. Select the run of `cases/step-re800.toml` and choose `ux` in the "field" box. The darkest colours along the floor behind
-   the step are the reversed flow of the main bubble; those along the upper wall further downstream are the second bubble.
-2. Hover along the floor to find where `ux` changes sign: that is the reattachment point.
-3. Slide over the iterations to see the bubbles form while the solver converges (iterations, not time).
+1. Select the run of `cases/step-re800.toml` in Runs, choose Open in workspace, and choose `ux` in Field. The darkest
+   colours along the floor behind the step are the reversed flow of the main bubble; those along the upper wall further
+   downstream are the second bubble.
+2. Point along the floor to find where `ux` changes sign: that is the reattachment point.
+3. Scrub over the iterations to see the bubbles form while the solver converges (iterations, not time).
 4. Select the run of `cases/step-re400.toml`: a shorter main bubble and a much smaller upper one.
 
 ## How it relates to the benchmark, and the limits

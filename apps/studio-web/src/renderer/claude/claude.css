@@ -1,0 +1,374 @@
+/* The Claude Code panel (claude/ClaudePanel.tsx, F-814; DESIGN.md Components, Claude Code panel): the right column of
+   the workspace, ruled off in ink. A meadow head with a square ink dot; your messages in sky-wash on the right; Claude's
+   answers between silver hairlines with no box, bold where the reply bolds, reference chips beneath. Tokens only
+   (tests/unit/claude.spec.ts). */
+
+/* ---- the workspace: the project's views, then the panel ------------------------------------------------------------ */
+
+.ph-work {
+  flex: 1;
+  min-height: 0;
+  min-width: 0;
+  display: flex;
+}
+.ph-work > .ph-open {
+  min-width: 0;
+}
+/* the panel hidden: a slim ink-ruled strip that shows it again */
+.cc-show {
+  flex: none;
+  width: var(--size-tab-row);
+  border-left: var(--line-rule);
+  display: flex;
+  justify-content: center;
+  padding-top: var(--space-md);
+}
+
+.cc {
+  flex: none;
+  width: 360px;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  border-left: var(--line-rule);
+  background: var(--role-ground);
+  color: var(--role-text);
+}
+
+.cc-head {
+  flex: none;
+  height: var(--size-tab-row);
+  display: flex;
+  align-items: center;
+  gap: var(--space-md);
+  padding: 0 var(--space-xs) 0 var(--space-lg);
+  /* meadow (DESIGN.md: the Claude Code head); a role for it awaits the maintainer (tests/unit/tokens.spec.ts) */
+  background: var(--color-meadow);
+  border-bottom: var(--line-rule);
+}
+.cc-dot {
+  width: 8px;
+  height: 8px;
+  flex: none;
+  background: var(--role-rule);
+}
+.cc-title {
+  flex: none;
+  white-space: nowrap;
+  margin: 0;
+  font-size: var(--type-body-size);
+  font-weight: var(--font-weight-bold);
+}
+.cc-for {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.cc-head-actions {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+}
+
+.cc-empty,
+.cc-line {
+  margin: 0;
+  color: var(--role-text-2);
+  font-size: var(--type-label-size);
+  line-height: var(--type-body-line-height);
+}
+.cc-empty {
+  padding: var(--space-lg);
+}
+.cc-line--fail {
+  color: var(--role-text-fail);
+  display: flex;
+  gap: var(--space-xs);
+  align-items: baseline;
+}
+.cc-line--note {
+  color: var(--role-text);
+}
+
+.cc-notice {
+  flex: none;
+  padding: var(--space-md) var(--space-lg);
+  border-bottom: var(--line-hair);
+}
+.cc-notice p {
+  margin: 0 0 var(--space-sm);
+  max-width: var(--size-measure-chat);
+}
+.cc-notice-title {
+  display: flex;
+  gap: var(--space-sm);
+  align-items: center;
+  font-weight: var(--font-weight-bold);
+}
+.cc-notice--failed .cc-notice-title {
+  color: var(--role-text-fail);
+}
+
+.cc-section-head {
+  display: flex;
+  align-items: center;
+  gap: var(--space-md);
+  min-height: var(--size-control);
+}
+.cc-section-title {
+  margin: 0;
+  font-size: var(--type-label-size);
+  font-weight: var(--font-weight-bold);
+}
+.cc-read {
+  margin-left: auto;
+  color: var(--role-text-2);
+  font-size: var(--type-label-size);
+}
+
+/* ---- sessions ---------------------------------------------------------------------------------------------------- */
+
+.cc-sessions {
+  flex: none;
+  padding: var(--space-xs) var(--space-lg) var(--space-md);
+  border-bottom: var(--line-rule);
+}
+.cc-session-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  max-height: 168px;
+  overflow: auto;
+  border-top: var(--line-hair);
+}
+.cc-session {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--space-hair);
+  padding: var(--space-sm) var(--space-md);
+  border: 0;
+  border-bottom: var(--line-hair);
+  border-radius: var(--radius-none);
+  background: var(--role-ground);
+  text-align: left;
+  cursor: default;
+}
+.cc-session:hover {
+  background: var(--role-row-hover);
+}
+.cc-session:focus-visible {
+  outline-offset: var(--focus-offset-inset);
+}
+.cc-session--current,
+.cc-session--current:hover {
+  background: var(--role-row-selected);
+  box-shadow: inset 0 0 0 1px var(--role-row-selected-edge);
+}
+.cc-session[aria-disabled='true'] .cc-session-name {
+  color: var(--role-text-2);
+}
+/* F-816 (G8): unavailable is a dashed hairline as on every unavailable control (DESIGN.md), not ink-2 alone */
+.cc-session[aria-disabled='true'] {
+  border: 1px dashed var(--role-hair);
+}
+.cc-session-name {
+  font-weight: var(--font-weight-medium);
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.cc-session-state {
+  font-size: var(--type-label-size);
+  color: var(--role-text-2);
+}
+.cc-session-state--open,
+.cc-session-state--studio {
+  color: var(--role-text);
+  font-weight: var(--font-weight-medium);
+}
+.cc-warnings {
+  margin: var(--space-sm) 0 0;
+  padding: 0 0 0 var(--space-lg);
+  font-size: var(--type-label-size);
+  color: var(--role-text-2);
+}
+
+/* ---- the transcript ---------------------------------------------------------------------------------------------- */
+
+.cc-feed-wrap {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+.cc-mirror {
+  flex: none;
+  margin: 0;
+  padding: var(--space-sm) var(--space-lg);
+  border-bottom: var(--line-hair);
+  font-size: var(--type-label-size);
+}
+.cc-mirror-word {
+  font-weight: var(--font-weight-bold);
+}
+/* the log role's box (F-816): no box of its own, the list lays out as before */
+.cc-feed-log {
+  display: contents;
+}
+.cc-feed {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  list-style: none;
+  margin: 0;
+  padding: var(--space-lg);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-lg);
+}
+.cc-feed-end {
+  height: 0;
+}
+.cc-msg {
+  padding: var(--space-md) 10px;
+}
+.cc-msg--you {
+  align-self: flex-end;
+  max-width: 88%;
+  background: var(--role-chat-own);
+}
+.cc-msg--claude {
+  padding-left: 0;
+  padding-right: 0;
+  border-top: var(--line-hair);
+  border-bottom: var(--line-hair);
+}
+.cc-who {
+  margin-bottom: var(--space-xs);
+  font-size: var(--type-label-size);
+  font-weight: var(--font-weight-bold);
+}
+.cc-p {
+  margin: 0 0 var(--space-sm);
+  max-width: var(--size-measure-chat);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.cc-p:last-of-type {
+  margin-bottom: 0;
+}
+.cc-p b {
+  font-weight: var(--font-weight-bold);
+}
+.cc-tools {
+  margin: var(--space-xs) 0 0;
+  font-size: var(--type-label-size);
+  color: var(--role-text-2);
+}
+.cc-refs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-sm);
+  margin-top: var(--space-sm);
+}
+.cc-event {
+  font-size: var(--type-label-size);
+  color: var(--role-text-2);
+  overflow-wrap: anywhere;
+}
+.cc-event-word {
+  color: var(--role-text);
+  font-weight: var(--font-weight-bold);
+}
+.cc-event--denied {
+  color: var(--role-text);
+}
+
+/* ---- control files, approvals, the last turn --------------------------------------------------------------------- */
+
+.cc-files,
+.cc-rules {
+  list-style: none;
+  margin: 0 0 var(--space-md);
+  padding: 0;
+  border-top: var(--line-hair);
+  font-size: var(--type-label-size);
+}
+.cc-files li,
+.cc-rules li {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--space-md);
+  padding: var(--space-xs) 0;
+  border-bottom: var(--line-hair);
+  overflow-wrap: anywhere;
+}
+.cc-file {
+  font-weight: var(--font-weight-medium);
+}
+.cc-file-meta {
+  color: var(--role-text-2);
+  white-space: nowrap;
+}
+.cc-approvals {
+  flex: none;
+  padding: var(--space-xs) var(--space-lg);
+  border-top: var(--line-rule);
+}
+.cc-disclose {
+  margin-left: auto;
+}
+.cc-allow {
+  max-height: 280px;
+  overflow: auto;
+  padding-bottom: var(--space-sm);
+}
+.cc-allow .cc-line {
+  margin-bottom: var(--space-sm);
+}
+.cc-turn {
+  flex: none;
+  padding: 0 var(--space-lg);
+}
+.cc-turn .cc-line {
+  padding: var(--space-xs) 0;
+}
+
+/* ---- typing ------------------------------------------------------------------------------------------------------ */
+
+.cc-compose {
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+  padding: var(--space-md) var(--space-lg) var(--space-lg);
+  border-top: var(--line-hair);
+}
+.cc-field {
+  display: flex;
+}
+.cc-input {
+  flex: 1;
+  height: auto;
+  min-height: 60px;
+  padding: var(--space-sm) var(--space-md);
+  line-height: var(--type-body-line-height);
+  resize: none;
+}
+.cc-input:focus {
+  border-color: var(--role-field-border-focus);
+}
+.cc-compose-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-md);
+}
+.cc-hint {
+  margin-right: auto;
+  color: var(--role-text-2);
+  font-size: var(--type-label-size);
+}

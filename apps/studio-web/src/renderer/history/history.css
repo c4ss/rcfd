@@ -1,0 +1,126 @@
+/* Undo, redo and the decisions around them (F-829). DESIGN.md's world: ghost buttons on the sky header band, a floating
+   panel that is white, ruled in ink and lifted with the popover shadow (the Flat Field Rule allows it on floating
+   overlays only), square corners, words carrying every state. Tokens only (tests/unit/history.spec.ts). */
+
+.hi-controls {
+  display: flex;
+  align-items: center;
+  gap: var(--space-xs);
+  min-width: 0;
+}
+.hi-button {
+  max-width: 260px;
+}
+/* nothing to undo or redo: the arrow alone, the words its name (G22); the button stays a ghost on the band */
+.hi-button[data-disabled] {
+  background: transparent;
+  border-color: transparent;
+  color: var(--role-text-2);
+}
+.hi-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.hi-controls .ui-unavailable {
+  max-width: 260px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.hi-panel {
+  position: fixed;
+  top: calc(var(--size-header) + var(--size-header-rule) + var(--space-sm));
+  right: var(--space-xl);
+  z-index: 10;
+  width: 460px;
+  max-height: calc(100vh - var(--size-header) - var(--size-footer) - var(--space-xxl));
+  overflow: auto;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-md);
+  padding: var(--space-lg);
+  background: var(--role-popover);
+  border: var(--line-rule);
+  border-color: var(--role-popover-edge);
+  border-radius: var(--radius-none);
+  box-shadow: var(--shadow-popover);
+  color: var(--role-text);
+  font-size: var(--type-body-size);
+}
+.hi-panel-title {
+  margin: 0;
+  font-size: var(--type-body-size);
+  font-weight: var(--font-weight-bold);
+  overflow-wrap: anywhere;
+}
+/* The panel moves focus itself (to the safe choice, or to the title); Enter acts on what has it, so its focus shows
+   however the panel was opened, Ctrl+Z included (a modifier key does not count as keyboard use for focus-visible). */
+.hi-panel-title:focus,
+.hi-panel .ui-button[data-focused] {
+  outline: var(--focus-width) solid var(--role-focus-ring);
+  outline-offset: var(--focus-offset);
+}
+.hi-panel--failed .hi-panel-title {
+  color: var(--role-text-fail);
+}
+.hi-panel-body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+  overflow-wrap: anywhere;
+}
+.hi-panel-body p {
+  margin: 0;
+}
+/* F-837: the files and changes a close without saving loses */
+.hi-losses {
+  margin: 0;
+  padding-left: var(--space-lg);
+}
+.hi-choices {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--space-sm);
+}
+.hi-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--type-label-size);
+}
+.hi-table th,
+.hi-table td {
+  text-align: left;
+  padding: var(--space-xs) var(--space-sm) var(--space-xs) 0;
+  border-bottom: var(--line-hair);
+  overflow-wrap: anywhere;
+  vertical-align: top;
+}
+.hi-table thead th {
+  color: var(--role-text-2);
+  font-weight: var(--font-weight-medium);
+  border-bottom: var(--line-rule);
+}
+.hi-table tbody th {
+  font-weight: var(--font-weight-bold);
+}
+
+/* A typed value that another writer overtook (KeyRow): the field stays, the choice sits under it. */
+.hi-overtaken {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+  padding: var(--space-sm) 0;
+  border-top: var(--line-hair);
+  font-size: var(--type-label-size);
+  font-weight: var(--font-weight-medium);
+  overflow-wrap: anywhere;
+}
+.hi-overtaken p {
+  margin: 0;
+}
+.hi-overtaken .hi-choices {
+  flex-direction: row;
+  flex-wrap: wrap;
+}

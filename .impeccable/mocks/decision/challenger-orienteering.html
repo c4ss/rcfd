@@ -1,0 +1,103 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><title>rcfd Studio - run workspace (map)</title>
+<link href="https://fonts.googleapis.com/css2?family=Archivo+Narrow:wght@400;500;600&family=Archivo:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+:root{--w:#FFFFFF;--yel:#F5D04A;--grn:#9DBF6B;--brn:#B5713A;--blu:#3D8FD1;--pur:#B0228C;--ink:#2B2620;--mut:#6B645B;--line:#DAD4C8;--pan:#FAF8F3}
+*{box-sizing:border-box}
+html,body{width:1440px;height:900px;overflow:hidden;margin:0}
+body{background:var(--w);color:var(--ink);font:13px/1.35 Archivo,system-ui,sans-serif;display:grid;grid-template-columns:452px 1fr 320px;grid-template-rows:46px 1fr 206px 26px}
+.n{font-family:"Archivo Narrow",Archivo,sans-serif;font-variant-numeric:tabular-nums}
+button,select,input{font:inherit;color:var(--ink);background:var(--w);border:1px solid #BDB6A8;border-radius:3px;padding:3px 9px}
+button{cursor:pointer}button.on{background:var(--ink);color:#fff;border-color:var(--ink)}
+header{grid-column:1/4;display:flex;align-items:center;gap:14px;padding:0 14px;border-bottom:1px solid var(--line);background:var(--pan)}
+header b{font-weight:600}.sp{flex:1}
+.tabs{display:flex;gap:2px}.tabs button{border:0;border-bottom:2px solid transparent;border-radius:0;background:none;color:var(--mut)}
+.tabs .on{color:var(--ink);border-color:var(--ink);background:none}
+.syn{color:var(--mut);font-size:11px;border:1px dashed #BDB6A8;padding:1px 7px;border-radius:3px}
+#left{grid-row:2/4;border-right:1px solid var(--line);display:flex;flex-direction:column;min-height:0}
+.proj{padding:9px 12px;display:flex;gap:8px;align-items:center;border-bottom:1px solid var(--line)}.proj select{flex:1}.proj small{color:var(--mut)}
+table{border-collapse:collapse;width:100%}
+th{font-weight:600;font-size:11px;text-align:left;color:var(--mut);text-transform:uppercase;letter-spacing:.05em;padding:0;border-bottom:1px solid var(--ink)}
+th button{border:0;background:none;padding:5px 8px;font:inherit;color:inherit;text-transform:inherit;letter-spacing:inherit;width:100%;text-align:left}
+td{padding:5px 8px;border-bottom:1px solid var(--line);vertical-align:top}
+.runs td{font-size:12px}.runs tr.sel td{background:#F6E6F1;box-shadow:inset 0 0 0 0 var(--pur)}.runs tr.sel td:first-child{box-shadow:inset 3px 0 var(--pur)}
+.runs .id{font-size:11px;color:var(--mut);display:block}
+.badge{display:inline-flex;gap:4px;align-items:center;font-weight:600;font-size:11px;padding:0 6px;border-radius:2px;border:1px solid var(--ink);white-space:nowrap}
+.b-ok{background:var(--grn)}.b-run{background:var(--yel)}.b-q{background:#fff;border-style:dashed}.b-bad{background:var(--ink);color:#fff}
+.sect{padding:9px 12px 4px;display:flex;align-items:baseline;gap:10px;border-top:1px solid var(--line)}
+.sect h4{margin:0;font-size:12px;font-weight:600;text-transform:uppercase;letter-spacing:.06em}.sect span{color:var(--mut);font-size:11px}
+.cd th{background:var(--pan)}.cd td{font-size:13px}.cd .num{font-weight:600;color:var(--pur);font-size:15px}
+.cd input[type=checkbox]{accent-color:var(--pur);width:15px;height:15px;margin:0}
+.pdot{display:inline-block;width:20px;height:20px;border-radius:50%;border:2px solid var(--pur);color:var(--pur);font:600 12px/16px "Archivo Narrow",sans-serif;text-align:center}
+#view{grid-row:2;display:flex;flex-direction:column;min-height:0}
+.tool{display:flex;gap:8px;align-items:center;padding:7px 12px;border-bottom:1px solid var(--line)}
+.tool label{display:flex;gap:6px;align-items:center;color:var(--mut)}
+.sw{width:30px;height:16px;border-radius:9px;background:#CFC9BC;position:relative;display:inline-block}.sw:after{content:"";position:absolute;left:2px;top:2px;width:12px;height:12px;border-radius:50%;background:#fff}
+.map{flex:1;position:relative;overflow:hidden;background:linear-gradient(90deg,#E9ECF6 0,#E4E6EE 14%,#EFE9CB 34%,#F7E9A4 55%,#F6EBB8 80%,#F2EEDB 100%)}
+.wallb{position:absolute;left:0;right:0;height:8px;background:var(--grn);opacity:.7}
+.cont{position:absolute;inset:0;background:
+repeating-radial-gradient(ellipse 120px 90px at 300px 50%,transparent 0 22px,rgba(181,113,58,.85) 22px 23px),
+repeating-radial-gradient(ellipse 260px 80px at 640px 50%,transparent 0 30px,rgba(181,113,58,.6) 30px 31px)}
+.cyl{position:absolute;left:272px;top:50%;width:56px;height:56px;margin-top:-28px;border-radius:50%;background:var(--blu);border:2px solid var(--ink)}
+.legend{position:absolute;right:14px;top:14px;background:rgba(255,255,255,.94);border:1px solid #BDB6A8;padding:8px 10px;width:214px}
+.legend .bar{height:10px;margin:6px 0 3px;background:linear-gradient(90deg,#00224e,#35456c,#666970,#948e77,#c8b866,#fee838)}
+.legend p{margin:0;display:flex;justify-content:space-between;color:var(--mut);font-size:11px}
+.legend i{display:inline-block;width:16px;border-top:1px solid var(--brn);vertical-align:middle;margin-right:4px}
+.scale{position:absolute;left:14px;bottom:12px;font-size:11px;color:var(--mut);display:flex;gap:6px;align-items:center}.scale i{width:80px;height:4px;border:1px solid var(--ink);border-top:0}
+#bottom{grid-row:3;border-top:1px solid var(--line);display:grid;grid-template-columns:1fr 200px;grid-template-rows:auto 1fr}
+.scrub{grid-column:1/3;padding:8px 12px;display:flex;gap:10px;align-items:center;border-bottom:1px solid var(--line)}
+.track{flex:1;height:22px;position:relative;background:linear-gradient(90deg,var(--ink) 0 62%,#CFC9BC 62%) center/100% 4px no-repeat}
+.track:before{content:"";position:absolute;left:0;right:0;top:9px;height:4px;background:repeating-linear-gradient(90deg,#999 0 1px,transparent 1px 14.4px)}
+.track b{position:absolute;left:62%;top:2px;width:4px;height:18px;background:var(--ink);border-radius:1px}
+.res{padding:6px 12px}.res h4,.mon h4{margin:0 0 4px;font-weight:600;color:var(--mut);font-size:11px;text-transform:uppercase;letter-spacing:.06em;display:flex;gap:12px}
+.mon{padding:6px 12px;border-left:1px solid var(--line)}.mon .big{font-size:30px;font-weight:600}
+#chat{grid-row:2/4;border-left:1px solid var(--line);display:flex;flex-direction:column;background:var(--pan)}
+#chat h3{margin:0;padding:12px 14px;font-size:13px;font-weight:600;border-bottom:1px solid var(--line)}
+.msgs{flex:1;padding:14px;display:flex;flex-direction:column;gap:14px;overflow:hidden}
+.u{align-self:flex-end;background:#EAE4D6;padding:8px 11px;border-radius:8px 8px 2px 8px;max-width:85%}
+.a{border-left:3px solid var(--ink);padding-left:11px}.a small{color:var(--mut);display:block;margin-bottom:3px}.a code{background:#EFEADD;padding:0 4px}
+.ask{padding:10px 14px;border-top:1px solid var(--line);display:flex;gap:6px}.ask input{flex:1}
+footer{grid-column:1/4;border-top:1px solid var(--line);display:flex;align-items:center;padding:0 14px;color:var(--mut);font-size:11px;background:var(--pan)}
+</style></head><body>
+<header><b>rcfd Studio</b><nav class="tabs"><button>Setup</button><button class="on">Run</button><button>Results</button><button>Compare</button></nav><span class="sp"></span><span class="syn">synthetic preview data</span><button>New run</button></header>
+<aside id="left">
+ <div class="proj"><small>Project</small><select><option>wind-tunnel</option><option>quick-start</option><option>axial-fan</option></select><button>Filter</button></div>
+ <table class="runs"><thead><tr><th><button>Run &#9650;</button></th><th><button>Status</button></th><th><button>Iter</button></th><th><button>Wall</button></th></tr></thead><tbody class="n">
+  <tr><td>step-re400<span class="id">r-20261028T152128-37c8</span></td><td><span class="badge b-ok">&#10003; Finished, converged</span></td><td>429</td><td>13.2 s<span class="id">res_u 9.07e-7</span></td></tr>
+  <tr><td>step-re800<span class="id">r-20261028T152128-806b</span></td><td><span class="badge b-ok">&#10003; Finished</span></td><td>612</td><td>19.8 s</td></tr>
+  <tr class="sel"><td>cylinder-re100<span class="id">r-20261028T152128-d5cb</span></td><td><span class="badge b-run">&#9654; Running</span></td><td>1840</td><td>t = 12.40<span class="id">of 20.00 s</span></td></tr>
+  <tr><td>cylinder-re200<span class="id">r-20261028T152128-db3f</span></td><td><span class="badge b-q">&#9675; Queued</span></td><td>-</td><td>-</td></tr>
+  <tr><td>naca0012-aoa4<span class="id">r-20261029T230332-0566</span></td><td><span class="badge b-bad">&#9650; Failed</span></td><td>211</td><td>diverged<span class="id">at it 211</span></td></tr>
+ </tbody></table>
+ <div class="sect"><h4>Control description</h4><span class="n">cylinder-re100 · t = 12.40 s</span><span class="sp"></span><button>+ Probe</button></div>
+ <table class="cd"><thead><tr><th><button>No.</button></th><th><button>Location x, y (m)</button></th><th><button>|U| m/s</button></th><th><button>p Pa</button></th><th><button>Seen</button></th></tr></thead><tbody class="n">
+  <tr><td><span class="pdot">1</span></td><td>0.35, 0.00</td><td class="num">1.62</td><td class="num">-0.84</td><td><input type="checkbox" checked aria-label="reviewed"></td></tr>
+  <tr><td><span class="pdot">2</span></td><td>0.62, 0.08</td><td class="num">0.47</td><td class="num">-1.12</td><td><input type="checkbox" checked aria-label="reviewed"></td></tr>
+  <tr><td><span class="pdot">3</span></td><td>1.10, -0.05</td><td class="num">0.91</td><td class="num">-0.30</td><td><input type="checkbox" aria-label="reviewed"></td></tr>
+ </tbody></table>
+</aside>
+<main id="view">
+ <div class="tool"><div class="tabs"><button class="on">Surface</button><button>Cut plane</button><button>Iso-surface</button><button>Streamlines</button></div><span class="sp"></span>
+  <label>Mesh grid <span class="sw"></span></label><label>Field <select><option>|U| velocity magnitude</option><option>p pressure</option></select></label></div>
+ <div class="map"><div class="wallb" style="top:0"></div><div class="wallb" style="bottom:0"></div><div class="cont"></div><div class="cyl"></div>
+  <svg style="position:absolute;inset:0" width="100%" height="100%" font-family="Archivo Narrow,sans-serif"><polyline points="420,230 560,200 800,255" fill="none" stroke="#B0228C" stroke-width="2.5"/><path d="M640 20V560" stroke="#B0228C" stroke-width="1.5" stroke-dasharray="6 4"/>
+   <g fill="#fff" stroke="#B0228C" stroke-width="3"><circle cx="420" cy="230" r="13"/><circle cx="560" cy="200" r="13"/><circle cx="800" cy="255" r="13"/></g>
+   <g fill="#B0228C" font-size="14" font-weight="600" text-anchor="middle"><text x="420" y="235">1</text><text x="560" y="205">2</text><text x="800" y="260">3</text></g><text x="646" y="34" font-size="12" fill="#B0228C">cut plane x = 0.70 m</text></svg>
+  <div class="legend"><b>velocity magnitude |U| m/s</b><div class="bar"></div><p class="n"><span>0.00</span><span>1.84</span></p><p style="margin-top:4px"><span><i></i>iso-lines every 0.2 m/s</span></p></div>
+  <div class="scale n"><i></i>0.5 m</div></div>
+</main>
+<section id="bottom">
+ <div class="scrub"><button>&#9198;</button><button>&#9654;</button><button>&#9197;</button><span class="n">t = 12.40 s</span><div class="track"><b></b></div><span class="n">snapshot 62 / 100</span><select><option>cylinder-re100</option></select></div>
+ <div class="res"><h4><span>Residuals</span><span>&#9644; continuity</span><span style="color:var(--blu)">&#9644; u</span><span style="color:var(--brn)">&#9644; p (dashed)</span></h4>
+  <svg width="840" height="116" viewBox="0 0 840 116" style="display:block"><g stroke="#E4DFD3" font-size="10" fill="#6B645B"><path d="M40 4H830M40 22H830M40 40H830M40 58H830M40 76H830M40 94H830M40 112H830"/><text x="2" y="8" stroke="none">1e-1</text><text x="2" y="44" stroke="none">1e-3</text><text x="2" y="80" stroke="none">1e-5</text><text x="2" y="114" stroke="none">1e-7</text></g>
+  <polyline fill="none" stroke="#2B2620" stroke-width="1.5" points="40,8 120,30 200,52 280,66 360,78 440,84 520,88 600,90 680,92 760,92 830,93"/>
+  <polyline fill="none" stroke="#3D8FD1" stroke-width="1.5" points="40,10 120,36 200,58 280,72 360,84 440,92 520,96 600,98 680,100 760,100 830,101"/>
+  <polyline fill="none" stroke="#B5713A" stroke-width="1.5" stroke-dasharray="4 3" points="40,6 120,24 200,44 280,58 360,70 440,78 520,82 600,84 680,86 760,86 830,87"/>
+  <path d="M590 2V114" stroke="#2B2620" stroke-dasharray="2 3"/></svg></div>
+ <div class="mon"><h4>Monitor</h4><div class="big n">Cd = 1.34</div><svg width="170" height="44"><polyline fill="none" stroke="#2B2620" stroke-width="1.5" points="0,8 20,26 40,34 60,28 80,24 100,26 120,23 140,24 170,23"/></svg><div style="color:var(--mut);font-size:11px">history, last 40 it</div></div>
+</section>
+<aside id="chat"><h3>Claude Code · wind-tunnel</h3>
+ <div class="msgs"><div class="u">Why did naca0012-aoa4 diverge?</div>
+  <div class="a"><small>Claude Code</small>It diverged at iteration 211. The Courant number passed 14 near the trailing edge by it 205, well above the limit of 1 for the explicit convection step, and residuals rose three decades in six iterations. Try <code>dt = 2e-4</code> and restart from it 200.</div></div>
+ <div class="ask"><input placeholder="Ask about this run"><button class="on">Send</button></div></aside>
+<footer>Early-stage software. Not validated for engineering decisions.</footer>
+</body></html>

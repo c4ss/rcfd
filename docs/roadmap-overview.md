@@ -38,7 +38,7 @@ Of the 190 roadmap items, 95 are done, 63 are partly done and 32 have not starte
 - FAN-01, the reference fan case, stalls. The steady rotating-frame solve of the reference fan does not reach the expected operating point. Several suspected causes have each been ruled out as the single cause, and the diagnosis is open. See [the fan milestone](milestone-fan.md).
 - There is no structural solver yet. Stress and strain pictures, and blade deformation, need one; its plan was approved on 2026-11-12 (crate `rcfd-fem`, ADR 0270, 0290 and 0310) and two of its pieces exist (a direct SPD solver and an eigensolver).
 - Sliding-mesh transient solves, needed for rotor-stator interaction and broadband noise, are not available.
-- The desktop app is being rebuilt. The old interface is frozen. The new one is described below and does not have a window yet.
+- The desktop app is being rebuilt. The old egui interface was removed (F-449). The new one (an Electron app in `apps/studio-web`) runs from a checkout, with no installer yet; `docs/tutorials/desktop-assistant.md` shows how to start it.
 
 ## What we are working on
 
@@ -52,7 +52,7 @@ The first target is a 120 mm axial computer fan. The aim is a parametric fan tha
 
 ### Studio, the new desktop application
 
-Studio will render with wgpu and treat a project as a folder holding many runs. You will be able to play a run back through time, run several in the background, and chat with Claude Code in a sidebar. The libraries underneath exist and are tested without a window: the project format, a background run service, a time-series store, a wgpu render core and the Claude Code bridge. The application shell and the Claude Code plugin come next. See [the Studio plan](ui-restart-plan.md).
+Studio treats a project as a folder holding many runs. You will be able to play a run back through time, run several in the background, and chat with Claude Code in a side panel, the Studio's only assistant: the local-model assistant of the old egui app was removed (F-838). The libraries underneath exist and are tested without a window: the project format, a background run service and a time-series store. The Studio is an Electron app that draws with three.js (WebGPU, or WebGL 2); see [the Studio plan](ui-restart-plan.md) and ADR 0800.
 
 ### Faster tests that stay strict
 

@@ -715,7 +715,8 @@ The OpenAI-compatible wire format (`POST /v1/chat/completions`, `GET /v1/models`
 `Authorization: Bearer`) and the default local ports (Ollama 11434, LM Studio 1234, llama.cpp 8080, vLLM 8000) are recalled
 from memory and unverified against current documentation. They were checked only against the loopback mock server written
 for the tests. That server shares the author's understanding of the format, so agreement is not independent evidence about
-any real server.
+any real server. The assistant crate and these tests were removed with the local-model assistant (F-838); the paragraph
+stays as the record of what they were checked against.
 
 The lid-driven cavity logic check (top-row mean ux, return flow) is a sanity bound, not a benchmark comparison.
 

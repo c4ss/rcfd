@@ -1,0 +1,396 @@
+/* The run list and run state (runs/RunsView.tsx, F-806). The runs table of DESIGN.md on the Table primitive (48px rows,
+   silver hairlines, the selected row in sky-wash boxed in ink, a failed row in fail-wash), and the selected run's number
+   grid beside it, divided by a 1px ink rule. Tokens only (tests/unit/runs.spec.ts). */
+
+.rv {
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 460px;
+}
+
+/* ---- the list --------------------------------------------------------------------------------------------------- */
+
+.rv-list {
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+.rv-tools {
+  height: 40px;
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: var(--space-lg);
+  padding: 0 var(--space-xl);
+  border-bottom: var(--line-rule);
+}
+.rv-title {
+  margin: 0;
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-sm);
+  font-size: var(--type-title-sm-size);
+  font-weight: var(--type-title-sm-weight);
+}
+.rv-total {
+  font-weight: var(--font-weight-regular);
+  color: var(--role-text-2);
+}
+.rv-filter {
+  width: 240px;
+}
+.rv-state {
+  width: 180px;
+}
+.rv-read {
+  margin-left: auto;
+  color: var(--role-text-2);
+  white-space: nowrap;
+}
+.rv-scroll {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+}
+.rv-table .ui-column {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background: var(--role-ground);
+}
+.rv-table .ui-column:first-child,
+.rv-table .ui-cell:first-child {
+  padding-left: var(--space-xl);
+}
+.rv-col-case {
+  width: 38%;
+}
+.rv-col-state {
+  width: 128px;
+}
+.rv-cell-case,
+.rv-cell-result {
+  line-height: var(--type-body-line-height);
+}
+.rv-case {
+  display: block;
+  font-size: var(--type-title-sm-size);
+  font-weight: var(--type-title-sm-weight);
+  overflow-wrap: anywhere;
+}
+.rv-id {
+  display: block;
+  font-size: var(--type-label-size);
+  font-weight: var(--type-label-weight);
+  color: var(--role-text-2);
+}
+.rv-head {
+  display: block;
+  font-weight: var(--font-weight-bold);
+  white-space: nowrap;
+}
+.rv-note {
+  display: -webkit-box;
+  -webkit-line-clamp: 1;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  font-size: var(--type-label-size);
+  color: var(--role-text-2);
+  overflow-wrap: anywhere;
+}
+/* a failure never fades (the Fade by Colour Rule): its sentence stays in the failure colour, selected or not */
+.rv-note--failed {
+  color: var(--role-text-fail);
+}
+.rv-state-word {
+  color: var(--role-text);
+}
+.rv-file {
+  font-weight: var(--font-weight-medium);
+  white-space: nowrap;
+}
+.rv-empty,
+.rv-empty-line {
+  margin: 0;
+  color: var(--role-text-2);
+  max-width: var(--size-measure-empty);
+}
+.rv-empty {
+  padding: var(--space-lg) var(--space-xl);
+}
+.rv-empty .rv-file {
+  color: var(--role-text);
+}
+.rv-nomatch {
+  display: flex;
+  align-items: center;
+  gap: var(--space-lg);
+  padding: var(--space-lg) var(--space-xl);
+}
+.rv-nomatch p {
+  margin: 0;
+}
+.rv-error {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--space-lg);
+  padding: var(--space-md) var(--space-xl);
+  background: var(--role-row-failed);
+  overflow-wrap: anywhere;
+}
+.rv-skipped {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  border-top: var(--line-rule);
+}
+.rv-skipped li {
+  display: flex;
+  gap: var(--space-md);
+  align-items: baseline;
+  padding: var(--space-sm) var(--space-xl);
+  border-bottom: var(--line-hair);
+}
+
+/* ---- the selected run ------------------------------------------------------------------------------------------- */
+
+.rv-run {
+  min-height: 0;
+  overflow-y: auto;
+  border-left: var(--line-rule);
+  display: flex;
+  flex-direction: column;
+}
+.rv-run--none {
+  padding: var(--space-lg) var(--space-xl);
+  gap: var(--space-lg);
+  align-items: flex-start;
+}
+.rv-run-head {
+  min-height: 40px;
+  flex: none;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--space-xs) var(--space-lg);
+  padding: var(--space-sm) var(--space-sm) var(--space-sm) var(--space-xl);
+  border-bottom: var(--line-rule);
+}
+.rv-run-title {
+  margin: 0;
+  font-size: var(--type-title-sm-size);
+  font-weight: var(--type-title-sm-weight);
+  overflow-wrap: anywhere;
+}
+.rv-run-head .rv-id {
+  display: inline;
+}
+.rv-clear {
+  margin-left: auto;
+}
+
+/* The number grid of DESIGN.md: three columns of hairline cells, an 11px ink-2 caption over a 22px bold value. */
+.rv-grid {
+  margin: 0;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  border-bottom: var(--line-hair);
+}
+.rv-num {
+  min-width: 0;
+  padding: var(--space-md) var(--space-lg);
+  border-right: var(--line-hair);
+  border-top: var(--line-hair);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-hair);
+}
+.rv-num:nth-child(3n) {
+  border-right: 0;
+}
+.rv-num:nth-child(-n + 3) {
+  border-top: 0;
+}
+.rv-num dt {
+  font-size: var(--type-label-size);
+  font-weight: var(--type-label-weight);
+  color: var(--role-text-2);
+  overflow-wrap: anywhere;
+}
+.rv-num dd {
+  margin: 0;
+  font-size: var(--type-headline-size);
+  font-weight: var(--type-headline-weight);
+  letter-spacing: var(--type-headline-tracking);
+  line-height: 1.1;
+  overflow-wrap: anywhere;
+}
+.rv-num dd.rv-num-word {
+  font-size: var(--type-body-size);
+  font-weight: var(--font-weight-medium);
+  letter-spacing: 0;
+  line-height: var(--type-body-line-height);
+  padding-top: var(--space-xs);
+}
+.rv-caption {
+  margin: 0;
+  padding: var(--space-sm) var(--space-xl);
+  font-size: var(--type-label-size);
+  color: var(--role-text-2);
+  border-bottom: var(--line-hair);
+}
+.rv-block {
+  padding: var(--space-md) var(--space-xl) var(--space-lg);
+  border-bottom: var(--line-hair);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+}
+.rv-block-title {
+  margin: 0;
+  font-size: var(--type-body-size);
+  font-weight: var(--font-weight-bold);
+}
+.rv-why {
+  margin: 0;
+  overflow-wrap: anywhere;
+  max-width: 60ch;
+}
+.rv-why--failed {
+  color: var(--role-text-fail);
+  font-weight: var(--font-weight-medium);
+}
+.rv-history {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.rv-history li {
+  display: grid;
+  grid-template-columns: 64px minmax(0, 1fr);
+  column-gap: var(--space-md);
+  padding: var(--space-xs) 0;
+  border-top: var(--line-hair);
+}
+.rv-history li:first-child {
+  border-top: 0;
+}
+.rv-history time {
+  color: var(--role-text-2);
+}
+.rv-history-to {
+  font-weight: var(--font-weight-medium);
+}
+.rv-history-why {
+  grid-column: 2;
+  font-size: var(--type-label-size);
+  color: var(--role-text-2);
+  overflow-wrap: anywhere;
+}
+.rv-source {
+  margin: 0;
+  padding: var(--space-md) var(--space-xl);
+  font-size: var(--type-label-size);
+  color: var(--role-text-2);
+}
+
+/* F-810: the selected run's way to the run workspace, under its head. */
+.rv-open-workspace {
+  padding: var(--space-md) var(--space-xl) 0;
+}
+
+/* F-837: the latest residual columns (numbers, right-aligned), the selected run's tools (pictograms only), its warnings
+   at rest, its log and events when opened, and the runner's budgets under the run bar */
+.rv-col-res {
+  width: 88px;
+}
+.rv-cell-res {
+  text-align: right;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+.rv-res {
+  font-size: var(--type-label-size);
+}
+.rv-run-tools {
+  display: flex;
+  align-items: center;
+  gap: var(--space-xs);
+  padding: var(--space-sm) var(--space-xl) 0;
+}
+.rv-run-tools .ui-segment {
+  width: var(--size-control);
+  padding: 0;
+  justify-content: center;
+}
+.rv-warnings {
+  margin: 0;
+  padding: var(--space-sm) var(--space-xl) 0;
+  list-style: none;
+  color: var(--role-text-fail);
+  font-size: var(--type-label-size);
+  overflow-wrap: anywhere;
+}
+.rv-events {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: var(--type-label-size);
+  max-height: 200px;
+  overflow-y: auto;
+}
+.rv-event {
+  display: flex;
+  gap: var(--space-md);
+  overflow-wrap: anywhere;
+}
+.rv-event time {
+  flex: none;
+  color: var(--role-text-2);
+}
+.rv-event--warning {
+  color: var(--role-text-fail);
+  font-weight: var(--font-weight-medium);
+}
+.rv-log-file {
+  margin: 0;
+  font-size: var(--type-label-size);
+  font-weight: var(--font-weight-bold);
+}
+.rv-log-tail {
+  margin: 0;
+  max-height: 240px;
+  overflow: auto;
+  padding: var(--space-sm);
+  border: var(--line-hair);
+  font-size: var(--type-label-size);
+  white-space: pre;
+}
+.rv-budgets {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-md);
+  padding: var(--space-md) var(--space-xl);
+  border-bottom: var(--line-hair);
+}
+.rv-budgets-file {
+  margin: 0;
+  font-weight: var(--font-weight-medium);
+}
+.rv-budgets-fields {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: var(--space-md) var(--space-lg);
+}
+.rv-budgets-actions {
+  display: flex;
+  gap: var(--space-md);
+}
+.rv-budgets-toggle.ui-segment {
+  width: var(--size-control);
+  padding: 0;
+  justify-content: center;
+}

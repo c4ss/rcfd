@@ -4225,11 +4225,37 @@
     "title": "Electron Studio to parity with rcfd-studio",
     "phase": 9,
     "deps": [
-      "F-447"
+      "F-447",
+      "F-824",
+      "F-825",
+      "F-827",
+      "F-828",
+      "F-829",
+      "F-830",
+      "F-831",
+      "F-832",
+      "F-801",
+      "F-802",
+      "F-803",
+      "F-804",
+      "F-805",
+      "F-806",
+      "F-807",
+      "F-808",
+      "F-809",
+      "F-810",
+      "F-811",
+      "F-812",
+      "F-813",
+      "F-814",
+      "F-816",
+      "F-817",
+      "F-822",
+      "F-833"
     ],
     "status": "todo",
     "acceptance": "An Electron shell in TypeScript over the service and the bulk route chosen by F-447 passes every parity check of ADR 0350 section 5 (the docs/ui-restart-plan.md section 6 list and the Studio checks added since), automated with Playwright where a check can be automated and by the maintainer's view-and-report where it cannot; its field values equal the Rust reader's bit for bit; rcfd-studio is frozen while it is built.",
-    "note": "ADR 0350 section 5. NEEDS THE USER: starts only on the maintainer's go-ahead after a viable F-447. ADR 0350 addendum 1 (2026-11-12) measured both bulk routes as fast enough; recommended: the Node reader of `store.rts` (R2) for local projects, `data.*` (R1) for a remote service, monitors fetched once and then by increments. Open before the start: the maintainer's go-ahead, QA1 (the cost of `monitors.get`) and QA2 (the route). F-456 (ADR 0353): the history is fetched once, then `since` increments at 0.3 ms; QA1 is answered."
+    "note": "ADR 0350 section 5. NEEDS THE USER: starts only on the maintainer's go-ahead after a viable F-447. ADR 0350 addendum 1 (2026-11-12) measured both bulk routes as fast enough; recommended: the Node reader of `store.rts` (R2) for local projects, `data.*` (R1) for a remote service, monitors fetched once and then by increments. Open before the start: the maintainer's go-ahead, QA1 (the cost of `monitors.get`) and QA2 (the route). F-456 (ADR 0353): the history is fetched once, then `since` increments at 0.3 ms; QA1 is answered. ADR 0800 (2026-11-16) splits the work into F-800 to F-823; F-448 depends on the parity subset."
   },
   {
     "id": "F-449",
@@ -4238,9 +4264,9 @@
     "deps": [
       "F-448"
     ],
-    "status": "todo",
+    "status": "done",
     "acceptance": "After F-448 passes and the maintainer has used the new shell and approved, rcfd-studio and the frozen rcfd-gui are removed with their tests, docs that name them are updated, and the two layer lines of crates/rcfd-cli/tests/workspace_graph.rs are removed with the maintainer's approval; every other crate and test is unchanged and the gate passes.",
-    "note": "ADR 0350 section 5. NEEDS THE USER: removal of crates and an edit of an existing test."
+    "note": "ADR 0350 section 5. NEEDS THE USER: removal of crates and an edit of an existing test. Done 2026-11-16 ahead of F-448 by the maintainer's decision (ADR 0800 §10, G14): crates/rcfd-studio and crates/rcfd-gui removed (47,263 lines, 381 tests; Cargo.lock 471 to 216 packages), launch scripts, CI excludes and doc references gone; lost capabilities are F-835 to F-838 and lost engine tests F-834."
   },
   {
     "id": "F-450",
@@ -8254,5 +8280,462 @@
     "status": "partial",
     "acceptance": "Every limit not stated here is registered in the ADR before the run. The public element-level entry points of the incompatible Hex8 (modes_and_strains and its variants, condensed_force_and_tangent and its variants, the mode iteration records, enhanced_force_and_tangent and its variants, and nonlinear::hex8_* with the Incompatible formulation) accept a state of the material layout followed by nine modes, by an opt-in or by a rule that leaves every current call bit-identical: the material part used as now and the modes as the start of the local iteration, measured against the driver's own evaluation on the ADR 0727 patch tests under the warm start; the transient restore's refusal names the first element and its two lengths; the default bits unchanged.",
     "note": "F-847 (ADR 0729, 2026-11-17): the public element entry points of the incompatible Hex8 accept a committed state of the warm start by a length rule. A state of the material layout (8 x state_size values) takes the code it took before. A state with nine more values is a warm state: its material part is used as now, and its last nine values are the committed modes, the start of the local iteration (if that iteration fails, it restarts from zero, ADR 0660 D1). Every other length is refused with the error it got before. The rule covers modes_and_strains{,_with}, condensed_force_and_tangent{,_backtracked,_update}, mode_iteration_record{,_from} and trust_region_record (a start given by the caller wins), enhanced_force_and_tangent{,_with} (the modes are given, the trailing ones ignored), and nonlinear::hex8_force_and_tangent_at, hex8_internal_force_at and hex8_second_piola_kirchhoff with Incompatible. On the ADR 0727 patch tests under the warm start (4 rules, 5 cases, 36 elements each), every entry point returns the driver's own evaluation bit for bit and every patch row meets its limit. The patch modes are exactly zero, so the use of the modes as the start is shown on one element: from the committed root 1 local iterate instead of 4, other bits from another start, and the restart from zero for NaN modes. The transient restore now names the first element and its two lengths. A digest of every default call and every refusal is equal before and after; the default bit records and baseline_hashes pass. Under a flipped default the four patch tests no longer fail at an entry point, but still fail at their own PT4 set-up line, which reads the J2 state by the material layout. Seven of seven mutations were caught. Lead (2026-11-17): recorded partial by the status rule (the patch rows were met only after amendment 1, written after the first run panicked on the J2 case); the agent proposed done; done is the maintainer call."
+  },
+  {
+    "id": "F-800",
+    "title": "Electron Studio: go-ahead and the apps/studio-web layout",
+    "phase": 8,
+    "deps": [
+      "F-447"
+    ],
+    "status": "done",
+    "acceptance": "The maintainer's go-ahead for F-448 (given 2026-11-16, ADR 0800 Q1) is in ADR 0800; apps/studio-web/ exists outside the Cargo workspace with exact versions and a committed lock file; every dependency is listed with its licence in THIRD_PARTY_LICENSES.md and justified in ADR 0800 or a follow-up ADR (G5); crates/rcfd-cli/tests/workspace_graph.rs and every existing test pass unchanged.",
+    "note": "ADR 0800, ADR 0801 (accepted 2026-11-16; Electron 45.3.3). Traces: G5, G14; PRODUCT Stack."
+  },
+  {
+    "id": "F-801",
+    "title": "Electron Studio: hardened shell and test harness",
+    "phase": 8,
+    "deps": [
+      "F-800"
+    ],
+    "status": "done",
+    "acceptance": "An Electron main process, a sandboxed and context-isolated renderer with nodeIntegration off, a strict Content Security Policy, no remote content and an allow-list of IPC calls through the preload script (G10); a Playwright test that drives the packaged shell and asserts each of those settings; cold start to an empty project view within the P10 limit of docs/studio-guardrails.md G9 on the maintainer's machine.",
+    "note": "ADR 0800; ADR 0801 addendum 1 (@playwright/test 1.65.1; P10 on Electron 45.3.3: median 476 ms, max 989 ms, one run under load 0.87 to 1.00). Traces: G9 (P10), G10, G13; PRODUCT Stack."
+  },
+  {
+    "id": "F-802",
+    "title": "Electron Studio: design tokens and accessible primitives from DESIGN.md",
+    "phase": 8,
+    "deps": [
+      "F-801"
+    ],
+    "status": "done",
+    "acceptance": "The DESIGN.md tokens (colour, type ramp, rules, pictogram grid) as one CSS token file and a TypeScript export of the same values; the primitives of DESIGN.md Components (buttons, segmented toggles, inputs, tabs, select, switch, table, slider, pictograms) built on React Aria Components; a test that the tokens equal DESIGN.md; a keyboard test of each primitive; a view-and-report step for the maintainer.",
+    "note": "ADR 0800. Traces: G1, G8; DESIGN Colors, Typography, Shapes, Components. Done 2026-11-16: tokens.ts single source (tokens.css generated), primitives in src/renderer/ui/, gallery at #/dev/primitives, keyboard e2e. Contrast requirement removed and contrast-driven token changes reverted to DESIGN.md (maintainer, 2026-11-16; ADR 0800 section 7)."
+  },
+  {
+    "id": "F-803",
+    "title": "Electron Studio: service client for control and events",
+    "phase": 8,
+    "deps": [
+      "F-801"
+    ],
+    "status": "done",
+    "acceptance": "A TypeScript client of rcfd-service/1 in the main process (JSON-RPC over TCP or stdio, events.poll long-poll), with reconnect after the service restarts; P1 and P2 of ADR 0350 met again through the product shell; no existing service method, reply shape or golden changes (G4); a test that the renderer cannot reach the service except through the IPC allow-list.",
+    "note": "ADR 0800. Traces: G2, G4, G7, G9 (P2); PRODUCT Operating Context. Done 2026-11-16: main-process client (TCP, events.poll, reconnect), renderer via MessagePort + allow-list (window.studioService); P1 p99 0.30 ms, P2 p99 1.17 ms (ADR 0801 addendum 2, decisions D1-D4 proceeded on recommendations, awaiting the maintainer's review)."
+  },
+  {
+    "id": "F-804",
+    "title": "Electron Studio: bulk field data by the R2 reader and the R1 route, bit for bit",
+    "phase": 8,
+    "deps": [
+      "F-803"
+    ],
+    "status": "done",
+    "acceptance": "The Node reader of store.rts (R2) for local projects and the opt-in data.* route (R1) for a remote service, moved from bench/electron/io/ into the product with tests; every value the renderer receives equals the Rust reader's value bit for bit for the ADR 0350 data sets (P12, G3); P4 met through the product shell.",
+    "note": "ADR 0800. Traces: G3, G9 (P4), G2; ADR 0350 addendum 1. Done 2026-11-16 (ADR 0801 addendum 3): R2 reader in a worker thread and R1 data.* route, values to the page over a data port; P12 bit-exact on 400 fields (6.4e8 values) both routes; P4 met by R2 (raw p50 21.7 / p99 32.5 ms), R1 missed it at full machine load (p50 47.0 / p99 104.2 ms). rcfd serve has no flag to enable data.* (Q6, maintainer)."
+  },
+  {
+    "id": "F-805",
+    "title": "Electron Studio: project home and the live project folder",
+    "phase": 8,
+    "deps": [
+      "F-803",
+      "F-802"
+    ],
+    "status": "done",
+    "acceptance": "Open a project folder, list its cases, meshes, runs and notes through the engine (docs/ui-restart-plan.md section 8, ADR 0173); an edit made outside the Studio (Claude Code, the CLI, a text editor) shows within 2 s without a reload; the Studio keeps no project state of its own (G12); a Playwright test of each; a view-and-report step.",
+    "note": "ADR 0800. Traces: G12; PRODUCT Operating Context. Surface not yet designed: shape it with impeccable inside the DESIGN.md system before building. Done 2026-11-16: project home (src/renderer/project), read through rcfd-mcp --read-only per open project, live updates under 2 s (e2e), no Studio state in the folder; case and note names read from the folder until the engine has list_cases/list_notes (README F-805 D2); decisions D1-D7 in the README."
+  },
+  {
+    "id": "F-806",
+    "title": "Electron Studio: run list and run state",
+    "phase": 8,
+    "deps": [
+      "F-805"
+    ],
+    "status": "done",
+    "acceptance": "The runs table of DESIGN.md (case, id, state pictogram and word, result, sort and filter, selection that fades the others by colour and never fades a failure); run state from the runner, updated live; a test that closes and kills the Studio during a run and shows, on restart, that the run went on and its true state is displayed (G7); a view-and-report step.",
+    "note": "ADR 0800. Traces: G6, G7, G8; DESIGN Runs table, Named Rules (Fade by Colour). Done 2026-11-16: Runs tab (src/renderer/runs), live state from the runner feed plus 1 s re-read while a run is active; G7 close-and-kill e2e with a real rcfd-runner run; paused and cancelled pictograms drawn (DESIGN.md addition proposed); steady runs no longer show time 0 (engine reports 0 for steady runs; shown in words)."
+  },
+  {
+    "id": "F-807",
+    "title": "Electron Studio: run control (quick run, stop, pause, queue)",
+    "phase": 8,
+    "deps": [
+      "F-806"
+    ],
+    "status": "done",
+    "acceptance": "Start a case as a quick run, stop, pause and queue through the runner service only; each action shown in the run list within P2; a test for each action and for a refused action (the error names the problem and the recovery).",
+    "note": "ADR 0800. Traces: G2, G7; PRODUCT Capabilities (parity: quick run, stop). Done 2026-11-16: run bar in the Runs view and Run per case on the home; start_run/pause_run/resume_run/cancel_run on a writable project server (shared with the F-812 case editor), rcfd-runner ensure to start the runner; confirmations name what is lost; P2 met for every action (<= 19.4 ms to the painted frame)."
+  },
+  {
+    "id": "F-808",
+    "title": "Electron Studio: field viewport on three.js WebGPU",
+    "phase": 8,
+    "deps": [
+      "F-804",
+      "F-802"
+    ],
+    "status": "partial",
+    "acceptance": "Mesh and fields on surfaces drawn by three.js WebGPURenderer with a TSL material that colours from the raw scalar through a lookup table, with the WebGL2 fallback; the colour of every vertex equals rcfd-render's colour map for the same value (G3, a test over the full range and the end points); the legend drawn from the same table; hover shows the value at the cursor; a mesh-grid toggle; P7 and P8 met; a view-and-report step.",
+    "note": "ADR 0800. Traces: G3, G9 (P7, P8); DESIGN Field view, Named Rules (Data Owns the Field). Partial 2026-11-16 (ADR 0801 addendum 5): field viewport src/renderer/field on WebGPU (WebGL2 fallback tested), dev route #/dev/field; P7 met by R2 (median 71 ms; R1 2.0 s), P8 met (p99 frame 4.4 ms at 1e6 triangles); hover value bit-exact. Open: a 256-entry table matches rcfd-render exactly only at its 256 points and within 3/255 elsewhere (F808-D1, maintainer: accept or switch to exact shader evaluation); view-and-report pending."
+  },
+  {
+    "id": "F-809",
+    "title": "Electron Studio: derived pictures (iso-surfaces, streamlines, cut planes, vectors)",
+    "phase": 8,
+    "deps": [
+      "F-808"
+    ],
+    "status": "partial",
+    "acceptance": "Each derived picture computed by the engine (rcfd-render or a registered opt-in service method) or, if computed in the Studio, matched against the engine's reference value for value within a tolerance registered before the code; a view that does not apply to a case (for example a cut plane on a 2D case) is disabled with the reason shown (G6).",
+    "note": "ADR 0800. Traces: G3, G6, G2; PRODUCT Operating Context. Partial 2026-11-16: field viewport has cut plane (rcfd-render's clip rule, on the GPU) and vectors (overlay_vectors' rule, stored components unchanged), checked against engine references with tolerances T1-T3 registered before the code (ADR 0801 Addendum 7); cut plane disabled on 2D cases with the reason in name and tooltip (G22). Left: iso-surfaces and streamlines have no engine entry point (shown unavailable); no CLI/MCP way to make the cut/arrows of a store (G16); no length unit for mesh coordinates. Engine needs listed in ADR 0801, \"Engine follow-ups of the Studio items\" (2026-11-17)."
+  },
+  {
+    "id": "F-810",
+    "title": "Electron Studio: run bands and linked time scrubbing",
+    "phase": 8,
+    "deps": [
+      "F-808",
+      "F-811"
+    ],
+    "status": "done",
+    "acceptance": "The run bands of DESIGN.md on one shared time axis, each end marked with its pictogram and word; one scrubber line with its own flag lane moves the field, the residual cursor, the monitor readouts and the snapshot counter of the selected run together; Follow live for a running run; P5 and P6 met; a test that the field, residual and monitor values at a scrub position all belong to the same snapshot; a view-and-report step.",
+    "note": "ADR 0800. Traces: G3, G9 (P5, P6); DESIGN Run bands (signature), Named Rules (One Live Thing). Done 2026-11-16: run workspace (Workspace tab): run bands on one shared iteration axis with pictogram and word at each end, one scrubber with its own flag lane moving field, residual cursor, monitor readout and snapshot counter together, Follow live; same-snapshot test against a real quick-start run; P5 met (23.6 snapshots/s at 1e6 cells), P6 met on rate (9.1/s at 4e6 cells, 4 of 100 frames over 150 ms, machine fully loaded); screenshots in test-results-visual/f810 for view-and-report."
+  },
+  {
+    "id": "F-811",
+    "title": "Electron Studio: residual and monitor plots",
+    "phase": 8,
+    "deps": [
+      "F-803"
+    ],
+    "status": "partial",
+    "acceptance": "Residuals and monitors fetched once and then by increments (ADR 0353); every plot range holds every value it draws; a run without a series says so in words with its pictogram, never with another run's data; P3 met.",
+    "note": "ADR 0800. Traces: G3, G6, G9 (P3); PRODUCT Principle 4. Partial 2026-11-16 (ADR 0801 addendum 4): residual and monitor plots on three.js (SVG measured 30x slower per increment), fetched once then by increments with 0 resyncs against real rcfd, range holds every value; dev route #/dev/plots until F-810. P3 missed under full machine load (median 118.3 ms vs 100 ms); re-measure on an idle machine (Q-811-1)."
+  },
+  {
+    "id": "F-812",
+    "title": "Electron Studio: case editor validated by the engine's schema",
+    "phase": 8,
+    "deps": [
+      "F-805",
+      "F-825"
+    ],
+    "status": "done",
+    "acceptance": "Open, edit and save a case through the engine's own schema and validation (no copy of either in the Studio, G2); invalid input names the key, the problem and the fix; learner defaults first with advanced keys one step away (PRODUCT Principle 5); round-trip test against the CLI's reading of the same file; a view-and-report step. The editor is the F-825 surface plus case-level actions; every case key is reachable (G15).",
+    "note": "ADR 0800. Traces: G2, G12; PRODUCT Principle 5. Surface not yet designed: shape it with impeccable first. Done 2026-11-16: case editor at #/case (src/renderer/case, src/main/case); opens via session.create, saves via edit_case with base_hash on a writable project server, comments kept; CLI round trip and conflict tests; screenshots for the maintainer's view-and-report in test-results-visual/f812."
+  },
+  {
+    "id": "F-813",
+    "title": "Electron Studio: a learner's first path",
+    "phase": 8,
+    "deps": [
+      "F-807",
+      "F-812"
+    ],
+    "status": "partial",
+    "acceptance": "From an empty folder to a first honest result with the quick-start project, without CFD jargon on the path; every empty state says what is missing and the next step; the disclaimers stay visible (G6); a Playwright walk of the path; a view-and-report step by the maintainer as a first-time user. The short path hides nothing for good: every capability stays one step away (G15).",
+    "note": "ADR 0800. Traces: G6; PRODUCT Users, Principle 5. Surface not yet designed: shape it with impeccable first. Partial 2026-11-16: first path in the project home from an empty folder to a first result (quick-start example, start_run with stored fields, result numbers equal metrics.json and status.json, picture drawn, disclaimers visible), quiet under G22 with words behind Explain; Playwright and keyboard walks against real rcfd binaries. 2026-11-17 (ADR 0801 Addendum 18): the result opens the run in the F-810 run workspace; the field caption is plain for a learner (the plain word, its unit, the round), with the stored name, snapshot, step, time, range and cells said to readers and the precise terms behind Explain (G22, G19); the result's numbers open their provenance. Left: no engine command creates a project (ADR 0731 proposed; E-813 of ADR 0801's engine follow-ups), so the walk's test writes rcfd-project.json in its place; maintainer's first-time view-and-report."
+  },
+  {
+    "id": "F-814",
+    "title": "Electron Studio: Claude Code panel",
+    "phase": 8,
+    "deps": [
+      "F-805"
+    ],
+    "status": "partial",
+    "acceptance": "The Claude Code chat for the project through rcfd-claude: open sessions mirrored read-only, closed sessions resumed and typed into, one writer per session, tool approvals by a conservative allow-list and never approve-everything (G11); run ids and files in a reply link to the run or file in the Studio; a test for each rule.",
+    "note": "ADR 0800. Traces: G11; PRODUCT Positioning; DESIGN Claude Code panel. Partial 2026-11-16: panel lists sessions, mirrors open ones read-only, resumes closed ones with claude -p --resume, single writer, conservative allow-list asserted in argv (dontAsk, no approve-everything flag), run/file links; tests use a fake claude. 2026-11-17 (ADR 0801 Addendum 18): a case file named in a reply opens in the case editor (F-812); a data file, mesh or note keeps the filtered Home; unit and e2e tests. Left: claude-head colour role and writing .rcfd/claude-allow.json wait for the maintainer; no engine entry point for session discovery (TypeScript stopgap; E-814 of ADR 0801's engine follow-ups)."
+  },
+  {
+    "id": "F-815",
+    "title": "Electron Studio: compare two runs",
+    "phase": 8,
+    "deps": [
+      "F-810"
+    ],
+    "status": "done",
+    "acceptance": "Two runs side by side or overlaid at the same time and the same colour range, with the difference field where the meshes match and a stated refusal where they do not; a test that both views read the same snapshot time.",
+    "note": "ADR 0800. Traces: G3, G6; PRODUCT Operating Context. Done 2026-11-16: compare mode in the run workspace: a second run chosen by keyboard or pointer, both fields at the same snapshot time (iteration when steady, exact stored time when transient, never interpolated; a missing snapshot and steady-vs-transient are stated), one shared colour range and legend, the scrubber drives both, residuals and monitors overlaid, compare_runs metrics; difference field equal bit for bit to an f64 subtraction of the stored bytes where the meshes match (cell count and MESH hash), refusal in words where they do not (ADR 0801 Addendum 10). Engine gaps: no field-difference entry point (compare_fields proposed), no mesh-identity query."
+  },
+  {
+    "id": "F-816",
+    "title": "Electron Studio: keyboard and assistive-technology pass",
+    "phase": 8,
+    "deps": [
+      "F-806",
+      "F-808",
+      "F-810"
+    ],
+    "status": "done",
+    "acceptance": "Every parity check passable by keyboard alone with visible focus; names and roles for every control; reduced motion respected; state never carried by colour alone; an automated check where a checker is approved under G5 and a written manual pass otherwise. No contrast requirement (maintainer, 2026-11-16).",
+    "note": "ADR 0800. Traces: G8; DESIGN Do's and Don'ts. Done 2026-11-17 (merge, ADR 0801 Addendum 12): tests/e2e/a11y.spec.ts walks 16 surface states by keys only (no trap, Escape returns focus, visible focus change on every stop, every control reachable, no pointer-only handler, names and roles from the Chromium accessibility tree, reduced motion, state not by colour alone); fixed: run band names now a roving toolbar, decision panel and confirm strip keep Tab inside (aria-modal), Play steps at most every 500 ms under reduced motion, live band segment gets an ink edge and a 'live' description; manual pass in apps/studio-web/README.md. Own checks instead of axe-core (G5). Follow-up 2026-11-17 (maintainer: keep axe-core, no full accessibility work; Tab stays held in open dialogs): axe-core 4.14.0 (dev, MPL-2.0) runs on each of the 16 walked surfaces in tests/e2e/a11y.spec.ts, fails on serious or critical only, color-contrast off, exclusion list (tests/support/axe.ts EXCLUDED) empty; fixed: Claude Code transcript list structure (listitem), Run again name, palette option names (label-content-name-mismatch), palette field a combobox over its list (scrollable-region-focusable). Open: the workspace keeps requesting animation frames at rest (743/s after an orbit key), a G9 power question (F-817 Addendum 14 since stopped the idle loop)."
+  },
+  {
+    "id": "F-817",
+    "title": "Electron Studio: performance regression bench for the product shell",
+    "phase": 8,
+    "deps": [
+      "F-808",
+      "F-810"
+    ],
+    "status": "partial",
+    "acceptance": "A script anyone can run that repeats P2, P4, P5, P7, P8 and P10 of docs/studio-guardrails.md G9 against the product shell and prints each against its limit; heavy cases run once by hand (house rule 7); results recorded in ADR 0800.",
+    "note": "ADR 0800. Traces: G9. Partial 2026-11-16: npm run bench repeats P2, P4, P5, P7, P8 and P10 against the packaged Studio, light set by default and --heavy for 4e6/P6/P12, each line against its limit, exit code on a miss, machine load recorded beside the numbers, never retried; results in ADR 0800 §9. All runs were on a fully loaded machine: P4/P7 (R2) and P8 met every time; P10 missed in three of four runs (3.6-40.3 s vs 2.5 s, cause not diagnosed; shared Chromium profile suspected); P5 met once, missed twice. Left: an idle-machine baseline (Q4) and the maintainer's answers to Q1-Q6. Maintainer 2026-11-16: idle baseline before F-448 (Q4), scratch profile for every case but P10 (Q5), bench stays out of CI (Q3); Follow-up 2026-11-17 (Addendum 14): three.js's internal animation loop kept requesting frames at rest (180/s at 60 Hz in the workspace, three renderers); drawOnDemand stops it 2 frames after the last draw, pictures unchanged, tests/e2e/idle-frames.spec.ts holds ≤ 5 per second at rest (measured 0); Q5 applied: every bench case but P10 gets its own scratch --user-data-dir. Left: the idle baseline (Q4), P10 and P5 misses under load."
+  },
+  {
+    "id": "F-818",
+    "title": "Electron Studio: dark theme",
+    "phase": 8,
+    "deps": [
+      "F-802"
+    ],
+    "status": "done",
+    "acceptance": "A dark variant of every DESIGN.md token that keeps each hue's single job; the field colour maps unchanged; DESIGN.md updated with the maintainer's approval.",
+    "note": "Traces: G8; DESIGN Open. Maintainer 2026-11-17: \"theming in general is a good idea so create a dark mode plus one other theme for this\". Partial 2026-11-17 (ADR 0801 Addendum 17): built, with the DESIGN.md palettes awaiting the maintainer. Themes are sets of the DESIGN.md colour tokens (tokens.ts themes.light = DESIGN.md, dark, contrast; roles unchanged, so each hue keeps its job) switched by <html data-theme>; the setting Light (default, pixel for pixel unchanged), Dark, High contrast, System is kept in the Studio's user data through theme.get/theme.set of the IPC allow-list (G10), applied at once with no reload, with nativeTheme.themeSource and the window background following (no white flash on a dark start); a theme icon in the header band (no word at rest, G22) and four palette commands (Theme: Light/Dark/High contrast/System). The field colour map and its overlays are unchanged in every theme; the field viewport ground and the plots follow. Second theme: High contrast (light, for bright rooms and projectors). Palettes proposed in docs/design-themes-proposal.md, ready to paste; screenshots in apps/studio-web/test-results-visual/f818/. Done 2026-11-17 (maintainer's answers, Addendum 17): both palettes approved and pasted into DESIGN.md (frontmatter themes, a Themes section; tokens.spec checks them), ink bands light in Dark, orange #c46810, field overlays unthemed; a Studio-wide settings page (#/studio-settings) with Theme as its first section, opened by the palette's Settings (Ctrl+,) and one Settings icon in the header bands, replacing the theme icon; word budget studio-settings 9 and the a11y walk. Candidate settings listed in the ADR, not moved."
+  },
+  {
+    "id": "F-819",
+    "title": "Electron Studio: large meshes and polyhedral fan meshes",
+    "phase": 8,
+    "deps": [
+      "F-808",
+      "F-817"
+    ],
+    "status": "partial",
+    "acceptance": "First picture, scrubbing and draw rate measured on a mesh of several million cells and on the FAN-01 polyhedral mesh with many patches; limits registered before the measurement; any miss stated with its numbers.",
+    "note": "ADR 0800. Traces: G9; PRODUCT Capabilities (large-mesh performance unmeasured), ADR 0350 section 6. Partial 2026-11-17 (merge, ADR 0801 Addendum 15, npm run bench:large): limits registered first; on the 4e6 box (320,000 surface triangles) and FAN-01 F3 and F1 (hexahedra and prisms, 7 patches), all under load, 4 runs: P7 median met everywhere (4e6 first open of a launch 1.7-2.5 s, verifyMesh 1.6 s), P8 met, P5 on 4e6 met 3 of 4 (missed 9.91/s, 167 ms frame). No polyhedral FAN-01 mesh exists (polydual not reachable from a case); F1 doubled does not build. Proposed: gather surface-cell values in the worker for scrubbing, cache the mesh check per file identity, no pick while a button is held. Fixes 2026-11-17 (Addendum 16): the reader's worker sends one value per surface triangle (1.2 MiB instead of 15.3 MiB, bit-identical), a launch-long memo of verified meshes plus a WebAssembly checksum loop, no pick while a button is held; 4e6 scrubbing 11-15/s to 20/s (longest frame 101 to 66 ms), first open of a launch 1.5-1.8 s to 0.86-0.94 s, all 63 lines met in 3 runs under load. Maintainer's answers 2026-11-17: the first open of a store in a launch is judged too (Q-819-1, Q-819b-1): a judged P7 line in npm run bench (first open of the 1e6 store, R1 or R2, <= 1.5 s) and in measure-large.mjs (per mesh and repeat); a polyhedral FAN-01 mesh is skipped (Q-819-4). Left: the maintainer's view-and-report."
+  },
+  {
+    "id": "F-820",
+    "title": "Electron Studio: installers, signing and updates",
+    "phase": 8,
+    "deps": [
+      "F-801"
+    ],
+    "status": "partial",
+    "acceptance": "Packaged installers for the platforms the maintainer names, signed if the maintainer provides certificates, with an update path that keeps the G10 settings; Electron on a supported release.",
+    "note": "ADR 0801 Addendum 19. Traces: G10. Partial 2026-11-17 (ADR 0801 Addendum 19). Maintainer 2026-11-17: installers built in CI, Linux tested in Docker first, signing when certificates exist, macOS not asked. Built: electron-builder 26.18.0 (devDependency, Q-F820-1), npm run package:installers: NSIS (Windows, per user, keeps app data, built here: 129 MB, unsigned) and AppImage plus .deb (Linux, built in Docker), each with rcfd, rcfd-mcp and rcfd-runner in resources/bin and the tested app folder (dist byte-identical to out/packaged). .github/workflows/studio-installers.yml builds them on manual dispatch and on tags, artifacts only, nothing published; Windows signing wired but off (RCFD_STUDIO_SIGN, repository variable RCFD_STUDIO_SIGNING plus secrets WIN_CSC_LINK, WIN_CSC_KEY_PASSWORD); Electron 45.3.3 is the latest stable (43, 44, 45 supported) and the workflow fails when the pin falls out of support. Update path: install over; settings live in userData named after productName, no installer touches it; tests/unit/installers.spec.ts pins productName, appId, keep-on-uninstall, no asar, no publish. Not run on GitHub (actionlint clean). Left: the maintainer's answers to Q-F820-1..6 (accept the dependency; where an installed Studio finds its bundled engine, without which it opens no project unless told by RCFD_STUDIO_MCP; automatic updates; asar and fuses; identity and version; the certificate), a first green run of the workflow, signed builds, an install-upgrade check on a runner."
+  },
+  {
+    "id": "F-821",
+    "title": "Electron Studio: Linux and macOS",
+    "phase": 8,
+    "deps": [
+      "F-817"
+    ],
+    "status": "partial",
+    "acceptance": "The F-817 bench and the parity tests run on Linux (and macOS if the maintainer asks), with WebGPU or the WebGL2 fallback; misses stated with their numbers.",
+    "note": "ADR 0801 Addendum 19. Traces: G9. Partial 2026-11-17 (ADR 0801 Addendum 19). apps/studio-web/docker/linux-test (npm run test:linux-docker): Ubuntu 24.04 container builds the engine and the packaged Linux Studio, runs unit and e2e under Xvfb with Chromium's sandbox on (verified by the renderer's seccomp mode); cargo, npm and Electron caches in named volumes. Linux fixes: the test window at opacity 0 was never painted on X11; Playwright ran Linux with --no-sandbox (G10 gap, launchArgs() fixes it); samePath used the running system's path rules; the WebGL 2 fallback label covered the other view's controls in compare; three test timing assumptions. Counts on the final tree with --ignore-gpu-blocklist (WebGL 2 on llvmpipe): unit 435/1/0 (claude.spec panel timing, Q-F821-3), e2e 213/2/7 in run 3 with both failures fixed and rerun green; without the switch no WebGL: 13 GPU tests fail (listed in the ADR). F-817 light bench in Docker: P10 263 ms and P2 p99 1.10 ms met; P4 (needs WebGPU), P5, P7, P8 not run (no GPU). .github/workflows/studio-linux-test.yml runs the same on manual dispatch only (not run). Left: GPU lines and WebGPU on Linux need a machine with a GPU (Q-F821-2); when the CI job runs (Q-F821-1); macOS not asked."
+  },
+  {
+    "id": "F-822",
+    "title": "Electron Studio: tutorials that name the GUI",
+    "phase": 8,
+    "deps": [
+      "F-813"
+    ],
+    "status": "done",
+    "acceptance": "Every tutorial that names rcfd-gui or rcfd-studio rewritten for the Electron Studio, or marked as CLI-only; the docs site test passes.",
+    "note": "ADR 0800. Traces: G6; docs/ui-restart-plan.md section 6. Done 2026-11-16: docs/tutorials/desktop-assistant.md rewritten for the Electron Studio (start from a checkout, project home, case editor, run control, workspace, compare, provenance, Claude Code panel, palette; controls named by accessible name or palette title per G22; gaps stated) with a labelled section for the frozen rcfd-studio/rcfd-gui; example-project notes, READMEs and small doc mentions updated; docs_site and tutorials tests pass. Left: the maintainer's walk-through against the running app; parity_tutorials_name_the_gui_known_miss in rcfd-studio stays ignored until F-449."
+  },
+  {
+    "id": "F-823",
+    "title": "Electron Studio: npm tests in CI",
+    "phase": 8,
+    "deps": [
+      "F-801"
+    ],
+    "status": "partial",
+    "acceptance": "The Studio's unit and Playwright tests run as a job in .github/workflows/ci.yml (ADR 0800 Q3, maintainer 2026-11-16), with npm ci from the committed lock file and Electron run headless; the job fails the workflow on any test failure; docs/test-process.md names the job. A weekly, grouped Dependabot npm entry for /apps/studio-web lands with the job (ADR 0801 Q2). The job builds rcfd-cli, rcfd-runner and rcfd-mcp first so the service e2e tests and the F-824 inventory check do not skip.",
+    "note": "ADR 0800 Q3, ADR 0801 Q2. studio-web job (ubuntu-24.04 + windows-latest, Node 22.19.0) and grouped weekly Dependabot npm entry written; all steps pass locally on Windows and in an Ubuntu 24.04 container; done when the job first runs green on GitHub Actions. Traces: G13."
+  },
+  {
+    "id": "F-824",
+    "title": "Electron Studio: capability inventory from the engine and a UI coverage test",
+    "phase": 8,
+    "deps": [
+      "F-803"
+    ],
+    "status": "done",
+    "acceptance": "An inventory of every engine capability generated from the engine itself (settings.schema, the method list of service.info, the MCP tool list, the CLI help), never kept by hand; a coverage report that maps each capability to its UI path or to a recorded, dated exemption; a test that fails on an unmapped capability, run with the Studio's tests (F-823); the first report lists today's gaps.",
+    "note": "ADR 0800 (G15 added 2026-11-16). Traces: G15, G2. Engine-side additions it needs (for example a stable list of CLI commands) are additive and go through an ADR under G4. Done 2026-11-16: 1271 capabilities from the engine (69 service methods, 56 MCP tools, 36 CLI commands, 156 CLI options, 948 case keys, 6 monitor keys); 0 with a UI path, all with dated exemptions, 189 flagged unplanned; docs/studio-coverage.md."
+  },
+  {
+    "id": "F-825",
+    "title": "Electron Studio: schema-driven case and settings surface",
+    "phase": 8,
+    "deps": [
+      "F-824",
+      "F-802"
+    ],
+    "status": "done",
+    "acceptance": "Every key of settings.schema gets a control generated from the schema (type, unit, range, enumeration, default), laid out by learner-first disclosure: defaults and common keys first, advanced keys one step away and never hidden for good; a new key added to the schema appears in the Studio with no Studio code change, shown by a test that adds a key to a test schema; validation messages come from the engine.",
+    "note": "ADR 0800 (G15 added 2026-11-16). Traces: G15, G2, G8; PRODUCT Principle 5; DESIGN Inputs. Done 2026-11-16: src/renderer/settings at #/settings (linked from the project home header); every one of 948 case keys has exactly one control generated from settings.schema (real-engine e2e); structural learner-first tiers until F-826 metadata; engine validation messages shown unchanged; coverage 0 -> 957 of 1271. A DESIGN.md subsection the agent added was held back as a proposal for the maintainer."
+  },
+  {
+    "id": "F-826",
+    "title": "Engine: UI metadata in the case schema (labels, units, ranges, advanced flag)",
+    "phase": 8,
+    "deps": [
+      "F-824"
+    ],
+    "status": "todo",
+    "acceptance": "Opt-in, additive metadata on settings.schema entries (human label, unit, recommended range, an advanced flag, a one-line help text from the existing docs) so that F-825 lays keys out without a Studio-side table; no existing key, golden, default or reply field changes (G4); docs/case-schema.md updated.",
+    "note": "ADR 0800, needs its own ADR before code (engine change, additive under G4). Traces: G15, G4. ADR 0730 proposed (shared with F-830); awaiting the maintainer."
+  },
+  {
+    "id": "F-827",
+    "title": "Electron Studio: one action layer for every UI action",
+    "phase": 8,
+    "deps": [
+      "F-803"
+    ],
+    "status": "done",
+    "acceptance": "Every UI action is a typed, named action in one registry that calls the engine (a service method, an MCP tool or a CLI command); a test that fails when a registered action has no engine equivalent (G16) or when a component calls the engine outside the registry; the registry is the single source for the command palette (F-831), undo (F-829) and action recording.",
+    "note": "ADR 0800 (G16 to G21 added 2026-11-16). Traces: G16, G20, G18, G2. Done 2026-11-16: registry src/shared/actions (24 actions, one per allow-listed method, CLI and MCP equivalents, undo hooks), renderer door src/renderer/actions, action log with JSON/sh export and replay; static check forbids window.studioService outside the door."
+  },
+  {
+    "id": "F-828",
+    "title": "Electron Studio: provenance inspector and reproduce-from-CLI",
+    "phase": 8,
+    "deps": [
+      "F-810",
+      "F-827"
+    ],
+    "status": "partial",
+    "acceptance": "Any number on screen opens its provenance (run id, snapshot, file, engine version, unit); every run shows the CLI command that reproduces it; a test that a run started from the Studio and the same run started by that command give bit-identical results on a quick-start case (G17); units come from the engine, never converted in the Studio.",
+    "note": "ADR 0800 (G16 to G21 added 2026-11-16). Traces: G17, G3, G2; docs/provenance.md. Partial 2026-11-16: numbers in Runs, the run workspace (residuals, monitor readout, snapshot counter) and the field readout open their provenance (run, snapshot, file, reader, engine version, unit as the engine gives it) by click, Enter, Ctrl+I or the palette, quiet at rest (G22); every runner run shows its reproduce command (rcfd-runner start from run.json) with Copy; G17 test: a Studio-started run and the copied command run from a shell give byte-identical store, fields, residuals and monitors. 2026-11-17 (ADR 0801 Addendum 18): service-session numbers open their provenance (settings values by Ctrl+I or the palette in the key's field or a click on its name; the dev plots' residual and monitor values and the iteration by click, Enter, Ctrl+I): session, service method, journal, unit from the schema or monitors.get, engine from service.info; the session's file and a reproduce command said as not recorded. The field caption's step and time and the first path's numbers open theirs; a snapshot's time unit said as not recorded. Left (Studio): the Runs residual columns, the compared run's residuals, legend ticks, domain size, scale bar, runner budgets and home counts have no provenance. Left (engine, E-828a to E-828e of ADR 0801's engine follow-ups): run.json records no launch argv or build id; status.json and store time have no unit; a session records no file or journal file; no rerun options; no mesh hash."
+  },
+  {
+    "id": "F-829",
+    "title": "Electron Studio: undo, safe deletes and edit conflicts",
+    "phase": 8,
+    "deps": [
+      "F-827",
+      "F-805"
+    ],
+    "status": "partial",
+    "acceptance": "Undo and redo for every edit made through the action layer; deleting a run, result or case is recoverable (for example a project trash) or confirmed in words that name what is lost; a file changed by another writer since the Studio read it is never overwritten silently, the conflict is shown with a choice; a test for each (G18).",
+    "note": "ADR 0800 (G16 to G21 added 2026-11-16). Traces: G18, G11, G12. Partial 2026-11-16: undo/redo for every action-layer edit (one history per session, named Undo/Redo controls, Ctrl+Z/Ctrl+Shift+Z/Ctrl+Y), tested on the fake service and real rcfd serve; actions without an inverse ask first naming what is lost; undo/redo and typed values show a conflict instead of overwriting; case saves refuse a changed file (edit_case base_hash). Left: no engine delete or trash for runs/results/cases, so the Studio offers none (engine tools trash_run/trash_case/list_trash/restore_trash proposed, needs an ADR); engine compare-and-set for settings.set proposed. Engine needs listed in ADR 0801, \"Engine follow-ups of the Studio items\" (2026-11-17)."
+  },
+  {
+    "id": "F-830",
+    "title": "Electron Studio: explain in place from the engine's docs",
+    "phase": 8,
+    "deps": [
+      "F-826",
+      "F-825"
+    ],
+    "status": "todo",
+    "acceptance": "Help on every control, term and value taken from the engine's case schema help text (F-826), docs and glossary, with no help text kept only in the Studio; every error message names the problem and the recovery, checked by a test over the engine's error catalogue; a learner's view-and-report step (G19).",
+    "note": "ADR 0800 (G16 to G21 added 2026-11-16). Traces: G19, G2; PRODUCT Users, Principle 5. ADR 0730 proposed (shared with F-826); awaiting the maintainer."
+  },
+  {
+    "id": "F-831",
+    "title": "Electron Studio: command palette and keyboard shortcuts",
+    "phase": 8,
+    "deps": [
+      "F-827",
+      "F-802"
+    ],
+    "status": "done",
+    "acceptance": "A command palette generated from the action registry that finds every action by name; shortcuts for frequent actions with no conflicts (a test); a coverage test that every registered action is in the palette (G20); everything usable from the keyboard alone (G8).",
+    "note": "ADR 0800 (G16 to G21 added 2026-11-16). Traces: G20, G15, G8. Done 2026-11-16: command palette (Ctrl+K, Ctrl+Shift+P) generated from the action, run, case and Studio command registries (54 commands), unavailable commands listed with their reason; one shortcut table for palette, listing, key listener and tests; no-conflict test incl. Electron's menu accelerators and reserved keys; coverage test that every registered action is in the palette; keyboard-only e2e."
+  },
+  {
+    "id": "F-832",
+    "title": "Electron Studio: responsiveness budget and cancellable work",
+    "phase": 8,
+    "deps": [
+      "F-808",
+      "F-810"
+    ],
+    "status": "done",
+    "acceptance": "No engine or data work on the renderer's main thread: a test that records long tasks while opening a run, loading fields and scrubbing and fails on any task over a limit registered before the measurement; every operation longer than a registered threshold shows progress and can be cancelled, and cancelling leaves no partial state (G21).",
+    "note": "ADR 0800 (G16 to G21 added 2026-11-16). Traces: G21, G9. Done 2026-11-16 (merge bfc2f381, ADR 0801 Addendum 9): long-task budget (100 ms per task, 150 ms per frame) checked by a test at 1e5/1e6 cells while opening a run, loading fields and scrubbing; opening, loading, checking and saving show progress after 300 ms with Cancel, and Cancel restores the screen exactly; field preparation, mesh layers and vector glyphs run in a worker. Full suite 573 passed, 1 failed (provenance focus after Escape, fixed separately). Open: decision 7 (count only frames that blocked the renderer thread; recommendation keep)."
+  },
+  {
+    "id": "F-833",
+    "title": "Electron Studio: quiet the built surfaces and lock a word budget per surface (G22)",
+    "phase": 8,
+    "deps": [
+      "F-805",
+      "F-806",
+      "F-807",
+      "F-810",
+      "F-812",
+      "F-814",
+      "F-825",
+      "F-829",
+      "F-831"
+    ],
+    "status": "done",
+    "acceptance": "One quieting pass over every built surface (project home, runs, settings, case editor, Claude Code panel, run workspace, command palette, undo and decision panels): normal states carry no visible words of their own; words that G6, G8, G18 and G19 ask for move into accessible names, tooltips or focus detail, help on demand or the palette; tests that read visible prose for a normal state are moved to role and accessible name (each change listed for the maintainer); disclaimers, failures and known misses stay visible; a budget of visible chrome words at rest proposed per surface from before-and-after screenshots and approved by the maintainer; a test counts those words from the DOM per surface and fails past its budget; a view-and-report step.",
+    "note": "ADR 0800 §8 (G22 added by the maintainer 2026-11-16; sweep as one item, option chosen by the maintainer). Traces: G22, G8, G13, G6. Partial 2026-11-16 (merge, ADR 0801 Addendum 11): every built surface quieted; chrome words at rest before→after: home-open 167→49, case-editor 553→51, settings 144→23, workspace 111→17, runs 64→14, claude 63→13, palette 31→4, compare 65→8, undo 6→0; tests/e2e/word-budget.spec.ts counts 17 surfaces from the DOM against src/shared/word-budget.ts; tests moved from visible prose to role and accessible name (listed in the addendum), no accessible name or palette title changed. Done 2026-11-17 (Addendum 11, maintainer's answers): the maintainer approved the 17 budgets, the kept-visible list and moving the G20 shortcut hints into the controls' descriptions; BUDGET_STATUS is approved and the budgets are enforced by tests/e2e/word-budget.spec.ts; the Commands button's Ctrl+K moved from its name to its description; screenshots and counts.json in test-results-visual/f833 for view-and-report. The proposed DESIGN.md lines are not applied (DESIGN.md is the maintainer's)."
+  },
+  {
+    "id": "F-834",
+    "title": "Engine tests that went with rcfd-studio, moved to rcfd-workspace",
+    "phase": 8,
+    "deps": [
+      "F-449"
+    ],
+    "status": "done",
+    "acceptance": "The engine behaviour the deleted rcfd-studio tests checked is checked again in crates/rcfd-workspace/tests (or the crate that owns it): the start-plan record of 22 shipped cases (plans_6867e40.txt, restored from git history, not re-recorded), store hashes of the 10 shipped cases (F-476), plan parity over every shipped example (F-271), the end-to-end store checks (SF2, SF4, SF5, SF8, SF9), a clean stop writing its last snapshot with status.json cancelled and exit 7 (AA1), every schema leaf's default parsing, and no iteration lost while polling a live run; each restored test names the deleted test it replaces.",
+    "note": "Added 2026-11-16 when F-449 ran ahead of F-448 (ADR 0800 §10). Traces: G14, G17. Done 2026-11-17 (merge of 0fc9028a): 18 tests restored in crates/rcfd-workspace/tests (*_f834.rs) and crates/rcfd-api/tests (schema_defaults_f834, service_poll_f834), each naming the deleted test it replaces; plans_6867e40.txt restored byte for byte (blob 9fc69532), F-476 hash table matched unchanged; UI-only parts and Studio-only logic (start-dialog estimates, time step, correctors) not ported, listed in the merge report. Open: process tests need release rcfd-runner and rcfd built first (fail loudly, current); Follow-up 8d600082: series_plan_f834b.rs restores M3 (decimate_minmax) and the engine parts of DV1 and DV5."
+  },
+  {
+    "id": "F-835",
+    "title": "Electron Studio: new project",
+    "phase": 8,
+    "deps": [
+      "F-449",
+      "F-805"
+    ],
+    "status": "todo",
+    "acceptance": "An engine entry point creates a project (rcfd project init and an MCP create_project, through rcfd_project::Project::create, ADR first); the Studio's project home offers it (button and palette) and opens the new project; the learner's first path uses it instead of a copied example; e2e test.",
+    "note": "Lost with rcfd-studio (S/ui.rs). Traces: G14, G4, G15. ADR 0731 proposed; awaiting the maintainer."
+  },
+  {
+    "id": "F-836",
+    "title": "Electron Studio: mesh preview before a run",
+    "phase": 8,
+    "deps": [
+      "F-449",
+      "F-812",
+      "F-808"
+    ],
+    "status": "todo",
+    "acceptance": "The case editor shows the mesh a case will build (generator and imported meshes, including a [mesh.adapt] mesh) with patch visibility, from an engine entry point that builds the mesh without solving (ADR first if none exists); the preview equals the solver's mesh (test replacing preview_g1 and adaptive_preview_f475); e2e test.",
+    "note": "Lost with rcfd-studio (preview.rs, preview_ui.rs). Traces: G14, G15. ADR 0732 proposed; awaiting the maintainer."
+  },
+  {
+    "id": "F-837",
+    "title": "Electron Studio: run setup, logs and field-view extras from rcfd-studio",
+    "phase": 8,
+    "deps": [
+      "F-449",
+      "F-807",
+      "F-810"
+    ],
+    "status": "partial",
+    "acceptance": "Each capability the deleted rcfd-studio had and the Electron Studio lacks is built or recorded as declined by the maintainer: run setup for \"simulate N s\" (time step, adaptive correctors, store plan, Courant warning with its fix), the Start run store section, runner budgets (.rcfd/runner-config.json), the log tail and event list with solver warnings, residual columns and the report.html path in Runs, Save PNG, range modes whole run and fixed, the 2D scale bar and domain size, Refine x2, Re-run with fields stored, the project argument at start, a Designs group, data files apart from cases, unsaved marks and save-or-discard on exit, the Claude model name and session cost; rcfd-gui's open-and-save of a single case file anywhere and the monitors plot log scale; one e2e test per built capability.",
+    "note": "Lost with rcfd-studio and rcfd-gui (list in the F-449 merge report). Traces: G14, G15. Partial 2026-11-17 (merge, ADR 0801 Addendum 13): built with one e2e test each: residual columns u and p, run log tail and events with warnings, open report.html, run again with fields stored (store plan), runner budgets panel (.rcfd/runner-config.json, runner's checks, conflict-safe, undo), colour range of snapshot / whole run / fixed, face-on view with scale bar and domain size, Save PNG, monitor log scale, designs/ group and data files apart, unsaved mark, Claude model and session cost, project folder argument at start, seven palette commands; word budgets unchanged. Needs engine: simulate-N-s helper with correctors and Courant fix (case-facts query or start_run dry run), Refine x2 (refine_mesh), open/save one case file outside a project, store length unit. Save or discard on close 2026-11-17 (the maintainer's approval, ADR 0801 Addendum 13): closing a case session, the project or the window (its close button, Alt+F4, the quit) with case changes not saved asks with the F-829 decision panel (Save and close, Close and lose them, Keep editing; the files and their changes named; Tab held, focus back on cancel); the window through the main process's close event and a page round trip (an unanswered page cannot hold it; the test-mode quit does not ask); e2e close-guard.spec.ts (4). The maintainer confirmed designs/ as the Home heading. Not built: set_runner_config (runner writes its own budgets), ADR 0733 proposed. Engine needs listed in ADR 0801, \"Engine follow-ups of the Studio items\" (2026-11-17)."
+  },
+  {
+    "id": "F-838",
+    "title": "Local-model assistant: keep, port or remove",
+    "phase": 8,
+    "deps": [
+      "F-449"
+    ],
+    "status": "done",
+    "acceptance": "The maintainer decides what becomes of the local-model assistant that only rcfd-gui offered (presets ollama, lm-studio, llama-cpp, vllm, openai, anthropic; keychain key; read-only and approve-writes modes; quick actions) and of the crates left without users (rcfd-assistant, rcfd-render, the rcfd-claude code only rcfd-studio used); the choice is carried out (a Studio panel, or removal with docs updated).",
+    "note": "Needs the maintainer. Traces: G14. Done 2026-11-17 by the maintainer's choice (a), removal (ADR 0800 §10): crates/rcfd-assistant and crates/rcfd-render removed with their tests (keychain key, provider presets, approval modes, quick actions, wgpu render core); of rcfd-claude the session discovery, transcript and stream readers, chat driver, folder trust, argument checks, suggestions and the fake-claude double went. rcfd-claude keeps the allow-list rules and file, which rcfd-mcp's tests F2 and C5-A check the tool names against (E5 moved to allow_file_w48e.rs). The Studio's colour-map reference now reads rcfd_post's colormap (the same map, values unchanged); its check of rcfd-render's shader text went. Cargo.lock 216 to 83 packages. Docs updated: the Studio's Claude Code panel is the only assistant."
   }
 ]

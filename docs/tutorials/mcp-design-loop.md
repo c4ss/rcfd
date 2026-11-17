@@ -5,8 +5,9 @@ run a small optimisation study, write the chosen variant and map its operating r
 assistant sends, on two examples: the contraction duct of the design loop (a pressure-drop minimisation) and the parametric axial
 fan passage. The fan part of the page stops at checking the mesh on purpose; the reason is in that section.
 
-The page is for people who connect an AI assistant to rcfd or write their own MCP client. If you want the desktop app instead, see
-the [desktop tutorial](desktop-assistant.md): its assistant sidebar uses the same tools in-process.
+The page is for people who connect an AI assistant to rcfd or write their own MCP client. If you want the desktop Studio instead,
+see the [desktop tutorial](desktop-assistant.md): its Claude Code panel gives Claude Code this server with the project tools of
+one folder.
 
 `rcfd-mcp` is a Model Context Protocol server on stdio. An MCP client (an AI assistant such as Claude, or any program that speaks
 JSON-RPC 2.0) lists its tools, sets up and runs cases, and iterates on a design with the `design_*` tools. [MCP tools](../mcp-tools.md)
@@ -241,7 +242,8 @@ same history, and every evaluation is stored and resumable.
 
 ## Where to go next
 
-* [The desktop app and the assistant sidebar](desktop-assistant.md): the same tools behind approval cards in the app.
+* [The desktop Studio and the Claude Code panel](desktop-assistant.md): the same server, given to Claude Code for one project
+  folder.
 * [MCP tools](../mcp-tools.md): every tool, its access class and the approval model.
 * [The design loop](../design-loop.md): how studies, optimisers, operating maps and the evaluation store work.
 * [The fan milestone](../milestone-fan.md): the state of the fan work and why a fan study is not shown here.

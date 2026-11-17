@@ -725,8 +725,8 @@ fn write_f64(path: &Path, v: &[f64]) {
     std::fs::write(path, b).unwrap();
 }
 
-/// The store dumper of ADR 0154 (`w48t_dump_stores` of `crates/rcfd-studio/tests/w48t_cylinder_spokes.rs`), here so that the
-/// Studio is not built: `W48V_DUMP` = `<store dir>=<out prefix>;...`, optional `W48V_FIELDS` (default `p`). Writes
+/// The store dumper of ADR 0154 (`w48t_dump_stores` of `crates/rcfd-studio/tests/w48t_cylinder_spokes.rs`, a crate removed
+/// by F-449), here so that the Studio was not built: `W48V_DUMP` = `<store dir>=<out prefix>;...`, optional `W48V_FIELDS` (default `p`). Writes
 /// `<prefix>.centres.f64`, `<prefix>.<field>.f64` (snapshots x cells, widened to f64) and `<prefix>.meta.json`, the formats
 /// `scripts/w48t_spoke_metrics.py` reads.
 #[test]

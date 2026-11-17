@@ -2,17 +2,14 @@
 
 These are the finished example projects of `../example-projects/` (ADR 0142, docs/adr/0142-wave48h-example-projects.md)
 with runs made on x86_64 Linux (ADR 0150, docs/adr/0150-job48p-linux-example-stores.md). No result in these folders is
-a validation (see each project's notes). Open these on Linux, and the ones in `../example-projects/` on Windows:
-
-    sh scripts/studio.sh example-projects-linux/wind-tunnel
+a validation (see each project's notes). Open these on Linux, and the ones in `../example-projects/` on Windows, with
+Open project folder… in the desktop Studio (`docs/tutorials/desktop-assistant.md`).
 
 | Folder | What is inside | Start with |
 |---|---|---|
 | `wind-tunnel/` | flow past a cylinder (vortex shedding), a NACA 0012 aerofoil (k-omega SST) and a laminar backward-facing step, each with a variant and both runs | `wind-tunnel/notes/README.md` |
 | `quick-start/` | a lid-driven cavity and a heated cavity, each with a variant and both runs; every run takes one or two seconds | `quick-start/notes/README.md` |
 | `axial-fan/` | one periodic blade passage of the FAN-01 axial fan in 3D (k-omega SST, rotating frame) and one run with first-order `upwind`, for viewing the 3D geometry and flow pattern only: not a validated fan prediction (ADR 0176) | `axial-fan/notes/README.md` |
-
-The notes speak of `target\release\rcfd-studio.exe`; on Linux it is `target/release/rcfd-studio`.
 
 Why a second tree: mesh generators call the C library's libm, whose last bits differ between Windows and Linux (ADR
 0137), so the mesh a run stored equals the mesh the same case builds only on the platform that made the run. Each tree

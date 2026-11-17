@@ -1,0 +1,555 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-11-16T11:13:33+00:00",
+  "title": "Design System: rcfd Studio",
+  "extensions": {
+    "colorMeta": {
+      "ink": {
+        "role": "primary",
+        "displayName": "Deep Ink",
+        "canonical": "#1d3a5f",
+        "oklch": "oklch(34.6% 0.074 255)",
+        "tonalRamp": [
+          "#050b16",
+          "#15263b",
+          "#294364",
+          "#44638b",
+          "#6484ae",
+          "#86a8d3",
+          "#aeccf2",
+          "#dcf1ff"
+        ]
+      },
+      "ink-2": {
+        "role": "neutral",
+        "displayName": "Ink Two",
+        "canonical": "#4a6382",
+        "oklch": "oklch(49.3% 0.058 254)",
+        "tonalRamp": [
+          "#060c14",
+          "#192636",
+          "#2f435d",
+          "#4a6382",
+          "#6a85a5",
+          "#8ca8ca",
+          "#b4ccea",
+          "#dff0ff"
+        ]
+      },
+      "ink-hover": {
+        "role": "primary",
+        "displayName": "Deep Ink, raised",
+        "canonical": "#2a4d78",
+        "oklch": "oklch(41.5% 0.083 255)",
+        "tonalRamp": [
+          "#040b17",
+          "#13263d",
+          "#254368",
+          "#3f6390",
+          "#5f85b4",
+          "#81a8d9",
+          "#aaccf7",
+          "#d9f1ff"
+        ]
+      },
+      "sky": {
+        "role": "secondary",
+        "displayName": "Sky",
+        "canonical": "#62b4e8",
+        "oklch": "oklch(73.9% 0.110 239)",
+        "tonalRamp": [
+          "#000d19",
+          "#002842",
+          "#00476f",
+          "#006898",
+          "#368bbd",
+          "#5caee2",
+          "#8ed2ff",
+          "#c7f6ff"
+        ]
+      },
+      "sky-wash": {
+        "role": "secondary",
+        "displayName": "Sky Wash",
+        "canonical": "#e4f0f9",
+        "oklch": "oklch(94.9% 0.018 240)",
+        "tonalRamp": [
+          "#090c0e",
+          "#20262a",
+          "#3b434a",
+          "#59636a",
+          "#79848c",
+          "#9ca7af",
+          "#c1cbd2",
+          "#e9f0f5"
+        ]
+      },
+      "meadow": {
+        "role": "secondary",
+        "displayName": "Meadow",
+        "canonical": "#6cc078",
+        "oklch": "oklch(73.6% 0.132 147)",
+        "tonalRamp": [
+          "#001002",
+          "#002f0a",
+          "#005117",
+          "#1a7431",
+          "#439752",
+          "#67bb74",
+          "#97dd9f",
+          "#cdfdd1"
+        ]
+      },
+      "meadow-wash": {
+        "role": "secondary",
+        "displayName": "Meadow Wash",
+        "canonical": "#e6f3e8",
+        "oklch": "oklch(95.1% 0.020 150)",
+        "tonalRamp": [
+          "#090c0a",
+          "#212722",
+          "#3c453d",
+          "#59655b",
+          "#7a867c",
+          "#9da99f",
+          "#c2ccc3",
+          "#e9f1ea"
+        ]
+      },
+      "meadow-deep": {
+        "role": "secondary",
+        "displayName": "Meadow Deep",
+        "canonical": "#2f7d3b",
+        "oklch": "oklch(52.5% 0.126 146)",
+        "tonalRamp": [
+          "#001002",
+          "#022e0b",
+          "#055119",
+          "#247332",
+          "#499653",
+          "#6dba75",
+          "#9bdca0",
+          "#cffdd2"
+        ]
+      },
+      "orange": {
+        "role": "tertiary",
+        "displayName": "Signal Orange",
+        "canonical": "#f08a24",
+        "oklch": "oklch(72.9% 0.162 59)",
+        "tonalRamp": [
+          "#1b0400",
+          "#461200",
+          "#752400",
+          "#a04100",
+          "#c66400",
+          "#ed8820",
+          "#ffb268",
+          "#ffe0af"
+        ]
+      },
+      "orange-deep": {
+        "role": "tertiary",
+        "displayName": "Orange Deep",
+        "canonical": "#b35a00",
+        "oklch": "oklch(56.5% 0.141 54)",
+        "tonalRamp": [
+          "#1a0400",
+          "#431400",
+          "#712800",
+          "#9b4400",
+          "#c1671b",
+          "#e88a46",
+          "#ffb37c",
+          "#ffe0bb"
+        ]
+      },
+      "fail": {
+        "role": "tertiary",
+        "displayName": "Failure Red",
+        "canonical": "#9b1c24",
+        "oklch": "oklch(44.9% 0.162 24)",
+        "tonalRamp": [
+          "#1e0102",
+          "#4a050a",
+          "#7d0e18",
+          "#aa2d30",
+          "#d25251",
+          "#fa7772",
+          "#ffa49d",
+          "#ffd6d0"
+        ]
+      },
+      "fail-wash": {
+        "role": "tertiary",
+        "displayName": "Failure Wash",
+        "canonical": "#f7e4e5",
+        "oklch": "oklch(93.4% 0.021 14)",
+        "tonalRamp": [
+          "#0e0a0a",
+          "#2b2323",
+          "#4b3e3f",
+          "#6d5d5e",
+          "#8e7e7e",
+          "#b2a0a1",
+          "#d4c5c6",
+          "#f7ebec"
+        ]
+      },
+      "silver": {
+        "role": "neutral",
+        "displayName": "Silver",
+        "canonical": "#c9cdd1",
+        "oklch": "oklch(84.6% 0.007 248)",
+        "tonalRamp": [
+          "#090b0e",
+          "#222528",
+          "#3f4246",
+          "#5e6265",
+          "#7f8386",
+          "#a2a5a9",
+          "#c6cace",
+          "#ebeff3"
+        ]
+      },
+      "silver-wash": {
+        "role": "neutral",
+        "displayName": "Silver Wash",
+        "canonical": "#eef1f4",
+        "oklch": "oklch(95.7% 0.005 248)",
+        "tonalRamp": [
+          "#090b0d",
+          "#232527",
+          "#404245",
+          "#5f6164",
+          "#808385",
+          "#a2a5a8",
+          "#c6c9cc",
+          "#eceff2"
+        ]
+      },
+      "white": {
+        "role": "neutral",
+        "displayName": "White",
+        "canonical": "#ffffff",
+        "oklch": "oklch(100.0% 0.000 90)",
+        "tonalRamp": [
+          "#0b0b0b",
+          "#252525",
+          "#424242",
+          "#616161",
+          "#828282",
+          "#a5a5a5",
+          "#c9c9c9",
+          "#eeeeee"
+        ]
+      }
+    },
+    "dataColormaps": [
+      {
+        "name": "viridis",
+        "stops": [
+          "#440154",
+          "#472d7b",
+          "#3b528b",
+          "#2c728e",
+          "#21918c",
+          "#28ae80",
+          "#5ec962",
+          "#addc30",
+          "#fde725"
+        ],
+        "lutSize": 256,
+        "purpose": "The only field colour map; one 256-entry table feeds the GPU lookup and the CSS legend."
+      }
+    ],
+    "typographyMeta": {
+      "display": {
+        "displayName": "Display",
+        "purpose": "Monitor readout at the scrubber time."
+      },
+      "headline": {
+        "displayName": "Headline",
+        "purpose": "Values in the selected run number grid."
+      },
+      "title": {
+        "displayName": "Title",
+        "purpose": "Brand mark in the header band."
+      },
+      "title-sm": {
+        "displayName": "Title small",
+        "purpose": "Case names and view title; 500 weight for project tabs."
+      },
+      "body": {
+        "displayName": "Body",
+        "purpose": "Default for controls, cells, chat and panel heads."
+      },
+      "label": {
+        "displayName": "Label",
+        "purpose": "Column heads, captions, legends, tooltips, footer."
+      },
+      "chart-micro": {
+        "displayName": "Chart micro",
+        "purpose": "Time panel only: band labels, axis ticks, scrubber flag."
+      }
+    },
+    "shadows": [
+      {
+        "name": "popover-lift",
+        "value": "0 6px 18px rgba(29, 58, 95, 0.18)",
+        "purpose": "Select popovers only, with a 1px ink border."
+      }
+    ],
+    "focus": [
+      {
+        "name": "focus-outline",
+        "value": "outline: 2px solid #f08a24; outline-offset: 1px",
+        "purpose": "Every focusable element; tabs use a negative offset; the scrubber line turns 2px orange."
+      }
+    ],
+    "lines": [
+      {
+        "name": "rule",
+        "value": "1px solid #1d3a5f",
+        "purpose": "Structural edges."
+      },
+      {
+        "name": "hair",
+        "value": "1px solid #c9cdd1",
+        "purpose": "Subdivision inside panels."
+      },
+      {
+        "name": "header-rule",
+        "value": "3px solid #1d3a5f",
+        "purpose": "Under the sky header band."
+      },
+      {
+        "name": "hatch",
+        "value": "repeating-linear-gradient(135deg, #c9cdd1 0 4px, #ffffff 4px 8px)",
+        "purpose": "Queued and not computed yet."
+      }
+    ],
+    "motion": [
+      {
+        "name": "ease-out",
+        "value": "cubic-bezier(0.16, 1, 0.3, 1)",
+        "purpose": "All state transitions."
+      },
+      {
+        "name": "toggle",
+        "value": "160ms",
+        "purpose": "Switch knob and track."
+      },
+      {
+        "name": "fade",
+        "value": "200ms",
+        "purpose": "Row and band fade on selection change."
+      },
+      {
+        "name": "band-grow",
+        "value": "700ms ease-out, 90ms stagger, once on load",
+        "purpose": "Run band segments grow in from the left."
+      },
+      {
+        "name": "scrub",
+        "value": "none (direct)",
+        "purpose": "The scrubber moves field, residuals and monitor with no easing."
+      },
+      {
+        "name": "reduced-motion",
+        "value": "animations and transitions off",
+        "purpose": "prefers-reduced-motion: reduce."
+      }
+    ],
+    "breakpoints": [
+      {
+        "name": "min-desktop",
+        "value": "1180px"
+      }
+    ],
+    "pictogramGrid": {
+      "units": 14,
+      "angles": [
+        0,
+        45,
+        90
+      ],
+      "stroke": {
+        "state": "2px",
+        "icon": "1.75px"
+      },
+      "caps": "square",
+      "joins": "miter",
+      "states": {
+        "queued": "<circle cx=\"7\" cy=\"7\" r=\"5\"/>",
+        "running": "<path d=\"M2 12V3H11M8 0L11 3L8 6\"/>",
+        "converged": "<path d=\"M2 7L6 11L13 4\"/>",
+        "finished": "<path d=\"M1 7H11M11 2V12\"/>",
+        "failed": "<path d=\"M2 2L6 6M8 8L12 12M12 2L8 6\"/>"
+      }
+    }
+  },
+  "components": [
+    {
+      "name": "Button",
+      "kind": "button",
+      "refersTo": "button",
+      "description": "Default ruled square button; sky-wash on hover, silver when pressed.",
+      "html": "<button class=\"ds-btn\"><svg width=\"14\" height=\"14\" viewBox=\"0 0 14 14\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.75\" stroke-linecap=\"square\" stroke-linejoin=\"miter\" aria-hidden=\"true\"><path d=\"M7 2V12M2 7H12\"/></svg>Open project</button>",
+      "css": ".ds-btn{font-family:var(--font, 'Archivo','Helvetica Neue',Arial,sans-serif);font-variant-numeric:tabular-nums;font-weight:500;font-size:12px;line-height:1;color:var(--ink, #1d3a5f);background:var(--white, #fff);border:1px solid var(--ink, #1d3a5f);border-radius:0;height:26px;padding:0 10px;display:inline-flex;align-items:center;gap:6px;} .ds-btn:hover{background:var(--sky-wash, #e4f0f9);} .ds-btn:active{background:var(--silver, #c9cdd1);} .ds-btn:focus-visible{outline:2px solid var(--orange, #f08a24);outline-offset:1px;}"
+    },
+    {
+      "name": "Primary Button",
+      "kind": "button",
+      "refersTo": "button-primary",
+      "description": "Deep ink button for the main action of a region (New run, Send, Play).",
+      "html": "<button class=\"ds-btn-primary\"><svg width=\"14\" height=\"14\" viewBox=\"0 0 14 14\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.75\" stroke-linecap=\"square\" stroke-linejoin=\"miter\" aria-hidden=\"true\"><path d=\"M7 2V12M2 7H12\"/></svg>New run</button>",
+      "css": ".ds-btn-primary{font-family:var(--font, 'Archivo','Helvetica Neue',Arial,sans-serif);font-variant-numeric:tabular-nums;font-weight:500;font-size:12px;line-height:1;color:var(--ink, #1d3a5f);background:var(--white, #fff);border:1px solid var(--ink, #1d3a5f);border-radius:0;height:26px;padding:0 10px;display:inline-flex;align-items:center;gap:6px;background:var(--ink, #1d3a5f);color:var(--white, #fff);} .ds-btn-primary:hover{background:#2a4d78;} .ds-btn-primary:focus-visible{outline:2px solid var(--orange, #f08a24);outline-offset:1px;}"
+    },
+    {
+      "name": "Text Input",
+      "kind": "input",
+      "refersTo": "input",
+      "description": "Hairline field; ink border on focus; orange caret.",
+      "html": "<input class=\"ds-input\" placeholder=\"Filter runs by case or id\" />",
+      "css": ".ds-input{font-family:var(--font, 'Archivo','Helvetica Neue',Arial,sans-serif);font-variant-numeric:tabular-nums;font-size:12px;color:var(--ink, #1d3a5f);height:26px;padding:0 8px;border:1px solid var(--silver, #c9cdd1);border-radius:0;background:var(--white, #fff);width:260px;caret-color:var(--orange, #f08a24);} .ds-input::placeholder{color:var(--ink-2, #4a6382);} .ds-input:hover{border-color:var(--ink-2, #4a6382);} .ds-input:focus{border-color:var(--ink, #1d3a5f);outline:none;}"
+    },
+    {
+      "name": "Segmented Toggle",
+      "kind": "chip",
+      "refersTo": "segmented-toggle-selected",
+      "description": "Joined ruled buttons; the selected one is deep ink. An unavailable option is a dashed silver chip that explains itself in a tooltip.",
+      "html": "<div class=\"ds-seg\"><button class=\"ds-seg-item on\">Surface</button><button class=\"ds-seg-item\">Iso-lines</button><button class=\"ds-seg-item\">Streamlines</button></div> <span class=\"ds-seg-off\">Cut plane</span>",
+      "css": ".ds-seg{display:inline-flex;} .ds-seg-item{font-family:var(--font, 'Archivo','Helvetica Neue',Arial,sans-serif);font-variant-numeric:tabular-nums;font-weight:500;font-size:12px;line-height:1;color:var(--ink, #1d3a5f);background:var(--white, #fff);border:1px solid var(--ink, #1d3a5f);border-radius:0;height:26px;padding:0 10px;display:inline-flex;align-items:center;gap:6px;margin-left:-1px;} .ds-seg-item:first-child{margin-left:0;} .ds-seg-item:hover{background:var(--sky-wash, #e4f0f9);} .ds-seg-item.on{background:var(--ink, #1d3a5f);color:var(--white, #fff);} .ds-seg-item:focus-visible{outline:2px solid var(--orange, #f08a24);outline-offset:1px;position:relative;} .ds-seg-off{font-family:var(--font, 'Archivo','Helvetica Neue',Arial,sans-serif);font-variant-numeric:tabular-nums;font-size:12px;height:26px;padding:0 10px;display:inline-flex;align-items:center;border:1px dashed var(--silver, #c9cdd1);color:var(--ink-2, #4a6382);}"
+    },
+    {
+      "name": "Header Band with Project Tabs",
+      "kind": "nav",
+      "refersTo": "header-band",
+      "description": "Sky band ruled by a 3px ink line; the selected project is a white tab.",
+      "html": "<nav class=\"ds-top\"><span class=\"ds-brand\">rcfd <span>Studio</span></span><a class=\"ds-ptab\">quick-start</a><a class=\"ds-ptab on\" aria-current=\"page\">wind-tunnel</a><a class=\"ds-ptab\">axial-fan</a></nav>",
+      "css": ".ds-top{font-family:var(--font, 'Archivo','Helvetica Neue',Arial,sans-serif);font-variant-numeric:tabular-nums;display:flex;align-items:stretch;height:48px;background:var(--sky, #62b4e8);border-bottom:3px solid var(--ink, #1d3a5f);color:var(--ink, #1d3a5f);} .ds-brand{width:160px;padding:0 16px;display:flex;align-items:center;gap:5px;font-size:15px;font-weight:700;letter-spacing:-0.01em;border-right:1px solid var(--ink, #1d3a5f);} .ds-brand span{font-weight:400;} .ds-ptab{padding:0 18px;display:flex;align-items:center;font-size:13px;font-weight:500;border-right:1px solid rgba(29,58,95,0.35);cursor:default;} .ds-ptab:hover{background:rgba(255,255,255,0.3);} .ds-ptab.on{background:var(--white, #fff);font-weight:700;} .ds-ptab:focus-visible{outline:2px solid var(--orange, #f08a24);outline-offset:-3px;}"
+    },
+    {
+      "name": "Sub-tabs",
+      "kind": "nav",
+      "refersTo": "sub-tab-selected",
+      "description": "32px tab row ruled in ink; the selected tab is a meadow field.",
+      "html": "<div class=\"ds-subtabs\" role=\"tablist\"><button class=\"ds-subtab on\" role=\"tab\" aria-selected=\"true\">Runs</button><button class=\"ds-subtab\" role=\"tab\">Cases</button><button class=\"ds-subtab\" role=\"tab\">Meshes</button></div>",
+      "css": ".ds-subtabs{display:flex;height:32px;border-bottom:1px solid var(--ink, #1d3a5f);width:360px;} .ds-subtab{font-family:var(--font, 'Archivo','Helvetica Neue',Arial,sans-serif);font-variant-numeric:tabular-nums;font-size:12px;font-weight:500;padding:0 16px;border:0;background:transparent;color:var(--ink, #1d3a5f);} .ds-subtab:hover{background:var(--meadow-wash, #e6f3e8);} .ds-subtab.on{background:var(--meadow, #6cc078);font-weight:700;} .ds-subtab:focus-visible{outline:2px solid var(--orange, #f08a24);outline-offset:-2px;}"
+    },
+    {
+      "name": "State Pictogram with Word",
+      "kind": "custom",
+      "refersTo": "run-row",
+      "description": "Every run state is a 14-unit grid pictogram beside its word; failure in deep red.",
+      "html": "<ul class=\"ds-states\"><li class=\"ds-state ds-state-queued\"><svg width=\"14\" height=\"14\" viewBox=\"0 0 14 14\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"square\" aria-hidden=\"true\"><circle cx=\"7\" cy=\"7\" r=\"5\"/></svg>Queued</li><li class=\"ds-state ds-state-running\"><svg width=\"14\" height=\"14\" viewBox=\"0 0 14 14\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"square\" aria-hidden=\"true\"><path d=\"M2 12V3H11M8 0L11 3L8 6\"/></svg>Running</li><li class=\"ds-state ds-state-converged\"><svg width=\"14\" height=\"14\" viewBox=\"0 0 14 14\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"square\" aria-hidden=\"true\"><path d=\"M2 7L6 11L13 4\"/></svg>Converged</li><li class=\"ds-state ds-state-finished\"><svg width=\"14\" height=\"14\" viewBox=\"0 0 14 14\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"square\" aria-hidden=\"true\"><path d=\"M1 7H11M11 2V12\"/></svg>Finished</li><li class=\"ds-state ds-state-failed\"><svg width=\"14\" height=\"14\" viewBox=\"0 0 14 14\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"square\" aria-hidden=\"true\"><path d=\"M2 2L6 6M8 8L12 12M12 2L8 6\"/></svg>Failed</li></ul>",
+      "css": ".ds-states{font-family:var(--font, 'Archivo','Helvetica Neue',Arial,sans-serif);font-variant-numeric:tabular-nums;list-style:none;margin:0;padding:0;display:flex;gap:16px;font-size:12px;font-weight:500;color:var(--ink, #1d3a5f);} .ds-state{display:inline-flex;align-items:center;gap:7px;} .ds-state svg{flex:none;} .ds-state-running svg{color:#b35a00;stroke-width:2.4;} .ds-state-converged svg{color:#2f7d3b;} .ds-state-failed{color:var(--fail, #9b1c24);font-weight:700;}"
+    },
+    {
+      "name": "Run Bands with Scrubber",
+      "kind": "custom",
+      "refersTo": "run-band",
+      "description": "Signature: one flat phase-coloured band per run on a shared time axis, ends labelled with pictogram and word, crossed by one ink scrubber line with its flag.",
+      "html": "<div class=\"ds-bands\"><span class=\"ds-flag\" style=\"left:62%\">t = 12.60 s</span><div class=\"ds-band dim\"><span class=\"ds-seg it\" style=\"left:0;width:63%\"></span><span class=\"ds-seg cv\" style=\"left:63%;width:3%\"></span><span class=\"ds-ev after\" style=\"left:calc(66% + 6px)\"><svg width=\"12\" height=\"12\" viewBox=\"0 0 14 14\" fill=\"none\" stroke=\"#2f7d3b\" stroke-width=\"2\" stroke-linecap=\"square\" aria-hidden=\"true\"><path d=\"M2 7L6 11L13 4\"/></svg>converged · 13.2 s</span></div><div class=\"ds-band on\"><span class=\"ds-seg run\" style=\"left:0;width:63%\"></span><span class=\"ds-seg pend\" style=\"left:63%;width:37%\"></span><span class=\"ds-ev after\" style=\"left:calc(63% + 6px)\"><svg width=\"12\" height=\"12\" viewBox=\"0 0 14 14\" fill=\"none\" stroke=\"#b35a00\" stroke-width=\"2\" stroke-linecap=\"square\" aria-hidden=\"true\"><path d=\"M2 12V3H11M8 0L11 3L8 6\"/></svg>running · it 1870</span></div><div class=\"ds-band\"><span class=\"ds-seg it\" style=\"left:0;width:6%\"></span><span class=\"ds-seg fl\" style=\"left:6%;width:1%\"></span><span class=\"ds-ev after fail\" style=\"left:calc(7% + 6px)\"><svg width=\"12\" height=\"12\" viewBox=\"0 0 14 14\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"square\" aria-hidden=\"true\"><path d=\"M2 2L6 6M8 8L12 12M12 2L8 6\"/></svg>failed · it 211</span></div><div class=\"ds-axis\"><i style=\"left:0\">0</i><i style=\"left:25%\">5</i><i style=\"left:50%\">10</i><i style=\"left:75%\">15</i><i style=\"left:100%\">20</i></div><span class=\"ds-line\" style=\"left:62%\"></span></div>",
+      "css": ".ds-bands{font-family:var(--font, 'Archivo','Helvetica Neue',Arial,sans-serif);font-variant-numeric:tabular-nums;position:relative;width:520px;padding-top:18px;color:var(--ink, #1d3a5f);} .ds-band{position:relative;height:20px;} .ds-band.on{box-shadow:inset 0 -1px 0 var(--ink, #1d3a5f);} .ds-seg{position:absolute;top:3px;bottom:3px;} .ds-seg.it{background:var(--sky, #62b4e8);} .ds-seg.cv{background:var(--meadow, #6cc078);} .ds-seg.run{background:var(--orange, #f08a24);} .ds-seg.fl{background:var(--fail, #9b1c24);} .ds-seg.pend{background:repeating-linear-gradient(135deg, var(--silver, #c9cdd1) 0 4px, var(--white, #fff) 4px 8px);outline:1px solid var(--silver, #c9cdd1);outline-offset:-1px;} .ds-band.dim .ds-seg{opacity:0.4;} .ds-ev{position:absolute;z-index:2;top:3px;bottom:3px;padding:0 4px;display:inline-flex;align-items:center;gap:4px;font-size:10px;font-weight:500;white-space:nowrap;} .ds-band.on .ds-ev{font-weight:700;} .ds-ev.after{background:var(--white, #fff);} .ds-ev.fail{color:var(--fail, #9b1c24);font-weight:700;} .ds-axis{position:relative;height:16px;border-top:1px solid var(--silver, #c9cdd1);font-size:10px;color:var(--ink-2, #4a6382);} .ds-axis i{position:absolute;top:2px;font-style:normal;transform:translateX(-50%);} .ds-axis i:first-child{transform:none;} .ds-axis i:last-child{transform:translateX(-100%);} .ds-line{position:absolute;top:18px;bottom:0;border-left:1px solid var(--ink, #1d3a5f);} .ds-bands:hover .ds-line{border-left:2px solid var(--orange, #f08a24);} .ds-flag{position:absolute;top:2px;transform:translateX(-100%);background:var(--ink, #1d3a5f);color:var(--white, #fff);font-size:10px;font-weight:500;padding:2px 6px;white-space:nowrap;}"
+    },
+    {
+      "name": "Number Grid",
+      "kind": "card",
+      "refersTo": "run-row-selected",
+      "description": "Selected run values in a hairline grid: 11px ink-2 caption over a 22px bold tabular value.",
+      "html": "<dl class=\"ds-nums\"><div class=\"ds-nums-head\">cylinder-re100 <span><svg width=\"14\" height=\"14\" viewBox=\"0 0 14 14\" fill=\"none\" stroke=\"#b35a00\" stroke-width=\"2\" stroke-linecap=\"square\" aria-hidden=\"true\"><path d=\"M2 12V3H11M8 0L11 3L8 6\"/></svg> Running</span></div><div><dt>Iteration</dt><dd>1870</dd></div><div><dt>Time, s</dt><dd>12.60</dd></div><div><dt>C<sub>d</sub></dt><dd>1.333</dd></div></dl>",
+      "css": ".ds-nums{font-family:var(--font, 'Archivo','Helvetica Neue',Arial,sans-serif);font-variant-numeric:tabular-nums;margin:0;width:420px;border-top:1px solid var(--ink, #1d3a5f);display:grid;grid-template-columns:repeat(3,1fr);color:var(--ink, #1d3a5f);font-size:12px;} .ds-nums-head{grid-column:1/-1;display:flex;justify-content:space-between;font-weight:700;padding:8px 12px;border-bottom:1px solid var(--silver, #c9cdd1);} .ds-nums-head span{display:inline-flex;gap:6px;align-items:center;font-weight:500;} .ds-nums>div:not(.ds-nums-head){padding:8px 12px 10px;border-right:1px solid var(--silver, #c9cdd1);} .ds-nums>div:last-child{border-right:0;} .ds-nums dt{font-size:11px;color:var(--ink-2, #4a6382);} .ds-nums dd{margin:2px 0 0;font-size:22px;font-weight:700;letter-spacing:-0.02em;}"
+    }
+  ],
+  "narrative": {
+    "northStar": "The Wayfinding Program",
+    "overview": "The Studio is drawn the way Otl Aicher drew the Munich 1972 Games: one strict program in which every run, state and event is a grid-built pictogram set beside its word, and colour is a short, flat, ordered scale where each hue has a job. Someone at a desk in daylight, reading numbers closely for hours, should be able to tell from the screen alone what ran, what is running and what failed, without hunting through it.\n\nThe world is white ground, deep ink rules and flat colour fields. Density comes from hairlines rather than card padding: panels sit edge to edge, divided by 1px ink or silver lines, and the workspace reflows by whole modules instead of floating boxes. Selection pulls the chosen run's numbers forward while everything else fades. The one place the world gives way is the field view: there the data owns the colour, through a perceptual colour map, and the chrome stays ink and white around it.\n\nIt refuses the grey docked workbench with a single blue accent: no grey chrome, no black, no grey text, no rounded panels.",
+    "keyCharacteristics": [
+      "Flat colour fields with jobs (sky, meadow, orange, deep red) on white, ruled in deep ink.",
+      "State is always a pictogram plus a word; colour only reinforces it.",
+      "Square corners everywhere; 1px rules and hairlines instead of cards and shadows.",
+      "One neo-grotesk (Archivo) with tabular figures throughout.",
+      "Hairline density, so many numbers fit on one screen, with selection bringing one run forward.",
+      "Light theme, desktop only (1180px minimum width)."
+    ],
+    "rules": [
+      {
+        "name": "The Colour Has a Job Rule",
+        "body": "Each hue means one thing: sky = header band and iterating; meadow = active sub-tab, Claude Code and converged; orange = the running run's live segment, plus focus and caret; deep red = failure. A new surface may not give a hue a second meaning.",
+        "section": "colors"
+      },
+      {
+        "name": "The One Live Thing Rule",
+        "body": "Orange fills exactly one band segment at a time: the live segment of the running run. Other emphasis uses ink.",
+        "section": "colors"
+      },
+      {
+        "name": "The Fade by Colour Rule",
+        "body": "Faded or de-emphasised content changes its fill opacity or switches its text to ink-2; text opacity is never lowered. Failures never fade.",
+        "section": "colors"
+      },
+      {
+        "name": "The No Black, No Grey Text Rule",
+        "body": "Deep ink replaces black; ink-2 replaces grey. Silver is for lines and hatch, never for words.",
+        "section": "colors"
+      },
+      {
+        "name": "The Data Owns the Field Rule",
+        "body": "Inside the field view, colour comes from the data through viridis (a 256-entry table built from 9 control stops, #440154 to #fde725), and the same table draws the legend. The palette above never tints a field.",
+        "section": "colors"
+      },
+      {
+        "name": "The Tabular Figures Rule",
+        "body": "Every number is set in tabular figures, and units sit in the label or caption (\"Time, s\"), not after each value.",
+        "section": "typography"
+      },
+      {
+        "name": "The One Family Rule",
+        "body": "Archivo carries everything; there is no display face and no mono.",
+        "section": "typography"
+      },
+      {
+        "name": "The Hairline Density Rule",
+        "body": "Divide with lines, not with space or boxes: a new panel takes a 1px ink rule on its structural edge and silver hairlines inside.",
+        "section": "layout"
+      },
+      {
+        "name": "The Flat Field Rule",
+        "body": "Panels, rows, bands and buttons have no drop shadows. Only floating overlays get the ink-tinted popover lift.",
+        "section": "elevation"
+      }
+    ],
+    "dos": [
+      "**Do** pair every state colour with its pictogram and its word (queued, running, converged, finished, failed).",
+      "**Do** draw new pictograms and icons on the 14-unit grid with 0, 45 and 90 degree strokes and square caps.",
+      "**Do** keep orange for the running run's live segment, focus and caret only.",
+      "**Do** fade by fill opacity or by switching text to ink-2 (6.18:1), never by text opacity, and never fade a failure.",
+      "**Do** use the deep variants (meadow-deep, orange-deep) when a state mark sits on white.",
+      "**Do** divide panels with 1px ink rules and silver hairlines, square-cornered, with no gutters.",
+      "**Do** set every number in tabular figures and put its unit in the caption.",
+      "**Do** keep the disclaimer footer visible on every surface.",
+      "**Do** let normal states be silent: pictogram, position and layout at rest; words in the accessible name, tooltip, help or palette.",
+      "**Do** show visible words for exceptions only: a failure, a loss, a conflict, something blocked or unavailable, a value to act on.",
+      "**Do** colour fields from the raw value through one table that also draws the legend."
+    ],
+    "donts": [
+      "**Don't** use black or grey text; deep ink and ink-2 cover every text job.",
+      "**Don't** round corners on any container, control or band.",
+      "**Don't** add drop shadows to panels, rows or buttons; only floating popovers lift.",
+      "**Don't** use sky, meadow or orange as text on white; they are fields and fills that carry ink text.",
+      "**Don't** show deep red for anything but a failure, and never without its pictogram and word.",
+      "**Don't** tint the field with interface colours, or show a field without its legend and caption.",
+      "**Don't** add a second typeface or a monospace for numbers.",
+      "**Don't** add standing notes, hints, reasons or explanations for a normal state; if a control needs a sentence at rest to be understood, redesign the control.",
+      "**Don't** repeat in visible text what a pictogram, column heading or position already says."
+    ],
+    "open": [
+      "Dark theme",
+      "Case editor and project home surfaces",
+      "Density and layout beyond the run workspace",
+      "Layouts below 1180px"
+    ]
+  }
+}

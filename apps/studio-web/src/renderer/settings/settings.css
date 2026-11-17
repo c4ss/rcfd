@@ -1,0 +1,526 @@
+/* The case settings surface (F-825; .impeccable/surfaces/apps-studio-web-src-renderer-settings.md). DESIGN.md's world:
+   the sky header band ruled in ink, three columns edge to edge divided by 1px ink rules, key rows as hairline stripes,
+   26px controls from ui/primitives.css, the ink disclaimer footer. Tokens only: no colour literal, no radius, no shadow
+   (tests/unit/settings-static.spec.ts). */
+
+.st-page {
+  min-width: var(--size-min-width);
+  height: 100vh;
+  display: grid;
+  grid-template-rows: calc(var(--size-header) + var(--size-header-rule)) minmax(0, 1fr) var(--size-footer);
+}
+
+/* ---- header band ---------------------------------------------------------------------------------------------- */
+
+.st-top {
+  display: flex;
+  align-items: stretch;
+  background: var(--role-header-band);
+  border-bottom: var(--line-header-rule);
+  color: var(--role-text);
+}
+.st-brand {
+  width: 264px;
+  flex: none;
+  padding: 0 var(--space-xl);
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: var(--type-title-size);
+  font-weight: var(--type-title-weight);
+  letter-spacing: var(--type-title-tracking);
+  border-right: var(--line-rule);
+}
+.st-brand span {
+  font-weight: var(--font-weight-regular);
+}
+.st-title {
+  margin: 0;
+  display: flex;
+  align-items: center;
+  padding: 0 var(--space-xl);
+  font-size: var(--type-title-sm-size);
+  font-weight: var(--type-title-sm-weight);
+}
+.st-top-right {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: var(--space-md);
+  padding: 0 var(--space-xl);
+}
+.st-top-right .ui-select {
+  min-width: 220px;
+}
+.st-conn {
+  font-size: var(--type-label-size);
+  font-weight: var(--type-label-weight);
+}
+
+/* ---- body: index | keys | check ------------------------------------------------------------------------------ */
+
+.st-body {
+  display: grid;
+  grid-template-columns: 264px minmax(0, 1fr) 360px;
+  min-height: 0;
+}
+.st-col {
+  /* the containing block of the visually hidden inputs inside (switches, the selects' form fields), so they scroll and
+     clip with the column instead of stretching the page */
+  position: relative;
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+.st-col + .st-col {
+  border-left: var(--line-rule);
+}
+
+.st-empty {
+  padding: var(--space-xxl);
+  max-width: calc(var(--size-measure-empty) + 2 * var(--space-xxl));
+}
+.st-empty h2 {
+  margin: 0 0 var(--space-md);
+  font-size: var(--type-title-sm-size);
+  font-weight: var(--type-title-sm-weight);
+}
+.st-empty p {
+  margin: 0 0 var(--space-lg);
+}
+.st-empty .st-session-list {
+  margin: 0 0 var(--space-lg);
+  padding: 0;
+  list-style: none;
+  border-top: var(--line-hair);
+}
+.st-session-list li {
+  display: flex;
+  align-items: center;
+  gap: var(--space-md);
+  padding: var(--space-sm) 0;
+  border-bottom: var(--line-hair);
+}
+.st-session-list li span {
+  color: var(--role-text-2);
+}
+
+/* ---- index ---------------------------------------------------------------------------------------------------- */
+
+.st-find {
+  padding: var(--space-lg);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-md);
+  border-bottom: var(--line-rule);
+}
+.st-find .ui-field {
+  display: flex;
+}
+.st-index {
+  margin: 0;
+  padding: 0;
+  outline: none;
+}
+.st-index-item {
+  display: flex;
+  align-items: center;
+  gap: var(--space-md);
+  min-height: var(--size-tab-row);
+  padding: 0 var(--space-lg);
+  border-bottom: var(--line-hair);
+  cursor: default;
+  outline: none;
+}
+.st-index-item[data-hovered] {
+  background: var(--role-row-hover);
+}
+.st-index-item[data-selected] {
+  background: var(--role-row-selected);
+  box-shadow: inset 0 0 0 1px var(--role-row-selected-edge);
+  font-weight: var(--font-weight-bold);
+}
+.st-index-item[data-focus-visible] {
+  outline: var(--focus-width) solid var(--role-focus-ring);
+  outline-offset: var(--focus-offset-inset);
+}
+.st-index-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.st-index-count {
+  margin-left: auto;
+  flex: none;
+  font-size: var(--type-label-size);
+  font-weight: var(--type-label-weight);
+  color: var(--role-text-2);
+}
+.st-index-item--first {
+  border-bottom: var(--line-rule);
+}
+
+/* ---- section head ---------------------------------------------------------------------------------------------- */
+
+.st-head {
+  padding: var(--space-lg) var(--space-xl);
+  border-bottom: var(--line-rule);
+}
+.st-head h2 {
+  margin: 0;
+  font-size: var(--type-title-sm-size);
+  font-weight: var(--type-title-sm-weight);
+}
+.st-head p {
+  margin: var(--space-xs) 0 0;
+  max-width: 72ch;
+  color: var(--role-text-2);
+}
+.st-head .st-head-counts {
+  font-size: var(--type-label-size);
+  font-weight: var(--type-label-weight);
+}
+.st-banner {
+  padding: var(--space-md) var(--space-xl);
+  border-bottom: var(--line-rule);
+  background: var(--role-row-hover);
+  font-weight: var(--font-weight-medium);
+}
+
+/* ---- key rows -------------------------------------------------------------------------------------------------- */
+
+.st-key {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 300px 176px;
+  gap: var(--space-xl);
+  align-items: start;
+  padding: var(--space-md) var(--space-xl);
+  border-bottom: var(--line-hair);
+}
+.st-key:hover,
+.st-key:focus-within {
+  background: var(--role-row-hover);
+}
+.st-key-head {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-hair);
+}
+.st-key-name {
+  font-weight: var(--font-weight-medium);
+  overflow-wrap: anywhere;
+}
+.st-key[data-set='true'] .st-key-name {
+  font-weight: var(--font-weight-bold);
+}
+.st-key-path {
+  font-size: var(--type-label-size);
+  color: var(--role-text-2);
+  overflow-wrap: anywhere;
+}
+.st-key-desc {
+  margin: 0;
+  max-width: 72ch;
+  font-size: var(--type-label-size);
+  color: var(--role-text-2);
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  overflow: hidden;
+}
+.st-key-si {
+  display: block;
+}
+.st-key:hover .st-key-desc,
+.st-key:focus-within .st-key-desc {
+  display: block;
+}
+.st-key-control {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+  min-width: 0;
+}
+.st-key-control .ui-field,
+.st-key-control .ui-select {
+  display: flex;
+  width: 100%;
+}
+.st-key-control .ui-switch-field {
+  min-height: var(--size-control);
+  justify-content: center;
+}
+.st-key-hint {
+  font-size: var(--type-label-size);
+  color: var(--role-text-2);
+}
+.st-key-error {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-xs);
+  font-size: var(--type-label-size);
+  font-weight: var(--font-weight-medium);
+  color: var(--role-text-fail);
+  overflow-wrap: anywhere;
+}
+.st-key-error svg {
+  flex: none;
+  margin-top: 1px;
+}
+.st-key-meta {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-hair);
+  font-size: var(--type-label-size);
+  color: var(--role-text-2);
+  overflow-wrap: anywhere;
+}
+.st-key-meta .st-set {
+  display: flex;
+  align-items: center;
+  gap: var(--space-md);
+  margin-top: var(--space-xs);
+  color: var(--role-text);
+  font-weight: var(--font-weight-bold);
+}
+
+/* ---- disclosures (more keys, nested objects, collections, entries) --------------------------------------------- */
+
+.st-disclosure {
+  display: flex;
+  align-items: center;
+  gap: var(--space-md);
+  width: 100%;
+  min-height: var(--size-tab-row);
+  padding: var(--space-xs) var(--space-xl);
+  border: 0;
+  border-bottom: var(--line-hair);
+  background: var(--role-ground);
+  color: var(--role-text);
+  text-align: left;
+  cursor: default;
+}
+.st-disclosure[data-hovered] {
+  background: var(--role-row-hover);
+}
+.st-disclosure[data-pressed] {
+  background: var(--role-pressed);
+}
+.st-disclosure[data-focus-visible] {
+  outline: var(--focus-width) solid var(--role-focus-ring);
+  outline-offset: var(--focus-offset-inset);
+}
+.st-disclosure .ui-icon {
+  flex: none;
+  transform: rotate(-90deg);
+  transition: transform var(--motion-toggle) var(--motion-ease);
+}
+.st-disclosure[aria-expanded='true'] .ui-icon {
+  transform: none;
+}
+.st-disclosure-name {
+  font-weight: var(--font-weight-bold);
+  overflow-wrap: anywhere;
+}
+.st-disclosure-note {
+  font-size: var(--type-label-size);
+  font-weight: var(--type-label-weight);
+  color: var(--role-text-2);
+}
+.st-disclosure-note--set {
+  color: var(--role-text);
+}
+.st-disclosure-desc {
+  display: block;
+  font-size: var(--type-label-size);
+  color: var(--role-text-2);
+  max-width: 72ch;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.st-disclosure-text {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+.st-disclosure-line {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-md);
+  flex-wrap: wrap;
+}
+.st-nested {
+  margin-left: var(--space-xl);
+  border-left: var(--line-hair);
+}
+.st-nested > .st-head-inline {
+  padding: var(--space-sm) var(--space-xl);
+  border-bottom: var(--line-hair);
+  font-size: var(--type-label-size);
+  color: var(--role-text-2);
+  max-width: calc(72ch + 2 * var(--space-xl));
+}
+.st-entry-bar {
+  display: flex;
+  align-items: center;
+  gap: var(--space-md);
+  padding: var(--space-sm) var(--space-xl);
+  border-bottom: var(--line-hair);
+}
+.st-entry-bar .ui-field {
+  width: 220px;
+}
+.st-entry-bar .st-key-error {
+  flex: 1;
+}
+.st-confirm {
+  display: flex;
+  align-items: center;
+  gap: var(--space-md);
+  padding: var(--space-sm) var(--space-xl);
+  border-bottom: var(--line-hair);
+  font-weight: var(--font-weight-medium);
+}
+
+/* ---- results of a search, keys set in the case ---------------------------------------------------------------- */
+
+.st-pending-key {
+  display: flex;
+  align-items: center;
+  gap: var(--space-md);
+  padding: var(--space-md) var(--space-xl);
+  border-bottom: var(--line-hair);
+}
+.st-pending-key span {
+  color: var(--role-text-2);
+}
+.st-filled {
+  padding: var(--space-md) var(--space-xl);
+  border-bottom: var(--line-hair);
+  display: flex;
+  gap: var(--space-md);
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+/* ---- check panel ------------------------------------------------------------------------------------------------ */
+
+.st-check {
+  display: flex;
+  flex-direction: column;
+}
+.st-check > section {
+  padding: var(--space-lg) var(--space-xl);
+  border-bottom: var(--line-rule);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-md);
+  align-items: flex-start;
+}
+.st-check h2 {
+  margin: 0;
+  font-size: var(--type-title-sm-size);
+  font-weight: var(--type-title-sm-weight);
+}
+.st-check p {
+  margin: 0;
+}
+.st-facts {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: var(--space-xs) var(--space-lg);
+  margin: 0;
+}
+.st-facts dt {
+  font-size: var(--type-label-size);
+  color: var(--role-text-2);
+}
+.st-facts dd {
+  margin: 0;
+  font-weight: var(--font-weight-medium);
+  overflow-wrap: anywhere;
+}
+.st-verdict {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  font-weight: var(--font-weight-bold);
+}
+.st-verdict--failed {
+  color: var(--role-text-fail);
+}
+.st-diags {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  width: 100%;
+  border-top: var(--line-hair);
+}
+.st-diags li {
+  padding: var(--space-sm) 0;
+  border-bottom: var(--line-hair);
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--space-xs);
+  overflow-wrap: anywhere;
+}
+.st-cli {
+  margin: 0;
+  width: 100%;
+  padding: var(--space-sm) var(--space-md);
+  border: var(--line-hair);
+  font-family: var(--font-family);
+  font-size: var(--type-label-size);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  user-select: text;
+}
+.st-small {
+  font-size: var(--type-label-size);
+  color: var(--role-text-2);
+}
+
+/* ---- footer ---------------------------------------------------------------------------------------------------- */
+
+.st-foot {
+  background: var(--role-footer);
+  color: var(--role-text-inverse);
+  display: flex;
+  align-items: center;
+  padding: 0 var(--space-xl);
+  font-size: var(--type-label-size);
+  font-weight: var(--type-label-weight);
+}
+.st-foot-right {
+  margin-left: auto;
+  color: var(--role-text-inverse-2);
+}
+
+.st-body--single {
+  display: block;
+  overflow-y: auto;
+}
+
+/* The Quiet Rule (G22, F-833): a key's description, hint, default, range and reset are its focus detail. At rest they are
+   kept for readers (and stay in the tab order) but take no room; the row that holds the focus shows them. */
+.st-key-detail {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+.st-key:focus-within .st-key-detail {
+  position: static;
+  width: auto;
+  height: auto;
+  overflow: visible;
+  clip-path: none;
+  white-space: normal;
+}

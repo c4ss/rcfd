@@ -544,3 +544,44 @@ For a merge of one ADR's branch, the lead runs these checks instead of the full 
 5. `cargo test -p rcfd-cli --release --test docs_site`.
 
 Everything else waits for the next daily gate, which attributes any failure to the merges since the last green gate.
+
+## 8. The Electron Studio's npm tests (CI job `studio-web`)
+
+The Studio (`apps/studio-web/`, outside the Cargo workspace) is tested by npm, not by the gate: its unit and Playwright tests
+run in the job `studio-web` of `.github/workflows/ci.yml`, on every pull request and every push to `main`, on `ubuntu-24.04`
+and `windows-latest` (F-823; where they run is [ADR 0800](adr/0800-electron-studio-roadmap.md) Q3, the test harness is
+[ADR 0801](adr/0801-studio-web-dependencies-and-layout.md) addendum 1). `scripts/gate_test.py` does not run them, and a
+green gate says nothing about the Studio.
+
+The job, in `apps/studio-web/` with Node 22.19.0 (the version the Studio was verified on; `package.json` asks for 22.12.0 or
+later):
+
+1. `npm ci`: the exact versions of the committed `package-lock.json`. Only npm's download cache is kept between runs, keyed
+   on the lock file; `node_modules/`, builds and test results are never cached.
+2. `npm run typecheck`: the three type checks (renderer; main, preload and shared; tests).
+3. `npm run build`.
+4. `npm test`: builds again, packages the app into `out/packaged/` and runs every Playwright test, unit and e2e, on the
+   packaged executable. On Linux it runs under a virtual display (`xvfb-run`); the runner first allows the unprivileged user
+   namespaces that Chromium's sandbox needs on Ubuntu 24.04, so the app keeps its sandbox on. On Windows the window opens on
+   the runner's desktop for a few seconds.
+5. On Linux only: `cargo fetch --locked`, then `python scripts/third_party_licenses.py --check` from the repository root
+   (the licence list covers the npm lock file too).
+
+Any failed step or test fails the job and the workflow (Playwright runs with `retries: 0` and `forbidOnly`). On a failure the
+job uploads `playwright-report/` and `test-results/` as the artifact `studio-web-<os>-<commit>`, kept 14 days.
+
+To reproduce it locally, from the repository root:
+
+```bash
+cd apps/studio-web
+npm ci
+npm run typecheck
+npm run build
+npm test -- --reporter=list,html        # on Linux: xvfb-run --auto-servernum npm test -- --reporter=list,html
+cd ../..
+python scripts/third_party_licenses.py --check
+```
+
+`npm test` downloads the Electron binary on its first run. Dependabot opens the Studio's npm updates weekly, grouped by the
+pairs of ADR 0801 section 4 (`.github/dependabot.yml`); each such pull request runs this job, and its licence check fails until
+`python scripts/third_party_licenses.py` is run on it.

@@ -1,6 +1,6 @@
 [package]
 name = "rcfd-claude"
-description = "Claude Code bridge (Studio layer L6): session discovery, tolerant transcript tail, headless chat driver with an allow-list"
+description = "Claude Code allow-list rules: the conservative rule policy, flag values and the per-project allow-list file"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
@@ -13,12 +13,5 @@ workspace = true
 [dependencies]
 serde.workspace = true
 serde_json.workspace = true
-# Atomic file replacement and path canonicalization (ADR 0134 Placement; layer 2 above rcfd-project).
+# Atomic file replacement (ADR 0134 Placement; layer 2 above rcfd-project).
 rcfd-project = { path = "../rcfd-project" }
-
-# Test-only replay double of the `claude` executable (ADR 0126); the driver never calls it unless a test passes its path.
-[[bin]]
-name = "fake-claude"
-path = "src/bin/fake-claude.rs"
-test = false
-doc = false

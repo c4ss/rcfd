@@ -18,10 +18,11 @@ rcfd is early-stage software. These parts run programs, write files or listen fo
   runner, and reads per-project settings from `<project>/.rcfd/runner-config.json`.
 * Some tools of the MCP server (`rcfd-mcp`) write files in the project (case files, exported results). Without
   `--root` file access is not confined; `--read-only` refuses the tools that change state.
-* The Claude Code bridge (`rcfd-claude`) starts the `claude` command-line tool with an allow-list of permissions.
-  The allow-list is a floor, not the whole gate: user and project settings of that tool can add their own rules (see
-  ADR 0126).
+* The Studio's Claude Code panel (`apps/studio-web/src/main/claude/`) starts the `claude` command-line tool with an
+  allow-list of permissions. The allow-list is a floor, not the whole gate: user and project settings of that tool can
+  add their own rules (see ADR 0126).
 * Parsers of mesh and result files (`rcfd-io`), which read untrusted input.
 
-The assistant crate (`rcfd-assistant`) makes outbound calls only to the language-model endpoints the user configures. rcfd
-sends no telemetry.
+rcfd sends no telemetry. The local-model assistant (`rcfd-assistant`, which called the language-model endpoints the user
+configured and kept their API key in the OS keychain) was removed (F-838); the Studio's only assistant is Claude Code,
+which makes its own calls under its own settings.

@@ -1,7 +1,7 @@
 //! ADR 0143 N3 and N4: the runner started natively by `Client::ensure_runner_pid` (no PowerShell or shell in between).
 //! N3: two starts at the same moment leave one runner. N4 (a): the process the client starts is the runner itself;
-//! (c): no PowerShell or shell program is named in the non-test sources of rcfd-runner and rcfd-studio. Processes are
-//! killed only by pids the test recorded.
+//! (c): no PowerShell or shell program is named in the non-test sources of rcfd-runner (and of rcfd-studio, until that
+//! crate was removed by F-449). Processes are killed only by pids the test recorded.
 
 use rcfd_runner::client::Client;
 use rcfd_runner::sys;
@@ -215,12 +215,13 @@ fn rs_files(dir: &Path, out: &mut Vec<PathBuf>) {
     }
 }
 
-/// N4 (c): no PowerShell, `cmd` or POSIX shell is named in the non-test sources of rcfd-runner and rcfd-studio.
+/// N4 (c): no PowerShell, `cmd` or POSIX shell is named in the non-test sources of rcfd-runner (rcfd-studio, also
+/// scanned before, was removed by F-449).
 #[test]
 fn n4_no_shell_in_the_start_path() {
     let crates = Path::new(env!("CARGO_MANIFEST_DIR")).parent().unwrap().to_path_buf();
     let mut files = Vec::new();
-    for c in ["rcfd-runner", "rcfd-studio"] {
+    for c in ["rcfd-runner"] {
         rs_files(&crates.join(c).join("src"), &mut files);
     }
     let mut found = Vec::new();
@@ -230,7 +231,7 @@ fn n4_no_shell_in_the_start_path() {
         }
     }
     eprintln!("N4 (c): {} source files; shell names: {found:#?}", files.len());
-    assert!(files.len() > 20, "set-up: too few files under {}", crates.display());
+    assert!(files.len() >= 5, "set-up: too few files under {}", crates.display());
     assert!(found.is_empty(), "{found:#?}");
     // negative control: the pre-change launcher line is found, and ignored after a #[cfg(test)]
     let old = "fn launcher_cmd(script: &str) -> (Command, u32) {\n    let (mut c, flags) = console(\"powershell\", \

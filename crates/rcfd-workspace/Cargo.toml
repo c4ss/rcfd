@@ -21,7 +21,7 @@ rcfd-tsstore.workspace = true
 rcfd-post.workspace = true
 serde_json.workspace = true
 # ADR 0186 G1: the shipped examples moved from the Studio read their TOML into a tree (`Example::parse`). Already in the
-# workspace (rcfd-api, rcfd-studio); not a new crate.
+# workspace (rcfd-api); not a new crate.
 toml.workspace = true
 # ADR 0187 M9: the mesh commands of W4 read mesh files with the readers a case's mesh build uses and check the mesh with
 # its quality report. Both below api in the layering rule; not new crates.

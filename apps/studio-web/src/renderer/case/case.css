@@ -1,0 +1,209 @@
+/* The case editor (F-812; .impeccable/surfaces/apps-studio-web-src-renderer-case.md). The F-825 page and surface
+   (settings.css) with the case file named as a white tab in the header band and a case file panel at the head of the
+   right column, ruled like the check panel's sections. Tokens only: no colour literal, no radius, no shadow
+   (tests/unit/case-static.spec.ts). */
+
+/* ---- header band ---------------------------------------------------------------------------------------------- */
+
+.ce-tab {
+  display: flex;
+  align-items: center;
+  padding: 0 18px;
+  max-width: 360px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  background: var(--role-project-tab-selected);
+  font-size: var(--type-title-sm-size);
+  font-weight: var(--font-weight-bold);
+  border-right: var(--line-rule);
+}
+.ce-top-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-xs);
+  padding: 0 var(--space-md);
+}
+.ce-word {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--size-icon-gap);
+  font-weight: var(--font-weight-bold);
+}
+.ce-word--failed {
+  color: var(--role-text-fail);
+}
+
+/* ---- the case file panel and the case actions (inside the right column of settings.css) ----------------------- */
+
+.st-check > .ce-panel {
+  gap: var(--space-md);
+}
+.ce-file-title {
+  overflow-wrap: anywhere;
+}
+.ce-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--space-md);
+}
+.ce-pending {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+}
+.ce-pending ul,
+.ce-values {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  width: 100%;
+  border-top: var(--line-hair);
+}
+.ce-pending li,
+.ce-values li {
+  padding: var(--space-xs) 0;
+  border-bottom: var(--line-hair);
+  overflow-wrap: anywhere;
+  font-weight: var(--font-weight-medium);
+}
+.ce-values li {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: var(--space-md);
+}
+.ce-saved {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+}
+
+/* a notice opens inside the panel, ruled in ink above and below; failures take the failed wash and word */
+.ce-notice {
+  width: 100%;
+  border-top: var(--line-rule);
+  border-bottom: var(--line-rule);
+  padding: var(--space-md) 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+}
+.ce-notice p {
+  margin: 0;
+}
+.ce-notice--failed {
+  background: var(--role-row-failed);
+  padding: var(--space-md);
+}
+.ce-notice-title {
+  margin: 0;
+  display: flex;
+  align-items: center;
+  gap: var(--size-icon-gap);
+  font-size: var(--type-body-size);
+  font-weight: var(--font-weight-bold);
+  overflow-wrap: anywhere;
+}
+.ce-notice--failed .ce-notice-title {
+  color: var(--role-text-fail);
+}
+.ce-notice-title:focus-visible {
+  outline: var(--focus-width) solid var(--role-focus-ring);
+  outline-offset: var(--focus-offset);
+}
+.ce-choices {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--space-sm);
+}
+.ce-conflict-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--type-label-size);
+}
+.ce-conflict-table th,
+.ce-conflict-table td {
+  text-align: left;
+  padding: var(--space-xs) var(--space-sm) var(--space-xs) 0;
+  border-bottom: var(--line-hair);
+  overflow-wrap: anywhere;
+  vertical-align: top;
+}
+.ce-conflict-table thead th {
+  color: var(--role-text-2);
+  font-weight: var(--font-weight-medium);
+  border-bottom: var(--line-rule);
+}
+.ce-conflict-table tbody th {
+  font-weight: var(--font-weight-bold);
+}
+.ce-refused {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--size-icon-gap);
+  color: var(--role-text-fail);
+  font-weight: var(--font-weight-medium);
+  overflow-wrap: anywhere;
+}
+.ce-check {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+  overflow-wrap: anywhere;
+}
+.ce-dup {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--space-sm);
+  padding-top: var(--space-md);
+  border-top: var(--line-hair);
+}
+.ce-dup .ui-field {
+  width: 100%;
+}
+.ce-close {
+  width: 100%;
+  padding-top: var(--space-md);
+  border-top: var(--line-hair);
+}
+.ce-failed-title {
+  display: flex;
+  align-items: center;
+  gap: var(--size-icon-gap);
+  color: var(--role-text-fail);
+}
+
+/* ---- the new case form ----------------------------------------------------------------------------------------- */
+
+.ce-new {
+  padding: var(--space-xxl);
+  max-width: calc(var(--size-measure-empty) + 2 * var(--space-xxl) + 160px);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-lg);
+}
+.ce-new h2 {
+  margin: 0;
+  font-size: var(--type-title-sm-size);
+  font-weight: var(--type-title-sm-weight);
+}
+.ce-new p {
+  margin: 0;
+}
+.ce-new .ui-field,
+.ce-new .ui-select {
+  max-width: 420px;
+}
+.ce-field {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--space-xs);
+}

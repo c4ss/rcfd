@@ -1,0 +1,122 @@
+/* Comparing two runs (workspace/Compare.tsx, F-815; DESIGN.md Field view, Run bands, the Hairline Density Rule): two
+   views edge to edge divided by a 1px ink rule, one legend under both, refusals in the views' place. Tokens only, no
+   colour literals, square corners, no shadow (tests/unit/compare.spec.ts). */
+
+.cmp-controls {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  flex: none;
+}
+.cmp-other {
+  min-width: 220px;
+  max-width: 320px;
+}
+.cmp-mode {
+  flex: none;
+}
+
+.cmp {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+.cmp-views {
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+}
+.cmp--difference .cmp-view,
+.cmp-view {
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+.cmp--difference .cmp-view {
+  flex: 1;
+}
+.cmp-view + .cmp-view {
+  border-left: var(--line-rule);
+}
+.cmp-view .fv {
+  flex: 1;
+  border: 0;
+}
+.cmp-legend {
+  flex: none;
+  min-height: 48px;
+  border-top: var(--line-hair);
+}
+
+/* an exception in a view's place: its pictogram and its words (G22) */
+.cmp-refusal {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-md);
+  padding: var(--space-xl);
+  background: var(--role-viewport);
+}
+.cmp-refusal p {
+  margin: 0;
+  max-width: var(--size-measure-empty);
+}
+.cmp-reading {
+  margin: 0;
+  padding: var(--space-xl);
+  color: var(--role-text-2);
+}
+
+/* the engine's metrics of both runs (compare_runs): a hairline table of numbers */
+.cmp-metrics {
+  margin: 0 var(--space-lg) var(--space-lg);
+  border-collapse: collapse;
+  font-size: var(--type-label-size);
+  font-variant-numeric: tabular-nums;
+}
+.cmp-metrics th,
+.cmp-metrics td {
+  padding: var(--space-xs) var(--space-md);
+  border-bottom: var(--line-hair);
+  text-align: right;
+  white-space: nowrap;
+}
+.cmp-metrics thead th {
+  color: var(--role-text-2);
+  font-weight: var(--font-weight-medium);
+  border-bottom: var(--line-rule);
+}
+.cmp-metrics tbody th {
+  text-align: left;
+  font-weight: var(--font-weight-medium);
+}
+
+/* the compared run's band: full fill like the selected one, with a dashed ink underline */
+.tp-band-row--compared .tp-band {
+  border-bottom: 1px dashed var(--role-rule);
+}
+.tp-band-row--compared .tp-band-name {
+  color: var(--role-text);
+}
+.tp-resid-compared {
+  color: var(--role-text-2);
+}
+.tp-resid-compare {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  color: var(--role-text-2);
+}
+.tp-resid-compare li {
+  display: grid;
+  grid-template-columns: 26px minmax(0, 1fr) auto;
+  gap: var(--space-xs);
+  align-items: center;
+}
+.tp-resid-compare .tp-resid-value {
+  text-align: right;
+}

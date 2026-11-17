@@ -20,6 +20,19 @@ use std::path::{Path, PathBuf};
 
 const RECORD: &str = "tests/fixtures/case_hashes_6867e40.txt";
 
+/// Recorded sources whose file left the repository after R0 together with the crate that held it, so they are not
+/// compared; the record itself is kept as written. (source, why)
+const REMOVED: [(&str, &str); 2] = [
+    (
+        "crates/rcfd-studio/tests/fixtures/cavity.toml",
+        "the egui Studio crate rcfd-studio was removed (F-449)",
+    ),
+    (
+        "crates/rcfd-claude/tests/fixtures/v2.1.310/agents.json",
+        "the Claude Code session fixtures went with rcfd-claude's chat driver and readers (F-838)",
+    ),
+];
+
 /// A case with the table, the text of R0's control.
 const WITH_TABLE: &str = "[mesh]\ngenerator = \"cavity_2d\"\nnx = 4\nny = 4\n\n[mesh.transform]\nrotate_z_deg = -4.0\nrotate_origin = [0.25, 0.0, 0.0]\n";
 
@@ -293,7 +306,12 @@ fn h1_case_files_are_unchanged_against_the_base_record() {
                 println!("H1 {src}: mesh differs from the Windows record, not compared here (ADR 0137): {l}");
             }
             Some(l) => problems.push(format!("{src}: now\n  {l}\nrecorded\n  {w}")),
-            None => problems.push(format!("{src}: recorded, not found now")),
+            None => match REMOVED.iter().find(|(s, _)| *s == src) {
+                Some((_, why)) if !repo().join(src).exists() => {
+                    println!("H1 {src}: recorded, removed from the repository since R0 ({why}), not compared");
+                }
+                _ => problems.push(format!("{src}: recorded, not found now")),
+            },
         }
     }
     let valid = want.iter().filter(|l| l.contains("\tvalid\t")).count();
@@ -351,7 +369,9 @@ fn h1_case_files_are_unchanged_against_the_base_record() {
     // pressure_interpolation = skew_corrected).
     let w = want
         .iter()
-        .find(|l| l.contains("\tvalid\t") && !src_of(l).contains(" block "))
+        .find(|l| {
+            l.contains("\tvalid\t") && !src_of(l).contains(" block ") && !REMOVED.iter().any(|(s, _)| *s == src_of(l))
+        })
         .expect("a recorded valid case file");
     for (path, value) in [
         ("solver.corrector_control", serde_json::json!("adaptive")),

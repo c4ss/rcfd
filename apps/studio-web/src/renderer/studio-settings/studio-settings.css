@@ -1,0 +1,77 @@
+/* The Studio's settings page (F-818): DESIGN.md's world as the case settings draw it: the sky header band ruled in ink,
+   one column of sections divided by silver hairlines, 26px controls from ui/primitives.css, the ink disclaimer footer.
+   Tokens only: no colour literal, no radius, no shadow. */
+
+.ss-page {
+  min-width: var(--size-min-width);
+  height: 100vh;
+  display: grid;
+  grid-template-rows: calc(var(--size-header) + var(--size-header-rule)) minmax(0, 1fr) var(--size-footer);
+  background: var(--role-ground);
+}
+
+.ss-top {
+  display: flex;
+  align-items: stretch;
+  background: var(--role-header-band);
+  border-bottom: var(--line-header-rule);
+  color: var(--role-text);
+}
+.ss-brand {
+  width: 264px;
+  flex: none;
+  padding: 0 var(--space-xl);
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: var(--type-title-size);
+  font-weight: var(--type-title-weight);
+  letter-spacing: var(--type-title-tracking);
+  border-right: var(--line-rule);
+}
+.ss-brand span {
+  font-weight: var(--font-weight-regular);
+}
+.ss-title {
+  margin: 0;
+  display: flex;
+  align-items: center;
+  padding: 0 var(--space-xl);
+  font-size: var(--type-title-sm-size);
+  font-weight: var(--type-title-sm-weight);
+}
+.ss-top-right {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: var(--space-md);
+  padding: 0 var(--space-xl);
+}
+
+.ss-body {
+  overflow-y: auto;
+}
+.ss-section {
+  display: flex;
+  align-items: center;
+  gap: var(--space-xl);
+  padding: var(--space-lg) var(--space-xl);
+  border-bottom: var(--line-hair);
+}
+.ss-section-title {
+  margin: 0;
+  width: 232px;
+  flex: none;
+  font-size: var(--type-title-sm-size);
+  font-weight: var(--type-title-sm-weight);
+}
+
+.ss-foot {
+  background: var(--role-footer);
+  color: var(--role-text-inverse);
+  display: flex;
+  align-items: center;
+  padding: 0 var(--space-xl);
+  font-size: var(--type-label-size);
+  font-weight: var(--type-label-weight);
+}

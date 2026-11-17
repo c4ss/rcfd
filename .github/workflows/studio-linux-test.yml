@@ -1,0 +1,66 @@
+# The Electron Studio on Linux with its engine (F-821, ADR 0801 Addendum 19): the Docker run of
+# apps/studio-web/docker/linux-test (Ubuntu 24.04, the engine's release binaries, the packaged Linux Studio, the unit
+# tests and the e2e suite under Xvfb, Chromium's sandbox on). ci.yml's studio-web job already runs the Studio's tests on
+# ubuntu-24.04, but without the engine, so the specs that need rcfd, rcfd-mcp or rcfd-runner skip there; this one has them.
+#
+# Manual dispatch only, for now: whether it runs on a schedule or beside the daily gate costs hosted-runner minutes and is
+# the maintainer's call. The runner has no GPU: the field views get no WebGL unless gpu_blocklist is "ignore" (WebGL 2 on
+# Mesa's software rasteriser); the ADR lists the specs that cannot pass without one.
+name: Studio Linux test (Docker)
+
+on:
+  workflow_dispatch:
+    inputs:
+      gpu_blocklist:
+        description: '"ignore" lets Chromium draw WebGL 2 on the software rasteriser (llvmpipe)'
+        type: choice
+        options: [keep, ignore]
+        default: keep
+      specs:
+        description: Only these e2e spec files (space-separated, e.g. "shell.spec.ts field.spec.ts"); empty for all
+        type: string
+        default: ""
+      bench:
+        description: Also run the F-817 light bench (its GPU lines mean nothing here)
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: studio-linux-test-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  linux-docker:
+    name: Studio on Linux in Docker (engine, unit, e2e)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 150
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: "22.19.0"
+      - name: docker run (docker/linux-test/run.mjs)
+        env:
+          SPECS: ${{ inputs.specs }}
+          GPU: ${{ inputs.gpu_blocklist }}
+          BENCH: ${{ inputs.bench }}
+        run: |
+          extra=()
+          if [ "$BENCH" = true ]; then extra+=(--bench); fi
+          node apps/studio-web/docker/linux-test/run.mjs --out="$RUNNER_TEMP/linux-test" --memory=12g \
+            --specs="$SPECS" --gpu-blocklist="$GPU" "${extra[@]}"
+      - name: summary
+        if: always()
+        run: |
+          { echo "### Studio on Linux (Docker) at ${GITHUB_SHA}"; echo '```'; cat "$RUNNER_TEMP/linux-test/summary.txt" || true; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
+      - name: upload logs and reports
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: studio-linux-test-${{ github.sha }}
+          path: ${{ runner.temp }}/linux-test/
+          if-no-files-found: warn
+          retention-days: 30

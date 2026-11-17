@@ -1,0 +1,102 @@
+/* The plots' development view (#/dev/plots, F-811). Tokens only, no colour literals (tests/unit/plots-css.spec.ts). */
+
+.plots-dev {
+  min-width: var(--size-min-width);
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.plots-dev-head {
+  padding: var(--space-md) var(--space-xl);
+  border-bottom: var(--line-rule);
+}
+
+.plots-dev-head h1 {
+  margin: 0;
+  font-size: var(--type-title-size);
+  font-weight: var(--type-title-weight);
+  letter-spacing: var(--type-title-tracking);
+}
+
+.plots-dev-head p {
+  margin: var(--space-xs) 0 0;
+  font-size: var(--type-label-size);
+  color: var(--role-text-2);
+}
+
+.plots-dev-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-md);
+  padding: var(--space-md) var(--space-xl);
+  border-bottom: var(--line-hair);
+}
+
+.plots-dev-service {
+  font-size: var(--type-label-size);
+  color: var(--role-text-2);
+  margin-right: var(--space-md);
+}
+
+.plots-dev-session {
+  width: 220px;
+}
+
+.plots-dev-case {
+  width: 260px;
+}
+
+.plots-dev-message {
+  margin: 0;
+  padding: var(--space-sm) var(--space-xl);
+  color: var(--role-text-fail);
+  font-weight: var(--font-weight-medium);
+}
+
+.plots-dev-panel {
+  border-bottom: var(--line-rule);
+}
+
+.plots-dev-state {
+  display: flex;
+  align-items: center;
+  gap: var(--space-lg);
+  padding: var(--space-sm) var(--space-xl);
+  border-bottom: var(--line-hair);
+  font-size: var(--type-label-size);
+}
+
+.plots-dev-fail {
+  color: var(--role-text-fail);
+}
+
+.plots-dev-plots {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 380px;
+}
+
+.plots-dev-plots > .plot--monitor {
+  border-left: var(--line-hair);
+}
+
+.plots-dev-stats,
+.plots-dev-none {
+  margin: 0;
+  padding: var(--space-sm) var(--space-xl);
+  font-size: var(--type-label-size);
+  color: var(--role-text-2);
+  border-top: var(--line-hair);
+}
+
+.plots-dev-foot {
+  margin-top: auto;
+  height: var(--size-footer);
+  display: flex;
+  align-items: center;
+  padding: 0 var(--space-xl);
+  background: var(--role-footer);
+  color: var(--role-text-inverse);
+  font-size: var(--type-label-size);
+}

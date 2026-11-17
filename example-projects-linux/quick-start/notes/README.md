@@ -15,24 +15,29 @@ The design ledger `designs/variants.ledger.jsonl` (ADR 0121) holds the parameter
 
 ## Open it
 
-1. Build: `cargo build --release -p rcfd-studio -p rcfd-runner -p rcfd-cli`.
-2. If you want to start runs of your own, copy this folder out of the repository. New runs would otherwise show up as
-   untracked files in the repository.
-3. Start `target\release\rcfd-studio.exe <this folder>`, or choose Project > Open project... in the Studio.
+1. If you want to start runs of your own, copy this folder out of the repository. New runs would otherwise show up as
+   untracked files in the repository. Opening and looking write nothing into the folder.
+2. Start the desktop Studio as the tutorial `../../docs/tutorials/desktop-assistant.md` says. There is no installer yet:
+   build `rcfd`, `rcfd-runner` and `rcfd-mcp` in release, then run `npm start` in `apps/studio-web/` with
+   `RCFD_STUDIO_RCFD` set to the `rcfd` you built.
+3. Choose Open project folder… (Ctrl+O) and pick this folder.
 
-## What to click, in order
+## What to look at, in order
 
-1. Project panel: four cases under `cases/`. Select `cases/cavity-re100.toml`. The Case editor shows its settings, and
-   Case > Validate checks it.
-2. Runs panel: select the run of `cases/cavity-re100.toml`. The Viewport shows `p`. Choose `ux` or `uy` in the
-   "field" box and hover for values.
-3. Scrub: these runs are steady, so the slider runs over iterations (a snapshot every 5 or 10). Watch the vortex form
-   while the solver converges. The Plots panel shows the residuals and the report `lid_drag` (or `q_hot` and `nu_hot`).
-4. Compare: select the run of `cases/cavity-re400.toml` (the vortex centre moves towards the middle and the lower
-   corner vortices grow), then the two heated-cavity runs with the field `T` (at Ra 1e4 the isotherms bend into an S).
-5. Run something yourself (in a copy, step 2 of Open it): Runs > Start run..., pick `cases/cavity-re400.toml`, Start.
-   The run streams into the Runs and Plots panels within a second or two. Or change `physics.nu` in the Case editor,
-   Save, and run it.
+The Studio names many controls only in tooltips and accessible names; the names below are those.
+
+1. Home (Ctrl+1) lists the four cases under `cases/` and their runs. Edit on the row of `cases/cavity-re100.toml` opens the
+   case editor on its settings, and Check the case runs the engine's check. Ctrl+1 goes back to Home.
+2. Runs (Ctrl+2): select the run of `cases/cavity-re100.toml`, then Open in workspace. The field view shows `p`. Choose `ux`
+   or `uy` in Field, and point at the field to read the value of a cell.
+3. Scrub: these runs are steady, so the scrubber runs over iterations and stops at the stored snapshots (every 5 or 10).
+   First snapshot, then Play: watch the vortex form while the solver converges. The time panel shows the residuals and
+   the report `lid_drag` (or `q_hot` and `nu_hot`, one at a time, chosen in Monitor series).
+4. Compare: Compare runs (the pictogram in the field bar), then the run of `cases/cavity-re400.toml` as Compared run, and
+   Side by side: the vortex centre moves towards the middle and the lower corner vortices grow. Then the two
+   heated-cavity runs with the field `T`: at Ra 1e4 the isotherms bend into an S.
+5. Run something yourself (in a copy, step 1 of Open it): Run on the row of `cases/cavity-re400.toml` on Home, or F5. The
+   new run shows in Runs within a second or two. Or change `physics.nu` in the case editor, Save (Ctrl+S), and run it.
 
 ## The runs in this folder
 

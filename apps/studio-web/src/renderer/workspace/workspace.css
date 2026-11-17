@@ -1,0 +1,578 @@
+/* The run workspace (workspace/RunWorkspace.tsx, TimePanel.tsx; F-810; DESIGN.md Layout and Run bands). The runs and
+   the field above, the 248px time panel below; panels edge to edge, divided by 1px ink rules and silver hairlines.
+   Tokens only, no colour literals, square corners, no shadow (tests/unit/workspace.spec.ts). */
+
+.ws {
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  grid-template-rows: minmax(0, 1fr) var(--size-time-panel);
+  font-variant-numeric: tabular-nums;
+  /* the abscissa of the time panel: the residual plot's drawing starts after its 40px tick column, its 1px rule and
+     its 3px inset (plots/PlotFrame.tsx, plots.css) and ends before its 8px pad and 3px inset; bands and line match */
+  --tp-labels: 200px;
+  --tp-x0: 44px;
+  --tp-x1: 11px;
+  --tp-cap: 6px;
+}
+.ws--empty {
+  grid-template-rows: auto;
+  align-content: start;
+}
+.ws-empty {
+  margin: 0;
+  padding: var(--space-xl);
+  max-width: var(--size-measure-empty);
+}
+.ws-file {
+  font-weight: var(--font-weight-medium);
+}
+
+.ws-top {
+  min-height: 0;
+  display: grid;
+  grid-template-columns: minmax(300px, 1fr) minmax(480px, 2fr);
+  border-bottom: var(--line-rule);
+}
+
+/* ---- runs ------------------------------------------------------------------------------------------------------- */
+
+.ws-runs {
+  min-height: 0;
+  overflow-y: auto;
+  border-right: var(--line-rule);
+  display: flex;
+  flex-direction: column;
+}
+.ws-head {
+  margin: 0;
+  height: var(--size-tab-row);
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  padding: 0 var(--space-lg);
+  font-size: var(--type-title-sm-size);
+  font-weight: var(--type-title-sm-weight);
+  border-bottom: var(--line-rule);
+}
+.ws-head-note {
+  font-weight: var(--font-weight-regular);
+  color: var(--role-text-2);
+}
+.ws-list {
+  outline: none;
+}
+.ws-list:focus-visible {
+  outline: var(--focus-width) solid var(--role-focus-ring);
+  outline-offset: var(--focus-offset-inset);
+}
+.ws-item {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-rows: auto auto;
+  column-gap: var(--space-lg);
+  align-items: center;
+  min-height: var(--size-run-row);
+  padding: var(--space-sm) var(--space-lg);
+  border-bottom: var(--line-hair);
+  cursor: default;
+  outline: none;
+}
+.ws-item[data-hovered] {
+  background: var(--role-row-hover);
+}
+.ws-item[data-selected] {
+  background: var(--role-row-selected);
+  outline: 1px solid var(--role-row-selected-edge);
+  outline-offset: -1px;
+}
+.ws-item--failed {
+  background: var(--role-row-failed);
+}
+.ws-item[data-focus-visible] {
+  outline: var(--focus-width) solid var(--role-focus-ring);
+  outline-offset: var(--focus-offset-inset);
+}
+.ws-item-case {
+  font-size: var(--type-title-sm-size);
+  font-weight: var(--type-title-sm-weight);
+}
+.ws-item-id {
+  grid-row: 2;
+  font-size: var(--type-label-size);
+  color: var(--role-text-2);
+}
+.ws-item-state {
+  grid-column: 2;
+  grid-row: 1 / span 2;
+}
+.ws-item:not([data-selected]):not(.ws-item--failed) .ws-item-case {
+  color: var(--role-text-2);
+}
+
+.ws-numbers {
+  border-top: var(--line-rule);
+  padding: var(--space-md) var(--space-lg);
+}
+.ws-grid {
+  margin: 0;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  border-top: var(--line-hair);
+  border-left: var(--line-hair);
+}
+.ws-grid > div {
+  padding: var(--space-sm) var(--space-md);
+  border-right: var(--line-hair);
+  border-bottom: var(--line-hair);
+}
+.ws-grid dt {
+  font-size: var(--type-label-size);
+  color: var(--role-text-2);
+}
+.ws-grid dd {
+  margin: 0;
+  font-size: var(--type-headline-size);
+  font-weight: var(--type-headline-weight);
+  letter-spacing: var(--type-headline-tracking);
+}
+.ws-source {
+  margin: var(--space-md) 0 0;
+  font-size: var(--type-label-size);
+  color: var(--role-text-2);
+}
+.ws-error {
+  margin: var(--space-md) 0 0;
+  display: flex;
+  gap: var(--space-sm);
+  align-items: center;
+  color: var(--role-text-fail);
+}
+
+/* ---- field ------------------------------------------------------------------------------------------------------ */
+
+.ws-field {
+  position: relative; /* F-832: the progress of opening a run lies over its top */
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+.ws-field .fv {
+  flex: 1;
+  border: 0;
+}
+.ws-field-bar {
+  height: var(--size-tab-row);
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: var(--space-lg);
+  padding: 0 var(--space-lg);
+  border-bottom: var(--line-rule);
+}
+.ws-field-note {
+  font-size: var(--type-label-size);
+  color: var(--role-text-2);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.ws-nofield {
+  flex: 1;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-lg);
+  padding: var(--space-xxl);
+  background: var(--role-viewport);
+  text-align: center;
+}
+.ws-nofield p {
+  margin: 0;
+  max-width: var(--size-measure-empty);
+}
+
+/* ---- time panel ------------------------------------------------------------------------------------------------- */
+
+.tp {
+  min-height: 0;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 380px;
+  font-size: var(--type-chart-micro-size);
+  font-weight: var(--type-chart-micro-weight);
+}
+.tp-main {
+  min-width: 0;
+  min-height: 0;
+  display: grid;
+  grid-template-rows: 24px minmax(0, 1fr);
+}
+.tp-head {
+  display: flex;
+  align-items: center;
+  gap: var(--space-md);
+  padding: 0 var(--space-lg);
+  border-bottom: var(--line-hair);
+  min-width: 0;
+}
+.tp-head small {
+  font-size: var(--type-label-size);
+  font-weight: var(--type-label-weight);
+  color: var(--role-text-2);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.tp-title {
+  margin: 0;
+  font-size: var(--type-body-size);
+  font-weight: var(--font-weight-bold);
+  white-space: nowrap;
+}
+.tp-body {
+  position: relative;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+.tp-lane {
+  height: var(--size-flag-lane);
+  flex: none;
+  margin-left: var(--tp-labels);
+  border-left: var(--line-hair);
+}
+.tp-bands {
+  flex: none;
+  max-height: calc(5 * var(--size-run-band));
+  overflow-y: auto;
+  scrollbar-width: none;
+}
+
+.tp-band-row {
+  display: grid;
+  grid-template-columns: var(--tp-labels) minmax(0, 1fr);
+  height: var(--size-run-band);
+}
+.tp-band-name {
+  display: flex;
+  align-items: center;
+  padding: 0 var(--space-md) 0 var(--space-lg);
+  color: var(--role-text-2);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  cursor: default;
+  /* a button (F-816) that looks as the label did */
+  appearance: none;
+  border: 0;
+  background: transparent;
+  text-align: left;
+  width: 100%;
+  min-width: 0;
+}
+/* inside the bands' scroll box, the ring is drawn inside the name */
+.tp-band-name:focus-visible {
+  outline-offset: var(--focus-offset-inset);
+}
+.tp-band-row--selected .tp-band-name {
+  color: var(--role-text);
+  font-weight: var(--font-weight-bold);
+}
+.tp-band-row[data-state='failed'] .tp-band-name {
+  color: var(--role-text-fail);
+}
+.tp-band {
+  position: relative;
+  border-left: var(--line-hair);
+}
+/* the selected band: an ink underline */
+.tp-band-row--selected .tp-band {
+  border-bottom: var(--line-rule);
+}
+.tp-track {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: var(--tp-x0);
+  right: var(--tp-x1);
+}
+.tp-seg {
+  position: absolute;
+  top: 3px;
+  bottom: 3px;
+  isolation: isolate;
+  transform-origin: left;
+  animation: tp-grow var(--motion-band-grow) var(--motion-ease) both;
+}
+.tp-seg::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  background: var(--tp-fill);
+}
+.tp-seg--iterating {
+  --tp-fill: var(--role-band-iterating);
+}
+.tp-seg--converged {
+  --tp-fill: var(--role-band-converged);
+}
+.tp-seg--live {
+  --tp-fill: var(--role-band-live);
+}
+/* F-816 (G8, colour is never the only carrier): the live segment's growing end is a 2px ink edge, a shape no other
+   segment has; the band end's description and tooltip say "live" */
+.tp-seg--live::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  right: 0;
+  width: var(--space-hair);
+  background: var(--role-rule);
+}
+.tp-seg--failed {
+  --tp-fill: var(--role-band-failed);
+}
+.tp-seg--queued,
+.tp-seg--pending {
+  --tp-fill: var(--line-hatch);
+  outline: var(--line-hair);
+  outline-offset: -1px;
+  animation: none;
+}
+.tp-seg--cap {
+  width: var(--tp-cap);
+  animation: none;
+}
+/* the Fade by Colour Rule: the other runs' bands drop to 40% fill; a failure never fades */
+.tp-band--faded .tp-seg::before {
+  opacity: 0.4;
+}
+.tp-band--faded .tp-seg--failed::before {
+  opacity: 1;
+}
+.tp-end {
+  position: absolute;
+  z-index: 2;
+  top: 3px;
+  bottom: 3px;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-xs);
+  padding: 0 var(--space-xs);
+  white-space: nowrap;
+  pointer-events: none;
+  color: var(--role-text);
+}
+.tp-end--after {
+  background: var(--role-ground);
+}
+.tp-band-row--selected .tp-end {
+  font-weight: var(--font-weight-bold);
+}
+.tp-end--failed {
+  color: var(--role-text-fail);
+  font-weight: var(--font-weight-bold);
+}
+@keyframes tp-grow {
+  from {
+    transform: scaleX(0);
+  }
+  to {
+    transform: scaleX(1);
+  }
+}
+
+.tp-resid {
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: var(--tp-labels) minmax(0, 1fr);
+  border-top: var(--line-hair);
+}
+.tp-resid-label {
+  padding: var(--space-xs) var(--space-md) var(--space-xs) var(--space-lg);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-hair);
+  min-width: 0;
+  overflow: hidden;
+}
+.tp-resid-title {
+  font-size: var(--type-label-size);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.tp-resid-at {
+  color: var(--role-text-2);
+}
+.tp-resid-values {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.tp-resid-values li {
+  display: grid;
+  grid-template-columns: 26px minmax(0, 1fr) auto;
+  gap: var(--space-xs);
+  align-items: center;
+}
+.tp-resid-value {
+  text-align: right;
+}
+.tp-resid-plot {
+  position: relative;
+  min-width: 0;
+  border-left: var(--line-hair);
+}
+.tp-resid-plot .plot-frame {
+  padding-top: var(--space-xs);
+}
+.tp-veil {
+  position: absolute;
+  top: var(--space-xs);
+  right: var(--tp-x1);
+  bottom: 26px;
+  background: var(--line-hatch);
+  opacity: 0.5;
+  border-left: var(--line-hair);
+  pointer-events: none;
+}
+.tp-veil span {
+  position: absolute;
+  right: var(--space-md);
+  bottom: var(--space-xs);
+  padding: 0 var(--space-xs);
+  background: var(--role-ground);
+  color: var(--role-text-2);
+}
+.tp-empty {
+  margin: 0;
+  padding: var(--space-lg);
+  display: flex;
+  gap: var(--space-md);
+  align-items: center;
+  font-size: var(--type-label-size);
+  color: var(--role-text);
+}
+
+/* The scrubber: one deep ink line over the bands, the residual plot and its axis; 2px orange while dragged or focused. */
+.tp-scrubber {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: calc(var(--tp-labels) + var(--tp-x0));
+  right: var(--tp-x1);
+  z-index: 3;
+  cursor: ew-resize;
+  outline: none;
+  touch-action: none;
+}
+.tp-scrubber[aria-disabled='true'] {
+  cursor: default;
+}
+.tp-line {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 0;
+  border-left: var(--line-rule);
+  pointer-events: none;
+}
+.tp-scrubber--dragging .tp-line,
+.tp-scrubber:focus-visible .tp-line {
+  border-left: var(--focus-width) solid var(--role-focus-ring);
+  margin-left: -0.5px;
+}
+.tp-flag {
+  position: absolute;
+  top: var(--space-hair);
+  right: 0;
+  padding: var(--space-hair) var(--space-sm);
+  background: var(--role-tooltip);
+  color: var(--role-tooltip-text);
+  white-space: nowrap;
+  line-height: 1;
+}
+.tp-flag--right {
+  right: auto;
+  left: 0;
+}
+
+/* ---- monitor ---------------------------------------------------------------------------------------------------- */
+
+.tp-monitor {
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  border-left: var(--line-rule);
+}
+.tp-monitor .tp-head {
+  height: 24px;
+  flex: none;
+}
+.tp-monitor-select .ui-select-button {
+  height: 20px;
+}
+.tp-readout {
+  padding: var(--space-xs) var(--space-lg) 0;
+  display: flex;
+  flex-direction: column;
+}
+.tp-readout small {
+  font-size: var(--type-label-size);
+  color: var(--role-text-2);
+}
+.tp-readout-value {
+  font-size: var(--type-display-size);
+  font-weight: var(--type-display-weight);
+  line-height: var(--type-display-line-height);
+  letter-spacing: var(--type-display-tracking);
+}
+.tp-monitor-plot {
+  min-width: 0;
+}
+.tp-empty--monitor {
+  flex: 1;
+}
+.tp-transport {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  padding: var(--space-xs) var(--space-lg) 0;
+}
+.tp-counter {
+  padding: var(--space-xs) var(--space-lg);
+  font-size: var(--type-label-size);
+  color: var(--role-text);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tp-seg {
+    animation: none;
+  }
+}
+
+/* F-837: the monitor's log scale toggle, a pictogram at the end of its 24px head; the note of the values a log scale
+   leaves out, under the plot */
+.tp-monitor .tp-monitor-log.ui-segment {
+  height: 20px;
+  width: 20px;
+  min-width: 20px;
+  padding: 0;
+  margin-left: auto;
+  justify-content: center;
+}
+.tp-monitor-skipped {
+  margin: 0;
+  padding: 0 var(--space-lg);
+  font-size: var(--type-label-size);
+  color: var(--role-text);
+}

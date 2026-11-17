@@ -25,19 +25,16 @@ allow = [
     "CDLA-Permissive-2.0",
 ]
 confidence-threshold = 0.9
-exceptions = [
-    # egui's default fonts, in epaint_default_fonts since egui 0.36 (both desktop apps: ADR 0131 amendment 1, ADR 0165);
-    # SPDX id of the Ubuntu Font Licence. Their licence texts must ship with binaries (THIRD_PARTY_LICENSES.md). The epaint
-    # exception for egui 0.27 (fonts inside epaint) went with egui 0.27 (ADR 0165).
-    { crate = "epaint_default_fonts", allow = ["OFL-1.1", "Ubuntu-font-1.0"] },
-]
+# The exception for egui's default fonts (epaint_default_fonts: OFL-1.1, Ubuntu-font-1.0) went with the egui desktop apps
+# rcfd-studio and rcfd-gui (F-449).
+exceptions = []
 
 [licenses.private]
 # Workspace crates are publish = false and licensed AGPL-3.0-only (Cargo.toml).
 ignore = true
 
 [bans]
-# wgpu and egui pull in several versions of some crates; report them without failing.
+# Report several versions of one crate without failing.
 multiple-versions = "warn"
 wildcards = "deny"
 allow-wildcard-paths = true

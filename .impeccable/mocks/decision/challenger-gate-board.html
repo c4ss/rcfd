@@ -1,0 +1,108 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><title>rcfd Studio · run workspace · gate board</title>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+:root{--bd:#16181B;--bd2:#1F2226;--ln:#2E3237;--of:#F2F2EE;--g:#9AA0A6;--am:#F5A623;--gr:#3FB27F}
+*{box-sizing:border-box}
+html,body{width:1440px;height:900px;overflow:hidden;margin:0}
+body{font:13px/1.35 "IBM Plex Sans","Segoe UI",sans-serif;background:var(--bd);color:var(--of);font-variant-numeric:tabular-nums;display:grid;grid-template-columns:1fr 360px;grid-template-rows:40px 1fr 26px}
+.m{font-family:"IBM Plex Mono",Consolas,monospace}
+button,select,input{font:inherit;color:inherit}
+button{background:var(--bd2);border:1px solid #4A4F55;color:var(--of);padding:4px 11px;border-radius:3px;cursor:pointer}
+button.on{background:var(--of);color:var(--bd);border-color:var(--of)}
+header{grid-column:1/-1;display:flex;align-items:center;gap:6px;padding:0 16px;border-bottom:1px solid var(--ln)}
+header b{margin-right:16px}
+.proj{background:none;border:0;border-bottom:2px solid transparent;border-radius:0;padding:10px 10px 8px;color:var(--g)}
+.proj.on{color:var(--of);border-color:var(--of);font-weight:600}
+header .r{margin-left:auto;color:var(--g)}
+.left{display:grid;grid-template-rows:auto 1fr 190px;min-height:0;min-width:0}
+.board{border-bottom:2px solid var(--of);padding:8px 12px 10px}
+.bh{display:flex;align-items:center;gap:10px;padding:0 0 6px;color:var(--g)}
+.bh b{color:var(--of);font-size:14px;letter-spacing:.08em}.bh .sp{margin-left:auto}
+.row{display:grid;grid-template-columns:212px 130px 1fr 90px 76px 96px 70px;gap:8px;align-items:center;height:32px;padding:0 8px;border-top:1px solid var(--ln);font-family:"IBM Plex Mono",Consolas,monospace;font-size:12.5px}
+.row.hd{height:26px;color:var(--g);font-size:11px;text-transform:uppercase;letter-spacing:.06em;border-top:0;border-bottom:1px solid #4A4F55}
+.row.hd button{all:unset;cursor:pointer}.row.hd .s{color:var(--of)}
+.row.sel{background:#262A2F;box-shadow:inset 3px 0 var(--of)}
+.row.ch{background:rgba(245,166,35,.14);box-shadow:inset 3px 0 var(--am)}
+.r{text-align:right}
+.ok{color:var(--gr)}.am{color:var(--am);font-weight:600}
+.flap{display:inline-block;background:#0C0D0F;border:1px solid var(--ln);padding:1px 7px;letter-spacing:.06em}
+.ch .flap{background:var(--am);color:#16181B;border-color:var(--am);font-weight:600}
+.ack{background:transparent;border-color:var(--am);color:var(--am);padding:1px 9px;margin-left:8px;font-family:"IBM Plex Sans",sans-serif}
+.mid{display:grid;grid-template-columns:250px 1fr;min-height:0}
+.pass{margin:12px 0 12px 12px;background:var(--of);color:var(--bd);border-radius:6px;display:flex;flex-direction:column;overflow:hidden}
+.seg{padding:9px 14px;border-bottom:2px dashed #B9B9B2}.seg small{display:block;font-size:10px;text-transform:uppercase;letter-spacing:.08em;color:#6B6F73}
+.seg b{font-size:15px;font-weight:600}
+.seg.run{background:#DDE9E2}
+.code{margin-top:auto;padding:10px 14px;background:#fff}
+.bars{height:40px;background:repeating-linear-gradient(90deg,#16181B 0 2px,#fff 2px 4px,#16181B 4px 5px,#fff 5px 8px,#16181B 8px 11px,#fff 11px 12px,#16181B 12px 13px,#fff 13px 16px)}
+.code span{display:block;font-size:10.5px;margin-top:4px;word-break:break-all}
+.vwrap{display:flex;flex-direction:column;min-width:0;min-height:0;padding:12px}
+.tool{display:flex;gap:4px;align-items:center;padding-bottom:8px}
+.tool label{margin-left:auto;display:flex;gap:6px;align-items:center}
+.vp{flex:1;position:relative;overflow:hidden;border:1px solid #4A4F55;min-height:0}
+.field{position:absolute;inset:0;background:linear-gradient(90deg,#440154 0%,#3b528b 12%,#21918c 32%,#5ec962 52%,#21918c 72%,#3b528b 100%)}
+.wake{position:absolute;left:34%;right:0;top:33%;height:34%;background:repeating-linear-gradient(90deg,rgba(68,1,84,0) 0 28px,rgba(68,1,84,.35) 28px 42px);border-radius:0 60px 60px 0}
+.cyl{position:absolute;left:28%;top:50%;width:76px;height:76px;margin:-38px;border-radius:50%;background:var(--bd);border:2px solid var(--of)}
+.wall{position:absolute;left:0;right:0;height:8px;background:var(--bd)}
+.grid{position:absolute;inset:0;background:repeating-linear-gradient(0deg,rgba(255,255,255,.28) 0 1px,transparent 1px 22px),repeating-linear-gradient(90deg,rgba(255,255,255,.28) 0 1px,transparent 1px 22px)}
+.legend{position:absolute;right:10px;bottom:10px;background:rgba(22,24,27,.92);padding:7px 10px;border:1px solid #4A4F55;width:250px;font-size:11.5px}
+.legend i{display:block;height:11px;margin:4px 0;background:linear-gradient(90deg,#440154,#3b528b,#21918c,#5ec962,#fde725)}
+.legend div{display:flex;justify-content:space-between}
+.syn{position:absolute;left:10px;bottom:8px;font-size:11px;color:var(--g)}
+.tag{position:absolute;left:10px;top:8px;background:rgba(22,24,27,.85);padding:2px 8px;font-size:12px}
+.bot{border-top:1px solid #4A4F55;display:grid;grid-template-columns:1fr 240px;grid-template-rows:auto 1fr;min-height:0}
+.scrub{grid-column:1/-1;display:flex;gap:12px;align-items:center;padding:7px 14px;border-bottom:1px solid var(--ln)}
+.scrub input{flex:1;accent-color:var(--of)}
+.plot{padding:6px 14px;position:relative;min-height:0}.plot svg{width:100%;height:100%}
+.leg{position:absolute;right:20px;top:4px;font-size:11px;color:var(--g)}
+.mon{padding:8px 14px;border-left:1px solid var(--ln)}.mon span{color:var(--g)}.mon b{font-size:30px;font-weight:500;display:block;line-height:1.15}
+.chat{border-left:1px solid #4A4F55;display:flex;flex-direction:column;min-height:0;background:#1B1D21}
+.h{padding:10px 14px;border-bottom:1px solid var(--ln);font-weight:600}
+.msgs{flex:1;padding:12px 14px;display:flex;flex-direction:column;gap:12px}
+.u{align-self:flex-end;background:#2E3237;padding:8px 12px;border-radius:6px;max-width:85%}
+.a small{display:block;color:var(--g);margin-bottom:2px}.a a{color:var(--of)}
+.in{display:flex;gap:6px;padding:10px 14px;border-top:1px solid var(--ln)}.in input{flex:1;background:var(--bd);border:1px solid #4A4F55;padding:6px 8px;border-radius:3px}
+footer{grid-column:1/-1;display:flex;align-items:center;padding:0 16px;font-size:12px;color:var(--g);border-top:1px solid var(--ln)}
+footer em{margin-left:auto;font-style:normal}
+</style></head><body>
+<header><b>rcfd Studio</b><button class="proj on">wind-tunnel</button><button class="proj">quick-start</button><button class="proj">axial-fan</button><span class="r">Run workspace</span></header>
+
+<div class="left">
+<div class="board"><div class="bh"><b class="m">RUN BOARD</b><span>wind-tunnel · ordered by start</span><span class="sp">State</span><select><option>All states</option></select><button>Filter</button></div>
+<div class="row hd"><button class="s">Run ▲</button><button>Case ⇅</button><button>State ⇅</button><button class="r">Iteration ⇅</button><button class="r">Time ⇅</button><button class="r">Residual ⇅</button><button class="r">ETA</button></div>
+<div class="row"><span>r-20261028T152128-37c8</span><span>step-re400</span><span><span class="flap ok">FINISHED · converged</span></span><span class="r">429</span><span class="r">13.2 s</span><span class="r">9.07e-7</span><span class="r">–</span></div>
+<div class="row"><span>r-20261028T152128-806b</span><span>step-re800</span><span><span class="flap ok">FINISHED</span></span><span class="r">612</span><span class="r">19.8 s</span><span class="r">–</span><span class="r">–</span></div>
+<div class="row sel"><span>r-20261028T152128-d5cb</span><span>cylinder-re100</span><span><span class="flap">RUNNING</span></span><span class="r">1840</span><span class="r">12.40 s</span><span class="r">–</span><span class="r">7.6 s</span></div>
+<div class="row"><span>r-20261028T152128-db3f</span><span>cylinder-re200</span><span><span class="flap" style="color:var(--g)">QUEUED</span></span><span class="r">–</span><span class="r">–</span><span class="r">–</span><span class="r">–</span></div>
+<div class="row ch"><span>r-20261029T230332-0566</span><span>naca0012-aoa4</span><span><span class="flap">CHANGED · ✕ failed</span><button class="ack">Acknowledge</button></span><span class="r am">211</span><span class="r">–</span><span class="r">–</span><span class="r">–</span></div></div>
+
+<div class="mid"><aside class="pass" aria-label="Selected run pass">
+<div class="seg run"><small>Boarding pass · running</small><b>cylinder-re100</b></div>
+<div class="seg"><small>Case</small><b>cylinder-re100</b></div>
+<div class="seg"><small>Mesh</small><b>8 000 cells</b></div>
+<div class="seg"><small>Reynolds</small><b>Re 100</b></div>
+<div class="seg"><small>Time</small><b class="m">t 12.40/20.00 s</b></div>
+<div class="seg"><small>Iteration</small><b class="m">it 1840</b></div>
+<div class="code"><div class="bars"></div><span class="m">r-20261028T152128-d5cb</span></div></aside>
+<div class="vwrap"><div class="tool"><button class="on">Surface</button><button>Cut plane</button><button>Iso-surface</button><button>Streamlines</button><label><input type="checkbox" checked> Mesh grid</label></div>
+<div class="vp"><div class="field"></div><div class="wake"></div><div class="grid"></div><div class="wall" style="top:0"></div><div class="wall" style="bottom:0"></div><div class="cyl"></div>
+<span class="tag m">cylinder-re100 · t = 12.40 s</span>
+<div class="legend"><b>velocity magnitude |U| m/s</b><i></i><div class="m"><span>0.00</span><span>0.92</span><span>1.84</span></div></div>
+<span class="syn">synthetic preview data</span></div></div></div>
+
+<div class="bot"><div class="scrub"><b class="m">cylinder-re100</b><button>◀</button><button>▶</button><input type="range" min="1" max="100" value="62"><span class="m">t = 12.40 s · snapshot 62/100</span></div>
+<div class="plot"><svg viewBox="0 0 700 110" preserveAspectRatio="none"><g stroke="#2E3237"><path d="M0 8H700M0 26H700M0 44H700M0 62H700M0 80H700M0 98H700"/></g>
+<polyline fill="none" stroke="#F2F2EE" stroke-width="2" points="0,10 80,28 160,44 240,58 320,70 400,80 480,88 560,94 700,98"/>
+<polyline fill="none" stroke="#9AA0A6" stroke-width="2" stroke-dasharray="6 3" points="0,6 80,22 160,40 240,54 320,66 400,76 480,84 560,90 700,95"/>
+<polyline fill="none" stroke="#3FB27F" stroke-width="2" stroke-dasharray="2 3" points="0,4 80,18 160,34 240,48 320,58 400,68 480,74 560,80 700,84"/></svg>
+<div class="leg m">log residual 1e-1…1e-7 · continuity ── · u - - · p ···</div></div>
+<div class="mon"><span>Monitor</span><b class="m">Cd = 1.34</b><svg viewBox="0 0 210 44" width="210" height="44"><polyline fill="none" stroke="#F2F2EE" stroke-width="2" points="0,36 30,10 60,30 90,16 120,26 150,20 180,24 210,22"/></svg></div></div>
+</div>
+
+<aside class="chat"><div class="h">Claude Code · wind-tunnel</div>
+<div class="msgs"><div class="u">Why did naca0012-aoa4 diverge?</div>
+<div class="a"><small>Claude Code</small>The solution blew up at iteration 211. The Courant number passed 1 around iteration 205 and kept growing, so the time step is too large for the cells near the leading edge. Lower the time step or cap the Courant number, then rerun. <a href="#">Open iteration 211 log</a></div></div>
+<div class="in"><input placeholder="Ask about this project"><button class="on">Send</button></div></aside>
+<footer>Early-stage software. Not validated for engineering decisions.<em>Synthetic preview data</em></footer>
+</body></html>
