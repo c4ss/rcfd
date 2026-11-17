@@ -15359,13 +15359,27 @@ fixed by the item's registration ADR before any code.
     bit. Eight fast tests, fourteen of fourteen mutations caught. Not included: the comparison itself, other amplitudes,
     a map of the lock-in range, a case-file key (open, F-307 schema golden). Follow-up F-765 (Moving immersed shapes at
     lock-in above the natural frequency with the frequency allowance bounded).
-- [ ] **F-757** Rhie-Chow ddt correction on coupled faces in the fractional step and with BDF2
+- [~] **F-757** Rhie-Chow ddt correction on coupled faces in the fractional step and with BDF2
   - depends on: F-754
   - acceptance: the fractional step's ddt correction gives the coupled pairs the term behind the same opt-in, defaults
     bit-identical; on ADR 0672's channel against its twin with ddt_correction on, the fractional-step run and a BDF2
     PISO run are each within a registered limit of the twin on every step where the run without the opt-in is not. Every
     limit not stated here is registered in the ADR before the run.
-  - note: Follow-up of F-754 (ADR 0675, 2026-11-16).
+  - note: ADR 0687, 2026-11-17: the opt-in PimpleSettings::coupled_ddt_correction now also acts in the fractional step
+    with fractional_step_consistent (ADR 0356's carried-defect flux; the coupled faces take Gamma R + Gamma/dt D with
+    the pair-harmonic Gamma and ADR 0675's coupled defect, shared as coupled_ddt_defect), with a new opt-in
+    fractional_periodic_implicit (the implicit periodic partner of the fractional predictor, without which the periodic
+    run differs from its twin by 1.9e-2 U_ref). On ADR 0672's meshes (from an initial velocity: the fractional step
+    reads no body force) the fractional run stays within 1.2e-14 U_ref of its unrolled twin on every one of 200 steps
+    (limit 1e-8) against 2e-6 to 3.2e-4 without the opt-in. The BDF2 PISO run first missed (4.2e-4, kept as a known
+    miss): the lagged periodic partner of the BDF2 deferred-correction state, a pre-existing difference; with a new
+    opt-in periodic_partner_extrapolated the BDF2 PISO run with ADR 0672's flow stays within 3.4e-15 of the twin against
+    8e-6 to 1.8e-5 without coupled_ddt_correction; the fractional step with BDF2 within 1.1e-14. Pair fluxes opposite to
+    4.4e-16. Seven of seven mutations caught (term not read, dte kept, sign, BDF2 weights swapped, older level dropped,
+    either new opt-in not read). Defaults bit-identical (baseline_hashes, the periodic, fractional and PISO suites
+    pass). Translational pairs only, incremental form, no non-orthogonal correction in the fractional runs; whether the
+    three coupled-face opt-ins become defaults is open for the maintainer. Follow-up F-771 (Body force in the fractional
+    step).
 - [x] **F-758** A repetition trigger for the basin restart
   - depends on: F-733
   - acceptance: with a trigger registered before the run that fires when the recent picks of plain expected improvement
@@ -15569,3 +15583,11 @@ fixed by the item's registration ADR before any code.
     0686 (mutation M4, the window condition dropped) is caught by it, a twin with the window inside gets a restart pick,
     and the O1 points hash of ADR 0673 is unchanged.
   - note: Follow-up of F-766 (ADR 0686, 2026-11-16).
+- [ ] **F-771** Body force in the fractional step
+  - depends on: F-757
+  - acceptance: the fractional step reads PimpleSolver::body_force behind an opt-in (the predictor's cell term, the
+    balanced-force face term of the intermediate flux and the walls' pressure gradient as in the PISO step), defaults
+    bit-identical; on ADR 0672's channel with its body force the fractional run with coupled_ddt_correction is within a
+    registered limit of its twin on every step where the run without the opt-in is not, and a hydrostatic rest state
+    stays at rest within a registered limit. Every limit not stated here is registered in the ADR before the run.
+  - note: Follow-up of F-757 (ADR 0687, 2026-11-16).

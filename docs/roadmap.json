@@ -7692,9 +7692,9 @@
     "deps": [
       "F-754"
     ],
-    "status": "todo",
+    "status": "partial",
     "acceptance": "the fractional step's ddt correction gives the coupled pairs the term behind the same opt-in, defaults bit-identical; on ADR 0672's channel against its twin with ddt_correction on, the fractional-step run and a BDF2 PISO run are each within a registered limit of the twin on every step where the run without the opt-in is not. Every limit not stated here is registered in the ADR before the run.",
-    "note": "Follow-up of F-754 (ADR 0675, 2026-11-16)."
+    "note": "ADR 0687, 2026-11-17: the opt-in PimpleSettings::coupled_ddt_correction now also acts in the fractional step with fractional_step_consistent (ADR 0356's carried-defect flux; the coupled faces take Gamma R + Gamma/dt D with the pair-harmonic Gamma and ADR 0675's coupled defect, shared as coupled_ddt_defect), with a new opt-in fractional_periodic_implicit (the implicit periodic partner of the fractional predictor, without which the periodic run differs from its twin by 1.9e-2 U_ref). On ADR 0672's meshes (from an initial velocity: the fractional step reads no body force) the fractional run stays within 1.2e-14 U_ref of its unrolled twin on every one of 200 steps (limit 1e-8) against 2e-6 to 3.2e-4 without the opt-in. The BDF2 PISO run first missed (4.2e-4, kept as a known miss): the lagged periodic partner of the BDF2 deferred-correction state, a pre-existing difference; with a new opt-in periodic_partner_extrapolated the BDF2 PISO run with ADR 0672's flow stays within 3.4e-15 of the twin against 8e-6 to 1.8e-5 without coupled_ddt_correction; the fractional step with BDF2 within 1.1e-14. Pair fluxes opposite to 4.4e-16. Seven of seven mutations caught (term not read, dte kept, sign, BDF2 weights swapped, older level dropped, either new opt-in not read). Defaults bit-identical (baseline_hashes, the periodic, fractional and PISO suites pass). Translational pairs only, incremental form, no non-orthogonal correction in the fractional runs; whether the three coupled-face opt-ins become defaults is open for the maintainer. Follow-up F-771 (Body force in the fractional step). Lead (2026-11-17): recorded partial by the status rule (the BDF2 PISO check P1b/P2b was met only after amendment 1, the first set-up kept as a known miss); the agent proposed done on the amended rule; done is the maintainer call. Q2 (initial-velocity flow taken as ADR 0672 channel) taken on the standing instruction."
   },
   {
     "id": "F-758",
@@ -7839,5 +7839,16 @@
     "status": "todo",
     "acceptance": "a fast test on an observation sequence whose plain pick lies in the incumbent's basin and whose last d + 1 evaluated points do not all lie in it shows that the repetition trigger makes no restart pick, the survivor of ADR 0686 (mutation M4, the window condition dropped) is caught by it, a twin with the window inside gets a restart pick, and the O1 points hash of ADR 0673 is unchanged.",
     "note": "Follow-up of F-766 (ADR 0686, 2026-11-16)."
+  },
+  {
+    "id": "F-771",
+    "title": "Body force in the fractional step",
+    "phase": 9,
+    "deps": [
+      "F-757"
+    ],
+    "status": "todo",
+    "acceptance": "the fractional step reads PimpleSolver::body_force behind an opt-in (the predictor's cell term, the balanced-force face term of the intermediate flux and the walls' pressure gradient as in the PISO step), defaults bit-identical; on ADR 0672's channel with its body force the fractional run with coupled_ddt_correction is within a registered limit of its twin on every step where the run without the opt-in is not, and a hydrostatic rest state stays at rest within a registered limit. Every limit not stated here is registered in the ADR before the run.",
+    "note": "Follow-up of F-757 (ADR 0687, 2026-11-16)."
   }
 ]
