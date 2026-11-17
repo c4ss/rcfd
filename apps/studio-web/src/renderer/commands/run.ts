@@ -103,10 +103,33 @@ function studioReason(id: string, env: PaletteEnv): string | null {
       const h = commandHandler(id);
       return h ? (h.unavailable?.() ?? null) : 'Open Runs or the Workspace of the project first.';
     }
+    // F-837: run by the surface that shows them (runs/RunExtras.tsx, field/FieldViewport.tsx, workspace/TimePanel.tsx)
+    case 'runs.log':
+    case 'runs.report':
+    case 'runs.budgets':
+    case 'field.save_png':
+    case 'field.range':
+    case 'field.face_on':
+    case 'plots.monitor_log': {
+      if (!view(env)) return NO_PROJECT;
+      const h = commandHandler(id);
+      return h ? (h.unavailable?.() ?? null) : (F837_WHERE[id] ?? null);
+    }
     default:
       return null;
   }
 }
+
+/** F-837: where a surface command is run from, when its surface is not shown. */
+const F837_WHERE: Readonly<Record<string, string>> = {
+  'runs.log': 'Open Runs (Ctrl+2) and select a run first.',
+  'runs.report': 'Open Runs (Ctrl+2) and select a run first.',
+  'runs.budgets': 'Open Runs (Ctrl+2) first.',
+  'field.save_png': 'Open a run in the workspace first.',
+  'field.range': 'Open a run in the workspace first.',
+  'field.face_on': 'Open a run in the workspace first.',
+  'plots.monitor_log': 'Open a run in the workspace first.',
+};
 
 // ---- choices
 
@@ -382,6 +405,26 @@ async function studio(e: PaletteEntry, values: Values): Promise<Outcome> {
       // F-828: the palette closes first, so the focus is back on the number it was opened from
       const h = commandHandler(e.id);
       return h ? close(() => h.run(values)) : failed(['Open Runs or the Workspace of the project first.']);
+    }
+    case 'runs.log':
+    case 'runs.budgets':
+    case 'field.range':
+    case 'field.face_on':
+    case 'plots.monitor_log': {
+      // F-837: the palette closes first, so the focus is back on the surface
+      const h = commandHandler(e.id);
+      return h ? close(() => h.run(values)) : failed([F837_WHERE[e.id] ?? 'Open the surface first.']);
+    }
+    case 'runs.report':
+    case 'field.save_png': {
+      const h = commandHandler(e.id);
+      if (!h) return failed([F837_WHERE[e.id] ?? 'Open the surface first.']);
+      try {
+        const lines = (await h.run(values)) as string[] | undefined;
+        return done(lines ?? []);
+      } catch (err) {
+        return failed([err instanceof Error ? err.message : String(err)]);
+      }
     }
     case 'provenance.copy_command': {
       const h = commandHandler(e.id);

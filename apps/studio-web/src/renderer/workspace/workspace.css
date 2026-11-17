@@ -559,3 +559,20 @@
     animation: none;
   }
 }
+
+/* F-837: the monitor's log scale toggle, a pictogram at the end of its 24px head; the note of the values a log scale
+   leaves out, under the plot */
+.tp-monitor .tp-monitor-log.ui-segment {
+  height: 20px;
+  width: 20px;
+  min-width: 20px;
+  padding: 0;
+  margin-left: auto;
+  justify-content: center;
+}
+.tp-monitor-skipped {
+  margin: 0;
+  padding: 0 var(--space-lg);
+  font-size: var(--type-label-size);
+  color: var(--role-text);
+}

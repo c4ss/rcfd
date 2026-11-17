@@ -37,6 +37,7 @@ import {
   MessageChannelMain,
   protocol,
   session,
+  shell,
   type IpcMainInvokeEvent,
   type MessagePortMain,
   type WebContents,
@@ -51,6 +52,8 @@ import { PROJECT_PORT_CHANNEL } from '../shared/project.js';
 import { CASE_PORT_CHANNEL } from '../shared/case.js';
 import { RUN_PORT_CHANNEL } from '../shared/run.js';
 import { RunPortBridge, type RunPortLike } from './run/bridge.js';
+import { RunnerBudgetsFile } from './run/extras.js';
+import { projectArgument } from './project/argv.js';
 import { PROVENANCE_PORT_CHANNEL } from '../shared/provenance.js';
 import { ProvenancePortBridge, type ProvenancePortLike } from './provenance/bridge.js';
 import { CasePortBridge, type CasePortLike } from './case/bridge.js';
@@ -316,6 +319,9 @@ function offerCasePort(contents: WebContents): void {
   contents.postMessage(CASE_PORT_CHANNEL, null, [port2]);
 }
 
+/** F-837: the runner's budgets file of the open project, with this process's last write (for undo). */
+const runnerBudgets = new RunnerBudgetsFile();
+
 /** The run port of each web contents (F-810), like the case port. */
 const runPorts = new Map<number, RunPortBridge>();
 
@@ -340,6 +346,30 @@ function offerRunPort(contents: WebContents): void {
     new RunPortBridge(adaptRunPort(port1), {
       query: () => (projects.state.project ? (tool, args) => projects.query(tool, args) : null),
       now: () => new Date().toISOString(),
+      // F-837: the runner's budgets of the open folder, its run's report in the system's program, Save PNG of the page
+      extras: {
+        folder: () => projects.state.project?.folder ?? null,
+        budgets: runnerBudgets,
+        openPath: (file) => shell.openPath(file),
+        png: {
+          capture: async (rect) => {
+            const image = await contents.capturePage(rect);
+            const size = image.getSize();
+            return { png: new Uint8Array(image.toPNG()), width: size.width, height: size.height };
+          },
+          savePath: async (name) => {
+            const win = BrowserWindow.fromWebContents(contents) ?? undefined;
+            const options = {
+              title: 'Save the field view as PNG',
+              defaultPath: path.join(app.getPath('pictures'), name),
+              filters: [{ name: 'PNG image', extensions: ['png'] }],
+              properties: ['createDirectory' as const, 'showOverwriteConfirmation' as const],
+            };
+            const r = win ? await dialog.showSaveDialog(win, options) : await dialog.showSaveDialog(options);
+            return r.canceled || !r.filePath ? null : r.filePath;
+          },
+        },
+      },
     }),
   );
   port1.start();
@@ -468,7 +498,9 @@ void app.whenReady().then(() => {
   hardenSession();
   registerIpc();
   service.start();
-  void projects.init();
+  // F-837: `rcfd-studio <PROJECT_DIR>` opens that folder (after the recent list is read, so it goes to its head)
+  const asked = projectArgument(process.argv, process.defaultApp === true, process.cwd());
+  void projects.init().then(() => (asked ? projects.open(asked) : undefined));
   openWindow();
 });
 app.on('window-all-closed', () => app.quit());

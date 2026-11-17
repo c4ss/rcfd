@@ -13,7 +13,12 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent, type PointerEvent } from 'react';
 import type { DataOptions, DataReply, FieldInfo, StoreInfo, StoreRef, SurfaceData } from '../../shared/data.js';
 import { cancelLoads, loadField, loadSurface, openStore } from '../data/door.js';
-import { Button, Quiet, Toggle } from '../ui/index.js';
+import { Button, IconButton, NumberField, Quiet, Toggle } from '../ui/index.js';
+import { IconToggle } from '../ui/IconToggle.js';
+import { useCommandHandlers } from '../commands/host.js';
+import { savePagePng } from '../workspace/door.js';
+import { shownRange } from './surface.js';
+import { AXIS, LENGTH_UNIT, LENGTH_UNIT_WHY, cellsOutside, domainText, fixedRange, lengthText, pngName, scaleBar, type RangeMode } from './viewExtras.js';
 import { colourRange, f32Text, lutBytes, type ColourRange } from './colormap.js';
 import { FieldCanvas, type Backend, type FieldCanvasApi, type Pick } from './FieldCanvas.js';
 import { CutPanel, DerivedControls, useArrows } from './DerivedControls.js';
@@ -133,6 +138,14 @@ export function FieldViewport({
   const [pointerAt, setPointerAt] = useState('');
   const [hover, setHover] = useState<{ pick: Pick; by: 'pointer' | 'keyboard' } | null>(null);
   const [attempt, setAttempt] = useState(0);
+  // F-837: the colour range mode, the whole run's range when found, the fixed range typed, the face-on scale, Save PNG
+  const [rangeMode, setRangeMode] = useState<RangeMode>('snapshot');
+  const [runRange, setRunRange] = useState<{ key: string; lo: number; hi: number; snapshots: number } | null>(null);
+  const [runRangeError, setRunRangeError] = useState<string | null>(null);
+  const [fixedLo, setFixedLo] = useState(Number.NaN);
+  const [fixedHi, setFixedHi] = useState(Number.NaN);
+  const [scale, setScale] = useState<ReturnType<FieldCanvasApi['faceScale']>>(null);
+  const [saved, setSaved] = useState<{ ok: boolean; text: string } | null>(null);
   const api = useRef<FieldCanvasApi>(null);
   // F-828: the readout stays while its provenance is open (the pointer leaves the surface for the popover)
   const pinned = useRef(false);
@@ -364,6 +377,80 @@ export function FieldViewport({
     // F-815: `loadKey` names the values when they are not the stored field
   }, [opened, storeKey, snapshot, field, tagBase, attempt, loadKey]);
 
+  // F-837: the whole run's range, the min and max of the shown values over every stored snapshot (rcfd-studio's run
+  // range); a work with Cancel (G21), found again when the store holds more snapshots
+  const ranged = rangeProp === undefined && !load;
+  const runKey = opened ? `${opened.key}\u0000${field}\u0000${opened.info.snapshots.length}` : '';
+  useEffect(() => {
+    if (!ranged || rangeMode !== 'run' || !opened || opened.key !== storeKey || runRange?.key === runKey) return;
+    const fi = opened.info.fields.find((f) => f.name === field);
+    if (!fi || fi.location !== 'cell') return;
+    let live = true;
+    const n = opened.info.snapshots.length;
+    const t = `${tagBase}-range-${field}-${n}`;
+    setRunRangeError(null);
+    const work = beginWork({ kind: 'field.load', scope: tagBase, label: `Finding the range of ${field} over ${n} snapshots`, word: 'Range of the run', onCancel: () => void cancelLoads(t) });
+    void (async () => {
+      let lo = Number.POSITIVE_INFINITY;
+      let hi = Number.NEGATIVE_INFINITY;
+      for (let i = 0; i < n; i++) {
+        const r = await loadField(store, i, field, { tag: t });
+        if (!live) return;
+        if (work.cancelled) {
+          setRangeMode('snapshot');
+          return;
+        }
+        if (!r.ok) {
+          work.end();
+          setRunRangeError(`The whole run’s range was not found: snapshot ${i + 1} could not be read (${r.error.message}).`);
+          return;
+        }
+        const span = shownRange(opened.surface.cells, r.result.values);
+        if (span) {
+          if (span.lo < lo) lo = span.lo;
+          if (span.hi > hi) hi = span.hi;
+        }
+      }
+      work.end();
+      if (lo <= hi) setRunRange({ key: runKey, lo, hi, snapshots: n });
+      else setRunRangeError('The whole run’s range was not found: no snapshot has a value on the surface.');
+    })();
+    return () => {
+      live = false;
+      work.end();
+      void cancelLoads(t);
+    };
+    // `store` is named by storeKey
+  }, [ranged, rangeMode, opened, storeKey, runKey, field, tagBase, runRange?.key]);
+  const fixed = fixedRange(fixedLo, fixedHi);
+  const fixedLoOk = 'problem' in fixed ? Number.NaN : fixed.lo;
+  const fixedHiOk = 'problem' in fixed ? Number.NaN : fixed.hi;
+  const modeRange = useMemo(() => {
+    if (!ranged) return null;
+    if (rangeMode === 'run' && runRange && runRange.key === runKey) return colourRange(runRange.lo, runRange.hi);
+    if (rangeMode === 'fixed' && Number.isFinite(fixedLoOk)) return colourRange(fixedLoOk, fixedHiOk);
+    return null;
+  }, [ranged, rangeMode, runRange, runKey, fixedLoOk, fixedHiOk]);
+  const chooseRange = (m: RangeMode) => {
+    setRangeMode(m);
+    // a fixed range starts as the range drawn now
+    if (m === 'fixed' && shownRef.current && (Number.isNaN(fixedLo) || Number.isNaN(fixedHi))) {
+      const r = modeRange ?? shownRef.current.range;
+      setFixedLo(r.lo);
+      setFixedHi(r.hi);
+    }
+  };
+  // F-837: the scale bar follows the camera (read once per frame at most)
+  const scaleFrame = useRef(0);
+  const onView = useCallback(() => {
+    if (scaleFrame.current) return;
+    scaleFrame.current = requestAnimationFrame(() => {
+      scaleFrame.current = 0;
+      setScale(api.current?.faceScale() ?? null);
+    });
+  }, []);
+  useEffect(() => () => cancelAnimationFrame(scaleFrame.current), []);
+
   const onDrawn = useCallback(() => {
     if (drawnFor.current !== null) drawnCb.current?.(drawnFor.current);
     if (!firstPicture.current) return;
@@ -390,16 +477,69 @@ export function FieldViewport({
   const fi = shown?.fieldInfo;
   const quantity = quantityProp ?? fi?.name ?? field;
   // F-815: the range drawn and shown in the legend: a comparison's one range, else the shown values' own
-  const drawnRange = shown ? (rangeProp ?? shown.range) : null;
+  // F-837: or the whole run's, or the fixed one
+  const drawnRange = shown ? (rangeProp ?? modeRange ?? shown.range) : null;
   const unit = fi?.unit ?? '';
   const snap = shown ? shown.info.snapshots[shown.snapshot] : undefined;
   const reset = () => {
     api.current?.reset();
     setHover(null);
   };
+  // F-837: Save PNG of the frame with its legend and caption (DESIGN.md: a field is never shown without them)
+  const sectionRef = useRef<HTMLElement>(null);
+  const savePng = async (): Promise<string[]> => {
+    const el = sectionRef.current;
+    const frame = el?.querySelector('.fv-frame');
+    const info = el?.querySelector('.fv-info');
+    if (!el || !frame || !info || !shown) throw new Error('Nothing is drawn yet.');
+    const a = frame.getBoundingClientRect();
+    const b = info.getBoundingClientRect();
+    const left = Math.min(a.left, b.left);
+    const top = Math.min(a.top, b.top);
+    const rect = { x: left, y: top, width: Math.max(a.right, b.right) - left, height: Math.max(a.bottom, b.bottom) - top };
+    const name = pngName(title ?? runName(shown.info.path), quantity, snap?.step);
+    setSaved(null);
+    const r = await savePagePng(rect, name);
+    if (!r.ok) {
+      setSaved({ ok: false, text: `The picture was not saved: ${r.error.message}` });
+      throw new Error(r.error.message);
+    }
+    if (r.result.path === null) return ['Not saved: the dialog was cancelled.'];
+    setSaved({ ok: true, text: r.result.path });
+    return [`Saved ${r.result.path} (${r.result.width} by ${r.result.height} pixels).`];
+  };
+  const twoD = layers?.twoD === true;
+  const faceOn = () => {
+    if (layers) api.current?.faceOn(layers.thin);
+  };
+  const NOTHING = 'No field is drawn yet: open a run in the workspace and wait for its picture.';
+  useCommandHandlers({
+    'field.save_png': { unavailable: () => (shown ? null : NOTHING), run: savePng },
+    'field.range': {
+      unavailable: () => (!shown ? NOTHING : ranged ? null : 'In compare mode both views share one range; leave compare mode first.'),
+      run: (args) => chooseRange((['snapshot', 'run', 'fixed'] as const).find((m) => m === args['mode']) ?? 'snapshot'),
+    },
+    'field.face_on': {
+      unavailable: () => (!shown || !layers ? NOTHING : twoD ? null : 'The case is not 2D (one cell layer): there is no face to look at straight on.'),
+      run: faceOn,
+    },
+  });
+  const outside = ranged && rangeMode === 'fixed' && shown && !('problem' in fixed) ? cellsOutside(shown.surface.cells, shown.values, fixed.lo, fixed.hi) : null;
+  const bar = twoD && layers && scale && scale.axis === layers.thin ? scaleBar(scale.perPixel, scale.widthPx) : null;
+  const rangeWords = rangeProp
+    ? 'viridis, one range for both runs'
+    : rangeMode === 'run'
+      ? modeRange && runRange
+        ? `viridis, range of the whole run (${runRange.snapshots} snapshots)`
+        : 'viridis, range of the shown values (the whole run’s is being found)'
+      : rangeMode === 'fixed'
+        ? modeRange
+          ? 'viridis, a fixed range'
+          : 'viridis, range of the shown values (the fixed range is not complete)'
+        : 'viridis, range of the shown values';
 
   return (
-    <section className="fv" aria-label={`Field view: ${quantity}`}>
+    <section className="fv" aria-label={`Field view: ${quantity}`} ref={sectionRef} data-range-mode={ranged ? rangeMode : 'shared'}>
       <div className="fv-tools">
         <Toggle isSelected={grid} onChange={setGrid} isDisabled={!shown}>
           Mesh grid
@@ -418,6 +558,26 @@ export function FieldViewport({
         {arrows.kind === 'error' && (
           <span className="fv-note fv-note--error" role="alert" data-words="exception">
             {arrows.message}
+          </span>
+        )}
+        {ranged && (
+          // F-837: the colour range of the shown snapshot (F-808's), of the whole run, or fixed; icons only (G22)
+          <div className="fv-range" role="group" aria-label="Colour range">
+            <IconToggle icon="range-snapshot" label="Colour range of the shown snapshot" isSelected={rangeMode === 'snapshot'} onChange={() => chooseRange('snapshot')} isDisabled={!shown} />
+            <IconToggle icon="range-run" label="Colour range of the whole run" isSelected={rangeMode === 'run'} onChange={() => chooseRange('run')} isDisabled={!shown} />
+            <IconToggle icon="range-fixed" label="Fixed colour range" isSelected={rangeMode === 'fixed'} onChange={() => chooseRange('fixed')} isDisabled={!shown} />
+          </div>
+        )}
+        {twoD && layers && <IconButton variant="ghost" icon="face-on" label={`View face on (along ${AXIS[layers.thin]})`} onPress={faceOn} isDisabled={!shown} className="fv-face-on" />}
+        <IconButton variant="ghost" icon="image" label="Save the view as PNG…" onPress={() => void savePng().catch(() => undefined)} isDisabled={!shown} className="fv-save-png" />
+        {runRangeError && (
+          <span className="fv-note fv-note--error" role="alert" data-words="exception">
+            {runRangeError}
+          </span>
+        )}
+        {saved && (
+          <span className={saved.ok ? 'fv-note' : 'fv-note fv-note--error'} role={saved.ok ? 'status' : 'alert'} data-words={saved.ok ? 'data' : 'exception'} data-saved={saved.ok ? saved.text : undefined}>
+            {saved.text}
           </span>
         )}
         <span className="fv-tools-gap" />
@@ -442,6 +602,7 @@ export function FieldViewport({
         data-step={snap?.step}
         data-arrows={arrows.kind === 'on' && arrows.snapshot === shown?.snapshot ? arrows.glyphs.cells.length : undefined}
         data-range={drawnRange ? `${drawnRange.lo} ${drawnRange.hi}` : undefined}
+        data-scale={bar ? bar.length : undefined}
         data-provenance="fv-readout"
       >
         <FieldCanvas
@@ -453,6 +614,7 @@ export function FieldViewport({
           forceWebGL={forceWebGL}
           onBackend={setBackend}
           onMoved={setMoved}
+          onView={onView}
           onDrawn={onDrawn}
           onGridState={setGridState}
           cut={cut}
@@ -461,6 +623,25 @@ export function FieldViewport({
           scalars={shown?.scalars ?? null}
         />
         {cut && layers && shown && <CutPanel cut={cut} layers={layers} onCut={setCut} />}
+        {ranged && rangeMode === 'fixed' && shown && (
+          // F-837: the fixed range's two ends; keys and pointer stay in the panel (not the orbit)
+          <div className="fv-fixed" role="group" aria-label="Fixed colour range" onKeyDown={(e) => e.stopPropagation()} onPointerMove={(e) => e.stopPropagation()} onPointerDown={(e) => e.stopPropagation()}>
+            <NumberField aria-label={`Bottom of the fixed range${unit ? `, ${unit}` : ''}`} value={fixedLo} onChange={setFixedLo} formatOptions={{ useGrouping: false, maximumSignificantDigits: 9 }} className="fv-fixed-field" />
+            <NumberField aria-label={`Top of the fixed range${unit ? `, ${unit}` : ''}`} value={fixedHi} onChange={setFixedHi} formatOptions={{ useGrouping: false, maximumSignificantDigits: 9 }} className="fv-fixed-field" />
+            {'problem' in fixed && (
+              <span className="fv-note fv-note--error" data-words="exception">
+                {fixed.problem}
+              </span>
+            )}
+          </div>
+        )}
+        {bar && (
+          // F-837: the scale bar of a face-on 2D view (the egui Studio's rule), in the picture Save PNG writes
+          <div className="fv-scalebar" data-length={bar.length} title={LENGTH_UNIT_WHY}>
+            <span className="fv-scalebar-bar" style={{ width: `${bar.px}px` }} aria-hidden="true" />
+            <span data-words="data">{`${lengthText(bar.length)} ${LENGTH_UNIT}`}</span>
+          </div>
+        )}
         <WorkProgress scope={tagBase} />
         {moved && shown && (
           <Button className="fv-reset" onPress={reset}>
@@ -495,9 +676,21 @@ export function FieldViewport({
               {/* G22: the colour map and the mesh size are said to readers (the legend shows the range) */}
               <Quiet>
                 {' '}
-                · {rangeProp ? 'viridis, one range for both runs' : 'viridis, range of the shown values'} · {shown.surface.cells.length} triangles of {shown.info.nCells}{' '}
+                · {rangeWords} · {shown.surface.cells.length} triangles of {shown.info.nCells}{' '}
                 cells
               </Quiet>
+              {layers && (
+                // F-837: the domain's size (the egui Studio's "domain 2 x 1 m"): the stored mesh's extents, m from the
+                // engine's SI settings (the store names no unit), said in the tooltip
+                <span className="fv-domain" data-words="data" data-domain={domainText(layers)} title={`Domain${layers.twoD ? ' (2D: the two in-plane extents)' : ''}. ${LENGTH_UNIT_WHY}`}>
+                  {` · ${domainText(layers)} ${LENGTH_UNIT}`}
+                </span>
+              )}
+              {outside && outside.outside > 0 && (
+                <span data-words="exception" data-outside={outside.outside}>
+                  {` · ${outside.outside} of ${outside.of} surface cells outside the fixed range, drawn in its end colours`}
+                </span>
+              )}
             </p>
             <div className="fv-readout" aria-live={hover?.by === 'keyboard' ? 'polite' : 'off'} data-pointer={pointerAt || undefined}>
               <span className="fv-readout-label">

@@ -5,7 +5,7 @@
 // The run port is a main-process read through the open project's read-only project server (`read_residuals`,
 // `read_project_file`), not a service method of SERVICE_METHODS, so it has no entry in the action registry (G16;
 // reported with F-810, as F-805 and F-812 report theirs).
-import type { RunComparison, RunReply, RunSeries, RunValuesAt } from '../../shared/run.js';
+import type { BudgetKey, BudgetsOutcome, PageRect, RunComparison, RunLog, RunnerBudgets, RunReply, RunSeries, RunValuesAt, SavedPng } from '../../shared/run.js';
 
 const bridge = () => window.studioRunData;
 
@@ -27,4 +27,42 @@ export function runValuesAt(run: string, step: number): Promise<RunReply<RunValu
 export function runComparison(run: string, other: string): Promise<RunReply<RunComparison>> {
   const b = bridge();
   return b ? b.compare(run, other) : Promise.resolve(noBridge());
+}
+
+// ---- F-837 (the same port; the run list and the field view reach it through here)
+
+/** The end of a run's log.txt, its last events (warnings named) and whether its report.html is there. */
+export function runLog(run: string): Promise<RunReply<RunLog>> {
+  const b = bridge();
+  return b ? b.log(run) : Promise.resolve(noBridge());
+}
+
+/** Opens the run's output/report.html in the system's program for HTML. */
+export function openRunReport(run: string): Promise<RunReply<{ readonly path: string }>> {
+  const b = bridge();
+  return b ? b.openReport(run) : Promise.resolve(noBridge());
+}
+
+/** The runner's budgets of the open project. */
+export function runnerBudgets(): Promise<RunReply<RunnerBudgets>> {
+  const b = bridge();
+  return b ? b.budgets() : Promise.resolve(noBridge());
+}
+
+/** Sets (number) or clears (null) budgets, if the file still has `base`. */
+export function setRunnerBudgets(values: Readonly<Partial<Record<BudgetKey, number | null>>>, base: string | null): Promise<RunReply<BudgetsOutcome>> {
+  const b = bridge();
+  return b ? b.setBudgets(values, base) : Promise.resolve(noBridge());
+}
+
+/** Puts back the budgets file as it was before this window's last write. */
+export function undoRunnerBudgets(force: boolean): Promise<RunReply<BudgetsOutcome>> {
+  const b = bridge();
+  return b ? b.undoBudgets(force) : Promise.resolve(noBridge());
+}
+
+/** Saves a picture of a rectangle of the page as a PNG the user names. */
+export function savePagePng(rect: PageRect, name: string): Promise<RunReply<SavedPng>> {
+  const b = bridge();
+  return b ? b.savePng(rect, name) : Promise.resolve(noBridge());
 }

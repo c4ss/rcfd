@@ -67,6 +67,17 @@ export const ICON_NAMES = [
   'first',
   'last',
   'send',
+  // F-837
+  'log',
+  'report',
+  'image',
+  'budgets',
+  'range-snapshot',
+  'range-run',
+  'range-fixed',
+  'face-on',
+  'log-scale',
+  'stored',
 ] as const;
 export type IconName = (typeof ICON_NAMES)[number];
 
@@ -87,4 +98,18 @@ export const ICON_PATHS: Record<IconName, { readonly path: string; readonly fill
   first: { path: 'M3 2V12M11 2L6 7L11 12' },
   last: { path: 'M11 2V12M3 2L8 7L3 12' },
   send: { path: 'M2 7H12M8 3L12 7L8 11' },
+  // F-837: a run's log (lines of text), its report (a page with a folded corner), Save PNG (a picture), the runner's
+  // budgets (two sliders), the colour range of one snapshot (one frame), of the whole run (frames stacked), fixed (a span
+  // with two stops), the face-on view (a square seen square, its centre marked), a log scale (equal steps of a staircase)
+  log: { path: 'M2 3H12M2 6H12M2 9H12M2 12H8' },
+  report: { path: 'M3 1H9L12 4V13H3ZM9 1V4H12M5 7H10M5 10H10' },
+  image: { path: 'M1 2H13V12H1ZM1 10L5 6L8 9L10 7L13 10' },
+  budgets: { path: 'M2 4H12M2 10H12M5 2V6M9 8V12' },
+  'range-snapshot': { path: 'M4 2H10V12H4Z' },
+  'range-run': { path: 'M2 4H8V12H2ZM5 4V2H11V10H8' },
+  'range-fixed': { path: 'M7 2V12M4 2H10M4 12H10' },
+  'face-on': { path: 'M2 2H12V12H2ZM6 6H8V8H6Z' },
+  'log-scale': { path: 'M2 12H5V9H8V6H11V3' },
+  // F-837: Run again with fields stored (the play mark over a shelf of stored snapshots)
+  stored: { path: 'M4 1L8 5L4 9ZM1 12H13M1 9V12M13 9V12' },
 };

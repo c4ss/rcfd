@@ -18,6 +18,7 @@ import {
   type ChangeEntry,
   type Listing,
   type MeshEntry,
+  type DesignEntry,
   type NoteEntry,
   type ProjectInfo,
   type ProjectView,
@@ -25,7 +26,7 @@ import {
   type ProjectTool,
 } from '../../shared/project.js';
 import { RunControl, settle, type ControlDeps } from './control.js';
-import type { Names } from './listing.js';
+import { entriesOf, type Names } from './listing.js';
 import { isActive, readRunDetail, readRuns, stale } from './runs.js';
 import type { ProjectServerLike } from './server.js';
 
@@ -87,6 +88,7 @@ export interface Lists {
   readonly meshes: Listing<MeshEntry>;
   readonly runs: Listing<RunEntry>;
   readonly notes: Listing<NoteEntry>;
+  readonly designs: Listing<DesignEntry>;
   readonly skippedRuns: readonly { readonly path: string; readonly message: string }[];
 }
 
@@ -159,7 +161,16 @@ export async function readLists(server: ProjectServerLike, root: string, listFil
     notes = empty(message(e));
   }
 
-  return { info, infoError, cases, meshes, runs, notes, skippedRuns };
+  // F-837: designs/, as the engine counts it (no query of the engine lists it; the names only, as listing.ts does)
+  let designs: Listing<DesignEntry>;
+  try {
+    const d = await entriesOf(root, 'designs');
+    designs = { items: d.entries, total: d.total, error: null };
+  } catch (e) {
+    designs = empty(message(e));
+  }
+
+  return { info, infoError, cases, meshes, runs, notes, designs, skippedRuns };
 }
 
 export class ProjectSession {
