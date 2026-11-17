@@ -8015,8 +8015,33 @@
     "deps": [
       "F-772"
     ],
-    "status": "todo",
+    "status": "partial",
     "acceptance": "Every limit not stated here is registered in the ADR before the run. The 28 files with a primary read in ADR 0701, with the five borderline readings (`cylinder.rs`, `run_control.rs`, `species.rs`, `properties.rs`, `cavity.rs`), are read by a reader who did not write the rule, against a written criterion registered before the reading, and agree with the first reading on at least 85 % of the files; the disagreements are listed with a reason; no limit of ADR 0684, 0690 or 0701 is changed by the second reading.",
-    "note": "Follow-up of F-772 (ADR 0701, 2026-11-16)."
+    "note": "Test-to-ADR index, gate attribution. Follow-up of F-772 (ADR 0701, 2026-11-17). PARTIAL. ADR 0704, 2026-11-17: the 28 files with a primary of the samples S45 and S25 of ADR 0701 (12 and 16) were read by a second reader who did not write the rule, against a criterion registered before the list was obtained (the right primary is the ADR that decided what the file checks and states its limits: named by the file, or registering it by name, or a retro-registration whose host ADR is about the tested feature; audit rows, precedents, re-run lists and ADRs of the attribution are mentions) and committed before the first reading was opened. The two readings agree on 21 of 28 files (75.0 %, limit 85 % missed; Cohen's kappa 0.41): both agree with the primary on 17, both reject it on 4 (`pimple.rs`, `run_control.rs`, `cavity.rs`, `step_laminar.rs`), and the second reader rejects 7 that the first accepted, none the other way. The 7: the four files that take ADR 0685 by rule H2 (`mesh_params.rs`, `channel_wall_function.rs`, `physics_workflow.rs`, `physics_cases.rs`; ADR 0685 says no ADR describes them and proposes that one be written), two \"Test files\" notes whose own text says the host ADR only names the item (`rcfd-assistant/tests/workflow.rs` in ADR 0067, `rcfd-api/tests/workflow.rs` in ADR 0123) and `cylinder.rs` (an audit row of ADR 0060, like `cavity.rs` and `step_laminar.rs`). Five of the seven come from the criterion (first ADR that says anything specific about the file, against the ADR that decided its checks), two from reading the notes one by one. Second reader's agreement with the primary: 17 of 28 (60.7 %); by rule G 1 of 1, H0 5 of 5, H1 11 of 13, H2 0 of 4, H3 0 of 5. Of the five borderline files the readings agree on four and differ on `cylinder.rs`. Disclosed: the reader had seen the first reading's totals and by-rule counts in the note of F-772, and the 8-file reading in ADR 0685. No limit and no text of ADR 0684, 0690 or 0701 and no script is changed. Open: what the primary of a file with no registering ADR is (the maintainer's decision), ADR 0685 as a source, the two notes. Follow-up F-787 (A retro-registration unit that says no ADR describes the file gives no primary). Follow-up F-788 (A third reading of the primary-ADR samples against one written criterion)."
+  },
+  {
+    "id": "F-787",
+    "title": "A retro-registration unit that says no ADR describes the file gives no primary",
+    "phase": 9,
+    "deps": [
+      "F-772",
+      "F-785"
+    ],
+    "status": "todo",
+    "acceptance": "Every limit not stated here is registered in the ADR before the run. In `scripts/adr_test_index.py --primary git` the units of ADR 0685 itself are not a source, and a `## Test files (added <date>, ADR dddd)` unit that says its host ADR only names the item or that no earlier ADR describes the file gives no primary, or the maintainer decides that such an ADR is the primary and the decision is recorded; the files that change primary are listed (the four H2 files of ADR 0685 and the two `workflow.rs` files of ADR 0704 among them); `--primary registered` and `--primary p0679` are bit-identical and the attribution data of `gate_attribute.py` is unchanged for the existing consumers; no limit of ADR 0684, 0690, 0701 or 0704 is changed.",
+    "note": "Follow-up of F-786 (ADR 0704, 2026-11-16). NEEDS USER (2026-11-17): rests on ADR 0704 Q1, the definition of the primary of a file no ADR registered (changes which tests have a primary, about 20 under H2); the reader recommends (a) the ADR that decided its checks, else none."
+  },
+  {
+    "id": "F-788",
+    "title": "A third reading of the primary-ADR samples against one written criterion",
+    "phase": 9,
+    "deps": [
+      "F-786",
+      "F-785",
+      "F-769"
+    ],
+    "status": "todo",
+    "acceptance": "Every limit not stated here is registered in the ADR before the run. After the maintainer's answer to question 1 of ADR 0704 (what the primary of a file with no registering ADR is), one written criterion is registered; the 7 files on which the readings of ADR 0701 and ADR 0704 differ and a fresh registered sample of at least 20 files with a primary under the rule as it then stands are read blind by a reader who wrote neither the rule nor ADR 0704, and by a second such reader, and the two agree on at least 85 % of the files; the disagreements are listed with a reason; the agreement of each reader with the assigned primary is reported next to it; no limit of ADR 0684, 0690, 0701 or 0704 is changed.",
+    "note": "Follow-up of F-786 (ADR 0704, 2026-11-16)."
   }
 ]
