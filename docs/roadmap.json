@@ -8051,9 +8051,9 @@
     "deps": [
       "F-783"
     ],
-    "status": "todo",
+    "status": "partial",
     "acceptance": "Every limit not stated here is registered in the ADR before the run. The bifurcated branch of ADR 0700 traced from its state at 0.9645 toward lower loads with a continuity test that also bounds the change of the amplitude along the critical mode, and by the arc-length driver to its fold if it folds, with the inertia and R/mu along it against the symmetric branch and F-bar; a fast control on the closed-form subcritical pitchfork of ADR 0700 and on a step that falls back onto the symmetric branch; the default bits unchanged.",
-    "note": "Follow-up of F-783 (ADR 0700, 2026-11-16)."
+    "note": "F-789 (ADR 0711, 2026-11-17): the subcritical branch of rule L's 16^3 punch path (ADR 0700) traced past 0.9645 toward lower loads. A continuity test that also bounds the change of the amplitude along the critical mode (|Da - Da_pred| <= 0.5 |Da_pred|) rejects ADR 0700's fall-back to the symmetric root at 0.964 (which ADR 0697's test still accepts); with one halving the load-controlled trace stays on the branch to 0.9625 (amplitude 9.84e-5, within 3.5 per cent of the reduced equation, nu = 1). An amplitude-controlled bordered Newton (test-side, in place of the arc-length driver, which cannot start from a state under a prescribed-displacement load) follows it to amplitude 2.165e-4 at load 0.958472 (dlambda/da from -44.5 to -0.54, lowest pair -323, nu = 1) and agrees with the load-controlled states to 7e-5 of lambda_c - lambda; beyond, element 3720 inverts or its modes do not converge, so no fold is bracketed: any fold lies above amplitude 2.165e-4 and below load 0.958472. R/mu stays within 1.2e-6 of the symmetric branch and 3.9 per cent above F-bar (nu = 0). Controls: ADR 0700's closed-form subcritical pitchfork, a toy step that falls back and passes the old test, a closed-form fold (bracketed and bounded), the bordered Newton on the stable 8^3 block. Test-only, default bits unchanged; five of five mutations caught; no amendment. Partial: the arc-length driver was not used and the fold was not reached. Follow-up F-796 (The end of the subcritical branch of rule L's 16^3 punch path at amplitude 2.2e-4). Follow-up F-797 (The arc-length driver from a given state under prescribed-displacement loading)."
   },
   {
     "id": "F-790",
@@ -8121,5 +8121,27 @@
     "status": "todo",
     "acceptance": "Every limit not stated here is registered in the ADR before the run. An addendum to ADR 0706 corrects row H22 (the test asserts that the first failed task has a message containing `nonexistent`, not which task it is) and an addendum to ADR 0707 corrects row W1 (a uniform 4 x 12 mesh), with the text above each addendum unchanged; the 18 rows not read in ADR 0705 or ADR 0715 (H5, H7, H9, H10, H11, H13, H14, H15, H17, H20, H21, H23, W6, W7, W8, C3, C6, T5) are read by a reader other than the author of the rows against the criterion of ADR 0715, every disagreement is listed with the line and corrected by the same addenda, and at least 16 of the 18 agree; no Rust file is edited and docs_site passes.",
     "note": "Follow-up of F-794 (ADR 0715, 2026-11-16)."
+  },
+  {
+    "id": "F-796",
+    "title": "The end of the subcritical branch of rule L's 16^3 punch path at amplitude 2.2e-4",
+    "phase": 9,
+    "deps": [
+      "F-789"
+    ],
+    "status": "todo",
+    "acceptance": "Every limit not stated here is registered in the ADR before the run. At the last state of ADR 0711's amplitude-controlled trace, whether the trace ends at a fold of the branch or at a breakdown of the local mode problem of element 3720: the eigenvalues of that element's mode tangent and the iterates of the failing attempts, the lowest pair and dlambda/da of the branch approached with smaller registered amplitude steps; a fast control on a closed-form fold and on a toy whose local problem loses its solution before the fold; the default bits unchanged.",
+    "note": "Follow-up of F-789 (ADR 0711, 2026-11-16)."
+  },
+  {
+    "id": "F-797",
+    "title": "The arc-length driver from a given state under prescribed-displacement loading",
+    "phase": 9,
+    "deps": [
+      "F-789"
+    ],
+    "status": "todo",
+    "acceptance": "Every limit not stated here is registered in the ADR before the run. A library opt-in, off by default, that starts the arc-length trace of ADR 0480 from a given converged state and increment with the prescribed values scaled by the load factor and their load column in the controlled correction; a closed-form control under a prescribed displacement through a limit point and ADR 0711's bordered trace of the 16^3 punch branch reproduced; baseline_hashes and the default-path bits unchanged.",
+    "note": "Follow-up of F-789 (ADR 0711, 2026-11-16)."
   }
 ]
