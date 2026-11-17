@@ -100,3 +100,66 @@ from the first.
 * `primary_adr` of the mapped tests is decided by the script as on this base (E2 evidence); ADR 0684 (F-759) may change it.
 * The 5 binaries of the second table stay unmapped; they need an ADR written for them or the maintainer's decision.
 * The two binaries without tests (`si_eas_hg3_rd`, `si_eas_hg3_rl`), the library and bin targets without tests are not touched.
+
+## Addendum 1: results (2026-11-17)
+
+Twenty notes headed `## Test files (added 2026-11-17, ADR 0685)` were appended to 12 ADR files (0004, 0008, 0011, 0024, 0025, 0027, 0031,
+0036, 0060, 0067, 0088, 0123); nothing above them is changed (`git diff` has 48 added lines and no removed line in those 12 files). No
+Rust file, golden, hash table or script is touched. Inputs and logs in `w49i-work/f760-scratch` (`before.txt`, `after.txt`, `after.json`,
+`append.py`, `unittest.log`, `docs_site.log`). The index was run once before and once after the edit.
+
+| id | limit | measured | met |
+|---|---|---|---|
+| A1 | 20 binaries named by path in appended notes, additions only | 20 of 20 in 12 files, 48 lines added, 0 removed | yes |
+| A2 | the 5 other binaries named in this ADR with a reason | 5 of 5 (second table above) | yes |
+| A3 | unmapped integration binaries with tests at most 5, and those are the 5 of A2 | **0** (baseline 25). The 5 of A2 are mapped to this ADR 0685 by evidence E7, because this ADR names them as words (`mesh_params`, `channel_wall_function`, `physics_cases`, `physics_workflow`, `table_expr`); the limit of 5 holds, the clause "those are the 5" does not apply because none is left | yes (the figure is better than the limit for a reason that is not a reading of the binaries) |
+| A4 | no test loses an ADR; at most 120 tests gain one | 0 lost; 109 gained (the 89 of the 20 binaries, 20 of the 5 through E7) | yes |
+| A5 | mapped tests rise by 85 to 120 of 7743 | 7607 to 7716 (+109), 98.2 % to 99.7 %; integration tests 7048 to 7157 of 7157 (100 %); integration binaries 1148 to 1173 of 1175 (the 2 left are the `si_eas` files with no tests) | yes |
+| A6 | no file outside `docs/adr/` changed | 13 files changed, all in `docs/adr/` | yes |
+| A7 | sample of 8 of the 20 (seed 7600) at least 6 agree | **7 of 8 agree**, 1 disagrees (below) | yes |
+| C1 | `python -m unittest discover -s scripts` passes | 93 run, OK, 4 skipped (the base has 93, not the 85 of ADR 0679) | yes |
+| C2 | `cargo test -q --release -p rcfd-cli --test docs_site` passes | 2 passed, 0 failed | yes |
+
+Sample A7 (drawn with `random.Random(7600).sample` over the first table in its order: `keychain`, `rcfd-fv/non_conformal`,
+`workflow_engine`, `interchange`, `scalars`, `species`, `full_loop`, `non_conformal_case`), each read with its note, the ADR text it
+cites and the file header; the index gives each of them the ADR named here as `primary_adr` with evidence E2:
+
+| file | ADR | reading |
+|---|---|---|
+| `rcfd-assistant/tests/keychain.rs` | 0004 | agree: the decision lists the order env, keychain, file, the read-back and the in-memory backend that the 7 tests check |
+| `rcfd-fv/tests/non_conformal.rs` | 0024 | agree with a reservation: section C describes the join of two channel blocks and a conduction check; the Poiseuille check of the file is not in the ADR (said in the note) |
+| `rcfd-assistant/tests/workflow_engine.rs` | 0123 | **disagree**: 0123 is the run service; it only names F-120 and F-121 as parents, and the workflow engine is not described there; the file drives the engine through the assistant |
+| `rcfd-io/tests/interchange.rs` | 0011 | agree: the file header says its checks were registered in 0011 |
+| `rcfd-api/tests/scalars.rs` | 0027 | agree, weak: 0027 describes species in the F-053 solver as context for chemistry; the test is the transport itself |
+| `rcfd-fv/tests/species.rs` | 0027 | agree, weak: same |
+| `rcfd-assistant/tests/full_loop.rs` | 0004 | agree, weak: 0004 decides tools in process and the gate below the UI, one of the 8 tests; the loop is not described otherwise |
+| `rcfd-api/tests/non_conformal_case.rs` | 0024 | agree: C2 is this test (`channel_2d_interface` through the settings tree) |
+
+Deviations: (1) 0685 became the second ADR of 5 binaries through E7, which the registration did not expect (the registration said the
+5 would stay unmapped); it is a word match, not a reading, and ADR 0684 may change what such a hit is worth. (2) `workflow_engine.rs`
+and `workflow.rs` (api) name an ADR (0123) that does not describe the workflow engine; the engine was never described in an ADR (the
+section "Test files" of 0123 says so). The same holds for the weak rows above and for `properties.rs` (0036), `data.rs` and `datapack.rs`
+(0060) and `workflow.rs` of the assistant (0067): the note says what is and is not described. Not run: a sample larger than 8; the
+other 12 mappings were read once when chosen, not again.
+
+Decision by the registered rule: **done** (A1 to A7, C1, C2 met).
+
+Remaining questions:
+
+1. The 5 binaries of A2 and the weak mappings have no ADR that describes them. Options: (a) leave as is (they map to 0685 by a word and
+   to a weak ADR); (b) write short ADRs for the feature groups (assistant helpers and workflow engine, wall function channel, the shipped
+   turbulence and compressible examples, mesh generator parameters, table expressions); (c) ask the maintainer which ADR should own them.
+   Recommendation: (a) for now, (b) only when one of these binaries fails in the daily gate and the attribution is not enough.
+2. The E7 rule maps a binary to any ADR that names it as a word, including an ADR that only lists the file as not described (as this
+   one does). Options: (a) keep; (b) in `adr_test_index.py` do not count an ADR that says "not named in an existing ADR" (an ADR cannot
+   be told apart from the text by the script). Recommendation: (a), and let F-759 (ADR 0684) decide how E7 ranks.
+
+## For the lead: roadmap entries
+
+Proposed status and note of F-760:
+
+> Proposed status: done.
+
+> Test-to-ADR index, ADR text for the unmapped integration-test binaries (follow-up of F-737, ADR 0679). DONE. ADR 0685, 2026-11-17: each of the 25 integration-test binaries left unmapped in ADR 0679 addendum 1 is named, by path, in the ADR that registered or first described it, found by reading the code and the git history (20 binaries in short "Test files" notes appended to 12 ADRs: 0004, 0008, 0011, 0024, 0025, 0027, 0031, 0036, 0060, 0067, 0088, 0123) or in ADR 0685 with the reason (5: `mesh_params`, `channel_wall_function`, `physics_cases`, `physics_workflow`, `table_expr`). Most were committed on 2026-10-13 or 2026-10-14 without an ADR; where no ADR described the feature the note says so. The index shows 0 unmapped integration binaries with tests (baseline 25, limit 5; the 5 named in 0685 are mapped to it by a word match), 109 tests gained an ADR and none lost one (all tests mapped 98.2 % to 99.7 %), no Rust file or script edited, unit tests of `scripts` pass, docs_site passes. Sample of 8 of the 20 new mappings read (seed 7600): 7 agree, 1 disagrees (`workflow_engine` to 0123, which does not describe the workflow engine).
+
+> Follow-up proposed: ADRs for the five feature groups that no ADR describes (the assistant setup helpers and workflow engine, the F-040 wall-function channel, the shipped turbulence and compressible examples through the binary, the mesh generator parameters, tables called from expressions). Deps F-760. Acceptance: Every limit not stated here is registered in the ADR before the run. A short registration ADR per group states what the files `rcfd-assistant/tests/physics_workflow.rs`, `rcfd-assistant/tests/workflow_engine.rs`, `rcfd-turb/tests/channel_wall_function.rs`, `rcfd-cli/tests/physics_cases.rs`, `rcfd-api/tests/mesh_params.rs` and `rcfd-core/tests/table_expr.rs` check and which limits they carry, read from the code and the roadmap notes, with no Rust file edited; the index maps these files by a reading of that ADR (evidence E2, not only a word); a registered sample is read.
