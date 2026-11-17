@@ -16062,7 +16062,8 @@ fixed by the item's registration ADR before any code.
     of rule L's 16^3 punch path at amplitude 2.2e-4). Follow-up F-797 (The arc-length driver from a given state under
     prescribed-displacement loading). ADR 0718 finds that the trace's end at amplitude 2.2e-4 is a breakdown of element
     3720's plain local iteration from alpha = 0, not an imminent fold: in finer steps the branch keeps dlambda/da near
-    -38 and is lost at 1.65e-4.
+    -38 and is lost at 1.65e-4. ADR 0723 confirms the imminent fold: with the warm start of the modes the branch folds
+    at a 2.17e-4 (lambda 0.95847209), just past rung 5.
 - [x] **F-790** Delete the dormant rule H3 code and its record tests after the second reading
   - depends on: F-786
   - acceptance: Every limit not stated here is registered in the ADR before the run. The constant `RETRO_H3`, the tier-3
@@ -16207,7 +16208,9 @@ fixed by the item's registration ADR before any code.
     within 7.8e-4 of the local fold), and the replica on one element. Test-only, default bits unchanged; six of six
     mutations caught; one amendment (the element control's set-up). Partial: the element control was met only after the
     amendment. Follow-up F-841 (The subcritical branch of rule L's 16^3 punch path past amplitude 1.65e-4 with the warm
-    start of the local modes).
+    start of the local modes). ADR 0723 shows with the warm start that rung 5 lies on the same local root as the
+    continued branch and that the branch folds at a 2.17e-4. The end at 1.65e-4 came from the plain iteration from alpha
+    = 0 failing at isolated regular states of that root, and the inference of another root is withdrawn.
 - [ ] **F-797** The arc-length driver from a given state under prescribed-displacement loading
   - depends on: F-789
   - acceptance: Every limit not stated here is registered in the ADR before the run. A library opt-in, off by default,
@@ -16217,7 +16220,8 @@ fixed by the item's registration ADR before any code.
     baseline_hashes and the default-path bits unchanged.
   - note: Follow-up of F-789 (ADR 0711, 2026-11-16). Lead (2026-11-17): ADR 0718 finds no fold at the end of the ADR
     0711 trace (a breakdown of element 3720's local iteration from alpha = 0); F-797 was recommended only if a real fold
-    appears, so it waits on F-841.
+    appears, so it waits on F-841. Lead (2026-11-17): ADR 0723 finds a real fold at a 2.17e-4 (lambda 0.95847209), so
+    the condition above is met.
 - [ ] **F-798** Hinged cylindrical roof of thickness 6.35 through its snap-back against the published table
   - depends on: F-610
   - acceptance: Every limit not stated here is registered in the ADR before the run. The tabulated path of the isotropic
@@ -16258,14 +16262,33 @@ fixed by the item's registration ADR before any code.
     E8b primary is read by a reader and a second reader with at least 80 % agreement, or the population is counted and
     the sample limit stated as missed by construction.
   - note: Follow-up of F-773 (ADR 0720, 2026-11-16).
-- [ ] **F-841** The subcritical branch of rule L's 16^3 punch path past amplitude 1.65e-4 with the warm start of the local modes
+- [x] **F-841** The subcritical branch of rule L's 16^3 punch path past amplitude 1.65e-4 with the warm start of the local modes
   - depends on: F-796
   - acceptance: Every limit not stated here is registered in the ADR before the run. ADR 0718's fine trace from rung 4
     repeated with the model's warm start of the incompatible modes (ADR 0660 D1) and the element states committed along
     the trace, to its fold if it folds or to a registered cap: dlambda/da, the lowest pairs and element 3720's mode
     tangent along it, whether ADR 0711's rung 5 is reached on the same local root; a fast control on a toy whose plain
     local iteration from zero fails while its root exists; the default bits unchanged.
-  - note: Follow-up of F-796 (ADR 0718, 2026-11-16).
+  - note: F-841 (ADR 0723, 2026-11-17): ADR 0718's fine trace of rule L's 16^3 punch branch repeated from ADR 0711's
+    rung 4, test-only, on the model with the warm start of the incompatible modes (ADR 0660 D1). After each accepted
+    state every element's state was committed (its converged modes), and the committed states equal the driver's warm
+    trial states bit for bit. At rung 4 the warm model reproduces the plain residual and dlambda/da bit for bit, and the
+    first step reproduces ADR 0718's plain state (lambda to 7e-14). The branch continues smoothly past ADR 0718's loss
+    at 1.65e-4 and folds. At a = a_4 + j (a_5 - a_4) / 8, dlambda/da runs -41.6, -39.1, -35.9, -31.9, -27.2, -21.8,
+    -15.5, -8.5, -0.54, then +3.75 at 2.205e-4 with nu going from 1 to 0; the fold estimate is a 2.170e-4, lambda
+    0.95847209. Element 3720's mode tangent stays positive definite and stiffens (l_min 2.27e4 to 4.21e4). Element 3720
+    carries the lowest pair (-2.47e4 rising to -323, share 0.64 to 0.59) up to the fold, and the pair leaves it past the
+    fold (share 0.002). The trace stays on one local root: no fallback in any of the 4096 elements, and the modes move 1
+    to 2 per cent per step. ADR 0711's rung 5 is reached on the same local root (modes to 9e-12, lambda to 1e-14, mu_1
+    -323.4 reproduced). So ADR 0718's inference of another root is wrong, and ADR 0711's imminent fold is confirmed 0.2
+    per cent of a_5 beyond rung 5. What ended ADR 0718's fine trace is that the plain iteration from alpha = 0 fails at
+    isolated regular states of this same root (4 of 12). Fast control: a toy (ADR 0711's PT with an atan local unknown)
+    whose plain local Newton from zero fails above a_c = 0.7005 although its root exists. Its plain trace is lost at a_c
+    and read as a breakdown of the local iteration; its warm, committed trace reads the closed-form fold at 0.9415. A
+    fallback control and a root-classifier control are added. Default bits unchanged (no library line); five of five
+    mutations caught; no amendment. Follow-up F-843 (The fold of rule L's 16^3 punch branch by an extended system with
+    warm-started local modes). Follow-up F-844 (The local mode update of the incompatible Hex8 as a default, compared on
+    the ADR 0658 set-ups and on rule L's 16^3 punch branch).
 - [ ] **F-842** The inertia and the retry of the nonlinear driver in the solid case's output
   - depends on: F-780
   - acceptance: Every limit not stated here is registered in the ADR before the run. With the solid case's opt-in for
@@ -16274,3 +16297,19 @@ fixed by the item's registration ADR before any code.
     block of ADR 0694 run through the case file reports nu = 1 at full load; off by default, the default bits, the
     schema golden and the hash tables unchanged.
   - note: Follow-up of F-780 (ADR 0719, 2026-11-16).
+- [ ] **F-843** The fold of rule L's 16^3 punch branch by an extended system with warm-started local modes
+  - depends on: F-841
+  - acceptance: Every limit not stated here is registered in the ADR before the run. At ADR 0723's fold bracket, a
+    test-only extended (Moore-Spence) system on the model with the warm start of the incompatible modes and committed
+    element states, converged to a registered tolerance: lambda_f and a_f inside the bracket, the critical vector's
+    share on element 3720, the null vector's residual; a fast control on a closed-form fold with a local unknown; the
+    default bits unchanged.
+  - note: Follow-up of F-841 (ADR 0723, 2026-11-16).
+- [ ] **F-844** The local mode update of the incompatible Hex8 as a default, compared on the ADR 0658 set-ups and on rule L's 16^3 punch branch
+  - depends on: F-841
+  - acceptance: Every limit not stated here is registered in the ADR before the run. The warm start of ADR 0660 D1, the
+    backtracking of ADR 0655 and the trust region of ADR 0660 D2, each measured as the would-be default on the ADR 0658
+    set-ups and on ADR 0723's fine trace from rung 4 without committed states beyond the driver's own: solves passed,
+    iterations, and the states where the plain iteration from alpha = 0 fails at a regular root; a recommendation
+    registered before the run; the default bits unchanged.
+  - note: Follow-up of F-841 (ADR 0723, 2026-11-16).
