@@ -3083,6 +3083,8 @@ P2 and P1 ran there; P5, P7 and P8 have not been run with the WebGL 2 fallback (
 - **A20-D1, where the undo lives.** The undo of an allowed rule is the panel's Undo and a palette command, as the F-837
   budgets are, not a step in the F-829 History (undo and redo of case edits). Alternative: a History step.
 - **A20-D2, no palette command that allows a rule.** Allowing starts only from a denied call in the panel.
+- **A20-D1 and A20-D2 accepted by the maintainer (2026-11-17).** The undo stays the panel's Undo chip plus the palette
+  command `claude.undo_allow`; a rule is allowed only from a denied call in the panel.
 - **A20-D3, a first file.** With no `.rcfd/claude-allow.json`, the file written is the Studio's first list, then the
   rule (so the list in force only gains the rule).
 - **A20-D4, undo of a first file** writes the Studio's first list to the file rather than deleting it (the Studio
@@ -3092,6 +3094,27 @@ P2 and P1 ran there; P5, P7 and P8 have not been run with the WebGL 2 fallback (
 - **A20-D7, axe on the new surfaces only.** The e2e axe check runs on the denied entry and the confirm. Run on the whole
   page with a chat open, axe reports `label-content-name-mismatch` (serious) on the current session's button of the
   session list ("Write a file, closed"), which predates this item; it is not fixed here.
+  **Resolved 2026-11-17 (branch axe-session-button over main d6eba150).** Two causes, both in `ClaudePanel.tsx`'s
+  session buttons: (1) the shown text had no space between the title and the state (two flex items), so axe read
+  "Write a fileclosed", a word not in the name; (2) the last-change time was shown but left out of the name. Fixed: a
+  space text node between the title and the state (a flex column draws no whitespace, so nothing visible changes), and
+  the name is built by `sessionLabel` from the shown parts in their order ("<title>, <state>, process <pid>,
+  <yyyy-mm-dd hh:mm>"), so it still starts with the title (claude.spec, f837.spec match on that; their anchored
+  patterns now include the time). The a11y walk now covers the list with every kind of entry: the fixture has a closed
+  session and one open in another process, listed beside New chat (surface `claude`), then a new chat sent from the
+  keyboard ("Write a file", the current entry; surface `claude-chat`) and the closed session resumed and answered
+  (surface `claude-resumed`), each with axe on the whole page and the full walk. Before the fix the walk failed on the
+  `claude` surface; after it, a11y 14 passed. No word budget changed (word-budget 10 passed).
+
+### Later the same day (2026-11-17, branch axe-session-button over main d6eba150)
+
+- **F-814 done.** The maintainer amended its acceptance: "through rcfd-claude" became "through the Studio's own
+  implementation of the same rules (rcfd-claude was removed 2026-11-17)", which `apps/studio-web/src/main/claude` is.
+  The rest of the acceptance was met before (see this addendum and Addendum 18); the view-and-report step follows the
+  F-810 and F-812 precedent (screenshots in `test-results-visual/f814/`). Engine session discovery (E-814 of the engine
+  follow-ups) stays an optional engine follow-up.
+- **`runner_config` on the first allow-list** (ADR 0733's open question, answered (b)): 16 tools; see ADR 0733.
+- **A20-D7 resolved** (above).
 
 ### Verification (2026-11-17, on studio-small over main e3fb058b)
 

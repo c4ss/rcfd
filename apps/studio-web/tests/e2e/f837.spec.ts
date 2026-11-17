@@ -386,7 +386,7 @@ test('the palette lists the F-837 commands; one that needs a run says where', as
 
 test('the Claude Code panel: a finished turn shows its model and the session’s cost', async () => {
   const panel = page.getByRole('complementary', { name: 'Claude Code' });
-  const closed = panel.getByRole('button', { name: /^Which runs converged\?, closed$/ });
+  const closed = panel.getByRole('button', { name: /^Which runs converged\?, closed, \d{4}-\d\d-\d\d \d\d:\d\d$/ });
   await expect(closed).toBeVisible({ timeout: 45_000 });
   await closed.click();
   const field = panel.getByRole('textbox', { name: /^Message to Claude Code, Which runs converged\?/ });

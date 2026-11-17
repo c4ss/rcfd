@@ -149,8 +149,8 @@ writes into `.rcfd/`.
 - **Tool-list tests restated, no golden edited.** `project_list_f270.rs` (the two tools taken out at their place, then the
   F-275 list as before), `tool_list_f275.rs` C5-L (42 tools, 25 project tools), `project_w48f.rs` F3 (17 + 25) and
   `project_runs_w48f.rs` F3/F13 (42). `project_w48f.rs` F2 says the first allow-list is exactly the read-class project
-  tools; it is restated to leave `runner_config` out, because whether the Studio's first allow-list gains it is not
-  decided (below).
+  tools; it was restated to leave `runner_config` out, because whether the Studio's first allow-list gains it was not
+  decided then (below; decided 2026-11-17, (b): F2 is the plain read-class set again).
 - **Studio (F-837).** The budgets panel reads with `runner_config` on the read-only project server and writes with
   `set_runner_config` on the run-control server (`apps/studio-web/src/main/run/extras.ts` `RunnerBudgetsEngine`, through
   `RunControl.setRunnerConfig`). A conflict shows as before. Undo sends the keys of the last write back with their values
@@ -170,8 +170,15 @@ writes into `.rcfd/`.
   e2e `f837` (14), `word-budget` and `a11y`: pass.
 - R7: `baseline_hashes.rs` is not edited; no solver path changed. The full suites run in CI.
 
-### Not decided (for the maintainer)
+### Decided after acceptance (was: not decided)
 
 - Whether `runner_config` joins the Studio bridge's first allow-list (`PROJECT_READ_TOOLS`, ADR 0195 P5), so Claude Code
   in the Studio reads the budgets without asking. As ADR 0187 Q6 and ADR 0188 Q6: (a) leave the list as it is (built);
   (b) add `runner_config`, which restates C5-A and F2 again.
+- **Decided 2026-11-17 by the maintainer: (b).** `runner_config` is added to the first allow-list, after `list_meshes`:
+  `PROJECT_READ_TOOLS` in `apps/studio-web/src/main/claude/allow.ts` and its Rust twin in
+  `crates/rcfd-mcp/tests/claude_allow/mod.rs` (16 tools). Restated, no golden re-recorded: `tool_list_f275.rs` C5-A (the
+  first list is main's 11, then `read_feed`, `check_case_mesh`, `preview_mesh`, `list_meshes`, `runner_config`),
+  `project_w48f.rs` F2 (the first list is exactly the 16 read-class project tools, no exception), the Studio unit test
+  (`claude.spec.ts`, 16) and the e2e disclosure (`16 allowed, everything else denied`). An existing allow-list file is not
+  changed. The README's list says 16.

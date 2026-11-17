@@ -93,10 +93,9 @@ fn f2_tool_names_pass_the_allow_list_rules() {
         .iter()
         .filter(|t| t["_meta"]["rcfd/access"] == "read" && !plain.iter().any(|p| t["name"] == p.as_str()))
         .map(|t| t["name"].as_str().unwrap())
-        // ADR 0733 (restated): runner_config is a read tool not on the first allow-list (not asked; as ADR 0188 Q6 (a))
-        .filter(|n| *n != "runner_config")
         .collect();
-    assert_eq!(read.len(), 15);
+    // ADR 0733 (the maintainer, 2026-11-17): runner_config is on the first allow-list too
+    assert_eq!(read.len(), 16);
     assert_eq!(read, PROJECT_READ_TOOLS.into_iter().collect::<BTreeSet<_>>());
     eprintln!(
         "F2: {} tools x 2 forms valid, longest {longest} characters; plugin '{plugin_name}', server '{server_name}', app-owned '{PINNED_SERVER}'",

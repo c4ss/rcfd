@@ -281,12 +281,19 @@ fn c5a_allow_list_has_the_read_tools_and_old_files_stay() {
         "read_project_file",
         "wait_run",
     ];
-    // a new project's first list: main's 11 in their order, then the four (the set is checked against the live list by
+    // a new project's first list: main's 11 in their order, then the five (ADR 0733: runner_config, the maintainer,
+    // 2026-11-17) (the set is checked against the live list by
     // project_w48f.rs F2)
     let first = AllowList::project_initial();
     let want: Vec<AllowRule> = MAIN
         .iter()
-        .chain(&["read_feed", "check_case_mesh", "preview_mesh", "list_meshes"])
+        .chain(&[
+            "read_feed",
+            "check_case_mesh",
+            "preview_mesh",
+            "list_meshes",
+            "runner_config",
+        ])
         .map(|t| AllowRule::Tool(format!("mcp__{PINNED_SERVER}__{t}")))
         .collect();
     assert_eq!(first.rules(), &want[..]);
