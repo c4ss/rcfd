@@ -16214,17 +16214,29 @@ fixed by the item's registration ADR before any code.
     start of the local modes). ADR 0723 shows with the warm start that rung 5 lies on the same local root as the
     continued branch and that the branch folds at a 2.17e-4. The end at 1.65e-4 came from the plain iteration from alpha
     = 0 failing at isolated regular states of that root, and the inference of another root is withdrawn.
-- [ ] **F-797** The arc-length driver from a given state under prescribed-displacement loading
+- [~] **F-797** The arc-length driver from a given state under prescribed-displacement loading
   - depends on: F-789
   - acceptance: Every limit not stated here is registered in the ADR before the run. A library opt-in, off by default,
     that starts the arc-length trace of ADR 0480 from a given converged state and increment with the prescribed values
     scaled by the load factor and their load column in the controlled correction; a closed-form control under a
     prescribed displacement through a limit point and ADR 0711's bordered trace of the 16^3 punch branch reproduced;
     baseline_hashes and the default-path bits unchanged.
-  - note: Follow-up of F-789 (ADR 0711, 2026-11-16). Lead (2026-11-17): ADR 0718 finds no fold at the end of the ADR
-    0711 trace (a breakdown of element 3720's local iteration from alpha = 0); F-797 was recommended only if a real fold
-    appears, so it waits on F-841. Lead (2026-11-17): ADR 0723 finds a real fold at a 2.17e-4 (lambda 0.95847209), so
-    the condition above is met.
+  - note: F-797 (ADR 0726, 2026-11-17): a library opt-in, arclength::trace_from with PathStart, starts the arc-length
+    trace of ADR 0480 from a given converged state, its committed element states and the increment that led to it, with
+    the prescribed values (the model's and the list) scaled by the load factor after every iteration and their load
+    column f_F - K_Fp v in the controlled correction (LoadFactorControl::prescribed_load, default false; trace unchanged
+    and still refusing non-zero prescribed values; indefinite_retry, indefinite_tangent and the other refusals
+    unchanged). Closed-form control: ADR 0480's two-bar truss with a soft series bar whose far end is prescribed, a
+    snap-back under a prescribed displacement traced through both limit points (lambda within 1.0e-13 of the closed form
+    over 126 points, the extrema within 9e-5, the inertia 0, 1, 0); a restart from a converged point with its increment
+    reproduces the continuing trace bit for bit, and trace equals trace_from bit for bit at zero prescribed values. On
+    rule L's 16^3 punch branch ADR 0711's bordered rungs are rebuilt to 3e-13 and the arc-length trace from the state at
+    0.9645 stays on the branch (nu = 1) and agrees with the bordered Newton to 5.3e-10 in lambda at 16 points; at 13
+    further points the bordered reference itself fails in element 3720 (plain local modes), the constraint measure
+    missed its limit on arcs shrunk to 6e-11 (2.6e-6 > 1e-10, its rounding), and the trace is lost at a 2.058e-4, lambda
+    0.958535, short of rung 5 and of ADR 0723's fold, in the same local breakdown. baseline_hashes passes, default bits
+    unchanged, five of five mutations caught, no amendment. Partial: the 16^3 reproduction is incomplete. Follow-up
+    F-847 (The arc-length trace of rule L's 16^3 punch branch through its fold on the warm model).
 - [ ] **F-798** Hinged cylindrical roof of thickness 6.35 through its snap-back against the published table
   - depends on: F-610
   - acceptance: Every limit not stated here is registered in the ADR before the run. The tabulated path of the isotropic
@@ -16364,3 +16376,11 @@ fixed by the item's registration ADR before any code.
     change of each recorded measure against a registered tolerance, every solve whose outcome changes, and the committed
     element states through the save and restart path; the default bits unchanged.
   - note: Follow-up of F-844 (ADR 0725, 2026-11-16).
+- [ ] **F-847** The arc-length trace of rule L's 16^3 punch branch through its fold on the warm model
+  - depends on: F-797, F-841
+  - acceptance: Every limit not stated here is registered in the ADR before the run. arclength::trace_from from ADR
+    0711's state at 0.9645 on the model with the warm start of the incompatible modes (ADR 0660 D1), the committed
+    element states carried by the driver, through ADR 0723's fold (a ~ 2.170e-4) to a registered cap: the fold read from
+    the load factor and the inertia against ADR 0723's estimate, the states against a bordered reference on the warm
+    model, the constraint measured with a floor for short arcs; the default bits unchanged.
+  - note: Follow-up of F-797 (ADR 0726, 2026-11-16).
