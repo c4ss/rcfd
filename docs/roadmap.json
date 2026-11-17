@@ -7349,9 +7349,9 @@
     "deps": [
       "F-722"
     ],
-    "status": "todo",
+    "status": "partial",
     "acceptance": "Every limit not stated here is registered in the ADR before the run. The camber_seam_h C-grid (or a new opt-in construction beside it, camber_seam_h unchanged in bits on every existing case) builds ComputerFan::rom_reference() blade 0 at the ADR 0118 s4 specs with no folded cell and registered non-orthogonality, skewness and aspect limits, and the ADR 0079 and ADR 0083 cases keep their results; the h_slit mesh of the reference is measured against the same limits.",
-    "note": "Follow-up of F-722 (ADR 0643, 2026-11-16)."
+    "note": "Follow-up of F-722 (ADR 0643 questions 1 and 2). ADR 0692, 2026-11-17. PARTIAL (the non-orthogonality and skewness limits missed). Cause of the camber_seam_h fold on the reference located before the design: with the axial front edge every suction-side nose target lies on the pressure side of the extended camber line once front_gap tan(stagger) exceeds the corner offset (at every front_gap and n_nose), and the pursuit lines turn by up to the stagger after the stack. New opt-in construction S beside it, CGridOptions::camber_seam_s_construction() = camber_seam_h + camber_front (front edge front_gap chords along the extended leading-edge camber line, centre line straight to it and turning axial upstream) + straight_lines (straight segments from the stack edge to the targets, first cell stretched by 1/cos) + no radial filter (amendment 1: the filter folds the first free rows at the mid-span kink of the station distribution); no case value. ComputerFan::rom_reference() blade 0 at the ADR 0118 s4 specs: 12841 cells, no folded cell (all 100096 corner Jacobians of the C and F hexes of one sign, min volume 2.7e-13 m^3), periodic, aspect 525.6 (limit 1000); MISSED 86.97 deg (limit 85) and skewness 7.43 (limit 4.0), on 36 and 12 faces at the stack edge of three wake lines next to the trailing edge, diagnosed to the first-cell stretch in the coarse turning wake (a mutation without it measured 84.69 deg / 3.24). h_slit on the reference against the same limits: 85.37 deg and 16.7 missed, 827 met. camber_seam_h unchanged in bits (the cgrid_w35d B1 hashes of pursuit, E, G and H; its hash on the default ComputerFan s4 equal to the base's) and the ADR 0079 / 0083 case tests pass (p1_p8, c1, control_range, r_g_out_of_range, fan01_p10_w36d c2, fan_design_w46a s4, f722 a5 met limits); baseline_hashes pass. S also builds the default ComputerFan (82.9 deg, H 87.9), blade B and FAN-01-C. Negative controls: camber_seam_h refuses the reference with the ADR 0643 message; H with either field alone folds. Four of six mutations caught (the nose-region straight extension and the first-cell stretch are not seen by a check). Follow-up F-777 (construction S without the first-cell stretch on strongly staggered blades). Follow-up F-778 (case value camber_seam_s for mesh.fan.c_grid_construction)."
   },
   {
     "id": "F-727",
@@ -7906,5 +7906,27 @@
     "status": "todo",
     "acceptance": "Every limit not stated here is registered in the ADR before the run. lessons drops a hypothesis whose latest drawn record, redone consistently by drawn_record_problems with the caller's model, did not reproduce, and reports the number of drawn checks per hypothesis; on synthetic ledgers an impostor caught by a drawn check gives 0 rows and an honest one keeps its row; ledgers without drawn records give the lessons of ADR 0624 bit for bit; every ADR 0624, ADR 0662 and ADR 0693 check keeps its result.",
     "note": "Follow-up of F-745 (ADR 0693, 2026-11-16)."
+  },
+  {
+    "id": "F-777",
+    "title": "construction S without the first-cell stretch on strongly staggered blades",
+    "phase": 9,
+    "deps": [
+      "F-726"
+    ],
+    "status": "todo",
+    "acceptance": "Every limit not stated here is registered in the ADR before the run. Construction S with the first free cell of the wake lines (or of every line) at the next stack height builds ComputerFan::rom_reference() blade 0 at the ADR 0118 s4 specs and a second strongly staggered blade (outer stagger at least 75 deg) with no folded cell within 85 deg non-orthogonality, skewness 4.0 and aspect 1000 (the reference's 84.69 deg / 3.24 from an ADR 0692 mutation disclosed as already seen), a registered front_gap and n_nose scan of S inside the camber_seam range builds a registered fraction, and camber_seam_h is unchanged in bits.",
+    "note": "Follow-up of F-726 (ADR 0692, 2026-11-16)."
+  },
+  {
+    "id": "F-778",
+    "title": "case value camber_seam_s for mesh.fan.c_grid_construction",
+    "phase": 9,
+    "deps": [
+      "F-726"
+    ],
+    "status": "todo",
+    "acceptance": "Every limit not stated here is registered in the ADR before the run. A fan case with c_grid_construction = camber_seam_s builds the mesh of CGridOptions::camber_seam_s_construction() bit for bit, and FvGeometry, check_mesh and the rules accept it on the reference fan; the schema golden is updated with the maintainer's approval; existing values and baseline hashes unchanged.",
+    "note": "Follow-up of F-726 (ADR 0692, 2026-11-16). NEEDS USER: schema golden change (case value)."
   }
 ]
