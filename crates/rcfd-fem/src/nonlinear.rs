@@ -1944,6 +1944,8 @@ impl Problem<'_> {
         };
         // ADR 0619 D1: the residual of each iterate and whether it was within the rounding bound (only with the opt-in).
         let mut floor: Vec<(f64, bool)> = Vec::new();
+        // ADR 0726 D1: a control with the prescribed values scaled by its load factor (read once per attempt).
+        let prescribed_load = control.as_deref().is_some_and(|c| c.prescribed_load());
         for k in 0..=o.max_iterations {
             // The trial states: a material with history updates them, always from the committed states (ADR 0475 D3);
             // the linear material has none (D5).
@@ -2128,6 +2130,13 @@ impl Problem<'_> {
                         None
                     };
                     let f = f_lambda.as_deref().unwrap_or(&self.f);
+                    // ADR 0726 D1: with the prescribed values scaled by the load factor, their column `-K_Fp v`.
+                    let column = if prescribed_load {
+                        Some(prescribed_load_column(&kt, f, &self.fixed))
+                    } else {
+                        None
+                    };
+                    let f = column.as_deref().unwrap_or(f);
                     let (du, rhs, dl) = controlled_correction(&sys, f, k, &dofs, c, o.unsymmetric)?;
                     lt += dl;
                     rhs_control = Some(rhs);
@@ -2183,7 +2192,8 @@ impl Problem<'_> {
                     u[q] += d;
                 }
             }
-            if k == 0 {
+            // ADR 0726 D1: with the prescribed values scaled by the control's load factor, after every iteration.
+            if k == 0 || prescribed_load {
                 for &(eq, v) in &self.fixed {
                     u[eq] = lt * v;
                 }
@@ -2694,6 +2704,37 @@ pub(crate) trait LoadFactorControl {
     fn contribution_load(&self) -> bool {
         false
     }
+    /// Whether the prescribed values are those at load 1 scaled by the control's load factor (ADR 0726 D1): the load
+    /// direction then carries their column `-K_Fp v` and the prescribed equations follow the load factor after every
+    /// iteration; `false`: they stay at their values after iteration 0.
+    fn prescribed_load(&self) -> bool {
+        false
+    }
+}
+
+/// The load column of the controlled correction with the prescribed values `fixed` (`(eq, v)`, `v` at load 1) scaled by
+/// the load factor (ADR 0726 D1): `f_i - sum_{j fixed} k_ij v_j` on the free rows, formed as [`reduce`] forms its
+/// right-hand side; the prescribed rows keep `f`.
+fn prescribed_load_column(kt: &CsrMatrix, f: &[f64], fixed: &[(usize, f64)]) -> Vec<f64> {
+    let n = f.len();
+    let mut g = vec![0.0; n];
+    let mut is_fixed = vec![false; n];
+    for &(eq, v) in fixed {
+        is_fixed[eq] = true;
+        g[eq] = v;
+    }
+    let mut q = f.to_vec();
+    for i in (0..n).filter(|&i| !is_fixed[i]) {
+        let mut b = f[i];
+        for p in kt.row_ptr[i]..kt.row_ptr[i + 1] {
+            let j = kt.col[p];
+            if is_fixed[j] {
+                b -= kt.val[p] * g[j];
+            }
+        }
+        q[i] = b;
+    }
+    q
 }
 
 /// The controlled correction (ADR 0480 D4): the reduced tangent factored as indefinite (a pivot `|d| <= PIVOT_TOLERANCE
