@@ -402,6 +402,19 @@ export const STUDIO_COMMANDS: readonly StudioCommand[] = [
     mcp: null,
     note: CLAUDE_NOTE,
   },
+  {
+    id: 'claude.undo_allow',
+    title: 'Undo the last allowed rule',
+    description:
+      'Take the rule last added by “Allow this from now on” out of the project’s .rcfd/claude-allow.json again; a file another writer changed since is not overwritten.',
+    group: 'Claude Code',
+    effect: 'change',
+    params: [],
+    engine: 'the main process rewrites .rcfd/claude-allow.json (write, then rename), if it is still as the Studio left it',
+    cli: null,
+    mcp: null,
+    note: 'The allow-list file is the project’s own, edited by hand or by this command; the engine has no entry point for Claude Code’s allow-list (F-814).',
+  },
 
   // ---- the theme (F-818)
   theme('view.theme_light', 'Theme: Light', 'Draw the Studio in its light theme (DESIGN.md, the default).'),

@@ -323,6 +323,7 @@ test('the run workspace on a converged run, the field view’s keys, its derived
   await expect(page.locator('.ws')).toHaveAttribute('data-run', RE100, { timeout: 20_000 });
   await expect(page.locator('.fv-frame[data-ready]')).toHaveCount(1, { timeout: 30_000 });
   await expect(page.locator('.fv-derived')).toBeVisible({ timeout: 20_000 });
+  await expect(page.getByRole('heading', { level: 1 })).toHaveText(`Run workspace: ${RE100}`);
   await surface('workspace', '.ws', { exclude: ['.fv-derived', '.wk'] });
   await surface('derived-controls', '.fv-derived');
 
@@ -362,6 +363,7 @@ test('the run workspace on a converged run, the field view’s keys, its derived
   await page.keyboard.press('Home');
   for (let i = 0; i < 7; i++) await page.keyboard.press('ArrowRight');
   await expect(page.locator('.cmp-view[data-view="b"] .fv-frame[data-ready]')).toHaveCount(1, { timeout: 30_000 });
+  await expect(page.getByRole('heading', { level: 1 })).toHaveText(`Compare: ${RE100} with ${RE400}`);
   await surface('compare', '.ws', { exclude: ['.fv-derived', '.wk'] });
   await tabTo(toggle);
   await page.keyboard.press('Space');
@@ -381,6 +383,7 @@ test('the case editor on a case file, and its undo controls', async () => {
   await page.keyboard.press('Enter');
   await expect(page.getByRole('heading', { level: 2, name: 'cases/cavity-re100.toml', exact: true })).toBeVisible({ timeout: 30_000 });
   await expect(page.getByRole('heading', { level: 2, name: 'Set in this case' })).toBeVisible({ timeout: 20_000 });
+  await expect(page.getByRole('heading', { level: 1 })).toHaveText('Case editor: cavity-re100.toml');
   await surface('case-editor', '.st-page', { exclude: ['.hi-controls', '.wk'] });
   await surface('undo', '.hi-controls', { exclude: ['.hi-panel'] });
 });
@@ -630,4 +633,8 @@ test('every surface was walked', () => {
   // axe-core ran on every walked surface: home, case editor, runs, run workspace, compare, provenance, the palette and
   // the decision panel among them
   expect(Object.keys(axeReport).sort()).toEqual(walked.sort());
+  // F-816 (the maintainer, 2026-11-17): a readers-only h1 on the run workspace, compare, the case editor and undo
+  for (const id of ['workspace', 'compare', 'case-editor', 'undo']) {
+    expect(axeReport[id]!.other.map((f) => f.rule), id).not.toContain('page-has-heading-one');
+  }
 });

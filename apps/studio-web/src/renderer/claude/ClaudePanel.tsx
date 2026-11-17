@@ -4,7 +4,11 @@
 // Everything shown comes in the state the main process pushes on the Claude port (window.studioClaude through ./door.ts,
 // src/shared/claude.ts); the panel keeps only what is being typed. The rules of G11 are the main process's: this panel
 // shows them (a read-only session says why, the one writer, the allow-list) and never works round them.
-import { useEffect, useMemo, useRef, useState, type KeyboardEvent, type ReactNode } from 'react';
+//
+// "Allow this from now on" (the maintainer, 2026-11-17): a denied call with a suggested rule offers it; a confirm names
+// the exact rule (F-829's decision panel, keeping it denied is the safe choice), and the main process adds it to the
+// project's allow-list file. The last addition can be undone here and from the palette (claude.undo_allow).
+import { lazy, Suspense, useEffect, useMemo, useRef, useState, type KeyboardEvent, type ReactNode } from 'react';
 import { TextArea, TextField } from 'react-aria-components';
 import type { ClaudeError, ClaudeState, ClaudeView, FeedItem, SessionRow, TurnView } from '../../shared/claude.js';
 import { FLOOR_CAVEAT } from '../../shared/claude.js';
@@ -16,6 +20,21 @@ import { fileOpensIn, findRefs, paragraphs, type Known, type Ref } from './links
 import { caseHash } from '../case/hash.js';
 import { isCaseFile } from '../project/HomeExtras.js';
 import './claude.css';
+
+const DecisionPanel = lazy(() => import('../history/DecisionPanel.js').then((m) => ({ default: m.DecisionPanel })));
+
+/** What a denied call's entry needs to offer its rule, and to take the last added one out again. */
+interface AllowControl {
+  /** The rules in use now (flag values). */
+  readonly allowed: ReadonlySet<string>;
+  /** The rule this Studio last added, while it can be undone. */
+  readonly undo: string | null;
+  /** The last undo was refused because another writer changed the file: Undo anyway is offered. */
+  readonly undoConflict: boolean;
+  readonly busy: boolean;
+  ask(rule: string): void;
+  undoIt(force: boolean): void;
+}
 
 export interface ClaudePanelProps {
   /** The open project as the engine answered it: its runs and files are what a reply can link to. */
@@ -98,11 +117,40 @@ function PanelBody({
   onOpenFile: (path: string) => void;
 }) {
   const [error, setError] = useState<ClaudeError | null>(null);
+  const [asking, setAsking] = useState<string | null>(null);
+  const [allowBusy, setAllowBusy] = useState(false);
+  const [undoConflict, setUndoConflict] = useState(false);
   const selectedRow = view.selected === null ? null : (view.sessions.find((s) => s.id === view.selected) ?? null);
   const busy = view.writer !== null;
   const select = (id: string | null) => {
     setError(null);
     void claudeActions.select(id).then((r) => setError(r.ok ? null : r.error));
+  };
+  const allowRule = (rule: string) => {
+    setAsking(null);
+    setError(null);
+    setAllowBusy(true);
+    void claudeActions.allow(rule, view.allow.hash).then((r) => {
+      setAllowBusy(false);
+      setUndoConflict(false);
+      setError(r.ok ? null : r.error);
+    });
+  };
+  const allow: AllowControl = {
+    allowed: new Set(view.allow.rules),
+    undo: view.allow.undo,
+    undoConflict,
+    busy: allowBusy,
+    ask: (rule) => setAsking(rule),
+    undoIt: (force) => {
+      setError(null);
+      setAllowBusy(true);
+      void claudeActions.undoAllow(force).then((r) => {
+        setAllowBusy(false);
+        setUndoConflict(!r.ok && r.error.code === 'stale');
+        setError(r.ok ? null : r.error);
+      });
+    },
   };
   return (
     <>
@@ -113,11 +161,29 @@ function PanelBody({
         </div>
       )}
       <Sessions view={view} busy={busy} onSelect={select} />
-      <Feed view={view} row={selectedRow} known={known} onOpenRun={onOpenRun} onOpenFile={onOpenFile} />
+      <Feed view={view} row={selectedRow} known={known} onOpenRun={onOpenRun} onOpenFile={onOpenFile} allow={allow} />
       <Trust view={view} onError={setError} />
       <Approvals view={view} />
       <TurnLine turn={view.turn} error={error} version={view.versionWarning} />
       <Composer state={state} view={view} row={selectedRow} onError={setError} />
+      {asking !== null && (
+        <Suspense fallback={null}>
+          <DecisionPanel
+            title={`Allow ${asking} from now on?`}
+            onCancel={() => setAsking(null)}
+            choices={[
+              { label: 'Keep it denied', safe: true, onPress: () => setAsking(null) },
+              { label: 'Allow from now on', onPress: () => allowRule(asking) },
+            ]}
+          >
+            <p>
+              The rule <span className="cc-rule" data-words="data">{asking}</span> is added to {view.allow.file} of this project. From the next message on,
+              Claude Code may make this call in every chat of this folder without asking.
+            </p>
+            <p>Undo takes it out again (in the denied call, or Undo the last allowed rule in the palette).</p>
+          </DecisionPanel>
+        </Suspense>
+      )}
     </>
   );
 }
@@ -212,18 +278,23 @@ function Feed({
   known,
   onOpenRun,
   onOpenFile,
+  allow,
 }: {
   view: ClaudeView;
   row: SessionRow | null;
   known: Known;
   onOpenRun: (id: string) => void;
   onOpenFile: (path: string) => void;
+  allow: AllowControl;
 }) {
   const end = useRef<HTMLLIElement | null>(null);
   const last = view.feed[view.feed.length - 1];
   useEffect(() => {
     end.current?.scrollIntoView({ block: 'end' });
   }, [view.feed.length, last?.text.length]);
+  // a rule denied more than once is offered once, on its latest denial
+  const offerAt = new Map<string, string>();
+  for (const i of view.feed) if (i.kind === 'denied' && i.suggestion) offerAt.set(i.suggestion, i.key);
   const title =
     view.selected === null ? 'New chat' : `Transcript of ${row?.name ?? row?.title ?? `session ${shortId(view.selected)}`}`;
   return (
@@ -245,7 +316,7 @@ function Feed({
             </li>
           )}
           {view.feed.map((i) => (
-            <FeedEntry key={i.key} item={i} known={known} onOpenRun={onOpenRun} onOpenFile={onOpenFile} />
+            <FeedEntry key={i.key} item={i} known={known} onOpenRun={onOpenRun} onOpenFile={onOpenFile} allow={allow} offer={i.suggestion !== null && offerAt.get(i.suggestion) === i.key} />
           ))}
           <li ref={end} className="cc-feed-end" aria-hidden="true" />
         </ol>
@@ -259,7 +330,22 @@ function Feed({
   );
 }
 
-function FeedEntry({ item, known, onOpenRun, onOpenFile }: { item: FeedItem; known: Known; onOpenRun: (id: string) => void; onOpenFile: (path: string) => void }) {
+function FeedEntry({
+  item,
+  known,
+  onOpenRun,
+  onOpenFile,
+  allow,
+  offer,
+}: {
+  item: FeedItem;
+  known: Known;
+  onOpenRun: (id: string) => void;
+  onOpenFile: (path: string) => void;
+  allow: AllowControl;
+  /** This denial carries the offer of its rule (the latest denial of that rule). */
+  offer: boolean;
+}) {
   switch (item.kind) {
     case 'user':
       return (
@@ -298,9 +384,30 @@ function FeedEntry({ item, known, onOpenRun, onOpenFile }: { item: FeedItem; kno
           <span className="cc-event-word">Not allowed</span> {item.text}
           <span className="cc-event-detail">
             {item.suggestion
-              ? ` The allow-list rule ${item.suggestion} would allow it. The Studio adds no rules; to allow it, add the rule to the project’s .rcfd/claude-allow.json and confirm the change here.`
+              ? allow.allowed.has(item.suggestion)
+                ? ` The allow-list rule ${item.suggestion} allows it from now on.`
+                : ` The allow-list rule ${item.suggestion} would allow it.`
               : ' No narrow rule would allow exactly this call, so the Studio suggests none.'}
           </span>
+          {offer && item.suggestion && !allow.allowed.has(item.suggestion) && (
+            <span className="cc-event-actions">
+              <Button variant="chip" isDisabled={allow.busy} onPress={() => allow.ask(item.suggestion!)} aria-label={`Allow this from now on: ${item.suggestion}`}>
+                Allow this from now on
+              </Button>
+            </span>
+          )}
+          {offer && item.suggestion && allow.undo === item.suggestion && (
+            <span className="cc-event-actions">
+              <Button variant="chip" isDisabled={allow.busy} onPress={() => allow.undoIt(false)} aria-label={`Undo: take ${item.suggestion} out of the allow-list`}>
+                Undo
+              </Button>
+              {allow.undoConflict && (
+                <Button variant="chip" isDisabled={allow.busy} onPress={() => allow.undoIt(true)}>
+                  Undo anyway
+                </Button>
+              )}
+            </span>
+          )}
         </li>
       );
     case 'note':

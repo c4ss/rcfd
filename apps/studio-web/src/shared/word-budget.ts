@@ -65,7 +65,8 @@ export const WORD_BUDGETS = {
   decision: { what: 'decision panel', rest: 'Close session asked', budget: 0 },
   progress: { what: 'progress rows', rest: 'a project opening that lasts', budget: 3 },
   // F-818 (2026-11-17): the Studio's settings page the maintainer asked for (Q-818-5), set at its count when it was
-  // built (the brand, the page's name, the Theme section's name and its four choices); for the maintainer to confirm
+  // built (the brand, the page's name, the Theme section's name and its four choices); approved by the maintainer
+  // 2026-11-17 (ADR 0801 Addendum 20)
   'studio-settings': { what: 'Studio settings', rest: 'opened from Ctrl+, with no project open, the theme Light', budget: 9 },
 } as const satisfies Readonly<Record<string, SurfaceBudget>>;
 

@@ -42,8 +42,8 @@
   align-items: center;
   gap: var(--space-md);
   padding: 0 var(--space-xs) 0 var(--space-lg);
-  /* meadow (DESIGN.md: the Claude Code head); a role for it awaits the maintainer (tests/unit/tokens.spec.ts) */
-  background: var(--color-meadow);
+  /* DESIGN.md's claude-head role (meadow in every theme) */
+  background: var(--role-claude-head);
   border-bottom: var(--line-rule);
 }
 .cc-dot {
@@ -286,6 +286,17 @@
 }
 .cc-event--denied {
   color: var(--role-text);
+}
+/* F-814: "Allow this from now on" and its Undo, only on a denied call (G22: nothing at rest) */
+.cc-event-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-sm);
+  margin-top: var(--space-xs);
+}
+.cc-rule {
+  overflow-wrap: anywhere;
+  font-weight: var(--font-weight-bold);
 }
 
 /* ---- control files, approvals, the last turn --------------------------------------------------------------------- */

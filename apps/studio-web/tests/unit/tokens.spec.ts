@@ -74,6 +74,8 @@ const sidecar = JSON.parse(read(repo, '.impeccable', 'design.json')) as {
   components: Array<{ name: string; css: string }>;
 };
 const ext = sidecar.extensions;
+/** The colour roles DESIGN.md names in its frontmatter beside the palette (role: the palette colour it is). */
+const FRONTMATTER_ROLES: Readonly<Record<string, keyof typeof palette>> = { 'claude-head': 'meadow' };
 const named = <T extends { name: string }>(list: T[], name: string): T => {
   const hit = list.find((x) => x.name === name);
   if (!hit) throw new Error(`design.json has no ${name}`);
@@ -118,7 +120,9 @@ test.describe('tokens.css and tokens.ts', () => {
 
 test.describe('tokens.ts holds the values of DESIGN.md', () => {
   test('palette: the frontmatter colours, the sidecar canonical values, and the footer tint from the prose', () => {
-    const colors = design['colors'] as Record<string, string>;
+    const all = design['colors'] as Record<string, string>;
+    // the frontmatter's colour roles (F-814: claude-head) are checked below, against tokens.ts's roles
+    const colors = Object.fromEntries(Object.entries(all).filter(([k]) => !(k in FRONTMATTER_ROLES)));
     const fromPalette = Object.fromEntries(Object.entries(palette).filter(([k]) => k !== 'ink-tint'));
     expect(fromPalette).toEqual(colors);
     for (const [k, v] of Object.entries(ext.colorMeta)) expect(palette[k as keyof typeof palette], k).toBe(v.canonical);
@@ -130,9 +134,21 @@ test.describe('tokens.ts holds the values of DESIGN.md', () => {
     expect(Object.keys(t).sort()).toEqual(['contrast', 'dark']);
     for (const name of ['dark', 'contrast'] as const) {
       const fromTheme = Object.fromEntries(Object.entries(themes[name]).filter(([k]) => k !== 'ink-tint'));
-      expect(fromTheme, name).toEqual(t[name]!.colors);
+      const colors = Object.fromEntries(Object.entries(t[name]!.colors).filter(([k]) => !(k in FRONTMATTER_ROLES)));
+      expect(fromTheme, name).toEqual(colors);
     }
     expect(designMd).toContain(`#${themes.dark['ink-tint'].slice(1)} in Dark and ${themes.contrast['ink-tint']} in High contrast`);
+  });
+
+  test('colour roles of the frontmatter (F-814, approved 2026-11-17): each is its palette colour in every theme', () => {
+    const t = design['themes'] as Record<string, { colors: Record<string, string> }>;
+    const light = design['colors'] as Record<string, string>;
+    for (const [name, colour] of Object.entries(FRONTMATTER_ROLES)) {
+      expect(role[name as keyof typeof role], name).toBe(colour);
+      expect(light[name], name).toBe(palette[colour]);
+      for (const theme of ['dark', 'contrast'] as const) expect(t[theme]!.colors[name], `${theme} ${name}`).toBe(themes[theme][colour]);
+      expect(designMd, name).toContain(`(${name})`);
+    }
   });
 
   test('type ramp: family, sizes, weights, line heights, tracking and tabular figures', () => {
@@ -288,7 +304,7 @@ test.describe('focus, caret, fields, tabs, selection and pictograms are what DES
         .map(([k]) => k)
         .sort();
     expect(users('orange')).toEqual(['band-live', 'caret', 'focus-ring', 'slider-thumb-active']);
-    expect(users('meadow')).toEqual(['band-converged', 'sub-tab-selected', 'switch-on']);
+    expect(users('meadow')).toEqual(['band-converged', 'claude-head', 'sub-tab-selected', 'switch-on']);
     expect(users('sky')).toEqual(['band-iterating', 'header-band', 'selection-bg']);
     expect(users('fail')).toEqual(['band-failed', 'state-failed', 'text-fail']);
     expect(users('fail-wash')).toEqual(['row-failed']);

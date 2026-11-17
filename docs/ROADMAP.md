@@ -16528,17 +16528,22 @@ Generated from `docs/studio-guardrails.md`, `PRODUCT.md` and `DESIGN.md` ([ADR 0
     view and Run per case on the home; start_run/pause_run/resume_run/cancel_run on a writable project server (shared
     with the F-812 case editor), rcfd-runner ensure to start the runner; confirmations name what is lost; P2 met for
     every action (<= 19.4 ms to the painted frame).
-- [~] **F-808** Electron Studio: field viewport on three.js WebGPU
+- [x] **F-808** Electron Studio: field viewport on three.js WebGPU
   - depends on: F-804, F-802
   - acceptance: Mesh and fields on surfaces drawn by three.js WebGPURenderer with a TSL material that colours from the
     raw scalar through a lookup table, with the WebGL2 fallback; the colour of every vertex equals rcfd-render's colour
-    map for the same value (G3, a test over the full range and the end points); the legend drawn from the same table;
-    hover shows the value at the cursor; a mesh-grid toggle; P7 and P8 met; a view-and-report step.
+    map for the same value at the 256 points of the 256-entry table and at and beyond both ends of the range, and is
+    within 3/255 per channel of it elsewhere (the maintainer's answer to F808-D1, option (a), 2026-11-17; G3, a test
+    over the full range and the end points); the legend drawn from the same table; hover shows the value at the cursor;
+    a mesh-grid toggle; P7 and P8 met; a view-and-report step.
   - note: ADR 0800. Traces: G3, G9 (P7, P8); DESIGN Field view, Named Rules (Data Owns the Field). Partial 2026-11-16
     (ADR 0801 addendum 5): field viewport src/renderer/field on WebGPU (WebGL2 fallback tested), dev route #/dev/field;
     P7 met by R2 (median 71 ms; R1 2.0 s), P8 met (p99 frame 4.4 ms at 1e6 triangles); hover value bit-exact. Open: a
     256-entry table matches rcfd-render exactly only at its 256 points and within 3/255 elsewhere (F808-D1, maintainer:
-    accept or switch to exact shader evaluation); view-and-report pending.
+    accept or switch to exact shader evaluation); view-and-report pending. Done 2026-11-17 (ADR 0801 Addendum 20): the
+    maintainer answered F808-D1 with (a): the 256-entry table, exact at its 256 points and at and beyond both ends,
+    within 3/255 per channel elsewhere, is written into the acceptance; with P7 and P8 met and the screenshots in
+    test-results-visual/f808 for the view-and-report (the precedent of F-810 and F-812), the acceptance is met.
 - [~] **F-809** Electron Studio: derived pictures (iso-surfaces, streamlines, cut planes, vectors)
   - depends on: F-808
   - acceptance: Each derived picture computed by the engine (rcfd-render or a registered opt-in service method) or, if
@@ -16609,7 +16614,18 @@ Generated from `docs/studio-guardrails.md`, `PRODUCT.md` and `DESIGN.md` ([ADR 0
     2026-11-17 (ADR 0801 Addendum 18): a case file named in a reply opens in the case editor (F-812); a data file, mesh
     or note keeps the filtered Home; unit and e2e tests. Left: claude-head colour role and writing
     .rcfd/claude-allow.json wait for the maintainer; no engine entry point for session discovery (TypeScript stopgap;
-    E-814 of ADR 0801's engine follow-ups).
+    E-814 of ADR 0801's engine follow-ups). 2026-11-17 (ADR 0801 Addendum 20, the maintainer's approval): the
+    claude-head colour role (DESIGN.md frontmatter, each theme, the colour-job text; tokens.ts role claude-head =
+    meadow; claude.css uses it; nothing visible changes); "Allow this from now on" on a denied call with a suggested
+    rule: a confirm (F-829 decision panel, Keep it denied the default) names the exact rule, the main process adds it to
+    .rcfd/claude-allow.json behind the Claude port's op allow-list (allow, undoAllow): only a rule the panel suggested
+    for a denied call it shows, the same validation as the file's rules plus checkArgs, never over a file changed since
+    it was read (hash), write then rename, the folder's confirmation of its control files following the Studio's own
+    write; undone by the panel's Undo or the palette's Undo the last allowed rule (claude.undo_allow), an undo over
+    another writer's change refused with Undo anyway; the turn's denials stay in the feed after the transcript replaces
+    the stream; unit tests and tests/e2e/claude-allow.spec.ts (fake claude). Left: no engine entry point for session
+    discovery (E-814; the TypeScript port of the removed rcfd-claude stands in); whether that meets "through
+    rcfd-claude" is the maintainer's call.
 - [x] **F-815** Electron Studio: compare two runs
   - depends on: F-810
   - acceptance: Two runs side by side or overlaid at the same time and the same colour range, with the difference field
@@ -16633,11 +16649,15 @@ Generated from `docs/studio-guardrails.md`, `PRODUCT.md` and `DESIGN.md` ([ADR 0
     strip keep Tab inside (aria-modal), Play steps at most every 500 ms under reduced motion, live band segment gets an
     ink edge and a 'live' description; manual pass in apps/studio-web/README.md. Own checks instead of axe-core (G5).
     Follow-up 2026-11-17 (maintainer: keep axe-core, no full accessibility work; Tab stays held in open dialogs):
-    axe-core 4.14.0 (dev, MPL-2.0) runs on each of the 16 walked surfaces in tests/e2e/a11y.spec.ts, fails on serious
-    or critical only, color-contrast off, exclusion list (tests/support/axe.ts EXCLUDED) empty; fixed: Claude Code
+    axe-core 4.14.0 (dev, MPL-2.0) runs on each of the 16 walked surfaces in tests/e2e/a11y.spec.ts, fails on serious or
+    critical only, color-contrast off, exclusion list (tests/support/axe.ts EXCLUDED) empty; fixed: Claude Code
     transcript list structure (listitem), Run again name, palette option names (label-content-name-mismatch), palette
     field a combobox over its list (scrollable-region-focusable). Open: the workspace keeps requesting animation frames
-    at rest (743/s after an orbit key), a G9 power question (F-817 Addendum 14 since stopped the idle loop).
+    at rest (743/s after an orbit key), a G9 power question (F-817 Addendum 14 since stopped the idle loop). Follow-up
+    2026-11-17 (ADR 0801 Addendum 20, the maintainer's approval): a readers-only h1 on the run workspace ("Run
+    workspace: <run>"), compare ("Compare: <run> with <run>"), the case editor and its undo controls ("Case editor:
+    <file>"); axe's moderate page-has-heading-one is gone from those four surfaces (a11y.spec.ts checks it); nothing
+    visible and no word budget changed.
 - [~] **F-817** Electron Studio: performance regression bench for the product shell
   - depends on: F-808, F-810
   - acceptance: A script anyone can run that repeats P2, P4, P5, P7, P8 and P10 of docs/studio-guardrails.md G9 against
@@ -16658,23 +16678,23 @@ Generated from `docs/studio-guardrails.md`, `PRODUCT.md` and `DESIGN.md` ([ADR 0
   - depends on: F-802
   - acceptance: A dark variant of every DESIGN.md token that keeps each hue's single job; the field colour maps
     unchanged; DESIGN.md updated with the maintainer's approval.
-  - note: Traces: G8; DESIGN Open. Maintainer 2026-11-17: "theming in general is a good idea so create a dark mode
-    plus one other theme for this". Partial 2026-11-17 (ADR 0801 Addendum 17): built, with the DESIGN.md palettes
-    awaiting the maintainer. Themes are sets of the DESIGN.md colour tokens (tokens.ts themes.light = DESIGN.md, dark,
-    contrast; roles unchanged, so each hue keeps its job) switched by <html data-theme>; the setting Light (default,
-    pixel for pixel unchanged), Dark, High contrast, System is kept in the Studio's user data through
-    theme.get/theme.set of the IPC allow-list (G10), applied at once with no reload, with nativeTheme.themeSource and
-    the window background following (no white flash on a dark start); a theme icon in the header band (no word at
-    rest, G22) and four palette commands (Theme: Light/Dark/High contrast/System). The field colour map and its
-    overlays are unchanged in every theme; the field viewport ground and the plots follow. Second theme: High contrast
-    (light, for bright rooms and projectors). Palettes proposed in docs/design-themes-proposal.md, ready to paste;
-    screenshots in apps/studio-web/test-results-visual/f818/. Done 2026-11-17 (maintainer's answers, Addendum 17):
-    both palettes approved and pasted into DESIGN.md (frontmatter themes, a Themes section; tokens.spec checks them),
-    ink bands light in Dark, orange #c46810, field overlays unthemed; a Studio-wide settings page (#/studio-settings)
-    with Theme as its first section, opened by the palette's Settings (Ctrl+,) and one Settings icon in the header
-    bands, replacing the theme icon; word budget studio-settings 9 and the a11y walk. Candidate settings listed in the
-    ADR, not moved.
-- [~] **F-819** Electron Studio: large meshes and polyhedral fan meshes
+  - note: Traces: G8; DESIGN Open. Maintainer 2026-11-17: "theming in general is a good idea so create a dark mode plus
+    one other theme for this". Partial 2026-11-17 (ADR 0801 Addendum 17): built, with the DESIGN.md palettes awaiting
+    the maintainer. Themes are sets of the DESIGN.md colour tokens (tokens.ts themes.light = DESIGN.md, dark, contrast;
+    roles unchanged, so each hue keeps its job) switched by <html data-theme>; the setting Light (default, pixel for
+    pixel unchanged), Dark, High contrast, System is kept in the Studio's user data through theme.get/theme.set of the
+    IPC allow-list (G10), applied at once with no reload, with nativeTheme.themeSource and the window background
+    following (no white flash on a dark start); a theme icon in the header band (no word at rest, G22) and four palette
+    commands (Theme: Light/Dark/High contrast/System). The field colour map and its overlays are unchanged in every
+    theme; the field viewport ground and the plots follow. Second theme: High contrast (light, for bright rooms and
+    projectors). Palettes proposed in docs/design-themes-proposal.md, ready to paste; screenshots in
+    apps/studio-web/test-results-visual/f818/. Done 2026-11-17 (maintainer's answers, Addendum 17): both palettes
+    approved and pasted into DESIGN.md (frontmatter themes, a Themes section; tokens.spec checks them), ink bands light
+    in Dark, orange #c46810, field overlays unthemed; a Studio-wide settings page (#/studio-settings) with Theme as its
+    first section, opened by the palette's Settings (Ctrl+,) and one Settings icon in the header bands, replacing the
+    theme icon; word budget studio-settings 9 and the a11y walk. Candidate settings listed in the ADR, not moved.
+    2026-11-17 (ADR 0801 Addendum 20): the maintainer approved the studio-settings word budget of 9.
+- [x] **F-819** Electron Studio: large meshes and polyhedral fan meshes
   - depends on: F-808, F-817
   - acceptance: First picture, scrubbing and draw rate measured on a mesh of several million cells and on the FAN-01
     polyhedral mesh with many patches; limits registered before the measurement; any miss stated with its numbers.
@@ -16690,7 +16710,10 @@ Generated from `docs/studio-guardrails.md`, `PRODUCT.md` and `DESIGN.md` ([ADR 0
     launch 1.5-1.8 s to 0.86-0.94 s, all 63 lines met in 3 runs under load. Maintainer's answers 2026-11-17: the first
     open of a store in a launch is judged too (Q-819-1, Q-819b-1): a judged P7 line in npm run bench (first open of the
     1e6 store, R1 or R2, <= 1.5 s) and in measure-large.mjs (per mesh and repeat); a polyhedral FAN-01 mesh is skipped
-    (Q-819-4). Left: the maintainer's view-and-report.
+    (Q-819-4). Left: the maintainer's view-and-report. Done 2026-11-17 (ADR 0801 Addendum 20): the maintainer skipped
+    Q-819b-2 (a hover sweep line) and Q-819b-3 (the gather for compare's difference); the polyhedral FAN-01 mesh was
+    skipped before (Q-819-4); with every registered line met and the results recorded for the view-and-report (the
+    precedent of F-810 and F-812), the acceptance is met.
 - [x] **F-820** Electron Studio: installers, signing and updates
   - depends on: F-801
   - acceptance: Packaged installers for the platforms the maintainer names, signed if the maintainer provides
@@ -16816,7 +16839,9 @@ Generated from `docs/studio-guardrails.md`, `PRODUCT.md` and `DESIGN.md` ([ADR 0
     (Studio): the Runs residual columns, the compared run's residuals, legend ticks, domain size, scale bar, runner
     budgets and home counts have no provenance. Left (engine, E-828a to E-828e of ADR 0801's engine follow-ups):
     run.json records no launch argv or build id; status.json and store time have no unit; a session records no file or
-    journal file; no rerun options; no mesh hash.
+    journal file; no rerun options; no mesh hash. 2026-11-17 (ADR 0801 Addendum 20): the maintainer answered D-L1: the
+    engine records a session's journal (E-828c), the Studio writes none; a session number's reproduce command stays said
+    as not recorded until the engine gives one.
 - [~] **F-829** Electron Studio: undo, safe deletes and edit conflicts
   - depends on: F-827, F-805
   - acceptance: Undo and redo for every edit made through the action layer; deleting a run, result or case is
@@ -16876,8 +16901,12 @@ Generated from `docs/studio-guardrails.md`, `PRODUCT.md` and `DESIGN.md` ([ADR 0
     addendum), no accessible name or palette title changed. Done 2026-11-17 (Addendum 11, maintainer's answers): the
     maintainer approved the 17 budgets, the kept-visible list and moving the G20 shortcut hints into the controls'
     descriptions; BUDGET_STATUS is approved and the budgets are enforced by tests/e2e/word-budget.spec.ts; the Commands
-    button's Ctrl+K moved from its name to its description; screenshots and counts.json in test-results-visual/f833
-    for view-and-report. The proposed DESIGN.md lines are not applied (DESIGN.md is the maintainer's).
+    button's Ctrl+K moved from its name to its description; screenshots and counts.json in test-results-visual/f833 for
+    view-and-report. The proposed DESIGN.md lines are not applied (DESIGN.md is the maintainer's). 2026-11-17 (ADR 0801
+    Addendum 20, the maintainer's approval): four of Addendum 11's proposed DESIGN.md lines applied: an empty state at
+    rest is the "not yet" hatch with its sentence as name and tooltip (The Quiet Rule), every surface has an approved
+    word budget enforced by a test (The Quiet Rule), icon buttons whose name is their tooltip and accessible name
+    (Buttons), a settings row's description, default and range as focus detail (Inputs / Fields).
 - [x] **F-834** Engine tests that went with rcfd-studio, moved to rcfd-workspace
   - depends on: F-449
   - acceptance: The engine behaviour the deleted rcfd-studio tests checked is checked again in
@@ -16937,7 +16966,10 @@ Generated from `docs/studio-guardrails.md`, `PRODUCT.md` and `DESIGN.md` ([ADR 0
     values back, says 'applies at the next runner start', and replaces a file the runner cannot read only on purpose
     (Replace the file); the Studio's copy of the runner's checks and its writer of .rcfd/runner-config.json removed; e2e
     f837.spec.ts budgets test through the engine. Engine needs listed in ADR 0801, "Engine follow-ups of the Studio
-    items" (2026-11-17).
+    items" (2026-11-17). 2026-11-17 (ADR 0801 Addendum 20, the maintainer's approval): the case settings' own Close
+    session asks with the shared save-or-discard prompt (closeGuard) when its session holds case-editor changes not
+    saved, instead of its older loss question (kept for a session with none); the window-close and close-project split
+    and Keep editing as the default are unchanged; e2e close-guard.spec.ts.
 - [x] **F-838** Local-model assistant: keep, port or remove
   - depends on: F-449
   - acceptance: The maintainer decides what becomes of the local-model assistant that only rcfd-gui offered (presets

@@ -10,6 +10,9 @@
 // - tool approvals come from a conservative allow-list passed to claude as `--allowedTools`, under
 //   `--permission-mode dontAsk --permission-prompts none`; nothing passes a bypass or approve-everything flag, and the
 //   main process checks every argument list before it starts claude;
+// - a denied call's suggested rule is added to the project's allow-list file only when the user confirms that exact
+//   rule ("Allow this from now on"), by the main process, never over a file changed since it was read, and the last
+//   addition can be undone (the maintainer, 2026-11-17);
 // - claude is started only by the main process, with the project folder as its working folder. The renderer never names
 //   a program, a flag or a file: it sends the operations below, and the main process checks every message
 //   (src/main/claude/bridge.ts).
@@ -117,6 +120,10 @@ export interface AllowView {
   readonly rules: readonly string[];
   /** Why the file is refused (then no chat is started); null when it is used or absent. */
   readonly error: string | null;
+  /** The SHA-256 (hex) of the file as last read; null when there is no file. `allow` is refused when it differs. */
+  readonly hash: string | null;
+  /** The rule this Studio last added to this folder's file, while `undoAllow` can take it out; null when none. */
+  readonly undo: string | null;
 }
 
 /** A file or link in the folder that changes what `claude -p` runs or reads. */
@@ -189,10 +196,16 @@ export type ClaudeRequest =
   | { readonly op: 'send'; readonly id: number; readonly session: string | null; readonly text: string }
   | { readonly op: 'cancel'; readonly id: number }
   | { readonly op: 'confirm'; readonly id: number; readonly token: string }
-  | { readonly op: 'refresh'; readonly id: number };
+  | { readonly op: 'refresh'; readonly id: number }
+  /** Adds `rule`, the suggestion of a denied call shown in the feed, to the allow-list file that has the hash `base`. */
+  | { readonly op: 'allow'; readonly id: number; readonly rule: string; readonly base: string | null }
+  /** Takes the last added rule out again (puts the file back as it was); `force` even when another writer changed it. */
+  | { readonly op: 'undoAllow'; readonly id: number; readonly force: boolean };
 
 export type ClaudeOp = ClaudeRequest['op'];
-export const CLAUDE_OPS = ['state', 'select', 'send', 'cancel', 'confirm', 'refresh'] as const satisfies readonly ClaudeOp[];
+export const CLAUDE_OPS = ['state', 'select', 'send', 'cancel', 'confirm', 'refresh', 'allow', 'undoAllow'] as const satisfies readonly ClaudeOp[];
+/** The longest rule `allow` takes (characters). */
+export const MAX_RULE_CHARS = 2000;
 
 export interface ClaudeError {
   /**
@@ -239,6 +252,10 @@ export interface ClaudeBridge {
   confirm(token: string): Promise<ClaudeReply<null>>;
   /** Lists the sessions and checks the folder again now. */
   refresh(): Promise<ClaudeReply<null>>;
+  /** Adds a denied call's suggested rule to the project's allow-list file, if the file still has the hash `base`. */
+  allow(rule: string, base: string | null): Promise<ClaudeReply<null>>;
+  /** Takes the rule this Studio last added out of the file again. */
+  undoAllow(force: boolean): Promise<ClaudeReply<null>>;
 }
 
 /** True when `s` is a UUID in the 8-4-4-4-12 hex form (session ids are passed to claude only after this check). */
