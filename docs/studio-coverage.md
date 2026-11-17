@@ -20,12 +20,12 @@ Engine read: rcfd 0.1.0, service protocol rcfd-service/1 version 1.1, MCP server
 | Kind | Capabilities | UI path | Exemption | Exemption whose item does not name it |
 |---|---|---|---|---|
 | Service methods | 69 | 20 | 49 | 40 |
-| MCP tools | 67 | 32 | 35 | 26 |
+| MCP tools | 69 | 34 | 35 | 26 |
 | CLI commands | 48 | 18 | 30 | 22 |
-| CLI options | 200 | 18 | 182 | 123 |
+| CLI options | 202 | 18 | 184 | 123 |
 | Case schema keys | 951 | 951 | 0 | 0 |
 | Monitor format keys | 6 | 6 | 0 | 0 |
-| **All** | **1341** | **1045** (77.9 %) | **296** | **211** |
+| **All** | **1345** | **1047** (77.8 %) | **298** | **211** |
 
 A case key stands for every value of its enumeration (the solver options of that key, listed in the inventory): the
 schema-driven surface of F-825 offers them all. A CLI option is mapped with its command. "Item does not name it" marks an
@@ -73,7 +73,7 @@ new item (see the last sections).
 | F-827 one action layer for every UI action | 1 | `rcfd call` (not named) |
 | F-828 provenance inspector and reproduce-from-CLI | 5 | `rcfd data list` (not named), `rcfd data provenance` (not named), `rcfd data verify` (not named), `rcfd project hash`, `rcfd version` |
 
-### CLI options (182 without a UI path)
+### CLI options (184 without a UI path)
 
 | Item | Count | Capabilities |
 |---|---|---|
@@ -81,7 +81,7 @@ new item (see the last sections).
 | F-807 run control (quick run, stop, pause, queue) | 69 | `rcfd map` (10), `rcfd reactor` (1), `rcfd restart` (4), `rcfd run` (28), `rcfd study` (8), `rcfd workflow run` (6), `rcfd workflow show` (2), `rcfd-runner ensure` (4), `rcfd-runner start` (5), `rcfd-runner wait` (1) |
 | F-809 derived pictures (iso-surfaces, streamlines, cut planes, vectors) | 38 | `rcfd acoustics` (3), `rcfd fwh` (9), `rcfd post derive` (19), `rcfd sample` (7) |
 | F-811 residual and monitor plots | 2 | `rcfd post` (2) |
-| F-812 case editor validated by the engine's schema | 30 | `rcfd check` (2), `rcfd check-mesh` (1), `rcfd inflate` (12), `rcfd partition` (15) |
+| F-812 case editor validated by the engine's schema | 32 | `rcfd check` (4), `rcfd check-mesh` (1), `rcfd inflate` (12), `rcfd partition` (15) |
 | F-813 a learner's first path | 1 | `rcfd cases` (1) |
 | F-814 Claude Code panel | 6 | `rcfd-mcp` (6) |
 | F-825 schema-driven case and settings surface | 2 | `rcfd schema` (2) |

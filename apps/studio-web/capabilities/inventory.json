@@ -17,12 +17,12 @@
   },
   "counts": {
     "service_method": 69,
-    "mcp_tool": 67,
+    "mcp_tool": 69,
     "cli_command": 48,
-    "cli_option": 200,
+    "cli_option": 202,
     "case_key": 951,
     "monitor_format_key": 6,
-    "total": 1341
+    "total": 1345
   },
   "capabilities": [
     {"id":"service:cosim.advance","kind":"service_method","source":"service.info"},
@@ -95,6 +95,7 @@
     {"id":"service:workflow.run","kind":"service_method","source":"service.info"},
     {"id":"service:workflow.save","kind":"service_method","source":"service.info"},
     {"id":"mcp:cancel_run","kind":"mcp_tool","source":"tools/list","access":{"project":"execute"}},
+    {"id":"mcp:case_facts","kind":"mcp_tool","source":"tools/list","access":{"project":"read"}},
     {"id":"mcp:check_case_headless","kind":"mcp_tool","source":"tools/list","access":{"default":"read","project":"read"}},
     {"id":"mcp:check_case_mesh","kind":"mcp_tool","source":"tools/list","access":{"project":"read"}},
     {"id":"mcp:check_mesh","kind":"mcp_tool","source":"tools/list","access":{"default":"read"}},
@@ -143,6 +144,7 @@
     {"id":"mcp:read_project_file","kind":"mcp_tool","source":"tools/list","access":{"project":"read"}},
     {"id":"mcp:read_residuals","kind":"mcp_tool","source":"tools/list","access":{"project":"read"}},
     {"id":"mcp:read_status_stream","kind":"mcp_tool","source":"tools/list","access":{"default":"read","project":"read"}},
+    {"id":"mcp:refine_case_mesh","kind":"mcp_tool","source":"tools/list","access":{"project":"write_files"}},
     {"id":"mcp:render_field","kind":"mcp_tool","source":"tools/list","access":{"project":"read"}},
     {"id":"mcp:render_image","kind":"mcp_tool","source":"tools/list","access":{"default":"read"}},
     {"id":"mcp:restore_trash","kind":"mcp_tool","source":"tools/list","access":{"project":"write_files"}},
@@ -216,7 +218,9 @@
     {"id":"cli:rcfd acoustics --times","kind":"cli_option","source":"help","parent":"cli:rcfd acoustics"},
     {"id":"cli:rcfd call --addr","kind":"cli_option","source":"help","parent":"cli:rcfd call"},
     {"id":"cli:rcfd cases --dir","kind":"cli_option","source":"help","parent":"cli:rcfd cases"},
+    {"id":"cli:rcfd check --facts","kind":"cli_option","source":"help","parent":"cli:rcfd check"},
     {"id":"cli:rcfd check --json","kind":"cli_option","source":"help","parent":"cli:rcfd check"},
+    {"id":"cli:rcfd check --refine","kind":"cli_option","source":"help","parent":"cli:rcfd check"},
     {"id":"cli:rcfd check --set","kind":"cli_option","source":"help","parent":"cli:rcfd check"},
     {"id":"cli:rcfd check-mesh --json","kind":"cli_option","source":"help","parent":"cli:rcfd check-mesh"},
     {"id":"cli:rcfd convert --ascii","kind":"cli_option","source":"help","parent":"cli:rcfd convert"},
