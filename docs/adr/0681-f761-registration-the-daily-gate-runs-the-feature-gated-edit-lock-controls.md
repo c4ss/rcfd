@@ -114,3 +114,17 @@ status proposed cannot be more than done-by-local-evidence, stated as such.
 - The workspace step's artefacts are checked at the crate of the feature (rcfd-project) with `--lib --no-run`, not by a whole
   workspace build, which the house rules do not allow here.
 - Bisect over a gated binary is checked by the probe command text, not by running a bisect.
+
+## Amendment 1 (2026-11-17, written before the corrected runs of C4 and C5 and before any other check was run)
+
+While writing the isolation step, the registered form of C4 and C5 was probed once on the unchanged tree (disclosed, these runs
+are set-up probes, not registered results): `cargo tree --workspace --locked -e features` has 0 lines with `test-hooks`, but so does
+`cargo tree --workspace --features rcfd-project/test-hooks -e features` (the forward tree names a feature only on a dependency
+edge, not the root package's own features). So C4's form cannot see the feature and C5 as registered fails to be a control. This
+is a defective set-up. Corrected checks, replacing C4 and C5 (limits unchanged in spirit):
+
+- C4': 0 lines with `test-hooks` in the forward `cargo tree --workspace --locked -e features` **and** 0 in the inverted
+  `cargo tree --workspace --locked -e features -i rcfd-project`.
+- C5': control: `cargo tree --workspace --features rcfd-project/test-hooks -e features -i rcfd-project` has at least 1 line with
+  `test-hooks` (probed once: its line is `rcfd-project feature "test-hooks" (command-line)`).
+- The step "feature isolation" greps the concatenation of both trees (D3 amended accordingly). The gate runs the same two commands.
