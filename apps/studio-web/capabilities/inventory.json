@@ -19,10 +19,10 @@
     "service_method": 69,
     "mcp_tool": 69,
     "cli_command": 48,
-    "cli_option": 202,
+    "cli_option": 203,
     "case_key": 951,
     "monitor_format_key": 6,
-    "total": 1345
+    "total": 1346
   },
   "capabilities": [
     {"id":"service:cosim.advance","kind":"service_method","source":"service.info"},
@@ -358,6 +358,7 @@
     {"id":"cli:rcfd schema --out","kind":"cli_option","source":"help","parent":"cli:rcfd schema"},
     {"id":"cli:rcfd schema --ui","kind":"cli_option","source":"help","parent":"cli:rcfd schema"},
     {"id":"cli:rcfd serve --addr","kind":"cli_option","source":"help","parent":"cli:rcfd serve"},
+    {"id":"cli:rcfd serve --allow-unauthenticated-remote","kind":"cli_option","source":"help","parent":"cli:rcfd serve"},
     {"id":"cli:rcfd serve --cosim","kind":"cli_option","source":"help","parent":"cli:rcfd serve"},
     {"id":"cli:rcfd serve --journal-dir","kind":"cli_option","source":"help","parent":"cli:rcfd serve"},
     {"id":"cli:rcfd serve --root","kind":"cli_option","source":"help","parent":"cli:rcfd serve"},

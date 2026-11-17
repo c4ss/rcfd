@@ -21,11 +21,11 @@ Engine read: rcfd 0.1.0, service protocol rcfd-service/1 version 1.1, MCP server
 |---|---|---|---|---|
 | Service methods | 69 | 20 | 49 | 40 |
 | MCP tools | 69 | 34 | 35 | 26 |
-| CLI commands | 48 | 18 | 30 | 22 |
-| CLI options | 202 | 18 | 184 | 123 |
+| CLI commands | 48 | 19 | 29 | 22 |
+| CLI options | 203 | 30 | 173 | 124 |
 | Case schema keys | 951 | 951 | 0 | 0 |
 | Monitor format keys | 6 | 6 | 0 | 0 |
-| **All** | **1345** | **1047** (77.8 %) | **298** | **211** |
+| **All** | **1346** | **1060** (78.8 %) | **286** | **212** |
 
 A case key stands for every value of its enumeration (the solver options of that key, listed in the inventory): the
 schema-driven surface of F-825 offers them all. A CLI option is mapped with its command. "Item does not name it" marks an
@@ -59,13 +59,13 @@ new item (see the last sections).
 | F-813 a learner's first path | 1 | `list_cases` |
 | F-815 compare two runs | 5 | `design_compare_variants` (not named), `design_get_metrics` (not named), `design_ledger_query` (not named), `design_ledger_rerun_check` (not named), `design_list_study` (not named) |
 
-### CLI commands (30 without a UI path)
+### CLI commands (29 without a UI path)
 
 | Item | Count | Capabilities |
 |---|---|---|
 | F-805 project home and the live project folder | 2 | `rcfd convert` (not named), `rcfd serve` (not named) |
 | F-807 run control (quick run, stop, pause, queue) | 11 | `rcfd map` (not named), `rcfd reactor` (not named), `rcfd restart` (not named), `rcfd run`, `rcfd study` (not named), `rcfd workflow run` (not named), `rcfd workflow show` (not named), `rcfd workflow templates` (not named), `rcfd-runner serve` (not named), `rcfd-runner shutdown` (not named), `rcfd-runner wait` (not named) |
-| F-809 derived pictures (iso-surfaces, streamlines, cut planes, vectors) | 4 | `rcfd acoustics` (not named), `rcfd fwh` (not named), `rcfd post derive`, `rcfd sample` (not named) |
+| F-809 derived pictures (iso-surfaces, streamlines, cut planes, vectors) | 3 | `rcfd acoustics` (not named), `rcfd fwh` (not named), `rcfd sample` (not named) |
 | F-811 residual and monitor plots | 1 | `rcfd post` (not named) |
 | F-812 case editor validated by the engine's schema | 4 | `rcfd check`, `rcfd check-mesh`, `rcfd inflate` (not named), `rcfd partition` (not named) |
 | F-813 a learner's first path | 1 | `rcfd cases` |
@@ -73,13 +73,13 @@ new item (see the last sections).
 | F-827 one action layer for every UI action | 1 | `rcfd call` (not named) |
 | F-828 provenance inspector and reproduce-from-CLI | 5 | `rcfd data list` (not named), `rcfd data provenance` (not named), `rcfd data verify` (not named), `rcfd project hash`, `rcfd version` |
 
-### CLI options (184 without a UI path)
+### CLI options (173 without a UI path)
 
 | Item | Count | Capabilities |
 |---|---|---|
-| F-805 project home and the live project folder | 9 | `rcfd convert` (3), `rcfd serve` (6) |
+| F-805 project home and the live project folder | 10 | `rcfd convert` (3), `rcfd serve` (7) |
 | F-807 run control (quick run, stop, pause, queue) | 69 | `rcfd map` (10), `rcfd reactor` (1), `rcfd restart` (4), `rcfd run` (28), `rcfd study` (8), `rcfd workflow run` (6), `rcfd workflow show` (2), `rcfd-runner ensure` (4), `rcfd-runner start` (5), `rcfd-runner wait` (1) |
-| F-809 derived pictures (iso-surfaces, streamlines, cut planes, vectors) | 38 | `rcfd acoustics` (3), `rcfd fwh` (9), `rcfd post derive` (19), `rcfd sample` (7) |
+| F-809 derived pictures (iso-surfaces, streamlines, cut planes, vectors) | 26 | `rcfd acoustics` (3), `rcfd fwh` (9), `rcfd post derive` (7), `rcfd sample` (7) |
 | F-811 residual and monitor plots | 2 | `rcfd post` (2) |
 | F-812 case editor validated by the engine's schema | 32 | `rcfd check` (4), `rcfd check-mesh` (1), `rcfd inflate` (12), `rcfd partition` (15) |
 | F-813 a learner's first path | 1 | `rcfd cases` (1) |

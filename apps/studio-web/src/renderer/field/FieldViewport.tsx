@@ -11,8 +11,9 @@
 // where it read the whole field, src/main/data/worker.ts), since everything drawn, ranged and read out here is a value
 // of a cell that owns a surface triangle; the colour range is the min and max over those same values (F-808's), and
 // the readout at a triangle is its owner cell's stored value, bit for bit. The whole field is read for the service
-// route and for a comparison's values (`load`), as before. F-809's arrows read their own components whole (useArrows),
-// and the cut plane clips the surface, so neither needs the shown field's other cells. No pick runs while a button is
+// route and for a comparison's values (`load`), as before. F-809's derived pictures are the engine's (ADR 0738): the
+// cut surface and arrows, the iso-surface and the streamlines come as GLB from `rcfd post derive` (useDerived), so
+// none needs the shown field's other cells here. No pick runs while a button is
 // held (an orbit or a pan): the readout is cleared at the drag's first move and taken again where the button is let go.
 //
 // Timing marks (performance.mark / measure, read by scripts/measure-field.mjs for P7): `rcfd:field:open` when a store is
@@ -29,8 +30,10 @@ import { rangeOf, shownRange } from './surface.js';
 import { AXIS, LENGTH_UNIT, LENGTH_UNIT_WHY, cellsOutside, cellsOutsideOf, domainText, fixedRange, lengthText, pngName, scaleBar, type RangeMode } from './viewExtras.js';
 import { colourRange, f32Text, lutBytes, type ColourRange } from './colormap.js';
 import { FieldCanvas, type Backend, type FieldCanvasApi, type Pick } from './FieldCanvas.js';
-import { CutPanel, DerivedControls, useArrows } from './DerivedControls.js';
-import { availability, middleCut, type Cut, type Glyphs, type Layers } from './derived.js';
+import { CutPanel, DerivedControls, IsoPanel, StreamPanel, pictureKey, useDerived } from './DerivedControls.js';
+import { availability, middleCut, rakeEnds, startRake, type Cut, type Rake } from './derived.js';
+import { cutOf, isoOf, linesOf } from './glb.js';
+import type { DeriveArgs } from '../../shared/data.js';
 import { Legend } from './Legend.js';
 import { Provenance, cellValue, snapshotFactValue } from '../provenance/index.js';
 import { FieldPrep, type PreparedSurface } from './prepare.js';
@@ -152,6 +155,11 @@ export function FieldViewport({
   // F-809: the derived pictures (./derived.ts): rcfd-render's cut plane and the vector arrows
   const [cutAsked, setCut] = useState<Cut | null>(null);
   const [vectorsAsked, setVectors] = useState(false);
+  // ADR 0738: the engine's iso-surface (its level, null for off) and streamlines (their rake, null for off)
+  const [isoLevel, setIsoLevel] = useState<number | null>(null);
+  const [rakeAsked, setRake] = useState<Rake | null>(null);
+  // the engine picture the canvas last drew, finished on the GPU (data-cut, data-arrows, data-iso, data-streamlines)
+  const [pictureDrawn, setPictureDrawn] = useState<object | null>(null);
   const [pointerAt, setPointerAt] = useState('');
   const [hover, setHover] = useState<{ pick: Pick; by: 'pointer' | 'keyboard' } | null>(null);
   const [attempt, setAttempt] = useState(0);
@@ -186,20 +194,42 @@ export function FieldViewport({
   // F-832: the layers are made in the worker with the surface's arrays (F-809's meshLayers, unchanged)
   const layers = opened?.prepared.layers ?? null;
   const derivedCtx = useMemo(
-    () => (opened && layers ? { layers, fields: opened.info.fields, nCells: opened.info.nCells } : null),
-    [opened?.info.fields, opened?.info.nCells, layers],
+    () =>
+      opened && layers
+        ? { layers, fields: opened.info.fields, nCells: opened.info.nCells, route: store.route, storedField: load ? null : field }
+        : null,
+    [opened?.info.fields, opened?.info.nCells, layers, store.route, load, field],
   );
   // a picture that does not apply to this store (another store was opened) is off
   const cut = derivedCtx && cutAsked && availability('cut', derivedCtx).ok ? cutAsked : null;
   const vectorsOn = !!derivedCtx && vectorsAsked && availability('vectors', derivedCtx).ok;
-  // F-832: the arrows are made in the worker too, on the surface it holds
-  const preparedSurface = opened?.prepared ?? null;
-  const glyphsOf = useCallback(
-    (s: SurfaceData, comps: readonly (Float32Array | null)[], l: Layers, n: number): Promise<Glyphs> =>
-      preparedSurface && preparedSurface.surface === s ? prep.glyphs(preparedSurface, comps, l, n) : Promise.reject(new Error('the surface changed')),
-    [prep, preparedSurface],
-  );
-  const arrows = useArrows(store, shown?.snapshot ?? null, shown?.surface ?? null, layers, opened?.info.nCells ?? 0, vectorsOn, tagBase, glyphsOf);
+  const isoOn = !!derivedCtx && isoLevel !== null && availability('iso', derivedCtx).ok;
+  const rake = derivedCtx && rakeAsked && availability('streamlines', derivedCtx).ok ? rakeAsked : null;
+  // ADR 0738: what the engine is asked for, of the shown snapshot
+  const cutArgs: DeriveArgs | null =
+    cut || vectorsOn ? { kind: 'cut_surface', ...(cut ? { axis: cut.axis, at: cut.at, keep: cut.keep } : {}), ...(vectorsOn ? { vectors: true } : {}) } : null;
+  const isoArgs: DeriveArgs | null = isoOn ? { kind: 'iso', field, level: isoLevel! } : null;
+  const streamArgs: DeriveArgs | null =
+    rake && layers ? { kind: 'streamlines', rake: { ...rakeEnds(layers, rake), n: rake.n }, direction: 'both', maxSteps: 2000 } : null;
+  const shownSnapshot = shown?.snapshot ?? null;
+  const cutPic = useDerived(store, shownSnapshot, cutArgs, `${tagBase}-cut`, cut ? 'The cut plane' : 'The arrows');
+  const isoPic = useDerived(store, shownSnapshot, isoArgs, `${tagBase}-iso`, 'The iso-surface');
+  const streamPic = useDerived(store, shownSnapshot, streamArgs, `${tagBase}-stream`, 'The streamlines');
+  const cutGlb = cutPic.kind === 'on' ? cutPic.glb : null;
+  const engineCutAll = useMemo(() => (cutGlb ? cutOf(cutGlb) : null), [cutGlb]);
+  const isoGlb = isoPic.kind === 'on' ? isoPic.glb : null;
+  const engineIso = useMemo(() => (isoGlb ? isoOf(isoGlb) : null), [isoGlb]);
+  const streamGlb = streamPic.kind === 'on' ? streamPic.glb : null;
+  const engineLines = useMemo(() => (streamGlb ? linesOf(streamGlb) : null), [streamGlb]);
+  // the last picture made stays while a newer one is made; it is drawn only while its kind is still asked for
+  const engineCut = cut && engineCutAll ? engineCutAll : null;
+  const engineArrows = vectorsOn && engineCutAll ? engineCutAll.arrows : null;
+  const iso = isoOn ? engineIso : null;
+  const streamlines = rake && engineLines ? engineLines.segments : null;
+  const current = (pic: typeof cutPic, args: DeriveArgs | null) =>
+    pic.kind === 'on' && !pic.loading && args !== null && shownSnapshot !== null && pic.key === pictureKey(storeKey, shownSnapshot, args);
+  const drawnNow = pictureDrawn !== null && pictureDrawn === (engineCut ?? iso ?? engineArrows ?? streamlines);
+  const derivedErrors = [cutPic, isoPic, streamPic].flatMap((p) => (p.kind === 'error' ? [p.message] : []));
 
   // the store: open it and read its surface (once per store)
   useEffect(() => {
@@ -631,13 +661,17 @@ export function FieldViewport({
             vectors={vectorsOn}
             onVectors={setVectors}
             startCut={layers ? () => middleCut(layers, 0) : null}
+            iso={isoOn}
+            onIso={(on) => setIsoLevel(on && drawnRange ? Math.fround(0.5 * (drawnRange.lo + drawnRange.hi)) : null)}
+            streamlines={rake !== null}
+            onStreamlines={(on) => setRake(on && layers ? startRake(layers) : null)}
           />
         )}
-        {arrows.kind === 'error' && (
-          <span className="fv-note fv-note--error" role="alert" data-words="exception">
-            {arrows.message}
+        {derivedErrors.map((m) => (
+          <span key={m} className="fv-note fv-note--error" role="alert" data-words="exception">
+            {m}
           </span>
-        )}
+        ))}
         {ranged && (
           // F-837: the colour range of the shown snapshot (F-808's), of the whole run, or fixed; icons only (G22)
           <div className="fv-range" role="group" aria-label="Colour range">
@@ -679,7 +713,10 @@ export function FieldViewport({
         data-ready={phase.kind === 'ready' && shown !== null && drawnValues === shown.values ? '' : undefined}
         data-snapshot={shown ? shown.snapshot : undefined}
         data-step={snap?.step}
-        data-arrows={arrows.kind === 'on' && arrows.snapshot === shown?.snapshot ? arrows.glyphs.cells.length : undefined}
+        data-arrows={vectorsOn && engineCutAll && current(cutPic, cutArgs) && drawnNow ? engineCutAll.arrowCount : undefined}
+        data-cut={cut && engineCut && current(cutPic, cutArgs) && drawnNow ? `${cut.axis} ${cut.at} ${cut.keep}` : undefined}
+        data-iso={iso && current(isoPic, isoArgs) && drawnNow ? iso.triangles : undefined}
+        data-streamlines={streamlines && engineLines && current(streamPic, streamArgs) && drawnNow ? engineLines.lines : undefined}
         data-range={drawnRange ? `${drawnRange.lo} ${drawnRange.hi}` : undefined}
         data-scale={bar ? bar.length : undefined}
         data-provenance="fv-readout"
@@ -698,11 +735,23 @@ export function FieldViewport({
           onDrawn={onDrawn}
           onGridState={setGridState}
           cut={cut}
-          arrows={arrows.kind === 'on' && arrows.snapshot === shown?.snapshot ? arrows.glyphs.segments : null}
+          engineCut={engineCut}
+          engineArrows={engineArrows}
+          iso={iso}
+          streamlines={streamlines}
+          onPictureDrawn={setPictureDrawn}
           prepared={opened?.prepared ?? null}
           scalars={shown?.scalars ?? null}
         />
-        {cut && layers && shown && <CutPanel cut={cut} layers={layers} onCut={setCut} />}
+        {(cut || isoOn || rake) && layers && shown && (
+          <div className="fv-panels">
+            {cut && <CutPanel cut={cut} layers={layers} onCut={setCut} />}
+            {isoOn && drawnRange && (
+              <IsoPanel level={isoLevel!} lo={drawnRange.lo} hi={drawnRange.hi} quantity={word} unit={unit} onLevel={(v) => setIsoLevel(Math.fround(v))} />
+            )}
+            {rake && <StreamPanel rake={rake} layers={layers} onRake={setRake} />}
+          </div>
+        )}
         {ranged && rangeMode === 'fixed' && shown && (
           // F-837: the fixed range's two ends; keys and pointer stay in the panel (not the orbit)
           <div className="fv-fixed" role="group" aria-label="Fixed colour range" onKeyDown={(e) => e.stopPropagation()} onPointerMove={(e) => e.stopPropagation()} onPointerDown={(e) => e.stopPropagation()}>

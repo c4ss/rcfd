@@ -135,8 +135,12 @@ COMMANDS:
                                a derived picture of a stored field (runs/<id>/fields) as a GLB in metres, the file of the
                                project tool derive_picture (ADR 0738); prints its reply as JSON
     serve [--addr <host:port>] [--root <dir>] [--stdio] [--cosim <case>] [--ui] [--journal-dir <dir>]
-                               start the solver service (JSON-RPC 2.0, newline-delimited); --cosim hosts the
-                               co-simulation fluid participant of the case's [cosim] table (protocol rcfd-cosim/1);
+        [--allow-unauthenticated-remote]
+                               start the solver service (JSON-RPC 2.0, newline-delimited); it has no authentication,
+                               so --addr must be a loopback address (default 127.0.0.1:7878; exit 2 otherwise) unless
+                               --allow-unauthenticated-remote is given; use SSH to reach it from elsewhere;
+                               --cosim hosts the co-simulation fluid participant of the case's [cosim] table
+                               (protocol rcfd-cosim/1);
                                --ui adds settings.schema {ui: true}, help.glossary, help.errors and
                                mesh.preview (rcfd-ui/1);
                                --journal-dir keeps each session's journal in <dir>/<session>-<created>.journal.json
@@ -996,6 +1000,18 @@ fn cmd_serve(args: &[String]) -> u8 {
         return if r.is_ok() { OK } else { FAIL };
     }
     let addr = opt(args, "--addr").unwrap_or("127.0.0.1:7878");
+    // ADR 0739 Q9: the service has no authentication, so a non-loopback address needs an explicit flag
+    if !flag(args, "--allow-unauthenticated-remote") {
+        if let Some(bad) = non_loopback(addr) {
+            eprintln!(
+                "error: --addr {addr}: {bad} is not a loopback address; the service has no authentication, so \
+                 rcfd serve listens on loopback only (127.0.0.1 or ::1). To reach it from another machine, use \
+                 SSH (for example ssh -L 7878:127.0.0.1:7878 <host>); to listen \
+                 unauthenticated on a network anyway, add --allow-unauthenticated-remote"
+            );
+            return USAGE_ERR;
+        }
+    }
     match svc.serve_tcp(addr) {
         Ok(server) => {
             println!("rcfd service listening on {}", server.addr);
@@ -1007,6 +1023,14 @@ fn cmd_serve(args: &[String]) -> u8 {
             FAIL
         }
     }
+}
+
+/// The first address `addr` resolves to that is not loopback (ADR 0739 Q9), or `None` when every address it resolves to
+/// is loopback. An address that does not resolve is left to `serve_tcp`, which reports it as before.
+fn non_loopback(addr: &str) -> Option<std::net::IpAddr> {
+    use std::net::ToSocketAddrs;
+    let addrs = addr.to_socket_addrs().ok()?;
+    addrs.map(|a| a.ip()).find(|ip| !ip.is_loopback())
 }
 
 fn cmd_cases(args: &[String]) -> u8 {

@@ -1,8 +1,8 @@
 # ADR 0738: F-809 proposal: derived pictures of a stored field: iso-surfaces, streamlines, slices, the Studio's cut from the CLI, and the length unit
 
-Status: **ACCEPTED 2026-11-17** (all eight recommended options, see "Answers"). The engine half is built (see "Built");
-the Studio half (the field viewport drawing the engine's cut and arrows, the iso-surface and streamline controls) is not
-yet.
+Status: **ACCEPTED 2026-11-17** (all eight recommended options, see "Answers"). Built (see "Built"): the engine half
+and the Studio half. Not built: P3's first bullet (`render_field` with `axis`, `slice`, `vectors`; R1) and `rcfd post
+render`.
 
 Roadmap item F-809 (Electron Studio: derived pictures), ADR 0801 Addendum 7 and "Engine follow-ups of the Studio items",
 rows E-809a to E-809e; E-809e is also F-837's length unit (ADR 0801 Addendum 13). F-809's acceptance: "Each derived
@@ -250,11 +250,37 @@ Deviations and decisions while building:
   reply's summary.
 - `derive_picture` is class `read` but is not added to the first allow-list of `project_w48f` F2: that list is the
   maintainer's and was not asked about.
-- Not built: P3's first bullet (`render_field` with `axis`, `slice`, `vectors`, `range`; R1) and `rcfd post render`;
-  the Studio half of P4 (the field viewport drawing `cut_surface`, the iso-surface and streamline controls).
+- Not built: P3's first bullet (`render_field` with `axis`, `slice`, `vectors`, `range`; R1) and `rcfd post render`.
 - G2 from the Studio's side: `apps/studio-web/tests/unit/field-derived.spec.ts` runs `rcfd post derive --kind
   cut_surface --vectors` on the quick-start cavity and the axial-fan passage and finds the Studio's surface triangles,
   cells and corners bit for bit, the arrows of `vectorGlyphs` within 2^-20 of the largest extent (T3's tolerance) with
   the same count, and, for a cut through the middle of the longest axis kept below and above, the triangles T2 keeps
   whole unchanged, no triangle T2 drops, and no drawn corner outside `n . p <= d`. So the Studio can switch to the
   engine's geometry with its T2 and T3 tests as they are.
+
+## Built (2026-11-17, Studio half)
+
+- The data port gains `derive` (`apps/studio-web/src/main/data/derive.ts`, `bridge.ts`, `studio-data.ts`): main checks
+  the page's arguments member by member (`parseDeriveArgs`), runs `rcfd post derive` on a local store inside a data root
+  (rcfd from `RCFD_STUDIO_RCFD`, else beside `RCFD_STUDIO_MCP`, else the shipped engine) and hands back the GLB and the
+  reply; a cancel stops the command; the engine's codes (1003, 1004, 1202) reach the page unchanged; the service route
+  and a Studio without an engine refuse with the reason. The page's bridge is `window.studioDerived` (one function).
+- `src/renderer/field/glb.ts` reads the engine's GLB. The field viewport draws the engine's cut surface in place of the
+  surface (each piece coloured by the value of the surface triangle it was cut from; the readout names that triangle
+  through `_TRIANGLE`), the engine's arrows, the iso-surface of the shown field (coloured by its level through the same
+  table; the surface hidden while it is shown) and streamlines (deep ink over the surface). The surface is no longer
+  masked on the GPU; the mesh grid keeps the mask. The camera code is unchanged.
+- Controls: the iso-surface (a 3D case, the shown values a stored cell field; a panel sets the level in the shown range)
+  and streamlines (a store with the velocity components; a panel sets the axis of the seed line through the middle of
+  the domain, the mid-plane of a 2D case, and the number of seeds; both directions, at most 2 000 steps). Every derived
+  picture of a store read through the service is unavailable with the reason (G6). The frame names what is drawn:
+  `data-cut`, `data-arrows`, `data-iso`, `data-streamlines` (the engine's counts), once drawn on the GPU.
+- Tests: `tests/unit/derive-bridge.spec.ts` (the request's shape and refusals, the flags, where rcfd is, the GLB is the
+  CLI's file of the same arguments, the data roots, the refusals and the engine's codes, a cancel);
+  `tests/unit/field-derived.spec.ts` (availability restated for the engine's pictures, G2 through the viewport's GLB
+  reader, the iso-surface and streamlines read back); `tests/e2e/field-derived.spec.ts` (T2 and T3 pixel tests unchanged
+  in their checks, now waiting for the engine's cut; the iso-surface's colour and level, the streamlines' ink and
+  seeds, on the 1e5 box and the 2D cavity).
+- Decision: the iso-surface is of the shown field only (its colour is then the legend's); a difference of two runs has
+  no iso-surface (said in the reason). The `speed` field and other seeds (`points`, `patch`) are the CLI's and the
+  tool's, not the viewport's.

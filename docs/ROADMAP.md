@@ -16550,7 +16550,7 @@ Generated from `docs/studio-guardrails.md`, `PRODUCT.md` and `DESIGN.md` ([ADR 0
     maintainer answered F808-D1 with (a): the 256-entry table, exact at its 256 points and at and beyond both ends,
     within 3/255 per channel elsewhere, is written into the acceptance; with P7 and P8 met and the screenshots in
     test-results-visual/f808 for the view-and-report (the precedent of F-810 and F-812), the acceptance is met.
-- [~] **F-809** Electron Studio: derived pictures (iso-surfaces, streamlines, cut planes, vectors)
+- [x] **F-809** Electron Studio: derived pictures (iso-surfaces, streamlines, cut planes, vectors)
   - depends on: F-808
   - acceptance: Each derived picture computed by the engine (rcfd-render or a registered opt-in service method) or, if
     computed in the Studio, matched against the engine's reference value for value within a tolerance registered before
@@ -16568,6 +16568,11 @@ Generated from `docs/studio-guardrails.md`, `PRODUCT.md` and `DESIGN.md` ([ADR 0
     (`cut_surface`, T2/T3's rules), by the project tool `derive_picture` and `rcfd post derive` (same bytes);
     `data.open` gains `length_unit: "m"`. Left: the field viewport drawing the engine's cut and arrows, iso-surface and
     streamline controls in the Studio; `render_field` with axis/slice/vectors and `rcfd post render` (ADR 0738 P3).
+    2026-11-17: Studio half of ADR 0738 built: the field viewport draws the engine's cut surface and arrows (`rcfd post
+    derive`, run by main over the data port; the readout names the source triangle), and the engine's iso-surfaces and
+    streamlines with their controls; every picture of a service-route store is disabled with the reason. Done: every
+    derived picture is the engine's. Left (not in the acceptance): `render_field` with axis/slice/vectors and `rcfd post
+    render` (ADR 0738 P3).
 - [x] **F-810** Electron Studio: run bands and linked time scrubbing
   - depends on: F-808, F-811
   - acceptance: The run bands of DESIGN.md on one shared time axis, each end marked with its pictogram and word; one
@@ -17081,3 +17086,20 @@ Generated from `docs/studio-guardrails.md`, `PRODUCT.md` and `DESIGN.md` ([ADR 0
     only assistant. Follow-up 2026-11-17 (maintainer): crates/rcfd-claude removed; its allow-list rules moved to
     rcfd-mcp's test support module crates/rcfd-mcp/tests/claude_allow/ (F2 and C5-A use it unchanged), E5 and the rule
     checks T1, T2, T5 to crates/rcfd-mcp/tests/allow_file_w48e.rs. Cargo.lock 83 to 82 packages.
+- [ ] **F-848** Runs on a remote site: a remote simulation service for the Studio, the CLI and the MCP server
+  - depends on: F-807, F-828
+  - acceptance: With no site named, the Studio, the CLI and the MCP server start and use the local engine as now, and a
+    local run's run.json, launch.json, status.json, events.jsonl and the feed are byte for byte as before
+    (baseline_hashes not re-recorded). A user-level sites file names remote sites; a run started on one (Studio run
+    dialog, rcfd-runner start --site, MCP start_run {site}) has its inputs uploaded content-addressed and resumably,
+    runs under the site's runner, shows in the same Runs list with its site, link state, pause, resume and cancel, and
+    has its status, events, residuals and log mirrored live and its outputs and field store downloaded at the end; its
+    provenance records the site, host and build. Proven against a fake remote in CI (a second local agent and work
+    folder) by the tests ADR 0739 registers, phase by phase.
+  - note: Proposed 2026-11-17 ([ADR 0739](adr/0739-f848-proposal-run-sites-a-remote-simulation-service-for-the-studio-cli-and-mcp.md),
+    design only, open questions Q1 to Q10 for the maintainer). Maintainer's direction 2026-11-17: the Studio supplies a
+    local service unless an external one is named, and an external one in the cloud runs high-intensity, sharded or
+    distributed simulations. Recommended first slice: SSH running a stdio agent (rcfd-runner site --stdio), no
+    listener, a mirror project with the ordinary rcfd-runner on the site; Slurm/PBS and cloud batch later behind one
+    Site interface in rcfd-runner. Distributed single runs need F-100 (no MPI or socket transport, no distributed
+    SIMPLE/PISO; ADR 0058) and are out of scope. Traces: G7, G10, G12, G16, G17, G22.

@@ -2,14 +2,17 @@
 // #/dev/field, on real stores read by route R2: the f447 boxes made afresh by `f447_bench gen` (3D, the Rust reader's
 // reference bytes) and a copy of the quick-start cavity's store (2D).
 //
-// - G6 and G22: on the 2D case the cut plane, the iso-surface and streamlines are disabled, each with its reason in its
-//   accessible name and in the tooltip its keyboard focus shows; no reason stands on the screen; on the 3D box only the
-//   iso-surface and streamlines are, with the engine's missing entry point as the reason;
-// - T2, pixels: with rcfd-render's cut plane on, at grid points away from edges, every coloured pixel is the table
-//   colour of the stored value of the cell the readout names, the readout's point is on the kept side, and each point
-//   whose unclipped hit was on the cut-away side now reads a different triangle on the kept side (or the ground);
+// - G6 and G22: on the 2D case the cut plane and the iso-surface are disabled, each with its reason in its accessible
+//   name and in the tooltip its keyboard focus shows; no reason stands on the screen; on the 3D box all four apply;
+// - ADR 0738: every derived picture is the engine's (`rcfd post derive`, run by main; the worktree's rcfd by
+//   RCFD_STUDIO_RCFD): the frame names the cut it shows (data-cut) once the engine's cut surface is drawn;
+// - T2, pixels: with the cut plane on, at grid points away from edges, every coloured pixel is the table colour of the
+//   stored value of the cell the readout names, the readout's point is on the kept side, and each point whose unclipped
+//   hit was on the cut-away side now reads a different triangle on the kept side (or the ground);
 // - T3, pixels: the arrows change only pixels to deep ink; their number is the recomputation's (derived.ts on the
-//   surface the page got and the Rust reader's components);
+//   surface the page got and the Rust reader's components), which is the engine's count;
+// - the engine's iso-surface of the 1e5 box and streamlines of the box and the 2D cavity: drawn (data-iso,
+//   data-streamlines are the engine's counts), the level and the seeds set from the keyboard;
 // - keyboard: the controls are reached by Tab, toggled by Space, the cut plane's axis, position and side are set from
 //   the keyboard; focus is visible;
 // - screenshots at 1440 x 900 in test-results-visual/f809/ for the maintainer's view-and-report.
@@ -24,7 +27,7 @@ import { meshLayers, vectorGlyphs, type Cut } from '../../src/renderer/field/der
 import { findBench, generate, NO_BENCH, refBytes, storeDir } from '../support/f447.js';
 import { decodePng, pixel, uniformAround, type Rgba } from '../support/png.js';
 import { repoRoot } from '../support/project.js';
-import { appRoot } from '../support/rcfd.js';
+import { appRoot, findRcfd } from '../support/rcfd.js';
 import { launchStudio } from '../support/studio.js';
 
 const bench = findBench();
@@ -82,7 +85,9 @@ test.beforeAll(async () => {
   const run = readdirSync(runs).sort()[0]!;
   quick = path.join(root, 'quick-start', run, 'fields');
   cpSync(path.join(runs, run, 'fields'), quick, { recursive: true });
-  ({ app, page } = await launchStudio({ RCFD_STUDIO_DATA_ROOTS: root }));
+  // ADR 0738: the engine that makes the derived pictures (the worktree's, as the tests find it)
+  const rcfd = findRcfd();
+  ({ app, page } = await launchStudio({ RCFD_STUDIO_DATA_ROOTS: root, ...(rcfd ? { RCFD_STUDIO_RCFD: rcfd } : {}) }));
   page.on('console', (m) => {
     if (m.type() === 'error') consoleErrors.push(m.text());
   });
@@ -159,17 +164,26 @@ async function cutNow(): Promise<Cut> {
   return { axis: (['x', 'y', 'z'].indexOf(axis.trim()) as 0 | 1 | 2), at: Math.fround(at), keep: label.includes('now below') ? 'below' : 'above' };
 }
 
+/** ADR 0738: waits until the frame shows the engine's cut surface of the cut the panel holds. */
+async function cutDrawn(): Promise<Cut> {
+  const c = await cutNow();
+  await expect(page.locator('.fv-frame')).toHaveAttribute('data-cut', `${c.axis} ${c.at} ${c.keep}`, { timeout: 30_000 });
+  await settle();
+  return c;
+}
+
 // ---- G6 and G22: what does not apply, and why --------------------------------------------------------------------------
 
-test('a 2D case: the cut plane, iso-surface and streamlines are disabled with the reason in their names and tooltips', async () => {
+test('a 2D case: the cut plane and the iso-surface are disabled with the reason in their names and tooltips', async () => {
   await show(quick, 'ux', 0);
   const g = group();
   const cut = g.getByRole('button', { name: /^Cut plane, unavailable: This is a 2D case \(one cell layer, thinnest along z\)/ });
   await expect(cut).toHaveAttribute('aria-disabled', 'true');
-  const iso = g.getByRole('button', { name: /^Iso-surface, unavailable: A 2D case \(one cell layer\) has no volume.*The engine has no entry point/ });
+  const iso = g.getByRole('button', { name: 'Iso-surface, unavailable: A 2D case (one cell layer) has no volume for an iso-surface.' });
   await expect(iso).toHaveAttribute('aria-disabled', 'true');
-  const stream = g.getByRole('button', { name: /^Streamlines, unavailable: The engine has no streamline integrator/ });
-  await expect(stream).toHaveAttribute('aria-disabled', 'true');
+  // ADR 0738: the engine's streamlines apply (the store holds ux and uy)
+  const stream = g.getByRole('button', { name: 'Streamlines', exact: true });
+  await expect(stream).toBeEnabled();
   // the in-plane arrows apply (the store holds ux and uy)
   const vectors = g.getByRole('button', { name: 'Vectors', exact: true });
   await expect(vectors).toBeEnabled();
@@ -189,22 +203,16 @@ test('a 2D case: the cut plane, iso-surface and streamlines are disabled with th
   await expect(vectors).toBeFocused();
   await page.keyboard.press('Tab');
   await expect(iso).toBeFocused();
-  await expect(page.getByRole('tooltip')).toContainText('The engine has no entry point that makes an iso-surface');
-  await page.keyboard.press('Tab');
-  await expect(stream).toBeFocused();
-  await expect(page.getByRole('tooltip')).toContainText('The engine has no streamline integrator');
+  await expect(page.getByRole('tooltip')).toContainText('has no volume for an iso-surface');
   // focus is visible on the chip: the product's orange outline
-  const outline = await stream.evaluate((e) => getComputedStyle(e).outlineStyle);
+  const outline = await iso.evaluate((e) => getComputedStyle(e).outlineStyle);
   expect(outline).toBe('solid');
 });
 
-test('a 3D box: the cut plane and vectors apply; iso-surface and streamlines say the engine has no entry point', async () => {
+test('a 3D box: the cut plane, vectors, the iso-surface and streamlines apply (the engine makes them, ADR 0738)', async () => {
   await show(storeDir(root, 'tiny', 'raw'), 'p', SNAPSHOT);
   const g = group();
-  await expect(g.getByRole('button', { name: 'Cut plane', exact: true })).toBeEnabled();
-  await expect(g.getByRole('button', { name: 'Vectors', exact: true })).toBeEnabled();
-  await expect(g.getByRole('button', { name: /^Iso-surface, unavailable: The engine has no entry point/ })).toHaveAttribute('aria-disabled', 'true');
-  await expect(g.getByRole('button', { name: /^Streamlines, unavailable: The engine has no streamline integrator/ })).toHaveAttribute('aria-disabled', 'true');
+  for (const name of ['Cut plane', 'Vectors', 'Iso-surface', 'Streamlines']) await expect(g.getByRole('button', { name, exact: true }), name).toBeEnabled();
   await expect(page.getByText(/unavailable/)).toHaveCount(0);
 });
 
@@ -231,7 +239,7 @@ async function checkCut(size: string, n: [number, number], minChanged: number) {
   await page.getByRole('button', { name: 'Cut plane', exact: true }).focus();
   await page.keyboard.press('Space');
   await expect(page.getByRole('group', { name: 'Cut plane', exact: true })).toBeVisible();
-  const cut = await cutNow();
+  const cut = await cutDrawn();
   expect(cut.axis).toBe(0);
   expect(cut.keep).toBe('below');
   const after = await shot(`${size}-cut-x`);
@@ -283,22 +291,22 @@ test('T2: the cut plane of the 1e5-cell box follows rcfd-render’s rule; axis, 
   await slider.focus();
   await page.keyboard.press('ArrowLeft');
   await page.keyboard.press('ArrowLeft');
-  const moved = await cutNow();
+  const moved = await cutDrawn();
   expect(moved.at).toBeLessThan(cut.at);
   // the side kept
   const flip = page.getByRole('group', { name: 'Cut plane', exact: true }).getByRole('button', { name: /Keep the side above the plane/ });
   await flip.focus();
   await page.keyboard.press('Enter');
-  expect((await cutNow()).keep).toBe('above');
+  expect((await cutDrawn()).keep).toBe('above');
   // the axis: z
   const axisZ = page.getByRole('radiogroup', { name: 'Cut plane normal axis' }).getByRole('radio', { name: 'z' });
   await axisZ.focus();
   await page.keyboard.press('Space');
-  expect((await cutNow()).axis).toBe(2);
+  expect((await cutDrawn()).axis).toBe(2);
   await shot('1e5-cut-z-above');
   // a readout on the kept side of the new plane
   const box = await frameBox();
-  const now = await cutNow();
+  const now = await cutDrawn();
   let read = 0;
   for (const [fx, fy] of [
     [0.5, 0.5],
@@ -392,8 +400,121 @@ test('the 3D box with the cut plane and the arrows together (view-and-report), n
   await group().getByRole('button', { name: 'Cut plane', exact: true }).click();
   await group().getByRole('button', { name: 'Vectors', exact: true }).click();
   await expect(page.locator('.fv-frame')).toHaveAttribute('data-arrows', /\d+/, { timeout: 30_000 });
+  await cutDrawn();
   await page.mouse.move(0, 0);
   await shot('1e5-cut-and-vectors');
   expect(await page.evaluate(() => (window as unknown as { __csp: string[] }).__csp)).toEqual([]);
+  expect(consoleErrors).toEqual([]);
+});
+
+// ---- ADR 0738: the engine's iso-surface and streamlines ----------------------------------------------------------------
+
+test('the engine’s iso-surface of the 1e5-cell box: drawn in the table’s colour of its level, the level from the keyboard', async () => {
+  test.setTimeout(240_000);
+  await show(storeDir(root, '1e5', 'raw'), 'p', SNAPSHOT);
+  const before = await shot();
+  const iso = group().getByRole('button', { name: 'Iso-surface', exact: true });
+  await iso.focus();
+  await page.keyboard.press('Space');
+  await expect(iso).toHaveAttribute('aria-pressed', 'true');
+  const panel = page.getByRole('group', { name: 'Iso-surface', exact: true });
+  await expect(panel).toBeVisible();
+  const frame = page.locator('.fv-frame');
+  await expect(frame).toHaveAttribute('data-iso', /^[1-9]\d*$/, { timeout: 30_000 });
+  const n0 = Number(await frame.getAttribute('data-iso'));
+  await page.mouse.move(0, 0);
+  const on = await shot('1e5-iso');
+  // the level: the panel's slider, and the picture's colour is the table's colour of it (one colour, flat)
+  const slider = panel.getByRole('slider');
+  const level = Math.fround(Number(await slider.inputValue()));
+  const range = (await frame.getAttribute('data-range'))!.split(' ').map(Number) as [number, number];
+  const want = colourOf(lut, level, colourRange(range[0], range[1]));
+  const box = await frameBox();
+  let seen = 0;
+  let changed = 0;
+  for (let y = Math.ceil(box.y * on.dpr) + 2; y < Math.floor((box.y + box.height) * on.dpr) - 2; y += 3)
+    for (let x = Math.ceil(box.x * on.dpr) + 2; x < Math.floor((box.x + box.width) * on.dpr) - 2; x += 3) {
+      const p = pixel(on.img, x, y);
+      const q = pixel(before.img, x, y);
+      if (p[0] !== q[0] || p[1] !== q[1] || p[2] !== q[2]) changed++;
+      if (p.every((c, k) => c === want[k])) seen++;
+    }
+  expect(changed, 'the iso-surface stands in for the surface').toBeGreaterThan(100);
+  expect(seen, 'pixels in the table’s colour of the level').toBeGreaterThan(100);
+  // the level from the keyboard: a new surface from the engine
+  await slider.focus();
+  for (let i = 0; i < 20; i++) await page.keyboard.press('ArrowRight');
+  await expect.poll(async () => Number(await frame.getAttribute('data-iso')), { timeout: 30_000 }).not.toBe(n0);
+  // off: the surface is back, pixel for pixel
+  await iso.click();
+  await expect(panel).toHaveCount(0);
+  await page.mouse.move(0, 0);
+  const back = await shot();
+  let diff = 0;
+  for (let y = Math.ceil(box.y * on.dpr); y < Math.floor((box.y + box.height) * on.dpr); y++)
+    for (let x = Math.ceil(box.x * on.dpr); x < Math.floor((box.x + box.width) * on.dpr); x++) {
+      const p = pixel(back.img, x, y);
+      const q = pixel(before.img, x, y);
+      if (p[0] !== q[0] || p[1] !== q[1] || p[2] !== q[2]) diff++;
+    }
+  expect(diff).toBe(0);
+});
+
+async function checkStreamlines(store: string, field: string, snapshot: number, name: string) {
+  await show(store, field, snapshot);
+  const off = await shot();
+  const stream = group().getByRole('button', { name: 'Streamlines', exact: true });
+  await stream.focus();
+  await page.keyboard.press('Space');
+  const frame = page.locator('.fv-frame');
+  await expect(frame).toHaveAttribute('data-streamlines', /^[1-9]\d*$/, { timeout: 60_000 });
+  const lines = Number(await frame.getAttribute('data-streamlines'));
+  // the seeds from the keyboard: more seeds, more lines (at most two per seed, one each way)
+  const seeds = page.getByRole('group', { name: 'Streamlines', exact: true }).getByRole('slider', { name: 'Seeds' });
+  await seeds.focus();
+  for (let i = 0; i < 5; i++) await page.keyboard.press('ArrowRight');
+  const n = Number(await seeds.inputValue());
+  await expect.poll(async () => Number(await frame.getAttribute('data-streamlines')), { timeout: 60_000 }).toBeGreaterThan(lines);
+  expect(Number(await frame.getAttribute('data-streamlines'))).toBeLessThanOrEqual(2 * n);
+  await settle();
+  await page.mouse.move(0, 0);
+  const on = await shot(name);
+  // only deep ink is added, over the surface
+  const box = await frameBox();
+  let added = 0;
+  const other: string[] = [];
+  for (let y = Math.ceil(box.y * on.dpr) + 1; y < Math.floor((box.y + box.height) * on.dpr) - 1; y++)
+    for (let x = Math.ceil(box.x * on.dpr) + 1; x < Math.floor((box.x + box.width) * on.dpr) - 1; x++) {
+      const p = pixel(on.img, x, y);
+      const q = pixel(off.img, x, y);
+      if (p[0] === q[0] && p[1] === q[1] && p[2] === q[2]) continue;
+      if (p.every((c, k) => c === INK[k])) added++;
+      else if (other.length < 10) other.push(`${x},${y}: ${p} (was ${q})`);
+    }
+  // the panel is drawn over the frame too: its pixels are not the lines'
+  const panel = (await page.getByRole('group', { name: 'Streamlines', exact: true }).boundingBox())!;
+  const outsidePanel = other.filter((o) => {
+    const [x, y] = o.split(':')[0]!.split(',').map(Number) as [number, number];
+    return !(x >= (panel.x - 4) * on.dpr && x <= (panel.x + panel.width + 4) * on.dpr && y >= (panel.y - 4) * on.dpr && y <= (panel.y + panel.height + 4) * on.dpr);
+  });
+  expect(outsidePanel).toEqual([]);
+  expect(added).toBeGreaterThan(100);
+  await stream.click();
+  await expect(frame).not.toHaveAttribute('data-streamlines', /.*/);
+}
+
+test('the engine’s streamlines of the 1e5-cell box (3D): deep ink over the surface, the seeds from the keyboard', async () => {
+  test.setTimeout(240_000);
+  await checkStreamlines(storeDir(root, '1e5', 'raw'), 'p', SNAPSHOT, '1e5-streamlines');
+});
+
+test('the engine’s streamlines of the 2D quick-start cavity, in its mid-plane', async () => {
+  test.setTimeout(240_000);
+  const last = await page.evaluate(async (p) => {
+    const info = await window.studioData.open({ route: 'local', path: p });
+    if (!info.ok) throw new Error(info.error.message);
+    return info.result.snapshots.length - 1;
+  }, quick);
+  await checkStreamlines(quick, 'ux', last, '2d-streamlines');
   expect(consoleErrors).toEqual([]);
 });

@@ -160,7 +160,8 @@ test.describe('undo and redo of every edit through the action layer', () => {
 test.describe('an action without an inverse asks first and names what is lost', () => {
   test('every change action has an inverse or words for what it loses', () => {
     const change = ACTIONS.filter((a) => a.effect === 'change').map((a) => a.id);
-    const invertible = ['session.create', 'settings.set', 'settings.remove'];
+    // mesh.refine {apply: true} (ADR 0737) is undone by a settings.set of each count back to its `before` (its reply's edits)
+    const invertible = ['session.create', 'settings.set', 'settings.remove', 'mesh.refine'];
     expect(change.filter((id) => !invertible.includes(id) && !isNoInverseAction(id))).toEqual([]);
     expect(Object.keys(NO_INVERSE).sort()).toEqual(change.filter((id) => !invertible.includes(id)).sort());
     // session.close names the session and everything only it holds
@@ -351,11 +352,13 @@ test.describe('deletes of runs, results and cases', () => {
     // confirmed control files (F-814, user data; trust.ts refuses a store inside the project), and the theme
     // setting's write-then-rename (F-818, user data); none of those is in a project folder. The one rename in a project
     // folder: the Claude Code allow-list file's write-then-rename (F-814, "Allow this from now on", the maintainer's
-    // word of 2026-11-17), only over a file unchanged since it was read
+    // word of 2026-11-17), only over a file unchanged since it was read. The field viewport's derive (ADR 0738) removes
+    // its own mkdtemp folder under the OS temp directory, never a project folder
     expect(uses.sort()).toEqual([
       'src/main/claude/allow.ts: rename',
       'src/main/claude/panel.ts: rename',
       'src/main/claude/trust.ts: rename',
+      'src/main/data/derive.ts: rm',
       'src/main/project/recent.ts: rename',
       'src/main/service/spawn.ts: rm',
       'src/main/theme.ts: rename',
