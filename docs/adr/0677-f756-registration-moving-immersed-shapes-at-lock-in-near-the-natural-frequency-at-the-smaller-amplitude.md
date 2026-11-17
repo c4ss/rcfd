@@ -316,3 +316,93 @@ The rule of D2:
 **No candidate qualifies.** By D2 no main record is run and the decision is partial; `SELECTED` stays `None` in the test file and
 `f756_lockin_record` stays ignored and not run. The candidates and the bracket are not changed. Nothing else of this registration
 changes.
+
+## Addendum 1: results (2026-11-17)
+
+Release builds on Windows. Registration b46aeb66; the test file 8a8a666c, on which the fast tests (once), the mutations and the
+scan record (once) were run; amendment 1 6eb2b6d1. No limit was changed and no amendment other than amendment 1 was written. Logs
+in `w49i-work/f756-scratch/logs`: `fast_tests.log`, `scan_record.log`, `mutations.log` and `mutations_stdout.log`, `fmt.log`,
+`clippy.log`, `docs_site.log`; the twelve force series in `w49i-work/f756-scratch/series`. No library line changed (no solver
+file touched), so `baseline_hashes` was not run: the default bits are unchanged by construction.
+
+### Results
+
+| Id | Check | Limit | Measured | Met |
+| --- | --- | --- | --- | --- |
+| SS1, K1 | twelve scan runs: no stop; series written and read back bit for bit | as stated | none stopped (continuity at most 7.2e-10, Courant 0.59); 12 of 12 bit for bit, hashes in amendment 1 | met |
+| SR | the reused F-750 series against ADR 0671's hashes (reported) | equal | 12 of 12 equal; A/D 0.25 measures reproduce ADR 0671 | reported |
+| D2 | a candidate qualifies | at least one | none (S3 at all three, S1 also at C3) | **no** |
+| G0, G1, F0, F1, L1, L2, L2I, X1, J1, A1 to A5, R1, N1b to N1d, K2 | the main record | as registered | not run (no point selected, D2) | not run |
+| T1 | meshes | as ADR 0671 T1 | within 1.8e-15; 64, 32, 16 inflow faces; smallest volumes 1.14e-4, 4.57e-4, 1.84e-3 at every pose | met |
+| T2 | specifications, measures | 1e-15; 1e-12; 1e-9 deg; 1e-3; 1e-6; 1e-14 | bracket frequencies 1.7e-16; 6.6e-15, 1.3e-14; 7.1e-13 deg; 5.6e-16; 2.3e-10; 0 | met |
+| T3 | solid cells within `1e-3 U` | 1e-3 | 3.40e-4 to 3.59e-4 at C1 to C3, with and without the velocity | met |
+| T4 | BF smoke at C1, C3 | 1e-6; 1e-12; bits | continuity 6.7e-11, 8.2e-11; centre to 1e-17; far field unchanged | met |
+| T5 | start at the initial pose (C1, C3, C1-) | bits; 1e-12 | posed grid bit for bit, centre (-9e-18, -0.25), largest difference 0.25 | met |
+| T6 | fixed set-ups | bits; 1e-3 | perturbation bit for bit; solid cells 3.4e-4 | met |
+| T7 | series round trip | bits | 503 steps bit for bit, hash equal | met |
+| T8 | selection rule | exact | S0, base, tie, S1 (both sides), S2 (and just above), S3 (amplitude, phase), S4, none as expected | met |
+
+All fast tests passed on their first run (46.7 s). Mutations, each run once on a scratch copy against the fast tests (a baseline
+run of the unmutated copy passed): **fourteen of fourteen caught.** M1 by T5; M2, M3, M4, M5, M12 by T2; M6 by T7; M7, M8, M9,
+M13, M14 by T8; M10 (library) by T3; M11 by T2, T3 and T5.
+
+`cargo fmt -p rcfd-fv --check` clean; `cargo clippy -p rcfd-fv --all-targets -- -D warnings` clean. Tests run (release): only
+`immersed_lockin_f756` (the fast tests and the scan record), and `rcfd-cli`'s `docs_site` (docs/ touched; 2 passed).
+
+### Diagnosis
+
+1. **At A/D 0.25 the first lift harmonic is steep in the frequency everywhere scanned.** Taking F-750's and this scan's BFc runs
+   together, `|Lhat|` is 0.029, 0.052, 0.092, 0.154 at f 0.13 to 0.16 and 0.198, 0.249, 0.320, 0.429 at f 0.1653, 0.170, 0.175,
+   0.180; the local slope `d ln |Lhat| / d ln f` is 7.7 to 8.6 from f 0.13 to 0.175 and 10.5 from 0.175 to 0.18. Over the
+   bracket, whose width is 5.7 per cent in `ln f`, a slope of 8 changes the harmonic by about 46 per cent of itself; S3 (0.20) and
+   J1 (0.25) need a slope below 3.5 and 4.4. So no point of A/D 0.25 between f 0.13 and 0.18 can meet the bracket conditioning
+   as registered, below or above the natural frequency. Against the fixed scale the change is as large: 0.31 of `F_L` at C1.
+   The phase falls by 25 to 31 deg across the bracket at C1 and C2, about as fast as below `f0` (25 to 33 deg per 0.01, ADR 0671).
+2. **The growth is the added mass coming into phase with the vortex lift.** `C_a` rises from -0.29 (f 0.14) through 0.10
+   (0.165), 0.34 (0.170), 0.70 (0.175) to 1.27 (0.180), while `C_v` stays near -0.5: above `f0` the vortex part turns toward
+   the acceleration and adds to the added mass, the reverse of the cancellation found at f 0.13 to 0.14. The phase of the total
+   lift moves from +84 to +42 deg over f 0.165 to 0.180.
+3. **The upper edge of lock-in at A/D 0.25 lies near `r` 1.12 in this set-up.** f 0.1853 (C3+, `r` 1.124 with `f0_731`) is not
+   periodic with the forcing within 0.01 (L1 2.2e-2, phase +1.4 deg, drag down to 0.771), so C3 fails S1 as well; f 0.180 is
+   locked to 2.0e-3.
+4. **The negative control separates well above `f0` (ADR 0671 Q5 answered).** The coarse control's phase is +8 to +12 deg (its
+   lift dominated by the added mass of the uncorrected body, `C_a` 2.6 to 3.4) against +42 to +72 deg for the reference: 33 to
+   60 deg off, amplitude 0.57 to 2.1 off. S4 held at every candidate.
+5. **The time step is not what makes the response steep.** The same frequency at three time steps agrees: f 0.175 at the `dt` of
+   0.170, 0.175 and 0.180 gives `|Lhat|` 0.32074, 0.31974, 0.31881 (0.6 per cent spread) and phase +58.61, +58.75, +58.88 deg.
+6. **What the steepness would cost in the comparison.** At C1 the reference slope is about `s_A = 0.49 / 0.059 = 8.3` per unit
+   of `r`; with an `r` difference like F-731's (`Delta r` 3.8e-4) the allowance would be 0.003, small against the base limit
+   0.08. So the steepness would not by itself widen the comparison's limits; it fails the bracket conditioning (S3, and J1 in the
+   main record), a clause carried from F-731's "away from the phase jump" into this acceptance's "conditioning measured over the
+   comparison's own frequency bracket". This is arithmetic on the scan's numbers, not a measured `Delta r`.
+
+### Decision by the registered rule
+
+No candidate qualified at the scan, so no main record was run. By the rule: **partial**. Met: c0 (every limit registered), c3 (a
+registered body-fitted scan with the conditioning measured over the comparison's own bracket, run and reported), c10 (the series
+kept: twelve of twelve written and read back, hashes recorded; the twelve reused F-750 series verified), the fast path (T1 to
+T8 on their first run), fourteen of fourteen mutations, no library change. Shown at the scan stage only (coarse, not binding):
+A/D 0.25 points between `f0` and 10 per cent above it locked (c5) with a first harmonic of 1.4 to 2.4 times the fixed lift (c4 at
+the screening scale), and a control that separates by 33 to 60 deg. Not run: c2, c4, c6 to c9 and c11 at a compared point.
+
+### Remaining questions
+
+- **Q1 (open, from the registration).** A case-file key for moving immersed bodies. Open (schema golden).
+- **Q4. The conditioning clause.** (a) a follow-up that keeps C1 (A/D 0.25, f 0.17: locked to 7e-5, harmonic 1.4 times the fixed
+  lift, control 60 deg off) and replaces the bracket conditioning by a registered bound on what the steepness can cost the
+  comparison (the allowance `abs(s_X Delta r)` of each measure at most half its base limit, J1 reported), then runs the main
+  record; (b) scan for a flatter point at a larger amplitude (A/D 0.35 to 0.4 near `r` 0.9 to 1.0) with the bracket conditioning
+  kept (unknown whether one exists: at A/D 0.5 the response jumped above `f0`, ADR 0671); (c) accept F-731, F-750 and F-756 as
+  the lock-in evidence and stop. Recommendation (a): the scan shows that at A/D 0.25 the steepness is a property of the case (a
+  log slope near 8 from f 0.13 to 0.18), not of a badly chosen point, and the allowance is the registered way to account for the
+  frequency difference. It changes the acceptance, so it is the maintainer's to take.
+- **Q5. The selection limits of S3.** (a) kept as registered (0.8 of J1); (b) set equal to J1. Not material: every candidate
+  missed J1's own limits too (`m_c` 0.49 to 0.73 against 0.25; phase 25.4 to 57.5 deg against 25). Recommendation (a).
+
+## For the lead: roadmap entries
+
+> Proposed status: partial.
+
+> Moving immersed shapes at lock-in near the natural frequency at the smaller amplitude. Follow-up of F-750 (ADR 0671). PARTIAL (ADR 0677, 2026-11-17): test-only, no library change (default bits unchanged by construction). A registered body-fitted scan at A/D 0.25 and Re 100 on the 128 x 64 O-grid (dt = T/700, 20 periods) at f D/U 0.17, 0.175 and 0.18 (1.03 to 1.09 of the natural frequency 0.1648), each with the two bracket runs of the comparison itself (720 and 680 steps of the point's time step, -2.8 and +2.9 per cent), and the negative control (body velocity left out of the forcing) on a D/20 immersed mesh, chose by a mechanical rule (locked within 0.01 at the point and its bracket, first lift harmonic at least 0.75 of the fixed lift, amplitude change across the bracket at most 0.20 of itself and phase change at most 20 degrees, the control at least 24 degrees and 24 per cent off). No candidate qualified, so the compared immersed and body-fitted runs were not made: the points are locked (L1 7e-5 to 2e-3) with a first harmonic of 1.4 to 2.4 times the fixed lift and the control 33 to 60 degrees off, but the harmonic changes by 49 to 73 per cent and the phase by 25 to 58 degrees across the bracket (with F-750's runs, d ln|Lhat| / d ln f is 7.7 to 10.5 everywhere from f 0.13 to 0.18 at this amplitude, as the added mass comes into phase with the vortex lift), and f 0.185 is no longer locked within 0.01. The same frequency at three time steps agrees to 0.6 per cent. Every force series (and the twelve reused F-750 series, hashes verified) is written to a file and read back bit for bit. Eight fast tests, fourteen of fourteen mutations caught. Not included: the comparison itself, other amplitudes, a map of the lock-in range, a case-file key (open, F-307 schema golden).
+
+> Follow-up proposed: Moving immersed shapes at lock-in above the natural frequency with the frequency allowance bounded. Deps F-756. Acceptance: Every limit not stated here is registered in the ADR before the run. A cylinder oscillating across a uniform stream at Re 100 with A/D 0.25 at f D/U 0.17, where the coarse body-fitted scan of F-756 found the shedding locked and the first lift harmonic 1.4 times the fixed cylinder's lift amplitude, gives the shedding locked to the forcing, the mean drag, the lift amplitude and the phase of the lift against a body-fitted moving-mesh run of this repository within registered limits stated relative and against a fixed force scale, each with an allowance for the natural-frequency difference of the two discretisations that is measured from body-fitted bracket runs and is at most half its base limit; the change across the bracket is reported; the first lift harmonic of the body-fitted reference is at least half the fixed cylinder's lift amplitude; the force series are kept for diagnosis; a negative control with the body velocity left out of the forcing misses the lift amplitude and phase.
