@@ -15106,14 +15106,30 @@ fixed by the item's registration ADR before any code.
     coupled-face flux: the wrap faces' k is tangential and the pressure nearly radial), so its effect is not shown; the
     momentum part carries the result. No case key; the default not changed (open, with F-746). Follow-up F-752 (Pressure
     part of the non-orthogonal correction on coupled faces).
-- [ ] **F-745** Verifier-drawn re-run sample for hypotheses from evaluators outside the maintainer's control
+- [x] **F-745** Verifier-drawn re-run sample for hypotheses from evaluators outside the maintainer's control
   - depends on: F-727
   - acceptance: Every limit not stated here is registered in the ADR before the run. The verifier draws the k pairs from
     a seed not stored in the ledger before the check and records it after; an impostor that is honest exactly on the
     pairs derivable from the file (the F-727 sample) is caught on at least the registered share of synthetic worlds,
     while the F-727 sample misses it in all of them (negative control); every ADR 0624 and ADR 0662 check keeps its
     result.
-  - note: Follow-up of F-727 (ADR 0662, 2026-11-16).
+  - note: Follow-up of F-727 (ADR 0662 question 1). ADR 0693, 2026-11-17. DONE. Library only, opt-in:
+    design::hypothesis::verify_drawn reads the ledger, then draws k pairs from a verifier's seed that is not in the file
+    (DrawSeed::Given, or DrawSeed::Entropy from std's OS-seeded RandomState; not cryptographic), re-runs both arms of
+    each with the trusted evaluator, and only then appends one hypothesis_drawn_check entry with the seed, the pairs,
+    the mismatched entries and hash references to every re-run entry; check_drawn is the pure check,
+    drawn_record_problems redoes a recorded one. Closed form: an impostor honest on m of n pairs is missed with
+    probability C(m,k)/C(n,k); for the 13-pair F-727 sample of 64 pairs, k = 3 (miss 0.0069). Checks on 400 synthetic
+    worlds: an evaluator that reads the registration and is honest exactly on the F-727 sample is caught in 399 (limit
+    380) with k = 3, one dishonest on 16 pairs outside that sample in 394 (limit 380) with k = 13, while the F-727
+    sample catches neither, 0 of 800 (negative control); a "verifier" seed derived from the file catches 0 of 400; k = 1
+    catches 305 (287 to 350); the honest evaluator is never flagged; the problem count equals the drawn dishonest pairs
+    in 800 of 800. The seed is absent from the file before the check, the file before is a byte prefix of the file
+    after, verify and lessons are unchanged by the record, and edits of the recorded seed, the outcome or a checked
+    entry are flagged (3 of 3). Every ADR 0624 and ADR 0662 check keeps its numbers (S1 1, S2 1592 of 1595, NC1 400, NC2
+    61, S4 118; A1 394, NC6 0, NC7 116, the C2 byte literals). Nine mutations caught. Not covered: a forger who can also
+    append to the ledger (records are not signed), lessons does not read drawn records, no MCP tool (F-702). Follow-up
+    F-776 (Lessons read the verifier-drawn checks).
 - [ ] **F-746** Implicit rotational periodic pairs by default and as a case key
   - depends on: F-743
   - acceptance: the implicit rotational pair of ADR 0664 is the default of the transient step or selected by a case key
@@ -15688,3 +15704,11 @@ fixed by the item's registration ADR before any code.
     default results are listed case by case, the hash tables are re-recorded only with the maintainer's approval, and
     ADR 0687's and ADR 0691's twin checks pass with the defaults alone.
   - note: Follow-up of F-771 (ADR 0691, 2026-11-16).
+- [ ] **F-776** Lessons read the verifier-drawn checks
+  - depends on: F-745
+  - acceptance: Every limit not stated here is registered in the ADR before the run. lessons drops a hypothesis whose
+    latest drawn record, redone consistently by drawn_record_problems with the caller's model, did not reproduce, and
+    reports the number of drawn checks per hypothesis; on synthetic ledgers an impostor caught by a drawn check gives 0
+    rows and an honest one keeps its row; ledgers without drawn records give the lessons of ADR 0624 bit for bit; every
+    ADR 0624, ADR 0662 and ADR 0693 check keeps its result.
+  - note: Follow-up of F-745 (ADR 0693, 2026-11-16).
