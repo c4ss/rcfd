@@ -203,9 +203,15 @@ pub struct PimpleSettings {
     pub coupled_non_orth_without_pressure: bool,
     /// F-754 (ADR 0675): with `ddt_correction`, give the coupled (periodic) faces the transient Rhie-Chow term the internal
     /// faces carry, the partner cell in the place of the neighbour (its old velocity rotated into the owner's frame on a
-    /// rotational pair) and the pair mean of `rAU`. Not read on a moving mesh or by the fractional step. Default `false`
-    /// (bit-identical).
+    /// rotational pair) and the pair mean of `rAU`. Not read on a moving mesh. In the fractional step (F-757, ADR 0687) it is
+    /// read with `fractional_step_consistent` in the incremental form (the fractional step's ddt correction; `ddt_correction`
+    /// is not read there): the coupled faces then take `Gamma R(p^n) + (Gamma / dt) D` with the pair-harmonic `Gamma` in place
+    /// of `dte R(p^n)`. Default `false` (bit-identical).
     pub coupled_ddt_correction: bool,
+    /// F-757 (ADR 0687): in the fractional step's momentum predictor, make the partner of the translationally periodic faces
+    /// implicit as the PISO step does (ADR 0046 D1, `PeriodicLinks`); rotational pairs keep the lagged partner. No-op without
+    /// translational pairs and outside the fractional step. Default `false` (bit-identical).
+    pub fractional_periodic_implicit: bool,
 }
 
 /// The outer iterations of one step with `PimpleSettings::outer_pressure_tolerance` (F-536, ADR 0458 C2).
@@ -1032,6 +1038,7 @@ impl PimpleSettings {
             coupled_non_orth: false,
             coupled_non_orth_without_pressure: false,
             coupled_ddt_correction: false,
+            fractional_periodic_implicit: false,
         }
     }
 
@@ -3303,18 +3310,33 @@ fn consistent_non_orth(
     eq_only
 }
 
-/// Weights `(c1, c2)` of the old levels in the time derivative
-/// `(c0 u - c1 u^n + c2 u^{n-1}) / dt` for the active scheme and history.
 /// F-754 (ADR 0675): `(f, gamma_f D_f)` of every coupled face `f`, the internal faces' transient Rhie-Chow term with the
 /// partner cell `c` in the place of the neighbour: `gamma_f = w rAU_r + (1 - w) rAU_c` (the pair mean of the pressure
-/// equation) and `D_f = c1 (phi_old - U_old_f . S) - c2 (phi_older - U_older_f . S)` with `U_f = w U_r + (1 - w) R U_c`, the
-/// face value `boundary_hby_a` gives the coupled faces' `HbyA`.
+/// equation) and `D_f` of [`coupled_ddt_defect`].
 fn coupled_ddt_term(
     g: &FvGeometry,
     pbc: &PressureBc,
     hist_u: &[History; 3],
     phi_hist: &History,
     gamma_p: &[f64],
+    c1: f64,
+    c2: f64,
+) -> Vec<(usize, f64)> {
+    let gamma = coupled_gamma(g, pbc, gamma_p);
+    coupled_ddt_defect(g, pbc, hist_u, phi_hist, c1, c2)
+        .into_iter()
+        .map(|(f, d)| (f, gamma[f] * d))
+        .collect()
+}
+
+/// F-754 (ADR 0675), F-757 (ADR 0687): `(f, D_f)` of every coupled face `f`, the old-level face defect
+/// `D_f = c1 (phi_old - U_old_f . S) - c2 (phi_older - U_older_f . S)` with `U_f = w U_r + (1 - w) R U_c`, the face value
+/// `boundary_hby_a` gives the coupled faces' `HbyA`. Shared by the PISO step and the fractional step.
+fn coupled_ddt_defect(
+    g: &FvGeometry,
+    pbc: &PressureBc,
+    hist_u: &[History; 3],
+    phi_hist: &History,
     c1: f64,
     c2: f64,
 ) -> Vec<(usize, f64)> {
@@ -3333,7 +3355,6 @@ fn coupled_ddt_term(
             .collect();
         boundary_hby_a(g, pbc, &zero_b, &u)
     };
-    let gamma = coupled_gamma(g, pbc, gamma_p);
     let bo = level(false);
     let bol = (c2 != 0.0).then(|| level(true));
     let phi_older = phi_hist.older.as_ref().unwrap_or(&phi_hist.old);
@@ -3347,11 +3368,13 @@ fn coupled_ddt_term(
         if let Some(b) = &bol {
             d -= c2 * (phi_older[f] - vec3::dot(b[i], sf[f]));
         }
-        out.push((f, gamma[f] * d));
+        out.push((f, d));
     }
     out
 }
 
+/// Weights `(c1, c2)` of the old levels in the time derivative
+/// `(c0 u - c1 u^n + c2 u^{n-1}) / dt` for the active scheme and history.
 fn ddt_history_weights(scheme: &TimeScheme, hist: &History, dt: f64) -> (f64, f64) {
     match (scheme, &hist.older, hist.dt_old) {
         (TimeScheme::Bdf2, Some(_), Some(dt_old)) => {

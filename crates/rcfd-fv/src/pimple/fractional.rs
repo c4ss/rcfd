@@ -13,9 +13,12 @@
 //! Its steady face defect is `dt R(p)`, so a steady state depends on the step; with the opt-in
 //! `PimpleSettings::fractional_step_consistent` (ADR 0356) the internal faces take `Gamma R(p^n) + (Gamma / dt) K` with the
 //! harmonic face value `Gamma` of `V / a_P` and the carried old defects `K`, and a steady state does not depend on the step.
+//! With `PimpleSettings::coupled_ddt_correction` as well (F-757, ADR 0687) the coupled faces take the same form with the
+//! partner cell in the place of the neighbour; `PimpleSettings::fractional_periodic_implicit` makes the periodic partner of
+//! the predictor implicit (ADR 0046 D1).
 //! Child module of `pimple`: it reads the private history of the solver.
 
-use super::{ddt_history_weights, PimpleSolver, StepInfo};
+use super::{coupled_ddt_defect, ddt_history_weights, PeriodicLinks, PimpleSolver, StepInfo};
 use crate::convection::{convection, face_flux};
 use crate::ddt::{add_ddt, max_courant};
 use crate::diffusion::{laplacian, uniform_gamma};
@@ -25,6 +28,7 @@ use crate::pressure::{
     PressureControls,
 };
 use crate::simple::normalised_residual;
+use crate::FvGeometry;
 use rcfd_core::vec3::{self, Vec3};
 
 /// Options of the fractional-step advance.
@@ -43,6 +47,22 @@ impl Default for FractionalSettings {
             kim_moin: true,
         }
     }
+}
+
+/// F-757 (ADR 0687): the pair-harmonic face value `1 / (w / gamma_r + (1 - w) / gamma_c)` on the coupled faces
+/// (`w = dn_g / (dn_f + dn_g)`, `gamma` the boundary faces' owner values of `harmonic_face`), the internal faces' value with
+/// the partner cell in the place of the neighbour.
+fn coupled_harmonic(geom: &FvGeometry, bc: &PressureBc, gamma: &[f64]) -> Vec<f64> {
+    let mut out = gamma.to_vec();
+    for (i, cp) in bc.coupled.iter().enumerate() {
+        if let Some(g) = *cp {
+            let f = geom.n_internal + i;
+            let (dp, dq) = (geom.dn[i], geom.dn[g - geom.n_internal]);
+            let w = dq / (dp + dq);
+            out[f] = 1.0 / (w / gamma[f] + (1.0 - w) / gamma[g]);
+        }
+    }
+    out
 }
 
 /// Pressure conditions of the increment: the real ones with the explicit parts removed (homogeneous Dirichlet where the
@@ -188,6 +208,14 @@ impl PimpleSolver {
             };
             let mut m = convection(&g, &phi_conv, &conv_cells, &bc, s.convection, grad.as_deref());
             m.add(&laplacian(&g, &gamma_nu, &bc, grad.as_deref()));
+            // F-757 (ADR 0687, opt-in): the periodic partner implicit (ADR 0046 D1); the lagged partner values the assembly
+            // used are `conv_cells` (the extrapolated ones under BDF2, `bc_extrapolated`)
+            let lk = s
+                .fractional_periodic_implicit
+                .then(|| PeriodicLinks::build(&g, &self.u, &phi_conv, &gamma_nu, &bc));
+            if let Some(lk) = &lk {
+                lk.fix_rhs(&mut m, &conv_cells);
+            }
             let m = add_ddt(s.time_scheme, m, &vol, dt, &self.hist_u[k]);
             let mut sys = m;
             if fs.incremental {
@@ -200,9 +228,17 @@ impl PimpleSolver {
                     *a += d;
                 }
             }
-            res_u = res_u.max(normalised_residual(&sys, &cells));
             let mut x = cells;
-            sys.solve(&mut x, &s.momentum_solver);
+            match &lk {
+                Some(lk) => {
+                    res_u = res_u.max(lk.residual(&sys, &x));
+                    lk.solve(&sys, &mut x, &s.momentum_solver);
+                }
+                None => {
+                    res_u = res_u.max(normalised_residual(&sys, &x));
+                    sys.solve(&mut x, &s.momentum_solver);
+                }
+            }
             for c in 0..n {
                 self.u.values[c][k] = x[c];
             }
@@ -223,6 +259,14 @@ impl PimpleSolver {
         } else {
             (Vec::new(), Vec::new())
         };
+        // F-757 (ADR 0687, opt-in): the coupled faces' pair-harmonic Gamma and old-level defect D (index f - n_int)
+        let coupled_sc: Option<(Vec<f64>, Vec<f64>)> = (sc && s.coupled_ddt_correction).then(|| {
+            let mut d = vec![0.0; mesh.n_boundary_faces()];
+            for (f, v) in coupled_ddt_defect(&g, &pbc, &self.hist_u, &self.phi_hist, c1, c2) {
+                d[f - n_int] = v;
+            }
+            (coupled_harmonic(&g, &pbc, &gamma_sc), d)
+        });
         if fs.incremental {
             let p = &self.p.values;
             let nei = mesh.neighbour();
@@ -245,8 +289,11 @@ impl PimpleSolver {
                         let a = pbc.coeffs[i].a;
                         let gf = [0, 1, 2].map(|k| a * grad_p[own[f]][k] + (1.0 - a) * grad_p[own[gp]][k]);
                         let span = g.dn[i] + g.dn[gp - n_int];
-                        phi_star[f] +=
-                            dte * (vec3::dot(gf, sf[f]) - vec3::norm(sf[f]) * (p[own[gp]] - p[own[f]]) / span);
+                        let r = vec3::dot(gf, sf[f]) - vec3::norm(sf[f]) * (p[own[gp]] - p[own[f]]) / span;
+                        match &coupled_sc {
+                            Some((gc, d)) => phi_star[f] += gc[f] * r + gc[f] / dt * d[i],
+                            None => phi_star[f] += dte * r,
+                        }
                     } else if !pbc.fixed_u[i] {
                         let co = &pbc.coeffs[i];
                         phi_star[f] +=
