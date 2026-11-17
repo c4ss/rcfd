@@ -19,6 +19,8 @@ import './ui/primitives.css';
 import { ProjectHome } from './project/ProjectHome';
 // F-831: the command palette and the global shortcuts, beside every route (the palette loads on first use)
 import { PaletteHost } from './commands/PaletteHost';
+// F-837: save or discard before a close that would lose case changes (the window's close request included)
+import { CloseGuardHost } from './case/closeGuard';
 
 const GALLERY_HASH = '#/dev/primitives';
 
@@ -97,5 +99,6 @@ createRoot(root).render(
   <StrictMode>
     <Root />
     <PaletteHost />
+    <CloseGuardHost />
   </StrictMode>,
 );

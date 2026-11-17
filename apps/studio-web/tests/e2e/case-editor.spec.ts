@@ -285,14 +285,21 @@ test('a new case from the engine’s template, a duplicate, the checks, and clos
   // closing with a change not saved: the editor names what is lost, and keeping is the default
   await setByKeyboard('physics.nu', '0.05');
   await page.getByRole('button', { name: 'Close the session' }).click();
-  const confirm = page.getByRole('alert').filter({ hasText: 'and lose 1 change not saved' });
+  // F-837: the decision panel, with Save and close beside losing them
+  const confirm = page.getByRole('alertdialog', { name: 'Close cases/learner-first.toml with 1 change not saved?' });
   await expect(confirm).toContainText('physics.nu');
+  await expect(confirm.getByRole('button', { name: 'Save and close' })).toBeVisible();
   expect(await page.evaluate(() => document.activeElement?.textContent)).toBe('Keep editing');
   await shot('08-close-asks');
   await page.keyboard.press('Enter');
   await expect(confirm).toHaveCount(0);
-  await page.getByRole('button', { name: 'Close the session' }).click();
-  await page.getByRole('button', { name: 'Close and lose them' }).click();
+  // by the keyboard, as a keyboard user leaves it (the next test starts from the keyboard): Shift+Tab from Keep editing
+  await page.getByRole('button', { name: 'Close the session' }).focus();
+  await page.keyboard.press('Enter');
+  await expect(confirm).toBeVisible();
+  await page.keyboard.press('Shift+Tab');
+  await expect(confirm.getByRole('button', { name: 'Close and lose them' })).toBeFocused();
+  await page.keyboard.press('Enter');
   await expect(page.getByRole('heading', { level: 1 })).toBeVisible();
   const list = (await rpc.request('session.list')) as { sessions: { session: string }[] };
   expect(list.sessions.map((x) => x.session)).not.toContain(s);

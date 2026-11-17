@@ -15,6 +15,7 @@ import { availability, dispatch } from '../actions/index.js';
 import { projectActions, runAction, runActionAvailability, runActionConfirmation } from '../project/door.js';
 import { claudeActions } from '../claude/door.js';
 import { caseHash } from '../case/hash.js';
+import { closeProject } from '../case/closeGuard.js';
 import { commandFact, commandHandler, whenRegistered } from './host.js';
 
 /** What the palette knows of the window when it asks. */
@@ -383,9 +384,9 @@ async function studio(e: PaletteEntry, values: Values): Promise<Outcome> {
     case 'project.refresh':
       return close(() => projectActions.refresh());
     case 'project.close':
-      return close(() => {
-        location.hash = '';
-        projectActions.close();
+      // F-837: asks first when a case of the project has changes not saved (closeGuard.tsx)
+      return close(async () => {
+        if (await closeProject()) location.hash = '';
       });
     case 'claude.new_chat':
     case 'claude.select': {

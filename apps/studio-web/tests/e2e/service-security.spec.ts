@@ -178,7 +178,7 @@ test('the shell\'s ipcMain channels are still app.info and app.ready only: the s
       listeners: ipcMain.eventNames().map(String).filter((n) => n !== 'error'),
     };
   });
-  expect(names).toEqual({ handlers: ['app.info', 'app.ready'], listeners: [] });
+  expect(names).toEqual({ handlers: ['app.closeAnswer', 'app.info', 'app.ready'], listeners: [] });
 });
 
 test('events reach a subscriber, filtered by session when asked', async () => {

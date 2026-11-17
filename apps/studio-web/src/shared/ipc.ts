@@ -26,12 +26,29 @@ export interface IpcContract {
    * process records the time; it writes it to a file only when RCFD_STUDIO_STARTUP_REPORT is set (the P10 measurement).
    */
   'app.ready': { args: []; reply: void };
+  /**
+   * F-837: the page's answer to a close request (CLOSE_REQUEST_CHANNEL): `asking` at once (the page is alive and checks
+   * for unsaved case changes), then `close` (nothing unsaved, or saved, or discarded) or `cancel` (the user keeps
+   * editing). The request is the number the main process sent.
+   */
+  'app.closeAnswer': { args: [request: number, answer: CloseAnswer]; reply: void };
 }
+
+/** F-837: the answers to a close request. */
+export const CLOSE_ANSWERS = ['asking', 'close', 'cancel'] as const;
+export type CloseAnswer = (typeof CLOSE_ANSWERS)[number];
+
+/**
+ * F-837: main to page, the window is about to close (its close button, Alt+F4, or a quit): the argument is the
+ * request's number, answered on `app.closeAnswer`. The page has no ipcRenderer; the preload script hands the request to
+ * the one listener set by `app.onCloseRequest`.
+ */
+export const CLOSE_REQUEST_CHANNEL = 'studio.close-request';
 
 export type Channel = keyof IpcContract;
 
 /** The allow-list at run time. `satisfies` keeps it equal to the keys of IpcContract in both directions. */
-export const CHANNELS = ['app.info', 'app.ready'] as const satisfies readonly Channel[];
+export const CHANNELS = ['app.info', 'app.ready', 'app.closeAnswer'] as const satisfies readonly Channel[];
 type Missing = Exclude<Channel, (typeof CHANNELS)[number]>;
 const complete: Missing extends never ? true : Missing = true;
 void complete;
@@ -41,5 +58,8 @@ export interface StudioBridge {
   readonly app: {
     info(): Promise<AppInfo>;
     ready(): Promise<void>;
+    /** F-837: the one listener of close requests (a second call replaces the first; null removes it). */
+    onCloseRequest(listener: ((request: number) => void) | null): void;
+    closeAnswer(request: number, answer: CloseAnswer): Promise<void>;
   };
 }
