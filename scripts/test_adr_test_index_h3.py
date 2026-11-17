@@ -24,6 +24,10 @@ FILES = {
     "docs/adr/0110-old.md": "# ADR 0110\n## Test files (added 2026-11-17, ADR 0685)\n\nNote: a3_h1.rs checks the thing.\n",
     "docs/adr/0115-retro.md": "# ADR 0115\nThe file a3_h2.rs was committed without an ADR; this ADR describes it.\n",
     "docs/adr/0120-phrase.md": "# ADR 0120\na5_both.rs had no ADR.\n",
+    "crates/rcfd-w/tests/a6_row_phrase.rs": T.format("a6_row_phrase"),
+    "crates/rcfd-w/tests/a7_row_section.rs": T.format("a7_row_section"),
+    "docs/adr/0130-rows.md": "# ADR 0130\n| id | file | note |\n|---|---|---|\n| T | a6_row_phrase.rs | had no ADR |\n\n"
+                             "## Test files (added 2026-11-17, ADR 0685)\n\n| file | note |\n|---|---|\n| a7_row_section.rs | checks it |\n",
     "docs/adr/0150-plain.md": "# ADR 0150\nNothing cited.\n",
 }
 
@@ -54,7 +58,7 @@ class H3Removed(unittest.TestCase):
     def test_a2_h3_key_present_and_zero(self):
         r = self.idx["coverage"]["primary"]["retro"]
         self.assertEqual(r["h3"], 0)
-        self.assertEqual((r["h1"], r["h2"]), (1, 2))
+        self.assertEqual((r["h1"], r["h2"]), (2, 3))
 
     def test_a3_h1_and_h2_unchanged(self):
         self.assertEqual(self.prim("a3_h1"), ("0110", "E2"))
@@ -62,6 +66,10 @@ class H3Removed(unittest.TestCase):
 
     def test_a4_h0_unchanged(self):
         self.assertEqual(self.prim("a4_h0"), ("0150", "E0"))
+
+    def test_a6_a7_table_rows_of_h1_and_h2_still_count(self):
+        self.assertEqual(self.prim("a6_row_phrase"), ("0130", "E2"))
+        self.assertEqual(self.prim("a7_row_section"), ("0130", "E2"))
 
     def test_a5_h2_phrase_wins_over_a_row(self):
         self.assertEqual(self.prim("a5_row_and_phrase"), ("0120", "E2"))
