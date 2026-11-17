@@ -14295,11 +14295,17 @@ Generated from `docs/studio-guardrails.md`, `PRODUCT.md` and `DESIGN.md` ([ADR 0
   - acceptance: A dark variant of every DESIGN.md token that keeps each hue's single job; the field colour maps
     unchanged; DESIGN.md updated with the maintainer's approval.
   - note: NEEDS THE USER: a dark theme is open in DESIGN.md; decide whether and when. Traces: G8; DESIGN Open.
-- [ ] **F-819** Electron Studio: large meshes and polyhedral fan meshes
+- [~] **F-819** Electron Studio: large meshes and polyhedral fan meshes
   - depends on: F-808, F-817
   - acceptance: First picture, scrubbing and draw rate measured on a mesh of several million cells and on the FAN-01
     polyhedral mesh with many patches; limits registered before the measurement; any miss stated with its numbers.
-  - note: ADR 0800. Traces: G9; PRODUCT Capabilities (large-mesh performance unmeasured), ADR 0350 section 6.
+  - note: ADR 0800. Traces: G9; PRODUCT Capabilities (large-mesh performance unmeasured), ADR 0350 section 6. Partial
+    2026-11-17 (merge, ADR 0801 Addendum 15, npm run bench:large): limits registered first; on the 4e6 box (320,000
+    surface triangles) and FAN-01 F3 and F1 (hexahedra and prisms, 7 patches), all under load, 4 runs: P7 median met
+    everywhere (4e6 first open of a launch 1.7-2.5 s, verifyMesh 1.6 s), P8 met, P5 on 4e6 met 3 of 4 (missed 9.91/s,
+    167 ms frame). No polyhedral FAN-01 mesh exists (polydual not reachable from a case); F1 doubled does not build.
+    Proposed: gather surface-cell values in the worker for scrubbing, cache the mesh check per file identity, no pick
+    while a button is held.
 - [ ] **F-820** Electron Studio: installers, signing and updates
   - depends on: F-801
   - acceptance: Packaged installers for the platforms the maintainer names, signed if the maintainer provides

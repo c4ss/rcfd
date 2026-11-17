@@ -1729,7 +1729,7 @@ max 2739, met; P2 with a scratch profile (1 launch, folder removed), p99 0.80 ms
   passed in the full run.
 - `python scripts/third_party_licenses.py --check`: up to date.
 
-## Addendum F-819: the Studio on large meshes and on the FAN-01 fan mesh (2026-11-17)
+## Addendum 15: F-819, the Studio on large meshes and on the FAN-01 fan mesh (2026-11-17)
 
 F-819's acceptance: first picture, scrubbing and draw rate measured on a mesh of several million cells and on the FAN-01
 mesh with many patches, with the limits registered before the measurement, and any miss stated with its numbers. ADR 0350
