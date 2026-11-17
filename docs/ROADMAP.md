@@ -16658,7 +16658,11 @@ Generated from `docs/studio-guardrails.md`, `PRODUCT.md` and `DESIGN.md` ([ADR 0
     2026-11-17 (ADR 0801 Addendum 20, the maintainer's approval): a readers-only h1 on the run workspace ("Run
     workspace: <run>"), compare ("Compare: <run> with <run>"), the case editor and its undo controls ("Case editor:
     <file>"); axe's moderate page-has-heading-one is gone from those four surfaces (a11y.spec.ts checks it); nothing
-    visible and no word budget changed.
+    visible and no word budget changed. Follow-up 2026-11-17 (ADR 0801 Addendum 20, A20-D7 resolved): the Claude Code
+    session buttons are named from their shown parts in order (title, state, process, last-change time) with a space
+    between title and state, so axe's label-content-name-mismatch is gone with a chat open; a11y.spec.ts now walks the
+    session list with closed, open-elsewhere, new-chat and resumed entries (surfaces claude, claude-chat,
+    claude-resumed); nothing visible and no word budget changed.
 - [~] **F-817** Electron Studio: performance regression bench for the product shell
   - depends on: F-808, F-810
   - acceptance: A script anyone can run that repeats P2, P4, P5, P7, P8 and P10 of docs/studio-guardrails.md G9 against

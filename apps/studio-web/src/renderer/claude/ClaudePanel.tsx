@@ -214,11 +214,13 @@ function Sessions({ view, busy, onSelect }: { view: ClaudeView; busy: boolean; o
               current={view.selected === s.id}
               disabledReason={reason}
               onPress={() => onSelect(s.id)}
-              label={`${s.name ?? s.title ?? `Session ${shortId(s.id)}`}, ${OPEN_WORD[s.open]}${s.pid !== null ? `, process ${s.pid}` : ''}`}
+              label={sessionLabel(s)}
             >
               <span className="cc-session-name" data-words="data">
                 {s.name ?? s.title ?? `Session ${shortId(s.id)}`}
               </span>
+              {/* a space between the parts: the button's flex column draws none, but readers and axe join the parts
+                  with it (without it the title's last word and the state's first run together) */}{' '}
               <span className={`cc-session-state cc-session-state--${s.open}`} data-open={s.open}>
                 {OPEN_WORD[s.open]}
                 {s.pid !== null ? <span data-words="data">{` · process ${s.pid}`}</span> : ''}
@@ -238,6 +240,19 @@ function Sessions({ view, busy, onSelect }: { view: ClaudeView; busy: boolean; o
       )}
     </section>
   );
+}
+
+/**
+ * A session button's name: its visible parts in the order shown (title, state, process, last change), joined by commas
+ * for readers. axe's label-content-name-mismatch (ADR 0801 Addendum 20, A20-D7) wants every word shown inside the
+ * button in its name, in order: the last-change time was shown but left out of the name, and with no space between the
+ * title and the state the shown text read "Write a fileclosed".
+ */
+function sessionLabel(s: SessionRow): string {
+  const parts = [s.name ?? s.title ?? `Session ${shortId(s.id)}`, OPEN_WORD[s.open]];
+  if (s.pid !== null) parts.push(`process ${s.pid}`);
+  if (s.modified) parts.push(dateTime(s.modified));
+  return parts.join(', ');
 }
 
 function SessionButton({

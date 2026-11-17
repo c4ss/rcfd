@@ -24,7 +24,8 @@ import { rm } from 'node:fs/promises';
 import path from 'node:path';
 import { arrowWalk, cycleOf, framesDuring, installA11y, motionOf, pointerOnly, reach, rolesOf, tabWalk, unnamed, NO_ROLE, type Stop, type Walk } from '../support/a11y.js';
 import { axeCheck, EXCLUDED, OFF, type AxeReport } from '../support/axe.js';
-import { claudeFixture, FAKE_CLAUDE, type ClaudeFixture } from '../support/claude.js';
+import { claudeFixture, FAKE_CLAUDE, sampleTranscript, type ClaudeFixture } from '../support/claude.js';
+import { until } from '../support/fake-service.js';
 import { copyExample, emptyProject, findMcp, mcpPids, NO_MCP, scratch, stubDialog } from '../support/project.js';
 import { appRoot, findRcfd, killIfRcfd, killPid, NO_RCFD, startRcfd, type RunningRcfd } from '../support/rcfd.js';
 import { launchStudio, type Studio } from '../support/studio.js';
@@ -40,6 +41,9 @@ const RE100 = 'r-20261028T152641-f8c2';
 const RE400 = 'r-20261028T152641-97f1';
 /** Motion shorter than this is not motion (a 0 s transition still reports 0). */
 const MOTION_MS = 50;
+/** A closed session (a transcript, no process) and one open in another process (this test's own, alive). */
+const S1 = '00000000-0000-4000-8000-000000000001';
+const S2 = '00000000-0000-4000-8000-000000000002';
 
 let dir = '';
 let quick = '';
@@ -76,6 +80,13 @@ test.beforeAll(async () => {
   quick = await copyExample('quick-start', dir);
   empty = await emptyProject(dir, 'An empty project');
   fx = await claudeFixture('f816');
+  // the session list shows every kind of entry: closed, open elsewhere, and (later) a new chat and a resumed one
+  await fx.transcript(quick, S1, sampleTranscript(quick, S1));
+  await fx.transcript(quick, S2, [
+    { type: 'user', cwd: quick, sessionId: S2, timestamp: '2026-11-16T10:00:00.000Z', message: { role: 'user', content: 'Plot the residuals of the heated cavity' } },
+    { type: 'assistant', cwd: quick, sessionId: S2, timestamp: '2026-11-16T10:00:04.000Z', message: { role: 'assistant', content: [{ type: 'text', text: 'Working on it in the terminal.' }] } },
+  ]);
+  await fx.setAgents([{ pid: process.pid, cwd: quick, sessionId: S2, name: 'terminal-chat' }]);
   service = await startRcfd(rcfd!);
   studio = await launchStudio({
     RCFD_STUDIO_SERVICE: `127.0.0.1:${service.port}`,
@@ -289,8 +300,48 @@ test('the project home of an open project, its Claude Code panel and the project
   await expect(page.locator('.ph-group[data-group="runs"] tr[data-run]').first()).toBeVisible({ timeout: 20_000 });
   const panel = page.getByRole('complementary', { name: 'Claude Code' });
   await expect(panel.getByRole('list', { name: 'Claude Code sessions of this project' })).toBeVisible({ timeout: 20_000 });
+  // the listed entries: closed and open elsewhere, beside New chat
+  await expect(panel.getByRole('button', { name: /^terminal-chat, open elsewhere, read-only, process \d+/ })).toBeVisible({ timeout: 45_000 });
+  await expect(panel.getByRole('button', { name: /^Which runs converged\?, closed/ })).toBeVisible();
   await surface('home-open', '.ph-page', { exclude: ['.cc'] });
   await surface('claude', '.cc');
+});
+
+/** Types `text` into the panel's message field from the keyboard, sends it with Enter and waits for the turn's end. */
+async function chatByKeys(text: string): Promise<void> {
+  const panel = page.getByRole('complementary', { name: 'Claude Code' });
+  const before = (await fx.chats()).length;
+  await tabTo(panel.getByRole('textbox', { name: /^Message to Claude Code/ }));
+  await page.keyboard.type(text);
+  await page.keyboard.press('Enter');
+  await until(async () => ((await fx.chats()).length > before ? true : null), 30_000, 'the chat to start');
+  await expect
+    .poll(() => page.evaluate(() => window.studioClaude.state()).then((s) => s.project?.writer === null && s.project?.turn?.status), { timeout: 30_000 })
+    .toBe('finished');
+}
+
+// ADR 0801 Addendum 20, A20-D7: with a chat open, the session list's current entry was named without the words it
+// shows (label-content-name-mismatch); these two surfaces hold the whole page, the list showing, to axe and the walk
+test('the Claude Code panel with a chat open: a new chat sent from the keyboard, the session list showing it', async () => {
+  const panel = page.getByRole('complementary', { name: 'Claude Code' });
+  await chatByKeys('Write a file');
+  const current = panel.locator('.cc-session[aria-current="true"]');
+  await expect(current).toHaveAccessibleName(/^Write a file, /, { timeout: 20_000 });
+  await expect(panel.getByRole('button', { name: /^terminal-chat, open elsewhere/ })).toBeVisible();
+  await expect(panel.getByRole('button', { name: /^Which runs converged\?, closed/ })).toBeVisible();
+  await surface('claude-chat', '.cc');
+});
+
+test('the Claude Code panel with a closed session resumed from the keyboard and answered', async () => {
+  const panel = page.getByRole('complementary', { name: 'Claude Code' });
+  const closed = panel.getByRole('button', { name: /^Which runs converged\?, closed/ });
+  await tabTo(closed);
+  await page.keyboard.press('Enter');
+  await expect(closed).toHaveAttribute('aria-current', 'true');
+  await chatByKeys('Which run converged, and where is its case?');
+  await expect(panel.locator('.cc-session[aria-current="true"]')).toHaveAccessibleName(/^Which runs converged\?, /);
+  await expect(panel.getByRole('button', { name: /^Write a file, / })).toBeVisible();
+  await surface('claude-resumed', '.cc');
 });
 
 test('the Runs view, a run selected from the keyboard, and the provenance popover of its step count', async () => {
@@ -614,6 +665,8 @@ test('every surface was walked', () => {
       'home-empty',
       'home-open',
       'claude',
+      'claude-chat',
+      'claude-resumed',
       'runs',
       'runs-selected',
       'provenance',

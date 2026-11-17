@@ -91,8 +91,8 @@ test('the panel lists the project’s sessions: one open elsewhere (read-only), 
   await expect(panel(page)).toBeVisible();
   await expect(panel(page).getByRole('heading', { name: 'Claude Code' })).toBeVisible();
   // the first listings start the CLI cold (an Electron-as-Node process for the fake), which is slow on a loaded machine
-  await expect(sessionButton(page, /^terminal-chat, open elsewhere, read-only, process \d+$/)).toBeVisible({ timeout: 45_000 });
-  await expect(sessionButton(page, /^Which runs converged\?, closed$/)).toBeVisible();
+  await expect(sessionButton(page, /^terminal-chat, open elsewhere, read-only, process \d+, \d{4}-\d\d-\d\d \d\d:\d\d$/)).toBeVisible({ timeout: 45_000 });
+  await expect(sessionButton(page, /^Which runs converged\?, closed, \d{4}-\d\d-\d\d \d\d:\d\d$/)).toBeVisible();
   await expect(panel(page).getByRole('heading', { name: 'Sessions 2' })).toBeVisible();
   await shot(page, '01-sessions');
 });
@@ -128,7 +128,7 @@ test('mirror: the open session is shown read-only from the keyboard, with no mes
 
 test('resume: the closed session is typed into from the keyboard; the reply streams in; one writer; the argv is conservative', async () => {
   const page = studio!.page;
-  const closed = sessionButton(page, /^Which runs converged\?, closed$/);
+  const closed = sessionButton(page, /^Which runs converged\?, closed, \d{4}-\d\d-\d\d \d\d:\d\d$/);
   await closed.focus();
   await page.keyboard.press('Enter');
   await expect(closed).toHaveAttribute('aria-current', 'true');
