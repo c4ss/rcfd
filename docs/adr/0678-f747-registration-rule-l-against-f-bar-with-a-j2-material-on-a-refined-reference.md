@@ -227,3 +227,25 @@ The heavy record is not run under the mutations (its rows depend on the same `re
    standing instruction of 2026-11-11 (take the recommendation).
 2. **Whether the J2 tolerance replaces the ADR 0636 tolerances in ADR 0666 JB1, JB2**: not taken (it would re-judge another
    item's registered checks); open for the maintainer, with the numbers of this item.
+
+## Amendment 1 (2026-11-17, written after the registered run of the fast test and before any further run)
+
+The registered run of `j2_refined_reference_setup` (test commit 78d48d81, log `run1-fast.log` in the scratch folder, 21 s) met
+every row but one: SU1, SU2, SU3 (largest `1.2e-7` against `1e-6`), M0 (`0.0762`), M1 (`343`), FC (largest `4.7e-12` against
+`1e-9`), JY (every count positive), NC2 (ii), (iii) and the `p` and `U` rows of NC2 (i). It missed **NC2 (i) `|a_inf - 1|`:
+`9.375e-3` against `1e-10`**.
+
+**Diagnosis.** The registration's formula of the Richardson limit in reading c4, `a_inf = a16 + d2 / (2^p - 1)` with `d2 = a8 -
+a16`, has the wrong sign: for `a_n = a + c h^p` one has `d2 = c h16^p (2^p - 1)` and so `a16 + d2 / (2^p - 1) = a + 2 c h16^p`,
+while `a16 - d2 / (2^p - 1) = a` (the standard form `f_1 + (f_1 - f_2) / (r^p - 1)`, `f_1` the finest). The miss is exactly
+`2 x 0.3 x (1/16)^1.5 = 9.375e-3`. The negative control NC2 caught a defect of the registration itself, which is what it is
+for. Arithmetic 3 had used the correct sign (limits below the `16^3` values). Nothing else of the reading depends on the sign:
+`p`, the asymptotic band, `U` and the bounds outside the band are unchanged.
+
+**Correction (registered now).** Reading c4 reads `a_inf = a16 - d2 / (2^p - 1)`; every other definition, limit and check stays
+as registered. In `si_eas_hg11.rs`: the reading as registered is kept as `reading_registered` and the registered run as the
+ignored record `j2_refined_reference_setup_known_miss` (code and limits unchanged, the measured value in its ignore text);
+`j2_refined_reference_setup_corrected` runs the same rows with the corrected `reading`, once. The heavy record
+`j2_refined_reference_heavy_record` has not been run; it uses the corrected `reading` and is run once after this amendment. The
+mutations are run against `j2_refined_reference_setup_corrected`. The registered rule gives **partial** whatever follows (a check
+met only after an amendment).
