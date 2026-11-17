@@ -7648,9 +7648,9 @@
     "deps": [
       "F-752"
     ],
-    "status": "todo",
+    "status": "done",
     "acceptance": "on a rotationally periodic sector against its unrolled full annulus under a balanced body force with the sector's period and a tangential pressure gradient across the wrap faces, ADR 0667's opt-in keeps the sector within a registered limit of the annulus on every step where the setting without its pressure part does not, and the corrected flux is divergence-free per cell within a registered limit; defaults bit-identical. Every limit not stated here is registered in the ADR before the run.",
-    "note": "Follow-up of F-752 (ADR 0672, 2026-11-16)."
+    "note": "ADR 0674, 2026-11-17: the pressure part of ADR 0667's non-orthogonal correction on rotational pairs, with the rotation R in its face gradient exercised. A 60-degree sector whose wrap faces are tilted (|k|/|S| up to 0.363 on the 16 wrap faces) under a balanced body force grad phi, phi = (G r_m/6)(r/r_m)^6 cos 6 theta (a radial, face-tangential pressure gradient at the wrap), plus a swirl driver, against its unrolled full annulus (six rotated copies of the same cells, no coupled face; every wrap face an annulus internal face with S, d and k equal to 1.2e-15). With PimpleSettings::coupled_non_orth (and rotational_periodic_implicit) the sector stays within 6.8e-15 U_ref of the annulus, over all six copies, on every one of 200 steps (limit 1e-8); with coupled_non_orth_without_pressure (the control) it misses by 2.6e-3 to 4.6e-3 U_ref on every step. The corrected flux is divergence-free per cell: 4.0e-15 U_ref dr dz with the explicit iteration converged (limit 1e-10), and equal to the annulus's to 4.7e-15 per cell at six passes (limit 1e-9). Six of six mutations caught, including the rotation dropped (P1 5.6e-3) or transposed (5.3e-3) in the pressure part's face gradient. Tests only, no library change; defaults bit-identical (baseline_hashes and the periodic, sliding and non-orthogonal suites pass). Static mesh, 2-D, ddt_correction off in the runs."
   },
   {
     "id": "F-754",
@@ -7661,7 +7661,7 @@
     ],
     "status": "todo",
     "acceptance": "an opt-in giving the coupled (periodic) pairs the ddt correction the internal faces carry, defaults bit-identical; on ADR 0672's channel against its twin with ddt_correction on, the periodic run is within a registered limit of the twin on every step where the run without the opt-in is not. Every limit not stated here is registered in the ADR before the run.",
-    "note": "Follow-up of F-752 (ADR 0672, 2026-11-16)."
+    "note": "Follow-up of F-752 (ADR 0672, 2026-11-16). ADR 0674's sector against its annulus (rotational pairs, the same settings with ddt_correction off) is a second case for its check; on rotational pairs the face velocity defect needs R."
   },
   {
     "id": "F-755",
