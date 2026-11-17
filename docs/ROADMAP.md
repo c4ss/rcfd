@@ -16362,14 +16362,31 @@ fixed by the item's registration ADR before any code.
     would move). ADR 0727 measures what the switch would move in the existing tests: no measure beyond 7.8e-11 relative,
     16 solves toward convergence and none away, and four tests that break because the element entry points refuse a warm
     state.
-- [ ] **F-845** The library arc-length driver through rule L's 16^3 fold with warm-started local modes
-  - depends on: F-797
+- [x] **F-845** The library arc-length driver through rule L's 16^3 fold with warm-started local modes
+  - depends on: F-797, F-841
   - acceptance: Every limit not stated here is registered in the ADR before the run. From ADR 0711's rung 5, the
     arc-length opt-in of F-797 on the model with the warm start of the incompatible modes passes the fold computed by
     ADR 0724 and reads it: a sign change of dlambda/da with nu from 1 to 0 whose bracket contains a_f 2.170072e-4 and
     lambda_f 0.958472086948, the steps and the local fallbacks, to registered limits; a fast control on a closed-form
     fold with a local unknown; the default bits unchanged.
-  - note: Follow-up of F-843 (ADR 0724, 2026-11-16).
+  - note: F-845 (ADR 0728, 2026-11-17): test-only. ADR 0726's arclength::trace_from runs from ADR 0711's rung 5
+    (registered as the start instead of the state at 0.9645), committed on the model with the warm start of the
+    incompatible modes (ADR 0660 D1), with the committed element states carried by the driver itself. At the last point
+    the driver's states equal a test-side commit chain bit for bit. The trace passes the fold computed by ADR 0724 and
+    reads it: dlambda/da changes sign from -0.286 to +0.106 with nu going from 1 to 0 between a 2.16738e-4 and
+    2.17107e-4. That bracket contains a_f 2.170072e-4, and the load factor bracket [0.958472072691, 0.958472092233] (the
+    tangent-line bound and the lower end) contains lambda_f 0.958472086948. ADR 0711's two-point estimate lies 8e-7
+    relative in a and 5e-11 in lambda from ADR 0724's fold. Six points of one arc length (5.3e-7) were taken, with 4 to
+    5 iterations each, no halving and no local fallback in any of the 4096 elements; nu stayed 0 for five points past
+    the fold. A bordered Newton on the warm model with the same committed states reproduces every point to 5e-14. The
+    arc-length constraint measured from the stored displacements is 8.7e-11 to 7.7e-10, within a floor derived from
+    their rounding (about 5e-8); ADR 0726's unfloored 1e-10 would have missed again. Fast control: ADR 0726's
+    closed-form snap-back with a local unknown at the apex (ADR 0723's atan local energy) is traced by trace_from with
+    the warm start and the commit through both closed-form folds (lambda to 8e-15, both folds bracketed, inertia 0, 1,
+    0). Without the warm start the same trace is lost 1.3e-11 below the threshold of the plain local iteration, before
+    the first fold. A fallback control is included, and the driver's carry of the warm modes is checked bit for bit on a
+    4^3 block. Default bits unchanged (no library line); five of five mutations caught; one amendment before any run
+    (the plain control's loss cause reported, not required).
 - [~] **F-846** What switching the default local mode update of the incompatible Hex8 to the warm start would move
   - depends on: F-844
   - acceptance: Every limit not stated here is registered in the ADR before the run. With the model's warm start turned
