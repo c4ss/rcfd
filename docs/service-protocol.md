@@ -144,7 +144,8 @@ ADR 0124) and hand the values over a second TCP connection as raw little-endian 
 - `data.info`: `{protocol, port, unix_ns}`: the port of the data connection and the service's clock (nanoseconds since
   the Unix epoch)
 - `data.open {path}`: `{protocol, n_cells, n_points, mesh_hash, snapshots: [{step, time}], fields: [{name, unit,
-  location, n, precision, codec}]}` (the fields of the first snapshot)
+  location, n, precision, codec}], time_unit, length_unit}` (the fields of the first snapshot; `time_unit` is `"s"`,
+  ADR 0734 P2, and `length_unit` is `"m"`, the unit of the stored mesh's coordinates, ADR 0738 P5)
 - `data.field {path, snapshot, field}`: one field of one snapshot as `f32` (a field stored as `f64` is rounded to the
   nearest single): `{ticket, sections: [{name: "values", dtype: "f32", count, bytes}]}`
 - `data.surface {path}`: the boundary faces of the stored mesh cut into triangles (a fan per face):

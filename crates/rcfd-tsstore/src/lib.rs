@@ -35,6 +35,10 @@ pub const STORE_FILE: &str = "store.rts";
 /// The unit of a snapshot's time (ADR 0734 P2): simulated seconds; 0 for a steady run, whose `step` is the iteration.
 /// The store does not write it: `store.rts` keeps its bytes, and replies name it as `time_unit`.
 pub const TIME_UNIT: &str = "s";
+/// The unit of the stored mesh's coordinates (ADR 0738 P5): the stored mesh is the solver's mesh after `mesh.scale` and
+/// `[mesh.transform]`, and the engine keeps every quantity in coherent SI, so its coordinates are metres. The store does
+/// not write it: `store.rts` keeps its bytes, and replies name it as `length_unit`.
+pub const LENGTH_UNIT: &str = "m";
 /// Name of the advisory JSON index written next to it by [`Writer::finish`].
 pub const INDEX_FILE: &str = "index.json";
 /// File magic.

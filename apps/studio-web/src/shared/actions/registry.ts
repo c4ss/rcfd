@@ -522,7 +522,7 @@ export function availability(a: RegisteredAction, ctx: ActionContext = {}, param
   if (service && service.status !== 'connected') {
     const reason =
       service.status === 'off'
-        ? 'No rcfd service is configured: start the Studio with RCFD_STUDIO_SERVICE (attach) or RCFD_STUDIO_RCFD (start one).'
+        ? `No rcfd service${service.lastError ? `: ${service.lastError}` : '.'}`
         : service.status === 'waiting'
           ? 'The rcfd service starts when a project is opened; open a project folder first.'
         : `The rcfd service is not connected (${service.status}${service.lastError ? `: ${service.lastError}` : ''}).`;

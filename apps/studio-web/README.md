@@ -21,7 +21,7 @@ dialog, read through the engine's project server, and kept live (below). Depende
     npm run build             # typecheck, then vite build (renderer) and tsc (main, preload, shared) into dist/
     npm test                  # build, package into out/packaged/, then every Playwright test (unit and e2e); no human step
     npm run test:unit         # the unit tests only (needs dist/ for the built index.html check)
-    npm run package:dir       # package dist/ by hand into out/packaged/ (rcfd-studio.exe; resources/app)
+    npm run package:dir       # package dist/ by hand into out/packaged/ (rcfd-studio.exe; resources/app; the engine in resources/bin)
     npm run tokens:css        # regenerate src/renderer/design/tokens.css from tokens.ts (a unit test fails when stale)
     npm run capabilities      # F-824: inventory.json from the rcfd binaries, then docs/studio-coverage.md (-- --report-only: report only)
     npm run gallery           # open the packaged app on the primitives gallery at 1440x900 (view-and-report)
@@ -35,35 +35,70 @@ dialog, read through the engine's project server, and kept live (below). Depende
     npm run bench:field -- --data=<folder> [--bench-server=<f447_bench>]   # P7 and P8 through the shell; heavy, by hand only
     npm run bench [-- --heavy]  # F-817: P2, P4, P5, P7, P8, P10 against their limits in one run (below); not in npm test
     npm start                 # electron . (run npm run build first); downloads the Electron binary on first use
+                              # the engine is this checkout's target/release (below); build it first with
+                              # cargo build --release -p rcfd-cli -p rcfd-mcp -p rcfd-runner
 
 `npm test` opens the Studio window for a few seconds on Windows (Electron has no headless mode there); it needs no input.
-On Linux it needs a display (CI uses a virtual one, F-823). The service tests of `tests/e2e/service.spec.ts` need the
-`rcfd` binary (`cargo build --release -p rcfd-cli`; found through `RCFD_BIN`, `$CARGO_TARGET_DIR/release` or a
-`target/release` above this folder); without it they are skipped and say why. The bulk data tests
+On Linux it needs a display (CI uses a virtual one, F-823). `npm test` packages the engine too, so it needs
+`cargo build --release -p rcfd-cli -p rcfd-mcp -p rcfd-runner` first (`npm run package:dir -- --no-engine` and then
+`npx playwright test` without it). The service tests of `tests/e2e/service.spec.ts` need the
+`rcfd` binary (`cargo build --release -p rcfd-cli`; found through `RCFD_BIN`, the checkout's engine folder as the Studio
+finds it, or a `target/release` above this folder); without it they are skipped and say why. The bulk data tests
 (`tests/unit/data-routes.spec.ts`, `tests/e2e/data.spec.ts`) need the Rust example `f447_bench`
 (`cargo build --release -p rcfd-api --example f447_bench`; found through `RCFD_F447_BENCH`, `$CARGO_TARGET_DIR` or a
 `target/release/examples` above this folder), which makes their data sets afresh on every run; without it they are
 skipped and say why.
 
+## Where the engine comes from (ADR 0801 Addendum 21, "Engine found without setup")
+
+The maintainer, 2026-11-17: "when the studio is opened it should start a bundled server unless overridden or told not
+to." Every way of starting the Studio finds an engine (rcfd, rcfd-mcp and rcfd-runner, from one folder) with nothing set
+(`src/main/engine/locate.ts`). First match wins; a switch wins over a variable, a variable over the default folder:
+
+| Order | Given by | Engine |
+|---|---|---|
+| 1 | `--no-engine` | none: projects cannot be opened, no service is started ("The Studio was started without an engine") |
+| 2 | `--engine-dir <folder>` | the three programs in that folder |
+| 3 | `RCFD_STUDIO_MCP`, `RCFD_STUDIO_RCFD` | the programs the variables name, and the others beside them (tables below) |
+| 4 | nothing, packaged | `<resources>/bin` (the installers, and `npm run package:dir` for `out/packaged`) |
+| 4 | nothing, `npm start` from the checkout | `$CARGO_TARGET_DIR/release` when that is set, else `<repo>/target/release` (`../../target/release` from this folder) |
+
+- Attaching to a service someone else started is a separate choice: `--service <host:port>` (wins), then
+  `RCFD_STUDIO_SERVICE`. It replaces the service the Studio would start, whatever the engine; the project server still
+  comes from the table. It also applies with `--no-engine` (attaching starts nothing). Loopback only today (G10); this
+  attach is where engines on other machines (a cloud, a cluster) will plug in, out of scope here.
+- The switches take `--name value` or `--name=value`, so a Windows shortcut (Target:
+  `"...\rcfd-studio.exe" --engine-dir "D:\rcfd\bin"`) or a `.desktop` file's `Exec=` line can carry them. Their values
+  are never taken for the project folder of `rcfd-studio <PROJECT_DIR>` (F-837).
+- A folder without the whole engine gives none, and the home says where it looked, which files are missing and, for the
+  checkout, the one cargo command that builds them (`cargo build --release -p rcfd-mcp` for a missing `rcfd-mcp`).
+- An engine named by a switch or a variable is never mixed with parts of the default folder. Nothing is looked for on
+  `PATH` (F-805 D3, ADR 0801 Addendum 19, Q-F820-2 (a)); the default folder is one known place, not a search.
+- `npm run package:dir` copies the three programs from the checkout's folder (as above; `--engine=<folder>` for
+  another) into `out/packaged/resources/bin`, so the packaged copy behaves as an installed one. A missing program fails
+  it with the file and the cargo command; `--no-engine` packages without one (CI's studio-web job, which builds no Rust).
+  The e2e tests of a Studio without an engine start it with `--no-engine`.
+- Claude Code's `claude` is not part of the engine: it still comes from `RCFD_STUDIO_CLAUDE` only (F-814 D2).
+
 ## The solver service (F-803)
 
-Which service the Studio uses is set by its environment (`src/main/service/config.ts`); an installed Studio with neither
-variable set uses the `rcfd` it ships with (F-820, below the table):
+Which service the Studio uses (`src/main/service/config.ts`); with nothing set it is the engine's own `rcfd` (the
+section above), started when the first project opens:
 
-| Variable | Effect |
+| Switch or variable | Effect |
 |---|---|
-| `RCFD_STUDIO_SERVICE=127.0.0.1:7878` | attach to a service someone else started; loopback addresses only (G10). The Studio never stops it. |
-| `RCFD_STUDIO_RCFD=<path of rcfd>` | start `rcfd serve --addr 127.0.0.1:0` (detached, output to `service.log`) and own it |
-| `RCFD_STUDIO_SERVICE_ROOT=<dir>` | with `RCFD_STUDIO_RCFD`: the service's sandbox (`--root`) |
+| `--service <host:port>` | attach to a service someone else started; wins over everything below |
+| `RCFD_STUDIO_SERVICE=127.0.0.1:7878` | the same as a variable; loopback addresses only (G10). The Studio never stops it. |
+| `RCFD_STUDIO_RCFD=<path of rcfd>` | start `rcfd serve --addr 127.0.0.1:0` at launch (detached, output to `service.log`) and own it |
+| `RCFD_STUDIO_MCP=<path of rcfd-mcp>` alone | the `rcfd` beside it, started when the first project opens |
+| `RCFD_STUDIO_SERVICE_ROOT=<dir>` | with a started service: its sandbox (`--root`) |
 | `RCFD_STUDIO_STATE_DIR=<dir>` | where `service.json` (address and process id of a started service) and `service.log` go; default `<user data>/service` |
-| neither of the first two, installed | the shipped `<resources>/bin/rcfd`, started when the first project opens (state `waiting` until then) |
-| neither of the first two, not installed | no service: state `off`, every call answers `not_configured` |
+| none of these | the `rcfd` of `--engine-dir`, `<resources>/bin` or the checkout's `target/release`, started when the first project opens (state `waiting` until then) |
+| `--no-engine`, or a folder without the whole engine | no service: state `off` with the reason, every call answers `not_configured` |
 
-- F-820 (ADR 0801 Addendum 19): a packaged Studio with no variable set uses `<resources>/bin` (rcfd, rcfd-mcp,
-  rcfd-runner, put there by the installers); never PATH. Its `rcfd serve` starts when the first project is opened, not
-  at launch, so the launch (P10) does no more than before; at launch it only connects to a service an earlier start
-  left running (G7: its sessions are found again without opening a project). `out/packaged` has no `bin` folder, so the
-  tests are told by the variables as before; `RCFD_TEST_BUNDLED_BIN` (test mode only) stands in for the folder.
+- F-820 (ADR 0801 Addendum 19, extended by Addendum 21): an engine folder's `rcfd serve` starts when the first project
+  is opened, not at launch, so the launch (P10) does no more than before; at launch it only connects to a service an
+  earlier start left running (G7: its sessions are found again without opening a project). Never PATH.
   `node scripts/check-installed.mjs --exe=<installed rcfd-studio>` checks an installed or unpacked copy.
 
 - Two TCP connections: one for calls, answered in the order sent, and one that only long-polls `events.poll`, so a
@@ -84,15 +119,19 @@ folder dialog and the recent list. An open project is one ruled index of its `ca
 filtered by kind and by name, and a lane of every change the engine's feed reports, newest first. Surface brief:
 `.impeccable/surfaces/web-src-renderer-project-projecthome-tsx-41df8cd1.md`.
 
-| Variable | Meaning |
+| Switch or variable | Meaning |
 |---|---|
+| `--no-engine` | no project server: "Open project folder" is unavailable, and the home says the Studio was started without an engine |
+| `--engine-dir <folder>` | the `rcfd-mcp` of that folder (with `rcfd` and `rcfd-runner` beside it); wins over the variables |
 | `RCFD_STUDIO_MCP=<path of rcfd-mcp>` | the engine's project server; for each open project the main process starts `rcfd-mcp --project <folder> --read-only` |
 | `RCFD_STUDIO_RCFD=<path of rcfd>` | (F-803) when `RCFD_STUDIO_MCP` is not set: the `rcfd-mcp` beside that `rcfd` |
 | `RCFD_STUDIO_RECENT=<file>` | where the recent list is kept; default `<user data>/recent-projects.json` |
 | `RCFD_STUDIO_PREFERENCES=<file>` | where the theme setting (F-818: Light, Dark, High contrast, System) is kept; default `<user data>/studio-preferences.json` |
 
-Neither set: an installed Studio uses the `rcfd-mcp` it ships with (`<resources>/bin`, F-820); otherwise the home says
-what to set, and "Open project folder" is unavailable with the reason.
+None of them: the `rcfd-mcp` of the default folder, `<resources>/bin` when packaged (F-820) or the checkout's
+`target/release` with `npm start` ("Where the engine comes from", above). When that folder lacks a program the home says
+where it looked and which file is missing (for the checkout, with the cargo command), and "Open project folder" is
+unavailable with the reason. The switches and variables are only the override.
 
 - Through the engine: the main process asks the project server `project_info`, `list_runs`, `list_meshes` and
   `read_feed` (the workspace of ADR 0173, the tools Claude Code uses, so both see one folder the same way). The server
@@ -122,7 +161,8 @@ engine):
   has the query; (b) counts only; (c) add `list_cases` and `list_notes` workspace queries (Rust, a follow-up). Taken:
   (a) now, (c) proposed. The page shows when a name count and the engine's count disagree.
 - D3, where the project server comes from: `RCFD_STUDIO_MCP`, else beside `RCFD_STUDIO_RCFD`, else (an installed
-  Studio, F-820) `<resources>/bin`; never from `PATH`.
+  Studio, F-820) `<resources>/bin`; never from `PATH`. Since ADR 0801 Addendum 21: `--no-engine` and `--engine-dir`
+  first, and with nothing set the checkout's `target/release` too when not packaged (still never `PATH`).
 - D4, the recent list: paths and times only, at most 10, in the user data; never opened on its own at start (the empty
   window stays "No project open").
 - D5, which folders the page may open: only the dialog's choice or a folder of the recent list.
@@ -460,9 +500,9 @@ are chips that open the run in Runs or the file on Home. The panel hides to a sl
   `read_feed`, `check_case_mesh`, `preview_mesh`, `list_meshes`, `runner_config`, `hash_project_file`; the last two
   since ADR 0733 and ADR 0734, the maintainer's word of 2026-11-17). Everything else is denied without asking; a denied
   call shows the narrowest rule that would allow it.
-- The project server Claude Code is given: `rcfd-mcp --project <folder> --root <folder>` (`RCFD_STUDIO_MCP`), in an MCP
-  config the Studio writes in its own state folder; with `--strict-mcp-config` no other server is loaded. Without
-  `RCFD_STUDIO_MCP` the config lists no server.
+- The project server Claude Code is given: `rcfd-mcp --project <folder> --root <folder>` (the engine's `rcfd-mcp`, as
+  the project home finds it), in an MCP config the Studio writes in its own state folder; with `--strict-mcp-config` no
+  other server is loaded. With no engine (`--no-engine`, or a folder missing a program) the config lists no server.
 - The folder's Claude Code control files (`.mcp.json`, `CLAUDE.md`, `.claude/`, `.claude-plugin/`, the allow-list file)
   can run code or widen permissions, so the first chat in a folder that has them asks to confirm them by name and hash;
   a change asks again.

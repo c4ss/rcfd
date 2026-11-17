@@ -405,7 +405,17 @@ test('a project folder given on the command line opens at start', async () => {
   const { executable } = JSON.parse(readFileSync(path.join(appRoot, 'out', 'packaged.json'), 'utf8')) as { executable: string };
   const env: Record<string, string> = {};
   for (const [k, v] of Object.entries(process.env)) if (v !== undefined && !k.startsWith('RCFD_STUDIO_')) env[k] = v;
-  const app = await electron.launch({ executablePath: executable, ...launchArgs([quick]), env: { ...env, RCFD_STUDIO_MCP: mcp!, RCFD_STUDIO_RECENT: path.join(dir, 'recent-argv.json') } });
+  const app = await electron.launch({
+    executablePath: executable,
+    ...launchArgs([quick]),
+    env: {
+      ...env,
+      RCFD_STUDIO_MCP: mcp!,
+      RCFD_STUDIO_RECENT: path.join(dir, 'recent-argv.json'),
+      // the rcfd beside rcfd-mcp starts with the project (ADR 0801 Addendum 21): its record stays in the test's folder
+      RCFD_STUDIO_STATE_DIR: path.join(dir, 'service-argv'),
+    },
+  });
   try {
     const p = await app.firstWindow();
     await expect(p.getByRole('heading', { level: 1, name: /Quick start/ })).toBeVisible({ timeout: 30_000 });

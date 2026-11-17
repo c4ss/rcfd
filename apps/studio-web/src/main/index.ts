@@ -58,14 +58,15 @@ import { CASE_PORT_CHANNEL } from '../shared/case.js';
 import { RUN_PORT_CHANNEL } from '../shared/run.js';
 import { RunPortBridge, type RunPortLike } from './run/bridge.js';
 import { RunnerBudgetsEngine } from './run/extras.js';
-import { projectArgument } from './project/argv.js';
+import { engineSwitches, projectArgument } from './project/argv.js';
 import { PROVENANCE_PORT_CHANNEL } from '../shared/provenance.js';
 import { ProvenancePortBridge, type ProvenancePortLike } from './provenance/bridge.js';
 import { CasePortBridge, type CasePortLike } from './case/bridge.js';
 import { CaseEditor } from './case/editor.js';
 import { ProjectServer } from './project/server.js';
 import { ProjectPortBridge, type ProjectPortLike } from './project/bridge.js';
-import { bundledBin, engineConfig, RCFD_EXE, recentFile } from './project/config.js';
+import { engineConfig, recentFile } from './project/config.js';
+import { chooseEngine, defaultEngine } from './engine/locate.js';
 import { ProjectHome } from './project/home.js';
 import { RecentStore } from './project/recent.js';
 import { PortBridge, type PortLike } from './service/bridge.js';
@@ -101,12 +102,16 @@ const isFile = (p: string): boolean => {
     return false;
   }
 };
-/** F-820: the engine an installed Studio ships with (<resources>/bin), used when no variable names one. Never PATH. */
-const bundled = bundledBin(process.env, app.isPackaged, process.resourcesPath);
-const bundledRcfd = bundled !== null && isFile(path.join(bundled, RCFD_EXE)) ? path.join(bundled, RCFD_EXE) : null;
+/**
+ * The engine, found without setup (ADR 0801 Addendum 21, src/main/engine/locate.ts): --no-engine, then --engine-dir,
+ * then the variables, then <resources>/bin when packaged or the checkout's target/release with `electron .`. Never PATH.
+ */
+const switches = engineSwitches(process.argv, process.defaultApp === true, process.cwd());
+for (const p of switches.problems) console.error(`rcfd Studio: ${p}`);
+const engineChoice = chooseEngine(process.env, switches, defaultEngine(process.env, app.isPackaged, process.resourcesPath, app.getAppPath()), isFile);
 
-/** The solver service (src/main/service/config.ts names the environment variables that choose it). */
-const serviceSetup = serviceConfig(process.env, path.join(app.getPath('userData'), 'service'), bundledRcfd);
+/** The solver service (src/main/service/config.ts names the switches and variables that choose it). */
+const serviceSetup = serviceConfig(process.env, path.join(app.getPath('userData'), 'service'), engineChoice, switches.service, isFile);
 const service = new ServiceClient(serviceSetup);
 /** Bulk field data (F-804): R2 reads local stores inside the data roots, R1 goes through the service (src/main/data/). */
 const roots = DataRoots.fromEnv(process.env);
@@ -115,7 +120,7 @@ const dataPorts = new DataPorts(data);
 /** P1 and P2 measurement only (scripts/measure-service.mjs): the client, reachable from Playwright's main-process evaluate. */
 if (process.env['RCFD_STUDIO_BENCH'] === '1') (globalThis as { rcfdStudioBench?: unknown }).rcfdStudioBench = { service };
 
-const engine = engineConfig(process.env, isFile, undefined, bundled);
+const engine = engineConfig(process.env, isFile, engineChoice);
 
 /** F-818: the theme setting, read before the first window opens. */
 const theme = new ThemePreference(preferencesFile(process.env, app.getPath('userData')));
@@ -129,7 +134,7 @@ const themeTargets: ThemeTargets = {
   },
 };
 
-/** The project home (F-805): the engine's project server from the environment (src/main/project/config.ts). */
+/** The project home (F-805): the engine's project server (src/main/project/config.ts). */
 const projects = new ProjectHome({
   engine,
   recent: new RecentStore(recentFile(process.env, app.getPath('userData'))),
@@ -585,7 +590,7 @@ void app.whenReady().then(() => {
   nativeTheme.on('updated', () => {
     if (theme.setting === 'system') themeTargets.setBackground(themeBackground());
   });
-  // F-820: the shipped rcfd starts with the first project; at launch only a service left running is found again (G7)
+  // F-820: the engine's own rcfd starts with the first project; at launch only a service left running is found again (G7)
   if (serviceSetup.mode === 'spawn' && serviceSetup.start === 'project') void service.findRunning();
   else service.start();
   // F-837: `rcfd-studio <PROJECT_DIR>` opens that folder (after the recent list is read, so it goes to its head)

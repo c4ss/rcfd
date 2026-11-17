@@ -13,7 +13,7 @@ import { RpcConnection } from '../../src/main/service/rpc.js';
 import { spawn } from 'node:child_process';
 import { until } from '../support/fake-service.js';
 import { alive, boxToml, findRcfd, killIfRcfd, killPid, NO_RCFD, startRcfd, type RunningRcfd } from '../support/rcfd.js';
-import { launchStudio, pageEvents, pageStates, quitLeavingService, recordInPage, serviceState, untilState, type Studio } from '../support/studio.js';
+import { launchStudio, packagedBin, pageEvents, pageStates, quitLeavingService, recordInPage, serviceState, untilState, type Studio } from '../support/studio.js';
 import { emptyProject, projectState, stubDialog } from '../support/project.js';
 
 const rcfd = findRcfd();
@@ -217,17 +217,18 @@ test.describe('a service the Studio starts itself', () => {
   });
 });
 
-// F-820 (ADR 0801 Addendum 19): an installed Studio, no variable set, uses the engine it ships with in <resources>/bin.
-// out/packaged has no bin folder, so RCFD_TEST_BUNDLED_BIN (honoured in test mode only) names the folder of the built
-// engine in its place. Its service waits for the first project instead of starting at launch, and G7 still holds.
+// F-820 (ADR 0801 Addendum 19): an installed Studio, no engine variable set, uses the engine it ships with in
+// <resources>/bin. Since Addendum 21 out/packaged has that folder too (scripts/package-dir.mjs copies the built engine
+// there), so this is the packaged copy's own engine, not a stand-in. Its service waits for the first project instead of
+// starting at launch, and G7 still holds.
 test.describe('an installed Studio with its shipped engine', () => {
-  const bin = rcfd ? path.dirname(rcfd) : '';
+  const bin = packagedBin();
   const mcpExe = process.platform === 'win32' ? 'rcfd-mcp.exe' : 'rcfd-mcp';
   test('rcfd serve starts with the first project, not at launch; with a session it outlives the Studio and is found again at launch (G7)', async () => {
-    test.skip(!existsSync(path.join(bin, mcpExe)), `no ${mcpExe} beside ${rcfd}`);
+    test.skip(!existsSync(path.join(bin, mcpExe)), `out/packaged has no engine (${bin}): packaged with --no-engine`);
     const stateDir = tempDir();
     const folder = await emptyProject(tempDir(), 'F-820 bundled');
-    const env = { RCFD_TEST_BUNDLED_BIN: bin, RCFD_STUDIO_STATE_DIR: stateDir, RCFD_STUDIO_RECENT: path.join(stateDir, 'recent.json') };
+    const env = { RCFD_STUDIO_STATE_DIR: stateDir, RCFD_STUDIO_RECENT: path.join(stateDir, 'recent.json') };
     let studio = await launchStudio(env);
     try {
       // the engine from the shipped folder; the service waits, nothing is started at launch

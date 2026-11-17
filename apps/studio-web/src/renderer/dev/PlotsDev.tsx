@@ -160,7 +160,7 @@ export default function PlotsDev() {
           )}
         </section>
       ) : (
-        <p className="plots-dev-none">{connected ? 'Pick a session, or make one from a case file of the service’s sandbox.' : 'No service connected: the plots need a running rcfd serve (RCFD_STUDIO_SERVICE or RCFD_STUDIO_RCFD).'}</p>
+        <p className="plots-dev-none">{connected ? 'Pick a session, or make one from a case file of the service’s sandbox.' : 'No service connected: the plots need a running rcfd serve (the Studio starts its engine’s with the first project; --service attaches to another).'}</p>
       )}
 
       <footer className="plots-dev-foot">rcfd is early-stage software. It is not validated for engineering decisions or for safety-critical use, and it comes with no warranty.</footer>

@@ -31,6 +31,7 @@
 pub use rcfd_api::case_text;
 pub mod cases;
 mod create;
+pub mod derive;
 pub mod design;
 pub mod examples;
 mod facts;
@@ -83,7 +84,7 @@ pub const FILE_PAGE: usize = 32_000;
 pub const MAX_WAIT_S: f64 = 60.0;
 
 /// The names [`Workspace::call`] answers, in the order of the MCP project tools.
-pub const COMMANDS: [&str; 34] = [
+pub const COMMANDS: [&str; 35] = [
     "project_info",
     "list_runs",
     "run_status",
@@ -91,6 +92,7 @@ pub const COMMANDS: [&str; 34] = [
     "read_residuals",
     "field_summary",
     "render_field",
+    "derive_picture",
     "compare_runs",
     "list_changes",
     "read_feed",
@@ -259,6 +261,7 @@ impl Workspace {
             "read_residuals" => value(self.read_residuals(args)),
             "field_summary" => value(self.field_summary(args)),
             "render_field" => self.render_field(args),
+            "derive_picture" => value(self.derive_picture(args)),
             "compare_runs" => value(self.compare_runs(args)),
             "list_changes" => value(self.list_changes(args)),
             "read_feed" => value(self.read_feed(args)),

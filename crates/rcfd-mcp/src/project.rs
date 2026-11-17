@@ -156,6 +156,41 @@ pub(crate) fn tools() -> Vec<Tool> {
             },
         },
         Tool {
+            name: "derive_picture",
+            description: "A derived picture of a stored snapshot of a run (default the last) as a GLB file in runs/<id>/derived/ (metres; POSITION, _CELL the cell of each vertex, _VALUE, _TRIANGLE): kind iso (the surface where a cell field equals level, marching tetrahedra; colour_by another field), streamlines (RK4 from seeds through the velocity ux, uy, uz, linear over tets), slice (the cells cut by an axis plane, a value per triangle; vectors adds each triangle's stored vector) or cut_surface (the Studio's picture: the boundary surface on the kept side of an axis plane, with vectors its arrows). Fields are the stored cell fields and speed. The same arguments give the same file, which is reused; rcfd post derive makes it without a project.",
+            access: Access::Read,
+            schema: || {
+                let point = json!({"type": "array", "items": {"type": "number"}, "minItems": 3, "maxItems": 3});
+                obj(
+                    json!({
+                        "run": run_schema(),
+                        "kind": {"type": "string", "enum": ["iso", "streamlines", "slice", "cut_surface"]},
+                        "snapshot": {"type": "integer", "minimum": 0, "description": "snapshot index (or step or time, the nearest)"},
+                        "step": {"type": "integer", "minimum": 0},
+                        "time": {"type": "number"},
+                        "field": {"type": "string", "description": "a stored cell field or speed (iso, slice; cut_surface colours by it)"},
+                        "level": {"type": "number", "description": "iso: the value of the surface, inside the field's range"},
+                        "colour_by": {"type": "string", "description": "iso: the field coloured on the surface (default the level)"},
+                        "seeds": {"type": "object", "description": "streamlines: {rake: {p0, p1, n}}, {points: [[x, y, z], ...]} or {patch: name, n}; at most 1000 seeds", "properties": {
+                            "rake": {"type": "object", "properties": {"p0": point.clone(), "p1": point.clone(), "n": {"type": "integer", "minimum": 1}}},
+                            "points": {"type": "array", "items": point},
+                            "patch": {"type": "string"},
+                            "n": {"type": "integer", "minimum": 1}}},
+                        "direction": {"type": "string", "enum": ["forward", "backward", "both"]},
+                        "max_steps": {"type": "integer", "minimum": 1, "maximum": 10000, "description": "streamlines: steps per line (default 2000)"},
+                        "max_length": {"type": "number", "description": "streamlines: arc length per line, m (default 4 x the bounding box diagonal)"},
+                        "min_speed": {"type": "number", "description": "streamlines: a line stops below this speed (default 1e-9 x the largest)"},
+                        "step_fraction": {"type": "number", "description": "streamlines: the RK4 step as a part of the cell length (default 0.25)"},
+                        "axis": {"type": "string", "enum": ["x", "y", "z"], "description": "slice, cut_surface: the plane's normal axis"},
+                        "at": {"type": "number", "description": "slice, cut_surface: the plane's coordinate, m"},
+                        "keep": {"type": "string", "enum": ["below", "above"], "description": "cut_surface: the side kept (default below)"},
+                        "vectors": {"type": "boolean", "description": "slice, cut_surface: add the vectors (arrows for cut_surface)"}
+                    }),
+                    &["run", "kind"],
+                )
+            },
+        },
+        Tool {
             name: "compare_runs",
             description: "Metrics of 2 to 10 runs side by side with the differences to the first run, and each run's state and residual history length.",
             access: Access::Read,

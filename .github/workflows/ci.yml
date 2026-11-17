@@ -152,14 +152,18 @@ jobs:
             sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
           fi
           command -v xvfb-run >/dev/null || { sudo apt-get update && sudo apt-get install -y xvfb; }
-      - name: npm test (unit and e2e on the packaged app)
+      # This job builds no Rust, so out/packaged has no engine beside it (scripts/package-dir.mjs fails without one unless
+      # told; ADR 0801 Addendum 21). The tests that need the engine are skipped with the reason, as before.
+      - run: npm run package:dir -- --no-engine
+      - name: Playwright (unit and e2e on the packaged app)
         # Linux has no display on the runner: Electron runs under a virtual one (xvfb). On Windows the window opens on the
         # runner's desktop for a few seconds; no human step either way. The HTML report is for the failure upload below.
+        # What npm test runs after its build and packaging (both done by the steps above).
         run: |
           if [ "$RUNNER_OS" = "Linux" ]; then
-            xvfb-run --auto-servernum npm test -- --reporter=list,html
+            xvfb-run --auto-servernum npx playwright test --reporter=list,html
           else
-            npm test -- --reporter=list,html
+            npx playwright test --reporter=list,html
           fi
       - name: upload the Playwright report and test results
         if: failure()

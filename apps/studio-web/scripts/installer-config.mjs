@@ -76,8 +76,8 @@ export function builderConfig({ pkg, stage, output, sign }) {
     npmRebuild: false,
     nodeGypRebuild: false,
     files: ['package.json', 'dist/**'],
-    // The engine beside the app: <resources>/bin. A packaged Studio with neither RCFD_STUDIO_MCP nor RCFD_STUDIO_RCFD
-    // set uses it (src/main/project/config.ts bundledBin; never PATH), and starts its rcfd serve with the first project.
+    // The engine beside the app: <resources>/bin. A packaged Studio with no engine switch or variable uses it
+    // (src/main/engine/locate.ts, ADR 0801 Addendum 21; never PATH), and starts its rcfd serve with the first project.
     extraResources: [{ from: `${stage}/bin`, to: 'bin' }],
     // Never published from a build: artifacts only, the maintainer releases by hand (docs/releasing.md).
     publish: null,

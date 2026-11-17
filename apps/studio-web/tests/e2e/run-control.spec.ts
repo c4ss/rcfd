@@ -429,7 +429,11 @@ test('refused actions name the problem and the way out: an unavailable control, 
   await expect(alert).toBeVisible({ timeout: 10_000 });
   await expect(alert.locator('.rc-problem')).toContainText('The engine refused to start a run of cases/to-delete.toml');
   await expect(alert.locator('.rc-problem')).toContainText('no such case file');
-  await expect(alert.locator('.rc-recovery')).toContainText('The case file was moved or deleted outside the Studio');
+  await expect(alert.locator('.rc-recovery:not([data-recovery-code])')).toContainText('The case file was moved or deleted outside the Studio');
+  // ADR 0801 Addendum 21: RCFD_STUDIO_MCP alone now starts the rcfd beside it with the project, so the service's error
+  // catalogue (help.errors, F-830) is there, and its recovery line for the engine's code is shown under the Studio's
+  await expect(alert.locator('.rc-recovery[data-recovery-code]')).toHaveCount(1);
+  await expect(alert.locator('.rc-recovery[data-recovery-code]')).not.toBeEmpty();
   await shot(page, '10-refused');
   await alert.getByRole('button', { name: 'Dismiss' }).click();
   await expect(alert).toHaveCount(0);

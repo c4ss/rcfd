@@ -3125,3 +3125,109 @@ P2 and P1 ran there; P5, P7 and P8 have not been run with the WebGL 2 fallback (
   case-editor, settings, commands, f837, workspace, compare, theme-surfaces, undo-case 64 passed. The full `npm test`
   was not run (CI runs it).
 - No Rust file, golden or `baseline_hashes.rs` changed; the light theme's colours are unchanged.
+
+## Addendum 21: Engine found without setup (2026-11-17, branch engine-default over main 41dc8add)
+
+The maintainer, 2026-11-17, after `npm run build && npm start` showed "Projects cannot be opened yet. The Studio was not
+told where the engine's project server is. Set RCFD_STUDIO_MCP to the path of rcfd-mcp.exe ... and start the Studio
+again":
+
+> this should never be the experience - when the studio is opened it should start a bundled server unless overridden or
+> told not to. of course simulations should be able to be run in the cloud or on clusters, but this is a simple case
+> where a custom shortcut can be setup
+
+and, the same day, from `npm start` with only `RCFD_STUDIO_MCP` set: "The engine answered: No rcfd service is
+configured: start the Studio with RCFD_STUDIO_SERVICE (attach) or RCFD_STUDIO_RCFD (start one)." The service side is
+covered by the same rules.
+
+### The rules (src/main/engine/locate.ts)
+
+Every launch finds an engine (rcfd, rcfd-mcp and rcfd-runner, from one folder) with nothing set. First match wins; a
+switch wins over a variable, a variable over the default folder:
+
+1. `--no-engine`: no engine. No project server, no service started by the Studio; the home says "The Studio was
+   started without an engine (--no-engine)."
+2. `--engine-dir <folder>`: the three programs in that folder.
+3. `RCFD_STUDIO_MCP`, `RCFD_STUDIO_RCFD`: as before for the project server. For the service, `RCFD_STUDIO_RCFD` starts
+   at launch as before, and `RCFD_STUDIO_MCP` alone now gives the `rcfd` beside it, started with the first project.
+4. The default folder. Packaged (installed, or `out/packaged`): `<resources>/bin`. Not packaged (`electron .`, `npm
+   start`): `$CARGO_TARGET_DIR/release` when set, else `<repo>/target/release`, found from the app folder
+   (`apps/studio-web` then `../../target/release`). This is a known place in the checkout, not a search. The tests'
+   lookup (`tests/support/rcfd.ts`, `tests/support/project.ts`) and `scripts/package-dir.mjs` call the same function
+   (`checkoutRelease`).
+
+Attaching is a separate choice: `--service <host:port>` (new, the switch twin), then `RCFD_STUDIO_SERVICE`. It replaces
+the service the Studio would start, whatever the engine; the project server still comes from the list above. It also
+applies with `--no-engine`, since attaching starts nothing. It is loopback only today (G10). This attach is where engines
+on other machines (a cloud, a cluster) will plug in. That work is out of scope here.
+
+The switches take `--name value` or `--name=value`, so a Windows shortcut or a `.desktop` file can carry them. Their
+values are never taken for F-837's project folder argument (`src/main/project/argv.ts`). A switch given without a value
+is reported on stderr and ignored. Nothing is ever looked for on PATH; F-805 D3, Addendum 19 and Q-F820-2 (a) stand.
+
+### Messages
+
+Every "was not told where ... Set RCFD_STUDIO_MCP" and "start the Studio with RCFD_STUDIO_..." text now says what was
+looked for and what is missing. Variables and switches appear only as the override. The affected places are the project
+home's notice and its Unavailable reasons, run control's recovery, the Claude Code panel's no-tools note, the service's
+`off` state (it now carries its reason, shown by the settings page and in the actions' availability as "No rcfd service:
+<reason>"), and the plots dev page. A checkout missing a program names the file, the folder, and the one cargo command
+that builds the missing ones (for example `cargo build --release -p rcfd-mcp`). An incomplete `<resources>/bin` says to
+install again or use `--engine-dir`. The Claude Code message keeps its rule (`RCFD_STUDIO_CLAUDE` only). It now says
+"Claude Code was not found: the Studio looks for it only where RCFD_STUDIO_CLAUDE says". No word budget changed: the
+notice is an exception surface (`data-words="exception"`), and the Unavailable reasons are tooltips.
+
+### Decisions (options, the recommendation taken; each reversible)
+
+- **A21-D1, out/packaged without a built engine:** (a) fail loudly, or (b) package without one by default. Taken: (a).
+  `scripts/package-dir.mjs` copies the three programs into `out/packaged/resources/bin`, as the installers do. A
+  missing one fails the run, naming the file and the cargo command, before anything is deleted. `--engine=<folder>`
+  takes the programs from elsewhere, and `--no-engine` packages without them. CI's studio-web job builds no Rust, so it
+  now runs `npm run package:dir -- --no-engine`, then `npx playwright test` (`.github/workflows/ci.yml`), and the
+  engine tests skip with their reason, as before. `npm test` locally needs the engine built.
+- **A21-D2, a named engine is used whole:** an engine named by a switch or a variable is never mixed with parts of the
+  default folder. A folder without the whole engine gives no project server and no started service, with the reason.
+  This is stricter than before for `<resources>/bin`, which used to need only `rcfd-mcp` for the project server.
+- **A21-D3, `RCFD_STUDIO_MCP` alone:** the `rcfd` beside it is started with the first project (the maintainer's second
+  report). With no `rcfd` beside it, the state is `off`, naming the file and `cargo build --release -p rcfd-cli`. Before
+  this, an installed Studio paired the variable's `rcfd-mcp` with its shipped `rcfd`, and other Studios had no service.
+- **A21-D4, `--engine-dir` and the variables' service:** with `--engine-dir`, `RCFD_STUDIO_RCFD` is ignored, and the
+  folder's `rcfd` starts with the first project. `RCFD_STUDIO_SERVICE` still attaches (attaching is its own choice).
+- **A21-D5, `RCFD_TEST_BUNDLED_BIN` removed:** `out/packaged` has a real bin folder now, so the F-820 e2e test uses it.
+- **A21-D6, tests and the user data folder:** `out/packaged` shares its user data folder with an installed Studio, and
+  it can now start a service. `launchStudio` (tests/support/studio.ts) therefore gives each launch a temporary
+  `RCFD_STUDIO_STATE_DIR` unless the test names one or a `--user-data-dir`. The new no-variable test uses Chromium's
+  `--user-data-dir`, which Electron honours (checked), so it sets no `RCFD_STUDIO_*` variable at all.
+- **Tests restated, not weakened:** project.spec's "without the engine" test now starts the Studio with `--no-engine`
+  and checks the exact reason. The unit tests of `engineConfig` and `serviceConfig` take the engine choice. The
+  registry's `off` reason is the service's own.
+
+### Open for the maintainer
+
+- **Q-A21-1, Claude Code without setup.** The `claude` CLI is still found only through `RCFD_STUDIO_CLAUDE` (F-814 D2,
+  never PATH), so a Studio started with nothing set has the engine but a read-only Claude Code panel. Options:
+  (a) leave it as it is; (b) look in Claude Code's own known install places (the native installer's
+  `~/.local/bin/claude` or `%USERPROFILE%\.local\bin\claude.exe`), one fixed place rather than a search, with the
+  variable and a new `--claude <path>` switch as overrides; (c) (b) plus PATH. Recommended: (b), with a `--no-claude`
+  switch. It follows this addendum's principle without reopening PATH. Not built.
+
+### Verification (2026-11-17, on engine-default over main 41dc8add, Windows 11, RCFD_TEST_HEADLESS=1)
+
+- The engine was built in this worktree (`cargo build --release -p rcfd-cli -p rcfd-runner -p rcfd-mcp`, its own
+  `target/`). No Rust file changed.
+- `npm ci`, `npm run typecheck` clean; `npm run build && npm run package:dir` exit 0, with the engine in
+  `out/packaged/resources/bin`. `package:dir --engine=<empty folder>` and `CARGO_TARGET_DIR=<empty folder>` both exit 1,
+  naming the three files and `cargo build --release -p rcfd-mcp -p rcfd-cli -p rcfd-runner`.
+- Unit, the touched specs (engine-locate 13 new, project-home, service-client, actions-registry, f837, claude): 122
+  passed.
+- e2e, the asked specs (project with the new no-variable test, first-path, service, claude, settings-rcfd,
+  word-budget, a11y): 65 passed. Afterwards no rcfd, rcfd-mcp or rcfd-runner process from this worktree was left
+  running.
+- Full `npx playwright test`: 761 passed and 2 failed (6 did not run after them in serial files). run-control's
+  refused-actions test now saw the F-830 catalogue line, because `RCFD_STUDIO_MCP` alone starts a service (A21-D3). It
+  was restated to check both recovery lines, and then passed. The other failure was undo.spec's "undo of a value
+  another writer changed", a focus-ring check. It fails in the same way with `--no-engine`, where the engine and
+  service rules are as before, so it is not caused by this change. It is left as found, for CI to confirm.
+- `electron .` with no variable (a probe through Playwright): the engine is `from: 'checkout'` (this worktree's
+  `target/release`) and the service is `waiting`. With `--no-engine`, both say the Studio was started without an engine.
+  With a bad `--engine-dir`, both name the folder and the missing files.

@@ -29,6 +29,8 @@
 //! ADR 0736 restates it for F-829 (P1): the six trash tools come last, after `wait_run` (`list_trash` read, `trash_run`,
 //! `trash_results`, `trash_case` and `restore_trash` `write_files`, `empty_trash` the new class `delete`, the only tool
 //! with `destructiveHint` true); without them the list is the F-828 one above, byte for byte.
+//! ADR 0738 restates it for F-809 (P4): `derive_picture` (read, required `run` and `kind`) comes right after
+//! `render_field`; without it the list is the F-828 one, byte for byte.
 //!
 //! ADR 0737 restates it for F-837 (P1 to P3): `case_facts` (read, required `case`) and `refine_case_mesh` (`write_files`,
 //! required `case`, `factor` and `base_hash`) come right after `set_runner_config`, and `start_run` gains exactly the
@@ -211,6 +213,24 @@ fn a2_tools_list_with_project_is_the_golden_with_the_f271_changes() {
             props.remove("dry_run").expect("start_run has dry_run")["type"],
             "boolean"
         );
+    }
+    // ADR 0738 P4: derive_picture right after render_field, taken out; the rest is the F-828 list
+    {
+        let tools = live_value["tools"].as_array_mut().unwrap();
+        let at = tools
+            .iter()
+            .position(|t| t["name"] == "derive_picture")
+            .expect("derive_picture listed");
+        assert_eq!(tools[at - 1]["name"], "render_field");
+        let d = &tools[at];
+        assert_eq!(d["_meta"]["rcfd/access"], "read");
+        assert_eq!(d["inputSchema"]["required"], json!(["run", "kind"]));
+        assert_eq!(
+            d["inputSchema"]["properties"]["kind"]["enum"],
+            json!(["iso", "streamlines", "slice", "cut_surface"])
+        );
+        assert_eq!(d["inputSchema"]["additionalProperties"], false);
+        tools.remove(at);
     }
     // ADR 0734 P3, P4: hash_project_file right after read_project_file and start_run's three properties, taken out;
     // the rest is the F-837 list

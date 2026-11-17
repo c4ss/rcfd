@@ -61,7 +61,8 @@ const actions = projectActions;
 /** F-832: the scope of the project home's works (opening a project) in the work tracker. */
 const WORK_SCOPE = 'project-home';
 
-const NOT_CONFIGURED_SHORT = 'The Studio was not told where the engine’s project server is.';
+/** The Unavailable chips' reason when there is no engine; the notice below them says what was looked for and what is missing. */
+const NOT_CONFIGURED_SHORT = 'The Studio has no engine to open projects with.';
 
 export function ProjectHome() {
   useEffect(reportReady, []);
@@ -238,7 +239,7 @@ function RecentRow({ r, canOpen }: { r: RecentProject; canOpen: boolean }) {
             label="Open"
             reason={
               r.exists
-                ? 'Projects cannot be opened yet: the Studio was not told where the engine’s project server is.'
+                ? 'Projects cannot be opened: the Studio has no engine (the project home says why).'
                 : 'The folder is not there any more: it may have been moved, renamed or deleted.'
             }
           />

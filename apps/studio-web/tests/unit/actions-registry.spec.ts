@@ -209,12 +209,14 @@ test.describe('availability', () => {
   const at = (state: string | undefined) => ({ service: connected, session: { id: 's1', ...(state ? { state } : {}) } });
   const av = (id: string, ctx: Parameters<typeof availability>[1], params: Record<string, unknown> = { session: 's1' }) => availability(getAction(id)!, ctx, params);
 
-  test('no service or no connection: nothing is available, and the reason says how to get one (G19)', () => {
+  test('no service or no connection: nothing is available, and the reason says why (G19)', () => {
     for (const a of ACTIONS) {
-      expect(availability(a, { service: { status: 'off', lastError: null } }, { session: 's1' })).toEqual({
+      // ADR 0801 Addendum 21: the reason is the service's own (what was looked for and what is missing)
+      expect(availability(a, { service: { status: 'off', lastError: 'The Studio was started without an engine (--no-engine).' } }, { session: 's1' })).toEqual({
         available: false,
-        reason: 'No rcfd service is configured: start the Studio with RCFD_STUDIO_SERVICE (attach) or RCFD_STUDIO_RCFD (start one).',
+        reason: 'No rcfd service: The Studio was started without an engine (--no-engine).',
       });
+      expect(availability(a, { service: { status: 'off', lastError: null } }, { session: 's1' })).toEqual({ available: false, reason: 'No rcfd service.' });
     }
     expect(av('run.status', { service: { status: 'disconnected', lastError: 'connection refused' } })).toEqual({
       available: false,
