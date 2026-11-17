@@ -22,6 +22,7 @@
 // | P5  | measure-scrub.mjs       | 1e6, 10 passes                             | P6 at 4e6 and Follow live (recorded)            |
 // | P7  | measure-field.mjs       | 1e6, 5 repeats per route (R2, and R1)      | (the same)                                      |
 // | P8  | measure-field.mjs       | 1e6 triangles, vertical sync and uncapped  | (the same)                                      |
+// | F819| measure-large.mjs       | -                                          | P7, P5, P8 on 4e6 and FAN-01, once (recorded)   |
 //
 // The data sets are the boxes of crates/rcfd-api/examples/f447_bench.rs (`gen`): tiny and 1e6 for the light set, 4e6 as
 // well for --heavy. They are kept in --data, else $RCFD_BENCH_DATA, else <temp>/rcfd-studio-bench-data, and the sizes
@@ -148,6 +149,8 @@ const CASES = [
   { ids: ['P4'], sizes: heavy ? ['1e6', '4e6'] : ['1e6'], script: 'measure-data.mjs', args: [`--bench-server=${benchServer}`, `--data=${data}`, ...(heavy ? ['--p12'] : [])] },
   { ids: ['P5'], sizes: heavy ? ['1e6', '4e6'] : ['1e6'], script: 'measure-scrub.mjs', strip: true, args: [`--data=${data}`, ...(heavy ? [] : ['--no-p6', '--no-live'])], needs: mcp ? null : 'rcfd-mcp not found (cargo build --release -p rcfd-mcp, or RCFD_MCP_BIN)' },
   { ids: ['P7', 'P8'], sizes: ['tiny', '1e6'], script: 'measure-field.mjs', args: [`--data=${data}`, `--bench-server=${benchServer}`] },
+  // F-819 (--heavy only): P7, P5 and P8 on the 4e6 box and the FAN-01 meshes (scripts/measure-large.mjs), one repeat, recorded
+  ...(heavy ? [{ ids: ['F819'], sizes: ['tiny', '4e6'], script: 'measure-large.mjs', args: [`--data=${data}`, '--repeats=1', ...(noGen ? ['--no-gen'] : [])], needs: mcp ? null : 'rcfd-mcp not found (cargo build --release -p rcfd-mcp, or RCFD_MCP_BIN)' }] : []),
 ].filter((c) => !only || c.ids.some((id) => only.has(id)));
 
 // ---- the data sets
@@ -223,7 +226,10 @@ function line(id, what, value, unit, op, limit, { judged = true, note = '' } = {
 }
 
 function linesFor(c, r) {
-  if (c.ids[0] === 'P10') {
+  if (c.ids[0] === 'F819') {
+    // its own limits and verdict are in its output; in the bench every line is recorded
+    for (const l of r.lines ?? []) line(l.id, `${l.what} (F-819)`, l.value, l.unit, l.op, l.limit, { judged: false, note: l.note });
+  } else if (c.ids[0] === 'P10') {
     line('P10', 'cold start to the project view, median of 10', r.p50, 'ms', '<=', 2500, { note: `first ${r.first}, max ${r.max}` });
   } else if (c.ids[0] === 'P2') {
     const l = r.P2.latencyMs;
