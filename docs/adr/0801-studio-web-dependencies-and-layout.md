@@ -1459,3 +1459,97 @@ cannot be made, refusals, conflicts and the decision panel; a work in progress (
   so it is not F-833's. `tests/e2e/word-budget.spec.ts`: 10 passed.
 - `python scripts/third_party_licenses.py --check`: up to date.
 - `cargo test -p rcfd-cli --release --test docs_site --test workspace_graph`: 2 and 4 passed.
+
+## Addendum F-816: the keyboard and assistive-technology pass (2026-11-16)
+
+F-816 (G8, with G13, G20 and G22) checks every built surface of the Studio from the keyboard and the accessibility tree
+and fixes what failed. It adds **no dependency** and changes no Rust file, service method, reply shape, golden or
+default. No visible word was added or removed (G22): the word budgets of `src/shared/word-budget.ts` are unchanged and
+`tests/e2e/word-budget.spec.ts` passes. `DESIGN.md` and `docs/studio-guardrails.md` are not edited; proposed `DESIGN.md`
+lines are below. There is no contrast requirement (the maintainer, 2026-11-16), and no check of colour values was
+written.
+
+### What F-816 built
+
+- `tests/support/a11y.ts`: the checks, on the DOM, the keyboard and Chromium's accessibility tree (DevTools protocol:
+  `Accessibility.getFullAXTree`, `getPartialAXTree`): the Tab walk both ways with each stop's focus indicator (an
+  outline, box shadow or border it has only while focused, on a box on the screen), reach (every interactive element a
+  Tab stop or a member of a composite that is one), the arrow walk of each composite, click or pointer handlers no key
+  reaches (read from React's props on the element), names of every interactive node, roles of every Tab stop, the CSS
+  motion of the document, and animation frames asked for.
+- `tests/e2e/a11y.spec.ts`: the packaged Studio against the real engine, every surface reached with keys only (16
+  surface states: project home with and without a project, the first path, the Claude Code panel, Runs, a selected run,
+  the provenance popover, the run workspace, its derived-picture controls, a select's list, compare mode, the command
+  palette, the case editor, its undo controls, case settings and the decision panel), then reduced motion and the
+  colour-alone list. It writes `test-results-visual/f816/report.json` and focus screenshots.
+- The written manual pass: `apps/studio-web/README.md`, "Keyboard and assistive technology (F-816, G8)".
+
+### Failures found, and what changed
+
+| Found | Fix |
+|---|---|
+| The run bands' names in the time panel were a `div` with a click handler and no keyboard path (the pointer-only check) | `TimePanel.tsx`: buttons in a vertical toolbar with one Tab stop (the selected run's name), Up, Down, Home and End between them, Enter or Space selects; named "<case>, run <id>", `aria-current` on the selected one. Looks as before; the ring is drawn inside. |
+| The decision panel (F-829) is an `alertdialog`, but Tab left it while it stayed open, and its Escape works only while it has the focus | `ui/containFocus.ts`: Tab and Shift+Tab go round the panel's own controls; `aria-modal="true"`. The same for a run's confirmation strip (F-807, `RunControls.tsx`), which the walk cannot reach without a running run (manual pass, step 3). |
+| Play stepped as fast as the fields were drawn (or every 150 ms) under reduced motion | `ui/motion.ts` (`usePrefersReducedMotion`), `RunWorkspace.tsx`: under `prefers-reduced-motion: reduce`, at most one stop every 500 ms. Unchanged without the preference. Measured gaps 499 to 502 ms. |
+| The live band segment differed from another running run's segment by orange alone | `workspace.css`: a 2px ink edge at the live segment's growing end; `TimePanel.tsx`: "live" as the band end's `aria-description` and in its tooltip. The end's accessible name is unchanged (`workspace.spec.ts` reads it). |
+| A Claude Code session that cannot be chosen while a reply runs differed by its ink-2 name alone | `claude.css`: a dashed hairline border, as every unavailable control has. |
+
+The shortcut table's descriptions of the time panel's Up, Down, Home and End name the band names' use of them
+(`shortcuts.ts`, descriptions only; the keys were already reserved for the time panel).
+
+Passed with no change: no trap anywhere; Shift+Tab is the reverse of Tab on every surface; every stop shows its ring
+(outline on the element for all but the table rows' cells, the scrubber's line and the inputs inside a switch or number
+field); no unnamed interactive node and no Tab stop without a role; Escape closes the palette, the provenance popover, a
+select's list and the decision panel and gives the focus back; CSS motion is off under reduced motion (`base.css`); the
+camera moves at once on a key (no easing, damping off).
+
+### Decisions (options, the recommendation taken; each reversible)
+
+- D1, a checker library. (a) Write the checks on the DOM, the keyboard and Chromium's accessibility tree, no dependency;
+  (b) add axe-core (MPL-2.0) under G5, which needs the maintainer; (c) Playwright's ARIA snapshot only (no roles of
+  non-focusable nodes, no names from the tree Chromium computes). Taken: (a). Recommendation: (a); (b) can be added later
+  on top, by the maintainer's word.
+- D2, the band names. (a) A toolbar with one Tab stop and the arrows; (b) one Tab stop per band (a project with 50 runs
+  adds 50 stops); (c) drop the click and leave the runs list as the only way; (d) leave a pointer-only target. Taken:
+  (a). Recommendation: (a).
+- D3, Play under reduced motion. (a) At most one stop per 500 ms (below three changes a second, so the field does not
+  flash); (b) unchanged, as a playback the user asked for; (c) Play off. Taken: (a). Recommendation: (a).
+- D4, the alert dialogs. (a) Contain Tab, `aria-modal`; (b) keep them non-modal and give them another role. Taken: (a),
+  as WAI-ARIA's alertdialog is modal and only the panel answers Escape. Recommendation: (a).
+- D5, the live segment. (a) An ink edge at its growing end, "live" in the end's description and tooltip; (b) a new
+  "live" pictogram at the band end (a new shape for DESIGN.md); (c) the accessible description only (nothing for a
+  sighted colour-blind user). Taken: (a). Recommendation: (a).
+- D6, selection by an ink fill (a selected segment of a segmented toggle, the first path's station). Counted as a
+  carrier that is not a hue: a filled box against an empty one, with `aria-checked` or `aria-current`. Option: add bold
+  weight as well (the label's width changes). Taken: no change. Recommendation: no change.
+
+### Proposed `DESIGN.md` lines (not edited here)
+
+- Run bands: "The live segment ends in a 2px ink edge at its growing end, so live is not told by orange alone."
+- Run bands: "A band's name is a button: one Tab stop for the names, Up and Down between them, Enter selects."
+- Motion: "Play under reduced motion: one stop at most every 500 ms."
+- Do's and Don'ts: "Do give every state colour a second carrier (pictogram, shape, position or word); an unavailable
+  control is a dashed hairline."
+- Components, decision panel: "Tab stays inside while it asks."
+
+### Open for the maintainer
+
+- D1: whether to add axe-core under G5 on top of the written checks.
+- The decision panel and the confirmation strip now hold Tab while open; if the maintainer wants to reach the page
+  behind a decision without answering it, D4 (b) is the way back.
+- Observed, not changed: while the run workspace is open the page asks for animation frames continuously (743 in the
+  second after one orbit key, in an early run of the reduced-motion test, with nothing moving after the first frame;
+  the loop was not traced to its owner). Nothing moves, so it is not motion; it is a power and G9 question for F-817.
+
+### Verification (2026-11-17, on studio-roadmap 11b443a8)
+
+- `npm ci`: exit 0. `npm run typecheck`: clean.
+- `npm test`: 592 passed, 3 failed, 6 did not run. Two failures were F-816's own and are fixed: the band name's button
+  reset used `border-radius` (`tests/unit/workspace.spec.ts` forbids it; now `appearance: none`), and the palette's arrow
+  walk read the active option before a loaded machine had drawn it (the walk now waits up to 500 ms for a key's effect);
+  the 6 that did not run are the serial `a11y.spec.ts` tests after it. The third is `service.spec.ts:132` (kill and
+  restart), known to fail under load. After the fixes, rebuilt and packaged: `tests/unit/workspace.spec.ts` with
+  `tests/e2e/a11y.spec.ts` 25 passed; `service.spec.ts` alone 9 passed; `word-budget.spec.ts`, `workspace.spec.ts`
+  and `run-control.spec.ts` 23 passed.
+- `python scripts/third_party_licenses.py --check`: up to date.
+- `cargo test -p rcfd-cli --release --test docs_site --test workspace_graph`: 2 and 3 passed.

@@ -113,6 +113,19 @@ export function TimePanel(props: TimePanelProps) {
     return out;
   }, [monitorSeries, comparedMonitor, compare?.row.id]);
   const plotVersion = version * 1000 + (compare?.version ?? 0);
+  // F-816: the band names' one Tab stop (the last one focused, else the selected run's) and their arrow keys
+  const [bandFocus, setBandFocus] = useState<string | null>(null);
+  const bandStop = bandFocus !== null && bands.some((b) => b.id === bandFocus) ? bandFocus : row.id;
+  const onBandKey = (e: KeyboardEvent<HTMLDivElement>) => {
+    const names = Array.from(bandsRef.current?.querySelectorAll<HTMLButtonElement>('.tp-band-name') ?? []);
+    const at = names.indexOf(document.activeElement as HTMLButtonElement);
+    if (at < 0) return;
+    const to: Record<string, number> = { ArrowDown: at + 1, ArrowUp: at - 1, Home: 0, End: names.length - 1 };
+    const k = to[e.key];
+    if (k === undefined || e.altKey || e.ctrlKey || e.metaKey || e.shiftKey) return;
+    e.preventDefault();
+    names[Math.max(0, Math.min(names.length - 1, k))]?.focus();
+  };
   const ownEnd = bands.find((b) => b.id === row.id)?.end ?? 0;
   // F-828: the stop every number of the panel belongs to, for its provenance
   const stop: StopFacts | null = position ? { ...position, of: positions.length } : null;
@@ -133,10 +146,15 @@ export function TimePanel(props: TimePanelProps) {
         </div>
         <div className="tp-body">
           <div className="tp-lane" aria-hidden="true" />
-          <div className="tp-bands" ref={bandsRef}>
+          {/* F-816 (G8): the band names select a run from the keyboard too: one Tab stop (the selected run's name), the
+              Up and Down arrows, Home and End move between them, Enter or Space selects (ARIA's toolbar pattern) */}
+          <div className="tp-bands" ref={bandsRef} role="toolbar" aria-orientation="vertical" aria-label={`Run bands of ${rows.length} runs`} onKeyDown={onBandKey}>
             {bands.map((b, i) => {
               const r = rows.find((x) => x.id === b.id)!;
               const selected = b.id === row.id;
+              // F-816 (G8): the live segment is orange and ends in an ink edge; "live" is the end's description and in its
+              // tooltip (its name stays the state and where the band ends)
+              const live = b.segments.some((s) => s.kind === 'live');
               return (
                 <div
                   key={b.id}
@@ -144,9 +162,20 @@ export function TimePanel(props: TimePanelProps) {
                   data-run={b.id}
                   data-state={r.state}
                 >
-                  <div className="tp-band-name" onClick={() => onSelect(b.id)} title={`${caseName(r.case)} · ${b.id}`} data-words="data">
+                  <button
+                    type="button"
+                    className="tp-band-name"
+                    tabIndex={b.id === bandStop ? 0 : -1}
+                    aria-current={selected ? 'true' : undefined}
+                    aria-label={`${caseName(r.case) || b.id}, run ${b.id}`}
+                    onClick={() => onSelect(b.id)}
+                    onFocus={() => setBandFocus(b.id)}
+                    title={`${caseName(r.case)} · ${b.id}`}
+                    data-words="data"
+                    data-band={b.id}
+                  >
                     {caseName(r.case) || b.id}
-                  </div>
+                  </button>
                   <div className={`tp-band${selected || b.id === compare?.row.id ? '' : ' tp-band--faded'}`}>
                     <div className="tp-track">
                       {b.segments.map((s, k) => (
@@ -166,7 +195,9 @@ export function TimePanel(props: TimePanelProps) {
                         data-words={b.state === 'failed' || b.state === 'cancelled' ? 'exception' : 'data'}
                         role="img"
                         aria-label={b.label}
-                        title={b.label}
+                        aria-description={live ? 'live' : undefined}
+                        title={live ? `${b.label} · live` : b.label}
+                        data-live={live ? '' : undefined}
                         style={labelAfter(b.end, axis) ? { left: `calc(${pct(fraction(b.end, axis))} + var(--space-sm))` } : { right: `calc(${pct(1 - fraction(b.end, axis))} + var(--space-md))` }}
                       >
                         {b.state && <StatePictogram state={b.state} size={12} />}

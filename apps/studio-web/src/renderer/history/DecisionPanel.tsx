@@ -1,9 +1,11 @@
 // A decision the Studio will not take for the user (F-829, G18): what would be lost or what another writer changed, in
 // words, and named choices. A floating panel under the header band (an alertdialog): focus goes to the safe choice when
 // there is one (a loss: keeping is the default), else to the title, so no choice is preselected (a conflict); Escape
-// is Cancel; focus goes back where it was when the panel closes. Keyboard: Tab moves through the choices (G8).
+// is Cancel; focus goes back where it was when the panel closes. Keyboard: Tab moves through the choices and stays in
+// the panel while it is open (G8, F-816).
 import { useEffect, useId, useRef, type ReactNode } from 'react';
 import { Button } from '../ui/index.js';
+import { containTab } from '../ui/containFocus.js';
 import './history.css';
 
 export interface Choice {
@@ -58,6 +60,8 @@ export function DecisionPanel({ title, children, choices, onCancel, failed }: De
       ref={root}
       className={failed ? 'hi-panel hi-panel--failed' : 'hi-panel'}
       role="alertdialog"
+      aria-modal="true"
+      onKeyDown={containTab}
       aria-labelledby={titleId}
       aria-describedby={bodyId}
       data-words="exception"

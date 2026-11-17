@@ -140,10 +140,10 @@ export const SHORTCUTS: readonly Shortcut[] = [
   { keys: 'Ctrl+Y', scope: 'global', does: 'Redo (F-829; until then the Edit menu’s Redo in text fields)', command: null, owner: 'F-829', reserved: true },
   { keys: 'ArrowLeft', scope: 'time-panel', does: 'Scrub back (F-810)', command: null, owner: 'F-810', reserved: true },
   { keys: 'ArrowRight', scope: 'time-panel', does: 'Scrub forward (F-810)', command: null, owner: 'F-810', reserved: true },
-  { keys: 'ArrowUp', scope: 'time-panel', does: 'Kept for the time panel (F-810)', command: null, owner: 'F-810', reserved: true },
-  { keys: 'ArrowDown', scope: 'time-panel', does: 'Kept for the time panel (F-810)', command: null, owner: 'F-810', reserved: true },
-  { keys: 'Home', scope: 'time-panel', does: 'Scrub to the start (F-810)', command: null, owner: 'F-810', reserved: true },
-  { keys: 'End', scope: 'time-panel', does: 'Scrub to the end (F-810)', command: null, owner: 'F-810', reserved: true },
+  { keys: 'ArrowUp', scope: 'time-panel', does: 'Kept for the time panel (F-810); on a run band’s name, the previous name (F-816)', command: null, owner: 'F-810', reserved: true },
+  { keys: 'ArrowDown', scope: 'time-panel', does: 'Kept for the time panel (F-810); on a run band’s name, the next name (F-816)', command: null, owner: 'F-810', reserved: true },
+  { keys: 'Home', scope: 'time-panel', does: 'Scrub to the start (F-810); on a run band’s name, the first name (F-816)', command: null, owner: 'F-810', reserved: true },
+  { keys: 'End', scope: 'time-panel', does: 'Scrub to the end (F-810); on a run band’s name, the last name (F-816)', command: null, owner: 'F-810', reserved: true },
 
   // ---- reserved: the Electron default application menu (tests/e2e/commands.spec.ts reads the running menu)
   { keys: 'Ctrl+X', scope: 'global', does: 'Cut', command: null, owner: ELECTRON_MENU, reserved: true },

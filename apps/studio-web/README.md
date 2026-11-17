@@ -1063,6 +1063,98 @@ unavailable and why, a value to act on (changes not saved).
 | decision panel | 0 | 0 | the whole panel is an exception |
 | progress rows | 3 | 3 | the work's name and Cancel (a work in progress is not at rest) |
 
+## Keyboard and assistive technology (F-816, G8)
+
+Every built surface works from the keyboard alone, shows where the focus is, names every control, keeps still under
+reduced motion and never says a state by colour alone. No WCAG contrast rule applies (the maintainer removed it on
+2026-11-16); colour values follow `DESIGN.md`. No checker library was added (G5): the checks are written in
+`tests/support/a11y.ts` on the DOM, the keyboard and Chromium's own accessibility tree (read through the DevTools
+protocol).
+
+`tests/e2e/a11y.spec.ts` opens the packaged Studio against the real engine (as `word-budget.spec.ts` does) and reaches
+every surface with keys only: Tab, Shift+Tab, the arrows, Enter, Space, Escape and the shortcuts (Ctrl+1, Ctrl+2, Ctrl+K,
+Ctrl+O). The folder dialog is the one thing stubbed. Surfaces walked: project home (no project, a project, an empty
+project with the first path), the Claude Code panel, Runs and a selected run, the provenance popover, the run workspace
+with the field view, the derived-picture controls, a select's list, compare mode, the command palette, the case
+editor and its undo controls, case settings and the decision panel. On each surface:
+
+| Check | How |
+|---|---|
+| No trap | Tab goes round the whole window and comes back to its first stop; Shift+Tab goes round the same stops in reverse order. A dialog (palette, provenance, a select's list, the decision panel) keeps Tab inside, closes on Escape and gives the focus back to what opened it. |
+| Visible focus | Each stop draws an outline, box shadow or border that it does not have once the focus has moved on (on itself, or on the part that draws its ring: a switch's track, a row's cells, the scrubber's line), and that box is on the screen. Not a colour or contrast check. |
+| Reach | Every button, link, field, slider, tab, option and other interactive element of the surface is a Tab stop or a member of a composite that is one (a list box, grid, tab list, radio group, roving toolbar); the arrow keys reach every member and come back. A number field's steppers are its Up and Down keys; React Aria's hidden Dismiss buttons are Escape. |
+| No pointer-only target | No element with a React click or pointer handler lacks a keyboard path (React keeps an element's props on it; the check reads them). |
+| Names and roles | Every node of Chromium's accessibility tree with an interactive role (button, link, textbox, slider, tab, option, checkbox, radio, switch, combobox, list box, grid, dialog, img, progressbar and the like) has a non-empty name; every Tab stop has a role. |
+| Reduced motion | With `prefers-reduced-motion: reduce` emulated, no element declares a CSS animation or transition over 50 ms and none runs; without it, the run bands' grow-in is seen (so the check sees motion when there is some). Play steps no faster than one stop per 500 ms; one orbit key moves the camera at once (the picture 150 ms after the key is the picture 900 ms after). |
+| Colour alone | Each state that has a colour also has a pictogram, a shape, a position or a word (the list below), read from the page and from the stylesheets. |
+
+It writes `test-results-visual/f816/report.json` (every surface's stops, how each draws its focus, the composites,
+the motion measured, the colour list) and screenshots of focus states (`<surface>-NN-<role>.png`, one per role, up to
+six per surface).
+
+What F-816 changed in the product:
+
+- The run bands' names select a run from the keyboard: they are buttons with one Tab stop between them (the selected
+  run's); Up and Down, Home and End move between them; Enter or Space selects (ARIA's toolbar pattern). They were a
+  click-only `div`, and the runs list was the only keyboard path.
+- The decision panel (F-829) and a run's confirmation strip (F-807) keep Tab inside while they ask (`ui/containFocus.ts`,
+  `aria-modal`), so Escape, which only they answer, stays in reach. Before, Tab left them open behind the focus.
+- Play under reduced motion steps at most one stop per 500 ms (`ui/motion.ts`), below three changes a second; without
+  the preference it is unchanged.
+- The live band segment ends in a 2px ink edge, and its band end says "live" in its description and tooltip. Before,
+  orange alone told it from another running run's band.
+- A Claude Code session that cannot be chosen while a reply runs has a dashed hairline, as every unavailable control
+  does. Before, only its ink-2 name said so.
+
+State and its non-colour carrier:
+
+| State (colour) | Also carried by |
+|---|---|
+| Run state: queued, running, converged, finished, failed, paused, cancelled (state colours) | its pictogram, one shape per state, and the word (shown for failed and cancelled, the name and tooltip otherwise) |
+| Failed row, notice or problem (fail wash, red text) | the failed pictogram and the words ("Failed", "Change failed.") |
+| Band segments: iterating (sky), converged (meadow), failed (red) | position: the phase at the band's end is the end's pictogram and state word |
+| Live band segment (orange) | the ink edge at its growing end; "live" in the end's description and tooltip (new) |
+| Queued or not computed yet (silver hatch) | the hatch pattern |
+| Band end | its pictogram and its name ("converged · it 121"), and where the band ends |
+| Selected band | bold name, ink underline, `aria-current` |
+| Project folder live or not live | an ink square, or the failed pictogram and "Not live" |
+| Compared run's lines | thinner lines, the same dashes per equation, names in the readout |
+| Difference field and metrics (colour map) | the legend's numbers, the readout, signed numbers in the metrics table |
+| Conflict | the words of the decision panel or notice, and the table of yours and theirs |
+| Validation (red field border) | the failed pictogram and "Change failed." with the engine's words |
+| Switch on (meadow) | the knob's position |
+| Selected segment, tab, option, row, section, session | ink fill, bold weight, a check mark or an ink box; `aria-selected`, `aria-pressed`, `aria-current` |
+| Unavailable control or session | a dashed hairline border; the reason in the name or tooltip |
+| Focus (orange) | the ring is a shape: a 2px line around the control |
+
+### Manual pass (view-and-report)
+
+What the automated checks cannot judge, for the maintainer to repeat with the packaged Studio
+(`npm run build && npm run package:dir`, then `out/packaged/rcfd-studio.exe`) on a project with a running run (start one
+from a case row's Run in the project home, or with `rcfd-runner start`):
+
+1. Keyboard only, no mouse, from start to finish: open a project (Ctrl+O), open Runs (Ctrl+2), select a run (Tab into
+   the table, arrows, Space), open its provenance (Tab to a number, Enter; Escape), go to Workspace (arrows on the
+   project tabs), pick a run by its band name (Tab to the names, Up and Down, Enter), scrub (arrows, Page Up and Down,
+   Home, End), Play and Pause, orbit and zoom the field (arrows, + and -, Home or 0 to reset), Compare runs (Space, then the compared run's list),
+   open the palette (Ctrl+K) and run a command, edit a case (Ctrl+1, Edit, change a key, Ctrl+S), undo (Ctrl+Z), close a
+   settings session and keep it. Report any step you could not do, or where you lost the focus.
+2. At every step: is the orange ring always visible, and on the thing Enter would act on? Report any place where you had
+   to look for it (inside scroll boxes, at the window's edges, on the field and the plots).
+3. A running run: press Stop… or Cancel… on it. The strip asks and has the focus; Tab and Shift+Tab stay on its two
+   buttons; Escape keeps the run and the focus goes back to Stop… (the automated walk has no running run).
+4. Windows Narrator (Ctrl+Win+Enter): Tab through the project home, Runs and the workspace. Every control is read with
+   a name and a role, and a run's state with its word. Report a control read as "button" with no name, or a name that
+   does not match what the control does.
+5. Windows Settings > Accessibility > Visual effects > Animation effects off, then restart the Studio: the run bands
+   appear at once, switches and disclosures do not slide, Play steps about twice a second.
+6. A colour filter (Windows Settings > Accessibility > Colour filters, red-green): every run state, band phase, the live
+   band, a failure and a conflict can still be told apart.
+7. Windows text scaling at 150 %: no control is cut off so that its name or its focus ring cannot be seen.
+
+Open for the maintainer: whether to add a checker library under G5 (axe-core, MPL-2.0) on top of these checks. The
+written checks cover the rules of F-816 and need no dependency (ADR 0801, Addendum F-816, D1).
+
 ## Security (G10)
 
 - The renderer is sandboxed (`app.enableSandbox()` and the window's settings), context-isolated, with Node integration
