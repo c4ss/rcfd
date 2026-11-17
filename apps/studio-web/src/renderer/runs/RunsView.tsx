@@ -37,6 +37,8 @@ import type { RunRequest } from '../../shared/project.js';
 import { Provenance, reportValue, statusValue } from '../provenance/index.js';
 import { BudgetsButton, BudgetsPanel, ResidualValue, residualColumns } from './RunExtras.js';
 import { HowItRanTools } from './HowItRan.js';
+import { SiteBadge } from './Sites.js';
+import type { RunSite } from '../../shared/sites.js';
 import './runs.css';
 
 /** The order of the state filter's options. */
@@ -143,7 +145,7 @@ export function RunsView({ view, selected, onSelect, onOpenWorkspace }: RunsView
               </TableHeader>
               <TableBody
                 items={rows}
-                dependencies={[selected, view.runDetails, view.runRequests, resCols]}
+                dependencies={[selected, view.runDetails, view.runRequests, resCols, view.runSites]}
                 renderEmptyState={() => (
                   <div className="rv-nomatch" data-words="exception">
                     <p>No run matches this filter.</p>
@@ -159,7 +161,7 @@ export function RunsView({ view, selected, onSelect, onOpenWorkspace }: RunsView
                   </div>
                 )}
               >
-                {(r) => <RunTableRow row={r} faded={selected !== null && r.id !== selected} pending={pending.get(r.id) ?? null} resCols={resCols} />}
+                {(r) => <RunTableRow row={r} faded={selected !== null && r.id !== selected} pending={pending.get(r.id) ?? null} resCols={resCols} site={view.runSites?.[r.id]} />}
               </TableBody>
             </Table>
           </div>
@@ -190,7 +192,7 @@ function StateCell({ row, faded }: { row: RunRow; faded: boolean }) {
   );
 }
 
-function RunTableRow({ row, faded, pending, resCols }: { row: RunRow; faded: boolean; pending: RunRequest | null; resCols: readonly string[] }) {
+function RunTableRow({ row, faded, pending, resCols, site }: { row: RunRow; faded: boolean; pending: RunRequest | null; resCols: readonly string[]; site?: RunSite | undefined }) {
   const r = result(row);
   const failed = row.state === 'failed';
   return (
@@ -201,6 +203,8 @@ function RunTableRow({ row, faded, pending, resCols }: { row: RunRow; faded: boo
         </span>
         <span className="rv-id" data-words="data">
           {row.id}
+          {/* F-848: a remote run's site and link state, on the id's line */}
+          <SiteBadge site={site} />
         </span>
       </Cell>
       <Cell className="rv-cell-state">
@@ -316,6 +320,7 @@ function SelectedRun({
             {row.id}
           </Provenance>
         </span>
+        <SiteBadge site={view.runSites?.[row.id]} />
         <IconButton variant="ghost" icon="close" label="Clear selection" onPress={onClear} className="rv-clear" />
       </header>
       {onOpenWorkspace && (

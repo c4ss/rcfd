@@ -353,13 +353,15 @@ test.describe('deletes of runs, results and cases', () => {
     // setting's write-then-rename (F-818, user data); none of those is in a project folder. The one rename in a project
     // folder: the Claude Code allow-list file's write-then-rename (F-814, "Allow this from now on", the maintainer's
     // word of 2026-11-17), only over a file unchanged since it was read. The field viewport's derive (ADR 0738) removes
-    // its own mkdtemp folder under the OS temp directory, never a project folder
+    // its own mkdtemp folder under the OS temp directory, never a project folder. The run sites' remembered choice per
+    // project is a write-then-rename in user data too (F-848, site-choices.json beside the recent list)
     expect(uses.sort()).toEqual([
       'src/main/claude/allow.ts: rename',
       'src/main/claude/panel.ts: rename',
       'src/main/claude/trust.ts: rename',
       'src/main/data/derive.ts: rm',
       'src/main/project/recent.ts: rename',
+      'src/main/project/sites.ts: rename',
       'src/main/service/spawn.ts: rm',
       'src/main/theme.ts: rename',
     ]);

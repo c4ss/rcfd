@@ -9,12 +9,15 @@
 // main process keeps it, through runner.keep.get and runner.keep.set). The budget of 9 words is the page's count before
 // it, so the setting is an icon toggle with no word at rest (G22): its name is its accessible name and its tooltip, and
 // the section's name is for readers only. With --keep-runner the toggle is on and cannot be turned off here.
+//
+// F-848 (ADR 0739): the Sites section (SitesSection.tsx), there only while the user has a sites file.
 import { useEffect, useState } from 'react';
 import type { KeepRunnerState } from '../../shared/ipc.js';
 import { THEME_LABEL, THEME_SETTINGS, isThemeSetting } from '../../shared/theme.js';
 import { IconButton, Quiet, SegmentedToggle } from '../ui/index.js';
 import { IconToggle } from '../ui/IconToggle.js';
 import { setTheme, useThemeSetting } from '../theme/theme.js';
+import { SitesSection } from './SitesSection.js';
 import './studio-settings.css';
 
 const THEME_OPTIONS = THEME_SETTINGS.map((id) => ({ id, label: THEME_LABEL[id] }));
@@ -96,6 +99,7 @@ export default function StudioSettingsPage() {
             start finds it again.
           </Quiet>
         </section>
+        <SitesSection />
       </main>
       <footer className="ss-foot">
         <span data-words="disclaimer">

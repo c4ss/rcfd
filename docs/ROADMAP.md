@@ -17117,3 +17117,9 @@ Generated from `docs/studio-guardrails.md`, `PRODUCT.md` and `DESIGN.md` ([ADR 0
     listener, a mirror project with the ordinary rcfd-runner on the site; Slurm/PBS and cloud batch later behind one
     Site interface in rcfd-runner. Distributed single runs need F-100 (no MPI or socket transport, no distributed
     SIMPLE/PISO; ADR 0058) and are out of scope. Traces: G7, G10, G12, G16, G17, G22.
+    Studio part of phase 1 built 2026-11-17 (branch sites-studio, ADR 0801 Addendum 24): the Where choice of the Runs
+    run bar (only when the sites file lists sites; remembered per project in the Studio's user data), a check before
+    every remote start with the yes in the decision panel (rcfd site check --confirm), the site badge and link state in
+    the runs table, run panel and workspace, and a Sites section in the Studio settings; S11 is
+    apps/studio-web/tests/e2e/sites.spec.ts. Left: Where on home Run, Run again and Rerun; creating the sites file from
+    the Studio; site.jsonl in the feed; phases 2 and 3.

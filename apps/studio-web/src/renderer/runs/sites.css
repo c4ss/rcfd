@@ -1,0 +1,44 @@
+/* Run sites (runs/Sites.tsx, F-848): the Where choice of the run bar, the site badge of a remote run, and the facts of
+   the site confirmation. Flat and ruled like the Runs view: no shadows, square corners, tokens only. */
+
+.st-where {
+  width: 140px;
+}
+
+.st-badge {
+  display: inline-flex;
+  align-items: baseline;
+  gap: var(--space-xs);
+  margin-left: var(--space-sm);
+  padding: 0 var(--space-xs);
+  border: var(--line-hair);
+  font-size: var(--type-label-size);
+  white-space: nowrap;
+}
+.st-badge-name {
+  font-weight: var(--font-weight-medium);
+}
+.st-badge-link {
+  color: var(--role-text-2);
+}
+.st-badge--retrying .st-badge-link,
+.st-badge--refused .st-badge-link {
+  color: var(--role-text-fail);
+}
+
+.st-facts {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: var(--space-xs) var(--space-md);
+  margin: var(--space-sm) 0;
+}
+.st-facts dt {
+  color: var(--role-text-2);
+}
+.st-facts dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+.st-reason {
+  color: var(--role-text-fail);
+}

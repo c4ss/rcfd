@@ -14,6 +14,7 @@
 // process's folder dialog, or on the folder the engine has just refused as no project, and then opens it as `open` does.
 import type { RunnerPlan } from './runner-lifetime.js';
 import type { CancelOptions } from './work.js';
+import type { RunSite, SiteCheckResult, SiteOp, SitesState } from './sites.js';
 
 /** The one IPC channel main uses to hand the preload script the project port (main -> renderer only). */
 export const PROJECT_PORT_CHANNEL = 'studio.project-port';
@@ -291,6 +292,12 @@ export interface ProjectView {
    * action log, not project state: the runs themselves are the runner's (G7, G12).
    */
   readonly runRequests?: readonly RunRequest[];
+  /**
+   * F-848 (ADR 0739): the remote runs among the listed runs, by run id: the site run.json names and the link state the
+   * local runner wrote (src/shared/sites.ts). Absent while no run of the project went to a site, and always absent while
+   * the user has no sites file.
+   */
+  readonly runSites?: Readonly<Record<string, RunSite>>;
   /** Feed entries since the project was opened, newest first (at most MAX_CHANGES). */
   readonly changes: readonly ChangeEntry[];
   readonly openedAt: string;
@@ -372,14 +379,20 @@ export type ProjectRequest =
    * ADR 0736: a trash operation of the engine (TRASH_OPS) with its arguments, checked in main; the reply's result is a
    * TrashOutcome. `case` needs no base: the main process reads the file's hash through the engine just before.
    */
-  | { readonly op: 'trash'; readonly id: number; readonly what: TrashWhat; readonly params: Readonly<Record<string, unknown>> };
+  | { readonly op: 'trash'; readonly id: number; readonly what: TrashWhat; readonly params: Readonly<Record<string, unknown>> }
+  /**
+   * F-848 (ADR 0739): the user's run sites through the engine (src/shared/sites.ts): `list` (a SitesState), `check` and
+   * `confirm` of the site `name` (a SiteCheckResult; confirm records the user's yes in the sites file), `open` (opens the
+   * sites file in the system's editor; the result is {message}, empty when it opened).
+   */
+  | { readonly op: 'sites'; readonly id: number; readonly what: SiteOp; readonly name?: string };
 
 /** F-835: where `create` makes the project. */
 export const CREATE_WHERE = ['pick', 'here'] as const;
 export type CreateWhere = (typeof CREATE_WHERE)[number];
 
 export type ProjectOp = ProjectRequest['op'];
-export const PROJECT_OPS = ['state', 'pick', 'open', 'forget', 'close', 'refresh', 'dismiss', 'action', 'cancel', 'create', 'trash', 'runnerPlan'] as const satisfies readonly ProjectOp[];
+export const PROJECT_OPS = ['state', 'pick', 'open', 'forget', 'close', 'refresh', 'dismiss', 'action', 'cancel', 'create', 'trash', 'runnerPlan', 'sites'] as const satisfies readonly ProjectOp[];
 
 export interface ProjectError {
   /** `bad_request` (the message has the wrong shape), `not_recent` (open of a folder the recent list does not hold). */
@@ -513,4 +526,8 @@ export interface RunsBridge {
   dispatch(action: string, params?: Readonly<Record<string, unknown>>): Promise<RunActionResult>;
   /** ADR 0736: moves to the project trash, restores from it, or empties it, through the engine. */
   trash(what: TrashWhat, params: Readonly<Record<string, unknown>>): Promise<TrashOutcome>;
+  /** F-848: the user's run sites (list, check, confirm, open the sites file); never rejects. */
+  sites(what: 'list'): Promise<SitesState>;
+  sites(what: 'check' | 'confirm', name: string): Promise<SiteCheckResult>;
+  sites(what: 'open'): Promise<{ readonly message: string }>;
 }

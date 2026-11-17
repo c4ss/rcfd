@@ -3481,3 +3481,128 @@ at a clean shutdown. `observeRunner` (`src/shared/runner-lifetime.ts`, pure) wor
 
   The specs service, run-control, runs, close-guard, f837, project, word-budget, shell, data, service-security and
   first-path were restated where they assumed survival. No process the tests started is left behind.
+
+## Addendum 24: Run sites in the Studio (2026-11-17, branch sites-studio over main 65c78c47)
+
+This addendum is numbered 24 because Addendum 23 is taken by the claude-mcp branch. It builds the Studio's part of
+phase 1 of ADR 0739 (F-848, test S11). The engine part was already on main.
+
+### How a run reaches a site
+
+- **The route.** A remote run is started with `rcfd-runner start <case> ... --site <name> --no-runner --project
+  <folder>`, and then `rcfd-runner ensure`. This is the same detached start the Studio already uses for the runner
+  (ADR 0146). The Studio does not use MCP `start_run {site}`, because the engine gates it on `assistant = true`, and a
+  click in the Studio is a direct user action, not the assistant's.
+- **The store plan.** Before the start, the Studio makes the dry run `start_run {case, store: "plan", dry_run: true,
+  set}` and passes its `set` on, so a remote run stores what a local run of the same case would store. The panel
+  shows the exact `rcfd-runner start ... --site` line that was run (G16, G17).
+- **Local runs are untouched.** Run, Queue…, Run again, Rerun and the palette still go through `start_run` and
+  `queue_run` exactly as before. The site action, `site.run_case` in `shared/sites.ts`, is kept out of `RUN_ACTIONS`,
+  so the palette and the action list pinned by tests do not change.
+
+### The sites file and the choice
+
+- **The sites file.** The Studio reads the user's sites file only through the engine: `rcfd site list --json`, and
+  `rcfd site check <name> [--confirm]`. It looks for the file where the engine does (`RCFD_SITES_FILE`, else the
+  `rcfd` folder under APPDATA or `~/.config`). While the file is absent, the Studio only checks that it is absent: it
+  spawns no `rcfd site`, writes nothing, and shows no new word.
+- **Where (Q8).** The Runs run bar gains a Where choice after the case, and only when the file lists a site.
+  `local` is the default. The choice is remembered per project folder in `site-choices.json`, beside the recent
+  list in the Studio's user data, and never in the project. Choosing `local` deletes the entry, and nothing is
+  written while no sites file exists. Run and Queue… then start on that site. Home Run, Run again and Rerun stay
+  local.
+- **The check before every remote start (Q3, Q10).** Each remote start first runs `rcfd site check <name>`. That
+  starts the site's agent once, and no project data goes to it. If the site is not admitted (not confirmed, or
+  another engine), the shared decision panel asks. It shows the case, the host key, the engine there and the engine
+  here. "Keep it here" is the safe default and sends nothing. "Confirm and run" (or "Yes, use this engine") runs
+  `rcfd site check <name> --confirm`, and then starts the run. A site whose agent cannot be reached shows the
+  engine's reason, and offers only Keep it here.
+
+### What the Studio shows
+
+- **The badge and the link state.** A remote run carries a badge with the site name and the link state, in the run
+  table (on the run id's line), in the selected run's header, and in the workspace's run list. The main process
+  derives the state from the local runner's files, and nothing in the Studio talks to a site (P4):
+  - `site.json` with `link: done` gives done;
+  - a last `refused` in `site.jsonl` gives refused;
+  - `lost` or `unconfigured` gives retrying;
+  - no `submitted` yet gives sending;
+  - an end in the copied `events.jsonl` while `status.json` has not ended gives copying back (Q4: the downloads
+    come before the final status);
+  - otherwise, connected.
+
+  `run.json`'s `site` is read once per run and session, whether or not the sites file exists. A run whose site was
+  removed therefore keeps its badge (P7), and a local run adds nothing to the view. A run whose link has settled
+  (done or refused) is not read again.
+- **The Sites section of the Studio settings.** It appears only when the sites file exists. It lists each site with
+  its host (or kind) and whether it is confirmed. Check runs the check and says "ready: <engine>" or the engine's
+  reason. A site that needs a yes opens the same decision panel. "Open the sites file" opens the file in the
+  system's editor. The Studio cannot create or edit the file.
+- **Pause, resume and cancel** of a remote run use the existing controls unchanged. The local runner forwards each
+  request to the site.
+
+### Decisions (recommendations taken; each reversible)
+
+- **SS-D1:** remote runs go through `rcfd-runner start --site`, not MCP `start_run {site}`, for the reason above.
+- **SS-D2:** every remote start is checked first (one extra agent hello), so the yes is asked before anything is
+  queued.
+- **SS-D3:** Where is offered only in the Runs run bar (Run and Queue…). Home Run, Run again and Rerun stay local,
+  so there is one place to choose.
+- **SS-D4:** the Sites section shows only when the file exists, and the Studio never creates the file.
+- **SS-D5:** the site's confirmed state in the Sites section is shown as data, not chrome (it is a value of the
+  user's file).
+
+### Word budgets (G22, none raised)
+
+- At rest with no sites file, every surface is as before. word-budget.spec passes unchanged.
+- With sites listed, the Runs view counts 14 of its 14 words. The Where choice's value is data, and its label is
+  only an accessible name.
+- With sites listed, the Studio settings page counts 16 words against its at-rest budget of 9. The section adds
+  "Sites", a "Check" per site and "Open the sites file". The budget is measured at rest, so it is not broken, but it
+  is too tight for this section once the user has sites (for the maintainer, together with Q-RL-1).
+
+### Verification (headless, engine built in the worktree's own target)
+
+- **Unit tests:** `tests/unit/sites.spec.ts`, 14 tests:
+  - the parsers;
+  - the file lookup;
+  - the remembered choices;
+  - no spawn and no read with no sites file;
+  - every link state;
+  - the folder reads;
+  - the action's CLI line against the inventory;
+  - control dispatch with a fake server, including the dry run, the argv, ensure and a refusal;
+  - the port's parsing;
+  - the real engine with an exec site (list, check and confirm).
+
+  `history.spec.ts` now allows the user-data rename of `site-choices.json`. The full unit project passes: 566 tests.
+- **e2e tests:** `tests/e2e/sites.spec.ts`, 6 tests, with `RCFD_TEST_EXEC_SITES=1` and two exec sites:
+  - Start on a site, with the badge going to done. The residuals are byte for byte the site's, and the workspace
+    reads them and draws the downloaded store.
+  - Pause, resume and Stop… of a long remote run. Each reaches the site's run, and `site.jsonl` has `request_sent`
+    pause, resume and cancel.
+  - The remembered choice after a restart, with nothing in the project.
+  - The confirm prompt: Keep it here sends nothing; Confirm and run records the yes and starts the run.
+  - The Sites section, with Check and Open the sites file.
+  - No sites file: no Where choice and no Sites section, and the remote runs keep their badge.
+
+  The touched specs pass: run-control, runs, workspace, theme, settings, settings-ui-f826, theme-surfaces,
+  word-budget and a11y (55 + 20 tests). `tests/support/studio.ts` points `RCFD_SITES_FILE` at a missing file for
+  every test that does not name one, so the user's own sites file never reaches a test.
+- **Capabilities:** the inventory is unchanged. In `coverage.json`, the F-848 exemptions are now ui entries:
+  - `rcfd site list`, `rcfd site check`, `--confirm` and `--json`;
+  - their `rcfd-runner site` aliases;
+  - `rcfd-runner start --site`;
+  - `mcp:list_sites`, which the Studio reaches through the same listing.
+
+  Only the agent (`rcfd-runner site --stdio`) stays exempt, because it runs on the other machine.
+  `docs/studio-coverage.md` is rewritten.
+
+### Left
+
+- Where is not offered on home Run, Run again and Rerun (SS-D3).
+- The Studio cannot create a sites file (SS-D4).
+- Lines of `site.jsonl` are not events in the feed.
+- There is no download progress (phase 2).
+- The engine-version prompt is covered by unit tests only: in e2e, `RCFD_SITE_TEST_GIT_REV` would change the engine
+  for the whole process tree.

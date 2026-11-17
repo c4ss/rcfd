@@ -16,6 +16,8 @@ import { ProjectSession } from './session.js';
 import { cliRunnerEngine, RunnerWatch, type RunnerEngine } from './runner-lifetime.js';
 import { NO_PLAN, type KeepRunner, type RunnerChoice, type RunnerPlan } from '../../shared/runner-lifetime.js';
 import { testDelay } from '../work/delay.js';
+import { RunSites, SiteChoices, Sites } from './sites.js';
+import { LOCAL, SITE_RUN_CASE, type SiteCheckResult, type SiteOp, type SitesState } from '../../shared/sites.js';
 
 export interface RecentLike {
   load(): Promise<StoredRecent[]>;
@@ -51,6 +53,12 @@ export interface HomeDeps {
   runnerEngine?(folder: string, cancelRun: (run: string) => Promise<boolean>): RunnerEngine;
   /** How often the open project's runner is looked at, ms (default RUNNER_LOOK_MS; 0: only at the open, around actions and at the close). */
   runnerLookMs?: number;
+  /** F-848: where the Studio keeps the Where choice of each project (its user data; none: not kept). */
+  siteChoicesFile?: string;
+  /** F-848: opens a file in the system's program for it (Electron's shell.openPath); an error message, empty when it opened. */
+  openPath?(file: string): Promise<string>;
+  /** F-848: the environment the sites file is found from (default process.env). */
+  sitesEnv?: Readonly<Record<string, string | undefined>>;
 }
 
 /** F-813: the project file whose appearance turns a folder into a project (rcfd_project's MANIFEST). */
@@ -99,8 +107,39 @@ export class ProjectHome {
   /** F-813: the timer that checks a not-a-project folder for its project file, and that folder. */
   private watch: { folder: string; timer: ReturnType<typeof setInterval> } | null = null;
 
+  /** F-848: the user's run sites through the engine (null without an engine). */
+  private readonly siteCommands: Sites | null;
+
   constructor(private readonly deps: HomeDeps) {
     this.now = deps.now ?? (() => new Date().toISOString());
+    const e = deps.engine;
+    this.siteCommands = e.configured
+      ? new Sites({
+          rcfd: rcfdBeside(e.path),
+          runner: path.join(path.dirname(e.path), RUNNER_EXE),
+          choices: deps.siteChoicesFile ? new SiteChoices(deps.siteChoicesFile) : null,
+          ...(deps.openPath ? { openPath: deps.openPath } : {}),
+          ...(deps.sitesEnv ? { env: deps.sitesEnv } : {}),
+        })
+      : null;
+  }
+
+  /**
+   * F-848 (ADR 0739): the user's run sites. `list` reads nothing but the sites file's existence when it is absent;
+   * `check` and `confirm` start the site's agent once (no project data goes there); `open` opens the sites file in the
+   * system's editor.
+   */
+  async sites(what: SiteOp, name?: string): Promise<SitesState | SiteCheckResult | { readonly message: string }> {
+    const s = this.siteCommands;
+    switch (what) {
+      case 'list':
+        return s ? s.list(this.session?.folder ?? null) : { file: null, exists: false, sites: [], error: null, choice: LOCAL };
+      case 'check':
+      case 'confirm':
+        return s ? s.check(name ?? '', what === 'confirm') : { ok: false, message: 'No engine is set up, so no site can be checked.' };
+      case 'open':
+        return { message: s ? await s.open() : 'No engine is set up.' };
+    }
   }
 
   get state(): ProjectState {
@@ -290,6 +329,9 @@ export class ProjectHome {
           now: this.now,
           ...(this.deps.pollMs ? { pollMs: this.deps.pollMs } : {}),
           control: this.controlDeps(engine.path),
+          // F-848: the remote runs' link state. run.json's site is read once per run whether or not the sites file is
+          // there, so a run whose site was removed keeps its badge (ADR 0739 P7); a local run adds nothing to the view
+          ...(this.siteCommands ? { runSites: (f: string) => new RunSites(f, () => true) } : {}),
         },
         (view) => this.onView(session, view),
       );
@@ -366,7 +408,13 @@ export class ProjectHome {
         existsSync(runner)
           ? ensureRunnerCli(runner, folder)
           : Promise.resolve({ ok: false as const, message: `there is no ${RUNNER_EXE} beside ${exe}; build it with cargo build --release -p rcfd-runner` }));
-    return { startControlServer: (f) => startControl(exe, f), ensureRunner: ensure, now: this.now };
+    const sites = this.siteCommands;
+    return {
+      startControlServer: (f) => startControl(exe, f),
+      ensureRunner: ensure,
+      now: this.now,
+      ...(sites ? { startOnSite: (f: string, argv: readonly string[]) => sites.start(f, argv) } : {}),
+    };
   }
 
   /** ADR 0736: a trash operation of the engine on the open project. */
@@ -390,6 +438,11 @@ export class ProjectHome {
     await this.runner?.look();
     const r = await s.dispatch(id, params);
     await this.runner?.look();
+    // F-848 (Q8): the Where of the run just started is the project's next default, kept in the Studio's user data
+    if (r.ok && this.siteCommands) {
+      if (id === SITE_RUN_CASE && typeof params['site'] === 'string') await this.siteCommands.remember(s.folder, params['site']);
+      else if ((id === 'project.run_case' || id === 'project.queue_case') && this.siteCommands.file().exists) await this.siteCommands.remember(s.folder, LOCAL);
+    }
     return r;
   }
 

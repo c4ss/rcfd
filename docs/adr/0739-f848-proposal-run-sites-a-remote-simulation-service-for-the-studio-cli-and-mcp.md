@@ -1,7 +1,7 @@
 # ADR 0739: F-848 proposal: run sites, a remote simulation service for the Studio, the CLI and the MCP server
 
 Status: **Accepted 2026-11-17.** The maintainer answered all ten open questions with option (a) on 2026-11-17 (see
-"Answers" after the open questions). Q9 and the engine part of phase 1 are built; see "Built" at the end.
+"Answers" after the open questions). Q9 and phase 1 (the engine and the Studio) are built; see "Built" at the end.
 
 Roadmap item F-848 (Electron Studio and engine: runs on a remote site). Parents:
 [ADR 0123](0123-wave47b-run-service.md) (the run service),
@@ -555,11 +555,33 @@ S1 compares `metrics.json` without the solver's wall-clock time. S8 checks the l
 that there is no `site.json`, no `site.jsonl` and no agent. It does not mask and byte-compare the files; the
 unchanged `baseline_hashes` covers the defaults.
 
+### Phase 1, the Studio (branch sites-studio, ADR 0801 Addendum 24)
+
+- **Starting a remote run.** The Studio starts it with `rcfd-runner start ... --site <name> --no-runner`, and then
+  `ensure`, using the store plan of a `start_run` dry run. It does not use `start_run {site}`, which needs
+  `assistant = true`.
+- **Where (Q8).** The Runs run bar has a Where choice, shown only when the sites file lists a site. The choice is
+  remembered per project in the Studio's user data.
+- **The yes (Q3, Q10).** Every remote start is checked first. A site that needs a yes asks in the shared decision
+  panel, which runs `rcfd site check <name> --confirm`.
+- **The badge.** Remote runs carry a site badge with the link state (sending, connected, retrying, copying back,
+  done, refused) in the runs table, the run panel and the workspace.
+- **The Sites section** of the Studio settings lists the sites, checks or confirms one, and opens the file in the
+  system's editor.
+- **The test.** S11 is `apps/studio-web/tests/e2e/sites.spec.ts` (6 tests) with exec sites:
+  - the badge and the link state;
+  - pause, resume and cancel across the link;
+  - the field view and residuals of the downloaded store;
+  - the remembered choice;
+  - the confirm prompt;
+  - the no-sites-file case.
+
 ### Left
 
-- **The Studio's part of phase 1 and S11**: the Where choice at Start, remembered per project (Q8); the site badge
-  and link state on remote runs; and a Sites page or sites.toml editor. Until they are built, the coverage map
-  exempts the site commands under F-848.
+- **The Studio:**
+  - Where is not on home Run, Run again and Rerun.
+  - There is no way to create the sites file from the Studio.
+  - The engine-version prompt is tested in unit tests only.
 - **R6 on the reference Linux**: there is no ssh server here (see the report of this build). The test is written
   for Unix and skips here.
 - **Feed**: lines of `site.jsonl` are not yet events in the feed. A local run has no `site.jsonl`, so the feed of

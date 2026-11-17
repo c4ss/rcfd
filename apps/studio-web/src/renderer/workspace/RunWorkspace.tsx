@@ -16,6 +16,8 @@ import type { RunSeries } from '../../shared/run.js';
 import { openStore, cancelLoads } from '../data/door.js';
 import { FieldViewport } from '../field/FieldViewport.js';
 import { caseName, runRows, shownState, unknownWord, type RunRow } from '../runs/model.js';
+import { SiteBadge } from '../runs/Sites.js';
+import type { RunSite } from '../../shared/sites.js';
 import { EmptyMark, Quiet, Select, StateMark, StatePictogram } from '../ui/index.js';
 import { runSeries, runValuesAt } from './door.js';
 import { bandOf, defaultField, lastStep, liveRun, playWait, positionsOf, sampleAt, sharedAxis, storePath, type PlaySpeed, type Position } from './model.js';
@@ -362,8 +364,9 @@ export default function RunWorkspace({ view, selected, onSelect, compareRequest 
               if (k !== undefined) onSelect(String(k));
             }}
             items={rows}
+            dependencies={[view.runSites, selected]}
           >
-            {(r) => <RunItem row={r} faded={selected !== null && r.id !== selected} />}
+            {(r) => <RunItem row={r} faded={selected !== null && r.id !== selected} site={view.runSites?.[r.id]} />}
           </ListBox>
           {row && <RunNumbers row={row} store={store.info} storeError={store.error} series={series} seriesError={seriesError} position={position} positionsCount={positions.length} />}
           {row && otherRow && <CompareMetrics a={row} b={otherRow} comparison={comparison.comparison} error={comparison.error} />}
@@ -450,7 +453,7 @@ export default function RunWorkspace({ view, selected, onSelect, compareRequest 
   );
 }
 
-function RunItem({ row, faded }: { row: RunRow; faded: boolean }) {
+function RunItem({ row, faded, site }: { row: RunRow; faded: boolean; site?: RunSite | undefined }) {
   const s = shownState(row);
   return (
     <ListBoxItem id={row.id} textValue={`${caseName(row.case)} ${row.id}`} className={`ws-item${row.state === 'failed' ? ' ws-item--failed' : ''}`}>
@@ -463,6 +466,8 @@ function RunItem({ row, faded }: { row: RunRow; faded: boolean }) {
         </Provenance>
       </span>
       <span className="ws-item-state" data-words={row.state === 'failed' ? 'exception' : 'chrome'}>{s ? <StateMark state={s} faded={faded} quiet /> : <span className="ui-state">{unknownWord(row.state)}</span>}</span>
+      {/* F-848: a remote run's site and link state */}
+      <SiteBadge site={site} />
     </ListBoxItem>
   );
 }

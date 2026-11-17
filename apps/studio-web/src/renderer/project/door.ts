@@ -19,6 +19,7 @@ import {
 } from '../../shared/actions/runs.js';
 
 import { NO_PLAN, type RunnerPlan } from '../../shared/runner-lifetime.js';
+import { NO_SITES, SITE_RUN_CASE, type SiteCheckResult, type SitesState } from '../../shared/sites.js';
 
 const bridge = () => window.studioProject;
 
@@ -120,4 +121,47 @@ export async function trashRequest(what: TrashWhat, params: Readonly<Record<stri
   const b = window.studioRuns;
   if (!b?.trash) return { ok: false, code: 'disconnected', message: 'This window has no way to the engine’s trash. Reload the window (Ctrl+R).', data: null };
   return b.trash(what, params);
+}
+
+// ---- F-848 (ADR 0739): run sites
+
+/** The user's run sites as the engine lists them, and the open project's remembered Where (none: NO_SITES). */
+export async function listSites(): Promise<SitesState> {
+  const b = window.studioRuns;
+  if (!b?.sites) return NO_SITES;
+  return b.sites('list');
+}
+
+/** `rcfd site check <name>`, or with `confirm` the user's yes recorded by the engine (never rejects). */
+export async function checkSite(name: string, confirm: boolean): Promise<SiteCheckResult> {
+  const b = window.studioRuns;
+  if (!b?.sites) return { ok: false, message: 'This window has no way to the engine’s sites. Reload the window (Ctrl+R).' };
+  return b.sites(confirm ? 'confirm' : 'check', name);
+}
+
+/** Opens the sites file in the system's editor; the message says why not (empty when it opened). */
+export async function openSitesFile(): Promise<string> {
+  const b = window.studioRuns;
+  if (!b?.sites) return 'This window has no way to the engine’s sites. Reload the window (Ctrl+R).';
+  return (await b.sites('open')).message;
+}
+
+/** F-848: starts a run of a case on a site (the action site.run_case of src/shared/sites.ts; never rejects). */
+export async function runOnSite(params: {
+  readonly case: string;
+  readonly site: string;
+  readonly priority?: number;
+  readonly threads?: number;
+  readonly mem_mb?: number;
+  readonly set?: readonly string[];
+}): Promise<RunActionResult> {
+  const b = window.studioRuns;
+  if (!b) {
+    return {
+      ok: false,
+      request: null,
+      failure: { code: 'disconnected', problem: 'This window has no run control.', recovery: 'Reload the window (Ctrl+R); runs are not affected.', engine: null },
+    };
+  }
+  return b.dispatch(SITE_RUN_CASE, params as Readonly<Record<string, unknown>>);
 }

@@ -20,12 +20,12 @@ Engine read: rcfd 0.1.0, service protocol rcfd-service/1 version 1.1, MCP server
 | Kind | Capabilities | UI path | Exemption | Exemption whose item does not name it |
 |---|---|---|---|---|
 | Service methods | 69 | 20 | 49 | 40 |
-| MCP tools | 70 | 34 | 36 | 26 |
-| CLI commands | 53 | 19 | 34 | 22 |
-| CLI options | 213 | 30 | 183 | 125 |
+| MCP tools | 70 | 35 | 35 | 26 |
+| CLI commands | 53 | 23 | 30 | 23 |
+| CLI options | 213 | 35 | 178 | 126 |
 | Case schema keys | 951 | 951 | 0 | 0 |
 | Monitor format keys | 6 | 6 | 0 | 0 |
-| **All** | **1362** | **1060** (77.8 %) | **302** | **213** |
+| **All** | **1362** | **1070** (78.6 %) | **292** | **215** |
 
 A case key stands for every value of its enumeration (the solver options of that key, listed in the inventory): the
 schema-driven surface of F-825 offers them all. A CLI option is mapped with its command. "Item does not name it" marks an
@@ -47,7 +47,7 @@ new item (see the last sections).
 | F-815 compare two runs | 5 | `design.compare` (not named), `design.get_metrics` (not named), `design.ledger_query` (not named), `design.ledger_rerun_check` (not named), `design.list_study` (not named) |
 | F-828 provenance inspector and reproduce-from-CLI | 1 | `journal.replay` |
 
-### MCP tools (36 without a UI path)
+### MCP tools (35 without a UI path)
 
 | Item | Count | Capabilities |
 |---|---|---|
@@ -58,9 +58,8 @@ new item (see the last sections).
 | F-811 residual and monitor plots | 2 | `get_residuals`, `read_metrics` |
 | F-813 a learner's first path | 1 | `list_cases` |
 | F-815 compare two runs | 5 | `design_compare_variants` (not named), `design_get_metrics` (not named), `design_ledger_query` (not named), `design_ledger_rerun_check` (not named), `design_list_study` (not named) |
-| F-848 Runs on a remote site: a remote simulation service for the Studio, the CLI and the MCP server | 1 | `list_sites` |
 
-### CLI commands (34 without a UI path)
+### CLI commands (30 without a UI path)
 
 | Item | Count | Capabilities |
 |---|---|---|
@@ -73,14 +72,14 @@ new item (see the last sections).
 | F-825 schema-driven case and settings surface | 1 | `rcfd schema` |
 | F-827 one action layer for every UI action | 1 | `rcfd call` (not named) |
 | F-828 provenance inspector and reproduce-from-CLI | 5 | `rcfd data list` (not named), `rcfd data provenance` (not named), `rcfd data verify` (not named), `rcfd project hash`, `rcfd version` |
-| F-848 Runs on a remote site: a remote simulation service for the Studio, the CLI and the MCP server | 5 | `rcfd site check`, `rcfd site list`, `rcfd-runner site`, `rcfd-runner site check`, `rcfd-runner site list` |
+| F-848 Runs on a remote site: a remote simulation service for the Studio, the CLI and the MCP server | 1 | `rcfd-runner site` (not named) |
 
-### CLI options (183 without a UI path)
+### CLI options (178 without a UI path)
 
 | Item | Count | Capabilities |
 |---|---|---|
 | F-805 project home and the live project folder | 10 | `rcfd convert` (3), `rcfd serve` (7) |
-| F-807 run control (quick run, stop, pause, queue) | 70 | `rcfd map` (10), `rcfd reactor` (1), `rcfd restart` (4), `rcfd run` (28), `rcfd study` (8), `rcfd workflow run` (6), `rcfd workflow show` (2), `rcfd-runner ensure` (4), `rcfd-runner start` (6), `rcfd-runner wait` (1) |
+| F-807 run control (quick run, stop, pause, queue) | 69 | `rcfd map` (10), `rcfd reactor` (1), `rcfd restart` (4), `rcfd run` (28), `rcfd study` (8), `rcfd workflow run` (6), `rcfd workflow show` (2), `rcfd-runner ensure` (4), `rcfd-runner start` (5), `rcfd-runner wait` (1) |
 | F-809 derived pictures (iso-surfaces, streamlines, cut planes, vectors) | 26 | `rcfd acoustics` (3), `rcfd fwh` (9), `rcfd post derive` (7), `rcfd sample` (7) |
 | F-811 residual and monitor plots | 2 | `rcfd post` (2) |
 | F-812 case editor validated by the engine's schema | 34 | `rcfd check` (6), `rcfd check-mesh` (1), `rcfd inflate` (12), `rcfd partition` (15) |
@@ -92,7 +91,7 @@ new item (see the last sections).
 | F-829 undo, safe deletes and edit conflicts | 4 | `rcfd project empty-trash` (2), `rcfd project restore` (1), `rcfd project trash` (1) |
 | F-830 explain in place from the engine's docs | 1 | `rcfd` (1) |
 | F-835 new project | 1 | `rcfd project init` (1) |
-| F-848 Runs on a remote site: a remote simulation service for the Studio, the CLI and the MCP server | 6 | `rcfd site check` (1), `rcfd site list` (1), `rcfd-runner site` (2), `rcfd-runner site check` (1), `rcfd-runner site list` (1) |
+| F-848 Runs on a remote site: a remote simulation service for the Studio, the CLI and the MCP server | 2 | `rcfd-runner site` (2) |
 
 ## Capabilities no Studio item names yet
 
@@ -119,6 +118,7 @@ holds the other way round). The reasons are in `coverage.json`.
 - The Claude Code panel (F-814) runs rcfd-mcp with the engine's defaults for case roots, the edit hook and the run and design limits; settings for them are not part of F-814. (F-814): `rcfd-mcp --*`.
 - The public validation-data pack (rcfd data): no Studio item covers it; nearest home provenance (F-828). (F-828): `rcfd data list`, `rcfd data provenance`, `rcfd data verify`, `rcfd data list --*`, `rcfd data provenance --*`, `rcfd data verify --*`.
 - The runner itself in the foreground: the Studio never runs serve directly; Start the runner runs rcfd-runner ensure, which starts serve detached (F-807). (F-807): `rcfd-runner serve`.
+- The site agent (rcfd-runner site --stdio --work) runs on the other machine, started by the local runner over ssh (ADR 0739); it is no Studio surface. The Studio starts runs on a site with rcfd-runner start --site. (F-848): `rcfd-runner site`, `rcfd-runner site --*`.
 - Waiting for a run to end is a call for scripts: the Studio shows the end live in Project > Runs (F-806) and needs no waiting call; nearest home run control (F-807). (F-807): `wait_run`, `rcfd-runner wait`, `rcfd-runner wait --*`.
 - Writing notes: F-805 lists notes but names no editor; nearest home F-805. (F-805): `write_note`.
 

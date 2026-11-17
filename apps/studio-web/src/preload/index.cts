@@ -394,6 +394,14 @@ const runs: RunsBridge = {
     const r = await projectSend<TrashOutcome>({ op: 'trash', id: nextProjectId++, what, params });
     return r.ok ? r.result : { ok: false, code: r.error.code, message: `The request did not reach the Studio's main process: ${r.error.message}`, data: null };
   },
+  // F-848: the user's run sites through the engine; main checks `what` and the name again
+  sites: (async (what: 'list' | 'check' | 'confirm' | 'open', name?: string) => {
+    const req: ProjectRequest = typeof name === 'string' ? { op: 'sites', id: nextProjectId++, what, name } : { op: 'sites', id: nextProjectId++, what };
+    const r = await projectSend<unknown>(req);
+    if (r.ok) return r.result;
+    const message = `The request did not reach the Studio's main process: ${r.error.message}`;
+    return what === 'list' ? { file: null, exists: false, sites: [], error: message, choice: 'local' } : what === 'open' ? { message } : { ok: false, message };
+  }) as RunsBridge['sites'],
 };
 
 contextBridge.exposeInMainWorld('studioRuns', runs);

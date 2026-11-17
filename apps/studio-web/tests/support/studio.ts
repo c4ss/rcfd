@@ -29,6 +29,8 @@ export async function launchStudio(serviceEnv: Record<string, string>, args: rea
   const env: Record<string, string> = {};
   for (const [k, v] of Object.entries(process.env)) if (v !== undefined && !k.startsWith('RCFD_STUDIO_')) env[k] = v;
   const own: Record<string, string> = serviceEnv['RCFD_STUDIO_STATE_DIR'] || args.some((a) => a.startsWith('--user-data-dir')) ? {} : { RCFD_STUDIO_STATE_DIR: scratchState() };
+  // F-848: the user's own sites file never reaches a test; a test of sites names its own
+  if (!serviceEnv['RCFD_SITES_FILE'] && !env['RCFD_SITES_FILE']) own['RCFD_SITES_FILE'] = path.join(tmpdir(), 'rcfd-studio-tests-no-sites-file.toml');
   const app = await electron.launch({ executablePath: executable, ...launchArgs(args), env: { ...env, ...own, ...serviceEnv } });
   const page = await app.firstWindow();
   await page.waitForFunction(() => document.querySelector('h1')?.textContent === 'No project open');

@@ -20,6 +20,7 @@ import {
 } from '../../shared/project.js';
 import { NO_PLAN, type RunnerChoice, type RunnerPlan } from '../../shared/runner-lifetime.js';
 import { HomeRefusal } from './home.js';
+import { isSiteName, LOCAL, SITE_OPS, type SiteOp } from '../../shared/sites.js';
 
 export const MAX_PATH_CHARS = 4096;
 
@@ -51,6 +52,8 @@ export interface BridgeHome {
   create?(where: CreateWhere): Promise<unknown>;
   /** ADR 0736: a trash operation of the engine on the open project (optional so that a home without it refuses it). */
   trash?(what: TrashWhat, params: Readonly<Record<string, unknown>>): Promise<TrashOutcome>;
+  /** F-848: the user's run sites (optional so that a home without it answers that there are none). */
+  sites?(what: SiteOp, name?: string): Promise<unknown>;
 }
 
 /** F-807: the longest action id the port accepts, and the most bytes of an action's parameters as JSON. */
@@ -153,6 +156,18 @@ export function parseProjectRequest(raw: unknown): ParsedProject {
       if (JSON.stringify(params).length > MAX_ACTION_PARAMS_BYTES) return bad(`trash: params are larger than ${MAX_ACTION_PARAMS_BYTES} bytes`);
       return { ok: true, request: { op, id, what: what as TrashWhat, params } };
     }
+    case 'sites': {
+      const what = raw['what'];
+      if (typeof what !== 'string' || !(SITE_OPS as readonly string[]).includes(what)) return bad(`sites: what must be one of ${SITE_OPS.join(', ')}`);
+      if (what === 'check' || what === 'confirm') {
+        const name = raw['name'];
+        if (keys !== 'id,name,op,what') return bad(`sites: ${what} takes exactly what and a site name`);
+        if (!isSiteName(name) || name === LOCAL) return bad(`sites: ${what}: the name must be a site name (letters, digits, _ and -, at most 64)`);
+        return { ok: true, request: { op, id, what, name } };
+      }
+      if (keys !== 'id,op,what') return bad(`sites: ${what} takes exactly what`);
+      return { ok: true, request: { op, id, what: what as SiteOp } };
+    }
     default:
       return bad(`unknown op '${String(op).slice(0, 40)}'`);
   }
@@ -249,6 +264,13 @@ export class ProjectPortBridge {
                 request: null,
                 failure: { code: 'engine', problem: 'This Studio has no run control.', recovery: 'Start a Studio built with F-807 or later.', engine: null },
               } satisfies RunActionResult);
+          break;
+        case 'sites':
+          result = this.home.sites ? await this.home.sites(r.what, r.name) : r.what === 'list'
+              ? { file: null, exists: false, sites: [], error: null, choice: LOCAL }
+              : r.what === 'open'
+                ? { message: 'This Studio has no run sites.' }
+                : { ok: false, message: 'This Studio has no run sites.' };
           break;
         case 'trash':
           result = this.home.trash

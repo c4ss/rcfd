@@ -148,6 +148,9 @@ const projects = new ProjectHome({
   engine,
   keepRunner,
   recent: new RecentStore(recentFile(process.env, app.getPath('userData'))),
+  // F-848 (ADR 0739 Q8): the Where choice of each project, beside the recent list; the sites file opens in the system's editor
+  siteChoicesFile: path.join(path.dirname(recentFile(process.env, app.getPath('userData'))), 'site-choices.json'),
+  openPath: (file) => shell.openPath(file),
   pickFolder: async () => {
     const win = BrowserWindow.getFocusedWindow() ?? BrowserWindow.getAllWindows()[0];
     const options = { title: 'Open project folder', properties: ['openDirectory' as const] };

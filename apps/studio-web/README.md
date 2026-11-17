@@ -1494,6 +1494,29 @@ A close that would lose case-editor changes not saved asks first, with F-829's d
 - Decisions D13 to D16 (the safe choice, what Close and lose them closes, the test-mode quit, the wait for the page):
   ADR 0801, Addendum 13.
 
+## Run sites (F-848, ADR 0739 phase 1)
+
+With no sites file, the Studio looks and acts as before. If the user's sites file lists sites (`RCFD_SITES_FILE`, or
+`sites.toml` in the `rcfd` folder under APPDATA or `~/.config`), the Studio adds three things.
+
+- **Where.** The Runs run bar shows a Where choice after the case: `local` or a site. Run and Queue… start the run
+  there with `rcfd-runner start ... --site <name>`, using the same store plan as a local run, and the panel shows
+  that line. The choice is remembered per project in `site-choices.json`, in the Studio's user data and never in the
+  project. Home Run, Run again and Rerun stay local.
+- **The yes.** Every remote start checks the site first with `rcfd site check`. A site that is not confirmed, or
+  that runs another engine, asks in the decision panel. Keep it here sends nothing. The yes runs `rcfd site check
+  <name> --confirm`.
+- **The badge.** A remote run shows its site and link state in the run table, the run panel and the workspace:
+  sending, connected, retrying, copying back, done or refused. The state is read from `site.json`, `site.jsonl`,
+  `events.jsonl` and `status.json`. Pause, resume and Stop… work as for local runs.
+
+The Studio settings have a Sites section only while the file exists. It lists the sites and whether each is
+confirmed, and has Check and Open the sites file (the system editor). The Studio does not edit the file.
+
+The tests are `tests/unit/sites.spec.ts` and `tests/e2e/sites.spec.ts`. The e2e tests use two `exec` sites, which
+work only with `RCFD_TEST_EXEC_SITES=1`. Every other test runs with `RCFD_SITES_FILE` pointing at a missing file. The
+details are in ADR 0801, Addendum 24.
+
 ## Security (G10)
 
 - The renderer is sandboxed (`app.enableSandbox()` and the window's settings), context-isolated, with Node integration

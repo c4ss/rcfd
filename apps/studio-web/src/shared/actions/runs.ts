@@ -26,8 +26,11 @@ export type RunControlTool = (typeof RUN_CONTROL_TOOLS)[number];
 export type RunEngine =
   /** A tool of `rcfd-mcp --project <folder>` (not read-only), called with the action's arguments. */
   | { readonly kind: 'mcp'; readonly tool: RunControlTool }
-  /** A command of the project's runner, `rcfd-runner <command> --project <folder>`. */
-  | { readonly kind: 'runner'; readonly command: 'ensure' };
+  /**
+   * A command of the project's runner, `rcfd-runner <command> --project <folder>`. F-848: `start` is the remote start
+   * of a run on a site (src/shared/sites.ts), the one start the project server's start_run does not give the Studio.
+   */
+  | { readonly kind: 'runner'; readonly command: 'ensure' | 'start' };
 
 /** What the caller knows of the run an action is about (the run list's answer); anything left out counts as unknown. */
 export interface RunFacts {
