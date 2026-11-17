@@ -2615,24 +2615,34 @@ local to this list.
 
 | Id | Item | What the engine needs to give | Today in the Studio |
 | --- | --- | --- | --- |
-| E-809a | F-809 | An iso-surface of a stored cell field (triangles with their cells), as a `data.*` method or an MCP tool | shown unavailable |
-| E-809b | F-809 | Streamlines of a stored velocity field (seeds, polylines with the cell of each point) | shown unavailable |
-| E-809c | F-809 | A cut or slice of a stored 3D field with values; `render_field` with `axis`, `slice` and `vectors` for a store | the cut and arrows are drawn by the Studio within tolerances T1 to T3 |
-| E-809d | F-809, G16 | A CLI or MCP way to draw the Studio's cut and arrows of a store, so Claude Code can make the same picture | none |
-| E-809e | F-809, F-837 | The length unit of the stored mesh coordinates | the cut position has no unit; the domain size and the scale bar say m from the SI settings, and say why |
+| E-809a | F-809 | An iso-surface of a stored cell field (triangles with their cells), as a `data.*` method or an MCP tool (ADR 0738 proposed; awaiting the maintainer) | shown unavailable |
+| E-809b | F-809 | Streamlines of a stored velocity field (seeds, polylines with the cell of each point) (ADR 0738 proposed; awaiting the maintainer) | shown unavailable |
+| E-809c | F-809 | A cut or slice of a stored 3D field with values; `render_field` with `axis`, `slice` and `vectors` for a store (ADR 0738 proposed; awaiting the maintainer) | the cut and arrows are drawn by the Studio within tolerances T1 to T3 |
+| E-809d | F-809, G16 | A CLI or MCP way to draw the Studio's cut and arrows of a store, so Claude Code can make the same picture (ADR 0738 proposed; awaiting the maintainer) | none |
+| E-809e | F-809, F-837 | The length unit of the stored mesh coordinates (ADR 0738 proposed; awaiting the maintainer) | the cut position has no unit; the domain size and the scale bar say m from the SI settings, and say why |
 | E-813 | F-813 | A command that creates a project (`rcfd project init`, MCP `create_project` over `Project::create`; ADR 0731, accepted and built 2026-11-17) | done: New project… and Make a project here run `rcfd project init`; the walk's test makes its projects through them |
-| E-814 | F-814 | An engine entry point that lists a project's Claude Code sessions (rcfd-claude) | a TypeScript stopgap in the main process |
-| E-828a | F-828 | run.json records the solver's launch argv and a build id (`solver_version` is a release name) | the reproduce command is built from the runner's start options |
-| E-828b | F-828 | A unit for `status.json`'s `time`, and for a snapshot's time in store.rts | "Time, s" is the Studio's caption; the provenance says not recorded |
-| E-828c | F-828 | A service session's record: the file `session.create` read, and a journal file that `rcfd run --journal` can run | the provenance says not recorded, with no command |
-| E-828d | F-828 | `rcfd-runner start` options for `continue_from` and `max_steps`, or `rcfd-runner rerun <id>` / `start_run {from_run}` | said as a gap beside the command |
-| E-828e | F-828 | A read-only hash of a mesh file a run names | said as a gap beside the command |
-| E-829a | F-829 | Delete or trash for runs, results and cases (`trash_run`, `trash_case`, `list_trash`, `restore_trash`) | the Studio offers no delete |
-| E-829b | F-829 | Compare-and-set for `settings.set` (a base value or hash) | the Studio reads the value again before it sends |
-| E-837a | F-837 | A case-facts query (cell sizes, a velocity scale) or `start_run {dry_run: true}`, for "simulate N s", adaptive correctors and the Courant fix | not built |
-| E-837b | F-837 | A mesh refine entry point (`refine_mesh {mesh, factor}` or a service method), for Refine by 2 | not built |
-| E-837c | F-837 | A service save of a case session to a path outside a project, for one case file anywhere | not built |
+| E-814 | F-814 | An engine entry point that lists a project's Claude Code sessions (rcfd-claude) (ADR 0735 proposed; awaiting the maintainer) | a TypeScript stopgap in the main process |
+| E-828a | F-828 | run.json records the solver's launch argv and a build id (`solver_version` is a release name) (ADR 0734 proposed; awaiting the maintainer) | the reproduce command is built from the runner's start options |
+| E-828b | F-828 | A unit for `status.json`'s `time`, and for a snapshot's time in store.rts (ADR 0734 proposed; awaiting the maintainer) | "Time, s" is the Studio's caption; the provenance says not recorded |
+| E-828c | F-828 | A service session's record: the file `session.create` read, and a journal file that `rcfd run --journal` can run (ADR 0735 proposed; awaiting the maintainer) | the provenance says not recorded, with no command |
+| E-828d | F-828 | `rcfd-runner start` options for `continue_from` and `max_steps`, or `rcfd-runner rerun <id>` / `start_run {from_run}` (ADR 0734 proposed; awaiting the maintainer) | said as a gap beside the command |
+| E-828e | F-828 | A read-only hash of a mesh file a run names (ADR 0734 proposed; awaiting the maintainer) | said as a gap beside the command |
+| E-829a | F-829 | Delete or trash for runs, results and cases (`trash_run`, `trash_case`, `list_trash`, `restore_trash`) (ADR 0736 proposed; awaiting the maintainer) | the Studio offers no delete |
+| E-829b | F-829 | Compare-and-set for `settings.set` (a base value or hash) (ADR 0736 proposed; awaiting the maintainer) | the Studio reads the value again before it sends |
+| E-837a | F-837 | A case-facts query (cell sizes, a velocity scale) or `start_run {dry_run: true}`, for "simulate N s", adaptive correctors and the Courant fix (ADR 0737 proposed; awaiting the maintainer) | not built |
+| E-837b | F-837 | A mesh refine entry point (`refine_mesh {mesh, factor}` or a service method), for Refine by 2 (ADR 0737 proposed; awaiting the maintainer) | not built |
+| E-837c | F-837 | A service save of a case session to a path outside a project, for one case file anywhere (ADR 0737 proposed; awaiting the maintainer) | not built |
 | E-837d | F-837 | `rcfd-runner config set` or MCP `set_runner_config` (ADR 0733, accepted 2026-11-17) | built 2026-11-17: the panel reads with `runner_config` and writes with `set_runner_config` (the runner's checks, atomic, conflict 1200); the Studio no longer writes `.rcfd/runner-config.json` |
+
+(2026-11-17) Engine ADRs proposed for these rows, status Proposed, nothing built:
+[ADR 0734](0734-f828-proposal-run-records-launch-argv-build-id-time-unit-rerun-and-mesh-hash.md) (E-828a, E-828b,
+E-828d, E-828e), [ADR 0735](0735-f828-f814-proposal-session-journals-on-disk-and-claude-code-session-discovery.md)
+(E-828c, E-814), [ADR 0736](0736-f829-proposal-a-project-trash-with-restore-and-compare-and-set-for-settings-set.md)
+(E-829a, E-829b),
+[ADR 0737](0737-f837-proposal-case-facts-and-a-dry-run-start-a-mesh-refine-and-saving-a-case-outside-a-project.md)
+(E-837a to E-837c),
+[ADR 0738](0738-f809-proposal-derived-pictures-of-a-stored-field-iso-surfaces-streamlines-slices-and-the-length-unit.md)
+(E-809a to E-809e). E-813 is ADR 0731 and E-837d is ADR 0733, both built.
 
 ## Addendum 19: F-820 and F-821, installers built in CI and the Studio on Linux in Docker (2026-11-17)
 

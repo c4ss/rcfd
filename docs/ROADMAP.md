@@ -16555,7 +16555,8 @@ Generated from `docs/studio-guardrails.md`, `PRODUCT.md` and `DESIGN.md` ([ADR 0
     against engine references with tolerances T1-T3 registered before the code (ADR 0801 Addendum 7); cut plane disabled
     on 2D cases with the reason in name and tooltip (G22). Left: iso-surfaces and streamlines have no engine entry point
     (shown unavailable); no CLI/MCP way to make the cut/arrows of a store (G16); no length unit for mesh coordinates.
-    Engine needs listed in ADR 0801, "Engine follow-ups of the Studio items" (2026-11-17).
+    Engine needs listed in ADR 0801, "Engine follow-ups of the Studio items" (2026-11-17). 2026-11-17: engine follow-ups
+    E-809a to E-809e: ADR 0738 proposed; awaiting the maintainer.
 - [x] **F-810** Electron Studio: run bands and linked time scrubbing
   - depends on: F-808, F-811
   - acceptance: The run bands of DESIGN.md on one shared time axis, each end marked with its pictogram and word; one
@@ -16626,7 +16627,8 @@ Generated from `docs/studio-guardrails.md`, `PRODUCT.md` and `DESIGN.md` ([ADR 0
     another writer's change refused with Undo anyway; the turn's denials stay in the feed after the transcript replaces
     the stream; unit tests and tests/e2e/claude-allow.spec.ts (fake claude). Left: no engine entry point for session
     discovery (E-814; the TypeScript port of the removed rcfd-claude stands in); whether that meets "through
-    rcfd-claude" is the maintainer's call.
+    rcfd-claude" is the maintainer's call. 2026-11-17: engine follow-up E-814 (session discovery): ADR 0735 proposed;
+    awaiting the maintainer.
 - [x] **F-815** Electron Studio: compare two runs
   - depends on: F-810
   - acceptance: Two runs side by side or overlaid at the same time and the same colour range, with the difference field
@@ -16842,7 +16844,8 @@ Generated from `docs/studio-guardrails.md`, `PRODUCT.md` and `DESIGN.md` ([ADR 0
     run.json records no launch argv or build id; status.json and store time have no unit; a session records no file or
     journal file; no rerun options; no mesh hash. 2026-11-17 (ADR 0801 Addendum 20): the maintainer answered D-L1: the
     engine records a session's journal (E-828c), the Studio writes none; a session number's reproduce command stays said
-    as not recorded until the engine gives one.
+    as not recorded until the engine gives one. 2026-11-17: engine follow-ups E-828a, E-828b, E-828d and E-828e:
+    ADR 0734 proposed; E-828c: ADR 0735 proposed; awaiting the maintainer.
 - [~] **F-829** Electron Studio: undo, safe deletes and edit conflicts
   - depends on: F-827, F-805
   - acceptance: Undo and redo for every edit made through the action layer; deleting a run, result or case is
@@ -16855,7 +16858,8 @@ Generated from `docs/studio-guardrails.md`, `PRODUCT.md` and `DESIGN.md` ([ADR 0
     show a conflict instead of overwriting; case saves refuse a changed file (edit_case base_hash). Left: no engine
     delete or trash for runs/results/cases, so the Studio offers none (engine tools
     trash_run/trash_case/list_trash/restore_trash proposed, needs an ADR); engine compare-and-set for settings.set
-    proposed. Engine needs listed in ADR 0801, "Engine follow-ups of the Studio items" (2026-11-17).
+    proposed. Engine needs listed in ADR 0801, "Engine follow-ups of the Studio items" (2026-11-17). 2026-11-17: engine
+    follow-ups E-829a and E-829b: ADR 0736 proposed; awaiting the maintainer.
 - [ ] **F-830** Electron Studio: explain in place from the engine's docs
   - depends on: F-826, F-825
   - acceptance: Help on every control, term and value taken from the engine's case schema help text (F-826), docs and
@@ -16977,7 +16981,8 @@ Generated from `docs/studio-guardrails.md`, `PRODUCT.md` and `DESIGN.md` ([ADR 0
     items" (2026-11-17). 2026-11-17 (ADR 0801 Addendum 20, the maintainer's approval): the case settings' own Close
     session asks with the shared save-or-discard prompt (closeGuard) when its session holds case-editor changes not
     saved, instead of its older loss question (kept for a session with none); the window-close and close-project split
-    and Keep editing as the default are unchanged; e2e close-guard.spec.ts.
+    and Keep editing as the default are unchanged; e2e close-guard.spec.ts. 2026-11-17: engine follow-ups E-837a to
+    E-837c: ADR 0737 proposed (the length unit: ADR 0738); awaiting the maintainer.
 - [x] **F-838** Local-model assistant: keep, port or remove
   - depends on: F-449
   - acceptance: The maintainer decides what becomes of the local-model assistant that only rcfd-gui offered (presets
