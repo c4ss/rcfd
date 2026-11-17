@@ -81,6 +81,7 @@ filtered by kind and by name, and a lane of every change the engine's feed repor
 | `RCFD_STUDIO_MCP=<path of rcfd-mcp>` | the engine's project server; for each open project the main process starts `rcfd-mcp --project <folder> --read-only` |
 | `RCFD_STUDIO_RCFD=<path of rcfd>` | (F-803) when `RCFD_STUDIO_MCP` is not set: the `rcfd-mcp` beside that `rcfd` |
 | `RCFD_STUDIO_RECENT=<file>` | where the recent list is kept; default `<user data>/recent-projects.json` |
+| `RCFD_STUDIO_PREFERENCES=<file>` | where the theme setting (F-818: Light, Dark, High contrast, System) is kept; default `<user data>/studio-preferences.json` |
 
 Neither set: the home says what to set, and "Open project folder" is unavailable with the reason.
 

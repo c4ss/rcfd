@@ -37,10 +37,10 @@ export interface PaletteParam {
   readonly enum?: readonly string[];
 }
 
-export type PaletteGroup = 'Go to' | 'Project' | 'Project runs' | 'Run workspace' | 'Case file' | 'Claude Code' | 'Service session' | 'Help';
+export type PaletteGroup = 'Go to' | 'Project' | 'Project runs' | 'Run workspace' | 'Case file' | 'Claude Code' | 'Service session' | 'View' | 'Help';
 
 /** The order of the groups when nothing is typed: the frequent ones first. */
-export const GROUP_ORDER: readonly PaletteGroup[] = ['Go to', 'Project', 'Project runs', 'Run workspace', 'Case file', 'Claude Code', 'Service session', 'Help'];
+export const GROUP_ORDER: readonly PaletteGroup[] = ['Go to', 'Project', 'Project runs', 'Run workspace', 'Case file', 'Claude Code', 'Service session', 'View', 'Help'];
 
 export interface StudioCommand {
   readonly id: string;
@@ -59,6 +59,21 @@ export interface StudioCommand {
 }
 
 const NAV_NOTE = 'A view of the Studio: no engine call, nothing to script.';
+const THEME_NOTE = 'A preference of the Studio (its user data, beside the recent list): no engine call, nothing to script.';
+
+/** F-818: one command per value of the theme setting (src/shared/theme.ts), so typing the theme's name finds it. */
+const theme = (id: string, title: string, description: string): StudioCommand => ({
+  id,
+  title,
+  description,
+  group: 'View',
+  effect: 'change',
+  params: [],
+  engine: null,
+  cli: null,
+  mcp: null,
+  note: THEME_NOTE,
+});
 const CLAUDE_NOTE = 'Claude Code itself: the Studio runs the `claude` CLI named by RCFD_STUDIO_CLAUDE; the engine has no entry point for it (F-814).';
 
 export const STUDIO_COMMANDS: readonly StudioCommand[] = [
@@ -375,6 +390,12 @@ export const STUDIO_COMMANDS: readonly StudioCommand[] = [
     mcp: null,
     note: CLAUDE_NOTE,
   },
+
+  // ---- the theme (F-818)
+  theme('view.theme_light', 'Theme: Light', 'Draw the Studio in its light theme (DESIGN.md, the default).'),
+  theme('view.theme_dark', 'Theme: Dark', 'Draw the Studio in its dark theme; the field colour maps stay the same.'),
+  theme('view.theme_contrast', 'Theme: High contrast', 'Draw the Studio in its high-contrast light theme, for bright rooms and projectors.'),
+  theme('view.theme_system', 'Theme: System', 'Follow the system: dark when the system is dark, light otherwise.'),
 
   // ---- help
   {

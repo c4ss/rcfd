@@ -8,7 +8,7 @@ import { fileURLToPath } from 'node:url';
 import { APP_ENTRY, CSP_HEADER, CSP_META } from '../../src/main/security.js';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
-const ALLOWED_CHANNELS = ['app.info', 'app.ready'];
+const ALLOWED_CHANNELS = ['app.info', 'app.ready', 'theme.get', 'theme.set'];
 
 let app: ElectronApplication;
 let page: Page;
@@ -94,19 +94,21 @@ test('the page has no Node: no require, process, module, Buffer or ipcRenderer',
   ]);
 });
 
-test('the bridge is the allow-list: window.studio.app.{info, ready} and nothing else', async () => {
+test('the bridge is the allow-list: window.studio.app.{info, ready}, window.studio.theme.{get, set} (F-818) and nothing else', async () => {
   const shape = await page.evaluate(() => {
     const s = window.studio as unknown as Record<string, Record<string, unknown>>;
     const app = s['app'] ?? {};
+    const theme = s['theme'] ?? {};
     return {
       top: Object.keys(s).sort(),
       app: Object.keys(app).sort(),
-      types: Object.values(app).map((v) => typeof v),
+      theme: Object.keys(theme).sort(),
+      types: [...Object.values(app), ...Object.values(theme)].map((v) => typeof v),
       // A context-isolated bridge is a frozen copy: the page cannot add to it or replace a function.
-      frozen: Object.isFrozen(s) && Object.isFrozen(app),
+      frozen: Object.isFrozen(s) && Object.isFrozen(app) && Object.isFrozen(theme),
     };
   });
-  expect(shape).toEqual({ top: ['app'], app: ['info', 'ready'], types: ['function', 'function'], frozen: true });
+  expect(shape).toEqual({ top: ['app', 'theme'], app: ['info', 'ready'], theme: ['get', 'set'], types: ['function', 'function', 'function', 'function'], frozen: true });
 });
 
 test('the main process handles exactly the allow-listed channels and refuses foreign senders', async () => {

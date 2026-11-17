@@ -18,6 +18,7 @@ import { attribute, dot, float, floor, positionWorld, texture, uniform, varying,
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import type { SurfaceData } from '../../shared/data.js';
 import { palette } from '../design/tokens.js';
+import { onThemeChange, themeHex } from '../theme/theme.js';
 import { LUT_SIZE, lutBytes, type ColourRange } from './colormap.js';
 import { clipPlane, keeps, type Cut } from './derived.js';
 import { bounds, cornerPositions, cornerScalars, cornerScalarsOf, gridEdges } from './surface.js';
@@ -247,6 +248,8 @@ function Scene({ surface, values, valuesPer = 'cell', range, grid, onMoved, onVi
     return m;
   }, [lut, clip]);
   const mesh = useMemo(() => new THREE.Mesh(new THREE.BufferGeometry(), mat.material), [mat]);
+  // F-818: the overlays drawn on the field (mesh grid, arrows) keep DESIGN.md's light values in every theme: they sit
+  // on the colour map, which is the same in every theme, not on the theme's ground
   const lines = useMemo(() => {
     const m = new THREE.LineBasicNodeMaterial({ color: raw(palette.white), transparent: true, opacity: 0.38, depthWrite: false });
     m.maskNode = clip.mask;
@@ -262,6 +265,15 @@ function Scene({ surface, values, valuesPer = 'cell', range, grid, onMoved, onVi
     l.visible = false;
     return l;
   }, [clip]);
+  // F-818: the viewport's ground follows the theme, drawn again at once
+  useEffect(
+    () =>
+      onThemeChange(() => {
+        renderer.setClearColor(raw(themeHex('silver-wash')), 1);
+        invalidate();
+      }),
+    [renderer, invalidate],
+  );
   const controls = useRef<OrbitControls | null>(null);
   const report = useRef(onMoved);
   report.current = onMoved;
@@ -634,7 +646,7 @@ export const FieldCanvas = forwardRef(function FieldCanvas({ forceWebGL, onBacke
         drawOnDemand(renderer); // F-817b: no frames asked for at rest (frameloop="demand" draws; three's own loop stops)
         renderer.outputColorSpace = THREE.LinearSRGBColorSpace;
         renderer.toneMapping = THREE.NoToneMapping;
-        renderer.setClearColor(raw(palette['silver-wash']), 1);
+        renderer.setClearColor(raw(themeHex('silver-wash')), 1);
         const isWebGPU = (renderer.backend as unknown as { isWebGPUBackend?: boolean }).isWebGPUBackend === true;
         backend.current(
           isWebGPU

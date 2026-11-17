@@ -60,14 +60,14 @@ test('the data bridge is window.studioData with exactly its four functions, froz
     keys: ['cancel', 'field', 'open', 'surface'],
     types: ['function'],
     frozen: true,
-    studio: ['app'],
+    studio: ['app', 'theme'], // F-818: the theme's two channels
     service: ['call', 'info', 'offState', 'onState', 'state', 'subscribe', 'unsubscribe'],
   });
   const names = await app.evaluate(({ ipcMain }) => {
     const handlers = (ipcMain as unknown as { _invokeHandlers?: Map<string, unknown> })._invokeHandlers;
     return handlers ? [...handlers.keys()].filter((n) => !/^[A-Z0-9_]+$/.test(n)).sort() : null;
   });
-  expect(names).toEqual(['app.info', 'app.ready']);
+  expect(names).toEqual(['app.info', 'app.ready', 'theme.get', 'theme.set']);
 });
 
 test('open: both routes describe the same store', async () => {

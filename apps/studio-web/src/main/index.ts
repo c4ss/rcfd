@@ -26,6 +26,9 @@
 // - Provenance (F-828): a MessagePort on PROVENANCE_PORT_CHANNEL (src/main/provenance/), checked against
 //   src/shared/provenance.ts; a run's record is read by the open project's read-only project server, and Copy writes the
 //   system clipboard here (the page has no clipboard permission).
+// - The theme (F-818): theme.get and theme.set of the allow-list; the setting is kept in the user data
+//   (src/main/theme.ts), and nativeTheme.themeSource and each window's background colour follow it, so a dark start
+//   shows no white ground before the page paints.
 //
 // Service and file I/O live in this process, never in the renderer.
 import {
@@ -35,6 +38,7 @@ import {
   dialog,
   ipcMain,
   MessageChannelMain,
+  nativeTheme,
   protocol,
   session,
   shell,
@@ -47,6 +51,7 @@ import { readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { CHANNELS, type AppInfo, type Channel, type IpcContract } from '../shared/ipc.js';
+import { backgroundOf, preferencesFile, ThemePreference, type ThemeTargets } from './theme.js';
 import { SERVICE_PORT_CHANNEL } from '../shared/service.js';
 import { PROJECT_PORT_CHANNEL } from '../shared/project.js';
 import { CASE_PORT_CHANNEL } from '../shared/case.js';
@@ -106,6 +111,18 @@ const isFile = (p: string): boolean => {
   }
 };
 const engine = engineConfig(process.env, isFile);
+
+/** F-818: the theme setting, read before the first window opens. */
+const theme = new ThemePreference(preferencesFile(process.env, app.getPath('userData')));
+const themeTargets: ThemeTargets = {
+  setSource: (source) => {
+    nativeTheme.themeSource = source;
+  },
+  systemDark: () => nativeTheme.shouldUseDarkColors,
+  setBackground: (colour) => {
+    for (const w of BrowserWindow.getAllWindows()) if (!w.isDestroyed()) w.setBackgroundColor(colour);
+  },
+};
 
 /** The project home (F-805): the engine's project server from the environment (src/main/project/config.ts). */
 const projects = new ProjectHome({
@@ -225,6 +242,14 @@ const handlers: { [C in Channel]: Handler<C> } = {
       await writeFile(STARTUP_REPORT, JSON.stringify({ readyUnixMs, electron: process.versions.electron }));
       setTimeout(() => app.quit(), 50);
     }
+  },
+  'theme.get': (args) => {
+    noArgs('theme.get', args);
+    return theme.state(themeTargets);
+  },
+  'theme.set': (args) => {
+    if (args.length !== 1) throw new Error('theme.set: takes one argument, the setting');
+    return theme.set(args[0], themeTargets);
   },
 };
 
@@ -430,11 +455,19 @@ function offerServicePort(contents: WebContents): void {
  */
 const HEADLESS = process.env.RCFD_TEST_HEADLESS === '1';
 
+/** The window background of the theme now (nativeTheme says whether the system is dark, for System). */
+function themeBackground(): string {
+  // the same rule as ThemePreference.apply: resolve System by the system's colours
+  return backgroundOf(theme.setting, nativeTheme.shouldUseDarkColors);
+}
+
 function openWindow(): void {
   const win = new BrowserWindow({
     width: 1280,
     height: 800,
     show: false,
+    // F-818: the theme's ground, so the window is never white before a dark page paints
+    backgroundColor: themeBackground(),
     ...(HEADLESS ? { skipTaskbar: true, opacity: 0, focusable: true } : {}),
     webPreferences: {
       ...(HEADLESS ? { backgroundThrottling: false } : {}),
@@ -497,6 +530,11 @@ function openWindow(): void {
 void app.whenReady().then(() => {
   hardenSession();
   registerIpc();
+  // F-818: the native parts in the theme before the window opens; System follows the system's changes
+  theme.apply(themeTargets);
+  nativeTheme.on('updated', () => {
+    if (theme.setting === 'system') themeTargets.setBackground(themeBackground());
+  });
   service.start();
   // F-837: `rcfd-studio <PROJECT_DIR>` opens that folder (after the recent list is read, so it goes to its head)
   const asked = projectArgument(process.argv, process.defaultApp === true, process.cwd());

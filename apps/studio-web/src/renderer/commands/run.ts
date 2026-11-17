@@ -16,6 +16,8 @@ import { projectActions, runAction, runActionAvailability, runActionConfirmation
 import { claudeActions } from '../claude/door.js';
 import { caseHash } from '../case/hash.js';
 import { commandFact, commandHandler, whenRegistered } from './host.js';
+import { setTheme } from '../theme/theme.js';
+import type { ThemeSetting } from '../../shared/theme.js';
 
 /** What the palette knows of the window when it asks. */
 export interface PaletteEnv {
@@ -415,6 +417,12 @@ async function studio(e: PaletteEntry, values: Values): Promise<Outcome> {
       const h = commandHandler(e.id);
       return h ? close(() => h.run(values)) : failed([F837_WHERE[e.id] ?? 'Open the surface first.']);
     }
+    // F-818: the theme, applied at once (src/renderer/theme/theme.ts); the palette closes on the new colours
+    case 'view.theme_light':
+    case 'view.theme_dark':
+    case 'view.theme_contrast':
+    case 'view.theme_system':
+      return close(() => void setTheme(e.id.slice('view.theme_'.length) as ThemeSetting));
     case 'runs.report':
     case 'field.save_png': {
       const h = commandHandler(e.id);

@@ -19,6 +19,10 @@ import './ui/primitives.css';
 import { ProjectHome } from './project/ProjectHome';
 // F-831: the command palette and the global shortcuts, beside every route (the palette loads on first use)
 import { PaletteHost } from './commands/PaletteHost';
+// F-818: the theme setting, drawn as soon as the main process answers (tokens.css follows the system until then)
+import { initTheme } from './theme/theme';
+
+initTheme();
 
 const GALLERY_HASH = '#/dev/primitives';
 

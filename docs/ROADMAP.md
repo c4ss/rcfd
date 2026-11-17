@@ -14290,11 +14290,22 @@ Generated from `docs/studio-guardrails.md`, `PRODUCT.md` and `DESIGN.md` ([ADR 0
     frames after the last draw, pictures unchanged, tests/e2e/idle-frames.spec.ts holds ≤ 5 per second at rest (measured
     0); Q5 applied: every bench case but P10 gets its own scratch --user-data-dir. Left: the idle baseline (Q4), P10 and
     P5 misses under load.
-- [ ] **F-818** Electron Studio: dark theme
+- [~] **F-818** Electron Studio: dark theme
   - depends on: F-802
   - acceptance: A dark variant of every DESIGN.md token that keeps each hue's single job; the field colour maps
     unchanged; DESIGN.md updated with the maintainer's approval.
-  - note: NEEDS THE USER: a dark theme is open in DESIGN.md; decide whether and when. Traces: G8; DESIGN Open.
+  - note: Traces: G8; DESIGN Open. Maintainer 2026-11-17: "theming in general is a good idea so create a dark mode plus
+    one other theme for this". Partial 2026-11-17 (ADR 0801 Addendum 17): built, with the DESIGN.md palettes awaiting
+    the maintainer. Themes are sets of the DESIGN.md colour tokens (tokens.ts themes.light = DESIGN.md, dark, contrast;
+    roles unchanged, so each hue keeps its job) switched by <html data-theme>; the setting Light (default, pixel for
+    pixel unchanged), Dark, High contrast, System is kept in the Studio's user data through theme.get/theme.set of the
+    IPC allow-list (G10), applied at once with no reload, with nativeTheme.themeSource and the window background
+    following (no white flash on a dark start); a theme icon in the header band (no word at rest, G22) and four palette
+    commands (Theme: Light/Dark/High contrast/System). The field colour map and its overlays are unchanged in every
+    theme; the field viewport ground and the plots follow. Second theme: High contrast (light, for bright rooms and
+    projectors). Palettes proposed in docs/design-themes-proposal.md, ready to paste; screenshots in
+    apps/studio-web/test-results-visual/f818/. Left: the maintainer's approval of both palettes and the DESIGN.md edit
+    (Q-818-1..5).
 - [~] **F-819** Electron Studio: large meshes and polyhedral fan meshes
   - depends on: F-808, F-817
   - acceptance: First picture, scrubbing and draw rate measured on a mesh of several million cells and on the FAN-01

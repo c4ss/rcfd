@@ -86,7 +86,8 @@ test.describe('tokens.css and tokens.ts', () => {
   });
 
   test('tokens.css declares each custom property once, and every one is a token of tokens.ts', () => {
-    const file = read(renderer, 'design', 'tokens.css');
+    // the :root block (DESIGN.md's light theme); the theme blocks after it are tests/unit/theme.spec.ts's (F-818)
+    const file = read(renderer, 'design', 'tokens.css').split('\n}\n')[0]!;
     const declared = [...file.matchAll(/^\s*(--[a-z0-9-]+):\s*(.+);$/gm)].map((m) => [m[1]!, m[2]!] as const);
     expect(declared).toEqual(cssCustomProperties());
     expect(new Set(declared.map(([k]) => k)).size).toBe(declared.length);

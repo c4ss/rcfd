@@ -29,6 +29,7 @@ import { ClaudePanel } from '../claude/ClaudePanel.js';
 import { requestCommand, useCommandFact, useCommandHandlers } from '../commands/host.js';
 import { FirstPath, FirstPathIntro, NotAProjectYet } from '../first/FirstPath.js';
 import { DataFiles, DesignsGroup, UnsavedMark, isCaseFile, useUnsavedCases } from './HomeExtras.js';
+import { ThemeSelect } from '../theme/ThemeSelect.js';
 import './project.css';
 
 // F-810: the run workspace, loaded on demand (it brings three.js), so the project home costs nothing more at start
@@ -106,6 +107,8 @@ export function ProjectHome() {
         )}
         {/* F-831: the command palette, also from the pointer */}
         <div className="ph-top-commands">
+          {/* F-818: the theme, an icon with no word at rest (G22) */}
+          <ThemeSelect />
           {/* G20, G22 (approved 2026-11-17): the shortcut is the button's description, not part of its name or text */}
           <Button variant="ghost" onPress={() => requestCommand('palette.open')} aria-keyshortcuts="Control+K" aria-describedby="ph-commands-keys">
             Commands

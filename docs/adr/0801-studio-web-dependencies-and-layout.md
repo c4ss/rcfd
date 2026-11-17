@@ -2192,3 +2192,115 @@ On 256 MiB in plain Node, the reference loop ran at 1.1 to 1.2 ns per byte and t
 - `npm run bench:large`: the two sets of three runs above, both with exit 0 and 63 of 63 judged lines met. The after
   set ran on a package built before one change that only narrows a TypeScript type in `FieldViewport` (a cast replaced
   by an `in` check) and does not change behaviour; `npm test` ran on the final tree.
+
+## Addendum 17: F-818, themes: Light, Dark, High contrast and System (2026-11-17)
+
+On 2026-11-17 the maintainer said: "theming in general is a good idea so create a dark mode plus one other theme for
+this". `DESIGN.md` changes need the maintainer's approval, so `DESIGN.md` is not edited. The two new palettes are
+written as a proposal in `docs/design-themes-proposal.md`, in `DESIGN.md`'s token format, ready to paste. No dependency,
+no Rust file, no service method, golden or default was changed. The default theme (Light) is `DESIGN.md` as before:
+its CSS is the unchanged `:root` block of `tokens.css` (byte for byte), and the existing visual, pixel and word-budget
+tests pass untouched.
+
+### What is built
+
+1. **Themes are sets of the tokens** (`src/renderer/design/tokens.ts`). `themes.light` is `palette` (`DESIGN.md`).
+   `themes.dark` and `themes.contrast` give every palette colour a value. The role table is the same in every theme,
+   so every component keeps its token and each hue keeps its job. `tokens.css` (generated, `npm run tokens:css`)
+   gains one block per other theme under `:root[data-theme='dark' | 'contrast']`, and a
+   `@media (prefers-color-scheme: dark) { :root:not([data-theme]) }` block, so a dark start is dark before the page's
+   script runs. Roles refer to the palette by `var()`, so nothing else in the CSS changes. The Dark popover lift is
+   tinted from the ground (`themeTint`), and Dark sets `color-scheme: dark`.
+2. **The setting** (`src/shared/theme.ts`, `src/main/theme.ts`): Light (default), Dark, High contrast, System. It is a
+   preference of the Studio, kept in its user data (`studio-preferences.json`, or the file named by
+   `RCFD_STUDIO_PREFERENCES`) beside the recent list. It is never project state (G12). It crosses the bridge only
+   through two new channels of the IPC allow-list (G10): `theme.get` and `theme.set`. The preload exposes them as
+   `window.studio.theme.{get, set}`, and the main process checks the value. The main process reads the file before
+   the first window opens, sets `nativeTheme.themeSource` (light, dark, light, system) and the window's
+   `backgroundColor` to the theme's ground, and sets both again on every change (and on the system's change under
+   System). A dark start shows no white window.
+3. **The page** (`src/renderer/theme/theme.ts`): `<html data-theme>` names the theme drawn. A change sets it at once
+   (no reload), then the main process keeps it. System follows `prefers-color-scheme`, which `nativeTheme` drives.
+   The three.js canvases follow through `onThemeChange`: the plots (`plots/linePlot.ts`) recolour their ground and
+   lines and draw once, and the field viewport (`field/FieldCanvas.tsx`) takes the theme's silver-wash as its clear
+   colour and draws once. The colour map and the overlays on the field (mesh grid, arrows) are not themed. The Claude
+   Code panel, the palette, the case editor and the settings are CSS and follow the tokens.
+4. **Controls.** A theme control in the header band of the project home and of the case settings. It is an icon on
+   the pictogram grid (`theme`: a square cut on its diagonal, one half hatched), with no visible word at rest (G22,
+   word budgets unchanged). Its accessible name is "Theme" and it reads the theme chosen. It opens the list Light,
+   Dark, High contrast, System. The palette has four commands in a new **View** group: Theme: Light, Theme: Dark,
+   Theme: High contrast, Theme: System (`view.theme_*`).
+
+### Decisions (options, the recommendation taken; each reversible)
+
+- D1, the second theme:
+  - (a) High contrast, a light theme for bright rooms and projectors (taken; why in the proposal: learners in
+    classrooms, and the hairlines and hatch that carry the program's structure are the first to wash out);
+  - (b) a colour-blind-safe theme (state is already shape plus word, G8, and the field is viridis);
+  - (c) a dim dark variant (repeats Dark).
+
+  Recommendation: (a), as the maintainer's brief suggested. The design docs do not make another theme clearly better.
+- D2, how a theme is defined:
+  - (a) palette values per theme, roles unchanged (taken);
+  - (b) roles remapped per theme (for example, the footer on a second dark tone in Dark).
+
+  Recommendation: (a). It is what "keeps each hue's single job" means, and it keeps one role table. A consequence the
+  maintainer should see: in Dark the ink fields (footer band, tooltips, scrubber flag, primary buttons) are light
+  bands with dark text.
+- D3, where the setting is kept: (a) the main process, in user data, through the IPC allow-list (taken); (b) the
+  page's `localStorage` (the Chromium profile is shared by the tests, and it would be state outside the main
+  process's view). Recommendation: (a).
+- D4, no flash: (a) `nativeTheme.themeSource`, the window background and the `prefers-color-scheme` fallback block
+  (taken); (b) a synchronous IPC call in the preload (`sendSync`; the shell test holds that the main process has no
+  `ipcMain.on` listener); (c) a command-line argument per window (stale after a change and a reload).
+  Recommendation: (a). High contrast starts as Light for the moment before the page reads the setting (both are white).
+- D5, Light's native theme: under Light, `nativeTheme.themeSource` is now `light`; before F-818 it was the system's.
+  On a dark system the title bar is light under Light. The page under Light is unchanged.
+- D6, the field overlays: Light's values in every theme (taken), because they sit on the colour map.
+- D7, the palette command: four commands, one per value (taken), so typing "dark" finds it, and the palette's
+  parameter kinds (`CHOICE_KINDS`) are unchanged. The other option was one command with a typed parameter.
+
+### Tests added and changed
+
+- `tests/unit/theme.spec.ts` (new): every theme sets every colour, all distinct; each themed colour stays within 25
+  degrees of its Light hue, and the neutrals stay ink-tinted (no black or pure grey); themes set no roles; `tokens.css`
+  is the unchanged `:root` block, then the theme blocks and the dark-system block; the window grounds equal the themes'
+  `white`; `colormap.ts` reads no theme; `theme.css` uses tokens only; the setting's file, its native source, its
+  background, and refusal of a bad value; the palette commands. No contrast check (G8).
+- `tests/e2e/theme.spec.ts` (new, packaged Studio, scratch preferences): Light by default (tokens, `themeSource`
+  light, white window); the header control switches the tokens at once with no reload, and the native theme and the
+  window background follow; the palette switches to High contrast; the setting persists across a restart; a dark start
+  opens on the dark ground and is dark before `data-theme` is set; System follows the emulated colour scheme, and an
+  explicit setting does not; the main process refuses a value that is not a setting.
+- `tests/e2e/theme-surfaces.spec.ts` (new, with rcfd and rcfd-mcp): the main surfaces in each theme, screenshotted
+  to `apps/studio-web/test-results-visual/f818/{light,dark,contrast}/`: home-empty, home-open (with the Claude Code
+  panel), runs-selected, workspace, palette, case-editor, settings, and `dark/theme-control.png`. On the workspace, the
+  field viewport's ground is the theme's silver-wash exactly, the plots' ground is the theme's ground, and the field's
+  pixels inside the frame are the same in every theme wherever the ground does not show.
+- Changed for the new channels and file: `tests/e2e/shell.spec.ts` (the allow-list is now app.info, app.ready,
+  theme.get, theme.set, and `window.studio` has `theme`); `tests/unit/tokens.spec.ts` (the declared-once check reads
+  the `:root` block); `tests/unit/history.spec.ts` (`src/main/theme.ts: rename`, the setting's write-then-rename in
+  user data); `tests/e2e/data.spec.ts`, `project.spec.ts` and `service-security.spec.ts` (their "the shell's channels
+  are unchanged" checks list the theme's two channels and `window.studio.theme`; the service, data and project ports
+  still use no shell channel).
+- The Studio has no terminal surface, so there was none to check.
+
+### Open for the maintainer
+
+- Q-818-1: approve, change or reject the Dark and High contrast palettes (`docs/design-themes-proposal.md`), then paste
+  them into `DESIGN.md` and close F-818.
+- Q-818-2: Dark's ink fields (footer, tooltips, flag, primary buttons) as light bands (D2 (a)), or a second dark tone
+  for them (D2 (b)).
+- Q-818-3: Dark's orange (`#c46810`) balances the label on the live segment against the focus ring on the ground.
+- Q-818-4: the field overlays in Light's values in every theme (D6).
+- Q-818-5: the theme control sits in the header band of the project home and the case settings. The Studio has no
+  Studio-wide settings page yet. Should one be made, and should the theme move there?
+
+### Verification (2026-11-17, on studio-f818 over studio-roadmap 7cb8ec45)
+
+- `npm ci`: exit 0, 0 vulnerabilities. `npm run typecheck`: clean. No dependency was added.
+- `tokens.css`: the `:root` block is byte-identical to the one before F-818 (compared with `git show HEAD:`).
+- `npm test` (headless, built and packaged): 679 passed, 0 failed, 8.4 min. This includes the 7 + 7 new e2e tests, the
+  word budgets (all surfaces within their approved budgets, unchanged), field and field-derived pixels, primitives
+  and a11y. A first full run failed 4 tests in data, project and service-security, which asserted the shell's old
+  two channels. Those three specs were updated as listed above and pass, then the full run above passed.

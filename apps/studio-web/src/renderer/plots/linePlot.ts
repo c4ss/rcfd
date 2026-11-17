@@ -18,6 +18,7 @@ import { LineSegmentsGeometry } from 'three/addons/lines/LineSegmentsGeometry.js
 import { Extent } from './range.js';
 import type { SeriesData } from './series.js';
 import { roleHex, type LineStyle } from './style.js';
+import { onThemeChange } from '../theme/theme.js';
 import { drawOnDemand } from '../ui/onDemand.js';
 
 /** The renderer's backend once initialised: WebGPU, or three.js's WebGL2 fallback. */
@@ -93,6 +94,8 @@ export class LinePlot {
   private frame: Frame | null = null;
   private frameId = 0;
   private disposed = false;
+  /** F-818: stops following the theme. */
+  private unTheme: (() => void) | null = null;
   /** Times the frame was set (for the dev route and the tests). */
   reframes = 0;
   /** Time of the last draw (ms, from the frame request to the end of render()), for the dev route. */
@@ -114,6 +117,12 @@ export class LinePlot {
       throw new Error('disposed');
     }
     this.renderer = r;
+    // F-818: a theme change recolours the ground and every line, and draws once
+    this.unTheme = onThemeChange(() => {
+      r.setClearColor(new Color(roleHex('ground')), 1);
+      for (const t of this.tracks.values()) t.material.color.set(roleHex(t.style.role));
+      this.requestDraw();
+    });
     this.resize(this.width, this.height, this.dpr);
     return (r.backend as { isWebGPUBackend?: boolean }).isWebGPUBackend ? 'WebGPU' : 'WebGL2';
   }
@@ -201,6 +210,8 @@ export class LinePlot {
 
   dispose(): void {
     this.disposed = true;
+    this.unTheme?.();
+    this.unTheme = null;
     if (this.frameId) cancelAnimationFrame(this.frameId);
     for (const name of [...this.tracks.keys()]) this.drop(name);
     this.renderer?.dispose();
