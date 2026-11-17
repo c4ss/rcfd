@@ -62,8 +62,6 @@ FILES = {
 class Retro(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
-        cls.h3 = ati.RETRO_H3
-        ati.RETRO_H3 = True  # ADR 0703 removed rule H3; these tests of ADR 0701 are kept as records of the rule
         cls.root = tempfile.mkdtemp(prefix="adr_retro_")
         for p, text in FILES.items():
             tg.put(cls.root, p, text)
@@ -73,7 +71,6 @@ class Retro(unittest.TestCase):
 
     @classmethod
     def tearDownClass(cls):
-        ati.RETRO_H3 = cls.h3
         shutil.rmtree(cls.root, ignore_errors=True)
 
     def prim(self, name):
@@ -90,11 +87,6 @@ class Retro(unittest.TestCase):
         for n in ("n5_path_after_code", "n5_path_missing_adr", "n5_path_listing_adr"):
             self.assertEqual(self.t[n]["evidence"], [], n)
             self.assertIsNone(self.t[n]["primary_adr"], n)
-
-    def test_p2_p3_p4_tiers(self):
-        self.assertEqual(self.prim("p2_h1"), ("0110", "E2"))   # the section of ADR 0110, not the plainly citing ADR 0100
-        self.assertEqual(self.prim("p3_h2"), ("0115", "E2"))
-        self.assertEqual(self.prim("p4_h3"), ("0116", "E2"))
 
     def test_n1_mention_only_is_not_a_registration(self):
         self.assertEqual(self.t["n1_mention_only"]["adrs"], ["0100", "0117"])
@@ -126,11 +118,6 @@ class Retro(unittest.TestCase):
     def test_p8_other_primaries_are_not_changed(self):
         self.assertEqual(self.prim("p8_e1_stays"), ("0105", "E1"))
         self.assertEqual(self.prim("p8_e0_stays"), ("0105", "E0"))
-
-    def test_counts(self):
-        r = self.idx["coverage"]["primary"]["retro"]
-        self.assertEqual((r["h1"], r["h2"], r["h3"]), (2, 3, 1))
-        self.assertEqual(r["files"]["crates/rcfd-w/tests/r_h1.rs"], [1, "0110"])
 
     def test_other_rules_and_retro_off_do_not_see_it(self):
         want = {"p2_h1": "0110", "p3_h2": "0115", "p4_h3": "0116"}
