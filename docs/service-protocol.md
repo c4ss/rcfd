@@ -149,7 +149,8 @@ unknown ticket is answered with the length 2^64 - 1 and the connection is closed
 ## UI metadata and help (`rcfd-ui/1`, opt-in with `rcfd serve --ui`)
 
 ADR 0730. Without `--ui` nothing below exists and every reply is as before, byte for byte. With it, `service.info` adds
-`ui: "rcfd-ui/1"` and lists the two help methods after the others; `protocol_version` stays 1.1.
+`ui: "rcfd-ui/1"` and lists `help.glossary`, `help.errors` and `mesh.preview` after the others; `protocol_version`
+stays 1.1.
 
 - `settings.schema {ui: true}`: the case schema with the UI metadata of `crates/rcfd-api/src/schema_ui.toml` on its
   nodes, and `x-rcfd-ui` on the root. A node may carry `x-rcfd-label` (a short name), `x-rcfd-help` (one line, at most
@@ -165,6 +166,28 @@ ADR 0730. Without `--ui` nothing below exists and every reply is as before, byte
 
 Both help methods take no parameters (`{}` or none). `rcfd schema --ui`, `rcfd help glossary` and `rcfd help errors`
 print the same on the command line.
+
+### `mesh.preview` (F-836, ADR 0732)
+
+`mesh.preview {session, dir, adapt?, force?}` builds the mesh the session's case runs on, without solving, and writes
+it as a field store with no snapshot (`store.rts`, the mesh frame only) at `<dir>/<mesh_hash>/`, by a temporary folder
+beside it and a rename. A folder of that name that already holds a store of the same mesh is used again (`reused:
+true`). The case is read from the session, so changes not saved are previewed.
+
+- `adapt`: `"base"` (default) or `"final"`. For a case with `[mesh.adapt]`, `base` is the mesh the run starts on
+  (`adapt.pending: true`: its first step changes it) and `final` runs the run's adaptive loop (`cycles + 1` solves) for
+  the mesh it solves on after that step. Without the table both give the one mesh and `adapt` is null.
+- `force`: a generator mesh whose `mesh.n*` counts give more than 2 000 000 cells is refused (1004) before it is built
+  unless `force: true`. Any built mesh over the service's `max_cells` is refused (1004) before anything is written.
+- Reply: `{path, mesh_hash, cells, faces, points, patches: [{name, kind, faces}], bounds: {min, max}, two_d, adapt:
+  null | {pending, cycles, solves}, reused}`. `mesh_hash` is `Mesh::content_hash` as 16 hexadecimal digits, the hash
+  the store records; `two_d` is true when the mesh has an `Empty` patch.
+- Errors: 1001 unknown session; 1003 the mesh cannot be built (`data.diagnostics`, as `mesh.check`); 1004 `dir` outside
+  the sandbox, the estimate or `max_cells`; -32602 a missing `session` or `dir`, a bad `adapt` or `force`, or an
+  unknown parameter; -32000 the store cannot be written (nothing is left behind).
+
+`rcfd call mesh.preview '{"session": "s1", "dir": ".rcfd/previews"}'` reaches it from a script. There is no MCP tool
+(ADR 0732 Q6).
 
 ## Where to go next
 

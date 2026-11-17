@@ -69,6 +69,8 @@ export class StudioData implements DataBackend {
           return this.local.surface(p);
         case 'surfaceField':
           return this.local.surfaceField(p, r.snapshot, r.field);
+        case 'patchSurface':
+          return this.local.patchSurface(p);
         case 'difference':
           if (r.other.route !== 'local') return failed('difference: both stores must be on the same route (local)');
           return this.local.difference(p, r.snapshot, r.other.path, r.otherSnapshot, r.field);
@@ -84,6 +86,9 @@ export class StudioData implements DataBackend {
       case 'surfaceField':
         // F-819b: the service's data.* methods gather nothing; the page reads the whole field there (data.field)
         return failed('surfaceField: the service route has no surface values; read the whole field (data.field)');
+      case 'patchSurface':
+        // F-836: the mesh preview's store is a local file the engine wrote into the project
+        return failed('patchSurface: the service route has no patch surface; the mesh preview reads its store locally');
       case 'difference':
         // F-815: the service's data.* methods have no difference (ADR 0801, addendum F-815)
         return failed('difference: the service route has no difference of two stores; it is computed by the local reader only');

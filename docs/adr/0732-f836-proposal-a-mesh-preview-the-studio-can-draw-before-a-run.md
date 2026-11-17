@@ -1,7 +1,8 @@
 # ADR 0732: F-836 proposal: a mesh preview the Studio can draw before a run (`mesh.preview`)
 
-Status: **PROPOSED 2026-11-17.** Not accepted by the maintainer. Nothing is built: no Rust, TypeScript or test code was
-written for this ADR, and nothing was run. The maintainer approves the command below before any code.
+Status: **ACCEPTED 2026-11-17.** The maintainer took every open question on its recommendation (recorded under
+"Answers"). Built on branch adr0732 the same day; what was built, the decisions the build needed and the test results are
+under "Built" at the end.
 
 Record, 2026-11-17: ADR 0730 was accepted and built (branch adr0730), so the `rcfd serve --ui` switch now exists. It
 gives the family `rcfd-ui/1`: a `ui` key in `service.info` and its methods appended to the method list, with
@@ -116,3 +117,65 @@ A service method `mesh.preview`, read-only for the case, that writes one mesh-on
 - **M6** `baseline_hashes.rs`, the case hash tables and the `preview_mesh` tests pass unedited.
 - **Studio** e2e: the case editor shows a generator mesh, a file mesh and a `[mesh.adapt]` mesh with patch visibility;
   an edit updates the preview; a refused build shows the engine's located message.
+
+## Answers (the maintainer, 2026-11-17)
+
+1. Opt-in: (a). `mesh.preview` is a method of the `rcfd serve --ui` switch of ADR 0730 (`UI_METHODS`).
+2. Where previews go: (a). The caller's `dir`; the Studio uses the project's `.rcfd/previews/<mesh hash>/` and reuses a
+   store whose hash matches.
+3. `[mesh.adapt]` cases: (a). `base` by default with `adapt.pending: true`; `final` on request, its cost said first.
+4. Size limit: (b). A cell estimate before a generator mesh is built, refused over the limit unless `force: true`, and
+   `max_cells` after the build.
+5. Unsaved editor text: (a). The session only.
+6. MCP tool: (a). None.
+
+## Built (2026-11-17, branch adr0732)
+
+**Engine.** `crates/rcfd-api/src/mesh_preview.rs` and one arm of `Service::call`: `mesh.preview {session, dir, adapt?,
+force?}`, only when `enable_ui` was called; `UI_METHODS` is now `help.glossary`, `help.errors`, `mesh.preview`. No other
+method, default, case key or reply changes; `sim::build_mesh`, `Simulation::new` and `sim::adapted_mesh` are called as they
+are. The protocol is in `docs/service-protocol.md`; `rcfd --help` names the method on its `--ui` line.
+
+Decisions the build needed (none changes a default or an answer):
+
+- **The store goes to `<dir>/<mesh hash>/`, not to `dir` itself.** Q2 (a) names the folder by the mesh hash, which is known
+  only after the build, so the caller cannot name it. `dir` is the previews folder; the engine adds the hash, writes in a
+  temporary folder beside it and renames. A folder of that name that already holds a store of the same mesh hash, cells
+  and points is used again without writing; the reply says so in one member the proposal did not list, `reused`. A
+  folder of that name that holds anything else is replaced.
+- **The mesh is the one `Simulation::new` sets the run up on.** For a plain case that is `build_mesh` (what
+  `Simulation::new` calls). A `[mesh.adapt]` case runs on its base lattice and a `[mesh.sliding]` case on its joined blocks,
+  neither of which is `build_mesh`'s mesh, so for those two the preview takes `Simulation::new`'s own mesh; where
+  `Simulation::new` refuses such a case, the preview is the same 1003 with its diagnostics. M1 needed this: with
+  `build_mesh` alone the adaptive and sliding cases fail it.
+- **The estimate's limit is 2 000 000 cells, the egui preview's** (ADR 0138), the generators and the count rule its
+  `estimate` had; a mesh file has no estimate. `force: true` skips the estimate only; `max_cells` holds after every build.
+- **The Studio reads the patch of each triangle** through a new data-port operation, `patchSurface`, on its own bridge
+  `window.studioMeshPreview` (as F-815 and F-819b added theirs, so that `window.studioData` keeps its four functions). The
+  store reader takes it from the mesh frame's patch table; the triangles are those of the plain surface.
+- **The Studio's side.** The case editor's right column has the preview above the case actions: it builds on open and
+  500 ms after a settings change (the egui debounce), ignores an older reply, keeps the last mesh on screen with the
+  failure under it, draws on the field canvas (one viridis entry per patch, the mesh grid on, a 2D mesh looked at along
+  its thin axis once), and lists the patches with a check box each. A settings change returns a `[mesh.adapt]` case to its
+  base mesh, so an edit never starts the adaptive loop unasked. A build is a work of F-832 (`mesh.preview`, progress and
+  Cancel after 300 ms; Cancel drops the reply). A service without `--ui` shows one exception line instead.
+- **G22.** The heading is for readers; counts, patch names and kinds are data. The case editor counts 51 chrome words with
+  the preview drawn, its budget of 51, unchanged.
+
+Tests (all run headless, release, no cache):
+
+- `crates/rcfd-api/tests/mesh_preview_adr0732.rs` (5): M1 for the 11 shipped cases (store, reply and decoded mesh against
+  `Simulation::new`, bit for bit; the estimate equals the built cells for the 9 generator cases it covers), M2 (base 576
+  cells pending, final 2799 cells equal to the run's mesh after one step; its hash, `05bb8beae5da57da`, is the one the egui test
+  recorded), M3, M4 (every error code,
+  nothing left behind), and reuse and unsaved settings.
+- Restated, not re-recorded: `ui_byte_identity_adr0730.rs` (P4 for every name of `UI_METHODS`; P2's help checks on the
+  `help.*` names), `crates/rcfd-cli/tests/ui_cli_adr0730.rs` (three names at the end of the `--ui` method list), the
+  Studio's `service.spec.ts` and `actions-rcfd.spec.ts` (the latter now starts the service with `--ui` as the Studio does;
+  it had failed on main since ADR 0730 for the `help.*` actions), and `work.spec.ts` (one more work kind).
+- `apps/studio-web/tests/unit/mesh-preview.spec.ts` (7): the engine's store read by the Studio's reader (M5's Studio side:
+  hash, counts, the plain surface's triangles, two triangles per face per patch), -32601 without `--ui`, the pure helpers,
+  the data port's shape. The TypeScript triangulation is the one F-804's `data.spec.ts` checks bit for bit against Rust.
+- `apps/studio-web/tests/e2e/f836.spec.ts` (5): a generator mesh, a mesh file and a `[mesh.adapt]` mesh drawn with patch
+  visibility, an unsaved edit redrawn, a missing mesh file's located message, the word budget.
+- `baseline_hashes.rs`, the case hash tables, the MCP goldens and `preview_mesh` are not edited.

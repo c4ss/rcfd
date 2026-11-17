@@ -51,7 +51,8 @@ function clock() {
 test.describe('the budget', () => {
   test('the registered limits and the kinds of work', () => {
     expect([LONG_TASK_LIMIT_MS, LONG_FRAME_LIMIT_MS, PROGRESS_AFTER_MS]).toEqual([100, 150, 300]);
-    expect([...WORK_KINDS]).toEqual(['project.open', 'run.open', 'field.load', 'case.check', 'case.save', 'mesh.check']);
+    // F-836 (ADR 0732): the mesh preview's build joined the list
+    expect([...WORK_KINDS]).toEqual(['project.open', 'run.open', 'field.load', 'case.check', 'case.save', 'mesh.check', 'mesh.preview']);
   });
 });
 

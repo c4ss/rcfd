@@ -127,7 +127,8 @@ COMMANDS:
     serve [--addr <host:port>] [--root <dir>] [--stdio] [--cosim <case>] [--ui]
                                start the solver service (JSON-RPC 2.0, newline-delimited); --cosim hosts the
                                co-simulation fluid participant of the case's [cosim] table (protocol rcfd-cosim/1);
-                               --ui adds settings.schema {ui: true}, help.glossary and help.errors (rcfd-ui/1)
+                               --ui adds settings.schema {ui: true}, help.glossary, help.errors and
+                               mesh.preview (rcfd-ui/1)
     call [--addr <host:port>] <method> [<json-params>]
                                call one method of a running service; prints the JSON result
                                (exit 1 and the JSON error on stderr if the call fails)

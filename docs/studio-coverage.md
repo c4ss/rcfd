@@ -20,12 +20,12 @@ Engine read: rcfd 0.1.0, service protocol rcfd-service/1 version 1.1, MCP server
 | Kind | Capabilities | UI path | Exemption | Exemption whose item does not name it |
 |---|---|---|---|---|
 | Service methods | 69 | 19 | 50 | 40 |
-| MCP tools | 59 | 24 | 35 | 27 |
+| MCP tools | 59 | 25 | 34 | 26 |
 | CLI commands | 40 | 13 | 27 | 22 |
 | CLI options | 162 | 11 | 151 | 122 |
 | Case schema keys | 951 | 951 | 0 | 0 |
 | Monitor format keys | 6 | 6 | 0 | 0 |
-| **All** | **1287** | **1024** (79.6 %) | **263** | **211** |
+| **All** | **1287** | **1025** (79.6 %) | **262** | **210** |
 
 A case key stands for every value of its enumeration (the solver options of that key, listed in the inventory): the
 schema-driven surface of F-825 offers them all. A CLI option is mapped with its command. "Item does not name it" marks an
@@ -47,7 +47,7 @@ new item (see the last sections).
 | F-815 compare two runs | 5 | `design.compare` (not named), `design.get_metrics` (not named), `design.ledger_query` (not named), `design.ledger_rerun_check` (not named), `design.list_study` (not named) |
 | F-828 provenance inspector and reproduce-from-CLI | 2 | `journal.get`, `journal.replay` |
 
-### MCP tools (35 without a UI path)
+### MCP tools (34 without a UI path)
 
 | Item | Count | Capabilities |
 |---|---|---|
@@ -55,7 +55,6 @@ new item (see the last sections).
 | F-807 run control (quick run, stop, pause, queue) | 18 | `create_workflow` (not named), `design_create_study` (not named), `design_create_variant` (not named), `design_evaluate` (not named), `design_ledger_append` (not named), `design_ledger_export` (not named), `design_propose` (not named), `design_record` (not named), `design_run_operating_map` (not named), `design_run_study` (not named), `edit_workflow` (not named), `list_workflow_tasks` (not named), `read_status_stream` (not named), `run` (not named), `run_headless` (not named), `run_workflow_task` (not named), `status` (not named), `wait_run` (not named) |
 | F-808 field viewport on three.js WebGPU | 5 | `export_vtk` (not named), `field_summary`, `get_field_stats`, `render_field`, `render_image` |
 | F-811 residual and monitor plots | 2 | `get_residuals`, `read_metrics` |
-| F-812 case editor validated by the engine's schema | 1 | `preview_mesh` (not named) |
 | F-813 a learner's first path | 1 | `list_cases` |
 | F-815 compare two runs | 5 | `design_compare_variants` (not named), `design_get_metrics` (not named), `design_ledger_query` (not named), `design_ledger_rerun_check` (not named), `design_list_study` (not named) |
 
@@ -105,7 +104,7 @@ holds the other way round). The reasons are in `coverage.json`.
 - Exports to files (VTK, report files): no Studio item names them; nearest home the surface that shows the data. (F-808, F-811): `field.export_vtk`, `report.export`, `export_vtk`.
 - How the started runner logs and whether it stays attached (--foreground, --log-file, --quiet, --stdout): the Studio starts it detached with its defaults (F-807, Start the runner). (F-807): `rcfd-runner ensure --*`.
 - Line and plane samples of a live service session (field.sample) or of a case run again (rcfd sample). F-809's derived pictures (cut plane, vectors) draw a run's stored fields and do not sample; iso-surfaces and streamlines have no engine entry point (ADR 0801, addendum F-809). No Studio item names samples yet. (F-809): `field.sample`, `rcfd sample`, `rcfd sample --*`.
-- Mesh tools (partition, inflation layers, conversion, import, mesh preview): no Studio item names them; nearest homes the case editor (F-812) and project home (F-805). (F-805, F-812): `mesh.inflate`, `mesh.partition`, `import_mesh`, `preview_mesh`, `rcfd convert`, `rcfd inflate`, `rcfd partition`, `rcfd convert --*`, `rcfd inflate --*`, `rcfd partition --*`.
+- Mesh tools (partition, inflation layers, conversion, import, mesh preview): no Studio item names them; nearest homes the case editor (F-812) and project home (F-805). (F-805, F-812): `mesh.inflate`, `mesh.partition`, `import_mesh`, `rcfd convert`, `rcfd inflate`, `rcfd partition`, `rcfd convert --*`, `rcfd inflate --*`, `rcfd partition --*`.
 - Options of rcfd-runner start that the Studio does not set (--foreground, --log-file, --no-runner, --quiet, --stdout): it starts runs through start_run, which takes priority, threads, mem_mb and set (F-807). (F-807): `rcfd-runner start --*`.
 - Particle-tracking reports: no item names them; nearest home the plots (F-811). (F-811): `particles.report`.
 - Re-creating reports from a results folder (rcfd post): no item names it; nearest home the plots (F-811). (F-811): `rcfd post`, `rcfd post --*`.

@@ -185,6 +185,9 @@ snapshot as a `Float32Array` (`field`) or the boundary surface (`surface`), nami
   device, file index, size, modification, change and creation times, the mesh frame's length, checksum and hash) and
   verifies any other file, or the same file changed. Its FNV-1a 64 runs a WebAssembly loop assembled in
   `src/main/data/fnv.ts` for many bytes (the reference loop for few).
+- F-836: `window.studioMeshPreview.surface(store)` (route `local`) gives `surface` with the patch of each triangle (its
+  index in the stored mesh's patch table), for the case editor's mesh preview; `window.studioData` keeps its four
+  functions.
 
 ## The run list and run state (F-806)
 
@@ -650,6 +653,12 @@ the head of the right column. Surface brief: `.impeccable/surfaces/apps-studio-w
   `mesh.check` action), Check the saved file (`check_case_headless`, the check-only launch with its exit code), Close
   the session (with unsaved changes it asks first, names them, and offers Save and close: F-837's close question). Each shows its Claude Code and CLI equivalents
   (`CASE_ACTIONS` in `src/shared/case.ts`).
+- Mesh preview (F-836, ADR 0732; `src/renderer/case/MeshPreview.tsx`): the session's mesh, saved or not, drawn before any
+  run. The engine builds it with the solver's own code (`mesh.preview`, on with `rcfd serve --ui`) and writes a
+  mesh-only store into the project's `.rcfd/previews/<mesh hash>/`; the Studio reads it through the data door and draws
+  it on the field canvas, one colour per patch, with the mesh grid and a check box per patch. It builds on open and
+  500 ms after a settings change; a `[mesh.adapt]` case shows its starting mesh and offers the adapted one with its cost
+  (the solves) said first; an estimate over 2 000 000 cells is refused with Build anyway.
 - The page reaches the case operations only through `window.studioCase` (`state`, `sources`, `prepare`, `attach`,
   `status`, `conflict`, `save`, `create`, `duplicate`, `check`, `forget`), from one module, `src/renderer/case/door.ts`;
   a third MessagePort on `studio.case-port`, checked by `src/main/case/bridge.ts` (exact fields, paths `cases/<...>.toml`
@@ -1080,6 +1089,8 @@ How they were chosen:
   - Checking the saved file: no result is shown, and a result shown before stays. The engine's `check_case_headless`
     finishes anyway, and it writes nothing.
   - Checking a mesh: the reply is dropped. The service has no way to stop `mesh.check`.
+  - Building the mesh preview (F-836): the reply is dropped and the mesh on screen stays. The service has no way to stop
+    `mesh.preview`.
 - **The main thread does no data work.** The arrays the GPU draws (a corner position per triangle, the bounding box and
   sphere, a scalar per corner, the shown range) are made in a worker (`src/renderer/field/prepare.worker.ts`, client
   `prepare.ts`) from `surface.ts`'s unchanged arithmetic. So are F-809's mesh layers and vector arrows (`derived.ts`,

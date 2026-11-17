@@ -36,6 +36,11 @@ export class LocalData {
     return this.job(p, (dir) => ({ op: 'surface', dir }));
   }
 
+  /** F-836: the surface with the patch of each triangle. */
+  patchSurface(p: string): Job<DataWireResult> {
+    return this.job(p, (dir) => ({ op: 'patchSurface', dir }));
+  }
+
   /** F-819b: field `field` of snapshot `snapshot` on the store's surface, one value per triangle, gathered in the worker. */
   surfaceField(p: string, snapshot: number, field: string): Job<DataWireResult> {
     return this.job(p, (dir) => ({ op: 'surfaceField', dir, snapshot, field }));

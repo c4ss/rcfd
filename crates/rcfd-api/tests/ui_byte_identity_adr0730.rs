@@ -4,7 +4,9 @@
 //! Restated 2026-11-17 (ADR 0730, "Result", the fixture note): the tests compare the same build with and without `--ui`,
 //! and the plain replies with what the code paths the ADR does not touch produce (`case_schema().to_json_schema()`,
 //! `monitor_json_schema()`, `METHODS`), never with a frozen recording, so a merge that adds a method, a tool or a key
-//! needs no re-recording. The byte-identity of the plain MCP tool lists is held by the pinned tests
+//! needs no re-recording. Restated 2026-11-17 for ADR 0732 (F-836): `mesh.preview` joined `UI_METHODS` (its Q1 (a)), so
+//! P4 holds for every name of the list and P2's checks of the help parameters run on the `help.*` names of it; the
+//! preview's own parameters are tested in `mesh_preview_adr0732.rs`. The byte-identity of the plain MCP tool lists is held by the pinned tests
 //! `crates/rcfd-mcp/tests/default_f1.rs` and `tool_list_f275.rs`; the case and run hashes by `baseline_hashes.rs` (T9).
 
 use rcfd_api::schema::case_schema;
@@ -75,8 +77,8 @@ fn t1_settings_schema_is_the_plain_export_without_ui_true() {
     );
 }
 
-/// T2: `service.info` without the switch has no `ui` key and lists exactly `METHODS`; `help.*` is the same -32601 as
-/// any unknown method.
+/// T2: `service.info` without the switch has no `ui` key and lists exactly `METHODS`; every method of the switch
+/// (`help.*`, and `mesh.preview` since ADR 0732) is the same -32601 as any unknown method.
 #[test]
 fn t2_service_info_and_help_without_ui_are_as_before() {
     let svc = plain();
@@ -97,9 +99,10 @@ fn t2_service_info_and_help_without_ui_are_as_before() {
     }
 }
 
-/// P4: with the switch, `service.info` is the plain reply plus `ui` and the two help methods at the end; nothing else.
+/// P4: with the switch, `service.info` is the plain reply plus `ui` and the methods of `UI_METHODS` at the end (the two
+/// help methods and, since ADR 0732, `mesh.preview`); nothing else.
 #[test]
-fn p4_service_info_with_ui_is_the_plain_one_plus_ui_and_two_methods() {
+fn p4_service_info_with_ui_is_the_plain_one_plus_ui_and_the_ui_methods() {
     let plain_info: Value = serde_json::from_str(&result(&plain(), "service.info", json!({}))).unwrap();
     let mut on: Value = serde_json::from_str(&result(&with_ui(), "service.info", json!({}))).unwrap();
     assert_eq!(on["ui"], UI_PROTOCOL);
@@ -122,7 +125,7 @@ fn p2_bad_parameters_are_refused_with_ui() {
     for p in [json!({"ui": "yes"}), json!({"ui": 1}), json!([true]), json!("ui")] {
         assert_eq!(error(&on, "settings.schema", p.clone())["code"], -32602, "{p}");
     }
-    for m in UI_METHODS {
+    for m in UI_METHODS.iter().filter(|m| m.starts_with("help.")) {
         assert_eq!(error(&on, m, json!({"x": 1}))["code"], -32602, "{m}");
         assert_eq!(error(&on, m, json!([]))["code"], -32602, "{m}");
         assert!(error(&on, m, Value::Null).is_null(), "{m} without params");

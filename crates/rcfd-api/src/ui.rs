@@ -21,8 +21,9 @@ use std::sync::OnceLock;
 
 /// Identifier of the UI metadata and the `help.*` methods, reported by `service.info` (`ui`) when they are on.
 pub const UI_PROTOCOL: &str = "rcfd-ui/1";
-/// The `help.*` methods, appended to `methods` of `service.info` when the UI switch is on.
-pub const UI_METHODS: [&str; 2] = ["help.glossary", "help.errors"];
+/// The methods of the UI switch, appended to `methods` of `service.info` when it is on: the `help.*` methods (ADR
+/// 0730) and the mesh preview (`mesh.preview`, F-836, ADR 0732 Q1 (a); `crate::mesh_preview`).
+pub const UI_METHODS: [&str; 3] = ["help.glossary", "help.errors", "mesh.preview"];
 /// Longest help line, in characters.
 pub const HELP_MAX: usize = 160;
 

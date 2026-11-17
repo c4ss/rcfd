@@ -17,7 +17,9 @@ export const SERVICE_PORT_CHANNEL = 'studio.service-port';
 /**
  * Methods that only read. `data.info` (protocol 1.2, opt-in) returns the service's clock and data port; a service
  * without `data.*` answers it with -32601. `help.glossary` and `help.errors` (ADR 0730, opt-in with `rcfd serve --ui`)
- * return the engine's glossary and error catalogue; a service without --ui answers them with -32601.
+ * return the engine's glossary and error catalogue; a service without --ui answers them with -32601. `mesh.preview` (ADR
+ * 0732, also --ui) builds the session's mesh without solving and writes it as a mesh-only store under the caller's
+ * folder: it changes no session or run, so it is listed here, and the Studio names `.rcfd/previews/` of the project.
  */
 export const SERVICE_READ_METHODS = [
   'service.info',
@@ -36,6 +38,7 @@ export const SERVICE_READ_METHODS = [
   'data.info',
   'help.glossary',
   'help.errors',
+  'mesh.preview',
 ] as const;
 
 /** Methods that change a session or its run. */
@@ -59,7 +62,7 @@ export const SERVICE_CONTROL_METHODS = [
  *   study ends, and every call of the window shares one ordered connection.
  * - `field.slice`, `field.grid`, `field.sample`, `render.*`, `data.*` other than `data.info`: bulk data (F-804).
  * - `report.export`, `field.export_vtk`, `workflow.save`, `workflow.load`, `status.read`, `run.check`, `mesh.*` other than
- *   `mesh.check`, `particles.report`, `workflow.*`, `cosim.*`: file output, other subsystems or co-simulation; each item
+ *   `mesh.check` and `mesh.preview`, `particles.report`, `workflow.*`, `cosim.*`: file output, other subsystems or co-simulation; each item
  *   that needs one adds it here with a test.
  * The Studio's named actions (G16, G20) will sit on top of this list; it is not the action layer.
  */

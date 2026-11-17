@@ -207,3 +207,63 @@
   align-items: flex-start;
   gap: var(--space-xs);
 }
+
+/* ---- the mesh preview (F-836, MeshPreview.tsx): the field canvas on the viewport ground, the counts and the patch list */
+
+.mp {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+}
+/* A fixed height: what is listed under it must never resize the canvas. */
+.mp-view {
+  position: relative;
+  width: 100%;
+  height: 240px;
+  border: var(--line-rule);
+  background: var(--role-viewport);
+}
+.mp-facts,
+.mp-note {
+  margin: 0;
+  font-size: var(--type-label-size);
+  font-variant-numeric: tabular-nums;
+}
+.mp-patches {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  border-top: var(--line-hair);
+}
+.mp-patches li {
+  border-bottom: var(--line-hair);
+}
+.mp-patches label {
+  display: flex;
+  align-items: center;
+  gap: var(--space-xs);
+  padding: var(--space-xs) 0;
+  overflow-wrap: anywhere;
+}
+.mp-swatch {
+  flex: none;
+  width: 12px;
+  height: 12px;
+  border: var(--line-hair);
+}
+.mp-faint {
+  color: var(--role-text-2);
+  font-size: var(--type-label-size);
+}
+.mp-adapt,
+.mp-failed {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--space-xs);
+}
+.mp-adapt p,
+.mp-failed p {
+  margin: 0;
+}

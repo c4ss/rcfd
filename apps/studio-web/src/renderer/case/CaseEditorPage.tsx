@@ -5,7 +5,7 @@
 // Every value, message, template and example name is the engine's. The session actions (session.create,
 // session.close, settings.*, mesh.check) go through the F-827 dispatcher; the case-file actions (bind, save, new,
 // duplicate, check the saved file) through the case port (door.ts), whose main-process side calls the engine's project
-// server (src/main/case/editor.ts).
+// server (src/main/case/editor.ts). The mesh preview (F-836, MeshPreview.tsx) draws the session's mesh before any run.
 import { abortable, beginWork, cancelHook } from '../work/work.js';
 import { WorkProgress } from '../work/WorkProgress.js';
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode, type RefObject } from 'react';
@@ -27,6 +27,7 @@ import { caseDoor } from './door.js';
 import { caseHash, caseRoute, replaceHash, type CaseRoute } from './hash.js';
 import { openCase, type OpenFailure } from './open.js';
 import { confirmClose } from './closeGuard.js';
+import { MeshPreview } from './MeshPreview.js';
 import '../settings/settings.css';
 import './case.css';
 
@@ -520,7 +521,7 @@ function EditorView({ session, engine, project, setTitle, setStateWord }: Editor
       address={service?.address ?? null}
       settingsEpoch={epochs.settings}
       stateEpoch={epochs.state}
-      aside={<CasePanel status={status} refresh={refresh} />}
+      aside={<CasePanel status={status} refresh={refresh} settingsEpoch={epochs.settings} />}
     />
   );
 }
@@ -560,7 +561,7 @@ const WORK_SCOPE = 'case-editor';
 
 // ---- the case file panel at the head of the right column (inside the settings surface's context)
 
-function CasePanel({ status, refresh }: { status: CaseStatus; refresh: () => Promise<void> }) {
+function CasePanel({ status, refresh, settingsEpoch }: { status: CaseStatus; refresh: () => Promise<void>; settingsEpoch: number }) {
   const settings = useSettings();
   const b = status.binding;
   const pending = status.pending;
@@ -809,6 +810,14 @@ function CasePanel({ status, refresh }: { status: CaseStatus; refresh: () => Pro
           </div>
         )}
         {notice && <NoticeView notice={notice} titleRef={noticeRef} path={b.path} pendingCount={pending.count} onGo={settings.goTo} onMine={() => void save('current')} onReload={reload} onDismiss={() => setNotice(null)} />}
+      </section>
+
+      {/* F-836 (ADR 0732): the mesh the session's case runs on, drawn before any run; G22: its heading is for readers */}
+      <section className="ce-panel" aria-labelledby="ce-mesh-title">
+        <h2 id="ce-mesh-title" className="sr-only">
+          Mesh preview
+        </h2>
+        <MeshPreview session={b.session} folder={b.folder} settingsEpoch={settingsEpoch} />
       </section>
 
       <section className="ce-panel" aria-labelledby="ce-actions-title">

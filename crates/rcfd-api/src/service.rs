@@ -278,8 +278,8 @@ pub struct Service {
     pub(crate) cosim: crate::cosim_service::Hosts,
     /// The bulk data channel (F-447, ADR 0350); off unless the embedding program calls `enable_data`.
     pub(crate) data: crate::data_service::Channel,
-    /// The UI metadata of `settings.schema {ui: true}` and the `help.*` methods (F-826, F-830, ADR 0730); off unless the
-    /// embedding program calls `enable_ui` (`rcfd serve --ui`).
+    /// The UI metadata of `settings.schema {ui: true}`, the `help.*` methods (F-826, F-830, ADR 0730) and `mesh.preview`
+    /// (F-836, ADR 0732); off unless the embedding program calls `enable_ui` (`rcfd serve --ui`).
     ui: AtomicBool,
 }
 
@@ -336,8 +336,8 @@ impl Service {
     }
 
     /// Switch the UI metadata and the `help.*` methods on (ADR 0730 P4): `settings.schema {ui: true}`, `help.glossary`,
-    /// `help.errors`, and `ui` with the two method names in `service.info`. A service without it answers every method as
-    /// protocol 1.1 does.
+    /// `help.errors`, the mesh preview `mesh.preview` (F-836, ADR 0732), and `ui` with the names of
+    /// [`crate::ui::UI_METHODS`] in `service.info`. A service without it answers every method as protocol 1.1 does.
     pub fn enable_ui(&self) {
         self.ui.store(true, Ordering::SeqCst);
     }
@@ -396,7 +396,7 @@ impl Service {
     }
 
     /// Refuse cases whose mesh file or output directory leave the sandbox.
-    fn check_case_paths(&self, case: &Case) -> Rpc<()> {
+    pub(crate) fn check_case_paths(&self, case: &Case) -> Rpc<()> {
         if self.cfg.root.is_none() {
             return Ok(());
         }
@@ -587,6 +587,14 @@ impl Service {
                     "report": serde_json::to_value(&q).unwrap_or(Value::Null),
                     "patches": mesh.patches().iter().map(|p| json!({"name": p.name, "faces": p.size, "kind": format!("{:?}", p.kind)})).collect::<Vec<_>>(),
                 }))
+            }
+            // F-836, ADR 0732: only a service started with --ui has the mesh preview; otherwise -32601 as before
+            "mesh.preview" if self.ui_enabled() => {
+                let req = crate::mesh_preview::Request::from_json(p)?;
+                let case = self.session_case(p)?;
+                self.check_case_paths(&case)?;
+                let dir = self.sandbox_path(&req.dir)?;
+                crate::mesh_preview::preview(&case, &dir, &req, self.cfg.max_cells)
             }
             "mesh.partition" => {
                 let s = self.session(p)?;
