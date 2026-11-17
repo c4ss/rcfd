@@ -1,7 +1,7 @@
 #![allow(dead_code)]
 //! The Claude Code allow-list rules (ADR 0126, ADR 0128 finding 2, ADR 0134), kept as test support of `rcfd-mcp`: the
 //! typed allow-list rule, the conservative policy every rule is checked against, the per-project allow-list file
-//! ([`ALLOW_FILE`]) and the first list of a project ([`PROJECT_READ_TOOLS`]). Used by `project_w48f.rs` (F2),
+//! ([`ALLOW_FILE`]), the first list of a project ([`PROJECT_READ_TOOLS`]) and the tools no list may hold ([`DELETE_TOOLS`]). Used by `project_w48f.rs` (F2),
 //! `tool_list_f275.rs` (C5-A) and `allow_file_w48e.rs` (E5, T1, T2, T5).
 //!
 //! This was the crate `rcfd-claude`, the Claude Code bridge of the removed egui Studio. Its bridge parts went with F-838
@@ -192,6 +192,10 @@ impl AllowRule {
                     Err("tool name must be letters, digits and '_'")
                 } else if NEED_PATTERN.contains(&n.as_str()) || check_text(n).is_err() {
                     Err("this tool needs a pattern, e.g. Bash(cmd) or Edit(path)")
+                } else if is_delete_tool(n) {
+                    Err("a tool of the class delete is never on an allow-list: the client asks for every call (ADR 0736)")
+                } else if is_whole_server(n) {
+                    Err("a rule naming a whole MCP server would allow its tools of the class delete: name each tool (ADR 0736)")
                 } else {
                     Ok(())
                 }
@@ -287,8 +291,9 @@ pub const PINNED_SERVER: &str = "rcfd_project";
 
 /// The read-class project tools: the first contents of a new project's allow-list, under the app-owned server's names
 /// (ADR 0134 W48-11 (a)). The 11 of ADR 0135's tool table, then the read tools added since (ADR 0187 Q6 (b) and ADR 0188
-/// Q6 (b), taken by ADR 0195 P5), and `runner_config` (ADR 0733, the maintainer, 2026-11-17). An existing allow-list file is not changed by this list.
-pub const PROJECT_READ_TOOLS: [&str; 16] = [
+/// Q6 (b), taken by ADR 0195 P5), `runner_config` (ADR 0733) and `hash_project_file` (ADR 0734), both the maintainer's
+/// word of 2026-11-17. An existing allow-list file is not changed by this list.
+pub const PROJECT_READ_TOOLS: [&str; 17] = [
     "project_info",
     "list_runs",
     "run_status",
@@ -305,7 +310,26 @@ pub const PROJECT_READ_TOOLS: [&str; 16] = [
     "preview_mesh",
     "list_meshes",
     "runner_config",
+    "hash_project_file",
 ];
+
+/// The project tools of the class `delete` (ADR 0736 Q3, the maintainer, 2026-11-17): no allow-list holds them, by
+/// default or by a rule added later, so Claude Code asks for every call. [`AllowRule::validate`] refuses an MCP tool rule
+/// `mcp__<server>__<name>` of one of these names, whatever the server is called.
+pub const DELETE_TOOLS: [&str; 1] = ["empty_trash"];
+
+/// Is `name` an MCP tool name (`mcp__<server>__<tool>`) whose tool is one of [`DELETE_TOOLS`]?
+pub fn is_delete_tool(name: &str) -> bool {
+    name.strip_prefix("mcp__")
+        .and_then(|rest| rest.rsplit_once("__"))
+        .is_some_and(|(_, tool)| DELETE_TOOLS.contains(&tool))
+}
+
+/// Is `name` a whole MCP server (`mcp__<server>`, no tool), which Claude Code reads as every tool of that server, the
+/// delete class included (ADR 0736)?
+pub fn is_whole_server(name: &str) -> bool {
+    name.strip_prefix("mcp__").is_some_and(|rest| !rest.contains("__"))
+}
 
 /// Format version of the allow-list file.
 const FILE_VERSION: u64 = 1;

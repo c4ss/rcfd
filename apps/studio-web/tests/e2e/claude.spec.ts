@@ -152,7 +152,7 @@ test('resume: the closed session is typed into from the keyboard; the reply stre
   const argv = chats[0]!.argv;
   expect(argv.slice(-2)).toEqual(['--resume', S1]);
   expect(argv.slice(argv.indexOf('--permission-mode'), argv.indexOf('--permission-mode') + 4)).toEqual(['--permission-mode', 'dontAsk', '--permission-prompts', 'none']);
-  expect(argv.filter((a) => a.startsWith('mcp__rcfd_project__'))).toHaveLength(16);
+  expect(argv.filter((a) => a.startsWith('mcp__rcfd_project__'))).toHaveLength(17);
   expect(argv.filter((a) => APPROVE_EVERYTHING.some((re) => re.test(a)))).toEqual([]);
   expect(path.resolve(chats[0]!.cwd).toLowerCase()).toBe(path.resolve(quick).toLowerCase());
   // the reply and its reference chips
@@ -190,11 +190,11 @@ test('a run id in the reply opens the run in Runs; a note opens on the project h
 
 test('tool approvals: the allow-list is shown from the keyboard, everything else denied', async () => {
   const page = studio!.page;
-  const disclose = panel(page).getByRole('button', { name: '16 allowed, everything else denied' });
+  const disclose = panel(page).getByRole('button', { name: '17 allowed, everything else denied' });
   await disclose.focus();
   await page.keyboard.press('Enter');
   await expect(disclose).toHaveAttribute('aria-expanded', 'true');
-  await expect(panel(page).getByRole('list', { name: 'Allowed tools' }).getByRole('listitem')).toHaveCount(16);
+  await expect(panel(page).getByRole('list', { name: 'Allowed tools' }).getByRole('listitem')).toHaveCount(17);
   await expect(panel(page).getByText(/never asked and never approved/)).toBeVisible();
   await shot(page, '06-approvals');
   await page.keyboard.press('Enter');

@@ -14,6 +14,8 @@ workspace = true
 serde.workspace = true
 serde_json.workspace = true
 rcfd-project.workspace = true
+# ADR 0734 P4: mesh.source and mesh.file of the case, read at submit for run.json mesh_hash.
+toml.workspace = true
 
 [[bin]]
 name = "rcfd-runner"

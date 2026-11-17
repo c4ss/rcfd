@@ -1,5 +1,5 @@
 // ADR 0737 (F-837) in the Studio, without the engine: a case file outside a project bound with the hash the service's
-// journal recorded and saved by the service's `case.save` (the changed lines, the hash compared; 1007 is the conflict,
+// journal recorded and saved by the service's `case.save` (the changed lines, the hash compared; 1008 is the conflict,
 // never an overwrite), only files the open dialog gave; the case port's two new operations; the #/case/file route; the
 // estimate line read from a `case.facts` reply (the Studio computes no part of the run-time rule); the new methods on
 // the allow-list, with registry actions. The engine side is crates/rcfd-api/tests/case_facts_adr0737.rs; the packaged
@@ -51,7 +51,7 @@ class FakeService {
       }
       case 'case.save': {
         this.saves.push(params);
-        if (params['base_hash'] !== this.disk.hash) throw new RpcError(1007, 'the file changed since it was read', { current_hash: this.disk.hash });
+        if (params['base_hash'] !== this.disk.hash) throw new RpcError(1008, 'the file changed since it was read', { current_hash: this.disk.hash });
         const old = this.disk.hash;
         this.disk = { hash: `fnv64:${Number(old.slice(6)) + 1}`, values: { ...s!.values } };
         return { path: params['path'], old_hash: old, new_hash: this.disk.hash, form: params['form'] };
@@ -110,7 +110,7 @@ test.describe('a case file outside a project (ADR 0737)', () => {
     expect((await editor.status(session)).pending.count).toBe(0);
   });
 
-  test('a file changed outside is a conflict (1007), shown with both sides; nothing is written until the choice', async () => {
+  test('a file changed outside is a conflict (1008), shown with both sides; nothing is written until the choice', async () => {
     const { service, editor } = setup();
     const { session } = await open(service, editor);
     service.set(session, 'mesh.nx', 16);

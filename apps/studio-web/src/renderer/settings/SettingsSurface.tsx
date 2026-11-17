@@ -6,13 +6,13 @@ import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } fro
 import { ListBox, ListBoxItem, type Key } from 'react-aria-components';
 import type { JsonObject, JsonValue } from '../../shared/actions/params.js';
 import { availability, dispatch } from '../actions/index.js';
-import { equivalents, getAction } from '../../shared/actions/registry.js';
+import { equivalents, getAction, SETTINGS_CONFLICT } from '../../shared/actions/registry.js';
 import { Button, EmptyMark, Icon, Quiet, StatePictogram, Switch, TextField } from '../ui/index.js';
-import { Settings, useSettings, type SettingsContext } from './context.js';
+import { Settings, useSettings, type SettingConflict, type SettingsContext } from './context.js';
 import { filledCollections, keyCount, search, sectionOf, sections, setCount, setKeys, type Section } from './disclosure.js';
 import { CollectionBody, GroupBody } from './Groups.js';
 import { KeyRow } from './KeyRow.js';
-import { entryNames, entrySeed, formatValue, type CaseModel, type SettingNode } from './schema.js';
+import { entryNames, entrySeed, formatValue, valueAt, type CaseModel, type SettingNode } from './schema.js';
 import { recoveryOf, useErrorCatalogue, type CatalogueEntry } from '../help/engine.js';
 
 export interface SettingsSurfaceProps {
@@ -95,6 +95,7 @@ export function SettingsSurface({ model, session, address, settingsEpoch, stateE
   const [changes, setChanges] = useState(0);
   const [checkedAt, setCheckedAt] = useState(0);
   const [announce, setAnnounce] = useState('');
+  const [conflicts, setConflicts] = useState<ReadonlyMap<string, SettingConflict>>(new Map());
   const [focusTarget, setFocusTarget] = useState<{ path: string; n: number } | null>(null);
   const mainRef = useRef<HTMLDivElement>(null);
   const catalogue = useErrorCatalogue();
@@ -118,6 +119,7 @@ export function SettingsSurface({ model, session, address, settingsEpoch, stateE
   useEffect(() => {
     setTree(null);
     setErrors(new Map());
+    setConflicts(new Map());
     setCheck(null);
     setLast(null);
     void refresh();
@@ -149,11 +151,37 @@ export function SettingsSurface({ model, session, address, settingsEpoch, stateE
       return n;
     });
 
+  const putConflict = (path: string, c: SettingConflict | null) =>
+    setConflicts((m) => {
+      const n = new Map(m);
+      if (c === null) n.delete(path);
+      else n.set(path, c);
+      return n;
+    });
+  /** 1007 (ADR 0736 P2): another writer changed the value since this page read it; nothing was changed. */
+  const conflicted = (error: { code: unknown; message: string; data?: unknown }, path: string, mine: JsonValue, remove: boolean): boolean => {
+    if (error.code !== SETTINGS_CONFLICT) return false;
+    const now = ((error.data as { current_value?: JsonValue } | undefined)?.current_value ?? null) as JsonValue;
+    putConflict(path, { now, mine, remove });
+    putError(path, null);
+    setAnnounce(`${path} was not changed: another writer set it to ${formatValue(now) || 'empty'} since it was read.`);
+    void refresh();
+    return true;
+  };
+  // the value of the tree as this page read it; none when the tree does not hold the path (a new entry, an optional
+  // object not made yet), so the engine's own default there is never taken for a change by another writer
+  const treeRef = useRef<unknown>(null);
+  treeRef.current = tree;
+  const readBase = (path: string): JsonValue | undefined => valueAt(treeRef.current, path);
+
   const change = useCallback(
-    async (path: string, value: JsonValue): Promise<boolean> => {
+    async (path: string, value: JsonValue, base?: JsonValue): Promise<boolean> => {
       mark(path, true);
-      const r = await dispatch('settings.set', { session, path, value }, { context: ctxSession });
+      const b = base === undefined ? readBase(path) : base;
+      const r = await dispatch('settings.set', { session, path, value, ...(b !== undefined ? { base_value: b } : {}) }, { context: ctxSession });
       mark(path, false);
+      if (!r.ok && conflicted(r.error, path, value, false)) return false;
+      putConflict(path, null);
       if (!r.ok) {
         const msg = engineMessage(r.error, path, catalogue);
         putError(path, msg);
@@ -196,6 +224,8 @@ export function SettingsSurface({ model, session, address, settingsEpoch, stateE
       });
     },
     change,
+    conflicts,
+    keepTheirs: (path) => putConflict(path, null),
     clearError: (path) => putError(path, null),
     addEntry: async (collectionPath, name) => {
       const key = `add:${collectionPath}`;
@@ -235,10 +265,13 @@ export function SettingsSurface({ model, session, address, settingsEpoch, stateE
       await refresh();
       return true;
     },
-    removeEntry: async (path) => {
+    removeEntry: async (path, base) => {
       mark(path, true);
-      const r = await dispatch('settings.remove', { session, path }, { context: ctxSession });
+      const b = base === undefined ? readBase(path) : base;
+      const r = await dispatch('settings.remove', { session, path, ...(b !== undefined ? { base_value: b } : {}) }, { context: ctxSession });
       mark(path, false);
+      if (!r.ok && conflicted(r.error, path, null, true)) return false;
+      putConflict(path, null);
       if (!r.ok) {
         const msg = engineMessage(r.error, path, catalogue);
         putError(path, msg);

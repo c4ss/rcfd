@@ -5,8 +5,9 @@
 // - an action without an inverse names what it loses before it runs (the loss table covers every change action);
 // - a value another writer changed since the edit is a conflict with both values, and nothing is overwritten until the
 //   user chooses;
-// - the Studio has no way to delete a run, a result or a case: the engine offers none (no trash, no delete), so there is
-//   nothing to confirm; the test fails when the engine gains one, so the Studio can offer it;
+// - a run, its results or a case leave the project only through the engine's trash (ADR 0736: trash_run, trash_results,
+//   trash_case, restored by restore_trash, removed for good only by empty_trash); the test fails when the engine gains
+//   another destructive entry point, so the Studio offers it through the engine too (tests/unit/trash.spec.ts);
 // - the recent list keeps another window's entries; history.css keeps DESIGN.md's rules.
 // The same history against the real `rcfd serve`: tests/e2e/undo-rcfd.spec.ts.
 import { expect, test } from '@playwright/test';
@@ -16,6 +17,7 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { ACTIONS, Dispatcher, History, lossOf, NO_INVERSE, isNoInverseAction, canonical, type ActionCall, type RecordOptions } from '../../src/shared/actions/index.js';
 import { CASE_TOOLS } from '../../src/shared/case.js';
+import { PROJECT_TOOLS, TRASH_WRITE_TOOLS } from '../../src/shared/project.js';
 import { ProjectHome } from '../../src/main/project/home.js';
 import type { StoredRecent } from '../../src/main/project/recent.js';
 import { cssCustomProperties } from '../../src/renderer/design/tokens.js';
@@ -303,14 +305,28 @@ test.describe('a value another writer changed is never overwritten silently', ()
 });
 
 test.describe('deletes of runs, results and cases', () => {
-  test('the engine offers no delete or trash of a run, a result or a case, so the Studio offers none (recorded gap)', () => {
+  test('the engine deletes a run, a result or a case only through its trash (ADR 0736), and the Studio reaches each of those tools', () => {
     const inv = JSON.parse(readFileSync(path.join(appRoot, 'capabilities', 'inventory.json'), 'utf8')) as { capabilities: { id: string }[] };
     const destructive = inv.capabilities
       .map((c) => c.id)
       .filter((id) => !id.startsWith('case:') && /(delete|remove|trash|purge|prune|discard|clean|archive|rm)/i.test(id));
-    // settings.remove removes a named entry of a session (undoable) and workflow.delete a task of a session workflow:
-    // neither touches a file. When this list grows, the engine has a delete: offer it (recoverable or confirmed in words).
-    expect(destructive.sort()).toEqual(['service:settings.remove', 'service:workflow.delete']);
+    // settings.remove removes a named entry of a session (undoable, compare-and-set since ADR 0736) and workflow.delete a
+    // task of a session workflow: neither touches a file. The trash tools and their CLI twins (ADR 0736) move to the
+    // project trash and back (Undo, Restore) and empty it behind the decision panel. When this list grows, the engine has
+    // another delete: offer it (recoverable or confirmed in words).
+    expect(destructive.filter((id) => !id.startsWith('cli:rcfd project ')).sort()).toEqual([
+      'mcp:empty_trash',
+      'mcp:list_trash',
+      'mcp:restore_trash',
+      'mcp:trash_case',
+      'mcp:trash_results',
+      'mcp:trash_run',
+      'service:settings.remove',
+      'service:workflow.delete',
+    ]);
+    expect([...TRASH_WRITE_TOOLS, ...PROJECT_TOOLS.filter((t) => t === 'list_trash')].sort()).toEqual(
+      destructive.filter((id) => id.startsWith('mcp:')).map((id) => id.slice(4)).sort(),
+    );
     // the case port's write tools never replace or remove a file (new_case refuses a taken name; edit_case is hash guarded)
     expect([...CASE_TOOLS].sort()).toEqual(['check_case_headless', 'edit_case', 'new_case', 'read_project_file']);
   });

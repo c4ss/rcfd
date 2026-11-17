@@ -46,14 +46,15 @@ async function outcome(port: number, session: string) {
 
 test.describe('actions on the real service', () => {
   test('every action calls a method the service offers (data.info only with data.* on)', async () => {
-    const s = await serve();
+    // restated 2026-11-17 (ADR 0732): the service as the Studio starts it, with --ui, whose methods (help.* of ADR 0730,
+    // mesh.preview of ADR 0732) have actions; without it this list also held the --ui methods
+    const s = await startRcfd(rcfd!, 0, ['--ui']);
+    leftovers.add(s.pid);
     const c = await RpcConnection.connectTcp('127.0.0.1', s.port);
     const info = (await c.request('service.info')) as { methods: string[] };
     c.close();
     await s.stop();
-    // restated for ADR 0737: a plain `rcfd serve` lacks the --ui methods (ADR 0730's help.*, which this check had not
-    // caught up with, and ADR 0737's case.facts and mesh.refine) besides data.info
-    expect(ACTIONS.map((a) => a.engine.service).filter((m) => !info.methods.includes(m))).toEqual(['help.glossary', 'help.errors', 'data.info', 'case.facts', 'mesh.refine']);
+    expect(ACTIONS.map((a) => a.engine.service).filter((m) => !info.methods.includes(m))).toEqual(['data.info']);
   });
 
   test('recorded on one service, replayed on another from JSON and from the shell: the same case and run (G16, G17)', async () => {

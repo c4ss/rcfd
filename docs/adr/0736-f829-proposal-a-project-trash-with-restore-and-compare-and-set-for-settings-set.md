@@ -1,7 +1,7 @@
 # ADR 0736: F-829 proposal: a project trash with restore, and compare-and-set for `settings.set`
 
-Status: **PROPOSED 2026-11-17.** Not accepted by the maintainer. Nothing is built: no Rust, TypeScript or test code was
-written for this ADR, and nothing was run. The maintainer approves the commands below before any code.
+Status: **ACCEPTED 2026-11-17.** The maintainer accepted this ADR on 2026-11-17, taking every open question on its
+recommendation (answers below). Built the same day; see "As built".
 
 Roadmap item F-829 (Electron Studio: undo, safe deletes and edit conflicts), ADR 0801 "Engine follow-ups of the Studio
 items", rows E-829a and E-829b. Its acceptance: "deleting a run, result or case is recoverable (for example a project
@@ -125,6 +125,16 @@ list. The decision panel (F-829) asks only for `empty_trash`. Every `settings.se
 7. **Automatic emptying.** Recommendation: (a). (a) none; the Studio says the trash size; (b) items older than 30 days
    at runner start.
 
+## The maintainer's answers (2026-11-17)
+
+1. Q1 (a): the trash is `.rcfd/trash/` inside the project.
+2. Q2 (a): trashing a run that another run continues from is refused only while that other run is unfinished.
+3. Q3 (a): `empty_trash` is in a new tool class `delete`, which no allow-list holds by default, so Claude Code asks.
+4. Q4 (a): a separate `trash_results` tool takes a run's `fields` and `output`.
+5. Q5 (a): compare-and-set takes `base_value` or `base_hash`.
+6. Q6 (a): a settings conflict is the new service code 1007.
+7. Q7 (a): there is no automatic emptying.
+
 ## Tests that would prove it
 
 - **T1** `trash_run` of a finished run then `restore_trash` gives a byte-identical folder (every file's hash); `verify`
@@ -144,3 +154,130 @@ list. The decision panel (F-829) asks only for `empty_trash`. Every `settings.se
 
 F-829 rows E-829a (recoverable delete of runs, results and cases) and E-829b (no silent overwrite of a session's
 settings).
+
+## As built (2026-11-17)
+
+- **Library.** `crates/rcfd-project/src/trash.rs`. An item is `.rcfd/trash/<token>/`, with `item.json` (`token`, `kind`
+  run|results|case, `path`, `parts`, `trashed`, `who`, `reason`, `hash`, `bytes`, `actor`) and `data/` holding what moved.
+  The token is `t-<yyyymmddThhmmss>-<4 hex>`. A move takes the edit lock on the path and then on the token, writes
+  `item.json` first, renames into `data/`, and rolls back on a failure. A restore refuses an occupied path. Empty removes
+  only tokens whose `item.json` reads. `hash` is set for a case file only (the engine's `fnv64:` of its bytes); a folder
+  carries null, so nothing hashes gigabytes of fields. `atomic::lock_edit` (an `EditGuard`) is new and public;
+  `with_retry` is `pub(crate)`.
+- **Workspace.** `crates/rcfd-workspace/src/trash.rs` holds the six commands, appended to `COMMANDS` after `wait_run`
+  (25 to 31):
+  - `trash_run`: 1002 for a run that has not ended; 1003 with `data.runs` while an unfinished run has
+    `settings.continue_from` equal to it.
+  - `trash_results`: `parts` from `fields`, `output`; a part the run does not hold is refused.
+  - `trash_case`: the path must be under `cases/` (1004); a missing file is 1202; `base_hash` is required and compared
+    under the lock (1200 with `current_hash`).
+  - `list_trash`: newest first, with `offset`/`limit` and the text budget; replies `{items, bytes, total, offset,
+    next_offset, skipped}`.
+  - `restore_trash`: a bad token is -32602, a missing one 1202, an occupied path 1200 with `data.path`.
+  - `empty_trash`: `tokens`, `older_than_days`, `reason`; replies `{removed, count, bytes}`.
+
+  The journal kinds are `trashed`, `restored` and `trash_emptied`, with the path, token, parts, hash, bytes, actor and
+  reason.
+- **Change feed.** `feed.rs` has a sentence for each kind. A trashed case claims "absent" and a restored case claims its
+  hash, so neither shows as an external change. A restored run's events are read from their current length.
+- **MCP.** `Access::Delete` (name `delete`) is added to `policy.rs`. The six tool descriptors come after `wait_run`:
+  `list_trash` is read, the four moves are `write_files`, and `empty_trash` is `delete`. `destructiveHint` is true only for
+  the class `delete`. The `initialize` text names the trash tools.
+- **Allow-lists.** The engine side (`crates/rcfd-mcp/tests/claude_allow`, `DELETE_TOOLS`, `is_delete_tool`,
+  `is_whole_server`) and the Studio side (`apps/studio-web/src/main/claude/allow.ts`, `DELETE_TOOLS`, `isDeleteTool`,
+  `isWholeServer`) refuse two kinds of rule:
+  - a tool of the class delete, under any server name;
+  - a rule that names a whole MCP server (`mcp__<server>`), which would allow its delete tools too.
+
+  So no first list, no "Allow this from now on" and no allow-list file can hold one. `list_trash` is not added to the
+  first allow-list, the same choice ADR 0188 Q6 (a) made.
+- **Service.** `settings.set` and `settings.remove` take `base_value` or `base_hash`, checked after the state checks and
+  before the write.
+  - `base_value` is compared with `case.get(path)`, null when absent; numbers are compared as numbers.
+  - `base_hash` is compared with the `{:016x}` content hash; a hash that is not a string is -32602.
+  - A mismatch is the new `code::CONFLICT` 1007, with `data {path, current_value, current_hash}`.
+
+  A call without either answers exactly as before.
+- **CLI.** These run through the same workspace commands, with the actor `cli`:
+  - `rcfd project trash <dir> (--run <id> | --results <id> [--parts fields,output] | --case <path> --base-hash <hash>)
+    [--reason <text>]`
+  - `rcfd project trash-list <dir>`
+  - `rcfd project restore <dir> <token> [--reason <text>]`
+  - `rcfd project empty-trash <dir> [--token <token>]... [--older-than-days <n>] [--reason <text>]`
+
+  They exit 0 on success, 1 on a refusal (with `{code, message, data}` on stderr) and 2 on a usage error.
+- **Tool-list tests restated, no golden edited:**
+  - `tool_list_f275.rs`: 31 project tools, 48 tools in all.
+  - `project_list_f270.rs`: the six new tools are checked at the end, then cut before the ADR 0733 block.
+  - `project_runs_w48f.rs`: 48.
+  - `project_w48f.rs`: F2 leaves `list_trash` out of the first allow-list; F3 is 17 + 31.
+  - `default_f1` and the default count in `crates/rcfd-mcp/src/tests.rs` (34) do not change, because the project tools are
+    listed only with `--project`.
+- **Studio (F-829).** `apps/studio-web`:
+  - *Main process.* The trash goes over the project port's new `trash` operation (`what` is run, results, case, restore or
+    empty; checked in `src/main/project/bridge.ts`), to `ProjectSession.trash`, and from there to the run-control server
+    (`RunControl.callTrash`).
+    - A case is sent with the engine's hash of it as `base_hash`, read through `read_project_file` just before.
+    - A run's results are sent with the parts the run holds; the main process reads the folder names and writes nothing.
+    - `list_trash` is read with the other lists on the read-only server, and the result is `view.trash`.
+  - *Home: moving.* Each row of an ended run in Runs has two icon buttons, "Move the results of run … to the trash" and
+    "Move run … to the trash". Each case row in Cases has one. Every move is confirmed in the F-829 decision panel, which
+    names what moves and what stays. A refusal comes back in the engine's words, with the way out.
+  - *Home: Undo.* Every move is an F-829 history step (`History.recordStep`, scope `project:<folder>`). Undo restores it
+    with `restore_trash`; redo moves it again. The home's undo controls sit in its tool row, and Ctrl+Z works there too.
+  - *Home: the Trash list.* It appears only while the trash holds anything, with each item, its kind, when it moved and
+    its size. Restore is a button on each row. Empty trash goes through the decision panel, which names the items and
+    their size and says that nothing brings them back; only the tokens listed are removed.
+  - *Settings.* Every write of the case settings (`SettingsSurface`) sends the value the page read as `base_value`,
+    except when the page's tree does not hold the path. In that case the engine's default for an optional object is never
+    taken for a change by another writer.
+    - A 1007 shows under the key, or under the entry for a removal, with the value now and two choices: Set mine (with
+      the value now as its base) or Keep.
+    - An undo or redo of a settings step carries the value it expects as its base (`withBase`). A 1007 is the same
+      conflict outcome as the history's own read. "Undo anyway" sends no base.
+  - *What the Studio never does.* It never moves or removes a file itself (G12; the unit check on `rm`, `unlink` and
+    `rename` is unchanged).
+  - *Coverage.* The capability inventory gains the six tools, the four commands and their options, mapped to these
+    controls. The `--reason` options and `--older-than-days` are exempted: the Studio gives no reason and does not empty
+    the trash by age.
+- **G22.** No budget was raised:
+  - At rest, the home gains only icon buttons and the undo arrows. Their words are accessible names and tooltips, which
+    are not counted.
+  - The Trash list is not shown while the trash is empty.
+  - The conflict blocks and panels are exceptions.
+
+  The Runs view (F-806/F-807, budgets 14 and 16) gained no trash control. With so few words to spare, a delete there
+  waits for its own item; the home's Runs table covers every run.
+
+### Tests run (2026-11-17, release, headless)
+
+- `cargo clippy --workspace --all-targets --locked -- -D warnings`: clean. `cargo fmt --check` passes on the touched
+  packages.
+- `cargo test --release`, with the touched files only:
+  - `rcfd-mcp`: `trash_adr0736` (7: T1 to T5, E, A), `tool_list_f275` (7), `project_list_f270` (1), `project_runs_w48f`
+    (3), `project_w48f` (10), `allow_file_w48e` (4), `default_f1` (2), `feed_f273` (3), `runner_config_adr0733` (1), and
+    the lib (18).
+  - `rcfd-api`: `settings_cas_adr0736` (3: T6), the lib (141), `workflow` (5), and `baseline_hashes` (3 passed, 1
+    ignored; unedited: T7).
+  - `rcfd-project`: the lib (3), `edit_lock_w48f` (4), `journal_f273` (4) and `watch` (2).
+  - `rcfd-workspace`: the lib (5), `feed_replay_f275` (1), `journal_f273` (9) and `save_f270` (8).
+  - `rcfd-cli`: `project_trash_adr0736` (4) and `project_init_f835` (6).
+- T3's "a run of the case started before still finishes with the same fields" was checked in a weaker form: the run's
+  snapshot is unchanged and `verify` passes. No runner run was made.
+- The dependency check in `trash_run` and a later `start_run` that continues from the run can race; this is documented
+  in the code.
+- Studio (`npm ci`, typecheck, `npm run build && npm run package:dir`, the touched specs only): 203 unit tests in 16 specs pass:
+  - `trash.spec.ts` is new (8): the main process's trash calls, the port check, the outside history step, `withBase`, a
+    stale base refused with 1007, and the race the base closes.
+  - `history.spec.ts` was restated: the "no engine delete" gap became "deletes only through the trash".
+  - `claude.spec.ts` gains a test that no allow-list holds the delete class, with the same list as the engine side.
+  - `project-home.spec.ts` was restated: the reads now include `list_trash`.
+  - `run-control`, `pictograms`, `capabilities`, `actions-*`, `settings-*`, `case-editor`, `security`, `compare` and
+    `f837` pass unedited.
+
+  96 e2e tests in 13 specs pass against the real engine:
+  - `trash.spec.ts` is new (3): move a run and Undo it byte for byte; move results and Empty trash; move a case and
+    Restore it.
+  - `word-budget` passes with no budget raised.
+  - `undo`, `undo-rcfd`, `undo-case`, `settings`, `settings-rcfd`, `case-editor`, `claude-allow`, `a11y`, `project`,
+    `theme-surfaces` and `run-control` pass.

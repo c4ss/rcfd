@@ -16868,27 +16868,41 @@ Generated from `docs/studio-guardrails.md`, `PRODUCT.md` and `DESIGN.md` ([ADR 0
     run.json records no launch argv or build id; status.json and store time have no unit; a session records no file or
     journal file; no rerun options; no mesh hash. 2026-11-17 (ADR 0801 Addendum 20): the maintainer answered D-L1: the
     engine records a session's journal (E-828c), the Studio writes none; a session number's reproduce command stays said
-    as not recorded until the engine gives one. 2026-11-17: engine follow-ups E-828a, E-828b, E-828d and E-828e:
-    ADR 0734 proposed; E-828c: ADR 0735 proposed; awaiting the maintainer.
-    2026-11-17 (ADR 0735, accepted with Q4 declined): E-828c built: session.create records a case file's resolved
-    path and hash (`source` in journal.get and session.list); rcfd serve --journal-dir keeps one
-    `<session>-<created>.journal.json` per session; rcfd run --journal refuses a case file changed since
-    (--journal-ignore-hash); the Studio starts its service with `--journal-dir <state dir>/journals`, and a session
-    number's provenance names its case file and hash and shows and copies `rcfd run --journal <file>`.
-- [~] **F-829** Electron Studio: undo, safe deletes and edit conflicts
+    as not recorded until the engine gives one. 2026-11-17: engine follow-ups E-828a, E-828b, E-828d and E-828e: ADR
+    0734 proposed; E-828c: ADR 0735 proposed; awaiting the maintainer. 2026-11-17 (ADR 0735, accepted with Q4 declined):
+    E-828c built: session.create records a case file's resolved path and hash (`source` in journal.get and
+    session.list); rcfd serve --journal-dir keeps one `<session>-<created>.journal.json` per session; rcfd run --journal
+    refuses a case file changed since (--journal-ignore-hash); the Studio starts its service with `--journal-dir <state
+    dir>/journals`, and a session number's provenance names its case file and hash and shows and copies `rcfd run
+    --journal <file>`. 2026-11-17 (ADR 0734 accepted and built): E-828a, E-828b, E-828d and E-828e are done: each launch
+    writes runs/<id>/launch.json (argv, cwd, solver path and version, build exe_hash and git_rev; rcfd version --json),
+    run_status, list_runs and data.open reply time_unit "s", rcfd-runner start takes --continue-from and --max-steps,
+    rcfd-runner rerun <id> and start_run from_run rerun a run from its case.snapshot (rerun_of), and the runner records
+    mesh_hash of a mesh-file case with hash_project_file and rcfd project hash to check it. The Studio's selected run
+    shows How this ran (command line, build, mesh hash unchanged or changed, rerun command) and Rerun as it ran through
+    start_run; the reproduce command carries --continue-from and --max-steps; time units come from the engine. Still
+    partial: the Studio items Left above.
+- [x] **F-829** Electron Studio: undo, safe deletes and edit conflicts
   - depends on: F-827, F-805
   - acceptance: Undo and redo for every edit made through the action layer; deleting a run, result or case is
     recoverable (for example a project trash) or confirmed in words that name what is lost; a file changed by another
     writer since the Studio read it is never overwritten silently, the conflict is shown with a choice; a test for each
     (G18).
-  - note: ADR 0800 (G16 to G21 added 2026-11-16). Traces: G18, G11, G12. Partial 2026-11-16: undo/redo for every action-
-    layer edit (one history per session, named Undo/Redo controls, Ctrl+Z/Ctrl+Shift+Z/Ctrl+Y), tested on the fake
-    service and real rcfd serve; actions without an inverse ask first naming what is lost; undo/redo and typed values
-    show a conflict instead of overwriting; case saves refuse a changed file (edit_case base_hash). Left: no engine
-    delete or trash for runs/results/cases, so the Studio offers none (engine tools
+  - note: ADR 0800 (G16 to G21 added 2026-11-16). Traces: G18, G11, G12. Partial 2026-11-16: undo/redo for every
+    action-layer edit (one history per session, named Undo/Redo controls, Ctrl+Z/Ctrl+Shift+Z/Ctrl+Y), tested on the
+    fake service and real rcfd serve; actions without an inverse ask first naming what is lost; undo/redo and typed
+    values show a conflict instead of overwriting; case saves refuse a changed file (edit_case base_hash). Left: no
+    engine delete or trash for runs/results/cases, so the Studio offers none (engine tools
     trash_run/trash_case/list_trash/restore_trash proposed, needs an ADR); engine compare-and-set for settings.set
     proposed. Engine needs listed in ADR 0801, "Engine follow-ups of the Studio items" (2026-11-17). 2026-11-17: engine
-    follow-ups E-829a and E-829b: ADR 0736 proposed; awaiting the maintainer.
+    follow-ups E-829a and E-829b: ADR 0736 proposed, then accepted. Done 2026-11-17 (ADR 0736 accepted and built):
+    deleting a run, its results or a case moves it to the engine's project trash (.rcfd/trash/; trash_run,
+    trash_results, trash_case, confirmed in words that name what moves) and Undo restores it as an F-829 history step
+    (restore_trash); the home lists the trash with Restore, and Empty trash (empty_trash, tool class delete, on no
+    allow-list) is behind the decision panel; the Studio itself never moves or removes a file. Every case settings write
+    sends base_value (compare-and-set, code 1007 shown as a conflict with Set mine or Keep), and undo/redo writes carry
+    the value they expect. Tests: tests/e2e/trash.spec.ts (the real engine), tests/unit/trash.spec.ts, history.spec.ts,
+    claude.spec.ts (no allow-list holds the delete class, also crates/rcfd-mcp/tests/trash_adr0736.rs).
 - [~] **F-830** Electron Studio: explain in place from the engine's docs
   - depends on: F-826, F-825
   - acceptance: Help on every control, term and value taken from the engine's case schema help text (F-826), docs and
@@ -16975,14 +16989,23 @@ Generated from `docs/studio-guardrails.md`, `PRODUCT.md` and `DESIGN.md` ([ADR 0
     open the project (G4, G12: the Studio writes no rcfd-project.json); the first path's e2e walk makes its projects
     through them. Word budgets unchanged: New project… on the empty home is an icon button (a worded one needs
     home-empty raised from 6 to 8, for the maintainer).
-- [ ] **F-836** Electron Studio: mesh preview before a run
+- [x] **F-836** Electron Studio: mesh preview before a run
   - depends on: F-449, F-812, F-808
   - acceptance: The case editor shows the mesh a case will build (generator and imported meshes, including a
     [mesh.adapt] mesh) with patch visibility, from an engine entry point that builds the mesh without solving (ADR first
     if none exists); the preview equals the solver's mesh (test replacing preview_g1 and adaptive_preview_f475); e2e
     test.
-  - note: Lost with rcfd-studio (preview.rs, preview_ui.rs). Traces: G14, G15. ADR 0732 proposed; awaiting the
-    maintainer.
+  - note: Lost with rcfd-studio (preview.rs, preview_ui.rs). Traces: G14, G15. Done 2026-11-17 (ADR 0732, accepted by
+    the maintainer 2026-11-17 with every recommendation; branch adr0732): the service method mesh.preview {session, dir,
+    adapt?, force?} behind rcfd serve --ui (UI_METHODS; the plain replies unchanged, ADR 0730's tests restated, not
+    re-recorded) builds the mesh Simulation::new sets the run up on without solving and writes it as a mesh-only store
+    in <dir>/<mesh hash>/, reused when the hash matches; a [mesh.adapt] case gives its base mesh with adapt.pending and
+    the adapted mesh on adapt: "final"; a generator over 2 000 000 estimated cells is refused unless force. The case
+    editor draws the session's mesh (saved or not) from that store through the Studio's store reader, one colour per
+    patch, with the mesh grid, patch visibility, the adapted mesh on request with its cost said first, and the engine's
+    located message on failure. mesh_preview_adr0732.rs replaces preview_g1 (M1, every shipped case against
+    Simulation::new) and adaptive_preview_f475 (M2); e2e tests/e2e/f836.spec.ts. No MCP tool (Q6). Word budgets
+    unchanged (case editor 51 of 51 with the preview drawn).
 - [~] **F-837** Electron Studio: run setup, logs and field-view extras from rcfd-studio
   - depends on: F-449, F-807, F-810
   - acceptance: Each capability the deleted rcfd-studio had and the Electron Studio lacks is built or recorded as
@@ -17025,7 +17048,7 @@ Generated from `docs/studio-guardrails.md`, `PRODUCT.md` and `DESIGN.md` ([ADR 0
     Refine x2 is the service's mesh.refine (factor 2 only, a mesh file refused with the reason, undoable; MCP
     refine_case_mesh through edit_case; rcfd check --refine 2). Open and save one case file outside a project
     (#/case/file, palette case.open_file): the service's case.save {form: lines}, the hash compared under a <file>.rcfd-
-    lock, a file inside a project refused (edit_case), a conflict (1007) shown with both sides. Decision (the
+    lock, a file inside a project refused (edit_case), a conflict (1008, FILE_CONFLICT) shown with both sides. Decision (the
     maintainer's report: cylinder_re100_shedding.toml, without [output], ran from the Studio and stored no field): the
     Studio's Run, Run again and Queue now pass start_run {store: plan} (ADR 0140), a case that sets
     output.store_interval or output.store_time_interval keeps its own, the case file is not changed, start_run's own

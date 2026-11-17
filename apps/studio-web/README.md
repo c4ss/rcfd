@@ -185,6 +185,9 @@ snapshot as a `Float32Array` (`field`) or the boundary surface (`surface`), nami
   device, file index, size, modification, change and creation times, the mesh frame's length, checksum and hash) and
   verifies any other file, or the same file changed. Its FNV-1a 64 runs a WebAssembly loop assembled in
   `src/main/data/fnv.ts` for many bytes (the reference loop for few).
+- F-836: `window.studioMeshPreview.surface(store)` (route `local`) gives `surface` with the patch of each triangle (its
+  index in the stored mesh's patch table), for the case editor's mesh preview; `window.studioData` keeps its four
+  functions.
 
 ## The run list and run state (F-806)
 
@@ -451,12 +454,12 @@ are chips that open the run in Runs or the file on Home. The panel hides to a sl
   `--add-dir`, `--permission-prompt-tool` and malformed rules. A turn whose `system/init` does not report `dontAsk` is
   killed before any action. Stop kills the process tree.
 - Tool approvals: the allow-list file `.rcfd/claude-allow.json` (`{"version":1,"rules":[...]}`) when valid (one bad
-  rule refuses the whole file and no chat starts), else the conservative first list: the 16 read-class tools of the
+  rule refuses the whole file and no chat starts), else the conservative first list: the 17 read-class tools of the
   engine's project server (`mcp__rcfd_project__project_info`, `list_runs`, `run_status`, `read_metrics`,
   `read_residuals`, `field_summary`, `render_field`, `compare_runs`, `list_changes`, `read_project_file`, `wait_run`,
-  `read_feed`, `check_case_mesh`, `preview_mesh`, `list_meshes`, `runner_config`; the last since ADR 0733, the
-  maintainer's word of 2026-11-17). Everything else is denied without asking; a denied call shows the narrowest rule
-  that would allow it.
+  `read_feed`, `check_case_mesh`, `preview_mesh`, `list_meshes`, `runner_config`, `hash_project_file`; the last two
+  since ADR 0733 and ADR 0734, the maintainer's word of 2026-11-17). Everything else is denied without asking; a denied
+  call shows the narrowest rule that would allow it.
 - The project server Claude Code is given: `rcfd-mcp --project <folder> --root <folder>` (`RCFD_STUDIO_MCP`), in an MCP
   config the Studio writes in its own state folder; with `--strict-mcp-config` no other server is loaded. Without
   `RCFD_STUDIO_MCP` the config lists no server.
@@ -650,6 +653,12 @@ the head of the right column. Surface brief: `.impeccable/surfaces/apps-studio-w
   `mesh.check` action), Check the saved file (`check_case_headless`, the check-only launch with its exit code), Close
   the session (with unsaved changes it asks first, names them, and offers Save and close: F-837's close question). Each shows its Claude Code and CLI equivalents
   (`CASE_ACTIONS` in `src/shared/case.ts`).
+- Mesh preview (F-836, ADR 0732; `src/renderer/case/MeshPreview.tsx`): the session's mesh, saved or not, drawn before any
+  run. The engine builds it with the solver's own code (`mesh.preview`, on with `rcfd serve --ui`) and writes a
+  mesh-only store into the project's `.rcfd/previews/<mesh hash>/`; the Studio reads it through the data door and draws
+  it on the field canvas, one colour per patch, with the mesh grid and a check box per patch. It builds on open and
+  500 ms after a settings change; a `[mesh.adapt]` case shows its starting mesh and offers the adapted one with its cost
+  (the solves) said first; an estimate over 2 000 000 cells is refused with Build anyway.
 - The page reaches the case operations only through `window.studioCase` (`state`, `sources`, `prepare`, `attach`,
   `status`, `conflict`, `save`, `create`, `duplicate`, `check`, `forget`), from one module, `src/renderer/case/door.ts`;
   a third MessagePort on `studio.case-port`, checked by `src/main/case/bridge.ts` (exact fields, paths `cases/<...>.toml`
@@ -963,19 +972,29 @@ run shows the command that runs it again (G17). Code: `src/renderer/provenance/`
   hash). Copy puts the provenance as text on the clipboard; Copy command the command alone. The clipboard is written by
   the main process (`window.studioProvenance.copy`; every permission stays denied in the page, G10).
 - **The reproduce command is the record's** (`reproduceCommand`): `rcfd-runner start <case> --project <folder> --threads
-  <n> --priority <n> [--mem-mb <n>] [--set path=value]...`, with the case of `run.json` in the open folder and every
+  <n> --priority <n> [--mem-mb <n>] [--set path=value]... [--continue-from <run>] [--max-steps <n>]`, with the case of `run.json` in the open folder and every
   setting of `run.json` in its order. Nothing comes from the Studio's own settings. It names the case whole (rcfd-runner
   reads a relative case against its working folder). The gaps are the exception that speaks, in words, in the popover
-  and beside a copied command: a settings key `rcfd-runner start` has no option for (`continue_from`, `max_steps` of ADR
-  0200, or any later key), a case file changed since the run (the engine's `read_project_file` hash of the case now
+  and beside a copied command: a settings key `rcfd-runner start` has no option for (a key later than ADR 0734's
+  `--continue-from` and `--max-steps`), a case file changed since the run (the engine's `read_project_file` hash of the case now
   against `case_snapshot_hash`), a `case.snapshot` that does not match its record, a case outside the project (not
-  checkable), a mesh file the record names (not checkable), a run whose engine version is not recorded or differs from
+  checkable), a mesh file the record names that changed since the run (`hash_project_file` now against `mesh_hash`,
+  ADR 0734), has no recorded hash or is outside the project (not checkable), a run whose engine version is not recorded or differs from
   the engine here (the project server's `serverInfo`, and the attached service's `service.info` when one answers). A
   design study's labels (study, variant, condition) do not change the result and are left out.
 - **Through the engine only**: a fifth port, `window.studioProvenance` (`src/shared/provenance.ts`; the one renderer
   module naming it is `provenance/door.ts`), asks the open project's read-only project server `read_project_file` for
   `runs/<id>/run.json`, `runs/<id>/case.snapshot`, the case file and `runs/<id>/output/monitors.json`. The Studio reads
   no file itself and writes none.
+- **How this ran** (ADR 0734 P5; `src/renderer/runs/HowItRan.tsx`): one icon in the selected run's row of tools (Log and
+  events, the report), its name the tooltip, no words at rest (G22). Pressed, it shows the run's latest launch record
+  as the runner wrote it (`runs/<id>/launch.json` through `run_status` `launch`): the solver's command line, its working
+  folder, the solver's path and version, the build (`exe_hash`, `git_rev`), when it launched; the mesh with its
+  recorded hash and whether it is unchanged now; the run it reruns (`rerun_of`); and the rerun command
+  (`rcfd-runner rerun <id> --project <folder>`, `rerunCommand`) with Copy rerun command. A run launched before the
+  runner recorded launches says so. **Rerun as it ran** (`project.rerun_run`, an icon among the selected run's
+  controls) is `start_run {from_run}` of the run-control server: a new run of the run's own `case.snapshot` with its
+  recorded settings. The unit of a run's and a snapshot's time is the engine's `time_unit` of `run_status` (P2).
 - **Commands** (G20): Show provenance (`provenance.show`, Ctrl+I) and Copy reproduce command (`provenance.copy_command`,
   asks which run, the selected one first) in the palette.
 
@@ -1013,11 +1032,9 @@ Decisions taken in building F-828 (options, the recommendation followed; each re
 - Not covered: numbers of a service session (the settings page, the `#/dev/plots` route): their reproduce command would
   be `rcfd call journal.get` then `rcfd run --journal`; `journal.get` keeps its exemption until a surface shows a
   session's results. The axis ticks of the plots and the legend's ticks are scales, not values, and open nothing.
-- Missing in the engine (no Rust change here): `run.json` records neither the solver's launch argv nor a build id
-  (`solver_version` is a release name, so two builds of one release cannot be told apart); `rcfd-runner start` has no
-  options for `continue_from` and `max_steps` (`start_run` and the runner take them); no tool reruns a run from its own
-  snapshot (`rcfd-runner rerun <id>` or `start_run {from_run}`, proposed); `status.json` gives `time` with no unit, so
-  the Runs view's "Time, s" caption is the Studio's word, not the engine's (shown as such in the provenance).
+- Missing in the engine, built by ADR 0734 (2026-11-17): the launch argv and the build id (`runs/<id>/launch.json`,
+  P1), the time unit (`time_unit` of the replies, P2), `rcfd-runner start --continue-from/--max-steps`, `rcfd-runner
+  rerun <id>` and `start_run {from_run}` (P3), and `mesh_hash` of a mesh-file case with `hash_project_file` (P4).
 
 ## Responsiveness and cancellable work (F-832, G21)
 
@@ -1080,6 +1097,8 @@ How they were chosen:
   - Checking the saved file: no result is shown, and a result shown before stays. The engine's `check_case_headless`
     finishes anyway, and it writes nothing.
   - Checking a mesh: the reply is dropped. The service has no way to stop `mesh.check`.
+  - Building the mesh preview (F-836): the reply is dropped and the mesh on screen stays. The service has no way to stop
+    `mesh.preview`.
 - **The main thread does no data work.** The arrays the GPU draws (a corner position per triangle, the bounding box and
   sphere, a scalar per corner, the shown range) are made in a worker (`src/renderer/field/prepare.worker.ts`, client
   `prepare.ts`) from `surface.ts`'s unchanged arithmetic. So are F-809's mesh layers and vector arrows (`derived.ts`,
@@ -1330,7 +1349,7 @@ Seven palette commands (G20): `runs.log`, `runs.report`, `runs.budgets` (group P
 - **Open a case file outside a project.** Use `#/case/file`, the palette action, the icon in the editor's top bar or
   the button on `#/case`. The main process shows the dialog and binds only a file it gave. Saving uses the service's
   `case.save {form: "lines"}`: the changed lines, compared with the hash read, under a `<file>.rcfd-lock`. A file inside
-  a project is refused there and saved with `edit_case`. A conflict (1007) shows both sides; writing yours keeps the
+  a project is refused there and saved with `edit_case`. A conflict (1008) shows both sides; writing yours keeps the
   other writer's other changes.
 - **Runs keep their fields.** Run, Run again and Queue pass `start_run {store: "plan"}` (ADR 0140), because the
   maintainer reported a case without `[output]` that stored nothing. A case that sets its own store keeps it, and the

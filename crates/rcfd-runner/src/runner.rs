@@ -169,6 +169,8 @@ struct Runner<S: RunStore = FsStore> {
     pending: Vec<Pending>,
     active: Vec<Active>,
     launch_seq: u64,
+    /// The solver's path, version and build id for launch records, kept per executable state (ADR 0734 P1).
+    solver_facts: crate::build::SolverFacts,
 }
 
 /// Run the runner for `project` until a shutdown request (`<project>/.rcfd/shutdown`). Returns the exit
@@ -293,6 +295,7 @@ impl<S: RunStore> Runner<S> {
             pending: Vec::new(),
             active: Vec::new(),
             launch_seq: 0,
+            solver_facts: crate::build::SolverFacts::default(),
         }
     }
 
@@ -769,6 +772,25 @@ impl<S: RunStore> Runner<S> {
         // null device stays where the file cannot be made)
         if let Ok(f) = sys::alive_file(&self.alive(&id)) {
             cmd.stdin(Stdio::from(f));
+        }
+        // ADR 0734 P1: the launch record, before the spawn; a run whose launch is not recorded is not launched
+        let launch = json!({
+            "launch_seq": self.launch_seq + 1,
+            "argv": std::iter::once(cmd.get_program()).chain(cmd.get_args())
+                .map(|a| a.to_string_lossy().into_owned()).collect::<Vec<_>>(),
+            "cwd": dir.display().to_string(),
+            "solver": self.solver_facts.of(&self.solver),
+            "started": records::now_iso(),
+        });
+        if let Err(e) = self.store.write_launch(&id, &launch) {
+            drop(cmd);
+            return self.fail_pending(
+                &id,
+                format!(
+                    "cannot record the launch in {}: {e}; the solver was not started",
+                    dir.display()
+                ),
+            );
         }
         match cmd.spawn() {
             Ok(mut child) => {

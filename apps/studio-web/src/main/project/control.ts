@@ -22,7 +22,7 @@ import {
 } from '../../shared/actions/runs.js';
 import { getFirstRunAction } from '../../shared/actions/first.js';
 import type { JsonObject } from '../../shared/actions/params.js';
-import { BUDGETS_WRITE_TOOL, RUN_SLOW_MS, type ProjectView, type RunActionFailure, type RunActionResult, type RunRequest } from '../../shared/project.js';
+import { BUDGETS_WRITE_TOOL, RUN_SLOW_MS, type ProjectView, type RunActionFailure, type RunActionResult, type RunRequest, type TrashWriteTool } from '../../shared/project.js';
 import { RpcError } from '../service/rpc.js';
 import { StartFailure, type ProjectServerLike } from './server.js';
 
@@ -53,6 +53,7 @@ const target = (p: Readonly<Record<string, unknown>>): string =>
 const VERB: Record<string, string> = {
   'project.run_case': 'start a run of',
   'project.queue_case': 'queue',
+  'project.rerun_run': 'rerun',
   'project.pause_run': 'pause',
   'project.resume_run': 'resume',
   'project.stop_run': 'stop',
@@ -215,6 +216,15 @@ export class RunControl {
   async setRunnerConfig(args: Record<string, unknown>): Promise<unknown> {
     const server = await this.controlServer();
     return server.call(BUDGETS_WRITE_TOOL, args);
+  }
+
+  /**
+   * ADR 0736: a trash tool on the run-control server (trash_run, trash_results, trash_case, restore_trash,
+   * empty_trash). The engine's error is the rejection.
+   */
+  async callTrash(tool: TrashWriteTool, args: Record<string, unknown>): Promise<unknown> {
+    const server = await this.controlServer();
+    return server.call(tool, args);
   }
 
   /** Whether the run-control server is running (for tests and diagnostics). */

@@ -13,6 +13,8 @@
 // - The keyboard: Enter on a number, Ctrl+I on the focused number, row, scrubber or field view, Escape gives the focus
 //   back; the palette's Show provenance and Copy reproduce command.
 // - G22: at rest a number looks as it did (its text, no underline, border or fill); the words are its accessible name.
+// - ADR 0734: the selected run's How this ran (its launch record as the runner wrote it, the build, the rerun command)
+//   and Rerun as it ran (start_run from_run; the new run's record names the run it reruns).
 // Screenshots at 1440 by 900 go to test-results-visual/f828/.
 import { expect, test, type Locator, type Page } from '@playwright/test';
 import { spawnSync } from 'node:child_process';
@@ -44,6 +46,7 @@ let runnerB: Runner | null = null;
 let studio: Studio | null = null;
 let runA = '';
 let runB = '';
+let runC = '';
 let copied = '';
 
 const shot = (page: Page, name: string) => page.screenshot({ path: path.join(SHOTS, `${name}.png`), scale: 'css' });
@@ -91,6 +94,7 @@ test.afterAll(async () => {
     await studio.app.close().catch(() => undefined);
     studio = null;
   }
+  await runnerA?.cleanUp(runC || null);
   await runnerA?.cleanUp(runA || null);
   await runnerB?.cleanUp(runB || null);
   for (const p of [...mcpPids(quick), ...mcpPids(other)]) killPid(p);
@@ -155,6 +159,33 @@ test('a run started from the window shows its provenance and the command that re
   await page.keyboard.press('Escape');
   await expect(d).toHaveCount(0);
   await expect(runTrigger).toBeFocused();
+});
+
+test('How this ran: the launch record as the runner wrote it, the build and the rerun command; one icon at rest', async () => {
+  const { page } = studio!;
+  await expect(aside(page)).toHaveAttribute('data-run', runA);
+  const toggle = aside(page).getByRole('button', { name: `How ${runA} ran` });
+  // G22: one icon, its name the tooltip, no words at rest
+  await expect(toggle).toHaveText('');
+  await expect(aside(page).getByRole('region', { name: `How ${runA} ran` })).toHaveCount(0);
+  await press(toggle);
+  const how = aside(page).getByRole('region', { name: `How ${runA} ran` });
+  await expect(how).toBeVisible();
+  const launch = JSON.parse(await readFile(path.join(quick, 'runs', runA, 'launch.json'), 'utf8')) as {
+    argv: string[];
+    cwd: string;
+    solver: { path: string; version: string | null; build: { exe_hash: string | null; git_rev: string | null } };
+  };
+  await expect(fact(how, 'Command')).toHaveText(shellLine(launch.argv), { timeout: 10_000 });
+  await expect(fact(how, 'Folder')).toHaveText(launch.cwd);
+  expect(launch.solver.build.exe_hash).toMatch(/^fnv64:[0-9a-f]{16}$/);
+  await expect(fact(how, 'Build')).toContainText(launch.solver.build.exe_hash!);
+  await expect(fact(how, 'Rerun')).toHaveText(shellLine(['rcfd-runner', 'rerun', runA, '--project', quick]));
+  await shot(page, '09-how-this-ran');
+  await how.getByRole('button', { name: 'Copy rerun command' }).click();
+  expect(await clipboard(studio!)).toBe(shellLine(['rcfd-runner', 'rerun', runA, '--project', quick]));
+  await press(toggle);
+  await expect(how).toHaveCount(0);
 });
 
 test('G17: the copied command, run from a shell in another project, gives the same results bit for bit', async () => {
@@ -367,7 +398,7 @@ test('the field readout: Ctrl+I on the field view opens the value at the centre,
   await expect(d).toHaveCount(0);
 });
 
-test('the field caption: its step and its time open their provenance (Enter, click), the time’s unit said as not recorded', async () => {
+test('the field caption: its step and its time open their provenance (Enter, click), the time’s unit as run_status names it', async () => {
   const { page } = studio!;
   const caption = page.locator('.ws .fv-caption');
   const step = caption.getByRole('button', { name: /^Provenance of step: \d+$/ });
@@ -384,8 +415,34 @@ test('the field caption: its step and its time open their provenance (Enter, cli
   const time = caption.getByRole('button', { name: /^Provenance of time: / });
   await time.click();
   const t = dialogOf(page, 'Provenance of time');
-  await expect(fact(t, 'Unit')).toHaveText(`none: not recorded: runs/${CAVITY}/fields/store.rts gives a snapshot’s time without a unit`);
+  // ADR 0734 P2: store.rts keeps its bytes; the unit is the one run_status names
+  await expect(fact(t, 'Unit')).toHaveText('s, time_unit of run_status (simulated time; 0 for a steady run)');
   await shot(page, '08-caption-provenance');
   await page.keyboard.press('Escape');
   await expect(t).toHaveCount(0);
+});
+
+test('Rerun as it ran: start_run from_run on the selected run; the new run’s record names the run it reruns', async () => {
+  test.setTimeout(120_000);
+  const { page } = studio!;
+  await page.getByRole('tab', { name: 'Runs' }).click();
+  await page.locator(`.rv-case[data-run="${runA}"]`).click();
+  await expect(aside(page)).toHaveAttribute('data-run', runA);
+  const rerun = aside(page).getByRole('button', { name: `Rerun ${runA} as it ran` });
+  await expect(rerun).toHaveText('');
+  await press(rerun);
+  await expect.poll(async () => (await projectState(page)).project?.runRequests?.[0]?.action, { timeout: 20_000 }).toBe('project.rerun_run');
+  const req = (await projectState(page)).project!.runRequests![0]!;
+  expect(req.outcome).toBe('accepted');
+  expect(req.mcp).toEqual({ tool: 'start_run', arguments: { from_run: runA } });
+  runC = req.run!;
+  expect(runC).toMatch(/^r-/);
+  expect(runC).not.toBe(runA);
+  await expect.poll(() => page.locator(`.rv-case[data-run="${runC}"]`).getAttribute('data-state'), { timeout: 90_000 }).toBe('finished');
+  const a = JSON.parse(await readFile(path.join(quick, 'runs', runA, 'run.json'), 'utf8')) as Record<string, unknown>;
+  const c = JSON.parse(await readFile(path.join(quick, 'runs', runC, 'run.json'), 'utf8')) as Record<string, unknown>;
+  expect(c['rerun_of']).toBe(runA);
+  expect(c['case_snapshot_hash']).toBe(a['case_snapshot_hash']);
+  expect(c['settings']).toEqual(a['settings']);
+  await shot(page, '10-rerun');
 });

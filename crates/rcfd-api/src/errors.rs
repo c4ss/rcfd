@@ -160,7 +160,14 @@ pub const CATALOGUE: &[ErrorEntry] = &[
     e(
         Service,
         1007,
-        "CONFLICT",
+        "SETTINGS_CONFLICT",
+        "settings conflict: the session holds another value than the call's base",
+        "Read the setting again (data.current_value is its value now), decide which value to keep, then set it with that base.",
+    ),
+    e(
+        Service,
+        1008,
+        "FILE_CONFLICT",
         "the file changed since it was read; data.current_hash is its hash now (case.save, ADR 0737)",
         "Read the file again (open it again), then save onto its current hash.",
     ),

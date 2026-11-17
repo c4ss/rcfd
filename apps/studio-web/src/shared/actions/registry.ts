@@ -106,6 +106,19 @@ function action<const P extends ParamsSpec>(spec: ActionSpec<P>): ActionSpec<P> 
 }
 
 const session = { type: 'session', description: 'The session (run.status, session.list).' } as const;
+/**
+ * The compare-and-set base of settings.set and settings.remove (ADR 0736 P2): the value the Studio last read at the path
+ * (null for absent). The engine changes nothing and answers 1007 with the current value when the session holds another
+ * value now (another writer: Claude Code, the CLI, a second window).
+ */
+const BASE_VALUE = {
+  type: 'json',
+  optional: true,
+  description: 'The value last read at the path (null: absent); the engine refuses with 1007 when the session holds another value now.',
+} as const;
+
+/** The service's code of a settings conflict (ADR 0736 P2): `data: {path, current_value, current_hash}`. */
+export const SETTINGS_CONFLICT = 1007;
 const ON_SESSION = { session } as const;
 
 const IN_PROGRESS = 'A run is in progress in this session; stop it first.';
@@ -237,9 +250,11 @@ const SPECS = {
       session,
       path: { type: 'string', description: 'Dotted setting path, for example solver.alpha_u or boundaries.lid.velocity_value.' },
       value: { type: 'json', description: 'The new value (any JSON value the schema allows at that path).' },
+      base_value: BASE_VALUE,
     },
     engine: { service: 'settings.set' },
-    mcp: { tool: 'set_setting' },
+    // set_setting has no base (ADR 0736 P2 is a service parameter): a call with one has no MCP equivalent
+    mcp: { tool: 'set_setting', args: (p) => (p.base_value === undefined ? p : null) },
     unavailable: (ctx) => (ctx.session?.state === 'running' ? 'The run is going; stop it before changing settings.' : null),
     undo: {
       before: (p) => ({ action: 'settings.get', params: { session: p.session, path: p.path } }),
@@ -254,7 +269,7 @@ const SPECS = {
     title: 'Remove a named entry',
     description: 'Delete a named entry such as boundaries.lid or reports.drag. The session returns to defined.',
     group: 'settings',
-    params: { session, path: { type: 'string', description: "The entry's path: '<collection>.<name>'." } },
+    params: { session, path: { type: 'string', description: "The entry's path: '<collection>.<name>'." }, base_value: BASE_VALUE },
     engine: { service: 'settings.remove' },
     mcp: { tool: null, note: 'No MCP tool in session mode; in project mode edit_case changes the case file.' },
     unavailable: (ctx) => (busy(ctx) ? IN_PROGRESS : null),
@@ -317,6 +332,25 @@ const SPECS = {
       },
       note: 'Sets each count back to its value before the refine.',
     },
+  }),
+  'mesh.preview': action({
+    title: 'Preview the mesh',
+    description:
+      'Build the mesh the run will use, without solving, and write it as a mesh-only store in <dir>/<mesh hash>/ for the case editor to draw (rcfd serve --ui).',
+    group: 'mesh',
+    params: {
+      session,
+      dir: { type: 'string', description: 'The folder of previews; the Studio uses the project’s .rcfd/previews.' },
+      adapt: {
+        type: 'string',
+        enum: ['base', 'final'],
+        optional: true,
+        description: 'For a case with [mesh.adapt]: the mesh the run starts on (base, the default) or after its first step (final: runs the adaptive loop).',
+      },
+      force: { type: 'boolean', optional: true, description: 'Build even when the mesh.n* counts give more than 2 000 000 cells.' },
+    },
+    engine: { service: 'mesh.preview', timeoutMs: 600_000 },
+    mcp: { tool: null, note: 'No MCP tool (ADR 0732, open question 6); `rcfd call mesh.preview` reaches it, and the project tool preview_mesh draws a plane of the same mesh.' },
   }),
 
   // ---- run control

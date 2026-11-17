@@ -43,7 +43,8 @@ its own thread, and connections share sessions.
 | 1004 | limit exceeded or path outside the sandbox root |
 | 1005 | a hosted co-simulation participant returned an error; `error.message` is the participant's message |
 | 1006 | no hosted co-simulation participant of that name |
-| 1007 | the file changed since it was read; `data.current_hash` is its hash now (`case.save`, with `--ui`; ADR 0737) |
+| 1007 | settings conflict: the `base_value` or `base_hash` of `settings.set` or `settings.remove` is not what the session holds now; nothing changed; `error.data` is `{path, current_value, current_hash}` ([ADR 0736](adr/0736-f829-proposal-a-project-trash-with-restore-and-compare-and-set-for-settings-set.md)) |
+| 1008 | the file changed since it was read; `data.current_hash` is its hash now (`case.save`, with `--ui`; ADR 0737) |
 | -32000 | internal error |
 
 ## Sessions and run states
@@ -65,7 +66,7 @@ All session methods take `session`.
 
 - `service.info`, `settings.schema` (JSON Schema of the case and of the monitor format)
 - `session.create | list | close`
-- `settings.get {path?}`, `settings.set {path, value}`, `settings.remove {path}` (delete a named entry such as `boundaries.lid`; journaled), `settings.validate`
+- `settings.get {path?}`, `settings.set {path, value, base_value?, base_hash?}`, `settings.remove {path, base_value?, base_hash?}` (delete a named entry such as `boundaries.lid`; journaled), `settings.validate`. With `base_value` (the value last read at `path`, null for absent) or `base_hash` (the `case_hash` of `journal.get`), the change is made only when the session still holds it, else 1007 (compare-and-set, ADR 0736); without either, the call answers as before
 - `mesh.check`: quality report and patch list
 - `run.initialize | start {max_steps?} | pause | resume | stop | step {count?} | status | wait {timeout_ms?}`
 - `monitors.get {names?, since?}` (JSON format `rcfd-monitors` v1; `names` and `since` are applied before the document is built and on the line protocol the reply is written without an intermediate JSON tree, so the last 100 samples of four series at 1e5 samples cost 0.3 ms instead of 21 ms, ADR 0353; the bytes of the reply did not change), `reports.get`
@@ -159,7 +160,8 @@ unknown ticket is answered with the length 2^64 - 1 and the connection is closed
 ## UI metadata and help (`rcfd-ui/1`, opt-in with `rcfd serve --ui`)
 
 ADR 0730. Without `--ui` nothing below exists and every reply is as before, byte for byte. With it, `service.info` adds
-`ui: "rcfd-ui/1"` and lists the two help methods after the others; `protocol_version` stays 1.1.
+`ui: "rcfd-ui/1"` and lists `help.glossary`, `help.errors` and `mesh.preview` after the others; `protocol_version`
+stays 1.1.
 
 - `settings.schema {ui: true}`: the case schema with the UI metadata of `crates/rcfd-api/src/schema_ui.toml` on its
   nodes, and `x-rcfd-ui` on the root. A node may carry `x-rcfd-label` (a short name), `x-rcfd-help` (one line, at most
@@ -176,7 +178,29 @@ ADR 0730. Without `--ui` nothing below exists and every reply is as before, byte
 Both help methods take no parameters (`{}` or none). `rcfd schema --ui`, `rcfd help glossary` and `rcfd help errors`
 print the same on the command line.
 
-ADR 0737 adds three methods to the same switch, listed after the help methods (`crate::ui::UI_METHODS`). Each takes an
+### `mesh.preview` (F-836, ADR 0732)
+
+`mesh.preview {session, dir, adapt?, force?}` builds the mesh the session's case runs on, without solving, and writes
+it as a field store with no snapshot (`store.rts`, the mesh frame only) at `<dir>/<mesh_hash>/`, by a temporary folder
+beside it and a rename. A folder of that name that already holds a store of the same mesh is used again (`reused:
+true`). The case is read from the session, so changes not saved are previewed.
+
+- `adapt`: `"base"` (default) or `"final"`. For a case with `[mesh.adapt]`, `base` is the mesh the run starts on
+  (`adapt.pending: true`: its first step changes it) and `final` runs the run's adaptive loop (`cycles + 1` solves) for
+  the mesh it solves on after that step. Without the table both give the one mesh and `adapt` is null.
+- `force`: a generator mesh whose `mesh.n*` counts give more than 2 000 000 cells is refused (1004) before it is built
+  unless `force: true`. Any built mesh over the service's `max_cells` is refused (1004) before anything is written.
+- Reply: `{path, mesh_hash, cells, faces, points, patches: [{name, kind, faces}], bounds: {min, max}, two_d, adapt:
+  null | {pending, cycles, solves}, reused}`. `mesh_hash` is `Mesh::content_hash` as 16 hexadecimal digits, the hash
+  the store records; `two_d` is true when the mesh has an `Empty` patch.
+- Errors: 1001 unknown session; 1003 the mesh cannot be built (`data.diagnostics`, as `mesh.check`); 1004 `dir` outside
+  the sandbox, the estimate or `max_cells`; -32602 a missing `session` or `dir`, a bad `adapt` or `force`, or an
+  unknown parameter; -32000 the store cannot be written (nothing is left behind).
+
+`rcfd call mesh.preview '{"session": "s1", "dir": ".rcfd/previews"}'` reaches it from a script. There is no MCP tool
+(ADR 0732 Q6).
+
+ADR 0737 adds three methods to the same switch, listed after the help methods and `mesh.preview` (`crate::ui::UI_METHODS`). Each takes an
 object with the members named; any other member is -32602.
 
 - `case.facts {session, run_time?}`: what the time step of the session's case (its unsaved changes included) depends
@@ -194,11 +218,12 @@ object with the members named; any other member is -32602.
   count of the generator doubled; a second block's `_right` count of 0 is left), `cells`, `cells_after`, `two_d`,
   `memory_after`, `over_limit`, `applied`. `factor` is 2 only (-32602 otherwise); 1004 with the reason for a mesh file, a
   generator counted by other settings (`axial_fan_sector`) and a count over its schema maximum, nothing set. With
-  `apply: true` each edit is a `settings.set` of the session (unsaved changes in its journal).
+  `apply: true` each edit is a `settings.set` of the session with its `base_value` (unsaved changes in its journal); a count
+  changed by another writer in between is 1007 (ADR 0736) and the counts already set are put back, so nothing is set.
 - `case.save {session, path, base_hash, form?}`: write the session's case to one file outside a project (`.toml` or
   `.json` by the extension), only if the file still has `base_hash` (`fnv64:`; null: no file there yet), by
   write-then-rename under an exclusive `<file>.rcfd-lock` beside it. `form: "lines"` keeps the file's comments and layout
-  where it can (else the whole case, `whole`, the default). Reply `{path, old_hash, new_hash, form}`. 1007 with
+  where it can (else the whole case, `whole`, the default). Reply `{path, old_hash, new_hash, form}`. 1008 with
   `data.current_hash` when the file changed; 1004 outside the sandbox, or inside a project (`data.use: "edit_case"`);
   1002 while another writer holds the lock; -32000 when the write failed (nothing replaced).
 

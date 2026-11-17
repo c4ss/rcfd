@@ -97,8 +97,9 @@ fn f3_f11_project_tools_on_runner_made_runs() {
         .unwrap()
         .contains("project folder"));
     let list = m.request("tools/list", json!({}));
-    // 40, ADR 0733's two budgets tools and ADR 0737's case_facts and refine_case_mesh
-    assert_eq!(list["result"]["tools"].as_array().unwrap().len(), 44);
+    // 40, ADR 0733's two budgets tools, ADR 0734's hash_project_file, ADR 0736's six trash tools and ADR 0737's
+    // case_facts and refine_case_mesh
+    assert_eq!(list["result"]["tools"].as_array().unwrap().len(), 51);
 
     // F11 part 1: start_run then wait_run reaches finished on a 30-step cavity
     let r = m.call("start_run", json!({"case": "cases/cavity.toml"}));
@@ -261,6 +262,32 @@ fn f3_f11_project_tools_on_runner_made_runs() {
     // a run that ended refuses control with 1002
     assert_eq!(err_code(&m.call("pause_run", json!({"run": a}))), 1002);
 
+    // ADR 0734 P1, P2 (restated for F-828): run_status gains launch (the launch record of a run the runner launched) and
+    // time_unit "s", list_runs gains time_unit; taken out, the shapes are the golden's
+    for (k, members) in [
+        ("run_status", &["launch", "time_unit"][..]),
+        ("list_runs", &["time_unit"][..]),
+    ] {
+        let o =
+            sh.0.get_mut(k)
+                .and_then(Value::as_object_mut)
+                .unwrap_or_else(|| panic!("{k} not recorded"));
+        for m in members {
+            let got = o.remove(*m).unwrap_or_else(|| panic!("{k} has no {m}"));
+            let want = if *m == "launch" {
+                let rev = if option_env!("RCFD_GIT_REV").is_some_and(|r| !r.is_empty()) {
+                    "string"
+                } else {
+                    "null"
+                };
+                json!({"argv": ["string"], "cwd": "string", "launch_seq": "number", "started": "string",
+                    "solver": {"path": "string", "version": "string", "build": {"exe_hash": "string", "git_rev": rev}}})
+            } else {
+                json!("string")
+            };
+            assert_eq!(got, want, "{k}.{m}");
+        }
+    }
     // F3: every shape equals the hand-written golden
     let golden: Value = serde_json::from_str(GOLDEN).unwrap();
     let mut bad = Vec::new();
@@ -320,12 +347,12 @@ fn f13_server_start() {
     let mut m = Mcp::start(&["--project", &d]);
     let r = m.request("initialize", json!({}));
     assert_eq!(r["result"]["serverInfo"]["name"], "rcfd");
-    // 40, ADR 0733's two budgets tools and ADR 0737's two tools
+    // 40, ADR 0733's two budgets tools, ADR 0734's hash_project_file, ADR 0736's six trash tools and ADR 0737's two
     assert_eq!(
         m.request("tools/list", json!({}))["result"]["tools"]
             .as_array()
             .unwrap()
             .len(),
-        44
+        51
     );
 }

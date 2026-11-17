@@ -197,6 +197,20 @@ const SPECS = {
     },
     expect: 'new_run',
   }),
+  // F-828 (ADR 0734 P3): the run again as it ran, from its own case snapshot, through the engine
+  'project.rerun_run': action({
+    title: 'Rerun the project run',
+    description:
+      'Start a new run of a run’s case as it was when the run was made (runs/<id>/case.snapshot) with the run’s recorded settings, so a case file changed since does not matter; the new run’s run.json names the run it reruns (rerun_of).',
+    group: 'run',
+    params: ON_RUN,
+    engine: { kind: 'mcp', tool: 'start_run' },
+    mcpArgs: (p) => ({ from_run: p.run }),
+    cli: (p, project) => runner('rerun', p.run, '--project', project),
+    cliNote: 'rcfd-runner rerun writes no line in the project journal; start_run does (who: start_run, with rerun_of).',
+    unavailable: (ctx) => (ctx.project === false ? NO_PROJECT : null),
+    expect: 'new_run',
+  }),
   'project.pause_run': action({
     title: 'Pause the project run',
     description:

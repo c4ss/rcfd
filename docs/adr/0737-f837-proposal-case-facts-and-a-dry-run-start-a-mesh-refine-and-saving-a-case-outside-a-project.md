@@ -194,7 +194,8 @@ Engine (Rust):
   both.
 - Service, behind `--ui`: `case.facts {session, run_time?}`, `mesh.refine {session, factor, apply?}` and
   `case.save {session, path, base_hash, form?}`. `UI_METHODS` is now `help.glossary, help.errors, case.facts,
-  mesh.refine, case.save`. Error 1007 `CONFLICT` is in the catalogue.
+  mesh.refine, case.save` after main's `mesh.preview` (ADR 0732): `help.glossary, help.errors, mesh.preview,
+  case.facts, mesh.refine, case.save`. Error 1008 `FILE_CONFLICT` is in the catalogue (see below).
 - MCP project tools: `case_facts {case, run_time?}` (read) and `refine_case_mesh {case, factor, base_hash, reason?}`
   (write_files, through `edit_case`). `start_run` takes `run_time` and `dry_run`. CLI: `rcfd check <case> --facts` and
   `--refine 2`.
@@ -205,9 +206,16 @@ Deviations from the proposal, decided while building:
 - The corrector entry is the last of the plan's `entries`, not a separate list. A refused plan answers
   `{refused, correctors}`.
 - `refine_case_mesh` writes through `edit_case`, so its journal line names `who: edit_case` and the call's reason.
-- `mesh.refine {apply: true}` sets the counts with `settings.set`. ADR 0736's `base_value` is not used, because 0736 is
-  not on main. The Studio's undo puts each `before` value back.
-- Code 1007 is shared with ADR 0736 by design. Whichever merges second keeps the one catalogue entry.
+- `mesh.refine {apply: true}` sets each count with `settings.set` and its `base_value` (ADR 0736 P2, merged from main),
+  so a writer that changed a count in between gets 1007. The counts already set by the same call are put back first,
+  so the refine is applied whole or not at all. The Studio's undo puts each `before` value back.
+- `case.save`'s conflict is **1008 `FILE_CONFLICT`**, not 1007. On main, 1007 is ADR 0736's `SETTINGS_CONFLICT`: a
+  session's setting changed since its base, with `data.current_value`. `case.save`'s conflict is a file on disk changed
+  since its hash was read, with `data.current_hash`, and its recovery is to read the file again. The meaning differs,
+  so it has its own code and catalogue entry. The Studio's outside-project save reads 1008.
+- `start_run {from_run}` (ADR 0734) also refuses `run_time` and `dry_run` with -32602, beside its own list (`case`,
+  `new_case`, `set`, `store`, `continue_from`, `max_steps`). The run-time plan adds settings, which a rerun takes from
+  its record. A dry run reads a case file, and a rerun has none.
 - `case_facts` is not on the Claude Code first-use allow-list; that was not asked (ADR 0188 Q6 (a)).
 - C1 is covered by the ported egui unit tests and hand-computed facts, not by a recording of the old commit. That
   follows ADR 0730: no frozen recordings.
@@ -222,7 +230,7 @@ Studio (apps/studio-web):
 - Open a case file outside a project: `#/case/file`, the palette action `case.open_file`, an icon in the editor's top bar
   and a button on `#/case`. The main process shows the dialog and binds only files it gave. The hash is the one the
   service's journal recorded.
-- A save of such a file is the service's `case.save {form: "lines"}`. A file changed outside is a conflict (1007) with
+- A save of such a file is the service's `case.save {form: "lines"}`. A file changed outside is a conflict (1008) with
   both sides shown. "Write my changes into the file as it is now" sets this session's changes in a fresh session of the
   file and saves that, so the other writer's other changes stay (G18).
 - `case.facts` and `mesh.refine` are on the allow-list, each with a registry action. `case.save` is not: only the main

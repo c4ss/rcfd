@@ -195,6 +195,12 @@ pub(crate) fn tools() -> Vec<Tool> {
             },
         },
         Tool {
+            name: "hash_project_file",
+            description: "The hash of a project file or folder, by the rule of run.json mesh_hash: a file is fnv64 of its bytes; a folder (an OpenFOAM mesh) is fnv64 over the sorted lines <relative path>\\0<file hash>\\n of every file below it. Symbolic links are refused; at most 4 GiB and 100000 files (error 1003 names the limit). Compare with run.json mesh_hash to see whether a run's mesh changed since.",
+            access: Access::Read,
+            schema: || obj(json!({"path": {"type": "string", "description": "project-relative file or folder"}}), &["path"]),
+        },
+        Tool {
             name: "edit_case",
             description: "Set dotted settings (e.g. physics.nu, solver.max_iterations) in a .toml or .json case file. The edited case is validated as set_setting does; the file is replaced atomically only if valid and only if it still has base_hash (else error 1200 with the current hash). The changed lines are edited in place (comments kept) when possible. dry_run validates without writing.",
             access: Access::WriteFiles,
@@ -357,7 +363,10 @@ pub(crate) fn tools() -> Vec<Tool> {
                         "threads": {"type": "integer", "minimum": 1, "maximum": 256},
                         "mem_mb": {"type": "integer", "minimum": 1},
                         "run_time": run_time_schema(),
-                        "dry_run": {"type": "boolean", "description": "return what the call would do (case, set, store and run-time plans, the check, memory, whether a runner would start) and write nothing (ADR 0737)"}
+                        "dry_run": {"type": "boolean", "description": "return what the call would do (case, set, store and run-time plans, the check, memory, whether a runner would start) and write nothing (ADR 0737)"},
+                        "continue_from": {"type": "string", "description": "a run id of this project: the run starts from that ended run's output/restart.rcfd"},
+                        "max_steps": {"type": "integer", "minimum": 1, "description": "at most this many steps"},
+                        "from_run": {"type": "string", "description": "instead of case or new_case: rerun that run id from its case.snapshot with its run.json settings (priority, threads and mem_mb given override them); the new run.json has rerun_of"}
                     }),
                     &[],
                 )
@@ -389,6 +398,86 @@ pub(crate) fn tools() -> Vec<Tool> {
                 obj(
                     json!({"run": run_schema(), "timeout_s": {"type": "number", "minimum": 0.0, "maximum": MAX_WAIT_S}, "from": state_schema()}),
                     &["run"],
+                )
+            },
+        },
+        // ADR 0736 P1 (F-829 E-829a): the project trash, after the F-275 list
+        Tool {
+            name: "list_trash",
+            description: "The project trash (.rcfd/trash/), newest first: each item's token, kind (run, results or case), original path, parts, when and by which command it was trashed, the reason, the hash of a case file and its bytes; bytes is the whole trash. Paged (offset, limit; next_offset when more). Nothing empties the trash by itself.",
+            access: Access::Read,
+            schema: || {
+                obj(
+                    json!({
+                        "offset": {"type": "integer", "minimum": 0},
+                        "limit": {"type": "integer", "minimum": 1, "maximum": 100}
+                    }),
+                    &[],
+                )
+            },
+        },
+        Tool {
+            name: "trash_run",
+            description: "Move a finished, failed or cancelled run's folder runs/<id>/ whole to the project trash, from where restore_trash brings it back. Refused (1002) while the run is queued, running or paused, and (1003, data.runs) while a run that has not ended continues from it (continue_from). Returns the trash token.",
+            access: Access::WriteFiles,
+            schema: || obj(json!({"run": run_schema(), "reason": reason_schema()}), &["run"]),
+        },
+        Tool {
+            name: "trash_results",
+            description: "Move a finished, failed or cancelled run's stored fields (runs/<id>/fields/) and/or its output (runs/<id>/output/) to the project trash as one item; the run's record, status, events and residuals stay. Refused as trash_run, and (1202) when a part is absent. Returns the trash token.",
+            access: Access::WriteFiles,
+            schema: || {
+                obj(
+                    json!({
+                        "run": run_schema(),
+                        "parts": {"type": "array", "items": {"type": "string", "enum": ["fields", "output"]}, "minItems": 1, "description": "what to move"},
+                        "reason": reason_schema()
+                    }),
+                    &["run", "parts"],
+                )
+            },
+        },
+        Tool {
+            name: "trash_case",
+            description: "Move a case file under cases/ to the project trash, only if it still has base_hash (else error 1200 with the current hash), under its edit lock. Runs keep their own case.snapshot, so no run changes. Returns the trash token.",
+            access: Access::WriteFiles,
+            schema: || {
+                obj(
+                    json!({
+                        "path": case_schema(),
+                        "base_hash": {"type": "string", "description": "hash from read_project_file"},
+                        "reason": reason_schema()
+                    }),
+                    &["path", "base_hash"],
+                )
+            },
+        },
+        Tool {
+            name: "restore_trash",
+            description: "Move a trashed item back to its original path. Refused (1200, data.path) when something occupies that path now; then nothing moves.",
+            access: Access::WriteFiles,
+            schema: || {
+                obj(
+                    json!({
+                        "token": {"type": "string", "description": "trash token (t-<yyyymmddThhmmss>-<4 hex>, see list_trash)"},
+                        "reason": reason_schema()
+                    }),
+                    &["token"],
+                )
+            },
+        },
+        Tool {
+            name: "empty_trash",
+            description: "Remove items of the project trash for good: the tokens given (each must be in the trash, else 1202 and nothing is removed), or every item; with older_than_days, only items trashed longer ago. Cannot be undone. Class delete: no allow-list includes it, so the client asks for every call.",
+            access: Access::Delete,
+            schema: || {
+                obj(
+                    json!({
+                        "tokens": {"type": "array", "items": {"type": "string"}, "description": "trash tokens (default: every item)"},
+                        "older_than_days": {"type": "number", "minimum": 0.0},
+                        "reason": reason_schema()
+                    }),
+                    &[],
                 )
             },
         },

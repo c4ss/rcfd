@@ -55,7 +55,29 @@ export const PROJECT_READ_TOOLS = [
   'list_meshes',
   // ADR 0733 (the maintainer, 2026-11-17): the runner's budgets, read-only
   'runner_config',
+  // ADR 0734 (the maintainer, 2026-11-17): the hash of a project file or mesh folder, read-only
+  'hash_project_file',
 ] as const;
+
+/**
+ * ADR 0736 (the maintainer, 2026-11-17): the project tools of the class `delete`. No allow-list holds them, by default
+ * or by a rule added later ("Allow this from now on" included), so Claude Code is never allowed one without asking;
+ * with this panel's `--permission-mode dontAsk` it is refused. The same list is crates/rcfd-mcp/tests/claude_allow.
+ */
+export const DELETE_TOOLS = ['empty_trash'] as const;
+
+/** An MCP tool name (`mcp__<server>__<tool>`) whose tool is of the class delete, whatever the server is called. */
+export function isDeleteTool(name: string): boolean {
+  if (!name.startsWith('mcp__')) return false;
+  const rest = name.slice('mcp__'.length);
+  const at = rest.lastIndexOf('__');
+  return at >= 0 && (DELETE_TOOLS as readonly string[]).includes(rest.slice(at + 2));
+}
+
+/** A whole MCP server (`mcp__<server>`, no tool): Claude Code reads it as every tool of the server, delete included. */
+export function isWholeServer(name: string): boolean {
+  return name.startsWith('mcp__') && !name.slice('mcp__'.length).includes('__');
+}
 
 export class RuleError extends Error {
   constructor(
@@ -157,6 +179,8 @@ export function ruleProblem(r: AllowRule): string | null {
     case 'tool':
       if (!/^[A-Za-z][A-Za-z0-9_]*$/.test(r.name)) return "tool name must be letters, digits and '_'";
       if (NEED_PATTERN.includes(r.name) || checkText(r.name)) return 'this tool needs a pattern, e.g. Bash(cmd) or Edit(path)';
+      if (isDeleteTool(r.name)) return 'a tool of the class delete is never on an allow-list: Claude Code asks for every call (ADR 0736)';
+      if (isWholeServer(r.name)) return 'a rule naming a whole MCP server would allow its tools of the class delete: name each tool (ADR 0736)';
       return null;
     case 'bash':
     case 'powershell':

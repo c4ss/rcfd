@@ -35,6 +35,17 @@ struct StartOutput {
     file: Option<(PathBuf, u64)>,
 }
 
+/// The scheduling settings a rerun changes (ADR 0734 P3); each `None` keeps the original run's.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct RerunOptions {
+    /// `--priority`.
+    pub priority: Option<i32>,
+    /// `--threads`.
+    pub threads: Option<usize>,
+    /// `--mem-mb`.
+    pub mem_mb: Option<u64>,
+}
+
 /// A client of one project's run service.
 #[derive(Debug, Clone)]
 pub struct Client {
@@ -242,6 +253,21 @@ impl Client {
         format!("the runner (pid {pid}) exited with {how} before it held the project's lock; {output}")
     }
 
+    /// The checks of a run's launch settings (ADR 0200 S2): `continue_from` the id of a run folder of this project,
+    /// `max_steps` at least 1.
+    fn check_launch(&self, launch: &LaunchSettings) -> Result<(), String> {
+        if let Some(src) = &launch.continue_from {
+            check_id(src).map_err(|e| format!("continue_from: {e}"))?;
+            if !self.store.run_dir(src).join("run.json").is_file() {
+                return Err(format!("continue_from: no run {src} in this project"));
+            }
+        }
+        if launch.max_steps == Some(0) {
+            return Err("max_steps: must be at least 1".into());
+        }
+        Ok(())
+    }
+
     /// Queue a run of `case` without starting a runner; returns the run id.
     pub fn submit(&self, case: &Path, settings: &RunSettings) -> Result<String, String> {
         self.submit_tagged(case, settings, &RunTags::default())
@@ -273,19 +299,45 @@ impl Client {
         launch: &LaunchSettings,
         tags: &RunTags,
     ) -> Result<String, String> {
-        if let Some(src) = &launch.continue_from {
-            check_id(src).map_err(|e| format!("continue_from: {e}"))?;
-            if !self.store.run_dir(src).join("run.json").is_file() {
-                return Err(format!("continue_from: no run {src} in this project"));
-            }
-        }
-        if launch.max_steps == Some(0) {
-            return Err("max_steps: must be at least 1".into());
-        }
+        self.check_launch(launch)?;
         let version = self.solver_version();
         self.store
             .create_run_with(case, settings, launch, version, tags)
             .map_err(|e| format!("{}: {e}", case.display()))
+    }
+
+    /// A new queued run of run `id`'s case as it was then (ADR 0734 P3, Q6 (a)): from `runs/<id>/case.snapshot` with
+    /// the record's `settings` (its `set`, `continue_from`, `max_steps`, priority, threads and memory) and `case_dir`; the
+    /// options given override the record's scheduling settings. The new `run.json` has `rerun_of: <id>`. The launch
+    /// settings are checked as [`Client::submit_with`] checks them; nothing is written when refused.
+    pub fn rerun(&self, id: &str, over: &RerunOptions) -> Result<String, String> {
+        check_id(id)?;
+        if !self.store.run_dir(id).join("run.json").is_file() {
+            return Err(format!("no run {id} in this project"));
+        }
+        let rec = self.store.read_record(id).map_err(|e| format!("run {id}: {e}"))?;
+        let mut settings = RunSettings::of(&rec).map_err(|e| format!("run {id}: {e}"))?;
+        let launch = LaunchSettings::of(&rec).map_err(|e| format!("run {id}: {e}"))?;
+        if let Some(p) = over.priority {
+            settings.priority = p;
+        }
+        if let Some(t) = over.threads {
+            settings.threads = t;
+        }
+        if let Some(m) = over.mem_mb {
+            settings.mem_mb = Some(m);
+        }
+        self.check_launch(&launch)?;
+        let version = self.solver_version();
+        self.store
+            .create_rerun(&rec, &settings, &launch, version)
+            .map_err(|e| format!("rerun of {id}: {e}"))
+    }
+
+    /// The latest launch record of run `id` (`runs/<id>/launch*.json`, ADR 0734 P1); `None` before its launch.
+    pub fn launch(&self, id: &str) -> Result<Option<serde_json::Value>, String> {
+        check_id(id)?;
+        crate::store::latest_launch(&self.store.run_dir(id)).map_err(|e| format!("run {id}: {e}"))
     }
 
     /// Queue a run and make sure a runner is alive.

@@ -5,7 +5,19 @@
 //
 // No Electron import: the port is any object with postMessage and message and close callbacks (the unit tests use
 // Node's MessageChannel; src/main/index.ts adapts Electron's MessagePortMain).
-import { CREATE_WHERE, type CreateWhere, type ProjectError, type ProjectPortMessage, type ProjectReply, type ProjectRequest, type ProjectState, type RunActionResult } from '../../shared/project.js';
+import {
+  CREATE_WHERE,
+  TRASH_OPS,
+  type CreateWhere,
+  type ProjectError,
+  type ProjectPortMessage,
+  type ProjectReply,
+  type ProjectRequest,
+  type ProjectState,
+  type RunActionResult,
+  type TrashOutcome,
+  type TrashWhat,
+} from '../../shared/project.js';
 import { HomeRefusal } from './home.js';
 
 export const MAX_PATH_CHARS = 4096;
@@ -33,6 +45,8 @@ export interface BridgeHome {
   cancelOpen?(): boolean;
   /** F-835: makes a project with the engine and opens it (optional so that a home without it refuses it). */
   create?(where: CreateWhere): Promise<unknown>;
+  /** ADR 0736: a trash operation of the engine on the open project (optional so that a home without it refuses it). */
+  trash?(what: TrashWhat, params: Readonly<Record<string, unknown>>): Promise<TrashOutcome>;
 }
 
 /** F-807: the longest action id the port accepts, and the most bytes of an action's parameters as JSON. */
@@ -117,6 +131,17 @@ export function parseProjectRequest(raw: unknown): ParsedProject {
       if (problem) return bad(`action: params: ${problem}`);
       if (JSON.stringify(params).length > MAX_ACTION_PARAMS_BYTES) return bad(`action: params are larger than ${MAX_ACTION_PARAMS_BYTES} bytes`);
       return { ok: true, request: { op, id, action, params } };
+    }
+    case 'trash': {
+      if (keys !== 'id,op,params,what') return bad('trash: takes exactly what and its params');
+      const what = raw['what'];
+      const params = raw['params'];
+      if (typeof what !== 'string' || !Object.hasOwn(TRASH_OPS, what)) return bad(`trash: what must be one of ${Object.keys(TRASH_OPS).join(', ')}`);
+      if (!isPlainObject(params)) return bad('trash: params must be a plain object');
+      const problem = jsonObjectProblem(params);
+      if (problem) return bad(`trash: params: ${problem}`);
+      if (JSON.stringify(params).length > MAX_ACTION_PARAMS_BYTES) return bad(`trash: params are larger than ${MAX_ACTION_PARAMS_BYTES} bytes`);
+      return { ok: true, request: { op, id, what: what as TrashWhat, params } };
     }
     default:
       return bad(`unknown op '${String(op).slice(0, 40)}'`);
@@ -211,6 +236,11 @@ export class ProjectPortBridge {
                 request: null,
                 failure: { code: 'engine', problem: 'This Studio has no run control.', recovery: 'Start a Studio built with F-807 or later.', engine: null },
               } satisfies RunActionResult);
+          break;
+        case 'trash':
+          result = this.home.trash
+            ? await this.home.trash(r.what, r.params)
+            : ({ ok: false, code: 'unavailable', message: 'This Studio has no project trash.', data: null } satisfies TrashOutcome);
           break;
       }
       this.reply(r.id, { ok: true, result });

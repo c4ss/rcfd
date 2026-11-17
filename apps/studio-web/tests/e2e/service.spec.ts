@@ -34,7 +34,7 @@ const tempDir = () => {
 };
 
 test.describe('rcfd serve without the Studio', () => {
-  test('the allow-list names methods the service has (data.info only when data.* is on, help.* only with --ui)', async () => {
+  test('the allow-list names methods the service has (data.info only when data.* is on, help.* and mesh.preview only with --ui)', async () => {
     const s = await startRcfd(rcfd!);
     leftovers.add(s.pid);
     const c = await RpcConnection.connectTcp('127.0.0.1', s.port);
@@ -42,9 +42,9 @@ test.describe('rcfd serve without the Studio', () => {
     c.close();
     await s.stop();
     expect(info.protocol).toBe('rcfd-service/1');
-    // restated for ADR 0737: case.facts and mesh.refine are --ui methods too
-    expect(SERVICE_METHODS.filter((m) => !info.methods.includes(m))).toEqual(['data.info', 'help.glossary', 'help.errors', 'case.facts', 'mesh.refine']);
-    // ADR 0730: the switch the Studio's spawn passes adds the help methods and the ui key
+    // restated for ADR 0732 (F-836) and ADR 0737: mesh.preview, case.facts and mesh.refine are --ui methods too
+    expect(SERVICE_METHODS.filter((m) => !info.methods.includes(m))).toEqual(['data.info', 'help.glossary', 'help.errors', 'mesh.preview', 'case.facts', 'mesh.refine']);
+    // ADR 0730: the switch the Studio's spawn passes adds the help methods (and, ADR 0732, mesh.preview) and the ui key
     const u = await startRcfd(rcfd!, 0, ['--ui']);
     leftovers.add(u.pid);
     const cu = await RpcConnection.connectTcp('127.0.0.1', u.port);

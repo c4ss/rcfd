@@ -23,11 +23,18 @@ export const COPY_MAX_CHARS = 16_000;
 export const UNKNOWN_SOLVER_VERSION = 'unknown';
 
 /**
- * The settings keys of run.json that `rcfd-runner start` takes, and its option for each (crates/rcfd-runner, RunSettings
- * and the start command). Any other key the record holds (continue_from, max_steps of ADR 0200, or a later one) has no
- * option there, so a command cannot carry it: that is a gap, said in words.
+ * The settings keys of run.json that `rcfd-runner start` takes, and its option for each (crates/rcfd-runner, RunSettings,
+ * LaunchSettings and the start command; continue_from and max_steps since ADR 0734 P3). Any other key the record holds
+ * (a later one) has no option there, so a command cannot carry it: that is a gap, said in words.
  */
-export const RUNNER_START_OPTIONS = { threads: '--threads', priority: '--priority', mem_mb: '--mem-mb', set: '--set' } as const;
+export const RUNNER_START_OPTIONS = {
+  threads: '--threads',
+  priority: '--priority',
+  mem_mb: '--mem-mb',
+  set: '--set',
+  continue_from: '--continue-from',
+  max_steps: '--max-steps',
+} as const;
 
 /** Labels of a run record that name a design study's run; they do not change what the solver computes. */
 export const RECORD_LABELS = ['study', 'variant', 'condition'] as const;
@@ -50,6 +57,27 @@ export interface RunRecordFacts {
   readonly mesh: { readonly path: string; readonly hash: string | null } | null;
   /** study, variant and condition when the record holds them. */
   readonly labels: Readonly<Record<string, string>>;
+  /** The run this one reran from its case snapshot (`rerun_of`, ADR 0734 P3), or null. */
+  readonly rerunOf: string | null;
+}
+
+/**
+ * A run's launch record as the runner wrote it (runs/<id>/launch.json, ADR 0734 P1), read through run_status `launch`:
+ * the solver's command line exactly as the runner gave it, its working folder and the solver's build.
+ */
+export interface LaunchFacts {
+  readonly launchSeq: number | null;
+  /** Program first, every path as passed. */
+  readonly argv: readonly string[];
+  readonly cwd: string | null;
+  readonly solverPath: string | null;
+  /** `rcfd --version` of that solver, or null when it did not answer. */
+  readonly solverVersion: string | null;
+  /** `fnv64:` of the solver executable's bytes, or null when the runner could not read it. */
+  readonly exeHash: string | null;
+  /** The build's git revision (`rcfd version --json`), or null when the build set none. */
+  readonly gitRev: string | null;
+  readonly started: string | null;
 }
 
 /** A file's hash as the engine's read_project_file gave it, against the hash the run recorded. */
@@ -96,6 +124,16 @@ export interface RunProvenance {
   readonly units: Readonly<Record<string, string>>;
   readonly unitsNote: string | null;
   readonly reproduce: Reproduce;
+  /** ADR 0734: the run's latest launch record (null: not launched yet, launched before the runner recorded it, or not read). */
+  readonly launch: LaunchFacts | null;
+  /** Why there is no launch record, in words, when there is none. */
+  readonly launchNote: string | null;
+  /** The mesh file now against run.json mesh_hash (`hash_project_file`), or null when the record names no mesh. */
+  readonly meshCheck: HashCheck | null;
+  /** The unit of the run's time as the engine gives it (run_status `time_unit`), or null when it gives none. */
+  readonly timeUnit: string | null;
+  /** `rcfd-runner rerun <id>`: the run again from its own case snapshot and settings, and what would still differ. */
+  readonly rerun: Reproduce;
   /** When the main process read it (RFC 3339). */
   readonly readAt: string;
 }
@@ -155,6 +193,45 @@ export interface ReproduceInput {
   readonly caseCheck: HashCheck | null;
   readonly snapshotCheck: HashCheck | null;
   readonly engineNow: { readonly name: string; readonly version: string } | null;
+  /** The mesh now against the record's mesh_hash (null: no mesh recorded, or a mesh outside the project). */
+  readonly meshCheck?: HashCheck | null;
+}
+
+/** The gaps a recorded mesh leaves (ADR 0734 P4, P5): none when the engine's hash of it now is the recorded one. */
+function meshGaps(record: RunRecordFacts, meshCheck: HashCheck | null | undefined): string[] {
+  const m = record.mesh;
+  if (!m) return [];
+  if (m.hash === null) return [`The run names the mesh ${m.path} but run.json records no hash of it, so the Studio cannot check that it is unchanged.`];
+  if (!meshCheck) return [`The run names the mesh ${m.path}, outside the project folder, so the Studio cannot check that it is unchanged.`];
+  if (meshCheck.matches === false) return [`The mesh ${m.path} changed since the run (hash ${meshCheck.hash} now, ${m.hash} when the run was made).`];
+  if (meshCheck.matches === null) return [`The mesh ${m.path} cannot be hashed now (${meshCheck.error ?? 'no reason given'}).`];
+  return [];
+}
+
+/** The engine-version gap of a recorded run, or none. */
+function engineGaps(record: RunRecordFacts, engineNow: { readonly name: string; readonly version: string } | null): string[] {
+  if (record.solverVersion === UNKNOWN_SOLVER_VERSION) return ['run.json does not say which engine version made the run.'];
+  if (engineNow && versionLine(engineNow) !== record.solverVersion) {
+    return [`The run was made by ${record.solverVersion}; the engine here is ${versionLine(engineNow)}, which may compute other values.`];
+  }
+  return [];
+}
+
+/**
+ * `rcfd-runner rerun <id> --project <folder>` (ADR 0734 P3): a new run of the run's own case.snapshot with its recorded
+ * settings and case folder, so a case file changed since does not matter. The gaps say what still would.
+ */
+export function rerunCommand(input: { readonly run: string; readonly folder: string; readonly record: RunRecordFacts; readonly snapshotCheck: HashCheck | null; readonly meshCheck?: HashCheck | null; readonly engineNow: { readonly name: string; readonly version: string } | null }): Reproduce {
+  const { run, folder, record, snapshotCheck, meshCheck, engineNow } = input;
+  const argv = ['rcfd-runner', 'rerun', run, '--project', folder];
+  const gaps: string[] = [];
+  if (snapshotCheck && snapshotCheck.matches === false) {
+    gaps.push(`${snapshotCheck.path} does not match the hash in run.json (${snapshotCheck.hash} now, ${snapshotCheck.recorded} recorded).`);
+  } else if (snapshotCheck && snapshotCheck.matches === null) {
+    gaps.push(`${snapshotCheck.path} cannot be read now (${snapshotCheck.error ?? 'no reason given'}); the rerun needs it.`);
+  }
+  gaps.push(...meshGaps(record, meshCheck), ...engineGaps(record, engineNow));
+  return { argv, text: shellLine(argv), gaps, leftOut: [] };
 }
 
 /**
@@ -184,11 +261,22 @@ export function reproduceCommand(input: ReproduceInput): Reproduce {
   const set = s['set'] ?? [];
   if (Array.isArray(set) && set.every((x) => typeof x === 'string')) for (const x of set as string[]) argv.push('--set', x);
   else gaps.push(`run.json settings.set is ${json(set)}, not a list of path=value lines.`);
+  // ADR 0734 P3: the launch settings of ADR 0200, options of rcfd-runner start since
+  const from = s['continue_from'] ?? null;
+  if (from !== null) {
+    if (typeof from === 'string') argv.push('--continue-from', from);
+    else gaps.push(`run.json settings.continue_from is ${json(from)}, not a run id rcfd-runner start takes.`);
+  }
+  const cap = s['max_steps'] ?? null;
+  if (cap !== null) {
+    if (isWhole(cap, 1)) argv.push('--max-steps', String(cap));
+    else gaps.push(`run.json settings.max_steps is ${json(cap)}, not a step count rcfd-runner start takes.`);
+  }
   for (const [k, v] of Object.entries(s)) {
     if (k in RUNNER_START_OPTIONS || v === null || v === undefined) continue;
     gaps.push(`run.json settings.${k} is ${json(v)}; rcfd-runner start has no option for it, so the command runs without it.`);
   }
-  if (record.mesh) gaps.push(`The run names the mesh ${record.mesh.path}; the Studio cannot check that it is the same file as when the run was made.`);
+  gaps.push(...meshGaps(record, input.meshCheck));
   if (snapshotCheck && snapshotCheck.matches === false) {
     gaps.push(`${snapshotCheck.path} does not match the hash in run.json (${snapshotCheck.hash} now, ${snapshotCheck.recorded} recorded).`);
   }
@@ -199,11 +287,7 @@ export function reproduceCommand(input: ReproduceInput): Reproduce {
   } else if (caseCheck.matches === null) {
     gaps.push(`${caseCheck.path} cannot be read now (${caseCheck.error ?? 'no reason given'}); the command needs it.`);
   }
-  if (record.solverVersion === UNKNOWN_SOLVER_VERSION) {
-    gaps.push('run.json does not say which engine version made the run.');
-  } else if (engineNow && versionLine(engineNow) !== record.solverVersion) {
-    gaps.push(`The run was made by ${record.solverVersion}; the engine here is ${versionLine(engineNow)}, which may compute other values.`);
-  }
+  gaps.push(...engineGaps(record, engineNow));
   for (const k of RECORD_LABELS) if (record.labels[k] !== undefined) leftOut.push(`${k} ${record.labels[k]}`);
   return { argv, text: shellLine(argv), gaps, leftOut };
 }
@@ -225,7 +309,9 @@ export interface NumberSource {
     | { readonly kind: 'engine'; readonly unit: string; readonly from: string }
     | { readonly kind: 'none'; readonly why: string }
     /** The unit of this series in the run's output/monitors.json, looked up in the run's provenance when it opens. */
-    | { readonly kind: 'monitors'; readonly name: string };
+    | { readonly kind: 'monitors'; readonly name: string }
+    /** A run's or a snapshot's time: the unit run_status names (`time_unit`, ADR 0734 P2), looked up when it opens. */
+    | { readonly kind: 'time' };
   readonly run: string;
   /** The snapshot the value belongs to (index from 0, of `of`), or why it has none. */
   readonly snapshot: { readonly index: number; readonly of: number; readonly step: number; readonly time: number | null } | { readonly none: string };
@@ -247,6 +333,12 @@ export function unitText(src: NumberSource, run: RunProvenance | null): string {
   const u = src.unit;
   if (u.kind === 'none') return `none: ${u.why}`;
   if (u.kind === 'engine') return u.unit === '' ? `none, empty in ${u.from}` : `${u.unit}, ${u.from}`;
+  if (u.kind === 'time') {
+    if (!run) return 'reading…';
+    return run.timeUnit !== null
+      ? `${run.timeUnit}, time_unit of run_status (simulated time; 0 for a steady run)`
+      : `none: run_status gives no time_unit (an engine before ADR 0734)`;
+  }
   const from = `runs/${src.run}/output/monitors.json`;
   if (!run) return 'reading…';
   const got = run.units[u.name];
@@ -288,6 +380,38 @@ export function runFacts(p: RunProvenance): Fact[] {
     ['Case snapshot', `runs/${p.run}/case.snapshot, ${r.caseSnapshotHash}`],
   ];
   for (const [k, v] of Object.entries(r.labels)) rows.push([k.charAt(0).toUpperCase() + k.slice(1), v]);
+  return rows;
+}
+
+/** Why a run has no launch record to show (run_status gave `launch: null`). */
+export const NO_LAUNCH_RECORD =
+  'Not recorded: the runner writes runs/<id>/launch.json when it launches a run (ADR 0734); this run has not been launched, or was launched before.';
+
+/**
+ * "How this ran" (ADR 0734 P5): the solver's command line, its build and the mesh, as the runner recorded them, and the
+ * rerun command. A fact not recorded is said, never filled in (G6).
+ */
+export function howItRanFacts(p: RunProvenance): Fact[] {
+  const rows: Fact[] = [];
+  const l = p.launch;
+  if (l) {
+    rows.push(['Command', shellLine(l.argv)]);
+    if (l.cwd !== null) rows.push(['Folder', l.cwd]);
+    rows.push(['Solver', [l.solverVersion ?? 'version not given', l.solverPath].filter((x) => x !== null).join(', ')]);
+    rows.push(['Build', `${l.exeHash ?? 'no executable hash'}, ${l.gitRev !== null ? `git ${l.gitRev}` : 'no git revision (the build set none)'}`]);
+    if (l.started !== null) rows.push(['Launched', l.started]);
+  } else {
+    rows.push(['Command', p.launchNote ?? NO_LAUNCH_RECORD]);
+  }
+  const m = p.record?.mesh ?? null;
+  if (!m) rows.push(['Mesh', 'no mesh file recorded: the case makes its mesh, or the run was made before the runner recorded one']);
+  else {
+    const c = p.meshCheck;
+    const now = m.hash === null ? 'no hash recorded' : !c ? 'not checked: outside the project' : c.matches === true ? 'unchanged' : c.matches === false ? `changed: ${c.hash} now` : `not checked: ${c.error ?? 'not read'}`;
+    rows.push(['Mesh', `${m.path}, ${m.hash ?? 'no hash'}; ${now}`]);
+  }
+  if (p.record?.rerunOf) rows.push(['Rerun of', p.record.rerunOf]);
+  if (p.rerun.text) rows.push(['Rerun', p.rerun.text]);
   return rows;
 }
 

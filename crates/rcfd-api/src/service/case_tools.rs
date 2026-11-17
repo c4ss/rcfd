@@ -62,7 +62,8 @@ impl Service {
     }
 
     /// `mesh.refine {session, factor, apply?}`: the refinement of the session's generator mesh; with `apply: true` its
-    /// edits are set in the session (each a `settings.set`, so they are unsaved changes in its journal).
+    /// edits are set in the session (each a `settings.set` with its `base_value`, so they are unsaved changes in its
+    /// journal, and a concurrent change of a count is 1007 with nothing set).
     pub(super) fn mesh_refine_call(self: &Arc<Self>, p: &Value) -> Rpc {
         members("mesh.refine", p, &["session", "factor", "apply"])?;
         let s = self.session(p)?;
@@ -96,11 +97,18 @@ impl Service {
         );
         out["over_limit"] = json!((r.cells_after > self.cfg.max_cells as u64).then_some(self.cfg.max_cells));
         if apply {
-            for e in &r.edits {
-                self.call(
-                    "settings.set",
-                    &json!({"session": s.id, "path": e.path, "value": e.after}),
-                )?;
+            // ADR 0736 P2: each count is set with its value as read (`base_value`), so a writer that changed one in
+            // between gets 1007 instead of being overwritten; the counts set before it are put back (with their new
+            // value as the base), so the refine is applied whole or not at all
+            for (k, e) in r.edits.iter().enumerate() {
+                let set = json!({"session": s.id, "path": e.path, "value": e.after, "base_value": e.before});
+                if let Err(err) = self.call("settings.set", &set) {
+                    for d in r.edits[..k].iter().rev() {
+                        let back = json!({"session": s.id, "path": d.path, "value": d.before, "base_value": d.after});
+                        let _ = self.call("settings.set", &back);
+                    }
+                    return Err(err);
+                }
             }
         }
         out["applied"] = json!(apply);
@@ -149,7 +157,7 @@ impl Service {
                 let message = e.to_string();
                 Err(match e {
                     SaveError::Conflict { current } => RpcError {
-                        code: code::CONFLICT,
+                        code: code::FILE_CONFLICT,
                         message,
                         data: Some(json!({"current_hash": current})),
                     },

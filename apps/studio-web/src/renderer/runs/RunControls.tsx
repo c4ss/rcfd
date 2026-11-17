@@ -27,7 +27,7 @@ function useAction(onStarted?: (run: string) => void) {
     try {
       const r = await runAction(id, params);
       setLast(r);
-      if (r.ok && r.request.run && (id === 'project.run_case' || id === 'project.queue_case')) onStarted?.(r.request.run);
+      if (r.ok && r.request.run && (id === 'project.run_case' || id === 'project.queue_case' || id === 'project.rerun_run')) onStarted?.(r.request.run);
       return r;
     } finally {
       setBusy(null);
@@ -417,6 +417,19 @@ export function SelectedRunControls({ view, row, onStarted }: { view: ProjectVie
             name={`Run ${caseName(row.case)} again with fields stored`}
           />
         )}
+        {/* F-828 (ADR 0734): the run again from its own case snapshot and settings, the icon alone (G22) */}
+        <Control
+          id="project.rerun_run"
+          params={p}
+          view={view}
+          label="Rerun as it ran"
+          icon="rerun"
+          variant="ghost"
+          iconOnly
+          busy={act.busy === 'project.rerun_run'}
+          onPress={() => void act.run('project.rerun_run', p)}
+          name={`Rerun ${row.id} as it ran`}
+        />
       </div>
       {asking && words && (
         <Confirm

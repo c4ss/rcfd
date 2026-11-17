@@ -1,17 +1,22 @@
 // A run's provenance, read through the engine (F-828): runs/<id>/run.json as the runner wrote it, the engine's hash of
 // runs/<id>/case.snapshot and of the project's case file now, and the units of runs/<id>/output/monitors.json, all with
-// `read_project_file` of the open project's read-only project server (crates/rcfd-workspace, the tool Claude Code uses).
+// `read_project_file` of the open project's read-only project server (crates/rcfd-workspace, the tool Claude Code uses);
+// ADR 0734: the run's launch record and time unit (`run_status` launch and time_unit) and the engine's hash of the mesh
+// the record names (`hash_project_file`, against run.json mesh_hash).
 // The reproduce command is built from the record alone (src/shared/provenance.ts reproduceCommand); the Studio reads no
 // file itself and writes none (G2, G12).
 //
 // No Electron import: the unit tests drive it with a fake query.
 import path from 'node:path';
 import {
+  NO_LAUNCH_RECORD,
   RECORD_LABELS,
   RECORD_MAX_BYTES,
+  rerunCommand,
   reproduceCommand,
   sameHash,
   type HashCheck,
+  type LaunchFacts,
   type Reproduce,
   type RunProvenance,
   type RunRecordFacts,
@@ -89,7 +94,54 @@ export function recordFacts(text: string, run: string): RunRecordFacts {
     settings: obj(j['settings']),
     mesh: mesh === null ? null : { path: mesh, hash: str(j['mesh_hash']) },
     labels,
+    rerunOf: str(j['rerun_of']),
   };
+}
+
+/** run_status's `launch` (ADR 0734 P1) as the Studio shows it; null for anything that is not a launch record. */
+export function launchFacts(v: unknown): LaunchFacts | null {
+  if (typeof v !== 'object' || v === null || Array.isArray(v)) return null;
+  const l = v as Obj;
+  const argv = Array.isArray(l['argv']) && l['argv'].every((a) => typeof a === 'string') ? (l['argv'] as string[]) : null;
+  if (argv === null || argv.length === 0) return null;
+  const solver = obj(l['solver']);
+  const build = obj(solver['build']);
+  return {
+    launchSeq: typeof l['launch_seq'] === 'number' ? l['launch_seq'] : null,
+    argv,
+    cwd: str(l['cwd']),
+    solverPath: str(solver['path']),
+    solverVersion: str(solver['version']),
+    exeHash: str(build['exe_hash']),
+    gitRev: str(build['git_rev']),
+    started: str(l['started']),
+  };
+}
+
+/** The launch record and the time unit of a run, from run_status (no events). */
+async function readLaunch(query: Query, run: string): Promise<{ launch: LaunchFacts | null; launchNote: string | null; timeUnit: string | null }> {
+  try {
+    const r = obj(await query('run_status', { run, events: 0 }));
+    const launch = launchFacts(r['launch']);
+    const note = launch ? null : 'launch' in r ? NO_LAUNCH_RECORD : 'Not recorded: the engine’s run_status gives no launch record (an engine before ADR 0734).';
+    return { launch, launchNote: note, timeUnit: str(r['time_unit']) };
+  } catch (e) {
+    return { launch: null, launchNote: `Not read: run_status of ${run} failed: ${message(e)}`, timeUnit: null };
+  }
+}
+
+/** The engine's hash of the mesh the record names, now, against the recorded mesh_hash (hash_project_file). */
+async function meshCheckOf(query: Query, record: RunRecordFacts): Promise<HashCheck | null> {
+  const m = record.mesh;
+  if (!m || m.hash === null || !isRelative(m.path)) return null;
+  const file = m.path.split('\\').join('/');
+  try {
+    const h = str(obj(await query('hash_project_file', { path: file }))['hash']);
+    if (h === null) throw new Error(`the engine gave no hash for ${file}`);
+    return { path: file, hash: h, recorded: m.hash, matches: sameHash(h, m.hash), error: null };
+  } catch (e) {
+    return { path: file, hash: null, recorded: m.hash, matches: null, error: message(e) };
+  }
 }
 
 /** Whether a recorded case path is inside the project (project-relative), as rcfd-runner's case_in_project writes it. */
@@ -117,9 +169,11 @@ export async function readRunProvenance(
     recordError = message(e);
   }
   const { units, note } = await readUnits(query, run);
-  const base = { run, folder, recordPath, recordHash, record, recordError, engineNow, units: Object.fromEntries(units), unitsNote: note, readAt: now() };
+  const { launch, launchNote, timeUnit } = await readLaunch(query, run);
+  const base = { run, folder, recordPath, recordHash, record, recordError, engineNow, units: Object.fromEntries(units), unitsNote: note, readAt: now(), launch, launchNote, timeUnit };
   if (!record) {
-    return { ...base, snapshotCheck: null, caseCheck: null, reproduce: { ...NO_COMMAND, gaps: [`There is no run record to build the command from: ${recordError}.`] } };
+    const none = { ...NO_COMMAND, gaps: [`There is no run record to build the command from: ${recordError}.`] };
+    return { ...base, snapshotCheck: null, caseCheck: null, meshCheck: null, reproduce: none, rerun: none };
   }
   const snapshotCheck = await check(query, `runs/${run}/case.snapshot`, record.caseSnapshotHash);
   const inside = isRelative(record.case);
@@ -127,6 +181,8 @@ export async function readRunProvenance(
   // the case the command names: the record's case in this project folder (rcfd-runner start reads a relative case
   // against its working folder, so the command names it whole), or the absolute path the record holds
   const casePath = inside ? path.join(folder, ...record.case.split(/[\\/]/)) : record.case;
-  const reproduce = reproduceCommand({ record, casePath, folder, caseCheck, snapshotCheck, engineNow });
-  return { ...base, snapshotCheck, caseCheck, reproduce };
+  const meshCheck = await meshCheckOf(query, record);
+  const reproduce = reproduceCommand({ record, casePath, folder, caseCheck, snapshotCheck, engineNow, meshCheck });
+  const rerun = rerunCommand({ run, folder, record, snapshotCheck, meshCheck, engineNow });
+  return { ...base, snapshotCheck, caseCheck, meshCheck, reproduce, rerun };
 }

@@ -6,6 +6,7 @@
 //! solver dependency.
 
 pub mod atomic;
+pub mod filehash;
 pub mod journal;
 pub mod jsonl;
 pub mod paths;
@@ -13,6 +14,7 @@ pub mod project;
 pub mod records;
 pub mod runid;
 pub mod time;
+pub mod trash;
 pub mod watch;
 
 use std::path::PathBuf;

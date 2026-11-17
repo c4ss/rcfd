@@ -46,9 +46,10 @@ fn hidden() -> Vec<(&'static str, Value)> {
 const EXECUTE: [&str; 3] = ["design_run_study", "design_evaluate", "design_run_operating_map"];
 
 /// ADR 0195 P1: the 23 project tools in the order of the F-273 list, ADR 0733 P3's two budgets tools right after
-/// `list_meshes` (C5-L restated for F-837), and ADR 0737's `case_facts` and `refine_case_mesh` right after them (restated
-/// again for F-837).
-const PROJECT_TOOLS: [&str; 27] = [
+/// `list_meshes` (C5-L restated for F-837), ADR 0734 P4's `hash_project_file` right after `read_project_file` (C5-L
+/// restated for F-828), ADR 0736 P1's six trash tools last (C5-L restated for F-829), and ADR 0737's `case_facts` and
+/// `refine_case_mesh` right after `set_runner_config` (restated again for F-837).
+const PROJECT_TOOLS: [&str; 34] = [
     "project_info",
     "list_runs",
     "run_status",
@@ -60,6 +61,7 @@ const PROJECT_TOOLS: [&str; 27] = [
     "list_changes",
     "read_feed",
     "read_project_file",
+    "hash_project_file",
     "edit_case",
     "write_note",
     "new_case",
@@ -76,6 +78,12 @@ const PROJECT_TOOLS: [&str; 27] = [
     "resume_run",
     "cancel_run",
     "wait_run",
+    "list_trash",
+    "trash_run",
+    "trash_results",
+    "trash_case",
+    "restore_trash",
+    "empty_trash",
 ];
 
 /// Sorted relative paths and bytes of every file under `dir`.
@@ -97,8 +105,8 @@ fn files(dir: &Path) -> Vec<(String, Vec<u8>)> {
     out
 }
 
-/// C5-L: under `--project`, 44 tools (40, ADR 0733's two and ADR 0737's two): the list without `--project` less the 16 of P1, in its order and byte for byte (but the
-/// class `execute` of `design_run_study` and `design_evaluate`, ADR 0196 B), then the 23 project tools.
+/// C5-L: under `--project`, 51 tools (40, ADR 0733's two, ADR 0734's one, ADR 0736's six and ADR 0737's two): the list without `--project` less the 16 of P1, in its order and byte for byte (but the
+/// class `execute` of `design_run_study` and `design_evaluate`, ADR 0196 B), then the 34 project tools.
 #[test]
 fn c5l_project_list_has_no_session_only_tool() {
     let dir = project("c5l");
@@ -117,8 +125,8 @@ fn c5l_project_list_has_no_session_only_tool() {
     assert_eq!(kept.len(), 17);
     assert_eq!(
         live.len(),
-        44,
-        "17 session tools and 27 project tools (ADR 0733: two budgets tools; ADR 0737: case_facts, refine_case_mesh)"
+        51,
+        "17 session tools and 34 project tools (ADR 0733: two budgets tools; ADR 0734: hash_project_file; ADR 0736: six trash tools; ADR 0737: case_facts, refine_case_mesh)"
     );
     let mut execute = 0;
     for (l, k) in live.iter().zip(&kept) {
@@ -266,7 +274,7 @@ fn c5s_hidden_tools_need_a_session_kept_tools_do_not() {
     eprintln!("C5-S: 15 hidden tools 1001, create_case a session; 17 kept tools without a session ({answered_ok} answered without error), no session made");
 }
 
-/// C5-A: the Studio bridge's first allow-list is main's 11 read tools, then the four read tools added since (P5); a file
+/// C5-A: the Studio bridge's first allow-list is main's 11 read tools, then the read tools added since (P5, ADR 0733, ADR 0734); a file
 /// written from main's 11 reads back as those 11 rules and is written back byte for byte (no migration).
 #[test]
 fn c5a_allow_list_has_the_read_tools_and_old_files_stay() {
@@ -284,9 +292,8 @@ fn c5a_allow_list_has_the_read_tools_and_old_files_stay() {
         "read_project_file",
         "wait_run",
     ];
-    // a new project's first list: main's 11 in their order, then the five (ADR 0733: runner_config, the maintainer,
-    // 2026-11-17) (the set is checked against the live list by
-    // project_w48f.rs F2)
+    // a new project's first list: main's 11 in their order, then the six (ADR 0733: runner_config; ADR 0734:
+    // hash_project_file; the maintainer, 2026-11-17) (the set is checked against the live list by project_w48f.rs F2)
     let first = AllowList::project_initial();
     let want: Vec<AllowRule> = MAIN
         .iter()
@@ -296,6 +303,7 @@ fn c5a_allow_list_has_the_read_tools_and_old_files_stay() {
             "preview_mesh",
             "list_meshes",
             "runner_config",
+            "hash_project_file",
         ])
         .map(|t| AllowRule::Tool(format!("mcp__{PINNED_SERVER}__{t}")))
         .collect();

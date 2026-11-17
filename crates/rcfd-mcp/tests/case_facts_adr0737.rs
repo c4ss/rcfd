@@ -218,6 +218,13 @@ fn c2_dry_run_writes_nothing_and_its_set_is_the_runs() {
             break;
         }
     }
+    // a rerun (ADR 0734 from_run) keeps its run's settings: run_time and dry_run are refused beside it, nothing queued
+    for extra in [json!({"run_time": {"simulate_s": 0.1}}), json!({"dry_run": true})] {
+        let mut a = json!({"from_run": id});
+        a.as_object_mut().unwrap().extend(extra.as_object().unwrap().clone());
+        let r = m.request("tools/call", json!({"name": "start_run", "arguments": a}));
+        assert_eq!(code(&r), -32602, "{r}");
+    }
     // without run_time: no run_time in the reply (as before)
     let r = m.call("start_run", json!({"case": "cases/cavity.toml", "dry_run": true}));
     assert!(r["structuredContent"]["run_time"].is_null());

@@ -58,6 +58,10 @@ impl RunState {
     }
 }
 
+/// The unit of `status.json` `time` and of a field-store snapshot's time (ADR 0734 P2): simulated seconds; 0 for a steady
+/// run, whose `step` is the iteration. Replies name it as `time_unit`; the files keep their bytes.
+pub const TIME_UNIT: &str = "s";
+
 /// Value of `solver_version` when `run.json` has none (null or missing).
 pub const UNKNOWN_SOLVER_VERSION: &str = "unknown";
 
@@ -98,6 +102,9 @@ pub struct RunRecord {
     /// The label of the study's operating condition the run is for (ADR 0189 S6).
     #[serde(skip_serializing_if = "Option::is_none")]
     pub condition: Option<String>,
+    /// The run this one reruns from its `case.snapshot` (ADR 0734 P3; only a rerun has it).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub rerun_of: Option<String>,
 }
 
 /// On-disk form of [`RunRecord`]: `case` or its legacy name `case_source`, optional `solver_version`.
@@ -125,6 +132,8 @@ struct RunRecordWire {
     variant: Option<String>,
     #[serde(default)]
     condition: Option<String>,
+    #[serde(default)]
+    rerun_of: Option<String>,
 }
 
 impl TryFrom<RunRecordWire> for RunRecord {
@@ -148,6 +157,7 @@ impl TryFrom<RunRecordWire> for RunRecord {
             study: w.study,
             variant: w.variant,
             condition: w.condition,
+            rerun_of: w.rerun_of,
         })
     }
 }

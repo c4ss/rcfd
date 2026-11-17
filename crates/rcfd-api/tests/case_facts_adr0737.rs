@@ -377,7 +377,7 @@ fn hash(p: &Path) -> String {
     rcfd_project::records::hash_bytes(&std::fs::read(p).unwrap())
 }
 
-/// C4: case.save writes what Case::load reads to the session's case hash; a stale base is 1007 with the file unchanged;
+/// C4: case.save writes what Case::load reads to the session's case hash; a stale base is 1008 with the file unchanged;
 /// inside a project 1004 naming edit_case; `lines` keeps a comment; the lock file beside the file is honoured and gone
 /// after the write.
 #[test]
@@ -404,14 +404,14 @@ fn c4_save_outside_a_project() {
         let e = error(&svc, "case.save", json!({"session": s, "path": f, "base_hash": null}));
         assert_eq!(
             (e["code"].clone(), e["data"]["current_hash"].clone()),
-            (json!(1007), json!(hash(&f)))
+            (json!(1008), json!(hash(&f)))
         );
         let e = error(
             &svc,
             "case.save",
             json!({"session": s, "path": f, "base_hash": "fnv64:0000000000000000"}),
         );
-        assert_eq!(e["code"], 1007);
+        assert_eq!(e["code"], 1008);
         assert_eq!(r["new_hash"], json!(hash(&f)));
     }
     // lines: the file's comment is kept, the changed value written in its line

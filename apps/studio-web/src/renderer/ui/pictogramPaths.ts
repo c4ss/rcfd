@@ -83,6 +83,11 @@ export const ICON_NAMES = [
   'settings',
   // F-835
   'new-project',
+  // F-828 (ADR 0734)
+  'rerun',
+  'how-ran',
+  // ADR 0736
+  'trash',
   'refine',
   'open-file',
 ] as const;
@@ -125,6 +130,11 @@ export const ICON_PATHS: Record<IconName, { readonly path: string; readonly fill
   settings: { path: 'M1 3H13M1 7H13M1 11H13M4 1V5M10 5V9M6 9V13' },
   // F-835: New project… (a folder with its tab, a plus inside)
   'new-project': { path: 'M1 3H5L6 4H13V12H1ZM7 6V10M5 8H9' },
+  // F-828 (ADR 0734): Rerun as it ran (the play mark after a stop: from the start again), How this ran (a command
+  // prompt, the solver's command line)
+  rerun: { path: 'M2 2V12M5 2L10 7L5 12Z' },
+  'how-ran': { path: 'M2 3L6 7L2 11M7 11H12' },
+  trash: { path: 'M2 4H12M5 4V2H9V4M3 4V12H11V4M6 6V10M8 6V10' },
   // ADR 0737: Refine x2 (a square cut into four, each cell halved), Open a case file (a page with its corner folded,
   // an arrow coming out of it)
   refine: { path: 'M2 2H12V12H2ZM7 2V12M2 7H12' },

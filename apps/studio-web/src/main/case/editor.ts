@@ -38,7 +38,7 @@ import { testDelay } from '../work/delay.js';
 const cancelledBefore = (what: string): CaseRefusal => new CaseRefusal('cancelled', `The ${what} was cancelled before the engine was asked; nothing was written.`);
 
 /** Engine error codes the editor tells apart (docs/mcp-tools.md, docs/service-protocol.md). */
-export const CODE = { UNKNOWN_SESSION: 1001, INVALID: 1003, REFUSED: 1004, CONFLICT: 1200, NOT_FOUND: 1202, SAVE_CONFLICT: 1007 } as const;
+export const CODE = { UNKNOWN_SESSION: 1001, INVALID: 1003, REFUSED: 1004, CONFLICT: 1200, NOT_FOUND: 1202, SAVE_CONFLICT: 1008 } as const;
 
 /** A request the editor refuses before or after asking the engine; bridge.ts turns it into the reply's error. */
 export class CaseRefusal extends Error {
