@@ -375,3 +375,19 @@ c6 is answered whichever way the full solves end: a remedy that fails is a resul
    2026-11-11 (take the recommendation).
 2. **Whether a remedy may change rule L's coefficient**: not taken; open for the maintainer.
 3. **Whether either opt-in should become a default**: not taken (it would change default results); open.
+
+## Amendment 1 (2026-11-17, written and committed before the corrected run)
+
+**The defect.** The registered run of `f774_fast` (on 5d958e8f, `f774-scratch/run1-fast.log`) missed BTC, and DC was met only
+vacuously: the column's committed displacement was the zero vector, but `solve_increment` (ADR 0688 D2) requires the committed
+displacement to carry `lc v` bit for bit at every prescribed equation, and `0 x (-1.2) = -0.0`, whose bits differ from `+0.0`.
+All three column attempts (backtracked, default, damped) were refused at the input (`key 'displacement': the committed
+displacement has 0e0 at the prescribed equation 26 (lc times its value -0e0)`); none ran. The replica itself ran: `beta = 1/2`
+(as derived), then the Newton iteration from it fails at its next iterate with the lower element inverted (`det F =
+-1.0056526950039935e-1 at point 0`). Every other row of the registered run was met.
+
+**The correction.** The column's committed displacement is `0 x v` at every prescribed equation (that is `-0.0` where `v < 0`)
+and `0.0` elsewhere, the value the driver itself commits at `lc = 0`. DC is made strict: both texts equal **and** they name an
+inverted point (`inverted`), so that a refusal at the input cannot meet it. No limit changes. The registered test becomes the
+ignored record `f774_fast_known_miss` (unchanged, the measured texts in its ignore text); the corrected test `f774_fast_amended`
+(the same rows, the corrected column) is run once and is the target of the mutations.

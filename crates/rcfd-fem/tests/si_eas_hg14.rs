@@ -1605,7 +1605,19 @@ const K_FBAR: Kind = Kind {
 // ============================================================================ the fast test
 
 #[test]
-fn f774_fast() {
+#[ignore = "ADR 0694: the registered fast run, known miss (a defective set-up, amendment 1): the column's committed displacement had +0.0 where lc v = -0.0, so solve_increment refused the three column attempts at the input (key 'displacement'); BTC missed, DC met only vacuously; every other row met; f774_fast_amended runs the corrected column"]
+fn f774_fast_known_miss() {
+    fast(false);
+}
+
+/// The corrected fast test of ADR 0694 amendment 1: the column's committed displacement carries `0 x v` at the prescribed
+/// equations, and DC requires an inverted point.
+#[test]
+fn f774_fast_amended() {
+    fast(true);
+}
+
+fn fast(corrected: bool) {
     let mut ch = Checks::new();
     let t_all = Instant::now();
     let mesh8 = block_mesh(8);
@@ -1874,7 +1886,12 @@ fn f774_fast() {
     // BTC, DC: the column.
     let mc = column_model();
     let sc = initial_states(&mc).unwrap();
-    let zc = vec![0.0; mc.dof_map().n_equations()];
+    let mut zc = vec![0.0; mc.dof_map().n_equations()];
+    if corrected {
+        for (eq, v) in prescribed_equations(&mc, &[]).unwrap() {
+            zc[eq] = 0.0 * v;
+        }
+    }
     let (beta_r, rep) = column_replica(&mc, &sc);
     println!(
         "BTC replica: beta {beta_r}, {:?}",
@@ -1927,7 +1944,7 @@ fn f774_fast() {
     println!("DC: default {td:?}; damped {tp:?}");
     ch.holds(
         "DC: the default and the damped attempts fail with the same text",
-        td.is_some() && td == tp,
+        td.is_some() && td == tp && (!corrected || td.as_deref().is_some_and(|t| t.contains("inverted"))),
     );
 
     // CR8: the corner record on the last 8^3 attempt.
