@@ -249,3 +249,149 @@ ignored record `j2_refined_reference_setup_known_miss` (code and limits unchange
 `j2_refined_reference_heavy_record` has not been run; it uses the corrected `reading` and is run once after this amendment. The
 mutations are run against `j2_refined_reference_setup_corrected`. The registered rule gives **partial** whatever follows (a check
 met only after an amendment).
+
+## Addendum 1: results (2026-11-17)
+
+The registered fast run once on 78d48d81 (`run1-fast.log`, 21 s; amendment 1); the corrected fast run once on cf00d2e1
+(`run2-fast.log`, 15 s); the heavy record once on cf00d2e1 (`run3-heavy.log`, 409 s, the machine shared and the mutations
+building beside it: F-bar `16^3` 130 s, L 67 s, Full 61 s, neo-Hookean F-bar 30 s, L 55 s, Off 17 s, Hex20 `8^3` 25 s); the
+mutations once each on a scratch copy of cf00d2e1 (`mutations.log`, `mut-MU*.log`); S6, S7, B6, S8 once (`fmt.log`,
+`clippy.log`, `s7-lib.log`, `s7-tests.log`, `s8-docs.log`). All in `w49i-work/f747-scratch`. No limit, set-up or measure was
+changed after a run; the heavy record is kept as the ignored `j2_refined_reference_heavy_record_known_miss` (code and limits
+unchanged, the measured values in its ignore text). It is the only run of the `16^3` meshes; the fast test
+`j2_refined_reference_setup_corrected` (15 s) covers the same solve path, the reading and the set-up on `4^3`, `8^3` and DB4.
+
+### The values (J2, `R / mu`, `w_c`)
+
+| Mesh | F-bar | rule L (S) | Full Hex8 | Off (S) | Hex20 |
+|---|---|---|---|---|---|
+| `4^3` | `0.09785876`, `0.05043897` | `0.08146704`, `0.05092271` | `0.14215013`, `0.01953616` | fails (load 0.43) | |
+| `8^3` | `0.07717089`, `0.03601575` | `0.06172012`, `0.02976180` | `0.07611689`, `0.02568226` | fails (0.23) | `0.05144384`, `0.02110758` |
+| `16^3` | `0.06488529`, `0.02807182` | `0.05278510`, `0.02079916` | fails (inverted, 0.988) | fails (0.15) | |
+| DB4 | `0.07576858`, `0.03522022` | `0.06653272`, `0.03300841` | | | |
+
+The readings (c4): F-bar `R` asymptotic, `p = 0.752`, `R_inf = 0.04692`, `U = 0.0225` (`0.48` of the limit); `w_c` `p = 0.861`,
+`0.01833`, `U = 0.0122` (`0.66`). Rule L `R` asymptotic, `p = 1.144`, `R_inf = 0.04540`, `U = 0.0092` (`0.20`); `w_c` `p =
+1.239`, `0.01421`, `U = 0.0082` (`0.58`). Against the reference (the F-bar limit): F-bar `R` `+109`, `+64`, `+38` per cent on
+`4^3`, `8^3`, `16^3`; rule L `+74`, `+32`, `+12.5` per cent; the Hex20 on `8^3` `+9.6` per cent (`w_c` `+15`); the Full Hex8
+`+203`, `+62` per cent. Against the F-bar `16^3` value: rule L `+26`, `-4.9`, `-18.6` per cent. Neo-Hookean: F-bar `R`
+asymptotic, `p = 1.217`, `R_inf = 0.3124`, `U = 0.017` (`0.054`); rule L failed on `16^3`, so it has no reading.
+
+### Results
+
+| Id | Limit | Measured | Met |
+|---|---|---|---|
+| SU1 (NH, `4^3`, `8^3`) | `<= 1e-6` | largest `6.4e-8` | yes |
+| SU2 (J2, `4^3`, `8^3`) | `<= 1e-6` | largest `1.2e-7` | yes |
+| SU3 (DB4) | `<= 1e-6` | largest `1.2e-7` | yes |
+| M0, M1 | `> 0`; `343` | `0.0762`; `343` | yes |
+| FC | `<= 1e-9` | largest `4.7e-12` | yes |
+| JY | `> 0` | every J2 F-bar and L solve: `4^3` `493`, `491`; `8^3` `3738`, `3794`; `16^3` `29151`, `27395`; DB4 `3765`, `3799` | yes |
+| NC2 (registered run) | as registered | **`|a_inf - 1| = 9.375e-3`** in (i); the other rows met | **no** (the registered formula's sign, amendment 1) |
+| NC2 (corrected) | as registered | `p` off by `3.8e-15`, `a_inf` exact, `U` off by `2.3e-17`; (ii), (iii) met | yes (after the amendment) |
+| RC0 | the `16^3` J2 F-bar and L solves succeed | both, no halving | yes |
+| RD | `U / |a_inf| <= 1` | `0.479`, `0.664` (F-bar `R`, `w_c`); `0.203`, `0.579` (L) | yes |
+| TJ | finite | `T_R = 3.21`, `2.11`, `1.54`; `T_w = 6.98`, `4.13`, `2.80` (`4^3`, `8^3`, `16^3`) | yes |
+| CJ | `<= T(n)` | `R`: `0.168`, `0.200`, `0.186`; `w_c`: `0.010`, `0.174`, `0.259` | yes |
+| DB | `<= T(8)` | `0.122` (`R`), `0.063` (`w_c`) | yes |
+| EC1 | G1 holds (NH) | **not measurable**: the neo-Hookean rule L `16^3` solve fails (singular tangent, pivot `-4.65e6` at load factor `0.966` after five halvings) | **no** (known miss) |
+| NC1 | G1 does not hold for Full; `R_Full > R_Fbar` on every mesh | **the Full `16^3` solve fails** (inverted element at load factor `0.988`); **`R_Full = 0.07612 < R_Fbar = 0.07717` on `8^3`** | **no** (known miss) |
+| B6 | pass; the diff only tests and docs | the three bit records pass; `git diff --stat c2ec31e4` touches `crates/rcfd-fem/tests/si_eas_hg11.rs` and this ADR only | yes |
+| S6 | clean | fmt and clippy (`--all-targets -D warnings`) clean | yes |
+| S7 | pass | `--lib` 15; `si_eas_hg` 8, `si_eas_hg2` 3, `si_eas_hg3` 4, `si_eas_hg5` 3, `si_eas_hg6` 4, `si_eas_hg7` 4, `si_eas_hg8` 5, `si_eas_hg9` 4, `si_eas_hg11` 1 passed | yes |
+| S8 | pass | `docs_site` 2 passed | yes |
+
+### c6: the reason for the gap of ADR 0666 A1.2
+
+- **G1 holds for `R` and for `w_c`**: `|R_inf,L - R_inf,Fbar| = 0.0015` against `U_L + U_Fbar = 0.032`; `|w_inf,L - w_inf,Fbar|
+  = 0.0041` against `0.020`. By the registered classification the gap is **identified as discretisation error of two
+  different sizes**, and the element with the larger `E(8)` is **F-bar** (`E_R(8)`: F-bar `1.12`, L `0.56`). Both elements
+  converge from above; F-bar more slowly (`p = 0.75` against `1.14`). The gap of A1.2 (`-0.168`, `-0.200`, and `-0.186` on
+  `16^3`) is F-bar's excess, not rule L's deficit: rule L is the nearer of the two to the common limit on every mesh.
+- **Where it sits**: the edge share `gamma = 1.12`, `1.35`, `1.61` (`4^3`, `8^3`, `16^3`): the edge row of punch nodes carries
+  more than the whole gap (F-bar's edge-row reaction is about twice rule L's on `16^3`, `0.0401` against `0.0205`; the interior
+  rows give some back). So the gap sits in the representation of the edge jump of the node-set punch (arithmetic 2).
+- **The stabilisation share** `sigma` is not available: the plain element (Off) fails on every mesh with J2 (the mode residual
+  does not decrease, ADR 0658 D1, at load factors `0.43`, `0.23`, `0.15`), as it failed elastically in ADR 0636 N3.
+- **Supporting, reported**: the Hex20 on `8^3` is `+9.6` per cent from the reference, nearer than rule L (`+32`) and F-bar
+  (`+64`) on the same mesh, against the expectation of c2 (locking by the constraint count); and the Full Hex8 is below F-bar
+  on `8^3`. Both say that F-bar's excess on this punch is not a volumetric locking that F-bar removes. The cause inside F-bar
+  (the candidate: the constant dilatation of the edge element under the jump of the prescribed displacement) is not
+  diagnosed here.
+- **Bound**: the limit gap `B = R_inf,L / R_inf,Fbar - 1 = -0.032 +- 0.68`. The identification rests on G1 with F-bar's wide `U`
+  (48 per cent of its limit); rule L's own reading is tighter (20 per cent) and lands within 3.3 per cent of F-bar's. The data
+  are in the registered asymptotic band, but three meshes cannot show that they are in the asymptotic range.
+
+### The J2 tolerance (c5)
+
+`T_R(n) = 3.21`, `2.11`, `1.54` and `T_w(n) = 6.98`, `4.13`, `2.80` on `4^3`, `8^3`, `16^3`: registered, derived, met by every
+regular mesh and by DB4, and **uninformative**: with errors of `0.4` to `1.6` of the limit on these meshes, a tolerance for two
+elements on the same mesh built from their errors is larger than any gap a defect would plausibly cause. The per-element
+tolerances against the reference are the useful reading: rule L `1.25 E_R = 1.25`, `0.70`, `0.46`; F-bar `1.96`, `1.40`,
+`1.08` (`4^3`, `8^3`, `16^3`). The ADR 0636 tolerances (`0.15`, `0.10`) do not transfer to J2 on this punch, in either form.
+
+### Deviations
+
+- Amendment 1: the registered Richardson formula had the wrong sign, caught by NC2 (i); corrected before the heavy record.
+- EC1 and NC1 missed by failed solves (`16^3` neo-Hookean rule L: a negative pivot of the tangent near full load, the loss of
+  positive definiteness ADR 0636 saw for the plain element on `8^3`; `16^3` Full Hex8 with J2: an inverted element), and NC1
+  also by `R_Full < R_Fbar` on `8^3` (arithmetic 5 expected locking above F-bar). They are known misses; no corrected test is
+  registered, since neither is a defect of the set-up.
+- Arithmetic 3 predicted the rule L values well (`16^3` `0.053`, limit `0.045`) and F-bar's poorly (`p ~ 1.1` assumed, `0.75`
+  measured). c2 expected the Hex20 to lock; it lies nearest to the reference.
+- MU4 was caught by a panic of the test (the empty edge-row set), not by the SU1, SU2 rows it was registered against.
+
+### Mutations (scratch copy of cf00d2e1, `j2_refined_reference_setup_corrected`, each run once)
+
+| Id | Caught | By |
+|---|---|---|
+| MU1 (ratio inverted) | **yes** | NC2 (i): asymptotic, `p` (`3.0` off), `a_inf`, `U` |
+| MU2 (asymptotic test dropped) | **yes** | NC2 (ii) (`a_inf` NaN), (iii) |
+| MU3 (no factor of safety) | **yes** | NC2 (i) `U` (`1.2e-3` off) |
+| MU4 (punch without its edge row) | **yes, not as registered** | the test panics (`EmptySet "edge"`) before SU1 |
+| MU5 (`sigma_y` times 1000) | **yes** | SU2 (`R` up to `2.1` off), JY (`0` plastic points) |
+| MU6 (DB4 seed) | **yes** | SU3 (`1.7e-2` to `2.4e-2` off) |
+
+Six of six caught; MU4 by a panic rather than by the registered rows.
+
+### Not run
+
+Nothing registered was skipped; the stabilisation share `sigma` could not be formed (Off fails). Not run by design: a `32^3`
+mesh, a contact punch, other J2 materials, W except as the fallback (not needed: S converged on every mesh), `baseline_hashes`
+(no shared solver file touched). The whole rcfd-fem suite was not run (rule 7).
+
+### Decision
+
+**partial**, by the registered rule: B6 met (no library file changed, the bit records pass), the `16^3` J2 block solved for
+both elements, the order-of-convergence reading made and the reason for the A1.2 gap identified (G1: a common limit within the
+uncertainties, F-bar carrying the larger error, located at the punch edge row), the J2 tolerance registered and derived; but
+NC2 was met only after amendment 1, EC1 and NC1 missed (failed solves on `16^3`, and the Full Hex8 below F-bar on `8^3`), and
+one mutation was caught by a panic rather than by its registered rows.
+
+### Remaining questions
+
+1. **The J2 tolerance is uninformative on this punch.** Options: (a) a load without the node-set edge jump (a prescribed
+   pressure, or a punch displacement smoothed over a registered width) with the same three-mesh reading, where `U` should be a
+   few per cent; (b) a `32^3` run of this punch; (c) accept the per-element tolerances of this ADR. Recommendation: (a),
+   proposed below.
+2. **Rule L loses positive definiteness on the refined neo-Hookean punch** (`16^3`, load factor `0.966`): new, not seen in ADR
+   0636 (`4^3`, `8^3`). Options: (a) a follow-up diagnosing it (the ADR 0628 sweep on the `16^3` edge elements at the failing
+   state, S and W, finer increments); (b) record it as a limit of rule L. Recommendation: (a), proposed below.
+3. **F-bar's excess at the punch edge.** Options: (a) a diagnosis of the F-bar edge element; (b) take the rule L or Hex20
+   values as the J2 reference for later items. Recommendation: (a) inside the follow-up of question 1 (a smooth load removes
+   the jump and tells whether the excess is the edge's).
+4. **Whether these readings re-judge ADR 0666 JB1, JB2** (open question 2 of the registration): open for the maintainer, not
+   taken; the numbers say the JB misses are F-bar's error rather than rule L's.
+5. **Default.** W stays opt-in (ADR 0660 open question 2): open for the maintainer.
+
+## For the lead: roadmap entries
+
+> Proposed status: partial.
+
+> Structural solver, intermediate tier. Follow-up of F-742 (ADR 0666). PARTIAL. ADR 0678, 2026-11-17 (tests only, no library file changed): rule L (with S) against the F-bar Hex8 with the J2 material of ADR 0666 on the punch block of ADR 0636 on 4^3, 8^3 and 16^3 (the 16^3 solves 67 s and 130 s, a heavy record run once), with a registered three-mesh Richardson reading (order band 0.5 to 4, factor of safety 1.25, a bound outside the band). Punch reaction: F-bar order 0.75, limit 0.0469 +- 0.0225; rule L order 1.14, limit 0.0454 +- 0.0092; the limits agree (the corner bulge's too), so the 17 to 20 per cent gap of ADR 0666 A1.2 is discretisation error carried mostly by F-bar (64 per cent above the limit on 8^3 against 32 for rule L, 38 against 12.5 on 16^3) and located at the edge row of the node-set punch; the Hex20 on 8^3 is 9.6 per cent above the limit. The J2 tolerance derived from the reading (rule L against F-bar on the same mesh: 3.21, 2.11, 1.54 for the reaction) is met on every mesh and on DB4 but uninformative; the per-element tolerances against the limit (rule L 1.25, 0.70, 0.46) are the useful reading. Missed: the registered Richardson formula had a sign error, caught by the synthetic control and corrected by amendment; the elastic positive control could not be read (rule L with the neo-Hookean material loses positive definiteness on 16^3 at load factor 0.966); the Full Hex8 negative control failed (inverted on 16^3, below F-bar on 8^3). The plain incompatible element fails with J2 on every mesh. Six of six mutations of the test's reading and set-up caught (one by a panic). No default bit changed (the bit records pass). Not covered: a 32^3 mesh, a smooth or contact punch, other J2 materials, the cause inside F-bar of its edge excess.
+
+> F-742 (note, ADR 0678, 2026-11-17): the reaction gap of rule L against F-bar with J2 (JB1, JB2) is F-bar's larger discretisation error at the punch edge; both elements reach a common limit within the uncertainty of a three-mesh reading (F-747).
+
+> Follow-up proposed: A J2 punch reference without the edge jump. Deps F-747. Acceptance: Every limit not stated here is registered in the ADR before the run. The block of ADR 0636 with the J2 material of ADR 0666 under a load without the node-set edge jump (a prescribed pressure or a punch displacement smoothed over a registered width) on 4^3, 8^3 and 16^3, rule L and F-bar (and the Hex20 on 8^3): the three-mesh reading of ADR 0678 with an uncertainty below a registered few per cent, a J2 tolerance derived from it that separates the Full Hex8 from the reference, and whether F-bar's edge excess of ADR 0678 disappears; the default bits unchanged.
+
+> Follow-up proposed: Rule L loses positive definiteness on the refined neo-Hookean punch block. Deps F-747. Acceptance: Every limit not stated here is registered in the ADR before the run. The failing solve of ADR 0678 (rule L, the neo-Hookean material of ADR 0636, the punch block on 16^3, the default options) reproduced first; the lowest eigenvalue of the ADR 0628 sweep and of the free tangent at the last converged state located by element; the same solve with S and W of ADR 0658 and ADR 0660 and with finer increments; the cause identified or bounded against a registered criterion; the default bits unchanged.

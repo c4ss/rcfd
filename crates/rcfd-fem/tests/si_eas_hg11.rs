@@ -795,9 +795,9 @@ fn report_series(s: &Series, reference: (&Reading, &Reading), fbar16: &Run) {
 }
 
 #[test]
-#[ignore = "ADR 0678: the heavy record (six 16^3 solves, the Hex20 8^3), run once; the fast test j2_refined_reference_setup covers the same path"]
+#[ignore = "ADR 0678: the heavy record (six 16^3 solves, the Hex20 8^3), run once (409 s), known miss: EC1 (the neo-Hookean rule L 16^3 solve fails, singular tangent at load factor 0.966), NC1 (the Full Hex8 16^3 solve fails, inverted element at 0.988, and R_Full 0.07612 < R_Fbar 0.07717 on 8^3); every other row met; the fast test j2_refined_reference_setup_corrected covers the same path"]
 /// RC0, JY, RD, TJ, CJ, DB, EC1, NC1 and the reports of c3 and c6.
-fn j2_refined_reference_heavy_record() {
+fn j2_refined_reference_heavy_record_known_miss() {
     let mut ch = Checks::new();
     let t0 = Instant::now();
     let fbar = series("J2 Fbar", |m, t| {
