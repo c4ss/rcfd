@@ -19,13 +19,21 @@ export interface SettingsContext {
   /** Whether a disclosure (more keys, a nested object, a collection, an entry) is open. */
   isOpen(id: string): boolean;
   toggle(id: string): void;
-  /** Sends settings.set; resolves true when the engine took the value. */
-  change(path: string, value: JsonValue): Promise<boolean>;
+  /**
+   * Sends settings.set with the value last read at the path as its compare-and-set base (ADR 0736 P2; `base` instead
+   * when given: the value now, after the user chose to set theirs over it); resolves true when the engine took the value. A value another writer set since is
+   * refused by the engine (1007): the row then shows a conflict (`conflicts`).
+   */
+  change(path: string, value: JsonValue, base?: JsonValue): Promise<boolean>;
+  /** ADR 0736 P2: changes the engine refused because another writer changed the value since it was read, by path. */
+  readonly conflicts: ReadonlyMap<string, SettingConflict>;
+  /** Keeps the other writer's value: forgets the conflict and sends nothing. */
+  keepTheirs(path: string): void;
   clearError(path: string): void;
   /** Makes a named entry of a collection (settings.set of its first key at its default). */
   addEntry(collectionPath: string, name: string): Promise<boolean>;
-  /** settings.remove of a named entry. */
-  removeEntry(path: string): Promise<boolean>;
+  /** settings.remove of a named entry, with the entry last read as its base (`base` instead when given). */
+  removeEntry(path: string, base?: JsonValue): Promise<boolean>;
   /** A name to put in a collection's new-entry field (from a problem of the check). */
   readonly prefill: ReadonlyMap<string, string>;
   /** Shows a key wherever it sits: its section, every disclosure on its way, then focus on its control. */
@@ -36,6 +44,14 @@ export interface SettingsContext {
    * not overwritten silently (F-829, G18).
    */
   current?(path: string): Promise<{ readonly ok: true; readonly value: JsonValue } | { readonly ok: false }>;
+}
+
+/** A change the engine refused with 1007 (ADR 0736 P2): the value now (the other writer's) and the value sent. */
+export interface SettingConflict {
+  readonly now: JsonValue;
+  readonly mine: JsonValue;
+  /** settings.remove of a named entry (`mine` is then null). */
+  readonly remove: boolean;
 }
 
 export const Settings = createContext<SettingsContext | null>(null);

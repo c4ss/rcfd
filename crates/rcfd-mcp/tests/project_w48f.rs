@@ -93,6 +93,8 @@ fn f2_tool_names_pass_the_allow_list_rules() {
         .iter()
         .filter(|t| t["_meta"]["rcfd/access"] == "read" && !plain.iter().any(|p| t["name"] == p.as_str()))
         .map(|t| t["name"].as_str().unwrap())
+        // ADR 0736 (restated): list_trash is a read tool not on the first allow-list (not asked; as ADR 0188 Q6 (a))
+        .filter(|n| *n != "list_trash")
         .collect();
     // ADR 0733 and ADR 0734 (the maintainer, 2026-11-17): runner_config and hash_project_file are on the first
     // allow-list too (no exception left)
@@ -111,8 +113,8 @@ fn f3_access_classes_read_only_and_schema() {
     let dir = project("f3p");
     let s = server(&dir, Policy::default());
     let list = s.tool_list();
-    // ADR 0733: and the two budgets tools; ADR 0734: and hash_project_file
-    assert_eq!(names(&list).len(), 17 + 26);
+    // ADR 0733: and the two budgets tools; ADR 0734: and hash_project_file; ADR 0736: and the six trash tools
+    assert_eq!(names(&list).len(), 17 + 32);
     for (name, access) in PROJECT_TOOLS {
         let t = list["tools"]
             .as_array()

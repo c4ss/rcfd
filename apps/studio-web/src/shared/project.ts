@@ -22,13 +22,56 @@ export const PROJECT_PORT_CHANNEL = 'studio.project-port';
  * (F-810): a run's residual and monitor histories and its output/monitors.json, for the run workspace (src/shared/run.ts).
  * `runner_config` (F-837, ADR 0733): the runner's budgets, which the runner itself writes (`set_runner_config`, on the
  * run-control server: BUDGETS_WRITE_TOOL). `hash_project_file` (F-828, ADR 0734 P4): the hash of the mesh a run names
- * now, against its run.json mesh_hash. */
-export const PROJECT_TOOLS = ['project_info', 'list_runs', 'list_meshes', 'read_feed', 'run_status', 'read_residuals', 'read_project_file', 'compare_runs', 'runner_config', 'hash_project_file'] as const;
+ * now, against its run.json mesh_hash. `list_trash` (ADR 0736): the project trash. */
+export const PROJECT_TOOLS = ['project_info', 'list_runs', 'list_meshes', 'read_feed', 'run_status', 'read_residuals', 'read_project_file', 'compare_runs', 'runner_config', 'hash_project_file', 'list_trash'] as const;
 export type ProjectTool = (typeof PROJECT_TOOLS)[number];
 
 /** F-837 (ADR 0733): the one write tool of the runner's budgets, called on the run-control server only. */
 export const BUDGETS_WRITE_TOOL = 'set_runner_config';
 export type BudgetsWriteTool = typeof BUDGETS_WRITE_TOOL;
+
+/**
+ * ADR 0736 (F-829): the project trash. The engine moves an ended run, a run's results or a case file to `.rcfd/trash/`
+ * and back (`trash_run`, `trash_results`, `trash_case`, `restore_trash`: class write_files) and removes trashed items
+ * for good (`empty_trash`: class delete, which no allow-list holds), on the run-control server only. The Studio itself
+ * never moves or removes a file of the project (G12); `list_trash` (read) is read on the read-only server.
+ */
+export const TRASH_WRITE_TOOLS = ['trash_run', 'trash_results', 'trash_case', 'restore_trash', 'empty_trash'] as const;
+export type TrashWriteTool = (typeof TRASH_WRITE_TOOLS)[number];
+
+/** What the renderer asks of the trash (the main process names the tool): `TRASH_OPS[what]`. */
+export const TRASH_OPS = { run: 'trash_run', results: 'trash_results', case: 'trash_case', restore: 'restore_trash', empty: 'empty_trash' } as const satisfies Record<string, TrashWriteTool>;
+export type TrashWhat = keyof typeof TRASH_OPS;
+
+/** The results of a run the trash takes apart from the run (`trash_results` `parts`). */
+export const RESULT_PARTS = ['fields', 'output'] as const;
+
+/** An item of the project trash (`list_trash`). */
+export interface TrashItem {
+  readonly token: string;
+  /** `run`, `results` or `case`. */
+  readonly kind: string;
+  /** Where it came from and goes back to, project-relative (`runs/r-...`, `cases/a.toml`). */
+  readonly path: string;
+  /** For `results`: the parts moved (`fields`, `output`). */
+  readonly parts: readonly string[];
+  /** When it was moved (RFC 3339). */
+  readonly trashed: string;
+  /** The tool that moved it, and why when the caller said. */
+  readonly who: string;
+  readonly reason: string | null;
+  readonly bytes: number;
+}
+
+/** The trash as the home shows it: its items (newest first), their size, and why it could not be read. */
+export interface TrashListing extends Listing<TrashItem> {
+  readonly bytes: number;
+}
+
+/** What the trash operation answers: the engine's result, or its refusal (code, message, data) in its words. */
+export type TrashOutcome =
+  | { readonly ok: true; readonly result: Readonly<Record<string, unknown>> }
+  | { readonly ok: false; readonly code: number | string; readonly message: string; readonly data: unknown };
 
 /** How often the main process asks the engine's change feed what changed (ms). */
 export const FEED_POLL_MS = 400;
@@ -222,6 +265,8 @@ export interface ProjectView {
   readonly notes: Listing<NoteEntry>;
   /** F-837: the top-level entries of designs/ (absent from a view made before F-837). */
   readonly designs?: Listing<DesignEntry>;
+  /** ADR 0736: the project trash (`list_trash`; absent from a view made before it). */
+  readonly trash?: TrashListing;
   /** Run folders the engine could not read (`list_runs`, `skipped`). */
   readonly skippedRuns: readonly { readonly path: string; readonly message: string }[];
   /**
@@ -307,14 +352,19 @@ export type ProjectRequest =
    * chosen in the main process's folder dialog (a new or an existing one); `here`: in the folder of the failed open the
    * engine refused as no project. The reply's result is a PickResult (null when the dialog was cancelled).
    */
-  | { readonly op: 'create'; readonly id: number; readonly where: CreateWhere };
+  | { readonly op: 'create'; readonly id: number; readonly where: CreateWhere }
+  /**
+   * ADR 0736: a trash operation of the engine (TRASH_OPS) with its arguments, checked in main; the reply's result is a
+   * TrashOutcome. `case` needs no base: the main process reads the file's hash through the engine just before.
+   */
+  | { readonly op: 'trash'; readonly id: number; readonly what: TrashWhat; readonly params: Readonly<Record<string, unknown>> };
 
 /** F-835: where `create` makes the project. */
 export const CREATE_WHERE = ['pick', 'here'] as const;
 export type CreateWhere = (typeof CREATE_WHERE)[number];
 
 export type ProjectOp = ProjectRequest['op'];
-export const PROJECT_OPS = ['state', 'pick', 'open', 'forget', 'close', 'refresh', 'dismiss', 'action', 'cancel', 'create'] as const satisfies readonly ProjectOp[];
+export const PROJECT_OPS = ['state', 'pick', 'open', 'forget', 'close', 'refresh', 'dismiss', 'action', 'cancel', 'create', 'trash'] as const satisfies readonly ProjectOp[];
 
 export interface ProjectError {
   /** `bad_request` (the message has the wrong shape), `not_recent` (open of a folder the recent list does not hold). */
@@ -435,4 +485,6 @@ export type RunActionResult =
  */
 export interface RunsBridge {
   dispatch(action: string, params?: Readonly<Record<string, unknown>>): Promise<RunActionResult>;
+  /** ADR 0736: moves to the project trash, restores from it, or empties it, through the engine. */
+  trash(what: TrashWhat, params: Readonly<Record<string, unknown>>): Promise<TrashOutcome>;
 }

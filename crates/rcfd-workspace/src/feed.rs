@@ -31,6 +31,8 @@ pub const EXTERNAL_WAIT: Duration = Duration::from_millis(500);
 pub const CLAIM_KEEP: Duration = Duration::from_secs(60);
 /// Entries a feed keeps.
 pub const KEEP: usize = 1000;
+/// The claim of a journal line that removed a file from its path (a case moved to the trash, ADR 0736).
+const ABSENT: &str = "absent";
 
 /// Where an entry comes from.
 pub const JOURNAL: &str = "journal";
@@ -197,6 +199,31 @@ fn journal_text(kind: &str, line: &Value, actor: Option<&Actor>) -> String {
         "run_submitted" => format!("run {run} of {} queued", s(line, "case").unwrap_or_default()),
         "run_control" => format!("{} run {run}", s(line, "requested").unwrap_or_default()),
         "stale_lock_broken" => format!("removed a stale edit lock of {path} ({} s old)", line["age_s"]),
+        // ADR 0736: the project trash
+        "trashed" | "restored" => {
+            let what = match (s(line, "item").as_deref(), line["parts"].as_array()) {
+                (Some("results"), Some(parts)) => {
+                    let names: Vec<String> = parts
+                        .iter()
+                        .filter_map(Value::as_str)
+                        .map(|p| format!("{path}/{p}"))
+                        .collect();
+                    names.join(" and ")
+                }
+                _ => path.clone(),
+            };
+            let token = s(line, "token").unwrap_or_default();
+            if kind == "trashed" {
+                format!("moved {what} to the trash ({token})")
+            } else {
+                format!("restored {what} from the trash ({token})")
+            }
+        }
+        "trash_emptied" => format!(
+            "removed {} trash item(s) for good ({} bytes)",
+            line["count"].as_u64().unwrap_or(0),
+            line["bytes"].as_u64().unwrap_or(0)
+        ),
         _ if !path.is_empty() => path.clone(),
         _ => run.clone(),
     };
@@ -291,6 +318,9 @@ impl Feed {
             let h = match kind {
                 "edit" => s(line, "new_hash"),
                 "case_created" => s(line, "hash"),
+                // ADR 0736: a trashed case is gone from its path, a restored one is back with its hash
+                "trashed" if s(line, "item").as_deref() == Some("case") => Some(ABSENT.to_string()),
+                "restored" if s(line, "item").as_deref() == Some("case") => s(line, "hash"),
                 _ => None,
             };
             out.push((p, h));
@@ -389,6 +419,14 @@ impl Feed {
             for (p, h) in Self::claims_of(&line) {
                 self.claim(&p, h, now);
             }
+            // ADR 0736: a run back from the trash brings its old events, which are not new
+            if line["kind"] == "restored" && line["item"] == "run" {
+                if let Some(id) = s(&line, "run") {
+                    let len =
+                        std::fs::metadata(self.root.join("runs").join(&id).join("events.jsonl")).map_or(0, |m| m.len());
+                    self.events.insert(id, len);
+                }
+            }
             out.push(journal_entry(&line));
         }
         // the runs' events
@@ -409,8 +447,13 @@ impl Feed {
         for (p, first) in pending {
             let file = self.root.join(&p);
             let meta = std::fs::metadata(&file).ok().filter(|m| m.is_file());
-            if let (Some(_), Some(cs)) = (&meta, self.claims.get_mut(&p)) {
-                let hash = std::fs::read(&file).ok().map(|b| hash_bytes(&b));
+            if let Some(cs) = self.claims.get_mut(&p) {
+                // a removed file is explained by a claim of its absence (ADR 0736)
+                let hash = match &meta {
+                    Some(_) => std::fs::read(&file).ok().map(|b| hash_bytes(&b)),
+                    None if !file.exists() => Some(ABSENT.to_string()),
+                    None => None,
+                };
                 if let Some(i) = cs.iter().position(|c| Some(&c.hash) == hash.as_ref()) {
                     cs.remove(i);
                     self.pending.remove(&p);

@@ -86,6 +86,8 @@ export const ICON_NAMES = [
   // F-828 (ADR 0734)
   'rerun',
   'how-ran',
+  // ADR 0736
+  'trash',
 ] as const;
 export type IconName = (typeof ICON_NAMES)[number];
 
@@ -130,4 +132,5 @@ export const ICON_PATHS: Record<IconName, { readonly path: string; readonly fill
   // prompt, the solver's command line)
   rerun: { path: 'M2 2V12M5 2L10 7L5 12Z' },
   'how-ran': { path: 'M2 3L6 7L2 11M7 11H12' },
+  trash: { path: 'M2 4H12M5 4V2H9V4M3 4V12H11V4M6 6V10M8 6V10' },
 };

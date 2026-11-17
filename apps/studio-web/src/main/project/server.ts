@@ -8,7 +8,7 @@
 // No Electron import: the unit tests drive it with a stand-in executable.
 import { spawn, type ChildProcess } from 'node:child_process';
 import { RpcConnection, RpcError } from '../service/rpc.js';
-import type { BudgetsWriteTool, ProjectTool } from '../../shared/project.js';
+import type { BudgetsWriteTool, ProjectTool, TrashWriteTool } from '../../shared/project.js';
 import type { RunControlTool } from '../../shared/actions/runs.js';
 
 /** Time limits (ms). */
@@ -48,7 +48,7 @@ export interface ServerInfo {
 export interface ProjectServerLike {
   readonly info: ServerInfo;
   readonly exited: boolean;
-  call(tool: ProjectTool | RunControlTool | BudgetsWriteTool, args?: Record<string, unknown>): Promise<unknown>;
+  call(tool: ProjectTool | RunControlTool | BudgetsWriteTool | TrashWriteTool, args?: Record<string, unknown>): Promise<unknown>;
   /** Called once when the server process ends (with its exit code and the end of its standard error). */
   onExit(listener: (why: string) => void): void;
   close(): Promise<void>;
@@ -165,7 +165,7 @@ export class ProjectServer implements ProjectServerLike {
     else this.exitListeners.push(listener);
   }
 
-  async call(tool: ProjectTool | RunControlTool | BudgetsWriteTool, args: Record<string, unknown> = {}): Promise<unknown> {
+  async call(tool: ProjectTool | RunControlTool | BudgetsWriteTool | TrashWriteTool, args: Record<string, unknown> = {}): Promise<unknown> {
     return this.callTool(tool, args);
   }
 

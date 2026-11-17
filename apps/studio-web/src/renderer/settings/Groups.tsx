@@ -5,7 +5,7 @@ import { Button as AriaButton } from 'react-aria-components';
 import { Button, Icon, StatePictogram, TextField } from '../ui/index.js';
 import { useSettings } from './context.js';
 import { keyCount, ownKeys, setCount } from './disclosure.js';
-import { KeyRow } from './KeyRow.js';
+import { ConflictNote, KeyRow } from './KeyRow.js';
 import { concrete, entryNames, valueAt, type Collection, type Group, type SettingNode } from './schema.js';
 
 const plural = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`;
@@ -176,6 +176,7 @@ function RemoveEntry({ path, keys }: { path: string; keys: number }) {
             <span>Remove failed. {error}</span>
           </span>
         )}
+        <ConflictNote path={path} />
       </div>
     );
   }

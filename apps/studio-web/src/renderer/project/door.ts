@@ -6,7 +6,7 @@
 // F-807: run control goes over the same project port (window.studioRuns, op `action`): every control calls
 // `runAction(id, params)`, an action of src/shared/actions/runs.ts, and asks `runActionAvailability` and
 // `runActionConfirmation` for its state and words; the main process checks the action again and makes the engine call.
-import type { ProjectState, ProjectView, RunActionResult } from '../../shared/project.js';
+import type { ProjectState, ProjectView, RunActionResult, TrashOutcome, TrashWhat } from '../../shared/project.js';
 import {
   contextOf,
   getRunAction,
@@ -89,4 +89,15 @@ export function runActionAvailability<Id extends RunActionId>(id: Id, params: Pa
 export function runActionConfirmation<Id extends RunActionId>(id: Id, params: RunActionParams<Id>, view: ProjectView): Confirmation | null {
   const p = params as Record<string, unknown>;
   return runConfirmation(getRunAction(id)!, contextOf(view, p), p);
+}
+
+/**
+ * ADR 0736: a trash operation of the engine (move a run, its results or a case file to the project trash, restore an
+ * item, empty the trash); resolves with the engine's answer or its refusal in its words (never rejects). The main
+ * process makes the engine call; the Studio itself never moves or removes a file (G12).
+ */
+export async function trashRequest(what: TrashWhat, params: Readonly<Record<string, unknown>>): Promise<TrashOutcome> {
+  const b = window.studioRuns;
+  if (!b?.trash) return { ok: false, code: 'disconnected', message: 'This window has no way to the engine’s trash. Reload the window (Ctrl+R).', data: null };
+  return b.trash(what, params);
 }

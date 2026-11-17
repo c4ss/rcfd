@@ -11,6 +11,8 @@ import { cssCustomProperties } from '../../src/renderer/design/tokens.js';
 import { isUuid, type ClaudeState } from '../../src/shared/claude.js';
 import {
   AllowList,
+  DELETE_TOOLS,
+  isDeleteTool,
   checkArgs,
   checkArgsIn,
   ForbiddenArgument,
@@ -86,6 +88,37 @@ test.describe('the conservative allow-list (G11)', () => {
     }
     expect(ruleProblem({ kind: 'tool', name: 'Bash' })).toContain('needs a pattern');
     expect(() => new AllowList().add({ kind: 'bash', pattern: '*' })).toThrow(/literal/);
+  });
+
+  test('ADR 0736: no allow-list holds a tool of the class delete, nor a whole server that would (the same list as the engine side)', async () => {
+    // the engine's own list (crates/rcfd-mcp/tests/claude_allow/mod.rs) and the live tools of the class delete
+    const rs = readFileSync(path.join(appRoot, '..', '..', 'crates', 'rcfd-mcp', 'tests', 'claude_allow', 'mod.rs'), 'utf8');
+    const engine = /pub const DELETE_TOOLS: \[&str; \d+\] = \[([^\]]*)\]/.exec(rs)![1]!.match(/"([a-z_]+)"/g)!.map((q) => q.slice(1, -1));
+    expect([...DELETE_TOOLS]).toEqual(engine);
+    const inv = JSON.parse(readFileSync(path.join(appRoot, 'capabilities', 'inventory.json'), 'utf8')) as { capabilities: { id: string; access?: { project?: string } }[] };
+    expect(inv.capabilities.filter((c) => c.access?.project === 'delete').map((c) => c.id.replace(/^mcp:/, ''))).toEqual([...DELETE_TOOLS]);
+    // the first list holds none
+    expect(AllowList.initial().values.filter((v) => isDeleteTool(v))).toEqual([]);
+    expect(PROJECT_READ_TOOLS.filter((t) => (DELETE_TOOLS as readonly string[]).includes(t))).toEqual([]);
+    for (const t of DELETE_TOOLS) {
+      for (const name of [`mcp__rcfd_project__${t}`, `mcp__plugin_rcfd_project__${t}`, `mcp__other__${t}`]) {
+        expect(ruleProblem({ kind: 'tool', name }), name).toContain('delete');
+        expect(parseRule(name), name).toBeNull();
+        expect(() => new AllowList().add({ kind: 'tool', name }), name).toThrow();
+        // "Allow this from now on" offers nothing and writes nothing for it
+        expect(suggest(name, {}, '/p'), name).toBeNull();
+        expect('refused' in withRule(null, name), name).toBe(true);
+      }
+    }
+    // a whole server is every tool of it, the delete class included
+    for (const name of ['mcp__rcfd_project', 'mcp__plugin_rcfd_project']) expect(ruleProblem({ kind: 'tool', name }), name).toContain('delete');
+    // a file holding one is refused as a whole
+    const f = parseAllowFile(JSON.stringify({ version: 1, rules: ['mcp__rcfd_project__list_runs', 'mcp__rcfd_project__empty_trash'] }));
+    expect(f.kind).not.toBe('list');
+    // control: every other project tool of the inventory is still a valid rule
+    const others = inv.capabilities.filter((c) => c.id.startsWith('mcp:') && c.access?.project !== undefined && c.access.project !== 'delete');
+    expect(others.length).toBeGreaterThan(40);
+    for (const c of others) expect(ruleProblem({ kind: 'tool', name: `mcp__rcfd_project__${c.id.slice(4)}` }), c.id).toBeNull();
   });
 
   test('never approve-everything: the argument check refuses every bypass, other modes and malformed rules', () => {

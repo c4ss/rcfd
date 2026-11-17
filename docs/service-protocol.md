@@ -43,6 +43,7 @@ its own thread, and connections share sessions.
 | 1004 | limit exceeded or path outside the sandbox root |
 | 1005 | a hosted co-simulation participant returned an error; `error.message` is the participant's message |
 | 1006 | no hosted co-simulation participant of that name |
+| 1007 | settings conflict: the `base_value` or `base_hash` of `settings.set` or `settings.remove` is not what the session holds now; nothing changed; `error.data` is `{path, current_value, current_hash}` ([ADR 0736](adr/0736-f829-proposal-a-project-trash-with-restore-and-compare-and-set-for-settings-set.md)) |
 | -32000 | internal error |
 
 ## Sessions and run states
@@ -64,7 +65,7 @@ All session methods take `session`.
 
 - `service.info`, `settings.schema` (JSON Schema of the case and of the monitor format)
 - `session.create | list | close`
-- `settings.get {path?}`, `settings.set {path, value}`, `settings.remove {path}` (delete a named entry such as `boundaries.lid`; journaled), `settings.validate`
+- `settings.get {path?}`, `settings.set {path, value, base_value?, base_hash?}`, `settings.remove {path, base_value?, base_hash?}` (delete a named entry such as `boundaries.lid`; journaled), `settings.validate`. With `base_value` (the value last read at `path`, null for absent) or `base_hash` (the `case_hash` of `journal.get`), the change is made only when the session still holds it, else 1007 (compare-and-set, ADR 0736); without either, the call answers as before
 - `mesh.check`: quality report and patch list
 - `run.initialize | start {max_steps?} | pause | resume | stop | step {count?} | status | wait {timeout_ms?}`
 - `monitors.get {names?, since?}` (JSON format `rcfd-monitors` v1; `names` and `since` are applied before the document is built and on the line protocol the reply is written without an intermediate JSON tree, so the last 100 samples of four series at 1e5 samples cost 0.3 ms instead of 21 ms, ADR 0353; the bytes of the reply did not change), `reports.get`
