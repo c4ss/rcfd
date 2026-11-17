@@ -14305,7 +14305,11 @@ Generated from `docs/studio-guardrails.md`, `PRODUCT.md` and `DESIGN.md` ([ADR 0
     everywhere (4e6 first open of a launch 1.7-2.5 s, verifyMesh 1.6 s), P8 met, P5 on 4e6 met 3 of 4 (missed 9.91/s,
     167 ms frame). No polyhedral FAN-01 mesh exists (polydual not reachable from a case); F1 doubled does not build.
     Proposed: gather surface-cell values in the worker for scrubbing, cache the mesh check per file identity, no pick
-    while a button is held.
+    while a button is held. Fixes 2026-11-17 (Addendum 16): the reader's worker sends one value per surface triangle
+    (1.2 MiB instead of 15.3 MiB, bit-identical), a launch-long memo of verified meshes plus a WebAssembly checksum
+    loop, no pick while a button is held; 4e6 scrubbing 11-15/s to 20/s (longest frame 101 to 66 ms), first open of a
+    launch 1.5-1.8 s to 0.86-0.94 s, all 63 lines met in 3 runs under load. Left: a polyhedral FAN-01 mesh (needs Rust),
+    the maintainer's view-and-report.
 - [ ] **F-820** Electron Studio: installers, signing and updates
   - depends on: F-801
   - acceptance: Packaged installers for the platforms the maintainer names, signed if the maintainer provides

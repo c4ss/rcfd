@@ -1909,7 +1909,7 @@ move per frame.
   `run-control.spec.ts` failed alone once ("Empty project"; the window inactive) and passed on the second run alone (10
   and 8 passed). No product source changed in this item.
 
-## Addendum F-819b: the three fixes of F-819 on the 4e6 box: surface values, the mesh check remembered, no pick during a drag (2026-11-17)
+## Addendum 16: F-819b, the three fixes of F-819 on the 4e6 box: surface values, the mesh check remembered, no pick during a drag (2026-11-17)
 
 This follows Addendum 15 (F-819), which measured the misses and proposed the fixes. The maintainer asked for the three
 proposals to be applied: Q-819-2 (a), Q-819-1's fixes (a) with (c), and Q-819-3 (a). The G9 limits and the script's
