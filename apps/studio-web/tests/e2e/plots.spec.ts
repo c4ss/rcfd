@@ -133,6 +133,12 @@ const residualNames = (all: Record<string, Series>) => Object.keys(all).filter((
 
 test('a run read once, then by increments while it runs; every range holds every value drawn', async () => {
   const { session } = await call<{ session: string }>('session.create', { path: 'cases/cavity-re400.toml' });
+  // The 32 x 32 cavity converges in about a second on an idle machine, which is too soon for five increments; this run
+  // goes on until the test stops it: the smallest tolerances the schema allows, which this mesh does not reach in the
+  // test's time, and no iteration cap within it.
+  await call('settings.set', { session, path: 'solver.max_iterations', value: 1_000_000 });
+  await call('settings.set', { session, path: 'solver.tolerance_u', value: 1e-14 });
+  await call('settings.set', { session, path: 'solver.tolerance_p', value: 1e-14 });
   await call('run.initialize', { session });
   await call('run.step', { session, count: 60 });
   await open(session);
