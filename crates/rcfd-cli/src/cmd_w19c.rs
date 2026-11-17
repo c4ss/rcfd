@@ -356,6 +356,15 @@ fn check_facts_or_refine(path: &str, args: &[String]) -> u8 {
                 v
             }
             Err(rcfd_api::refine::Refusal::Factor(m)) => return usage_error(&m),
+            Err(rcfd_api::refine::Refusal::MeshFile(m)) => {
+                // exit 3 as the other refusals; the way out is the catalogue's line of the service's 1009 (ADR 0737,
+                // change of 2026-11-17), since exit 3's own line is about invalid keys
+                eprintln!("{path}: Refine x2: {m}");
+                if let Some(e) = rcfd_api::errors::lookup_rpc(rcfd_api::service::code::MESH_FILE) {
+                    eprintln!("{path}: {}", e.recovery);
+                }
+                return INVALID;
+            }
             Err(rcfd_api::refine::Refusal::Refused(m)) => {
                 eprintln!("{path}: Refine x2: {m}");
                 return INVALID;

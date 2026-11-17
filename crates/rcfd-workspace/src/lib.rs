@@ -72,6 +72,8 @@ pub const NOT_FOUND: i64 = 1202;
 pub(crate) const BAD_STATE: i64 = 1002;
 pub(crate) const VALIDATION: i64 = 1003;
 pub(crate) const REFUSED: i64 = 1004;
+/// The service's 1009 `MESH_FILE`: Refine x2 of a case whose mesh is a file (`refine_case_mesh`, ADR 0737).
+pub(crate) const MESH_FILE: i64 = rcfd_api::service::code::MESH_FILE;
 pub(crate) const INTERNAL: i64 = -32000;
 pub(crate) const PARAMS: i64 = -32602;
 

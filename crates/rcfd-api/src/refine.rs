@@ -57,7 +57,10 @@ pub struct Refinement {
 pub enum Refusal {
     /// A factor other than [`FACTORS`].
     Factor(String),
-    /// The mesh is a file, a generator counted otherwise, or a count would pass its maximum: the reason.
+    /// The mesh is a file: the reason (error 1009 `MESH_FILE` of the service and the project tools; ADR 0737, change of
+    /// 2026-11-17).
+    MeshFile(String),
+    /// A generator counted otherwise, a count would pass its maximum, or the mesh is over the cell limit: the reason.
     Refused(String),
     /// The case does not build.
     Invalid(Vec<Diagnostic>),
@@ -96,7 +99,7 @@ pub fn count_refinement(case: &Case, factor: u64, max_cells: Option<u64>) -> Res
             .unwrap_or_default()
     };
     if s("mesh.source") == "file" {
-        return Err(Refusal::Refused(format!(
+        return Err(Refusal::MeshFile(format!(
             "the resolution is set by the mesh file {}; a mesh file is not refined (its cells would have to be split, \
              which the engine does not do): refine it in the program that made it",
             s("mesh.file")

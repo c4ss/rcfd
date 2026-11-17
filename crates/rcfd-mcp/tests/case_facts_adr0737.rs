@@ -142,7 +142,7 @@ fn refine_case_mesh_writes_through_edit_case() {
         json!({"case": "cases/piso.toml", "factor": 2, "base_hash": h}),
     );
     assert_eq!(code(&r), 1200);
-    // a mesh file: 1004 with the reason, nothing written
+    // a mesh file: 1009 MESH_FILE with the reason, nothing written (it was 1004 before ADR 0737's change of 2026-11-17)
     let before = files(&dir);
     let hf = hash_of(&s, "cases/file.toml");
     let r = rpc_call(
@@ -150,7 +150,7 @@ fn refine_case_mesh_writes_through_edit_case() {
         "refine_case_mesh",
         json!({"case": "cases/file.toml", "factor": 2, "base_hash": hf}),
     );
-    assert_eq!(code(&r), 1004, "{r}");
+    assert_eq!(code(&r), 1009, "{r}");
     assert!(r.to_string().contains("mesh file"), "{r}");
     let r = rpc_call(
         &s,

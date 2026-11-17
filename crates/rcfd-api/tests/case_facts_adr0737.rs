@@ -310,7 +310,8 @@ fn c3_refinement_of_each_generator_is_the_refined_mesh() {
 }
 
 /// C3: a mesh file, axial_fan_sector, a count over its maximum and a factor other than 2 are refused with the reason;
-/// nothing is set. `apply: true` sets the edits as unsaved changes of the session.
+/// nothing is set. `apply: true` sets the edits as unsaved changes of the session. Restated for ADR 0737's change of
+/// 2026-11-17: the mesh file is 1009 `MESH_FILE` (it was 1004), the other two stay 1004.
 #[test]
 fn c3_refusals_and_apply() {
     let svc = with_ui(ServiceConfig::default());
@@ -318,18 +319,24 @@ fn c3_refusals_and_apply() {
         (
             PISO.replace("nx = 16", "nx = 16\nsource = \"file\"\nfile = \"m.msh\""),
             "mesh file",
+            1009,
         ),
         (
             PISO.replace("generator = \"cavity_2d\"", "generator = \"axial_fan_sector\""),
             "mesh.fan.n_*",
+            1004,
         ),
-        (PISO.replace("nx = 16", "nx = 60000"), "more than its maximum 100000"),
+        (
+            PISO.replace("nx = 16", "nx = 60000"),
+            "more than its maximum 100000",
+            1004,
+        ),
     ];
-    for (text, why) in cases {
+    for (text, why, want) in cases {
         let s = session(&svc, &text);
         let before = ok(&svc, "journal.get", json!({"session": s}));
         let e = error(&svc, "mesh.refine", json!({"session": s, "factor": 2, "apply": true}));
-        assert_eq!(e["code"], 1004, "{e}");
+        assert_eq!(e["code"], want, "{e}");
         assert!(e["message"].as_str().unwrap().contains(why), "{why}: {e}");
         assert_eq!(
             ok(&svc, "journal.get", json!({"session": s}))["entries"],

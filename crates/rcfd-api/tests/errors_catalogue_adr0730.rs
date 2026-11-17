@@ -67,8 +67,9 @@ fn every_service_code_is_in_the_catalogue() {
         .next()
         .unwrap();
     let codes = numbers_after(module, ": i64 = ");
-    // 11, ADR 0736 P2's CONFLICT (1007) and, restated for ADR 0737, FILE_CONFLICT (1008, case.save)
-    assert_eq!(codes.len(), 13, "the constants of service::code");
+    // 11, ADR 0736 P2's CONFLICT (1007) and, restated for ADR 0737, FILE_CONFLICT (1008, case.save) and, restated
+    // again for ADR 0737's change of 2026-11-17, MESH_FILE (1009, Refine x2 of a mesh-file case)
+    assert_eq!(codes.len(), 14, "the constants of service::code");
     for c in codes {
         let e = lookup(Surface::Service, c).unwrap_or_else(|| panic!("service code {c} is not in the catalogue"));
         assert!(!e.recovery.is_empty());

@@ -4,7 +4,7 @@
 //! (P2) is in [`crate::runs`].
 
 use crate::journal::reason_arg;
-use crate::{err, str_arg, RpcError, Workspace, NOT_FOUND, PARAMS, REFUSED, VALIDATION};
+use crate::{err, str_arg, RpcError, Workspace, MESH_FILE, NOT_FOUND, PARAMS, REFUSED, VALIDATION};
 use rcfd_api::case::Case;
 use rcfd_api::facts::{self, CaseFacts, FactsError, InText, RunTime};
 use rcfd_api::refine::{self, Refusal};
@@ -91,6 +91,7 @@ impl Workspace {
         let r = match refine::count_refinement(&case, factor, None) {
             Ok(r) => r,
             Err(Refusal::Factor(m)) => return Err(err(PARAMS, m)),
+            Err(Refusal::MeshFile(m)) => return Err(err(MESH_FILE, format!("{rel}: {m}"))),
             Err(Refusal::Refused(m)) => return Err(err(REFUSED, format!("{rel}: {m}"))),
             Err(Refusal::Invalid(d)) => {
                 return Err(crate::create::invalid(&format!("{rel}: the case does not build"), d))

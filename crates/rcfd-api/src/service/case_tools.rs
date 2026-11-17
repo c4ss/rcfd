@@ -83,6 +83,7 @@ impl Service {
         let r = match refine::count_refinement(&case, factor, Some(self.cfg.max_cells as u64)) {
             Ok(r) => r,
             Err(Refusal::Factor(m)) => return Err(RpcError::params(m)),
+            Err(Refusal::MeshFile(m)) => return Err(RpcError::new(code::MESH_FILE, m)),
             Err(Refusal::Refused(m)) => return Err(RpcError::new(code::LIMIT, m)),
             Err(Refusal::Invalid(d)) => return Err(RpcError::validation(d)),
         };

@@ -1462,7 +1462,7 @@ Seven palette commands (G20): `runs.log`, `runs.report`, `runs.budgets` (group P
   appears.
 - **Refine x2.** An icon in the case actions calls the service's `mesh.refine {factor: 2, apply: true}`. The doubled
   counts become unsaved changes, and Undo puts them back. A mesh file or a generator without counts is refused with
-  the engine's reason. From Claude Code, `refine_case_mesh` does the same; `rcfd check <case> --refine 2` shows the
+  the engine's reason and the error catalogue's line for its code (1009 for a mesh file). From Claude Code, `refine_case_mesh` does the same; `rcfd check <case> --refine 2` shows the
   edits.
 - **Open a case file outside a project.** Use `#/case/file`, the palette action, the icon in the editor's top bar or
   the button on `#/case`. The main process shows the dialog and binds only a file it gave. Saving uses the service's

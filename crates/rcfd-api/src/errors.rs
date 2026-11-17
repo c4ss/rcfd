@@ -173,6 +173,13 @@ pub const CATALOGUE: &[ErrorEntry] = &[
     ),
     e(
         Service,
+        1009,
+        "MESH_FILE",
+        "the case's mesh is a file, which Refine x2 does not refine (mesh.refine, refine_case_mesh; ADR 0737)",
+        "Refine the mesh file in the program that made it, or switch the case to a generator mesh (mesh.source = generator).",
+    ),
+    e(
+        Service,
         -32000,
         "INTERNAL",
         "internal error",

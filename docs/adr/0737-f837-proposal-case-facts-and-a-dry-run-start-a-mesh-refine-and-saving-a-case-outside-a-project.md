@@ -261,3 +261,40 @@ Tests:
 - Studio e2e: `tests/e2e/case-file-adr0737.spec.ts`, 4 tests against `rcfd serve --ui`, with screenshots in
   `test-results-visual/adr0737/`. Restated: `run-control.spec.ts` (store plan).
 - `word-budget.spec.ts` passes with the budgets unchanged.
+
+## Change of 2026-11-17: a mesh-file refusal has its own code, 1009 MESH_FILE
+
+The maintainer approved this after Refine x2 of a mesh-file case in the Studio was refused with 1004. The catalogue's
+line for 1004 (ADR 0730) is about paths outside the service's root and the limits of `service.info`, which does not fit
+this refusal.
+
+- Refine x2 of a case whose `mesh.source` is `file` is now **1009 `MESH_FILE`**, the next free code of the service's
+  1000 range (1001 to 1008 are taken; the project tools' codes start at 1200 and the MCP server's at 1100). It is
+  `rcfd_api::service::code::MESH_FILE` and `rcfd_api::refine::Refusal::MeshFile`. The message is unchanged.
+- The catalogue (`help.errors`, `rcfd help errors`) has its row: "the case's mesh is a file, which Refine x2 does not
+  refine". The recovery line is "Refine the mesh file in the program that made it, or switch the case to a generator mesh
+  (mesh.source = generator)."
+- The same code is given on every path that refines: the service's `mesh.refine` and the MCP project tool
+  `refine_case_mesh` (the project tools reuse the service's code, as they reuse 1003 and 1004). `rcfd check <case>
+  --refine 2` still exits 3, as its other refusals do. Under the reason it now prints the catalogue's line of 1009,
+  because exit 3's own line is about invalid keys.
+- The other refusals of a refine stay 1004: a generator counted by other settings (`axial_fan_sector`), a count over
+  its schema maximum, and a mesh over the service's `max_cells`. Every other use of 1004 is as before.
+- Studio: the "Refine x2 refused" alert and the estimate line's "No estimate" show the catalogue's line for their code
+  under the engine's message. For a mesh-file case the alert's line is 1009's. The estimate of a mesh-file case fails
+  only when the mesh file does not build (1003, with its line), because `case.facts` reads a mesh file as it is.
+- Docs: the error table and the `mesh.refine` entry of `docs/service-protocol.md`, and the `refine_case_mesh` row of
+  `docs/mcp-tools.md` and the tool's description.
+- Defaults and `baseline_hashes.rs` are unchanged: only an error code of a refusal changes, and no solver path.
+
+Tests, restated with no golden re-recorded:
+
+- `crates/rcfd-api/tests/case_facts_adr0737.rs` `c3_refusals_and_apply`: the mesh file is 1009 (it was 1004); the
+  other two refusals stay 1004.
+- `crates/rcfd-mcp/tests/case_facts_adr0737.rs` `refine_case_mesh_writes_through_edit_case`: 1009 for the mesh file.
+- `crates/rcfd-api/tests/errors_catalogue_adr0730.rs`: 14 constants in `service::code` (it was 13).
+- New: `crates/rcfd-cli/tests/check_refine_adr0737.rs`, which checks the exit 3 with the reason and 1009's line, and a
+  generator case's edits.
+- Studio e2e: `tests/e2e/error-walk.spec.ts` provokes 1009 (Refine x2 of a mesh-file case in the quick-start copy) and
+  finds its line. `tests/e2e/case-file-adr0737.spec.ts` finds 1009's line under the refusal, and 1003's line under
+  "No estimate".

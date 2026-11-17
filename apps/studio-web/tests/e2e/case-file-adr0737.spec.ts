@@ -4,7 +4,9 @@
 // changed lines, the comment kept, no lock file left), a file changed outside shown as a conflict with nothing written,
 // an undo of Refine x2 after another writer set a count shown as
 // the conflict panel (ADR 0736 P2: the counts it left are checked and sent as base_value), and a mesh-file case refused
-// with the engine's reason. Screenshots at 1440 by 900 to test-results-visual/adr0737/.
+// with the engine's reason and the error catalogue's line of its code, 1009 MESH_FILE (restated for ADR 0737's change of
+// 2026-11-17: it was 1004, whose line is about paths and limits), the estimate line's "No estimate" with its code's line.
+// Screenshots at 1440 by 900 to test-results-visual/adr0737/.
 //
 // Needs rcfd (tests/support/rcfd.ts); without it the tests are skipped.
 import { expect, test, type Page } from '@playwright/test';
@@ -149,7 +151,7 @@ test('undo of Refine x2 checks the counts it left: another writer’s count is a
   }
 });
 
-test('Refine x2 of a mesh-file case is refused with the engine’s reason', async () => {
+test('Refine x2 of a mesh-file case is refused with the engine’s reason and the catalogue’s line of 1009', async () => {
   const f = path.join(dir, 'file-mesh.toml');
   await writeFile(f, PISO.replace('generator = "cavity_2d"\nnx = 8\nny = 8\n', 'source = "file"\nfile = "m.msh"\n'));
   const opened = await (async () => {
@@ -163,7 +165,24 @@ test('Refine x2 of a mesh-file case is refused with the engine’s reason', asyn
     await expect(page.getByRole('heading', { name: 'Failed to open the case file' })).toBeVisible();
     return;
   }
+  const rpc = await RpcConnection.connectTcp('127.0.0.1', service.port);
+  const catalogue = await (async () => {
+    try {
+      return ((await rpc.request('help.errors', {})) as { errors: { surface: string; code: number; name: string; recovery: string }[] }).errors;
+    } finally {
+      rpc.close();
+    }
+  })();
+  const line = (code: number) => catalogue.find((e) => e.surface === 'service' && e.code === code)!;
+  expect(line(1009).name).toBe('MESH_FILE');
+  // m.msh is not there: the estimate fails as the case does not build (1003), and says the way out
+  const estimate = page.locator('.ce-estimate');
+  await expect(estimate).toContainText('No estimate:', { timeout: 20_000 });
+  await expect(estimate.locator('[data-recovery-code="1003"]')).toHaveText(line(1003).recovery);
   await page.getByRole('button', { name: 'Refine the mesh x2', exact: true }).click();
-  await expect(page.getByRole('alert').filter({ hasText: 'Refine x2 refused' })).toContainText('mesh file');
+  const refused = page.getByRole('alert').filter({ hasText: 'Refine x2 refused' });
+  await expect(refused).toContainText('mesh file');
+  await expect(refused.locator('[data-recovery-code="1009"]')).toHaveText(line(1009).recovery);
+  await expect(refused.locator('[data-recovery-code="1004"]')).toHaveCount(0);
   await shot('06-refused');
 });

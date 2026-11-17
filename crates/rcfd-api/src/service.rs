@@ -60,6 +60,9 @@ pub mod code {
     /// A file changed since it was read; `data.current_hash` is its hash now (`case.save`, ADR 0737 P4). Apart from
     /// 1007, which is a session's setting changed since its base (`data.current_value`): this one is a file on disk.
     pub const FILE_CONFLICT: i64 = 1008;
+    /// Refine x2 of a case whose mesh is a file (`mesh.refine`, `refine_case_mesh`; ADR 0737, change of 2026-11-17):
+    /// the engine does not split a mesh file's cells. The other refusals of a refine stay 1004.
+    pub const MESH_FILE: i64 = 1009;
     /// Anything else.
     pub const INTERNAL: i64 = -32000;
 }

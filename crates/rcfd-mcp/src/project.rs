@@ -368,7 +368,7 @@ pub(crate) fn tools() -> Vec<Tool> {
         },
         Tool {
             name: "refine_case_mesh",
-            description: "Refine x2 (ADR 0737): double every cell count of the case's generator mesh (mesh.nx, mesh.ny, mesh.nz and the second block's _right counts), written through edit_case's rule (only if the file still has base_hash, else error 1200; comments kept). Refused (1004, with the reason, nothing written) for a mesh file, a generator counted by other settings (axial_fan_sector) and a count over its maximum. Returns the edits, cells before and after, the runner's memory estimate after, and edit_case's result.",
+            description: "Refine x2 (ADR 0737): double every cell count of the case's generator mesh (mesh.nx, mesh.ny, mesh.nz and the second block's _right counts), written through edit_case's rule (only if the file still has base_hash, else error 1200; comments kept). Refused with the reason, nothing written: 1009 for a mesh file; 1004 for a generator counted by other settings (axial_fan_sector) and a count over its maximum. Returns the edits, cells before and after, the runner's memory estimate after, and edit_case's result.",
             access: Access::WriteFiles,
             schema: || {
                 obj(

@@ -16960,8 +16960,11 @@ Generated from `docs/studio-guardrails.md`, `PRODUCT.md` and `DESIGN.md` ([ADR 0
     and the settings' could-not-be-read state now show the line (they showed the message only); the rows it does not
     provoke are listed with the reason (-32700, -32600, -32601, -32602, 1005, 1006, -32000, 1100; 1007, 1008 and 1200
     answered by the conflict panels' choices instead of the line; the exit codes of rcfd, rcfd-runner, rcfd-mcp and the
-    hook), and the test fails when the catalogue gains a row in neither list. Left: a learner's view-and-report step
-    (G19).
+    hook), and the test fails when the catalogue gains a row in neither list. 2026-11-17 (branch refine-code, ADR 0737
+    change of 2026-11-17): Refine x2 of a mesh-file case has its own code, 1009 MESH_FILE (it was 1004, whose catalogue
+    line is about paths and limits), with its catalogue line, on mesh.refine and refine_case_mesh (rcfd check --refine 2
+    keeps exit 3 and prints the line); the Refine x2 refused alert and the estimate line's No estimate show their code's
+    line; error-walk.spec.ts provokes 1009. Left: a learner's view-and-report step (G19).
 - [x] **F-831** Electron Studio: command palette and keyboard shortcuts
   - depends on: F-827, F-802
   - acceptance: A command palette generated from the action registry that finds every action by name; shortcuts for

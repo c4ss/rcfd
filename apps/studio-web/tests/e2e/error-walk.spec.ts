@@ -26,6 +26,8 @@ test.describe.configure({ mode: 'serial', timeout: 120_000 });
 
 const SHOTS = path.join(appRoot, 'test-results-visual', 'f830-errors');
 const CASE = 'cases/cavity-re100.toml';
+/** A copy of CASE whose mesh is a file (not there: the session opens, the refine is refused before the mesh is read). */
+const MESH_CASE = 'cases/file-mesh.toml';
 
 interface Entry {
   readonly surface: string;
@@ -40,6 +42,7 @@ const PROVOKED: Readonly<Record<number, string>> = {
   1002: 'the case editor: a setting changed while another writer holds the session’s run paused',
   1003: 'the case editor: a value the engine refuses (a negative viscosity)',
   1004: 'the mesh preview: a mesh over the preview limit',
+  1009: 'the case editor: Refine x2 of a case whose mesh is a file',
   1201: 'the case editor: Save while another writer holds the file’s edit lock',
   1202: 'the run bar: Run of a case file deleted under the Studio',
 };
@@ -112,6 +115,9 @@ test.beforeAll(async () => {
   dir = await scratch('f830-errors');
   quick = await copyExample('quick-start', dir);
   await writeFile(path.join(quick, 'cases', 'to-delete.toml'), await readFile(path.join(quick, CASE), 'utf8'));
+  const meshFile = (await readFile(path.join(quick, CASE), 'utf8')).replace(/generator = "cavity_2d"\r?\nnx = 32\r?\nny = 32\r?\n/, 'source = "file"\nfile = "m.msh"\n');
+  if (!meshFile.includes('source = "file"')) throw new Error(`${CASE}: its [mesh] is not the one this walk replaces`);
+  await writeFile(path.join(quick, MESH_CASE), meshFile);
   service = await startRcfd(rcfd!, 0, ['--ui']);
   rpc = await RpcConnection.connectTcp('127.0.0.1', service.port);
   catalogue = ((await rpc.request('help.errors', {})) as { errors: Entry[] }).errors;
@@ -214,6 +220,15 @@ test('1001 NO_SESSION: the case editor’s session closed by another writer', as
   await expect(gone).toContainText(`no session '${session}'`, { timeout: 20_000 });
   await expect(gone.locator('[data-recovery-code="1001"]')).toHaveText(line(1001));
   await shot('1001-no-session');
+});
+
+test('1009 MESH_FILE: Refine x2 of a case whose mesh is a file', async () => {
+  await openCase(MESH_CASE);
+  await page.getByRole('button', { name: 'Refine the mesh x2', exact: true }).click();
+  const refused = page.getByRole('alert').filter({ hasText: 'Refine x2 refused' });
+  await expect(refused).toContainText('mesh file', { timeout: 20_000 });
+  await expect(refused.locator('[data-recovery-code="1009"]')).toHaveText(line(1009));
+  await shot('1009-mesh-file');
 });
 
 test('1202 NOT_FOUND: Run of a case file deleted under the Studio', async () => {

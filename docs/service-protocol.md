@@ -52,6 +52,7 @@ loopback address behave as before.
 | 1006 | no hosted co-simulation participant of that name |
 | 1007 | settings conflict: the `base_value` or `base_hash` of `settings.set` or `settings.remove` is not what the session holds now; nothing changed; `error.data` is `{path, current_value, current_hash}` ([ADR 0736](adr/0736-f829-proposal-a-project-trash-with-restore-and-compare-and-set-for-settings-set.md)) |
 | 1008 | the file changed since it was read; `data.current_hash` is its hash now (`case.save`, with `--ui`; ADR 0737) |
+| 1009 | the case's mesh is a file, which Refine x2 does not refine (`mesh.refine`, with `--ui`, and `refine_case_mesh`; ADR 0737) |
 | -32000 | internal error |
 
 ## Sessions and run states
@@ -224,8 +225,9 @@ object with the members named; any other member is -32602.
   0158's, with their constants (`rcfd_api::facts`).
 - `mesh.refine {session, factor, apply?}`: Refine x2 of a generator mesh: `edits` [{`path`, `before`, `after`}] (every
   count of the generator doubled; a second block's `_right` count of 0 is left), `cells`, `cells_after`, `two_d`,
-  `memory_after`, `over_limit`, `applied`. `factor` is 2 only (-32602 otherwise); 1004 with the reason for a mesh file, a
-  generator counted by other settings (`axial_fan_sector`) and a count over its schema maximum, nothing set. With
+  `memory_after`, `over_limit`, `applied`. `factor` is 2 only (-32602 otherwise); 1009 with the reason for a mesh file;
+  1004 with the reason for a generator counted by other settings (`axial_fan_sector`) and a count over its schema maximum;
+  nothing set. With
   `apply: true` each edit is a `settings.set` of the session with its `base_value` (unsaved changes in its journal); a count
   changed by another writer in between is 1007 (ADR 0736) and the counts already set are put back, so nothing is set.
 - `case.save {session, path, base_hash, form?}`: write the session's case to one file outside a project (`.toml` or
