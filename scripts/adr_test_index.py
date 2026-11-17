@@ -31,6 +31,10 @@ H1 to H3, a file-citation-only test that rule G left without a primary takes the
 that cites its file: H1 a unit in a `## Test files (added <date>, ADR dddd)` section, H2 a unit that says `without an ADR`, `ADR-less`
 or `no ADR describes ...`. Rule H3 of ADR 0701 (a table row with the file in one cell and a limit in another) is removed (ADR 0703: it read
 1 of 5, audit and test-list rows) and its code is deleted (ADR 0712). `coverage.primary.retro` keeps the key `h3`, always 0.
+`--primary git` also applies rule E8 (ADR 0720; `--no-e8` gives the output of ADR 0690, the library default of `build()` is `e8=False`):
+on a full history the ADRs named in the subject of the commit that first adds a test's file (every `ADR dddd` that exists, then the
+registration ADR of every `F-ddd` that has one) are evidence of kind E8 of its tests (`adrs`, `items`, `evidence` extended, no
+coherence step), and the first of them is the primary in the tier order E0 > E1 > E6 > E8 > E2.
 """
 import argparse
 import json
@@ -57,6 +61,7 @@ RETRO_PHRASE = re.compile(r"without an ADR|ADR-less|had no ADR|no ADR (?:describ
 WORD = re.compile(r"\b[A-Za-z_]\w*\b")
 ADR_IN_SUBJECT = re.compile(r"\bADRs? (\d{4})\b")
 ITEM_IN_SUBJECT = re.compile(r"\bF-(\d{2,4})\b")
+E8_TIERS = ("E0", "E1", "E6", "E8", "E2")  # ADR 0720: the tier order of rule G with E8 (the ADR the adding commit names)
 CRATE_IN_PATH = re.compile(r"(rcfd-[a-z0-9-]+)/((?:src|tests|benches|examples)/.+\.rs)$")
 
 
@@ -378,12 +383,18 @@ def wave_resolve(tag, table):
     return ("ambiguous", cands) if cands else ("none", [])
 
 
-def primary_adr(ev, item_adrs, adr_files, rule="p0679"):
+def primary_adr(ev, item_adrs, adr_files, rule="p0679", e8=False):
     """(ADR, evidence kind) of a test. Rule p0679: the first tier of TIERS with an ADR; in the tier an ADR file named registration
     or -wave first, then the lowest number. Rule registered (ADR 0684): only the tiers of REGISTERED_TIERS; in E2 the lowest
-    number outside LISTING_ADRS; none (None, None) when no such tier has an ADR."""
+    number outside LISTING_ADRS; none (None, None) when no such tier has an ADR. With `e8` (rule git, ADR 0720) the tiers are E8_TIERS and
+    the primary of tier E8 is the first E8 entry."""
     registered = rule in ("registered", "git")
-    for kind in REGISTERED_TIERS if registered else TIERS:
+    for kind in E8_TIERS if registered and e8 else REGISTERED_TIERS if registered else TIERS:
+        if kind == "E8":
+            for e in ev:
+                if e["kind"] == "E8":
+                    return e["adr"], "E8"
+            continue
         cands = set()
         for e in ev:
             if e["kind"] != kind:
@@ -454,6 +465,20 @@ def commit_adr(subject, adrs, reg):
     return None
 
 
+def e8_adrs(subject, adrs, reg):
+    """Rule E8 (ADR 0720): [(ADR, via)] named by a commit subject: every `ADR dddd` that exists, in order, then the registration ADR of
+    every `F-ddd` that has one, without repeats."""
+    out = []
+    for m in ADR_IN_SUBJECT.finditer(subject):
+        if m.group(1) in adrs and m.group(1) not in [n for n, _ in out]:
+            out.append((m.group(1), "subject"))
+    for m in ITEM_IN_SUBJECT.finditer(subject):
+        it = item_id(m.group(1))
+        if it in reg and reg[it] not in [n for n, _ in out]:
+            out.append((reg[it], it))
+    return out
+
+
 def registration_adrs(adrs):
     """Item -> its registration ADR: the ADR whose file name carries `-fddd-` (a file named `registration` first, then the lowest number)."""
     reg = {}
@@ -477,10 +502,13 @@ def rel(root, p):
     return os.path.relpath(p, root).replace("\\", "/")
 
 
-def build(root, meta, primary_rule="p0679", retro=None):
+def build(root, meta, primary_rule="p0679", retro=None, e8=False):
     """`retro` (ADR 0701): the header path as E0 (H0) and the retro-registration units (H1 to H3). Default on for rule `git`, off
-    otherwise; it has no effect on another rule."""
+    otherwise; it has no effect on another rule. `e8` (ADR 0720): evidence of kind E8, the ADRs named by the commit that adds a test's
+    file; default off here (the output of ADR 0690), on in the command line; it has no effect on another rule than `git`."""
     retro = (primary_rule == "git") if retro is None else (retro and primary_rule == "git")
+    e8 = bool(e8) and primary_rule == "git"
+    state, origin, gcalls = git_history(root) if primary_rule == "git" else (None, {}, 0)
     adrs, roadmap, item_adrs, adr_items = load_docs(root)
     ws_root = meta.get("workspace_root", root)
     pkgs = meta["packages"]
@@ -528,6 +556,8 @@ def build(root, meta, primary_rule="p0679", retro=None):
     def distinctive(fn, t):
         return "_" in fn and len(fn) >= 12 and len(fn_bins.get(fn, ())) == 1
 
+    reg = registration_adrs(adrs) if primary_rule == "git" else {}
+    e8stat = {"history": state, "tests": 0, "files": set(), "links": 0, "links_new": 0, "tests_new": 0}
     wtab = wave_table(adrs)
     adr_files = {n: a["files"] for n, a in adrs.items()}
     wave_map, wave_amb, wave_none, e7_common = {}, {}, set(), set()
@@ -584,24 +614,42 @@ def build(root, meta, primary_rule="p0679", retro=None):
         found = {e["adr"] for e in ev if "adr" in e}
         for it in items:
             found |= item_adrs.get(it, set())
+        if e8 and state == "full" and t["file"] in origin:
+            h, subj = origin[t["file"]]
+            named = e8_adrs(subj, adrs, reg)
+            if named:
+                new = [n for n, _ in named if n not in found]
+                e8stat["tests"] += 1
+                e8stat["files"].add(t["file"])
+                e8stat["links"] += len(named)
+                e8stat["links_new"] += len(new)
+                e8stat["tests_new"] += 1 if new else 0
+                ev.extend({"kind": "E8", "adr": n, "via": via, "commit": h[:10]} for n, via in named)
+                found |= {n for n, _ in named}
         t["adrs"] = sorted(found)
         t["items"] = sorted(set(items) | {i for n in found for i in adr_items.get(n, ())})
         t["evidence"] = ev
-        t["primary_adr"], t["primary_evidence"] = primary_adr(ev, item_adrs, adr_files, primary_rule)
+        t["primary_adr"], t["primary_evidence"] = primary_adr(ev, item_adrs, adr_files, primary_rule, e8)
 
     gstat = None
     if primary_rule == "git":
-        state, origin, calls = git_history(root)
-        reg = registration_adrs(adrs)
+        calls = gcalls
         gstat = {"history": state, "e2_tests": 0, "from_git": 0, "no_commit_rule": 0, "not_in_adrs": 0, "no_origin": 0,
                  "git_calls": calls}
         e2_null = []
         for t in tests:
+            if e8 and t["primary_evidence"] == "E8":
+                gstat["e2_tests"] += 1
+                gstat["from_git"] += 1
+                continue
             if t["primary_evidence"] != "E2":
                 continue
             gstat["e2_tests"] += 1
             cand, why = None, "no_origin"
-            if state == "full" and t["file"] in origin:
+            if e8:  # tier E8 took every test whose commit names an ADR or an item: the others have no primary (ADR 0720)
+                if state == "full" and t["file"] in origin:
+                    why = "no_commit_rule"
+            elif state == "full" and t["file"] in origin:
                 cand = commit_adr(origin[t["file"]][1], adrs, reg)
                 why = "no_commit_rule" if cand is None else ("not_in_adrs" if cand not in t["adrs"] else "from_git")
             if why == "from_git":
@@ -644,6 +692,11 @@ def build(root, meta, primary_rule="p0679", retro=None):
     idx["coverage"]["primary"] = {"with_primary": sum(pe.values()), "by_evidence": dict(sorted(pe.items()))}
     if gstat:
         idx["coverage"]["primary"]["git"] = gstat
+        if e8:
+            e8stat["files"] = len(e8stat["files"])
+            e8stat["primary_tests"] = sum(1 for t in tests if t["primary_evidence"] == "E8")
+            e8stat["primary_files"] = len({t["file"] for t in tests if t["primary_evidence"] == "E8"})
+            idx["coverage"]["primary"]["e8"] = e8stat
         if retro:
             idx["coverage"]["primary"]["retro"] = rstat
     return idx
@@ -734,11 +787,13 @@ def main(argv=None):
     ap.add_argument("--out")
     ap.add_argument("--report", action="store_true")
     ap.add_argument("--adr", nargs="*", default=[])
+    ap.add_argument("--e8", action=argparse.BooleanOptionalAction, default=True,
+                    help="evidence E8, the ADRs named by the commit that adds a test file (ADR 0720; default on, with --primary git)")
     ap.add_argument("--primary", choices=("git", "registered", "p0679"), default="git",
                     help="rule of the primary ADR: git (ADR 0690, default), registered (ADR 0684) or p0679 (ADR 0679)")
     a = ap.parse_args(argv)
     root = os.path.abspath(a.root)
-    idx = build(root, metadata(root, a.metadata), a.primary)
+    idx = build(root, metadata(root, a.metadata), a.primary, e8=a.e8)
     if a.out:
         with open(a.out, "w", encoding="utf-8") as f:
             json.dump(idx, f, indent=1)
@@ -755,6 +810,8 @@ def main(argv=None):
         print(f"primary ADR: {c['primary']['with_primary']} tests {c['primary']['by_evidence']}")
         if "git" in c["primary"]:
             print(f"primary from git: {c['primary']['git']}")
+        if "e8" in c["primary"]:
+            print(f"evidence E8 (ADR 0720): {c['primary']['e8']}")
         if "retro" in c["primary"]:
             r = c["primary"]["retro"]
             print(f"primary from retro rule H (ADR 0701, H3 removed by ADR 0703): tests h1 {r['h1']}, h2 {r['h2']}, h3 {r['h3']}, none {r['none']}; "
