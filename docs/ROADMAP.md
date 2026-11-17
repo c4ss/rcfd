@@ -15058,7 +15058,10 @@ fixed by the item's registration ADR before any code.
     set-ups. Follow-up F-742 (The warm start of the incompatible-mode iteration on a history material and on the
     transient and rotating paths). ADR 0666 (F-742, 2026-11-16): W runs with a J2 material, on the transient path and on
     the rotating path; the reaction gap of rule L against F-bar with J2 is the element's, not the warm start's. With W,
-    a creep or viscoelastic material would read the committed modes as a point (found by reading, F-748).
+    a creep or viscoelastic material would read the committed modes as a point (found by reading, F-748). ADR 0725
+    measures the warm start alone (without the backtracking and the decrease test) as the would-be default: it passes
+    all eleven set-ups of ADR 0658 with W's values and ADR 0723's trace to the fold, while the trust region alone passes
+    9 of 11 and is lost on the trace before 1.69e-4.
 - [~] **F-742** The warm start of the incompatible-mode iteration on a history material and on the transient and rotating paths
   - depends on: F-740
   - acceptance: Every limit not stated here is registered in the ADR before the run. The remedy W of ADR 0660 with a J2
@@ -16288,7 +16291,9 @@ fixed by the item's registration ADR before any code.
     fallback control and a root-classifier control are added. Default bits unchanged (no library line); five of five
     mutations caught; no amendment. Follow-up F-843 (The fold of rule L's 16^3 punch branch by an extended system with
     warm-started local modes). Follow-up F-844 (The local mode update of the incompatible Hex8 as a default, compared on
-    the ADR 0658 set-ups and on rule L's 16^3 punch branch).
+    the ADR 0658 set-ups and on rule L's 16^3 punch branch). ADR 0725 repeats the warm trace with the commit taken from
+    the library's per-element warm evaluation (the driver's own trial states) and reproduces it (lambda to 4e-13); the
+    plain iteration from alpha = 0 fails at element 3720 alone among the 4096 elements.
 - [ ] **F-842** The inertia and the retry of the nonlinear driver in the solid case's output
   - depends on: F-780
   - acceptance: Every limit not stated here is registered in the ADR before the run. With the solid case's opt-in for
@@ -16319,14 +16324,30 @@ fixed by the item's registration ADR before any code.
     system on the toy without the warm start fails at its first evaluation. Default bits unchanged (no library line);
     six of six mutations caught; no amendment. Follow-up F-845 (The library arc-length driver through rule L's 16^3 fold
     with warm-started local modes).
-- [ ] **F-844** The local mode update of the incompatible Hex8 as a default, compared on the ADR 0658 set-ups and on rule L's 16^3 punch branch
+- [x] **F-844** The local mode update of the incompatible Hex8 as a default, compared on the ADR 0658 set-ups and on rule L's 16^3 punch branch
   - depends on: F-841
   - acceptance: Every limit not stated here is registered in the ADR before the run. The warm start of ADR 0660 D1, the
     backtracking of ADR 0655 and the trust region of ADR 0660 D2, each measured as the would-be default on the ADR 0658
     set-ups and on ADR 0723's fine trace from rung 4 without committed states beyond the driver's own: solves passed,
     iterations, and the states where the plain iteration from alpha = 0 fails at a regular root; a recommendation
     registered before the run; the default bits unchanged.
-  - note: Follow-up of F-841 (ADR 0723, 2026-11-16).
+  - note: F-844 (ADR 0725, 2026-11-17): the three local mode updates of the incompatible Hex8 with rule L, each measured
+    alone as the would-be default beside today's default, test-only, no default changed. On the eleven set-ups of ADR
+    0658 the default passes 7, the backtracking of ADR 0655 8, the trust region of ADR 0660 D2 9 and the warm start of
+    ADR 0660 D1 all 11 (the 8^3 block at 0.25 h and the three seeds of ADR 0658 within 8.2 per cent of the F-bar punch
+    reaction, positive definite). None fails a set-up the default passes, and where all four pass they take the same
+    increments and Newton iterations. On ADR 0723's fine trace from rung 4, carrying only the element states the driver
+    itself commits, the warm start reproduces ADR 0723's branch to the fold (11 states, lambda to 4e-13, the fold
+    bracketed in 12 solves). The plain control is lost after 1.65e-4 as in ADR 0718, the backtracking after 1.83e-4, and
+    the trust region never reaches 1.69e-4. Along the whole trace the plain iteration from alpha = 0 fails in one
+    element only, element 3720, at 4 of the warm trace's 12 states, each at a regular root (l_min 2.6e4 to 4.2e4) that
+    the warm start follows without a fallback. From alpha = 0 the backtracking reaches that root at 1 of the 4 states
+    and the trust region at none. By the rule registered before the run, the warm start is the recommended default local
+    update. The switch changes default bits and the length of the committed element states, so it is left to the
+    maintainer. A fast tally at ADR 0660's stall state of seed 3 covers the trace's tally code. Default bits unchanged
+    (no library line); five of six mutations of the measurement caught (the sixth registered as possibly not caught); no
+    amendment. Follow-up F-846 (What switching the default local mode update of the incompatible Hex8 to the warm start
+    would move).
 - [ ] **F-845** The library arc-length driver through rule L's 16^3 fold with warm-started local modes
   - depends on: F-797
   - acceptance: Every limit not stated here is registered in the ADR before the run. From ADR 0711's rung 5, the
@@ -16335,3 +16356,11 @@ fixed by the item's registration ADR before any code.
     lambda_f 0.958472086948, the steps and the local fallbacks, to registered limits; a fast control on a closed-form
     fold with a local unknown; the default bits unchanged.
   - note: Follow-up of F-843 (ADR 0724, 2026-11-16).
+- [ ] **F-846** What switching the default local mode update of the incompatible Hex8 to the warm start would move
+  - depends on: F-844
+  - acceptance: Every limit not stated here is registered in the ADR before the run. With the model's warm start turned
+    on in test-only copies of each case (no default changed), the existing nonlinear tests of the incompatible Hex8 and
+    the rcfd-api baseline cases that use the element: the number of results whose bits change, the largest relative
+    change of each recorded measure against a registered tolerance, every solve whose outcome changes, and the committed
+    element states through the save and restart path; the default bits unchanged.
+  - note: Follow-up of F-844 (ADR 0725, 2026-11-16).
