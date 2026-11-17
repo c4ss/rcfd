@@ -2910,3 +2910,79 @@ reports 6 moderate findings, all one advisory: minimatch 7.0.0-11.0.0, a denial 
 - `actionlint` 1.7.7 over `.github/workflows/`: no finding. Neither new workflow has run; CI was not triggered.
 - No Rust file, test or golden changed; `crates/rcfd-api/tests/baseline_hashes.rs` untouched; `DESIGN.md` untouched;
   outside the test mode (`RCFD_TEST_HEADLESS`) the only change to what a user runs is the fallback label's ellipsis.
+
+## Addendum 20: the maintainer's answers of 2026-11-17 and the small items they approved (F-808, F-814, F-816, F-818, F-819, F-828, F-833, F-837)
+
+### Answers recorded
+
+- **F-818, the studio-settings word budget:** 9, approved (`src/shared/word-budget.ts`; the comment now says so).
+- **F-828 D-L1 (Addendum 18):** the engine records a session's journal (E-828c of the engine follow-ups); the Studio
+  writes none. A session number's reproduce command stays said as not recorded until the engine gives one.
+- **F-819 Q-819b-2 and Q-819b-3 (Addendum 16):** skipped. With Q-819-4 skipped before and every registered line met,
+  F-819 is done, by the view-and-report precedent of F-810 and F-812.
+- **F-808 F808-D1:** option (a). The tolerance is written into F-808's acceptance: exact at the 256 points of the table
+  and at and beyond both ends, within 3/255 per channel elsewhere. F-808 is done by the same precedent.
+
+### Changes (each approved by the maintainer on 2026-11-17)
+
+- **F-816, a heading for readers.** A visually hidden `h1` (`.sr-only`, no word counted) on the run workspace ("Run
+  workspace: <run>", or "Run workspace" with no run), compare ("Compare: <run> with <run>") and the case editor with
+  its undo controls ("Case editor: <file>"). axe's moderate `page-has-heading-one` is gone from those four surfaces;
+  `a11y.spec.ts` checks the heading text and the absence. Compare's other moderate findings (`empty-table-header`,
+  `landmark-unique`, `region`) are unchanged and not this item's.
+- **F-814, the claude-head role.** DESIGN.md gains the colour role `claude-head` (frontmatter, Dark and High contrast
+  following meadow's values, a Colors bullet, the Colour Has a Job Rule). `tokens.ts` has the role `claude-head =
+  meadow`; `claude.css` uses `var(--role-claude-head)` in place of the raw meadow. `tokens.spec.ts` checks that a
+  frontmatter role equals its palette colour in each theme. Nothing visible changes.
+- **F-814, Allow this from now on.** A denied call with a suggested rule offers "Allow this from now on" (on its latest
+  denial only, when a rule was denied more than once). A confirm (the F-829 decision panel, alertdialog, Tab held)
+  names the exact rule and the file; Keep it denied is the default and Escape keeps it. On confirm the renderer sends
+  `allow {rule, base}` on the Claude port (op allow-list: `allow`, `undoAllow`; exact keys, rule 1 to 2000 characters,
+  base null or a SHA-256). The main process (`panel.ts`, `allow.ts`):
+  - accepts only the rule it suggested for a denied call in the feed it shows (`bad_request` otherwise), only while the
+    folder's control files are confirmed (`not_confirmed`);
+  - refuses when the file's hash is not the base (`stale`, and the file is read again);
+  - validates the result as rules read from the file are validated (`ruleShape`, `ruleProblem`, `parseAllowFile`) and
+    through `checkArgs`, so no approve-everything rule, wildcard, control-file edit or path outside the project can be
+    written; a duplicate or a refused file is not added to (`refused`);
+  - writes `<file>.<pid>.<hex>.tmp`, then renames it over `.rcfd/claude-allow.json`.
+  The Studio's own write keeps the folder confirmed only when it was confirmed before and the other control files are
+  unchanged. Undo is the panel's Undo chip and the palette command `claude.undo_allow` ("Undo the last allowed rule"):
+  it puts back the file as it was, refused (`stale`) when another writer changed it since, with Undo anyway. The
+  denials of a turn stay in the feed when the transcript replaces the stream, so the offer stays reachable. Tests:
+  `tests/unit/claude.spec.ts` (port, refusals, the flow, trust), `tests/e2e/claude-allow.spec.ts` (fake claude: keyboard
+  confirm, the file, the next argv, palette undo, the conflict, refusals, axe on the denied entry and the confirm),
+  `tests/unit/history.spec.ts` (the one rename in a project folder). The claude panel's budget at rest (13) is unchanged.
+- **F-833, four DESIGN.md lines** from Addendum 11: under The Quiet Rule, the "not yet" hatch (48 by 8 px) with its
+  sentence as accessible name and tooltip, and the approved word budget per surface enforced by a test; under Buttons,
+  the icon button whose name is its tooltip and accessible name; under Inputs / Fields, a settings row's description,
+  default and range as focus detail.
+- **F-837, the settings page's Close session** asks first with the shared save-or-discard prompt (`confirmClose`, kind
+  session) when its session holds case-editor changes not saved; on Save or Discard the session closes and the case
+  door forgets it. A session with none keeps the older loss question. The window-close and close-project split and
+  Keep editing as the default are unchanged. Test: `close-guard.spec.ts`.
+
+### Decisions taken here (reversible; for the maintainer)
+
+- **A20-D1, where the undo lives.** The undo of an allowed rule is the panel's Undo and a palette command, as the F-837
+  budgets are, not a step in the F-829 History (undo and redo of case edits). Alternative: a History step.
+- **A20-D2, no palette command that allows a rule.** Allowing starts only from a denied call in the panel.
+- **A20-D3, a first file.** With no `.rcfd/claude-allow.json`, the file written is the Studio's first list, then the
+  rule (so the list in force only gains the rule).
+- **A20-D4, undo of a first file** writes the Studio's first list to the file rather than deleting it (the Studio
+  deletes no file of a project).
+- **A20-D5, trust after the Studio's own write** stays confirmed (see above); any other change asks again.
+- **A20-D6, the check and the rename** are moments apart: a writer between the hash check and the rename is not seen.
+- **A20-D7, axe on the new surfaces only.** The e2e axe check runs on the denied entry and the confirm. Run on the whole
+  page with a chat open, axe reports `label-content-name-mismatch` (serious) on the current session's button of the
+  session list ("Write a file, closed"), which predates this item; it is not fixed here.
+
+### Verification (2026-11-17, on studio-small over main e3fb058b)
+
+- Windows 11: `npm ci`, `npm run typecheck` clean; `npm run build && npm run package:dir` exit 0.
+- Unit (touched specs: claude, history, tokens, theme, commands-palette, commands-shortcuts, workspace, case-editor,
+  settings-static, f837, capabilities, security): 168 passed.
+- e2e headless, touched specs only: claude-allow 5, then claude, a11y, word-budget, theme, close-guard, undo 51 passed;
+  case-editor, settings, commands, f837, workspace, compare, theme-surfaces, undo-case 64 passed. The full `npm test`
+  was not run (CI runs it).
+- No Rust file, golden or `baseline_hashes.rs` changed; the light theme's colours are unchanged.

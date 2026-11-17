@@ -11,7 +11,10 @@
 //   while it is held is refused with `busy`.
 // - Approvals: the allow-list (allow.ts): the project's `.rcfd/claude-allow.json` when it is valid, else the Studio's
 //   first list of read-only project tools; a file with one bad rule is refused as a whole and no chat starts. The panel
-//   shows a denied call and the rule that would allow it; it does not add rules (decision D5).
+//   shows a denied call and the rule that would allow it. "Allow this from now on" (the maintainer, 2026-11-17) adds
+//   exactly that rule to the file once the user has confirmed it (`allowRule`): only a rule suggested for a denied call
+//   in the feed, never over a file changed since it was read, validated as the file's own rules are, and the folder's
+//   confirmation of its control files follows the Studio's own write; `undoAllow` takes the last one out again.
 // - The folder's Claude Code control files must be confirmed first (trust.ts); the record is in the user data.
 // - MCP: an app-owned config in the user data, passed with --strict-mcp-config, naming one server, the engine's project
 //   server `rcfd-mcp --project <folder> --root <folder>` (ADR 0134 W48-10 (a)); with no rcfd-mcp configured, no server.
@@ -33,17 +36,18 @@ import {
   type ClaudeError,
   type ClaudeState,
   type ClaudeView,
+  type ControlFileView,
   type FeedItem,
   type FolderTrust,
   type SessionRow,
   type TurnView,
 } from '../../shared/claude.js';
-import { ALLOW_FILE, AllowList, flagValue, PINNED_SERVER, readAllowFile, suggest } from './allow.js';
+import { ALLOW_FILE, type AllowFileResult, allowFileHash, allowFileText, AllowList, flagValue, parseAllowFile, PINNED_SERVER, readAllowText, suggest, withRule, writeAllowFile } from './allow.js';
 import type { ClaudeConfig } from './config.js';
 import { classify, isAlive, projectDirName, type Discovery, type HeadCache } from './discover.js';
 import { chatArgs, listAgents, startTurn, type Listing, type Turn, type TurnEvent } from './driver.js';
 import { readNew, tail, type TranscriptEntry } from './transcript.js';
-import { checkFolder, TrustStore } from './trust.js';
+import { checkFolder, isAllowFile, TrustStore } from './trust.js';
 
 /** A request the panel refuses; bridge.ts turns it into the reply's error. */
 export class ClaudeRefusal extends Error {
@@ -87,7 +91,9 @@ export class ClaudePanel {
   private readonly costs = new Map<string, number>();
   private running: Turn | null = null;
   private writer: { session: string; pid: number | null } | null = null;
-  private allow: AllowView = { source: 'initial', file: ALLOW_FILE, rules: AllowList.initial().values, error: null };
+  private allow: AllowView = { source: 'initial', file: ALLOW_FILE, rules: AllowList.initial().values, error: null, hash: null, undo: null };
+  /** The rule this Studio last added: the folder, the rule, the file's text before (null: none) and the hash it left. */
+  private lastAllow: { folder: string; rule: string; before: string | null; after: string } | null = null;
   private allowList: AllowList | null = AllowList.initial();
   private trust: FolderTrust = { state: 'confirmed', files: 0 };
   private mcp: ClaudeView['mcp'] = { file: null, server: null, note: null };
@@ -140,7 +146,7 @@ export class ClaudePanel {
       feedError: this.feedError,
       turn: this.turn,
       writer: this.writer,
-      allow: this.allow,
+      allow: { ...this.allow, undo: this.lastAllow?.folder === this.folder ? this.lastAllow.rule : null },
       trust: this.trust,
       mcp: this.mcp,
       versionWarning: this.versionWarning,
@@ -293,19 +299,104 @@ export class ClaudePanel {
   private async readAllow(): Promise<void> {
     if (this.folder === null) return;
     const gen = this.generation;
-    const r = await readAllowFile(this.folder);
+    let text: string | null;
+    let r: AllowFileResult;
+    try {
+      text = await readAllowText(this.folder);
+      r = text === null ? { kind: 'absent' } : parseAllowFile(text);
+    } catch (e) {
+      text = null;
+      r = { kind: 'refused', reason: `${ALLOW_FILE}: ${(e as Error).message}` };
+    }
     if (gen !== this.generation) return;
+    const hash = allowFileHash(text);
     if (r.kind === 'list') {
       this.allowList = r.list;
-      this.allow = { source: 'file', file: ALLOW_FILE, rules: r.list.values, error: null };
+      this.allow = { source: 'file', file: ALLOW_FILE, rules: r.list.values, error: null, hash, undo: null };
     } else if (r.kind === 'absent') {
       this.allowList = AllowList.initial();
-      this.allow = { source: 'initial', file: ALLOW_FILE, rules: this.allowList.values, error: null };
+      this.allow = { source: 'initial', file: ALLOW_FILE, rules: this.allowList.values, error: null, hash: null, undo: null };
     } else {
       this.allowList = null;
-      this.allow = { source: 'file', file: ALLOW_FILE, rules: [], error: r.reason };
+      this.allow = { source: 'file', file: ALLOW_FILE, rules: [], error: r.reason, hash, undo: null };
     }
     this.emit();
+  }
+
+  // ---- "Allow this from now on" (F-814, the maintainer's approval of 2026-11-17)
+
+  /**
+   * Adds `rule` to the project's allow-list file. Refused unless it is the rule suggested for a denied call the feed
+   * shows, the folder's control files are confirmed, and the file still has the hash `base` that was shown (null: no
+   * file); the new list passes the checks of a file read from the folder and of every spawn (allow.ts `withRule`).
+   */
+  async allowRule(rule: string, base: string | null): Promise<void> {
+    if (this.folder === null) throw new ClaudeRefusal('no_project', 'No project is open.');
+    const folder = this.folder;
+    if (!this.feed.some((i) => i.kind === 'denied' && i.suggestion === rule)) {
+      throw new ClaudeRefusal('bad_request', 'Only the rule this panel suggested for a denied call it shows can be added.');
+    }
+    const trust = await this.checkFolder();
+    if (trust.state !== 'confirmed') throw new ClaudeRefusal('not_confirmed', 'Confirm the folder’s Claude Code files first; nothing was written.');
+    const text = await readAllowText(folder);
+    if (allowFileHash(text) !== base) {
+      await this.readAllow();
+      throw new ClaudeRefusal('stale', `${ALLOW_FILE} was changed by another writer since it was read: nothing was written. It has been read again; allow the call again to add the rule to it.`);
+    }
+    const next = withRule(text, rule);
+    if ('refused' in next) throw new ClaudeRefusal('refused', `Nothing was written: ${next.refused}.`);
+    await this.writeOwn(folder, next.text, base, `${ALLOW_FILE} was changed by another writer while the rule was being added: nothing was written.`);
+    this.lastAllow = { folder, rule, before: text, after: allowFileHash(next.text)! };
+    await this.readAllow();
+    this.emit();
+  }
+
+  /**
+   * Takes the rule this Studio last added out again: the file goes back to the text it had (no file before: the
+   * Studio's first list, written as a file, since the Studio removes no file of a project). A file changed since by
+   * another writer is refused (`stale`) unless `force`.
+   */
+  async undoAllow(force: boolean): Promise<void> {
+    if (this.folder === null) throw new ClaudeRefusal('no_project', 'No project is open.');
+    const folder = this.folder;
+    const last = this.lastAllow;
+    if (!last || last.folder !== folder) throw new ClaudeRefusal('bad_request', 'Nothing to undo: this Studio has added no rule to this project’s allow-list.');
+    const now = allowFileHash(await readAllowText(folder));
+    if (now !== last.after && !force) {
+      await this.readAllow();
+      throw new ClaudeRefusal('stale', `${ALLOW_FILE} was changed by another writer after ${last.rule} was added: nothing was undone. Undo anyway puts back the list as it was before the rule was added.`);
+    }
+    const before = last.before ?? allowFileText(AllowList.initial().values);
+    await this.writeOwn(folder, before, now, `${ALLOW_FILE} was changed by another writer while it was being put back: nothing was undone.`);
+    this.lastAllow = null;
+    await this.readAllow();
+    this.emit();
+  }
+
+  /**
+   * The Studio's own write of the allow-list file, and the confirmation of the folder's control files that follows it:
+   * when the folder was confirmed and the write is the only change of its control files, the new scan is recorded as
+   * confirmed (the user confirmed this exact change); any other change still asks.
+   */
+  private async writeOwn(folder: string, text: string, base: string | null, conflict: string): Promise<void> {
+    const before = await checkFolder(folder, this.store);
+    if (!(await writeAllowFile(folder, text, base))) {
+      await this.readAllow();
+      throw new ClaudeRefusal('stale', conflict);
+    }
+    const after = await checkFolder(folder, this.store);
+    const others = (files: readonly ControlFileView[]) => JSON.stringify(files.filter((f) => !isAllowFile(f.path)));
+    const written = after.files.find((f) => isAllowFile(f.path));
+    if (
+      before.trust.state === 'confirmed' &&
+      after.trust.state === 'pending' &&
+      others(before.files) === others(after.files) &&
+      written?.kind === 'file' &&
+      written.hash === `sha256:${allowFileHash(text)}`
+    ) {
+      await this.store.confirm(folder, after.files);
+    }
+    await this.checkFolder();
   }
 
   /** The app-owned MCP config of this project, in the user data (never in the project), written before each turn. */
@@ -362,7 +453,7 @@ export class ClaudePanel {
         // after a turn of a new session, the transcript's first read replaces what the stream showed
         const replace = this.provisionalFrom !== null && !this.running && r.entries.length > 0;
         if (replace) this.provisionalFrom = null;
-        this.feed = [...r.entries.map((e) => this.fromEntry(e)), ...(replace ? [] : this.feed.filter((i) => i.provisional))];
+        this.feed = [...r.entries.map((e) => this.fromEntry(e)), ...(replace ? this.keptDenials() : this.feed.filter((i) => i.provisional))];
         this.feedError = null;
         this.emit();
         return;
@@ -372,12 +463,14 @@ export class ClaudePanel {
       m.offset = r.offset;
       if (r.entries.length > 0 || r.reset) {
         // the CLI has written the turn's lines: they replace what the stream showed
+        let kept: FeedItem[] = [];
         if (this.provisionalFrom !== null) {
+          kept = this.keptDenials();
           this.feed = this.feed.filter((i) => !i.provisional);
           this.provisionalFrom = null;
         }
         const items = r.entries.map((e) => this.fromEntry(e));
-        this.feed = r.reset ? items : [...this.feed, ...items];
+        this.feed = r.reset ? [...items, ...kept] : [...this.feed, ...items, ...kept];
         this.feedError = null;
         this.emit();
       }
@@ -392,6 +485,14 @@ export class ClaudePanel {
     } finally {
       this.mirroring = false;
     }
+  }
+
+  /**
+   * The denied calls of the turn that streamed, kept when the transcript's lines replace the stream: the transcript does
+   * not carry the rule a denial would need, and "Allow this from now on" stays reachable after the reply (F-814).
+   */
+  private keptDenials(): FeedItem[] {
+    return this.feed.filter((i) => i.provisional && i.kind === 'denied').map((i) => ({ ...i, provisional: false }));
   }
 
   /** Mirrors a session (or none: a new chat). Refused while a turn runs. */

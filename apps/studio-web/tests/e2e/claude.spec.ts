@@ -103,7 +103,7 @@ test('the bridge is window.studioClaude with exactly its functions, frozen; the 
     const c = window.studioClaude as unknown as Record<string, unknown>;
     return { keys: Object.keys(c).sort(), frozen: Object.isFrozen(c), fns: Object.values(c).every((v) => typeof v === 'function') };
   });
-  expect(shape).toEqual({ keys: ['cancel', 'confirm', 'offState', 'onState', 'refresh', 'select', 'send', 'state'], frozen: true, fns: true });
+  expect(shape).toEqual({ keys: ['allow', 'cancel', 'confirm', 'offState', 'onState', 'refresh', 'select', 'send', 'state', 'undoAllow'], frozen: true, fns: true });
   const odd = await page.evaluate(() => (window.studioClaude.send as unknown as (s: unknown, t: unknown) => Promise<{ ok: boolean; error?: { code: string } }>)('--dangerously-skip-permissions', 'hi'));
   expect(odd).toMatchObject({ ok: false, error: { code: 'bad_request' } });
   expect(await fx.chats()).toEqual([]);

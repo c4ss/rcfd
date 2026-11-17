@@ -665,6 +665,8 @@ const claude: ClaudeBridge = {
   cancel: () => claudeSend({ op: 'cancel', id: nextClaudeId++ }),
   confirm: (token) => claudeSend({ op: 'confirm', id: nextClaudeId++, token }),
   refresh: () => claudeSend({ op: 'refresh', id: nextClaudeId++ }),
+  allow: (rule, base) => claudeSend({ op: 'allow', id: nextClaudeId++, rule, base }),
+  undoAllow: (force) => claudeSend({ op: 'undoAllow', id: nextClaudeId++, force }),
 };
 
 contextBridge.exposeInMainWorld('studioClaude', claude);

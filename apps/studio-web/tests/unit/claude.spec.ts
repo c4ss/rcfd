@@ -15,10 +15,14 @@ import {
   checkArgsIn,
   ForbiddenArgument,
   parseAllowFile,
+  allowFileHash,
+  allowFileText,
   parseRule,
   PROJECT_READ_TOOLS,
+  readAllowText,
   ruleProblem,
   suggest,
+  withRule,
 } from '../../src/main/claude/allow.js';
 import { parseClaudeRequest } from '../../src/main/claude/bridge.js';
 import { claudeConfig, type ClaudeConfig } from '../../src/main/claude/config.js';
@@ -139,6 +143,43 @@ test.describe('the conservative allow-list (G11)', () => {
     }
   });
 
+  test('adding a rule (F-814): only a valid rule, never approve-everything, never twice, never to a refused file', () => {
+    // no file: the Studio's first list is kept, then the rule
+    const added = withRule(null, 'Bash(echo hello > made_by_bash.txt)');
+    if ('refused' in added) throw new Error(added.refused);
+    expect(added.rules).toEqual([...AllowList.initial().values, 'Bash(echo hello > made_by_bash.txt)']);
+    expect(parseAllowFile(added.text)).toMatchObject({ kind: 'list' });
+    expect(JSON.parse(added.text)).toEqual({ version: 1, rules: added.rules });
+    // a file: its rules, then the rule
+    const file = allowFileText(['Bash(git status)']);
+    const more = withRule(file, 'Edit(./notes/plan.md)');
+    expect('refused' in more ? more.refused : more.rules).toEqual(['Bash(git status)', 'Edit(./notes/plan.md)']);
+    // the refusals of the file's own rules and of the spawn's argument check
+    for (const bad of [
+      'Bash',
+      'Edit',
+      'Write',
+      'Bash(*)',
+      'Bash(* --x)',
+      'Edit(*)',
+      'Edit(.rcfd/claude-allow.json)',
+      'Edit(.claude/settings.json)',
+      'Read(../secret)',
+      'Bash(--dangerously-skip-permissions)',
+      'bypassPermissions',
+      'Bash(rm -rf /, Edit)',
+      '--permission-mode',
+      'Grep(x)',
+    ]) {
+      expect('refused' in withRule(null, bad), bad).toBe(true);
+    }
+    expect(withRule(file, 'Bash(git status)')).toEqual({ refused: 'Bash(git status) is already allowed by .rcfd/claude-allow.json' });
+    const broken = withRule(JSON.stringify({ version: 1, rules: ['Bash'] }), 'Bash(git status)');
+    expect('refused' in broken && broken.refused).toContain('correct the file before a rule is added');
+    expect(allowFileHash(null)).toBeNull();
+    expect(allowFileHash(file)).toMatch(/^[0-9a-f]{64}$/);
+  });
+
   test('a denied call gets the narrowest exact rule, never a wildcard or a path outside the project', () => {
     const project = path.resolve('/proj/demo');
     expect(suggest('Bash', { command: 'echo hello > made_by_bash.txt' }, project)).toEqual({ kind: 'bash', pattern: 'echo hello > made_by_bash.txt' });
@@ -242,10 +283,22 @@ test.describe('the Claude port checks every message', () => {
       { op: 'spawn', id: 4 },
       { op: 'state', id: -1 },
       'state',
+      // F-814: allow takes exactly a rule and a base (null or a SHA-256), undoAllow exactly force
+      { op: 'allow', id: 5, rule: 'Bash(git status)' },
+      { op: 'allow', id: 5, rule: '', base: null },
+      { op: 'allow', id: 5, rule: 'x'.repeat(2001), base: null },
+      { op: 'allow', id: 5, rule: 'Bash(git status)', base: 'abc' },
+      { op: 'allow', id: 5, rule: 'Bash(git status)', base: null, file: '.rcfd/claude-allow.json' },
+      { op: 'allow', id: 5, rule: ['Bash'], base: null },
+      { op: 'undoAllow', id: 6 },
+      { op: 'undoAllow', id: 6, force: 'yes' },
     ]) {
       expect(parseClaudeRequest(bad).ok, JSON.stringify(bad)).toBe(false);
     }
     expect(isUuid(S1)).toBe(true);
+    expect(parseClaudeRequest({ op: 'allow', id: 5, rule: 'Bash(git status)', base: null })).toMatchObject({ ok: true });
+    expect(parseClaudeRequest({ op: 'allow', id: 5, rule: 'Bash(git status)', base: 'a'.repeat(64) })).toMatchObject({ ok: true });
+    expect(parseClaudeRequest({ op: 'undoAllow', id: 6, force: false })).toMatchObject({ ok: true });
   });
 });
 
@@ -367,8 +420,11 @@ test.describe('the panel (main process) against the fake claude', () => {
     const v = view(r);
     expect(v.turn).toMatchObject({ status: 'finished', mode: 'dontAsk', exitCode: 0 });
     await until(() => view(r).feed.filter((f) => f.kind === 'user').length === 2 && !view(r).feed.some((f) => f.provisional), 5000, 'the transcript lines of the turn');
-    expect(view(r).feed.at(-1)).toMatchObject({ kind: 'assistant', provisional: false });
-    expect(view(r).feed.at(-1)!.text).toContain(RUN);
+    const reply = view(r).feed.filter((f) => f.kind === 'assistant').at(-1);
+    expect(reply).toMatchObject({ kind: 'assistant', provisional: false });
+    expect(reply!.text).toContain(RUN);
+    // F-814: the turn's denied call stays after the transcript replaced the stream (the transcript has no rule for it)
+    expect(view(r).feed.at(-1)).toMatchObject({ kind: 'denied', provisional: false, suggestion: 'Bash(echo hello > made_by_bash.txt)' });
     // the denied Bash call showed with its narrowest rule while the turn streamed
     expect(r.states.some((s) => s.project?.feed.some((f) => f.kind === 'denied' && f.suggestion === 'Bash(echo hello > made_by_bash.txt)'))).toBe(true);
     await r.panel.setProject(null);
@@ -469,7 +525,9 @@ test.describe('the panel (main process) against the fake claude', () => {
     const [c] = await r.fx.chats();
     expect(c!.argv.slice(-2)).toEqual(['--session-id', session]);
     await until(() => view(r).sessions.find((s) => s.id === session && s.open === 'closed'), 10_000, 'the new session listed');
-    await until(() => view(r).feed.length === 2 && view(r).feed.every((f) => !f.provisional), 5000, 'the transcript of the new session');
+    // the transcript's two lines, and the turn's denied call kept after them (F-814)
+    await until(() => view(r).feed.length === 3 && view(r).feed.every((f) => !f.provisional), 5000, 'the transcript of the new session');
+    expect(view(r).feed.map((f) => f.kind)).toEqual(['user', 'assistant', 'denied']);
   });
 
   test('a turn whose CLI did not apply dontAsk is stopped at once', async () => {
@@ -539,6 +597,72 @@ test.describe('the panel (main process) against the fake claude', () => {
     expect(c!.argv.slice(i + 1, c!.argv.indexOf('--session-id'))).toEqual(['mcp__rcfd_project__list_runs', 'Bash(git status)']);
   });
 
+  test('Allow this from now on (F-814): the suggested rule is written to the file, conflict-safe, then used; undo takes it out', async () => {
+    const RULE = 'Bash(echo hello > made_by_bash.txt)';
+    const r = await rig('allow-add');
+    await r.panel.setProject(r.folder);
+    expect(view(r).trust).toEqual({ state: 'confirmed', files: 0 });
+    expect(view(r).allow).toMatchObject({ source: 'initial', hash: null, undo: null });
+    // nothing suggested yet: no rule can be added
+    expect(((await r.panel.allowRule(RULE, null).catch((x: unknown) => x)) as ClaudeRefusal).code).toBe('bad_request');
+    await r.panel.send(null, 'hi');
+    await settle(r);
+    await until(() => (view(r).feed.some((f) => f.kind === 'denied' && f.suggestion === RULE && !f.provisional) ? true : null), 5000, 'the denial kept');
+    // a rule other than the suggestion is refused, even a valid one
+    expect(((await r.panel.allowRule('Bash(git status)', null).catch((x: unknown) => x)) as ClaudeRefusal).code).toBe('bad_request');
+    // a base that is not the file's: stale, nothing written
+    expect(((await r.panel.allowRule(RULE, 'a'.repeat(64)).catch((x: unknown) => x)) as ClaudeRefusal).code).toBe('stale');
+    expect(await readAllowText(r.folder)).toBeNull();
+    await r.panel.allowRule(RULE, null);
+    const text = await readAllowText(r.folder);
+    expect(JSON.parse(text!)).toEqual({ version: 1, rules: [...AllowList.initial().values, RULE] });
+    expect(view(r).allow).toMatchObject({ source: 'file', hash: allowFileHash(text), undo: RULE });
+    // the Studio's own write keeps the folder confirmed; the record is outside the project
+    expect(view(r).trust).toEqual({ state: 'confirmed', files: 1 });
+    // the next chat passes the rule
+    await r.panel.send(null, 'again');
+    await settle(r);
+    const chats = await r.fx.chats();
+    expect(chats[1]!.argv).toContain(RULE);
+    expect(chats[1]!.argv.filter((a) => APPROVE_EVERYTHING.some((re) => re.test(a)))).toEqual([]);
+    // another writer changes the file: undo is refused (stale) and the file is kept; force puts back the first list
+    const theirs = allowFileText([...AllowList.initial().values, RULE, 'Bash(git status)']);
+    await writeFile(path.join(r.folder, '.rcfd', 'claude-allow.json'), theirs);
+    expect(((await r.panel.undoAllow(false).catch((x: unknown) => x)) as ClaudeRefusal).code).toBe('stale');
+    expect(await readAllowText(r.folder)).toBe(theirs);
+    await r.panel.undoAllow(true);
+    // the other writer's change was a change of a control file the Studio did not make: it still asks before a chat
+    expect(view(r).trust.state).toBe('pending');
+    expect(await readAllowText(r.folder)).toBe(allowFileText(AllowList.initial().values));
+    expect(view(r).allow).toMatchObject({ source: 'file', rules: AllowList.initial().values, undo: null });
+    expect(((await r.panel.undoAllow(false).catch((x: unknown) => x)) as ClaudeRefusal).code).toBe('bad_request');
+    await r.panel.setProject(null);
+  });
+
+  test('Allow this from now on: refused while the folder’s control files are not confirmed, or the file is refused', async () => {
+    const RULE = 'Bash(echo hello > made_by_bash.txt)';
+    const r = await rig('allow-trust');
+    await r.panel.setProject(r.folder);
+    await r.panel.send(null, 'hi');
+    await settle(r);
+    await until(() => (view(r).feed.some((f) => f.kind === 'denied' && f.suggestion === RULE) ? true : null), 5000, 'the denial');
+    await writeFile(path.join(r.folder, 'CLAUDE.md'), '# new instructions\n');
+    expect(((await r.panel.allowRule(RULE, null).catch((x: unknown) => x)) as ClaudeRefusal).code).toBe('not_confirmed');
+    expect(await readAllowText(r.folder)).toBeNull();
+    const t = view(r).trust;
+    if (t.state === 'pending') await r.panel.confirm(t.token);
+    // a refused file is not added to
+    await mkdir(path.join(r.folder, '.rcfd'), { recursive: true });
+    const bad = JSON.stringify({ version: 1, rules: ['Bash'] });
+    await writeFile(path.join(r.folder, '.rcfd', 'claude-allow.json'), bad);
+    await r.panel.refresh();
+    const t2 = view(r).trust;
+    if (t2.state === 'pending') await r.panel.confirm(t2.token);
+    expect(((await r.panel.allowRule(RULE, allowFileHash(bad)).catch((x: unknown) => x)) as ClaudeRefusal).code).toBe('refused');
+    expect(await readAllowText(r.folder)).toBe(bad);
+    await r.panel.setProject(null);
+  });
+
   test('not configured: sessions are still listed from their transcripts, read-only, and nothing is started', async () => {
     const r = await rig('off');
     const panel = new ClaudePanel({
@@ -568,5 +692,6 @@ test('claude.css uses only defined tokens and no colour literals or rounded corn
   expect(css.match(/#[0-9a-f]{3,8}\b|rgba?\(|hsla?\(|oklch\(/gi) ?? []).toEqual([]);
   const radii = [...css.matchAll(/border-radius:\s*([^;]+)/g)].map((m) => m[1]!.trim());
   expect(radii.filter((v) => v !== 'var(--radius-none)' && v !== '0')).toEqual([]);
-  expect(css).toContain('background: var(--color-meadow)'); // the head, as DESIGN.md says
+  expect(css).toContain('background: var(--role-claude-head)'); // the head, DESIGN.md's claude-head role (meadow)
+  expect(css).not.toContain('var(--color-meadow)');
 });

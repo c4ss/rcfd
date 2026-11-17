@@ -3,7 +3,9 @@
 // instance (settings.schema), lists the service's sessions (session.list), makes a session from the engine's defaults
 // (session.create), and passes the service's events on to the surface so a change made by another writer shows.
 // Loaded on demand from main.tsx. F-829: undo and redo of the session's edits in the header band, and Close session,
-// which cannot be undone, asks first in words that name what is lost.
+// which cannot be undone, asks first in words that name what is lost. F-837 (the maintainer, 2026-11-17): when the
+// session holds case-editor changes not saved, Close session asks with the shared save-or-discard prompt
+// (../case/closeGuard.tsx: Save and close, Close and lose them, Keep editing) instead of that question.
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import type { ServiceState } from '../../shared/service.js';
 import { dispatch, history, watchEvents, watchServiceState } from '../actions/index.js';
@@ -14,6 +16,8 @@ import { Button, IconButton, Quiet, Select } from '../ui/index.js';
 import { caseModel, type CaseModel } from './schema.js';
 import { SettingsSurface } from './SettingsSurface.js';
 import { STUDIO_SETTINGS_HASH } from '../studio-settings/hash.js';
+import { confirmClose } from '../case/closeGuard.js';
+import { caseDoor } from '../case/door.js';
 import './settings.css';
 
 export const SETTINGS_HASH = '#/settings';
@@ -133,6 +137,14 @@ export default function SettingsPage() {
 
   const askClose = async (id: string) => {
     setCloseError(null);
+    // F-837: unsaved case edits of this session are asked about by the shared prompt; a choice there is the answer
+    const guard = await confirmClose({ kind: 'session', session: id });
+    if (guard === 'cancel') return;
+    if (guard !== 'clean') {
+      await close(id);
+      await caseDoor.forget(id);
+      return;
+    }
     const st = await dispatch('run.status', { session: id });
     const facts = { ...(st.ok ? statusFacts(st.result) : {}), edits: history().view(id).titles };
     setClosing({ session: id, loss: NO_INVERSE['session.close']({ session: id }, facts) ?? '' });
