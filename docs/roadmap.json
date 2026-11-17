@@ -7615,9 +7615,9 @@
     "deps": [
       "F-731"
     ],
-    "status": "todo",
+    "status": "partial",
     "acceptance": "Every limit not stated here is registered in the ADR before the run. A cylinder oscillating across a uniform stream at Re 100 inside the lock-in range, at a forcing point where the first harmonic of the lift is at least half the fixed cylinder's lift amplitude in the body-fitted reference, gives the shedding locked to the forcing, the mean drag, the lift amplitude and the phase of the lift against a body-fitted moving-mesh run of this repository within registered limits that allow for the natural-frequency difference of the two discretisations, with the lift limits stated against a fixed force scale as well as relative; the force series are kept for diagnosis; a negative control with the body velocity left out of the forcing misses the lift amplitude and phase.",
-    "note": "Follow-up of F-731 (ADR 0657, 2026-11-16)."
+    "note": "Moving immersed shapes at lock-in where the lift does not cancel. Follow-up of F-731 (ADR 0657). PARTIAL (ADR 0671, 2026-11-16): test-only, no library change (default bits unchanged by construction). A registered body-fitted scan chose the forcing point: 128 x 64 O-grid runs at A/D 0.5 (f D/U 0.17 to 0.20) and A/D 0.25 (0.13 to 0.16), dt = T/700, 20 periods, with the negative control (body velocity left out of the forcing) on a D/20 immersed mesh at the four candidates, and a mechanical rule (locked within 0.01 with both neighbours, first lift harmonic at least 0.75 of the F-731 fixed lift, amplitude and phase changes to the neighbours within 25 per cent and 30 degrees, the control at least 24 degrees and 24 per cent off). No candidate qualified, so the compared immersed and body-fitted runs were not made: at A/D 0.5 the lift jumps from 0.33 to 1.11 between f 0.18 and 0.19 and is not locked within 0.01 from 0.19, and the control's phase (+28.7 degrees) lies only 8.9 degrees from the reference's at 0.18, where the added mass dominates; at A/D 0.25 every run is locked but the harmonic is 0.029 to 0.154 (0.16 to 0.87 of the fixed lift) and grows by 40 to 80 per cent per 0.01 of frequency, the cancellation moved rather than removed. Every force series is written to a file and read back bit for bit, hashes recorded. Lift limits are registered relative and against a fixed scale (fixed-cylinder lift plus the added-mass force amplitude) for the main record, which stays ignored and not run. Eight fast tests (one corrected by an amendment, the first kept as a known-miss record), eleven of eleven mutations caught. Not included: the comparison itself, other amplitudes, a map of the lock-in range, a case-file key (open, F-307 schema golden). Follow-up F-756 (Moving immersed shapes at lock-in near the natural frequency at the smaller amplitude)."
   },
   {
     "id": "F-751",
@@ -7673,5 +7673,16 @@
     "status": "todo",
     "acceptance": "Every limit not stated here is registered in the ADR before the run. Test-only hooks (feature-gated, off in every default build) that delay a waiter's attempt and that hold a handle on the lock file without delete sharing; with them the old acquire starves to LockBusy in a registered share of trials and the claim of ADR 0669 never does; the removal of the lock in EditLock::drop retried on a transient error with a logged failure, a lock left behind shown before and removed after; the default bits and every ADR 0135 and ADR 0669 check keep their results.",
     "note": "Follow-up of F-751 (ADR 0669, 2026-11-16)."
+  },
+  {
+    "id": "F-756",
+    "title": "Moving immersed shapes at lock-in near the natural frequency at the smaller amplitude",
+    "phase": 9,
+    "deps": [
+      "F-750"
+    ],
+    "status": "todo",
+    "acceptance": "Every limit not stated here is registered in the ADR before the run. A cylinder oscillating across a uniform stream at Re 100 with A/D 0.25, at a forcing point between the natural frequency and 10 per cent above it chosen by a registered body-fitted scan whose conditioning is measured over the comparison's own frequency bracket, where the first harmonic of the lift is at least half the fixed cylinder's lift amplitude in the body-fitted reference, gives the shedding locked to the forcing, the mean drag, the lift amplitude and the phase of the lift against a body-fitted moving-mesh run of this repository within registered limits that allow for the natural-frequency difference of the two discretisations, stated relative and against a fixed force scale; the force series are kept for diagnosis; a negative control with the body velocity left out of the forcing misses the lift amplitude and phase.",
+    "note": "Follow-up of F-750 (ADR 0671, 2026-11-16)."
   }
 ]
