@@ -555,6 +555,14 @@ someone kept:
   and 0.02 it is 13. The sample is derivable from the file, so it guards against mistakes and version drift, not a deliberate
   forger. Records without the key keep the bytes and hashes of ADR 0624 and are read as before; code of ADR 0624 reading a new
   record ignores the key and re-runs all or none.
+* For evidence from an evaluator outside the maintainer's control, `verify_drawn(ledger, id, model, sample, seed)` (ADR 0693)
+  reads the ledger, then draws k pairs from a verifier's seed that is not in the file (`DrawSeed::Given`, or `DrawSeed::Entropy`
+  from std's OS-seeded `RandomState`; not a cryptographic generator), re-runs both arms of each with the trusted model, and only
+  then appends a `hypothesis_drawn_check` entry with the seed, the pairs and the outcome. An evaluator that read the registration
+  and was honest exactly on the F-727 sample is caught with probability `1 - C(m, k) / C(n, k)` (m the honest pairs); for 64 pairs
+  and the 13-pair F-727 sample, k = 3 catches it in 0.993 of worlds while the F-727 sample never does. `check_drawn` is the same
+  check without the append, `drawn_record_problems` redoes a recorded check. `verify`, `lessons` and every existing record are
+  unchanged by drawn records; `lessons` does not read them yet.
 * Two held metrics (ADR 0665; "at equal flow and speed") are registered with `register_with_floor(ledger, h, model)`: the two
   compensating parameters are solved together in each arm by a damped Newton iteration on the held residuals (forward-difference
   Jacobian, backtracking on the tolerance-scaled residual, kept inside the brackets), and the registration computes the
