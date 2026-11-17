@@ -282,3 +282,37 @@ response depends on the forcing through `f / f0` near the point. First-order for
   recommendation): (b) would let the rule pick a point that G0 may then fail by a few tenths of a per cent.
 - **Q3. The conditioning screen.** Options: (a) the bracket's end-to-end change at 0.8 of the J1 limits, as registered; (b) the
   J1 limits themselves. Taken (a) on the standing instruction (arithmetic 4).
+
+## Amendment 1 (2026-11-17, the scan of D2; written after the scan and before any main run)
+
+The scan record `f756_scan_record` was run once (test file 8a8a666c, release, twelve threads, 3 438 s wall on the shared machine;
+log `w49i-work/f756-scratch/logs/scan_record.log`). Every run finished (SS1): largest step continuity 7.2e-10, largest Courant
+0.59; every series written to `w49i-work/f756-scratch/series` and read back bit for bit (K1). SR: the twelve F-750 series all
+have the hashes of ADR 0671 amendment 1, and the measures recomputed from the A/D 0.25 files equal ADR 0671's printed digits.
+
+| Run | f (dt of) | L1 | `abs(Lhat)` | `/ S731` | phase (deg) | mean drag | `C_a`, `C_v` | series hash |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| BFc C1 | 0.170 (0.170) | 6.6e-5 | 0.24923 | 1.403 | +72.09 | 0.8309 | 0.34, -0.47 | c4f87f3591a650f4 |
+| BFc C1- | 0.165278 (0.170) | 3.4e-6 | 0.19817 | 1.116 | +84.01 | 0.8132 | 0.10, -0.39 | b718d6edfdee2845 |
+| BFc C1+ | 0.175000 (0.170) | 6.3e-4 | 0.32074 | 1.806 | +58.61 | 0.8467 | 0.70, -0.55 | 012e42eee3f0a7dc |
+| BFc C2 | 0.175 (0.175) | 6.3e-4 | 0.31974 | 1.800 | +58.75 | 0.8466 | 0.70, -0.55 | 9ef2d21ebbc6a854 |
+| BFc C2- | 0.170139 (0.175) | 7.0e-5 | 0.25018 | 1.409 | +71.84 | 0.8312 | 0.35, -0.48 | 2a703fb17a545ecf |
+| BFc C2+ | 0.180147 (0.175) | 1.9e-3 | 0.43508 | 2.450 | +40.95 | 0.8534 | 1.31, -0.57 | 38b9af7f307c0678 |
+| BFc C3 | 0.180 (0.180) | 2.0e-3 | 0.42921 | 2.417 | +41.79 | 0.8536 | 1.27, -0.57 | edf6cda85cd915ff |
+| BFc C3- | 0.175000 (0.180) | 6.2e-4 | 0.31881 | 1.795 | +58.88 | 0.8465 | 0.69, -0.55 | 3021c78fc1036546 |
+| BFc C3+ | 0.185294 (0.180) | 2.2e-2 | 0.63051 | 3.550 | +1.37 | 0.7707 | 2.37, -0.03 | bfc604227c817292 |
+| N1 G20 C1 | 0.170 | 9.4e-3 | 0.78286 | | +11.87 | 0.8710 | 3.42, -0.32 | fe71184bbdb4fd9e |
+| N1 G20 C2 | 0.175 | 8.8e-3 | 0.72154 | | +9.20 | 0.8554 | 3.00, -0.23 | ff0fbc3ee2b8b4c2 |
+| N1 G20 C3 | 0.180 | 7.1e-3 | 0.67205 | | +8.34 | 0.8444 | 2.65, -0.19 | 36f35a8eb9021646 |
+
+The rule of D2:
+
+| Candidate | S0 | S1 (L1 <= 0.01, c and bracket) | S2 (`>= 0.133215`) | S3 (bracket: `m_c <= 0.20`, phase <= 20 deg) | S4 (N1: >= 24 deg, >= 0.24) | qualifies |
+| --- | --- | --- | --- | --- | --- | --- |
+| C1 (0.170) | yes (1.0316) | yes | yes (0.249) | **no** (`m_c` 0.492, phase -25.4 deg) | yes (60.2 deg, 2.14) | no |
+| C2 (0.175) | yes (1.0619) | yes | yes (0.320) | **no** (`m_c` 0.578, phase -30.9 deg) | yes (49.6 deg, 1.26) | no |
+| C3 (0.180) | yes (1.0923) | **no** (`c+` 2.2e-2) | yes (0.429) | **no** (`m_c` 0.726, phase -57.5 deg) | yes (33.5 deg, 0.57) | no |
+
+**No candidate qualifies.** By D2 no main record is run and the decision is partial; `SELECTED` stays `None` in the test file and
+`f756_lockin_record` stays ignored and not run. The candidates and the bracket are not changed. Nothing else of this registration
+changes.
