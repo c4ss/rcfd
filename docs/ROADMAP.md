@@ -15629,14 +15629,29 @@ fixed by the item's registration ADR before any code.
     catches that). The O1 points hash of ADR 0673 and the f766, f758, f715 and lib tests are unchanged. Not covered: the
     outside point at the first or middle window position, failed or pending observations in the window, a window other
     than d + 1, one function and one seed.
-- [ ] **F-771** Body force in the fractional step
+- [~] **F-771** Body force in the fractional step
   - depends on: F-757
   - acceptance: the fractional step reads PimpleSolver::body_force behind an opt-in (the predictor's cell term, the
     balanced-force face term of the intermediate flux and the walls' pressure gradient as in the PISO step), defaults
     bit-identical; on ADR 0672's channel with its body force the fractional run with coupled_ddt_correction is within a
     registered limit of its twin on every step where the run without the opt-in is not, and a hydrostatic rest state
     stays at rest within a registered limit. Every limit not stated here is registered in the ADR before the run.
-  - note: Follow-up of F-757 (ADR 0687, 2026-11-16).
+  - note: ADR 0691, 2026-11-17: with the opt-in PimpleSettings::fractional_body_force (incremental form only, the Chorin
+    form refused; default false, bit-identical) the fractional step reads PimpleSolver::body_force in the PISO step's
+    three places: the walls' balancing pressure gradient (pressure::apply_body_force_wall_gradient, now shared with the
+    PISO step), the predictor's cell term, and the balanced-force face term c_f (b_f . S - B_f . S) with each face's
+    pressure coefficient (dte, or the harmonic Gamma with fractional_step_consistent and on coupled faces with
+    coupled_ddt_correction). On ADR 0672's channel with its body force (0.8, -2) from the hydrostatic start the
+    fractional run with coupled_ddt_correction stays within 1.8e-14 U_ref of its unrolled twin on every one of 200 steps
+    (limit 1e-8) against 4.4e-4 to 1.5e-3 without it; pair fluxes opposite to 4.4e-16. A discrete hydrostatic rest state
+    (a non-uniform potential force on the skewed periodic mesh) stays exactly at rest (limit 1e-10) with the twin
+    settings and with the plain fractional step, against 2.2e-3 without the opt-in; the start-up channel matches its 1-D
+    discrete model to 5.4e-14 and the closed form to 5.5e-3. The plain start-up run first missed its model by 5.8e-2
+    (kept as a known miss): the lagged periodic partner of the default fractional predictor, not the body force; with
+    fractional_periodic_implicit it is within 5.4e-14. Seven of seven mutations caught (opt-in not read, cell term, face
+    term, coupled face term, wall gradient, dte in place of Gamma, coupled ddt term). Not covered: BDF2, non-orthogonal
+    correction, rotational pairs, fixed-pressure faces, the hook's source_force; whether the opt-in becomes the default
+    is open for the maintainer. Follow-up F-775 (Fractional-step coupled-face opt-ins as defaults).
 - [ ] **F-772** Retro-registration ADRs and ADR paths in file headers as primary evidence for file-citation-only tests
   - depends on: F-768
   - acceptance: Every limit not stated here is registered in the ADR before the run. A header comment that names an ADR
@@ -15666,3 +15681,10 @@ fixed by the item's registration ADR before any code.
     backtracking of the predictor from the full step on an inadmissible trial, opt-in, and whether the block then solves
     to full load; the default bits unchanged.
   - note: Follow-up of F-767 (ADR 0688, 2026-11-16).
+- [ ] **F-775** Fractional-step coupled-face opt-ins as defaults
+  - depends on: F-771, F-757
+  - acceptance: the maintainer decides whether fractional_body_force, fractional_periodic_implicit and
+    coupled_ddt_correction (with fractional_step_consistent) become the fractional step's defaults; if so, the changed
+    default results are listed case by case, the hash tables are re-recorded only with the maintainer's approval, and
+    ADR 0687's and ADR 0691's twin checks pass with the defaults alone.
+  - note: Follow-up of F-771 (ADR 0691, 2026-11-16).
