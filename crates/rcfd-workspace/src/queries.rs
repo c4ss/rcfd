@@ -171,7 +171,9 @@ impl Workspace {
             .map(|i| json!({"path": self.rel(&i.path), "message": i.message}))
             .collect();
         let mut v = json!({"runs": [], "total": rows.len(), "offset": offset, "next_offset": null,
-            "skipped": skipped, "skipped_total": all.skipped.len()});
+            "skipped": skipped, "skipped_total": all.skipped.len(),
+            // ADR 0734 P2: the unit of each row's time
+            "time_unit": rcfd_project::records::TIME_UNIT});
         let mut size = text_len(&v);
         let mut out = Vec::new();
         for r in rows.iter().skip(offset).take(limit) {
@@ -203,9 +205,13 @@ impl Workspace {
             .iter()
             .filter_map(|l| serde_json::from_str(l).ok())
             .collect();
+        // ADR 0734 P1, P2: the latest launch record (null before the launch, or for a run launched before ADR 0734) and
+        // the unit of status.time
+        let launch = rcfd_runner::store::latest_launch(&dir).map_err(|e| err(INTERNAL, format!("run {id}: {e}")))?;
         let mut v = json!({"run": id, "case": rec.case, "created": rec.created, "solver_version": rec.solver_version,
             "settings": rec.settings, "status": serde_json::to_value(&st).unwrap_or(Value::Null),
-            "last_residual": last, "events": events});
+            "last_residual": last, "events": events, "launch": launch,
+            "time_unit": rcfd_project::records::TIME_UNIT});
         while text_len(&v) > TEXT_BUDGET && !events.is_empty() {
             events.remove(0);
             v["events"] = json!(events);
@@ -641,6 +647,23 @@ impl Workspace {
             "path": self.rel(&path), "hash": hash_bytes(&bytes), "size": bytes.len(), "offset": offset,
             "text": &text[offset..end], "next_offset": if end < text.len() { json!(end) } else { Value::Null },
         }))
+    }
+}
+
+impl Workspace {
+    /// `hash_project_file` (ADR 0734 P4): the hash of a project file or folder (an OpenFOAM mesh) by
+    /// `rcfd_project::filehash`, the rule of `run.json` `mesh_hash`. 1004 outside the project, 1202 missing, 1003 a
+    /// symbolic link or over the limit (named in the message).
+    pub(crate) fn hash_project_file(&self, args: &Value) -> Result<Value, RpcError> {
+        use rcfd_project::filehash::{hash_path, PathHashError};
+        let rel = str_arg(args, "path");
+        let path = self.project.resolve(rel).map_err(perr)?;
+        let h = hash_path(&path).map_err(|e| match e {
+            PathHashError::Missing(_) => err(NOT_FOUND, format!("{rel}: no such file or folder")),
+            PathHashError::Symlink(_) | PathHashError::OverLimit(_) => err(VALIDATION, e.to_string()),
+            PathHashError::Io(..) => err(INTERNAL, e.to_string()),
+        })?;
+        Ok(json!({"path": self.rel(&path), "kind": h.kind, "hash": h.hash, "bytes": h.bytes, "files": h.files}))
     }
 }
 

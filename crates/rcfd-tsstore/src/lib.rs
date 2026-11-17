@@ -32,6 +32,9 @@ use std::path::{Path, PathBuf};
 
 /// Name of the store file inside the fields directory.
 pub const STORE_FILE: &str = "store.rts";
+/// The unit of a snapshot's time (ADR 0734 P2): simulated seconds; 0 for a steady run, whose `step` is the iteration.
+/// The store does not write it: `store.rts` keeps its bytes, and replies name it as `time_unit`.
+pub const TIME_UNIT: &str = "s";
 /// Name of the advisory JSON index written next to it by [`Writer::finish`].
 pub const INDEX_FILE: &str = "index.json";
 /// File magic.
