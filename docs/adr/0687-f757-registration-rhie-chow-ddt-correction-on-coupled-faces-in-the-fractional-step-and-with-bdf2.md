@@ -298,3 +298,121 @@ changes.
 **Decision rule (amended).** c3b is judged on the corrected set-up ("a BDF2 PISO run"): in the registered rule read P1b',
 NC1b', C1b', P2b', D1Lb' in place of P1b, NC1b, C1b, P2b, D1Lb, and add D7 and D8 to c2 and MX1 to the required mutations.
 P1b and P2b stay recorded as missed with the cause above. If P1b' is missed, partial (diagnosed) or todo as registered.
+
+## Addendum 1: results (2026-11-17)
+
+Measured against the limits registered above and in amendment 1; no limit was changed. Release builds on Windows, on a machine
+shared with other building agents. Commits: the registration 1a6b5031 (alone, first); the library change and the test file
+5bb12a91 (before their run); amendment 1 8bd69bfd (after the registered run's P1b miss, before any code of the correction);
+the correction and its tests fae938d8 (before their run). Each registered run was made once: the test file at 5bb12a91 (4
+tests, 8.4 s, `fast.log`), the two amendment-1 tests at fae938d8 (7.4 s, `amend1.log`), `rcfd-fv --lib`, the named files,
+`baseline_hashes`, `docs_site`. Logs in `w49i-work/f757-scratch`.
+
+**Built.** In `crates/rcfd-fv/src/pimple.rs`: the fields `fractional_periodic_implicit` and `periodic_partner_extrapolated`
+with their docs and defaults, the doc of `coupled_ddt_correction` (it is now read by the fractional step); the BDF2
+extrapolated partner of the PISO predictor (`bc_extrapolated`, the override of the translational coupled faces' `b`, `d`, and
+`q_lag = conv_cells` for the links, all only with the new field and an extrapolated step); `coupled_ddt_term` split into
+itself and `coupled_ddt_defect` (the same operations: the PISO term's bits unchanged, F-754's test passes); the doc comment
+of `ddt_history_weights` back above its function. In `crates/rcfd-fv/src/pimple/fractional.rs`: `coupled_harmonic`, the
+implicit links of the predictor (`PeriodicLinks::build`, `fix_rhs` with `conv_cells`, `residual`, `solve`), and the coupled
+faces' `Gamma R + (Gamma / dt) D` with `fractional_step_consistent` and `coupled_ddt_correction`. The new test file
+`crates/rcfd-fv/tests/coupled_ddt_fractional_bdf2_f757.rs`. One passage of `docs/dynamic-mesh.md`. No case key, no golden, no
+hash table.
+
+### Results
+
+| Check | Limit | Measured | Verdict |
+| --- | --- | --- | --- |
+| P1f (c3f) fractional `G_on(n)`, 200 steps | `<= 1e-8` each step | `1.18e-14` (step 52; step 1 `2.67e-15`) | met |
+| NC1f (c3f control) | `> 1e-8` on one step | largest `3.19e-4` (step 6); every step from 2 at least `2.05e-6`; step 1 `2.67e-15` | held |
+| P2f pressure / `(0.5 U_ref^2)` | `<= 1e-8` each step | `1.38e-13` | met |
+| D1Lf divergence / `(U_ref h dz)` | `<= 1e-9` each step | `5.5e-15` | met |
+| C1f pair sums / `(U_ref h dz)` | `<= 1e-12` each step | `4.4e-16` | met |
+| NCL without the implicit partner | `> 1e-6` on one step | `1.89e-2` (step 16) | held |
+| D5 opt-in without `sc` | bit for bit | equal every step | met |
+| D6 implicit partner without pairs | bit for bit, 20 steps | equal | met |
+| P1b (c3b, as first registered) | `<= 1e-8` each step | `4.22e-4` (step 85) | **missed** (known miss, amendment 1) |
+| NC1b | `> 1e-8` on one step | `4.19e-4` | held |
+| P2b | `<= 1e-8` each step | `8.28e-4` | **missed** |
+| D1Lb, C1b | `1e-9`, `1e-12` | `1.39e-11`, `4.4e-16` | met |
+| P1b' (c3b, amendment 1) | `<= 1e-8` each step | `3.41e-15` (step 24) | met |
+| NC1b' | `> 1e-8` on one step | largest `1.84e-5` (step 6); every step from 2 at least `8.07e-6`; step 1 `2.06e-15` | held |
+| P2b', D1Lb', C1b' | `1e-8`, `1e-9`, `1e-12` | `8.4e-14`, `6.4e-15`, `4.4e-16` | met |
+| D7 new field under Euler, 20 steps | bit for bit | equal | met |
+| D8 new field without pairs, BDF2, 20 steps | bit for bit | equal | met |
+| S1fb (supporting) fractional BDF2 | `<= 1e-8` each step | `1.09e-14` | met |
+| SNC1fb | `> 1e-8` on one step | `5.31e-4` (step 3) | held |
+| G0 | `1e-12`, one-to-one | `8.9e-16`, yes | met |
+| B1 | pass | see below | met |
+
+Printed, no limit: the fractional `T_on` against `T_off` `5.9e-6 U_ref` (Euler), `1.4e-5` (BDF2); the largest old-level
+defect on `T_on`'s faces at the images of `P`'s cut `3.3e-3 U_ref h dz` (fractional; estimate up to `3e-3`), `4.3e-5` (PISO
+BDF2, as ADR 0675's Euler); the fractional BDF2 pressure `3.2e-13`, divergence `5.5e-15`, pair sums `4.4e-16`. `G_off` of the
+fractional run `2e-6` to `3.2e-4` against the estimate `1e-6` to `1e-3`.
+
+Suites (release, run once, all passed; ignored records not run): `baseline_hashes` 3 passed, 1 ignored; `rcfd-fv --lib` 115
+passed, 6 ignored; `coupled_ddt_correction_f754` 2; `skewed_periodic_channel_f752` 3; `rotational_sector_pressure_part_f753`
+3; `periodic` 3; `consistent_periodic_f367` 13 (2 ignored); `fractional_step` 13 (3 ignored); `fractional_step_consistent_f454`
+3; `w33b_default_bits` 1; `w33b_transient_order` 6 (9 ignored); `step_consistent_paths_f443` 5 (2 ignored);
+`piso_thin_gap_f299` 18 (2 ignored; 75 s); `sliding_annulus_inlet_f744` 2 (1 ignored). `cargo fmt -p rcfd-fv --check` clean;
+`cargo clippy --release -p rcfd-fv --all-targets -- -D warnings` clean. `docs_site` (this ADR and the `docs/dynamic-mesh.md` passage): 2 passed.
+
+### Mutations (scratch copy `w49i-work/f757-scratch/mut` of fae938d8, script `mutate.py`, target `target-mut`; the new test file run once per mutation)
+
+| Mutation | Must fail | Result |
+| --- | --- | --- |
+| M0 (harness, none) | none | every test passes with the registered numbers |
+| MF1 fractional coupled term not read | P1f | caught: P1f `3.19e-4` (the control's value), P2f; S1fb `5.3e-4` |
+| MF2 `dte` kept in front of `R_f` | P1f | caught: P1f `1.13e-3`, P2f; S1fb |
+| MF3 the coupled defect's sign | P1f | caught: P1f `1.21e-3`, P2f; S1fb |
+| MB1 BDF2 weights swapped where `c2 != 0` | P1b' (S1fb); P1f met | caught: P1b' `2.86e-5`, P2b'; S1fb `2.3e-3`; P1f met |
+| MB2 older level replaced by the old one | P1b' | caught: P1b' `2.65e-6`, P2b'; S1fb `2.1e-4` |
+| ML1 `fractional_periodic_implicit` not read | P1f | caught: P1f `1.73e-2`, P2f; S1fb |
+| MX1 `periodic_partner_extrapolated` not read | P1b' | caught: P1b' `4.2194e-4`, equal to the known-miss record |
+| MF4 (diagnostic) arithmetic pair mean | none | caught too: P1f `2.24e-6`, S1fb `2.1e-6` |
+
+Seven of seven required mutations caught; D5 to D8 held under every mutation.
+
+### Deviations
+
+- Amendment 1 (registered before its code and run): the first BDF2 PISO set-up missed P1b and P2b by a pre-existing
+  difference (the lagged periodic partner of the BDF2 deferred-correction state), not by the ddt term; the record is kept as
+  `bdf2_piso_channel_against_the_twin_known_miss`; c3b is met on the corrected set-up with a third opt-in.
+- Amendment 1 says B1 adds `piso_thin_gap_f299` "already in the list": it was not in the registered B1 list; it was run
+  (passed) because the PISO step changed. `sliding_annulus_inlet_f744` was run as well.
+
+### Not covered
+
+The fractional step's flow is not ADR 0672's body-force flow (the fractional step reads no body force; Q2); the fractional
+runs have no non-orthogonal correction; translational pairs only (the fractional step's rotational pairs keep a lagged
+partner and an unrotated partner pressure gradient; `periodic_partner_extrapolated` leaves rotational pairs lagged); the
+incremental form only; not on a moving mesh or with `rhie_chow_step_consistent`; one channel, 2-D; the least-squares momentum
+gradient's coupled face values stay lagged under BDF2 (not used by this set-up); no case key; the defaults unchanged (a
+default BDF2 periodic PISO run still differs from its twin by up to `4.2e-4 U_ref` on this channel).
+
+### Decision
+
+By the rule as amended: P1f, NC1f, P1b', NC1b', C1f, C1b', D5, D6, D7, D8 and B1 met; P2f, P2b', D1Lf, D1Lb', G0 and NCL
+held; MF1, MF2, MF3, MB1, MB2, ML1 and MX1 caught; S1fb and SNC1fb met. P1b and P2b of the first set-up are missed with the
+cause diagnosed (amendment 1). **Done** on the amended rule, conditional on Q2: the registered rule gives partial if the
+maintainer reads "ADR 0672's channel" as its body-force flow for the fractional run, which the fractional step cannot run.
+
+### Remaining questions
+
+1. **Q2, the fractional flow.** Options: (a) accept ADR 0672's meshes with an initial velocity (taken); (b) add a body force
+   to the fractional step (follow-up below) and repeat the fractional check on the body-force flow. Recommendation (a) for
+   this item, (b) as a follow-up if the fractional step is to be used with gravity or a driving body force.
+2. **The BDF2 periodic default (new).** A default BDF2 periodic PISO run differs from its twin by the lagged partner of the
+   extrapolated state (`4.2e-4 U_ref` here). Options: (a) make `periodic_partner_extrapolated` the default with BDF2 (changes
+   default BDF2 periodic results and possibly hashes; maintainer); (b) keep it opt-in. Recommendation (a), together with ADR
+   0675 Q3 and ADR 0667 Q2 (all make the coupled face the internal face); not taken (changes default results).
+3. **The fractional step's implicit partner as default.** As 2 for `fractional_periodic_implicit` (the lagged partner gives
+   `1.9e-2 U_ref` here). Recommendation: the same single change, by the maintainer.
+
+## For the lead: roadmap entries
+
+> Proposed status: done.
+
+> ADR 0687, 2026-11-17: the opt-in PimpleSettings::coupled_ddt_correction now also acts in the fractional step with fractional_step_consistent (ADR 0356's carried-defect flux; the coupled faces take Gamma R + Gamma/dt D with the pair-harmonic Gamma and ADR 0675's coupled defect, shared as coupled_ddt_defect), with a new opt-in fractional_periodic_implicit (the implicit periodic partner of the fractional predictor, without which the periodic run differs from its twin by 1.9e-2 U_ref). On ADR 0672's meshes (from an initial velocity: the fractional step reads no body force) the fractional run stays within 1.2e-14 U_ref of its unrolled twin on every one of 200 steps (limit 1e-8) against 2e-6 to 3.2e-4 without the opt-in. The BDF2 PISO run first missed (4.2e-4, kept as a known miss): the lagged periodic partner of the BDF2 deferred-correction state, a pre-existing difference; with a new opt-in periodic_partner_extrapolated the BDF2 PISO run with ADR 0672's flow stays within 3.4e-15 of the twin against 8e-6 to 1.8e-5 without coupled_ddt_correction; the fractional step with BDF2 within 1.1e-14. Pair fluxes opposite to 4.4e-16. Seven of seven mutations caught (term not read, dte kept, sign, BDF2 weights swapped, older level dropped, either new opt-in not read). Defaults bit-identical (baseline_hashes, the periodic, fractional and PISO suites pass). Translational pairs only, incremental form, no non-orthogonal correction in the fractional runs; whether the three coupled-face opt-ins become defaults is open for the maintainer.
+
+> Follow-up proposed: "Body force in the fractional step". Deps F-757. Acceptance: the fractional step reads PimpleSolver::body_force behind an opt-in (the predictor's cell term, the balanced-force face term of the intermediate flux and the walls' pressure gradient as in the PISO step), defaults bit-identical; on ADR 0672's channel with its body force the fractional run with coupled_ddt_correction is within a registered limit of its twin on every step where the run without the opt-in is not, and a hydrostatic rest state stays at rest within a registered limit. Every limit not stated here is registered in the ADR before the run.
