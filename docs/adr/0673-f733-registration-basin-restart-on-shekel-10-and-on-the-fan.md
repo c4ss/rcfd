@@ -178,3 +178,100 @@ T1 stays in the file as the ignored record `t1_shekel10_fast_path_known_miss` (l
 smoke runs at `n0 = 10`, budget 150 (Z2, both variants) had 51 or more restart picks. About one minute (two runs in
 parallel), so it stays a fast test. Run once. The decision rule is unchanged with T1b in the place of T1; mutation R1 is run
 against T1b.
+
+## Addendum 1 (2026-11-17): results
+
+Code: 1de27b10 (`Restart::step_model` in `bayes.rs`, the test file), a44c52b5 (amendment 1: T1 kept as a known miss, T1b),
+e4c0276f (the Shekel record renamed `s0_s3_shekel10_plain_fresh_and_step_known_miss` after its run, limits intact), then the
+docs. Each registered check ran once; logs in `f733-scratch/logs` (`run_fast.log`, `run_t1b.log`, `run_s.log`, `run_f.log`,
+`run_b1_*.log`, `diag_s1.log`, `mutations.log`, `mut_*.log`). Release profile throughout.
+
+### Results
+
+| Check | Limit | Measured | Met |
+|---|---|---|---|
+| S0 Shekel 10 minimum | within 1e-4 of -10.5364; no start lower | -10.53644315 at (4.000747, 3.999509, 4.000747, 3.999509), 4.3e-5 from the value from memory; lowest of 40 starts the same | yes |
+| S1 Shekel 10, fresh against plain (seeds 1 to 20) | fresh >= plain | **fresh 17, plain 18** (fresh misses 9, 13, 18; plain misses 5, 18) | **no** |
+| S2 fresh against step (the R2 decision) | fresh >= step + 3 | fresh 17, step 11 (difference 6); measured from the record's line, its assertion comes after S1 and did not execute | yes: the fresh process is needed |
+| S3 restart picks outside the basin; E2 | 0; 0 | 3535 restart picks over the 40 restart runs, 0 inside; E2 0 | yes |
+| S1r record | recorded | first hits plain 31 to 136, fresh 31 to 150, step 31 to 147; restart picks 55 to 114 per run | recorded |
+| F1 fan, fresh against plain (seeds 1 to 10) | fresh >= plain | 10 and 10 (best / `P_ref` 0.99304 to 0.99351) | yes |
+| F1b fresh bit-equal to plain | bit-equal | every seed bit-equal; 0 restart picks | yes |
+| NC1 plain failed counts | exactly [37, 35, 34, 36, 36, 36, 39, 36, 34, 36] | the same | yes |
+| F1c record | recorded | step 10 of 10, 0 restart picks; per fresh run 8 to 20 steps below the trigger and at most 0 `Ok` points outside the basin | recorded |
+| F1d failures located; E2 | all; 0 | true; 0 (78 s for the 30 runs) | yes |
+| H1 O1 points hash | == 0xe2cf141320774cfc | 0xe2cf141320774cfc | yes |
+| NCH the same with the restart | != | 0xfcb394c67ca8392f | yes |
+| T1 Shekel fast path, budget 40 | >= 1 restart pick each; 0; 0 | 0 and 0 restart picks | **no** (defective set-up, amendment 1) |
+| T1b (amendment 1), budget 150 | >= 1 each; 0; 0 | 82 and 84; 0; 0 | yes |
+| T2 fan fast path | bit-equal; located | true (0 restart picks); true | yes |
+| T3 `step_model` option | false; differ; 0 | false; true; 10 step restart picks, 0 inside | yes |
+| B1 regression | pass | f715_robust_ei 6 passed (2 ignored), f698_surrogate 19 (3 ignored), f716_stall_precheck 7 (2 ignored, its B1 digest included), f697_fan_objective 22; `--lib` 141 passed (4 ignored); docs_site 2 | yes |
+| B2 fmt, clippy, files | clean; as stated | `cargo fmt -p rcfd-api --check` clean; `cargo clippy -p rcfd-api --all-targets --release -- -D warnings` clean; `git diff 5f501379 --stat`: `bayes.rs`, the new test, this ADR, `design-loop.md`, `reference-data.md` | yes |
+
+### Diagnosis of the S1 miss (from the record, and one scratch diagnostic run disclosed here)
+
+The three seeds that plain expected improvement solves and the restart does not (9, 13) or that both miss (18) were rerun in a
+scratch copy only to read the pick records (`diag_s1.log`; the registered numbers are those above, nothing was re-decided).
+On each of them the restart fires first at evaluation 44 to 53, with the incumbent in a local basin (-2.871, or -2.790), and
+then makes 91 to 103 of the remaining picks. The global minimiser lies 5.2 to 5.9 length scales from the incumbent, so it is
+outside the excluded basin (the length scales are 0.075 to 0.079 of the unit cube; the basin radius is about 0.15). The
+restart does not exclude it, but none of its picks comes within 0.05 (unit cube) of it, where plain expected improvement put
+15 and 16 points on seeds 9 and 13 and reached the target at 103 and 91. So on Shekel 10 the trigger does not mean that plain
+expected improvement is stuck: its acquisition stays below `1e-4` of the spread while it still drifts into the narrow
+global basin (width about 0.03 of the box), and the restart, which takes over most of the remaining budget and scores against
+the best value outside the basin (a worse one), spends it near the other local minima. `tau` and `rho` were fixed on Hartmann 6
+(ADR 0651) and were not tuned here, as the acceptance asks.
+
+### Mutations
+
+| Id | Mutation | Caught by |
+|---|---|---|
+| R2 | the fresh path scored by the step's process | T3 (fast); the Shekel record: fresh 11 = step 11, so S2 not met (and S1 fails first, plain 18) |
+| R4 | `restart` defaulting to `Some` | H1 |
+| R6 | `step_model` ignored | T3 |
+| R7 | `Restart::default()` with `step_model: true` | T3 (the default) |
+| R8 | default `candidates_per_dim` 999 | H1 (and T3) |
+| R1 | the trigger never fires | T1b, T3, NCH (with no restart the hash equals the base) |
+
+Control: the unmutated scratch copy passes every non-ignored test of the file (`mut_control.log`).
+
+### Deviations
+
+* T1 made no restart pick within 40 evaluations; amendment 1 kept it as a known miss and added T1b at budget 150 before its
+  run.
+* S1 missed: the Shekel record is kept as `s0_s3_shekel10_plain_fresh_and_step_known_miss` with every limit intact. Its S2
+  assertion did not execute; S2 is read from the printed counts.
+* The F1 record took 78 s, under the two-minute mark; it stays `#[ignore]`d as registered.
+
+### Decision
+
+By the registered rule, with T1b in the place of T1 (amendment 1): **partial**, because S1 was missed. On Shekel 10 the restart
+of ADR 0651, with its registered `tau` and `rho`, reached the target on 17 of 20 seeds against 18 of 20 for plain expected
+improvement. Every other check was met: S0, S3, F1, F1b, NC1, F1d, H1, NCH, T1b, T2, T3, B1 and B2. S2 decided R2: the fresh
+process is needed (17 against 11), and R2 is caught. All six mutations were caught. The fan clause is met by runs that are
+bit-equal to plain expected improvement, because the restart never fires there (Z5, F1c). The hash clause is met, and it pins
+the default O1 points to the base.
+
+### Remaining questions (taken on the maintainer's standing instruction of 2026-11-11; the recommendation is given in each)
+
+1. The restart hurts on Shekel 10 (one seed net: seeds 9 and 13 lost, seed 5 gained, seed 18 missed by both). Options: (a) leave the restart opt-in and off as it is,
+   with this result recorded; (b) a follow-up that changes the trigger so that it fires only when plain expected improvement
+   repeats itself (for example the last k picks inside the incumbent's basin) instead of on the size of the acquisition, to
+   be registered on Hartmann 6 and Shekel 10 together; (c) tune `tau` and `rho` on Shekel 10. Recommend (a) now and (b) as
+   the follow-up below. (c) would fit the parameters to the test functions.
+2. The fan never reaches the restart (the basin covers the box). Options: (a) nothing, since the fan objective of F3 is
+   unimodal over its feasible region; (b) bound the basin by the box, for example a radius in length scales capped so that
+   the ellipsoid covers at most a fixed share of the unit cube. Recommend (a) until a fan objective with more than one basin
+   exists (a multimodal fan set-up would be its own item). (b) is a design change with its own parameter.
+3. Keep `Restart::step_model`? It is opt-in and only serves the R2 decision. Recommend keeping it as a documented variant (S2:
+   11 of 20, worse than the fresh process). No caller depends on it.
+4. Default on or off: off (ADR 0651 question 2 still holds; S1 makes the case stronger).
+
+## For the lead: roadmap entries
+
+> Proposed status: partial
+
+> Follow-up of F-715 (ADR 0651, 2026-11-16). ADR 0673, 2026-11-17. PARTIAL (library, opt-in). The basin restart of ADR 0651 with its registered tau 1e-4 and rho 2 was run on a second multimodal function and on the fan. On Shekel 10 (n0 10, budget 150, seeds 1 to 20) it reached the minimum within 1 percent on 17 of 20 seeds against 18 of 20 for plain expected improvement: registered limit missed, kept as a known-miss record. On the seeds it misses (two of them solved by plain expected improvement), the restart fires at evaluations 44 to 53 from a local basin and its 91 to 103 picks never come near the narrow global basin that plain expected improvement still finds later, so a small acquisition does not mean plain expected improvement is stuck. On the F-698 R1 fan set-up (seeds 1 to 10, 50 evaluations) every run is bit-equal to plain expected improvement (10 of 10 within 1 percent of the grid optimum, F-698 failed counts reproduced exactly): the restart never fires, because the fitted length scales (2 to 10 in the unit cube) put the whole box inside the basin. BayesOptions::restart gains Restart::step_model (default false), which scores the restart by the step's own process; on Shekel 10 it does 11 of 20 against 17 for the fresh process, so the fresh process is needed and the surviving F-715 mutation R2 is now caught. A hash of the 1200 default O1 points (Branin, seeds 1 to 20) equals the hash computed on the base 5f501379 and differs with the restart on. Shekel 10 minimum (from memory) confirmed numerically at -10.536443. Six of six mutations caught; a fast check that made no restart pick within 40 evaluations was corrected under a recorded amendment. Not covered: a trigger that detects repetition rather than a small acquisition, a multimodal fan objective, tau and rho beyond Hartmann 6.
+
+> Follow-up proposed: A repetition trigger for the basin restart. Deps F-733. Acceptance: with a trigger registered before the run that fires when the recent picks of plain expected improvement stay in the incumbent's basin (instead of on the size of the acquisition), the restart reaches the target on at least as many seeds as plain expected improvement on both Hartmann 6 (n0 30, budget 200, seeds 1 to 10) and Shekel 10 (n0 10, budget 150, seeds 1 to 20), every F-715 and F-733 check keeps its result, and the O1 points hash of ADR 0673 is unchanged.

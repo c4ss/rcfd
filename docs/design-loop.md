@@ -468,6 +468,13 @@ jitter. `predict`, `loo` and the likelihood gradient follow the mode. Rung R3 of
   fitted length scales) is set aside and the point is chosen by expected improvement of a fresh process fitted to the points
   outside it. On Hartmann 6 (30 initial points, 200 evaluations) it reaches the minimum within 1 percent on 9 of 10 seeds,
   against 6 of 10 for plain expected improvement; on Branin it changes nothing before the target.
+  ADR 0673 ran it on a second function and on the fan with the same `tau` and `rho`. On Shekel 10 (10 initial points, 150
+  evaluations, 20 seeds) it does not help: 17 of 20 within 1 percent against 18 of 20 for plain expected improvement. On
+  three seeds the restart fires at evaluations 44 to 53 from a local basin (-2.87 or -2.79), and its 91 to 103 picks never
+  reach the narrow global basin that plain expected improvement finds later. On the reduced-order fan (the F-698 R1 set-up)
+  it never fires: the fitted length scales are 2 to 10 in the unit cube, so the basin covers the box, and the runs are bit
+  for bit those of plain expected improvement. `Restart { step_model: true, .. }` scores the restart by the step's own
+  process instead of a fresh one; on Shekel 10 that does worse (11 of 20), so the fresh process is kept.
 * `minimise` has the batch interface of the other optimisers; `run(spec, model, ledger)` drives a `ledger::Model` and appends
   one entry per evaluation with the predicted mean and standard deviation in the provenance (`driver: gp_ei`), then a
   `surrogate_summary` with the fitted model's identity (`fitted`) and its training entries (`parents`). A run resumes from the
