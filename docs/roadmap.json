@@ -7714,9 +7714,9 @@
     "deps": [
       "F-737"
     ],
-    "status": "todo",
+    "status": "partial",
     "acceptance": "Every limit not stated here is registered in the ADR before the run. The primary ADR is taken from the header ADR, the item's registration, the wave ADR and a file citation only, never from a binary named in an ADR's text or a list of tests run; the 7 tests whose primary was E7 and the E2-only source files named in ADR 0679 sample A' (`gen.rs`, `rheology.rs`, `transient_buoyancy.rs`) get the earliest ADR that names the file, or none, by a registered rule; a registered sample of at least 30 primary ADRs is read with at least 90 % agreement; the attribution JSON of `gate_attribute.py` is unchanged for the existing consumers.",
-    "note": "Follow-up of F-737 (ADR 0679, 2026-11-16)."
+    "note": "Primary ADR only from registering evidence in the test-to-ADR index. Follow-up of F-737 (ADR 0679, 2026-11-17). PARTIAL. ADR 0684, 2026-11-17: `scripts/adr_test_index.py` takes the primary ADR only from the header ADR, the item's registration, the wave ADR and a file citation (default of the command line, `--primary p0679` keeps the old rule); evidence from a function name, a roadmap note, a module path or a binary named in an ADR's text stays in the test's ADR list but gives no primary (43 of 7597 mapped tests have none), and the file-citation primary is the earliest citing ADR (lowest number; ADRs 0653, 0679 and 0684, which list files, left out); the old E7 primaries are null, and the attribution data of `gate_attribute.py` is unchanged (0 differences in 7733 tests, the existing tests unedited, git order equals number order for 78 of 78 files). Sample by reading: 39 of 40 uniform files agree (limit 36); missed: the file-citation-only stratum, 3 of 20 (limit 16), because most of those files come from the initial import and the earliest ADR that names one only edits or mentions it; the three files of ADR 0679 sample A' keep their primary (it is already the earliest) and are still not the registering ADR. 7 of 7 mutations caught. Follow-up F-768 (Primary ADR of file-citation-only tests from the commit that adds the file)."
   },
   {
     "id": "F-760",
@@ -7759,9 +7759,9 @@
     "deps": [
       "F-747"
     ],
-    "status": "todo",
+    "status": "partial",
     "acceptance": "Every limit not stated here is registered in the ADR before the run. The failing solve of ADR 0678 (rule L, the neo-Hookean material of ADR 0636, the punch block on 16^3, the default options) reproduced first; the lowest eigenvalue of the ADR 0628 sweep and of the free tangent at the last converged state located by element; the same solve with S and W of ADR 0658 and ADR 0660 and with finer increments; the cause identified or bounded against a registered criterion; the default bits unchanged.",
-    "note": "Follow-up of F-747 (ADR 0678, 2026-11-16)."
+    "note": "Structural solver, intermediate tier. Follow-up of F-747 (ADR 0678). PARTIAL. ADR 0682, 2026-11-17 (tests only, no library file changed): the failing solve of ADR 0678 (rule L, neo-Hookean, the punch block on 16^3, default options) reproduced to the character, its attempts recorded through an identity step-control hook (last converged load factor 0.9625). The last converged state rebuilt by a replicated path (the driver's predictor, then solve_from; a lifted start was a defective set-up, corrected by amendment): none of the 13 converged states has a negative eigenvalue (supernodal inertia), and the driver's own first factor passes at the last one, so the negative pivot of ADR 0678 belongs to a Newton iterate, not to the equilibrium. The free tangent there: lowest eigenvalue 0.0363 mu h against F-bar's 0.0362 at its own state, F-bar's energy of rule L's mode positive, the mode global and smooth. The ADR 0628 pencil there: lowest 0.063 mu, isolated (next 0.615), in two elements of hourglass form (share 0.88) under the punch corner, where the element with the smallest modes block also sits. S and W fail exactly as the default; 20 and 40 increments fail earlier (0.870, 0.871) by an inverted element under the punch corner. Cause bounded by the registered criterion (a stable converged state, no finer solve passes): not an instability of the body or of rule L at a converged state; a Newton iterate from a stable state at the punch corner, not the edge row; the soft local pencil mode is the candidate, not proven. Missed: the plain element's 8^3 failure, registered as the positive control of a spurious instability, is also at an iterate; the registered hypothesis that the converged tangent is indefinite. Five of six mutations caught. No default bit changed. Not covered: the iterates of the failing attempt, a remedy, a 32^3 mesh. Follow-up F-767 (The failing Newton iterate of rule L at the punch corner)."
   },
   {
     "id": "F-764",
@@ -7795,5 +7795,27 @@
     "status": "todo",
     "acceptance": "a fast test with an observation sequence whose last d + 1 points lie in the incumbent's basin while the plain pick of the step lies outside it shows that the repetition trigger makes no restart pick, the surviving ADR 0680 mutation M2 (the plain-pick condition dropped) is caught by it, and the O1 points hash of ADR 0673 is unchanged.",
     "note": "Follow-up of F-758 (ADR 0680, 2026-11-16)."
+  },
+  {
+    "id": "F-767",
+    "title": "The failing Newton iterate of rule L at the punch corner",
+    "phase": 9,
+    "deps": [
+      "F-763"
+    ],
+    "status": "todo",
+    "acceptance": "Every limit not stated here is registered in the ADR before the run. The failing attempt of ADR 0682 (rule L, neo-Hookean, the punch block on 16^3, from the converged state at load factor 0.9625) recorded iterate by iterate: the predictor's share in the isolated pencil mode of ADR 0682 and the lowest eigenvalue of the free tangent and of the ADR 0628 pencil at every iterate, located by element; the ADR 0628 sweep at the state of the punch-corner element; the line search of ADR 0607 and a registered damping of the predictor on the same attempt, and whether the 16^3 block then solves to full load; a positive control on the ADR 0628 patch below its zero; the default bits unchanged.",
+    "note": "Follow-up of F-763 (ADR 0682, 2026-11-16)."
+  },
+  {
+    "id": "F-768",
+    "title": "Primary ADR of file-citation-only tests from the commit that adds the file",
+    "phase": 9,
+    "deps": [
+      "F-759"
+    ],
+    "status": "todo",
+    "acceptance": "Every limit not stated here is registered in the ADR before the run. A test whose only primary evidence is a file citation takes its primary from the first git commit that adds the file (an `ADR NNNN` in its subject, or an item `F-NNN` whose registration ADR exists), else no primary, by a rule registered before the run, with the history depth the gate has stated and a fall-back to no primary where the history is shallow; the 20 files of ADR 0684 sample D (seed 7590) and a fresh registered sample of at least 20 file-citation-only files are read with at least 80 % agreement; the attribution data of `gate_attribute.py` is unchanged for the existing consumers.",
+    "note": "Follow-up of F-759 (ADR 0684, 2026-11-16)."
   }
 ]
