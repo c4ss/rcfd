@@ -1800,8 +1800,8 @@ fn f783_nh16_branch_heavy_known_miss() {
 
 /// The corrected heavy record of ADR 0700 amendment 2: the forced ladder from `1e-7` over 13 levels.
 #[test]
-#[ignore = "ADR 0700: the corrected heavy record of the bifurcated branch on 16^3 (amendment 2), run once with --ignored"]
-fn f783_nh16_branch_heavy_amended() {
+#[ignore = "ADR 0700: the corrected heavy record of the bifurcated branch on 16^3 (amendment 2), run once with --ignored (165 s), known miss: HT |a| >= 0.5 |a_s| missed, the trace fell back onto the symmetric branch at 0.964 (a -1.2e-11, accepted by the continuity test); every other row met: CF softening (beta^ -1.158e12, k_0 within 1.0e-8 of mu_1 873.67, z <= 7.6e-9), CR subcritical (B at lambda_f 0.9647 with eps = a*_pred 2.747e-5, a_s 2.695e-5, nu 1, mirror 4.3e-15; the other side F), the branch at 0.9645 a 3.83e-5 nu 1; F-bar nu 0 at every load; f783_fast_amended covers the same procedures"]
+fn f783_nh16_branch_heavy_amended_known_miss() {
     heavy(true);
 }
 

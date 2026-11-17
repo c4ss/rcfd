@@ -376,3 +376,125 @@ of D2 wherever the amplitude scale lies between about `1e-6` and `4e-4`, without
 D2 to D4 and every limit is unchanged; the fast test (whose toys keep `a_0 = 2e-4`, 9 levels) is unchanged. The registered heavy
 test becomes the ignored record `f783_nh16_branch_heavy_known_miss` (unchanged, the measured numbers in its ignore text); the
 corrected `f783_nh16_branch_heavy_amended` is run once. The decision can be at best **partial**.
+
+## Addendum 1: results (2026-11-17)
+
+Logs in `w49i-work/f783-scratch`: `run1-fast.log` (the registered fast run on aaa276f9, the panic of amendment 1),
+`run2-fast-amended.log` (1.5 s, on 158385e5), `run3-heavy.log` (the registered heavy run, 79 s, on 158385e5),
+`probe-forced.log` (scratch copy, diagnosis only), `run4-heavy-amended.log` (165 s, on 6f7104c7); `mutations.log` and
+`mut-MU*.log`; `s7-lib.log`, `s7-tests.log`, `b-src-diff.log`, `fmt.log`, `clippy.log`, `s8-docs.log`; the hand arithmetic
+`scripts/lpd.py`, `scripts/pt.py`. Each test was run once; no limit changed after a run.
+
+### The fast test (`f783_fast_amended`, after amendment 1)
+
+| Id | Measured | Limit | Result |
+|---|---|---|---|
+| PT-S | `phi_f = e_0`; `k_0` `1.1e-13`; `z = 0`; 3 window levels; `beta^` `6.5e-11` from 1; "stiffening"; `alpha^`, `lambda_c^` exact | as registered | met |
+| PT-S switch | B at the first `eps` (plain start); `a_s` `5.6e-16` from `sqrt(0.08)`; mirror 0; ratio 1.000; `nu = 0`; other side S, S; "supercritical" | as registered | met |
+| PT-S trace | 4 of 4 accepted; `a(p)` within `2.2e-16`; `nu = 0` each | as registered | met |
+| PT-U | `k_0` `5.4e-14`; `z = 0`; 2 window levels; `beta^` `2.2e-11` from -0.5; "softening" | as registered | met |
+| PT-U switch | the plain start S, **the second-order start B**, both at the first `eps`; `a_s` `2.2e-16` from `sqrt(0.2)`; mirror 0; ratio 1.000; `nu = 1`; other side S, S; "subcritical" | as registered | met |
+| PT-U trace | 4 of 4 accepted (downward); `a(p)` within `3.2e-15`; `nu = 1` each | as registered | met |
+| C5 | the first attempt converged to `u_0 = 13.9998` and was rejected by the continuity test; `p_c = 0.421644017077` in `[0.421643924713, 0.421644401550]`; width `4.77e-7`; upper end lost; "limit point" | as registered | met |
+| N8 | `mu_1(1.0) = 14645.7`, `sigma = -1`; `k_0` `5.2e-14`; `z` `3.2e-13`; the switch S | as registered | met |
+
+The registered run (`f783_fast_known_miss`) measured nothing (amendment 1).
+
+### The heavy record (16^3)
+
+| Id | Measured | Limit | Result |
+|---|---|---|---|
+| OB | equal | equal | met (both runs) |
+| HS1 | the chain converges at all 14 grid loads; `nu` 0 up to `A`, 1 from `lt` to 1.0 | as registered | met |
+| HS2 | `2.8e-10`, `2.1e-8` | `<= 1e-7` | met |
+| HS3 | `1.2e-8`, `1.8e-8` | `<= 1e-6` | met |
+| HS4 | `7.3e-13` | `<= 1e-9` | met |
+| HM | `|sigma + 1| = 2.1e-15`; `|phi_f . phi_A| = 0.9983`; `mu_1(lambda_f) = 873.67` (estimate 882); `mu_1(A) = 2.554`; residuals `<= 8.9e-9`; `alpha^ = -4.368e6`, `lambda_c^ = 0.964900029` | as registered | met |
+| HF | registered (`a_0 = 2e-4`): `k_0` off by `1.50`, no window level, CF "undecided" (amendment 2); corrected (`a_0 = 1e-7`, 13 levels, the 8th failed at the fold of the forced path): `k_0` within `1.0e-8` of `mu_1`; `z <= 7.6e-9`; 3 window levels, `beta_j = -1.1579e12, -1.1584e12, -1.1605e12`: **"softening"** | `<= 1e-3`; `<= 1e-6`; `>= 2`; not undecided | missed, then met after amendment 2 |
+| HW | `lambda_s = lambda_f`, `a*_pred = 2.747e-5`; **B at the first rung, the plain start** (`a_s = 2.695e-5`); mirror `4.3e-15`; `a_s / a*_pred = 0.981`; `nu = 1` (lowest pair `-1760.4`); the other side (`lt`) F, F (the internal modes of element 3720 did not converge); CR **"subcritical"** | as registered | met (corrected run) |
+| HT | down from 0.9647: 0.9645 on the branch (`a = 3.83e-5`, `nu = 1`); the step to **0.964 accepted by the continuity test but on the symmetric branch** (`a = -1.2e-11`, `nu = 0`), and 0.9635 to 0.9625 symmetric | every grid load reached, `|a| >= 0.5 |a_s|` | reached, **`|a|` missed** (known miss) |
+| HFB | the chain converges at 15 loads; `nu_Fb = 0` at every one; at 0.9625 `1.3e-8`, `2.9e-8`; at 1.0 `7.3e-9`, `6.6e-8` | as registered | met |
+| HG | `g_R = +3.93e-2`, `g_w = +2.92e-2` for both branches at every traced load | `<= 0.15` | met |
+
+**The bifurcated branch (the table).** At `lambda_f = 0.9647`: bifurcated `nu = 1`, `a = 2.695e-5`, `R/mu = 0.32733619`, `w_c =
+0.06033679`; symmetric `nu = 0`, `0.32733621`, `0.06033679`; F-bar `nu = 0`, `0.31495089`, `0.05862427`. At 0.9645: bifurcated
+`nu = 1`, `a = 3.827e-5`, `0.32726797`, `0.06032477`; symmetric `nu = 0`, `0.32726801`, `0.06032477`; F-bar `nu = 0`,
+`0.31488787`, `0.05861294`. The amplitudes follow the reduced equation with the measured coefficient: `a*^2 = mu_1 / |beta^|`
+gives `2.75e-5` at 0.9647 (measured `2.695e-5`) and, with `mu_1(0.9645) ~ 873.7 + 4.37e6 * 2e-4 = 1747`, `3.88e-5` at 0.9645
+(measured `3.83e-5`). The branch differs from the symmetric one in `R/mu` by `1.2e-7` relative: its asymmetry is an hourglass of
+amplitude `3e-5` (`|u - P u|_inf / |u|_inf = 2e-4`) in one element.
+
+**Reading.** The pitchfork of ADR 0697 is **subcritical**. The cubic coefficient of the reduced equation on the stable side is
+`beta = -1.16e12` (three window levels within 0.2 per cent of each other; the forced path folds near `a ~ 1.6e-5`); the branch
+switch at 0.9647 finds the unstable asymmetric equilibrium (`nu = 1`) at the amplitude the coefficient predicts (within 2 per
+cent), and past the bifurcation (at `lt`) the switch finds no small asymmetric state. A subcritical branch exists only below
+`lambda_c` and bends toward lower loads, so the bifurcated branch does **not** reach full load under load control: the
+`lambda`-controlled trace followed it from 0.9647 to 0.9645 and then fell back onto the stable symmetric branch at 0.964 (the
+fixed-load Newton of a `5e-4` step from the branch state converged to the symmetric root, and the continuity test, whose bound
+`|d v_t|_inf` is large where `da/dlambda` is large, accepted it; HT's amplitude row caught it). The consequence for the punch
+path: past `lambda_c = 0.96490003` the symmetric branch that the indefinite-tangent solve follows to full load (ADR 0694 IN-F,
+HS3 here) is unstable with **no nearby stable asymmetric branch**; a slightly imperfect block would leave it with a finite jump,
+not with a smooth asymmetric continuation. The instability is an hourglass of rule L's element 3720 (the stiffness along the
+mode with the other unknowns frozen rises from 874 to 1642 over an amplitude of `1e-5`, a cubic coefficient of about `7.7e12`,
+while the coupling to the symmetric unknowns makes the reduced one negative, as in the toy PT-U); F-bar is stable at every load
+to full load (`nu = 0` at 15 loads).
+
+### Default bits and static checks
+
+| Id | Result |
+|---|---|
+| B | `git diff --stat bbb71825 -- crates/*/src` empty: no library file changed, the default bits are unchanged by construction: met |
+| S7 | `--lib` 15 pass; `si_eas_hg15`, `si_eas_hg14`, `si_eas_hg13` 1 pass and 3 ignored each: met |
+| S6 | `cargo fmt -p rcfd-fem --check` clean; `cargo clippy -p rcfd-fem --all-targets -- -D warnings` (release profile) clean: met |
+| S8 | `cargo test -p rcfd-cli --release --test docs_site` passes (2) on the results tree: met |
+| S9 | aaa276f9, 158385e5 and 6f7104c7 built for the runs; fa848aae, d1b3a277 and the amendment 2 text are docs only; the results commit is the clippy-checked tree: met |
+
+### Mutations (each on a scratch copy of 158385e5, run once against `f783_fast_amended`)
+
+| Id | Caught by | Result |
+|---|---|---|
+| MU1 | PT-S, PT-U (CF, the switches, CR) | caught |
+| MU2 | PT-S, PT-U (the ladder fails at every level: `k_0` NaN, CF "undecided") | caught |
+| MU3 | C5 ("no change": the distant root taken as the branch) | caught |
+| MU4 | PT-S, PT-U (B at the second rung, not the first) | caught |
+| MU5 | PT-S, PT-U (no branch found) | caught |
+| MU6 | PT-S, PT-U (CR "undecided") | caught |
+
+### Deviations
+
+- Amendment 1 (the toy's symmetric state from its closed form) and amendment 2 (the heavy ladder from `1e-7`) were each
+  committed before their corrected runs; the registered tests are kept as `f783_fast_known_miss` and
+  `f783_nh16_branch_heavy_known_miss`. The corrected heavy record missed HT and is kept as
+  `f783_nh16_branch_heavy_amended_known_miss` with its measured numbers.
+- A probe on a scratch copy (`probe-forced.log`) was run after the registered heavy run to diagnose HF; it is not a registered
+  result. Amendment 2's `a_0` was set after seeing it (disclosed there); no limit changed.
+- The mutation builds ran side by side with the probe (separate target directories).
+- My dimensional estimate of `beta` (arithmetic (ii)) was low by five orders of magnitude.
+
+### Decision
+
+**partial**: c1 (the switch along `+-phi` with the indefinite-tangent Newton at fixed loads), c2 (**subcritical**), c4, c5 and c6
+are answered; c3 only below the bifurcation (the inertia `nu = 1` and `R/mu` of the bifurcated branch at 0.9647 and 0.9645
+against the symmetric branch and F-bar), not to full load: a subcritical branch cannot reach full load under load control, and
+the trace lost the branch at 0.964 (HT missed). HF was met only after amendment 2, the fast test only after amendment 1. Every
+mutation was caught.
+
+### Remaining questions
+
+1. **The subcritical branch beyond 0.9645.** Options: (a) trace it with the arc-length driver from the B state (where it folds
+   and whether it restabilises; the only way to follow it toward full load); (b) trace it under load control with a continuity
+   test that also bounds the change of the amplitude `phi . u` (the bound `|d v_t|` admitted the fall-back), or smaller steps;
+   (c) leave it. Recommendation: (b) first (small, test-only), then (a) if the branch is wanted past its fold.
+2. **What the solve to full load should return.** The indefinite-tangent solve returns the unstable symmetric state at full load
+   (ADR 0694); with a subcritical pitchfork there is no nearby stable state. Options: (a) document it as the idealised symmetric
+   answer; (b) an opt-in report of the inertia of the driver's converged states, so a user sees the instability; (c) change rule
+   L. Recommendation: (b); (c) stays the maintainer's call (rule L's coefficient, ADR 0682 open question 2).
+3. **Whether either opt-in of ADR 0694 becomes a default**: still open (it would change default results).
+
+## For the lead: roadmap entries
+
+> Proposed status: partial.
+
+> F-783 (ADR 0700, 2026-11-17): the bifurcation of rule L's 16^3 neo-Hookean punch path at 0.96490003 (ADR 0697) is a subcritical pitchfork. The cubic coefficient of its reduced equation, measured on the stable side at 0.9647 from the response to a force along the antisymmetric mode (k_0 within 1.0e-8 of mu_1 = 873.67, Z2-symmetric to 7.6e-9), is -1.16e12 (three levels within 0.2 per cent). The branch switch along +-phi with the indefinite-tangent Newton at fixed loads finds the unstable asymmetric equilibrium at 0.9647 (amplitude 2.695e-5 against the predicted 2.747e-5, nu = 1, mirror images to 4e-15) and at 0.9645 (3.83e-5, nu = 1), with R/mu within 1.2e-7 of the symmetric branch and 3.9 per cent above F-bar (stable, nu = 0 at 15 loads to full load); past the bifurcation no small asymmetric state exists, so the symmetric state the indefinite-tangent solve reaches at full load is unstable with no nearby stable branch. Controls: closed-form super- and subcritical pitchforks (the subcritical one with a positive cubic term of its own, found only from the second-order start), a fold whose Newton converges to a distant root (rejected by the continuity test: ADR 0697's MU4 now caught), the stable 8^3 block. Test-only, default bits unchanged; six of six mutations caught. Partial: a subcritical branch does not reach full load under load control, the trace fell back onto the symmetric branch at 0.964, and two rows were met only after amendments.
+
+> Follow-up proposed: The subcritical branch of rule L's 16^3 punch path past 0.9645. Deps F-783. Acceptance: Every limit not stated here is registered in the ADR before the run. The bifurcated branch of ADR 0700 traced from its state at 0.9645 toward lower loads with a continuity test that also bounds the change of the amplitude along the critical mode, and by the arc-length driver to its fold if it folds, with the inertia and R/mu along it against the symmetric branch and F-bar; a fast control on the closed-form subcritical pitchfork of ADR 0700 and on a step that falls back onto the symmetric branch; the default bits unchanged.
