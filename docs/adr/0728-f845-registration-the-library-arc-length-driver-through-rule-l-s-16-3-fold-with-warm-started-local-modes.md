@@ -311,3 +311,16 @@ The heavy record is not run under the mutations.
    `4^3`, the file name): taken on the maintainer's standing instruction of 2026-11-11 (take the recommendation).
 2. **Whether the warm start becomes a default**: not taken (it would change default results); open (F-846).
 3. **Whether `trace` should accept non-zero prescribed values by default** (ADR 0726 question 3): open, not in scope.
+
+## Amendment 1 (2026-11-17, written and committed before any run of F-845's checks)
+
+**TZ-P, the cause of the plain control's loss.** Writing the test (before any run) showed a defect of TZ-P's registered row:
+`run` halves the arc on a failure and doubles it after a success, so a plain trace that cannot pass `w_c` creeps toward it
+with ever shorter arcs (ADR 0726's heavy record shrank its arcs to `6e-11` the same way), and the trace is lost when six
+attempts in a row fail at one point. The last of those six can fail because an iterate passes `w_c` (a local cause) or, once
+the arc is at the rounding of the displacement, because the Newton iteration's energy test cannot be met (ADR 0726's final
+cause, "not converged in 20 iterations"); which one ends the trace is not determined by the toy. The registered requirement
+"its cause contains `local`" therefore tests the order of the halvings, not the toy. **Corrected row TZ-P**: the plain trace
+does not pass `w_c`: it ends lost (an error) or at the cap of 600 points, every converged `w` is below `w_c`, and the last
+converged `w` is within `0.01` of `w_c`; the cause of the loss is reported. The limits of the other rows are unchanged. The
+mutations MU1 and MU2 are caught by TZ2 to TZ4 as registered, not by TZ-P.
