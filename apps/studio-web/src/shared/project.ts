@@ -8,6 +8,10 @@
 // this item writes nothing to the folder. The renderer never names a tool or a file: it asks for the operations below,
 // and the main process checks every message on the port (src/main/project/bridge.ts). The page can open a folder only
 // through the folder dialog of the main process or from the recent list the main process keeps.
+//
+// F-835: a new project is made by the engine, never by the Studio (G4, G12): `create` runs the engine's
+// `rcfd project init <folder>` (ADR 0731; the MCP equivalent is `create_project`) on a folder chosen in the main
+// process's folder dialog, or on the folder the engine has just refused as no project, and then opens it as `open` does.
 import type { CancelOptions } from './work.js';
 
 /** The one IPC channel main uses to hand the preload script the project port (main -> renderer only). */
@@ -243,7 +247,8 @@ export const MAX_CHANGES = 100;
 
 /** Why a folder could not be opened, in words that name the problem and the next step (G6, G19). */
 export interface OpenFailure {
-  readonly kind: 'not_configured' | 'not_found' | 'not_a_project' | 'engine';
+  /** F-835: `not_created`, the engine's `rcfd project init` refused the folder or failed (its message is `detail`). */
+  readonly kind: 'not_configured' | 'not_found' | 'not_a_project' | 'engine' | 'not_created';
   readonly folder: string;
   readonly message: string;
   /** The engine's own message, when it gave one. */
@@ -293,14 +298,25 @@ export type ProjectRequest =
    * open, the recent list is not touched, and a project server started for it is stopped. The reply's result is
    * `{cancelled: boolean}` (false when nothing was being opened).
    */
-  | { readonly op: 'cancel'; readonly id: number };
+  | { readonly op: 'cancel'; readonly id: number }
+  /**
+   * F-835: makes a project with the engine (`rcfd project init <folder>`, ADR 0731) and opens it. `pick`: in a folder
+   * chosen in the main process's folder dialog (a new or an existing one); `here`: in the folder of the failed open the
+   * engine refused as no project. The reply's result is a PickResult (null when the dialog was cancelled).
+   */
+  | { readonly op: 'create'; readonly id: number; readonly where: CreateWhere };
+
+/** F-835: where `create` makes the project. */
+export const CREATE_WHERE = ['pick', 'here'] as const;
+export type CreateWhere = (typeof CREATE_WHERE)[number];
 
 export type ProjectOp = ProjectRequest['op'];
-export const PROJECT_OPS = ['state', 'pick', 'open', 'forget', 'close', 'refresh', 'dismiss', 'action', 'cancel'] as const satisfies readonly ProjectOp[];
+export const PROJECT_OPS = ['state', 'pick', 'open', 'forget', 'close', 'refresh', 'dismiss', 'action', 'cancel', 'create'] as const satisfies readonly ProjectOp[];
 
 export interface ProjectError {
   /** `bad_request` (the message has the wrong shape), `not_recent` (open of a folder the recent list does not hold). */
-  readonly code: 'bad_request' | 'not_recent' | 'no_port' | 'timeout';
+  /** F-835: `no_folder` (create `here` with no folder the engine refused as no project). */
+  readonly code: 'bad_request' | 'not_recent' | 'no_port' | 'timeout' | 'no_folder';
   readonly message: string;
 }
 
@@ -335,6 +351,11 @@ export interface ProjectBridge {
   refresh(): Promise<ProjectReply<null>>;
   /** Clears the message of a failed open. */
   dismiss(): Promise<ProjectReply<null>>;
+  /**
+   * F-835: makes a project with the engine and opens it: in a folder chosen in the main process's folder dialog
+   * (`pick`), or in the folder the engine has just refused as no project (`here`). `options` as for pick.
+   */
+  create(where: CreateWhere, options?: CancelOptions): Promise<ProjectReply<PickResult>>;
 }
 
 // ---- F-807: run control (src/shared/actions/runs.ts; src/main/project/control.ts)

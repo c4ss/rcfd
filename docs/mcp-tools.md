@@ -61,9 +61,20 @@ F-147, F-148):
 | `design_ledger_export` | write_files | `design.ledger_export` | ledger entries to a CSV or JSON file |
 | `design_ledger_rerun_check` | read | `design.ledger_rerun_check` | compare a re-run's metrics with a ledger entry |
 | `render_image` | read | `render.png` | PNG image of a field |
+| `create_project` | write_files | (local, `rcfd_workspace::create_project`) | make a project folder; only without `--project` |
 
 With `--project` the 16 tools above that need a session of the server's memory, or make one, are not offered (see
-[Project mode](#project-mode-the-session-tools-that-are-not-offered)); the other 17 are.
+[Project mode](#project-mode-the-session-tools-that-are-not-offered)), nor is `create_project` (the server already has a
+project); the other 17 are.
+
+`create_project {path, name?}` (ADR 0731) makes a project folder with `rcfd_project::Project::create`, as
+`rcfd project init <dir> [--name <name>]` does: `rcfd-project.json` and the folders `cases`, `meshes`, `runs`, `designs`,
+`notes` and `.rcfd`. The folder may exist and hold other files; nothing in it is replaced, and the result
+`{root, name, schema_version, created, solver_version_created, existing}` lists the top-level entries that were already
+there. `name` defaults to the folder's name; the solver version recorded is `rcfd <version>`. Errors: 1200 when the folder
+already holds `rcfd-project.json` (`data.root`, nothing written), 1004 for a file or a path outside `--root`, 1100 with
+`--read-only`, -32602 for an empty name, one over 200 characters or one with a control character, and -32000 for any other
+failure (naming the folders already made). No journal line is written: the manifest's `created` is the record.
 
 ## Design tools
 

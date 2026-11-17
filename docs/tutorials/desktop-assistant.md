@@ -102,8 +102,10 @@ Without `RCFD_STUDIO_RCFD` the window still opens, but Open project folder… is
 ## 3. Open a project (not executed)
 
 The Studio opens project folders: a folder with an `rcfd-project.json` and the folders `cases/`, `meshes/`, `runs/` and
-`notes/`. It cannot make a new project (the engine has no command for it yet), so copy the quick-start example project out
-of the repository and open the copy. Use `example-projects/quick-start` on Windows and `example-projects-linux/quick-start`
+`notes/`. New project… on the empty home (the folder icon beside Open project folder…, or New project… in the command
+palette) makes one in a folder you choose or make: the engine's `rcfd project init <folder>` writes it, and the Studio opens
+it. This tutorial uses a project with runs already in it, so copy the quick-start example project out of the repository
+and open the copy. Use `example-projects/quick-start` on Windows and `example-projects-linux/quick-start`
 on Linux (a stored mesh equals the mesh its case builds only on the platform that made the run; ADR 0150).
 
 ```console not-executed
@@ -264,8 +266,8 @@ Ctrl is Cmd on macOS.
 ## What the Studio does not do yet
 
 * No installer (F-820): it runs from a checkout as in step 2.
-* No new project: the engine has no command that makes one (`rcfd_project::Project::create` has no CLI or MCP entry
-  point). Copy an example project. The removed `rcfd-studio` had Project > New project....
+* No name field for a new project: New project… names it after its folder (`rcfd project init <dir> --name <name>` and
+  the MCP tool `create_project` take a name).
 * No delete of a run, a result or a case: the engine has none, so the Studio offers none.
 * No picture of a case's mesh before a run (the removed `rcfd-studio` had one), no iso-surfaces and no streamlines.
 * No model of your own choice: the Claude Code panel is the only assistant. The local-model assistant of the removed

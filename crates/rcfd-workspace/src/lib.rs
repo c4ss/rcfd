@@ -33,6 +33,7 @@ mod create;
 pub mod design;
 pub mod examples;
 pub mod feed;
+mod init;
 pub mod journal;
 pub mod meshes;
 pub mod plan;
@@ -51,6 +52,7 @@ use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 
 pub use create::SOURCES;
+pub use init::{create_project, MAX_NAME, SOLVER_VERSION};
 pub use rcfd_api::service::RpcError;
 pub use save::{save_case, SaveError, SaveForm, Saved};
 pub use series::{decimate_minmax, residual_series};

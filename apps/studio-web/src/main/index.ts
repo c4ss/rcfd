@@ -139,6 +139,17 @@ const projects = new ProjectHome({
     const r = win ? await dialog.showOpenDialog(win, options) : await dialog.showOpenDialog(options);
     return r.canceled ? null : (r.filePaths[0] ?? null);
   },
+  // F-835: the folder of a new project; the dialog can make a new folder (the engine then makes the project in it)
+  pickNewFolder: async () => {
+    const win = BrowserWindow.getFocusedWindow() ?? BrowserWindow.getAllWindows()[0];
+    const options = {
+      title: 'New project: choose or make its folder',
+      buttonLabel: 'Make the project here',
+      properties: ['openDirectory' as const, 'createDirectory' as const, 'promptToCreate' as const],
+    };
+    const r = win ? await dialog.showOpenDialog(win, options) : await dialog.showOpenDialog(options);
+    return r.canceled ? null : (r.filePaths[0] ?? null);
+  },
 });
 
 /** The case editor (F-812): sessions bound to case files of the open project, saved through the engine's edit_case. */

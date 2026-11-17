@@ -77,6 +77,7 @@ function studioReason(id: string, env: PaletteEnv): string | null {
     case 'claude.refresh':
       return view(env) ? null : NO_PROJECT;
     case 'project.open_folder':
+    case 'project.new':
       if (p && !p.engine.configured) return p.engine.reason;
       if (p?.opening) return `${p.opening} is being opened; wait for it.`;
       return null;
@@ -387,6 +388,8 @@ async function studio(e: PaletteEntry, values: Values, env: PaletteEnv): Promise
       return close(() => void (location.hash = caseHash.index));
     case 'project.open_folder':
       return close(() => projectActions.pick());
+    case 'project.new':
+      return close(() => projectActions.create());
     case 'project.open_recent':
       return close(() => projectActions.open(String(values['path'])));
     case 'project.forget_recent':

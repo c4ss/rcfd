@@ -17,12 +17,12 @@
   },
   "counts": {
     "service_method": 69,
-    "mcp_tool": 58,
-    "cli_command": 38,
-    "cli_option": 159,
+    "mcp_tool": 59,
+    "cli_command": 39,
+    "cli_option": 160,
     "case_key": 951,
     "monitor_format_key": 6,
-    "total": 1281
+    "total": 1284
   },
   "capabilities": [
     {"id":"service:cosim.advance","kind":"service_method","source":"service.info"},
@@ -100,6 +100,7 @@
     {"id":"mcp:check_mesh","kind":"mcp_tool","source":"tools/list","access":{"default":"read"}},
     {"id":"mcp:compare_runs","kind":"mcp_tool","source":"tools/list","access":{"project":"read"}},
     {"id":"mcp:create_case","kind":"mcp_tool","source":"tools/list","access":{"default":"mutate"}},
+    {"id":"mcp:create_project","kind":"mcp_tool","source":"tools/list","access":{"default":"write_files"}},
     {"id":"mcp:create_workflow","kind":"mcp_tool","source":"tools/list","access":{"default":"mutate"}},
     {"id":"mcp:design_compare_variants","kind":"mcp_tool","source":"tools/list","access":{"default":"read","project":"read"}},
     {"id":"mcp:design_create_study","kind":"mcp_tool","source":"tools/list","access":{"default":"write_files","project":"write_files"}},
@@ -166,6 +167,7 @@
     {"id":"cli:rcfd map","kind":"cli_command","source":"help","usage":"map <case> --axis path=v1,v2,... [--axis path=start:stop:count]... [--out dir] [--cold] [--stop-on-failure] [--no-retry] [--serpentine] [--max-steps n] [--warm-start flow|extended] [--json] [--set path=value]"},
     {"id":"cli:rcfd partition","kind":"cli_command","source":"help","usage":"partition <case|mesh> [--method bisection|inertial|sectors|graph] [--parts n] [--rule longest|cycle|x|y|z]"},
     {"id":"cli:rcfd post","kind":"cli_command","source":"help","usage":"post <results-dir> [--format html|csv|json] [--out <file>]"},
+    {"id":"cli:rcfd project init","kind":"cli_command","source":"help","usage":"project init <dir> [--name <name>]"},
     {"id":"cli:rcfd reactor","kind":"cli_command","source":"help","usage":"reactor <case.json> [--out <file.csv>]"},
     {"id":"cli:rcfd restart","kind":"cli_command","source":"help","usage":"restart <case> --from <restart file> [--mesh <mesh>] [--source-case <case>] [--method m] [run options]"},
     {"id":"cli:rcfd run","kind":"cli_command","source":"help","usage":"run <case> [options]"},
@@ -260,6 +262,7 @@
     {"id":"cli:rcfd partition --weights-box","kind":"cli_option","source":"help","parent":"cli:rcfd partition"},
     {"id":"cli:rcfd post --format","kind":"cli_option","source":"help","parent":"cli:rcfd post"},
     {"id":"cli:rcfd post --out","kind":"cli_option","source":"help","parent":"cli:rcfd post"},
+    {"id":"cli:rcfd project init --name","kind":"cli_option","source":"help","parent":"cli:rcfd project init"},
     {"id":"cli:rcfd reactor --out","kind":"cli_option","source":"help","parent":"cli:rcfd reactor"},
     {"id":"cli:rcfd restart --from","kind":"cli_option","source":"help","parent":"cli:rcfd restart"},
     {"id":"cli:rcfd restart --mesh","kind":"cli_option","source":"help","parent":"cli:rcfd restart"},

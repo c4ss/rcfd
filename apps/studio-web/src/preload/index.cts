@@ -257,7 +257,7 @@ contextBridge.exposeInMainWorld('studioService', service);
 // ---- the project port (F-805): the same pattern as the service port, its own ids and listeners
 
 const PROJECT_PORT_CHANNEL: typeof ProjectChannel = 'studio.project-port';
-/** The folder dialog waits for the user, so `pick` has no time limit of its own; the others are answered at once. */
+/** The folder dialog waits for the user, so `pick` and `create` (F-835) have no time limit of their own; the others are answered at once. */
 const PROJECT_TIMEOUT_MS = 120_000;
 
 let projectPort: Port | null = null;
@@ -286,7 +286,7 @@ const projectPost = (req: ProjectRequest): void => {
 const projectSend = <T,>(req: ProjectRequest): Promise<ProjectReply<T>> =>
   new Promise((resolve) => {
     const timer =
-      req.op === 'pick'
+      req.op === 'pick' || req.op === 'create'
         ? null
         : setTimeout(() => {
             projectSettle(req.id, {
@@ -353,6 +353,11 @@ const project: ProjectBridge = {
   close: () => projectSend({ op: 'close', id: nextProjectId++ }),
   refresh: () => projectSend({ op: 'refresh', id: nextProjectId++ }),
   dismiss: () => projectSend({ op: 'dismiss', id: nextProjectId++ }),
+  // F-835: the engine makes the project (rcfd project init), then it opens; main checks `where` again
+  create: (where, options) => {
+    offerCancel(options, () => void projectSend({ op: 'cancel', id: nextProjectId++ }));
+    return projectSend({ op: 'create', id: nextProjectId++, where });
+  },
 };
 
 contextBridge.exposeInMainWorld('studioProject', project);

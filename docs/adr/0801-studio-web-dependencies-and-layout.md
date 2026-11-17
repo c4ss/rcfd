@@ -2620,7 +2620,7 @@ local to this list.
 | E-809c | F-809 | A cut or slice of a stored 3D field with values; `render_field` with `axis`, `slice` and `vectors` for a store | the cut and arrows are drawn by the Studio within tolerances T1 to T3 |
 | E-809d | F-809, G16 | A CLI or MCP way to draw the Studio's cut and arrows of a store, so Claude Code can make the same picture | none |
 | E-809e | F-809, F-837 | The length unit of the stored mesh coordinates | the cut position has no unit; the domain size and the scale bar say m from the SI settings, and say why |
-| E-813 | F-813 | A command that creates a project (`rcfd project init`, MCP `create_project` over `Project::create`; ADR 0731, proposed) | the empty folder says it is missing; the walk's test writes `rcfd-project.json` |
+| E-813 | F-813 | A command that creates a project (`rcfd project init`, MCP `create_project` over `Project::create`; ADR 0731, accepted and built 2026-11-17) | done: New project… and Make a project here run `rcfd project init`; the walk's test makes its projects through them |
 | E-814 | F-814 | An engine entry point that lists a project's Claude Code sessions (rcfd-claude) | a TypeScript stopgap in the main process |
 | E-828a | F-828 | run.json records the solver's launch argv and a build id (`solver_version` is a release name) | the reproduce command is built from the runner's start options |
 | E-828b | F-828 | A unit for `status.json`'s `time`, and for a snapshot's time in store.rts | "Time, s" is the Studio's caption; the provenance says not recorded |
