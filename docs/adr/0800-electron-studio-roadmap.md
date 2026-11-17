@@ -288,6 +288,18 @@ profile. The bench prints and keeps each case's profile; a script run alone uses
 `--profile-root`. No bench number above was taken this way; the idle baseline of Q4 will be the first. Details in ADR
 0801, Addendum F-817b.
 
+F-819, large meshes and the FAN-01 mesh (2026-11-17): `scripts/measure-large.mjs` (`npm run bench:large`; in
+`npm run bench -- --heavy` once, recorded) applies P7, P5 and P8, unchanged, to the 4e6 box (4 000 000 cells, 320 000
+surface triangles) and to the FAN-01 blade passage, F3 (4 920 cells, 7 patches, committed engine run) and F1 (38 184
+cells, a 20-iteration engine run). The limits were committed in the script (89090900) before the first measurement. Four
+runs, every one with a scratch profile, in the test mode, at a processor busy fraction of 0.56 to 1.00: 63 of 63 judged
+lines met in the three runs of the script, and in the fourth (the bench's) the 4e6 scrub missed P5, 9.91 per s with a
+167 ms frame (the others: 11.1 to 11.6 per s, longest 102 to 117 ms). Also recorded: the first open of the 4e6 store in a
+launch took 1704 to 2516 ms (the median of five opens, which is judged, 179 to 248 ms). 1.5 to 1.6 s of that is the
+reader checking the checksum of the whole 773 MB mesh frame. The FAN-01 meshes are small (3 740 and 14 816 triangles),
+and every FAN-01 number is far inside its limit. No polyhedral FAN-01 mesh exists, and F1's counts doubled do not build.
+The numbers, causes and proposed fixes are in ADR 0801, Addendum F-819.
+
 ## 10. Retiring the egui apps early (maintainer, 2026-11-16)
 
 The maintainer asked to "kill the old rcfd-studio and clear up some test bandwidth" and chose (a) of three options:
