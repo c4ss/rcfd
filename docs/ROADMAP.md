@@ -16359,7 +16359,9 @@ fixed by the item's registration ADR before any code.
     maintainer. A fast tally at ADR 0660's stall state of seed 3 covers the trace's tally code. Default bits unchanged
     (no library line); five of six mutations of the measurement caught (the sixth registered as possibly not caught); no
     amendment. Follow-up F-846 (What switching the default local mode update of the incompatible Hex8 to the warm start
-    would move).
+    would move). ADR 0727 measures what the switch would move in the existing tests: no measure beyond 7.8e-11 relative,
+    16 solves toward convergence and none away, and four tests that break because the element entry points refuse a warm
+    state.
 - [ ] **F-845** The library arc-length driver through rule L's 16^3 fold with warm-started local modes
   - depends on: F-797
   - acceptance: Every limit not stated here is registered in the ADR before the run. From ADR 0711's rung 5, the
@@ -16368,14 +16370,29 @@ fixed by the item's registration ADR before any code.
     lambda_f 0.958472086948, the steps and the local fallbacks, to registered limits; a fast control on a closed-form
     fold with a local unknown; the default bits unchanged.
   - note: Follow-up of F-843 (ADR 0724, 2026-11-16).
-- [ ] **F-846** What switching the default local mode update of the incompatible Hex8 to the warm start would move
+- [~] **F-846** What switching the default local mode update of the incompatible Hex8 to the warm start would move
   - depends on: F-844
   - acceptance: Every limit not stated here is registered in the ADR before the run. With the model's warm start turned
     on in test-only copies of each case (no default changed), the existing nonlinear tests of the incompatible Hex8 and
     the rcfd-api baseline cases that use the element: the number of results whose bits change, the largest relative
     change of each recorded measure against a registered tolerance, every solve whose outcome changes, and the committed
     element states through the save and restart path; the default bits unchanged.
-  - note: Follow-up of F-844 (ADR 0725, 2026-11-16).
+  - note: F-846 (ADR 0727, 2026-11-17): what switching the default local mode update of the incompatible Hex8 to the
+    warm start of ADR 0660 D1 would move, measured test-only, no default changed. A census ran the default tests of all
+    34 test binaries of the element on two scratch copies, one with the constructor's default flipped, and recorded
+    every outermost driver solve on a model with the element (321 records; rcfd-api has no baseline case with the
+    element, and baseline_hashes passes on the flipped copy). Of the 140 results the switch reaches, 112 change bits, by
+    at most 7.8e-11 relative (registered tolerance 1e-6). The 119 results of models that set the flag themselves do not
+    move. Sixteen solves change outcome, every one toward convergence: 13 that fail today converge (the inverted points
+    of the distorted blocks and the ADR 0658 seeds, a singular punch tangent) and 3 need fewer halvings; none that
+    converges fails. Eight tests would fail: the two default bit records (B1, B3), two rows asserting the default's
+    failure on DB4, and four patch tests. Those four break because the public element entry points (modes_and_strains
+    and the others) refuse a committed state with the nine modes. The modes survive the transient save through bytes and
+    both restarts bit for bit, and the default model refuses them. Partial because the state-length row was registered
+    too strictly (it assumed every base model was a default one, corrected by an amendment before the comparison) and
+    one clause of a control could not be evaluated. Five of five mutations of the in-process file caught; the heavy
+    records not run. Follow-up F-847 (The element entry points of the incompatible Hex8 given a committed state with the
+    nine modes of the warm start).
 - [ ] **F-847** The arc-length trace of rule L's 16^3 punch branch through its fold on the warm model
   - depends on: F-797, F-841
   - acceptance: Every limit not stated here is registered in the ADR before the run. arclength::trace_from from ADR
@@ -16384,3 +16401,13 @@ fixed by the item's registration ADR before any code.
     the load factor and the inertia against ADR 0723's estimate, the states against a bordered reference on the warm
     model, the constraint measured with a floor for short arcs; the default bits unchanged.
   - note: Follow-up of F-797 (ADR 0726, 2026-11-16).
+- [ ] **F-847** The element entry points of the incompatible Hex8 given a committed state with the nine modes of the warm start
+  - depends on: F-846
+  - acceptance: Every limit not stated here is registered in the ADR before the run. The public element-level entry
+    points of the incompatible Hex8 (modes_and_strains and its variants, condensed_force_and_tangent and its variants,
+    the mode iteration records, enhanced_force_and_tangent and its variants, and nonlinear::hex8_* with the Incompatible
+    formulation) accept a state of the material layout followed by nine modes, by an opt-in or by a rule that leaves
+    every current call bit-identical: the material part used as now and the modes as the start of the local iteration,
+    measured against the driver's own evaluation on the ADR 0727 patch tests under the warm start; the transient
+    restore's refusal names the first element and its two lengths; the default bits unchanged.
+  - note: Follow-up of F-846 (ADR 0727, 2026-11-16).
