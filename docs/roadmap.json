@@ -8062,9 +8062,9 @@
     "deps": [
       "F-786"
     ],
-    "status": "todo",
+    "status": "done",
     "acceptance": "Every limit not stated here is registered in the ADR before the run. The constant `RETRO_H3`, the tier-3 branch of `retro_units` and the tests of ADR 0701 and ADR 0703 that depend on it are removed in one commit; the index of `--primary git` is equal to the index before the commit in every field, `--primary registered` and `p0679` are equal, `gate_attribute.py` is unchanged, and `python -m unittest discover -s scripts` passes.",
-    "note": "Follow-up of F-785 (ADR 0703, 2026-11-16)."
+    "note": "Test-to-ADR index, gate attribution. Follow-up of F-785 (ADR 0703) and F-786 (ADR 0704), 2026-11-17. DONE. ADR 0712, 2026-11-17: the dormant rule H3 code of `scripts/adr_test_index.py` is deleted in one commit: the constant `RETRO_H3`, the tier-3 loop of `retro_units` and `RETRO_LIMIT`, with the 3 tests that depended on them (`test_p2_p3_p4_tiers` and `test_counts` of the tests of ADR 0701, `test_constant_is_off` of the tests of ADR 0703) and the setUp/tearDown lines of the constant; 3 files, 3 insertions and 26 deletions. The index of `--primary git`, `--primary registered` and `p0679` is byte-identical before and after (11 791 224, 11 811 933 and 11 815 035 bytes, `cmp`; the `--report` output too; the key `h3` stays, always 0), `gate_attribute.py` is unchanged, `python -m unittest discover -s scripts` runs 136 tests (139 before), OK; 4 of 4 mutations caught. The exact file list of the retro counts is no longer asserted by a test. Follow-up F-792 (A test of the per-file tier list of the retro counts for rules H1 and H2)."
   },
   {
     "id": "F-791",
@@ -8076,5 +8076,16 @@
     "status": "todo",
     "acceptance": "Every limit not stated here is registered in the ADR before the run. A new opt-in field of S''' builds the first free rows of the blade lines between the last thin and the first thick span layers so that, at the ADR 0118 s4 specs, ComputerFan::rom_reference() blade 0 and the ADR 0696 second blade build with no folded cell within 84.5 deg non-orthogonality (the 84.688 deg of ADR 0702 at C (45, 2) / (45, 3), layer 3 of the reference disclosed), skewness 4.0 and aspect 1000, the wake-stack spanwise skewness stays within 1.0, a registered front_gap and n_nose scan inside the camber_seam range builds a registered fraction, and camber_seam_h, camber_seam_s, camber_seam_s_unstretched, camber_seam_s_wake_remap and camber_seam_s_wake_ramp are unchanged in bits.",
     "note": "Follow-up of F-784 (ADR 0702, 2026-11-16)."
+  },
+  {
+    "id": "F-792",
+    "title": "A test of the per-file tier list of the retro counts for rules H1 and H2",
+    "phase": 9,
+    "deps": [
+      "F-790"
+    ],
+    "status": "todo",
+    "acceptance": "Every limit not stated here is registered in the ADR before the run. A test of `scripts/test_adr_test_index_retro.py` asserts the `files` map of `coverage.primary.retro` (tier and ADR of each file) on its fake workspace for H1 and H2 files; the index of `--primary git`, `--primary registered` and `p0679` is equal to the index before the commit in every field; `gate_attribute.py` is unchanged; a planted change of a tier in `retro_primaries` is caught; `python -m unittest discover -s scripts` passes.",
+    "note": "Follow-up of F-790 (ADR 0712, 2026-11-16)."
   }
 ]
