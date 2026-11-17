@@ -15364,14 +15364,29 @@ fixed by the item's registration ADR before any code.
     PISO run are each within a registered limit of the twin on every step where the run without the opt-in is not. Every
     limit not stated here is registered in the ADR before the run.
   - note: Follow-up of F-754 (ADR 0675, 2026-11-16).
-- [ ] **F-758** A repetition trigger for the basin restart
+- [x] **F-758** A repetition trigger for the basin restart
   - depends on: F-733
   - acceptance: with a trigger registered before the run that fires when the recent picks of plain expected improvement
     stay in the incumbent's basin (instead of on the size of the acquisition), the restart reaches the target on at
     least as many seeds as plain expected improvement on both Hartmann 6 (n0 30, budget 200, seeds 1 to 10) and Shekel
     10 (n0 10, budget 150, seeds 1 to 20), every F-715 and F-733 check keeps its result, and the O1 points hash of ADR
     0673 is unchanged.
-  - note: Follow-up of F-733 (ADR 0673, 2026-11-16).
+  - note: Follow-up of F-733 (ADR 0673, 2026-11-17). ADR 0680, 2026-11-17. DONE (library, opt-in). The basin restart of
+    ADR 0651 gains Restart::trigger (default Trigger::Acquisition, so every F-715 and F-733 result and the default bits
+    are unchanged) with a second trigger, Trigger::Repetition: the restart fires when the plain pick of the step and
+    each of the last d + 1 evaluated observations lie in the incumbent's basin (radius 2 in the fitted length scales),
+    instead of when the acquisition is small. The window d + 1 (a simplex of consecutive evaluations) and the radius
+    were fixed before any run and not tuned. It takes at most one pick in d + 2 while plain expected improvement keeps
+    choosing the basin, and stays quiet when plain expected improvement drifts out of it. Hartmann 6 (n0 30, budget 200,
+    seeds 1 to 10): 8 of 10 within 1 percent against 6 of 10 for plain expected improvement (seeds 6 and 9 rescued, none
+    lost). Shekel 10 (n0 10, budget 150, seeds 1 to 20): 19 of 20 against 18 of 20 (seeds 5 and 18 rescued, seed 19
+    lost), where the acquisition trigger did 17 of 20. Every restart pick was checked from outside: its window and its
+    recomputed plain pick in the basin, the pick itself outside it (388 picks, 0 violations). The F-715 and F-733 heavy
+    records and fast tests were re-run with their recorded results; the O1 points hash of ADR 0673 and the hash of the
+    ADR 0651 restart are unchanged. Six of seven mutations caught; dropping the plain-pick condition survived, as
+    registered. With the repetition trigger, propose depends on the order of the observations. Not covered: the fan (the
+    basin covers the box there), other functions, batches larger than one. Follow-up F-766 (A fast check of the
+    plain-pick condition of the repetition trigger).
 - [ ] **F-759** Primary ADR only from registering evidence in the test-to-ADR index
   - depends on: F-737
   - acceptance: Every limit not stated here is registered in the ADR before the run. The primary ADR is taken from the
@@ -15461,3 +15476,10 @@ fixed by the item's registration ADR before any code.
     reference is at least half the fixed cylinder's lift amplitude; the force series are kept for diagnosis; a negative
     control with the body velocity left out of the forcing misses the lift amplitude and phase.
   - note: Follow-up of F-756 (ADR 0677, 2026-11-16).
+- [ ] **F-766** A fast check of the plain-pick condition of the repetition trigger
+  - depends on: F-758
+  - acceptance: a fast test with an observation sequence whose last d + 1 points lie in the incumbent's basin while the
+    plain pick of the step lies outside it shows that the repetition trigger makes no restart pick, the surviving ADR
+    0680 mutation M2 (the plain-pick condition dropped) is caught by it, and the O1 points hash of ADR 0673 is
+    unchanged.
+  - note: Follow-up of F-758 (ADR 0680, 2026-11-16).
