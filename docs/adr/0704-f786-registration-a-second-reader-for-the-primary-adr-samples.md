@@ -232,3 +232,119 @@ the files, changed none). The five borderline files of the acceptance are all am
 The note of F-772 (disclosed in the registration) says the first reader counted 24 of 28 as agreeing; I count 17. The two readings
 therefore differ on at least 7 files and C3 can be at most 21 of 28 (75 %): a miss of C3 is certain before the comparison. No row
 above is changed for that.
+
+## Addendum 2: comparison with the first reading (2026-11-17)
+
+Addendum 1 was committed as 59b54068 and is not edited. Only after that commit did I read ADR 0701 from line 99 on (its checks, its
+addendum 1 with the first reading, its remaining questions). `f772-scratch/reading.txt` and `addendum.md` were not needed and were
+not opened: ADR 0701 gives a counted verdict for each of the 28 files. ADRs 0684 and 0690 were not opened.
+
+The first reader's verdicts (ADR 0701 addendum 1): disagree on `pimple.rs`, `run_control.rs`, `cavity.rs` and `step_laminar.rs`;
+agree on the other 24, with `cylinder.rs` counted agree (borderline).
+
+### Results
+
+| # | Check | Limit | Measured | Met |
+|---|---|---|---|---|
+| C1 | files of S45 and S25 with a primary | exactly 28 (12 + 16) | 28 (12 + 16); the same 28 files and primaries as ADR 0701 lists | yes |
+| C2 | files read, each with a verdict and a reason | 28 of 28 | 28 of 28 | yes |
+| C3 | agreement of the two readings | at least 85 % (24 of 28) | **21 of 28 = 75.0 %** | **no** |
+| C4 | every differing file listed with both verdicts and a reason | all | the 7 files below | yes |
+| C5 | `git diff 55831919 -- docs/adr/0684-* docs/adr/0690-* docs/adr/0701-* scripts/` | empty | empty; the only file changed on the branch is this ADR | yes |
+| C6 | `docs_site` (release) | passes | 2 passed, run after the last edit of this file | yes |
+
+The two readings, file by file: both agree 17; both disagree 4 (`pimple.rs`, `run_control.rs`, `cavity.rs`, `step_laminar.rs`); first
+agree and second disagree 7; first disagree and second agree 0.
+
+Reported without a limit, as registered:
+
+- Agreement of each reader with the assigned primary: first 24 of 28 (85.7 %), second 17 of 28 (60.7 %).
+- Cohen's kappa of the two readings: observed 0.750, expected by chance 0.577, **kappa 0.41**.
+- My borderline rows: 4 (`non_conformal_case.rs`, `properties.rs`, `non_conformal.rs`, `species.rs`), all counted agree; the first
+  reader also counted all four agree.
+- The five borderline files of the acceptance: the readings agree on 4 (`run_control.rs` and `cavity.rs` both disagree; `species.rs`
+  and `properties.rs` both agree) and differ on `cylinder.rs`.
+- By the rule that gave the primary (looked up only now, from ADR 0701), first reader / second reader, files agreeing with the
+  primary: G 1 / 1 of 1; H0 5 / 5 of 5; H1 13 / 11 of 13; H2 4 / **0** of 4; H3 1 / 0 of 5.
+- Both disagree but name different right ADRs (counted as agreeing readings, as registered): `cavity.rs` (first reader: ADR 0047
+  describes `cavity_re100_simplec` with the Ghia limits earlier; I: none, 0047 uses the test as the model for its own O9) and
+  `step_laminar.rs` (first reader points to ADR 0023 P4 as the earlier use; I: none). Neither reader proposes a primary that the
+  other accepts, so both rows amount to "the assigned one is wrong".
+
+### The 7 files on which the readings differ
+
+| File | Assigned (rule) | First | Second | Reason for the difference |
+|---|---|---|---|---|
+| `rcfd-api/tests/mesh_params.rs` | 0685 (H2) | agree | disagree | Criterion. The first reader: "no other ADR describes the generator parameters; 0685 is the one that states what it checks". I: 0685 says the file is undescribed, does "not guess" an ADR for it and proposes that one be written (now F-769); my criterion asks for the ADR that decided what the file checks, and an ADR of the attribution that reports the absence of one is not that. The facts are not in dispute. |
+| `rcfd-turb/tests/channel_wall_function.rs` | 0685 (H2) | agree | disagree | Same. |
+| `rcfd-assistant/tests/physics_workflow.rs` | 0685 (H2) | agree | disagree | Same. |
+| `rcfd-cli/tests/physics_cases.rs` | 0685 (H2) | agree | disagree | Same. |
+| `rcfd-assistant/tests/workflow.rs` | 0067 (H1) | agree | disagree | Reading of the note. The first reader took the 11 H1 files of S25 together ("the note names the file, says it had no ADR or belongs to the ADR's item, and the ADR text describes the feature"). For this file the note says the opposite of the last clause: "No earlier ADR describes it; this ADR only names the item"; 0067 is the design loop and has one line with the item number. |
+| `rcfd-api/tests/workflow.rs` | 0123 (H1) | agree | disagree | Same kind. The note says 0123 "names F-120 and F-121 (the run service rests on them)"; 0123 does not describe the workflow engine that four of the five tests check (ADR 0685 says so of the sister file `workflow_engine.rs`). The first reader disagreed with 0123 for `run_control.rs`, the other test file of the same commit and items, where the citation is a table row and not a note. |
+| `rcfd-fv/tests/cylinder.rs` | 0060 (H3) | agree (borderline) | disagree | Criterion, and consistency. Both readers see the same row of 0060's "Audit of what was validated before this wave". The first reader: the first ADR to state the check and its limits. I: an audit row is a mention; and the same table gives `cavity.rs` and `step_laminar.rs` their rows, which both readers reject. |
+
+What the difference is made of:
+
+- **Five of the seven are one question** (the four H2 files and, in mirror image, `cylinder.rs`): is the primary "the first ADR that
+  says anything specific about the file", or "the ADR that decided what the file checks"? The first reader used the former for H2
+  and for `cylinder.rs`; I registered the latter. Under the former, my rows 5, 8, 9, 10 would be agree and the readings would meet
+  on 25 of 28 (89 %); that is a counterfactual, not a result.
+- **Two are a difference of reading** (the two `workflow.rs` files): the note was read as a class by the first reader and one by one
+  by me, and for these two the note itself says the host ADR does not describe the file.
+- **No file is the other way round**: wherever the first reader rejected a primary, so did I. The second reading confirms the four
+  H3 rejections of ADR 0701 and adds a fifth (`cylinder.rs`): H3 is 0 of 5 for me, which supports F-785 as proposed.
+- The disclosures weigh against my independence in the direction of agreement, not of the miss: I knew the first reader's totals
+  and that its disagreements were H3 rows, and I had seen ADR 0685's 8-file reading. All four files that reading and my table share
+  (`interchange.rs`, `species.rs`, `full_loop.rs`, `non_conformal_case.rs`) are rows where the two readings agree.
+
+### Deviations
+
+1. C3 missed (75.0 % against 85 %). The limit stays; no row was re-read.
+2. The disclosures and the interpretation in addendum 1 (items 1 to 3 there).
+3. `docs_site` was first started on the tree of addendum 1 and run again after this addendum; the second run is the one in C6.
+
+### Decision by the registered rule: **partial**
+
+C1, C2, C4, C5 and C6 are met; C3 is missed. The reading was made, blind to the per-file first reading (with the two disclosures of
+the registration and the third of addendum 1), and it discriminated (11 "disagree"). No limit of ADR 0684, 0690 or 0701 is changed:
+their numbers stand as the first reader's (R10 9 of 12, R11 15 of 16, R12 24 of 28). For information only, my reading of the same
+samples would give S45 4 of 12 (33 %), S25 13 of 16 (81 %) and together 17 of 28 (61 %), against the 80 % of ADR 0701 R10 to R12.
+
+### Remaining questions
+
+1. **What "the right primary" means for a file that no ADR registered.** Options: (a) the ADR that decided what the file checks,
+   and none if there is none (this ADR's criterion): the four files of ADR 0685 and the files whose note says the host only names
+   the item have no primary until an ADR is written for them (F-769 does that for the four); (b) the first ADR that states
+   anything specific about the file, including "no ADR describes it" (the first reader's use for H2). Recommendation: (a). A
+   primary is what the gate attribution prints as the ADR to open; ADR 0685 opened for a failing `mesh_params.rs` test tells the
+   maintainer only that nothing was registered, which a null primary with the ADR list says as well and without suggesting an
+   owner. This is the maintainer's to decide: it changes which tests have a primary in `--primary git` (20 tests under H2 by ADR
+   0701 R9), so it is not taken here.
+2. **ADR 0685 as a source** (question 3 of ADR 0701, whose recommendation was to keep it). Options: (a) keep; (b) exclude the units
+   of ADR 0685 itself, keeping the notes it appended to other ADRs. Recommendation: (b), by question 1 (a); proposed below, not
+   taken.
+3. **"Test files" notes whose host ADR only names the item** (2 of the 13 H1 files read: ADR 0067 and ADR 0123). Options: (a)
+   leave them (the host is at least the ADR that carries the description); (b) such a note gives no primary when it says the host
+   does not describe the file ("only names the item", "no earlier ADR describes it"); (c) move the two notes into the ADR that
+   F-769 writes for the workflow engine and the assistant helpers. Recommendation: (c) where F-769 covers the file
+   (`workflow_engine.rs` is in its acceptance; the two `workflow.rs` files are the same features), else (b).
+4. **A common criterion before a third reading.** The two readers did not use the same criterion, and five of the seven
+   differences come from that. Options: (a) accept 75 % as the measured agreement of two readers with different criteria and stop;
+   (b) fix the criterion (question 1), then have the 7 differing files and a fresh sample read by a third reader against it.
+   Recommendation: (b) after question 1 is decided and after F-785 and F-769 have changed the rule and the ADRs, so that the
+   reading is of the rule as it will stand.
+5. **F-785 and `cylinder.rs`.** F-785 keeps a table row as a source "only where its ADR registers the file". For the five H3 files
+   read, both readings would then give no primary to four, and mine to all five. Nothing to decide here; recorded for the reader
+   of F-785.
+
+## For the lead: roadmap entries
+
+Proposed status and note of F-786:
+
+> Proposed status: partial.
+
+> Test-to-ADR index, gate attribution. Follow-up of F-772 (ADR 0701, 2026-11-17). PARTIAL. ADR 0704, 2026-11-17: the 28 files with a primary of the samples S45 and S25 of ADR 0701 (12 and 16) were read by a second reader who did not write the rule, against a criterion registered before the list was obtained (the right primary is the ADR that decided what the file checks and states its limits: named by the file, or registering it by name, or a retro-registration whose host ADR is about the tested feature; audit rows, precedents, re-run lists and ADRs of the attribution are mentions) and committed before the first reading was opened. The two readings agree on 21 of 28 files (75.0 %, limit 85 % missed; Cohen's kappa 0.41): both agree with the primary on 17, both reject it on 4 (`pimple.rs`, `run_control.rs`, `cavity.rs`, `step_laminar.rs`), and the second reader rejects 7 that the first accepted, none the other way. The 7: the four files that take ADR 0685 by rule H2 (`mesh_params.rs`, `channel_wall_function.rs`, `physics_workflow.rs`, `physics_cases.rs`; ADR 0685 says no ADR describes them and proposes that one be written), two "Test files" notes whose own text says the host ADR only names the item (`rcfd-assistant/tests/workflow.rs` in ADR 0067, `rcfd-api/tests/workflow.rs` in ADR 0123) and `cylinder.rs` (an audit row of ADR 0060, like `cavity.rs` and `step_laminar.rs`). Five of the seven come from the criterion (first ADR that says anything specific about the file, against the ADR that decided its checks), two from reading the notes one by one. Second reader's agreement with the primary: 17 of 28 (60.7 %); by rule G 1 of 1, H0 5 of 5, H1 11 of 13, H2 0 of 4, H3 0 of 5. Of the five borderline files the readings agree on four and differ on `cylinder.rs`. Disclosed: the reader had seen the first reading's totals and by-rule counts in the note of F-772, and the 8-file reading in ADR 0685. No limit and no text of ADR 0684, 0690 or 0701 and no script is changed. Open: what the primary of a file with no registering ADR is (the maintainer's decision), ADR 0685 as a source, the two notes.
+
+> Follow-up proposed: A retro-registration unit that says no ADR describes the file gives no primary. Deps F-772, F-785. Acceptance: Every limit not stated here is registered in the ADR before the run. In `scripts/adr_test_index.py --primary git` the units of ADR 0685 itself are not a source, and a `## Test files (added <date>, ADR dddd)` unit that says its host ADR only names the item or that no earlier ADR describes the file gives no primary, or the maintainer decides that such an ADR is the primary and the decision is recorded; the files that change primary are listed (the four H2 files of ADR 0685 and the two `workflow.rs` files of ADR 0704 among them); `--primary registered` and `--primary p0679` are bit-identical and the attribution data of `gate_attribute.py` is unchanged for the existing consumers; no limit of ADR 0684, 0690, 0701 or 0704 is changed.
+
+> Follow-up proposed: A third reading of the primary-ADR samples against one written criterion. Deps F-786, F-785, F-769. Acceptance: Every limit not stated here is registered in the ADR before the run. After the maintainer's answer to question 1 of ADR 0704 (what the primary of a file with no registering ADR is), one written criterion is registered; the 7 files on which the readings of ADR 0701 and ADR 0704 differ and a fresh registered sample of at least 20 files with a primary under the rule as it then stands are read blind by a reader who wrote neither the rule nor ADR 0704, and by a second such reader, and the two agree on at least 85 % of the files; the disagreements are listed with a reason; the agreement of each reader with the assigned primary is reported next to it; no limit of ADR 0684, 0690, 0701 or 0704 is changed.
