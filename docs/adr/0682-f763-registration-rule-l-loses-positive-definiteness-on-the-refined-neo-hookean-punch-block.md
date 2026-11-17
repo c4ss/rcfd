@@ -281,3 +281,39 @@ The heavy records are not run under the mutations (they use the same functions, 
    the maintainer's standing instruction of 2026-11-11 (take the recommendation).
 2. **Whether a remedy may change rule L's coefficient**: not taken (it would change the results of every rule L item); open
    for the maintainer, with the numbers of this item.
+
+## Amendment 1 (2026-11-17, written after the registered run of the fast test and before any further run)
+
+The registered run of `f763_fast_setup` (test commit 0c57234a, log `run1-fast.log` in the scratch folder, 50 s) met every row
+but one: F6 (`16`, `32`), NC-H (i) `1.0000`, (ii) `2.4e-29`, (iii) `9.64e-3`, F7 (bit-equal), F1 (`2.3e-9`, `6.4e-8`), F2
+(`nu = 0` and the driver's factor passing at the nine states), F3 (`6.8e-9`; no negative value, `nu = 0`), F4 (`8.9e-9`; the
+same), F5 (`4.8e-15`, `7.6e-15`), NC-L (`|A| = 4`, all around `n0`) and the PC1 row "the hooked solve fails" (load factor
+`0.928125` to `0.93125`, pivot `-3.21e3` at node 446). It missed **PC1 "I-S"**: the classification had a missing measure,
+because **the path P of the plain element did not reach its `lambda_c`**: every attempt of P for `Off` from `0.1` on failed
+(a negative pivot at its first factor), the retries in two halves passed up to `0.6`, and at `0.65` and `0.7` an element
+inverted; P stopped at `0.6` of `0.928125`. P of F-bar on the same log also failed every attempt and passed by its retries.
+
+**Diagnosis.** A defect of the set-up of reading c1, not of the item: the **lifted start** sets the punch nodes to the new
+value while their neighbours stay where they were, so the first iterate of every attempt carries the whole increment `0.1 x
+0.1 = 0.01` as a jump over one element at the punch edge (a shear of `0.08` over `h = 1/8`). The driver never evaluates that
+iterate: its first correction is the linear predictor `K_ff du_F = r_F - K_FP dg` at the committed state (`Problem::
+attempt_with`, `reduce` with the increment `(lt - lc) v`), after which the prescribed values are `lt v` and the free ones have
+moved with them. The tangent at the lifted iterate is what failed (for `Off` and F-bar; rule L passed it, F1). The registered
+statement "the iterates differ, the converged equilibrium agrees" holds only when the lifted iteration converges.
+
+**Correction (registered now).** Reading c1, the path P: each attempt from the committed state `(u_c, states_c, lc)` to `l`
+takes **the driver's first iteration**: `nonlinear::internal_force` and `nonlinear::tangent` at `u_c` with `states_c`,
+`constraint::reduce` with the right side `-f_int` and the increment `(l - lc) v` at the prescribed equations (`v` the model's
+value of each, `-0.1` at the punch, `0` elsewhere), the driver's factor (`SupernodalAnalysis::nested_dissection`,
+`SupernodalLdlt::factor_analysed`, the pivot test `d <= 1e-10 a_ii`; a refusal fails the attempt), `u[free] += du`, then the
+prescribed values set to `l v` (bit for bit the driver's assignment `lt * v`); from that predictor the Newton iteration by
+`solve_from` on the model with the punch at `l x (-0.1)` (the same bits). The rest of P (the retry in two halves, the
+options) is unchanged. The iterates are then the driver's from its second iteration on; the convergence decision may stop at
+another iterate (`solve_from`'s energy test is relative to its own first correction), so the state agrees with the driver's
+within the Newton tolerance (RP2 tests it). Every other definition, limit and check stays as registered. In `si_eas_hg12.rs`:
+the path as registered is kept as `replicate_lifted` and the registered run as the ignored record
+`f763_fast_setup_known_miss` (rows and limits unchanged, the measured value in its ignore text); `f763_fast_setup_corrected`
+runs the same rows with the corrected P, once. The heavy records have not been run; they use the corrected P and are run once
+after this amendment. The mutations are run against `f763_fast_setup_corrected`; MU4 (the lifted start without the new punch
+value) is read on the corrected P as "the predictor without the prescribed increment" (`(l - lc) v` replaced by `0`), caught
+by F1 as registered. The registered rule gives **partial** whatever follows (a check met only after an amendment).
