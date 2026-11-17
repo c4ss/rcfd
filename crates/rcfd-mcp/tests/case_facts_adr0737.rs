@@ -30,6 +30,22 @@ end_time = 1.0
 "#;
 
 /// Every file of the project but the change watcher's and the runner's own (path, bytes), sorted.
+/// Shuts down the project runner a test's start_run started, so no runner outlives the test (and holds its pipes).
+struct StopRunner(std::path::PathBuf);
+
+impl Drop for StopRunner {
+    fn drop(&mut self) {
+        let runner = binaries().with_file_name(format!("rcfd-runner{}", std::env::consts::EXE_SUFFIX));
+        let _ = std::process::Command::new(runner)
+            .args(["shutdown", "--quiet", "--project"])
+            .arg(&self.0)
+            .stdin(std::process::Stdio::null())
+            .stdout(std::process::Stdio::null())
+            .stderr(std::process::Stdio::null())
+            .status();
+    }
+}
+
 fn files(dir: &Path) -> Vec<(String, Vec<u8>)> {
     let mut out = Vec::new();
     let mut stack = vec![dir.to_path_buf()];
@@ -178,6 +194,8 @@ fn c2_dry_run_writes_nothing_and_its_set_is_the_runs() {
     std::fs::write(dir.join("cases/piso.toml"), PISO).unwrap();
     let d = dir.to_string_lossy().to_string();
     let _ = binaries();
+    // start_run starts the project's runner (detached, ADR 0146); shut it down when the test ends, pass or fail
+    let _runner = StopRunner(dir.clone());
     let mut m = Mcp::start(&["--project", &d]);
     let _ = m.request("initialize", json!({}));
     let args = json!({"case": "cases/piso.toml", "run_time": {"simulate_s": 0.05}, "store": "plan", "set": ["physics.nu=0.02"]});
