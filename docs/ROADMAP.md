@@ -15369,13 +15369,29 @@ fixed by the item's registration ADR before any code.
     history, with no Rust file edited; the index shows at most 5 unmapped integration binaries with tests; a registered
     sample of the new mappings is read.
   - note: Follow-up of F-737 (ADR 0679, 2026-11-16).
-- [ ] **F-761** The daily gate runs the feature-gated edit-lock controls
+- [x] **F-761** The daily gate runs the feature-gated edit-lock controls
   - depends on: F-755, F-723
   - acceptance: Every limit not stated here is registered in the ADR before the run. The daily gate runs cargo test -p
     rcfd-project --release --features test-hooks --test edit_lock_f755 as its own step with its failures attributed to
     ADR 0676, without enabling the feature in any other build step (cargo tree of the workspace step shows no
     test-hooks); the gate's other results unchanged.
-  - note: Follow-up of F-755 (ADR 0676, 2026-11-16).
+  - note: Gate, test infrastructure. Follow-up of F-755 (ADR 0676, 2026-11-17). DONE by local evidence. ADR 0681,
+    2026-11-17: the daily gate (.github/workflows/gate.yml) gets two steps. "feature isolation" before the workspace
+    tests fails if `cargo tree --workspace -e features`, forward or inverted for rcfd-project, names test-hooks (0 of
+    1768 lines now; the forward tree cannot see a feature switched on from the command line, so the inverted tree is
+    part of the check, control: 1 line with --features rcfd-project/test-hooks). "tests with the test-hooks feature"
+    after the workspace step, also when it failed: `scripts/gate_test.py --no-doc --tsv gate-out/times_hooks.tsv -- -p
+    rcfd-project --features test-hooks --test edit_lock_f755`, one separate cargo invocation, 7 of 7 tests ok in 23 s
+    locally; the default build's artefact (features [default], same path, size and mtime) is unchanged by the feature
+    build, which has its own file names. gate_test.py gains `--no-doc` (cargo test --doc cannot be combined with
+    --test); gate_attribute.py takes several --tsv/--log files, copies the index's primary_adr into each failure record
+    and shows it in bold first in the table, and `--feature-binary BINARY=FEATURE` makes the bisect probe build with the
+    feature; all additive. Negative control in a scratch copy (a deliberately failing test in edit_lock_f755.rs): step
+    exit 101, attribution.json one failure with primary_adr 0676 (adrs 0135, 0669, 0676), re-run FAILED, not flaky; the
+    unchanged file gives no failure. 93 script unit tests pass (85 old unedited, 8 new; skipped 4), five of five
+    mutations caught, docs_site passes. Not covered: the real GitHub run (Windows runner, clean target folder, Actions
+    `if:` semantics) is left to the next daily gate; a bisect over the gated binary (probe text only); other
+    feature-gated test files. Follow-up F-764 (Check the first real run of the feature-gated gate step).
 - [ ] **F-762** A J2 punch reference without the edge jump
   - depends on: F-747
   - acceptance: Every limit not stated here is registered in the ADR before the run. The block of ADR 0636 with the J2
@@ -15393,3 +15409,11 @@ fixed by the item's registration ADR before any code.
     solve with S and W of ADR 0658 and ADR 0660 and with finer increments; the cause identified or bounded against a
     registered criterion; the default bits unchanged.
   - note: Follow-up of F-747 (ADR 0678, 2026-11-16).
+- [ ] **F-764** Check the first real run of the feature-gated gate step
+  - depends on: F-761
+  - acceptance: Every limit not stated here is registered in the ADR before the run. In the first daily gate on main
+    after ADR 0681 is merged, the steps feature isolation and tests with the test-hooks feature pass with 7 of 7 tests
+    ok, the workspace step's results equal those of the previous green gate (same test counts), the uploaded `gate-out/`
+    holds test_hooks.log and times_hooks.tsv, and a registered mutation (an edit_lock_f755 test made to fail on a
+    scratch branch, run by the maintainer or a dispatched gate) produces an attribution.md row with ADR 0676 in bold.
+  - note: Follow-up of F-761 (ADR 0681, 2026-11-16).
