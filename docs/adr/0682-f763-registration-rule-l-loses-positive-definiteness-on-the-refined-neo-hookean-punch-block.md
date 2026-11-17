@@ -317,3 +317,160 @@ runs the same rows with the corrected P, once. The heavy records have not been r
 after this amendment. The mutations are run against `f763_fast_setup_corrected`; MU4 (the lifted start without the new punch
 value) is read on the corrected P as "the predictor without the prescribed increment" (`(l - lc) v` replaced by `0`), caught
 by F1 as registered. The registered rule gives **partial** whatever follows (a check met only after an amendment).
+
+## Addendum 1: results (2026-11-17)
+
+The registered fast run once on 0c57234a (`run1-fast.log`, 50 s; amendment 1); the corrected fast run once on abf6ab10
+(`run2-fast.log`, 16 s); the two heavy records once each on 000a0d4d, side by side (`run3-heavy-tangent.log`, 247 s;
+`run4-heavy-variants.log`, 248 s; the machine shared); the mutations once each on a scratch copy of 000a0d4d against
+`f763_fast_setup_corrected_known_miss` (`mutations.log`, `mut-MU*.log`); S6, S7, B6, S8 once (`fmt.log`, `clippy.log`,
+`s7-lib.log`, `s7-tests.log`, `b6-bits.log`, `s8-docs.log`). All in `w49i-work/f763-scratch`. No limit, set-up or measure was
+changed after a run. The records: `f763_fast_setup_known_miss` (the registered run, amendment 1),
+`f763_fast_setup_corrected_known_miss` (PC1), `f763_nh16_tangent_heavy_known_miss` (RP2), `f763_nh16_variants_heavy` (met;
+heavy), all ignored with the measured values in their ignore texts; `f763_fast_rows` (default, 7.5 s) runs the met rows of
+the corrected fast run (all but PC1) on `8^3`, on the same path as the heavy records.
+
+### What was found
+
+- **The failing solve reproduced** (RP0, RP1): the same error text, character for character, plain (60.0 s) and hooked
+  (44.8 s). The attempts of the tenth step: `0.9 -> 1.0` fails, `0.95` converges, `1.0`, `0.975`, `0.9625` fail, `0.95625` and
+  `0.9625` converge, `0.96875` and `0.965625` fail (the eighth step also halved once, `0.7 -> 0.75 -> 0.8`). `lambda_c =
+  0.9625` exactly.
+- **Every converged state is stable.** P (the driver's predictor, then `solve_from`) reached `lambda_c` with no retry (47.0
+  s). The inertia is `nu = 0` at all 13 converged states, and **the driver's own first factor passes at `u_c`** (RP2 missed:
+  there is no refusal, so no pivot to compare). At `u_c`: `R/mu = 0.32658599`, `w_c = 0.06020454`. So the negative pivot of
+  ADR 0678 is **not** a property of a converged state: it appears at a Newton iterate of the attempts from the stable state
+  `u_c`, and the hypothesis of arithmetic 1 is refuted.
+- **The free tangent at `u_c`** (E1, c3): `lambda_1 / (mu h) = 0.03633` (the four lowest `0.0363`, `0.0489`, `0.0630`,
+  `0.0756`); F-bar at its own state `lambda_F / (mu h) = 0.03620` (`0.4` per cent apart); rule L's mode under the F-bar tangent
+  at the same displacement `rho_F / (mu h) = 0.03884` (`rho_Full = 0.0540`); rule L on `8^3` at `lambda_c` `0.1170`. The mode is
+  global and smooth: `|A| = 652` elements, `s_E = 0.021`, `H = 0.134`; its largest element energy is in element 3720.
+- **The ADR 0628 pencil at `u_c`** (E2, c2): `m_1 = 0.0629`, **isolated**: the next three are `0.615`, `0.649`, `0.674`. Its
+  mode is **local and of hourglass form**: `|A| = 2` elements, `H = 0.882`, the first element **3720 at `(8, 8, 14)`** (`x, y in
+  [0.5, 0.5625]`, `z in [0.875, 0.9375]`: diagonally outside the punch corner, one layer below the top; its upper corner node
+  `(0.5, 0.5, 0.9375)` is directly under node 4768, the corner where the two edge rows meet and where the pivot of ADR 0678
+  appears), `s_E = 0.133`, the smallest centre stretch there `0.808`. The **smallest modes block** of all 4096 elements (KA)
+  is in the same element: `lambda_min(K_aa) / (mu h^3) = 37.3`. The pencil weights gradients, so it isolates this mesh-scale
+  mode, which the standard problem hides under the smooth global modes. ADR 0636 kept the sweep of rule L at `>= 0.559 mu`
+  on homogeneous states; here a non-homogeneous state at the punch corner brings one mode down to `0.063 mu`, still positive.
+- **S and W** (c4): both fail exactly as the default (the same attempts, last converged `0.9625`, the pivot `-4.6518265e6`
+  at node 4768 within `2e-9` relative of the default's): the local mode update does not change the failing iterate.
+- **Finer increments** (c5): 20 and 40 increments fail **earlier**, from `0.870312` and `0.871094`, by an **inverted element
+  3959** (`(7, 7, 15)`: the top-layer element under the punch corner; `det F = -0.157`, `-0.155` at point 4) at an iterate, with
+  increments of `0.0016` and `0.0008` after the halvings. By reading c5 the failure is **increment-dependent** (spread
+  `0.092` against `0.025`), and no finer solve passes.
+- **The plain element** (PC1): its `8^3` path is stable too: at its last converged state `0.928125` `nu = 0`, `lambda_1 /
+  (mu h) = 0.1153` against F-bar's `0.1151`; its failure (pivot `-3.21e3`) is also at an iterate. PC1 expected I-S and
+  missed: the registered positive control was not one (arithmetic 4 named this risk).
+
+### Results
+
+| Id | Limit | Measured | Met |
+|---|---|---|---|
+| F1 (registered run; corrected) | `<= 1e-6` | `2.3e-9`, `6.4e-8` (both runs) | yes |
+| F2 | `nu = 0`; passes | `nu = 0` at the nine states; the driver's factor passes | yes |
+| F3 | `<= 1e-8`; equal | `6.8e-9`; `0 = min(0, 4)` | yes |
+| F4 | `<= 1e-8`; equal | `8.9e-9`; `0` | yes |
+| F5 (LC1, `8^3`) | `<= 1e-10` | `3.1e-15`, `3.6e-15` | yes |
+| F6 | `16`, `32` | `16`, `32` | yes |
+| F7 | bit-equal | bit-equal | yes |
+| NC-H (i), (ii), (iii) | `>= 1 - 1e-12`; `<= 1e-12`; `<= 0.05` | `1.0`; `2.4e-29`; `9.64e-3` | yes |
+| NC-L | `|A| <= 8`, around `n0` | `4`, all around `n0` | yes |
+| PC1 (registered run) | fails; I-S | fails; **a missing measure** (the lifted start stopped P at `0.6`) | **no** (amendment 1) |
+| PC1 (corrected) | fails; I-S | fails; **`nu = 0`, `lambda_1 / (mu h) = 0.1153`**: "I-T or bounded" | **no** (known miss) |
+| RP0 | the text of ADR 0678 | equal | yes |
+| RP1 | equal; `lambda_c = 0.9625` | equal; `0.9625` | yes |
+| RP2 | node 4768 comp 0; `<= 1e-3` | **the driver's factor passes at `u_c`**: no refusal | **no** (known miss) |
+| SY | `<= 1e-10` | `3.9e-16` | yes |
+| E1 | `<= 1e-8`; equal | `9.7e-9`; `0 = min(0, 4)` | yes |
+| E2 | `<= 1e-8`; equal | `9.994e-9`; `0` | yes |
+| LC1 (`16^3`) | `<= 1e-10` | `6.6e-15`, `6.8e-16` | yes |
+| LOC, KA, ON | finite | as above | yes |
+| CF | finite; `<= 1e-8` | `rho_F 0.0388`, `rho_Full 0.0540`, `lambda_F 0.0362`; `9.0e-9` | yes |
+| C8 | finite | `0.1170` | yes |
+| SW, FI | classified | S, W fail from `0.9625`; 20, 40 fail from `0.8703`, `0.8711` | yes |
+| CL | classified | **bounded** (`lambda_1 > 0`, no finer solve passes) | reported |
+| B6 | pass; tests and docs only | the three records pass; `git diff --stat 41181a84` touches `crates/rcfd-fem/tests/si_eas_hg12.rs` and this ADR only | yes |
+| S6 | clean | fmt and clippy (`--all-targets -D warnings`) clean | yes |
+| S7 | pass | `--lib` 15; `si_eas_hg9` 4, `si_eas_hg10` 2, `si_eas_hg11` 1, `si_eas_hg12` 1 passed | yes |
+| S8 | pass | `docs_site` 2 passed | yes |
+
+### c6: the cause, by the registered criterion
+
+**Bounded, not identified.** `lambda_1 > 0` at the last converged state and no finer solve passes: "bounded (stable converged
+state, no finer solve passes)". What the measures bound:
+
+- **Not an instability of the body, nor of rule L at a converged state**: every converged state of the path has `nu = 0`; at
+  `u_c` rule L's lowest eigenvalue equals F-bar's within `0.4` per cent and F-bar gives rule L's mode a positive energy. I-S and
+  I-P (both need `lambda_1 < 0`) are excluded at the converged states.
+- **A Newton iterate from a stable state**: the driver's factor at `u_c` passes; the failing pivot is the same to `2e-9` in the
+  default, S and W (the mode update does not move it); with finer increments the attempts fail earlier, by an inverted
+  element, so smaller increments do not avoid it. Registered reading c5: increment-dependent.
+- **Where**: at the **punch corner**, not along the edge rows: the pivot at node 4768 (the corner), the inverted element 3959
+  under it, the isolated pencil mode and the smallest `K_aa` in element 3720 under the corner one layer down. The edge shares of
+  the two modes are `0.02` and `0.13`: the instability does not live in the edge row where ADR 0678 found F-bar's error.
+- **The candidate, not proven**: the isolated, local, hourglass-form pencil mode (`m_1 = 0.063 mu` in two elements, ten times
+  below the next) is soft enough that the predictor of an increment from `u_c` (a linear solve with this nearly singular local
+  mode) can carry the corner elements past the point where the tangent or the deformation gradient is admissible. This was not
+  measured: no iterate of the failing attempt is recorded (the driver keeps none), and the share of the predictor in that mode
+  was not registered. The follow-up below registers it.
+
+### Deviations
+
+- Amendment 1: the lifted start of P was a defective set-up (the plain element's path stopped), corrected before the heavy
+  records.
+- RP2 missed: the hypothesis of arithmetic 1 (the tangent at `u_c` already indefinite) is false; recorded, not tuned.
+- PC1 missed: the plain element's failure on `8^3` is also at an iterate, so it was not a positive control of I-S.
+- The heavy records ran side by side (their wall times are shared-machine times).
+- MU4, the predictor without the prescribed increment, was registered as caught by F1; it is **not caught**: on the `8^3`
+  rule L path the lifted iteration converges to the same state (as in the registered run), and its only effect is on PC1's
+  path, a row that already misses.
+
+### Mutations (scratch copy of 000a0d4d, `f763_fast_setup_corrected_known_miss`, each run once; PC1 misses in every run)
+
+| Id | Caught | By |
+|---|---|---|
+| MU1 (`P_lin` replaced by `P_0`) | **yes** | NC-H (ii) (`1.0`), (iii) (`1.0`) |
+| MU2 (energies from the plain element's tangent) | **yes** | F5 (`3.3e-2`, `9.8e-2`) |
+| MU3 (`E` from every punch node) | **yes** | F6 (`25`, `81`) |
+| MU4 (the predictor without the increment) | **no** | F1, F2 met; only PC1's path changes (it stops at `0.6`) |
+| MU5 (inertia counting positive pivots) | **yes** | F2 (`1757`), F3, F4 |
+| MU6 (the Laplacian of the first component) | **yes** | F4 (NaN: the pencil solve fails), F5 |
+
+Five of six caught.
+
+### Not run
+
+Nothing registered was skipped. Not run by design: a `32^3` mesh, other materials, the iterates of the failing attempt (not
+registered), a remedy, `baseline_hashes` (no shared solver file touched). The whole rcfd-fem suite was not run (rule 7).
+
+### Decision
+
+**partial**, by the registered rule: B6 met (no library file changed), the failing solve reproduced, the lowest eigenvalue of
+the free tangent and of the ADR 0628 pencil at the last converged state located by element, S, W and two finer increments run;
+but the cause is **bounded**, not identified, a check was met only after amendment 1, PC1 and RP2 missed, and MU4 was not
+caught.
+
+### Remaining questions
+
+1. **The failing iterate.** Options: (a) a follow-up recording the failing attempt from `u_c` iterate by iterate (the
+   predictor's share in the isolated pencil mode, the eigenvalues at each iterate), with the line search of ADR 0607 and a
+   registered damping of the predictor tried on it; (b) record the punch-corner failure as a limit of rule L on node-set
+   punches. Recommendation: (a), proposed below.
+2. **The ADR 0628 sweep on non-homogeneous states.** The homogeneous sweep (ADR 0628, ADR 0636: `>= 0.559 mu`) did not see a
+   state that brings one local mode to `0.063 mu`. Options: (a) a separate item extending the sweep to simple shear and to the
+   punch-corner element's state; (b) inside the follow-up of question 1. Recommendation: (b).
+3. **Whether a remedy may change rule L's coefficient** (open question 2 of the registration): open for the maintainer.
+4. **The positive control.** The plain element's `8^3` failure is not an I-S case; a true control needs a state where the
+   plain element's converged tangent is indefinite (the ADR 0628 patch below its `lambda_s`). Recommendation: use that patch
+   in the follow-up.
+
+## For the lead: roadmap entries
+
+> Proposed status: partial.
+
+> Structural solver, intermediate tier. Follow-up of F-747 (ADR 0678). PARTIAL. ADR 0682, 2026-11-17 (tests only, no library file changed): the failing solve of ADR 0678 (rule L, neo-Hookean, the punch block on 16^3, default options) reproduced to the character, its attempts recorded through an identity step-control hook (last converged load factor 0.9625). The last converged state rebuilt by a replicated path (the driver's predictor, then solve_from; a lifted start was a defective set-up, corrected by amendment): none of the 13 converged states has a negative eigenvalue (supernodal inertia), and the driver's own first factor passes at the last one, so the negative pivot of ADR 0678 belongs to a Newton iterate, not to the equilibrium. The free tangent there: lowest eigenvalue 0.0363 mu h against F-bar's 0.0362 at its own state, F-bar's energy of rule L's mode positive, the mode global and smooth. The ADR 0628 pencil there: lowest 0.063 mu, isolated (next 0.615), in two elements of hourglass form (share 0.88) under the punch corner, where the element with the smallest modes block also sits. S and W fail exactly as the default; 20 and 40 increments fail earlier (0.870, 0.871) by an inverted element under the punch corner. Cause bounded by the registered criterion (a stable converged state, no finer solve passes): not an instability of the body or of rule L at a converged state; a Newton iterate from a stable state at the punch corner, not the edge row; the soft local pencil mode is the candidate, not proven. Missed: the plain element's 8^3 failure, registered as the positive control of a spurious instability, is also at an iterate; the registered hypothesis that the converged tangent is indefinite. Five of six mutations caught. No default bit changed. Not covered: the iterates of the failing attempt, a remedy, a 32^3 mesh.
+
+> F-747 (note, ADR 0682, 2026-11-17): the failed 16^3 neo-Hookean rule L solve of EC1 fails at a Newton iterate from a stable converged state at the punch corner; every converged state is positive definite (F-763).
+
+> Follow-up proposed: The failing Newton iterate of rule L at the punch corner. Deps F-763. Acceptance: Every limit not stated here is registered in the ADR before the run. The failing attempt of ADR 0682 (rule L, neo-Hookean, the punch block on 16^3, from the converged state at load factor 0.9625) recorded iterate by iterate: the predictor's share in the isolated pencil mode of ADR 0682 and the lowest eigenvalue of the free tangent and of the ADR 0628 pencil at every iterate, located by element; the ADR 0628 sweep at the state of the punch-corner element; the line search of ADR 0607 and a registered damping of the predictor on the same attempt, and whether the 16^3 block then solves to full load; a positive control on the ADR 0628 patch below its zero; the default bits unchanged.

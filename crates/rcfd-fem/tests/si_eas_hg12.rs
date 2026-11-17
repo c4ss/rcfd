@@ -1214,8 +1214,8 @@ fn fast_rows(rep: Replicate, pc1: bool) {
 // ============================================================================ the heavy records
 
 #[test]
-#[ignore = "ADR 0682: the heavy record of the 16^3 tangent (reproduction, P, the eigen analyses, F-bar, 8^3), run once"]
-fn f763_nh16_tangent_heavy() {
+#[ignore = "ADR 0682: the heavy record of the 16^3 tangent (reproduction, P, the eigen analyses, F-bar, 8^3), run once (247 s), known miss: RP2, the driver's first factor at the last converged state 0.9625 passes (nu 0, lambda_1 / (mu h) 0.0363, F-bar 0.0362): the failure is at a Newton iterate; RP0, RP1, SY, E1, E2, LC1, CF met; the lowest pencil mode m_1 0.0629 lies in 2 elements at the punch corner (H 0.88); f763_fast_rows covers the same path on 8^3"]
+fn f763_nh16_tangent_heavy_known_miss() {
     let mut ch = Checks::new();
     let mesh16 = block_mesh(16);
     let mesh8 = block_mesh(8);
@@ -1351,7 +1351,7 @@ fn f763_nh16_tangent_heavy() {
 }
 
 #[test]
-#[ignore = "ADR 0682: the heavy record of S, W and the finer increments on 16^3, run once"]
+#[ignore = "ADR 0682: the heavy record of S, W and the finer increments on 16^3, run once (248 s): S and W fail as the default from 0.9625; 20 and 40 increments fail earlier (from 0.8703, 0.8711) by an inverted punch-corner element at an iterate"]
 fn f763_nh16_variants_heavy() {
     let mesh16 = block_mesh(16);
     let mut ch = Checks::new();
