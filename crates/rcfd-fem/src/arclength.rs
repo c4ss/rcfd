@@ -18,6 +18,12 @@
 //!
 //! Shell4 and Shell3 take the corotated element of ADR 0490 (ADR 0522, F-585), their rotation unknowns corrected
 //! additively as every other unknown.
+//!
+//! [`trace_from`] (ADR 0726, F-797) is the opt-in start from a given converged state and increment ([`PathStart`]) with the
+//! prescribed values of the model and of the list scaled by the load factor: the load direction of the correction is then
+//! `f_F - K_Fp v` (`v` the prescribed values at load 1) and the prescribed equations follow the load factor after every
+//! iteration ([`crate::nonlinear`]'s controlled iteration, ADR 0726 D1). [`trace`] is unchanged: it starts unloaded and
+//! refuses non-zero prescribed values.
 
 use crate::constraint::{check_rigid_body_motions, prescribed_equations, Prescribed};
 use crate::element::ElementState;
@@ -180,6 +186,48 @@ pub struct ArcLengthPath {
     pub stopped: bool,
 }
 
+/// The given converged start of [`trace_from`] (ADR 0726 D2).
+#[derive(Debug, Clone, PartialEq)]
+#[non_exhaustive]
+pub struct PathStart {
+    /// The load factor of the start.
+    pub load_factor: f64,
+    /// The displacement, one value per equation of the model's `DofMap`; each prescribed equation must carry
+    /// `load_factor` times its value at load 1.
+    pub displacement: Vec<f64>,
+    /// The committed element states, one per element.
+    pub states: Vec<ElementState>,
+    /// The increment `(Du, Dlambda)` that led to the start (`Du` one value per equation, only the free equations read): it
+    /// selects the root of the first correction as the previous converged increment does; `None`: the root of the larger
+    /// `Dlambda`, as from the unloaded start.
+    pub increment: Option<(Vec<f64>, f64)>,
+}
+
+impl PathStart {
+    /// The start at `load_factor` with `displacement` and the committed `states`, without an increment.
+    pub fn new(load_factor: f64, displacement: Vec<f64>, states: Vec<ElementState>) -> PathStart {
+        PathStart {
+            load_factor,
+            displacement,
+            states,
+            increment: None,
+        }
+    }
+    /// The unloaded start of `model`: zero displacement, load factor 0, the initial element states.
+    pub fn unloaded(model: &SolidModel) -> Result<PathStart> {
+        Ok(PathStart::new(
+            0.0,
+            vec![0.0; model.dof_map().n_equations()],
+            initial_states(model)?,
+        ))
+    }
+    /// The same start with the increment `(du, dlambda)` that led to it.
+    pub fn increment(mut self, du: Vec<f64>, dlambda: f64) -> PathStart {
+        self.increment = Some((du, dlambda));
+        self
+    }
+}
+
 /// The spherical constraint of one attempt (ADR 0480 D4).
 struct Spherical {
     ds: f64,
@@ -194,6 +242,8 @@ struct Spherical {
     negative: usize,
     /// The load direction of the contributions (ADR 0560 D3).
     contribution_load: bool,
+    /// The prescribed values scaled by the load factor with their load column (ADR 0726 D1).
+    prescribed_load: bool,
 }
 
 fn dot(a: &[f64], b: &[f64]) -> f64 {
@@ -263,6 +313,9 @@ impl LoadFactorControl for Spherical {
     fn contribution_load(&self) -> bool {
         self.contribution_load
     }
+    fn prescribed_load(&self) -> bool {
+        self.prescribed_load
+    }
 }
 
 /// Follows the equilibrium path of `model` under the load factor times its loads and `forces` (ADR 0480 D4), from the
@@ -322,11 +375,149 @@ pub fn trace(
             reason: "the load is zero on the free equations: no load direction to follow (ADR 0480 D4)".to_string(),
         });
     }
-    let mut u = vec![0.0; n];
-    let mut lambda = 0.0;
-    let mut states = initial_states(model)?;
+    run(
+        model,
+        &f,
+        &fixed,
+        options,
+        contributions,
+        (vec![0.0; n], 0.0, initial_states(model)?),
+        None,
+        false,
+        stop,
+    )
+}
+
+/// The trace of [`trace`] from the given converged `start` (ADR 0726 D2), the prescribed values (the model's and
+/// `prescribed`) being their values at load 1 scaled by the load factor, with their load column `f_F - K_Fp v` in the
+/// controlled correction and the prescribed equations following the load factor after every iteration (ADR 0726 D1). The
+/// options, points, halvings, stop and errors are those of [`trace`]. Refused, besides the refusals of [`trace`] other than
+/// its refusal of non-zero prescribed values (key `"arc-length start"`): a displacement or increment of another length
+/// (`FemError::FieldLength`), a non-finite start or increment, a number of element states other than the number of
+/// elements, an increment zero on every free equation with `Dlambda = 0`, a prescribed equation whose start value is not
+/// `load_factor` times its value; and (key `"arc length"`) a load zero on every free equation with every prescribed value
+/// zero.
+pub fn trace_from(
+    model: &SolidModel,
+    prescribed: &[Prescribed],
+    forces: &[NodalForceAt],
+    options: &ArcLengthOptions,
+    contributions: &[&dyn Contribution],
+    start: &PathStart,
+    stop: &mut dyn FnMut(&PathPoint) -> bool,
+) -> Result<ArcLengthPath> {
+    model.validate()?;
+    // ADR 0522 D4: Shell4 and Shell3 take the corotated element of ADR 0490.
+    model.check_supported_nonlinear_shells()?;
+    crate::nonlinear::check_driver_model(model)?;
+    options.check()?;
+    let dofs = model.dof_map();
+    let n = dofs.n_equations();
+    let f = nodal_load_vector(model, forces)?;
+    let fixed = prescribed_equations(model, prescribed)?;
+    let key = "arc-length start";
+    let lengths = std::iter::once(start.displacement.len()).chain(start.increment.iter().map(|(du, _)| du.len()));
+    for found in lengths {
+        if found != n {
+            return Err(FemError::FieldLength {
+                key,
+                expected: n,
+                found,
+            });
+        }
+    }
+    let invalid = |reason: String| FemError::InvalidValue { key, reason };
+    let lambda0 = start.load_factor;
+    if !lambda0.is_finite() || start.displacement.iter().any(|x| !x.is_finite()) {
+        return Err(invalid(format!("the start (load factor {lambda0:e}) is not finite")));
+    }
+    let n_elements = model.mesh().n_elements();
+    if start.states.len() != n_elements {
+        return Err(invalid(format!(
+            "{} element states for {n_elements} elements",
+            start.states.len()
+        )));
+    }
+    let mut is_fixed = vec![false; n];
+    for &(eq, _) in &fixed {
+        is_fixed[eq] = true;
+    }
+    let previous = match &start.increment {
+        None => None,
+        Some((du, dl)) => {
+            if !dl.is_finite() || du.iter().any(|x| !x.is_finite()) {
+                return Err(invalid("the start increment is not finite".to_string()));
+            }
+            let free: Vec<f64> = (0..n).filter(|&i| !is_fixed[i]).map(|i| du[i]).collect();
+            if *dl == 0.0 && free.iter().all(|&x| x == 0.0) {
+                return Err(invalid("the start increment is zero".to_string()));
+            }
+            Some((free, *dl))
+        }
+    };
+    if let Some(&(eq, v)) = fixed.iter().find(|&&(eq, v)| start.displacement[eq] != lambda0 * v) {
+        let (node, component) = dofs.node_component(eq).expect("existing equation");
+        return Err(invalid(format!(
+            "the start has {:e} at node {node} component {component}, prescribed {v:e} at load 1: it must carry the load \
+             factor {lambda0:e} times it (ADR 0726 D2)",
+            start.displacement[eq]
+        )));
+    }
+    check_rigid_body_motions(model, &fixed)?;
+    let any_prescribed = fixed.iter().any(|&(_, v)| v != 0.0);
+    if options.contribution_load {
+        // ADR 0560 D3: the load direction at the start, with the contributions.
+        let f0 =
+            load_direction(&f, contributions, &start.displacement, lambda0).map_err(|reason| FemError::Solver {
+                solver: "arc-length",
+                reason,
+            })?;
+        if !any_prescribed && (0..n).all(|i| is_fixed[i] || f0[i] == 0.0) {
+            return Err(FemError::InvalidValue {
+                key: "arc length",
+                reason: "the load, the contributions' load-factor derivatives and every prescribed value are zero: no \
+                         load direction to follow (ADR 0726 D2)"
+                    .to_string(),
+            });
+        }
+    } else if !any_prescribed && (0..n).all(|i| is_fixed[i] || f[i] == 0.0) {
+        return Err(FemError::InvalidValue {
+            key: "arc length",
+            reason: "the load is zero on the free equations and every prescribed value is zero: no load direction to \
+                     follow (ADR 0726 D2)"
+                .to_string(),
+        });
+    }
+    run(
+        model,
+        &f,
+        &fixed,
+        options,
+        contributions,
+        (start.displacement.clone(), lambda0, start.states.clone()),
+        previous,
+        true,
+        stop,
+    )
+}
+
+/// The loop of [`trace`] and [`trace_from`] from the converged `(u, lambda, states)` with the previous increment (on the
+/// free equations, ascending) and the prescribed values scaled by the load factor or not (ADR 0726 D1).
+#[allow(clippy::too_many_arguments)]
+fn run(
+    model: &SolidModel,
+    f: &[f64],
+    fixed: &[(usize, f64)],
+    options: &ArcLengthOptions,
+    contributions: &[&dyn Contribution],
+    from: (Vec<f64>, f64, Vec<ElementState>),
+    previous: Option<(Vec<f64>, f64)>,
+    prescribed_load: bool,
+    stop: &mut dyn FnMut(&PathPoint) -> bool,
+) -> Result<ArcLengthPath> {
+    let (mut u, mut lambda, mut states) = from;
+    let mut previous = previous;
     let mut c = options.load_scale;
-    let mut previous: Option<(Vec<f64>, f64)> = None;
     let mut ds = options.length;
     let mut points = Vec::new();
     while points.len() < options.max_points {
@@ -341,11 +532,12 @@ pub fn trace(
                 previous: previous.clone(),
                 negative: 0,
                 contribution_load: options.contribution_load,
+                prescribed_load,
             };
             match controlled_attempt(
                 model,
-                &f,
-                &fixed,
+                f,
+                fixed,
                 &options.newton,
                 contributions,
                 &u,
