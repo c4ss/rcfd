@@ -16226,14 +16226,27 @@ fixed by the item's registration ADR before any code.
     loads within 2 percent of the tabulated values and the deflection of the rising branch at the tabulated loads within
     a registered limit.
   - note: Follow-up of F-610 (ADR 0716, 2026-11-16).
-- [ ] **F-839** A second reader for the E8-primary files and the supplementary sample of ADR 0720
+- [x] **F-839** A second reader for the E8-primary files and the supplementary sample of ADR 0720
   - depends on: F-773
   - acceptance: Every limit not stated here is registered in the ADR before the reading. The 2 files with an E8 primary
     and the 20 files of the supplementary sample of ADR 0720 (`random.Random(7730)`, listed in its addendum) are read by
     a reader who did not write the rule, against the criterion of ADR 0704 registered before the reading, and agree with
     the first reading on at least 85 % of the files; the disagreements are listed with a reason; no limit of ADR 0720 is
     changed by the second reading.
-  - note: Follow-up of F-773 (ADR 0720, 2026-11-16).
+  - note: Test-to-ADR index, gate attribution. Follow-up of F-773 (ADR 0720, 2026-11-17). DONE. ADR 0721, 2026-11-17: a
+    second reading of the 2 files with an E8 primary (`discover.rs` 0126, `time.rs` 0122) and of the 20 files of ADR
+    0720's supplementary sample (`random.Random(7730)`, reproduced from the index: population 29, the same 20 paths), by
+    an agent that did not write rule E8, against the criterion of ADR 0704 quoted in the registration; registration, the
+    22 readings and the comparison committed in that order, ADR 0720's addendum opened only after the readings were
+    committed. Agreement with the first reading 22 of 22 (limit 19 of 22, 85 %): both E8-primary files agree; of the 20
+    supplementary files 19 are E0 right and 1 is E8 right in both readings, the same file (`rcfd-mcp/src/edit_hook.rs`,
+    header ADR 0173, registration ADR 0195). No file differs in verdict; differences below the verdict are listed (which
+    of the two E8-primary files is borderline, wording of two reasons). The first reading records the 20 supplementary
+    files as totals with one file named, so 16 categories are known by exclusion. Agreement expected by chance on this
+    near one-sided sample is 90.5 %, so the result says little about the criterion's power to separate readers; the
+    readers are agents of the same kind and the second knew the first reader's registered expectations. No limit of ADR
+    0720 changed; ADR 0720, ADR 0704 and the scripts unedited; `docs_site` passes. F-773 stays partial (its sample of 20
+    E8-primary files is not drawable).
 - [ ] **F-840** Items named in a commit subject whose ADRs are named only in the roadmap note as evidence of the files the commit adds
   - depends on: F-773
   - acceptance: Every limit not stated here is registered in the ADR before the run. The ADRs that the roadmap note of
