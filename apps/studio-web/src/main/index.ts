@@ -57,7 +57,7 @@ import { PROJECT_PORT_CHANNEL } from '../shared/project.js';
 import { CASE_PORT_CHANNEL } from '../shared/case.js';
 import { RUN_PORT_CHANNEL } from '../shared/run.js';
 import { RunPortBridge, type RunPortLike } from './run/bridge.js';
-import { RunnerBudgetsFile } from './run/extras.js';
+import { RunnerBudgetsEngine } from './run/extras.js';
 import { projectArgument } from './project/argv.js';
 import { PROVENANCE_PORT_CHANNEL } from '../shared/provenance.js';
 import { ProvenancePortBridge, type ProvenancePortLike } from './provenance/bridge.js';
@@ -360,8 +360,11 @@ function offerCasePort(contents: WebContents): void {
   contents.postMessage(CASE_PORT_CHANNEL, null, [port2]);
 }
 
-/** F-837: the runner's budgets file of the open project, with this process's last write (for undo). */
-const runnerBudgets = new RunnerBudgetsFile();
+/** F-837: the runner's budgets of the open project through the engine (ADR 0733), with this process's last write (for undo). */
+const runnerBudgets = new RunnerBudgetsEngine({
+  read: () => projects.query('runner_config', {}),
+  write: (args) => projects.setRunnerConfig(args),
+});
 
 /** The run port of each web contents (F-810), like the case port. */
 const runPorts = new Map<number, RunPortBridge>();

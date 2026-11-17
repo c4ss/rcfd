@@ -1,6 +1,7 @@
 // F-837 in the packaged Studio at 1440 by 900, against the real engine (rcfd serve for the case editor, rcfd-mcp for the
 // project, rcfd-runner for the run started again, the fake claude for the panel): what the removed egui Studio offered
-// beside its run list, field view and project view, rebuilt without a new engine entry point. One test per capability;
+// beside its run list, field view and project view, rebuilt on the engine (the runner's budgets through ADR 0733's
+// runner_config and set_runner_config). One test per capability;
 // screenshots go to test-results-visual/f837/.
 //
 // The quick-start copy gets, as fixtures: a solver warning at the end of the Re 100 run's events.jsonl (the shape the
@@ -203,7 +204,7 @@ test('the selected run’s report opens in the system’s program for HTML', asy
   await expect.poll(() => studio.app.evaluate(() => (globalThis as unknown as { __opened: string[] }).__opened)).toEqual([path.join(quick, 'runs', RE100, 'output', 'report.html')]);
 });
 
-test('the runner’s budgets: read, written with only the keys set, refused over another writer’s change, undone', async () => {
+test('the runner’s budgets: read and written by the runner (ADR 0733), refused over another writer’s change, undone by values', async () => {
   await toRuns();
   const file = path.join(quick, '.rcfd', 'runner-config.json');
   expect(existsSync(file)).toBe(false);
@@ -213,8 +214,15 @@ test('the runner’s budgets: read, written with only the keys set, refused over
   await panel.getByRole('textbox', { name: 'max_runs' }).fill('2');
   await panel.getByRole('textbox', { name: 'max_runs' }).press('Tab');
   await panel.getByRole('button', { name: 'Write', exact: true }).click();
-  await expect(panel.getByRole('status')).toContainText('Written to .rcfd/runner-config.json');
+  await expect(panel.getByRole('status')).toContainText('Written to .rcfd/runner-config.json; applies at the next runner start.');
   expect(JSON.parse(await readFile(file, 'utf8'))).toEqual({ max_runs: 2 });
+  // written by the runner's set_runner_config: one journal line of that command (the Studio writes nothing into .rcfd/)
+  const edits = (await readFile(path.join(quick, '.rcfd', 'edits.jsonl'), 'utf8'))
+    .split('\n')
+    .filter((l) => l.trim() !== '')
+    .map((l) => JSON.parse(l) as Record<string, unknown>)
+    .filter((l) => l['path'] === '.rcfd/runner-config.json');
+  expect(edits.map((l) => l['who'])).toEqual(['set_runner_config']);
   await shot('05-runner-budgets-written');
   // another writer since: the Studio does not write over it
   await writeFile(file, '{"max_runs": 3}\n');
@@ -235,6 +243,17 @@ test('the runner’s budgets: read, written with only the keys set, refused over
   await expect(panel.getByRole('status')).toContainText('is as it was');
   // no file before the write: undone to no key set (the runner's defaults); the Studio removes no file (house rule)
   expect(JSON.parse(await readFile(file, 'utf8'))).toEqual({});
+  await page.keyboard.press('Escape');
+  await expect(panel).toHaveCount(0);
+  // a file the runner cannot read (ADR 0733 Q4): refused as it is, replaced whole on purpose
+  await writeFile(file, '{"gpu": 1}\n');
+  await page.getByRole('button', { name: 'Runner budgets (.rcfd/runner-config.json)' }).click();
+  await expect(panel.getByRole('alert')).toContainText('The runner would refuse this file: unknown field `gpu`');
+  await panel.getByRole('textbox', { name: 'max_runs' }).fill('2');
+  await panel.getByRole('textbox', { name: 'max_runs' }).press('Tab');
+  await panel.getByRole('button', { name: 'Replace the file', exact: true }).click();
+  await expect(panel.getByRole('status')).toContainText('Written to .rcfd/runner-config.json');
+  expect(JSON.parse(await readFile(file, 'utf8'))).toEqual({ max_runs: 2 });
   await page.keyboard.press('Escape');
   await expect(panel).toHaveCount(0);
 });

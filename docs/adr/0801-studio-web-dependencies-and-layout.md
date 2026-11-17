@@ -2632,7 +2632,7 @@ local to this list.
 | E-837a | F-837 | A case-facts query (cell sizes, a velocity scale) or `start_run {dry_run: true}`, for "simulate N s", adaptive correctors and the Courant fix | not built |
 | E-837b | F-837 | A mesh refine entry point (`refine_mesh {mesh, factor}` or a service method), for Refine by 2 | not built |
 | E-837c | F-837 | A service save of a case session to a path outside a project, for one case file anywhere | not built |
-| E-837d | F-837 | `rcfd-runner config set` or MCP `set_runner_config` (ADR 0733, proposed) | the Studio writes `.rcfd/runner-config.json` conflict-safe, and the runner checks it |
+| E-837d | F-837 | `rcfd-runner config set` or MCP `set_runner_config` (ADR 0733, accepted 2026-11-17) | built 2026-11-17: the panel reads with `runner_config` and writes with `set_runner_config` (the runner's checks, atomic, conflict 1200); the Studio no longer writes `.rcfd/runner-config.json` |
 
 ## Addendum 19: F-820 and F-821, installers built in CI and the Studio on Linux in Docker (2026-11-17)
 

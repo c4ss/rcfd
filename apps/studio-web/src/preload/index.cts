@@ -733,7 +733,7 @@ const runHistories: RunBridge = {
   log: (run) => runSend({ op: 'log', id: nextRunId++, run }),
   openReport: (run) => runSend({ op: 'openReport', id: nextRunId++, run }),
   budgets: () => runSend({ op: 'budgets', id: nextRunId++ }),
-  setBudgets: (values, base) => runSend({ op: 'setBudgets', id: nextRunId++, values, base }),
+  setBudgets: (values, base, replace) => runSend({ op: 'setBudgets', id: nextRunId++, values, base, replace }),
   undoBudgets: (force) => runSend({ op: 'undoBudgets', id: nextRunId++, force }),
   // the save dialog waits for the user: an hour
   savePng: (rect, name) => runSend({ op: 'savePng', id: nextRunId++, rect, name }, 3_600_000),

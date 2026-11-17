@@ -85,12 +85,8 @@ impl Config {
             Err(e) if e.kind() == std::io::ErrorKind::NotFound => Config::default(),
             Err(e) => return Err(format!("{}: {e}", p.display())),
         };
-        if c.max_runs == 0 || c.cpu_threads == 0 || c.poll_ms == 0 {
-            return Err(format!(
-                "{}: max_runs, cpu_threads and poll_ms must be positive",
-                p.display()
-            ));
-        }
+        // the checks after the parse are `Config::check` (one place, shared with `Config::set`, ADR 0733)
+        c.check().map_err(|m| format!("{}: {m}", p.display()))?;
         Ok(c)
     }
 

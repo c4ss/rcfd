@@ -1,15 +1,17 @@
-// F-837 without a window: the run's log and events (warnings named), the runner's budgets file (the runner's checks, no
-// write over another writer's change, undo), the run port's new requests, the project argument, Save PNG's file, the
+// F-837 without a window: the run's log and events (warnings named), the runner's budgets through the engine (ADR 0733:
+// the engine's answers as the panel shows them, a conflict, a refusal, undo by the values before, and nothing under
+// src/main writing the file), the run port's new requests, the project argument, Save PNG's file, the
 // field view's range, domain and scale bar, the latest residuals of run_status, and the palette's new commands.
 import { expect, test } from '@playwright/test';
-import { mkdtemp, readFile, rm, writeFile, mkdir } from 'node:fs/promises';
+import { mkdtemp, readFile, readdir, rm, writeFile, mkdir } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { BUDGET_KEYS, RUN_COMPARE_OPS, RUN_EXTRA_OPS, RUN_OPS } from '../../src/shared/run.js';
 import { parseRunRequest } from '../../src/main/run/bridge.js';
-import { budgetProblem, budgetsOf, eventLine, readRunLog, RunnerBudgetsFile, savePng, wholeRect } from '../../src/main/run/extras.js';
+import { budgetsOf, eventLine, readRunLog, RunnerBudgetsEngine, savePng, wholeRect, type BudgetsEngine } from '../../src/main/run/extras.js';
 import type { Query } from '../../src/main/run/series.js';
 import { projectArgument } from '../../src/main/project/argv.js';
+import { appRoot } from '../support/rcfd.js';
 import { entriesOf } from '../../src/main/project/listing.js';
 import { runDetail } from '../../src/main/project/runs.js';
 import { cellsOutside, domainText, fixedRange, lengthText, pngName, scaleBar } from '../../src/renderer/field/viewExtras.js';
@@ -72,52 +74,126 @@ test.describe('a run’s log and events', () => {
 });
 
 test.describe('the runner’s budgets (.rcfd/runner-config.json)', () => {
-  test('the runner’s checks: known keys, whole numbers where it reads u64 or usize, no zero runs, threads or poll', () => {
+  /** An engine answer of runner_config / set_runner_config (crates/rcfd-runner/src/config.rs). */
+  const state = (values: Record<string, unknown> | null, hash: string | null, more: Record<string, unknown> = {}) => ({
+    path: '.rcfd/runner-config.json',
+    exists: values !== null,
+    hash,
+    values: values ?? {},
+    problem: null,
+    needs_replace: false,
+    defaults: { max_runs: 2 },
+    in_use: null,
+    applies: 'next_start',
+    ...more,
+  });
+  const engineError = (code: number, message: string) => Object.assign(new Error(message), { code });
+
+  test('the engine’s answer as the panel shows it', () => {
     expect(BUDGET_KEYS).toEqual(['max_runs', 'cpu_threads', 'mem_budget_mb', 'mem_base_mb', 'mem_kb_per_cell', 'poll_ms', 'adopt_probe_ms', 'cancel_grace_ms']);
-    expect(budgetProblem('max_runs', 2)).toBeNull();
-    expect(budgetProblem('max_runs', 0)).toMatch(/positive/);
-    expect(budgetProblem('cpu_threads', 1.5)).toMatch(/whole/);
-    expect(budgetProblem('mem_budget_mb', 0)).toBeNull();
-    expect(budgetProblem('mem_base_mb', 12.5)).toBeNull();
-    expect(budgetProblem('mem_kb_per_cell', -1)).toMatch(/negative/);
-    expect(budgetProblem('gpu', 1)).toMatch(/unknown key/);
-    expect(budgetsOf('{"max_runs": 0}', null, false).problem).toMatch(/max_runs must be positive/);
-    expect(budgetsOf('{', null, false).problem).toMatch(/not JSON/);
-    const b = budgetsOf('{"max_runs":3}', JSON.stringify({ config: { max_runs: 2, cpu_threads: 8 }, config_source: 'defaults', started: 'S' }), false);
-    expect(b.values).toEqual({ max_runs: 3 });
-    expect(b.inUse).toEqual({ values: { max_runs: 2, cpu_threads: 8 }, source: 'defaults', started: 'S' });
+    const b = budgetsOf(
+      state({ max_runs: 3 }, 'fnv64:0000000000000001', { in_use: { values: { max_runs: 2, cpu_threads: 8 }, source: 'the default (no runner-config.json)', started: 'S' } }),
+      false,
+    );
+    expect(b).toEqual({
+      path: '.rcfd/runner-config.json',
+      exists: true,
+      values: { max_runs: 3 },
+      hash: 'fnv64:0000000000000001',
+      problem: null,
+      needsReplace: false,
+      inUse: { values: { max_runs: 2, cpu_threads: 8 }, source: 'the default (no runner-config.json)', started: 'S' },
+      undo: false,
+    });
+    const bad = budgetsOf(state({}, 'fnv64:0000000000000002', { problem: 'unknown field `gpu`', needs_replace: true }), false);
+    expect(bad).toMatchObject({ problem: 'unknown field `gpu`', needsReplace: true, values: {} });
   });
 
-  test('written with only the keys set, never over another writer’s change; the last write undone', async () => {
-    const dir = await mkdtemp(path.join(tmpdir(), 'rcfd-f837-budgets-'));
-    try {
-      const f = new RunnerBudgetsFile();
-      const file = path.join(dir, '.rcfd', 'runner-config.json');
-      const none = await f.read(dir);
-      expect(none).toMatchObject({ exists: false, hash: null, values: {}, undo: false });
-      const w = await f.write(dir, { max_runs: 3, mem_budget_mb: 2048 }, null);
-      expect(w.kind).toBe('written');
-      expect(JSON.parse(await readFile(file, 'utf8'))).toEqual({ max_runs: 3, mem_budget_mb: 2048 });
-      const now = w.kind === 'written' ? w.budgets : none;
-      expect(now.undo).toBe(true);
-      // a key cleared goes back to the runner's default
-      const w2 = await f.write(dir, { mem_budget_mb: null }, now.hash);
-      expect(JSON.parse(await readFile(file, 'utf8'))).toEqual({ max_runs: 3 });
-      // another writer since the read: refused, nothing written
-      await writeFile(file, '{"max_runs": 5}\n');
-      const c = await f.write(dir, { max_runs: 4 }, w2.kind === 'written' ? w2.budgets.hash : null);
-      expect(c.kind).toBe('conflict');
-      expect(await readFile(file, 'utf8')).toBe('{"max_runs": 5}\n');
-      // a value the runner refuses: refused
-      expect(await f.write(dir, { cpu_threads: 0 }, c.kind === 'conflict' ? c.budgets.hash : null)).toMatchObject({ kind: 'refused' });
-      // undo over the other writer's change is a conflict unless forced
-      expect((await f.undo(dir, false)).kind).toBe('conflict');
-      expect((await f.undo(dir, true)).kind).toBe('written');
-      expect(JSON.parse(await readFile(file, 'utf8'))).toEqual({ max_runs: 3, mem_budget_mb: 2048 });
-      expect((await f.undo(dir, false)).kind).toBe('refused');
-    } finally {
-      await rm(dir, { recursive: true, force: true });
+  test('written by the engine, never over another writer’s change; undo sends the values before back', async () => {
+    const calls: Record<string, unknown>[] = [];
+    let now: ReturnType<typeof state> = state(null, null);
+    const answers: (() => unknown)[] = [];
+    const engine: BudgetsEngine = {
+      read: async () => now,
+      write: async (args) => {
+        calls.push(args);
+        const a = answers.shift();
+        if (!a) throw new Error('no answer');
+        return a();
+      },
+    };
+    const f = new RunnerBudgetsEngine(engine);
+    expect(await f.read('/p')).toMatchObject({ exists: false, hash: null, values: {}, undo: false });
+    answers.push(() => (now = state({ max_runs: 3, mem_budget_mb: 2048 }, 'fnv64:00000000000000a1')));
+    const w = await f.write('/p', { max_runs: 3, mem_budget_mb: 2048 }, null, false);
+    expect(calls.at(-1)).toEqual({ set: { max_runs: 3, mem_budget_mb: 2048 }, base_hash: null });
+    expect(w).toMatchObject({ kind: 'written', budgets: { hash: 'fnv64:00000000000000a1', undo: true } });
+    expect(await f.read('/p')).toMatchObject({ undo: true });
+    expect(await f.read('/other')).toMatchObject({ undo: false });
+    // a base that is not the file's now: a conflict, nothing sent
+    const n = calls.length;
+    expect(await f.write('/p', { max_runs: 4 }, 'fnv64:0000000000000bad', false)).toMatchObject({ kind: 'conflict', budgets: { hash: 'fnv64:00000000000000a1' } });
+    expect(calls.length).toBe(n);
+    // the engine's conflict (another writer between the read and the write): the file now
+    answers.push(() => {
+      now = state({ max_runs: 5 }, 'fnv64:00000000000000b2');
+      throw engineError(1200, '.rcfd/runner-config.json: changed since it was read');
+    });
+    expect(await f.write('/p', { max_runs: 4 }, 'fnv64:00000000000000a1', false)).toMatchObject({ kind: 'conflict', budgets: { hash: 'fnv64:00000000000000b2' } });
+    // the runner's refusal, in its words
+    answers.push(() => {
+      throw engineError(1003, '.rcfd/runner-config.json: max_runs, cpu_threads and poll_ms must be positive; nothing was written');
+    });
+    expect(await f.write('/p', { cpu_threads: 0 }, 'fnv64:00000000000000b2', false)).toEqual({
+      kind: 'refused',
+      message: '.rcfd/runner-config.json: max_runs, cpu_threads and poll_ms must be positive; nothing was written',
+    });
+    // undo with the hash of this window's write as base: the engine's conflict, then Undo anyway on the file as it is
+    answers.push(() => {
+      throw engineError(1200, 'changed');
+    });
+    expect((await f.undo('/p', false)).kind).toBe('conflict');
+    expect(calls.at(-1)).toEqual({ set: { max_runs: null, mem_budget_mb: null }, base_hash: 'fnv64:00000000000000a1' });
+    answers.push(() => (now = state({}, 'fnv64:00000000000000c3')));
+    expect(await f.undo('/p', true)).toMatchObject({ kind: 'written', budgets: { values: {}, undo: false } });
+    expect(calls.at(-1)).toEqual({ set: { max_runs: null, mem_budget_mb: null }, base_hash: 'fnv64:00000000000000b2' });
+    expect((await f.undo('/p', false)).kind).toBe('refused');
+    // a key that had a value goes back to it
+    answers.push(() => (now = state({ max_runs: 7 }, 'fnv64:00000000000000d4')));
+    await f.write('/p', { max_runs: 7 }, 'fnv64:00000000000000c3', false);
+    now = state({ max_runs: 7 }, 'fnv64:00000000000000d4');
+    answers.push(() => (now = state({ max_runs: 9 }, 'fnv64:00000000000000e5')));
+    await f.write('/p', { max_runs: 9 }, 'fnv64:00000000000000d4', false);
+    answers.push(() => (now = state({ max_runs: 7 }, 'fnv64:00000000000000f6')));
+    await f.undo('/p', false);
+    expect(calls.at(-1)).toEqual({ set: { max_runs: 7 }, base_hash: 'fnv64:00000000000000e5' });
+    // a file the runner cannot read: replaced whole, and that replacement is not undone by values
+    now = state({}, 'fnv64:0000000000000107', { problem: 'not JSON', needs_replace: true });
+    answers.push(() => (now = state({ max_runs: 2 }, 'fnv64:0000000000000108')));
+    const all = Object.fromEntries(BUDGET_KEYS.map((k) => [k, k === 'max_runs' ? 2 : null]));
+    expect(await f.write('/p', all, 'fnv64:0000000000000107', true)).toMatchObject({ kind: 'written', budgets: { undo: false } });
+    expect(calls.at(-1)).toEqual({ set: all, base_hash: 'fnv64:0000000000000107', replace: true });
+  });
+
+  test('nothing under src/main writes the runner’s budgets file: the runner does (ADR 0733)', async () => {
+    const root = path.join(appRoot, 'src', 'main');
+    const files: string[] = [];
+    const walk = async (d: string): Promise<void> => {
+      for (const e of await readdir(d, { withFileTypes: true })) {
+        const p = path.join(d, e.name);
+        if (e.isDirectory()) await walk(p);
+        else if (/\.(ts|cts|mts)$/.test(e.name)) files.push(p);
+      }
+    };
+    await walk(root);
+    expect(files.length).toBeGreaterThan(10);
+    const code = (t: string) => t.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '');
+    const offenders: string[] = [];
+    for (const f of files) {
+      const c = code(await readFile(f, 'utf8'));
+      if (/runner-config\.json|runner-config/.test(c)) offenders.push(path.relative(root, f));
     }
+    expect(offenders, 'src/main names the runner’s budgets file in code').toEqual([]);
   });
 });
 
@@ -129,9 +205,12 @@ test.describe('the run port’s F-837 requests', () => {
     expect(parseRunRequest({ id: 1, op: 'log', run: 'r-1' })).toEqual({ ok: true, request: { id: 1, op: 'log', run: 'r-1' } });
     expect(parseRunRequest({ id: 1, op: 'openReport', run: '../x' }).ok).toBe(false);
     expect(parseRunRequest({ id: 1, op: 'budgets' }).ok).toBe(true);
-    expect(parseRunRequest({ id: 1, op: 'setBudgets', values: { max_runs: 2, poll_ms: null }, base: null }).ok).toBe(true);
-    expect(parseRunRequest({ id: 1, op: 'setBudgets', values: { gpu: 2 }, base: null }).ok).toBe(false);
-    expect(parseRunRequest({ id: 1, op: 'setBudgets', values: {}, base: 'not a hash' }).ok).toBe(false);
+    expect(parseRunRequest({ id: 1, op: 'setBudgets', values: { max_runs: 2, poll_ms: null }, base: null, replace: false }).ok).toBe(true);
+    expect(parseRunRequest({ id: 1, op: 'setBudgets', values: { max_runs: 2 }, base: 'fnv64:00000000000000a1', replace: false }).ok).toBe(true);
+    expect(parseRunRequest({ id: 1, op: 'setBudgets', values: { max_runs: 2 }, base: null }).ok).toBe(false);
+    expect(parseRunRequest({ id: 1, op: 'setBudgets', values: { gpu: 2 }, base: null, replace: false }).ok).toBe(false);
+    expect(parseRunRequest({ id: 1, op: 'setBudgets', values: {}, base: 'not a hash', replace: false }).ok).toBe(false);
+    expect(parseRunRequest({ id: 1, op: 'setBudgets', values: {}, base: 'a'.repeat(64), replace: false }).ok).toBe(false);
     expect(parseRunRequest({ id: 1, op: 'undoBudgets', force: 'yes' }).ok).toBe(false);
     expect(parseRunRequest({ id: 1, op: 'savePng', rect: { x: 0, y: 0, width: 10, height: 10 }, name: 'a-b.png' }).ok).toBe(true);
     expect(parseRunRequest({ id: 1, op: 'savePng', rect: { x: 0, y: 0, width: 10, height: 10 }, name: '../a.png' }).ok).toBe(false);

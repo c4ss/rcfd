@@ -1,5 +1,5 @@
 // F-837: what the removed egui Studio showed of a run and of the runner beside the run list, rebuilt on the run port
-// (src/shared/run.ts) without a new engine entry point.
+// (src/shared/run.ts); the runner's budgets through the engine commands of ADR 0733.
 //
 // - A run's log and events: the end of runs/<id>/log.txt (`read_project_file`, one page from the end) and the last lines
 //   of its events.jsonl (`run_status {events}`), through the open project's read-only project server, the tools Claude
@@ -10,21 +10,18 @@
 //   system's program for HTML (outside the Studio's window: G10 keeps remote content out of the window, not out of the
 //   user's browser).
 // - The runner's budgets: `.rcfd/runner-config.json`, owned by rcfd-runner (its `Config`, ADR 0123 section 6: every key
-//   optional, unknown keys refused, read when the runner starts). No engine command writes it, so the main process reads
-//   and writes it itself, only the keys the runner reads, with the runner's own checks, and never over a file another
-//   writer changed since it was read (G18). The last write of this window can be undone. The write is not atomic (a
-//   write-then-rename would be: the Studio does not rename in project folders, tests/unit/history.spec.ts); the runner
-//   reads the file only when it starts. Proposed engine entry point: an rcfd-runner (or MCP) command that sets budgets.
+//   optional, unknown keys refused, read when the runner starts). The runner reads and writes it itself (ADR 0733):
+//   `runner_config` on the read-only project server reads it, `set_runner_config` on the run-control server (not
+//   read-only) writes it with the runner's own checks, atomically, and never over a file another writer changed since it
+//   was read (G18, error 1200). The last write of this window can be undone: the keys it set are sent back with their
+//   values before it (ADR 0733 Q2 (a)). The Studio writes nothing into .rcfd/ itself.
 // - Save PNG: the main process captures a rectangle of the page (the field view with its legend and caption: DESIGN.md,
 //   a field is never shown without them) and writes it where the user says in the save dialog.
 //
 // No Electron import: src/main/index.ts hands in the capture, the dialog and the system's opener.
-import { createHash } from 'node:crypto';
-import { mkdir, readFile, writeFile } from 'node:fs/promises';
-import path from 'node:path';
+import { writeFile } from 'node:fs/promises';
 import {
   BUDGET_KEYS,
-  BUDGET_KIND,
   LOG_EVENTS,
   LOG_LINES,
   LOG_TAIL_BYTES,
@@ -152,135 +149,113 @@ export const reportFile = (run: string): string => `runs/${run}/output/report.ht
 
 // ---- the runner's budgets
 
-export const BUDGETS_FILE = '.rcfd/runner-config.json';
-export const RUNNER_RECORD = '.rcfd/runner.json';
+/** The engine's error code of a write over a file changed since its base hash was read. */
+const CONFLICT = 1200;
+/** The engine's error codes of a refusal: the runner's checks (1003), an argument it does not take (-32602). */
+const REFUSED = [1003, -32602];
 
-const sha256 = (b: Uint8Array | string): string => createHash('sha256').update(b).digest('hex');
+const codeOf = (e: unknown): unknown => (e as { code?: unknown })?.code;
 
-/** Why the runner would refuse `value` for `key` (its serde types and its load checks), or null. */
-export function budgetProblem(key: string, value: unknown): string | null {
-  if (!(BUDGET_KEYS as readonly string[]).includes(key)) return `unknown key '${key}' (the runner reads ${BUDGET_KEYS.join(', ')})`;
-  const kind = BUDGET_KIND[key as BudgetKey];
-  if (typeof value !== 'number' || !Number.isFinite(value)) return `${key} must be a number`;
-  if (kind === 'real') return value >= 0 ? null : `${key} must not be negative`;
-  if (!Number.isSafeInteger(value)) return `${key} must be a whole number`;
-  if (kind === 'positive' && value < 1) return `${key} must be positive (the runner refuses 0)`;
-  if (value < 0) return `${key} must not be negative`;
-  return null;
-}
-
-/** The values of a budgets object and the first problem the runner would have with it. */
-function valuesOf(o: unknown, file: string): { values: Partial<Record<BudgetKey, number>>; problem: string | null } {
-  if (typeof o !== 'object' || o === null || Array.isArray(o)) return { values: {}, problem: `${file}: not a JSON object` };
+/** The engine's answer of `runner_config` (or `set_runner_config`) as the panel shows it. */
+export function budgetsOf(state: unknown, undo: boolean): RunnerBudgets {
+  const o = obj(state);
   const values: Partial<Record<BudgetKey, number>> = {};
-  let problem: string | null = null;
-  for (const [k, v] of Object.entries(o)) {
-    const p = budgetProblem(k, v);
-    if (p) problem ??= `${file}: ${p}`;
-    else values[k as BudgetKey] = v as number;
-  }
-  return { values, problem };
-}
-
-/** The budgets as read: the file's text (null: no file) and the runner's record (null: none). */
-export function budgetsOf(text: string | null, runnerRecord: string | null, undo: boolean): RunnerBudgets {
-  let values: Partial<Record<BudgetKey, number>> = {};
-  let problem: string | null = null;
-  if (text !== null) {
-    try {
-      ({ values, problem } = valuesOf(JSON.parse(text), BUDGETS_FILE));
-    } catch (e) {
-      problem = `${BUDGETS_FILE}: not JSON (${message(e)})`;
-    }
-  }
+  const v = obj(o['values']);
+  for (const k of BUDGET_KEYS) if (typeof v[k] === 'number') values[k] = v[k] as number;
+  const u = o['in_use'];
   let inUse: RunnerBudgets['inUse'] = null;
-  if (runnerRecord !== null) {
-    try {
-      const r = obj(JSON.parse(runnerRecord));
-      const c = obj(r['config']);
-      const used: Partial<Record<BudgetKey, number>> = {};
-      for (const k of BUDGET_KEYS) if (typeof c[k] === 'number') used[k] = c[k] as number;
-      inUse = { values: used, source: str(r['config_source']), started: str(r['started']) };
-    } catch {
-      // a record being written: shown as none
-    }
+  if (typeof u === 'object' && u !== null) {
+    const used: Partial<Record<BudgetKey, number>> = {};
+    const c = obj(obj(u)['values']);
+    for (const k of BUDGET_KEYS) if (typeof c[k] === 'number') used[k] = c[k] as number;
+    inUse = { values: used, source: str(obj(u)['source']), started: str(obj(u)['started']) };
   }
-  return { path: BUDGETS_FILE, exists: text !== null, values, hash: text === null ? null : sha256(text), problem, inUse, undo };
+  return {
+    path: str(o['path']),
+    exists: o['exists'] === true,
+    values,
+    hash: typeof o['hash'] === 'string' ? o['hash'] : null,
+    problem: typeof o['problem'] === 'string' ? o['problem'] : null,
+    needsReplace: o['needs_replace'] === true,
+    inUse,
+    undo,
+  };
 }
 
-async function readText(file: string): Promise<string | null> {
-  try {
-    return await readFile(file, 'utf8');
-  } catch (e) {
-    if ((e as NodeJS.ErrnoException).code === 'ENOENT') return null;
-    throw e;
-  }
+/** How the main process reaches the engine for the budgets of the open project. */
+export interface BudgetsEngine {
+  /** `runner_config` on the open project's read-only project server. */
+  read(): Promise<unknown>;
+  /** `set_runner_config` on the open project's run-control server (not read-only). */
+  write(args: Record<string, unknown>): Promise<unknown>;
 }
 
-/** The budgets of the open project folder, and this window's last write (for undo). */
-export class RunnerBudgetsFile {
-  /** The last write: the folder, the text before it (null: there was no file) and the hash it left. */
-  private last: { folder: string; before: string | null; after: string } | null = null;
+type BudgetSet = Partial<Record<BudgetKey, number | null>>;
+
+/** The budgets of the open project folder through the engine, and this window's last write (for undo). */
+export class RunnerBudgetsEngine {
+  /** The last write: the folder, the keys it set with their values before it (null: unset), and the hash it left. */
+  private last: { folder: string; restore: BudgetSet; after: string } | null = null;
+
+  constructor(private readonly engine: BudgetsEngine) {}
+
+  private undoable(folder: string): boolean {
+    return this.last !== null && this.last.folder === folder;
+  }
 
   async read(folder: string): Promise<RunnerBudgets> {
-    const text = await readText(path.join(folder, BUDGETS_FILE));
-    const record = await readText(path.join(folder, RUNNER_RECORD)).catch(() => null);
-    const undo = this.last !== null && this.last.folder === folder;
-    return budgetsOf(text, record, undo);
+    return budgetsOf(await this.engine.read(), this.undoable(folder));
   }
 
-  /** Sets (a number) or removes (null) keys, if the file still has `base` (null: if there is still no file). */
-  async write(folder: string, set: Readonly<Partial<Record<BudgetKey, number | null>>>, base: string | null): Promise<BudgetsOutcome> {
-    for (const [k, v] of Object.entries(set)) {
-      if (v === null) {
-        if (!(BUDGET_KEYS as readonly string[]).includes(k)) return { kind: 'refused', message: budgetProblem(k, 0)! };
-        continue;
-      }
-      const p = budgetProblem(k, v);
-      if (p) return { kind: 'refused', message: p };
+  /** The engine's answer to one `set_runner_config`: written, a conflict (the file now), or the runner's refusal. */
+  private async send(folder: string, args: Record<string, unknown>): Promise<{ outcome: BudgetsOutcome; state: unknown }> {
+    try {
+      const state = await this.engine.write(args);
+      return { outcome: { kind: 'written', budgets: budgetsOf(state, true) }, state };
+    } catch (e) {
+      if (codeOf(e) === CONFLICT) return { outcome: { kind: 'conflict', budgets: await this.read(folder) }, state: null };
+      if (REFUSED.includes(codeOf(e) as number)) return { outcome: { kind: 'refused', message: message(e) }, state: null };
+      throw e;
     }
-    const file = path.join(folder, BUDGETS_FILE);
-    const text = await readText(file);
-    const hash = text === null ? null : sha256(text);
-    if (hash !== base) return { kind: 'conflict', budgets: await this.read(folder) };
-    let current: Obj = {};
-    if (text !== null) {
-      try {
-        const o: unknown = JSON.parse(text);
-        if (typeof o === 'object' && o !== null && !Array.isArray(o)) current = o as Obj;
-      } catch {
-        // the runner refuses this file as it is: it is replaced by the keys set here (undo puts it back)
-      }
-    }
-    const next: Obj = {};
-    // the runner's order of keys, then any other key the file held (kept as it was: the runner names it when it refuses)
-    for (const k of BUDGET_KEYS) {
-      const v = Object.hasOwn(set, k) ? set[k] : current[k];
-      if (v !== null && v !== undefined) next[k] = v;
-    }
-    for (const [k, v] of Object.entries(current)) if (!(BUDGET_KEYS as readonly string[]).includes(k)) next[k] = v;
-    const out = `${JSON.stringify(next, null, 2)}\n`;
-    await mkdir(path.dirname(file), { recursive: true });
-    await writeFile(file, out, 'utf8');
-    this.last = { folder, before: text, after: sha256(out) };
-    return { kind: 'written', budgets: await this.read(folder) };
   }
 
   /**
-   * Puts back what this window's last write replaced. A file changed since by another writer is a conflict unless
-   * `force`. Where there was no file, `{}` is written (every key at the runner's default): the Studio removes no file of a
-   * project.
+   * The runner sets (a number) or removes (null) keys, if the file still has `base` (null: if there is still no file);
+   * `replace`: exactly these keys, every one, over a file the runner cannot read. Its checks are the runner's own.
+   */
+  async write(folder: string, set: Readonly<BudgetSet>, base: string | null, replace: boolean): Promise<BudgetsOutcome> {
+    const before = await this.read(folder);
+    if (before.hash !== base) return { kind: 'conflict', budgets: before };
+    const { outcome, state } = await this.send(folder, { set: { ...set }, base_hash: base, ...(replace ? { replace: true } : {}) });
+    if (outcome.kind === 'written') {
+      // a file the runner could not read is not put back by values: no undo of its replacement
+      if (before.needsReplace) this.last = null;
+      else {
+        const restore: BudgetSet = {};
+        for (const k of Object.keys(set) as BudgetKey[]) restore[k] = before.values[k] ?? null;
+        this.last = { folder, restore, after: str(obj(state)['hash']) };
+      }
+      return { kind: 'written', budgets: { ...outcome.budgets, undo: this.undoable(folder) } };
+    }
+    return outcome;
+  }
+
+  /**
+   * Sets the keys of this window's last write back to their values before it, with the hash that write left as the base.
+   * A file changed since by another writer is a conflict unless `force` (then the file as it is now is the base). Where
+   * there was no file, the keys are removed and `{}` stays (every key at the runner's default): the Studio removes no file
+   * of a project.
    */
   async undo(folder: string, force: boolean): Promise<BudgetsOutcome> {
     const last = this.last;
     if (!last || last.folder !== folder) return { kind: 'refused', message: 'Nothing to undo: this window has not changed the runner’s budgets of this project.' };
-    const file = path.join(folder, BUDGETS_FILE);
-    const text = await readText(file);
-    if (!force && (text === null ? null : sha256(text)) !== last.after) return { kind: 'conflict', budgets: await this.read(folder) };
-    await mkdir(path.dirname(file), { recursive: true });
-    await writeFile(file, last.before ?? '{}\n', 'utf8');
-    this.last = null;
-    return { kind: 'written', budgets: await this.read(folder) };
+    const base = force ? (await this.read(folder)).hash : last.after;
+    const { outcome } = await this.send(folder, { set: { ...last.restore }, base_hash: base });
+    if (outcome.kind === 'written') {
+      this.last = null;
+      return { kind: 'written', budgets: { ...outcome.budgets, undo: false } };
+    }
+    return outcome;
   }
 }
 

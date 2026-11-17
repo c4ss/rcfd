@@ -18,6 +18,9 @@
 //!
 //! ADR 0196 B restates it for the class of `design_run_study` and `design_evaluate`, `execute` with `--project`: set back to
 //! `write_files`, the list is the F-273 one. The goldens are not edited.
+//!
+//! ADR 0733 restates it for F-837 (P3): `runner_config` (read, no argument) and `set_runner_config` (`write_files`, required
+//! `set` and `base_hash`) come right after `list_meshes`; without them the list is the F-275 one, byte for byte.
 
 use serde_json::{json, Value};
 use std::io::Write;
@@ -97,12 +100,32 @@ fn a2_tools_list_with_project_is_the_golden_with_the_f271_changes() {
         .strip_prefix(r#"{"id":1,"jsonrpc":"2.0","result":"#)
         .and_then(|b| b.strip_suffix('}'))
         .unwrap_or_else(|| panic!("unexpected response {}", &line[..line.len().min(80)]));
-    let live_value: Value = serde_json::from_str(got).unwrap();
+    let mut live_value: Value = serde_json::from_str(got).unwrap();
     let gold: Value = serde_json::from_str(GOLDEN).unwrap();
     // the golden's own text is the serialisation of its value, so equal values are equal bytes; the same holds for the
     // live text
     assert_eq!(serde_json::to_string(&gold).unwrap(), GOLDEN);
     assert_eq!(serde_json::to_string(&live_value).unwrap(), got);
+    // ADR 0733 P3: the two budgets tools right after list_meshes, taken out; the rest is the F-275 list
+    {
+        let tools = live_value["tools"].as_array_mut().unwrap();
+        let at = tools
+            .iter()
+            .position(|t| t["name"] == "runner_config")
+            .expect("runner_config listed");
+        assert_eq!(tools[at - 1]["name"], "list_meshes");
+        assert_eq!(tools[at + 1]["name"], "set_runner_config");
+        let (r, w) = (&tools[at], &tools[at + 1]);
+        assert_eq!(r["_meta"]["rcfd/access"], "read");
+        assert_eq!(r["inputSchema"]["required"], json!([]));
+        assert_eq!(r["inputSchema"]["properties"], json!({}));
+        assert_eq!(w["_meta"]["rcfd/access"], "write_files");
+        assert_eq!(w["inputSchema"]["required"], json!(["set", "base_hash"]));
+        for t in [r, w] {
+            assert_eq!(t["inputSchema"]["additionalProperties"], false, "{}", t["name"]);
+        }
+        tools.drain(at..at + 2);
+    }
     let (live_f275, gold) = (
         live_value["tools"].as_array().unwrap(),
         gold["tools"].as_array().unwrap(),

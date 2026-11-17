@@ -5,6 +5,7 @@
 //! cancel and crash recovery. Clients ([`client::Client`]) and the runner talk through files only.
 
 pub mod client;
+pub mod config;
 pub mod records;
 pub mod runner;
 pub mod store;

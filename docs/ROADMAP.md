@@ -16930,8 +16930,14 @@ Generated from `docs/studio-guardrails.md`, `PRODUCT.md` and `DESIGN.md` ([ADR 0
     close, Close and lose them, Keep editing; the files and their changes named; Tab held, focus back on cancel); the
     window through the main process's close event and a page round trip (an unanswered page cannot hold it; the
     test-mode quit does not ask); e2e close-guard.spec.ts (4). The maintainer confirmed designs/ as the Home heading.
-    Not built: set_runner_config (runner writes its own budgets), ADR 0733 proposed. Engine needs listed in ADR 0801,
-    "Engine follow-ups of the Studio items" (2026-11-17).
+    Runner budgets through the engine 2026-11-17 (ADR 0733, accepted with every recommendation): the runner writes its
+    own budgets file (rcfd-runner Config::set and Config::state, replace_if_hash under the edit lock, fnv64: hashes, one
+    journal line; rcfd-runner config [set], exit 4 on a conflict; MCP runner_config and set_runner_config); the panel
+    reads with runner_config, writes with set_runner_config on the run-control server, undoes by sending the previous
+    values back, says 'applies at the next runner start', and replaces a file the runner cannot read only on purpose
+    (Replace the file); the Studio's copy of the runner's checks and its writer of .rcfd/runner-config.json removed; e2e
+    f837.spec.ts budgets test through the engine. Engine needs listed in ADR 0801, "Engine follow-ups of the Studio
+    items" (2026-11-17).
 - [x] **F-838** Local-model assistant: keep, port or remove
   - depends on: F-449
   - acceptance: The maintainer decides what becomes of the local-model assistant that only rcfd-gui offered (presets
