@@ -73,7 +73,11 @@ case section see [case-schema.md](case-schema.md); for the full decision record 
   periodic run stays within `5.8e-15 U_ref` of its unrolled twin (the same cells with the cut where the faces are
   orthogonal) over 200 steps, its converged corrected flux is divergence-free per cell to `3.6e-15`, and the setting with its
   pressure part left out (`PimpleSettings::coupled_non_orth_without_pressure`, a control) misses the twin by `1.5e-3` to
-  `1.9e-3 U_ref` on every step.
+  `1.9e-3 U_ref` on every step. On rotational pairs (F-753, ADR 0674), with the rotation `R` in the pressure part's face
+  gradient exercised: a 60-degree sector whose wrap faces are tilted (`|k| / |S|` up to `0.36`) under a balanced potential
+  `r^6 cos 6 theta` and a swirl driver stays within `6.8e-15 U_ref` of its unrolled full annulus (all six copies) over 200
+  steps, against `2.6e-3` to `4.6e-3` for the control without the pressure part; its converged corrected flux is
+  divergence-free per cell to `4.0e-15`.
   data set per face on rotor patches are the caller's to set on the new mesh; sectors of different pitch are refused. In the
   case tree since F-711 (ADR 0646) for the sector: `[mesh.sliding]` on `mesh.generator =
   "annulus_3d_sector_cylindrical_interface"` runs ADR 0634's turned loop (`mesh_turned`, `periodic_sliding_step`,

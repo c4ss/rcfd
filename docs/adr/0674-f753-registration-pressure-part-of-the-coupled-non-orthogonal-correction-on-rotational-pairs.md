@@ -269,3 +269,99 @@ missed with its cause diagnosed. **Todo** when P1 and D1 are both missed without
   non-zero reference velocity, the momentum part active, the centripetal gradient adds to the radial gradient at the wrap); (b)
   the balanced potential alone (the reference velocity is the scheme's spurious current only). Taken (a) on the standing
   instruction.
+
+## Addendum 1: results (2026-11-17)
+
+Measured against the limits registered above; no limit was changed and no amendment was made. Release builds on Windows, on a
+machine shared with other building agents. The registration is 413589d1 (alone, first); the test file 2f1c6828 (committed
+before its run). No library code was written (as registered: the setting, its control and the rotation exist). Each registered
+run was made once: the new test file (3 tests, 31 s; the lockstep 27.8 s, so no heavy record), `rcfd-fv --lib`,
+`baseline_hashes`, the named files. Logs in `w49i-work/f753-scratch` (`fast.log`, `lib.log`, `suites.log`, `baseline.log`,
+`mutations.log`).
+
+### Results
+
+| Check | Limit | Measured | Verdict |
+| --- | --- | --- | --- |
+| P1 (c1) `G_F(n)` over the six copies, every one of 200 steps | `<= 1e-8` each step | `6.78e-15` (step 86, copy 3; step 1 `1.18e-15`) | met |
+| NC1 (c1, control) `G_M(n)`, every step | `>= 1e-4` each step | smallest `2.65e-3` (step 1), largest `4.57e-3` (step 200) | held |
+| P2 (supporting) pressure, every step | `<= 1e-8` each step | `2.77e-13` | met |
+| D1L (c2) `abs(div_SF - div_AF) / (U_ref dr dz)`, every step | `<= 1e-9` each step | `4.65e-15` | met |
+| D1 (c2) converged flux (100 passes, 5 steps) | `<= 1e-10` | `4.01e-15` | met |
+| D2 `A_F` against `A_O`, every step | `<= 1e-10` each step | `0` (bit for bit) | met |
+| D3 `S_X` against `S_O`, every step | bit for bit | equal on every step | met |
+| G0 six cell maps | `<= 1e-12`, one-to-one, a bijection | `2.3e-15`, yes, yes | met |
+| H1 wrap faces | 16 and 16, same list, 2 rotational patches; `R`, `R x_g - x_f`, centre, `S`, `d`, `k` `<= 1e-12`; largest `abs(k)/abs(S)` in `[0.32, 0.39]` | 16, 16, same, 2; `0`, `5.0e-16`, `5.6e-16`, `5.5e-17`, `1.2e-15`, `8.0e-17`; `0.3633` | met |
+| H3 largest share of the rotation | `>= 0.1` | `0.701` (smallest `0.065`) | met |
+| B1 `baseline_hashes`; `--lib`; the named files | pass | see below | met |
+
+Printed, no limit: `G_O` (setting off) step 1 `2.65e-3`, equal to `G_M`'s (at step 1 the velocity is zero, so the momentum part
+does nothing and the whole step-1 difference is the pressure part's), largest `3.03e-2` at step 200; the control's pressure
+differs from the annulus by up to `5.0e-2`; the largest absolute lockstep divergence in `U_ref dr dz`: `S_F` and `A_F`
+`8.52e-10` (equal: the six-pass mismatch of the default scheme on the tilted internal faces), `S_M`, `S_O`, `S_X` `3.87e-10`;
+D1 of `S_M` `5.4e-15`; `S_F`'s largest speed at step 200 `0.995 U_ref` (estimate `1.0`). Against the estimates: NC1 `2.65e-3`
+at step 1 against `1.8e-3` (at `r_m`) to `4.7e-3` (outer wall); `|k|/|S|` `0.363` against `0.353` (in the range); `rho`
+largest `0.70` against about `0.25` (the estimate took `k` and the partner gradient both radial; near the walls the
+`theta_hat` parts of `grad phi(c_c)` and of `k` add).
+
+Suites (release, run once): `baseline_hashes` 3 passed, 1 ignored; `rcfd-fv --lib` 115 passed, 6 ignored;
+`consistent_periodic_f367` 13 (2 ignored), `gradient_pressure_f291` 3, `non_conformal` 2, `periodic` 3, `seam_no_harm_f344` 6
+(1 ignored), `skewed_periodic_channel_f752` 3, `sliding_annulus_inlet_f743` 1 (1 ignored), `sliding_annulus_inlet_f744` 2 (1
+ignored), all passed; ignored records not run. No library file changed, so these confirm the tree only. `cargo fmt -p rcfd-fv
+--check` clean; `cargo clippy --release -p rcfd-fv --all-targets -- -D warnings` clean.
+
+### Mutations (scratch copy `w49i-work/f753-scratch/mut` of 2f1c6828, script `mutate.py`, target `target-mut`; the new test file run once per mutation)
+
+| Mutation | Must fail | Result |
+| --- | --- | --- |
+| MR1 the pressure part's face gradient without `R` | P1 | caught: P1 `5.58e-3`, P2 `7.2e-2`, D1 `1.33e-2`, D1L `1.33e-2` |
+| MR2 the pressure part's face gradient with `R^T` | P1 | caught: P1 `5.25e-3`, P2 `7.8e-2`, D1 `1.22e-2`, D1L `1.22e-2` |
+| MN1 the pressure equation without the coupled correction | P1 or D1 or D1L | caught: P1 `4.96e-3`, D1 `7.33e-3`, D1L `7.37e-3`, P2 `2.1e-2` |
+| MN4 the coupled faces' flux correction with the opposite sign | D1 or D1L or P1 | caught: D1 `1.49e-2`, D1L `1.49e-2`, P1 `1.77e-3` |
+| MN3 the momentum correction with the opposite sign | P1 | caught: P1 `6.52e-2`, P2 `8.8e-2` (D1, D1L met) |
+| MN5 the control field not read | NC1 | caught: NC1 `1.0e-15` (the control equals `F`) |
+
+Six of six caught; H1, H3, G0, D2 and D3 held under every mutation; the library restored after each (equal to 2f1c6828).
+
+**Deviation from a registered expectation (not a check).** The registration said MR1 and MR2 leave D1 met "by construction".
+They do not: D1 and D1L are missed by `1.2e-2` to `1.3e-2`. Diagnosis (by hand from the code, no further run): the two faces of
+a pair each take their own face gradient, face `f` `w grad_r + (1 - w) R grad_c` and its partner `g` `(1 - w) grad_c + w R^-1
+grad_r`, with `k_g = -R^-1 k_f`; with the right `R` the two corrections are opposite (`k_g . v_g = -k_f . R v_g`), with `R`
+dropped or transposed they are not, so the pair puts a net source into the singular (all-Neumann) pressure system. That
+system is then incompatible; the `p_ref` row absorbs the sum, and the converged flux carries it as a per-cell divergence (at
+the reference cell, by this reading; not checked). The "by construction" argument holds only for `R = I` (ADR 0672). The
+verdicts are unaffected (P1, the required check, caught both); the expectation was wrong, not the checks.
+
+### Deviations
+
+None from the registered set-up.
+
+### Not covered
+
+As registered: one sector angle, one tilt, one potential, 2-D, the PISO step; a static mesh (no sliding interface, no seam
+pairs); `ddt_correction` off, `coupled_body_pair_mean` and `rotational_periodic_implicit` on in every run; no case key; the
+default unchanged. `docs_site` not run (only prose under `docs/`: this ADR and one sentence of `docs/dynamic-mesh.md`; left to
+the daily gate).
+
+### Decision
+
+By the registered rule: P1, NC1, D1, D1L, D2, D3, G0, H1, H3 and B1 met, MR1, MR2, MN1, MN3, MN4 and MN5 caught: **done**.
+
+### Remaining questions
+
+1. **The default (ADR 0667 Q2, open).** Unchanged: `coupled_non_orth` and `rotational_periodic_implicit` stay opt-in; making
+   them the default changes default periodic results and the baseline hashes, so it is the maintainer's call (recommendation:
+   one change together with F-746, hashes re-recorded by the maintainer).
+2. **The pressure part on the sliding seam pairs.** Options: (a) a follow-up putting this body force on ADR 0661's sliding
+   lockstep; (b) leave it (the seam pairs go through the same `CoupledNonOrth` code checked here, and the sliding rest of
+   `1.5e-4` would mask the effect). Recommendation (b).
+3. **`ddt_correction` on coupled faces.** Already proposed as F-754 (ADR 0672); on rotational pairs the face velocity defect
+   needs `R`. Recommendation: F-754 checks rotational pairs too, with this item's sector as a second case.
+
+## For the lead: roadmap entries
+
+> Proposed status: done.
+
+> ADR 0674, 2026-11-17: the pressure part of ADR 0667's non-orthogonal correction on rotational pairs, with the rotation R in its face gradient exercised. A 60-degree sector whose wrap faces are tilted (|k|/|S| up to 0.363 on the 16 wrap faces) under a balanced body force grad phi, phi = (G r_m/6)(r/r_m)^6 cos 6 theta (a radial, face-tangential pressure gradient at the wrap), plus a swirl driver, against its unrolled full annulus (six rotated copies of the same cells, no coupled face; every wrap face an annulus internal face with S, d and k equal to 1.2e-15). With PimpleSettings::coupled_non_orth (and rotational_periodic_implicit) the sector stays within 6.8e-15 U_ref of the annulus, over all six copies, on every one of 200 steps (limit 1e-8); with coupled_non_orth_without_pressure (the control) it misses by 2.6e-3 to 4.6e-3 U_ref on every step. The corrected flux is divergence-free per cell: 4.0e-15 U_ref dr dz with the explicit iteration converged (limit 1e-10), and equal to the annulus's to 4.7e-15 per cell at six passes (limit 1e-9). Six of six mutations caught, including the rotation dropped (P1 5.6e-3) or transposed (5.3e-3) in the pressure part's face gradient. Tests only, no library change; defaults bit-identical (baseline_hashes and the periodic, sliding and non-orthogonal suites pass). Static mesh, 2-D, ddt_correction off in the runs.
+
+> Note for F-754 (Rhie-Chow ddt correction on coupled faces): ADR 0674's sector against its annulus (rotational pairs, the same settings with ddt_correction off) is a second case for its check; on rotational pairs the face velocity defect needs R.
