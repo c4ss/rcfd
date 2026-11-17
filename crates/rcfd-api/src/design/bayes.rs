@@ -85,6 +85,8 @@ pub struct Restart {
     /// instead of a fresh process fitted outside the basin (ADR 0673 D1, the variant of ADR 0651 mutation R2). Default
     /// `false`: the restart of ADR 0651 unchanged.
     pub step_model: bool,
+    /// When the restart fires (ADR 0680). Default [`Trigger::Acquisition`]: the trigger of ADR 0651 unchanged.
+    pub trigger: Trigger,
 }
 
 impl Default for Restart {
@@ -93,8 +95,23 @@ impl Default for Restart {
             tau: 1e-4,
             rho: 2.0,
             step_model: false,
+            trigger: Trigger::Acquisition,
         }
     }
+}
+
+/// When the basin restart fires.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Trigger {
+    /// The best acquisition of the plain pick below `tau` times the spread of the evaluated values (ADR 0651).
+    Acquisition,
+    /// Repetition (ADR 0680): the plain pick of the step and each of the last `window` evaluated observations (`Ok` or
+    /// failed, pending skipped, in the order given to [`propose`]) lie inside the incumbent's basin; `None` is `d + 1`.
+    /// `tau` is not read. With this trigger [`propose`] depends on the order of the observations, not only on their set.
+    Repetition {
+        /// Window length (`None`: the number of parameters plus one).
+        window: Option<usize>,
+    },
 }
 
 /// Options of [`propose`], [`minimise`] and [`run`].
@@ -684,7 +701,25 @@ fn propose_ranked(
         }
         let restarted = match &o.restart {
             Some(r) if models.incumbent.is_some() => {
+                // ADR 0680: the last evaluated observations, in the order given, for the repetition trigger
+                let (window, recent): (usize, Vec<Vec<f64>>) = match r.trigger {
+                    Trigger::Acquisition => (0, Vec::new()),
+                    Trigger::Repetition { window } => {
+                        let w = window.unwrap_or(d + 1);
+                        let v = obs
+                            .iter()
+                            .rev()
+                            .filter(|o| !matches!(o.status, Status::Pending))
+                            .take(w)
+                            .map(|o| to_unit(&o.x, b))
+                            .collect();
+                        (w, v)
+                    }
+                };
                 let rs = RestartScope {
+                    plain: &u,
+                    window,
+                    recent: &recent,
                     cn: &cn,
                     models: &models,
                     cand: &cand,
@@ -805,6 +840,12 @@ fn propose_ranked(
 
 /// What the basin restart reads from one proposal step.
 struct RestartScope<'a> {
+    /// The plain pick of the step (unit cube).
+    plain: &'a [f64],
+    /// The window length of the repetition trigger (0 with the acquisition trigger).
+    window: usize,
+    /// The last `window` evaluated observations, newest first (unit cube); fewer when fewer were evaluated.
+    recent: &'a [Vec<f64>],
     cn: &'a Canon,
     models: &'a Models,
     cand: &'a [Vec<f64>],
@@ -833,7 +874,7 @@ fn basin_restart(r: &Restart, best: f64, rs: &RestartScope<'_>) -> Option<Restar
     let d = cn.ok_u.first()?.len();
     let mf = cn.ok_f.iter().sum::<f64>() / n as f64;
     let sdf = (cn.ok_f.iter().map(|v| (v - mf).powi(2)).sum::<f64>() / n as f64).sqrt();
-    if best.is_nan() || best >= r.tau * sdf {
+    if r.trigger == Trigger::Acquisition && (best.is_nan() || best >= r.tau * sdf) {
         return None;
     }
     let feasible: Vec<bool> = cn.ok_c.iter().map(|c| c.iter().all(|v| *v <= 0.0)).collect();
@@ -854,6 +895,13 @@ fn basin_restart(r: &Restart, best: f64, rs: &RestartScope<'_>) -> Option<Restar
             .sum::<f64>()
             .sqrt()
     };
+    // ADR 0680 D1: the repetition trigger, the plain pick and the window inside the basin
+    if let Trigger::Repetition { .. } = r.trigger {
+        let inside = |u: &[f64]| delta(u) < r.rho;
+        if rs.recent.len() < rs.window || !inside(rs.plain) || !rs.recent.iter().all(|u| inside(u)) {
+            return None;
+        }
+    }
     let outside: Vec<usize> = (0..n).filter(|&i| delta(&cn.ok_u[i]) >= r.rho).collect();
     if outside.len() < d + 2 {
         return None;
