@@ -212,6 +212,13 @@ pub struct PimpleSettings {
     /// implicit as the PISO step does (ADR 0046 D1, `PeriodicLinks`); rotational pairs keep the lagged partner. No-op without
     /// translational pairs and outside the fractional step. Default `false` (bit-identical).
     pub fractional_periodic_implicit: bool,
+    /// F-757 (ADR 0687 amendment 1): in the PISO/PIMPLE step, on the first outer iteration of a BDF2 step (where the convected
+    /// flux and the deferred-correction state are extrapolated in time), give the translationally periodic faces the partner
+    /// value of the extrapolated field in the velocity's boundary coefficients, as the fractional step does (ADR 0043 D1), so
+    /// that the coupled face's deferred central part is the internal face's; the implicit links remove that value. Rotational
+    /// pairs keep the lagged partner. Not read without the extrapolation (implicit Euler, later outer iterations, the first
+    /// step of BDF2) or by the fractional step. Default `false` (bit-identical).
+    pub periodic_partner_extrapolated: bool,
 }
 
 /// The outer iterations of one step with `PimpleSettings::outer_pressure_tolerance` (F-536, ADR 0458 C2).
@@ -1039,6 +1046,7 @@ impl PimpleSettings {
             coupled_non_orth_without_pressure: false,
             coupled_ddt_correction: false,
             fractional_periodic_implicit: false,
+            periodic_partner_extrapolated: false,
         }
     }
 
@@ -1916,12 +1924,38 @@ impl PimpleSolver {
                 _ => None,
             };
             let mut deferred: Vec<Option<FvMatrix>> = vec![None, None, None];
+            // F-757 (ADR 0687 amendment 1, opt-in): the translational coupled faces' partner values of the extrapolated field
+            let bc_extrapolated: Vec<Vec<crate::bc::FaceCoeffs>> = match extrap {
+                Some(r) if s.periodic_partner_extrapolated && g.coupled_face.iter().any(|&c| c) => {
+                    let mut ue = self.u.clone();
+                    for c in 0..n {
+                        for j in 0..3 {
+                            let older = self.hist_u[j].older.as_ref().map_or(self.hist_u[j].old[c], |v| v[c]);
+                            ue.values[c][j] = (1.0 + r) * self.hist_u[j].old[c] - r * older;
+                        }
+                    }
+                    (0..3).map(|k| ue.boundary_coeffs(&g, k)).collect()
+                }
+                _ => Vec::new(),
+            };
             for k in 0..3 {
                 if !g.active[k] {
                     continue;
                 }
                 let cells: Vec<f64> = u_iter.iter().map(|v| v[k]).collect();
-                let bc = self.u.boundary_coeffs(&g, k);
+                let mut bc = self.u.boundary_coeffs(&g, k);
+                if !bc_extrapolated.is_empty() {
+                    for (pi, p) in mesh.patches().iter().enumerate() {
+                        if g.periodic_partner[pi].is_none() || g.periodic_rot[pi].is_some() {
+                            continue;
+                        }
+                        for f in p.faces() {
+                            let i = f - n_int;
+                            bc[i].b = bc_extrapolated[k][i].b;
+                            bc[i].d = bc_extrapolated[k][i].d;
+                        }
+                    }
+                }
                 let bv: Vec<f64> = ub.iter().map(|v| v[k]).collect();
                 let conv_cells: Vec<f64> = match (extrap, &self.hist_u[k].older) {
                     (Some(r), Some(older)) => (0..n)
@@ -1970,7 +2004,11 @@ impl PimpleSolver {
                 }
                 // periodic partner values implicit (ADR 0046): move the lagged partner term back into the matrix
                 let lk = PeriodicLinks::build(&g, &self.u, &phi_conv, &gamma_nu, &bc);
-                let q_lag: Vec<f64> = u_iter.iter().map(|v| v[k]).collect();
+                let q_lag: Vec<f64> = if bc_extrapolated.is_empty() {
+                    u_iter.iter().map(|v| v[k]).collect()
+                } else {
+                    conv_cells.clone()
+                };
                 lk.fix_rhs(&mut m, &q_lag);
                 if !rot.is_empty() {
                     rot.fix_rhs(&mut m, k, &u_iter);

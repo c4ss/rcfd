@@ -192,6 +192,11 @@ fn base_settings(bdf2: bool) -> PimpleSettings {
 
 /// ADR 0675's PISO channel solver (ADR 0672's flow and full setting `F`, `ddt_correction` on), with BDF2 if asked.
 fn piso_solver(g: &Arc<FvGeometry>, opt: bool, bdf2: bool, ref_cell: usize) -> PimpleSolver {
+    piso_solver_x(g, opt, bdf2, false, ref_cell)
+}
+
+/// [`piso_solver`] with `periodic_partner_extrapolated` as given (ADR 0687 amendment 1).
+fn piso_solver_x(g: &Arc<FvGeometry>, opt: bool, bdf2: bool, ext: bool, ref_cell: usize) -> PimpleSolver {
     let mut u = VectorField::uniform("U", g, [0.0; 3]);
     for w in ["ymin", "ymax"] {
         u.set_bc(g, w, Box::new(FixedValue::vector([0.0; 3]))).unwrap();
@@ -202,6 +207,7 @@ fn piso_solver(g: &Arc<FvGeometry>, opt: bool, bdf2: bool, ref_cell: usize) -> P
     s.coupled_body_pair_mean = true;
     s.coupled_non_orth = true;
     s.coupled_ddt_correction = opt;
+    s.periodic_partner_extrapolated = ext;
     s.p_ref = (ref_cell, p0(g.mesh.cell_centres()[ref_cell]));
     let mut sv = PimpleSolver::new(g.clone(), u, p, s);
     sv.body_force = Some(BodyForce::uniform(g, [FX, GY, 0.0]));
@@ -569,5 +575,90 @@ fn fractional_step_bdf2_channel_against_the_twin() {
     let (dl, _) = largest(&se.d1l);
     let (cc, _) = largest(&se.c1);
     println!("printed: P2 {pp:.4e}, D1L {dl:.4e}, C1 {cc:.3e}");
+    assert!(fails.is_empty(), "{fails:?}");
+}
+
+// ---- ADR 0687 amendment 1: the corrected BDF2 PISO set-up -------------------------------------------------------------------
+
+/// P1b', NC1b', P2b', D1Lb', C1b' (and G0) of ADR 0687 amendment 1: ADR 0675's PISO lockstep with BDF2 and
+/// `periodic_partner_extrapolated` in all four runs.
+#[test]
+fn bdf2_piso_extrapolated_partner_against_the_twin() {
+    let t0 = Instant::now();
+    let pr = pair();
+    let (rp, rt) = (0, pr.m[0]);
+    let mut p_on = piso_solver_x(&pr.gp, true, true, true, rp);
+    let mut p_off = piso_solver_x(&pr.gp, false, true, true, rp);
+    let mut t_on = piso_solver_x(&pr.gt, true, true, true, rt);
+    let mut t_off = piso_solver_x(&pr.gt, false, true, true, rt);
+    let se = lockstep(
+        &pr,
+        [&mut p_on, &mut p_off, &mut t_on, &mut t_off],
+        &mut [],
+        GY.abs() * H,
+    );
+    print_series(&se, t0.elapsed().as_secs_f64(), &pr);
+    let mut fails = Fails::new();
+    common_checks(
+        &mut fails,
+        ["P1b'", "NC1b'", "P2b'", "D1Lb'", "C1b'", "G0"],
+        &se,
+        &pr,
+        "|g_y| H",
+    );
+    assert!(fails.is_empty(), "{fails:?}");
+}
+
+/// D7, D8 of ADR 0687 amendment 1: `periodic_partner_extrapolated` changes nothing under implicit Euler (ADR 0675's
+/// lockstep) and without periodic pairs under BDF2, 20 steps bit for bit.
+#[test]
+fn periodic_partner_extrapolated_is_a_no_op_without_extrapolation_or_pairs() {
+    let pr = pair();
+    let (mut a, mut b) = (
+        piso_solver_x(&pr.gp, true, false, true, 0),
+        piso_solver_x(&pr.gp, true, false, false, 0),
+    );
+    let mut d7 = true;
+    for _ in 0..20 {
+        a.step(DT);
+        b.step(DT);
+        d7 &= bits(&a) == bits(&b);
+    }
+    let g = geom_of(box_2d(NX, NY, L, H, false, false).unwrap());
+    let mk = |ext| {
+        let mut u = VectorField::from_fn("U", &g, |x| u_init(x, 0.0));
+        for w in ["xmin", "xmax", "ymin", "ymax"] {
+            u.set_bc(&g, w, Box::new(FixedValue::vector([0.0; 3]))).unwrap();
+        }
+        let p = ScalarField::uniform("p", &g, 0.0);
+        let mut s = base_settings(true);
+        s.non_orth_correctors = PASSES;
+        s.coupled_body_pair_mean = true;
+        s.coupled_non_orth = true;
+        s.coupled_ddt_correction = true;
+        s.periodic_partner_extrapolated = ext;
+        s.p_ref = (0, 0.0);
+        PimpleSolver::new(g.clone(), u, p, s)
+    };
+    let (mut c, mut d) = (mk(true), mk(false));
+    let mut d8 = true;
+    for _ in 0..20 {
+        c.step(DT);
+        d.step(DT);
+        d8 &= bits(&c) == bits(&d);
+    }
+    let mut fails = Fails::new();
+    check(
+        &mut fails,
+        "D7",
+        d7,
+        format!("periodic_partner_extrapolated on against off, implicit Euler, 20 steps bit for bit: {d7}"),
+    );
+    check(
+        &mut fails,
+        "D8",
+        d8,
+        format!("periodic_partner_extrapolated on against off, BDF2 without pairs, 20 steps bit for bit: {d8}"),
+    );
     assert!(fails.is_empty(), "{fails:?}");
 }
