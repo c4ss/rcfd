@@ -171,6 +171,8 @@ struct Runner<S: RunStore = FsStore> {
     launch_seq: u64,
     /// The solver's path, version and build id for launch records, kept per executable state (ADR 0734 P1).
     solver_facts: crate::build::SolverFacts,
+    /// The runs on remote sites (ADR 0739): made with the first run that names a site; a project without one never has it.
+    remote: Option<crate::site::remote::RemoteRuns>,
 }
 
 /// Run the runner for `project` until a shutdown request (`<project>/.rcfd/shutdown`). Returns the exit
@@ -296,6 +298,7 @@ impl<S: RunStore> Runner<S> {
             active: Vec::new(),
             launch_seq: 0,
             solver_facts: crate::build::SolverFacts::default(),
+            remote: None,
         }
     }
 
@@ -396,6 +399,17 @@ impl<S: RunStore> Runner<S> {
                 continue; // retried next tick
             };
             self.known.insert(id.clone());
+            // ADR 0739: a run on a remote site is followed by the site layer, never launched here
+            if let Some(site) = rec.site.clone() {
+                if !st.state.is_terminal() {
+                    let (project, solver) = (self.store.project().to_path_buf(), self.solver.clone());
+                    let poll = Duration::from_millis(self.cfg.poll_ms);
+                    self.remote
+                        .get_or_insert_with(|| crate::site::remote::RemoteRuns::new(&project, &solver, poll))
+                        .take(&id, &site);
+                }
+                continue;
+            }
             let launched = match (st.state, st.pid) {
                 (RunState::Queued, _) | (RunState::Paused, None) => self.launched_pid(&id),
                 _ => None,
@@ -1121,6 +1135,9 @@ impl<S: RunStore> Runner<S> {
 
     fn shutdown(&mut self) {
         self.retry_status();
+        if let Some(mut r) = self.remote.take() {
+            r.shutdown();
+        }
         for p in &mut self.pending {
             if let Some(mut c) = p.check.take() {
                 let _ = c.kill();

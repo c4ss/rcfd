@@ -55,6 +55,7 @@ fn r1_every_record_round_trips() {
         variant: None,
         condition: None,
         rerun_of: None,
+        site: None,
     };
     round_trip(&rec);
     round_trip(&RunRecord {

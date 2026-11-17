@@ -113,14 +113,49 @@ impl RunService {
         let id = self
             .client
             .submit_with(case, settings, launch, &rcfd_runner::store::RunTags::default())?;
-        self.submitted(&id, case, settings, launch, None);
+        self.submitted(&id, case, settings, launch, None, None);
+        Ok(id)
+    }
+
+    /// [`Self::submit_launch`] on the remote site `site` for an MCP client (ADR 0739 Q6 (a)): only a site with
+    /// `assistant = true`, confirmed and admitted ([`Client::submit_on_site`]); nothing is written otherwise. The journal
+    /// line also names the site.
+    pub fn submit_launch_on_site(
+        &self,
+        case: &Path,
+        settings: &RunSettings,
+        launch: &LaunchSettings,
+        site: &str,
+    ) -> Result<String, String> {
+        let id = self.client.submit_on_site(
+            case,
+            settings,
+            launch,
+            &rcfd_runner::store::RunTags::default(),
+            site,
+            true,
+        )?;
+        self.submitted(&id, case, settings, launch, None, Some(site));
         Ok(id)
     }
 
     /// A new run of run `src`'s case snapshot with its settings ([`Client::rerun`], ADR 0734 P3); the journal line is a
     /// `run_submitted` with `rerun_of`.
     pub fn rerun(&self, src: &str, over: &rcfd_runner::client::RerunOptions) -> Result<String, String> {
-        let id = self.client.rerun(src, over)?;
+        self.rerun_at(src, over, None)
+    }
+
+    /// [`Self::rerun`] on the remote site `site` for an MCP client (ADR 0739 Q6 (a); `None`: the local rerun).
+    pub fn rerun_at(
+        &self,
+        src: &str,
+        over: &rcfd_runner::client::RerunOptions,
+        site: Option<&str>,
+    ) -> Result<String, String> {
+        let id = match site {
+            Some(s) => self.client.rerun_on_site(src, over, s, true)?,
+            None => self.client.rerun(src, over)?,
+        };
         let rec = rcfd_runner::store::FsStore::new(self.client.project());
         let rec = rcfd_runner::store::RunStore::read_record(&rec, &id).map_err(|e| format!("run {id}: {e}"))?;
         let settings = RunSettings::of(&rec)?;
@@ -131,6 +166,7 @@ impl RunService {
             &settings,
             &launch,
             Some(src),
+            site,
         );
         Ok(id)
     }
@@ -147,6 +183,7 @@ impl RunService {
         settings: &RunSettings,
         launch: &LaunchSettings,
         rerun_of: Option<&str>,
+        site: Option<&str>,
     ) {
         let root = self.client.project();
         let mut m = Map::new();
@@ -172,6 +209,9 @@ impl RunService {
         }
         if let Some(r) = rerun_of {
             m.insert("rerun_of".into(), json!(r));
+        }
+        if let Some(s) = site {
+            m.insert("site".into(), json!(s));
         }
         self.journal("run_submitted", "submit", m);
     }
@@ -250,6 +290,15 @@ impl RunService {
     }
 }
 
+/// `site` of `start_run` (ADR 0739): a site name or absent.
+fn site_arg(args: &Value) -> Result<Option<String>, RpcError> {
+    match args.get("site") {
+        None | Some(Value::Null) => Ok(None),
+        Some(Value::String(s)) => Ok(Some(s.clone())),
+        Some(_) => Err(err(PARAMS, "site: a site name from list_sites")),
+    }
+}
+
 impl Workspace {
     /// The case file at `path` read as `rcfd run` reads it, for its start plan.
     fn read_case(&self, path: &Path) -> Result<Case, RpcError> {
@@ -264,9 +313,24 @@ impl Workspace {
 
     pub(crate) fn start_run(&self, args: &Value) -> Result<Value, RpcError> {
         let reason = reason_arg(args)?;
+        // ADR 0739: a run on a remote site, named by an MCP client (only a site with assistant = true)
+        let site = site_arg(args)?;
+        if let Some(s) = &site {
+            // the file's checks first, before a new case is written or the site's agent is started
+            let (file, entry) = rcfd_runner::site::sites::site(s).map_err(|e| err(BAD_STATE, format!("site: {e}")))?;
+            if !entry.assistant {
+                return Err(err(
+                    BAD_STATE,
+                    format!(
+                        "site: {s} is not open to assistants; the user can set assistant = true in [site.{s}] of {}",
+                        file.display()
+                    ),
+                ));
+            }
+        }
         // ADR 0734 P3: a rerun of a run's case snapshot instead of a case
         if args.get("from_run").is_some() {
-            return self.rerun_run(args, reason);
+            return self.rerun_run(args, reason, site.as_deref());
         }
         let launch = self.launch_arg(args)?;
         // ADR 0186 G5: a project case, or a new case made first; and whether the start plan applies
@@ -395,11 +459,18 @@ impl Workspace {
             mem_mb: u64_arg(args, "mem_mb"),
             set,
         };
-        let id = self
-            .runs
-            .by("start_run", reason)
-            .submit_launch(&path, &settings, &launch)
-            .map_err(|e| err(INTERNAL, e))?;
+        let id = match &site {
+            Some(s) => self
+                .runs
+                .by("start_run", reason)
+                .submit_launch_on_site(&path, &settings, &launch, s)
+                .map_err(|e| err(BAD_STATE, format!("site: {e}")))?,
+            None => self
+                .runs
+                .by("start_run", reason)
+                .submit_launch(&path, &settings, &launch)
+                .map_err(|e| err(INTERNAL, e))?,
+        };
         if let Err(e) = self.runs.ensure_runner() {
             return Err(RpcError {
                 code: INTERNAL,
@@ -409,6 +480,9 @@ impl Workspace {
         }
         let st = self.runs.status(&id).map_err(|e| err(INTERNAL, e))?;
         let mut out = json!({"run": id, "case": self.rel(&path), "state": state_name(st.state)});
+        if let Some(s) = &site {
+            out["site"] = json!(s);
+        }
         if let Some(c) = created {
             out["created"] = c;
         }
@@ -492,7 +566,7 @@ impl Workspace {
     /// `continue_from` or `max_steps` (the record gives those); 1202 no such run; 1003 the record's settings do not read.
     /// ADR 0737: `run_time` and `dry_run` are -32602 too: the run-time plan adds settings, which a rerun takes from its
     /// record, and a dry run reads a case file, which a rerun has none of.
-    fn rerun_run(&self, args: &Value, reason: Option<String>) -> Result<Value, RpcError> {
+    fn rerun_run(&self, args: &Value, reason: Option<String>, site: Option<&str>) -> Result<Value, RpcError> {
         let with: Vec<&str> = [
             "case",
             "new_case",
@@ -532,8 +606,8 @@ impl Workspace {
         let id = self
             .runs
             .by("start_run", reason)
-            .rerun(&src, &over)
-            .map_err(|e| err(INTERNAL, e))?;
+            .rerun_at(&src, &over, site)
+            .map_err(|e| err(if site.is_some() { BAD_STATE } else { INTERNAL }, e))?;
         if let Err(e) = self.runs.ensure_runner() {
             return Err(RpcError {
                 code: INTERNAL,
@@ -542,7 +616,18 @@ impl Workspace {
             });
         }
         let st = self.runs.status(&id).map_err(|e| err(INTERNAL, e))?;
-        Ok(json!({"run": id, "case": rec.case, "rerun_of": src, "state": state_name(st.state)}))
+        let mut out = json!({"run": id, "case": rec.case, "rerun_of": src, "state": state_name(st.state)});
+        if let Some(s) = site {
+            out["site"] = json!(s);
+        }
+        Ok(out)
+    }
+
+    /// `list_sites` (ADR 0739): the sites of the user's sites file; nothing is started.
+    pub(crate) fn list_sites(&self) -> Result<Value, RpcError> {
+        let (file, sites) = rcfd_runner::site::sites::load().map_err(|e| err(VALIDATION, e))?;
+        let list: Vec<Value> = sites.iter().map(|(n, e)| e.listing(n)).collect();
+        Ok(json!({"file": file.display().to_string(), "sites": list}))
     }
 
     pub(crate) fn control(&self, name: &str, args: &Value) -> Result<Value, RpcError> {

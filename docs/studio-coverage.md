@@ -20,12 +20,12 @@ Engine read: rcfd 0.1.0, service protocol rcfd-service/1 version 1.1, MCP server
 | Kind | Capabilities | UI path | Exemption | Exemption whose item does not name it |
 |---|---|---|---|---|
 | Service methods | 69 | 20 | 49 | 40 |
-| MCP tools | 69 | 34 | 35 | 26 |
-| CLI commands | 48 | 19 | 29 | 22 |
-| CLI options | 203 | 30 | 173 | 124 |
+| MCP tools | 70 | 34 | 36 | 26 |
+| CLI commands | 53 | 19 | 34 | 22 |
+| CLI options | 213 | 30 | 183 | 125 |
 | Case schema keys | 951 | 951 | 0 | 0 |
 | Monitor format keys | 6 | 6 | 0 | 0 |
-| **All** | **1346** | **1060** (78.8 %) | **286** | **212** |
+| **All** | **1362** | **1060** (77.8 %) | **302** | **213** |
 
 A case key stands for every value of its enumeration (the solver options of that key, listed in the inventory): the
 schema-driven surface of F-825 offers them all. A CLI option is mapped with its command. "Item does not name it" marks an
@@ -47,7 +47,7 @@ new item (see the last sections).
 | F-815 compare two runs | 5 | `design.compare` (not named), `design.get_metrics` (not named), `design.ledger_query` (not named), `design.ledger_rerun_check` (not named), `design.list_study` (not named) |
 | F-828 provenance inspector and reproduce-from-CLI | 1 | `journal.replay` |
 
-### MCP tools (35 without a UI path)
+### MCP tools (36 without a UI path)
 
 | Item | Count | Capabilities |
 |---|---|---|
@@ -58,8 +58,9 @@ new item (see the last sections).
 | F-811 residual and monitor plots | 2 | `get_residuals`, `read_metrics` |
 | F-813 a learner's first path | 1 | `list_cases` |
 | F-815 compare two runs | 5 | `design_compare_variants` (not named), `design_get_metrics` (not named), `design_ledger_query` (not named), `design_ledger_rerun_check` (not named), `design_list_study` (not named) |
+| F-848 Runs on a remote site: a remote simulation service for the Studio, the CLI and the MCP server | 1 | `list_sites` |
 
-### CLI commands (29 without a UI path)
+### CLI commands (34 without a UI path)
 
 | Item | Count | Capabilities |
 |---|---|---|
@@ -72,24 +73,26 @@ new item (see the last sections).
 | F-825 schema-driven case and settings surface | 1 | `rcfd schema` |
 | F-827 one action layer for every UI action | 1 | `rcfd call` (not named) |
 | F-828 provenance inspector and reproduce-from-CLI | 5 | `rcfd data list` (not named), `rcfd data provenance` (not named), `rcfd data verify` (not named), `rcfd project hash`, `rcfd version` |
+| F-848 Runs on a remote site: a remote simulation service for the Studio, the CLI and the MCP server | 5 | `rcfd site check`, `rcfd site list`, `rcfd-runner site`, `rcfd-runner site check`, `rcfd-runner site list` |
 
-### CLI options (173 without a UI path)
+### CLI options (183 without a UI path)
 
 | Item | Count | Capabilities |
 |---|---|---|
 | F-805 project home and the live project folder | 10 | `rcfd convert` (3), `rcfd serve` (7) |
-| F-807 run control (quick run, stop, pause, queue) | 69 | `rcfd map` (10), `rcfd reactor` (1), `rcfd restart` (4), `rcfd run` (28), `rcfd study` (8), `rcfd workflow run` (6), `rcfd workflow show` (2), `rcfd-runner ensure` (4), `rcfd-runner start` (5), `rcfd-runner wait` (1) |
+| F-807 run control (quick run, stop, pause, queue) | 70 | `rcfd map` (10), `rcfd reactor` (1), `rcfd restart` (4), `rcfd run` (28), `rcfd study` (8), `rcfd workflow run` (6), `rcfd workflow show` (2), `rcfd-runner ensure` (4), `rcfd-runner start` (6), `rcfd-runner wait` (1) |
 | F-809 derived pictures (iso-surfaces, streamlines, cut planes, vectors) | 26 | `rcfd acoustics` (3), `rcfd fwh` (9), `rcfd post derive` (7), `rcfd sample` (7) |
 | F-811 residual and monitor plots | 2 | `rcfd post` (2) |
-| F-812 case editor validated by the engine's schema | 32 | `rcfd check` (4), `rcfd check-mesh` (1), `rcfd inflate` (12), `rcfd partition` (15) |
+| F-812 case editor validated by the engine's schema | 34 | `rcfd check` (6), `rcfd check-mesh` (1), `rcfd inflate` (12), `rcfd partition` (15) |
 | F-813 a learner's first path | 1 | `rcfd cases` (1) |
 | F-814 Claude Code panel | 6 | `rcfd-mcp` (6) |
 | F-825 schema-driven case and settings surface | 2 | `rcfd schema` (2) |
 | F-827 one action layer for every UI action | 1 | `rcfd call` (1) |
-| F-828 provenance inspector and reproduce-from-CLI | 18 | `rcfd` (1), `rcfd data list` (3), `rcfd data provenance` (3), `rcfd data verify` (3), `rcfd run` (1), `rcfd version` (1), `rcfd-runner rerun` (4), `rcfd-runner start` (2) |
+| F-828 provenance inspector and reproduce-from-CLI | 19 | `rcfd` (1), `rcfd data list` (3), `rcfd data provenance` (3), `rcfd data verify` (3), `rcfd run` (1), `rcfd version` (1), `rcfd-runner rerun` (5), `rcfd-runner start` (2) |
 | F-829 undo, safe deletes and edit conflicts | 4 | `rcfd project empty-trash` (2), `rcfd project restore` (1), `rcfd project trash` (1) |
 | F-830 explain in place from the engine's docs | 1 | `rcfd` (1) |
 | F-835 new project | 1 | `rcfd project init` (1) |
+| F-848 Runs on a remote site: a remote simulation service for the Studio, the CLI and the MCP server | 6 | `rcfd site check` (1), `rcfd site list` (1), `rcfd-runner site` (2), `rcfd-runner site check` (1), `rcfd-runner site list` (1) |
 
 ## Capabilities no Studio item names yet
 
