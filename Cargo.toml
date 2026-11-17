@@ -15,11 +15,9 @@ members = [
     "crates/rcfd-cli",
     "crates/rcfd-api",
     "crates/rcfd-mcp",
-    "crates/rcfd-assistant",
     "crates/rcfd-claude",
     "crates/rcfd-project",
     "crates/rcfd-runner",
-    "crates/rcfd-render",
     "crates/rcfd-tsstore",
     "crates/rcfd-workspace",
     "crates/rcfd-fem",
@@ -53,7 +51,6 @@ rcfd-reactor = { path = "crates/rcfd-reactor" }
 rcfd-particles = { path = "crates/rcfd-particles" }
 rcfd-api = { path = "crates/rcfd-api" }
 rcfd-mcp = { path = "crates/rcfd-mcp" }
-rcfd-assistant = { path = "crates/rcfd-assistant" }
 rcfd-tsstore = { path = "crates/rcfd-tsstore" }
 rcfd-project = { path = "crates/rcfd-project" }
 rcfd-workspace = { path = "crates/rcfd-workspace" }

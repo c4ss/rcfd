@@ -1,6 +1,7 @@
 //! ADR 0128 finding 17 (c): no console program is started in non-test code of any crate except through a no-window
-//! helper (`rcfd_runner::sys::console`, rcfd-claude's `console`). Scans `crates/*/src/**/*.rs`, the text of each file
-//! before its first `#[cfg(test)]`, for `Command::new("<program>")` of the programs that open a console window.
+//! helper (`rcfd_runner::sys::console`; rcfd-claude's `console` went with its chat driver, F-838). Scans
+//! `crates/*/src/**/*.rs`, the text of each file before its first `#[cfg(test)]`, for `Command::new("<program>")` of the
+//! programs that open a console window.
 
 use std::path::{Path, PathBuf};
 

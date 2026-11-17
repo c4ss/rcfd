@@ -269,7 +269,9 @@ fallback, a loss, is named above the canvas ("Drawn by WebGL 2 (fallback: <why>)
 - **The table is rcfd-render's map** (`field/colormap.ts`): entry k is rcfd-render's `ColorMap::viridis().eval(k / 255)`
   (the 9 stops of `rcfd_post::render::colormap`). Stated tolerance: exact at the 256 table points and at and beyond both
   ends; between them a value's colour is within 3 levels of 255 per channel of rcfd-render's colour of the same value
-  (a 256-entry table cannot hold the 635 colours of the piecewise-linear map). ADR 0801, addendum F-808, F808-D1.
+  (a 256-entry table cannot hold the 635 colours of the piecewise-linear map). ADR 0801, addendum F-808, F808-D1. The
+  crate rcfd-render was removed by F-838; its map was `rcfd_post::render::colormap` itself, which the engine's
+  remaining renderer (`render_field`) draws with, so the reference and the tolerance are unchanged.
 - **Legend** from the same table (its 256 entries put into a canvas), ticks in rcfd-studio's `{:.4e}`, the unit in the
   title; the range is the min and max of the shown values (rcfd-studio's snapshot range).
 - **Hover readout**: the stored value of the cell under the cursor (a CPU pick with three's Raycaster on the drawn
@@ -283,8 +285,8 @@ fallback, a loss, is named above the canvas ("Drawn by WebGL 2 (fallback: <why>)
   (`tests/unit/data-door-static.spec.ts`). Every load carries the view's tag and a superseded or cancelled one is
   cancelled (G21); progress and errors are shown in the frame with Cancel or Try again.
 - Point fields are refused with the reason: `data.surface` does not say which mesh points the surface uses (ADR 0801, addendum F-808, F808-D3).
-- Tests: `tests/unit/field-colormap.spec.ts` (every entry and both ends against rcfd-render's map read from the Rust
-  source; the full range against the tolerance), `field-surface.spec.ts`, `data-door-static.spec.ts`, and
+- Tests: `tests/unit/field-colormap.spec.ts` (every entry and both ends against rcfd-render's map, `rcfd_post`'s
+  `colormap` read from the Rust source; the full range against the tolerance), `field-surface.spec.ts`, `data-door-static.spec.ts`, and
   `tests/e2e/field.spec.ts` (pixels read back from screenshots of the packaged Studio equal the table colour of the
   stored value under them, by WebGPU and by WebGL 2; the hover readout equals the stored value; legend; grid; reset;
   keyboard; screenshots at 1440 x 900 in `test-results-visual/f808/`).
@@ -298,7 +300,8 @@ not apply is a dashed chip that says why in its accessible name and in the toolt
 standing text. What the engine computes was read first (ADR 0801, addendum F-809), and the tolerances were registered
 there before the code (G3):
 
-- **Cut plane**: rcfd-render's own cut (`View::clip`, only points with `n . p <= d` are drawn), on the GPU for the
+- **Cut plane**: rcfd-render's own cut (`View::clip`, only points with `n . p <= d` are drawn; the crate was removed by
+  F-838 and the rule kept), on the GPU for the
   surface, the mesh grid and the arrows (`maskNode` of each TSL material), and in the pick, so the readout names what is
   seen. A plane normal to x, y or z: axis, position (a slider in mesh coordinates; the store gives no length unit) and
   the side kept, in a small panel in the frame's top left corner. Unavailable on a 2D case (one cell layer, the
@@ -444,8 +447,8 @@ Decisions taken in building F-814 (options, the recommendation followed; each re
 - D7, a new chat: allowed, with `--session-id` and a UUID chosen by the main process.
 - D8, MCP config: always `--strict-mcp-config` with an app-owned config (no server when there is no `rcfd-mcp`).
 - Missing in the engine (no Rust change here): a CLI, MCP or service entry point for Claude Code session discovery,
-  transcript reading, resume and writing the allow-list file (`rcfd-claude` has the code; its only user, the egui Studio
-  `rcfd-studio`, was removed by F-449).
+  transcript reading, resume and writing the allow-list file (`rcfd-claude` had the code for its only user, the egui
+  Studio `rcfd-studio`, removed by F-449; F-838 removed that code, and only the allow-list rules stay in the crate).
 
 ## Layout
 

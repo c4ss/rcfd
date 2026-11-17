@@ -9,7 +9,7 @@
 // owner cell and its stored value. The mesh grid is computed in a worker (./grid.worker.ts) the first time it is shown.
 //
 // F-809: the cut plane is rcfd-render's (`View::clip`): every material keeps a fragment only where `n . p <= d`
-// (`maskNode`, the same test as `crates/rcfd-render/src/shader.wgsl`), and the pick takes the nearest hit the rule keeps.
+// (`maskNode`, the same test as the shader of the removed rcfd-render), and the pick takes the nearest hit the rule keeps.
 // The vector arrows (./derived.ts) are ink line segments over the surface, cut by the same plane.
 import { forwardRef, useEffect, useImperativeHandle, useMemo, useRef, type Ref } from 'react';
 import { Canvas, useThree } from '@react-three/fiber';

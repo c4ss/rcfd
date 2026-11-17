@@ -27,7 +27,8 @@ of `store.rts` (R2, ADR 0350 addendum 1). Case validation uses the engine's sche
 
 - Every field value the renderer gets is equal to the Rust reader's value, bit for bit (ADR 0350 P12), and a test keeps
   it so.
-- Colour maps, iso-surfaces, streamlines and other derived pictures match `rcfd-render`'s reference value for value, or
+- Colour maps, iso-surfaces, streamlines and other derived pictures match the engine's reference value for value
+  (`rcfd_post::render`; it was `rcfd-render`'s until F-838 removed that crate), or
   within a tolerance stated before the code is written.
 - Every number shown traces to a solver value; nothing is decorative, smoothed out of sight or made up.
 

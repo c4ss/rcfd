@@ -34,7 +34,7 @@ exceptions = []
 ignore = true
 
 [bans]
-# wgpu pulls in several versions of some crates; report them without failing.
+# Report several versions of one crate without failing.
 multiple-versions = "warn"
 wildcards = "deny"
 allow-wildcard-paths = true

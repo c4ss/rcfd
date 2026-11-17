@@ -14494,10 +14494,17 @@ Generated from `docs/studio-guardrails.md`, `PRODUCT.md` and `DESIGN.md` ([ADR 0
     unchanged. Needs engine: simulate-N-s helper with correctors and Courant fix (case-facts query or start_run dry
     run), Refine x2 (refine_mesh), open/save one case file outside a project, store length unit. Not built:
     save-or-discard on window close (proposed as an F-829 decision panel).
-- [ ] **F-838** Local-model assistant: keep, port or remove
+- [x] **F-838** Local-model assistant: keep, port or remove
   - depends on: F-449
   - acceptance: The maintainer decides what becomes of the local-model assistant that only rcfd-gui offered (presets
     ollama, lm-studio, llama-cpp, vllm, openai, anthropic; keychain key; read-only and approve-writes modes; quick
     actions) and of the crates left without users (rcfd-assistant, rcfd-render, the rcfd-claude code only rcfd-studio
     used); the choice is carried out (a Studio panel, or removal with docs updated).
-  - note: Needs the maintainer. Traces: G14.
+  - note: Needs the maintainer. Traces: G14. Done 2026-11-17 by the maintainer's choice (a), removal (ADR 0800 §10):
+    crates/rcfd-assistant and crates/rcfd-render removed with their tests (keychain key, provider presets, approval
+    modes, quick actions, wgpu render core); of rcfd-claude the session discovery, transcript and stream readers, chat
+    driver, folder trust, argument checks, suggestions and the fake-claude double went. rcfd-claude keeps the allow-list
+    rules and file, which rcfd-mcp's tests F2 and C5-A check the tool names against (E5 moved to allow_file_w48e.rs).
+    The Studio's colour-map reference now reads rcfd_post's colormap (the same map, values unchanged); its check of
+    rcfd-render's shader text went. Cargo.lock 216 to 83 packages. Docs updated: the Studio's Claude Code panel is the
+    only assistant.

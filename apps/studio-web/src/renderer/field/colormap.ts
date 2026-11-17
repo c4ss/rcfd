@@ -1,7 +1,7 @@
 // The field colour map (F-808; DESIGN.md, the Data Owns the Field Rule; guardrail G3): viridis as rcfd-render draws it,
 // in a 256-entry table that colours the surface on the GPU and draws the legend.
 //
-// The source: rcfd-render's `ColorMap::viridis()` (crates/rcfd-render/src/lib.rs) is the 9 integer stops of
+// The source: rcfd-render's `ColorMap::viridis()` (crates/rcfd-render/src/lib.rs, removed by F-838) was the 9 integer stops of
 // `rcfd_post::render::colormap` (crates/rcfd-post/src/render.rs), evenly spaced, and `ColorMap::eval(t)` interpolates
 // them linearly and rounds to the nearest integer. Entry k of the table is `eval(k / 255)`, computed here the way the Rust
 // computes it (f64, the same operations in the same order). tests/unit/field-colormap.spec.ts reads the stops out of the
