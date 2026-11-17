@@ -15751,7 +15751,11 @@ fixed by the item's registration ADR before any code.
     by a forged pass still drops the row, forged edits are ignored; ledgers without drawn records give the lessons of
     ADR 0624 bit for bit in 600 of 600 (one hypothesis) and 200 of 200 (two, row order); every ADR 0624, 0662 and 0693
     check keeps its result; 8 of 8 mutations caught (M40, the row order, by the check added in amendment 1 after the
-    one-row ledgers missed it). Follow-up F-781 (Drawn checks must be newer than the evidence they check).
+    one-row ledgers missed it). Follow-up F-781 (Drawn checks must be newer than the evidence they check). Lead
+    (2026-11-17): recorded partial by the status rule (mutation M40 survived the registered run; caught only by A0b,
+    added under amendment 1); the agent proposed done on the amended rule; done is the maintainer call. ADR 0698 (F-781,
+    2026-11-17): lessons_drawn counts a drawn record only when no evidence of its row is newer than the entries the
+    record saw.
 - [~] **F-777** construction S without the first-cell stretch on strongly staggered blades
   - depends on: F-726
   - acceptance: Every limit not stated here is registered in the ADR before the run. Construction S with the first free
@@ -15806,7 +15810,7 @@ fixed by the item's registration ADR before any code.
     NewtonOptions::indefinite_tangent after a refused positive factor, reporting the inertia of every accepted state;
     the 16^3 block of ADR 0694 solves to full load with it; off by default, the default bits unchanged.
   - note: Follow-up of F-774 (ADR 0694, 2026-11-17); after F-779.
-- [ ] **F-781** Drawn checks must be newer than the evidence they check
+- [x] **F-781** Drawn checks must be newer than the evidence they check
   - depends on: F-776
   - acceptance: Every limit not stated here is registered in the ADR before the run. lessons_drawn counts a drawn record
     for a row only when no evidence entry of the row is newer than the record (entries_seen covers every evidence entry
@@ -15814,7 +15818,18 @@ fixed by the item's registration ADR before any code.
     appends a second evidence set after a passing drawn record is dropped or not reported, and an honest ledger keeps
     its row; ledgers without drawn records give the lessons of ADR 0624 bit for bit; every ADR 0624, ADR 0662, ADR 0693
     and ADR 0695 check keeps its result.
-  - note: Follow-up of F-776 (ADR 0695, 2026-11-16).
+  - note: Follow-up of F-776 (ADR 0695 question 3). ADR 0698, 2026-11-17. DONE. Library only, opt-in:
+    design::hypothesis::lessons_drawn counts a drawn record for a row only when no evidence entry of the row is newer
+    than the record (an evidence entry at an index of at least entries_seen, new helper drawn_newer_evidence); a
+    consistent record with newer evidence is ignored, never drops or keeps a row, and is reported separately
+    (drawn_stale per row, DrawnLessons::stale, a drawn_flags entry). Checks on 40 synthetic worlds: an honest ledger
+    keeps its row with 1 check and 0 stale in 40 of 40; the impostor that appends a second evidence set after a passing
+    record is not reported by lessons in the default mode (40 of 40) and, with the stored-result switch where lessons
+    still returns the row, its passing record is not counted (0 checks, 1 stale, 40 of 40); a stale failing record does
+    not drop the row (40 of 40, control without the second set drops 40 of 40); two-hypothesis ledgers (evidence of
+    another hypothesis newer than the record is not stale, order kept, 120 of 120); the boundary at entries_seen (80 of
+    80); ledgers without drawn records give the lessons of ADR 0624 bit for bit (160 of 160); every ADR 0624, 0662, 0693
+    and 0695 check keeps its result (f776 6 of 6 unedited); 8 of 8 mutations caught.
 - [ ] **F-782** wake stacks of construction S' at the thin end-wall layers
   - depends on: F-777
   - acceptance: Every limit not stated here is registered in the ADR before the run. A new opt-in field of S' builds the
