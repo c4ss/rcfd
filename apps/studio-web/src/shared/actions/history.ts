@@ -1,6 +1,6 @@
 // Undo and redo of the Studio's edits (F-829, guardrail G18), built on the action log and the registry's undo hooks
 // (F-827 D7). Every change action that succeeds from the UI and has an undo hook becomes a step of its session's
-// history: settings.set, settings.remove and session.create (a session made from the page). Undo dispatches the step's
+// history: settings.set, settings.remove, session.create (a session made from the page) and mesh.refine {apply: true}. Undo dispatches the step's
 // inverse through the dispatcher (origin `undo`), redo dispatches the step's own call again (origin `redo`), so both are
 // logged, replayable and the engine's (G2, G16).
 //
@@ -179,6 +179,15 @@ export function stepTitle(call: ActionCall, made?: string): string {
 
 /** The settings a successful call left, as the engine reported them. */
 function left(call: ActionCall, result: unknown): Expectation[] {
+  // ADR 0737: an applied Refine x2 left each count of its reply's edits at `after`; its undo (a settings.set of each
+  // count back to `before`) is checked against them and sends them as `base_value`, as a settings.set step's undo does
+  if (call.action === 'mesh.refine') {
+    if (call.params['apply'] !== true || !isObject(result) || !Array.isArray(result['edits'])) return [];
+    return (result['edits'] as unknown[])
+      .filter(isObject)
+      .filter((e) => typeof e['path'] === 'string')
+      .map((e) => ({ path: e['path'] as string, value: (e['after'] ?? null) as JsonValue }));
+  }
   const path = typeof call.params['path'] === 'string' ? call.params['path'] : null;
   if (path === null) return [];
   if (call.action === 'settings.set') return [{ path, value: isObject(result) && 'value' in result ? ((result['value'] ?? null) as JsonValue) : null }];

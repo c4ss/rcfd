@@ -17083,7 +17083,11 @@ Generated from `docs/studio-guardrails.md`, `PRODUCT.md` and `DESIGN.md` ([ADR 0
     Studio's Run, Run again and Queue now pass start_run {store: plan} (ADR 0140), a case that sets
     output.store_interval or output.store_time_interval keeps its own, the case file is not changed, start_run's own
     default (none) and the CLI's stay, and the start line says the snapshots and size the plan applied. e2e case-file-
-    adr0737.spec.ts (4); word budgets unchanged. Left: the store length unit (ADR 0738).
+    adr0737.spec.ts (4); word budgets unchanged. 2026-11-17 (branch small-fixes): an undo of Refine x2 checks the counts
+    the refine left (each edits[].after of its reply) and sends them as base_value, as the undo of settings.set does, so
+    a count another writer set since is the conflict panel with its three choices (the read before, or the engine's
+    1007), never overwritten silently; unit history.spec.ts (2), e2e case-file-adr0737.spec.ts (5). Left: the store
+    length unit (ADR 0738).
 - [x] **F-838** Local-model assistant: keep, port or remove
   - depends on: F-449
   - acceptance: The maintainer decides what becomes of the local-model assistant that only rcfd-gui offered (presets

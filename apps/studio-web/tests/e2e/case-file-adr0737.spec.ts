@@ -2,13 +2,16 @@
 // opened with Open a case file (the main process's dialog, stubbed to answer the file), the estimate line from the
 // engine's case.facts, Refine x2 (the doubled counts as unsaved changes), the save by the service's case.save (the
 // changed lines, the comment kept, no lock file left), a file changed outside shown as a conflict with nothing written,
-// and a mesh-file case refused with the engine's reason. Screenshots at 1440 by 900 to test-results-visual/adr0737/.
+// an undo of Refine x2 after another writer set a count shown as
+// the conflict panel (ADR 0736 P2: the counts it left are checked and sent as base_value), and a mesh-file case refused
+// with the engine's reason. Screenshots at 1440 by 900 to test-results-visual/adr0737/.
 //
 // Needs rcfd (tests/support/rcfd.ts); without it the tests are skipped.
 import { expect, test, type Page } from '@playwright/test';
 import { mkdirSync } from 'node:fs';
 import { readFile, readdir, rm, writeFile } from 'node:fs/promises';
 import path from 'node:path';
+import { RpcConnection } from '../../src/main/service/rpc.js';
 import { scratch, stubDialog } from '../support/project.js';
 import { appRoot, findRcfd, killIfRcfd, NO_RCFD, startRcfd, type RunningRcfd } from '../support/rcfd.js';
 import { launchStudio, type Studio } from '../support/studio.js';
@@ -113,6 +116,39 @@ test('a file changed outside is a conflict: both sides shown, nothing written', 
   expect(await readFile(file, 'utf8')).toContain('nu = 0.02');
 });
 
+test('undo of Refine x2 checks the counts it left: another writer’s count is a conflict with three choices', async () => {
+  // a refine (nx, ny 32 -> 64) from the session the write left; another writer (a second connection) sets ny afterwards
+  const session = decodeURIComponent((await page.evaluate(() => location.hash)).replace('#/case/', ''));
+  const rpc = await RpcConnection.connectTcp('127.0.0.1', service.port);
+  try {
+    const counts = async () => Promise.all(['mesh.nx', 'mesh.ny'].map(async (p) => ((await rpc.request('settings.get', { session, path: p })) as { value: unknown }).value));
+    expect(await counts()).toEqual([32, 32]);
+    await page.getByRole('button', { name: 'Refine the mesh x2', exact: true }).click();
+    await expect(page.getByRole('status').filter({ hasText: 'Refined x2' })).toContainText('1024 → 4096 cells');
+    const undo = page.getByRole('group', { name: /^Undo and redo/ }).getByRole('button').first();
+    await expect(undo).toHaveText('Undo: refine the mesh x2');
+    await rpc.request('settings.set', { session, path: 'mesh.ny', value: 70 });
+    await undo.click();
+    const d = page.getByRole('alertdialog');
+    await expect(d.getByRole('heading')).toHaveText('Not undone: changed outside the Studio');
+    await expect(d.getByRole('row', { name: /mesh\.ny/ })).toContainText('64');
+    await expect(d.getByRole('row', { name: /mesh\.ny/ })).toContainText('70');
+    await expect(d.getByRole('row', { name: /mesh\.nx/ })).toHaveCount(0);
+    await expect(d.getByRole('button')).toHaveText(['Undo anyway, replacing the value now', 'Keep the value now and drop this step', 'Cancel']);
+    await shot('05-refine-undo-conflict');
+    await d.getByRole('button', { name: 'Cancel' }).click();
+    await expect(page.getByRole('alertdialog')).toHaveCount(0);
+    expect(await counts()).toEqual([64, 70]);
+    // undo anyway: both counts back to what the refine found
+    await undo.click();
+    await page.getByRole('alertdialog').getByRole('button', { name: 'Undo anyway, replacing the value now' }).click();
+    await expect.poll(counts, { timeout: 20_000 }).toEqual([32, 32]);
+    await expect(undo).toHaveText('Nothing to undo');
+  } finally {
+    rpc.close();
+  }
+});
+
 test('Refine x2 of a mesh-file case is refused with the engine’s reason', async () => {
   const f = path.join(dir, 'file-mesh.toml');
   await writeFile(f, PISO.replace('generator = "cavity_2d"\nnx = 8\nny = 8\n', 'source = "file"\nfile = "m.msh"\n'));
@@ -129,5 +165,5 @@ test('Refine x2 of a mesh-file case is refused with the engine’s reason', asyn
   }
   await page.getByRole('button', { name: 'Refine the mesh x2', exact: true }).click();
   await expect(page.getByRole('alert').filter({ hasText: 'Refine x2 refused' })).toContainText('mesh file');
-  await shot('05-refused');
+  await shot('06-refused');
 });
