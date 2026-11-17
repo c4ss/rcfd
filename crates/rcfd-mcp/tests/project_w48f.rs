@@ -93,6 +93,8 @@ fn f2_tool_names_pass_the_allow_list_rules() {
         .iter()
         .filter(|t| t["_meta"]["rcfd/access"] == "read" && !plain.iter().any(|p| t["name"] == p.as_str()))
         .map(|t| t["name"].as_str().unwrap())
+        // ADR 0733 (restated): runner_config is a read tool not on the first allow-list (not asked; as ADR 0188 Q6 (a))
+        .filter(|n| *n != "runner_config")
         .collect();
     assert_eq!(read.len(), 15);
     assert_eq!(read, PROJECT_READ_TOOLS.into_iter().collect::<BTreeSet<_>>());
@@ -109,7 +111,8 @@ fn f3_access_classes_read_only_and_schema() {
     let dir = project("f3p");
     let s = server(&dir, Policy::default());
     let list = s.tool_list();
-    assert_eq!(names(&list).len(), 17 + 23);
+    // ADR 0733: and the two budgets tools
+    assert_eq!(names(&list).len(), 17 + 25);
     for (name, access) in PROJECT_TOOLS {
         let t = list["tools"]
             .as_array()

@@ -277,6 +277,28 @@ pub(crate) fn tools() -> Vec<Tool> {
             },
         },
         Tool {
+            name: "runner_config",
+            description: "The run service's budgets: .rcfd/runner-config.json (exists, hash: the base_hash for set_runner_config, values, problem: why the runner would refuse the file), the runner's defaults on this machine, and in_use: the values the runner running now started with. The runner reads the file when it starts (applies: next_start).",
+            access: Access::Read,
+            schema: || obj(json!({}), &[]),
+        },
+        Tool {
+            name: "set_runner_config",
+            description: "Change the run service's budgets in .rcfd/runner-config.json (max_runs, cpu_threads, mem_budget_mb, mem_base_mb, mem_kb_per_cell, poll_ms, adopt_probe_ms, cancel_grace_ms): a number sets a key, null removes it (the runner's default). Checked as the runner checks the file (error 1003 at the key) and written atomically only if the file still has base_hash (null: there is no file yet; else error 1200 with the current hash). A file the runner cannot read is replaced only with replace: true and every key given. Applies at the next runner start; the runner is not restarted. Returns the budgets as runner_config does.",
+            access: Access::WriteFiles,
+            schema: || {
+                obj(
+                    json!({
+                        "set": {"type": "object", "description": "{key: number, or null for the runner's default}"},
+                        "base_hash": {"type": ["string", "null"], "description": "hash from runner_config; null when there is no file"},
+                        "replace": {"type": "boolean", "description": "write exactly set (every key) over a file the runner cannot read"},
+                        "reason": reason_schema()
+                    }),
+                    &["set", "base_hash"],
+                )
+            },
+        },
+        Tool {
             name: "start_run",
             description: "Queue a run of a project case with the project's run service and start the service if none is alive. set holds rcfd run --set overrides (path=value). Returns the run id.",
             access: Access::Execute,
