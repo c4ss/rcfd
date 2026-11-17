@@ -142,3 +142,79 @@ Whatever the result, each disagreement is proposed for correction in a follow-up
 * A row is not judged on what it leaves out (clause B), so a table that omits an assert of a test is not caught here.
 * One second reader, who knows the first reader's total (disclosed above).
 * No overlap with the first reader's rows, so this measures the rows, not the agreement of two readers on the same row.
+
+## Addendum 1: results (2026-11-17)
+
+Written after the registration was committed alone (d0b55306). No row of ADRs 0706 to 0710 was read against a file before that
+commit. No Rust file, script, golden or hash table was edited; ADRs 0705 to 0710 are unchanged. No test was run for the reading:
+no sampled row needed runtime output (the one recorded value, 18.17 in C5, is in the test's comment and in the F-043 note).
+
+**The draw** (Python 3.9.13, once, output kept in `f794-scratch/draw.txt`):
+
+```
+pools = {'0706': ['H%d' % i for i in range(2, 25) if i != 6], '0707': ['W%d' % i for i in range(3, 9)],
+         '0708': ['C%d' % i for i in range(3, 8)], '0709': ['M2', 'M3'], '0710': ['T3', 'T4', 'T5']}
+k = {'0706': 10, '0707': 3, '0708': 3, '0709': 2, '0710': 2}
+for a in pools: print(a, random.Random(794).sample(pools[a], k[a]))
+
+0706 ['H12', 'H8', 'H19', 'H4', 'H24', 'H16', 'H22', 'H3', 'H2', 'H18']
+0707 ['W5', 'W4', 'W3']
+0708 ['C5', 'C4', 'C7']
+0709 ['M3', 'M2']
+0710 ['T4', 'T3']
+```
+
+**The readings.** "ADR line" is the line of the row in its group ADR at 68f66132. Test files are under `crates/`. The roadmap
+notes are those of `docs/roadmap.json` at 68f66132.
+
+| row | ADR line | test and lines read | reading | reason |
+|---|---|---|---|---|
+| H2 | 0706:43 | `rcfd-assistant/tests/physics_workflow.rs` 41 to 55 | agree | the three `k_epsilon` inlet paths (45 to 47), `boundaries.inlet.velocity` (49), `turbulence_length` for `k_omega_sst` (53) and no wall path containing `turbulence` (54) are asserted as the row says |
+| H3 | 0706:44 | same file 58 to 67 | agree | inlet has `compressible_bc` and `pressure_value`, not `pressure` (62 to 64); outlet and walls by `assert_eq!` on the whole list (65, 66) |
+| H4 | 0706:45 | same file 70 to 117 | agree | every claim is an assert: "laminar flow only" (84), `y+` and not laminar (86), `ly = 0.1`, `ny = 20` (90), warning at `turbulence.model` (96), `yp > 500.0 && yp < 1500.0` (100), `SST` (101), `wall_layers = 10`, `first_layer_height = 1e-5` (104), `yf < 3.0` (114), `cfl = 0.95` and `compressible.cfl` (115, 116). The source cell quotes the comment of line 99 correctly (Re_x 1e7, u_tau about 0.36, 0.005, about 900) |
+| H8 | 0706:60 | `rcfd-assistant/tests/workflow_engine.rs` 23, 57, 65, 141 to 149 | agree | the inserted task is `export`, kind `export_vtk`, dir `results` (57); `workflow.complete == true` and `results/solution.vtu` (142, 143); `physics.nu = 0.02` (65) and all tasks `stale` (145 to 148) |
+| H12 | 0706:72 | `rcfd-assistant/tests/workflow.rs` 54 to 61 | agree | `decay(30, ..)`, `y[20] = NAN`, `non_finite`, verdict contains `NaN`, evidence contains "sample 20" |
+| H16 | 0706:76 | same file 100 to 118 | agree | the three inputs carry the numbers of the row (102, 106, 114); verdicts `good`, `usable with care` with the advice, `not usable` with 4 findings (104, 108 to 112, 116, 117) |
+| H18 | 0706:78 | same file 150 to 172 | agree | `ok == false` and the first error contains `nowhere` (157, 158); `'walls'` with "no boundary condition" (165 to 169); `Re =` (170); none with `frontAndBack` (171) |
+| H19 | 0706:79 | same file 175 to 207 | agree | `good` (189), ok (191), 3 suggestions (194), "not enough data" (198), hashes equal (203), error without a session (206) |
+| H22 | 0706:89 | `rcfd-api/tests/workflow.rs` 183 to 214 | **disagree (clause B)** | the first half is as the row says: `max_steps = 5` (190), the last task run is `solve` (195) with `step_limit` in its message (196), `report` is `not_run` (198 to 201; the test also asserts `solve` is `failed`). The second half says the invalid boundary name "fails the validate task". The test takes the first task of `ran` with `ok == false` (212) and asserts only that its message contains `nonexistent` (213); it does not assert which task that is. The words "the validate task" come from the comment of line 202, not from an assert. Also no task has the id `validate`: in the template the task of kind `validate` has the id `setup` (`rcfd-api/src/workflow.rs` 144) |
+| H24 | 0706:91 | same file 256 to 313 | agree | ok and `exit_code` 0 (261); `max_steps` 25, checkpoint, status file, `status_every` 10 (266, 267); `step_limit`, `ready`, the checkpoint file (270 to 272); `status.read` gives `step_limit`, complete, 1 checkpoint (274 to 281); stop file gives 7 and `stopped` (287, 288); `converged`, more than 25 iterations, `res/solution.vtu` (297 to 299); the five keys with `../x` and "sandbox" (301 to 306); the four methods (309 to 311) |
+| W3 | 0707:38 | `rcfd-turb/tests/channel_wall_function.rs` 130 to 142 | agree | `y1 = 1.0 / ny`, `yplus1 = y1 * RE_TAU` with `RE_TAU = 395.0` (16, 139, 140), `assert!(yplus1 > 11.6)` (142). 395/8 = 49.375, 395/12 = 32.917, 395/16 = 24.688: the row's 49.4, 32.9, 24.7 are these to one decimal, and the F-040 note has "first-cell y+ = 49.4/32.9/24.7" |
+| W4 | 0707:39 | same file 143 to 146 | agree | `(yp / yplus1 - 1.0).abs() < 5e-3` for every value of `wall_y_plus` on the two wall patches; the F-040 note has "within 0.5%" (0.5 % = 5e-3) |
+| W5 | 0707:40 | same file 147 to 153 | agree | `tau = (nu + nutw) * u / y`, `(tau - 1.0).abs() < 2e-3`, for every wall face; the F-040 note has "equals the imposed 1 within 2e-3 (momentum balance)" |
+| C4 | 0708:26 | `rcfd-cli/tests/physics_cases.rs` 69 to 78 | agree | exit code 0 (71); `k`, `epsilon`, `nut`, `y_plus` in `solution.vtu` (73 to 75); first line of `monitors.csv` contains `yplus_lower` (77) |
+| C5 | 0708:27 | same file 81 to 95; `cases/channel/sst_channel.toml` 5 | agree | exit 0 (83); the four fields (85); last row, `(yplus_lower - 1.0).abs() < 0.01` (92); `(u_mean / 17.4 - 1.0).abs() < 0.10` (94). The comment of line 93 is "18.17 (DNS 17.4, +4.4 percent, see the F-043 roadmap note)"; the case file cites Moser/Kim/Mansour 1999 with U_b+ = 17.4; the F-043 note has "U_b+ 18.167 (+4.4% vs 17.4)" |
+| C7 | 0708:29 | same file 110 to 138; `cases/sod/sod.toml` 22; `cases/channel/kepsilon_inlet.toml` 32, 33 | agree | three `validate` calls each asserted to exit 3 (117, 129, 135); (a) `rk_order = 3` to `1`, `compressible.rk_order` and `line {line}` with the line found in the file (115 to 123); (b) `simplec` to `piso`, `turbulence.model` (127, 130); (c) `p_ref_cell = 99999` under `[solver]`, `solver.p_ref_cell` and `line ` (133, 137). The strings replaced exist in the case files |
+| M2 | 0709:27 | `rcfd-api/tests/mesh_params.rs` 21 to 32 | agree | `nx = 8`, `ny = 4`, `lx = 2.0`, `ly = 0.5` (22); extents minus 2.0 and 0.5 below `1e-12` (30); 32 cells (31) |
+| M3 | 0709:28 | same file 35 to 38 | agree | `nx = 12`, `ny = 12`, `assert_eq!(m.n_cells(), 144)` |
+| T3 | 0710:32 | `rcfd-core/tests/table_expr.rs` 16, 41, 42 | agree | `slots[temp] = 400.0`, `is_nan()`; the table rows are 280, 300, 320 K (16) |
+| T4 | 0710:33 | same file 44 to 46 | agree | `nu_t(300 [K])`, `is_constant()`, `assert_eq!(k.constant_value(), Some(0.85e-6))` |
+
+**Control N1** (`f794-scratch/n1.py`, output `n1.txt`): for the 19 rows read as "agree", every number in the limit cell was
+searched as written in the cited test file. Not found as written: `49.4`, `32.9`, `24.7` of W3 (computed values, 395/ny to one
+decimal, and in the F-040 note: clause C, a derived value, and clause E); `10` and `1999` of C5 (`10 %` is the code's `0.10`, the
+percent normalisation of clause C; 1999 is the year of the reference, in the case file the row names). All other literals are in
+the files as written. No reading was changed by N1.
+
+**Checks.**
+
+| # | check | limit | measured | met |
+|---|---|---|---|---|
+| R1 | the registered sample | 20 rows, none of ADR 0705's ten, 10 of 0706's unread 22 | 20 rows as drawn above; 10 of 0706 | yes |
+| R2 | agreement | at least 18 of 20 (90 percent) | **19 of 20 (95 percent)** | yes |
+| R3 | disagreements listed with the line | all | 1: H22, ADR 0706 line 89, against `rcfd-api/tests/workflow.rs` lines 212 and 213 | yes |
+| R4 | reported | none | 0706: 9 of 10. 0707: 3 of 3. 0708: 3 of 3. 0709: 2 of 2. 0710: 2 of 2. Reservations: none, so 19 of 20 either way | - |
+| R5 | `docs_site` | passes | recorded in Addendum 2 | - |
+
+**The disagreement.** H22 (ADR 0706 line 89) says the test checks that an invalid boundary name "fails the validate task with a
+message containing `nonexistent`". The test checks that some task failed with that message, not which one. It is the smallest kind
+of disagreement: the row repeats the test's own comment, and by the template the task that validates is `setup`, which runs second,
+so the statement is probably true of the program (not checked by a run). It is still not what the assert pins, and the first half
+of the same row shows the difference (there the id `solve` is asserted). A corrected row would read "an invalid boundary name makes
+the run fail (`ok = false`) and the first failed task has a message containing `nonexistent`; the test does not assert which task
+it is".
+
+**Deviations.** None from the registration. The reading did not need a test run.
+
+**Not run, not covered.** The eight test files were not run. The 18 unread rows (H5, H7, H9, H10, H11, H13, H14, H15, H17, H20,
+H21, H23, W6, W7, W8, C3, C6, T5) have no reading; the 10 rows of ADR 0705 have the author's only.
