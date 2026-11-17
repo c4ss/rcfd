@@ -59,18 +59,19 @@ def make_repo(repo, sub=""):
     run(repo, "init", "-q")
     n = [0]
 
-    def commit(msg, files=(), rename=None):
+    def commit(msg, files=(), rename=None, body=None):
         n[0] += 1
         for p, text in files:
             put(base, p, text)
         if rename:
             run(repo, "mv", os.path.join(sub, rename[0]), os.path.join(sub, rename[1]))
         run(repo, "add", "-A")
-        run(repo, "commit", "-q", "-m", msg, date=f"2026-01-{n[0]:02d}T00:00:00")
+        run(repo, "commit", "-q", "-m", msg, *(["-m", body] if body else []), date=f"2026-01-{n[0]:02d}T00:00:00")
 
     put(base, "crates/rcfd-w/src/lib.rs", "")
     docs = list(ADRS.items())
-    commit("Initial import", docs + [("crates/rcfd-w/src/lib.rs", ""), (TESTS + "t_init.rs", T.format("g_init"))])
+    commit("Initial import", docs + [("crates/rcfd-w/src/lib.rs", ""), (TESTS + "t_init.rs", T.format("g_init"))],
+           body="The body names ADR 0120, which is not read: only the subject is.")
     commit("w: one (ADR 0120)", [(TESTS + "t_one.rs", T.format("g_one"))])
     commit("w: item (F-020)", [(TESTS + "t_item.rs", T.format("g_item"))])
     commit("w: noreg (F-021)", [(TESTS + "t_noreg.rs", T.format("g_noreg"))])
