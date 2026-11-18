@@ -402,17 +402,28 @@ def sec_d(items, adrs, full=False):
     return rep, q
 
 
+SOURCES_READ = re.compile(r"^## Sources read \(20\d\d-\d\d-\d\d\)", re.M)
+
+
+def from_memory_open(adrs):
+    """The ADRs that cite from memory and have no addendum `## Sources read (date)` (docs/process/lead-process.md): an ADR
+    is append-only, so a citation that was read later is closed by that addendum, not by removing the words."""
+    return [a for a in adrs if re.search(r"from memory", a["text"], re.I) and not SOURCES_READ.search(a["text"])]
+
+
 def sec_e(root, adrs):
     rep, fail = [], []
-    mem = [a for a in adrs if re.search(r"from memory", a["text"], re.I)]
+    cited = [a for a in adrs if re.search(r"from memory", a["text"], re.I)]
+    mem = from_memory_open(adrs)
     unv = [a for a in adrs if re.search(r"UNVERIFIED|NOT VERIFIED", a["text"])]
-    rep.append(f"ADRs that cite from memory: {len(mem)}; ADRs with UNVERIFIED or NOT VERIFIED: {len(unv)}")
+    rep.append(f"ADRs that cite from memory: {len(cited)}, of which {len(cited) - len(mem)} have a 'Sources read' addendum; "
+               f"open: {len(mem)}; ADRs with UNVERIFIED or NOT VERIFIED: {len(unv)}")
     cap = exceptions(root, "from-memory-count")
     if cap:
         limit = int(sorted(cap)[0])
-        rep.append(f"the count may not rise above {limit} (docs/process/exceptions/from-memory-count.txt)")
+        rep.append(f"the open count may not rise above {limit} (docs/process/exceptions/from-memory-count.txt)")
         if len(mem) > limit:
-            fail.append(f"e: {len(mem)} ADRs cite from memory, above the recorded {limit}")
+            fail.append(f"e: {len(mem)} ADRs cite from memory without a 'Sources read' addendum, above the recorded {limit}")
         elif len(mem) < limit:
             rep.append(f"the count fell: lower from-memory-count.txt to {len(mem)}")
     return rep, fail, mem, unv
@@ -712,7 +723,7 @@ def sec_m(root, items, cats, adrs, questions, mem, rust, specs):
     rep = [f"merges on main since the newest green full run ({base}): {n if n is not None else 'not countable here (shallow checkout)'}",
            f"open questions: {len(questions)}",
            f"partial items without a gap: {sum(1 for i in items if i['status'] == 'partial' and not i.get('gap'))}",
-           f"ADRs that cite from memory: {len(mem)}",
+           f"ADRs that cite from memory, without a 'Sources read' addendum: {len(mem)}",
            f"test files without a record in the leading comment: {len(rust)} Rust, {len(specs)} Studio",
            f"pushes in the ledger: {len(pushes)}"]
     if pushes:
@@ -773,7 +784,7 @@ def seed(root, items, md, adrs, history):
         "adr-without-kind-word": [a["file"] for a in adrs if not a["kind"]],
         "test-root-without-adr": rust,
         "studio-spec-without-record": specs,
-        "from-memory-count": [str(sum(1 for a in adrs if re.search(r"from memory", a["text"], re.I)))],
+        "from-memory-count": [str(len(from_memory_open(adrs)))],
     }
     notes = {
         "roadmap-duplicates": "Ids that occur twice in the roadmap pair when the check started.",
@@ -782,7 +793,7 @@ def seed(root, items, md, adrs, history):
         "adr-without-kind-word": "ADR file names without a kind word when the rule started.",
         "test-root-without-adr": "Rust test root files whose leading comment named no ADR when the rule started.",
         "studio-spec-without-record": "Studio spec files whose leading comment named no item or ADR when the rule started.",
-        "from-memory-count": "The number of ADRs that cite from memory. It may fall, never rise.",
+        "from-memory-count": "The number of ADRs that cite from memory and have no 'Sources read' addendum. It may fall, never rise.",
         "adr-rewritten": "ADRs with lines deleted after their creating commit when the append-only rule started.",
         "registration-not-alone": "Registrations whose creating commit changed other files when the lint started.",
         "registration-after-code": "Registrations created after a code commit that cites them when the lint started.",
