@@ -385,3 +385,46 @@ same list in the same order, and the dealing is a function of that list, so thei
 complete. `gate_shards_check.py` requires: shards exactly 1 to N, one M, one digest, the sum of m equal to M, and in
 each shard as many result rows in its times as its m. H2 tests a failure on each of: a missing shard, two M, two
 digests, a sum below M, a shard with fewer rows than its m.
+
+## Addendum 3: results of Amendment 3 (2026-11-18)
+
+**H1 to H3.** 10 unit tests in `scripts/test_gate_shards.py` pass; W1 to W3 pass unchanged; 193 script self-tests in
+all. Locally the 87 tests of rcfd-runner ran as three shards of 29 and `gate_shards_check.py` passed.
+
+**H4.** One dispatched run of the branch at dd2ab837 with 4 shards on windows-latest, GitHub run 44361504875.
+
+| shard | part | build | tests (wall) | job | result |
+|---|---|---|---|---|---|
+| 1 | 1447 | 22 min | 61 min | 87 min | green |
+| 2 | 1447 | 29 min | 78 min | 151 min | red: one test timed out at 3600 s |
+| 3 | 1448 | 18 min | 47 min | 68 min | green |
+| 4 | 1544 | 30 min | 76 min | 111 min | red: one test failed, passed on the re-run (flaky) |
+
+- `complete` is green: shards 1 to 4, one total of 5886, one split digest, parts summing to 5886, and each shard's
+  times hold its part. The times came from run 44276505780, the newest completed gate on main when `decide` ran.
+- Sums over the shards: 5884 passed, 2 failed, 1698 ignored. The last unsharded gate, at 39269587, had 5884 passed,
+  0 failed, 1698 ignored of 5884 tests; this branch has two tests more.
+- Wall time of the run 2 h 32 min, against 4 h 41 min for the unsharded gate of the same day. The last test finished
+  1 h 47 min after the start; the rest of shard 2's job was the attribution re-running its 3600 s test. Runner time
+  417 minutes against 281.
+- The attribution ran in each failed shard and named its own test. `issues` was not asked for.
+
+**The two failures are results of the tests, not of the split.**
+
+- `immersed_solid_f219::a3_two_d_two_strouhal_number` timed out at the 3600 s limit. It took 2066 s in the gate at
+  205889bf and 3060 s in the gate at 39269587, both unsharded. `immersed_unsteady_force_f346::a2t_c1...` took 3230 s
+  at 39269587 and 2880 s here. Two tests of the gate therefore run within a factor of 1.2 of the per-test limit on
+  this runner, sharded or not, and the next slow runner fails the daily gate on them. For the lead: an item for these
+  two tests (a shorter set-up, or a registered limit for them) is due before the daily gate depends on shards.
+- `monitors_filtered_f456::f456_i2_storing_an_increment_of_100_samples_at_1e5` failed once and passed on the re-run.
+
+**What the trial shows about the gain.** The shards were dealt equal recorded time, yet their test steps took 47 to
+78 minutes and their builds 18 to 30 minutes: the runners differ by more than the split can even out, and one test of
+close to an hour is a floor under its shard. Four shards cut the wall time from about 4 h 40 min to about 1 h 50 min
+of testing, not to a quarter, for one and a half times the runner minutes.
+
+**Deviation.** H4 asked for a green `complete` and the sums; both are as registered. The run as a whole is red
+because of the two test failures above.
+
+**Left for the lead.** The default of `shards` for the scheduled run stays 1. Changing it is one expression in
+`gate.yml` (`inputs.shards || '1'`).
