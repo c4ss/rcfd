@@ -459,3 +459,26 @@ F-383 (ADR 0284), sentence to append to its note:
 > ADR 0273 (2026-11-12): Element::mass_rule() proposes tet_4 (Tet4), gauss_3 (Hex8) and tet_14 (Tet10, degree 5), exact for straight-sided tetrahedra and every trilinear hexahedron; the consistent mass is the sum of rho N^T N w det J over Element::integration_points.
 
 No follow-up items.
+
+## Sources read (2026-11-18)
+
+Written by Claude, an agent of the lead's citation item I10; nothing above this heading was changed.
+
+| citation | status | where | finding |
+| --- | --- | --- | --- |
+| House rules, last bullet: "books are cited from memory for orientation only" (no book named there, no value taken) | `not a source` | - | The line names no source; the books it means are the two of the planned stub (rows 5 and 6). |
+| Walkington's tables (arithmetic 4, "UNVERIFIED"): the 14-point degree-5 tetrahedral rule, `a_1 ~ 0.0927352503`, `w_1 ~ 0.0122488405`, `a_2 ~ 0.3108859193`, `w_2 ~ 0.0187813210`, `b ~ 0.0455037041`, `w_3 ~ 0.0070910035`, used as Newton start values | `not obtainable` | Tried: N. J. Walkington, "Quadrature on simplices of arbitrary dimension", report 00-CNA-023, Carnegie Mellon, at `www.math.cmu.edu/~nw0z/publications/00-CNA-023/023abs` (also with a trailing slash, `.html`, the directory and `~nw0z/publications/`): all HTTP 404; `web.archive.org` copy: not reachable from this tool; two web searches found the abstract page only, no full text. | Stays from memory. The constants rest on the ADR's own Newton solution and on check A4 (56 monomials, 8.3e-17). |
+| Keast's tables (the same line of arithmetic 4, the alternative attribution of the same six constants) | `read` | P. Keast, "Moderate-degree tetrahedral quadrature formulas", Comput. Methods Appl. Mech. Engrg. 55 (1986) 339-348: Table 1, p. 342, and section 2, p. 341. Read as a scanned copy at `xinyujames.github.io/page/files/CQEM_Quadrature.pdf` (title page checked: journal, volume, pages, author). | Differs in attribution, see below. The six constants are not in Keast's Table 1. Its only 14-point rule is of degree 4 (N = 4, second block): six points `(1/2, 1/2, 0, 0)` with weight 0.0031746032, four with `a = 0.1005267652`, weight 0.0147649708, four with `a = 0.3143728735`, weight 0.0221397911 (weights sum to 1/6). Its tabulated degree-5 rule has 15 points (orbits 4, 1, 4, 6). Page 341 confirms only the structure the ADR uses (two orbits of four and one of six points, 14 points, the minimum for degree 5) and refers for the constants to Grundmann and Moller (1978) and to a second reference, p. 315; it does not print them. |
+| SplitMix64 (D6, "from memory"): increment `0x9E3779B97F4A7C15`, multipliers `0xBF58476D1CE4E5B9` and `0x94D049BB133111EB`, shifts 30, 27, 31 | `read` (of a second source: the reference implementation, not the paper of Steele, Lea and Flood, 2014, which was not opened; `doi.org/10.1145/2714064.2660195` redirects to the ACM library) | S. Vigna, `splitmix64.c` (2015, public domain), function `next()`, at `prng.di.unimi.it/splitmix64.c` | agrees: the three constants, the three shifts and the order of the steps are the same. The conversion `(z >> 11) 2^-53` to `[0, 1)` is not part of that file and was not checked against a source. |
+| Hughes, The Finite Element Method (1987) (planned stub, "cited from memory, to be confirmed by the implementer"): named as a method text, no constant, equation or table value taken | `not obtainable` | Tried: a web search for an open full text; it returned library catalogue records and subscription platforms only (ProQuest, Knovel). The book is in print (Dover reprint, 2000) and not open. | Stays from memory. Nothing in the ADR depends on it: the shape functions, rules and `D` are derived in "Arithmetic before this registration" and checked by A1 to A10. |
+| Zienkiewicz and Taylor, The Finite Element Method, vol. 1 (planned stub, the same sentence): named as a method text, no value taken | `not obtainable` | Tried: a web search for an open full text; it returned the publisher's shop pages and library catalogue records with campus-only access. | Stays from memory. Nothing in the ADR depends on it, as in the row above. |
+
+Differences for the lead:
+
+- Attribution of the `tet_14` start values (arithmetic 4, "Walkington's or Keast's tables"). In the ADR: `a_1 ~ 0.0927352503`, `a_2 ~ 0.3108859193`,
+  `b ~ 0.0455037041`, weights `0.0122488405`, `0.0187813210`, `0.0070910035`, degree 5. In Keast (1986), Table 1, p. 342: no such rule; the 14-point
+  rule there is of degree 4 with `a = 0.1005267652`, `0.3143728735`, the mid-edge points `(1/2, 1/2, 0, 0)` and weights `0.0147649708`,
+  `0.0221397911`, `0.0031746032`. So "Keast's tables" is not where these constants are printed; whether Walkington's report prints them could not
+  be read. No number in the code is wrong by this reading: the code uses the Newton-refined constants `TET14_A1`, `TET14_W1`, `TET14_A2`,
+  `TET14_W2`, `TET14_B`, `TET14_W3` of `crates/rcfd-fem/src/quadrature.rs` (lines 113 to 120, rule `tet_14`), whose comment says "recalled from
+  memory" and names no source, and they are checked by A4 and N1 and mutation M2 in `crates/rcfd-fem/tests/sb_elements.rs`.
