@@ -818,13 +818,12 @@ fn list_inputs(solver: &Path, snapshot: &Path, case_dir: &Path, set: &[String]) 
     Ok(v)
 }
 
-#[cfg(test)]
+#[cfg(all(test, windows))]
 mod tests {
     use super::*;
 
     /// ADR 0739 Diagnosis 1, check D1: a final record that cannot be written is reported, so `Worker::step` holds the
     /// terminal status back; the held file is not replaced by an empty record.
-    #[cfg(windows)]
     #[test]
     fn final_record_precedes_the_terminal_status() {
         use std::os::windows::fs::OpenOptionsExt;
