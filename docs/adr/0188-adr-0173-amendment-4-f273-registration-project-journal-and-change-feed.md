@@ -405,3 +405,10 @@ writers one of them could go 250 ms without the lock. Fix: `LOCK_WAIT` raised fr
 (`atomic::EDIT_LOCK_WAIT`). It stays below `LOCK_STALE` (5 s), so the held-lock test's bound holds. No test was edited; the
 four tests of `journal_f273` then passed in 5 of 5 runs. The lock stays unfair: under heavier contention a line can still be
 appended without `seq`, which the journal's best-effort contract allows.
+
+## Answers of the maintainer (2026-11-18)
+
+Five decisions on the priority items F-270 to F-275 were put to the maintainer on 2026-11-18, each with options and a recommendation, and he took the recommended option on all five. The part that concerns this record:
+
+- The answers of 2026-11-06 to Q3 and Q5 pointed at F-293, which is retired with the worktree `studio-case-lineage` (both target the egui Studio removed on 2026-11-16). The lead checks which of the deferred pieces the Electron Studio already has (its actor on run starts and controls, a feed panel, a notes list) and issues what is missing as Studio items. The run worker of Q5 belonged to the egui Studio and lapses.
+- Q1 and Q2 stand as built, on the written recommendations. Q4 stays (c). Q7 was settled by F-275 (`read_feed` with `from_seq`).

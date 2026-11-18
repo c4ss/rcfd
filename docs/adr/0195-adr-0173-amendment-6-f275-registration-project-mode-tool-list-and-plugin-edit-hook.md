@@ -496,3 +496,11 @@ limit, check or result above.
 
 The other known misses of addendum 1 (the plugin installed from the marketplace; `NotebookEdit` and `MultiEdit` in a real
 session) were not asked and stand as recorded.
+
+## Answers of the maintainer (2026-11-18)
+
+Five decisions on the priority items F-270 to F-275 were put to the maintainer on 2026-11-18, each with options and a recommendation, and he took the recommended option on all five. The part that concerns this record:
+
+- Q2 is accepted by the maintainer himself: the four workflow tools and the restart, interpolation and checkpoint options of `run_headless` are not offered in project mode until project equivalents exist. F-287 gives the restart path.
+- The hook under the bypass-permissions modes stays untested, as accepted on 2026-11-06. That it is untested is to be stated in the plugin's documentation; the lead issues that.
+- The other items of "Decisions needed" that were not asked on 2026-11-06 (Q1, Q3, Q4, Q8) stand as built, on the written recommendations.
