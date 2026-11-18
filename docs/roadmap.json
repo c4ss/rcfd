@@ -2741,7 +2741,7 @@
     ],
     "status": "todo",
     "acceptance": "A moving-mesh case with [solver.consistent_correctors] enabled runs through the case tree and reproduces the library falling-block result; the edit to ADR 0156 A9b and the Studio scope test are made only with the maintainer's approval.",
-    "note": "From ADR 0223 question 2. NEEDS THE USER: it edits a registered check (ADR 0156 A9b) and a Studio scope test."
+    "note": "From ADR 0223 question 2. NEEDS THE USER: it edits a registered check (ADR 0156 A9b) and a Studio scope test. Maintainer (2026-11-18): held for re-scoping: the Studio scope test it would edit belonged to the egui Studio removed on 2026-11-16 (F-449). The lead rewrites the acceptance before it is issued."
   },
   {
     "id": "F-322",
@@ -2823,7 +2823,7 @@
     ],
     "status": "todo",
     "acceptance": "`compressible_bc = \"impedance\"` with `impedance_value` runs the ADR 0233 tube from a case file with R within 1e-2 of the closed form for z/(rho c) = 1/3, 1, 3; located validate errors for a negative impedance and a non-positive pressure; every existing case file's settings hash and written text unchanged after the registered normalisation of the new key at its default. Sponge layer (ADR 0237): A case file selects a sponge layer in front of a boundary patch (thickness, form, target reflection); the ADR 0237 tube check runs from a case file with a reflection below 1 percent; located validate errors for a non-positive thickness, a reflection outside (0, 1) and the matched form with a moving reference; every existing case file's settings hash and written text unchanged after the registered normalisation of the new keys at their defaults. max_dt takes the sponge rate into account. Mass-spring-damper wall (ADR 0243): a case file selects the wall on a patch (mass, stiffness, damping); the M2 check of ADR 0243 runs from a case file within 2 percent in magnitude and phase; one oblique angle is checked against its closed form; a wall together with a sponge layer runs (the two step paths merged).",
-    "note": "From ADR 0233 question 1, recommendation taken on the maintainer's standing instruction of 2026-11-11. NEEDS THE USER before merge: the new key needs an edit of the registered hash test case_hashes_w48u.rs."
+    "note": "From ADR 0233 question 1, recommendation taken on the maintainer's standing instruction of 2026-11-11. NEEDS THE USER before merge: the new key needs an edit of the registered hash test case_hashes_w48u.rs. Maintainer (2026-11-18): the golden, schema or hash-table edit this item needs is approved under the class rule of agent rules version 2, rule 3: a change that only adds entries is re-recorded by the lead, with the diff in the ledger. The item may be issued."
   },
   {
     "id": "F-331",
@@ -2951,7 +2951,7 @@
     ],
     "status": "todo",
     "acceptance": "design_uq and design_sobol tools run uq::run and sensitivity::run on a named evaluator (the reduced-order fan evaluator first) inside the sandbox, with the ledger, and the MCP tools-list goldens are updated by a registered edit.",
-    "note": "From ADR 0240 question 2, recommendation taken on the maintainer's standing instruction of 2026-11-11. NEEDS THE USER before merge: it edits the MCP tools-list goldens."
+    "note": "From ADR 0240 question 2, recommendation taken on the maintainer's standing instruction of 2026-11-11. NEEDS THE USER before merge: it edits the MCP tools-list goldens. Maintainer (2026-11-18): the golden, schema or hash-table edit this item needs is approved under the class rule of agent rules version 2, rule 3: a change that only adds entries is re-recorded by the lead, with the diff in the ledger. The item may be issued."
   },
   {
     "id": "F-340",
@@ -3046,7 +3046,7 @@
     ],
     "status": "todo",
     "acceptance": "A specification of the card (fields, sign, required surface elements) from an open source is placed in the repository; the deck writes it beside RCFDQ; the tube heat rate after a round trip through the repository reader matches the fluid heat rate to 0.1 percent",
-    "note": "Priority P3. Size S. Area: io. Opened by ADR 0244: RCFDQ is the repository's own card; no vendor heat-flux card layout is specified in the repository, so none was written. NEEDS THE USER: an open specification of the card has to be placed in the repository first (clean-room rule)."
+    "note": "Priority P3. Size S. Area: io. Opened by ADR 0244: RCFDQ is the repository's own card; no vendor heat-flux card layout is specified in the repository, so none was written. NEEDS THE USER: an open specification of the card has to be placed in the repository first (clean-room rule). Maintainer (2026-11-18): parked until an open specification of the card is in the repository. Not on the fan path."
   },
   {
     "id": "F-348",
@@ -3243,7 +3243,7 @@
     ],
     "status": "todo",
     "acceptance": "`build_second_order` builds the bounded form of ADR 0254, the refusal of the unbounded form is removed, and the checks of ADR 0234 (A1, V1 to V4) and ADR 0239 are measured again and reported next to the old numbers.",
-    "note": "NEEDS THE USER. From ADR 0254 questions 1 and 2. Needs the maintainer's decision: it changes the recorded numbers of a merged opt-in (circular Couette e(96) 4.243e-4 to 4.232e-4, face-flux error 1.612e-4 to 3.078e-4; the DFG 2D-1 values asserted to nine digits in immersed_unsteady_force_f346.rs)."
+    "note": "NEEDS THE USER. From ADR 0254 questions 1 and 2. Needs the maintainer's decision: it changes the recorded numbers of a merged opt-in (circular Couette e(96) 4.243e-4 to 4.232e-4, face-flux error 1.612e-4 to 3.078e-4; the DFG 2D-1 values asserted to nine digits in immersed_unsteady_force_f346.rs). Maintainer (2026-11-18): held. The default change is not approved now: it moves existing flow results, and it waits until the fan path needs it. Not to be issued."
   },
   {
     "id": "F-365",
@@ -3255,7 +3255,7 @@
     ],
     "status": "todo",
     "acceptance": "Every limit not stated here is registered in the ADR before the run. Needs the maintainer's lift of the bit-identical default for moving compressible tree runs (ADR 0207 Q2 (b)). The moving compressible step of the case tree takes max_dt_ale() by default, with [dynamic_mesh.compressible] time_step = \"absolute\" restoring the step of ADR 0191; the library loops of ADR 0191's equality tests are restated by a registered edit (the old tests kept as ignored records); a tree run equals the library run to 1e-12 for both values; fixed-mesh compressible runs and incompressible runs are bit-identical (baseline hashes and ADR 0191's D0 unchanged); the CFL number of the piston cell of the Mach 0.2 piston stays within the registered bound of the set value over the stroke.",
-    "note": "From ADR 0257 question 1 (ADR 0207 Q2 (b)). NEEDS THE USER: it changes the bits of existing moving compressible runs."
+    "note": "From ADR 0257 question 1 (ADR 0207 Q2 (b)). NEEDS THE USER: it changes the bits of existing moving compressible runs. Maintainer (2026-11-18): held. The default change is not approved now: it moves existing flow results, and it waits until the fan path needs it. Not to be issued."
   },
   {
     "id": "F-366",
@@ -3266,7 +3266,7 @@
     ],
     "status": "todo",
     "acceptance": "`[solver.consistent_correctors]` has the keys enabled, periodic, body_force, non_orthogonal, component_diagonal and face_jump with defaults that leave every existing case's hash and result unchanged; sim.rs sets `PimpleSettings::set_consistent` from it and reports each `ConsistentRefusal` of `ConsistentCorrectors::conflicts` at `solver.consistent_correctors.<flag>`; overset.rs reads `consistent_flags().enabled`; the three older PimpleSettings fields are removed with amendments to ADR 0214 and ADR 0223; the schema golden edit is made only with the maintainer's approval; defaults bit-identical.",
-    "note": "The remaining half of F-322 (ADR 0258). NEEDS THE USER before merge: the schema golden edit."
+    "note": "The remaining half of F-322 (ADR 0258). NEEDS THE USER before merge: the schema golden edit. Maintainer (2026-11-18): the golden, schema or hash-table edit this item needs is approved under the class rule of agent rules version 2, rule 3: a change that only adds entries is re-recorded by the lead, with the diff in the ledger. The item may be issued."
   },
   {
     "id": "F-367",
@@ -4356,7 +4356,7 @@
     ],
     "status": "todo",
     "acceptance": "With the maintainer's approval, the matched forms in SpongeFrame::AttachedToMesh use the memory of the lab frame (ADR 0344); the F-341 matched records are re-recorded once with that approval, the plain form and every run without motion stay bit-identical, and the ADR 0344 checks pass unchanged.",
-    "note": "NEEDS THE USER: it changes the results of the F-341 matched forms (re-recording their records)."
+    "note": "NEEDS THE USER: it changes the results of the F-341 matched forms (re-recording their records). Maintainer (2026-11-18): held. The default change is not approved now: it moves existing flow results, and it waits until the fan path needs it. Not to be issued."
   },
   {
     "id": "F-447",
@@ -4403,7 +4403,7 @@
     ],
     "status": "todo",
     "acceptance": "An Electron shell in TypeScript over the service and the bulk route chosen by F-447 passes every parity check of ADR 0350 section 5 (the docs/ui-restart-plan.md section 6 list and the Studio checks added since), automated with Playwright where a check can be automated and by the maintainer's view-and-report where it cannot; its field values equal the Rust reader's bit for bit; rcfd-studio is frozen while it is built.",
-    "note": "ADR 0350 section 5. NEEDS THE USER: starts only on the maintainer's go-ahead after a viable F-447. ADR 0350 addendum 1 (2026-11-12) measured both bulk routes as fast enough; recommended: the Node reader of `store.rts` (R2) for local projects, `data.*` (R1) for a remote service, monitors fetched once and then by increments. Open before the start: the maintainer's go-ahead, QA1 (the cost of `monitors.get`) and QA2 (the route). F-456 (ADR 0353): the history is fetched once, then `since` increments at 0.3 ms; QA1 is answered. ADR 0800 (2026-11-16) splits the work into F-800 to F-823; F-448 depends on the parity subset."
+    "note": "ADR 0350 section 5. NEEDS THE USER: starts only on the maintainer's go-ahead after a viable F-447. ADR 0350 addendum 1 (2026-11-12) measured both bulk routes as fast enough; recommended: the Node reader of `store.rts` (R2) for local projects, `data.*` (R1) for a remote service, monitors fetched once and then by increments. Open before the start: the maintainer's go-ahead, QA1 (the cost of `monitors.get`) and QA2 (the route). F-456 (ADR 0353): the history is fetched once, then `since` increments at 0.3 ms; QA1 is answered. ADR 0800 (2026-11-16) splits the work into F-800 to F-823; F-448 depends on the parity subset. Maintainer (2026-11-18): the go-ahead was given on 2026-11-16 with the Studio block (ADR 0800). This item tracks the parity subset of F-800 to F-838 only."
   },
   {
     "id": "F-449",
@@ -4438,7 +4438,7 @@
     ],
     "status": "todo",
     "acceptance": "rcfd duct-modes reads a saved pressure time series on a duct section and writes the rcfd-duct-modes export; on the ADR 0351 X1 field it reproduces the library's export bit for bit; located errors for a section outside the duct and a non-integer number of periods; the CLI help golden updated with the maintainer's approval.",
-    "note": "From ADR 0351 question 1. NEEDS THE USER: the command's help text changes the CLI golden."
+    "note": "From ADR 0351 question 1. NEEDS THE USER: the command's help text changes the CLI golden. Maintainer (2026-11-18): the golden, schema or hash-table edit this item needs is approved under the class rule of agent rules version 2, rule 3: a change that only adds entries is re-recorded by the lead, with the diff in the ledger. The item may be issued."
   },
   {
     "id": "F-452",
@@ -4622,7 +4622,7 @@
     ],
     "status": "todo",
     "acceptance": "ConsistentCorrectors::all() with periodic accepts non-orthogonal correctors, the component diagonal and face jumps with periodic pressure faces without PimpleSettings::consistent_periodic_extensions, which is removed; the assertions of rows 4, 7 and 11 in consistent_value_f322 v2 and r3 are retired by an amendment to ADR 0258 approved by the lead; ADR 0360's identities pass unchanged; defaults bit-identical.",
-    "note": "From ADR 0360 question 1. NEEDS THE USER: it retires assertions of existing tests (consistent_value_f322 v2 and r3, rows 4, 7, 11) by an amendment to ADR 0258, which is the maintainer's to approve."
+    "note": "From ADR 0360 question 1. NEEDS THE USER: it retires assertions of existing tests (consistent_value_f322 v2 and r3, rows 4, 7, 11) by an amendment to ADR 0258, which is the maintainer's to approve. Maintainer (2026-11-18): approved: the assertions are retired by an amendment to ADR 0258 written and committed before the change. The item may be issued."
   },
   {
     "id": "F-468",
@@ -4665,8 +4665,8 @@
     "deps": [],
     "status": "partial",
     "acceptance": "Every limit not stated here is registered in the ADR before the run. A test shows whether the coarsest dense LU of rcfd_linalg::amg (DenseLu) interchanges rows on each fluid case of the baseline set and records where; DenseLu::solve applies every interchange before the forward substitution (as rcfd_linalg::amg_elastic after ADR 0305 amendment 1) so that a coarsest matrix that needs interchanges is solved to a relative residual of 1e-12; the rcfd-linalg, rcfd-fv and rcfd-api tests and the baseline hashes are run, and any changed hash is reported to the maintainer, not re-recorded.",
-    "gap": "The default of DenseLu is not switched to apply interchanges first (opt-in only). Still to do: switch the default, run the AMG-using rcfd-fv and rcfd-api test files in the gate, and give new records for ADR 0363 H1, H2, H3a and ADR 0369 L1, which assert the old behaviour. Needs the user.",
-    "note": "PARTIAL (ADR 0369, 2026-11-12, with F-474). The defect is shown in rcfd_linalg::amg DenseLu: whole-row swaps in the factorisation with interleaved interchanges in the solve give (-13, 15, -5) for (1, 1, 1) on a 3 x 3 SPD matrix, a relative residual of 4e-3 on a 20 x 20 SPD tridiagonal, and 0.21 on the coarsest operator of the T pressure system of ADR 0363, where it is the cause of the AMG-CG breakdown (F-474). Interchanges at step 0 alone are harmless. On the baseline set only kepsilon_channel (coarsest 56) and cavity-coupled (Schur, coarsest 71) reach an AMG, and neither interchanges (scratch instrumentation). The corrected order is built as the opt-in AmgSettings::coarse_lu_interchanges_first (5e-15 and 9e-19 relative residual). With it as the default on a scratch copy, baseline_hashes, case_hashes_w48u, rcfd-linalg (except ADR 0369 L1, which pins the old default), rcfd-fv lib and the defaults tests f301/f367 pass, so no registered hash moves; the T bounded run of ADR 0268/0363 changes (no stop, different from step 2917). Remaining (NEEDS THE USER): switch the default and run the AMG-using rcfd-fv/rcfd-api test files in the gate; ADR 0363's records H1, H2 and H3a and ADR 0369 L1 assert the old behaviour. NEEDS THE USER: switching the default (no registered hash moves; ADR 0363's stop records and ADR 0369 L1 would need new records)."
+    "gap": "Switching the default is approved and not yet made: switch it, run the AMG-using rcfd-fv and rcfd-api test files, and give ADR 0363 H1, H2, H3a and ADR 0369 L1 new records.",
+    "note": "PARTIAL (ADR 0369, 2026-11-12, with F-474). The defect is shown in rcfd_linalg::amg DenseLu: whole-row swaps in the factorisation with interleaved interchanges in the solve give (-13, 15, -5) for (1, 1, 1) on a 3 x 3 SPD matrix, a relative residual of 4e-3 on a 20 x 20 SPD tridiagonal, and 0.21 on the coarsest operator of the T pressure system of ADR 0363, where it is the cause of the AMG-CG breakdown (F-474). Interchanges at step 0 alone are harmless. On the baseline set only kepsilon_channel (coarsest 56) and cavity-coupled (Schur, coarsest 71) reach an AMG, and neither interchanges (scratch instrumentation). The corrected order is built as the opt-in AmgSettings::coarse_lu_interchanges_first (5e-15 and 9e-19 relative residual). With it as the default on a scratch copy, baseline_hashes, case_hashes_w48u, rcfd-linalg (except ADR 0369 L1, which pins the old default), rcfd-fv lib and the defaults tests f301/f367 pass, so no registered hash moves; the T bounded run of ADR 0268/0363 changes (no stop, different from step 2917). Remaining (NEEDS THE USER): switch the default and run the AMG-using rcfd-fv/rcfd-api test files in the gate; ADR 0363's records H1, H2 and H3a and ADR 0369 L1 assert the old behaviour. NEEDS THE USER: switching the default (no registered hash moves; ADR 0363's stop records and ADR 0369 L1 would need new records). Maintainer (2026-11-18): the default change is approved; its registration lists the changed results case by case and the records it re-records. The item may be issued."
   },
   {
     "id": "F-472",
@@ -4769,7 +4769,7 @@
     ],
     "status": "todo",
     "acceptance": "An rcfd-surface-series file carrying the axial velocity with the pressure lets a drive built from one section split the entering and returning waves of a duct field within 1 percent of the closed form; files without velocity read and drive bit-identically as before.",
-    "note": "From ADR 0378 question 1. NEEDS THE USER: it changes the rcfd-surface-series format. Size M."
+    "note": "From ADR 0378 question 1. NEEDS THE USER: it changes the rcfd-surface-series format. Size M. Maintainer (2026-11-18): the golden, schema or hash-table edit this item needs is approved under the class rule of agent rules version 2, rule 3: a change that only adds entries is re-recorded by the lead, with the diff in the ledger. The item may be issued."
   },
   {
     "id": "F-481",
@@ -6100,7 +6100,7 @@
     "status": "partial",
     "acceptance": "Every limit not stated here is registered in the ADR before the run. rcfd_fem::builders gains the structured Tet10 blade mesh of ADR 0500 D1 for an AxialFan with given divisions, with the sets hub, tip, pressure and suction; the solid case file gains a centrifugal load (axis, origin, speed) and a mesh source fan_blade (a ComputerFan or its defaults, the blade index and the divisions); the F-387 blade run from a file gives the bits of the library run, the existing solid-case and schema tests pass unedited, and docs/solid-case-file.md and docs/structural-solver.md describe the keys.",
     "gap": "The case-file half is not built: the centrifugal load (axis, origin, speed), the mesh source fan_blade (fan, blade, divisions), the file-versus-library bit test and the keys in docs/solid-case-file.md. It needs the user to approve the case-file keys proposed in ADR 0505.",
-    "note": "Structural solver, basic tier. Follow-up of F-387 (ADR 0500, 2026-11-14). Library half done in ADR 0505, 2026-11-14: rcfd_fem::builders has fan_blade_tet4, fan_blade_tet10 and computer_fan_blade_tet10 (the structured Tet10 blade mesh of ADR 0500 D1 for an AxialFan, or blade k of a ComputerFan, with the node sets all, hub, tip and the surface sets hub, tip, pressure and suction; zero divisions, n_c below 2, an invalid blade and a blade index out of range refused). At the F-387 divisions the meshes, the sets and the F-387 results (reactions, mean tip displacements, first frequency) equal the test's construction bit for bit; the four surface sets are disjoint and cover the boundary exactly (472 and 1720 faces; vector area sum 3e-16 of the total area); identities 1e-11 and 1e-10. Seven mutations caught. Section in docs/structural-solver.md. NEEDS THE USER for the case-file half: centrifugal load (axis, origin, speed) and mesh source fan_blade (fan, blade, divisions), proposed in the ADR open questions; the file-versus-library bit test and the solid-case-file.md keys follow with them. NEEDS THE USER for the case-file keys ([mesh] generator = \"fan_blade\", [loads.x] kind = \"centrifugal\"; proposal in ADR 0505)."
+    "note": "Structural solver, basic tier. Follow-up of F-387 (ADR 0500, 2026-11-14). Library half done in ADR 0505, 2026-11-14: rcfd_fem::builders has fan_blade_tet4, fan_blade_tet10 and computer_fan_blade_tet10 (the structured Tet10 blade mesh of ADR 0500 D1 for an AxialFan, or blade k of a ComputerFan, with the node sets all, hub, tip and the surface sets hub, tip, pressure and suction; zero divisions, n_c below 2, an invalid blade and a blade index out of range refused). At the F-387 divisions the meshes, the sets and the F-387 results (reactions, mean tip displacements, first frequency) equal the test's construction bit for bit; the four surface sets are disjoint and cover the boundary exactly (472 and 1720 faces; vector area sum 3e-16 of the total area); identities 1e-11 and 1e-10. Seven mutations caught. Section in docs/structural-solver.md. NEEDS THE USER for the case-file half: centrifugal load (axis, origin, speed) and mesh source fan_blade (fan, blade, divisions), proposed in the ADR open questions; the file-versus-library bit test and the solid-case-file.md keys follow with them. NEEDS THE USER for the case-file keys ([mesh] generator = \"fan_blade\", [loads.x] kind = \"centrifugal\"; proposal in ADR 0505). Maintainer (2026-11-18): the golden, schema or hash-table edit this item needs is approved under the class rule of agent rules version 2, rule 3: a change that only adds entries is re-recorded by the lead, with the diff in the ledger. The item may be issued."
   },
   {
     "id": "F-594",
@@ -6159,7 +6159,7 @@
     "status": "partial",
     "acceptance": "Every limit not stated here is registered in the ADR before the run. A warping degree of freedom for Beam2 (a 14-DOF element), opt-in, with per-section Wagner coefficients from the section properties: the lateral-torsional buckling moment of a simply supported I beam under uniform moment equals (pi/L) sqrt(E I_z G J) (1 + (pi^2 E C_w)/(G J L^2))^(1/2) within 1 percent at 16 elements (the clause of F-558 missed without warping); every result without the option bit-identical.",
     "gap": "Mutation M1 was caught only by the post-run amendment M1'. The case key (F-625), static, modes and pre-stressed modes (F-626) and monosymmetric sections (F-627) are not built; buckling only. Done is the maintainer's call.",
-    "note": "Structural solver, advanced tier. PARTIAL. ADR 0546, 2026-11-15: opt-in warping unknown for Beam2 (the 14-unknown element, cubic Hermite twist with E C_w, the warping unknowns numbered after the model's six-unknown DofMap, `rcfd_fem::beam_warping::buckling_factors`) with per-section Wagner coefficients (`WarpingSection::doubly_symmetric_i` from the plate dimensions, zero by symmetry). The I-beam lateral-torsional buckling under uniform moment is 5.9e-4 of (pi/L) sqrt(E I_z G J (1 + pi^2 E C_w/(G J L^2))) at 16 elements (8.3e-4 at 8; 1.1e-3 and 2.0e-4 at L 1.5 and 6), against the -19.2 percent of ADR 0508 without warping. Saint-Venant control (C_w = 0) 5.9e-4 of M_0 and 1.6e-3 of the F-558 value. Warping restrained 1.61 of free, within the fixed-fixed bound. Torque cantilever 1.1e-6. Frame invariance 5e-16. Mixed model with a non-warping beam exact (M1', amendment 1: the first M1 missed at 1.5e-9 against 1e-9 because of the eigensolver tolerance, kept as an ignored record). Fifteen refusals (shared nodes with other elements, kinks, the transformation path, torsion in the pre-stress). Defaults bit-identical (12 digests). Eleven of eleven mutations caught. Buckling only; no case-file key. Partial under the standing rule: M1 was caught only by the post-run amendment M1'; done is the maintainer's call. Follow-ups F-625 (case key, NEEDS THE USER), F-626 (static, modes, pre-stressed modes), F-627 (monosymmetric sections)."
+    "note": "Structural solver, advanced tier. PARTIAL. ADR 0546, 2026-11-15: opt-in warping unknown for Beam2 (the 14-unknown element, cubic Hermite twist with E C_w, the warping unknowns numbered after the model's six-unknown DofMap, `rcfd_fem::beam_warping::buckling_factors`) with per-section Wagner coefficients (`WarpingSection::doubly_symmetric_i` from the plate dimensions, zero by symmetry). The I-beam lateral-torsional buckling under uniform moment is 5.9e-4 of (pi/L) sqrt(E I_z G J (1 + pi^2 E C_w/(G J L^2))) at 16 elements (8.3e-4 at 8; 1.1e-3 and 2.0e-4 at L 1.5 and 6), against the -19.2 percent of ADR 0508 without warping. Saint-Venant control (C_w = 0) 5.9e-4 of M_0 and 1.6e-3 of the F-558 value. Warping restrained 1.61 of free, within the fixed-fixed bound. Torque cantilever 1.1e-6. Frame invariance 5e-16. Mixed model with a non-warping beam exact (M1', amendment 1: the first M1 missed at 1.5e-9 against 1e-9 because of the eigensolver tolerance, kept as an ignored record). Fifteen refusals (shared nodes with other elements, kinks, the transformation path, torsion in the pre-stress). Defaults bit-identical (12 digests). Eleven of eleven mutations caught. Buckling only; no case-file key. Partial under the standing rule: M1 was caught only by the post-run amendment M1'; done is the maintainer's call. Follow-ups F-625 (case key, NEEDS THE USER), F-626 (static, modes, pre-stressed modes), F-627 (monosymmetric sections). Maintainer (2026-11-18): the case key of its follow-up F-625 is approved under the class rule for additive golden edits (agent rules version 2, rule 3)."
   },
   {
     "id": "F-599",
@@ -6239,7 +6239,7 @@
     ],
     "status": "todo",
     "acceptance": "Every limit not stated here is registered in the ADR before the run. A [fatigue] section with method = \"narrow-band\" or \"dirlik\" and stress = a component or a plane normal reports the damage rate and the life 1/rate per integration point; stress = \"von-mises\" is refused with the reason of ADR 0516; a case without the section keeps its bits and the baseline hashes are unchanged; the schema golden is updated with the maintainer's approval.",
-    "note": "Structural solver, advanced tier. Follow-up of F-589 (ADR 0516, 2026-11-14). NEEDS THE USER: a case-file key and schema golden change."
+    "note": "Structural solver, advanced tier. Follow-up of F-589 (ADR 0516, 2026-11-14). NEEDS THE USER: a case-file key and schema golden change. Maintainer (2026-11-18): the golden, schema or hash-table edit this item needs is approved under the class rule of agent rules version 2, rule 3: a change that only adds entries is re-recorded by the lead, with the diff in the ledger. The item may be issued."
   },
   {
     "id": "F-606",
@@ -6368,7 +6368,7 @@
     ],
     "status": "todo",
     "acceptance": "Every limit not stated here is registered in the ADR before the run. A case file names reduced part files of ADR 0469 and the host node sets they attach to (key superelements) and the interface enrichment of ADR 0532 (key interface_enrichment); the bar of ADR 0536 run from a case file gives the library's results in bits; the schema golden re-recorded with the maintainer's approval; a case without the keys gives every result bit-identical.",
-    "note": "Structural solver, advanced tier. Follow-up of F-553 (ADR 0536, 2026-11-14). NEEDS THE USER: the schema golden is re-recorded only with the maintainer's approval."
+    "note": "Structural solver, advanced tier. Follow-up of F-553 (ADR 0536, 2026-11-14). NEEDS THE USER: the schema golden is re-recorded only with the maintainer's approval. Maintainer (2026-11-18): the golden, schema or hash-table edit this item needs is approved under the class rule of agent rules version 2, rule 3: a change that only adds entries is re-recorded by the lead, with the diff in the ledger. The item may be issued."
   },
   {
     "id": "F-617",
@@ -6425,7 +6425,7 @@
     ],
     "status": "todo",
     "acceptance": "Every limit not stated here is registered in the ADR before the run. A case-file key [material] kind = \"hyperelastic\" (energy, mu, kappa, c10, c01) with the block formulation = \"bbar\"; the schema golden re-recorded with the maintainer's approval; a case without the key gives every result bit-identical.",
-    "note": "Structural solver, advanced tier. Follow-up of F-425 (ADR 0541, 2026-11-15). NEEDS THE USER: a schema golden change."
+    "note": "Structural solver, advanced tier. Follow-up of F-425 (ADR 0541, 2026-11-15). NEEDS THE USER: a schema golden change. Maintainer (2026-11-18): the golden, schema or hash-table edit this item needs is approved under the class rule of agent rules version 2, rule 3: a change that only adds entries is re-recorded by the lead, with the diff in the ledger. The item may be issued."
   },
   {
     "id": "F-622",
@@ -6472,7 +6472,7 @@
     ],
     "status": "todo",
     "acceptance": "Every limit not stated here is registered in the ADR before the run. A case-file key opts a Beam2 block into the warping unknown of ADR 0546 on the buckling path; the case with the key reproduces the library result bit for bit, and every case without it keeps its hash.",
-    "note": "Structural solver, advanced tier. Follow-up of F-598 (ADR 0546, 2026-11-15)."
+    "note": "Structural solver, advanced tier. Follow-up of F-598 (ADR 0546, 2026-11-15). Maintainer (2026-11-18): the golden, schema or hash-table edit this item needs is approved under the class rule of agent rules version 2, rule 3: a change that only adds entries is re-recorded by the lead, with the diff in the ledger. The item may be issued."
   },
   {
     "id": "F-626",
@@ -6610,7 +6610,7 @@
     "status": "partial",
     "acceptance": "Every limit not stated here is registered in the ADR before the run. The growth of 4.4e-3 of p of the point-wise stress difference against the finite-strain reference at r = 1.05 (ADR 0549 F4, equal in sigma_r and sigma_theta) diagnosed: its scaling with p/E, its presence in a one-dimensional F-bar proxy, and whether a J-based volumetric part of the law removes it, each with a registered limit; the default element and every existing result bit-identical.",
     "gap": "Control J4 (J variant against the library law within 1e-5 at p/100) missed at 1.30e-4: the laws differ at first order in strain. An opt-in J-based volumetric creep law (F-658) is not built and needs the user (material schema golden).",
-    "note": "Structural solver, advanced tier. PARTIAL. ADR 0568, 2026-11-15: the growth of 4.4e-3 of p of ADR 0549's point-wise difference (F4, at r = 1.0545) diagnosed as a pressure error of the F-bar Hex8 that is finite-strain in origin and O(h) in size: the law's pressure kappa tr E_bar contains kappa sum e'^2 (tr E = ln J + sum e'^2 at second order), which varies inside an element and which the continuum absorbs in J, while the F-bar gives the element one J. Scaling (library runs at p, p/10, p/100): F4/p falls by 0.1005 and 0.01004, the finite-strain part isolated by the pair of ADR 0563 scales by 0.0914 against the linear 0.0909 (limit 5 percent) and is the whole growth (to 4e-5); worst point at r = 1.0545, predicted 5 r0/4 = 1.0543 by the graded mesh. One-dimensional F-bar proxy (written in the test): the same growth to 4.6e-4 at the same point, gone without F-bar (1.1e-6), halved on twice the elements (0.4996), equal to the kinematic mismatch kappa (Q - Q_mean)/p within 1.3e-2. A J-based volumetric part (kappa ln J C^-1, in the proxy only, opt-in by construction) removes it: 5.9e-5 against a reference of the same law (limit 3e-4), although the mismatch stays in the kinematics (4.3e-3). Partial by the rule: the control J4 (the J variant and the library's law within 1e-5 at p/100) missed at 1.30e-4, recorded as known miss: the laws differ at first order in the strain (S_zz at the bore, linear in p/E), the estimate had looked at S_r only. All five mutations caught (three library, two test). Test only (si_fbar_drift.rs, helpers copied from si_fbar_bore.rs); no source file changed; rcfd-fem tests, baseline_hashes, docs_site, fmt and clippy pass. Follow-up F-658 (opt-in J-based volumetric creep law; NEEDS THE USER: material schema golden)."
+    "note": "Structural solver, advanced tier. PARTIAL. ADR 0568, 2026-11-15: the growth of 4.4e-3 of p of ADR 0549's point-wise difference (F4, at r = 1.0545) diagnosed as a pressure error of the F-bar Hex8 that is finite-strain in origin and O(h) in size: the law's pressure kappa tr E_bar contains kappa sum e'^2 (tr E = ln J + sum e'^2 at second order), which varies inside an element and which the continuum absorbs in J, while the F-bar gives the element one J. Scaling (library runs at p, p/10, p/100): F4/p falls by 0.1005 and 0.01004, the finite-strain part isolated by the pair of ADR 0563 scales by 0.0914 against the linear 0.0909 (limit 5 percent) and is the whole growth (to 4e-5); worst point at r = 1.0545, predicted 5 r0/4 = 1.0543 by the graded mesh. One-dimensional F-bar proxy (written in the test): the same growth to 4.6e-4 at the same point, gone without F-bar (1.1e-6), halved on twice the elements (0.4996), equal to the kinematic mismatch kappa (Q - Q_mean)/p within 1.3e-2. A J-based volumetric part (kappa ln J C^-1, in the proxy only, opt-in by construction) removes it: 5.9e-5 against a reference of the same law (limit 3e-4), although the mismatch stays in the kinematics (4.3e-3). Partial by the rule: the control J4 (the J variant and the library's law within 1e-5 at p/100) missed at 1.30e-4, recorded as known miss: the laws differ at first order in the strain (S_zz at the bore, linear in p/E), the estimate had looked at S_r only. All five mutations caught (three library, two test). Test only (si_fbar_drift.rs, helpers copied from si_fbar_bore.rs); no source file changed; rcfd-fem tests, baseline_hashes, docs_site, fmt and clippy pass. Follow-up F-658 (opt-in J-based volumetric creep law; NEEDS THE USER: material schema golden). Maintainer (2026-11-18): the golden, schema or hash-table edit this item needs is approved under the class rule of agent rules version 2, rule 3: a change that only adds entries is re-recorded by the lead, with the diff in the ledger. The item may be issued."
   },
   {
     "id": "F-638",
@@ -6938,8 +6938,8 @@
     ],
     "status": "partial",
     "acceptance": "Every limit not stated here is registered in the ADR before the run. With a neo-Hookean material on Beam2 and Shell4 elements, the cyclic, rotating, cms and mpc-transformation paths give the results of the isotropic twin of the same small-strain moduli within 1e-10; on the maintainer's approval the refusal of ADR 0555 D3 on structural elements is lifted by default with RF1 retired as a record and its copy accepting.",
-    "gap": "Beam2 on the cyclic path stays refused for every material (follow-up F-672). The default lift of the ADR 0555 D3 refusal, with RF1 retired as a record and its copy accepting, awaits the maintainer's approval.",
-    "note": "Structural solver, advanced tier. Follow-up of F-645 (ADR 0584). PARTIAL. ADR 0593, 2026-11-15: with SolidModel::set_hyperelastic_structures(true) a neo-Hookean material on Shell4 (and Shell3) elements on the cyclic path (solve_static_mpc on a frustum sector with CyclicOptions::shells, solve_static_harmonic k = 1, modal_analysis_harmonic k = 0..3), and on Beam2 and Shell4 elements on the rotating path (RotatingPart::modes at 0.2 omega_1 with stress stiffening and spin softening; RotatingSector::modes on the sector), the cms path (cms::reduce: reduced stiffness, mass, load, fixed-interface and reduced eigenvalues, recovered static field) and the mpc-transformation path (solve_static_mpc and modal_analysis_mpc with a rigid set and a linear constraint), gives the results of the isotropic twin of the same small-strain moduli with difference exactly 0 (limit 1e-10); the twin with G (1 + 1e-6) is seen at 9.4e-7 .. 1.0e-6. The registered run found the rotating path refusing the material: its unit pre-stress copy did not carry the setting (fixed by one line in rotating.rs, defaults bit-identical: baseline hashes and the rotating default-bits records pass; the run-1 tests kept as ignored known-miss records). Seven of seven mutations caught. Not done: Beam2 on the cyclic path stays refused for every material (ADR 0556 D1); the default lift with RF1 retired awaits the maintainer's approval. Follow-up F-672 (Beam2 elements in the cyclic constraint). Also fixed an F-645 defect (rotating.rs unit_centrifugal_model dropped hyperelastic_structures). The default lift (RF1 retired as record+copy) NEEDS USER; the agent recommends lifting it now."
+    "gap": "The default lift (retiring RF1 as record and copy) is approved and not yet made. Beam2 on the cyclic path stays refused until F-672's lift is made.",
+    "note": "Structural solver, advanced tier. Follow-up of F-645 (ADR 0584). PARTIAL. ADR 0593, 2026-11-15: with SolidModel::set_hyperelastic_structures(true) a neo-Hookean material on Shell4 (and Shell3) elements on the cyclic path (solve_static_mpc on a frustum sector with CyclicOptions::shells, solve_static_harmonic k = 1, modal_analysis_harmonic k = 0..3), and on Beam2 and Shell4 elements on the rotating path (RotatingPart::modes at 0.2 omega_1 with stress stiffening and spin softening; RotatingSector::modes on the sector), the cms path (cms::reduce: reduced stiffness, mass, load, fixed-interface and reduced eigenvalues, recovered static field) and the mpc-transformation path (solve_static_mpc and modal_analysis_mpc with a rigid set and a linear constraint), gives the results of the isotropic twin of the same small-strain moduli with difference exactly 0 (limit 1e-10); the twin with G (1 + 1e-6) is seen at 9.4e-7 .. 1.0e-6. The registered run found the rotating path refusing the material: its unit pre-stress copy did not carry the setting (fixed by one line in rotating.rs, defaults bit-identical: baseline hashes and the rotating default-bits records pass; the run-1 tests kept as ignored known-miss records). Seven of seven mutations caught. Not done: Beam2 on the cyclic path stays refused for every material (ADR 0556 D1); the default lift with RF1 retired awaits the maintainer's approval. Follow-up F-672 (Beam2 elements in the cyclic constraint). Also fixed an F-645 defect (rotating.rs unit_centrifugal_model dropped hyperelastic_structures). The default lift (RF1 retired as record+copy) NEEDS USER; the agent recommends lifting it now. Maintainer (2026-11-18): the default change is approved; its registration lists the changed results case by case and the records it re-records. The item may be issued."
   },
   {
     "id": "F-667",
@@ -7008,8 +7008,8 @@
     ],
     "status": "partial",
     "acceptance": "Every limit not stated here is registered in the ADR before the run. A cyclic sector holding Beam2 elements (the orientation vector and the rotation unknowns rotated per sector) gives the static displacements and the modes of each harmonic index of the full ring of beams within 1e-10, the defaults bit-identical.",
-    "gap": "Checks are met, but the negative control NC1 was met only after amendment 1, so done is the maintainer's call. Lifting the Beam2 cyclic refusal by default needs the user. Not covered: full_rotor with beams (F-674), rotating paths on a beam sector, beam ends on interpolated or axis boundaries, line loads in the sector.",
-    "note": "Structural solver, advanced tier. Follow-up of F-666 (ADR 0593). DONE. ADR 0595, 2026-11-15: Beam2 elements in the cyclic constraint by the opt-in CyclicOptions::beams (with shells; refused without shells by add_constraint, and with interpolation or axis nodes; the default refusals and the four existing tests that assert them unchanged). The rows are those of ADR 0556 D2 on the six-unknown beam nodes; the sector stands for the ring whose sector j holds the beams rotated by R^j, orientation vectors R^j v included (the Timoshenko element is objective: R e_1 x R v = R (e_1 x v)). A wheel sector of ring and spoke beams about an oblique axis (N = 6, sections with I_z = 4 I_y, oblique orientation vectors), against the full ring built independently with rotated orientations: static k = 0 with nodal forces, moments and a centrifugal load within 6.6e-13, harmonic static k = 1..3 within 6.1e-13 (limit 1e-10), the rotation rows exact; the eigenvalues of each harmonic k = 0..3 within 8.2e-13 with equal counts below the cut-off (limit 1e-10, backward residual test), the expanded sector modes eigenvectors of the ring to a backward error of 1.5e-13, pair splits 2.6e-13. A ring with unrotated orientations is seen at 0.78. Models without the option keep their bits (existing tests, baseline hashes, a shell sector bit-equal with and without it). Six of six mutations caught. Not covered: full_rotor with beams (one orientation per block), the rotating paths on a beam sector, beam ends on interpolated or axis boundaries, line loads in the sector. Follow-up F-674 (full_rotor and the expansion of a cyclic sector with Beam2). Follow-up F-675 (Rotating paths on a cyclic sector of beams). PARTIAL by the standing rule: the negative control NC1 was met only after amendment 1 (its model could not be built; D1a refusal added) after run 1. Done is the maintainer's call. Lifting the Beam2 cyclic refusal by default (retiring ADR 0556 NC3 and ADR 0593 A-B) NEEDS USER."
+    "gap": "Lifting the Beam2 cyclic refusal by default (retiring ADR 0556 NC3 and ADR 0593 A-B) is approved and not yet made. Follow-ups F-674 and F-675 are separate items.",
+    "note": "Structural solver, advanced tier. Follow-up of F-666 (ADR 0593). DONE. ADR 0595, 2026-11-15: Beam2 elements in the cyclic constraint by the opt-in CyclicOptions::beams (with shells; refused without shells by add_constraint, and with interpolation or axis nodes; the default refusals and the four existing tests that assert them unchanged). The rows are those of ADR 0556 D2 on the six-unknown beam nodes; the sector stands for the ring whose sector j holds the beams rotated by R^j, orientation vectors R^j v included (the Timoshenko element is objective: R e_1 x R v = R (e_1 x v)). A wheel sector of ring and spoke beams about an oblique axis (N = 6, sections with I_z = 4 I_y, oblique orientation vectors), against the full ring built independently with rotated orientations: static k = 0 with nodal forces, moments and a centrifugal load within 6.6e-13, harmonic static k = 1..3 within 6.1e-13 (limit 1e-10), the rotation rows exact; the eigenvalues of each harmonic k = 0..3 within 8.2e-13 with equal counts below the cut-off (limit 1e-10, backward residual test), the expanded sector modes eigenvectors of the ring to a backward error of 1.5e-13, pair splits 2.6e-13. A ring with unrotated orientations is seen at 0.78. Models without the option keep their bits (existing tests, baseline hashes, a shell sector bit-equal with and without it). Six of six mutations caught. Not covered: full_rotor with beams (one orientation per block), the rotating paths on a beam sector, beam ends on interpolated or axis boundaries, line loads in the sector. Follow-up F-674 (full_rotor and the expansion of a cyclic sector with Beam2). Follow-up F-675 (Rotating paths on a cyclic sector of beams). PARTIAL by the standing rule: the negative control NC1 was met only after amendment 1 (its model could not be built; D1a refusal added) after run 1. Done is the maintainer's call. Lifting the Beam2 cyclic refusal by default (retiring ADR 0556 NC3 and ADR 0593 A-B) NEEDS USER. Maintainer (2026-11-18): the default change is approved; its registration lists the changed results case by case and the records it re-records. The item may be issued."
   },
   {
     "id": "F-673",
@@ -7079,7 +7079,7 @@
     ],
     "status": "todo",
     "acceptance": "Every limit not stated here is registered in the ADR before the run. The mass of a warping element with a shear-centre offset is the consistent discretisation of the kinetic energy of ADR 0597 D2 on the element's own fields (v_c = v_s + z_0 phi inside the element); the lowest unloaded frequency of the fork-supported ADR 0553 monosymmetric I equals the coupled Timoshenko-Rayleigh closed form of ADR 0597 D5 within 1e-4 at 16 elements, and the ADR 0597 pre-stressed frequencies stay within 1e-2 of their references; results of sections without an offset bit-identical (the change of results with an offset approved by the maintainer).",
-    "note": "Follow-up of F-673 (ADR 0597, 2026-11-15). Changes existing modal, harmonic and transient results of offset sections: NEEDS USER."
+    "note": "Follow-up of F-673 (ADR 0597, 2026-11-15). Changes existing modal, harmonic and transient results of offset sections: NEEDS USER. Maintainer (2026-11-18): the default change is approved; its registration lists the changed results case by case and the records it re-records. The item may be issued."
   },
   {
     "id": "F-679",
@@ -7243,7 +7243,7 @@
     ],
     "status": "todo",
     "acceptance": "Every limit not stated here is registered in the ADR before the run. Case keys solver.outer_tolerance and solver.outer_scale_window (hash_omit_default) reach PimpleSettings::outer_pressure_tolerance and outer_scale_window; a case read from a file reproduces the bits of the library call on the channel of ADR 0451; existing keys, goldens and baseline hashes unchanged except the schema golden approved by the maintainer.",
-    "note": "Follow-up of F-550 (ADR 0617, 2026-11-15). NEEDS USER: schema golden change."
+    "note": "Follow-up of F-550 (ADR 0617, 2026-11-15). NEEDS USER: schema golden change. Maintainer (2026-11-18): the golden, schema or hash-table edit this item needs is approved under the class rule of agent rules version 2, rule 3: a change that only adds entries is re-recorded by the lead, with the diff in the ledger. The item may be issued."
   },
   {
     "id": "F-693",
@@ -7265,7 +7265,7 @@
     ],
     "status": "todo",
     "acceptance": "Every limit not stated here is registered in the ADR before the run. With the maintainer's decision recorded, NewtonOptions::stagnation is true by default; NC1b of ADR 0604 amendment 1 is kept as an ignored record with a copy that asserts at most 10 corrections; S3 and the pendulum of ADR 0479 with the driver defaults reproduce ADR 0619 ST1 and ST3; every other existing default-bits test keeps its bits, and the baseline hashes pass.",
-    "note": "Follow-up of F-690 (ADR 0619, 2026-11-15). NEEDS USER: changes default results (NC1b of ADR 0604 would become a record plus copy)."
+    "note": "Follow-up of F-690 (ADR 0619, 2026-11-15). NEEDS USER: changes default results (NC1b of ADR 0604 would become a record plus copy). Maintainer (2026-11-18): held. The default change is not approved now: it moves existing flow results, and it waits until the fan path needs it. Not to be issued."
   },
   {
     "id": "F-695",
@@ -7371,7 +7371,7 @@
     ],
     "status": "todo",
     "acceptance": "Every limit not stated here is registered in an ADR before the run. Each library entry point of F-268 (ledger sink), F-697, F-698, F-699 and F-701 is reachable through a service method and an MCP tool; a call through the tool gives the same ledger bytes as the library call on the registered fixtures; the MCP fidelity enums gain measured, and a measured entry is still written only to a private ledger; both tools-list goldens change in one edit, approved by the maintainer, and no other golden or baseline hash changes.",
-    "note": "Decided by the maintainer 2026-11-15 (shared decision D1 of the design-loop drafts): the loop items stay library only, and their tools land in this one item together with F-339 so the goldens change once. NEEDS USER: the tools-list golden edit. Size M. ADR 0670 (F-749, 2026-11-16): when a hold is given, the MCP tool should call register_with_floor, and may pass floor_sample = n_pairs for a cheap evaluator (the floor then bounds every pair of the design)."
+    "note": "Decided by the maintainer 2026-11-15 (shared decision D1 of the design-loop drafts): the loop items stay library only, and their tools land in this one item together with F-339 so the goldens change once. NEEDS USER: the tools-list golden edit. Size M. ADR 0670 (F-749, 2026-11-16): when a hold is given, the MCP tool should call register_with_floor, and may pass floor_sample = n_pairs for a cheap evaluator (the floor then bounds every pair of the design). Maintainer (2026-11-18): the golden, schema or hash-table edit this item needs is approved under the class rule of agent rules version 2, rule 3: a change that only adds entries is re-recorded by the lead, with the diff in the ledger. The item may be issued."
   },
   {
     "id": "F-703",
@@ -8220,7 +8220,7 @@
     ],
     "status": "todo",
     "acceptance": "the maintainer decides whether fractional_body_force, fractional_periodic_implicit and coupled_ddt_correction (with fractional_step_consistent) become the fractional step's defaults; if so, the changed default results are listed case by case, the hash tables are re-recorded only with the maintainer's approval, and ADR 0687's and ADR 0691's twin checks pass with the defaults alone.",
-    "note": "Follow-up of F-771 (ADR 0691, 2026-11-16). NEEDS USER: changes default results (default-flip of fractional-step opt-ins), not started by the loop."
+    "note": "Follow-up of F-771 (ADR 0691, 2026-11-16). NEEDS USER: changes default results (default-flip of fractional-step opt-ins), not started by the loop. Maintainer (2026-11-18): held. The default change is not approved now: it moves existing flow results, and it waits until the fan path needs it. Not to be issued."
   },
   {
     "id": "F-776",
@@ -8255,7 +8255,7 @@
     ],
     "status": "todo",
     "acceptance": "Every limit not stated here is registered in the ADR before the run. A fan case with c_grid_construction = camber_seam_s builds the mesh of CGridOptions::camber_seam_s_construction() bit for bit, and FvGeometry, check_mesh and the rules accept it on the reference fan; the schema golden is updated with the maintainer's approval; existing values and baseline hashes unchanged.",
-    "note": "Follow-up of F-726 (ADR 0692, 2026-11-16). NEEDS USER: schema golden change (case value)."
+    "note": "Follow-up of F-726 (ADR 0692, 2026-11-16). NEEDS USER: schema golden change (case value). Maintainer (2026-11-18): the golden, schema or hash-table edit this item needs is approved under the class rule of agent rules version 2, rule 3: a change that only adds entries is re-recorded by the lead, with the diff in the ledger. The item may be issued."
   },
   {
     "id": "F-779",
@@ -8362,7 +8362,7 @@
     ],
     "status": "todo",
     "acceptance": "Every limit not stated here is registered in the ADR before the run. In `scripts/adr_test_index.py --primary git` the units of ADR 0685 itself are not a source, and a `## Test files (added <date>, ADR dddd)` unit that says its host ADR only names the item or that no earlier ADR describes the file gives no primary, or the maintainer decides that such an ADR is the primary and the decision is recorded; the files that change primary are listed (the four H2 files of ADR 0685 and the two `workflow.rs` files of ADR 0704 among them); `--primary registered` and `--primary p0679` are bit-identical and the attribution data of `gate_attribute.py` is unchanged for the existing consumers; no limit of ADR 0684, 0690, 0701 or 0704 is changed.",
-    "note": "Follow-up of F-786 (ADR 0704, 2026-11-16). NEEDS USER (2026-11-17): rests on ADR 0704 Q1, the definition of the primary of a file no ADR registered (changes which tests have a primary, about 20 under H2); the reader recommends (a) the ADR that decided its checks, else none."
+    "note": "Follow-up of F-786 (ADR 0704, 2026-11-16). NEEDS USER (2026-11-17): rests on ADR 0704 Q1, the definition of the primary of a file no ADR registered (changes which tests have a primary, about 20 under H2); the reader recommends (a) the ADR that decided its checks, else none. Maintainer (2026-11-18): ADR 0704 Q1 is answered (a): the primary of a test file that no ADR registered beforehand is the ADR that decided its checks, else none. The item may be issued."
   },
   {
     "id": "F-788",
@@ -8432,7 +8432,7 @@
     ],
     "status": "todo",
     "acceptance": "Every limit not stated here is registered in the ADR before the run. A rule in `scripts/adr_test_index.py`, registered with its mutations, under which the ADR that carries a limits table for a file and says that its tests predate it is the primary of the 35 tests of the eight files of ADR 0705, and no primary of any other test changes by more than a registered count; the unit tests of `scripts` pass.",
-    "note": "Follow-up of F-769 (ADR 0705, 2026-11-16). NEEDS USER (2026-11-17): changes which ADR is primary for 35 tests; rests on the same definition as F-787 (ADR 0704 Q1, the primary of a file no ADR registered beforehand)."
+    "note": "Follow-up of F-769 (ADR 0705, 2026-11-16). NEEDS USER (2026-11-17): changes which ADR is primary for 35 tests; rests on the same definition as F-787 (ADR 0704 Q1, the primary of a file no ADR registered beforehand). Maintainer (2026-11-18): ADR 0704 Q1 is answered (a): the primary of a test file that no ADR registered beforehand is the ADR that decided its checks, else none. The item may be issued."
   },
   {
     "id": "F-794",
@@ -8533,7 +8533,7 @@
     ],
     "status": "todo",
     "acceptance": "Every limit not stated here is registered in the ADR before the run. With the solid case's opt-in for NewtonOptions::indefinite_retry, the inertia and the retry flag of every accepted increment written where the case reports its increments and shown by the CLI summary, with a warning when an accepted state has nu > 0; the 16^3 block of ADR 0694 run through the case file reports nu = 1 at full load; off by default, the default bits, the schema golden and the hash tables unchanged.",
-    "note": "Follow-up of F-780 (ADR 0719, 2026-11-16). NEEDS USER (2026-11-17): adds the inertia to the case output and CLI, which changes output goldens and schema."
+    "note": "Follow-up of F-780 (ADR 0719, 2026-11-16). NEEDS USER (2026-11-17): adds the inertia to the case output and CLI, which changes output goldens and schema. Maintainer (2026-11-18): the golden, schema or hash-table edit this item needs is approved under the class rule of agent rules version 2, rule 3: a change that only adds entries is re-recorded by the lead, with the diff in the ledger. The item may be issued."
   },
   {
     "id": "F-843",

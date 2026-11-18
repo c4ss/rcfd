@@ -215,6 +215,12 @@ class State(Repo):
         q = pr.open_questions(self.items, pr.load_adrs(self.root))
         self.assertEqual([w for w, _ in q], ["F-002", "ADR 0002"])
 
+    def test_a_dated_entry_of_the_maintainer_after_the_marker_answers_it(self):
+        self.items[1]["note"] = "NEEDS THE USER: a default change. Maintainer (2026-11-18): approved."
+        self.items[3]["note"] = "Maintainer (2026-11-10): go ahead. NEEDS USER: a later question."
+        q = pr.open_questions(self.items, pr.load_adrs(self.root))
+        self.assertEqual([w for w, _ in q], ["F-004"])
+
     def test_dispatch_counts_and_budget(self):
         items, cats, adrs, _ = self.load()
         rep, over = pr.sec_g(self.root, items, cats, adrs)

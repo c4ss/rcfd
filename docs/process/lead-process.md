@@ -92,3 +92,10 @@ further addendum of that ADR. Main may be red on a test that was left out of a p
 ## Changes
 
 - Version 1, 2026-11-18: first written, from the documentation process review and the maintainer's decisions of that day.
+
+## Golden files
+
+An agent never edits a golden file or a hash table (agent rules, rule 3). Where an item's addendum reports an "additive
+golden edit", the lead checks that the diff adds entries and removes or changes none, re-records the file on main and writes
+the diff's size and the file in the ledger line of the merge. Any other golden change, and every change to
+`baseline_hashes.rs`, needs the maintainer's word for that item.

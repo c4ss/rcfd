@@ -1,6 +1,6 @@
 # House rules for implementation agents
 
-Version 1 (2026-11-18). This file is the governing copy of the rules for every agent that works on rcfd, in the campaign
+Version 2 (2026-11-18). This file is the governing copy of the rules for every agent that works on rcfd, in the campaign
 stream and in the Studio stream alike. It replaces `w49i-work/AGENT_RULES.md` (2026-11-12) and `w49i-work/briefs/common.md`
 (2026-11-08) from the moment the lead's briefs point here; ADRs that cite "house rule N" of the earlier file mean the rule
 of the same number below. A change to a rule needs the maintainer's word, raises the version, and is dated in the list at
@@ -24,8 +24,11 @@ number, the branch, the worktree and your scratch folder.
 3. Defaults stay bit-identical: anything that does not ask for the new capability produces exactly the bytes it produced
    before; new behaviour is opt-in. Never edit or re-record `crates/rcfd-api/tests/baseline_hashes.rs`, the case and mesh hash
    tables or any golden file (schema golden, CLI help, MCP tools list). If your design needs such an edit, build and check
-   everything that does not, leave that step out, and report it as the step that needs the maintainer's approval. If you
-   change a shared solver file, run `cargo test -p rcfd-api --release --test baseline_hashes`.
+   everything that does not, leave that step out, and report it as the step that needs the maintainer's approval. One class
+   is approved in advance (the maintainer, 2026-11-18): where the edit only adds entries (a new key in the schema golden, a
+   new tool in the tools list, new lines of CLI help, new rows of a case hash table) and removes or changes none, report it
+   as "additive golden edit" with the diff; the lead re-records it and puts the diff in the ledger. `baseline_hashes.rs` is
+   never in this class. If you change a shared solver file, run `cargo test -p rcfd-api --release --test baseline_hashes`.
 4. Clean-room, from sources that were read. Every algorithm comes from published literature or first principles and is cited
    in the ADR. No vendor code, binaries or documentation; a fetched vendor page is not a source. Cite a source you have read,
    in the repository or fetched, with its place in it: an equation, table or page number, or a DOI. A citation from memory is
@@ -103,6 +106,8 @@ plainly anything that failed or was skipped.
 
 ## Changes
 
+- Version 2, 2026-11-18: rule 3 gains the class of additive golden edits, approved in advance by the maintainer and
+  re-recorded by the lead.
 - Version 1, 2026-11-18: rules 1 to 11 carried over from `w49i-work/AGENT_RULES.md`; rule 4 requires sources that were read,
   with a locator; rule 8 gains the two fixed headings; rule 9 covers both streams, the one-line note entry and the `gap`;
   rules 12 to 18 added. From the documentation process review and the maintainer's decisions of 2026-11-18.
