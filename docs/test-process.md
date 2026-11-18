@@ -399,6 +399,9 @@ one gate-level gap found while triaging the skips):
    `plot3d_public`. GPU tests have `RCFD_GPU_REQUIRE=1` to turn their skip into a failure; these have no such switch. Options: (a)
    copy the fetched folder into the gate copy and add a `RCFD_DATA_REQUIRE=1` switch that fails a skip; (b) keep and list them as
    not run by the gate; (c) count a skip separately in the runner (needs a skip marker the runner can read). Recommendation: (a).
+   Since 2026-11-18 the runner can do a form of (c) without a marker: `scripts/gate_test.py --skip-pattern REGEX` (section 7.5)
+   lists the output lines of each passed test that match REGEX. It makes these skips countable; it does not make them fail, and
+   whether the tests get their data and a switch remains open.
 4. Child-process entry points (`*_child_body`, `child_entry`, `l3_kill_child`: 7 tests) pass without doing anything when run alone
    and are counted as passed tests. Documented and harmless; they inflate the passed count by 7.
 5. **ADR 0123 S7 cancel time** (from the mutation spot-check, section 6.4): 5 s limit against 0.116 s measured; a 10x slower
@@ -563,7 +566,7 @@ Then, in this order:
 On the first failing command the script stops, prints the line, writes nothing and leaves the merge unpushed. On success it
 regenerates the generated pages (`process_report.py --write`, `roadmap_progress.py`), appends one line to the ledger
 `docs/process/ledger.tsv` and commits both; `--push` then pushes. The ledger is changed only on `main`. Its columns are date, kind
-(`merge`, `gate`, `leftout`, `ci`), commit, branch, items, adrs, result, minutes, left_out (binaries the budget left out),
+(`merge`, `gate`, `leftout`, `mutants`, `ci`), commit, branch, items, adrs, result, minutes, left_out (binaries the budget left out),
 left_out_minutes and detail (the commands run; for a gate line `passed=N;failed=N;ignored=N;fails=binary::test=ADR/F-item,...`).
 
 When a full gate finishes, the lead records it with
@@ -572,6 +575,30 @@ When a full gate finishes, the lead records it with
 `verified`. `python scripts/push_main.py --since-verified` prints the number of merges on `main` since the newest green gate line.
 
 Everything else waits for the next full gate, which attributes any failure to the merges since the last green gate.
+
+### 7.5 The skipped count, the left-out run and generated mutants
+
+Three further commands of the lead. None of them has been run on this repository yet: the pure parts are unit-tested
+(`scripts/test_gate_test.py`, `scripts/test_push_main.py`), the runs are not.
+
+1. Skipped tests in a full run. `python scripts/gate_test.py --skip-pattern "(?i)(?<!\b0 )\bskipped\b" --tsv out.tsv ...` runs
+   every test with `--show-output`, writes the matching output lines of each passed test in a last TSV column `skipped`, and
+   adds "N passed tests reported a skip" to its closing line. Without the option the output and the TSV are as before. The
+   pattern is a suggestion (`SKIP_SUGGESTED` in the script): it matches 24 of the 26 print lines in the test sources that
+   contain "skip" (13 files), and some of those report a skipped part or input, not a skipped test, so the count is an upper
+   bound until an item fixes the pattern from a real run. The seven child-process entry points of section 6.3 print nothing
+   and are not found. The lead passes the count on: `python scripts/push_main.py --gate-line ... --skipped N` puts
+   `skipped=N` in the gate line of the ledger. The gate workflow does not pass the option yet.
+2. The tests the budget left out. `python scripts/push_main.py --run --left-out-run` starts them detached after the commit,
+   for that one merge; when they end, a `leftout` line (green or red, with the failed binaries) is appended to the ledger in
+   the working tree and goes in with the lead's next push. It blocks nothing.
+3. Mutants the author did not write. `python scripts/push_main.py --mutants [--merge REV] [--mutants-timeout S]` prints, and
+   with `--run` runs, `cargo mutants --in-diff` on the Rust lines the merge changed, for the touched packages, and appends a
+   `mutants` line with `caught=N;missed=N;timeout=N;unviable=N` and the first missed mutants. It reports; a missed mutant is
+   a line no test would notice changing, which the lead may turn into an item against the merge's ADR. cargo-mutants is a
+   development tool (`cargo install cargo-mutants`), not a dependency; it is not installed on the lead's machine as of
+   2026-11-18, its run time on this workspace is not measured, and the reading of its `outcomes.json` follows its
+   documentation, not a run. It covers Rust only.
 
 ## 8. The Electron Studio's npm tests (CI job `studio-web`)
 

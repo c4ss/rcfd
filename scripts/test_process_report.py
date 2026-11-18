@@ -243,5 +243,48 @@ class State(Repo):
         self.assertIn("Structural solver: 2 registrations this week, budget 1", out)
 
 
+class NewRules(Repo):
+    REG = ("# ADR 0005: F-004 registration: x\n\nStatus: **REGISTERED 2026-11-19.**\n\n"
+           "Rules: docs/process/agent-rules.md version 1. Brief: docs/adr/briefs/f004-work.md.\n\nSize (agent): partial, 1, 0, 0, 40000\n\n"
+           "| Check | Limit | Source | Estimate | Margin | Kind |\n|---|---|---|---|---|---|\n"
+           "| C1 order | 1.9 | tolerances.md, observed order | 2.0 | 1.05 | solution verification |\n"
+           "| C2 drift | 1e-3 | own estimate | 1e-4 | 10 | code verification |\n")
+
+    def test_a_registration_under_the_new_rules_is_read(self):
+        self.put("docs/adr/0005-f004-registration-x.md", self.REG)
+        rep, fail = pr.sec_r(self.root, pr.load_adrs(self.root))
+        self.assertEqual(fail, [])
+        text = "\n".join(rep)
+        self.assertIn("registrations that cite docs/process/agent-rules.md: 1", text)
+        self.assertIn("margin above 3 (reported): 1", text)
+        self.assertIn("only source is the agent's estimate (the lead holds the item's code, rule 15): 1", text)
+
+    def test_missing_brief_size_columns_and_a_wrong_kind_fail(self):
+        bad = (self.REG.replace(" Brief: docs/adr/briefs/f004-work.md.", "").replace("Size (agent)", "Size")
+               .replace("| Margin ", "| Slack ").replace("code verification", "a check"))
+        self.put("docs/adr/0005-f004-registration-x.md", bad)
+        fail = pr.sec_r(self.root, pr.load_adrs(self.root))[1]
+        self.assertEqual(len(fail), 4)
+        for want in ("cites no brief file", "states no size", 'no column "margin"', "kind 'a check' is not one of the four"):
+            self.assertTrue(any(want in f for f in fail), want)
+
+    def test_older_registrations_are_not_read(self):
+        self.assertEqual(pr.sec_r(self.root, pr.load_adrs(self.root))[1], [])
+
+    def test_changelog_count_is_kept_current(self):
+        self.put("CHANGELOG.md", "Of the 3 roadmap items, 1 are done, 1 partly done and 1 not started; more.\n")
+        items, cats, adrs, _ = self.load()
+        self.assertEqual(pr.generated(self.root, items, cats, adrs)["CHANGELOG.md"],
+                         "Of the 4 roadmap items, 2 are done, 1 partly done and 1 not started; more.\n")
+
+    def test_an_adopted_roadmap_page_is_generated(self):
+        items, cats, adrs, _ = self.load()
+        self.assertNotIn("docs/ROADMAP.md", pr.generated(self.root, items, cats, adrs))
+        self.put("docs/ROADMAP.md", ROADMAP.split("- [x]")[0] + pr.render_roadmap.MARKER + "\n")
+        page = pr.generated(self.root, items, cats, adrs)["docs/ROADMAP.md"]
+        self.assertIn("- [~] **F-002** Title 2\n  - depends on: none\n  - acceptance: error below 1e-3\n  - gap: the second case\n", page)
+        self.assertEqual([i for i, _ in pr.roadmap_md(self.root)], [])
+
+
 if __name__ == "__main__":
     unittest.main()

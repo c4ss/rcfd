@@ -14,6 +14,12 @@ Usage (from the workspace root):
 --timeout-factor F, --timeout-min S, --timeout-max S (ADR 0129; defaults 5, 600, 3600): a test's time limit is
            clamp(F * its seconds in the --order TSV, min, max), max if it has no record; --timeout-max 0 turns the limit off. On expiry
            the test's process tree (never cargo) is killed and the test fails with outcome TIMEOUT; the other tests go on.
+--skip-pattern REGEX (off by default; docs/process/documentation-process-review.md I2): every test runs with `--show-output`, and
+           the TSV gains a last column `skipped` with the output lines of a PASSED test that match REGEX, joined by " | ". The closing
+           `gate_test:` line then also gives the number of passed tests that reported a skip. Suggested REGEX: SKIP_SUGGESTED below.
+           It matches 24 of the 26 print lines of the test sources that contain "skip" (13 files, 2026-11-18); some of those lines
+           report a skipped part or a skipped input, not a skipped test, so the count is an upper bound until an item fixes the pattern.
+           The child-process entry points that pass without doing anything print nothing and are not found this way.
 Progress goes to stderr: phase markers, one `[k/N outcome seconds MB elapsed] binary::test` line per finished test and the
 heartbeat lines. Output keeps the libtest lines (`Running`, `test X ... ok`, `test result:`), so the gate's summing awk works unchanged. Afterwards
 `cargo test --doc` runs the doc-tests. Exit status 0 only if the build, every test and the doc-tests pass.
@@ -30,6 +36,21 @@ import threading
 import time
 
 RESULT = re.compile(r"^test result: \w+\. (\d+) passed; (\d+) failed; (\d+) ignored", re.M)
+
+
+# "skipped" as a word, not after the count 0 ("0 skipped" is a tally, not a skip).
+SKIP_SUGGESTED = r"(?i)(?<!\b0 )\bskipped\b"
+
+
+def skip_lines(out, pattern):
+    """The lines of a test's output that match the compiled pattern, stripped; tabs become spaces so they fit a TSV cell."""
+    return [ln.strip().replace("\t", " ") for ln in out.splitlines() if pattern.search(ln)]
+
+
+def tsv_row(stem, test, outcome, seconds, mb, skipped=None):
+    """One TSV row; `skipped` (a list of lines, or None when --skip-pattern is off) adds the last column."""
+    row = f"{stem}\t{test}\t{outcome}\t{seconds}\t{mb}"
+    return row if skipped is None else row + "\t" + " | ".join(skipped)
 
 
 _PROGRESS = threading.Lock()
@@ -181,9 +202,12 @@ def main():
     ap.add_argument("--timeout-min", type=float, default=600.0)
     ap.add_argument("--timeout-max", type=float, default=3600.0)
     ap.add_argument("--no-doc", action="store_true")
+    ap.add_argument("--skip-pattern")
     ap.add_argument("select", nargs="*")
     a = ap.parse_args()
     select = a.select or ["--workspace"]
+    skip_re = re.compile(a.skip_pattern) if a.skip_pattern else None
+    show = ["--show-output"] if skip_re else []
 
     t_build = time.time()
     progress(f"gate_test: building test binaries ({' '.join(select)}, release)")
@@ -242,10 +266,11 @@ def main():
         lim = limit_s(prev.get((stem[i], t)), a.timeout_factor, a.timeout_min, a.timeout_max)
         with lock:
             running[job] = time.time()
-        code, out, dt, mb, to = run([b["executable"], t, "--exact", "--test-threads=1"], cwd, dict(env, CARGO_MANIFEST_DIR=cwd),
+        code, out, dt, mb, to = run([b["executable"], t, "--exact", "--test-threads=1", *show], cwd, dict(env, CARGO_MANIFEST_DIR=cwd),
                                     lim)
-        r = RESULT.search(out)
-        ok = "TIMEOUT" if to else "ok" if code == 0 and r is not None and r.groups() == ("1", "0", "0") else "FAILED"
+        r = (RESULT.findall(out) or [None])[-1] if skip_re else RESULT.search(out)
+        r = r if r is None or isinstance(r, tuple) else r.groups()
+        ok = "TIMEOUT" if to else "ok" if code == 0 and r == ("1", "0", "0") else "FAILED"
         with lock:
             running.pop(job, None)
             state["done"] += 1
@@ -281,7 +306,8 @@ def main():
     ratio = max([dt / lim for _, _, dt, _, lim in res.values() if lim] or [0.0])
 
     fails = 0
-    rows = ["binary\ttest\toutcome\tseconds\tpeak_mb"]
+    rows = ["binary\ttest\toutcome\tseconds\tpeak_mb" + ("\tskipped" if skip_re else "")]
+    n_skip = 0
     for i, b in enumerate(bins):
         rel = os.path.relpath(b["target"]["src_path"], os.path.dirname(b["manifest_path"]))
         kind = "unittests " if b["target"]["kind"] != ["test"] else ""
@@ -291,13 +317,15 @@ def main():
         for t in alls[i]:
             if t in ign[i]:
                 print(f"test {t} ... ignored")
-                rows.append(f"{stem[i]}\t{t}\tignored\t0\t0")
+                rows.append(tsv_row(stem[i], t, "ignored", "0", "0", [] if skip_re else None))
                 continue
             outcome, out, dt, mb, lim = res[(i, t)]
             ok = outcome == "ok"
             secs += dt
             print(f"test {t} ... {'ok' if ok else 'FAILED'}" + (f" (timeout after {lim:.0f} s)" if outcome == "TIMEOUT" else ""))
-            rows.append(f"{stem[i]}\t{t}\t{outcome}\t{dt:.2f}\t{mb:.0f}")
+            sk = (skip_lines(out, skip_re) if ok else []) if skip_re else None
+            n_skip += bool(sk)
+            rows.append(tsv_row(stem[i], t, outcome, f"{dt:.2f}", f"{mb:.0f}", sk))
             p, f = p + ok, f + (not ok)
             if not ok:
                 # indented so the gate's `^test result` sum does not count the inner summary a second time
@@ -307,7 +335,8 @@ def main():
         print(f"\ntest result: {status}. {p} passed; {f} failed; {len(ign[i])} ignored; 0 measured; 0 filtered out; "
               f"finished in {secs:.2f}s (process seconds)\n")
     print(f"gate_test: {len(jobs)} test processes, {len(bins)} binaries, jobs={a.jobs}, wall {wall:.1f}s, "
-          f"peak summed working set {mem[0]:.0f} MB, max time/limit {ratio:.3f}")
+          f"peak summed working set {mem[0]:.0f} MB, max time/limit {ratio:.3f}"
+          + (f", {n_skip} passed tests reported a skip" if skip_re else ""))
     if a.tsv:
         open(a.tsv, "w", encoding="utf-8").write("\n".join(rows) + "\n")
 

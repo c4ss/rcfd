@@ -133,6 +133,32 @@ class Mutation(unittest.TestCase):
         self.assertIsNone(pm.skipped_count("40 passed"))
 
 
+class Mutants(unittest.TestCase):
+    def test_command_names_the_diff_the_packages_and_the_timeout(self):
+        self.assertEqual(pm.mutants_command(["rcfd-fv", "rcfd-api"], "d.diff", "out", 120.0),
+                         ["cargo", "mutants", "--in-diff", "d.diff", "--output", "out", "--package", "rcfd-fv", "--package", "rcfd-api",
+                          "--timeout", "120"])
+        self.assertEqual(pm.mutants_command(["a"], "d", "o"), ["cargo", "mutants", "--in-diff", "d", "--output", "o", "--package", "a"])
+
+    def test_counts_from_the_top_level_or_from_the_summaries(self):
+        top = {"caught": 7, "missed": 2, "timeout": 1, "unviable": 3, "outcomes": []}
+        self.assertEqual(pm.mutants_counts(top, "a.rs:1: replace x\n\nb.rs:2: replace y\n"),
+                         ({"caught": 7, "missed": 2, "timeout": 1, "unviable": 3}, ["a.rs:1: replace x", "b.rs:2: replace y"]))
+        listed = {"outcomes": [{"summary": s} for s in ("Success", "CaughtMutant", "CaughtMutant", "MissedMutant", "Unviable")]}
+        self.assertEqual(pm.mutants_counts(listed)[0], {"caught": 2, "missed": 1, "timeout": 0, "unviable": 1})
+
+    def test_detail_lists_the_first_missed_mutants(self):
+        c = {"caught": 1, "missed": 7, "timeout": 0, "unviable": 0}
+        d = pm.mutants_detail(c, [f"m{i}" for i in range(7)])
+        self.assertEqual(d, "caught=1;missed=7;timeout=0;unviable=0;missed_list=m0 | m1 | m2 | m3 | m4 | and 2 more")
+        self.assertEqual(pm.mutants_detail({"caught": 2, "missed": 0, "timeout": 0, "unviable": 0}, []),
+                         "caught=2;missed=0;timeout=0;unviable=0")
+
+    def test_gate_detail_carries_the_skipped_count(self):
+        self.assertEqual(pm.gate_detail(10, 0, 3, skipped=4), "passed=10;failed=0;ignored=3;skipped=4")
+        self.assertEqual(pm.gate_detail(10, 0, 3), "passed=10;failed=0;ignored=3")
+
+
 class Git(unittest.TestCase):
     def test_merge_info_and_since_verified(self):
         with tempfile.TemporaryDirectory() as d:

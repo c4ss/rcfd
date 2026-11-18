@@ -6,7 +6,8 @@ Run on the main checkout, with the merge of one branch at HEAD:
     python scripts/push_main.py --run           run the plan; on success regenerate the generated files, append the ledger line and commit
     python scripts/push_main.py --run --push    the same, then `git push origin HEAD:main`
     python scripts/push_main.py --run --left-out-run   after the commit, start the left-out tests detached; a `leftout` line follows
-    python scripts/push_main.py --gate-line --commit SHA --passed N --failed N --ignored N [--attribution gate_attribute.json]
+    python scripts/push_main.py --gate-line --commit SHA --passed N --failed N --ignored N [--skipped N] [--attribution gate_attribute.json]
+    python scripts/push_main.py --mutants [--merge REV] [--mutants-timeout S] [--run]   generated mutants on the lines the merge changed
     python scripts/push_main.py --since-verified
 
 The plan, in order:
@@ -25,9 +26,19 @@ The plan, in order:
  4. `npm test` in apps/studio-web when the merge touches it; Playwright's skipped count goes in the ledger line.
 On the first failing command the script stops, prints the line, writes nothing and leaves the merge unpushed.
 
-The ledger, docs/process/ledger.tsv, is changed only on main. Columns: date, kind (merge, gate, leftout, ci), commit, branch,
-items, adrs, result, minutes, left_out, left_out_minutes, detail. A gate line's detail is
-`passed=N;failed=N;ignored=N;fails=binary::test=ADR/F-item,...`. A green gate line moves the local tag `verified`.
+The ledger, docs/process/ledger.tsv, is changed only on main. Columns: date, kind (merge, gate, leftout, mutants, ci), commit,
+branch, items, adrs, result, minutes, left_out, left_out_minutes, detail. A gate line's detail is
+`passed=N;failed=N;ignored=N[;skipped=N];fails=binary::test=ADR/F-item,...`; `skipped` is the number of passed tests that
+reported a skip (the closing line of `scripts/gate_test.py --skip-pattern`). A green gate line moves the local tag `verified`.
+
+--mutants (docs/process/documentation-process-review.md, "Mutations the author did not write"): the diff of the merge against
+its first parent, Rust files under crates/ only, is written to a temporary file and `cargo mutants --in-diff` runs on it for the
+touched packages. Without --run the command is printed. With --run a ledger line of kind `mutants` follows, with
+`caught=N;missed=N;timeout=N;unviable=N` and the first missed mutants in the detail; result is green when none was missed.
+It reports and blocks nothing. NOT RUN HERE: cargo-mutants was not installed where this was written, its run time on this
+workspace is unmeasured, and the layout of `mutants.out/outcomes.json` (counts at the top level, one `summary` per outcome,
+`missed.txt` beside it) is taken from the tool's documentation as remembered, not from a run. cargo-mutants is a development
+tool (`cargo install cargo-mutants`), not a dependency of any crate.
 Python 3.9 standard library only.
 """
 import argparse
@@ -206,8 +217,8 @@ def patch_paths(files, test_files, exists=os.path.isfile):
     return sorted(set(out))
 
 
-def gate_detail(passed, failed, ignored, attribution=None, note=""):
-    d = f"passed={passed};failed={failed};ignored={ignored}"
+def gate_detail(passed, failed, ignored, attribution=None, note="", skipped=None):
+    d = f"passed={passed};failed={failed};ignored={ignored}" + ("" if skipped is None else f";skipped={skipped}")
     if attribution:
         fails = []
         for f in attribution.get("failures", []):
@@ -218,6 +229,37 @@ def gate_detail(passed, failed, ignored, attribution=None, note=""):
         if fails:
             d += ";fails=" + ",".join(fails)
     return d + (";" + note if note else "")
+
+
+def mutants_command(packages, diff_file, out_dir, timeout=None):
+    """The cargo-mutants command line for one merge: only the lines of the diff, only the touched packages."""
+    cmd = ["cargo", "mutants", "--in-diff", diff_file, "--output", out_dir]
+    for p in packages:
+        cmd += ["--package", p]
+    if timeout:
+        cmd += ["--timeout", str(int(timeout))]
+    return cmd
+
+
+def mutants_counts(outcomes, missed_text=""):
+    """(counts, missed names) from cargo-mutants' outcomes.json (a dict) and missed.txt. The top-level counts are used when
+    present; otherwise the `summary` of each outcome is counted. The unmutated baseline run (`Success`) is not a mutant."""
+    keys = {"caught": "CaughtMutant", "missed": "MissedMutant", "timeout": "Timeout", "unviable": "Unviable"}
+    counts = {}
+    for k, summary in keys.items():
+        if isinstance(outcomes.get(k), int):
+            counts[k] = outcomes[k]
+        else:
+            counts[k] = sum(1 for o in outcomes.get("outcomes", []) if o.get("summary") == summary)
+    missed = [ln.strip() for ln in missed_text.splitlines() if ln.strip()]
+    return counts, missed
+
+
+def mutants_detail(counts, missed, shown=5):
+    d = ";".join(f"{k}={counts[k]}" for k in ("caught", "missed", "timeout", "unviable"))
+    if missed:
+        d += ";missed_list=" + " | ".join(missed[:shown]) + (f" | and {len(missed) - shown} more" if len(missed) > shown else "")
+    return d
 
 
 def skipped_count(text):
@@ -442,6 +484,49 @@ def do_left_out(root, path):
     return 1 if failed else 0
 
 
+def do_mutants(root, a, info, touched):
+    import shutil
+    import tempfile
+    diff = subprocess.run(["git", "-C", root, "diff", info["first"], info["sha"], "--", "crates/*.rs"], stdout=subprocess.PIPE,
+                          check=True).stdout
+    if not diff.strip() or not touched:
+        print("push_main: the merge changes no Rust file under crates/; no mutants")
+        return 0
+    work = tempfile.mkdtemp(prefix="mutants-")
+    diff_file = os.path.join(work, "merge.diff")
+    with open(diff_file, "wb") as fh:
+        fh.write(diff)
+    cmd = mutants_command(touched, diff_file, work, a.mutants_timeout)
+    print(" ".join(cmd))
+    if not a.run:
+        print("dry run: nothing was run (use --run)")
+        shutil.rmtree(work, ignore_errors=True)
+        return 0
+    if git(root, "rev-parse", "HEAD").strip() != info["sha"]:
+        raise SystemExit("push_main: --mutants --run needs the merge at HEAD")
+    try:
+        ok = subprocess.run(["cargo", "mutants", "--version"], cwd=root, stdout=subprocess.PIPE, stderr=subprocess.STDOUT).returncode == 0
+    except OSError:
+        ok = False
+    if not ok:
+        raise SystemExit("push_main: cargo-mutants is not installed (cargo install cargo-mutants); nothing was run")
+    t0 = time.time()
+    subprocess.run(cmd, cwd=root)  # its exit code is non-zero when a mutant was missed; the counts below are the result
+    out = os.path.join(work, "mutants.out")
+    try:
+        outcomes = json.load(open(os.path.join(out, "outcomes.json"), encoding="utf-8"))
+    except (OSError, ValueError) as e:
+        raise SystemExit(f"push_main: no readable {out}/outcomes.json ({e}); nothing written to the ledger")
+    mp = os.path.join(out, "missed.txt")
+    counts, missed = mutants_counts(outcomes, open(mp, encoding="utf-8").read() if os.path.isfile(mp) else "")
+    append_ledger(os.path.join(root, LEDGER), ledger_line(
+        date=today(), kind="mutants", commit=info["sha"][:10], branch=info["branch"], items=",".join(info["items"]),
+        adrs=",".join(info["adrs"]), result="red" if counts["missed"] else "green", minutes=f"{(time.time() - t0) / 60.0:.1f}",
+        detail=mutants_detail(counts, missed)))
+    print(f"push_main: mutants {mutants_detail(counts, missed)}; reports in {out}")
+    return 0
+
+
 def do_gate_line(root, a):
     if not a.commit or a.passed is None or a.failed is None or a.ignored is None:
         raise SystemExit("push_main: --gate-line needs --commit, --passed, --failed and --ignored")
@@ -450,7 +535,7 @@ def do_gate_line(root, a):
     sha = git(root, "rev-parse", a.commit).strip()
     append_ledger(os.path.join(root, LEDGER), ledger_line(
         date=a.date or today(), kind="gate", commit=sha[:10], result="green" if green else "red",
-        minutes=a.minutes or "", detail=gate_detail(a.passed, a.failed, a.ignored, att, a.note or "")))
+        minutes=a.minutes or "", detail=gate_detail(a.passed, a.failed, a.ignored, att, a.note or "", a.skipped)))
     if green:
         git(root, "tag", "-f", "verified", sha)
         print(f"push_main: tag verified moved to {sha[:10]}")
@@ -476,6 +561,9 @@ def main(argv=None):
     ap.add_argument("--passed", type=int)
     ap.add_argument("--failed", type=int)
     ap.add_argument("--ignored", type=int)
+    ap.add_argument("--skipped", type=int, help="passed tests that reported a skip (gate_test.py --skip-pattern)")
+    ap.add_argument("--mutants", action="store_true", help="generated mutants on the lines the merge changed (cargo-mutants)")
+    ap.add_argument("--mutants-timeout", type=float, help="seconds per mutant, passed to cargo mutants --timeout")
     ap.add_argument("--minutes")
     ap.add_argument("--note")
     ap.add_argument("--attribution", help="JSON written by scripts/gate_attribute.py")
@@ -496,6 +584,8 @@ def main(argv=None):
     import adr_test_index
     info = merge_info(root, a.merge)
     idx = adr_test_index.build(root, adr_test_index.metadata(root, a.metadata), "git", e8=True)
+    if a.mutants:
+        return do_mutants(root, a, info, touched_crates(info["files"], idx["crates"]))
     plan = make_plan(root, info, idx, read_times(a.times), rows, a.budget_minutes, a.default_seconds)
     base, n = since_verified(root, rows, info["sha"])
     print_plan(info, plan, base, n)

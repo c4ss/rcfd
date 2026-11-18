@@ -12,7 +12,7 @@ number, the branch, the worktree and your scratch folder.
 
 1. Registration before code. First write `docs/adr/<number>-<item>-registration-<short-slug>.md` in the style of the newest
    registrations: the status line "REGISTERED <date>, written before any code of <item> and before any run of its checks";
-   the brief it answers (path) and the version of these rules; what you read and any arithmetic done beforehand; the design
+   the brief it answers (path) and these rules by path and version (`docs/process/agent-rules.md`, version N); what you read and any arithmetic done beforehand; the design
    with its derivation from first principles or a cited published source; the table of checks (rule 14), every clause of the
    roadmap acceptance first; negative controls and planned mutations (rule 16); the size (rule 17); the decision rule (done,
    partial, todo); what is not covered. Commit that file alone as the first commit, before any library or test code.
@@ -79,7 +79,7 @@ number, the branch, the worktree and your scratch folder.
 16. One committed mutation. Run the planned mutations on a scratch copy and record what caught each, as before. In addition
     commit one of them as a patch file beside the test it must fail (`<test file stem>.mutation.patch`, made with `git diff`; its first line is `# expect-fail: <the command that must fail>`).
     The lead's push script applies it, runs that test, expects a failure and removes the patch.
-17. Size. The registration states five values, fixed before any code: the expected outcome of this registration (done or
+17. Size. The registration states five values on one line that starts `Size (agent):`, fixed before any code: the expected outcome of this registration (done or
     partial), further registrations expected, heavy runs on the shared machine, questions for the maintainer, and bytes to
     read. The addendum states the actual five. Your size is scored for calibration; nothing is charged against it.
 18. Records. A new ADR file name contains one kind word: registration, amendment, diagnosis, proposal, plan, record, review,

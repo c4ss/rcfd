@@ -111,12 +111,9 @@ fn md_to_html(md: &str) -> (String, String) {
             if title.is_empty() {
                 title = text.replace('`', "");
             }
-            let id: String = text
-                .to_lowercase()
-                .chars()
-                .filter(|c| c.is_alphanumeric() || *c == ' ' || *c == '-')
-                .map(|c| if c == ' ' { '-' } else { c })
-                .collect();
+            // The one slug rule of the repository (docs/process/documentation-process-review.md, I4): the engine's
+            // `x-rcfd-see` anchors and `rcfd help` use it, so the site's heading ids are theirs.
+            let id = rcfd_api::ui::slug(text);
             html.push_str(&format!("<h{n} id=\"{id}\">{}</h{n}>\n", inline(text)));
         } else if t.starts_with('|') {
             flush(&mut html, &mut para, &mut list);
@@ -229,6 +226,57 @@ fn resolve(page: &str, href: &str) -> Option<String> {
     Some(parts.join("/"))
 }
 
+/// The values of `attr="..."` in `html`, optionally only inside tags that start with `tag`.
+fn attr_values(html: &str, tag: &str, attr: &str) -> Vec<String> {
+    let mut out = Vec::new();
+    for t in html.split('<').skip(1) {
+        let t = t.split('>').next().unwrap_or("");
+        if !t.starts_with(tag) {
+            continue;
+        }
+        if let Some(v) = t.split(&format!(" {attr}=\"")).nth(1).and_then(|s| s.split('"').next()) {
+            out.push(v.replace("&amp;", "&"));
+        }
+    }
+    out
+}
+
+/// Every (page, href) of the built site whose fragment is not the id of a heading of the page it points at. Links to
+/// other sites are skipped; a link to a missing page is the business of S2.
+fn broken_fragments(out: &Path, pages: &BTreeSet<String>) -> Vec<(String, String)> {
+    let html: std::collections::BTreeMap<&String, String> = pages
+        .iter()
+        .map(|p| (p, std::fs::read_to_string(out.join(p)).unwrap()))
+        .collect();
+    let ids = |p: &String| -> BTreeSet<String> {
+        let h = &html[p];
+        (1..=6).flat_map(|n| attr_values(h, &format!("h{n}"), "id")).collect()
+    };
+    let mut bad = Vec::new();
+    for p in pages {
+        for href in attr_values(&html[p], "a ", "href") {
+            if href.contains("://") || href.starts_with("mailto:") {
+                continue;
+            }
+            let Some((path, frag)) = href.split_once('#') else {
+                continue;
+            };
+            let target = if path.is_empty() {
+                Some(p.clone())
+            } else {
+                resolve(p, &href)
+            };
+            let Some(target) = target.filter(|t| pages.contains(t)) else {
+                continue;
+            };
+            if !frag.is_empty() && !ids(&target).contains(frag) {
+                bad.push((p.clone(), href));
+            }
+        }
+    }
+    bad
+}
+
 /// S1, S2, S3.
 #[test]
 fn docs_site_builds_with_no_broken_links() {
@@ -253,6 +301,13 @@ fn docs_site_builds_with_no_broken_links() {
         broken.is_empty(),
         "relative links in docs/ that do not resolve to a docs page (page, link); fix the link, or write a path outside docs/ \
          as `code` instead of a link (ADR 0089 S2): {broken:?}"
+    );
+    // Fragments (docs/process/documentation-process-review.md, I4): a relative or same-page link with `#fragment` must name
+    // a heading id of its target page.
+    let bad = broken_fragments(&out, &pages);
+    assert!(
+        bad.is_empty(),
+        "links in docs/ whose #fragment is not a heading id of the target page (page, link): {bad:?}"
     );
     let index: BTreeSet<String> = links
         .iter()
@@ -290,4 +345,24 @@ fn markdown_subset() {
     }
     assert_eq!(resolve("tutorials/a.html", "../b.html#x").as_deref(), Some("b.html"));
     assert_eq!(resolve("a.html", "../b.html"), None);
+    // I4: the heading id is `rcfd_api::ui::slug`, which keeps `_`; a fragment is checked against the ids of its target.
+    let (_, h) = md_to_html("## The `a_b` key\n\n[ok](#the-a_b-key) [no](#the-ab-key)\n");
+    assert!(h.contains("<h2 id=\"the-a_b-key\">"), "{h}");
+    let out = Path::new(env!("CARGO_TARGET_TMPDIR")).join("docs-site-fragments");
+    let _ = std::fs::remove_dir_all(&out);
+    std::fs::create_dir_all(&out).unwrap();
+    std::fs::write(out.join("p.html"), &h).unwrap();
+    std::fs::write(
+        out.join("q.html"),
+        "<a href=\"p.html#the-a_b-key\">x</a><a href=\"p.html#gone\">y</a>",
+    )
+    .unwrap();
+    let pages: BTreeSet<String> = ["p.html".to_string(), "q.html".to_string()].into();
+    assert_eq!(
+        broken_fragments(&out, &pages),
+        vec![
+            ("p.html".to_string(), "#the-ab-key".to_string()),
+            ("q.html".to_string(), "p.html#gone".to_string())
+        ]
+    );
 }

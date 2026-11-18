@@ -14,7 +14,9 @@ Usage (from the repository root, Python 3.9 standard library):
     python scripts/process_report.py --seed-exceptions   write today's findings to docs/process/exceptions/ (once, by the lead)
 
 Sections: a roadmap checks, b ADR index, c registration lint (history), d open questions, e provenance, f overview numbers,
-g dispatch, h the lead's state, i area pages, j weekly list, k merge hygiene, l test headers, m process measures.
+g dispatch, h the lead's state, i area pages, j weekly list, k merge hygiene, l test headers, m process measures,
+r registrations written under docs/process/agent-rules.md (brief, size, the kind, margin and source columns), and with
+--history t, the tests without a primary ADR.
 
 Exceptions files (docs/process/exceptions/*.txt, one entry per line, `#` comments) hold the findings that existed when a rule
 started. They may only shrink: an entry that no longer applies is reported so that it can be removed.
@@ -28,6 +30,9 @@ import re
 import subprocess
 import sys
 from collections import Counter, defaultdict
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import render_roadmap  # noqa: E402
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 ADR_FILE = re.compile(r"^(\d{4})-(.+)\.md$")
@@ -46,6 +51,11 @@ EXC_DIR = "docs/process/exceptions"
 LEDGER = "docs/process/ledger.tsv"
 BRIEFS = "docs/adr/briefs"
 LAST_GREEN = "49fbf1a3"
+CHANGELOG = "CHANGELOG.md"
+CHANGELOG_COUNT = re.compile(r"Of the \d+ roadmap items, \d+ are done, \d+ partly done and \d+ not started")
+RULES = "docs/process/agent-rules.md"
+KINDS = ("unchanged default output", "code verification", "solution verification", "validation")
+MARGIN_MAX = 3.0
 
 # (i) the page that summarises each roadmap_progress.py category; None prints "no page".
 AREA_PAGES = {
@@ -399,6 +409,61 @@ def sec_e(root, adrs):
     return rep, fail, mem, unv
 
 
+def checks_table(text):
+    """The first table of a registration whose header has a cell "limit": (header cells in lower case, rows of cells)."""
+    lines = text.splitlines()
+    for n, ln in enumerate(lines):
+        if ln.startswith("|") and n + 1 < len(lines) and re.match(r"^\|[\s:|-]+\|\s*$", lines[n + 1]):
+            head = [c.strip().lower() for c in ln.strip().strip("|").split("|")]
+            if any(c == "limit" or c.startswith("limit ") for c in head):
+                rows = []
+                for row in lines[n + 2:]:
+                    if not row.startswith("|"):
+                        break
+                    rows.append([c.strip() for c in row.strip().strip("|").split("|")])
+                return head, rows
+    return None, []
+
+
+def sec_r(root, adrs):
+    """Registrations written under docs/process/agent-rules.md (they cite that path): the brief, the size, and the columns
+    kind, margin and source of the table of checks (rules 1, 14, 15, 17). Older registrations are not read."""
+    rep, fail, wide, own, mem = [], [], [], [], []
+    regs = [a for a in adrs if a["kind"] == "registration" and RULES in a["text"]]
+    for a in regs:
+        f, t = a["file"], a["text"]
+        if not re.search(r"docs/adr/briefs/[\w./-]+\.md", t):
+            fail.append(f"r: registration cites no brief file, {f}")
+        if not re.search(r"^Size \(agent\):", t, re.M):
+            fail.append(f"r: registration states no size (a line that starts \"Size (agent):\"), {f}")
+        head, rows = checks_table(t)
+        if head is None:
+            fail.append(f"r: registration has no table of checks with a column \"limit\", {f}")
+            continue
+        col = {name: next((i for i, c in enumerate(head) if c.startswith(name)), None) for name in ("kind", "margin", "source")}
+        for name, i in col.items():
+            if i is None:
+                fail.append(f"r: table of checks has no column \"{name}\", {f}")
+        for row in rows:
+            cell = lambda name: row[col[name]] if col[name] is not None and col[name] < len(row) else ""
+            if col["kind"] is not None and cell("kind").lower() not in KINDS:
+                fail.append(f"r: kind {cell('kind')!r} is not one of the four, {f}: {row[0][:60]}")
+            m = re.search(r"\d+(?:\.\d+)?(?:e[+-]?\d+)?", cell("margin"), re.I)
+            if m and float(m.group(0)) > MARGIN_MAX:
+                wide.append(f"{f}: margin {m.group(0)}, {row[0][:60]}")
+            if col["source"] is not None and (not cell("source") or re.search(r"\b(own )?estimate\b", cell("source"), re.I)):
+                own.append(f"{f}: {row[0][:60]}")
+        if re.search(r"from memory", t, re.I):
+            mem.append(f)
+    rep.append(f"registrations that cite {RULES}: {len(regs)}")
+    rep.append(f"limits with a margin above {MARGIN_MAX:g} (reported): {len(wide)}")
+    rep += [f"  {x}" for x in wide[:20]]
+    rep.append(f"limits whose only source is the agent's estimate (the lead holds the item's code, rule 15): {len(own)}")
+    rep += [f"  {x}" for x in own[:20]]
+    rep.append(f"of these registrations, citing from memory (rule 4 allows it only where no source could be read): {len(mem)} {mem[:8]}")
+    return rep, fail
+
+
 def counts_by_line(items, cats, lines):
     cat = item_category(cats)
     c = defaultdict(Counter)
@@ -449,6 +514,15 @@ def generated(root, items, cats, adrs):
         t = replace_block(read(root, OVERVIEW), "overview", overview_block(items, cats, pdate, lines, stated))
         if t is not None:
             out[OVERVIEW] = t
+    if exists(root, CHANGELOG):
+        tot = Counter(i["status"] for i in items)
+        line = f"Of the {len(items)} roadmap items, {tot['done']} are done, {tot['partial']} partly done and {tot['todo']} not started"
+        old = read(root, CHANGELOG)
+        if CHANGELOG_COUNT.search(old):
+            out[CHANGELOG] = CHANGELOG_COUNT.sub(line, old, count=1)
+    page = read(root, "docs/ROADMAP.md")
+    if render_roadmap.MARKER in page:
+        out["docs/ROADMAP.md"] = render_roadmap.render_page(page, items)
     for name, page in AREA_PAGES.items():
         if page and exists(root, page):
             t = replace_block(out.get(page) or read(root, page), "built", built_block(items, cats, name))
@@ -756,12 +830,17 @@ def main(argv=None):
         rep, f = sec_c(root, adrs); fails += f; show("c", "registration lint (git history)", rep)
     rep, questions = sec_d(items, adrs, full=want == {"d"}); show("d", "open questions", rep)
     rep, f, mem, unv = sec_e(root, adrs); fails += f; show("e", "provenance", rep)
+    rep, f = sec_r(root, adrs); fails += f; show("r", "registrations under the rules in the repository", rep)
     show("f", "overview numbers", sec_f(root, items, cats))
     rep, over = sec_g(root, items, cats, adrs); show("g", "dispatch", rep)
     rep, _ = sec_h(root); show("h", "the lead's state", rep)
     show("i", "area pages", sec_i(root, items, cats))
     rep, f = sec_k(root); fails += f; show("k", "merge hygiene", rep)
     rep, f, rust, specs = sec_l(root, items, adrs); fails += f; show("l", "test headers", rep)
+    if a.history:
+        r = subprocess.run([sys.executable, os.path.join(root, "scripts", "adr_test_index.py"), "--root", root, "--report"],
+                           capture_output=True, text=True, encoding="utf-8", errors="replace")
+        show("t", "tests and their primary ADR (scripts/adr_test_index.py --report)", (r.stdout or r.stderr).strip().splitlines()[-25:])
     measures = sec_m(root, items, cats, adrs, questions, mem, rust, specs)
     show("m", "process measures", measures)
     for rel, text in gen.items():

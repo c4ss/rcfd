@@ -370,14 +370,23 @@ In place:
 - I8: [the briefs folder](../adr/briefs/README.md) with the form of a brief.
 - The tolerance table as [a draft](tolerances.md) that waits for the maintainer's approval.
 
+A second part followed the same day:
+
+- I4: `scripts/render_roadmap.py`, the generator revived for today's roadmap, with the `gap` key in its schema. It is written and tested but docs/ROADMAP.md is still kept by hand: `--diff` finds 46 places where the page and roadmap.json disagree (36 notes, 5 acceptance texts, 3 titles, one list of prerequisites, the second F-847), in both directions, and adopting would keep roadmap.json's words and drop the page's. The lead reconciles them on main and runs `--adopt` once; from then on the process report keeps the page current.
+- I4: the docs site test gives each heading the id of `rcfd_api::ui::slug` and fails on a link whose fragment is not a heading of its target (13 fragment links, none broken).
+- I5: `crates/rcfd-api/tests/case_schema_page.rs` compares the case schema with docs/case-schema.md (12 schema tables not named on the page and 8 keys on the page that do not resolve are its starting exceptions).
+- I2: `scripts/gate_test.py --skip-pattern` records, per passed test, the output lines that report a skip; `push_main.py --gate-line --skipped N` puts the count in the ledger.
+- The mutation tool: `push_main.py --mutants` runs cargo-mutants on the Rust lines a merge changed and writes a ledger line.
+- Lints: section r of the report reads registrations that cite agent-rules.md for the brief, the size line and the kind, margin and source columns; with `--history` it prints the tests without a primary ADR. The count in CHANGELOG.md is generated.
+
 Not in place, with who acts next:
 
-- The rules in the maintainer's work folder still govern running agents until the lead's briefs point at agent-rules.md (lead).
+- The rules in the maintainer's work folder still govern running agents until this branch is on main and the lead's briefs point at agent-rules.md (lead).
 - The priority statement in the form of I6, with budgets (maintainer). Until it exists the report orders the lines of work as `scripts/roadmap_progress.py` does and no budget is counted.
-- Fixes to the roadmap pair, which is written on main only: the second F-847, the 36 notes that say "not merged", the 42 that say pending acceptance, and a `gap` for the 319 partial items (lead).
-- The roadmap generator of 2026-10-31 (I4), the anchor check of the docs site (I4), the distillation of the structural page, the decision on docs/reference-data.md and the schema test (I5), the trial of another kind of reader (I9), and the items that replace citations from memory (I10): each is an item to issue.
-- The full run split into parallel jobs, the mutation tool in the full run, the count of skipped tests in `scripts/gate_test.py` and the run of the tests left out after a push, which the push script starts but which has never run (I2, I11).
-- Lints for rules that so far rest on convention: the kind and margin columns, the source of each limit, one-line note entries, citation locators, the limit on reading, and the list of tests without a primary ADR (`python scripts/adr_test_index.py --report` prints the last).
-- The count in CHANGELOG.md was corrected by hand and is not generated.
+- On the roadmap pair, which is written on main only: reconciling the 46 differences and adopting the generator, the 36 notes that say "not merged", the 42 that say pending acceptance, and a `gap` for the 319 partial items (lead).
+- Never run: `push_main.py --run`, `--push`, `--left-out-run` and `--mutants --run` (cargo-mutants is not installed here and its run time on this workspace is unmeasured), and `gate_test.py --skip-pattern` on a real gate; gate.yml does not pass it yet.
+- The full run split into parallel jobs: not written. A test pins the gate job's steps, and the change cannot be tried from a branch.
+- Items to issue: the hand-written distillation and reading list of the structural page, the decision on docs/reference-data.md (maintainer), the trial of another kind of reader (I9), and the replacement of citations from memory (I10; the ADRs are append-only, so each is an addendum).
+- Rules that still rest on convention: one-line note entries, citation locators, the validation rule, the limit on reading and the weekly audit.
 
 Three measures changed when the script counted them. 311 ADRs contain the words "from memory" (G18 counted 218 registration files); 55 Rust test root files and 12 Studio spec files name no record in their leading comment (I1 said 54 and 12); 97 file names carry none of the ten kind words of rule 18 (G3 counted 103 against four words).

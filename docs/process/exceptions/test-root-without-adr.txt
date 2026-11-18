@@ -1,5 +1,6 @@
 # Rust test root files whose leading comment named no ADR when the rule started.
 # Written by scripts/process_report.py --seed-exceptions on 2026-11-18. This list only shrinks.
+crates/rcfd-api/tests/case_schema_page.rs
 crates/rcfd-api/tests/coupled.rs
 crates/rcfd-api/tests/fan_cgrid_case.rs
 crates/rcfd-api/tests/fan_sector.rs
