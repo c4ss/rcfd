@@ -461,10 +461,10 @@ impl Worker {
         // ended on the site: everything appended, then the results, then the final status
         while copy_appended(link, m)? {}
         let (n, bytes) = download(link, m)?;
-        atomic_status(&m.dir, &st.data);
         for f in [extra::PAUSE, extra::PAUSE_ACK, extra::CANCEL] {
             let _ = std::fs::remove_file(m.dir.join(f));
         }
+        // `site.jsonl` and `site.json` before the terminal status: a reader that waits for the status sees them final
         site_event(
             &m.dir,
             "downloaded",
@@ -475,6 +475,7 @@ impl Worker {
             json!({"last_contact": records::now_iso(), "link": "done", "done": true,
                    "state": remote.map(|s| crate::client::state_name(s.state))}),
         );
+        atomic_status(&m.dir, &st.data);
         Ok(Step::Done)
     }
 
