@@ -22,6 +22,11 @@ on:
         description: Time budget of the bisect, minutes in all
         type: number
         default: 30
+      shards:
+        description: Parallel shards of the test step (ADR 0653 Amendment 3); 1 is the single job of the daily gate
+        type: choice
+        options: ["1", "2", "3", "4", "6", "8"]
+        default: "1"
       open_issues:
         description: Open one issue per non-flaky failed test (skipped when an open issue has the same title)
         type: boolean
@@ -42,7 +47,8 @@ env:
 
 jobs:
   # Finds the last successful Windows gate on main (read-only API calls) and skips a scheduled run when it tested the same SHA.
-  # Any failure of the query runs the gate (fail open).
+  # Any failure of the query runs the gate (fail open). For a sharded run (ADR 0653 Amendment 3) it also names the one earlier
+  # run whose test times every shard splits by; none found means every shard splits by count.
   decide:
     runs-on: ubuntu-24.04
     timeout-minutes: 5
@@ -52,6 +58,9 @@ jobs:
     outputs:
       run: ${{ steps.d.outputs.run }}
       last_green: ${{ steps.d.outputs.last_green }}
+      n: ${{ steps.d.outputs.n }}
+      shards: ${{ steps.d.outputs.shards }}
+      order_run: ${{ steps.d.outputs.order_run }}
     steps:
       - id: d
         shell: bash
@@ -61,11 +70,13 @@ jobs:
           EVENT: ${{ github.event_name }}
           REF: ${{ github.ref }}
           SHA: ${{ github.sha }}
+          SHARDS: ${{ inputs.shards || '1' }}
+          OS: ${{ inputs.os || 'windows-latest' }}
         run: |
           last=""
           ids=$(gh api "repos/$REPO/actions/workflows/gate.yml/runs?branch=main&status=success&per_page=20"                   --jq '.workflow_runs[].id') || ids=""
           for id in $ids; do
-            ok=$(gh api "repos/$REPO/actions/runs/$id/jobs"                    --jq '[.jobs[] | select(.name == "full gate, windows-latest" and .conclusion == "success")] | length') || ok=0
+            ok=$(gh api "repos/$REPO/actions/runs/$id/jobs"                    --jq '[.jobs[] | select((.name | startswith("full gate, windows-latest")) and .conclusion == "success")] | length') || ok=0
             if [ "$ok" != "0" ]; then
               last=$(gh api "repos/$REPO/actions/runs/$id" --jq .head_sha) || last=""
               break
@@ -82,14 +93,41 @@ jobs:
           echo "last green Windows gate on main: ${last:-none}; this run: $SHA ($EVENT, $REF); run: $run"
           echo "run=$run" >> "$GITHUB_OUTPUT"
           echo "last_green=$last" >> "$GITHUB_OUTPUT"
+          n="${SHARDS:-1}"
+          order_run=""
+          if [ "$n" != "1" ]; then
+            ids=$(gh api "repos/$REPO/actions/workflows/gate.yml/runs?branch=main&status=completed&per_page=10" --jq '.workflow_runs[].id') || ids=""
+            for id in $ids; do
+              rm -rf order
+              gh run download "$id" -R "$REPO" -p "gate-$OS-*" -D order > /dev/null 2>&1 || continue
+              if [ -n "$(find order -name times.tsv -size +0 2> /dev/null | head -n 1)" ]; then order_run=$id; break; fi
+            done
+          fi
+          echo "shards: $n; test times from run: ${order_run:-none}"
+          echo "n=$n" >> "$GITHUB_OUTPUT"
+          echo "shards=$(python3 -c 'import sys; print(list(range(1, int(sys.argv[1]) + 1)))' "$n")" >> "$GITHUB_OUTPUT"
+          echo "order_run=$order_run" >> "$GITHUB_OUTPUT"
 
   gate:
     needs: decide
     if: needs.decide.outputs.run == 'true'
-    name: full gate, ${{ inputs.os || 'windows-latest' }}
+    # One job per shard; with one shard the name, the commands and the artifact names are those of the unsharded gate.
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: ${{ fromJSON(needs.decide.outputs.shards) }}
+    name: full gate, ${{ inputs.os || 'windows-latest' }}${{ needs.decide.outputs.n != '1' && format(', shard {0}/{1}', matrix.shard, needs.decide.outputs.n) || '' }}
     runs-on: ${{ inputs.os || 'windows-latest' }}
     timeout-minutes: 340
+    permissions:
+      actions: read # the test times of an earlier run, for the split
+      contents: read
     env:
+      SHARD: ${{ matrix.shard }}
+      SHARDS: ${{ needs.decide.outputs.n }}
+      ORDER_RUN: ${{ needs.decide.outputs.order_run }}
+      SUFFIX: ${{ needs.decide.outputs.n != '1' && format('-shard-{0}', matrix.shard) || '' }}
+      GATE_OS: ${{ inputs.os || 'windows-latest' }}
       # SHA tested by the last successful Windows gate on main (empty if none); for the failure attribution (ADR 0653).
       GATE_LAST_GREEN: ${{ needs.decide.outputs.last_green }}
     defaults:
@@ -138,19 +176,33 @@ jobs:
         id: tests
         # Shorter than the job, so the logs are still uploaded when this step runs out of time.
         timeout-minutes: 290
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
           mkdir -p gate-out
+          # A sharded run: this shard's part of the split, dealt by the times of the run `decide` named. Every test keeps
+          # the 3600 s limit it has without an order file.
+          args=()
+          if [ "$SHARDS" != "1" ]; then
+            args=(--shard "$SHARD/$SHARDS" --timeout-min 3600)
+            if [ -n "$ORDER_RUN" ]; then
+              gh run download "$ORDER_RUN" -R "$GITHUB_REPOSITORY" -p "gate-$GATE_OS-*" -D "$RUNNER_TEMP/order" || true
+              cat "$RUNNER_TEMP"/order/*/times.tsv > "$RUNNER_TEMP/order.tsv" 2> /dev/null || true
+              if [ -s "$RUNNER_TEMP/order.tsv" ]; then args+=(--order "$RUNNER_TEMP/order.tsv"); fi
+            fi
+          fi
           # stderr (cargo's build output, phase markers, one line per finished test, a heartbeat every 5 min) goes both to
           # progress.log and to this step's live log, so a run can be followed while it goes; stdout stays in test.log.
           export PYTHONUNBUFFERED=1
           set -o pipefail
-          { python scripts/gate_test.py --tsv gate-out/times.tsv --heartbeat 300 > gate-out/test.log; } 2>&1 | tee gate-out/progress.log
+          { python scripts/gate_test.py --tsv gate-out/times.tsv --heartbeat 300 "${args[@]}" > gate-out/test.log; } 2>&1 | tee gate-out/progress.log
       - name: tests with the test-hooks feature (scripts/gate_test.py, ADR 0681)
         id: hooks
         # The feature-gated controls of the edit lock (ADR 0676, crates/rcfd-project/tests/edit_lock_f755.rs), built in this
         # separate cargo invocation only: cargo test -p rcfd-project --release --features test-hooks --test edit_lock_f755.
         # Runs also after a failed workspace step; not when an earlier step (fmt, clippy) stopped the job. No doc-tests here.
-        if: always() && steps.tests.outcome != 'skipped'
+        # In a sharded run, in shard 1 only.
+        if: always() && steps.tests.outcome != 'skipped' && matrix.shard == 1
         timeout-minutes: 30
         run: |
           mkdir -p gate-out
@@ -161,7 +213,7 @@ jobs:
         if: always()
         run: |
           {
-            echo "### Full gate at ${GITHUB_SHA}"
+            echo "### Full gate at ${GITHUB_SHA}${SUFFIX}"
             grep "^test result" gate-out/test.log | awk '{p+=$4;f+=$6;i+=$8} END{print p" passed, "f" failed, "i" ignored"}'
             grep -E "^test .* FAILED" gate-out/test.log || true
             grep "^gate_test:" gate-out/test.log || true
@@ -179,7 +231,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
-          name: gate-${{ inputs.os || 'windows-latest' }}-${{ github.sha }}
+          name: gate-${{ inputs.os || 'windows-latest' }}-${{ github.sha }}${{ env.SUFFIX }}
           path: gate-out/
           if-no-files-found: warn
           retention-days: 90
@@ -201,7 +253,7 @@ jobs:
         if: always() && hashFiles('gate-out/attribution.json') != ''
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
-          name: gate-attribution-${{ inputs.os || 'windows-latest' }}-${{ github.sha }}
+          name: gate-attribution-${{ inputs.os || 'windows-latest' }}-${{ github.sha }}${{ env.SUFFIX }}
           path: |
             gate-out/attribution.json
             gate-out/attribution.md
@@ -226,5 +278,28 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           NAME: gate-attribution-${{ inputs.os || 'windows-latest' }}-${{ github.sha }}
         run: |
-          gh run download "${{ github.run_id }}" -n "$NAME" -D gate-out
-          python3 scripts/gate_attribute.py issues --json gate-out/attribution.json
+          # one attribution per shard that failed (one in an unsharded run)
+          gh run download "${{ github.run_id }}" -p "$NAME*" -D gate-out
+          for f in gate-out/*/attribution.json; do
+            python3 scripts/gate_attribute.py issues --json "$f"
+          done
+
+  # A sharded run only: the shards together ran every test once (scripts/gate_shards_check.py, ADR 0653 Amendment 3).
+  complete:
+    needs: [decide, gate]
+    if: always() && needs.decide.outputs.n != '1' && needs.gate.result != 'skipped'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      actions: read
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: every test ran in exactly one shard
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          OS: ${{ inputs.os || 'windows-latest' }}
+        run: |
+          gh run download "${{ github.run_id }}" -p "gate-$OS-*" -D shards
+          python3 scripts/gate_shards_check.py shards/*/ | tee -a "$GITHUB_STEP_SUMMARY"

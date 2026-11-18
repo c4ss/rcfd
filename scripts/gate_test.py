@@ -11,8 +11,9 @@ Usage (from the workspace root):
            elapsed, estimated time left, and the longest-running tests still going.
 --shard K/N  run only shard K of N (1 <= K <= N). The tests are dealt to the N shards by their seconds in the --order TSV so that
            the shards carry about equal recorded time; with the same --order file the N runs together run every test once. The
-           ignored tests and the doc-tests are reported by shard 1 only, so the sums over the N logs equal those of one run. Not
-           yet used by gate.yml (docs/test-process.md 7.5).
+           ignored tests and the doc-tests are reported by shard 1 only, so the sums over the N logs equal those of one run. The
+           split does not depend on the order of the binaries, and a line `gate_test: shard K/N runs m of M tests, split DIGEST`
+           lets scripts/gate_shards_check.py show that the N runs dealt from one list (ADR 0653 Amendment 3; gate.yml input `shards`).
 --no-doc   skip the closing doc-tests (ADR 0681: a run restricted with `--test NAME`, where `cargo test --doc` is an error). Cargo options
            in the selection come after `--`: gate_test.py --no-doc -- -p CRATE --features F --test NAME.
 --timeout-factor F, --timeout-min S, --timeout-max S (ADR 0129; defaults 5, 600, 3600): a test's time limit is
@@ -29,6 +30,7 @@ heartbeat lines. Output keeps the libtest lines (`Running`, `test X ... ok`, `te
 `cargo test --doc` runs the doc-tests. Exit status 0 only if the build, every test and the doc-tests pass.
 """
 import argparse
+import hashlib
 import concurrent.futures as cf
 import json
 import os
@@ -83,6 +85,17 @@ def shard_of(seconds, n, default=1.0):
         load[k] += default if s is None else s
         out.append(k)
     return out
+
+
+def shard_split(keys, seconds, n):
+    """The split of ADR 0653 Amendment 3: `keys` are (binary, manifest path, test) and `seconds` the recorded seconds (None
+    without a record) of all tests, in any order. Returns (order, part, digest): the indices in the order the tests are
+    dealt (longest first, then by key, so the order does not depend on the order of the binaries), the shard (0 to n-1)
+    of each test in that order, and the SHA-256 of the ordered list, which shards with the same input share."""
+    order = sorted(range(len(keys)), key=lambda k: (-(seconds[k] or 0.0), keys[k]))
+    secs = [seconds[k] for k in order]
+    text = "".join(f"{keys[k][0]}\t{keys[k][1]}\t{keys[k][2]}\t{seconds[k]}\n" for k in order)
+    return order, shard_of(secs, n), hashlib.sha256(text.encode("utf-8")).hexdigest()
 
 
 def parse_shard(text):
@@ -282,8 +295,13 @@ def main():
     jobs = [(i, t) for i, names in enumerate(alls) for t in names if t not in ign[i]]
     jobs.sort(key=lambda j: -prev.get((stem[j[0]], j[1]), 0.0))
     if shard:
-        part = shard_of([prev.get((stem[i], t)) for i, t in jobs], shard[1])
-        jobs = [j for j, k in zip(jobs, part) if k == shard[0] - 1]
+        keys = [(stem[i], bins[i]["manifest_path"].replace("\\", "/"), t) for i, t in jobs]
+        order, part, digest = shard_split(keys, [prev.get((stem[i], t)) for i, t in jobs], shard[1])
+        total = len(jobs)
+        jobs = [jobs[k] for k, sh in zip(order, part) if sh == shard[0] - 1]
+        line = f"gate_test: shard {shard[0]}/{shard[1]} runs {len(jobs)} of {total} tests, split {digest}"
+        progress(line)
+        print(line, flush=True)
     n_ign = sum(len(x) for x in ign) if first else 0
     progress(f"gate_test: {len(jobs)} tests to run ({n_ign} ignored) in {len(bins)} binaries, jobs={a.jobs}"
              + (f", order from {a.order}" if prev else ""))
