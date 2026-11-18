@@ -717,7 +717,10 @@ def sec_j(root, items, cats, questions, over):
         rep += ["No priority statement in the form of I6 (a numbered list of lines of work, each with an optional weekly budget) "
                 f"is in docs/ROADMAP.md; the statement there is dated {pdate or 'not found'}.", ""]
     m = re.search(r"^Current priority.*?(?:\n\n|\Z)", read(root, "docs/ROADMAP.md"), re.M | re.S)
-    pri_ids = re.findall(r"F-\d{3}", m.group(0)) if m else []
+    text = m.group(0) if m else ""
+    for lo, hi in re.findall(r"F-(\d{3}) to F-(\d{3})", text):  # a range names every item in it
+        text += " " + " ".join(f"F-{n:03d}" for n in range(int(lo), int(hi) + 1))
+    pri_ids = list(dict.fromkeys(re.findall(r"F-\d{3}", text)))
     st = {i["id"]: i for i in items}
     blocked = [i for i in pri_ids if i in st and st[i]["status"] != "done"]
     rep.append(f"1. Priority items not done: {len(blocked)}")

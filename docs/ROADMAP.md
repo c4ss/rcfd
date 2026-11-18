@@ -5,9 +5,22 @@ by phase, each with its prerequisites, acceptance criterion, status, gap (what a
 The list below the marker line is generated from `roadmap.json` by `python scripts/render_roadmap.py`; change an item
 there, on main, never here. The text above the marker is written by hand.
 
-Current priority (set by the maintainer, 2026-11-04): F-270 > F-271 > F-272 > F-273 > F-274 > F-275, the workspace layer
+Current priority (set by the maintainer, 2026-11-18):
+1. Claude and the MCP server: the workspace layer F-270 to F-275 first (budget 15 registrations a week)
+2. Studio desktop app (budget 40 registrations a week)
+3. Moving meshes, rotors and coupling: the fan path and the FAN-01 diagnosis (budget 40 registrations a week)
+4. Structural solver: close partial items before opening new ones (budget 100 registrations a week)
+5. Quality, docs and validation: the gate, the process and validation cases (budget 25 registrations a week)
+6. Design studies and optimisation (budget 15 registrations a week)
+7. Numerics and solvers (budget 10 registrations a week)
+8. Compressible flow and acoustics (budget 0 registrations a week)
+9. Multiphase and particles (budget 0 registrations a week)
+
+Each line is a category of `scripts/roadmap_progress.py`; a budget is counted in registrations created in a calendar week,
+and a line that is not named has none. This statement is the maintainer's go-ahead for these lines of work
+([process](process/lead-process.md)); it replaces the statement of 2026-11-04, which put F-270 to F-275, the workspace layer
 of [ADR 0173](adr/0173-workspace-layer-between-the-project-folder-the-mcp-server-and-the-studio.md), ahead of the FAN-01
-diagnosis.
+diagnosis. Drafted by Claude from the registrations of the two weeks before and adopted as drafted by the maintainer.
 
 Critical path to the in-app assistant: F-001 > F-003 > F-005 > F-010 > F-020 > F-028 > F-030 > F-074 > F-085 > F-090 >
 F-091 > F-146 > F-147 > F-148 > F-145 > F-094. The Claude Code mod panel (F-092/F-093) is an optional extra off this path.
