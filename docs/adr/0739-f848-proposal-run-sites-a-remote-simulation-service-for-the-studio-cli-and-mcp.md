@@ -632,3 +632,6 @@ this assertion, so the two cannot be told apart from this run.
 
 **Limits.** D1 tests the helper, not the order in `step`; the order is by reading. If the cause is (b), this change
 does not remove it, and item 4 is what will show it at the next failure. No acceptance of S1 or S2 changes.
+
+**Later observation (2026-11-18).** The next full gate on main, at 39269587 (GitHub run 44316638137), ran without this
+change and S1 passed. The rate on the gate's runner is therefore one failure in two runs; the cause is still inferred.
