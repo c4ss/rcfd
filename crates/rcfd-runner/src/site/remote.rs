@@ -140,19 +140,25 @@ fn site_event(dir: &Path, kind: &str, fields: Value) {
     let _ = records::append_line(&dir.join(SITE_JSONL), &v.to_string());
 }
 
-/// Update `runs/<id>/site.json` with `fields` (atomically; best effort).
-fn site_json(dir: &Path, fields: Value) {
+/// Update `runs/<id>/site.json` with `fields` (atomically); `false` when the record was not written. An existing
+/// file that cannot be read is left as it is, not replaced by an empty record (ADR 0739 Diagnosis 1). Callers other
+/// than the final record of a run treat the update as best effort.
+fn site_json(dir: &Path, fields: Value) -> bool {
     let p = dir.join(SITE_JSON);
-    let mut v: Value = std::fs::read(&p)
-        .ok()
-        .and_then(|b| serde_json::from_slice(&b).ok())
-        .unwrap_or_else(|| json!({}));
+    let mut v: Value = if p.exists() {
+        match rcfd_project::atomic::read(&p) {
+            Ok(b) => serde_json::from_slice(&b).unwrap_or_else(|_| json!({})),
+            Err(_) => return false,
+        }
+    } else {
+        json!({})
+    };
     if let (Some(o), Value::Object(f)) = (v.as_object_mut(), fields) {
         o.extend(f);
     }
     let mut bytes = serde_json::to_vec_pretty(&v).unwrap_or_default();
     bytes.push(b'\n');
-    let _ = records::atomic_write(&p, &bytes);
+    records::atomic_write(&p, &bytes).is_ok()
 }
 
 /// The key of a project's mirror on a site: `<name>-<fnv64 of the local absolute path and created>`.
@@ -465,16 +471,22 @@ impl Worker {
             let _ = std::fs::remove_file(m.dir.join(f));
         }
         // `site.jsonl` and `site.json` before the terminal status: a reader that waits for the status sees them final
-        site_event(
-            &m.dir,
-            "downloaded",
-            json!({"site": self.site, "files": n, "bytes": bytes}),
-        );
-        site_json(
+        if m.said.insert("downloaded".into()) {
+            site_event(
+                &m.dir,
+                "downloaded",
+                json!({"site": self.site, "files": n, "bytes": bytes}),
+            );
+        }
+        let written = site_json(
             &m.dir,
             json!({"last_contact": records::now_iso(), "link": "done", "done": true,
                    "state": remote.map(|s| crate::client::state_name(s.state))}),
         );
+        if !written {
+            // the record did not land (a held file): no terminal status yet, the step is tried again at the next poll
+            return Ok(Step::Go);
+        }
         atomic_status(&m.dir, &st.data);
         Ok(Step::Done)
     }
@@ -804,4 +816,44 @@ fn list_inputs(solver: &Path, snapshot: &Path, case_dir: &Path, set: &[String]) 
         return Err(format!("an input of the case cannot be read: {}", errs.join("; ")));
     }
     Ok(v)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// ADR 0739 Diagnosis 1, check D1: a final record that cannot be written is reported, so `Worker::step` holds the
+    /// terminal status back; the held file is not replaced by an empty record.
+    #[cfg(windows)]
+    #[test]
+    fn final_record_precedes_the_terminal_status() {
+        use std::os::windows::fs::OpenOptionsExt;
+        let dir = std::env::temp_dir().join(format!("rcfd_site_json_d1_{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        // control: a file nobody holds is written
+        assert!(site_json(&dir, json!({"submitted": true, "link": "connected"})));
+        let before = std::fs::read(dir.join(SITE_JSON)).unwrap();
+        // held open without sharing: neither read nor replaced
+        let held = std::fs::OpenOptions::new()
+            .read(true)
+            .share_mode(0)
+            .open(dir.join(SITE_JSON))
+            .unwrap();
+        let t0 = Instant::now();
+        assert!(!site_json(&dir, json!({"link": "done", "done": true})));
+        assert!(t0.elapsed() < Duration::from_secs(5), "{:?}", t0.elapsed());
+        drop(held);
+        assert_eq!(
+            std::fs::read(dir.join(SITE_JSON)).unwrap(),
+            before,
+            "the held record is unchanged"
+        );
+        // released: the same update lands and keeps the earlier fields
+        assert!(site_json(&dir, json!({"link": "done", "done": true})));
+        let v: Value = serde_json::from_slice(&std::fs::read(dir.join(SITE_JSON)).unwrap()).unwrap();
+        assert_eq!(v["done"], true, "{v}");
+        assert_eq!(v["submitted"], true, "{v}");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
 }

@@ -358,10 +358,22 @@ fn s1_s2_results_on_the_site_equal_local_ones_and_a_mesh_goes_once() {
         // the mirror's own copies equal the downloads
         let site = env.site_run(&remote);
         assert!(bytes(&site.join("output/solution.vtu")) == bytes(&r.join("output/solution.vtu")));
-        assert!(r.join("launch.json").is_file(), "the site's launch record is copied");
+        // what a failure here prints (ADR 0739 Diagnosis 1): the link's events and the runner's log
+        let diag = || {
+            format!(
+                "site.jsonl: {}\nrunner.log: {}",
+                std::fs::read_to_string(r.join("site.jsonl")).unwrap_or_default(),
+                std::fs::read_to_string(env.project.join(".rcfd/runner.log")).unwrap_or_default()
+            )
+        };
+        assert!(
+            r.join("launch.json").is_file(),
+            "the site's launch record is copied\n{}",
+            diag()
+        );
         let sj: Value = serde_json::from_slice(&bytes(&r.join("site.json"))).unwrap();
-        assert_eq!(sj["done"], true, "{sj}");
-        assert_eq!(sj["protocol"], "rcfd-site/1");
+        assert_eq!(sj["done"], true, "{sj}\n{}", diag());
+        assert_eq!(sj["protocol"], "rcfd-site/1", "{sj}\n{}", diag());
         let kinds: Vec<String> = env
             .site_events(&remote)
             .iter()
