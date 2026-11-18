@@ -1,2 +1,4 @@
 date	kind	commit	branch	items	adrs	result	minutes	left_out	left_out_minutes	detail
 2026-11-12	gate	49fbf1a3				green				passed=3548;failed=0;ignored=1023;local full gate
+2026-11-18	gate	205889bfb1				red	212			passed=5883;failed=1;ignored=1698;fails=sites_adr0739::s1_s2_results_on_the_site_equal_local_ones_and_a_mesh_goes_once=0739/F-848;GitHub run 44276505780
+2026-11-18	gate	39269587d7				green	281			passed=5884;failed=0;ignored=1698;GitHub run 44316638137
