@@ -1,8 +1,9 @@
 # Tolerance table
 
-Status: DRAFT of 2026-11-18, not approved. The maintainer approves this table once; until then it describes what
-registrations already use and binds nobody. After approval a limit in a registration cites a row here, a published
-reference with its place in it, or the acceptance of the parent item ([agent-rules.md](agent-rules.md) rule 15).
+Status: PROVISIONAL VERSION 1, approved by the maintainer on 2026-11-18. It binds registrations written under
+[agent-rules.md](agent-rules.md) from that date and no earlier one: a limit in such a registration cites a row here, a
+published reference with its place in it, or the acceptance of the parent item (rule 15). Rows that are missing are added
+from the registrations that need them, each addition approved like this table.
 
 The starting values are not new numbers. They are the limits found in the check tables of 18 registrations read for this
 draft: ADR 0357, 0365, 0378, 0379, 0394, 0501, 0504, 0527, 0558, 0569, 0573, 0575, 0602, 0614, 0620, 0627, 0672 and 0682.

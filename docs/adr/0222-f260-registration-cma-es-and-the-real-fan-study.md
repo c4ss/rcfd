@@ -455,3 +455,10 @@ The gate of `3f475d3` ran on a `git archive` copy (`scripts/gate_test.py`, 3 job
 package 0, `clippy --workspace --all-targets -D warnings` 0, tests 3254 passed, 1 failed, 900 ignored (3255 test processes in 617
 binaries). The one failure is the known flake `preview_gpu_g1` `g10_upload_frame_at_the_triangle_limit`. The merge with main was
 clean. After the merge: clippy of rcfd-api and rcfd-mcp clean; `f260_cmaes`, `f260_default_bits` and `design_f260` pass in release.
+
+## Answers of the maintainer (2026-11-18)
+
+The questions of this record were listed before the standing instruction of 2026-11-11 (take the recommendation). On
+2026-11-18 the maintainer decided that the instruction applies to such questions too: the lead closes each on its written
+recommendation, except a question that would change a default result, a golden or a hash table, or that needs a source the
+repository lacks; those stay open and are named in the item's roadmap note. No question is answered here one by one.

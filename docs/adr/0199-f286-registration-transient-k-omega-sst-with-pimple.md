@@ -450,3 +450,10 @@ The tests are in `crates/rcfd-api/tests/f300_transient_rans.rs` (ADR 0225 part B
 `s3_bdf2_time_order_known_miss` stays an ignored record with its limit; `s3_euler_time_order` and
 `s3n_one_sweep_per_step_loses_the_order` stay gate tests unchanged (both met from the uniform start). No code changes. Results go
 in the addendum of ADR 0225.
+
+## Answers of the maintainer (2026-11-18)
+
+The questions of this record were listed before the standing instruction of 2026-11-11 (take the recommendation). On
+2026-11-18 the maintainer decided that the instruction applies to such questions too: the lead closes each on its written
+recommendation, except a question that would change a default result, a golden or a hash table, or that needs a source the
+repository lacks; those stay open and are named in the item's roadmap note. No question is answered here one by one.

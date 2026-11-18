@@ -571,3 +571,10 @@ accepted, are re-registered as S1c of [ADR 0225](0225-f300-registration-transien
 S1c. Question 3 (`supports_transient`) is ADR 0225 part A, question 5 is ADR 0199 amendment 4 (ADR 0225 part B), and question 7
 (b) is ADR 0225 part C, which tests the suspected cause of the S3 k-epsilon BDF2 known miss with a smooth wall eddy viscosity; the
 known miss itself and its limit are not changed.
+
+## Answers of the maintainer (2026-11-18)
+
+The questions of this record were listed before the standing instruction of 2026-11-11 (take the recommendation). On
+2026-11-18 the maintainer decided that the instruction applies to such questions too: the lead closes each on its written
+recommendation, except a question that would change a default result, a golden or a hash table, or that needs a source the
+repository lacks; those stay open and are named in the item's roadmap note. No question is answered here one by one.

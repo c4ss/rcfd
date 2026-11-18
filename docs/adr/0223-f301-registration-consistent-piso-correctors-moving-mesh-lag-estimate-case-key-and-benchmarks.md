@@ -582,3 +582,10 @@ processes in 623 binaries). The one failure is the known flake `journal_f273`
 of rcfd-fv and rcfd-api clean; `consistent_correctors_f301` and `consistent_defaults_f301` (rcfd-fv) pass in release. F-301
 stays partial (the S1p3 pressure part and the default-decision criteria DC4 and DC5 are registered known misses); the default
 stays false.
+
+## Answers of the maintainer (2026-11-18)
+
+The questions of this record were listed before the standing instruction of 2026-11-11 (take the recommendation). On
+2026-11-18 the maintainer decided that the instruction applies to such questions too: the lead closes each on its written
+recommendation, except a question that would change a default result, a golden or a hash table, or that needs a source the
+repository lacks; those stay open and are named in the item's roadmap note. No question is answered here one by one.

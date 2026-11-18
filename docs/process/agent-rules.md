@@ -1,6 +1,6 @@
 # House rules for implementation agents
 
-Version 2 (2026-11-18). This file is the governing copy of the rules for every agent that works on rcfd, in the campaign
+Version 3 (2026-11-18). This file is the governing copy of the rules for every agent that works on rcfd, in the campaign
 stream and in the Studio stream alike. It replaces `w49i-work/AGENT_RULES.md` (2026-11-12) and `w49i-work/briefs/common.md`
 (2026-11-08) from the moment the lead's briefs point here; ADRs that cite "house rule N" of the earlier file mean the rule
 of the same number below. A change to a rule needs the maintainer's word, raises the version, and is dated in the list at
@@ -34,6 +34,8 @@ number, the branch, the worktree and your scratch folder.
    in the repository or fetched, with its place in it: an equation, table or page number, or a DOI. A citation from memory is
    allowed only where no source could be read; say so in those words and derive what you use. Reference values come from the
    repository ([reference-data.md](../reference-data.md), existing tests), a closed form, or a source read and located.
+   A new reference value goes in a new file `docs/reference-data.d/<ADR number>-<item>.part`; the page is generated from
+   those files and is never edited.
 5. No new third-party crate, no unsafe code, and the crate graph stays acyclic. A new Studio dependency follows guardrail G5.
 6. Open questions. Where you would ask the maintainer, take the option you would recommend and record in the ADR "taken on
    the maintainer's standing instruction of 2026-11-11 (take the recommendation)". Do not present it as a decision the
@@ -106,6 +108,7 @@ plainly anything that failed or was skipped.
 
 ## Changes
 
+- Version 3, 2026-11-18: rule 4 names the fragment files of the reference-data page, which is now generated.
 - Version 2, 2026-11-18: rule 3 gains the class of additive golden edits, approved in advance by the maintainer and
   re-recorded by the lead.
 - Version 1, 2026-11-18: rules 1 to 11 carried over from `w49i-work/AGENT_RULES.md`; rule 4 requires sources that were read,

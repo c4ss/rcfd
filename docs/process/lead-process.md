@@ -58,7 +58,7 @@ ledger line, pushes, and starts the selected tests that did not fit in the backg
 | "Answers of the maintainer" in an ADR | the lead | main only |
 | An ADR above its answers | the agent it was issued to | its branch |
 | `docs/process/agent-rules.md`, this file, `tolerances.md` | the lead, on the maintainer's word | main only |
-| `docs/reference-data.md` | the agent of a distillation item; other agents put additions in their addendum | its branch |
+| `docs/reference-data.md` | nobody: generated from `docs/reference-data.d/*.part`, one fragment per item, written by that item's agent | each branch adds its own fragment |
 | A topic page under `docs/` | the agent whose subject it is | its branch |
 
 Generated, never edited by hand: the item list of `docs/ROADMAP.md` (from `docs/roadmap.json`), `docs/adr/index.md`, the two roadmap SVGs, `docs/studio-coverage.md`, the capabilities
@@ -99,3 +99,24 @@ An agent never edits a golden file or a hash table (agent rules, rule 3). Where 
 golden edit", the lead checks that the diff adds entries and removes or changes none, re-records the file on main and writes
 the diff's size and the file in the ledger line of the merge. Any other golden change, and every change to
 `baseline_hashes.rs`, needs the maintainer's word for that item.
+
+## Status by the registered rule
+
+"Done" is the lead's decision by the rule the registration fixed. An item whose check, negative control or mutation passed
+only after an amendment is done all the same (the maintainer, 2026-11-18) when rule 2 was followed: no numeric limit changed,
+the amendment only corrected a defective set-up and was committed before the corrected run, the failed or stopped test is
+kept as a record, and no clause of the acceptance is unmet or not run. The earlier practice of recording such an item as
+partial (2026-11-13) ends. The lead confirms these points against the ADR before changing the status.
+
+## Questions asked before 2026-11-11
+
+The standing instruction of 2026-11-11 (take the recommendation) also applies to questions that agents listed before that
+date (the maintainer, 2026-11-18): the lead closes them on the written recommendation, except a question that would change
+a default result, a golden or a hash table, or that needs a source the repository lacks.
+
+## Amending an acceptance
+
+Where a registration's result shows that a clause of an acceptance cannot be met as written or does not measure what was
+meant, the lead may amend the acceptance (the maintainer, 2026-11-18): the new words are appended to the acceptance as
+"Amended <date>: ..." with the reason and the ADR, the old words stay, and the weekly list names every amended acceptance
+so that a lowered bar is seen.

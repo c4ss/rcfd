@@ -386,3 +386,10 @@ Before the gate, on 22efe0b in release: `cargo fmt --check` of `rcfd-fv`, `rcfd-
 `physics_schema`, `regions`, `registers`, `sst_schema`, `turb_models` and `wall_options`: 60 passed, 0 failed.
 
 **Questions added by the results:** none. Questions 1 to 3 stand.
+
+## Answers of the maintainer (2026-11-18)
+
+The questions of this record were listed before the standing instruction of 2026-11-11 (take the recommendation). On
+2026-11-18 the maintainer decided that the instruction applies to such questions too: the lead closes each on its written
+recommendation, except a question that would change a default result, a golden or a hash table, or that needs a source the
+repository lacks; those stay open and are named in the item's roadmap note. No question is answered here one by one.

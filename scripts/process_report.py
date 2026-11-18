@@ -42,6 +42,7 @@ KIND_WORDS = ("registration", "amendment", "diagnosis", "proposal", "plan", "rec
 GAP_MAX = 500
 QUESTION_MARKS = ("NEEDS THE USER", "NEEDS USER", "Open:", "not asked")
 ANSWER_MARK = "Maintainer (20"
+REFDATA, REFDATA_DIR = "docs/reference-data.md", "docs/reference-data.d"
 OLD_ANSWERS = re.compile(r"^#+ .*(Answers of the maintainer|Maintainer answers|Answers \(the maintainer|Decision record|"
                          r"Decisions \(20|Decisions made|approved by the maintainer)", re.M)
 Q_HEADING = "Open questions for the maintainer"
@@ -530,6 +531,11 @@ def generated(root, items, cats, adrs):
     page = read(root, "docs/ROADMAP.md")
     if render_roadmap.MARKER in page:
         out["docs/ROADMAP.md"] = render_roadmap.render_page(page, items)
+    frag = os.path.join(root, REFDATA_DIR)
+    if os.path.isdir(frag):
+        parts = [read(root, f"{REFDATA_DIR}/{fn}") for fn in sorted(os.listdir(frag)) if fn.endswith(".part")]
+        if parts:  # one fragment per item, joined in name order with a blank line between
+            out[REFDATA] = "\n".join(t if t.endswith("\n") else t + "\n" for t in parts)
     for name, page in AREA_PAGES.items():
         if page and exists(root, page):
             t = replace_block(out.get(page) or read(root, page), "built", built_block(items, cats, name))
@@ -735,7 +741,11 @@ def sec_j(root, items, cats, questions, over):
     rep += [f"   {i} ({st[i]['status']})" + (", has an open question" if i in qids else "") + f": {st[i]['title'][:90]}" for i in blocked]
     rep.append(f"2. Lines over their weekly budget: {len(over)}")
     rep += [f"   {line}: {n} registrations this week, budget {b}" for line, n, b in over]
-    rep.append(f"3. Unanswered questions: {len(questions)}")
+    amended = sorted(((re.findall(r"Amended (\d{4}-\d{2}-\d{2})", i["acceptance"])[-1], i["id"]) for i in items
+                      if "Amended 20" in (i.get("acceptance") or "")), reverse=True)
+    rep.append(f"3. Acceptances amended (newest first; see that no bar was lowered): {len(amended)}")
+    rep += [f"   {k}, amended {d}: {st[k]['title'][:80]}" for d, k in amended[:15]]
+    rep.append(f"4. Unanswered questions: {len(questions)}")
     rep += [f"   {w}: {t}" for w, t in questions[:25]]
     if len(questions) > 25:
         rep.append(f"   and {len(questions) - 25} more: python scripts/process_report.py --sections d")
