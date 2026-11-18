@@ -1,0 +1,21 @@
+{
+  "results_that_do_not_follow": [
+    {"file": "0553-f627-registration-monosymmetric-thin-walled-sections-for-the-warping-element.md", "line": 415, "reason": "States every measured value is at or below its estimate except A1', but C1 measured 3.5e-3 (line 400) against its registered estimate 3e-3 (line 238), so it is above its estimate; also A1' is not an exception (1.29e-3 < 3e-3), so the sentence is internally confused."},
+    {"file": "0553-f627-registration-monosymmetric-thin-walled-sections-for-the-warping-element.md", "line": 416, "reason": "Attributes the ~1e-3 size of the A, C1, V1 errors to the shear-flexible lateral plane, but the registration (line 195) says shear flexibility lowers P_y and hence M, while the recorded A1', A2', A4'', A5' errors are all FE above the closed form (positive), so the explanation does not fit the sign and is not demonstrated."},
+    {"file": "0553-f627-registration-monosymmetric-thin-walled-sections-for-the-warping-element.md", "line": 411, "reason": "Says 'the three functions that the solver stopped' stay as ignored records but names only two (a_n_run1_known_miss, a_n_amended_run2_known_miss)."},
+    {"file": "0553-f627-registration-monosymmetric-thin-walled-sections-for-the-warping-element.md", "line": 435, "reason": "Says the A checks catching Z3 were not predicted by the registration, but the mutation table (line 259) predicted A8 for Z3; and the A1/A2/A3/A8/N1 checks live only in an ignored test (line 420 says mutation runs used non-ignored tests), so only A4''/A5' were actually exercised."},
+    {"file": "0553-f627-registration-monosymmetric-thin-walled-sections-for-the-warping-element.md", "line": 463, "reason": "Q3 claims 'any' monosymmetric LTB case with the larger flange in compression is refused with default options, but the evidence is a single case (L=3, 16 elements, this one section)."},
+    {"file": "0553-f627-registration-monosymmetric-thin-walled-sections-for-the-warping-element.md", "line": 453, "reason": "Decision says the acceptance values are met, yet the acceptance checks A1'/A2' exist only in the ignored run-2 record test, so no passing test in the suite asserts them; the claim rests on a one-time log."}
+  ],
+  "checks_that_cannot_fail": [
+    {"file": "sa_beam_warping_f627.rs", "line": 383, "reason": "a_n_amended_run2_known_miss, the only test holding the acceptance checks A1', A2', A3', A8' and N1', is #[ignore]d (line 382), so these checks never run and cannot fail."},
+    {"file": "sa_beam_warping_f627.rs", "line": 272, "reason": "a_n_run1_known_miss (A1 to A8, N1 as registered) is #[ignore]d and never runs, so every assertion in it is inert."},
+    {"file": "sa_beam_warping_f627.rs", "line": 850, "reason": "The non-ignored a_n_amended3_remaining omits A1', A2', A3', A8', N1'; A6'/A7' only compare the code with itself (axis y vs x, from_static vs six-unknown) and never against the closed form, so a wrong beta_x shared by both paths would pass them."},
+    {"file": "sa_beam_warping_f627.rs", "line": 212, "reason": "The closed-form reference in the A checks takes beta_x, C_w, I_z, J from the section code under test (wagner_about_shear_centre, c_w); only D1 pins them to hand values, so A checks do not independently detect an error in those section constants."}
+  ],
+  "limits_that_test_nothing": [
+    {"file": "sa_beam_warping_f627.rs", "line": 910, "reason": "A6' limit 1e-6 against a recorded 1.3e-13 (line 398): the same computation in a permuted axis, so the limit is seven orders looser than the observed agreement."},
+    {"file": "sa_beam_warping_f627.rs", "line": 619, "reason": "W2 limit 1e-7*B*k for the root twist reaction against a recorded 3.9e-13 (line 405); a reaction that should be zero is allowed 1.8e-5, orders above the recorded value."},
+    {"file": "sa_beam_warping_f627.rs", "line": 905, "reason": "A5' tension at L=6 allows 2e-2 while the recorded errors are 2.3e-4 to 4.6e-4 (line 397) and the registered estimate is 1e-3; the limit is 20 to 90 times the recorded error."}
+  ]
+}

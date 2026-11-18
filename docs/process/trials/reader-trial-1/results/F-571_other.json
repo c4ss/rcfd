@@ -1,0 +1,16 @@
+{
+  "results_that_do_not_follow": [
+    {"file": "0604-f571-registration-rounding-floor-of-the-newton-residual-under-translation-and-rotation.md", "line": 372, "reason": "The roadmap entry says the audit 'found no attempt the bound would change' and default bits are safe, but amendment 1 (lines 281-290) shows the bound did change a default-path outcome (NC1 refused before, accepted now); the audit never saw that test."},
+    {"file": "0604-f571-registration-rounding-floor-of-the-newton-residual-under-translation-and-rotation.md", "line": 262, "reason": "Decision 'done' lists B3 as met, but B3 was measured on the pre-merge base and not re-run (lines 236, 258), and a default-path behaviour then changed (NC1, line 359); the registered rule (line 194) says a changed default makes the item todo, and NC1 was made an ignored record to reach 'no failure' in M1 (line 353)."},
+    {"file": "0604-f571-registration-rounding-floor-of-the-newton-residual-under-translation-and-rotation.md", "line": 351, "reason": "NC1b is reported 'met' on '20 iterations (= max_iterations)', but the test file never asserts rep.iterations (see the test file line 173-177), so the claim that the bound at the last iterate accepted the step is not verified by the check."}
+  ],
+  "checks_that_cannot_fail": [
+    {"file": "sa_nl_inertia_reference_after_f571.rs", "line": 175, "reason": "The 'accepted at the last iterate' check compares opts.newton.max_iterations with max_iterations, which was copied from the same field at line 159; it is always true and never looks at rep.iterations."}
+  ],
+  "limits_that_test_nothing": [
+    {"file": "0604-f571-registration-rounding-floor-of-the-newton-residual-under-translation-and-rotation.md", "line": 230, "reason": "A2 limit 1e-9 against a measured 3.56e-18 (and an estimated ~3e-17): eight or more orders of slack, so a wrong accepted solution would still pass."},
+    {"file": "0604-f571-registration-rounding-floor-of-the-newton-residual-under-translation-and-rotation.md", "line": 231, "reason": "P1 limit 'total halvings <= 19' against 0 measured, and period <= 1e-2 / energy <= 1e-3 against 2.1e-4 / 2.8e-4, are loose enough to pass a markedly worse computation."},
+    {"file": "0604-f571-registration-rounding-floor-of-the-newton-residual-under-translation-and-rotation.md", "line": 227, "reason": "A1 momentum limit 1e-11 against measured 1.297e-14: three orders of slack on a quantity that should be at rounding level."},
+    {"file": "sa_nl_inertia_reference_after_f571.rs", "line": 183, "reason": "NC1b upper limit 1e-7 against the recorded 1.392e-10 is three orders loose; it only excludes gross failure of the bound branch."}
+  ]
+}

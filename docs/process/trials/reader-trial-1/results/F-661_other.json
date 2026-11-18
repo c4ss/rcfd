@@ -1,0 +1,20 @@
+{
+  "results_that_do_not_follow": [
+    {"file": "0585-f661-registration-pre-stress-on-the-warping-harmonic-path.md", "line": 291, "reason": "H1+ is recorded as 3.55e-5 against a limit of 3e-5 yet the verdict is 'met'; the value exceeds the limit (and is 10x its own estimate 3.5e-6 and the H6b+ value 3.55e-6, so it is likely mis-recorded or a real miss)."},
+    {"file": "0585-f661-registration-pre-stress-on-the-warping-harmonic-path.md", "line": 327, "reason": "'Done: every registered check met in the one run' does not follow while H1+ (3.55e-5 > 3e-5, line 291) is recorded above the limit; by the decision rule on line 243-245 a missed check makes the item partial."},
+    {"file": "0585-f661-registration-pre-stress-on-the-warping-harmonic-path.md", "line": 300, "reason": "'Every measured value is within a factor of 1.1 of its arithmetic estimate' is false against the table: H1+ 3.55e-5 vs 3.5e-6, H3+ 7.1e-14 vs 4e-12, H3- 1.9e-12 vs 1.1e-11."},
+    {"file": "0585-f661-registration-pre-stress-on-the-warping-harmonic-path.md", "line": 321, "reason": "'all passed' for the f661 test binary cannot hold with H1+ recorded at 3.55e-5 against the asserted limit 3e-5 (test file line 342 asserts it and would fail)."},
+    {"file": "0585-f661-registration-pre-stress-on-the-warping-harmonic-path.md", "line": 328, "reason": "a1 ('K + K_sigma is the matrix solved') is said to be shown by P0, but P0 uses a zero pre-stress and only shows that no option and a zero option are bit-equal; it says nothing about K_sigma being added."},
+    {"file": "0585-f661-registration-pre-stress-on-the-warping-harmonic-path.md", "line": 275, "reason": "Addendum says B0 was run on base 054a7b74 with no library line changed, while D5 (line 266) and the bits file header (sa_beam_warping_f661_bits.rs line 3) name base 535de064 as the base of the recorded digests."}
+  ],
+  "checks_that_cannot_fail": [
+    {"file": "sa_beam_warping_f661.rs", "line": 397, "reason": "HB-: for a doubly symmetric section under a pure torque twist and bending are decoupled structurally, so bending/twist is 0 whatever K_sigma the code adds (the ADR records 0); it checks no spurious coupling only for this symmetric case and passes under Z1, Z2 and Z5."},
+    {"file": "sa_beam_warping_f661.rs", "line": 316, "reason": "HS compares the ratio of two resonances found by the same search with sqrt(3); it adds nothing beyond H2 for both signs (each within 1e-3) except a tighter limit, and cannot fail if both signs share the same error."}
+  ],
+  "limits_that_test_nothing": [
+    {"file": "sa_beam_warping_f661.rs", "line": 255, "reason": "H2/H2T limit 1e-3 (also 264) is about 4000x the recorded 2.3e-7 and 7.2e-7 errors; only gross errors (the K_sigma mutations shift by 0.3 to 2) can trip it."},
+    {"file": "sa_beam_warping_f661.rs", "line": 342, "reason": "H1 limit 3e-5 against a compression value of 1.39e-8 (and an estimate of 3.5e-6 in tension) is 3 orders loose for one sign, so it cannot see small errors there."},
+    {"file": "sa_beam_warping_f661.rs", "line": 285, "reason": "H3 limit 1e-8 against recorded 7.1e-14 and 1.9e-12 is 4 to 6 orders loose for an eigenvalue-equality check."},
+    {"file": "sa_beam_warping_f661.rs", "line": 406, "reason": "H7 negative control only requires relative difference > 0.3 while the recorded values are 0.776 and 0.565; it only shows the option has a large effect."}
+  ]
+}

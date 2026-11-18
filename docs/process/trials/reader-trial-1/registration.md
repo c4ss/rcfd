@@ -76,3 +76,63 @@ all plants may still miss real defects of other kinds.
 ## Recorded after the run
 
 The results go below this line as an addendum; nothing above it is edited.
+
+## Results (2026-11-18)
+
+Run the same day by Claude: one planter agent, then 16 reader agents, each a fresh agent with one item. The readers'
+answers, the key and the list of agreed findings are in `results/`; `score.py` recomputes the counts from them.
+
+**Detection of the six plants.**
+
+| item | planted | same kind (Fable 5.2) | other model (Sonnet 5.5) |
+|---|---|---|---|
+| F-661 | result | found | found |
+| F-639 | result | found | found |
+| F-571 | test | found | found |
+| F-534 | test | found | found |
+| F-595 | limit | found | found |
+| F-627 | limit | missed | found |
+| total | | 5 of 6 | 6 of 6 |
+
+By the registered reading, a difference of one is within chance: the trial shows no difference between the two
+readers. Both found every changed result and every changed test. The one miss was a widened limit that agreed in the
+ADR and the test.
+
+**Findings on unchanged text.** Same kind 54, other model 64, over the eight items; none judged true or false here.
+The two unplanted items drew findings like the planted ones (F-638: 4 and 12; F-615: 6 and 6), so a reader does not
+return an empty list on a clean item. 19 findings were made by both readers at the same place (within 3 lines).
+Three of those follow from a plant (F-661 lines 300 and 327, F-571 line 351). The other 16 are in
+`results/agreed-on-unchanged-text.txt`. Examples, each stated by both readers independently:
+
+- F-638, `sa_contact_mortar_recovery_hertz_f638.rs:61`: a check asserts the literal `true`; the penetration it names
+  is printed and not compared with its tolerance.
+- F-615, `sa_contact_supernodal_f615.rs:639`: the negative control N2, the only check registered to catch mutations
+  M5 and M6, is `#[ignore]`.
+- F-534, `sa_fatigue_f534.rs:89`: G3 requires only `is_ok()`; the returned amplitude is not checked.
+- F-627, ADR 0553 line 415: "every measured value is at or below its estimate, except A1'" contradicts the table
+  (C1 is above its estimate, A1' is below).
+- F-615, ADR 0533 line 245: the explanation by nine factorisations does not fit the recorded times.
+
+**Cost.** Tokens as the agent tool reports them: same kind 769,654 for 8 items, other model 743,947. Mean wall time
+per item 100 s and 57 s. The planter used 125,121 tokens.
+
+**Deviations from the registration.**
+
+- F-595: the limit was widened in the ADR only (two places). The item's test file is a bit record with no numeric
+  limit, and the test that carries that limit is not named for the item, so it was not in the folder.
+- Two line hits of the scorer are a neighbouring line, not the plant (F-595 line 162, F-534 line 26); each of those
+  readers also named the planted line, so no count changes.
+- The same-kind reader of F-661 named the planted line in its one-line reply; nothing else was read from the replies.
+
+**What this does and does not show.**
+
+- A fresh reader of either model, given only the ADR and the tests, found 11 of 12 crude planted defects in one to
+  two minutes per item. The question of I9, whether another model finds what the author's kind does not, gets the
+  answer "no difference seen", with two Claude models and six plants.
+- The larger observation is outside what the trial was built to measure: on text nobody changed, two independent
+  readers agreed on 16 places in eight done items. Whether those are real defects is not established. If most are,
+  the useful rule would be a fresh reader per item before it is marked done, whatever the model, not a second model.
+- Not shown: the rate of real defects in done items, the rate of false findings, and anything outside the structural
+  category.
+
+The maintainer judges whether a rule follows. The 16 agreed findings are listed for the lead; none was acted on.

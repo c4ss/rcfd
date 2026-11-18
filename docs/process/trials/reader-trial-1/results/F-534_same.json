@@ -1,0 +1,58 @@
+{
+  "results_that_do_not_follow": [
+    {
+      "file": "0453-f534-registration-rainflow-residue-guard-gerber-message.md",
+      "line": 80,
+      "reason": "P1 is recorded as measured 'n cycles of 2S', but the test never reads the number of cycles returned (sa_fatigue_f534.rs line 24 compares the input length with n), so the cycle count was not measured."
+    },
+    {
+      "file": "0453-f534-registration-rainflow-residue-guard-gerber-message.md",
+      "line": 125,
+      "reason": "The roadmap text says the mutation gives an error 'for n = 7 and 1000', but the only recorded observation (line 94) is one error with a residue of 15 points, which is the n = 7 case; the test stops at its first panic, so n = 1000 was never reached under the mutation."
+    },
+    {
+      "file": "0453-f534-registration-rainflow-residue-guard-gerber-message.md",
+      "line": 84,
+      "reason": "G2 is recorded as met against the registered limit '==' (exact present text), but the test asserts msg.contains(want) (sa_fatigue_f534.rs line 74), which also passes if text is added before or after the pattern, so byte identity was not shown."
+    },
+    {
+      "file": "0453-f534-registration-rainflow-residue-guard-gerber-message.md",
+      "line": 96,
+      "reason": "The registration (lines 55 and 59) planned M14 together with M5b as the pair showing what the guard fixed; the result row reports M14 alone, the pair is not in the results or in the list of what was not run, yet the conclusion says M14 came out 'as registered'."
+    },
+    {
+      "file": "0453-f534-registration-rainflow-residue-guard-gerber-message.md",
+      "line": 112,
+      "reason": "The 'done' verdict rests on every check being met as registered in a single run, but P1's cycle count was not asserted, G2 was checked by containment instead of equality, and M13 was seen only on a rerun (line 95), so the stated condition is not what the record shows."
+    },
+    {
+      "file": "0453-f534-registration-rainflow-residue-guard-gerber-message.md",
+      "line": 83,
+      "reason": "G1 covers two means (-sigma_u and -1.1 sigma_u) but the measured cell records one message, for -6e8 only; the result for -6.6e8 is asserted met without a recorded value."
+    }
+  ],
+  "checks_that_cannot_fail": [
+    {
+      "file": "sa_fatigue_f534.rs",
+      "line": 24,
+      "reason": "assert_eq!(h.len() / 2, n) compares the length of the input the test itself built (2n points) with n; it never looks at r.cycles.len(), so it passes whatever rainflow_periodic returns."
+    },
+    {
+      "file": "sa_fatigue_f534.rs",
+      "line": 26,
+      "reason": "The .all() over r.cycles is vacuously true for an empty cycle list, and since no assertion fixes the number of cycles, a function returning Ok with no cycles and an empty residue passes all of P1."
+    }
+  ],
+  "limits_that_test_nothing": [
+    {
+      "file": "sa_fatigue_f534.rs",
+      "line": 42,
+      "reason": "For the 200 random histories (and the sine at line 36) the only condition is Ok with an empty residue; no cycle count, range sum or other property of the counted cycles is bounded, so any counting that returns Ok and discards the residue meets it."
+    },
+    {
+      "file": "sa_fatigue_f534.rs",
+      "line": 89,
+      "reason": "G3 requires only is_ok() for the three accepted cases (lines 77 to 89); the returned amplitude is not bounded at all, so the registered statement that returned numbers are unchanged (md line 31) is not tested here."
+    }
+  ]
+}

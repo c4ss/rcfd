@@ -1,0 +1,10 @@
+{"results_that_do_not_follow": [
+{"file": "0531-f595-registration-coordinate-nested-dissection-in-the-eigensolvers.md", "line": 295, "reason": "The coordinate run being 23 percent faster than the levels run is offered as a result, but the same paragraph says the machine was shared and the levels run took 126.5 s against 77.7 s in ADR 0509 for the same work, so the timing difference cannot be attributed to the ordering."},
+{"file": "0531-f595-registration-coordinate-nested-dissection-in-the-eigensolvers.md", "line": 347, "reason": "The roadmap entry states '98 s against 127 s per modal analysis' as a benefit of the coordinate order without the shared-machine caveat recorded at line 294 that makes the 127 s figure unreliable."},
+{"file": "0531-f595-registration-coordinate-nested-dissection-in-the-eigensolvers.md", "line": 305, "reason": "M6 is recorded as caught by P3(a) via the ordering's panic on a wrong length, not via the removed length check returning DimensionMismatch, so the decision at line 331 that every mutation was caught by a check named for it is stretched for this one."}
+],
+"checks_that_cannot_fail": [],
+"limits_that_test_nothing": [
+{"file": "0531-f595-registration-coordinate-nested-dissection-in-the-eigensolvers.md", "line": 163, "reason": "E2's buckling-factor limit 1e-7 is 8 orders looser than the registered estimate of about 1e-14 and the recorded 1.9e-15 (and 100 times looser than E1's 1e-9 for the same kind of comparison), so a gross error in the coordinate factor would pass."},
+{"file": "0531-f595-registration-coordinate-nested-dissection-in-the-eigensolvers.md", "line": 159, "reason": "P1/P2 limit 1e-9 against recorded 6.3e-14 (and the same 1e-9 in E1 against 1e-15) leaves four to six orders of slack."}
+]}

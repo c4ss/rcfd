@@ -1,0 +1,58 @@
+{
+  "results_that_do_not_follow": [
+    {
+      "file": "0585-f661-registration-pre-stress-on-the-warping-harmonic-path.md",
+      "line": 291,
+      "reason": "H1+ is recorded as 3.55e-5 against the registered limit 3e-5 and given the verdict 'met', but 3.55e-5 is above 3e-5, so by the numbers in the row the check is missed."
+    },
+    {
+      "file": "0585-f661-registration-pre-stress-on-the-warping-harmonic-path.md",
+      "line": 327,
+      "reason": "The decision 'Done ... every registered check met in the one run' does not follow from the results table, where H1+ (3.55e-5 against 3e-5, line 291) exceeds its limit; the registered rule (line 244) makes any missed check 'partial'."
+    },
+    {
+      "file": "0585-f661-registration-pre-stress-on-the-warping-harmonic-path.md",
+      "line": 300,
+      "reason": "'Every measured value is within a factor of 1.1 of its arithmetic estimate' is contradicted by the table: H1+ 3.55e-5 against the estimate 3.5e-6 (factor 10), H3+ 7.1e-14 against 4e-12 (factor 56), H3- 1.9e-12 against 1.1e-11 (factor 6)."
+    },
+    {
+      "file": "0585-f661-registration-pre-stress-on-the-warping-harmonic-path.md",
+      "line": 343,
+      "reason": "The proposed status 'done' and the roadmap text of line 345 rest on all checks being met, which the recorded H1+ value (3.55e-5 over the limit 3e-5) does not support."
+    }
+  ],
+  "checks_that_cannot_fail": [
+    {
+      "file": "sa_beam_warping_f661.rs",
+      "line": 397,
+      "reason": "HB- compares the bending components with the twist for a doubly symmetric straight beam loaded by a torque only, where twist and bending are in uncoupled blocks whatever K_sigma is (omitted, sign-flipped or doubled), so the ratio is exactly 0 (as recorded) for any of the planned mutations and the check does not depend on what the pre-stress code computed."
+    }
+  ],
+  "limits_that_test_nothing": [
+    {
+      "file": "0585-f661-registration-pre-stress-on-the-warping-harmonic-path.md",
+      "line": 217,
+      "reason": "H1- has the limit 3e-5 against an estimate and a measured value of 1.4e-8, about 2000 times looser, so for the compression sign it would pass an error three orders above the recorded one (sa_beam_warping_f661.rs line 342 uses one limit for both signs)."
+    },
+    {
+      "file": "0585-f661-registration-pre-stress-on-the-warping-harmonic-path.md",
+      "line": 220,
+      "reason": "H6b- has the limit 3e-5 against an estimate and a measured value of 1.8e-8, about 1700 times looser, so for the compression sign it constrains nothing near the recorded accuracy (sa_beam_warping_f661.rs line 362)."
+    },
+    {
+      "file": "0585-f661-registration-pre-stress-on-the-warping-harmonic-path.md",
+      "line": 213,
+      "reason": "H2T+- is registered here (not fixed by the acceptance) at 1e-3 against estimates 2.4e-7 and 7.2e-7 and measured 2.32e-7 and 7.20e-7, 1400 to 4000 times looser, so it only detects order-one errors that H2 and HS already detect (sa_beam_warping_f661.rs line 265)."
+    },
+    {
+      "file": "0585-f661-registration-pre-stress-on-the-warping-harmonic-path.md",
+      "line": 212,
+      "reason": "H2+- uses the acceptance's 1e-3 against measured 2.32e-7 and 7.20e-7 (about 4000 and 1400 times looser); the limit comes from the acceptance text, but as a test it would pass a frequency error three orders above the discretisation error recorded (sa_beam_warping_f661.rs line 255)."
+    },
+    {
+      "file": "0585-f661-registration-pre-stress-on-the-warping-harmonic-path.md",
+      "line": 216,
+      "reason": "H8+ has the limit 1e-4 against 3.87e-6 measured (26 times looser), so the 8-element check does not test the mesh dependence it is there for: an error 25 times the recorded one would still pass (sa_beam_warping_f661.rs line 312)."
+    }
+  ]
+}

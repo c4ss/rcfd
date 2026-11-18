@@ -1,0 +1,27 @@
+{
+  "results_that_do_not_follow": [
+    {
+      "file": "0571-f638-registration-pressure-recovery-of-the-mortar-contactor.md",
+      "line": 274,
+      "reason": "The statement that the fast file covers the same code path as the ignored Hertz records does not follow from what is recorded: the fast PV runs have every node active (8 of 8 and 6 of 6, line 229) and the patch tests have a uniform positive traction, so the inactive-node (t_a = 0) and negative-traction cases of the recovery, and the fit, are exercised only by the two ignored tests."
+    }
+  ],
+  "checks_that_cannot_fail": [
+    {
+      "file": "sa_contact_mortar_recovery_hertz_f638.rs",
+      "line": 106,
+      "reason": "The approach error comes from hertz_theory(f_fe) of the unchanged ADR 0551 solve and does not use recovered_tractions at all (the ADR says so at lines 108 and 129, where the values 1.18e-2 and 1.40e-2 are written before the run), so it passes whatever the recovery of this item computes."
+    },
+    {
+      "file": "sa_contact_mortar_recovery_hertz_f638.rs",
+      "line": 61,
+      "reason": "The check 'succeeds with the gap tolerance 1e-8' asserts the literal true; the final penetration is only printed (line 70) and never compared with 1e-8, so the clause rests entirely on solve returning Err."
+    },
+    {
+      "file": "sa_contact_mortar_recovery_hertz_f638.rs",
+      "line": 112,
+      "reason": "NC-n reads hertz_read of the same bit-identical solve, whose radius errors 2.07e-1 and 4.89 were known from ADR 0551 before the run (ADR line 138); it does not touch the recovered traction, so it passes whatever the new code computes."
+    }
+  ],
+  "limits_that_test_nothing": []
+}

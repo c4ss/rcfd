@@ -1,0 +1,22 @@
+{
+  "results_that_do_not_follow": [
+    {
+      "file": "0570-f639-registration-curvature-free-fallback-of-the-total-lagrangian-contact-body.md",
+      "line": 303,
+      "reason": "HS20f peak error is recorded as 2.13e-1, which is above the limit 0.20, yet the row is marked met; the values beside it (0.06055 against 0.06905) give 1.23e-1, as note 2 (line 326) and the roadmap text (line 385) say, so the recorded number and the verdict contradict each other and the 'done' decision at line 370 rests on this row."
+    },
+    {
+      "file": "0570-f639-registration-curvature-free-fallback-of-the-total-lagrangian-contact-body.md",
+      "line": 326,
+      "reason": "The 12 percent peak deficit is attributed to the finite-strain effect estimated at 3 to 8 percent, but the recorded force difference of 5.5 percent moves the Hertz peak by only about 2 percent (p_H scales as F^(1/3)), and the peak is read from the same nodal fit whose radius is recorded at line 316 as 47 percent off (HS20f) and NaN with a wrong-sign slope (HS10f), so the cause stated is not shown by the numbers."
+    }
+  ],
+  "checks_that_cannot_fail": [],
+  "limits_that_test_nothing": [
+    {
+      "file": "0570-f639-registration-curvature-free-fallback-of-the-total-lagrangian-contact-body.md",
+      "line": 225,
+      "reason": "The limit 0.15 on the moment radius a_M = sqrt(5/2 M2/M0) (also lines 222, 223, 226; test file line 347) is 4 to 26 times the measured 5.8e-3 to 3.4e-2 and above the registered estimate of 2 to 6 percent, and even a uniform pressure over the Hertz disc (M2/M0 = a^2/2, a_M = 1.118 a, error 0.118) would pass it, so it does not test the pressure distribution."
+    }
+  ]
+}
