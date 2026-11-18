@@ -587,3 +587,48 @@ unchanged `baseline_hashes` covers the defaults.
 - **Feed**: lines of `site.jsonl` are not yet events in the feed. A local run has no `site.jsonl`, so the feed of
   local runs is unchanged.
 - **Phases 2 and 3**: S13, S14 and S15, `rcfd site gc`, studies on a site, download progress, and the Slurm adapter.
+
+## Diagnosis 1 (2026-11-18): S1 failed once in the full gate, `site.json` not final at the terminal status
+
+Written before the change it registers. By Claude, from the logs of the full gate on main at 205889bf (GitHub run
+44276505780, Windows) and the source at 10ba1a34.
+
+**Observed.** `sites_adr0739::s1_s2_results_on_the_site_equal_local_ones_and_a_mesh_goes_once` failed at
+`sites_adr0739.rs:363`, `sj["done"]` was null where `true` is expected. It was the second run of the test (the mesh
+file); the first (the generator) passed. `status.json` read `finished`, `site.jsonl` had `downloaded`, and all
+results compared equal. `site.json` held the fields of the submission and of one later contact (`link: connected`,
+`last_contact` 126 ms after `submitted_at`) and neither `done` nor `state`. The other seven tests of the binary
+passed. It is the only complete full gate since F-848 was merged, so the rate is one of one there.
+
+**Not reproduced.** 60 runs one after another and 120 runs ten at a time, release, on the maintainer's Windows
+machine at 10ba1a34: none failed.
+
+**What the source says.** `Worker::step` writes the final `site.json` and then the terminal `status.json`, and the
+comment there states the invariant: a reader that waits for the status sees `site.json` final. The status is written
+nowhere else with a terminal state. `site_json` is best effort: a failed write is dropped without a word, and a failed
+read of the existing file is treated as an empty record. So the invariant holds only when the write succeeds.
+
+**Candidate causes.** (a) The final write failed. `atomic_write` retries the rename for about 0.63 s; the file had been
+replaced one poll earlier by the contact write, and on the gate's runner a scanner or indexer can hold a new file open
+that long while three tests run at once. This fits every observed fact. (b) Two followers of one run (a second runner
+process), one writing its contact line over the other's final record. Nothing in the logs shows a second runner, and
+the project lock is meant to exclude it. The log of the failed test does not print `runner.log` or `site.jsonl` at
+this assertion, so the two cannot be told apart from this run.
+
+**Change registered here.**
+
+1. `site_json` returns whether the record was written. An existing `site.json` that cannot be read is not replaced by
+   an empty record: the update is reported as not written.
+2. In `Worker::step`, a run that ended on the site gets its terminal `status.json` only after the final `site.json`
+   was written. If that write fails the run stays followed and the step is tried again at the next poll; the
+   `downloaded` event is written once.
+3. Check D1 (unit test `final_record_precedes_the_terminal_status` in `site/remote.rs`, Windows only, because it needs
+   a handle that forbids the replacement): with `site.json` held open without sharing, `site_json` returns false
+   within 5 s and the file is unchanged; with the handle closed it returns true and the record has the new field.
+   Control: the same call on a file nobody holds returns true. D1 fails on the code before this change, where
+   `site_json` returns nothing.
+4. The assertion at `sites_adr0739.rs:363` and the two around it print `site.jsonl` and `runner.log` when they fail.
+   The checks themselves are unchanged.
+
+**Limits.** D1 tests the helper, not the order in `step`; the order is by reading. If the cause is (b), this change
+does not remove it, and item 4 is what will show it at the next failure. No acceptance of S1 or S2 changes.
