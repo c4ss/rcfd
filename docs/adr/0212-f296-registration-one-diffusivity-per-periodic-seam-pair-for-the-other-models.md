@@ -429,3 +429,10 @@ and will likely conflict. After the merge, k-epsilon and SA on `pimple` use the 
 | V0e | gate of e70613d (git archive, `scripts/gate_test.py`, 3 jobs, the shared gate lock, held from 15:32 to 17:17): fmt per package 0, clippy `--workspace --all-targets -D warnings` 0; 3097 passed, 2 failed, 868 ignored, 3099 test processes, wall 5510 s. The free-memory start threshold was 19 GB (the value given for this job; the F-292 template had 20 GB), met at once (38 GB); the lowest free memory during the run was 26 GB. The 2 failures are `journal_f273` `c3s_two_appenders_without_a_shared_edit_lock_number_every_line_once` and `c3s_two_writers_number_every_line_once_in_file_order`, on the list of known flakes (`journal_f273` c3s); every F-296 and F-295 test, `f296_default_bits`, `f295_default_bits`, `f286_default_bits`, `baseline_hashes` and `case_hashes_w48u` passed in it | pass, apart from the known flakes | met |
 
 After the gate only this text changed (a docs-only commit).
+
+## Answers of the maintainer (2026-11-18)
+
+The questions of this record were listed before the standing instruction of 2026-11-11 (take the recommendation). On
+2026-11-18 the maintainer decided that the instruction applies to such questions too: the lead closes each on its written
+recommendation, except a question that would change a default result, a golden or a hash table, or that needs a source the
+repository lacks; those stay open and are named in the item's roadmap note. No question is answered here one by one.

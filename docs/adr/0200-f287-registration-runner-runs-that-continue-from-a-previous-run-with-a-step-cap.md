@@ -369,3 +369,11 @@ New tests: `rcfd-runner` `tests/continue_f287.rs` (R-1 ignored, R-1c), `rcfd-cli
 **Questions for the maintainer.** Q1 to Q7 stand as registered, each built on its option (a). In order of weight: Q1 (the two
 `settings` keys, the lead's approval under ADR 0130, and where they live); Q5 (the class of `design_run_operating_map`); Q6 (the
 iteration cap of a continued run); Q2, Q3, Q4 and Q7. Also for the maintainer: `rcfd run --max-steps` is a new command-line option.
+
+## Answers of the maintainer (2026-11-18)
+
+Five decisions on the priority items F-270 to F-275 were put to the maintainer on 2026-11-18, each with options and a recommendation, and he took the recommended option on all five. The part that concerns this record:
+
+- Q1: the run-record fields `continue_from` and `max_steps` are approved as built, in a type beside `RunSettings` (the approval ADR 0130 asks for). Folding them into `RunSettings` is open to the lead as a later tidy-up; the reason against it, the egui Studio's struct literal, went with that Studio.
+- Q2 to Q7 stand as built, on the written recommendations (option (a) of each).
+- The lead decides the status of F-287 by the registered rule. F-274 no longer waits on this approval.

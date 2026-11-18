@@ -9,11 +9,21 @@ Usage (from the workspace root):
 --tsv      write binary, test, outcome, seconds, peak working set (MB) for every test.
 --heartbeat S  every S seconds (default 300; 0 off) write a progress line to stderr: tests done of total, failures so far,
            elapsed, estimated time left, and the longest-running tests still going.
+--shard K/N  run only shard K of N (1 <= K <= N). The tests are dealt to the N shards by their seconds in the --order TSV so that
+           the shards carry about equal recorded time; with the same --order file the N runs together run every test once. The
+           ignored tests and the doc-tests are reported by shard 1 only, so the sums over the N logs equal those of one run. Not
+           yet used by gate.yml (docs/test-process.md 7.5).
 --no-doc   skip the closing doc-tests (ADR 0681: a run restricted with `--test NAME`, where `cargo test --doc` is an error). Cargo options
            in the selection come after `--`: gate_test.py --no-doc -- -p CRATE --features F --test NAME.
 --timeout-factor F, --timeout-min S, --timeout-max S (ADR 0129; defaults 5, 600, 3600): a test's time limit is
            clamp(F * its seconds in the --order TSV, min, max), max if it has no record; --timeout-max 0 turns the limit off. On expiry
            the test's process tree (never cargo) is killed and the test fails with outcome TIMEOUT; the other tests go on.
+--skip-pattern REGEX (off by default; docs/process/documentation-process-review.md I2): every test runs with `--show-output`, and
+           the TSV gains a last column `skipped` with the output lines of a PASSED test that match REGEX, joined by " | ". The closing
+           `gate_test:` line then also gives the number of passed tests that reported a skip. Suggested REGEX: SKIP_SUGGESTED below.
+           It matches 24 of the 26 print lines of the test sources that contain "skip" (13 files, 2026-11-18); some of those lines
+           report a skipped part or a skipped input, not a skipped test, so the count is an upper bound until an item fixes the pattern.
+           The child-process entry points that pass without doing anything print nothing and are not found this way.
 Progress goes to stderr: phase markers, one `[k/N outcome seconds MB elapsed] binary::test` line per finished test and the
 heartbeat lines. Output keeps the libtest lines (`Running`, `test X ... ok`, `test result:`), so the gate's summing awk works unchanged. Afterwards
 `cargo test --doc` runs the doc-tests. Exit status 0 only if the build, every test and the doc-tests pass.
@@ -32,6 +42,21 @@ import time
 RESULT = re.compile(r"^test result: \w+\. (\d+) passed; (\d+) failed; (\d+) ignored", re.M)
 
 
+# "skipped" as a word, not after the count 0 ("0 skipped" is a tally, not a skip).
+SKIP_SUGGESTED = r"(?i)(?<!\b0 )\bskipped\b"
+
+
+def skip_lines(out, pattern):
+    """The lines of a test's output that match the compiled pattern, stripped; tabs become spaces so they fit a TSV cell."""
+    return [ln.strip().replace("\t", " ") for ln in out.splitlines() if pattern.search(ln)]
+
+
+def tsv_row(stem, test, outcome, seconds, mb, skipped=None):
+    """One TSV row; `skipped` (a list of lines, or None when --skip-pattern is off) adds the last column."""
+    row = f"{stem}\t{test}\t{outcome}\t{seconds}\t{mb}"
+    return row if skipped is None else row + "\t" + " | ".join(skipped)
+
+
 _PROGRESS = threading.Lock()
 
 
@@ -45,6 +70,27 @@ def progress(msg):
     with _PROGRESS:  # one write per line, so the pool's threads never interleave within a line
         sys.stderr.write(msg + "\n")
         sys.stderr.flush()
+
+
+def shard_of(seconds, n, default=1.0):
+    """The shard (0 to n-1) of each test, given the recorded seconds of the tests in the order they would start (None where
+    there is no record, counted as `default`). Each test goes to the shard with the least seconds so far, the lowest-numbered
+    on a tie, so the same order and records always give the same split and the shards carry about equal recorded time."""
+    load = [0.0] * n
+    out = []
+    for s in seconds:
+        k = min(range(n), key=lambda i: (load[i], i))
+        load[k] += default if s is None else s
+        out.append(k)
+    return out
+
+
+def parse_shard(text):
+    """"K/N" as (K, N) with 1 <= K <= N."""
+    m = re.fullmatch(r"(\d+)/(\d+)", text or "")
+    if not m or not 1 <= int(m.group(1)) <= int(m.group(2)):
+        raise SystemExit(f"gate_test: --shard takes K/N with 1 <= K <= N, not {text!r}")
+    return int(m.group(1)), int(m.group(2))
 
 
 def limit_s(rec, factor, lo, hi):
@@ -181,9 +227,16 @@ def main():
     ap.add_argument("--timeout-min", type=float, default=600.0)
     ap.add_argument("--timeout-max", type=float, default=3600.0)
     ap.add_argument("--no-doc", action="store_true")
+    ap.add_argument("--skip-pattern")
+    ap.add_argument("--shard")
     ap.add_argument("select", nargs="*")
     a = ap.parse_args()
     select = a.select or ["--workspace"]
+    shard = parse_shard(a.shard) if a.shard else None
+    first = shard is None or shard[0] == 1  # the ignored tests and the doc-tests are reported by shard 1 only
+    a.no_doc = a.no_doc or not first
+    skip_re = re.compile(a.skip_pattern) if a.skip_pattern else None
+    show = ["--show-output"] if skip_re else []
 
     t_build = time.time()
     progress(f"gate_test: building test binaries ({' '.join(select)}, release)")
@@ -228,7 +281,10 @@ def main():
     stem = [os.path.basename(b["executable"]).rsplit("-", 1)[0] for b in bins]
     jobs = [(i, t) for i, names in enumerate(alls) for t in names if t not in ign[i]]
     jobs.sort(key=lambda j: -prev.get((stem[j[0]], j[1]), 0.0))
-    n_ign = sum(len(x) for x in ign)
+    if shard:
+        part = shard_of([prev.get((stem[i], t)) for i, t in jobs], shard[1])
+        jobs = [j for j, k in zip(jobs, part) if k == shard[0] - 1]
+    n_ign = sum(len(x) for x in ign) if first else 0
     progress(f"gate_test: {len(jobs)} tests to run ({n_ign} ignored) in {len(bins)} binaries, jobs={a.jobs}"
              + (f", order from {a.order}" if prev else ""))
     lock = threading.Lock()
@@ -242,10 +298,11 @@ def main():
         lim = limit_s(prev.get((stem[i], t)), a.timeout_factor, a.timeout_min, a.timeout_max)
         with lock:
             running[job] = time.time()
-        code, out, dt, mb, to = run([b["executable"], t, "--exact", "--test-threads=1"], cwd, dict(env, CARGO_MANIFEST_DIR=cwd),
+        code, out, dt, mb, to = run([b["executable"], t, "--exact", "--test-threads=1", *show], cwd, dict(env, CARGO_MANIFEST_DIR=cwd),
                                     lim)
-        r = RESULT.search(out)
-        ok = "TIMEOUT" if to else "ok" if code == 0 and r is not None and r.groups() == ("1", "0", "0") else "FAILED"
+        r = (RESULT.findall(out) or [None])[-1] if skip_re else RESULT.search(out)
+        r = r if r is None or isinstance(r, tuple) else r.groups()
+        ok = "TIMEOUT" if to else "ok" if code == 0 and r == ("1", "0", "0") else "FAILED"
         with lock:
             running.pop(job, None)
             state["done"] += 1
@@ -281,7 +338,8 @@ def main():
     ratio = max([dt / lim for _, _, dt, _, lim in res.values() if lim] or [0.0])
 
     fails = 0
-    rows = ["binary\ttest\toutcome\tseconds\tpeak_mb"]
+    rows = ["binary\ttest\toutcome\tseconds\tpeak_mb" + ("\tskipped" if skip_re else "")]
+    n_skip = 0
     for i, b in enumerate(bins):
         rel = os.path.relpath(b["target"]["src_path"], os.path.dirname(b["manifest_path"]))
         kind = "unittests " if b["target"]["kind"] != ["test"] else ""
@@ -290,24 +348,31 @@ def main():
         secs = 0.0
         for t in alls[i]:
             if t in ign[i]:
+                if not first:
+                    continue
                 print(f"test {t} ... ignored")
-                rows.append(f"{stem[i]}\t{t}\tignored\t0\t0")
+                rows.append(tsv_row(stem[i], t, "ignored", "0", "0", [] if skip_re else None))
                 continue
+            if (i, t) not in res:
+                continue  # a test of another shard
             outcome, out, dt, mb, lim = res[(i, t)]
             ok = outcome == "ok"
             secs += dt
             print(f"test {t} ... {'ok' if ok else 'FAILED'}" + (f" (timeout after {lim:.0f} s)" if outcome == "TIMEOUT" else ""))
-            rows.append(f"{stem[i]}\t{t}\t{outcome}\t{dt:.2f}\t{mb:.0f}")
+            sk = (skip_lines(out, skip_re) if ok else []) if skip_re else None
+            n_skip += bool(sk)
+            rows.append(tsv_row(stem[i], t, outcome, f"{dt:.2f}", f"{mb:.0f}", sk))
             p, f = p + ok, f + (not ok)
             if not ok:
                 # indented so the gate's `^test result` sum does not count the inner summary a second time
                 print(f"---- {t} output ----\n" + "".join("    " + ln + "\n" for ln in out.splitlines()))
         fails += f
         status = "ok" if f == 0 else "FAILED"
-        print(f"\ntest result: {status}. {p} passed; {f} failed; {len(ign[i])} ignored; 0 measured; 0 filtered out; "
+        print(f"\ntest result: {status}. {p} passed; {f} failed; {len(ign[i]) if first else 0} ignored; 0 measured; 0 filtered out; "
               f"finished in {secs:.2f}s (process seconds)\n")
     print(f"gate_test: {len(jobs)} test processes, {len(bins)} binaries, jobs={a.jobs}, wall {wall:.1f}s, "
-          f"peak summed working set {mem[0]:.0f} MB, max time/limit {ratio:.3f}")
+          f"peak summed working set {mem[0]:.0f} MB, max time/limit {ratio:.3f}"
+          + (f", {n_skip} passed tests reported a skip" if skip_re else ""))
     if a.tsv:
         open(a.tsv, "w", encoding="utf-8").write("\n".join(rows) + "\n")
 

@@ -1,0 +1,2 @@
+# Ids that occur twice in the roadmap pair when the check started.
+# Written by scripts/process_report.py --seed-exceptions on 2026-11-18. This list only shrinks.

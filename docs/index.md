@@ -75,6 +75,13 @@ Most task steps live in the reference pages below for now.
 * [Verification report](verification-report.md): reference values that were marked unverified, re-checked against their sources.
 * [Product suites](product-suites.md): a log of capabilities outside CFD; not a plan.
 * [Audit report](audit-report.md): an independent model-run audit of the repository, not reviewed by a human.
+* [ADR index](adr/index.md): every record of `docs/adr` by line of work, with its item and that item's status (generated).
+* [Process](process/README.md): how work is issued, recorded, checked and merged. [Agent rules](process/agent-rules.md),
+  [the lead's process](process/lead-process.md), [tolerances](process/tolerances.md) (a draft) and
+  [briefs](adr/briefs/README.md).
+* [Documentation process review](process/documentation-process-review.md): a model-run review of how the project records plans,
+  decisions, evidence and status, adapted for a project built by many agents; not reviewed by a human. Its proposals are being
+  put in place, starting with the process pages above.
 * [Test process](test-process.md): what the gate runs, how long it takes, and the options to make it faster.
 * [Releasing](releasing.md): what a version number means, what each automatic check proves, and the steps to cut a release.
 

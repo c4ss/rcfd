@@ -273,3 +273,10 @@ The work is on branch `f271-new-simulations`, after this text and amendment 1: `
 case file through `new_case` (never replacing one). A policy `allow` list or a skill's `allowed-tools` that permits `start_run`
 (the plugin's `start-and-watch`) therefore now also lets Claude add a file under `cases/`. ADR 0173 designed `start_run` with a
 new case this way; whether such a call should need the `write_files` class too is left to the maintainer with F-275's tool list.
+
+## Answers of the maintainer (2026-11-18)
+
+Five decisions on the priority items F-270 to F-275 were put to the maintainer on 2026-11-18, each with options and a recommendation, and he took the recommended option on all five. The part that concerns this record:
+
+- Q2 (decision D7 of ADR 0173): option (a) is approved. The field-store plan is on by default for every `start_run`, also of an existing case with no store setting. This changes what such a call stores, which is why it needed the maintainer's word. The change itself is not made here: it is an item for the lead to issue, with its own registration.
+- Q1 stands as built (`new_case`), on the written recommendation.

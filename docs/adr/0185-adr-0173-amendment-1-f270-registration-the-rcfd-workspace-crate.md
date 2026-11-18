@@ -252,3 +252,10 @@ The Studio changes are:
 | A7 lock file | `Cargo.lock` gains the `rcfd-workspace` entry and that name in the dependency lists of `rcfd-mcp` and `rcfd-studio`; nothing else |
 | Scanner | `scripts/limit_audit.py` reports none of the new tests |
 | Gate | 6c9c15d, `git archive` copy, three jobs (`scripts/gate_test.py`): fmt 0, clippy `-D warnings` 0, 2791 passed, 0 failed, 799 ignored, 534 binaries, 67 min. The last gate before it (`386c81e`, before the test fix `7c4091f`) gave 2776 / 1 / 799; the 15 more passing tests are that fixed test and the 14 new ones of F-270 (the 4 moved unit tests count once) |
+
+## Answers of the maintainer (2026-11-18)
+
+Five decisions on the priority items F-270 to F-275 were put to the maintainer on 2026-11-18, each with options and a recommendation, and he took the recommended option on all five. The part that concerns this record:
+
+- Q1 is closed as overtaken. The egui Studio it asks about was removed on 2026-11-16 (F-449). The Electron Studio (apps/studio-web) saves a project case through `edit_case`, which writes the changed lines and keeps comments. The acceptance of F-270 is re-scoped to the Electron Studio; its clause on the dependencies of `rcfd-studio` lapsed with that crate. Not yet shown by a test: a comment line surviving a save from the Electron Studio. The lead names or adds that test and then decides the status by the registered rule.
+- Q2 and Q3 stand as built, on the written recommendations.

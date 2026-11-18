@@ -567,3 +567,10 @@ point 2 and the sum, 11 106 against 11 232, are lower).
   the documentation says when to keep `range`); a range floor would remove this miss and is the maintainer's constant to choose.
 * Question 1: the T3 clause (N1), the Pareto clause (MO1f, with FON's 3 parameters) and the warm-start clause (W1 to W3) are met
   by their registered checks; MO1z and N3 are misses of further registered checks.
+
+## Answers of the maintainer (2026-11-18)
+
+The questions of this record were listed before the standing instruction of 2026-11-11 (take the recommendation). On
+2026-11-18 the maintainer decided that the instruction applies to such questions too: the lead closes each on its written
+recommendation, except a question that would change a default result, a golden or a hash table, or that needs a source the
+repository lacks; those stay open and are named in the item's roadmap note. No question is answered here one by one.

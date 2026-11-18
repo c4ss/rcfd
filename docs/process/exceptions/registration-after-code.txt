@@ -1,0 +1,2 @@
+# Registrations created after a code commit that cites them when the lint started.
+# Written by scripts/process_report.py --seed-exceptions on 2026-11-18. This list only shrinks.

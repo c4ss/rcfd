@@ -9,6 +9,9 @@ import time
 import unittest
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import re  # noqa: E402
+
+import gate_test  # noqa: E402
 from gate_test import limit_s  # noqa: E402
 
 GATE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "gate_test.py")
@@ -69,7 +72,46 @@ def alive(pid):
         return False
 
 
+class SkipColumn(unittest.TestCase):
+    """--skip-pattern (documentation process review, I2): the pure parts; the run itself needs cargo."""
+
+    def test_suggested_pattern_takes_a_skip_and_not_a_tally_of_zero(self):
+        pat = re.compile(gate_test.SKIP_SUGGESTED)
+        out = ("running 1 test\n---- t stdout ----\nD2 skipped: GRI-Mech data not fetched\nA3: 200 low, 0 skipped; hashes hold\n"
+               "\tSSH: Skipped (no answer)\nall cases ran\ntest result: ok. 1 passed; 0 failed; 0 ignored\n")
+        self.assertEqual(gate_test.skip_lines(out, pat), ["D2 skipped: GRI-Mech data not fetched", "SSH: Skipped (no answer)"])
+
+    def test_row_is_unchanged_without_the_option_and_gains_one_cell_with_it(self):
+        self.assertEqual(gate_test.tsv_row("b", "m::t", "ok", "1.25", "40"), "b\tm::t\tok\t1.25\t40")
+        self.assertEqual(gate_test.tsv_row("b", "m::t", "ok", "1.25", "40", []), "b\tm::t\tok\t1.25\t40\t")
+        self.assertEqual(gate_test.tsv_row("b", "m::t", "ok", "1.25", "40", ["x skipped: a", "y skipped: b"]),
+                         "b\tm::t\tok\t1.25\t40\tx skipped: a | y skipped: b")
+
+    def test_a_tab_in_a_matched_line_cannot_split_the_cell(self):
+        self.assertEqual(gate_test.skip_lines("a\tskipped\tb\n", re.compile("skipped")), ["a skipped b"])
+
+
 @unittest.skipUnless(os.environ.get("GATE_TEST_E2E") == "1", "set GATE_TEST_E2E=1 (builds a crate with cargo --release)")
+class Shard(unittest.TestCase):
+    def test_every_test_is_in_exactly_one_shard_and_the_loads_are_close(self):
+        secs = [600.0, 300.0, 200.0, 120.0, 60.0, 30.0, None, 5.0, 2.0, None, 1.0]
+        part = gate_test.shard_of(secs, 3)
+        self.assertEqual(len(part), len(secs))
+        self.assertEqual(set(part), {0, 1, 2})
+        load = [sum((s or 1.0) for s, k in zip(secs, part) if k == n) for n in range(3)]
+        self.assertEqual(sum(load), sum(s or 1.0 for s in secs))
+        self.assertEqual(part[:3], [0, 1, 2])  # the three slowest start one per shard
+        self.assertLessEqual(max(load[1:]) - min(load[1:]), 120.0)
+        self.assertEqual(part, gate_test.shard_of(secs, 3))  # the same split every time
+
+    def test_one_shard_takes_everything_and_the_option_is_checked(self):
+        self.assertEqual(gate_test.shard_of([3.0, None, 1.0], 1), [0, 0, 0])
+        self.assertEqual(gate_test.parse_shard("2/4"), (2, 4))
+        for bad in ("0/4", "5/4", "2", "a/b", ""):
+            with self.assertRaises(SystemExit):
+                gate_test.parse_shard(bad)
+
+
 class TimeLimit(unittest.TestCase):
     @classmethod
     def setUpClass(cls):

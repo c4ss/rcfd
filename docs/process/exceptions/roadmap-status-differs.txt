@@ -1,0 +1,2 @@
+# Items whose status differed between roadmap.json and ROADMAP.md when the check started.
+# Written by scripts/process_report.py --seed-exceptions on 2026-11-18. This list only shrinks.

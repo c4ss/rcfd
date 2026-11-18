@@ -20,7 +20,8 @@ warranty of any kind (see the licences). The main gaps today:
 * The steady rotating-frame solve of the FAN-01 reference fan case does not
   reach its expected operating point, and the diagnosis is open
   ([fan milestone](docs/milestone-fan.md)).
-* There is no structural solver.
+* The structural solver ([docs/structural-solver.md](docs/structural-solver.md)) is new and not validated against
+  measurement; many of its roadmap items are partly done.
 * Sliding-mesh transient solves run from a case file for the full-annulus
   rotor-stator generator and its sector form (`[mesh.sliding]`, F-303,
   ADR 0637; F-711, ADR 0646; laminar piso / pimple); planar sliding is in the
@@ -78,9 +79,10 @@ Build and test:
     cargo test --workspace --release
 
 The full test suite takes about an hour in release mode on a 16-thread
-machine, and much longer in debug mode. The project's gate, the full check run
-before work is merged, runs it with `python scripts/gate_test.py`
-([docs/test-process.md](docs/test-process.md)).
+machine, and much longer in debug mode. The project's gate, the full check of a
+commit, runs it with `python scripts/gate_test.py`. The gate runs on `main` in CI,
+not before each merge; a merge is checked first by the tests its changes select
+([docs/test-process.md](docs/test-process.md), [docs/process/](docs/process/README.md)).
 
 The desktop Studio is the Electron app in `apps/studio-web/`. It starts the
 solver service, the project server and the run service from the folder of

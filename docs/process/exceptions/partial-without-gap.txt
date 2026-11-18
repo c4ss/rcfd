@@ -1,0 +1,2 @@
+# Partial items that had no `gap` key when the rule started (agent rules, rule 9).
+# Written by scripts/process_report.py --seed-exceptions on 2026-11-18. This list only shrinks.

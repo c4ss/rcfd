@@ -1,0 +1,14 @@
+# Studio spec files whose leading comment named no item or ADR when the rule started.
+# Written by scripts/process_report.py --seed-exceptions on 2026-11-18. This list only shrinks.
+apps/studio-web/tests/e2e/idle-frames.spec.ts
+apps/studio-web/tests/e2e/runner-lifetime.spec.ts
+apps/studio-web/tests/e2e/shell.spec.ts
+apps/studio-web/tests/unit/data-bridge.spec.ts
+apps/studio-web/tests/unit/data-fnv.spec.ts
+apps/studio-web/tests/unit/on-demand.spec.ts
+apps/studio-web/tests/unit/pictograms.spec.ts
+apps/studio-web/tests/unit/runner-lifetime.spec.ts
+apps/studio-web/tests/unit/security.spec.ts
+apps/studio-web/tests/unit/service-bridge.spec.ts
+apps/studio-web/tests/unit/service-client.spec.ts
+apps/studio-web/tests/unit/service-rpc.spec.ts

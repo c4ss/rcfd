@@ -33,7 +33,8 @@ ADR = re.compile(r"\bADRs? (\d{4})\b")
 
 
 def stem_of(exe):
-    return os.path.basename(exe).rsplit("-", 1)[0].replace("-", "_")
+    # Either separator: the log of a Windows gate is also read on Linux (the scripts job of ci.yml).
+    return re.split(r"[\\/]", exe)[-1].rsplit("-", 1)[0].replace("-", "_")
 
 
 def git(repo, *args, check=True):

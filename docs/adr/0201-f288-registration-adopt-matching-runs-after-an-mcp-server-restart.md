@@ -186,3 +186,10 @@ New tests: `rcfd-workspace` `tests/adopt_f288.rs` (A-U), `rcfd-mcp` `tests/adopt
 **Questions for the maintainer.** Q1 to Q5 stand as registered, each built on its option (a). In order of weight: Q1 (the solver
 version in the key, beyond the three items of ADR 0189 Q5 (b)), Q2 (failed runs never adopted), Q5, Q3 and Q4. The result key
 `runs_adopted` and `adopted` in a run object are new keys of the design tools' results in project mode.
+
+## Answers of the maintainer (2026-11-18)
+
+Five decisions on the priority items F-270 to F-275 were put to the maintainer on 2026-11-18, each with options and a recommendation, and he took the recommended option on all five. The part that concerns this record:
+
+- Q1 to Q5 stand as built, on the written recommendations (option (a) of each).
+- The lead decides the status of F-288 by the registered rule.

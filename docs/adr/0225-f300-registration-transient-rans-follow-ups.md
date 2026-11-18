@@ -438,3 +438,10 @@ warnings`, `scripts/gate_test.py` with 3 jobs, target `target-f300-gate`, start 
 (19:14 to 21:12) and by F-320 (from 21:12, which at 21:23 was still waiting for 19 GB of free memory: 13 GB free, the WSL VM
 holding 31.8 GB). This gate had not started when this text was written; its result goes here when it has run. No gate result is
 claimed.
+
+## Answers of the maintainer (2026-11-18)
+
+The questions of this record were listed before the standing instruction of 2026-11-11 (take the recommendation). On
+2026-11-18 the maintainer decided that the instruction applies to such questions too: the lead closes each on its written
+recommendation, except a question that would change a default result, a golden or a hash table, or that needs a source the
+repository lacks; those stay open and are named in the item's roadmap note. No question is answered here one by one.

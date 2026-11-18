@@ -1,0 +1,24 @@
+# Registrations whose creating commit changed other files when the lint started.
+# Written by scripts/process_report.py --seed-exceptions on 2026-11-18. This list only shrinks.
+0183-exp-rot-registration.md
+0184-m-fan-b-registration-and-obj-gltf-readers.md
+0192-f253-registration-particle-wall-film.md
+0194-f254-registration-particle-wall-interaction.md
+0200-f287-registration-runner-runs-that-continue-from-a-previous-run-with-a-step-cap.md
+0201-f288-registration-adopt-matching-runs-after-an-mcp-server-restart.md
+0203-f290-registration-inverse-volume-mesh-smoothing-in-the-case-tree.md
+0206-f292-registration-gas-buoyancy-and-gas-shear-in-the-particle-wall-film.md
+0207-f258-registration-compressible-ale-boundaries-and-mesh-speed-time-step.md
+0208-f255-registration-particle-dispersion-from-turbulence-model-fields-and-particle-surface-reactions.md
+0213-f257-registration-prism-layering-and-incompressible-layering.md
+0216-f250-registration-sliding-interface-on-a-cylinder.md
+0219-f134-registration-overset-coupling-of-a-moving-component-mesh.md
+0225-f300-registration-transient-rans-follow-ups.md
+0226-f320-registration-wet-steam-checks-for-mu3-and-mu6.md
+0580-f653-registration-flutter-of-follower-loads-the-unsymmetric-eigenproblem.md
+0620-f697-registration-fan-objective-over-impedances-and-tolerances.md
+0706-f769-registration-assistant-setup-helpers-and-the-workflow-engine.md
+0707-f769-registration-the-f040-wall-function-channel.md
+0708-f769-registration-the-shipped-turbulence-and-compressible-examples-through-the-binary.md
+0709-f769-registration-the-mesh-generator-parameters.md
+0710-f769-registration-tables-called-from-expressions.md

@@ -29,5 +29,9 @@ Run these commands:
 The maintainer runs the full suite (`python scripts/gate_test.py`, see [docs/test-process.md](docs/test-process.md)), which
 takes over an hour.
 
+Work on a roadmap item starts with a registration: a page in `docs/adr/` that fixes the checks and their numeric limits
+before any code is written, committed alone as the first commit. The rules for this, which the project's agents follow
+and which apply to any contributor, are in [docs/process/agent-rules.md](docs/process/agent-rules.md).
+
 Roadmap items need unit tests for their acceptance criteria. The crate dependency graph must stay acyclic (see
 [docs/architecture.md](docs/architecture.md)).

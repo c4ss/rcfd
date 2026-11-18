@@ -1,0 +1,2 @@
+date	kind	commit	branch	items	adrs	result	minutes	left_out	left_out_minutes	detail
+2026-11-12	gate	49fbf1a3				green				passed=3548;failed=0;ignored=1023;local full gate

@@ -1,0 +1,122 @@
+# The lead's process
+
+Version 1 (2026-11-18). What the lead agent does between the maintainer and the implementation agents. The agents' side is
+[agent-rules.md](agent-rules.md). The lead's state is not kept in its session: what is issued is the brief files, what is
+merged is the ledger, what is asked is the open-questions list of the process report. Another session can read all three.
+
+## The constraint
+
+The maintainer's attention comes first: a question reaches the maintainer only when it is about scope or priority, as
+options with a recommendation. The one shared machine is second: no step here may need more of it than the push budget
+below. Whole-system verification is third: main runs ahead of the newest green full run, and the ledger shows by how much.
+
+## Maintainer acceptance
+
+Acceptance is the maintainer's go-ahead for a line of work to be scoped or prioritised. It is written in the dated priority
+statement at the head of `docs/ROADMAP.md`, which is restated whenever the maintainer gives a new instruction and names the
+lines of work in order, each with its weekly budget in registrations where one is set. The maintainer does not accept
+results one by one: an item is done when its registered decision rule says so and the push checks pass.
+
+## Issuing
+
+1. Choose the item from the lines the priority statement names, in order. Do not issue on a line whose weekly budget is
+   spent (`python scripts/process_report.py --weekly` shows it). A blocked priority item is not skipped silently: its
+   question goes to the head of the weekly list.
+2. Decide whether a proposed follow-up is a new item or a further registration of its parent (rule 13). Enter a new item
+   only if its acceptance names a number or a named reference, or hands its limits to the registration.
+3. Give the ADR number: the next free number on main. Numbers are given by the lead only.
+4. Write the brief as a file, `docs/adr/briefs/<branch>.md`, in the form of [the briefs folder](../adr/briefs/README.md):
+   items, ADR number, rules version, model, the lead's size (five values, rule 17), the reading list with its bytes, the
+   task. Commit it on main (several briefs may share a commit), then start the agent and give it the path. If the brief's
+   reading exceeds the reading limit, split it or point it at an area page's reading list.
+5. After the registration is committed and before the code: if the report lists one of its limits as having no source
+   (rule 15), send it back for a source.
+6. A dispatch that is abandoned gets a dated line appended to its brief: "Closed without merge (<date>): <why>".
+
+## Merging and pushing
+
+Merge the branch into main locally, then run `python scripts/push_main.py`. The script is the one list of per-merge checks
+([test-process.md](../test-process.md) section 7.4). It runs fmt and clippy of the touched packages, the ADR's registered
+tests, the committed mutation patch (expecting a failure), `baseline_hashes`, `docs_site` when `docs/` is touched,
+`npm test` in `apps/studio-web` when it is touched, the process report's checks, and then the tests the diff selects, up to
+30 minutes of recorded run time. It regenerates the generated files, commits them with the item's roadmap status and the
+ledger line, pushes, and starts the selected tests that did not fit in the background. If a check fails, nothing is pushed.
+
+- Roadmap status is written after the checks, not before.
+- A conflict in a generated file is not resolved by hand: take either side and let the script regenerate it.
+- Merging never stops for the full run. No test is marked ignored, skipped or removed to make a run pass.
+- If pushes queue up, merge several branches and run one selection over their joint diff.
+
+## Shared files and their one writer
+
+| File | Writer | Where |
+| --- | --- | --- |
+| `docs/roadmap.json`, the head of `docs/ROADMAP.md` (above its marker line), `docs/roadmap-overview.md` | the lead | main only, both streams |
+| `scripts/roadmap_progress.py` (categories) | the lead | main only |
+| `docs/process/ledger.tsv` | the push script and the lead | main only |
+| `docs/adr/briefs/*.md` | the lead | main only |
+| "Answers of the maintainer" in an ADR | the lead | main only |
+| An ADR above its answers | the agent it was issued to | its branch |
+| `docs/process/agent-rules.md`, this file, `tolerances.md` | the lead, on the maintainer's word | main only |
+| `docs/reference-data.md` | nobody: generated from `docs/reference-data.d/*.part`, one fragment per item, written by that item's agent | each branch adds its own fragment |
+| A topic page under `docs/` | the agent whose subject it is | its branch |
+
+Generated, never edited by hand: the item list of `docs/ROADMAP.md` (from `docs/roadmap.json`), `docs/adr/index.md`, the two roadmap SVGs, `docs/studio-coverage.md`, the capabilities
+inventory, and the generated sections of the overview and the area pages.
+
+## Questions and answers
+
+An agent's open questions sit in its ADR under "Open questions for the maintainer". The process report lists every such
+heading that has no "Answers of the maintainer" heading after it. When the maintainer answers, write the answer with its
+date under that heading in the same ADR, on main. Put a question to the maintainer only if it is about scope or priority, or
+if rule 6 forbids taking it; decide the rest and record the decision in the ADR.
+
+## The full run
+
+CI on main runs every test. When a run finishes, add its ledger line: commit, date, passed, failed, ignored, and for each
+failed test its primary ADR and item (`scripts/gate_attribute.py`). On a green run, move the tag `verified` to that commit.
+On a failure, issue the fix as an item against the failing test's ADR before any new work on that line; its result is a
+further addendum of that ADR. Main may be red on a test that was left out of a push budget until that fix lands.
+
+## Weekly
+
+- Print `python scripts/process_report.py --weekly` for the maintainer: blocked priority items, lines over budget,
+  unanswered questions, and the process measures.
+- Issue one audit item: a sample, drawn by a registered seed, of the lead's status decisions checked against the decision
+  rule each registration fixed, and of the briefs against the rules. Findings of scope go on the weekly list.
+- Issue one citation item: five citations drawn by seed, re-read against their sources. The count of citations from memory
+  may not rise.
+- Issue a distillation item for an area whose list of done items missing from its page has passed the size the maintainer
+  chose.
+
+## Changes
+
+- Version 1, 2026-11-18: first written, from the documentation process review and the maintainer's decisions of that day.
+
+## Golden files
+
+An agent never edits a golden file or a hash table (agent rules, rule 3). Where an item's addendum reports an "additive
+golden edit", the lead checks that the diff adds entries and removes or changes none, re-records the file on main and writes
+the diff's size and the file in the ledger line of the merge. Any other golden change, and every change to
+`baseline_hashes.rs`, needs the maintainer's word for that item.
+
+## Status by the registered rule
+
+"Done" is the lead's decision by the rule the registration fixed. An item whose check, negative control or mutation passed
+only after an amendment is done all the same (the maintainer, 2026-11-18) when rule 2 was followed: no numeric limit changed,
+the amendment only corrected a defective set-up and was committed before the corrected run, the failed or stopped test is
+kept as a record, and no clause of the acceptance is unmet or not run. The earlier practice of recording such an item as
+partial (2026-11-13) ends. The lead confirms these points against the ADR before changing the status.
+
+## Questions asked before 2026-11-11
+
+The standing instruction of 2026-11-11 (take the recommendation) also applies to questions that agents listed before that
+date (the maintainer, 2026-11-18): the lead closes them on the written recommendation, except a question that would change
+a default result, a golden or a hash table, or that needs a source the repository lacks.
+
+## Amending an acceptance
+
+Where a registration's result shows that a clause of an acceptance cannot be met as written or does not measure what was
+meant, the lead may amend the acceptance (the maintainer, 2026-11-18): the new words are appended to the acceptance as
+"Amended <date>: ..." with the reason and the ADR, the old words stay, and the weekly list names every amended acceptance
+so that a lowered bar is seen.

@@ -380,3 +380,10 @@ Q1 to Q5 stay open for the maintainer. F-297 is done in the roadmap by the decis
 
 Merge note for the lead: main has moved to 50c4a83 since the branch point; a trial merge (`git merge-tree`) conflicts only in
 `docs/reference-data.md`, where both sides append a section at the end (keep both).
+
+## Answers of the maintainer (2026-11-18)
+
+The questions of this record were listed before the standing instruction of 2026-11-11 (take the recommendation). On
+2026-11-18 the maintainer decided that the instruction applies to such questions too: the lead closes each on its written
+recommendation, except a question that would change a default result, a golden or a hash table, or that needs a source the
+repository lacks; those stay open and are named in the item's roadmap note. No question is answered here one by one.
