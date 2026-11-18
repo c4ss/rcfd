@@ -533,7 +533,9 @@ unchanged tests therefore maps to that ADR too. Read `evidence` to tell the two 
 
 ### 7.4 What to check per merge now that the full suites run daily
 
-For a merge of one ADR's branch, the lead runs these checks instead of the full suites:
+For a merge of one ADR's branch, the lead runs `python scripts/push_main.py --run` on the main checkout, with the merge at HEAD
+and before the push (without `--run` it prints the plan and runs nothing). The script is the one list of what is checked per
+merge. It always runs these five checks:
 
 1. `cargo fmt -p <package> -- --check` for each package the merge touches, then
    `cargo clippy -p <packages> --all-targets -- -D warnings`.
@@ -541,9 +543,35 @@ For a merge of one ADR's branch, the lead runs these checks instead of the full 
    ADR names that the index does not map.
 3. The unit tests of the touched crates: `cargo test -p <crate> --release --lib`.
 4. `cargo test -p rcfd-api --release --test baseline_hashes`.
-5. `cargo test -p rcfd-cli --release --test docs_site`.
+5. `cargo test -p rcfd-cli --release --test docs_site`, when the merge touches `docs/`.
 
-Everything else waits for the next daily gate, which attributes any failure to the merges since the last green gate.
+Then, in this order:
+
+6. `python scripts/process_report.py --check` (the process lints and the generated pages).
+7. The diff-selected tests, within a budget of 30 minutes of recorded run time (`--budget-minutes`): the integration-test binaries
+   of the crates the merge touches, then those of the crates that depend on them. Inside each group, binaries with a test that
+   failed in a recent gate line of the ledger come first, then the others by recorded time, shortest first. Recorded times come
+   from `--times`, a TSV written by `scripts/gate_test.py --tsv`; a binary with no record counts 60 s (`--default-seconds`).
+   Selection stops at the first binary that does not fit. What is left out is not run before the push: it runs in CI on `main`,
+   and `--left-out-run` starts it in the background for this one merge. No test is switched off to make a run pass.
+8. Mutation patches. A registration commits one of its planned mutations as `crates/<crate>/tests/<test>.mutation.patch` beside
+   `<test>.rs` (a Studio spec likewise beside the spec file). Its first line is `# expect-fail: <command>`, the command that runs
+   the test that must catch the mutation; the rest is a patch `git apply` accepts from the workspace root. The script applies it,
+   requires the command to fail, and removes it again.
+9. `npm test` in `apps/studio-web`, when the merge touches it.
+
+On the first failing command the script stops, prints the line, writes nothing and leaves the merge unpushed. On success it
+regenerates the generated pages (`process_report.py --write`, `roadmap_progress.py`), appends one line to the ledger
+`docs/process/ledger.tsv` and commits both; `--push` then pushes. The ledger is changed only on `main`. Its columns are date, kind
+(`merge`, `gate`, `leftout`, `ci`), commit, branch, items, adrs, result, minutes, left_out (binaries the budget left out),
+left_out_minutes and detail (the commands run; for a gate line `passed=N;failed=N;ignored=N;fails=binary::test=ADR/F-item,...`).
+
+When a full gate finishes, the lead records it with
+`python scripts/push_main.py --gate-line --commit SHA --passed N --failed N --ignored N [--attribution attribution.json]`
+(the JSON of `scripts/gate_attribute.py` gives each failed test its primary ADR and item); a green line moves the local tag
+`verified`. `python scripts/push_main.py --since-verified` prints the number of merges on `main` since the newest green gate line.
+
+Everything else waits for the next full gate, which attributes any failure to the merges since the last green gate.
 
 ## 8. The Electron Studio's npm tests (CI job `studio-web`)
 

@@ -109,7 +109,10 @@ jobs:
       - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
         with:
           python-version: "3.x"
-      - run: python -m unittest scripts/test_gate_test.py scripts/test_limit_audit.py scripts/test_release_notes.py scripts/test_make_example_projects.py
+      # Every scripts/test_*.py, so a new test file needs no edit here (docs/process/documentation-process-review.md, I1).
+      - run: python -m unittest discover -s scripts -p "test_*.py"
+      # The generated pages are current, and the lints of the process report hold (sections a, b, e, k, l; no git history).
+      - run: python scripts/process_report.py --check
 
   # The Electron Studio (apps/studio-web, ADR 0800 Q3: its npm tests run here, not in scripts/gate_test.py). npm ci installs
   # the committed lock file exactly; npm test builds, packages the app into out/packaged/ and runs every Playwright test

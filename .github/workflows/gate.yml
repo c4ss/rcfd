@@ -172,6 +172,9 @@ jobs:
               grep "^gate_test:" gate-out/test_hooks.log || true
             fi
           } >> "$GITHUB_STEP_SUMMARY" 2>/dev/null || true
+          # The process report with its registration lint, which reads git history (docs/process/README.md). It is uploaded
+          # with the logs and never changes the result of the gate, which is the result of the tests.
+          python scripts/process_report.py --check --history > gate-out/process_report.txt 2>&1 || true
       - name: upload logs
         if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2

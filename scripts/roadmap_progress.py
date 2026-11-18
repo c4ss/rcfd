@@ -2,13 +2,19 @@
 """Write docs/roadmap-progress.svg and docs/roadmap-categories.svg from docs/roadmap.json.
 
 The category of each item is listed in CATEGORIES below (roadmap.json has only phases).
-An item that is in no category is drawn under "Other" and reported, so add new ids here.
+An item that is in no category is an error (exit status 1): add new ids here.
+
+    python scripts/roadmap_progress.py           write both files
+    python scripts/roadmap_progress.py --check   write nothing; exit status 1 if either file differs from what would be written
 """
 import json
 import pathlib
 import sys
 from collections import Counter
 
+CHECK = "--check" in sys.argv[1:]
+if [a for a in sys.argv[1:] if a != "--check"]:
+    sys.exit("usage: roadmap_progress.py [--check]")
 root = pathlib.Path(__file__).resolve().parent.parent
 data = json.loads((root / "docs/roadmap.json").read_text(encoding="utf-8"))
 items = data["items"] if isinstance(data, dict) and "items" in data else data
@@ -49,8 +55,7 @@ for _, name, ids in CATEGORIES:
 other = sorted(set(status) - set(seen))
 cats = list(CATEGORIES)
 if other:
-    print("not in a category:", ", ".join(f"F-{n:03d}" for n in other), file=sys.stderr)
-    cats.append(("Project", "Other", other))
+    sys.exit("not in a category (add to CATEGORIES): " + ", ".join(f"F-{n:03d}" for n in other))
 
 STYLE = """
     :root { --ink:#1f2328; --mute:#59636e; --done:#1a7f4b; --part:#d4a72c; --todo:#d0d7de; --bg:#ffffff; }
@@ -78,8 +83,16 @@ def counts(ids):
     return c["done"], c["partial"], c["todo"]
 
 
+STALE = []
+
+
 def write(name, text):
-    with open(root / "docs" / name, "w", encoding="utf-8", newline="\n") as f:
+    path = root / "docs" / name
+    if CHECK:
+        if not path.is_file() or path.read_bytes() != text.encode("utf-8"):
+            STALE.append(name)
+        return
+    with open(path,"w", encoding="utf-8", newline="\n") as f:
         f.write(text)
 
 
@@ -160,3 +173,5 @@ write("roadmap-categories.svg", f"""<svg xmlns="http://www.w3.org/2000/svg" view
 </svg>
 """)
 print(f"done {done}, partial {partial}, todo {todo}, total {total}; {len(cats)} categories")
+if STALE:
+    sys.exit("differs from what roadmap_progress.py writes (run it without --check): " + ", ".join("docs/" + n for n in STALE))

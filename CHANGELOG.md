@@ -19,7 +19,7 @@ Nothing yet.
 The first release. Everything in it is new.
 
 rcfd is early-stage software. It has not been validated for engineering decisions, must not be used for safety-critical work, and
-comes with no warranty. Of the 184 roadmap items, 95 are done, 63 partly done and 26 not started; a partly done item works for some
+comes with no warranty. Of the 754 roadmap items, 354 are done, 319 partly done and 81 not started; a partly done item works for some
 cases and its roadmap note states the gap.
 
 ### Added
@@ -36,7 +36,7 @@ cases and its roadmap note states the gap.
 * For the new desktop application (Studio), its libraries, tested without a window: the project folder format, a background run
   service and a time-series store. (The wgpu render core and the Claude Code bridge library `rcfd-claude` of the egui Studio were
   removed with it, F-449 and F-838.)
-* Tutorials that the test suite executes, a validation data pack with fetch scripts and checksums, and a suite of about 2,200 tests
+* Tutorials that the test suite executes, a validation data pack with fetch scripts and checksums, and a suite of about 7,500 tests
   whose numeric limits were written down before each run.
 
 ### Known limitations
@@ -45,10 +45,11 @@ cases and its roadmap note states the gap.
   measured fan misses, and the cause has not been found ([fan milestone](docs/milestone-fan.md)). No fan prediction in this
   release is validated against measurement.
 * Fan noise: the FW-H solver, the tonal estimate and the broadband proxies exist, but none is validated.
-* There is no structural solver, so no stress, strain or blade deformation.
+* The structural solver (`docs/structural-solver.md`) is new: many of its roadmap items are partly done and none is validated
+  against measurement.
 * Sliding-mesh transient solves are not available, so no rotor-stator interaction in time.
 * The old desktop app is frozen and the new one has no window yet.
 * The CUDA backend is optional and off by default. Without a GPU, the GPU tests skip and count as passed.
-* The project's own test gate, the full check run before work is merged, runs on Windows. Linux is checked by CI (build, clippy,
+* The project's own test gate, the full check of a commit, runs on `main` in CI on Windows, not before each merge. Linux is checked by CI (build, clippy,
   unit tests); macOS is not checked.
 * The Rust crates are not published and their library API may change in any release.

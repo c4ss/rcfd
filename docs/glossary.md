@@ -10,7 +10,7 @@ listed; any CFD textbook defines them.
 | F-xxx | A roadmap item id, for example F-028. Each item has dependencies, acceptance criteria and a status. | [Detailed roadmap](ROADMAP.md) |
 | Done, PARTIAL, not started | Roadmap status marks. PARTIAL (also "partly done", `[~]` in the roadmap) means some of the item works and its note says what is missing. | [Roadmap overview](roadmap-overview.md) |
 | Wave | A numbered batch of work, sometimes split into parts with a letter (wave 35C). Its plan and results are recorded in an ADR and in roadmap notes. | [Fan milestone](milestone-fan.md) |
-| Gate | The full check run before work is merged: `cargo fmt --check`, `cargo clippy` with warnings as errors, and the whole test suite in release mode on a clean copy of the commit. It takes over an hour. | [Test process](test-process.md) |
+| Gate | The full check of a commit: `cargo fmt --check`, `cargo clippy` with warnings as errors, and the whole test suite in release mode on a clean copy of the commit. It takes over an hour and runs on `main` in CI, not before each merge. | [Test process](test-process.md) |
 | Registered limit | A pass/fail limit written down before the run it judges. If a result misses it, the miss is recorded, not tuned away. | [Roadmap overview](roadmap-overview.md) |
 | Known miss | A registered limit that the current code does not meet. Its test is kept, marked as ignored, with the limit unchanged. | [Reference data](reference-data.md) |
 | MISSED | A registered target that a measured result did not reach, as written in status notes. | [Fan milestone](milestone-fan.md) |

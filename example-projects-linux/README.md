@@ -19,7 +19,7 @@ tables list this tree's runs).
 
 The real solver made the runs through the run service, with `scripts/make_example_projects.py` in Docker, in the image
 of `scripts/docker/ubuntu-24.04-rust.Dockerfile` (Ubuntu 24.04 with glibc 2.39, the CI runners' system, and Rust 1.99.0,
-the toolchain of the gate, the full check run before work is merged). From a checkout, on a machine with Docker:
+the toolchain of the gate, the full check of a commit). From a checkout, on a machine with Docker:
 
     python scripts/make_example_projects.py --docker                 rebuild this tree and put it in place
     python scripts/make_example_projects.py --docker --rerun-check   rebuild it in a temporary copy and compare
