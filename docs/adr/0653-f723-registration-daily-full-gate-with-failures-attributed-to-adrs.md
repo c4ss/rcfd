@@ -375,3 +375,13 @@ manifest path of its crate, then test name. Without `--shard` nothing changes.
   A failure of a test in that run is a result of the tests, not of this amendment, and is reported as such.
 
 **Not changed.** Which tests run, their limits, the attribution rules, the daily schedule.
+
+**Correction to D10 and H2, before any code (2026-11-18).** The times file names a test by binary name and test name,
+and two crates have binaries of the same name (`sites_adr0739` in rcfd-mcp and rcfd-runner), so "no test in the times
+of two shards" cannot be decided from the times. In its place: in shard mode `gate_test.py` prints
+`gate_test: shard K/N runs m of M tests, split <digest>`, where the digest is the SHA-256 of the ordered list of
+(binary, manifest path, test, recorded seconds) that the split was dealt from. Shards with one digest dealt from the
+same list in the same order, and the dealing is a function of that list, so their parts are disjoint and together
+complete. `gate_shards_check.py` requires: shards exactly 1 to N, one M, one digest, the sum of m equal to M, and in
+each shard as many result rows in its times as its m. H2 tests a failure on each of: a missing shard, two M, two
+digests, a sum below M, a shard with fewer rows than its m.
