@@ -136,3 +136,38 @@ per item 100 s and 57 s. The planter used 125,121 tokens.
   category.
 
 The maintainer judges whether a rule follows. The 16 agreed findings are listed for the lead; none was acted on.
+
+## Check of the 16 agreed findings (2026-11-18)
+
+Asked for by the maintainer after the results. Four checker agents (Claude Fable 5.2) read the repository itself for
+each place: the ADRs, the tests, the source and the other tests, which the readers had not seen. Their verdicts and
+evidence are in `results/check-of-agreed-findings.json`. Claude then compared three of the verdicts with the source
+(F-638 line 61, F-615 line 639, F-627 line 415) and they held. No test was run and nothing was fixed.
+
+| verdict | count | places |
+|---|---|---|
+| not a defect | 5 | F-638 test lines 61 and 106; F-595 ADR line 159; F-615 test line 639; F-534 test line 89 |
+| real but minor | 10 | F-661 test line 397; F-639 ADR line 225; F-595 ADR line 293; F-615 ADR line 245; F-534 ADR lines 112 and 125; F-627 ADR lines 411, 416, 453, 464 |
+| real | 1 | F-627 ADR line 415 |
+
+- **Not a defect (5).** Each is explained by something outside the reader's folder or stated earlier in the ADR. The
+  literal `true` in F-638 reports a solve whose tolerance the driver enforces. The ignored N2 of F-615 was ignored by
+  a later item that lifted the refusal on purpose, and its guard runs in that item's test. G3 of F-534 is covered by
+  another test file. Three of these were the examples named in the results above.
+- **Real but minor (10).** Seven are statements in the record that are loose, over-general or miscounted. Two are
+  supporting checks weaker than their text says (F-661 HB-, F-639 moment radius). One is a status question the ADR
+  leaves open (F-627), which the status rule of 2026-11-18 settles as done. None changes a verdict.
+- **Real (1).** F-627, ADR 0553 line 415: "every measured value is at or below its estimate, except A1'" is false.
+  A1' is below its estimate; C1, D1 and E2'(b) are above theirs. All are inside their limits, so the item's result
+  stands and the sentence is wrong.
+
+**What this adds.** No finding showed a wrong result or a check that passes wrongly: every done item of the sample
+keeps its status. Of 16 places that two readers agreed on, 11 were true as stated, and all 11 concern the quality of
+the record or the strength of a supporting check. Five were false alarms caused by the reader not seeing the rest of
+the repository. A fresh reader per item would therefore mostly improve the records, at about 95,000 tokens per reader
+and item plus about 29,000 per finding checked, and a third of what two readers agree on would still need checking
+against the repository. The 38 and 48 findings made by one reader only were not checked.
+
+**Left for the lead.** Each real entry has a proposed fix in the JSON. ADRs are append-only, so a fix is an addendum
+to the ADR or a registered follow-up; the two weak supporting checks and the roadmap note of F-627, which still opens
+with "PARTIAL", are the ones that touch more than wording.
