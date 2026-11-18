@@ -379,14 +379,20 @@ A second part followed the same day:
 - The mutation tool: `push_main.py --mutants` runs cargo-mutants on the Rust lines a merge changed and writes a ledger line.
 - Lints: section r of the report reads registrations that cite agent-rules.md for the brief, the size line and the kind, margin and source columns; with `--history` it prints the tests without a primary ADR. The count in CHANGELOG.md is generated.
 
+A third part, the same day:
+
+- Every partial item has a `gap` (319). Each was drafted by a model from the item's acceptance and note alone, without reading the ADRs or the code, and nothing checks that a gap is true: where a note is stale, so is its gap. Six say that the note does not say what is missing (F-249, F-303, F-304, F-387, F-774, F-796). For 26 the gap says that every measured clause is met or that only a decision is open; by the answer to Q4 these are the lead's to decide by the registered rule, and they are the first candidates for done or for a sharper acceptance.
+- The notes no longer say "branch ..., not merged" of work that is on main (38 places) or "pending acceptance" (45 places).
+- `scripts/gate_test.py --shard K/N` runs one of N shards of about equal recorded time; gate.yml does not use it yet.
+- The structural page opens with a reading list.
+
 Not in place, with who acts next:
 
 - The rules in the maintainer's work folder still govern running agents until this branch is on main and the lead's briefs point at agent-rules.md (lead).
 - The priority statement in the form of I6, with budgets (maintainer). Until it exists the report orders the lines of work as `scripts/roadmap_progress.py` does and no budget is counted.
-- In roadmap.json, which is written on main only: the 36 notes that say "not merged", the 42 that say pending acceptance, and a `gap` for the 319 partial items (lead).
 - Never run: `push_main.py --run`, `--push`, `--left-out-run` and `--mutants --run` (cargo-mutants is not installed here and its run time on this workspace is unmeasured), and `gate_test.py --skip-pattern` on a real gate; gate.yml does not pass it yet.
-- The full run split into parallel jobs: not written. A test pins the gate job's steps, and the change cannot be tried from a branch.
-- Items to issue: the hand-written distillation and reading list of the structural page, the decision on docs/reference-data.md (maintainer), the trial of another kind of reader (I9), and the replacement of citations from memory (I10; the ADRs are append-only, so each is an addendum).
+- The full run split into parallel jobs: the script can shard, the workflow does not yet. The workflow change cannot be tried from a branch, and the attribution step would have to read the logs of all shards.
+- Items to issue: the hand-written distillation of the structural page, the decision on docs/reference-data.md (maintainer), the trial of another kind of reader (I9), and the replacement of citations from memory (I10; the ADRs are append-only, so each is an addendum).
 - Rules that still rest on convention: one-line note entries, citation locators, the validation rule, the limit on reading and the weekly audit.
 
 Three measures changed when the script counted them. 311 ADRs contain the words "from memory" (G18 counted 218 registration files); 55 Rust test root files and 12 Studio spec files name no record in their leading comment (I1 said 54 and 12); 97 file names carry none of the ten kind words of rule 18 (G3 counted 103 against four words).

@@ -92,6 +92,26 @@ class SkipColumn(unittest.TestCase):
 
 
 @unittest.skipUnless(os.environ.get("GATE_TEST_E2E") == "1", "set GATE_TEST_E2E=1 (builds a crate with cargo --release)")
+class Shard(unittest.TestCase):
+    def test_every_test_is_in_exactly_one_shard_and_the_loads_are_close(self):
+        secs = [600.0, 300.0, 200.0, 120.0, 60.0, 30.0, None, 5.0, 2.0, None, 1.0]
+        part = gate_test.shard_of(secs, 3)
+        self.assertEqual(len(part), len(secs))
+        self.assertEqual(set(part), {0, 1, 2})
+        load = [sum((s or 1.0) for s, k in zip(secs, part) if k == n) for n in range(3)]
+        self.assertEqual(sum(load), sum(s or 1.0 for s in secs))
+        self.assertEqual(part[:3], [0, 1, 2])  # the three slowest start one per shard
+        self.assertLessEqual(max(load[1:]) - min(load[1:]), 120.0)
+        self.assertEqual(part, gate_test.shard_of(secs, 3))  # the same split every time
+
+    def test_one_shard_takes_everything_and_the_option_is_checked(self):
+        self.assertEqual(gate_test.shard_of([3.0, None, 1.0], 1), [0, 0, 0])
+        self.assertEqual(gate_test.parse_shard("2/4"), (2, 4))
+        for bad in ("0/4", "5/4", "2", "a/b", ""):
+            with self.assertRaises(SystemExit):
+                gate_test.parse_shard(bad)
+
+
 class TimeLimit(unittest.TestCase):
     @classmethod
     def setUpClass(cls):

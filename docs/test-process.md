@@ -578,6 +578,10 @@ Everything else waits for the next full gate, which attributes any failure to th
 
 ### 7.5 The skipped count, the left-out run and generated mutants
 
+`python scripts/gate_test.py --shard K/N --order prev.tsv ...` runs shard K of N: the tests are dealt to the shards by their
+recorded seconds so that the shards carry about equal time, the ignored tests and the doc-tests are reported by shard 1 only,
+and the N logs together sum to one full run. It is unit-tested and has not been run; `gate.yml` still runs one job.
+
 Three further commands of the lead. None of them has been run on this repository yet: the pure parts are unit-tested
 (`scripts/test_gate_test.py`, `scripts/test_push_main.py`), the runs are not.
 

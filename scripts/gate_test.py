@@ -9,6 +9,10 @@ Usage (from the workspace root):
 --tsv      write binary, test, outcome, seconds, peak working set (MB) for every test.
 --heartbeat S  every S seconds (default 300; 0 off) write a progress line to stderr: tests done of total, failures so far,
            elapsed, estimated time left, and the longest-running tests still going.
+--shard K/N  run only shard K of N (1 <= K <= N). The tests are dealt to the N shards by their seconds in the --order TSV so that
+           the shards carry about equal recorded time; with the same --order file the N runs together run every test once. The
+           ignored tests and the doc-tests are reported by shard 1 only, so the sums over the N logs equal those of one run. Not
+           yet used by gate.yml (docs/test-process.md 7.5).
 --no-doc   skip the closing doc-tests (ADR 0681: a run restricted with `--test NAME`, where `cargo test --doc` is an error). Cargo options
            in the selection come after `--`: gate_test.py --no-doc -- -p CRATE --features F --test NAME.
 --timeout-factor F, --timeout-min S, --timeout-max S (ADR 0129; defaults 5, 600, 3600): a test's time limit is
@@ -66,6 +70,27 @@ def progress(msg):
     with _PROGRESS:  # one write per line, so the pool's threads never interleave within a line
         sys.stderr.write(msg + "\n")
         sys.stderr.flush()
+
+
+def shard_of(seconds, n, default=1.0):
+    """The shard (0 to n-1) of each test, given the recorded seconds of the tests in the order they would start (None where
+    there is no record, counted as `default`). Each test goes to the shard with the least seconds so far, the lowest-numbered
+    on a tie, so the same order and records always give the same split and the shards carry about equal recorded time."""
+    load = [0.0] * n
+    out = []
+    for s in seconds:
+        k = min(range(n), key=lambda i: (load[i], i))
+        load[k] += default if s is None else s
+        out.append(k)
+    return out
+
+
+def parse_shard(text):
+    """"K/N" as (K, N) with 1 <= K <= N."""
+    m = re.fullmatch(r"(\d+)/(\d+)", text or "")
+    if not m or not 1 <= int(m.group(1)) <= int(m.group(2)):
+        raise SystemExit(f"gate_test: --shard takes K/N with 1 <= K <= N, not {text!r}")
+    return int(m.group(1)), int(m.group(2))
 
 
 def limit_s(rec, factor, lo, hi):
@@ -203,9 +228,13 @@ def main():
     ap.add_argument("--timeout-max", type=float, default=3600.0)
     ap.add_argument("--no-doc", action="store_true")
     ap.add_argument("--skip-pattern")
+    ap.add_argument("--shard")
     ap.add_argument("select", nargs="*")
     a = ap.parse_args()
     select = a.select or ["--workspace"]
+    shard = parse_shard(a.shard) if a.shard else None
+    first = shard is None or shard[0] == 1  # the ignored tests and the doc-tests are reported by shard 1 only
+    a.no_doc = a.no_doc or not first
     skip_re = re.compile(a.skip_pattern) if a.skip_pattern else None
     show = ["--show-output"] if skip_re else []
 
@@ -252,7 +281,10 @@ def main():
     stem = [os.path.basename(b["executable"]).rsplit("-", 1)[0] for b in bins]
     jobs = [(i, t) for i, names in enumerate(alls) for t in names if t not in ign[i]]
     jobs.sort(key=lambda j: -prev.get((stem[j[0]], j[1]), 0.0))
-    n_ign = sum(len(x) for x in ign)
+    if shard:
+        part = shard_of([prev.get((stem[i], t)) for i, t in jobs], shard[1])
+        jobs = [j for j, k in zip(jobs, part) if k == shard[0] - 1]
+    n_ign = sum(len(x) for x in ign) if first else 0
     progress(f"gate_test: {len(jobs)} tests to run ({n_ign} ignored) in {len(bins)} binaries, jobs={a.jobs}"
              + (f", order from {a.order}" if prev else ""))
     lock = threading.Lock()
@@ -316,9 +348,13 @@ def main():
         secs = 0.0
         for t in alls[i]:
             if t in ign[i]:
+                if not first:
+                    continue
                 print(f"test {t} ... ignored")
                 rows.append(tsv_row(stem[i], t, "ignored", "0", "0", [] if skip_re else None))
                 continue
+            if (i, t) not in res:
+                continue  # a test of another shard
             outcome, out, dt, mb, lim = res[(i, t)]
             ok = outcome == "ok"
             secs += dt
@@ -332,7 +368,7 @@ def main():
                 print(f"---- {t} output ----\n" + "".join("    " + ln + "\n" for ln in out.splitlines()))
         fails += f
         status = "ok" if f == 0 else "FAILED"
-        print(f"\ntest result: {status}. {p} passed; {f} failed; {len(ign[i])} ignored; 0 measured; 0 filtered out; "
+        print(f"\ntest result: {status}. {p} passed; {f} failed; {len(ign[i]) if first else 0} ignored; 0 measured; 0 filtered out; "
               f"finished in {secs:.2f}s (process seconds)\n")
     print(f"gate_test: {len(jobs)} test processes, {len(bins)} binaries, jobs={a.jobs}, wall {wall:.1f}s, "
           f"peak summed working set {mem[0]:.0f} MB, max time/limit {ratio:.3f}"

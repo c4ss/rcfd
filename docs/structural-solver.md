@@ -6,6 +6,15 @@ how to run it, and what the fan-blade demonstration shows (F-387,
 it is validated against a measured blade or a measured fan.** The checks are closed forms, identities of the discretisation and
 mesh convergence.
 
+## Reading list for an agent starting work here
+
+Read first, about 30 KB in all: this page (22 KB without the generated list at its end), `crates/rcfd-fem/src/lib.rs`
+(3 KB, the module list), and the entry of your item in [the roadmap](ROADMAP.md) with its `gap`. Then the ADRs your brief
+names, and the rows of the line "Structural solver" in [the ADR index](adr/index.md) to find the records of neighbouring
+items. The three tier plans are reference, not first reading: [ADR 0270](adr/0270-structural-solver-basic-tier-plan.md)
+(93 KB), [ADR 0290](adr/0290-structural-solver-intermediate-tier-plan.md) (115 KB) and
+[ADR 0310](adr/0310-structural-solver-advanced-tier-plan.md) (164 KB); read the section of your item, not the whole.
+
 ## Scope
 
 The basic tier, planned in [ADR 0270](adr/0270-structural-solver-basic-tier-plan.md), is in place:
