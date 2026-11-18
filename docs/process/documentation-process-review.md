@@ -372,7 +372,7 @@ In place:
 
 A second part followed the same day:
 
-- I4: `scripts/render_roadmap.py`, the generator revived for today's roadmap, with the `gap` key in its schema. It is written and tested but docs/ROADMAP.md is still kept by hand: `--diff` finds 46 places where the page and roadmap.json disagree (36 notes, 5 acceptance texts, 3 titles, one list of prerequisites, the second F-847), in both directions, and adopting would keep roadmap.json's words and drop the page's. The lead reconciles them on main and runs `--adopt` once; from then on the process report keeps the page current.
+- I4: `scripts/render_roadmap.py`, the generator revived for today's roadmap, with the `gap` key in its schema. It was adopted on this branch at the maintainer's word (2026-11-18): the item list of docs/ROADMAP.md is now generated, grouped by the phase of each item, and the process report keeps it current. Before adoption the page and roadmap.json disagreed in 48 places. Six notes where the page held text that roadmap.json lacked (F-247, F-254, F-292, F-294, F-295, F-299) were merged into roadmap.json, keeping the words of both. In the others roadmap.json already held the page's text or more, or they differed by a few characters, and roadmap.json's wording stands; the second entry of F-847 is gone. Dropped with the hand-kept layout: the introductions of the sections in which items were added (they are in git history at 3128d12b) and the markdown links inside three notes.
 - I4: the docs site test gives each heading the id of `rcfd_api::ui::slug` and fails on a link whose fragment is not a heading of its target (13 fragment links, none broken).
 - I5: `crates/rcfd-api/tests/case_schema_page.rs` compares the case schema with docs/case-schema.md (12 schema tables not named on the page and 8 keys on the page that do not resolve are its starting exceptions).
 - I2: `scripts/gate_test.py --skip-pattern` records, per passed test, the output lines that report a skip; `push_main.py --gate-line --skipped N` puts the count in the ledger.
@@ -383,7 +383,7 @@ Not in place, with who acts next:
 
 - The rules in the maintainer's work folder still govern running agents until this branch is on main and the lead's briefs point at agent-rules.md (lead).
 - The priority statement in the form of I6, with budgets (maintainer). Until it exists the report orders the lines of work as `scripts/roadmap_progress.py` does and no budget is counted.
-- On the roadmap pair, which is written on main only: reconciling the 46 differences and adopting the generator, the 36 notes that say "not merged", the 42 that say pending acceptance, and a `gap` for the 319 partial items (lead).
+- In roadmap.json, which is written on main only: the 36 notes that say "not merged", the 42 that say pending acceptance, and a `gap` for the 319 partial items (lead).
 - Never run: `push_main.py --run`, `--push`, `--left-out-run` and `--mutants --run` (cargo-mutants is not installed here and its run time on this workspace is unmeasured), and `gate_test.py --skip-pattern` on a real gate; gate.yml does not pass it yet.
 - The full run split into parallel jobs: not written. A test pins the gate job's steps, and the change cannot be tried from a branch.
 - Items to issue: the hand-written distillation and reading list of the structural page, the decision on docs/reference-data.md (maintainer), the trial of another kind of reader (I9), and the replacement of citations from memory (I10; the ADRs are append-only, so each is an addendum).

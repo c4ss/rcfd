@@ -51,7 +51,7 @@ ledger line, pushes, and starts the selected tests that did not fit in the backg
 
 | File | Writer | Where |
 | --- | --- | --- |
-| `docs/roadmap.json`, `docs/ROADMAP.md`, `docs/roadmap-overview.md` | the lead | main only, both streams |
+| `docs/roadmap.json`, the head of `docs/ROADMAP.md` (above its marker line), `docs/roadmap-overview.md` | the lead | main only, both streams |
 | `scripts/roadmap_progress.py` (categories) | the lead | main only |
 | `docs/process/ledger.tsv` | the push script and the lead | main only |
 | `docs/adr/briefs/*.md` | the lead | main only |
@@ -61,7 +61,7 @@ ledger line, pushes, and starts the selected tests that did not fit in the backg
 | `docs/reference-data.md` | the agent of a distillation item; other agents put additions in their addendum | its branch |
 | A topic page under `docs/` | the agent whose subject it is | its branch |
 
-Generated, never edited by hand: `docs/adr/index.md`, the two roadmap SVGs, `docs/studio-coverage.md`, the capabilities
+Generated, never edited by hand: the item list of `docs/ROADMAP.md` (from `docs/roadmap.json`), `docs/adr/index.md`, the two roadmap SVGs, `docs/studio-coverage.md`, the capabilities
 inventory, and the generated sections of the overview and the area pages.
 
 ## Questions and answers

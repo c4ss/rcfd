@@ -2,7 +2,7 @@
 
 rcfd is an early-stage CFD solver that has not been validated for engineering decisions. The counts of roadmap items done, partly done and not started are under [Where it stands](#where-it-stands). FAN-01, the reference fan case, stalls. A structural solver is partly built. One workspace layer for Claude Code and the Studio comes first.
 
-This page is the short, plain-language version of the plan, for anyone who wants to know what rcfd can do today and what comes next. The full list of items, with acceptance criteria, is in [the detailed roadmap](ROADMAP.md). It is kept by hand beside `roadmap.json`, which is the source of truth for every status below; a check compares the two. The numbers under "Where it stands" are generated from `roadmap.json`. The hand-written parts of this page were last reviewed on 2026-11-18. To learn how to use rcfd, start at [the documentation home](index.md) instead.
+This page is the short, plain-language version of the plan, for anyone who wants to know what rcfd can do today and what comes next. The full list of items, with acceptance criteria, is in [the detailed roadmap](ROADMAP.md). Its list of items is generated from `roadmap.json`, which is the source of truth for every status below. The numbers under "Where it stands" are generated from `roadmap.json`. The hand-written parts of this page were last reviewed on 2026-11-18. To learn how to use rcfd, start at [the documentation home](index.md) instead.
 
 ## What rcfd is
 

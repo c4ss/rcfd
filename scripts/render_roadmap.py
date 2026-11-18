@@ -141,15 +141,16 @@ def page_items(text):
             field = {"depends on": "deps"}.get(f.group(1), f.group(1))
             cur[field] = f.group(2)
         elif ln.strip() and ln.startswith(" "):
-            cur[field] = cur.get(field, "") + " " + ln.strip()
+            part = ln.strip()  # a wrapped line, or a sub-bullet of the field: its "- " is layout, a " - " inside a line is a minus
+            cur[field] = cur.get(field, "") + " " + (part[2:] if part.startswith("- ") else part)
         elif ln.strip():
             cur = None  # a paragraph between items
     return out
 
 
 def norm(text):
-    """Text compared without layout: wrapped lines, sub-bullets and backticks do not count."""
-    return re.sub(r"\s+", " ", re.sub(r"(^|\s)- ", " ", (text or "").replace("`", ""))).strip()
+    """Text compared without layout: wrapped lines and backticks do not count (page_items drops the sub-bullet marks)."""
+    return re.sub(r"\s+", " ", (text or "").replace("`", "")).strip()
 
 
 def diff(text, items):
