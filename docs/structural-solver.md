@@ -8,7 +8,7 @@ mesh convergence.
 
 ## Reading list for an agent starting work here
 
-Read first, about 30 KB in all: this page (22 KB without the generated list at its end), `crates/rcfd-fem/src/lib.rs`
+Read first, about 35 KB in all: this page (28 KB without the generated list at its end), `crates/rcfd-fem/src/lib.rs`
 (3 KB, the module list), and the entry of your item in [the roadmap](ROADMAP.md) with its `gap`. Then the ADRs your brief
 names, and the rows of the line "Structural solver" in [the ADR index](adr/index.md) to find the records of neighbouring
 items. The three tier plans are reference, not first reading: [ADR 0270](adr/0270-structural-solver-basic-tier-plan.md)
@@ -17,7 +17,8 @@ items. The three tier plans are reference, not first reading: [ADR 0270](adr/027
 
 ## Scope
 
-The basic tier, planned in [ADR 0270](adr/0270-structural-solver-basic-tier-plan.md), is in place:
+The basic tier, planned in [ADR 0270](adr/0270-structural-solver-basic-tier-plan.md), is in the code. Five of its items are
+still partial by a missed check (F-378, F-381, F-383, F-384, F-386; see "Not there or partial" below):
 
 * Linear elastostatics and linear modal analysis of isotropic elastic solids in Tet4, Hex8 and Tet10 elements (Hex20 from the
   next tier as well).
@@ -130,6 +131,202 @@ What it shows (measured 2026-11-14):
 * With the divisions `[12, 2, 8]` and `[24, 2, 16]` the meshes are bit for bit those of the demonstration test, and so are its
   results. As there, the mid-edge nodes lie on the straight edges, not on the curved blade surface, and the function does not
   check element quality of unusual blades.
+
+## What the solver does today
+
+A hand-written summary of the 307 roadmap items of the line "Structural solver" as of 2026-11-18: 152 done, 129
+partial, 26 todo. It was drafted by Claude from the items' titles, acceptances, notes and gaps in `docs/roadmap.json`,
+not from the ADRs; 32 of its numbers were compared with the roadmap by script. It is not regenerated: when the list
+below has grown by the number of items the lead has set, a distillation item rewrites it
+([lead-process.md](process/lead-process.md)). Ids in parentheses are done items, except in the last subsection and
+where a base item is named as partial. Numbers are relative errors
+against the reference named, from the item's note. Several base capabilities (modal analysis, Hex20, Shell3, buckling,
+linear transient, the Newton driver, J2, contact, the sparse factorisations) are in the code but their own item is
+partial: they appear below only through done follow-up items, and by name in "Not there or partial". The sections
+above (the fan-blade demonstration is F-387) are not repeated.
+
+### Model, meshes and solid elements
+
+* `rcfd-fem` holds the solid model as validated data: Tet4, Hex8 and Tet10 blocks, node, element and surface sets
+  (F-370, F-388). Meshes convert from an all-tetrahedron or all-hexahedron `rcfd_mesh::Mesh` and from the tetrahedral
+  mesher's output, with patches as surface sets (F-371).
+* Tet4 (1 point), Hex8 (2 x 2 x 2 Gauss) and Tet10 (4 points) with isotropic elasticity (F-372). Patch test on boxes
+  with moved interior nodes: 4.4e-16, 6.1e-16, 1.2e-15 (F-374). Manufactured solution: Tet4 L2 order 1.9176 on the
+  pair 16 -> 32 (F-458); orders on distorted meshes are a registered check (F-459, F-464).
+* Hex8 has two opt-in formulations, B-bar and incompatible modes. One-layer cantilever L/h = 20: 0.99913 of the closed
+  form against 0.667 with full integration; Lame cylinder at nu = 0.4999 with B-bar: 1.7e-3 against 0.225 (F-390).
+* The incompatible-modes Hex8 runs at finite strain in the Newton driver as an enhanced assumed strain element (F-596,
+  F-693). Its entry points accept a committed state carrying the nine local modes, the "warm start" (F-847, F-748);
+  measured as a would-be default it passes 11 of 11 set-ups, today's default 7; no default was changed (F-844).
+* Hex20: face loads through the model path (F-484); cantilever with the beam-theory support 0.04 percent (F-485).
+
+### Beams and shells
+
+* Beam2: two nodes, six unknowns per node, exact prismatic Timoshenko stiffness, nodal moments, consistent mass with
+  rotary inertia. Pinned-pinned frequencies within 1.3e-5, 1.9e-4, 9.1e-4 of the exact Timoshenko values (F-391).
+* Opt-in warping unknown for Beam2 (14 unknowns per element). Lateral-torsional buckling of an I beam under uniform
+  moment: 5.9e-4 at 16 elements, against -19.2 percent without warping (F-598). It is on the static solve, the modes
+  and the pre-stressed modes (F-626), takes monosymmetric sections (F-627), load height of point and line loads
+  (F-643, F-663, F-670) and a pre-stress on its harmonic and transient paths (F-661, F-667, F-668).
+* Shell4: flat facet, MITC4 shear, drilling penalty. Simply supported plate 16 x 16: 7.5e-4 of Navier at t/a = 0.01,
+  1.26e-3 at 0.001 (F-392). Rotating plane-stress disc against the closed form (F-524). An opt-in ANDES membrane lets
+  Shell4 share edges with ANDES Shell3: mixed patch 2.1e-14, against 2.1e-1 with the default Shell4 (F-549).
+* Laminated Shell4: classical lamination theory, ply stresses, maximum-stress, maximum-strain, Tsai-Hill and Tsai-Wu
+  indices; [0/90]s plate within 1.58e-3 of Navier (F-428); body loads and pre-stress (F-591, F-709).
+* Shells take rigid sets, supports, gravity and centrifugal loads on the transformation path (F-522). An opt-in check
+  reports constant-strain Shell3 membranes on warped meshes (F-574). Shell pressure: see above (F-540, F-546, F-634).
+
+### Materials
+
+* Orthotropic elasticity from nine constants with fixed, cylindrical or per-element axes, orthotropic expansion and
+  temperature tables, on the linear static solve of solid elements (F-409); on the cyclic paths when the axes are
+  cylindrical about the cyclic axis (F-544, F-547). Thermal strain from one nodal temperature field (F-380).
+* Linear viscoelasticity: Prony series, WLF and Arrhenius shift, complex moduli; relaxation of three branches within
+  4.7e-16 (F-410). On the quasi-static time-stepping driver (F-576) and in the direct harmonic solve with its stress
+  (F-577, F-583); the own-frequency iteration can skip pseudo-modes (F-609).
+* Power-law creep with time hardening, backward Euler and a consistent tangent, on the quasi-static time-stepping
+  driver (F-411, F-651, F-636); a temperature history and an opt-in thermal predictor (F-592, F-617).
+* Hyperelastic (base item F-425 partial): Beam2 and shells take the linearised material, opt-in (F-645); linear-path
+  checks (F-644); modes, buckling and harmonic response about a nonlinear state (F-646, F-669).
+* J2 plasticity (base item F-422 partial): thick sphere on 16 radial Hex20 layers, residual hoop stress at the bore
+  4.52e-3 (F-602); yielded-set record checked (F-606).
+
+### Loads, constraints, statics and substructures
+
+* Nodal forces, prescribed displacements, reactions; free rigid-body motions and mechanisms are refused. Assembly
+  gives the same bits for 1 and 8 threads; the static solve is direct by default, CG the alternative (F-374).
+  Traction, pressure, gravity, centrifugal load and a body force field as consistent nodal loads (F-375, F-523).
+* Strain and stress at integration points, element means, nodal averages, von Mises, principal stresses, strain energy
+  (F-376). Closed forms: cantilever L/h = 20, Tet10, 5.3e-4; Lame cylinder, Hex8 32 x 64, bore displacement 1.8e-4,
+  bore hoop stress 5.7e-3 (F-379). Error-estimate checks (F-614, F-696).
+* Linear multi-point constraints, rigid sets with a reference point and elastic supports by a transformation of the
+  unknowns (F-393, F-488). Beam-to-solid and shell-to-solid joints with consistent face weights: 5.4e-6 and 5.6e-4
+  (F-543). A beam node shared with a solid is refused (F-518).
+* Cyclic symmetry: one sector for statics and for modes by harmonic index; N = 12 ring and disc equal the full model
+  within 4.0e-14 and 1.8e-13 (F-394). Static loads of a harmonic index (F-489). Shells opt-in (F-628), two-sided shell
+  edge ties on non-matching boundaries (F-662), Beam2 in the full rotor opt-in (F-674).
+* Reduced parts attach to an ordinary model as superelements for the static, modal and direct harmonic solves (F-553).
+  Opt-in Craig-Bampton interface enrichment: frequencies within 2.9e-6 with one block, against 5.1e-3 without (F-603).
+
+### Modes, buckling, harmonic and random response
+
+* Eigensolver for `K x = lambda M x`: dense Jacobi and subspace iteration on the factorisation, with a Sturm count
+  that verifies no eigenvalue was missed (F-382); an opt-in backward-error residual test (F-457); opt-in coordinate
+  nested dissection, 98 s against 127 s per modal analysis at 104 544 unknowns (F-595).
+* Buckling: knife-edge Hex20 column within 4.4e-5 and 1.7e-4 of the derived closed form (F-492); mechanisms are
+  refused on both constraint paths (F-495, F-496); factors are returned on sign-asymmetric spectra (F-642, F-650).
+* Harmonic response by mode superposition: modal damping, static correction, effective mass, force harmonics (F-399);
+  the correction covers free bodies and the transformation path (F-491). Direct harmonic base motion there (F-619).
+* Damped and complex modes on a modal subspace (F-414), with residual vectors for boundary dampers (F-532). Radiation
+  impedance of a baffled plane in `rcfd-post` (F-579).
+* Random vibration by modal superposition for force and base-acceleration spectra, root-mean-square von Mises stress
+  (F-417); complex cross-spectra and coherence (F-567); spectral moments m0, m1, m2, m4 of a stress component (F-589).
+
+### Rotating parts
+
+* Coriolis coupling: gyroscopic matrix, whirl modes, Campbell table; a cyclic sector equals the full rotor's 252 whirl
+  frequencies within 3e-13 (F-499). Sparse whirl solver: 20 064 reduced unknowns in 6.3 s (F-506); see also F-520.
+  Stationary-frame frequencies (F-507). Stability flags above the loss of stiffness (F-510, F-511).
+* Further registered checks: F-498, F-554, F-575, F-686, F-657 (spinning shell disc), F-679 (spinning Beam2 ring).
+* Rotor on bearings (base item F-416 partial): speed-dependent bearing tables (F-563); unbalance-response peaks and
+  Campbell crossings, peak within 4.4e-9 of the damped Jeffcott closed form (F-564).
+
+### Nonlinear statics and dynamics
+
+* Newton driver (base item F-397 partial): the roll-back of a failed attempt is a registered check (F-497). Opt-in
+  retry with an indefinite tangent after a refused factor, reporting the inertia of every accepted state (F-780).
+* Follower pressure with its load stiffness, and arc-length continuation (Crisfield): two-bar truss limit load within
+  6.2e-4, and modes about a nonlinear equilibrium (F-424); a follower-only reference load and an opt-in unsymmetric
+  envelope LU (F-572); a hyperelastic sphere through its pressure maximum (F-649). Hinged cylindrical roof, Shell4 16
+  x 16: limit load 2222.4 N against the published 2226.3 N of Sze, Liu and Lo (2004), 1.8e-3 below (F-610).
+* Flutter and buckling about a nonlinear state with the full unsymmetric contribution tangents (F-676, F-677); a
+  follower tip force on Beam2 (F-665); the pencil eigensolver reports normwise backward errors (F-664).
+* Linear transient on the transformation path and with prescribed motion histories (F-490, F-545). Nonlinear
+  transient: opt-in residual reference with inertia terms (F-631, F-691), rounding-floor diagnosis (F-571), and the
+  energy-momentum step with neo-Hookean and Mooney-Rivlin energies (F-611).
+
+### Contact, fatigue and fracture
+
+* Contact (base item F-427 partial): opt-in supernodal factor in the linear contact driver, hub fit of 96 046 free
+  unknowns in 82.0 s against 1456.6 s (F-615). Traction recovery of the mortar contactor (F-638). Total Lagrangian
+  contact: curvature-free fallback tangent (F-639), lifted contactor (F-608), line search (F-684), a Newton order
+  reading (F-600). The pressure variation of the one-layer interference fit is a discretisation error (F-599).
+* High-cycle fatigue: Basquin, power and table curves, Goodman, Gerber and Soderberg corrections, rainflow counting,
+  Miner sum, narrow-band rate; cantilever life 0.9527 of the hand value (F-413, F-534).
+* Fracture (base item F-429 partial): interaction integral for K_I, K_II, K_III; embedded elliptical crack within
+  8.4e-3 of Irwin at 13 stations (F-632); closed fronts and mirror-plane stations (F-689).
+
+### Linear solvers and performance
+
+* Envelope `L D L^T` after reverse Cuthill-McKee, factor once, solve many; about 1e5 unknowns in minutes (F-373).
+* CG preconditioners: incomplete Cholesky with one level of fill, 58 iterations against 156 of block Jacobi on 4704
+  unknowns (F-460); multigrid smoother for Tet10, 23 iterations at 121 680 unknowns (F-477); smoothed aggregation with
+  rotation unknowns for beams and shells (F-629) and a vertex-patch smoother for thin plates (F-641, F-659).
+* Static solves on ranks of `rcfd-dist` and on a CUDA device: Jacobi CG on 304 842 unknowns in 0.60 s, 4.50 s on 16
+  threads (F-433).
+
+### Input, output and coupling with the flow solver
+
+* `.vtu` output of finite-element cells with point and cell data (F-377); Shell4 results as quad cells with resultants
+  (F-521); a beam result in another layout is refused (F-516).
+* A [solid case file](solid-case-file.md) run with `method = cg` and each of the six preconditioner keys reaches 1e-10
+  and agrees with the direct run within 1.2e-12 (F-526).
+* One-way coupling: fluid face forces map to a solid surface set and are solved statically; `StaticSolid` is a
+  co-simulation participant without mass, for mock fluids and quasi-static use only; no flow solver is coupled (F-385,
+  F-463, F-469). Coupled frequency on non-matching interfaces (F-502); opt-in bilinear projection (F-504).
+
+### Not there or partial
+
+Not built (todo):
+
+* No CLI subcommand and no MCP tool (F-405). No `[solid]` table in the flow case (F-404). The case file covers none of
+  the intermediate and advanced tiers (F-403, F-435; single keys F-533, F-565, F-605, F-616, F-621, F-625, F-652,
+  F-688, F-660, F-842, F-509).
+* No fan-rotor demonstration (F-406, F-436) and no public coupled benchmark (the elastic flag, F-434).
+* Shells on the linear dynamic paths (F-630). The existing smoothed-aggregation CG still refuses structures (F-640).
+* Held or waiting: F-462, F-678, F-658, F-694 (default or schema changes), F-798 (6.35 roof), F-655 (heavy record).
+
+Built, but the item is partial (a registered check missed, or the maintainer has not closed it):
+
+* Verification: Tet4 L2 order 1.7925 against 1.8 on the pair 8 to 16 (F-378). The direct-solve residual limit 1e-14 is
+  below the representability floor on all twelve cases (F-455). Error estimate (F-432, F-568, F-695): the hole
+  criterion misses (18, 44 and 28 of 48).
+* Hex20 (F-389): cantilever 1.8 percent and bore hoop stress 1.17 percent under the acceptance's own set-ups. Shell3
+  (F-419): the one-diagonal cylinder is met only by the opt-in pressure of F-540; mixed Shell3 plus Shell4 meshes with
+  the Allman membrane are refused (F-539).
+* Modal analysis (F-383) waits for acceptance of an amendment. Sparse `L D L^T` (F-431): the 3e5-unknown record was
+  not run, "nnz(L) would be 13.6 GB". Supernodal factor (F-529, F-594): acceptance only.
+* CG (F-381): IC(0) needs 0.545 of block Jacobi's iterations against 0.5. Multigrid on Tet10 (F-402, F-470): 79 and 31
+  iterations against the limit 30. Case file (F-386): on the Tet10 cantilever every CG preconditioner stops at 5.7e-10
+  to 6.2e-10 against 1e-10; the fan blade and the centrifugal load in the case file are not built (F-593).
+* Buckling (F-395): second factor 2.0135e-2 against 2e-2. Rotating modes (F-396): flap-lag misses 1e-4. Transient
+  (F-398): generalised-alpha decay misses at omega dt = 1e3. Direct harmonic (F-412): `HarmonicResponse::stress` omits
+  the loss part. Craig-Bampton (F-430, F-552, F-559): harmonic clauses miss without F-603.
+* Newton driver (F-397): linear-limit clause met only after an amendment. J2 (F-422): residual hoop stress 2.6 percent
+  against 2, residual order 1.27 to 1.44 against 1.8. Nonlinear transient (F-423): the free spinning bar misses,
+  "nonlinear instability of the trapezoidal rule". Hyperelastic (F-425): small-strain clause 4.7e-6 against 1e-6.
+* Contact (F-427, F-601, F-623): no `[[contact]]` case-file table; Hertz on Hex20 and Tet10 point contactors stalls at
+  a gap of 5e-7 to 8e-6 against 1e-8; the mortar contactor misses the contact radius from nodal multipliers and the
+  Hertz problem on the total Lagrangian body. Press fit (F-604): plane-strain clause 8.6e-2 against 2e-2.
+* Ties (F-426): the unit-weight joints miss (2.25 and 2.36 percent) and the node-to-surface tie's local stress error
+  does not fall. Shell cyclic boundary 2:3: 4.2e-2 against 2e-2 (F-648).
+* Coupling: deck loads (F-384) refuse Tet, Tet10 and Hex20 surfaces. Dynamic participant (F-400): frequency change
+  6.3e-3 against 1e-3. Two-way coupling (F-401) and aerodynamic damping (F-421): estimates missed.
+* Rotor (F-416, F-562): whirl "still refuses a massless damped unknown". Coriolis split table (F-415): cyclic models
+  refused. Sector split-mode estimates miss (F-569, F-584, F-612).
+* Beams (F-514): centrifugal, nodal body force and thermal loads are refused. Warping (F-635): no warping inertia, no
+  mode superposition. Beam2 cyclic by default: approved, not yet made (F-672, F-666).
+* Shells: temperature loads have rounding misses and no per-ply temperatures (F-525, F-527, F-687); the
+  energy-momentum step, `solve_in_time` and `buckling_factors` still refuse geometrically nonlinear shells (F-585).
+* Creep on B-bar and F-bar Hex8 (F-580, F-587, F-597, F-637): growth bound 6.0e-3 against 2e-3; no finite-strain
+  reference built.
+* Incompatible Hex8 "rule L" under a punch (F-719 to F-797, F-846): on distorted meshes the default local update
+  fails; on the 16^3 block rule L loses positive definiteness at load factor 0.966 (F-747) and "why one element goes
+  soft is open" (F-763); the library arc-length trace without the warm start is lost short of the fold (F-797); with it the
+  fold is traced, test-only (done: F-841, F-843, F-845).
+* Broadband fatigue (F-590): the Benasciutti-Tovo rate misses 1e-2 (1.646e-2, 3.106e-2). Fracture (F-682):
+  coarse-ellipse K 2.29e-2 against 2e-2; no mixed-mode elliptical or non-planar fronts. Flutter (F-653): the pair
+  residual 1e-8 was missed (2.0e-8 and 7.3e-6). Radiated sound (F-418, F-551): no unbaffled or curved radiators.
 
 ## What was built
 
