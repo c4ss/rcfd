@@ -43,7 +43,7 @@ GAP_MAX = 500
 QUESTION_MARKS = ("NEEDS THE USER", "NEEDS USER", "Open:", "not asked")
 ANSWER_MARK = "Maintainer (20"
 REFDATA, REFDATA_DIR = "docs/reference-data.md", "docs/reference-data.d"
-OLD_ANSWERS = re.compile(r"^#+ .*(Answers of the maintainer|Maintainer answers|Answers \(the maintainer|Decision record|"
+OLD_ANSWERS = re.compile(r"^#+ .*(Answers of the maintainer|Maintainer answers|Answers \(the maintainer|Answers \(maintainer|The maintainer's answers|Decision record|"
                          r"Decisions \(20|Decisions made|approved by the maintainer)", re.M)
 Q_HEADING = "Open questions for the maintainer"
 A_HEADING = "Answers of the maintainer"
@@ -387,7 +387,8 @@ def open_questions(items, adrs):
     for a in adrs:
         q = a["text"].rfind(Q_HEADING)
         # answered: the fixed answers heading, or one of the headings ADRs used before the rule set fixed it
-        if q >= 0 and not OLD_ANSWERS.search(a["text"], q):
+        # (ADR 0620 records its dated decisions above the list of questions)
+        if q >= 0 and not OLD_ANSWERS.search(a["text"], q) and "\n## Maintainer decisions (" not in a["text"]:
             out.append((f"ADR {a['n']}", "open questions heading with no answers after it"))
     return out
 

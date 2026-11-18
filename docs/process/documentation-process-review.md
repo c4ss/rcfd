@@ -386,13 +386,25 @@ A third part, the same day:
 - `scripts/gate_test.py --shard K/N` runs one of N shards of about equal recorded time; gate.yml does not use it yet.
 - The structural page opens with a reading list.
 
+A fourth part, the same day, is the maintainer's decisions. Seventeen sets of options were put to him, each with a recommendation, and he took the recommendation on all of them. They are recorded in the ADRs they answer, in the roadmap notes and in the process pages:
+
+- The priority statement of 2026-11-18 is in the head of docs/ROADMAP.md, with a weekly budget in registrations for each line of work. The overview and the weekly list follow its order.
+- The workspace-layer items F-270 to F-275, F-287 and F-288: the questions that the removal of the egui Studio had overtaken are closed, F-270's acceptance is re-scoped to the Electron Studio, the default field-store plan and the two run-record fields are approved, F-293 is retired.
+- Thirty-one items that waited on the maintainer: additive golden edits are approved as a class (agent rules, rule 3), four default changes are approved and ten held, ADR 0704 Q1 is answered.
+- The status rule: an item whose check passed only after an amendment is done when rule 2 was followed. Of 36 such items, 17 were marked done after a reading of their ADRs by a model and 19 stay partial, each with its reason in the note.
+- Questions listed before the standing instruction of 2026-11-11 are closed by the lead on their written recommendations; the lead may amend an acceptance by a dated amendment, and the weekly list names each one.
+- The tolerance table is provisional version 1. docs/reference-data.md is generated from one fragment file per item in docs/reference-data.d/.
+- The agent rules are at version 3.
+
+The report's count of unanswered questions went from 88 to none. That count reads markers and headings; it does not show that each question was answered well.
+
 Not in place, with who acts next:
 
 - The rules in the maintainer's work folder still govern running agents until this branch is on main and the lead's briefs point at agent-rules.md (lead).
-- The priority statement in the form of I6, with budgets (maintainer). Until it exists the report orders the lines of work as `scripts/roadmap_progress.py` does and no budget is counted.
-- Never run: `push_main.py --run`, `--push`, `--left-out-run` and `--mutants --run` (cargo-mutants is not installed here and its run time on this workspace is unmeasured), and `gate_test.py --skip-pattern` on a real gate; gate.yml does not pass it yet.
+- Issuing the items the decisions unblocked, within the budgets; the registered item that makes the approved default of `start_run`; the answers written into the ADR of each of the thirty-one items (lead).
+- Never run: `push_main.py --run`, `--push`, `--left-out-run` and `--mutants --run` (cargo-mutants is not installed here and its run time on this workspace is unmeasured), and `gate_test.py --skip-pattern` and `--shard` on a real gate; gate.yml passes neither.
 - The full run split into parallel jobs: the script can shard, the workflow does not yet. The workflow change cannot be tried from a branch, and the attribution step would have to read the logs of all shards.
-- Items to issue: the hand-written distillation of the structural page, the decision on docs/reference-data.md (maintainer), the trial of another kind of reader (I9), and the replacement of citations from memory (I10; the ADRs are append-only, so each is an addendum).
+- Items to issue: the hand-written distillation of the structural page, the trial of another kind of reader (I9), and the replacement of citations from memory (I10; the ADRs are append-only, so each is an addendum).
 - Rules that still rest on convention: one-line note entries, citation locators, the validation rule, the limit on reading and the weekly audit.
 
 Three measures changed when the script counted them. 311 ADRs contain the words "from memory" (G18 counted 218 registration files); 55 Rust test root files and 12 Studio spec files name no record in their leading comment (I1 said 54 and 12); 97 file names carry none of the ten kind words of rule 18 (G3 counted 103 against four words).
