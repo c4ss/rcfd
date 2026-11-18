@@ -326,3 +326,52 @@ Proposed status and note of F-723:
 > Follow-up proposed: First GitHub runs of the daily gate (ADR 0653 checks on the runner). Deps F-723. Acceptance: Every limit not stated here is registered in the ADR before the run. The first scheduled run after the push runs the gate with a non-empty last-green SHA and passes fmt with one line per package; a scheduled run with no push since a green run is skipped; a dispatch on a commit with one failing test (a test branch that is not merged) produces attribution.json with that test, its re-run, its ADRs and a candidate list, the bisect with input bisect finds the commit that broke it within bisect_minutes, and input open_issues opens one issue and no duplicate on a second run.
 
 > Follow-up proposed: Wave-tag mapping and a primary ADR in the test-to-ADR index. Deps F-723. Acceptance: Every limit not stated here is registered in the ADR before the run. The index maps wave-named test files (w34a, wave17a, w48a) to the ADRs named after their wave, and each test gets a primary ADR (the registering ADR); the integration-test binaries left unmapped in ADR 0653 addendum 2 (81) fall below a registered number; a registered sample of primary ADRs is checked by reading.
+
+## Amendment 3 (2026-11-18): the full gate in parallel shards, written before its code
+
+By Claude. It carries out the item "the full run split into parallel jobs" of docs/process/documentation-process-review.md.
+
+**Why.** The test step of the gate at 205889bf took 3 h 28 min (build 19 min, tests 3 h 09 min) of a 290 minute limit,
+and the run of 2026-11-17 ran out of time. `scripts/gate_test.py --shard K/N` exists since 2026-11-18 and is not used.
+
+**Defect found while reading, fixed here.** The split deals the tests to the shards in the order of the job list. Tests
+without a recorded time keep the order of the binaries, which is the order in which cargo reports them, and that
+depends on which build finished first. Two machines can therefore split differently, and a test could run twice or
+not at all. In shard mode the job list is now ordered by recorded seconds (longest first), then binary name, then the
+manifest path of its crate, then test name. Without `--shard` nothing changes.
+
+**Design.**
+
+- D7. A dispatch input `shards` (1 to 8, default 1). A scheduled run uses 1, so the daily gate is unchanged until the
+  lead changes that default after a green sharded run. With 1, job names, artifact names and commands are as before.
+- D8. The job `decide` gives the list of shards and the id of the newest completed gate run on main that has test
+  times for the chosen runner. Every shard downloads the times of that one run, so all shards split by the same file.
+  If there is none, every shard splits by count.
+- D9. The job `gate` is a matrix over the shards. A shard runs fmt, clippy and the feature isolation as before, then
+  `gate_test.py --shard K/N --order <times> --timeout-min 3600`. The last option keeps every test's time limit at the
+  3600 s it has today, where no order file is given. The test-hooks step runs in shard 1 only. Logs and the
+  attribution are per shard, in artifacts named with `-shard-K`. The job keeps its twelve steps.
+- D10. `gate_test.py` in shard mode prints `gate_test: shard K/N runs m of M tests`. A job `complete` (sharded runs
+  only) downloads the logs of all shards and runs `scripts/gate_shards_check.py`: the shards are exactly 1 to N, all
+  give the same M, the sum of m is M, and no test is in the times of two shards. A shard that did not finish makes it
+  fail. This is the check that no test was left out by the split.
+- D11. `issues` reads the attribution of every shard.
+- Cost: each shard builds the workspace (19 min on the Windows runner), so N shards use about N times 19 minutes more
+  runner time than one job, for a wall time of about 19 min plus a share of the tests.
+
+**Checks.**
+
+- H1 (unit, `scripts/test_gate_shards.py`): with the binaries given in two different orders and the same times, the
+  shard of every test is the same; over the N shards every test occurs once. Control: with the order key removed
+  (the old sort), the two splits differ for tests without a record.
+- H2 (unit): `gate_shards_check.py` accepts a complete set and fails, with a message naming the reason, on each of: a
+  missing shard, two different M, a sum below M, one test in two shards.
+- H3 (workflow text, same file): the matrix comes from `decide`; `--shard` and `--timeout-min 3600` are passed only
+  when shards > 1; the hooks step is limited to shard 1; the artifact names carry the shard; `complete` needs `gate`
+  and runs only when shards > 1; with shards = 1 the expressions give today's job and artifact names. The existing
+  checks W1 to W3 of `scripts/test_gate_hooks_f761.py` pass unchanged.
+- H4 (one dispatched run of the branch with 4 shards on windows-latest): `complete` is green; the sum of passed, failed
+  and ignored over the shards is reported beside the last unsharded gate; wall time and runner minutes are recorded.
+  A failure of a test in that run is a result of the tests, not of this amendment, and is reported as such.
+
+**Not changed.** Which tests run, their limits, the attribution rules, the daily schedule.
