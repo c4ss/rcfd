@@ -273,3 +273,166 @@ The one heavy run is N6. Four listed existing files are long as well (25 to 55 m
 ## Open questions
 
 None is taken and none is open at registration. The default itself is the maintainer's decision of 2026-11-18.
+
+## Addendum 1: results (2026-11-19)
+
+Built as registered, on the code commit 828c9375 (after the registration d1129c93). All runs in the release profile, each
+registered run made once, on Windows, `RAYON_NUM_THREADS` 4 for the flow runs, `F466_DIR` = `w49i-work/f466-scratch/runs`
+(read only; its 13 files are unchanged). Logs are in `w49i-work/f471-coarse-lu-default-scratch/logs`. No limit was changed
+and no amendment was written.
+
+**The work stopped at a changed registered fingerprint** (decision rule, third point): the test
+`rcfd-fv` `immersed_single_corrector_f363::n0_fingerprints_of_the_defaults` (ADR 0374 N0) fails at its fingerprint FP4.
+It is not edited and nothing is re-recorded. What was already running was let finish; the four long listed files were not
+started. Details under "The changed fingerprint".
+
+### Results
+
+| # | Check | Limit | Measured | Met |
+|---|---|---|---|---|
+| A1 | interchanges on the baseline set (instrumented scratch copy of 828c9375, `baseline_hashes`, one thread) | 0 factorisations with an interchange at `k >= 1` | 12 case runs; 119 factorisations, in two of them: the coupled cavity (59, coarsest 71 unknowns) and `kepsilon_channel` (60, coarsest 56); no interchange at any step in any of them; the other runs build no AMG; the instrumented test passes | yes |
+| A2 | the default on `A3`; on the 20 x 20 tridiagonal | `(1, 1, 1)` bit for bit; `<= 1e-12` | `(1, 1, 1)`; 8.863e-19 (interchanges at steps 0, 2, ..., 18) | yes |
+| A3 | every listed file passes unedited | 0 failures | **1 failure in 42 files run; 4 files not run.** Passed: `rcfd-linalg` `--lib` 20, `amg_coarse_lu_f474` 5 (2 ignored), `amg_contrast` 2; `rcfd-fv` `--lib` 115 and 29 files (list below); `rcfd-api` `--lib` 159 and 4 files. Failed: `immersed_single_corrector_f363` (3 passed, 1 failed: FP4). Not run: `immersed_solid_f219`, `immersed_unsteady_force_f346`, `immersed_piso_stop_f355`, `vof_waves` | **no** |
+| A4 | `baseline_hashes` | every hash equal | 3 passed, 1 ignored (as on main) | yes |
+| A5 | `case_hashes_w48u`, `w48v_case_hashes`, `varden_ideal_hash` | every hash equal | 1 passed; 0 run (its one test is ignored on main, it only prints); 1 passed | yes |
+| N2 | the old order on `A3` | `[1]`; `(-13, 15, -5)` bit for bit | `[1]`; `(-13, 15, -5)` | yes |
+| N3a | the old order on the tridiagonal | `> 1e-12` | 4.071e-3 | yes |
+| N3b | old order against default on the 40 x 40 Laplacian | subset of `{0}`; 0 differing | `[0]`; 0 | yes |
+| P1 | M2, bounded, 3 steps, old order against default | 0 differing; no interchange at `k >= 1` | 0; no interchange at all in the 6 systems (coarsest 89 to 93 unknowns) | yes |
+| P2 | `FvMatrix::solve_amg` on the tridiagonal | `<= 1e-10`; 0 differing | converged in 1 iteration, 8.863e-19; `solve_amg_with` (default) 0 differing, 1 iteration | yes |
+| P2a | `solve_amg_with` (old order) differs | at least 1 of 20 | 20 of 20 (50 iterations, not converged, relative residual 2.8e-2) | yes |
+| O1 | from the state of step 2900, old order | stop at 2951; R1's message; 0 Courant numbers differing | stop at 2951; the message equal; 0 differing (20 s) | yes |
+| O2 | from the state of step 2950, old order, IC repeat | no stop; `[(2951, 0, 1)]`; finite | no stop; `[(2951, 0, 1)]`; finite | yes |
+| O3 | the stopping system, old order, then the default | stop 2951; 3000 iterations, non-finite; `[13, 16, 17]`; `-2.006e-9`; default converged, `rz > 0`, `<= 100` | stop 2951; 3000 iterations, 53 136 non-finite cells; levels 53 136, 10 745, 1653, 206, 24; `[13, 16, 17]`; `-2.006e-9` (start 5.520616e-9); default: converged in 10 iterations, every `rz > 0` | yes |
+| N4 | from the state of step 2900, default, to step 2960 | no stop; 0 non-finite | no stop; 0; at most 20 pressure iterations in a step | yes |
+| N4a | Courant numbers of 2901 to 2950 differing from H1 | at least 1 | 32, the first at step 2917 (estimate 34) | yes |
+| N5 | from the state of step 2950, default, IC repeat | no stop; no repeat; finite | no stop; `[]`; finite | yes |
+| N6 | T, bounded, from `t = 0` to step 8000, default | no stop; crossings `>= 6`; period spread `<= 1e-2`; maximum spread `<= 2e-2`; amplitude `>= 1.0` | no stop; 7; 5.170e-6; 1.861e-4; 2.0408 (1620 s) | yes |
+| D1 | the retired records, run once with `--ignored` | each fails as predicted in D3 | ADR 0369 L1: fails at its last assertion, `z = [1.0, 1.0, 1.0]`; ADR 0363 H2: "M2: H2 did not stop" (42 Courant numbers differ by its own count, which includes steps 2951 to 2960); ADR 0363 H3a: "H3a: repeats", left `[]`; ADR 0369 H: "H0: stop step", left `None` | yes |
+
+A3, the files that passed (passed / ignored): `rcfd-fv` `consistent_correctors_f301` 12/4, `consistent_defaults_f301` 6/0,
+`consistent_extensions_f322` 8/0, `consistent_periodic_defaults_f367` 1/0, `consistent_periodic_f367` 13/2, `cylinder`
+2/1, `immersed_bounded_stop_f466` 7/4, `immersed_dfg_convergence_f354` 6/12, `immersed_early_state_start_f501` 3/2,
+`immersed_lag_estimate_f483` 5/7, `immersed_lockin_f731` 6/1, `immersed_lockin_f750` 8/3, `immersed_lockin_f756` 8/2,
+`immersed_moving_f308` 7/2, `immersed_multistep_linearisation_f494` 4/6, `immersed_start_projection_f515` 4/2,
+`immersed_step_linearisation_f482` 3/6, `immersed_transverse_f707` 4/3, `transient_buoyancy` 3/0,
+`vof_bubble_diagnosis_w41c` 1/20, `vof_bubble_refinement_w40d` 1/12, `vof_dambreak_amg` 1/0, `vof_height_function_w42b`
+2/2, `amg_definiteness_f474` 1/1, `coupled` 2/1, `gradient_pressure_f291` 3/0, `varden_ideal_hash` 1/0,
+`sixdof_flow_f244` 8/1, `piso_thin_gap_f299` 18/2; `rcfd-api` `consistent_correctors_case_f301` 4/8, `w35b_lag_check` 6/0,
+`w48t_cylinder_spokes` 3/13, `vof_wiring_tree` 4/0. The new files: `amg_coarse_lu_default_adr0743` 4/0,
+`amg_default_fluid_adr0743` 2/6 (the six run one by one as rows O1 to N6).
+
+**The record N6** (the default T run, the changed result of ADR 0268 R1 and ADR 0363 H1 and H3): no stop to `t = 8`. At
+`t = 1` and `t = 2` the printed coefficients are those of ADR 0268 R1 to their five digits (2.98321, -0.35990; 3.13571,
+-0.74178). Max `C_D` 3.22695 (+0.216 percent), max `C_L` 1.00253 (+1.687 percent), `St` 0.30144 (-0.146 percent); relative
+to ADR 0363 H3 (the old default with one IC repeat): +2.9e-7, -2.1e-6, -8.5e-7. Clause A2-T-2 of ADR 0268 evaluates as in
+ADR 0363 (drag 0.216 to 0.136, lift 1.687 to 0.174; both true). The largest pressure iteration count of a step is 20
+(two correctors), at step 939; the old default needed 406 in corrector 0 of step 2951 and then broke down.
+
+### The changed fingerprint (the reason for the stop)
+
+- **Test**: `crates/rcfd-fv/tests/immersed_single_corrector_f363.rs`, `n0_fingerprints_of_the_defaults` (ADR 0374 N0: "the
+  fingerprints of the defaults", measured on the tree before any code of F-363), assertion "FP4" at line 269.
+- **Case**: FP4 is the FNV hash of `u` and `p` after 20 steps of `dt = 1e-3` of the set-up R of ADR 0254 on M2 (DFG 2D-2,
+  18 304 cells, BDF2, linear upwind, `amg_pressure`), forcing `Sa`, one PISO corrector, `flux_weight_check` on.
+- **Values**: registered `0x279c4c4ed4cf89be`; with the new default `0xda894fae1d52a3ad`.
+- FP1 (`0xdd07702a17b9a36f`), FP2 (`0xe4d227de316e6de4`) and both FP3 values of the same test are unchanged.
+- **Cause, measured on the scratch copy** (not a registered check; made to report the case; logs `fp4-default.log`,
+  `fp4-old.log`): in the `Sa` run exactly one coarsest factorisation interchanges rows at a step `k >= 1`: the pressure
+  solve of step 3, coarsest 90 unknowns, step 35. No factorisation of the F and B runs does. With the old order asked for
+  through `linear.amg_coarse_lu_interleaved` the test passes with FP4 `0x279c4c4ed4cf89be`. So the registered FP4 holds one
+  pressure solve with a wrong coarse correction, and the change is the default switch and nothing else.
+
+By the decision rule this is the changed registered hash that stops the work. It is also the case R3 named "not known":
+a listed file whose result moves.
+
+### Mutations (each alone on a scratch copy of 828c9375, the named test once, the file restored byte for byte every time)
+
+| Mutation | Registered to fail | Result |
+|---|---|---|
+| M1 (committed as `crates/rcfd-linalg/tests/amg_coarse_lu_default_adr0743.mutation.patch`) | N1 and N3 | caught: N1 fails at the default flag (line 51), N3 at the default residual (line 118) |
+| M2 (`DenseLu::solve` always interchanges first) | N2, N3a | caught: N2 (line 70), N3a (line 119) |
+| M3 (`LinearOptions::amg_settings` ignores the flag) | O2 | caught: "O2: repeats", repeats `[]` |
+| M4 (`FvMatrix::solve_amg` passes the old order) | P2 | caught: "P2: relative residual 2.776e-2" |
+| M5 (`pressure.rs` line 484 calls `pm.solve_amg`) | O2 | caught: "O2: repeats", repeats `[]` |
+
+### Checks of rule 7
+
+`cargo fmt -p rcfd-linalg --check`, `-p rcfd-fv --check`, `-p rcfd-api --check`: clean. `cargo clippy -p rcfd-linalg -p
+rcfd-fv -p rcfd-api --all-targets -- -D warnings`: clean. `cargo test -p rcfd-cli --release --test docs_site`: 2 passed.
+`python scripts/process_report.py --check`: one failure, `docs/adr/index.md` not current (the lead's file).
+
+Shared solver files changed (line numbers of 828c9375):
+
+- `crates/rcfd-linalg/src/amg.rs`: 30 to 34 (the comment of the field), 47 (`coarse_lu_interchanges_first: true`), 125 and
+  142 (comments in `DenseLu::solve`). No statement of `DenseLu::new` or `DenseLu::solve` changed.
+- `crates/rcfd-linalg/src/backend.rs`: 67 to 71 (`LinearOptions::amg_coarse_lu_interleaved`), 75 to 83
+  (`LinearOptions::amg_settings`).
+- `crates/rcfd-fv/src/fvmatrix.rs`: 76 to 82 (`solve_amg` calls the new `solve_amg_with`).
+- `crates/rcfd-fv/src/pressure.rs`: 18 (the import), 484, 500, 620 (`ctl.linear.amg_settings()`).
+- `crates/rcfd-api/src/linsolver.rs` 47 and `solid_parallel.rs` 773 (`..LinearOptions::default()`).
+
+Test files: the two new files and the mutation patch; one `#[ignore]` attribute added in `amg_coarse_lu_f474.rs` and the
+text of four existing `#[ignore]` attributes changed in `immersed_bounded_stop_f466.rs` (three) and
+`amg_definiteness_f474.rs` (one). `immersed_single_corrector_f363.rs` is untouched.
+
+### Deviations and disclosures
+
+- The registration commit was amended once, minutes after it was made and before any code, build or run: the qualifiers in
+  the kind column were written in square brackets, which `process_report.py` does not read as a qualifier; they are now in
+  round brackets. No other character changed. The first commit of the branch is the amended one, d1129c93.
+- The prediction of D3 for ADR 0363 H2 named the message, not the line: the test fails at its line 959 (the branch for "no
+  captured solve returned a non-finite pressure"), with the predicted message.
+- The diagnosis of FP4 on the scratch copy (an `eprintln` in `DenseLu::new`, the old order through an environment variable
+  in a copy of the test) was not registered. Nothing of it is committed.
+- N4a measured 32 where 34 was estimated (two of the steps from 2917 on have the same Courant bits as H1).
+- ADR 0369 L4b and F1 pass and are now vacuous, as registered (D3).
+
+### Not run, not done
+
+- **The four long listed files** (`immersed_solid_f219`, `immersed_unsteady_force_f346`, `immersed_piso_stop_f355`,
+  `vof_waves`; 25 to 55 minutes each): not started, because the work stopped at FP4. Whether they hold another moved
+  result is not known.
+- The test files that reach a scalar AMG without naming it (registered as not covered).
+- ADR 0363 H1 and H3 under the new default (registered as not run).
+- **The branch as it stands fails one gate test** (`n0_fingerprints_of_the_defaults`), so it cannot be merged before
+  question 1 is answered.
+
+### Size
+
+Size (agent): partial; 1; 1; 1; about 250000
+
+### Decision
+
+By the registered rule: **partial**, and the work is stopped. Every row but A3 is met, no hash of `baseline_hashes` or of
+the case hash tables moved, and all five mutations are caught. A3 is missed: one listed existing test fails that D3 does
+not list, its failing value is a registered fingerprint of a default result, and four listed files were not run.
+
+## Open questions for the maintainer
+
+1. **The fingerprint FP4 of ADR 0374 N0** (`immersed_single_corrector_f363::n0_fingerprints_of_the_defaults`) moves with
+   the approved default: registered `0x279c4c4ed4cf89be`, new `0xda894fae1d52a3ad`. The approval of 2026-11-18 does not
+   cover a hash. Options: (a) approve this move: a further registration under F-471 retires that test as an ignored record
+   (its `#[ignore]` attribute only) and restates it with FP1 to FP3 unchanged, FP4 `0x279c4c4ed4cf89be` under the old
+   order and `0xda894fae1d52a3ad` under the default, and runs the four long files and, if the lead wants it, the wider set
+   of "What is not covered" before the merge; (b) withdraw the default switch (the constant back to `false`, the rest of
+   this branch kept as an opt-in route); (c) approve in advance every fingerprint of a default result that is shown to
+   reproduce bit for bit under the old order and to come from a coarsest factorisation with an interchange at `k >= 1`,
+   so that a further one found by the gate does not need a new question. Recommendation: **(a) with (c)**. The registered
+   FP4 pins a run in which one pressure solve had a wrong coarse correction; the old order reproduces it exactly, and the
+   same evidence can be produced for any further fingerprint.
+
+## For the lead: roadmap entries
+
+Status proposed for F-471: partial.
+
+> ADR 0743, 2026-11-19, partial: the corrected order is the default of AmgSettings on the branch, with a way back (coarse_lu_interchanges_first false; LinearOptions::amg_coarse_lu_interleaved for the pressure solve) that reproduces the old stop of the T run bit for bit; baseline_hashes and the case hash tests pass and no baseline case interchanges; the default T run reaches t = 8 without a stop (max C_D 3.22695, max C_L 1.00253, St 0.30144, at most 20 pressure iterations a step); five of five mutations caught; stopped because the fingerprint FP4 of ADR 0374 N0 moves (0x279c4c4ed4cf89be to 0xda894fae1d52a3ad, one coarsest interchange at step 35 in step 3 of the Sa run on M2), which the approval does not cover; four long listed files not run.
+
+> Gap: the branch of ADR 0743 is not mergeable: immersed_single_corrector_f363 n0_fingerprints_of_the_defaults fails at FP4 (registered 0x279c4c4ed4cf89be, new 0xda894fae1d52a3ad). Needs the maintainer's answer to ADR 0743 question 1; then a further registration retires and restates that test, runs immersed_solid_f219, immersed_unsteady_force_f346, immersed_piso_stop_f355 and vof_waves, and the full gate shows whether any other default result moves.
+
+No new item is proposed: what remains is a further registration under F-471 (rule 13). Notes proposed for F-474 and
+F-466, each one line:
+
+> ADR 0743, 2026-11-19 (F-471): with the corrected order as the default on its branch the stopping system of step 2951 converges in 10 iterations with every r^T z > 0, the T run does not stop, and the old breakdown is reproduced under the old order (stop at 2951, r^T z -2.006e-9, interchanges at 13, 16, 17).
+
+> ADR 0743, 2026-11-19 (F-471): the default T run with the bounded forcing reaches t = 8 without the IC repeat on the branch of ADR 0743; its extrema equal those of ADR 0363 H3 to 2e-6 relative (max C_D 3.22695, max C_L 1.00253, St 0.30144), so A2-T-2 of ADR 0268 stays met.
