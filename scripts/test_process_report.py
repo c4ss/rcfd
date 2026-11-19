@@ -287,6 +287,8 @@ class NewRules(Repo):
         self.assertIn("kind 'reading, no run' is not one of the four", fail[0])
         self.put("docs/process/exceptions/registration-kind.txt", "# reason\n0005-f004-registration-x.md: R9 reading\n")
         self.assertEqual(pr.sec_r(self.root, pr.load_adrs(self.root))[1], [])
+        self.put("docs/adr/0005-f004-registration-x.md", reg.replace("(negative control)", "[negative control]"))
+        self.assertEqual(pr.sec_r(self.root, pr.load_adrs(self.root))[1], [])
 
     def test_older_registrations_are_not_read(self):
         self.assertEqual(pr.sec_r(self.root, pr.load_adrs(self.root))[1], [])
