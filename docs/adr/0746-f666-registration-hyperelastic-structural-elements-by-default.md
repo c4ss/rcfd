@@ -227,3 +227,99 @@ Size (agent): done; 0; 0; 0; 300000
 - The linearised material is the small-strain tangent: no claim on large rotations or finite strain of beams and shells.
 - The case schema: no case key reaches the material.
 - Removing `set_hyperelastic_structures` (D2).
+
+## Addendum 1: results (2026-11-19)
+
+Built as registered: the registration 4cd5e54f, then the code and the tests 78e6b108, then the runs. Library changes
+(shared solver file `crates/rcfd-fem/src/model.rs`, lines of the new file): 994 to 995 (the doc of the field), 1127 and
+1131 to 1135 (the docs of the getter and the setter), 1503 to 1516 (`check_elements`: the block of ADR 0555 D3 with its
+temperature-load refusal alone; 14 lines where 26 were). `crates/rcfd-fem/src/mat_hyper.rs` 16 to 20 and 31 to 32: doc
+comments only. `rotating.rs` is not touched. The four retired tests have one `#[ignore = "ADR 0746: ..."]` line each and
+no other change. All runs in the release profile, each registered run made once; logs `run1.log`, `rt.log`, `b1.log`,
+`b2.log`, `b3.log`, `docs_site.log`, `mutations.log`, `clippy.log` in the scratch folder.
+
+| # | Limit | Measured | Met |
+|---|---|---|---|
+| A-RF1 | (a) not refused for the material; (b) `e_u <= 1e-10` | (a) `RigidBodyMotionFree { part_node: 0, part_nodes: 9, count: 6 }` (the unsupported plate); (b) 0 | yes |
+| A-S | `<= 1e-10` each | Beam2 0, Shell4 0, Shell3 0 | yes |
+| A-M | `<= 1e-10` each | `e_lambda` and `e_phi` 0 for Beam2, Shell4 and Shell3 | yes |
+| A-N1 | each `Ok` | the four calls `Ok` | yes |
+| A-CY | `<= 1e-10` each | CY-S-Q4 0; CY-H-Q4 0; CY-M-Q4 `e_lambda` 0 for `k = 0 .. 3`, `e_phi` 0 for `k = 0, 3` | yes |
+| A-W | `<= 1e-10` | 0 (the eight eigenvalues of `k = 0, 1` equal those of the twin to the last bit) | yes |
+| A-RO | `<= 1e-10` each | RO-B 0, 0 (Omega = 0.32788 rad/s); RO-P4 0, 0 | yes |
+| A-CM | `<= 1e-10` each | CM-B and CM-P4: 0 on each of the six measures | yes |
+| A-MP | `<= 1e-10` each | MP-B 0, 0, 0; MP-P4 0, 0, 0 | yes |
+| X | `<= 1e-10` each | X-CY-Q3 0 on every row; X-RS-Q4 0 for `k = 0 .. 3` (Omega = 6.1786 rad/s); X-MP-P3 0, 0, 0 | yes |
+| E | bits equal | 12 sets of values (1702 values) equal against `set(true)`, and the same 12 against `set(true)` then `set(false)` | yes |
+| K-0744 | as in ADR 0744 | AB-a: not the beam refusal, `InvalidValue { key: "cyclic" }` (the boundary match); H-T 0 | yes |
+| K-0555 | as in ADR 0555 | RF2 refused, location "a temperature load", package `a follow-up of ADR 0555`; RF3 the four rows hold; RF4 refused, key `expansion` | yes |
+| K-0584 | as in ADR 0584; holds | N2 refused, "a temperature load"; N3 the four bit rows hold; N4 holds; the getter `false` by default and `true` after `set(true)` | yes |
+| N-T | refused, "a temperature load" | Beam B and P4: `NotYetSupported { variant: "Hyperelastic", location: "material 0, element set 'all': a temperature load", package: "a follow-up of ADR 0555" }` | yes |
+| C | `> 1e-8` each | C-B `9.677e-7`, C-CY `9.431e-7`, C-RO `9.999e-7`, C-CM `9.677e-7`, C-MP `9.439e-7` | yes |
+| R-T | the retired records fail at their refusal rows only | T1: exactly "RF1 a Shell4 model refused naming LINEAR_FOLLOW_UP" (`RigidBodyMotionFree`); T2: exactly the six N1 lines (each `Ok`); T3: exactly the four N1 lines (each `Ok`); T4: exactly "H-D without the setting" (`Ok`) | yes |
+| B1 | 0 failures | `--lib` 15; `sa_hyper_paths` 16 (3 ignored: 2 before and T1); `sa_hyper_structures` 5 (1 ignored: T2); `sa_hyper_structures_f666` 9 (5 ignored: 4 before and T3); `sa_cyclic_beams_default_adr0744` 6 (1 ignored: T4); `sa_hyper` 10 (4 ignored before); `sa_hyper_paths_f644` 4 (1 ignored before); `sa_hyper_prestress_f646` 2; `sa_hyper_state_paths_f669` 4; `sa_laminate` 9 (1 ignored before); `sa_scaffold` 9 (32 ignored before); `sa_geometric_struct` 9 (2 ignored before); `sa_cyclic_shells` 8 (1 ignored before); `sa_cms` 10 (1 ignored before); `si_beam` 9 (4 ignored before); `si_shell` 11 (3 ignored before); `si_rotating` 9 (1 ignored before). 0 failed | yes |
+| B2 | 0 failures | the eleven bit records pass (`sa_scaffold_bits` 2 tests, `sa_cms_default_bits` 1 with 1 ignored before, the others 1 each). 0 failed | yes |
+| B3 | pass | `baseline_hashes`: 3 passed, 1 ignored (as before) | yes |
+
+Every difference against the twin is exactly 0, as on the rows of ADR 0584, ADR 0593 and ADR 0744 with the setting. The
+registered run of the new file: 14 tests passed, 0.89 s.
+
+### Mutations (scratch copy of 78e6b108, own target directory, the new file run once for each)
+
+| Id | Registered to be caught by | Caught by |
+|---|---|---|
+| Z1, committed as `crates/rcfd-fem/tests/sa_hyper_structures_default_adr0746.mutation.patch` | every A row, X, C, E | all 14 tests of the file fail: every A row, X, C and E (refused, "a structural element"), and with them N-T (the default with a temperature load is refused for the element first) |
+| Z2 | N-T, RF2, N2 | N-T (both rows), RF2 and N2; 3 tests fail. The models are still refused, further down and with another error (the element routines: no expansion coefficient), so the block of ADR 0555 D3 is not their only guard |
+| Z3 | every A row but A-N1 and A-RF1 (a), and X | those rows (`3.1e-2 .. 3.2e-2` on displacements and eigenvalues), and H-T; 10 tests fail; A-N1, E, N-T and C pass, as registered |
+| Z4 | the Beam B rows of A-S, A-M, A-N1, A-RO, A-CM, A-MP, and A-W, C; not the plate rows | those rows, and E, N-T (Beam B) and AB-a; 9 tests fail; the Shell4 and Shell3 rows, A-CY, A-RF1 and X pass |
+| Z5 | the P3 rows of A-S and A-M, X-CY-Q3, X-MP-P3; not the others | those rows and E (its P3 values); 4 tests fail; the Beam B and Shell4 rows pass |
+
+Five of five caught.
+
+### Checks of rule 7
+
+`cargo clippy -p rcfd-fem --all-targets -- -D warnings`: clean. Format: `python scripts/fmt_check.py rcfd-fem` (374 target
+files): clean; `cargo fmt -p rcfd-fem -- --check` cannot run on this machine (os error 206, the brief). `baseline_hashes`:
+row B3. `docs_site` (`cargo test -p rcfd-cli --release --test docs_site`): 2 passed, run after the topic page was
+changed. `npm test` not run: `apps/studio-web` is not touched.
+
+### Deviations
+
+1. A-RF1 (a): the unsupported plate is refused as `RigidBodyMotionFree`, where the registration expected a refusal for a
+   singular stiffness; the row asserted only "not refused for the material", which holds.
+2. The two names of the brief that differ from the files, and T2 retired beyond the tests the brief names (all registered
+   in the audit before the code).
+3. The format check by `scripts/fmt_check.py` in place of `cargo fmt -p` (above).
+
+### Not run, not done
+
+- The whole workspace suite and the other integration tests of `rcfd-fem` (the lead's gate).
+- `docs/adr/index.md` is not current for this ADR (`python scripts/process_report.py --check` reports that and nothing
+  else): the lead's.
+- Nothing of "What is not covered" was run.
+- The comment of `rotating::unit_centrifugal_model` still calls the copied setting "the opt-in of ADR 0584 D1"; the line
+  is without effect now and the file was left untouched (D2).
+
+### Size
+
+Size (agent): done; 0; 0; 0; about 270000
+
+### Decision
+
+By the registered rule: **done**. Every row A-RF1 to B3 is met in its one registered run and five of five mutations are
+caught. Clause a5 of F-666 is made: the refusal is lifted by default, RF1 of ADR 0555, N1 of ADR 0584, N1 of ADR 0593 and
+H-D of ADR 0744 are ignored records with restated copies that accept and agree with the isotropic twin exactly. Clauses a1
+to a4 hold by default (A-CY and A-W, A-RO, A-CM, A-MP: 0, limit `1e-10`), and every model that was accepted before keeps
+its bits (B1, B2, B3, E).
+
+## Open questions for the maintainer
+
+None.
+
+## For the lead: roadmap entries
+
+Status proposed for F-666: done.
+
+> ADR 0746, 2026-11-19, done: the refusal of ADR 0555 D3 of a hyperelastic material on Beam2, Shell4 and Shell3 elements on the linear paths is lifted by default (the maintainer's approval of 2026-11-18), set_hyperelastic_structures kept as a documented no-op; without the setting a neo-Hookean material on the static solve, the modes, the cyclic path (Shell4, Shell3 and the Beam2 wheel sector), the rotating, cms and mpc-transformation paths gives the isotropic twin with difference exactly 0 (limit 1e-10) and the bits of the setting; RF1 of ADR 0555, N1 of ADR 0584, N1 of ADR 0593 and H-D of ADR 0744 are ignored records restated in one new file; a temperature load with the material stays refused; existing tests, bit records and baseline hashes unchanged; five of five mutations caught.
+
+No gap and no follow-up item are proposed.
