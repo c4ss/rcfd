@@ -191,7 +191,12 @@ class Lints(Repo):
 
     def test_from_memory_count_may_not_rise(self):
         self.put(f"{pr.EXC_DIR}/from-memory-count.txt", "0\n")
-        self.assertEqual(pr.sec_e(self.root, pr.load_adrs(self.root))[1], ["e: 1 ADRs cite from memory, above the recorded 0"])
+        self.assertEqual(pr.sec_e(self.root, pr.load_adrs(self.root))[1], ["e: 1 ADRs cite from memory without a 'Sources read' addendum, above the recorded 0"])
+        # the addendum closes it: the ADR still holds the words, the open count is 0
+        adr = [f for f in os.listdir(os.path.join(self.root, "docs", "adr")) if f.startswith("0003")][0]
+        with open(os.path.join(self.root, "docs", "adr", adr), "a", encoding="utf-8") as h:
+            h.write("\n## Sources read (2026-11-18)\n\n| citation | status |\n|---|---|\n| the value | read: Table 2 |\n")
+        self.assertEqual(pr.sec_e(self.root, pr.load_adrs(self.root))[1], [])
 
     def test_registration_lint_from_history(self):
         self.git_init()

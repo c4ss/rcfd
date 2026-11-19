@@ -89,6 +89,30 @@ further addendum of that ADR. Main may be red on a test that was left out of a p
 - Issue a distillation item for an area whose list of done items missing from its page has passed the size the maintainer
   chose.
 
+## Citations from memory: the "Sources read" addendum
+
+An ADR is append-only, so a citation from memory is not edited away. It is closed by an addendum at the end of the ADR
+with the heading `## Sources read (YYYY-MM-DD)` and one row per citation the ADR makes from memory:
+
+| column | content |
+|---|---|
+| citation | the source as the ADR names it, and what the ADR takes from it (a constant, an equation, a table value) |
+| status | `read`, `not obtainable` or `not a source` |
+| where | for `read`: the place in the source (equation, table, page, section) and where it was read (DOI or address) |
+| finding | `agrees`, or what differs, with both values |
+
+- `read` means the agent opened the source itself in this work and found the place. A second-hand statement of the
+  value (a review, a textbook that quotes it) is `read` of that second source, named as such, not of the original.
+- `not obtainable` says what was tried (the addresses) and why it failed (behind a paywall, out of print, not found).
+  The citation then stays from memory, and the ADR's own derivation or test is what supports the value.
+- `not a source` is for a line that names no source, for example a number recalled as a check on arithmetic.
+- Vendor documentation, vendor code and course material derived from them are not sources (agent rules, rule 4).
+- A finding that differs is not fixed in the addendum. It names the item and goes to the lead as a defect report.
+
+`python scripts/process_report.py --sections e` counts the ADRs that cite from memory and have no such addendum; that
+count may fall and never rise. An addendum whose rows are all `not obtainable` still closes the ADR for the count: the
+count measures citations looked at, and the rows say what was found.
+
 ## Changes
 
 - Version 1, 2026-11-18: first written, from the documentation process review and the maintainer's decisions of that day.
