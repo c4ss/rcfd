@@ -323,3 +323,8 @@ Status proposed for F-666: done.
 > ADR 0746, 2026-11-19, done: the refusal of ADR 0555 D3 of a hyperelastic material on Beam2, Shell4 and Shell3 elements on the linear paths is lifted by default (the maintainer's approval of 2026-11-18), set_hyperelastic_structures kept as a documented no-op; without the setting a neo-Hookean material on the static solve, the modes, the cyclic path (Shell4, Shell3 and the Beam2 wheel sector), the rotating, cms and mpc-transformation paths gives the isotropic twin with difference exactly 0 (limit 1e-10) and the bits of the setting; RF1 of ADR 0555, N1 of ADR 0584, N1 of ADR 0593 and H-D of ADR 0744 are ignored records restated in one new file; a temperature load with the material stays refused; existing tests, bit records and baseline hashes unchanged; five of five mutations caught.
 
 No gap and no follow-up item are proposed.
+
+## Addendum 2: a correction of Addendum 1 (2026-11-19)
+
+Row E of the results table gives the number of compared values as 1702. The log `run1.log` gives 1762 (66, 462, 462, 6,
+6, 72, 6, 100, 100, 10, 468 and 4), each set equal in bits in both comparisons. No check, limit or result changes.
