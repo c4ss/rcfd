@@ -144,3 +144,62 @@ Size (agent): partial; 0; 0; 0; 215000
 - A request file written by a client after the last removal (the client read a non-terminal status just before) stays, as
   before the remedy.
 - Nothing is synced to disk in a new place; the Unix paths are compiled and not run here.
+
+## Addendum 1: results (2026-11-19)
+
+Release profile, Windows, the shared machine. Run A at eebc653f (the checks on the unchanged library), run B at f62c532c
+(the remedy). Each run was made once; no limit and no set-up was changed, and there is no amendment.
+
+**The hypothesis is confirmed.** In run A, D1 saw at the write of the terminal status: last state event `paused`,
+`metrics.json` already `cancelled`, and `pause`, `pause.ack` and `cancel` present; the `cancelled` event was appended
+while `status.json` was terminal. That is the picture of the S7 failures, without any load.
+
+| id | limit | run A (before the remedy) | run B (after) | met |
+| --- | --- | --- | --- | --- |
+| D1 | final folder at the terminal status write, one terminal event, `cancelled` | fails as predicted: last event `paused`, three request files | event first with status not terminal; status onto last event `cancelled`, metrics `cancelled`, no request file; 1 terminal event | yes |
+| D2 | the same, never launched | fails: last event `queued`, `pause` and `cancel` present | met, `launched: false` | yes |
+| D3 | the same, `finished` | fails: last event `queued` | met | yes |
+| D4 | the same, `failed` | fails: last event `queued` | met | yes |
+| D5 | `cancelled`, "cancelled on request"; control `failed` | fails: `failed` ("the solver ended in state 'interrupted' (exit 7)") | `cancelled` ("cancelled on request; the solver stopped cleanly after step 5"); control `failed` | yes |
+| B1 | byte equality of `status.json`, `metrics.json`, the last event line, the event kinds, the file names (a finished and a failed run) | passes | passes, same test text | yes |
+| E1 | 20 of 20 without a problem, each within 5.0 s | 0 of 20 with a problem, slowest 0.234 s | 0 of 20 with a problem, slowest 0.131 s; the planted `cancel` is reported | yes |
+| E2 | S7 passes 20 of 20 | not run (registered for after the remedy) | 20 of 20, slowest "three cancels" 0.180 s | yes |
+| X | pass, clean | - | `--lib` 35 passed, 1 ignored; `runner_w47b` 13 passed, 1 ignored (S5); `runner_wfix` 6; `contract_w48a` 2; `run_records_adr0734` 2; `continue_f287` 1 passed, 1 ignored; `cargo fmt -p rcfd-runner --check` clean; `cargo clippy -p rcfd-runner --all-targets -- -D warnings` clean | yes |
+
+**What E1 does and does not show.** E1 passed in run A too: at the load of this session the process-level reader did
+not fall into the window in 20 cycles, so E1 is not shown to be sensitive to the defect. The reproduction that carries
+the diagnosis is D1. E2's 20 of 20 has the registered 0.012 chance of a false pass at the lead's rate, and that rate was
+measured under a load that this session cannot show it had; taken alone E2 is weak evidence too. D1 to D4 are exact.
+
+**Mutations** (scratch copy, `cargo test -p rcfd-runner --release --lib f262`): M1 (status before the event) failed D1,
+D2, D3, D4; M2 (request files removed only after the status) failed D1, D2; M3 (no reading of `cancel_requested`) failed
+D5; M4 (another reason in the terminal event) failed B1. Every other test passed under each. M1 is committed as
+`crates/rcfd-runner/src/runner/tests/f262.mutation.patch`.
+
+**The change.** `crates/rcfd-runner/src/runner.rs`: new `set_terminal` (state event, request files, status, request files
+again) and `cancel_was_requested`; `end_pending` and `finalize` call `set_terminal` where they called `set_state` and
+`clear_requests`; `finalize` takes a run as cancelled also from a `cancel_requested` event when the finish is
+`interrupted`. `store.rs`: two comments. No shared solver file, no golden, no hash table. `runner_w47b.rs` is not edited.
+
+**Deviations.** None from the registered checks. Not run: the whole integration suite of the crate and the workspace
+(rule 7), `sites_adr0739` (remote runs are not touched), the Unix paths.
+
+Size (agent), actual: partial; 0; 0; 0; 212000
+
+**Decision by the registered rule.** The hypothesis is confirmed (D1 failed in run A as registered). The remedy is done:
+every row is met in run B. F-262 stays partial (S5 is an ignored known miss; the gap is untouched).
+
+### Open questions for the maintainer
+
+None. Taken on the maintainer's standing instruction of 2026-11-11 (take the recommendation): the second removal of the
+request files after the status, and the reading of `cancel_requested` for a run whose runner died inside the final writes.
+
+### For the lead: roadmap entries
+
+> Status of F-262: partial (unchanged).
+
+> Note entry for F-262: ADR 0742, 2026-11-19, done: the intermittent failure of S7 on the held run was the order of the final writes (terminal status.json before the last state event and before the request files were removed), shown without load by a store that looks at the folder at each write; the terminal status is now the last write of a run, the records of a run that is not cancelled are byte for byte the same, and S7 passed 20 of 20 afterwards.
+
+> Gap of F-262: Socket control (files only) and runs started from the application are not done. Registered check S5 is an ignored known miss. Non-terminal state changes (paused, resumed) still write status.json before their state event, and a runner killed inside the final writes leaves a second terminal state event after adoption.
+
+No follow-up item is proposed.
