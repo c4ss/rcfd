@@ -246,3 +246,104 @@ Corrected check, run once after this amendment is committed:
 
 The limit is unchanged. Known before this run: the three commits of the branch so far were made by me and hold no file
 under `crates/`.
+
+## Addendum 1: results (2026-11-19)
+
+Measured against the limits registered above and in Amendment 1; no limit was changed. Commits: the registration 607b416b;
+the code and tests ea354d95; the committed mutation 2caadc62; Amendment 1 2a7f5220, before the run of N1'. T1 and T2 ran on
+the binaries built from 607b416b; no Rust file differs in the later commits.
+
+**Built.** `scripts/gate_limits.tsv` (the two rows of D2); `scripts/gate_test.py` (`read_limits`, `test_limit`, the option
+`--limits`, the `limits` line); `scripts/gate_limit_check.py` (D6); `scripts/gate_attribute.py` (`--limits`,
+`--rerun-budget`, `--job-start-file`, `--job-minutes`; `rerun_budget`, `read_start`, `rerun_all`);
+`.github/workflows/gate.yml` (D4, D5); `scripts/test_gate_limits_f849.py` (28 tests, 2 of them end to end) and its
+mutation patch; `docs/test-process.md` sections 4 and 7.2; a pointer appended to ADR 0653. No file under `crates/`.
+
+### Results
+
+| Id | Limit | Measured | Met |
+| --- | --- | --- | --- |
+| G1 (c1) three consecutive full gates on windows-latest | each test `ok`, at most 5400 s | **not run**: the gates need the merge | not run |
+| G2 (c2) the committed table | the two rows, 10 800 s, each a `#[test]` without `#[ignore]` | as required | yes |
+| N1 (c3) | no file under `crates/` | void: defective command (Amendment 1) | not counted |
+| N1' (c3) `git diff --name-only b52b882a HEAD -- crates` | no file | no file | yes |
+| N2 (c3) `--list` and `--list --ignored` of the two release binaries | both listed, neither ignored | both listed, neither ignored | yes |
+| T1 `a3_two_d_two_strouhal_number`, once, release, this machine, beside T2 | passes; at most 5400 s | passed; 2033.8 s (St 0.30073, max `C_D` 3.2462, max `C_L` 1.0113, the numbers of ADR 0218) | yes |
+| T2 `a2t_c1_two_d_two_on_t`, once, release, this machine, beside T1 | passes; at most 5400 s | passed; 2055.4 s (C1r held: 3.24624, 1.01134, 0.30073; D1p 1.2e-7 and 1.9e-6) | yes |
+| L1 the table reader | parsed; each bad table refused with its line | 3 tests pass (eight bad tables) | yes |
+| L2 the limit of a test | the row's limit; `limit_s` for every other test; off with `--timeout-max 0` | 3 tests pass (15 clamp cases, 5 near misses) | yes |
+| L3 `gate_limit_check.py` on fixtures | exit 0 for the good sets and exactly half; exit 1 for every defect | 10 tests pass | yes |
+| L4 the re-runs of the attribution | as registered | 8 tests pass | yes |
+| L5 `gate.yml` as text | as registered; 340; 14 400 >= 13 800; 12 000 >= 10 800 | 2 tests pass | yes |
+| E1 end to end, one of two 20 s tests named with 120 s, the limit 5 s | named `ok` after at least 20 s; the other `TIMEOUT` within 15 s; exit not 0; the `limits` line | `ok`; `TIMEOUT` after 5 s; exit 101; `1 rows, 1 name a test of this run` | yes |
+| E1n the same without the table | both `TIMEOUT` | both `TIMEOUT` | yes |
+| W1 the existing tests of the gate scripts, unedited, with `GATE_TEST_E2E=1` | every test passes | 37 run, OK, none skipped | yes |
+| W2 `actionlint` on `gate.yml` | 0 findings | 0 findings | yes |
+| W3 `cargo test -p rcfd-cli --release --test docs_site` | passes | 2 passed (run before this addendum was appended) | yes |
+
+The estimates against the measurements: T1 1729 s estimated, 2034 s measured; T2 2234 s estimated, 2055 s measured. On this
+machine the two tests take 0.38 of the acceptance's 5400 s.
+
+### Mutations
+
+Each alone on a scratch copy (`mutate.py` in the scratch folder: an exact replacement checked to occur once),
+`python -m unittest scripts/test_gate_limits_f849.py` once without `GATE_TEST_E2E`, the file restored and equal byte for
+byte after each. The unmutated copy passes.
+
+| Id | Must fail | Result |
+| --- | --- | --- |
+| M1 the table not consulted | L2 | caught: `test_l2_a_named_test_has_the_limit_of_its_row_whatever_the_options_give` |
+| M2 the table matched by binary only | L2 | caught: `test_l2_every_other_test_has_the_limit_it_had` |
+| M3 the whole limit, not half | L3 | caught: `test_l3_seconds_above_half_the_limit` |
+| M4 a missing row counts as met | L3 | caught: `test_l3_a_missing_row` |
+| M5 the budget does not cap a re-run | L4 | caught: two tests of L4 |
+| M6 `--limits` removed from the tests step | L5 | caught: `test_l5_the_tests_step_passes_the_table_in_the_command_both_forms_share` |
+
+Committed: M1 as `scripts/test_gate_limits_f849.mutation.patch`; applied with `git apply`, its command fails (1 failure),
+removed with `git apply -R`, the tree clean.
+
+### Tools
+
+No Rust crate is touched, so `cargo fmt` and `cargo clippy` do not apply and were not run. `scripts/limit_audit.py` on the
+new test file: 0 hits. `python scripts/process_report.py --check`: one failure, `docs/adr/index.md` is not current, which
+is the lead's file (rule 9).
+
+### Deviations and disclosures
+
+- Amendment 1: N1 named the local ref `main`, which is not the base of the branch.
+- Not in the registration: with a budget the attribution JSON gains the key `rerun_budget_s`; without a budget the JSON
+  has the keys it had. With a budget all re-runs are made before the first bisect and the bisect's minutes count from the
+  end of the re-runs; without a budget the order and the count are those of before.
+- Not registered, printed only: `gate_limit_check.py` on the downloaded logs of real gates. Runs 43919555816, 44276505780
+  and 44316638137 give "met" (2066 to 3230 s of 5400 s); a set with run 44361504875 (a time-out in shard 2) and run
+  44060003415 (no `times.tsv`) gives "MISSED" and names both. Those gates ran with the old limit and are not G1.
+- The new unit tests passed at their first run; the end-to-end tests, W1 and the mutations were each run once. W1 also ran
+  the end-to-end test of `test_gate_attribute.py`.
+- T1 and T2 ran before the code commit, on binaries of the registration commit (the Rust tree is the same).
+- Not run: the workflow on GitHub; G1; the attribution step with its budget on a runner (the start file in `RUNNER_TEMP`,
+  the step limit of 240 min); a sharded gate with the table.
+
+### Size, actual
+
+Size (agent): partial; 0; 2; 0; 360000
+
+### Decision by the registered rule
+
+G2, N1', N2, T1, T2, L1 to L5, E1 with E1n and W1 to W3 are met and all six mutations were caught; G1 was not run. The
+rule gives **partial**. Clause c1 of the acceptance is not shown until `gate_limit_check.py` is met on three consecutive
+full gates on windows-latest.
+
+### Open questions for the maintainer
+
+None. Taken on the maintainer's standing instruction of 2026-11-11 (take the recommendation): route (b); one limit of
+10 800 s for both tests; a sharded gate counts as a full gate for G1 (the times of all its shards are read together).
+
+### For the lead: roadmap entries
+
+> Proposed status of F-849: partial.
+
+> ADR 0740, 2026-11-19, partial: route (b), scripts/gate_limits.tsv gives immersed_solid_f219::a3_two_d_two_strouhal_number and immersed_unsteady_force_f346::a2t_c1_two_d_two_on_t a limit of 10800 s in the full gate (gate_test.py --limits; twice the fastest measured time, 2247 s, times the largest runner ratio seen, 2.4, from five gates and eight runners with three time-outs at 3600 s), every other test keeps 3600 s, no Rust file changes, both tests pass locally in 2034 and 2055 s, the re-runs of the attribution get a budget from what the 340 min of the job have left, and six of six mutations are caught; the three consecutive gates are not yet run.
+
+> Gap of F-849: the three consecutive full gates on windows-latest of the acceptance have not run. After the merge, download the logs of three consecutive gates (gh run download RUN -p "gate-windows-latest-*" -D DIR, one folder per gate) and run python scripts/gate_limit_check.py --limits scripts/gate_limits.tsv DIR1 DIR2 DIR3: exit 0 means each of the two tests passed in at most 5400 s in each gate. A gate of one job on a slow runner can still run out of its 290 min tests step.
+
+No follow-up item is proposed.
