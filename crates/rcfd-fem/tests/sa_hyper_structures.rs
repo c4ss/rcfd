@@ -379,6 +379,7 @@ fn c_perturbed_twin() {
 }
 
 #[test]
+#[ignore = "ADR 0746: retired record, N1 asserts the refusal of a hyperelastic material on a structural element that is lifted by default; restated in sa_hyper_structures_default_adr0746.rs"]
 fn n1_to_n4_settings_and_refusals() {
     let mut c = Checks::new();
     // N1: without the setting the refusal of ADR 0555 D3 stands.
