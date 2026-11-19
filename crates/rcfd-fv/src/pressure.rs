@@ -15,7 +15,7 @@ use crate::geometry::FvGeometry;
 use crate::gradient::least_squares;
 use rcfd_core::vec3::{self, Vec3};
 use rcfd_linalg::{
-    cg, Amg, AmgSettings, CsrMatrix, LduMatrix, LinearBackend, LinearDevice, LinearOptions, SolveControl, SolveStats,
+    cg, Amg, CsrMatrix, LduMatrix, LinearBackend, LinearDevice, LinearOptions, SolveControl, SolveStats,
 };
 
 /// Pressure boundary coefficients with the velocity-boundary logic applied.
@@ -481,7 +481,7 @@ fn solve_pressure_inner(
             };
             iters += match dev {
                 Some(s) => s,
-                None if ctl.amg => pm.solve_amg(p, &ctl.solver),
+                None if ctl.amg => pm.solve_amg_with(p, &ctl.solver, ctl.linear.amg_settings()),
                 None => pm.solve(p, &ctl.solver),
             }
             .iterations;
@@ -497,7 +497,7 @@ fn solve_pressure_inner(
             iters += match dev {
                 Some(s) => s,
                 None => {
-                    let amg = Amg::new(&csr, AmgSettings::default());
+                    let amg = Amg::new(&csr, ctl.linear.amg_settings());
                     cg(&csr, &pm.b, p, &amg, &ctl.solver)
                 }
             }
@@ -617,7 +617,7 @@ pub fn solve_pressure_implicit_non_orth(
     let mut ax = vec![0.0; x0.len()];
     m0.a.matvec(&x0, &mut ax);
     let r0: Vec<f64> = m0.b.iter().zip(&ax).map(|(b, a)| b - a).collect();
-    let amg = Amg::new(&m0.a.to_csr(), AmgSettings::default());
+    let amg = Amg::new(&m0.a.to_csr(), ctl.linear.amg_settings());
     let mut d = vec![0.0; x0.len()];
     let st = rcfd_linalg::gmres(&op, &r0, &mut d, &amg, 30, &ctl.solver);
     for (pi, di) in p.iter_mut().zip(&d) {

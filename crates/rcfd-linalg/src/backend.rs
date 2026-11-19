@@ -64,9 +64,23 @@ pub struct LinearOptions {
     pub precond: GpuPrecond,
     /// Chebyshev terms, 0 = default ([`DEFAULT_CHEBYSHEV_DEGREE`]).
     pub chebyshev_degree: usize,
+    /// ADR 0743 (F-471): the scalar AMG of the pressure solve (`rcfd_fv::pressure`) uses the interleaved order of the
+    /// coarsest dense LU solve of before ADR 0743 (`AmgSettings::coarse_lu_interchanges_first = false`). That order is wrong
+    /// whenever the coarsest factorisation interchanges rows at a step `k >= 1` (ADR 0369); the flag exists so that the
+    /// records of ADR 0363 and ADR 0369 can be reproduced. It is not a key of the case schema. Default `false`.
+    pub amg_coarse_lu_interleaved: bool,
 }
 
 impl LinearOptions {
+    /// The settings of the scalar AMG these options ask for (ADR 0743): the default settings, with the interleaved order of
+    /// the coarsest dense LU solve when [`LinearOptions::amg_coarse_lu_interleaved`] is set.
+    pub fn amg_settings(&self) -> crate::amg::AmgSettings {
+        crate::amg::AmgSettings {
+            coarse_lu_interchanges_first: !self.amg_coarse_lu_interleaved,
+            ..crate::amg::AmgSettings::default()
+        }
+    }
+
     /// Effective Chebyshev degree.
     pub fn degree(&self) -> usize {
         if self.chebyshev_degree == 0 {

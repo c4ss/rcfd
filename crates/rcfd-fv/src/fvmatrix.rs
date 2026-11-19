@@ -73,7 +73,13 @@ impl FvMatrix {
     /// Solve a symmetric positive definite system with CG preconditioned by
     /// one aggregation-AMG V-cycle (built from the current coefficients).
     pub fn solve_amg(&self, x: &mut [f64], ctl: &SolveControl) -> SolveStats {
-        let amg = Amg::new(&self.a.to_csr(), AmgSettings::default());
+        self.solve_amg_with(x, ctl, AmgSettings::default())
+    }
+
+    /// [`FvMatrix::solve_amg`] with the given AMG settings (ADR 0743: the pressure solve passes
+    /// `LinearOptions::amg_settings`, which can ask for the coarsest-solve order of before that ADR).
+    pub fn solve_amg_with(&self, x: &mut [f64], ctl: &SolveControl, settings: AmgSettings) -> SolveStats {
+        let amg = Amg::new(&self.a.to_csr(), settings);
         cg(&self.a, &self.b, x, &amg, ctl)
     }
 }

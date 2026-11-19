@@ -27,9 +27,11 @@ pub struct AmgSettings {
     pub post_sweeps: usize,
     /// Coarse-grid visits per level: 1 gives a V-cycle, 2 a W-cycle (default; mesh-independent rate).
     pub cycle_index: usize,
-    /// Opt-in (ADR 0369, F-471/F-474): the dense coarsest solve applies every row interchange before the forward
-    /// substitution, as the factorisation's whole-row swaps require (`P A = L U`). `false` (the default) keeps the
-    /// interleaved order, which is exact only when the coarsest factorisation interchanges no rows.
+    /// The dense coarsest solve applies every row interchange before the forward substitution, as the factorisation's
+    /// whole-row swaps require (`P A = L U`; ADR 0369, F-471/F-474). `true` is the default since ADR 0743 (F-471, the
+    /// maintainer's approval of 2026-11-18). `false` asks for the interleaved order of before, which is exact only when the
+    /// coarsest factorisation interchanges no row at a step `k >= 1`; it is kept so that the records of ADR 0363 and ADR
+    /// 0369 can be reproduced (see `LinearOptions::amg_coarse_lu_interleaved` for the flow solvers).
     pub coarse_lu_interchanges_first: bool,
 }
 
@@ -42,7 +44,7 @@ impl Default for AmgSettings {
             pre_sweeps: 1,
             post_sweeps: 1,
             cycle_index: 2,
-            coarse_lu_interchanges_first: false,
+            coarse_lu_interchanges_first: true,
         }
     }
 }
@@ -120,7 +122,7 @@ impl DenseLu {
         let n = self.n;
         x.copy_from_slice(b);
         if self.interchanges_first {
-            // ADR 0369 (opt-in): every interchange first, then the unit lower and the upper substitution
+            // ADR 0369, the default since ADR 0743: every interchange first, then the unit lower and the upper substitution
             for k in 0..n {
                 x.swap(k, self.piv[k]);
             }
@@ -137,6 +139,7 @@ impl DenseLu {
             }
             return;
         }
+        // the interleaved order of before ADR 0743 (`coarse_lu_interchanges_first: false`), kept for the earlier records
         for k in 0..n {
             x.swap(k, self.piv[k]);
             for i in k + 1..n {

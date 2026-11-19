@@ -589,7 +589,7 @@ fn min_column_norm(p: &CsrMatrix) -> f64 {
 
 /// ADR 0369 H: the stopping system of ADR 0363 rebuilt from the state of step 2940, measured (H0 to H7).
 #[test]
-#[ignore = "heavy record (ADR 0369 H, minutes; needs ADR 0363 H1's states); run once in release with --ignored and F466_DIR set"]
+#[ignore = "retired by ADR 0743 (F-471): asserts the stop of before it (ADR 0369 H, minutes; needs ADR 0363 H1's states); restated as O3 in amg_default_fluid_adr0743.rs"]
 fn h_stopping_system_definiteness() {
     let t0 = Instant::now();
     let dir = f466_dir();

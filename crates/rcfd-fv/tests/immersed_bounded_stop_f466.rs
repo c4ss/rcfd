@@ -761,7 +761,7 @@ fn window(ts: &[f64], cds: &[f64], cls: &[f64]) -> (usize, f64, f64, f64, f64, f
 /// ADR 0363 H1: ADR 0268 R1 again from t = 0 (T, bounded, dt 1e-3), per-step records, the state written at the checkpoint
 /// steps; M1 (the reproduction from t = 0) and the class G.
 #[test]
-#[ignore = "heavy record (ADR 0363 H1, 0.5 to 1 h); run once in release with --ignored and F466_DIR set"]
+#[ignore = "retired by ADR 0743 (F-471): asserts the stop of before it (ADR 0363 H1, 0.5 to 1 h); restated as O1 and N6 in amg_default_fluid_adr0743.rs. Do not run with F466_DIR naming the files of ADR 0363: it would overwrite them"]
 fn h1_t_bounded_reproduce_and_checkpoint() {
     let dir = f466_dir();
     let dt = 1e-3;
@@ -889,7 +889,7 @@ fn nonfinite(v: &[f64]) -> usize {
 /// steps 2949 on captured; M2 (the reproduction from a restart) and M3 to M7 (the inputs, the extent, the iteration, the
 /// preconditioner or the system, the source of the solid cells).
 #[test]
-#[ignore = "heavy record (ADR 0363 H2, minutes; needs H1's files); run once in release with --ignored and F466_DIR set"]
+#[ignore = "retired by ADR 0743 (F-471): asserts the stop of before it (ADR 0363 H2, minutes; needs H1's files); restated as O1 and N4 in amg_default_fluid_adr0743.rs"]
 fn h2_restart_capture_analysis() {
     let dir = f466_dir();
     let dt = 1e-3;
@@ -1100,7 +1100,7 @@ fn restored_2950_with_fallback() -> (Arc<FvGeometry>, ImmersedForcing, PimpleSol
 /// ADR 0363 amendment 1 H3a: from the state of step 2950 with the option, step 2951 does not stop and is repeated once, at
 /// corrector 1.
 #[test]
-#[ignore = "needs H1's files (ADR 0363 H3a, seconds); run in release with --ignored and F466_DIR set"]
+#[ignore = "retired by ADR 0743 (F-471): asserts the one IC repeat of before it (ADR 0363 H3a, seconds; needs H1's files); restated as O2 and N5 in amg_default_fluid_adr0743.rs"]
 fn h3a_fallback_at_step_2951() {
     let (geom, _, mut s) = restored_2950_with_fallback();
     s.step(1e-3);

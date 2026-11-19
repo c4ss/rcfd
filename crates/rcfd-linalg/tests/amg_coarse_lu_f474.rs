@@ -45,6 +45,7 @@ fn rel_residual(a: &CsrMatrix, b: &[f64], x: &[f64]) -> f64 {
 
 /// ADR 0369 L1: the default solve on `A3` gives the interleaved result of the registration's arithmetic, bit for bit.
 #[test]
+#[ignore = "retired by ADR 0743 (F-471): asserts the default of before it (the interleaved order); restated as N2 (the old order) and N1 (the new default) in amg_coarse_lu_default_adr0743.rs"]
 fn l1_default_interleaved_solve_is_wrong_on_a3() {
     let a = a3();
     let amg = Amg::new(&a, AmgSettings::default());

@@ -770,6 +770,7 @@ pub fn solve_static_device(
         device: options.device,
         precond,
         chebyshev_degree: degree,
+        ..LinearOptions::default()
     };
     let resolution = rcfd_gpu::resolve(options.device, nf).map_err(|e| FemError::Solver {
         solver: DEVICE_SOLVER,

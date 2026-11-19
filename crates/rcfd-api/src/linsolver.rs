@@ -44,6 +44,7 @@ pub fn options(case: &Case) -> LinearOptions {
             _ => GpuPrecond::Jacobi,
         },
         chebyshev_degree: get_i(case, "linear_solver.chebyshev_degree").max(0) as usize,
+        ..LinearOptions::default()
     }
 }
 
