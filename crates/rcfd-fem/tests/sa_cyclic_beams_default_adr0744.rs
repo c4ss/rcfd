@@ -608,10 +608,13 @@ fn rotating_values(options: CyclicOptions) -> Vec<f64> {
         .collect()
 }
 
+/// The values of one bit-equality row for a sector with the given options.
+type Values = fn(CyclicOptions) -> Vec<f64>;
+
 #[test]
 fn e_s_e_m_e_r_the_shells_option_alone_has_the_bits_of_the_beams_option() {
     let mut fails = Vec::new();
-    let rows: [(&str, fn(CyclicOptions) -> Vec<f64>); 3] = [
+    let rows: [(&str, Values); 3] = [
         ("E-S static", static_values),
         ("E-M modes", modal_values),
         ("E-R rotating modes", rotating_values),
