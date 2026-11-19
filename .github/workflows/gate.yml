@@ -148,7 +148,9 @@ jobs:
       - name: fmt
         # Per package: `cargo fmt --all` hands every target's root file to one rustfmt process, whose command line is above
         # the Windows limit of 32767 characters (os error 206, ADR 0653). The members are the same set `--all` formats.
+        # The first line records the start of the job for the re-run budget of the failure attribution (ADR 0740).
         run: |
+          date +%s > "$RUNNER_TEMP/gate_job_start"
           pkgs=$(cargo metadata --no-deps --format-version 1 --locked |
                  python -c "import json,sys; sys.stdout.write(' '.join(p['name'] for p in json.load(sys.stdin)['packages']))")
           [ -n "$pkgs" ] || { echo "fmt: no packages listed"; exit 1; }
@@ -181,7 +183,8 @@ jobs:
         run: |
           mkdir -p gate-out
           # A sharded run: this shard's part of the split, dealt by the times of the run `decide` named. Every test keeps
-          # the 3600 s limit it has without an order file.
+          # the 3600 s limit it has without an order file, except the tests of scripts/gate_limits.tsv, which have the
+          # limit of their row in a run of one job and in a shard alike (ADR 0740).
           args=()
           if [ "$SHARDS" != "1" ]; then
             args=(--shard "$SHARD/$SHARDS" --timeout-min 3600)
@@ -195,7 +198,7 @@ jobs:
           # progress.log and to this step's live log, so a run can be followed while it goes; stdout stays in test.log.
           export PYTHONUNBUFFERED=1
           set -o pipefail
-          { python scripts/gate_test.py --tsv gate-out/times.tsv --heartbeat 300 "${args[@]}" > gate-out/test.log; } 2>&1 | tee gate-out/progress.log
+          { python scripts/gate_test.py --limits scripts/gate_limits.tsv --tsv gate-out/times.tsv --heartbeat 300 "${args[@]}" > gate-out/test.log; } 2>&1 | tee gate-out/progress.log
       - name: tests with the test-hooks feature (scripts/gate_test.py, ADR 0681)
         id: hooks
         # The feature-gated controls of the edit lock (ADR 0676, crates/rcfd-project/tests/edit_lock_f755.rs), built in this
@@ -238,7 +241,9 @@ jobs:
       # After the logs are uploaded, so a slow attribution cannot lose them (ADR 0653).
       - name: failure attribution (scripts/gate_attribute.py)
         if: failure() && (steps.tests.outcome == 'failure' || steps.hooks.outcome == 'failure')
-        timeout-minutes: 40
+        # The re-runs have a budget: what the job's 340 min have left when this step starts, less a reserve, at most
+        # 12000 s (scripts/gate_attribute.py rerun_budget, ADR 0740). The step's limit is above that plus the bisect.
+        timeout-minutes: 240
         env:
           CARGO_TARGET_DIR: ${{ github.workspace }}/target
           BISECT: ${{ inputs.bisect }}
@@ -247,7 +252,7 @@ jobs:
           python scripts/adr_test_index.py --out gate-out/adr_test_index.json
           extra=()
           if [ "$BISECT" = "true" ]; then extra=(--bisect --bisect-minutes "$BISECT_MINUTES"); fi
-          python scripts/gate_attribute.py attribute --tsv gate-out/times.tsv gate-out/times_hooks.tsv --log gate-out/test.log gate-out/test_hooks.log --feature-binary edit_lock_f755=test-hooks             --index gate-out/adr_test_index.json --base "$GATE_LAST_GREEN" --head "$GITHUB_SHA" --rerun "${extra[@]}"             --work "$RUNNER_TEMP/bisect" --json gate-out/attribution.json --summary gate-out/attribution.md
+          python scripts/gate_attribute.py attribute --tsv gate-out/times.tsv gate-out/times_hooks.tsv --log gate-out/test.log gate-out/test_hooks.log --feature-binary edit_lock_f755=test-hooks             --index gate-out/adr_test_index.json --base "$GATE_LAST_GREEN" --head "$GITHUB_SHA" --rerun --limits scripts/gate_limits.tsv --job-start-file "$RUNNER_TEMP/gate_job_start" --job-minutes 340 "${extra[@]}"             --work "$RUNNER_TEMP/bisect" --json gate-out/attribution.json --summary gate-out/attribution.md
           cat gate-out/attribution.md >> "$GITHUB_STEP_SUMMARY"
       - name: upload attribution
         if: always() && hashFiles('gate-out/attribution.json') != ''

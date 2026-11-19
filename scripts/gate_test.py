@@ -19,6 +19,9 @@ Usage (from the workspace root):
 --timeout-factor F, --timeout-min S, --timeout-max S (ADR 0129; defaults 5, 600, 3600): a test's time limit is
            clamp(F * its seconds in the --order TSV, min, max), max if it has no record; --timeout-max 0 turns the limit off. On expiry
            the test's process tree (never cargo) is killed and the test fails with outcome TIMEOUT; the other tests go on.
+--limits FILE (ADR 0740; off by default; the gate passes scripts/gate_limits.tsv): a table with the columns binary, test, limit_s, adr.
+           A test named by a row has the limit of its row, whatever the three options above and the --order record give; every other
+           test keeps the limit it has without the table. --timeout-max 0 still turns every limit off.
 --skip-pattern REGEX (off by default; docs/process/documentation-process-review.md I2): every test runs with `--show-output`, and
            the TSV gains a last column `skipped` with the output lines of a PASSED test that match REGEX, joined by " | ". The closing
            `gate_test:` line then also gives the number of passed tests that reported a skip. Suggested REGEX: SKIP_SUGGESTED below.
@@ -113,6 +116,43 @@ def limit_s(rec, factor, lo, hi):
     if rec is None:
         return hi
     return min(max(factor * rec, lo), hi)
+
+
+def read_limits(path):
+    """The table of --limits (ADR 0740): {(binary, test): seconds}. Lines that are empty or start with `#` are skipped and the
+    first other line is the header. A row with fewer than four cells, a limit that is not a positive number or a test named
+    twice ends the run with a message that names the line."""
+    table, header = {}, False
+    with open(path, encoding="utf-8") as fh:
+        for n, raw in enumerate(fh.read().splitlines(), 1):
+            if not raw.strip() or raw.lstrip().startswith("#"):
+                continue
+            f = [c.strip() for c in raw.split("\t")]
+            if not header:
+                header = True
+                if f[:4] != ["binary", "test", "limit_s", "adr"]:
+                    raise SystemExit(f"gate_test: {path} line {n}: the header is not binary, test, limit_s, adr")
+                continue
+            if len(f) < 4 or not f[0] or not f[1]:
+                raise SystemExit(f"gate_test: {path} line {n}: a row needs binary, test, limit_s, adr")
+            try:
+                sec = float(f[2])
+            except ValueError:
+                sec = 0.0
+            if not 0.0 < sec < float("inf"):
+                raise SystemExit(f"gate_test: {path} line {n}: the limit {f[2]!r} is not a positive number of seconds")
+            if (f[0], f[1]) in table:
+                raise SystemExit(f"gate_test: {path} line {n}: {f[0]}::{f[1]} is named twice")
+            table[(f[0], f[1])] = sec
+    return table
+
+
+def test_limit(key, rec, factor, lo, hi, table=None):
+    """Time limit of the test `key` = (binary, test): its row of the --limits table if it has one (ADR 0740), else `limit_s`;
+    None if hi <= 0 (every limit off)."""
+    if hi > 0 and table and key in table:
+        return table[key]
+    return limit_s(rec, factor, lo, hi)
 
 
 def peak_mb(proc, field="PeakWorkingSetSize"):
@@ -239,6 +279,7 @@ def main():
     ap.add_argument("--timeout-factor", type=float, default=5.0)
     ap.add_argument("--timeout-min", type=float, default=600.0)
     ap.add_argument("--timeout-max", type=float, default=3600.0)
+    ap.add_argument("--limits")
     ap.add_argument("--no-doc", action="store_true")
     ap.add_argument("--skip-pattern")
     ap.add_argument("--shard")
@@ -250,6 +291,7 @@ def main():
     a.no_doc = a.no_doc or not first
     skip_re = re.compile(a.skip_pattern) if a.skip_pattern else None
     show = ["--show-output"] if skip_re else []
+    table = read_limits(a.limits) if a.limits else None
 
     t_build = time.time()
     progress(f"gate_test: building test binaries ({' '.join(select)}, release)")
@@ -302,6 +344,11 @@ def main():
         line = f"gate_test: shard {shard[0]}/{shard[1]} runs {len(jobs)} of {total} tests, split {digest}"
         progress(line)
         print(line, flush=True)
+    if table is not None:
+        named = sum((stem[i], t) in table for i, t in jobs)
+        line = f"gate_test: limits {a.limits}: {len(table)} rows, {named} name a test of this run"
+        progress(line)
+        print(line, flush=True)
     n_ign = sum(len(x) for x in ign) if first else 0
     progress(f"gate_test: {len(jobs)} tests to run ({n_ign} ignored) in {len(bins)} binaries, jobs={a.jobs}"
              + (f", order from {a.order}" if prev else ""))
@@ -313,7 +360,7 @@ def main():
         i, t = job
         b = bins[i]
         cwd = os.path.dirname(b["manifest_path"])
-        lim = limit_s(prev.get((stem[i], t)), a.timeout_factor, a.timeout_min, a.timeout_max)
+        lim = test_limit((stem[i], t), prev.get((stem[i], t)), a.timeout_factor, a.timeout_min, a.timeout_max, table)
         with lock:
             running[job] = time.time()
         code, out, dt, mb, to = run([b["executable"], t, "--exact", "--test-threads=1", *show], cwd, dict(env, CARGO_MANIFEST_DIR=cwd),

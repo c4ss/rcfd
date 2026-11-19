@@ -1,0 +1,6 @@
+# Time limits of single tests in the full gate (scripts/gate_test.py --limits, ADR 0740). A test named here has the limit of its
+# row in seconds; every other test keeps the limit of gate_test.py (3600 s in the gate). A new row needs a registration that
+# gives the measured times it rests on. scripts/gate_limit_check.py reads the same table: a test must take at most half its limit.
+binary	test	limit_s	adr
+immersed_solid_f219	a3_two_d_two_strouhal_number	10800	0740
+immersed_unsteady_force_f346	a2t_c1_two_d_two_on_t	10800	0740

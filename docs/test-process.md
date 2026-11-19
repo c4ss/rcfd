@@ -171,6 +171,15 @@ The last line of the test phase also gives the peak summed working set of the ru
 largest ratio of a test's time to its limit. Tests: `python -m unittest scripts/test_gate_test.py` (the end-to-end part needs
 `GATE_TEST_E2E=1` and a slot).
 
+**Limits of single tests (ADR 0740).** `--limits FILE` reads a table with the columns `binary`, `test`, `limit_s`, `adr`. A
+test named by a row has the limit of its row, whatever the three options above and the `--order` record give; every other
+test keeps its limit. The full gate passes `scripts/gate_limits.tsv`, which holds two tests of `rcfd-fv` at 10 800 s
+(`immersed_solid_f219::a3_two_d_two_strouhal_number` and `immersed_unsteady_force_f346::a2t_c1_two_d_two_on_t`: 2066 to 3230 s
+on the Windows runner when they passed, and three time-outs at 3600 s on slower runners). A new row needs a registration
+with the measured times it rests on. `python scripts/gate_limit_check.py --limits scripts/gate_limits.tsv GATE GATE GATE`
+reads the downloaded logs of three gates (one folder per gate, shards included) and is met when every test of the table
+passed once in each gate in at most half its limit. Tests: `python -m unittest scripts/test_gate_limits_f849.py`.
+
 `progress.log` (stderr) gets phase markers (build, listing, tests, doc-tests, each with its time), one line per finished test
 (`[k/N outcome seconds MB elapsed] binary::test`) and, every `--heartbeat` seconds (default 300, 0 off), a line with tests done of
 total, failures so far, elapsed and estimated time left, and the longest-running tests still going. In CI the gate tees it into the
@@ -483,7 +492,12 @@ attribution step.
 ### 7.2 What a failed run produces
 
 The gate logs (`times.tsv`, `test.log`, `progress.log`, and from the feature step `times_hooks.tsv`, `test_hooks.log`) are
-uploaded first, as the artifact `gate-<os>-<sha>`. Then, only if the test step or the feature step failed, `scripts/gate_attribute.py` runs (at most 40 min). It writes:
+uploaded first, as the artifact `gate-<os>-<sha>`. Then, only if the test step or the feature step failed, `scripts/gate_attribute.py` runs.
+Its re-runs have a budget (ADR 0740): what the job's 340 min have left when the step starts, less 15 min and the minutes of
+the bisect, at most 12 000 s. They are made shortest limit first (3600 s, or the row of `scripts/gate_limits.tsv`), each cut
+at what is left of the budget. A re-run that was cut says so in its outcome (`TIMEOUT (cut at N s by the re-run budget; its
+limit is L s)`), one that could not start is `not run (re-run budget used up)`, and neither counts as flaky. So the step
+always reaches its JSON; before, a re-run of 3600 s in a step of 40 min could end the step without one. It writes:
 
 - **`gate-out/attribution.json`** (artifact `gate-attribution-<os>-<sha>`, for the roadmap loop). It has one record per failed or
   timed-out test with these fields: crate, binary, file, outcome, `rerun` (the test run once more, alone, the way `gate_test.py`

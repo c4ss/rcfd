@@ -444,3 +444,13 @@ trial of Addendum 3 was red on two tests, neither of them a fault of the split:
 The default changes to 4 when F-849 is done and one dispatched run with four shards is green: 2 h 32 min against 4 h 41 min
 of wall time, for about one and a half times the runner minutes (417 against 281). That is one expression in `gate.yml`
 and an amendment line here. Nothing above this section is changed.
+
+## Pointer (2026-11-19): limits of single tests and the budget of the re-runs are in ADR 0740
+
+[ADR 0740](0740-f849-registration-a-registered-time-limit-for-two-immersed-solid-tests-of-the-full-gate.md) (F-849) changes
+three things that this ADR describes, and registers them there. The tests step passes `--limits scripts/gate_limits.tsv`,
+so the two immersed-solid tests named above have a limit of 10 800 s; every other test keeps 3600 s (D9 said every
+test). The re-run of the attribution (D5) takes its limit from the same table and runs inside a budget computed from what
+the job's 340 min have left, and the attribution step's limit goes from 40 to 240 min (Q3: the attribution stays in the
+gate job). In shard 2 of the trial of Addendum 3 the step was ended after 40 min in the re-run of the timed-out test and
+wrote no attribution; Addendum 3 read that as the re-run taking the rest of the job. Nothing above this section is changed.
