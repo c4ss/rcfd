@@ -123,3 +123,19 @@ modulus, ADR 0449 checks unedited) are all met.
 Proposed status for F-534: done.
 
 > ADR 0453, 2026-11-14: rainflow_periodic returns an internal error (InvalidValue, key "rainflow") when the residue of the closed sequence has more than three points, and the mutation that closes loops with a strict inequality is now caught by the constant-amplitude check (error for n = 7 and 1000; it escaped that check in ADR 0449); the Gerber refusal of a compressive mean at or beyond the strength says "in modulus" while every positive-mean message is byte-identical; all 9 tests of ADR 0449 pass unedited; mutations of the guard threshold and of both message forms caught; the guard itself is unreachable by design (equivalent mutant recorded).
+
+## Addendum 2 (2026-11-19, the lead): three points of the record of Addendum 1
+
+Source: reader trial 1 (`docs/process/trials/reader-trial-1/registration.md`, "Check of the 16 agreed findings", and `results/check-of-agreed-findings.json` there). Two readers flagged the place and a checker read the repository for it. Nothing above this addendum is changed, no test was run again, and no result, limit or status of the item changes. Line numbers are those of this file before this addendum.
+
+1. **G2 was checked by containment, not equality.** G2 is registered with the limit `==` and "the exact present text" and
+   reported as met in those words; the test asserts `msg.contains(&want)` (`sa_fatigue_f534.rs`). The source text is exactly
+   that string, so the result is right; the check is weaker than registered and this was not listed as a deviation. An
+   assertion of equality is part of roadmap item F-850.
+2. **The pair "M5b with the guard removed" has no row.** It is registered (lines 55 and 59, "shows what the guard fixed") and
+   appears neither in the mutation table nor under what was not run. It is taken here as not run; its expected outcome rests
+   on ADR 0449's record that the same mutation M5 escaped Q1 before the guard existed. The decision does not need it: the
+   rule asks for M5b, M13, M15 and M16 each caught by a registered catcher, and they were.
+3. **Line 125 and the roadmap note, "error for n = 7 and 1000".** Observed: the error at `n = 7`, the first case that reaches
+   the guard. `n = 1000` was not reached, because the test stops at the first error. The statement is true of the code (the
+   residue for `n = 1000` has 2001 points and the guard returns the error); it repeats the registered expectation.

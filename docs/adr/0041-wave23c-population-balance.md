@@ -315,3 +315,12 @@ Differences for the lead:
 
 No constant or formula differs. The kernel constant is used in `CoalKernel::eval` (`crates/rcfd-fv/src/popbal.rs`) as the
 exact `sqrt(8 pi/15)` and tested in `crates/rcfd-fv/tests/popbal_bins.rs` (B10).
+
+## The lead's decisions on the differences of "Sources read" (2026-11-19)
+
+- **The two names.** The 1968 paper is by William T. Scott (this ADR writes "P. J. Scott") and the first author of the 1995
+  paper is Priscilla J. Hill (this ADR writes "C. A. Hill"). The names in this ADR are wrong and are corrected by this
+  line; `docs/reference-data.md` already carries the right name of the first. No code or test uses either name, and no
+  constant or formula differs. Closed.
+
+Nothing above this addendum is changed and no test was run again. The differences are those listed at the end of "Sources read (2026-11-18)" above; batch 1 is recorded in `docs/process/citation-batches.md`.

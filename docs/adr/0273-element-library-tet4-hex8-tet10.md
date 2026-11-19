@@ -482,3 +482,14 @@ Differences for the lead:
   be read. No number in the code is wrong by this reading: the code uses the Newton-refined constants `TET14_A1`, `TET14_W1`, `TET14_A2`,
   `TET14_W2`, `TET14_B`, `TET14_W3` of `crates/rcfd-fem/src/quadrature.rs` (lines 113 to 120, rule `tet_14`), whose comment says "recalled from
   memory" and names no source, and they are checked by A4 and N1 and mutation M2 in `crates/rcfd-fem/tests/sb_elements.rs`.
+
+## The lead's decisions on the differences of "Sources read" (2026-11-19)
+
+- **The attribution of the `tet_14` start values to Keast's tables is withdrawn.** Keast (1986), Table 1, prints no such
+  rule: its 14-point rule has other constants and degree 4. Whether Walkington's report prints the values was not read.
+  The constants of `tet_14` therefore have no cited source: they are the item's own, recalled as start values, refined by
+  Newton's method on the moment equations and checked by A4, N1 and mutation M2 (`crates/rcfd-fem/tests/sb_elements.rs`),
+  which test the degree of exactness and do not depend on where the start values came from. No code changes and no item
+  is entered. Closed.
+
+Nothing above this addendum is changed and no test was run again. The differences are those listed at the end of "Sources read (2026-11-18)" above; batch 1 is recorded in `docs/process/citation-batches.md`.

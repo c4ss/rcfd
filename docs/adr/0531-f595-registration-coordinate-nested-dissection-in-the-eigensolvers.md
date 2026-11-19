@@ -345,3 +345,15 @@ caught by a check named for it on the first run. Amendments 1 and 2 were written
 Proposed status of F-595: **done**.
 
 > Structural solver, advanced tier. Optional. Follow-up of F-594 (ADR 0509). ADR 0531, 2026-11-14: SubspaceOptions::points and BucklingEigenOptions::points (the coordinates of each unknown for the nested dissection of Factorisation::Supernodal; None keeps the level structures; checked for length and finiteness; the other factorisations do not read them), and ModalOptions::coordinate_order / BucklingOptions::coordinate_order in rcfd-fem (the node coordinates of the free unknowns passed on the elimination path; refused, key "factorisation", with another factorisation and on the transformation path). Clamped cube of 104 544 unknowns: nnz(L) 92 953 458 by coordinates against 110 872 668 by level structures, ratio 0.838 (limit 0.85); frequencies 1.4e-14 from the level-structure run (limit 1e-9); 98 s against 127 s per modal analysis, peak working set 2.9 GB. Clamped Hex8 cube of 4 752 unknowns: frequencies 1.1e-15 and buckling factors 1.9e-15 from the level-structure run, and bit-equal to the eigensolvers called directly with the free unknowns' node points. Results bit-identical for 1 and 8 threads; 24 digests of the default and level-structure paths equal to base; baseline_hashes passes. Eight mutations caught. No case-file key (proposed: a value of the pending solver.factor key).
+
+## Addendum 2 (2026-11-19, the lead): the two wall times of H1
+
+Source: reader trial 1 (`docs/process/trials/reader-trial-1/registration.md`, "Check of the 16 agreed findings", and `results/check-of-agreed-findings.json` there). Two readers flagged the place and a checker read the repository for it. Nothing above this addendum is changed, no test was run again, and no result, limit or status of the item changes. Line numbers are those of this file before this addendum.
+
+- **Lines 293 to 295 and the roadmap entry, "98 s against 127 s per modal analysis".** The figure is arithmetically right
+  (`(126.5 - 97.5) / 126.5`) and no check rests on it: the acceptance has no time clause and H1 registers the wall time as
+  recorded only. It is one run of each order, in a fixed sequence (levels first), on a shared machine on which the levels
+  run took `126.5 s` against ADR 0509's `77.7 s` for the same computation. That load effect (63 percent) is larger than the
+  difference reported (23 percent). The direction is plausible (16 percent fewer stored entries), but the pair does not
+  establish the size of a speed-up, and 23 percent is not to be quoted as the effect of the ordering.
+- The roadmap note of F-595 carries this qualifier from 2026-11-19.

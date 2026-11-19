@@ -906,3 +906,21 @@ Differences for the lead (none is fixed here):
 - Attributions not found at the places read: "with no feasible point yet, the acquisition is the probability of feasibility
   alone" (D6, cited to Schonlau et al. and Gardner et al.) and "the squared exponential is the worse-conditioned of the two"
   (question 2, cited to Stein and Snoek et al.). Both remain the ADR's own statements; constraint check K1 covers the first.
+
+## The lead's decisions on the differences of "Sources read" (2026-11-19)
+
+- **The locator of the diagnostic plots** is Jones et al., section 3 ("Model validation"), not section 2. Corrected by this
+  line.
+- **Hartmann 3, `P(4,1)`.** The code keeps `0.0381`. The survey read has `0.03815`; the difference at the minimiser is
+  `2.4e-6`, inside G0's limit of `1e-5`, and the original (Dixon and Szego) was not read. Open until that volume is read;
+  no check depends on it at the digits this ADR gives.
+- **Hartmann 3 `P(2,2)`, Hartmann 6 `P(1,6)` and the third Branin minimiser.** The code's values stand. The survey's
+  entries contradict the survey's own stated minima, and the code's values reproduce those minima (G0). This rests on the
+  calculation above, not on a reading of the original.
+- **The Hartmann 6 minimum** differs by rounding only. Closed.
+- **The two statements credited to Schonlau et al. and Gardner et al., and to Stein and Snoek et al.,** were not found at
+  the places read. They stand as this ADR's own statements and are not to be cited as those authors'. The first is
+  covered by the constraint check K1.
+- No code changes and no item is entered.
+
+Nothing above this addendum is changed and no test was run again. The differences are those listed at the end of "Sources read (2026-11-18)" above; batch 1 is recorded in `docs/process/citation-batches.md`.

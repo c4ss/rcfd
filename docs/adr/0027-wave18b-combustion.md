@@ -428,3 +428,16 @@ Differences for the lead:
   `chemistry.edc_c_xi = 2.1377` and `chemistry.edc_c_tau = 0.4082` in `crates/rcfd-api/src/chemistry.rs` (lines 89 and 93), passed to
   `edc_scales` in `crates/rcfd-reactor/src/cell.rs` (line 61), and the K7 test in `crates/rcfd-reactor/tests/cell.rs` (lines 273 to 284).
   `C_tau` is not affected (`(0.5/3)^{1/2} = 0.408248` in both readings).
+
+## The lead's decisions on the differences of "Sources read" (2026-11-19)
+
+- **`C_D1`.** The record stands corrected by the reading above: the one source that could be read (Ertesvag and Magnussen,
+  accepted manuscript) gives `C_D1 = 0.135`, and the `0.134` of this ADR is a recalled value that no source read confirms.
+  No code changes: the code does not hold `C_D1`; its defaults are the pair `2.1377` and `0.4082`, which a published paper
+  (arXiv:2101.08764, Eqs. 8 and 9) prints and which the reading above confirmed digit for digit.
+- **Open, and it stays open:** which value Gran and Magnussen (1996) print. The paper could not be obtained. Until it is
+  read, `C_xi = 2.1377` rests on the secondary source and not on the relation with `C_D1`. With `C_D1 = 0.135` the relation
+  gives `2.1298`, a difference of 0.4 percent in `C_xi`; both constants are case inputs
+  (`chemistry.edc_c_xi`, `chemistry.edc_c_tau`), so a user who holds the primary paper can set them. No item is entered.
+
+Nothing above this addendum is changed and no test was run again. The differences are those listed at the end of "Sources read (2026-11-18)" above; batch 1 is recorded in `docs/process/citation-batches.md`.

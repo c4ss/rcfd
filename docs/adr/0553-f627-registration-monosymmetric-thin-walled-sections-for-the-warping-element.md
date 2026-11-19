@@ -471,3 +471,31 @@ post-run amendments 2 and 3. Both corrected the eigensolver set-up of the test: 
 > Follow-up proposed: the buckling eigensolver on sign-asymmetric spectra (rcfd-linalg lowest_buckling_factors refuses with a Sturm mismatch when the subspace holds exactly the requested number of positive Ritz values and larger negative ones, as in a monosymmetric beam with the larger flange in compression). Deps F-627. Acceptance: Every limit not stated here is registered in the ADR before the run. With the default BucklingOptions, the lateral-torsional buckling factor of the ADR 0553 monosymmetric I under -M_ref is returned (not refused) and equals the factor of the ADR 0553 amended run within 1e-9; every result that the solver returned before is bit-identical.
 
 > Follow-up proposed: load height and non-uniform moment for monosymmetric warping beams (the load-height geometric term and the shear-force terms with a shear-centre offset). Deps F-627. Acceptance: Every limit not stated here is registered in the ADR before the run. The lateral-torsional buckling load of a simply supported doubly symmetric I under a central point load at the shear centre, above and below it, and of the ADR 0553 monosymmetric I under a central point load at the shear centre, each equals a closed form or a converged Rayleigh-Ritz reference derived in the ADR within 2 percent at 16 elements; uniform-moment results unchanged.
+
+## Addendum 2 (2026-11-19, the lead): corrections of the record of Addendum 1
+
+Source: reader trial 1 (`docs/process/trials/reader-trial-1/registration.md`, "Check of the 16 agreed findings", and `results/check-of-agreed-findings.json` there). Two readers flagged the place and a checker read the repository for it. Nothing above this addendum is changed, no test was run again, and no result, limit or status of the item changes. Line numbers are those of this file before this addendum.
+
+1. **Line 411, "The three functions that the solver stopped".** There are two, the two named in that sentence
+   (`a_n_run1_known_miss`, `a_n_amended_run2_known_miss`); three is the number of runs.
+2. **Lines 415 to 416, "Every measured value is at or below its estimate, except A1'".** The sentence is false. A1' is below
+   its estimate (`1.29e-3` against `3e-3`). Three values are above their estimates and inside their limits: C1 `3.5e-3`
+   against `3e-3` (limit `1e-2`), D1 up to `2.9e-11` against `1e-11` (limit `1e-9`), and E2'(b) `5.6e-17` against `1e-17`
+   (limit `1e-15`). V1's second value `3.0e-3` equals its estimate. Every other value is at or below its estimate.
+3. **Lines 416 to 418, "The shear-flexible lateral plane accounts for the size of the A, C1 and V1 errors".** This holds for
+   C1, which is below its closed form by the registered shear amount (`3.5e-3`). It does not follow for the A checks: A1' and
+   A2' are above the closed form, which is opposite to the shear estimate, and they depend on the mesh (`2.1e-3` and `6.5e-4`
+   at 8 elements, `1.29e-3` and `3.9e-4` at 16). They are 0.7 to 2.2 times the excess ADR 0546 measured (`5.9e-4`), and their
+   cause is not diagnosed, as in ADR 0546.
+4. **Lines 453 to 457, the decision.** The rule has a clause "todo: A1, A2 or B0 missed" beside the partial clause that was
+   applied. The reading used, which the text does not state, is: todo means A1, A2 or B0 unmet after every amendment; a check
+   met after an amendment written before its corrected run is the partial clause. By the status rule of 2026-11-18 the item
+   is done (roadmap note, status check of 2026-11-18).
+5. **The 16-element acceptance values have no running assertion in this item's test file.** They are asserted only in the
+   two ignored records; `a_n_amended3_remaining` recomputes and prints them. They are pinned bit for bit by running tests of
+   later items (`sa_beam_warping_f643.rs`, `u1_uniform_moment_unchanged`; `sa_buckling_sign_asymmetric_f642.rs`). A running
+   assertion against the closed form is part of roadmap item F-850.
+6. **Line 464, "any monosymmetric LTB load case that puts the larger flange in compression is refused".** Shown at the time
+   for the registered case only (L = 3, 16 elements, three factors). ADR 0559 (F-642) measured more: the 8-element case is
+   refused in the same way, L = 1.5 is refused by another branch and stays refused after the fix, and L = 6 before the fix
+   was not recorded. The mechanism is not a single one, and the code state the sentence describes no longer exists.

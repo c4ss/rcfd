@@ -385,3 +385,17 @@ Proposed status of F-639: **done**. New note:
 > Structural solver, advanced tier. Follow-up of F-623 (ADR 0551, 2026-11-15). DONE. ADR 0570, 2026-11-15: rcfd_fem::nonlinear::Contribution gains has_fallback_tangent and add_fallback_tangent (defaults: none); the Newton attempt (no load-factor control, symmetric factor) takes, for an iteration whose exact tangent fails the pivot test, the element tangent plus each such contribution's tangent without its curvature part. rcfd_fem::contact: the opt-in ContactOptions::curvature_fallback(true) gives the total Lagrangian body the contact matrix eps G G^T on the exact pattern (ADR 0507 amendment 2, as the linear body), counted in NewtonSolve::convex_iterations. ADR 0551 HS20t and HS10t with it: solved with the gap tolerance 1e-8, one fallback iteration each; radius 2.5e-2 and 5.8e-3 (read from the moments of the nodal forces, a = sqrt(5/2 M2/M0), registered so that ADR 0551's coefficient reading, F-638's subject, is not inherited), peak 1.23e-1 both, approach 2.7e-2 and 2.3e-2; the same reading on the linear HS20m and HS10m gives 1.4e-2 and 3.4e-2. The driver's fallback run matches the honest tangent's run bit for bit; the contact fallback equals convex_tangent bit for bit on the exact index set; ADR 0542 P solves with it; defaults, ADR 0542 P's refusal and the ADR 0551 records unchanged; 7 of 7 mutations caught. Making the fallback the default is the maintainer's call (it changes ADR 0542 P's outcome).
 
 No follow-up proposed.
+
+## Addendum 2 (2026-11-19, the lead): the limit of the moment radius
+
+Source: reader trial 1 (`docs/process/trials/reader-trial-1/registration.md`, "Check of the 16 agreed findings", and `results/check-of-agreed-findings.json` there). Two readers flagged the place and a checker read the repository for it. Nothing above this addendum is changed, no test was run again, and no result, limit or status of the item changes. Line numbers are those of this file before this addendum.
+
+- **Lines 225 to 226, HS20m-M and HS10m-M.** The limit `0.15` is this ADR's own choice for two supporting checks (D5; they
+  are not in the acceptance) and stands against its own estimate of 2 to 6 percent; the measured values are `1.35e-2` and
+  `3.40e-2`. A uniform pressure on the Hertz disc has a moment radius `sqrt(5/4) a`, an error of `0.118`, and would pass.
+  The moment radius is an integral measure and alone does not test the shape of the pressure.
+- What limits the consequence: the same uniform pressure has a peak of 2/3 of the Hertz peak, an error of `0.33` against
+  the peak limit `0.20` on HS20f and HS10f, so it is caught there; and the limit is not empty, since the nodal-fit reading
+  of the same four states gives `0.47`, NaN, `0.21` and `4.89`.
+- The two rows are to be read together with the peak check. A limit near the estimate (about `0.08`) is part of roadmap
+  item F-850; this ADR's limits do not change.

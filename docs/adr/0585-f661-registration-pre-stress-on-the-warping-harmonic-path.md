@@ -347,3 +347,17 @@ met for both signs on the full fork beam and on the torsion-only model; a3 is me
 > Follow-up proposed: Pre-stress on the warping transient path. Deps F-661. Acceptance: Every limit not stated here is registered in the ADR before the run. WarpingTransient takes the pre-stress of the warping static solve (K + K_sigma); the midspan twist of the fork-supported I beam under a step torque and an axial force N = +/-0.5 of the torsional buckling load follows the continuous modal series with omega_m^2 = (G J k_m^2 + N I_p/A k_m^2 + E C_w k_m^4)/(rho I_p) within 1.5e-2 of the static twist over two periods at 16 elements; every result without the option bit-identical.
 
 > Follow-up proposed: Negative-pivot count of the pre-stressed warping harmonic solve. Deps F-661. Acceptance: Every limit not stated here is registered in the ADR before the run. WarpingHarmonic with a pre-stress reports the number of negative eigenvalues of K + K_sigma on the free equations (a Sturm count of the real factor at omega = 0); the fork-supported I beam under N = -0.5 of the torsional buckling load reports exactly the number of weak-axis bending modes beyond their Euler load (one), and 0 under N = +0.5; every result without the option bit-identical.
+
+## Addendum 2 (2026-11-19, the lead): what the check HB- shows
+
+Source: reader trial 1 (`docs/process/trials/reader-trial-1/registration.md`, "Check of the 16 agreed findings", and `results/check-of-agreed-findings.json` there). Two readers flagged the place and a checker read the repository for it. Nothing above this addendum is changed, no test was run again, and no result, limit or status of the item changes. Line numbers are those of this file before this addendum.
+
+- **HB- is a structural-zero check with no demonstrated failure.** On the registered model the section is doubly symmetric,
+  the pre-stress is a pure axial force and the load a pure torque, so the bending block has a zero right-hand side and no
+  coupling entry: the registered estimate is exactly 0 and the measured value is 0. None of the seven planned mutations names
+  HB- as its catcher, and omitting, negating or doubling `K_sigma` leaves it at 0. It can fail: the geometric stiffness has
+  twist-bending coupling terms driven by end moments and shear forces of the pre-stress, so an axial force put into a moment
+  slot, or `K_sigma` indexed into the bending equations, would make it non-zero. That class of error was not shown to be
+  caught.
+- **Lines 226 to 227 list HB- under "Negative controls".** It is not one: it is a check that is expected to pass.
+- The acceptance does not need HB-. A mutation that HB- must catch is part of roadmap item F-850.
