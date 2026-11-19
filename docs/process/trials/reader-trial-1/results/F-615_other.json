@@ -1,0 +1,14 @@
+{
+  "results_that_do_not_follow": [
+    {"file": "0533-f615-registration-supernodal-factorisation-in-the-linear-contact-driver.md", "line": 245, "reason": "Concluding that the driver factors 9 times (5+2 iterations plus 2 convex) conflicts with the recorded numbers: 9 x 186 s is about 1680 s, above the measured t_p of 1456.6 s, which fits 7 factorisations (7 x 186 = 1305 s plus 9 percent); the per-iteration 9.1 s figure rests on the same unsupported count."},
+    {"file": "0533-f615-registration-supernodal-factorisation-in-the-linear-contact-driver.md", "line": 271, "reason": "'Every mutation was caught by the check named for it' / Done is claimed, but the N2 test that is to catch M5 and M6 is #[ignore]d in the recorded test file (superseded by another ADR), so the Done decision does not follow for the final tree."},
+    {"file": "0533-f615-registration-supernodal-factorisation-in-the-linear-contact-driver.md", "line": 273, "reason": "'Three new and four existing digests unchanged' is not backed by the table at line 238, which lists three new digests and only B1 and B0 of two ADRs as existing."}
+  ],
+  "checks_that_cannot_fail": [
+    {"file": "sa_contact_supernodal_f615.rs", "line": 639, "reason": "f615_n2_refusals (the N2 negative control, which is the check named to catch mutations M5 and M6) is #[ignore]d, so it never runs and cannot fail."}
+  ],
+  "limits_that_test_nothing": [
+    {"file": "sa_contact_supernodal_f615.rs", "line": 582, "reason": "U1 limit 1e-10 against recorded displacement differences of 7e-15 to 1.4e-14 leaves about four orders of slack, so it would pass a much wrong factor."},
+    {"file": "sa_contact_supernodal_f615.rs", "line": 556, "reason": "V1/V2 limit 1e-10 on readings that were recorded at 1e-14 to 8e-12 (and the row limit at line 563) leaves 1 to 4 orders of slack and is the same size as the Newton tolerance 1e-10."}
+  ]
+}

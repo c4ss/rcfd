@@ -1,0 +1,52 @@
+{
+  "results_that_do_not_follow": [
+    {
+      "file": "0553-f627-registration-monosymmetric-thin-walled-sections-for-the-warping-element.md",
+      "line": 453,
+      "reason": "The decision is 'Partial by the registered rule', but the rule (line 272) says 'todo: A1, A2 or B0 missed' and the results table (line 389) records A1 to A8 of the one registered run as MISSED with no value, so the registered rule gives todo, or at least the text does not say why the todo clause does not apply."
+    },
+    {
+      "file": "0553-f627-registration-monosymmetric-thin-walled-sections-for-the-warping-element.md",
+      "line": 415,
+      "reason": "'Every measured value is at or below its estimate, except A1'' is false and self-contradictory: A1' (1.29e-3 against 3e-3) is below its estimate, while C1 (3.5e-3 against 3e-3, lines 238 and 400), D1 (up to 2.9e-11 against 1e-11, lines 226 and 386) and E2'(b) (5.6e-17 against 1e-17, lines 311 and 407) are above theirs."
+    },
+    {
+      "file": "0553-f627-registration-monosymmetric-thin-walled-sections-for-the-warping-element.md",
+      "line": 416,
+      "reason": "Shear flexibility is said to account for the A errors, but the registration (line 195) says it lowers P_y and so M, while the measured A1' and A2' moments are above the closed form (178684.2 > 178454.6, 53979.8 > 53958.8) and change with the mesh (2.1e-3 at 8 elements, 1.29e-3 at 16); 'about the same relative amount as in ADR 0546' (+5.9e-4) also does not fit 1.29e-3."
+    },
+    {
+      "file": "0553-f627-registration-monosymmetric-thin-walled-sections-for-the-warping-element.md",
+      "line": 411,
+      "reason": "'The three functions that the solver stopped' names two functions, and only two runs (run 1 and run 2) were stopped."
+    },
+    {
+      "file": "0553-f627-registration-monosymmetric-thin-walled-sections-for-the-warping-element.md",
+      "line": 464,
+      "reason": "'Any monosymmetric LTB load case that puts the larger flange in compression is refused' with default options is concluded from one refusal (one section, L = 3, 16 elements, 3 factors); no other compressed-flange case was run with the default subspace."
+    },
+    {
+      "file": "0553-f627-registration-monosymmetric-thin-walled-sections-for-the-warping-element.md",
+      "line": 431,
+      "reason": "Z8 (shear centre from the wrong flange) is listed as caught by C1 and V1, but both tests build their reference from the code's own z_0 (sa_beam_warping_f627.rs lines 498 and 526), so a wrong but consistently used z_0 moves the reference with the element and these two checks should not see it; only D1 (and the A checks through the flange sign) can."
+    }
+  ],
+  "checks_that_cannot_fail": [
+    {
+      "file": "sa_beam_warping_f627.rs",
+      "line": 417,
+      "reason": "The acceptance checks A1', A2' (and A3', A8', N1', lines 404 to 449) exist only in #[ignore] functions that panic at the 8-element solve (line 451) before c.finish() (line 491), so their outcome is only printed and never asserted; the one running A function (line 850) computes the 16-element L = 3 factors but never compares them with the closed form, so no test in the suite can fail on the acceptance value."
+    },
+    {
+      "file": "sa_beam_warping_f627.rs",
+      "line": 404,
+      "reason": "A3 'one load case each way' compares the signs of the flange-1 strain of two linear static solves of the six-unknown solver under +M_ref and -M_ref; by linearity they are opposite whatever the warping code computes (the same at line 289)."
+    },
+    {
+      "file": "sa_beam_warping_f627.rs",
+      "line": 517,
+      "reason": "C1's reference P_1 is computed from the code's own z_0 (line 498), not from the registered hand value 6.09657056e5, which is only printed; a wrong shear-centre position used consistently by the element passes this check (the same holds for V1, lines 526 and 547, where the hand values are also only printed)."
+    }
+  ],
+  "limits_that_test_nothing": []
+}

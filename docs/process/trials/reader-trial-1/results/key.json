@@ -1,0 +1,112 @@
+[
+  {
+    "item": "F-661",
+    "kind": "result",
+    "file": "0585-f661-registration-pre-stress-on-the-warping-harmonic-path.md",
+    "line": 291,
+    "before": "3.55e-6",
+    "after": "3.55e-5",
+    "quantity": "H1+ measured (undamped twist at 0.5 omega_1, tension)",
+    "note": "Results table of addendum 1. The measured H1+ is now above its limit 3e-5 while the verdict stays 'met'; it also no longer agrees with the sentence 'within a factor of 1.1 of its arithmetic estimate' (estimate 3.5e-6) or with the decision 'every registered check met'. H6b+ on line 294 keeps 3.55e-6."
+  },
+  {
+    "item": "F-639",
+    "kind": "result",
+    "file": "0570-f639-registration-curvature-free-fallback-of-the-total-lagrangian-contact-body.md",
+    "line": 303,
+    "before": "1.23e-1",
+    "after": "2.13e-1",
+    "quantity": "HS20f peak error against Hertz",
+    "note": "Results table of addendum 1, row HS20f. The peak error is now above its limit 0.20 while the row says 'yes'; it also no longer follows from the two values beside it (0.06055 against 0.06905 is 1.23e-1), from note 2 ('12 percent below ... on both meshes', 'Within the limit 0.20') or from the roadmap entry ('peak 1.23e-1 both')."
+  },
+  {
+    "item": "F-595",
+    "kind": "limit",
+    "file": "0531-f595-registration-coordinate-nested-dissection-in-the-eigensolvers.md",
+    "line": 163,
+    "before": "<= 1e-9",
+    "after": "<= 1e-7",
+    "quantity": "E2 limit (buckling factors, coordinates against levels)",
+    "note": "DEVIATION: the item's only test file is a bit record (digests, no numeric limit), and the test that carries E2 (sa_coordinate_modes.rs) is not in the folder. The limit is widened in the ADR only, in both places it is stated (registration table and results table). Recorded value 1.898e-15. E2 is clause c5, not the acceptance's 1e-9 (c7), so the verbatim acceptance text is untouched."
+  },
+  {
+    "item": "F-595",
+    "kind": "limit",
+    "file": "0531-f595-registration-coordinate-nested-dissection-in-the-eigensolvers.md",
+    "line": 282,
+    "before": "<= 1e-9",
+    "after": "<= 1e-7",
+    "quantity": "E2 limit (buckling factors, coordinates against levels)",
+    "note": "Second place of the same plant (results table). No test copy changed, see the first entry."
+  },
+  {
+    "item": "F-571",
+    "kind": "test",
+    "file": "sa_nl_inertia_reference_after_f571.rs",
+    "line": 175,
+    "before": "rep.iterations == max_iterations",
+    "after": "opts.newton.max_iterations == max_iterations",
+    "quantity": "NC1b 'accepted at the last iterate' condition",
+    "note": "max_iterations is read from opts.newton.max_iterations on line 159, so the condition compares a value with itself and holds for any step report. The label and the detail message (which still prints rep.iterations) are unchanged. opts is only borrowed by NlIntegrator::new, so the file still reads as compilable."
+  },
+  {
+    "item": "F-534",
+    "kind": "test",
+    "file": "sa_fatigue_f534.rs",
+    "line": 24,
+    "before": "r.cycles.len()",
+    "after": "h.len() / 2",
+    "quantity": "P1 cycle count assertion",
+    "note": "h is built on line 22 as n pairs, so h.len() / 2 == n for any result of rainflow_periodic: the count of cycles is no longer checked (the all() on the cycles below it holds on an empty list too). Message unchanged."
+  },
+  {
+    "item": "F-627",
+    "kind": "limit",
+    "file": "0553-f627-registration-monosymmetric-thin-walled-sections-for-the-warping-element.md",
+    "line": 243,
+    "before": "<= 1e-9 B k",
+    "after": "<= 1e-7 B k",
+    "quantity": "W2 limit (root twist reaction of the bimoment case)",
+    "note": "Registration table. Recorded value 3.9e-13 (estimate 3e-12 B)."
+  },
+  {
+    "item": "F-627",
+    "kind": "limit",
+    "file": "0553-f627-registration-monosymmetric-thin-walled-sections-for-the-warping-element.md",
+    "line": 405,
+    "before": "1e-9",
+    "after": "1e-7",
+    "quantity": "W2 limit (root twist reaction of the bimoment case)",
+    "note": "Results table of addendum 1."
+  },
+  {
+    "item": "F-627",
+    "kind": "limit",
+    "file": "sa_beam_warping_f627.rs",
+    "line": 619,
+    "before": "1e-9",
+    "after": "1e-7",
+    "quantity": "W2 limit (root twist reaction of the bimoment case)",
+    "note": "Test copy; the only place the W2 limit is stated in the test."
+  },
+  {
+    "item": "F-638",
+    "kind": "none",
+    "file": null,
+    "line": null,
+    "before": null,
+    "after": null,
+    "quantity": null,
+    "note": "copied unchanged"
+  },
+  {
+    "item": "F-615",
+    "kind": "none",
+    "file": null,
+    "line": null,
+    "before": null,
+    "after": null,
+    "quantity": null,
+    "note": "copied unchanged"
+  }
+]

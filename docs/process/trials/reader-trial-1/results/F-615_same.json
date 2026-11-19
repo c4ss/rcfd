@@ -1,0 +1,38 @@
+{
+  "results_that_do_not_follow": [
+    {
+      "file": "0533-f615-registration-supernodal-factorisation-in-the-linear-contact-driver.md",
+      "line": 245,
+      "reason": "The excess of T1 over its estimate is explained by 9 factorisations instead of 7 (82 s / 9 = 9.1 s), but the same count applied to the present driver gives 9 x 186.45 s = 1678 s, more than the measured t_p of 1456.59 s, so the recorded times do not support 9 full factorisations per solve and the supernodal factor's cost per factorisation (82 s over 7 iterations = 11.7 s against P1's 6.24 s) is left unexplained."
+    },
+    {
+      "file": "0533-f615-registration-supernodal-factorisation-in-the-linear-contact-driver.md",
+      "line": 155,
+      "reason": "The basis of check D (\"P1: 306 fronts split at n = 16, so the parallel path runs\") cites a number that is not among the P1 numbers disclosed in lines 65-82, although the section says every number used is disclosed, and no recorded result shows that the parallel path ran in D."
+    }
+  ],
+  "checks_that_cannot_fail": [
+    {
+      "file": "sa_contact_supernodal_f615.rs",
+      "line": 639,
+      "reason": "f615_n2_refusals is marked #[ignore], so in this file the N2 assertions (lines 647-663) are never run by the normal test command and cannot fail, while N2 is the only check registered to catch mutations M5 and M6."
+    },
+    {
+      "file": "sa_contact_f615_default_bits.rs",
+      "line": 420,
+      "reason": "assert_eq!(name, en) compares two string literals written in the same file (the got array and EXPECTED), so it passes whatever the solver computed."
+    },
+    {
+      "file": "sa_contact_supernodal_f615.rs",
+      "line": 176,
+      "reason": "assert_eq!(nper - 1, 2 * NC) compares compile-time constants (NTH + 1 = 16 = 2 * 8) and is independent of anything the code under test computes (the same assertion is at line 208 of sa_contact_f615_default_bits.rs)."
+    }
+  ],
+  "limits_that_test_nothing": [
+    {
+      "file": "0533-f615-registration-supernodal-factorisation-in-the-linear-contact-driver.md",
+      "line": 153,
+      "reason": "U1's limit of 1e-10 on the displacement (applied at line 582 of sa_contact_supernodal_f615.rs) is four orders of magnitude above the estimate of 7.2e-15 and the measured 7.0e-15, 6.6e-15 and 1.4e-14, so a displacement error several thousand times larger than observed would still pass and the reading limits of V1 and V2 would bind first."
+    }
+  ]
+}

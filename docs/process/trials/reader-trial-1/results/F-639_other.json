@@ -1,0 +1,15 @@
+{
+  "results_that_do_not_follow": [
+    {"file": "0570-f639-registration-curvature-free-fallback-of-the-total-lagrangian-contact-body.md", "line": 303, "reason": "HS20f peak 0.06055 against 0.06905 is an error of 1.23e-1, not the recorded 2.13e-1; as written 2.13e-1 exceeds the 0.20 limit yet the row says met, and it contradicts note 2 ('12 percent on both meshes') and the roadmap text (1.23e-1 both)."}
+  ],
+  "checks_that_cannot_fail": [
+    {"file": "sa_contact_tl_fallback_f639.rs", "line": 94, "reason": "c.holds(\"FD spoiled run succeeds\", true, \"\") is a constant true inside the Ok branch, so it records nothing beyond the match arm (the Err arm carries the real check)."},
+    {"file": "sa_contact_tl_fallback_f639.rs", "line": 308, "reason": "c.holds(\"{tag} solve\", true, ...) after the Err arm already returned is a constant true and adds no check."}
+  ],
+  "limits_that_test_nothing": [
+    {"file": "sa_contact_tl_fallback_f639.rs", "line": 347, "reason": "Radius limit 0.15 against recorded errors of 5.8e-3 to 3.4e-2 and the ADR's own 2-6 percent estimate (ADR line 201) is 4 to 25 times too loose to detect a wrong radius."},
+    {"file": "sa_contact_tl_fallback_f639.rs", "line": 351, "reason": "Approach limit 0.10 against recorded 2.3e-2 to 2.65e-2 leaves about four times headroom, so a sizeable error in the approach would still pass."},
+    {"file": "sa_contact_tl_fallback_f639.rs", "line": 350, "reason": "Peak limit 0.20 against an estimate of 3 to 8 percent (ADR line 204) and a recorded 1.23e-1 is loose enough that a 12 percent error in peak pressure passes."},
+    {"file": "0570-f639-registration-curvature-free-fallback-of-the-total-lagrangian-contact-body.md", "line": 225, "reason": "HS20m-M and HS10m-M radius limit 0.15 against the registered 2-6 percent estimate (recorded 1.35e-2 and 3.40e-2) tests almost nothing."}
+  ]
+}

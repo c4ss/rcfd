@@ -1,0 +1,59 @@
+F-638 sa_contact_mortar_recovery_hertz_f:106
+   same : The approach error comes from hertz_theory(f_fe) of the unchanged ADR 0551 solve and does not use recovered_tractions at all (the ADR says so at lines 108 and 129, where the values 1.18e-2 and 1.40e-2 are written before the run), so it passes whatever the recovery of this item computes.
+   other: The approach error comes from hertz_theory(f_fe), which depends only on the reaction force of the solve, not on the recovered traction, so it passes whatever recovered_tractions computes.
+F-638 sa_contact_mortar_recovery_hertz_f:61
+   same : The check 'succeeds with the gap tolerance 1e-8' asserts the literal true; the final penetration is only printed (line 70) and never compared with 1e-8, so the clause rests entirely on solve returning Err.
+   other: c.holds(solve, true, ...) is asserted with a constant true after the Err branch has already returned, so this check cannot fail.
+F-661 0585-f661-registration-pre-stress-:327
+   same : The decision 'Done ... every registered check met in the one run' does not follow from the results table, where H1+ (3.55e-5 against 3e-5, line 291) exceeds its limit; the registered rule (line 244) makes any missed check 'partial'.
+   other: 'Done: every registered check met in the one run' does not follow while H1+ (3.55e-5 > 3e-5, line 291) is recorded above the limit; by the decision rule on line 243-245 a missed check makes the item partial.
+F-661 0585-f661-registration-pre-stress-:300
+   same : 'Every measured value is within a factor of 1.1 of its arithmetic estimate' is contradicted by the table: H1+ 3.55e-5 against the estimate 3.5e-6 (factor 10), H3+ 7.1e-14 against 4e-12 (factor 56), H3- 1.9e-12 against 1.1e-11 (factor 6).
+   other: 'Every measured value is within a factor of 1.1 of its arithmetic estimate' is false against the table: H1+ 3.55e-5 vs 3.5e-6, H3+ 7.1e-14 vs 4e-12, H3- 1.9e-12 vs 1.1e-11.
+F-661 sa_beam_warping_f661.rs:397
+   same : HB- compares the bending components with the twist for a doubly symmetric straight beam loaded by a torque only, where twist and bending are in uncoupled blocks whatever K_sigma is (omitted, sign-flipped or doubled), so the ratio is exactly 0 (as recorded) for any of the planned mutations and the check does not depend on what th
+   other: HB-: for a doubly symmetric section under a pure torque twist and bending are decoupled structurally, so bending/twist is 0 whatever K_sigma the code adds (the ADR records 0); it checks no spurious coupling only for this symmetric case and passes under Z1, Z2 and Z5.
+F-595 0531-f595-registration-coordinate-:293
+   same : The conclusion that the coordinate run is 23 percent faster (97.5 s against 126.5 s, repeated in the roadmap entry at line 347 as 98 s against 127 s per modal analysis) rests on one run each on a machine the same paragraph says was shared and that made the levels run 63 percent slower than ADR 0509's 77.7 s, so the load noise is
+   other: The coordinate run being 23 percent faster than the levels run is offered as a result, but the same paragraph says the machine was shared and the levels run took 126.5 s against 77.7 s in ADR 0509 for the same work, so the timing difference cannot be attributed to the ordering.
+F-595 0531-f595-registration-coordinate-:159
+   same : P1 and P2 (lines 159 and 160) set 1e-9 against a closed form where the basis is 6.1e-14 and the measured values are 6.325e-14 and 6.303e-14 (lines 278 and 279): the limit is four orders above the expected value, so a loss of several digits of accuracy from the point-ordered factor would pass.
+   other: P1/P2 limit 1e-9 against recorded 6.3e-14 (and the same 1e-9 in E1 against 1e-15) leaves four to six orders of slack.
+F-571 0604-f571-registration-rounding-fl:351
+   same : NC1b is reported met on its limit "iterations = 20", but the test's check of that name (rs line 175) compares max_iterations with itself, so the met result for this limit rests only on the printed count, not on an assertion.
+   other: NC1b is reported 'met' on '20 iterations (= max_iterations)', but the test file never asserts rep.iterations (see the test file line 173-177), so the claim that the bound at the last iterate accepted the step is not verified by the check.
+F-534 0453-f534-registration-rainflow-re:125
+   same : The roadmap text says the mutation gives an error 'for n = 7 and 1000', but the only recorded observation (line 94) is one error with a residue of 15 points, which is the n = 7 case; the test stops at its first panic, so n = 1000 was never reached under the mutation.
+   other: Roadmap text says the guard-related mutants are caught, but M5b/M13 were caught by P1/Q1 through the guard's error, and the recorded results never show what the guard fixed (M5b with guard removed was not run), so 'what the guard fixed' is unsupported.
+F-534 0453-f534-registration-rainflow-re:112
+   same : The 'done' verdict rests on every check being met as registered in a single run, but P1's cycle count was not asserted, G2 was checked by containment instead of equality, and M13 was seen only on a rerun (line 95), so the stated condition is not what the record shows.
+   other: 'done' is concluded with every check 'met' although P2 was never observed as a catcher of M5b/M13 (line 102) and the registered M5b+M14 pair run (lines 55, 59) has no recorded result.
+F-534 sa_fatigue_f534.rs:89
+   same : G3 requires only is_ok() for the three accepted cases (lines 77 to 89); the returned amplitude is not bounded at all, so the registered statement that returned numbers are unchanged (md line 31) is not tested here.
+   other: G3 checks only is_ok() for the accepted cases, with no check on the returned equivalent amplitude, so any finite or wrong value passes.
+F-639 0570-f639-registration-curvature-f:225
+   same : The limit 0.15 on the moment radius a_M = sqrt(5/2 M2/M0) (also lines 222, 223, 226; test file line 347) is 4 to 26 times the measured 5.8e-3 to 3.4e-2 and above the registered estimate of 2 to 6 percent, and even a uniform pressure over the Hertz disc (M2/M0 = a^2/2, a_M = 1.118 a, error 0.118) would pass it, so it does not tes
+   other: HS20m-M and HS10m-M radius limit 0.15 against the registered 2-6 percent estimate (recorded 1.35e-2 and 3.40e-2) tests almost nothing.
+F-627 0553-f627-registration-monosymmetr:453
+   same : The decision is 'Partial by the registered rule', but the rule (line 272) says 'todo: A1, A2 or B0 missed' and the results table (line 389) records A1 to A8 of the one registered run as MISSED with no value, so the registered rule gives todo, or at least the text does not say why the todo clause does not apply.
+   other: Decision says the acceptance values are met, yet the acceptance checks A1'/A2' exist only in the ignored run-2 record test, so no passing test in the suite asserts them; the claim rests on a one-time log.
+F-627 0553-f627-registration-monosymmetr:415
+   same : 'Every measured value is at or below its estimate, except A1'' is false and self-contradictory: A1' (1.29e-3 against 3e-3) is below its estimate, while C1 (3.5e-3 against 3e-3, lines 238 and 400), D1 (up to 2.9e-11 against 1e-11, lines 226 and 386) and E2'(b) (5.6e-17 against 1e-17, lines 311 and 407) are above theirs.
+   other: States every measured value is at or below its estimate except A1', but C1 measured 3.5e-3 (line 400) against its registered estimate 3e-3 (line 238), so it is above its estimate; also A1' is not an exception (1.29e-3 < 3e-3), so the sentence is internally confused.
+F-627 0553-f627-registration-monosymmetr:416
+   same : Shear flexibility is said to account for the A errors, but the registration (line 195) says it lowers P_y and so M, while the measured A1' and A2' moments are above the closed form (178684.2 > 178454.6, 53979.8 > 53958.8) and change with the mesh (2.1e-3 at 8 elements, 1.29e-3 at 16); 'about the same relative amount as in ADR 05
+   other: States every measured value is at or below its estimate except A1', but C1 measured 3.5e-3 (line 400) against its registered estimate 3e-3 (line 238), so it is above its estimate; also A1' is not an exception (1.29e-3 < 3e-3), so the sentence is internally confused.
+F-627 0553-f627-registration-monosymmetr:411
+   same : 'The three functions that the solver stopped' names two functions, and only two runs (run 1 and run 2) were stopped.
+   other: Says 'the three functions that the solver stopped' stay as ignored records but names only two (a_n_run1_known_miss, a_n_amended_run2_known_miss).
+F-627 0553-f627-registration-monosymmetr:464
+   same : 'Any monosymmetric LTB load case that puts the larger flange in compression is refused' with default options is concluded from one refusal (one section, L = 3, 16 elements, 3 factors); no other compressed-flange case was run with the default subspace.
+   other: Q3 claims 'any' monosymmetric LTB case with the larger flange in compression is refused with default options, but the evidence is a single case (L=3, 16 elements, this one section).
+F-615 0533-f615-registration-supernodal-:245
+   same : The excess of T1 over its estimate is explained by 9 factorisations instead of 7 (82 s / 9 = 9.1 s), but the same count applied to the present driver gives 9 x 186.45 s = 1678 s, more than the measured t_p of 1456.59 s, so the recorded times do not support 9 full factorisations per solve and the supernodal factor's cost per fact
+   other: Concluding that the driver factors 9 times (5+2 iterations plus 2 convex) conflicts with the recorded numbers: 9 x 186 s is about 1680 s, above the measured t_p of 1456.6 s, which fits 7 factorisations (7 x 186 = 1305 s plus 9 percent); the per-iteration 9.1 s figure rests on the same unsupported count.
+F-615 sa_contact_supernodal_f615.rs:639
+   same : f615_n2_refusals is marked #[ignore], so in this file the N2 assertions (lines 647-663) are never run by the normal test command and cannot fail, while N2 is the only check registered to catch mutations M5 and M6.
+   other: f615_n2_refusals (the N2 negative control, which is the check named to catch mutations M5 and M6) is #[ignore]d, so it never runs and cannot fail.
+agreed on unchanged text: 19
+769654 743947 100 57

@@ -1,0 +1,68 @@
+{
+  "results_that_do_not_follow": [
+    {
+      "file": "0604-f571-registration-rounding-floor-of-the-newton-residual-under-translation-and-rotation.md",
+      "line": 79,
+      "reason": "The text concludes that the halvings make the relative floor worse than the full step's 1.64e-9, yet the number quoted beside it for the last halving of the ADR 0479 run is 1.169e-10, about 14 times better, not worse."
+    },
+    {
+      "file": "0604-f571-registration-rounding-floor-of-the-newton-residual-under-translation-and-rotation.md",
+      "line": 78,
+      "reason": "\"No float vector reaches 1e-10 relative\" is concluded from the floor one Newton iteration attained (rn = 0.156 phi, below the bound phi), which shows what that iteration reached and not that no representable vector has a smaller residual."
+    },
+    {
+      "file": "0604-f571-registration-rounding-floor-of-the-newton-residual-under-translation-and-rotation.md",
+      "line": 351,
+      "reason": "NC1b is reported met on its limit \"iterations = 20\", but the test's check of that name (rs line 175) compares max_iterations with itself, so the met result for this limit rests only on the printed count, not on an assertion."
+    },
+    {
+      "file": "0604-f571-registration-rounding-floor-of-the-newton-residual-under-translation-and-rotation.md",
+      "line": 268,
+      "reason": "The recommendation says ADR 0604 \"lifts the floor\" of S3 and the pendulum, while the record's own limits (line 198) and results say the floor is accepted and not lowered (step 50 still ends at relative residual 1.64e-9)."
+    },
+    {
+      "file": "0604-f571-registration-rounding-floor-of-the-newton-residual-under-translation-and-rotation.md",
+      "line": 239,
+      "reason": "\"P1c's numbers to the printed digits\" is stated beside an energy of 2.761783e-4 against 2.761787e-4, which differ in the last printed digit."
+    }
+  ],
+  "checks_that_cannot_fail": [
+    {
+      "file": "sa_nl_inertia_reference_after_f571.rs",
+      "line": 175,
+      "reason": "The check \"NC1b accepted at the last iterate\" tests opts.newton.max_iterations == max_iterations, a value against its own copy, and never reads rep.iterations, so it passes whatever iteration count the driver returned."
+    },
+    {
+      "file": "0604-f571-registration-rounding-floor-of-the-newton-residual-under-translation-and-rotation.md",
+      "line": 316,
+      "reason": "M1's limit is \"every failure reported\", which is satisfied by any outcome of the crate run, including failures."
+    },
+    {
+      "file": "0604-f571-registration-rounding-floor-of-the-newton-residual-under-translation-and-rotation.md",
+      "line": 170,
+      "reason": "B3 is registered with limit 0 on a number already measured as 0 on the unchanged base before registration and expressly not re-run on the changed code, so it cannot respond to anything the change computes."
+    }
+  ],
+  "limits_that_test_nothing": [
+    {
+      "file": "0604-f571-registration-rounding-floor-of-the-newton-residual-under-translation-and-rotation.md",
+      "line": 165,
+      "reason": "A2's limit 1e-9 stands against its own estimate of about 3e-17 (1e-19 m over 3e-3 m) and a measured 3.56e-18, eight to nine orders looser, so a displacement error millions of times the rounding level would pass."
+    },
+    {
+      "file": "0604-f571-registration-rounding-floor-of-the-newton-residual-under-translation-and-rotation.md",
+      "line": 314,
+      "reason": "NC1b's upper limit 1e-7 (rs line 183) was fixed with the value 1.392e-10 already known and is about 700 times above it, set just under the 1.48e-7 stall of a different step size, so it does not bound the accepted residual at h_f."
+    },
+    {
+      "file": "0604-f571-registration-rounding-floor-of-the-newton-residual-under-translation-and-rotation.md",
+      "line": 162,
+      "reason": "A1's momentum limit 1e-11 is about 770 times the previously measured 1.30e-14 quoted in the same row (1.297e-14 measured here), so a large loss of momentum conservation would still pass."
+    },
+    {
+      "file": "0604-f571-registration-rounding-floor-of-the-newton-residual-under-translation-and-rotation.md",
+      "line": 166,
+      "reason": "P1's halvings limit <= 19 stands against an estimate that the bound holds at the full step and a measured 0 (the companion A1h uses limit 0), so up to 19 failed attempts of the mechanism under test would pass."
+    }
+  ]
+}

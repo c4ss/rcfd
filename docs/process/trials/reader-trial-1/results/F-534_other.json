@@ -1,0 +1,14 @@
+{"results_that_do_not_follow": [
+{"file":"0453-f534-registration-rainflow-residue-guard-gerber-message.md","line":112,"reason":"'done' is concluded with every check 'met' although P2 was never observed as a catcher of M5b/M13 (line 102) and the registered M5b+M14 pair run (lines 55, 59) has no recorded result."},
+{"file":"0453-f534-registration-rainflow-residue-guard-gerber-message.md","line":125,"reason":"Roadmap text says the guard-related mutants are caught, but M5b/M13 were caught by P1/Q1 through the guard's error, and the recorded results never show what the guard fixed (M5b with guard removed was not run), so 'what the guard fixed' is unsupported."},
+{"file":"0453-f534-registration-rainflow-residue-guard-gerber-message.md","line":89,"reason":"Mutations were run in the worktree and restored by git checkout, not on the registered scratch copy; the 'done' rule is applied without noting this departure from the registered set-up."}
+],
+"checks_that_cannot_fail": [
+{"file":"sa_fatigue_f534.rs","line":24,"reason":"assert_eq!(h.len()/2, n) only checks the input vector's length, which is true by construction, and never the number of cycles returned, though the ADR claims 'n cycles'."},
+{"file":"sa_fatigue_f534.rs","line":25,"reason":"all() over r.cycles passes vacuously if the result has no cycles, and the cycle count is never asserted."},
+{"file":"sa_fatigue_f534.rs","line":74,"reason":"G2 uses msg.contains(&want) where the registration says exact '=='; any longer message containing the text also passes."},
+{"file":"sa_fatigue_f534.rs","line":36,"reason":"The sine case asserts only an empty residue, not cycle count or ranges, so a wrong cycle set with an empty residue passes."}
+],
+"limits_that_test_nothing": [
+{"file":"sa_fatigue_f534.rs","line":89,"reason":"G3 checks only is_ok() for the accepted cases, with no check on the returned equivalent amplitude, so any finite or wrong value passes."}
+]}
