@@ -634,6 +634,7 @@ fn nc1_to_nc4_refusals_run1_record() {
 
 /// NC1 to NC4 as amended by ADR 0595 amendment 1: NC1 is the refusal of `add_constraint` (D1a).
 #[test]
+#[ignore = "ADR 0744: retired record, NC3 asserts the Beam2 refusal that is lifted by default; restated in sa_cyclic_beams_default_adr0744.rs"]
 fn nc1_to_nc4_refusals_amended() {
     let mut fails = Vec::new();
     let mut hold = |name: &str, ok: bool, what: String| {

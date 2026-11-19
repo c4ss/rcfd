@@ -650,6 +650,7 @@ fn cy_q4_cyclic_paths() {
 }
 
 #[test]
+#[ignore = "ADR 0744: retired record, A-B asserts the Beam2 refusal that is lifted by default; restated in sa_cyclic_beams_default_adr0744.rs"]
 fn a_b_beam2_cyclic_refused_for_its_own_reason() {
     let mut c = Checks::new();
     let mut m = beam_b(Which::Hyper, false);
