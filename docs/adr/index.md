@@ -494,14 +494,14 @@ One row per record of this folder, grouped by the roadmap category of the item i
 | ADR | Title | Status word | Date | Addenda | Item | Item status |
 |---|---|---|---|---|---|---|
 | [0185](0185-adr-0173-amendment-1-f270-registration-the-rcfd-workspace-crate.md) | ADR 0173 amendment 1, F-270 registration: the rcfd-workspace crate, with the MCP server and the Studio moved onto it | REGISTERED | 2026-11-05 | 1 | F-270 | partial |
-| [0186](0186-adr-0173-amendment-2-f271-registration-new-simulations-from-the-mcp-server.md) | ADR 0173 amendment 2, F-271 registration: new simulations from the MCP server in project mode | REGISTERED | 2026-11-05 | 1 | F-271 | partial |
+| [0186](0186-adr-0173-amendment-2-f271-registration-new-simulations-from-the-mcp-server.md) | ADR 0173 amendment 2, F-271 registration: new simulations from the MCP server in project mode | REGISTERED | 2026-11-05 | 1 | F-271 | done |
 | [0187](0187-adr-0173-amendment-3-f272-registration-mesh-set-up-from-the-mcp-server.md) | ADR 0173 amendment 3, F-272 registration: mesh set-up from the MCP server in project mode | REGISTERED | 2026-11-05 | 1 | F-272 | partial |
 | [0188](0188-adr-0173-amendment-4-f273-registration-project-journal-and-change-feed.md) | ADR 0173 amendment 4, F-273 registration: the project journal and the change feed | REGISTERED | 2026-11-05 | 2 | F-273 | partial |
 | [0189](0189-adr-0173-amendment-5-f274-registration-design-study-evaluations-on-the-runner.md) | ADR 0173 amendment 5, F-274 registration: design study evaluations on the runner in project mode | REGISTERED | 2026-11-05 | 1 | F-274 | partial |
 | [0195](0195-adr-0173-amendment-6-f275-registration-project-mode-tool-list-and-plugin-edit-hook.md) | ADR 0173 amendment 6, F-275 registration: the project-mode tool list and the plugin edit hook | REGISTERED | 2026-11-06 | 1 | F-275 | partial |
 | [0200](0200-f287-registration-runner-runs-that-continue-from-a-previous-run-with-a-step-cap.md) | F-287 registration: runner runs that continue from a previous run, with a step cap | REGISTERED | 2026-11-06 | 1 | F-287 | partial |
 | [0201](0201-f288-registration-adopt-matching-runs-after-an-mcp-server-restart.md) | F-288 registration: adopt matching runs after an MCP server restart | REGISTERED | 2026-11-06 | 1 | F-288 | partial |
-| [0741](0741-f271-registration-the-field-store-plan-as-the-default-of-start-run.md) | F-271 registration: the field-store plan as the default of start_run | REGISTERED | 2026-11-19 | 1 | F-271 | partial |
+| [0741](0741-f271-registration-the-field-store-plan-as-the-default-of-start-run.md) | F-271 registration: the field-store plan as the default of start_run | REGISTERED | 2026-11-19 | 1 | F-271 | done |
 
 ## Studio desktop app (15)
 
@@ -550,7 +550,7 @@ One row per record of this folder, grouped by the roadmap category of the item i
 | [0717](0717-f795-registration-corrections-and-a-reading-of-the-18-unread-limit-rows-of-adrs-0706-to-0710.md) | F-795 registration: corrections of rows H22 and W1 and a reading of the 18 unread limit rows of ADRs 0706 to 0710 | REGISTERED | 2026-11-17 | 2 | F-795 | done |
 | [0720](0720-f773-registration-a-git-commit-that-names-an-adr-or-an-item-as-evidence-of-the-files-it-adds.md) | F-773 registration: the ADR or item named by the commit that adds a test file as evidence of kind E8 | REGISTERED | 2026-11-17 | 1 | F-773 | partial |
 | [0721](0721-f839-registration-a-second-reader-for-the-e8-primary-files-and-the-supplementary-sample-of-adr-0720.md) | F-839 registration: a second reader for the E8-primary files and the supplementary sample of ADR 0720 | REGISTERED | 2026-11-17 | 2 | F-839 | done |
-| [0740](0740-f849-registration-a-registered-time-limit-for-two-immersed-solid-tests-of-the-full-gate.md) | F-849 registration: a registered time limit for two immersed-solid tests of the full gate | REGISTERED | 2026-11-19 | 1 | F-849 | todo |
+| [0740](0740-f849-registration-a-registered-time-limit-for-two-immersed-solid-tests-of-the-full-gate.md) | F-849 registration: a registered time limit for two immersed-solid tests of the full gate | REGISTERED | 2026-11-19 | 1 | F-849 | partial |
 
 ## Records with no item in the file name (259)
 
@@ -812,6 +812,6 @@ One row per record of this folder, grouped by the roadmap category of the item i
 | [0339](0339-plastic-fan-blade-and-housing-demonstration.md) | Demonstration on the 120 mm fan: a polymer blade (orthotropy, temperature, creep, fatigue at a Campbell crossing) and the radiated power of the frame | PLANNED | 2026-11-12 | 0 | F-436 |
 | [0346](0346-defaults-registration-wall-pressure-flip.md) | registration of the default flip of the two wall-pressure keys (ADR 0269 Q1, ADR 0342 Q1): `prescribed_gradient` for the body force of the six-DOF driver and for the force reports on moving walls | REGISTERED | 2026-11-12 | 1 | F-358, F-440 |
 | [0350](0350-electron-studio-performance-spike-and-rcfd-studio-retirement.md) | An Electron Studio over the rcfd APIs: a performance spike, and the conditions for retiring rcfd-studio | PROPOSED | 2026-11-12 | 1 | F-447, F-448, F-449, F-456, F-804, F-819 |
-| [0745](0745-citations-2026-w47-audit-five-citations-drawn-by-seed.md) | citations 2026 week 47, audit: five citations drawn by seed and re-read against their sources | REGISTERED | 2026-11-19 | 0 |  |
+| [0745](0745-citations-2026-w47-audit-five-citations-drawn-by-seed.md) | citations 2026 week 47, audit: five citations drawn by seed and re-read against their sources | REGISTERED | 2026-11-19 | 0 | F-851 |
 | [0800](0800-electron-studio-roadmap.md) | The Electron Studio roadmap, generated from guardrails, PRODUCT.md and DESIGN.md | ACCEPTED | 2026-11-16 | 0 | F-448, F-449, F-800, F-801, F-802, F-803, F-804, F-805, F-806, F-807, F-808, F-809 and 23 more |
 | [0801](0801-studio-web-dependencies-and-layout.md) | The dependencies and the directory layout of apps/studio-web | ACCEPTED | 2026-11-16 | 25 | F-800, F-801, F-803, F-804, F-805, F-807, F-808, F-809, F-810, F-811, F-813, F-814 and 13 more |
