@@ -1,5 +1,5 @@
 {
-  "start_run": {"case": "string", "run": "string", "state": "string"},
+  "start_run": {"case": "string", "run": "string", "state": "string", "store": {"applied": "bool", "estimated_bytes": "null", "note": "string", "set": [], "snapshots": "null"}},
   "wait_run": {
     "changed": "bool", "from": "string", "run": "string", "state": "string", "terminal": "bool", "waited_s": "number",
     "status": {"exit_code": "number", "pid": "null", "reason": "string", "state": "string", "step": "number", "time": "number", "updated": "string"}

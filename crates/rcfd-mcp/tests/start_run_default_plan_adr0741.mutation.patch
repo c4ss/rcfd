@@ -1,0 +1,14 @@
+# expect-fail: cargo test --release -p rcfd-mcp --test start_run_default_plan_adr0741
+diff --git a/crates/rcfd-workspace/src/plan.rs b/crates/rcfd-workspace/src/plan.rs
+index 043f0729..f2f76b07 100644
+--- a/crates/rcfd-workspace/src/plan.rs
++++ b/crates/rcfd-workspace/src/plan.rs
+@@ -27,7 +27,7 @@ pub const STORE_FIELDS: u64 = 4;
+ /// 2026-11-18, so every `start_run` in project mode stores the run's fields unless the case or a `set` entry gives the
+ /// store. `store: "none"` is the caller's way back: the run gets only what the case asks for, as every such call did
+ /// while this was `false` (ADR 0186). A case made by the same call (`new_case`) got the plan from the start.
+-pub const PLAN_FOR_PROJECT_CASES: bool = true;
++pub const PLAN_FOR_PROJECT_CASES: bool = false;
+ 
+ /// The keys that decide whether and how often a store is written.
+ pub const INTERVAL_KEYS: [&str; 2] = ["output.store_interval", "output.store_time_interval"];

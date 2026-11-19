@@ -63,6 +63,7 @@ fn run_folders(dir: &Path) -> Vec<String> {
 }
 
 #[test]
+#[ignore = "retired by ADR 0741 (F-271): control (ii) asserts the old default of start_run {case}; restated in start_run_default_plan_adr0741.rs"]
 fn c7_one_start_run_makes_a_case_from_an_example_and_stores_its_fields() {
     binaries();
     let dir = scratch("f271-c7").join("proj");
