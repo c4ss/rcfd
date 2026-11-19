@@ -237,3 +237,126 @@ immersed_single_corrector_fp_adr0747`. M1a is run once on the scratch copy after
 **Consequence for the decision.** The registered rule says done needs every mutation "caught by the tests named for them
 without an amendment after a run". This amendment is written after a run, so by that rule the outcome of this registration
 cannot be done on the mutations alone, whatever M1a gives; the addendum reports it so.
+
+## Addendum 1: results (2026-11-19)
+
+Built as registered. Commits: the registration aa64693e (with the maintainer's answer appended to ADR 0743), the code
+5536aa90, amendment 1 with the corrected mutation patch 7f4ae935. All runs in the release profile, each registered run made
+once, on Windows, `RAYON_NUM_THREADS` 4. Logs are in `w49i-work/f471-coarse-lu-default-scratch/logs` with the prefix
+`0747-`. No limit and no registered value was changed. No library file changed. No registered hash, fingerprint or recorded
+value other than FP4 of ADR 0374 N0 moved, and no test of the four long files failed.
+
+### Results
+
+| # | Check | Limit | Measured | Met |
+|---|---|---|---|---|
+| A3 | every file of the list of ADR 0743 passes | 0 failures | 0 failures in 46 test files and 3 `--lib` runs (list below) | yes |
+| A4 | `baseline_hashes` | every hash equal | 3 passed, 1 ignored (as on main) | yes |
+| A5 | `case_hashes_w48u`, `w48v_case_hashes`, `varden_ideal_hash` | every hash equal | 1 passed; 0 run (its one test is ignored on main); 1 passed | yes |
+| L1 | `immersed_solid_f219` | 0 failures | 11 passed, 0 failed, 2 ignored; 1696 s | yes |
+| L2 | `immersed_unsteady_force_f346` | 0 failures | 9 passed, 0 failed, 5 ignored; 1713 s | yes |
+| L3 | `immersed_piso_stop_f355` | 0 failures | 15 passed, 0 failed, 2 ignored; 749 s | yes |
+| L4 | `vof_waves` | 0 failures | 6 passed, 0 failed, 2 ignored; 435 s | yes |
+| F1 | N0 under the default | FP1 to FP3 registered, FP4 `0xda894fae1d52a3ad` | equal (the test passed) | yes |
+| F2 | N0 under the old order | all five registered, FP4 `0x279c4c4ed4cf89be` | equal (the test passed) | yes |
+| F3 | which factorisation | F 20 systems, none; B 40 systems, none; `Sa` 20 systems, exactly (step 3, corrector 0, coarsest 90, `[35]`); the hash the FP4 of F1 | as stated (the test asserts each with equality and passed) | yes |
+| F4 | differing values after steps 1 and 2 | 0 and 0 | 0 and 0 | yes |
+| F4a | differing values after steps 3 and 20 | at least 1 each | at least 1 each; the counts were not read (see deviations) | yes |
+| D1 | the retired record with `--ignored` | fails at "FP4", left `0xda894fae1d52a3ad` | fails at "FP4" (line 273), left 15747205181312508845; it prints FP1 `dd07702a17b9a36f`, FP2 `e4d227de316e6de4`, FP3 `3ff4a94abc88ca99`/11855 and `3fb06aeaae8972f1`/11855, FP4 `da894fae1d52a3ad` | yes |
+
+The new file `immersed_single_corrector_fp_adr0747`: 4 passed in 6.8 s.
+
+**The four long files, times** (seconds from the start of the file's run to the line that reports the test; a file's tests
+run on parallel threads, two files ran at a time, and the short list ran beside them for part of the time):
+
+- `immersed_solid_f219`, 1696 s: `a3_two_d_two_strouhal_number` 1696 s (gate limit 10 800 s, half of it 5400 s),
+  `a1_a2_two_d_one_drag_and_lift_on_m3` 895 s, `two_d_one_plain_forcing_printed` 74 s, the other eight within 10 s.
+- `immersed_unsteady_force_f346`, 1713 s: `a2t_c1_two_d_two_on_t` 1713 s (gate limit 10 800 s, half of it 5400 s),
+  `a2_two_d_two_on_m2` 773 s, `a3a_steady_two_d_one_on_m2` 71 s, the other six within 19 s.
+- `immersed_piso_stop_f355`, 749 s: `a_two_d_two_on_m2_strouhal` 749 s, `d1_to_d8_variants` 296 s,
+  `sb_bounded_runs_the_variants_that_stopped` 135 s, `d9_located_cause` 98 s, the others within 54 s.
+- `vof_waves`, 435 s: `w2b_beach_long_window` and `w2b_control_long_window` 435 s, `w1_w3_generation_and_beach` 226 s,
+  the other three within 23 s.
+
+**A3, the repeated list** (passed / ignored): `rcfd-linalg` `--lib` 20/1, `amg_coarse_lu_f474` 5/2, `amg_contrast` 2/0,
+`amg_coarse_lu_default_adr0743` 4/0; `rcfd-fv` `--lib` 115/6, `consistent_correctors_f301` 12/4,
+`consistent_defaults_f301` 6/0, `consistent_extensions_f322` 8/0, `consistent_periodic_defaults_f367` 1/0,
+`consistent_periodic_f367` 13/2, `cylinder` 2/1, `immersed_bounded_stop_f466` 7/4, `immersed_dfg_convergence_f354` 6/12,
+`immersed_early_state_start_f501` 3/2, `immersed_lag_estimate_f483` 5/7, `immersed_lockin_f731` 6/1,
+`immersed_lockin_f750` 8/3, `immersed_lockin_f756` 8/2, `immersed_moving_f308` 7/2,
+`immersed_multistep_linearisation_f494` 4/6, `immersed_single_corrector_f363` 3/8 (N0 now among the ignored),
+`immersed_start_projection_f515` 4/2, `immersed_step_linearisation_f482` 3/6, `immersed_transverse_f707` 4/3,
+`transient_buoyancy` 3/0, `vof_bubble_diagnosis_w41c` 1/20, `vof_bubble_refinement_w40d` 1/12, `vof_dambreak_amg` 1/0,
+`vof_height_function_w42b` 2/2, `amg_definiteness_f474` 1/1, `coupled` 2/1, `gradient_pressure_f291` 3/0,
+`varden_ideal_hash` 1/0, `sixdof_flow_f244` 8/1, `piso_thin_gap_f299` 18/2, `amg_default_fluid_adr0743` 2/6; `rcfd-api`
+`--lib` 159/4, `baseline_hashes` 3/1, `case_hashes_w48u` 1/0, `w48v_case_hashes` 0/1,
+`consistent_correctors_case_f301` 4/8, `w35b_lag_check` 6/0, `w48t_cylinder_spokes` 3/13, `vof_wiring_tree` 4/0; and the
+four long files above.
+
+### Mutations (each alone on the scratch copy, the test file once, the file restored byte for byte every time)
+
+| Mutation | Registered to fail | Result |
+|---|---|---|
+| M1 (the `Default` of `AmgSettings` back to `false`) | F1 at FP4 | **not caught**: 4 passed. A defect of the plan, not of the code (amendment 1): the pressure path does not read that default |
+| M1a (amendment 1, committed patch: `LinearOptions::amg_settings` returns the old order always) | F1 at FP4 | caught: F1 fails at "FP4" with left 2854240165307582910 (`0x279c4c4ed4cf89be`); F3 (the hash) and F4 fail as well |
+| M2 (`LinearOptions::amg_settings` ignores the flag) | F2 at FP4 | caught: "FP4 under the old order", left 15747205181312508845; F4 fails as well |
+| M3 (`pressure.rs` line 484 calls `pm.solve_amg`) | F2 at FP4 | caught: the same two failures |
+
+### Checks of rule 7
+
+`cargo fmt -p rcfd-fv --check` and `-p rcfd-linalg --check`: clean. `cargo clippy -p rcfd-fv -p rcfd-linalg --all-targets --
+-D warnings`: clean. `cargo test -p rcfd-cli --release --test docs_site`: 2 passed. `python scripts/process_report.py
+--check`: one failure, `docs/adr/index.md` not current (the lead's file).
+
+Files changed since 5c8a18ff: `crates/rcfd-fv/tests/immersed_single_corrector_f363.rs` (one attribute added above
+`n0_fingerprints_of_the_defaults`, lines 255 to 258 as `cargo fmt` writes it; nothing else); new
+`crates/rcfd-fv/tests/immersed_single_corrector_fp_adr0747.rs` and its `.mutation.patch`; this ADR; the answer section
+appended to ADR 0743. No shared solver file.
+
+### Deviations and disclosures
+
+- Amendment 1: M1 was not caught and was replaced by M1a after a run.
+- The new test file was run without `--nocapture`, so the counts of F4a and the printed lists of F3 were not read; each
+  registered run is made once, so it was not run again. F3 is asserted with equality, so its values are known; of F4a only
+  "at least 1" is known.
+- The registration (D1) wrote the retiring attribute on one line; `cargo fmt` breaks it over four lines, as the
+  registration allowed. It is one attribute.
+- The long files and the short list were built on 5536aa90 and partly ran after 7f4ae935 was committed; the two commits
+  differ only in this ADR and in the patch file, and nothing was rebuilt. The summaries of the logs name 7f4ae935.
+- The times of the long files are not those of a test run alone (as the gate measures them).
+
+### Not run, not done
+
+- The test files that reach a scalar AMG without naming it (registered as not covered; the lead's full gate).
+- The committed patch was checked with `git apply --check` and M1a was run on the scratch copy by the same text
+  replacement; the lead's push script itself was not run.
+
+### Size
+
+Size (agent): partial; 0; 4; 0; about 215000
+
+### Decision
+
+By the registered rule: **partial**, for one reason only: the rule asks that every mutation be caught "without an
+amendment after a run", and M1 was not caught and was replaced by amendment 1 after its run. Everything else of "done" is
+met: A3 to A5, L1 to L4, F1 to F4a and D1; no registered value other than FP4 moved; M1a, M2 and M3 are caught; `fmt` and
+`clippy` are clean. The miss is diagnosed (a mutation that changes no operation on the call path under test) and concerns
+no clause of the acceptance of F-471, all of which now have a passing row (ADR 0743 A1, A2, A4, A5; A3 here). Whether the
+item is done is the lead's decision.
+
+## Open questions for the maintainer
+
+None.
+
+## For the lead: roadmap entries
+
+Status proposed for F-471: done, if the lead takes the miss of the mutation plan (amendment 1) as closed by M1a; partial
+by the letter of the registered rule otherwise.
+
+> ADR 0747, 2026-11-19, partial by its rule (one planned mutation was an equivalent mutant and was replaced by amendment 1), all checks met: N0 of ADR 0374 is retired as an ignored record and restated (FP1 to FP3 unchanged, FP4 0xda894fae1d52a3ad under the default and 0x279c4c4ed4cf89be under the old order); one factorisation takes the interchange (step 3 of the Sa run, coarsest 90, step 35) and the two orders agree in every bit before it; immersed_solid_f219 (11 passed, 1696 s), immersed_unsteady_force_f346 (9, 1713 s), immersed_piso_stop_f355 (15, 749 s) and vof_waves (6, 435 s) pass under the new default; the whole list of ADR 0743 passes; no other registered value moved.
+
+> Gap: every clause of the acceptance has a passing row (ADR 0743 A1, A2, A4, A5; ADR 0747 A3). What remains is the lead's full gate over the test files that reach a scalar AMG without naming it (ADR 0743, "What is not covered"); a registered value that moves there is not covered by the approval of 2026-11-19 and goes to the maintainer.
+
+No new item is proposed. Note proposed for F-363, one line:
+
+> ADR 0747, 2026-11-19 (F-471): the fingerprint FP4 of ADR 0374 N0 moved with the corrected order of the coarsest dense LU (approved by the maintainer on 2026-11-19); n0_fingerprints_of_the_defaults is an ignored record and immersed_single_corrector_fp_adr0747.rs restates it with the old value reproduced under the old order.
