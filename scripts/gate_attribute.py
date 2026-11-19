@@ -7,9 +7,17 @@ Usage (from the workspace root, after scripts/gate_test.py):
     python scripts/gate_attribute.py attribute --tsv gate-out/times.tsv --log gate-out/test.log --index gate-out/adr_test_index.json
         [--feature-binary BINARY=FEATURE] [--base SHA] [--head SHA] [--rerun] [--rerun-timeout S] [--bisect] [--bisect-minutes M] [--probe-cmd CMD]
         [--max-commits N] [--work DIR] [--json gate-out/attribution.json] [--summary FILE]
+        [--limits scripts/gate_limits.tsv] [--rerun-budget S | --job-start-file FILE --job-minutes M]
     python scripts/gate_attribute.py issues --json gate-out/attribution.json [--dry-run] [--include-flaky]
 attribute  --base: the SHA of the last green gate (empty or unknown: the last --max-commits first-parent commits).
            --rerun: run each failed test once more the way gate_test.py runs it; a pass marks it flaky.
+           --limits: the table of scripts/gate_test.py --limits (ADR 0740); the re-run of a test named there has the limit of its
+           row, every other re-run --rerun-timeout.
+           --rerun-budget S: seconds for all re-runs together; or --job-start-file (a file with the epoch second at which the CI
+           job started) and --job-minutes (the job's time limit), from which the budget is what the job has left less a reserve
+           (`rerun_budget`). With a budget the re-runs go shortest limit first, each cut at what is left; a re-run cut below its
+           own limit is `TIMEOUT (cut at N s by the re-run budget; its limit is L s)`, and one that cannot start is `not run
+           (re-run budget used up)`. Neither is flaky. Without a budget the re-runs are made in file order, each with its limit.
            --bisect: when more than one candidate commit remains, find the first candidate at which the test fails (assumes
            it passes at base and fails at head); each probe builds only that test's target in a git worktree under --work and
            runs the one test, or runs --probe-cmd there (exit 0 = pass). Stops when --bisect-minutes are used up.
@@ -198,6 +206,56 @@ def run_test(exe, test, cwd, timeout):
     return ("ok" if ok else "FAILED"), time.time() - t
 
 
+# The re-run budget (ADR 0740 D5). The cap holds one re-run with the largest limit of scripts/gate_limits.tsv (10800 s) and
+# 20 min of others; the reserve is for the candidates, the JSON, the upload and the end of the job; the fallback is what the
+# step of 40 min held before the job start was recorded; a re-run is not started with less than RERUN_LEAST_S left.
+RERUN_CAP_S = 12000.0
+RERUN_RESERVE_S = 900.0
+RERUN_FALLBACK_S = 1500.0
+RERUN_LEAST_S = 60.0
+
+
+def read_start(path):
+    """The epoch second in the file `path` (written by the first step of the gate job); None if it cannot be read."""
+    try:
+        with open(path, encoding="utf-8") as fh:
+            return float(fh.read().split()[0])
+    except (OSError, ValueError, IndexError):
+        return None
+
+
+def rerun_budget(now, start, job_minutes, bisect_minutes=0.0):
+    """Seconds the re-runs may take in all: what the job has left at `now`, less the reserve and the bisect's minutes, at most
+    RERUN_CAP_S and not below 0; RERUN_FALLBACK_S when the start of the job is not known."""
+    if start is None:
+        return RERUN_FALLBACK_S
+    return max(0.0, min(RERUN_CAP_S, 60.0 * job_minutes - (now - start) - RERUN_RESERVE_S - 60.0 * bisect_minutes))
+
+
+def rerun_all(todo, budget=None, run=None, clock=time.time):
+    """Re-run the tests of `todo`, a list of (key, exe, test, cwd, limit in seconds); returns {key: {outcome, seconds}}.
+    Without a budget: in the given order, each with its limit. With a budget (seconds for all together): shortest limit first,
+    each with min(its limit, what is left)."""
+    run = run or run_test
+    out = {}
+    if budget is not None:
+        todo = sorted(todo, key=lambda x: (x[4], x[0]))
+    t0 = clock()
+    for key, exe, test, cwd, limit in todo:
+        cap = limit
+        if budget is not None:
+            left = budget - (clock() - t0)
+            if left < RERUN_LEAST_S:
+                out[key] = {"outcome": "not run (re-run budget used up)", "seconds": 0.0}
+                continue
+            cap = min(limit, left)
+        outcome, secs = run(exe, test, cwd, cap)
+        if outcome == "TIMEOUT" and cap < limit:
+            outcome = f"TIMEOUT (cut at {cap:.0f} s by the re-run budget; its limit is {limit:.0f} s)"
+        out[key] = {"outcome": outcome, "seconds": round(secs, 2)}
+    return out
+
+
 def cargo_probe(entry, binary_rec, features=None):
     """Shell command that builds only the test's target and runs the one test (cwd: the worktree).
     features: the feature of a feature-gated test binary (ADR 0681), added as `--features`."""
@@ -290,23 +348,44 @@ def attribute(a):
     cache, res = {}, {"head": head, "base": base, "base_found": base_ok, "max_commits": a.max_commits, "commits": commits,
                       "build_failed": build_failed, "failures": [], "doc_failures": []}
     t_start = time.time()
+    found = []
     for f in fails:
         entry, b = lookup(idx, f["binary"], f["test"])
         crate = entry["crate"] if entry else b["crate"] if b else None
+        found.append((entry, b, crate))
+    reruns, todo, budget = {}, {}, None
+    if a.rerun:
+        table = {}
+        if a.limits:
+            from gate_test import read_limits  # the table of ADR 0740; scripts/ is on the path of a script run from it
+
+            table = read_limits(a.limits)
+        budget = a.rerun_budget
+        if budget is None and a.job_start_file:
+            budget = rerun_budget(time.time(), read_start(a.job_start_file), a.job_minutes, a.bisect_minutes if a.bisect else 0.0)
+        for k, (f, (entry, b, crate)) in enumerate(zip(fails, found)):
+            ex = exes.get(f["binary"], [])
+            if ex and crate:
+                cwd = os.path.join(repo, idx["crates"][crate]["dir"])
+                todo[k] = (k, ex[0]["exe"], f["test"], cwd, table.get((f["binary"], f["test"]), a.rerun_timeout))
+            else:
+                reruns[k] = {"outcome": "not run (no executable or crate)", "seconds": 0.0}
+        if budget is not None:
+            # all re-runs first, inside their budget; the bisect's minutes start after them
+            reruns.update(rerun_all(list(todo.values()), budget))
+            res["rerun_budget_s"] = round(budget, 1)
+            t_start = time.time()
+    for k, (f, (entry, b, crate)) in enumerate(zip(fails, found)):
         test_file = entry["file"] if entry else b["file"] if b else None
         rec = {**f, "crate": crate, "file": test_file, "adrs": entry["adrs"] if entry else [],
                "primary_adr": entry.get("primary_adr") if entry else None,
                "items": entry["items"] if entry else [], "evidence": entry["evidence"] if entry else [],
                "in_index": entry is not None, "rerun": None, "flaky": False, "bisect": None}
         if a.rerun:
-            ex = exes.get(f["binary"], [])
-            if ex and crate:
-                cwd = os.path.join(repo, idx["crates"][crate]["dir"])
-                outcome, secs = run_test(ex[0]["exe"], f["test"], cwd, a.rerun_timeout)
-                rec["rerun"] = {"outcome": outcome, "seconds": round(secs, 2)}
-                rec["flaky"] = outcome == "ok"
-            else:
-                rec["rerun"] = {"outcome": "not run (no executable or crate)", "seconds": 0.0}
+            if k not in reruns:  # no budget: each re-run where it was before ADR 0740, ahead of its own bisect
+                reruns.update(rerun_all([todo[k]]))
+            rec["rerun"] = reruns[k]
+            rec["flaky"] = rec["rerun"]["outcome"] == "ok"
         rec["candidates"] = candidates(repo, idx, commits, crate, test_file, cache)
         if a.bisect and not rec["flaky"] and len(rec["candidates"]) > 1 and (crate or a.probe_cmd):
             left = a.bisect_minutes - (time.time() - t_start) / 60.0
@@ -381,6 +460,10 @@ def main(argv=None):
     p.add_argument("--max-commits", type=int, default=30)
     p.add_argument("--rerun", action="store_true")
     p.add_argument("--rerun-timeout", type=float, default=3600.0)
+    p.add_argument("--limits")
+    p.add_argument("--rerun-budget", type=float)
+    p.add_argument("--job-start-file")
+    p.add_argument("--job-minutes", type=float, default=340.0)
     p.add_argument("--bisect", action="store_true")
     p.add_argument("--bisect-minutes", type=float, default=30.0)
     p.add_argument("--probe-cmd")

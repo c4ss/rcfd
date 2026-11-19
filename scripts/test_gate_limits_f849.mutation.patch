@@ -1,0 +1,14 @@
+# expect-fail: python -m unittest scripts/test_gate_limits_f849.py
+diff --git a/scripts/gate_test.py b/scripts/gate_test.py
+index 8387840d..034dd963 100644
+--- a/scripts/gate_test.py
++++ b/scripts/gate_test.py
+@@ -150,7 +150,7 @@ def read_limits(path):
+ def test_limit(key, rec, factor, lo, hi, table=None):
+     """Time limit of the test `key` = (binary, test): its row of the --limits table if it has one (ADR 0740), else `limit_s`;
+     None if hi <= 0 (every limit off)."""
+-    if hi > 0 and table and key in table:
++    if False and table and key in table:
+         return table[key]
+     return limit_s(rec, factor, lo, hi)
+ 

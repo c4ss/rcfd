@@ -523,7 +523,7 @@ One row per record of this folder, grouped by the roadmap category of the item i
 | [0739](0739-f848-proposal-run-sites-a-remote-simulation-service-for-the-studio-cli-and-mcp.md) | F-848 proposal: run sites, a remote simulation service for the Studio, the CLI and the MCP server | ACCEPTED | 2026-11-17 | 0 | F-848 | todo |
 | [0742](0742-f262-diagnosis-the-terminal-status-of-a-run-is-written-before-its-last-state-event.md) | F-262 diagnosis: the terminal status of a run is written before its last state event and before its request files are removed (S7 of ADR 0123 fails intermittently on the held run) | REGISTERED | 2026-11-19 | 1 | F-262 | partial |
 
-## Quality, docs and validation (23)
+## Quality, docs and validation (24)
 
 | ADR | Title | Status word | Date | Addenda | Item | Item status |
 |---|---|---|---|---|---|---|
@@ -550,6 +550,7 @@ One row per record of this folder, grouped by the roadmap category of the item i
 | [0717](0717-f795-registration-corrections-and-a-reading-of-the-18-unread-limit-rows-of-adrs-0706-to-0710.md) | F-795 registration: corrections of rows H22 and W1 and a reading of the 18 unread limit rows of ADRs 0706 to 0710 | REGISTERED | 2026-11-17 | 2 | F-795 | done |
 | [0720](0720-f773-registration-a-git-commit-that-names-an-adr-or-an-item-as-evidence-of-the-files-it-adds.md) | F-773 registration: the ADR or item named by the commit that adds a test file as evidence of kind E8 | REGISTERED | 2026-11-17 | 1 | F-773 | partial |
 | [0721](0721-f839-registration-a-second-reader-for-the-e8-primary-files-and-the-supplementary-sample-of-adr-0720.md) | F-839 registration: a second reader for the E8-primary files and the supplementary sample of ADR 0720 | REGISTERED | 2026-11-17 | 2 | F-839 | done |
+| [0740](0740-f849-registration-a-registered-time-limit-for-two-immersed-solid-tests-of-the-full-gate.md) | F-849 registration: a registered time limit for two immersed-solid tests of the full gate | REGISTERED | 2026-11-19 | 1 | F-849 | todo |
 
 ## Records with no item in the file name (259)
 
