@@ -450,6 +450,7 @@ def sec_r(root, adrs):
     kind, margin and source of the table of checks (rules 1, 14, 15, 17). Older registrations are not read."""
     rep, fail, wide, own, mem = [], [], [], [], []
     regs = [a for a in adrs if a["kind"] == "registration" and RULES in a["text"]]
+    kind_exc = set(exceptions(root, "registration-kind") or [])
     for a in regs:
         f, t = a["file"], a["text"]
         if not re.search(r"docs/adr/briefs/[\w./-]+\.md", t):
@@ -466,7 +467,11 @@ def sec_r(root, adrs):
                 fail.append(f"r: table of checks has no column \"{name}\", {f}")
         for row in rows:
             cell = lambda name: row[col[name]] if col[name] is not None and col[name] < len(row) else ""
-            if col["kind"] is not None and cell("kind").lower() not in KINDS:
+            # one of the four, alone or followed by a qualifier in brackets; a row the lead has listed in
+            # exceptions/registration-kind.txt as "<file>: <row>" is not a check and is passed over (ADRs are append-only)
+            k = cell("kind").lower()
+            named = k in KINDS or any(k.startswith(x + " (") for x in KINDS)
+            if col["kind"] is not None and not named and f"{f}: {row[0]}" not in kind_exc:
                 fail.append(f"r: kind {cell('kind')!r} is not one of the four, {f}: {row[0][:60]}")
             m = re.search(r"\d+(?:\.\d+)?(?:e[+-]?\d+)?", cell("margin"), re.I)
             if m and float(m.group(0)) > MARGIN_MAX:

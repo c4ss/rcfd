@@ -279,6 +279,15 @@ class NewRules(Repo):
         for want in ("cites no brief file", "states no size", 'no column "margin"', "kind 'a check' is not one of the four"):
             self.assertTrue(any(want in f for f in fail), want)
 
+    def test_a_qualified_kind_passes_and_a_listed_row_is_passed_over(self):
+        reg = self.REG.replace("| 10 | code verification |", "| 10 | code verification (negative control) |")
+        self.put("docs/adr/0005-f004-registration-x.md", reg + "| R9 reading | stated | the brief | stated | - | reading, no run |\n")
+        fail = pr.sec_r(self.root, pr.load_adrs(self.root))[1]
+        self.assertEqual(len(fail), 1)
+        self.assertIn("kind 'reading, no run' is not one of the four", fail[0])
+        self.put("docs/process/exceptions/registration-kind.txt", "# reason\n0005-f004-registration-x.md: R9 reading\n")
+        self.assertEqual(pr.sec_r(self.root, pr.load_adrs(self.root))[1], [])
+
     def test_older_registrations_are_not_read(self):
         self.assertEqual(pr.sec_r(self.root, pr.load_adrs(self.root))[1], [])
 
