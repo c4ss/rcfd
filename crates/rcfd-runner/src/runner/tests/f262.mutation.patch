@@ -1,0 +1,16 @@
+# expect-fail: cargo test -p rcfd-runner --release --lib f262
+diff --git a/crates/rcfd-runner/src/runner.rs b/crates/rcfd-runner/src/runner.rs
+index 574f4b3d..f651706d 100644
+--- a/crates/rcfd-runner/src/runner.rs
++++ b/crates/rcfd-runner/src/runner.rs
+@@ -369,9 +369,8 @@ impl<S: RunStore> Runner<S> {
+     /// own read of the status and that write. What is written is what [`Runner::set_state`] writes.
+     fn set_terminal(&self, id: &str, st: &RunStatus, why: &str) {
+         let from = self.store.read_status(id).ok().map(|s| s.state);
+-        note("event", self.store.append_event(id, state_event(from, st.state, why)));
+-        self.clear_requests(id);
+         self.put_status(id, st);
++        note("event", self.store.append_event(id, state_event(from, st.state, why)));
+         self.clear_requests(id);
+     }
+ 

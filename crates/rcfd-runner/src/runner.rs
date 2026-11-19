@@ -363,6 +363,28 @@ impl<S: RunStore> Runner<S> {
         note("event", self.store.append_event(id, ev));
     }
 
+    /// The last writes of a run that ends, the status last (ADR 0742): the state event is appended and the request files
+    /// are removed before the terminal `status.json`, so a reader that sees the terminal status sees the finished
+    /// folder (ADR 0123 S7). The request files are removed once more after it, for a request a client wrote between its
+    /// own read of the status and that write. What is written is what [`Runner::set_state`] writes.
+    fn set_terminal(&self, id: &str, st: &RunStatus, why: &str) {
+        let from = self.store.read_status(id).ok().map(|s| s.state);
+        note("event", self.store.append_event(id, state_event(from, st.state, why)));
+        self.clear_requests(id);
+        self.put_status(id, st);
+        self.clear_requests(id);
+    }
+
+    /// Whether the runner saw a cancel request of run `id` (its `cancel_requested` event): the answer for a run whose
+    /// earlier runner removed the `cancel` file and died before the terminal status (ADR 0742).
+    fn cancel_was_requested(&self, id: &str) -> bool {
+        std::fs::read_to_string(self.dir(id).join("events.jsonl"))
+            .unwrap_or_default()
+            .lines()
+            .filter_map(|l| serde_json::from_str::<Value>(l).ok())
+            .any(|v| event_kind(&v) == Some("cancel_requested"))
+    }
+
     /// End a run that was never launched.
     fn end_pending(&self, id: &str, state: RunState, reason: String) {
         let mut st = RunStatus::new(state);
@@ -374,8 +396,7 @@ impl<S: RunStore> Runner<S> {
                 &json!({"state": state, "reason": reason, "steps": 0, "launched": false, "reports": {}}),
             ),
         );
-        self.set_state(id, &st, &reason);
-        self.clear_requests(id);
+        self.set_terminal(id, &st, &reason);
     }
 
     fn fail_pending(&self, id: &str, reason: String) {
@@ -1062,8 +1083,9 @@ impl<S: RunStore> Runner<S> {
     fn finalize(&self, a: &Active, code: Option<i32>) {
         let dir = self.dir(&a.id);
         let log = dir.join("log.txt");
-        let cancel = self.has(&a.id, extra::CANCEL);
         let fin = a.finish.as_ref();
+        let cancel = self.has(&a.id, extra::CANCEL)
+            || (fin.is_some_and(|f| f["state"] == "interrupted") && self.cancel_was_requested(&a.id));
         let fin_code = fin.and_then(|f| f["exit_code"].as_i64()).map(|c| c as i32);
         let (state, reason) = match fin {
             Some(f) if code.is_some() && code != fin_code => (
@@ -1131,8 +1153,7 @@ impl<S: RunStore> Runner<S> {
             "solver_finish": fin, "last_residuals": last, "reports": reports,
         });
         note("metrics", self.store.write_metrics(&a.id, &metrics));
-        self.set_state(&a.id, &st, &reason);
-        self.clear_requests(&a.id);
+        self.set_terminal(&a.id, &st, &reason);
         // the solver is gone: its liveness file is free (best effort; an empty file is left when it is not yet)
         let _ = std::fs::remove_file(self.alive(&a.id));
     }
@@ -1763,4 +1784,7 @@ mod tests {
         assert_eq!(seqs_2, [1, 2]);
         let _ = std::fs::remove_dir_all(&dir);
     }
+
+    // ADR 0742 (F-262): the order of the final writes of a run
+    mod f262;
 }

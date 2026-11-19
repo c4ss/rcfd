@@ -502,7 +502,7 @@ One row per record of this folder, grouped by the roadmap category of the item i
 | [0200](0200-f287-registration-runner-runs-that-continue-from-a-previous-run-with-a-step-cap.md) | F-287 registration: runner runs that continue from a previous run, with a step cap | REGISTERED | 2026-11-06 | 1 | F-287 | partial |
 | [0201](0201-f288-registration-adopt-matching-runs-after-an-mcp-server-restart.md) | F-288 registration: adopt matching runs after an MCP server restart | REGISTERED | 2026-11-06 | 1 | F-288 | partial |
 
-## Studio desktop app (14)
+## Studio desktop app (15)
 
 | ADR | Title | Status word | Date | Addenda | Item | Item status |
 |---|---|---|---|---|---|---|
@@ -520,6 +520,7 @@ One row per record of this folder, grouped by the roadmap category of the item i
 | [0737](0737-f837-proposal-case-facts-and-a-dry-run-start-a-mesh-refine-and-saving-a-case-outside-a-project.md) | F-837 proposal: case facts and a dry-run start, a mesh refine, and saving a case outside a project | ACCEPTED | 2026-11-17 | 0 | F-837 | done |
 | [0738](0738-f809-proposal-derived-pictures-of-a-stored-field-iso-surfaces-streamlines-slices-and-the-length-unit.md) | F-809 proposal: derived pictures of a stored field: iso-surfaces, streamlines, slices, the Studio's cut from the CLI, and the length unit | ACCEPTED | 2026-11-17 | 0 | F-809 | done |
 | [0739](0739-f848-proposal-run-sites-a-remote-simulation-service-for-the-studio-cli-and-mcp.md) | F-848 proposal: run sites, a remote simulation service for the Studio, the CLI and the MCP server | ACCEPTED | 2026-11-17 | 0 | F-848 | todo |
+| [0742](0742-f262-diagnosis-the-terminal-status-of-a-run-is-written-before-its-last-state-event.md) | F-262 diagnosis: the terminal status of a run is written before its last state event and before its request files are removed (S7 of ADR 0123 fails intermittently on the held run) | REGISTERED | 2026-11-19 | 1 | F-262 | partial |
 
 ## Quality, docs and validation (23)
 
