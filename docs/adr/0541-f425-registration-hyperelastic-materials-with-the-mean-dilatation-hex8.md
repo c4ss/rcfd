@@ -532,3 +532,9 @@ Remaining questions (the recommendations of the open questions, taken on the mai
 > Proposed follow-up: case-file key [material] kind = "hyperelastic" (energy, mu, kappa, c10, c01) with the block formulation = "bbar", a schema golden change (ADR 0541, 2026-11-15, remaining question 3).
 
 > Proposed follow-up: the Full Hex8 locking control of the inflated sphere with a set-up that converges (a smaller inner stretch with its own registered limit, or pressure control with the arc-length step), and the small-strain clause amended to option (b) of ADR 0541 open question 1 (ADR 0541, 2026-11-15, remaining questions 1 and 5).
+
+## Answers of the maintainer (2026-11-18), written into this ADR by the lead on 2026-11-19
+
+The maintainer decided these on 2026-11-18 as sets of options with a recommendation; until now the decision stood in the roadmap note of the item only. Nothing above this section is changed.
+
+- **F-621, open question 3 (repeated as remaining question 3).** Asked: the material kind `hyperelastic` and the block key `formulation = "bbar"` in the case file. Answer: Approved under the class rule for additive golden edits (agent rules, rule 3, from version 2): an edit that only adds entries and removes or changes none is reported by the agent as an "additive golden edit" with its diff, re-recorded by the lead and written in the ledger line of the merge. `baseline_hashes.rs` is never in this class, and an edit that changes or removes an entry still needs the maintainer's word for that item. The item may be issued. ADR 0506 (open question 3) asks for the formulation key; this answer covers it.

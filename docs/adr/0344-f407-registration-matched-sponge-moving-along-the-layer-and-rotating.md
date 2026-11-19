@@ -512,3 +512,9 @@ Proposed follow-up (number for the lead to assign): **Lab-frame memory as the be
 Deps: F-407. Size S. Acceptance:
 
 > With the maintainer's approval, the matched forms in SpongeFrame::AttachedToMesh use the memory of the lab frame (ADR 0344); the F-341 matched records are re-recorded once with that approval, the plain form and every run without motion stay bit-identical, and the ADR 0344 checks pass unchanged.
+
+## Answers of the maintainer (2026-11-18), written into this ADR by the lead on 2026-11-19
+
+The maintainer decided these on 2026-11-18 as sets of options with a recommendation; until now the decision stood in the roadmap note of the item only. Nothing above this section is changed.
+
+- **F-446, the addendum's remaining question 1 (first asked as Q1).** Asked: the lab-frame memory as the behaviour of `SpongeFrame::AttachedToMesh` for the matched forms, with the F-341 records re-recorded. Answer: Held. The default change is not approved now: it moves existing results, and it waits until the fan path needs it. Not to be issued.

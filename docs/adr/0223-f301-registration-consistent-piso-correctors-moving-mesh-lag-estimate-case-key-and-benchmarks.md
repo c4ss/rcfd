@@ -589,3 +589,9 @@ The questions of this record were listed before the standing instruction of 2026
 2026-11-18 the maintainer decided that the instruction applies to such questions too: the lead closes each on its written
 recommendation, except a question that would change a default result, a golden or a hash table, or that needs a source the
 repository lacks; those stay open and are named in the item's roadmap note. No question is answered here one by one.
+
+## Answers of the maintainer (2026-11-18), written into this ADR by the lead on 2026-11-19
+
+The maintainer decided these on 2026-11-18 as sets of options with a recommendation; until now the decision stood in the roadmap note of the item only. Nothing above this section is changed.
+
+- **F-301, the addendum's open question Q1 (the default; first asked in ADR 0214 Q1).** Asked: `consistent_correctors` as the default of piso and pimple. Answer: Held. The default change is not approved now: it would move existing results and waits until the fan path needs it. The other open questions of this ADR are closed by the lead on their written recommendations (lead-process.md, "Questions asked before 2026-11-11"). The section of 2026-11-18 above states the general rule and names no question; this entry records the decision on Q1. Q2 needs the edit of a test and stays open with it.

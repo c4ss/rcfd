@@ -337,3 +337,9 @@ F-536, the note's last sentence "Follow-up F-NEW (a scale that does not vanish).
 > Follow-up F-550 (a scale that does not vanish; ADR 0617: with a window of 18 steps every step of the channel meets the criterion before the cap, with 19 to 26 percent fewer outer iterations).
 
 > Follow-up proposed: Case-file keys for the outer-iteration criterion and its window. Deps F-536, F-550. Acceptance: Every limit not stated here is registered in the ADR before the run. Case keys solver.outer_tolerance and solver.outer_scale_window (hash_omit_default) reach PimpleSettings::outer_pressure_tolerance and outer_scale_window; a case read from a file reproduces the bits of the library call on the channel of ADR 0451; existing keys, goldens and baseline hashes unchanged except the schema golden approved by the maintainer.
+
+## Answers of the maintainer (2026-11-18), written into this ADR by the lead on 2026-11-19
+
+The maintainer decided these on 2026-11-18 as sets of options with a recommendation; until now the decision stood in the roadmap note of the item only. Nothing above this section is changed.
+
+- **F-692, remaining question 1 (a case key).** Asked: the keys `solver.outer_tolerance` and `solver.outer_scale_window`. Answer: Approved under the class rule for additive golden edits (agent rules, rule 3, from version 2): an edit that only adds entries and removes or changes none is reported by the agent as an "additive golden edit" with its diff, re-recorded by the lead and written in the ledger line of the merge. `baseline_hashes.rs` is never in this class, and an edit that changes or removes an entry still needs the maintainer's word for that item. The item may be issued.

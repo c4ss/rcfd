@@ -276,3 +276,9 @@ Proposed status of F-589: **done**. Note:
 Follow-ups (numbers to be given by the lead):
 
 > Title: case-file key and output for the broadband fatigue life of a stress component. Deps: F-589, F-566. Acceptance: Every limit not stated here is registered in the ADR before the run. A [fatigue] section with method = "narrow-band" or "dirlik" and stress = a component or a plane normal reports the damage rate and the life 1/rate per integration point; stress = "von-mises" is refused with the reason of ADR 0516; a case without the section keeps its bits and the baseline hashes are unchanged; the schema golden is updated with the maintainer's approval.
+
+## Answers of the maintainer (2026-11-18), written into this ADR by the lead on 2026-11-19
+
+The maintainer decided these on 2026-11-18 as sets of options with a recommendation; until now the decision stood in the roadmap note of the item only. Nothing above this section is changed.
+
+- **F-605, Addendum 1, open question Q1.** Asked: a `[fatigue]` section of the case file with the outputs `damage_rate` and `life`. Answer: Approved under the class rule for additive golden edits (agent rules, rule 3, from version 2): an edit that only adds entries and removes or changes none is reported by the agent as an "additive golden edit" with its diff, re-recorded by the lead and written in the ledger line of the merge. `baseline_hashes.rs` is never in this class, and an edit that changes or removes an entry still needs the maintainer's word for that item. The item may be issued.

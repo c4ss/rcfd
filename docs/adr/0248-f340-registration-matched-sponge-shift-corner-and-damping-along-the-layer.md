@@ -646,3 +646,9 @@ Proposed follow-up item (number for the lead to assign), only if question 1 is a
   rigid duct) falls below 1 percent within 5 periods of the lowest transverse mode at 30, 45 and 60 degrees; an isolated
   plane pulse at 60 degrees and the trains of set-up D2 still reflect less than 1 percent; the thickness and the rates
   are fixed from a derivation before the runs."
+
+## Answers of the maintainer (2026-11-18), written into this ADR by the lead on 2026-11-19
+
+The maintainer decided these on 2026-11-18 as sets of options with a recommendation; until now the decision stood in the roadmap note of the item only. Nothing above this section is changed.
+
+- **F-340, Addendum 1, remaining question 2 (first asked as Q-B).** Asked: the default of `shift` in the case-file wiring of F-330 (zero, or 0.05 c/L). Answer: Held. The default change is not approved now: it would move existing results and waits until the fan path needs it. The other open questions of this ADR are closed by the lead on their written recommendations (lead-process.md, "Questions asked before 2026-11-11"). The lead's remark: the reason recorded with the decision (existing flow results would move) does not fit this question, which is the default of a new key and moves no existing result. It is recorded as given and named to the maintainer in the lead's report of 2026-11-19; F-330's registration takes zero (the form of ADR 0237) until it is answered again.

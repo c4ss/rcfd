@@ -414,3 +414,10 @@ is the present one):
 **Follow-up item (proposed)**: title "Mesh-speed time step as the default of moving compressible tree runs"; deps F-259, F-258; acceptance:
 
 > Every limit not stated here is registered in the ADR before the run. Needs the maintainer's lift of the bit-identical default for moving compressible tree runs (ADR 0207 Q2 (b)). The moving compressible step of the case tree takes max_dt_ale() by default, with [dynamic_mesh.compressible] time_step = "absolute" restoring the step of ADR 0191; the library loops of ADR 0191's equality tests are restated by a registered edit (the old tests kept as ignored records); a tree run equals the library run to 1e-12 for both values; fixed-mesh compressible runs and incompressible runs are bit-identical (baseline hashes and ADR 0191's D0 unchanged); the CFL number of the piston cell of the Mach 0.2 piston stays within the registered bound of the set value over the stroke.
+
+## Answers of the maintainer (2026-11-18), written into this ADR by the lead on 2026-11-19
+
+The maintainer decided these on 2026-11-18 as sets of options with a recommendation; until now the decision stood in the roadmap note of the item only. Nothing above this section is changed.
+
+- **F-259, remaining question Q1 (the time step of moving compressible tree runs; ADR 0207 Q2).** Asked: the mesh-speed step as the default of moving compressible tree runs. Answer: Held. The default change is not approved now: it would move existing results and waits until the fan path needs it. The other open questions of this ADR are closed by the lead on their written recommendations (lead-process.md, "Questions asked before 2026-11-11").
+- **F-365, remaining question Q1 and the proposed follow-up item.** Asked: the same default, as the item that would make it. Answer: Held. The default change is not approved now: it moves existing results, and it waits until the fan path needs it. Not to be issued.

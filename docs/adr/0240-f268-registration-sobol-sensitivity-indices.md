@@ -441,3 +441,9 @@ Differences for the lead:
   Saltelli (2002), which has the same design as `M1`, `M2`, `N_j` (row 4); and the first-order form (b) is marked "[this paper]" in Table 2 of
   Saltelli et al. (2010), so the ADR's attribution of it to that paper is right. The estimators are in `estimate` of
   `crates/rcfd-api/src/design/sensitivity.rs` (the pooled mean at line 127, the total term at line 152).
+
+## Answers of the maintainer (2026-11-18), written into this ADR by the lead on 2026-11-19
+
+The maintainer decided these on 2026-11-18 as sets of options with a recommendation; until now the decision stood in the roadmap note of the item only. Nothing above this section is changed.
+
+- **F-339, the addendum's remaining question Q2 (first asked as Q2, "Exposure").** Asked: MCP tools for the tolerance and Sobol studies of a named evaluator, which add entries to the tools-list goldens. Answer: Approved under the class rule for additive golden edits (agent rules, rule 3, from version 2): an edit that only adds entries and removes or changes none is reported by the agent as an "additive golden edit" with its diff, re-recorded by the lead and written in the ledger line of the merge. `baseline_hashes.rs` is never in this class, and an edit that changes or removes an entry still needs the maintainer's word for that item. The item may be issued. Together with F-702, so that the goldens change once (decision D1 of 2026-11-15 in ADR 0620).

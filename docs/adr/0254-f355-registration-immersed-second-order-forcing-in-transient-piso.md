@@ -633,3 +633,9 @@ and not with `build_second_order` as named.
 2. *Second-order immersed forcing: one constructor with bounded weights.* Deps: F-355. Acceptance: "`build_second_order` builds the bounded form of ADR 0254, the refusal of the unbounded form is removed, and the checks of ADR 0234 (A1, V1 to V4) and ADR 0239 are measured again and reported next to the old numbers." Note:
 
 > From ADR 0254 questions 1 and 2. Needs the maintainer's decision: it changes the recorded numbers of a merged opt-in (circular Couette e(96) 4.243e-4 to 4.232e-4, face-flux error 1.612e-4 to 3.078e-4; the DFG 2D-1 values asserted to nine digits in immersed_unsteady_force_f346.rs).
+
+## Answers of the maintainer (2026-11-18), written into this ADR by the lead on 2026-11-19
+
+The maintainer decided these on 2026-11-18 as sets of options with a recommendation; until now the decision stood in the roadmap note of the item only. Nothing above this section is changed.
+
+- **F-364, remaining questions Q1 and Q2.** Asked: `build_second_order` building the bounded form, which changes the recorded numbers of ADR 0234 and ADR 0239. Answer: Held. The default change is not approved now: it moves existing results, and it waits until the fan path needs it. Not to be issued. The lead's remark: the change is to the recorded numbers of an opt-in, not to a default of every run.

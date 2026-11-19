@@ -530,3 +530,9 @@ Proposed follow-up items (numbers for the lead to assign):
 - **Circular and three-dimensional ducts through the wave solver.** Deps: F-333. Size M. Acceptance:
 
 > A spinning mode (1, 0) and a radial mode (0, 1) of a hard-walled circular duct on an O-grid propagate with the closed-form axial wavenumber within 1 percent after the polygonal cut-off error of the grid, estimated in the registration, is accounted for; a matched layer ends the duct with less than 1 percent reflection.
+
+## Answers of the maintainer (2026-11-18), written into this ADR by the lead on 2026-11-19
+
+The maintainer decided these on 2026-11-18 as sets of options with a recommendation; until now the decision stood in the roadmap note of the item only. Nothing above this section is changed.
+
+- **F-451, remaining question 1 (wiring).** Asked: the command `rcfd duct-modes`, whose help text adds to the CLI help golden. Answer: Approved under the class rule for additive golden edits (agent rules, rule 3, from version 2): an edit that only adds entries and removes or changes none is reported by the agent as an "additive golden edit" with its diff, re-recorded by the lead and written in the ledger line of the merge. `baseline_hashes.rs` is never in this class, and an edit that changes or removes an entry still needs the maintainer's word for that item. The item may be issued. Option (b), the command only. F-451 is on the line "Compressible flow and acoustics", whose weekly budget is 0, so it is not issued now.

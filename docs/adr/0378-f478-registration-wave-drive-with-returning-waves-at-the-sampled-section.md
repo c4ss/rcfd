@@ -304,3 +304,9 @@ Proposed follow-up item (number for the lead to assign), only if the maintainer 
   change). Acceptance:
 
 > An rcfd-surface-series file carrying the axial velocity with the pressure lets a drive built from one section split the entering and returning waves of a duct field within 1 percent of the closed form; files without velocity read and drive bit-identically as before.
+
+## Answers of the maintainer (2026-11-18), written into this ADR by the lead on 2026-11-19
+
+The maintainer decided these on 2026-11-18 as sets of options with a recommendation; until now the decision stood in the roadmap note of the item only. Nothing above this section is changed.
+
+- **F-480, remaining question 1, option (b).** Asked: an optional axial-velocity series in the `rcfd-surface-series` format. Answer: Approved under the class rule for additive golden edits (agent rules, rule 3, from version 2): an edit that only adds entries and removes or changes none is reported by the agent as an "additive golden edit" with its diff, re-recorded by the lead and written in the ledger line of the merge. `baseline_hashes.rs` is never in this class, and an edit that changes or removes an entry still needs the maintainer's word for that item. The item may be issued. The lead's reading: the question asks for an extension of a file format, not for a golden by name. It falls under the class only if files without the series read bit-identically and every existing golden is unchanged or gains entries only; the registration has to show that. Budget 0 on its line, so it is not issued now.

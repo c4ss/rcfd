@@ -462,3 +462,10 @@ Proposed follow-up items (numbers for the lead to assign):
   Acceptance: "A duct mode propagates with the closed-form axial wavenumber within 1 percent; a sponge layer ends the duct
   with less than 1 percent reflection; the modal amplitudes of a synthetic field are exported and recovered within 1 percent."
   Deps: F-243. Size L.
+
+## Answers of the maintainer (2026-11-18), written into this ADR by the lead on 2026-11-19
+
+The maintainer decided these on 2026-11-18 as sets of options with a recommendation; until now the decision stood in the roadmap note of the item only. Nothing above this section is changed.
+
+- **F-330, Addendum 1, remaining question 1 (the case-schema wiring; first asked as Q-A).** Asked: new case keys for the impedance boundary with the normalisation of the new keys in `case_hashes_w48u.rs`. Answer: Approved under the class rule for additive golden edits (agent rules, rule 3, from version 2): an edit that only adds entries and removes or changes none is reported by the agent as an "additive golden edit" with its diff, re-recorded by the lead and written in the ledger line of the merge. `baseline_hashes.rs` is never in this class, and an edit that changes or removes an entry still needs the maintainer's word for that item. The item may be issued. The same wiring is asked in ADR 0237 (remaining question 1) and ADR 0243 (remaining question 1); this answer covers them. F-330 is on the line "Compressible flow and acoustics", whose weekly budget is 0, so it is not issued now.
+- **F-243, Addendum 1, remaining question 3 (the default `reflection_value` of `nonreflecting`).** Asked: changing the default from 0.02 to 0 (option (b)). Answer: Held. The default change is not approved now: it would move existing results and waits until the fan path needs it. The other open questions of this ADR are closed by the lead on their written recommendations (lead-process.md, "Questions asked before 2026-11-11").

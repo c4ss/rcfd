@@ -386,3 +386,9 @@ The test file of D5 was written on a branch made before ADR 0718 (F-796) merged,
 `crates/rcfd-fem/tests/si_eas_hg18.rs`. At the merge the lead kept ADR 0718's file under that name and moved this ADR's file,
 unchanged in content, to `crates/rcfd-fem/tests/si_eas_hg19.rs`. Every test name,
 check and result above refers to that file. Nothing above this heading was edited.
+
+## Answers of the maintainer (2026-11-18), written into this ADR by the lead on 2026-11-19
+
+The maintainer decided these on 2026-11-18 as sets of options with a recommendation; until now the decision stood in the roadmap note of the item only. Nothing above this section is changed.
+
+- **F-842, Addendum 1, remaining question 2 (reporting the inertia outside the library).** Asked: `inertia` and `retried` per increment in the solid case's output, behind the opt-in. Answer: Approved under the class rule for additive golden edits (agent rules, rule 3, from version 2): an edit that only adds entries and removes or changes none is reported by the agent as an "additive golden edit" with its diff, re-recorded by the lead and written in the ledger line of the merge. `baseline_hashes.rs` is never in this class, and an edit that changes or removes an entry still needs the maintainer's word for that item. The item may be issued. The lead's reading: this ADR and the item's acceptance say that the schema golden and the hash tables stay unchanged, so the approval may not be needed; if an output golden gains entries, the class rule covers it.

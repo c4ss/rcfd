@@ -514,3 +514,9 @@ Follow-up items proposed:
 - Title: "Consistent correctors: the new combinations with periodic faces". Deps: F-322. Acceptance:
 
 > Non-orthogonal correctors, the component diagonal and face jumps are each accepted with periodic pressure faces under the consistent correctors once a registered periodic steady identity (velocity, and pressure with the mean removed against the default's own drift) is met for it; a combination that misses stays refused with its located message; defaults bit-identical.
+
+## Answers of the maintainer (2026-11-18), written into this ADR by the lead on 2026-11-19
+
+The maintainer decided these on 2026-11-18 as sets of options with a recommendation; until now the decision stood in the roadmap note of the item only. Nothing above this section is changed.
+
+- **F-366, Addendum 1, open question Q2 (the case table).** Asked: five further boolean keys of `[solver.consistent_correctors]`, which add to the schema golden and `docs/case-schema.md`. Answer: Approved under the class rule for additive golden edits (agent rules, rule 3, from version 2): an edit that only adds entries and removes or changes none is reported by the agent as an "additive golden edit" with its diff, re-recorded by the lead and written in the ledger line of the merge. `baseline_hashes.rs` is never in this class, and an edit that changes or removes an entry still needs the maintainer's word for that item. The item may be issued.

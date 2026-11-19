@@ -395,3 +395,9 @@ F-531 (note addition):
 > ADR 0613 (F-538, 2026-11-15): the relaxed PIMPLE loop's near-zero Symmetry excess is an accidental cancellation at alpha_u 0.8 and nu dt/dy^2 = 1 (sigma = r - (1/alpha_u - 1)(1/r - 1)); at N 50 the excess is -0.42 of the sink; ADR 0455's two-corrector model gains the flow-direction Laplacian diagonal and then meets the PISO per-length part to 8.4e-6.
 
 No follow-up is proposed (remaining question 2 recommends leaving the 2-D ends).
+
+## Answers of the maintainer (2026-11-18), written into this ADR by the lead on 2026-11-19
+
+The maintainer decided these on 2026-11-18 as sets of options with a recommendation; until now the decision stood in the roadmap note of the item only. Nothing above this section is changed.
+
+- **F-538, remaining question 1 (the default; first asked in ADR 0455, remaining question 1).** Asked: `component_diagonal = corrected` as the default of the transient kernel, with the `packed_bed` hash re-registered. Answer: Held. The default change is not approved now: it would move existing results and waits until the fan path needs it. The other open questions of this ADR are closed by the lead on their written recommendations (lead-process.md, "Questions asked before 2026-11-11").

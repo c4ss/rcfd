@@ -393,3 +393,9 @@ run and met it at 1.8e-15. The lead decides.
 > Follow-up proposed: the warping unknown on the static solve, the modes and the pre-stressed modes (lifting the refusal of torsion in the pre-stress). Deps F-598. Acceptance: Every limit not stated here is registered in the ADR before the run. The static twist of a cantilever I beam under end torque with the root warping held equals (T/(G J))(L - tanh(kL)/k) within 1e-3 at 16 elements, and the lateral-torsional buckling factor of a beam whose reference load includes torsion uses the warping static solve; every result without the option bit-identical.
 
 > Follow-up proposed: monosymmetric thin-walled sections for the warping element (shear-centre offset and the monosymmetry coefficient about it). Deps F-598. Acceptance: Every limit not stated here is registered in the ADR before the run. The lateral-torsional buckling moment of a simply supported monosymmetric I under uniform moment equals the published closed form with beta_x within 2 percent at 16 elements; doubly symmetric results unchanged.
+
+## Answers of the maintainer (2026-11-18), written into this ADR by the lead on 2026-11-19
+
+The maintainer decided these on 2026-11-18 as sets of options with a recommendation; until now the decision stood in the roadmap note of the item only. Nothing above this section is changed.
+
+- **F-625, open question Q1 (repeated as remaining question Q1).** Asked: a `warping` entry of a Beam2 block and the key `geometric_terms` of ADR 0508 Q2. Answer: Approved under the class rule for additive golden edits (agent rules, rule 3, from version 2): an edit that only adds entries and removes or changes none is reported by the agent as an "additive golden edit" with its diff, re-recorded by the lead and written in the ledger line of the merge. `baseline_hashes.rs` is never in this class, and an edit that changes or removes an entry still needs the maintainer's word for that item. The item may be issued.

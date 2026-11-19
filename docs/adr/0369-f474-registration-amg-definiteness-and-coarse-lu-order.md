@@ -424,3 +424,9 @@ maintainer accepts the amendment). Proposed note:
 **F-466 / F-354: no change of status;** proposed addition to F-466's note:
 
 > ADR 0369 (2026-11-12, F-474): the AMG breakdown at step 2951 is the coarsest dense LU order defect (F-471); with AmgSettings::coarse_lu_interchanges_first the stopping system converges in 10 iterations and T does not stop.
+
+## Answers of the maintainer (2026-11-18), written into this ADR by the lead on 2026-11-19
+
+The maintainer decided these on 2026-11-18 as sets of options with a recommendation; until now the decision stood in the roadmap note of the item only. Nothing above this section is changed.
+
+- **F-471, the addendum's remaining question Q1 (switch the default).** Asked: the corrected order of the coarsest dense LU as the default of `rcfd_linalg::amg`. Answer: The default change is approved. Its registration lists the changed results case by case and the records it re-records, before the code. The item may be issued. Issued on 2026-11-19 as ADR 0743 (brief `docs/adr/briefs/f471-coarse-lu-default.md`). A changed registered hash is not covered by this approval.

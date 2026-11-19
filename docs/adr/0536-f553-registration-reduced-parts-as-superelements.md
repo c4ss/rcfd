@@ -359,3 +359,9 @@ Proposed status of F-553: **done**. New note:
 Proposed follow-up (number left to the lead), title "Case-file keys for superelements and interface enrichment", deps F-553, F-603:
 
 > Every limit not stated here is registered in the ADR before the run. A case file names reduced part files of ADR 0469 and the host node sets they attach to (key superelements) and the interface enrichment of ADR 0532 (key interface_enrichment); the bar of ADR 0536 run from a case file gives the library's results in bits; the schema golden re-recorded with the maintainer's approval; a case without the keys gives every result bit-identical.
+
+## Answers of the maintainer (2026-11-18), written into this ADR by the lead on 2026-11-19
+
+The maintainer decided these on 2026-11-18 as sets of options with a recommendation; until now the decision stood in the roadmap note of the item only. Nothing above this section is changed.
+
+- **F-616, Addendum 1, remaining question 1 (case-file key).** Asked: the keys `superelements` and `interface_enrichment`, with the schema golden re-recorded once. Answer: Approved under the class rule for additive golden edits (agent rules, rule 3, from version 2): an edit that only adds entries and removes or changes none is reported by the agent as an "additive golden edit" with its diff, re-recorded by the lead and written in the ledger line of the merge. `baseline_hashes.rs` is never in this class, and an edit that changes or removes an entry still needs the maintainer's word for that item. The item may be issued. ADR 0532 (remaining question 1) asks for the second key; this answer covers it.

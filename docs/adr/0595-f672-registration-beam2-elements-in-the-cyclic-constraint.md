@@ -314,3 +314,9 @@ Proposed status and note of F-672:
 > Follow-up proposed: full_rotor and the expansion of a cyclic sector with Beam2. Deps F-672. Acceptance: Every limit not stated here is registered in the ADR before the run. cyclic::full_rotor of a sector with CyclicOptions::beams gives each sector copy of a Beam2 block the orientation R^j v, and FullRotor::expand, expand_field and expand_load of the ADR 0595 wheel sector give the fields of the independently built ring within 1e-10; the defaults bit-identical.
 
 > Follow-up proposed: Rotating paths on a cyclic sector of beams. Deps F-672. Acceptance: Every limit not stated here is registered in the ADR before the run. RotatingSector on the ADR 0595 wheel sector (stress stiffening and spin softening, and with Coriolis the whirl modes) at two speeds gives the frequencies of each harmonic of RotatingPart on the full ring of beams within 1e-8; the defaults bit-identical.
+
+## Answers of the maintainer (2026-11-18), written into this ADR by the lead on 2026-11-19
+
+The maintainer decided these on 2026-11-18 as sets of options with a recommendation; until now the decision stood in the roadmap note of the item only. Nothing above this section is changed.
+
+- **F-672, remaining question 3 (default lift).** Asked: accepting Beam2 elements in the cyclic constraint by default, which retires NC3 of ADR 0556 and A-B of ADR 0593. Answer: The default change is approved. Its registration lists the changed results case by case and the records it re-records, before the code. The item may be issued. Issued on 2026-11-19 as ADR 0744 (brief `docs/adr/briefs/f672-beam2-cyclic-default.md`).
