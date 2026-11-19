@@ -252,6 +252,10 @@ fn fp_lag(f: Forcing, n: usize) -> (u64, usize) {
 /// ADR 0374 N0: FP1 (F, one corrector), FP2 (B, two correctors), FP3 (the lag estimates), FP4 (Sa, one corrector, check on).
 #[test]
 #[cfg_attr(debug_assertions, ignore = "heavy: run in release")]
+#[cfg_attr(
+    not(debug_assertions),
+    ignore = "retired record (ADR 0747, F-471): FP4 moved with the default of ADR 0743, approved by the maintainer on 2026-11-19; restated in immersed_single_corrector_fp_adr0747.rs"
+)]
 fn n0_fingerprints_of_the_defaults() {
     let fp1 = fp_run(Forcing::F, 1, true);
     let fp2 = fp_run(Forcing::B, 2, true);
