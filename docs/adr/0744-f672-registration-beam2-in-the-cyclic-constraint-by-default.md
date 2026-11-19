@@ -219,3 +219,134 @@ Size (agent): done; 0; 0; 0; 420000
   with the rotating ring is ADR 0598's, under the option.
 - F-666's default lift (RF1): not part of this registration. H-T uses the setting.
 - The case schema: no case key reaches `CyclicOptions`.
+
+## Amendment 1 (2026-11-19, after the runs): the notation of five kinds
+
+Found by `python scripts/process_report.py --check` after the runs. Five rows of the table of checks (N-X, N-W, NC-O,
+H-D, R-T) write their kind as `code verification [negative control]`. The qualifier belongs in round brackets, which is
+what the report script reads: the kind of each of the five is **code verification (negative control)**. No check, limit,
+source or estimate changes, and no run depends on it. The table above is not edited (rule 18), so the script still
+reports those five rows; that is for the lead (see "Not done" below).
+
+## Addendum 1: results (2026-11-19)
+
+Built as registered: the registration 85c5ae18, then the code and the tests cc8a4917, then the runs. Library changes
+(shared solver files, lines of the new files): `crates/rcfd-fem/src/mpc.rs` 1359 (doc), 1367 to 1372
+(`check_transformation_model`: the call of the new check and the condition `has(Beam2) && !shells`);
+`crates/rcfd-fem/src/cyclic.rs` 41 to 43 (module doc), 254 to 272 (`check_cyclic_beam_boundaries`, new), 888 to 891
+(`check_cyclic_model`), and the 25 lines of `refuse_cyclic_beams` removed after 897; `crates/rcfd-fem/src/model.rs` 564
+to 566 (the doc of `CyclicOptions::beams`). The three retired tests have one `#[ignore = "ADR 0744: ..."]` line each and
+no other change. All runs in the release profile, each registered run made once; logs `run1.log`, `rt.log`, `b1_b2.log`,
+`b3.log`, `docs_site.log`, `mutations.log` in the scratch folder.
+
+| # | Limit | Measured | Met |
+|---|---|---|---|
+| S0 | `e <= 1e-10` | `e_u 6.5675e-13`, `e_theta 6.3875e-13` | yes |
+| R1 | `<= 1e-14` | 0 | yes |
+| S1 to S3 | `e <= 1e-10` each | `6.0777e-13`, `3.9190e-13`, `3.9603e-13` | yes |
+| M-list | complete; counts equal | cut-off `2.917107e6`, largest ring eigenvalue `5.320926e6`; 18 and 18 | yes |
+| M0 to M3 | `<= 1e-10` each | `8.2090e-13`, `2.9377e-13`, `7.5273e-14`, `1.0303e-13` | yes |
+| P0 to P3 | `<= 1e-10` each | `6.1477e-16` (3 modes), `1.4706e-13` (6), `9.9113e-17` (6), `6.5375e-17` (3) | yes |
+| Q1, Q2 | `<= 1e-10` | `2.5579e-13`, `2.0357e-13` | yes |
+| E-S | bits equal | 294 values equal | yes |
+| E-M | bits equal | 24 values equal | yes |
+| E-R | bits equal | 24 values equal | yes |
+| A3 | both `Ok` | `solve_static_mpc` `Ok`; `modal_analysis_harmonic` `k = 0` `Ok` (21.574 Hz, 57.427 Hz) | yes |
+| A1 | (a) not the beam refusal; (b) both `Ok` | (a) `solve_static_mpc`: `SingularStiffness { node: 0, component: 2 }` (the unsupported arc, as expected), `modal_analysis_harmonic` `k = 1`: `Ok`; (b) both `Ok` | yes |
+| N-0556 | as in ADR 0556 | NC1 `UnknownSet { Surface, "low" }`; NC2 both `NotYetSupported Shell4`; NC4 "low node 8 has 6 unknowns and its high partner 0 has 3"; NC5 both naming ADR 0556; NC6 "has no node of the high boundary" | yes |
+| N-0595 | as in ADR 0595 | NC1 refused by `add_constraint`, key `cyclic`, ADR 0595; NC2 both key `cyclic`, ADR 0595; NC4 `UnsupportedKind { kind: "Beam2", operation: "full_rotor" }` with the beams option and with shells alone | yes |
+| N-X | refused, key `cyclic`, naming ADR 0744 | all four calls: "constraint 6: Beam2 in the cyclic constraint (ADR 0595, by default since ADR 0744) is not taken with interpolated boundaries or nodes on the axis" | yes |
+| N-W | refused naming `beam::SOLID_ROUTINES` | `Element { element: 0, source: NotYetSupported { variant: "Beam2", location: "element routines", package: beam::SOLID_ROUTINES } }` | yes |
+| NC-O | `e >= 1e-3` | `0.77791` | yes |
+| AB-a | not the beam refusal; `InvalidValue { key: "cyclic" }` | `InvalidValue { key: "cyclic" }`: "low node 0 at [0, 0, 0] of 'x0': its image ... has no node of the high boundary 'xl' within 1e-8 (nearest: node 10 at 1e0)" | yes |
+| H-D | refused naming `mat_hyper::LINEAR_FOLLOW_UP` | `NotYetSupported { variant: "Hyperelastic", location: "material 0, element set 'all': a structural element (Beam2, Shell4, Shell3)", package: "a follow-up of ADR 0555" }` | yes |
+| H-T | `<= 1e-10` | 0 (the eight eigenvalues equal those of the twin to the last bit; `k = 0`: 0.23014, 0.61257, 2.4529, 3.1704 Hz) | yes |
+| R-T | the retired records fail at their NC3 or A-B lines only | T1: missed exactly "NC3 ... solve_static_mpc" (`SingularStiffness`) and "NC3 ... modal_analysis_harmonic" (`Ok`); T3: exactly "NC3 shells only: solve_static_mpc" and "... modal_analysis_harmonic k = 0" (both `Ok`); T2: "A-B" (the boundary-match refusal) | yes |
+| B1 | 0 failures | `--lib` 15; `sa_cyclic_shells` 8 (1 ignored: T1); `sa_cyclic_shell_extensions` 7 (1 ignored before); `sa_cyclic_shell_two_sided` 7; `sa_cyclic_beams_f672` 5 (2 ignored: T3, T4); `sa_cyclic_beams_full_rotor_f674` 8; `sa_rotating_cyclic_shells` 8 (1 ignored before); `sa_rotating_cyclic_beams_f675` 4 (1 ignored before); `sa_ring_whirl_beams_f679` 4; `sa_free_sector_prestress_f680` 5; `sa_hyper_structures_f666` 10 (4 ignored: 3 before and T2); `si_beam` 9 (4 ignored before); `si_beam_transformation` 5; `si_cyclic` 11 (1 ignored before); `si_cyclic_harmonic` 9 (1 ignored before); `si_rotating_cyclic` 7 (1 ignored before); `sa_ortho_cyclic` 7; `si_shell_transformation` 7 (2 ignored before). 0 failed | yes |
+| B2 | 0 failures | `sa_ortho_cyclic_default_bits` 1, `sa_ortho_cyclic_prestress_default_bits` 1, `sa_rotating_cyclic_shells_default_bits` 1, `sa_tie_default_bits` 1, `sa_geometric_struct_bits` 1; B4 of `sa_cyclic_shells` and B3 of `sa_cyclic_beams_f672` pass inside B1. 0 failed | yes |
+| B3 | pass | `baseline_hashes`: 3 passed, 1 ignored (as before) | yes |
+
+The ring rows repeat the numbers of ADR 0595 Addendum 1 to the digits printed there, as estimated.
+
+### Mutations (scratch copy of cc8a4917, own target directory, each run once)
+
+| Id | Registered to be caught by | Caught by |
+|---|---|---|
+| Y1, committed as `crates/rcfd-fem/tests/sa_cyclic_beams_default_adr0744.mutation.patch` | S0, E-S, A3, AB-a; A1 | 6 of the 7 tests of the first file fail (S0, NC-O and M at the `k = 0` solve, E-S, A3, AB-a: all refused naming the beam); A1 (a) and (b) in the second file |
+| Y2 | S1 to S3, M, E-S, E-M, A3 (modal) | S1 to S3, M, E-S, A3 (modal), and AB-a (the `k = 0` call passes `check_cyclic_model` first); 5 tests fail |
+| Y3 | N-X | N-X, all four calls: with `axis_nodes` both calls return `Ok`; with `interpolation` the refusal is another one ("the low node set has no shell edge", ADR 0575), not the registered one |
+| Y4 | `si_beam_transformation` N3 | N3, both calls (the boundary-match refusal in place of the beam refusal); the first new file is not affected (7 pass), as registered |
+
+Four of four caught.
+
+### Checks of rule 7
+
+`cargo clippy -p rcfd-fem --all-targets -- -D warnings`: clean. `cargo fmt -p rcfd-fem --check` could not be run in this
+worktree: it stops with "The filename or extension is too long (os error 206)" before formatting (the command line of
+the crate's test files with this worktree's path). In its place `rustfmt --edition 2021 --check` (the repository's
+`rustfmt.toml`) on the eight Rust files changed or added: clean. `baseline_hashes`: row B3. `docs_site` (`cargo test -p
+rcfd-cli --release --test docs_site`): 2 passed, run again after this addendum and the topic page. `npm test` not run:
+`apps/studio-web` is not touched.
+
+### Deviations
+
+1. Amendment 1 (the notation of five kinds).
+2. One text-only change of the first new test file after its run: the type alias `Values` for `fn(CyclicOptions) ->
+   Vec<f64>` (clippy `type_complexity`). No value or assertion changes; the file was compiled again by clippy and not run
+   again.
+3. T3 is retired beyond the two tests the brief names (registered in the audit before the code).
+4. `cargo fmt -p` replaced by `rustfmt --check` on the changed files (above).
+5. A1 (a): the modal call on the unsupported arc returned `Ok` where the registration expected a singular-stiffness
+   refusal for both calls; the row asserted only "not the beam refusal", which holds.
+
+### Not run, not done
+
+- The whole workspace suite and the other integration tests of `rcfd-fem` (the lead's gate).
+- `docs/adr/index.md` is not current for this ADR, and the report script lists the five kind cells of amendment 1: both
+  are the lead's (the index is generated on main; the kind cells need either a line each in
+  `exceptions/registration-kind.txt` or the lead's decision on the notation).
+- Nothing of "What is not covered" was run.
+
+### What F-666 will find changed
+
+- `sa_hyper_structures_f666.rs::a_b_beam2_cyclic_refused_for_its_own_reason` is an ignored record of ADR 0744. Its model
+  is not a sector (the boundary match refuses it), so it cannot become an accepting row; F-666's default lift should
+  leave it as it is.
+- The Beam2 half of clause a1 of F-666 is no longer refused. It has one passing row here, H-T (W, neo-Hookean with the
+  setting, against the twin, `k = 0, 1`: 0), in `sa_cyclic_beams_default_adr0744.rs`.
+- H-D in the same file asserts the refusal of ADR 0555 D3 on the beams of W without the setting. F-666's default lift
+  turns that refusal into a result, so H-D is one more test for F-666 to retire as a record with an accepting copy, beside
+  RF1. It is inside the test `ab_a_h_d_h_t_hyperelastic_beams_on_the_cyclic_path`, with AB-a and H-T, which the copy must
+  keep.
+
+### Size
+
+Size (agent): done; 0; 0; 1; about 380000
+
+### Decision
+
+By the registered rule: **done**. Every row S0 to B3 is met in its one registered run and four of four mutations are
+caught. The acceptance of F-672 has passing checks under the lifted default (S0 to Q2 against the full ring within
+`8.3e-13`, limit `1e-10`), and every model that was accepted before keeps its bits (B1, B2, B3, E-S, E-M, E-R). The gap of
+the item is closed: the refusal is lifted by default, NC3 of ADR 0556, A-B of ADR 0593 and NC3 of ADR 0595 are retired as
+ignored records with restated copies.
+
+## Open questions for the maintainer
+
+1. **The two opt-ins that are left on a beam sector.** After this lift the static and the modal paths take Beam2 with the
+   shells option alone, while the whirl paths still need `CyclicOptions::beams` (ADR 0598, its question 3) and
+   `full_rotor` still needs `beams` and `full_rotor_beams` (ADR 0601, its question 1). Lifting either changes a default
+   (it turns a refusal into a result) and retires controls: N-W of this ADR for the whirl paths; NC4 of ADR 0595 as
+   restated here, NC1 of ADR 0601 and NC1 of `sa_rotating_cyclic_shells.rs` for `full_rotor`. Options: (a) leave both
+   opt-ins; (b) lift both in one further registration, with `beams` and `full_rotor_beams` kept as documented no-ops;
+   (c) lift the whirl paths only. Recommendation: (b). A sector that solves and gives its modes without an option and
+   then refuses its whirl modes or its full rotor for want of one is harder to explain than either state, and both
+   capabilities have their registered checks (ADR 0598, ADR 0601).
+
+## For the lead: roadmap entries
+
+Status proposed for F-672: done.
+
+> ADR 0744, 2026-11-19, done: a cyclic constraint with the shells option takes Beam2 without CyclicOptions::beams (the maintainer's approval of 2026-11-18); the wheel sector of ADR 0595 with shells alone gives the full ring within 6.6e-13 (static k = 0), 6.1e-13 (harmonic static), 8.3e-13 (eigenvalues of k = 0..3), limit 1e-10, with the bits of the beams option; NC3 of ADR 0556, A-B of ADR 0593 and NC3 of ADR 0595 are ignored records restated in two new files; beam ends on interpolated or axis boundaries stay refused by a new check, full_rotor and the whirl paths keep their opt-ins; existing tests, bit records and baseline hashes unchanged; four of four mutations caught.
+
+No follow-up item is proposed; the remaining opt-ins are open question 1.

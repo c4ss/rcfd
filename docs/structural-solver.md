@@ -315,7 +315,9 @@ Built, but the item is partial (a registered check missed, or the maintainer has
 * Rotor (F-416, F-562): whirl "still refuses a massless damped unknown". Coriolis split table (F-415): cyclic models
   refused. Sector split-mode estimates miss (F-569, F-584, F-612).
 * Beams (F-514): centrifugal, nodal body force and thermal loads are refused. Warping (F-635): no warping inertia, no
-  mode superposition. Beam2 cyclic by default: approved, not yet made (F-672, F-666).
+  mode superposition. Beam2 in a cyclic sector: taken with the shells option alone (F-672, ADR 0744); `full_rotor` and
+  the whirl paths keep their own options, beam ends on interpolated or axis boundaries are refused. Hyperelastic
+  structural elements by default: approved, not yet made (F-666).
 * Shells: temperature loads have rounding misses and no per-ply temperatures (F-525, F-527, F-687); the
   energy-momentum step, `solve_in_time` and `buckling_factors` still refuse geometrically nonlinear shells (F-585).
 * Creep on B-bar and F-bar Hex8 (F-580, F-587, F-597, F-637): growth bound 6.0e-3 against 2e-3; no finite-strain
