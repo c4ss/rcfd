@@ -525,7 +525,7 @@ One row per record of this folder, grouped by the roadmap category of the item i
 
 | ADR | Title | Status word | Date | Addenda | Item | Item status |
 |---|---|---|---|---|---|---|
-| [0653](0653-f723-registration-daily-full-gate-with-failures-attributed-to-adrs.md) | F-723 registration: the daily full gate in CI, with failures attributed to ADRs | REGISTERED | 2026-11-16 | 2 | F-723 | done |
+| [0653](0653-f723-registration-daily-full-gate-with-failures-attributed-to-adrs.md) | F-723 registration: the daily full gate in CI, with failures attributed to ADRs | REGISTERED | 2026-11-16 | 3 | F-723 | done |
 | [0669](0669-f751-registration-the-two-failures-of-the-first-daily-gate.md) | F-751 registration: the two failures of the first daily gate (P4's temporary path, and the edit lock's races) | REGISTERED | 2026-11-16 | 1 | F-751 | partial |
 | [0676](0676-f755-registration-a-forced-control-of-the-edit-locks-starvation-and-of-a-lock-left-behind.md) | F-755 registration: a forced control of the edit lock's starvation and of a lock left behind | REGISTERED | 2026-11-17 | 1 | F-755 | done |
 | [0679](0679-f737-registration-wave-tag-mapping-and-a-primary-adr-in-the-test-to-adr-index.md) | F-737 registration: wave-tag mapping and a primary ADR in the test-to-ADR index | REGISTERED | 2026-11-17 | 1 | F-737 | partial |

@@ -580,7 +580,15 @@ Everything else waits for the next full gate, which attributes any failure to th
 
 `python scripts/gate_test.py --shard K/N --order prev.tsv ...` runs shard K of N: the tests are dealt to the shards by their
 recorded seconds so that the shards carry about equal time, the ignored tests and the doc-tests are reported by shard 1 only,
-and the N logs together sum to one full run. It is unit-tested and has not been run; `gate.yml` still runs one job.
+and the N logs together sum to one full run. The split does not depend on the order in which cargo reports the binaries
+(ADR 0653 Amendment 3).
+
+The gate can run in shards: `gh workflow run gate.yml -f shards=4` (1, 2, 3, 4, 6 or 8). A scheduled run uses one job, as
+before. In a sharded run every shard builds the workspace and runs its part with the times of one earlier run, which the
+job `decide` names; the test-hooks step runs in shard 1; logs and the attribution are per shard, in artifacts ending in
+`-shard-K`. The job `complete` then runs `python scripts/gate_shards_check.py` on the logs of all shards and fails unless
+they are shards 1 to N of one split and their parts sum to the total, so a test left out by the split, or a shard that did
+not finish, fails the run. The result of the first sharded run is in ADR 0653.
 
 Three further commands of the lead. None of them has been run on this repository yet: the pure parts are unit-tested
 (`scripts/test_gate_test.py`, `scripts/test_push_main.py`), the runs are not.

@@ -326,3 +326,105 @@ Proposed status and note of F-723:
 > Follow-up proposed: First GitHub runs of the daily gate (ADR 0653 checks on the runner). Deps F-723. Acceptance: Every limit not stated here is registered in the ADR before the run. The first scheduled run after the push runs the gate with a non-empty last-green SHA and passes fmt with one line per package; a scheduled run with no push since a green run is skipped; a dispatch on a commit with one failing test (a test branch that is not merged) produces attribution.json with that test, its re-run, its ADRs and a candidate list, the bisect with input bisect finds the commit that broke it within bisect_minutes, and input open_issues opens one issue and no duplicate on a second run.
 
 > Follow-up proposed: Wave-tag mapping and a primary ADR in the test-to-ADR index. Deps F-723. Acceptance: Every limit not stated here is registered in the ADR before the run. The index maps wave-named test files (w34a, wave17a, w48a) to the ADRs named after their wave, and each test gets a primary ADR (the registering ADR); the integration-test binaries left unmapped in ADR 0653 addendum 2 (81) fall below a registered number; a registered sample of primary ADRs is checked by reading.
+
+## Amendment 3 (2026-11-18): the full gate in parallel shards, written before its code
+
+By Claude. It carries out the item "the full run split into parallel jobs" of docs/process/documentation-process-review.md.
+
+**Why.** The test step of the gate at 205889bf took 3 h 28 min (build 19 min, tests 3 h 09 min) of a 290 minute limit,
+and the run of 2026-11-17 ran out of time. `scripts/gate_test.py --shard K/N` exists since 2026-11-18 and is not used.
+
+**Defect found while reading, fixed here.** The split deals the tests to the shards in the order of the job list. Tests
+without a recorded time keep the order of the binaries, which is the order in which cargo reports them, and that
+depends on which build finished first. Two machines can therefore split differently, and a test could run twice or
+not at all. In shard mode the job list is now ordered by recorded seconds (longest first), then binary name, then the
+manifest path of its crate, then test name. Without `--shard` nothing changes.
+
+**Design.**
+
+- D7. A dispatch input `shards` (1 to 8, default 1). A scheduled run uses 1, so the daily gate is unchanged until the
+  lead changes that default after a green sharded run. With 1, job names, artifact names and commands are as before.
+- D8. The job `decide` gives the list of shards and the id of the newest completed gate run on main that has test
+  times for the chosen runner. Every shard downloads the times of that one run, so all shards split by the same file.
+  If there is none, every shard splits by count.
+- D9. The job `gate` is a matrix over the shards. A shard runs fmt, clippy and the feature isolation as before, then
+  `gate_test.py --shard K/N --order <times> --timeout-min 3600`. The last option keeps every test's time limit at the
+  3600 s it has today, where no order file is given. The test-hooks step runs in shard 1 only. Logs and the
+  attribution are per shard, in artifacts named with `-shard-K`. The job keeps its twelve steps.
+- D10. `gate_test.py` in shard mode prints `gate_test: shard K/N runs m of M tests`. A job `complete` (sharded runs
+  only) downloads the logs of all shards and runs `scripts/gate_shards_check.py`: the shards are exactly 1 to N, all
+  give the same M, the sum of m is M, and no test is in the times of two shards. A shard that did not finish makes it
+  fail. This is the check that no test was left out by the split.
+- D11. `issues` reads the attribution of every shard.
+- Cost: each shard builds the workspace (19 min on the Windows runner), so N shards use about N times 19 minutes more
+  runner time than one job, for a wall time of about 19 min plus a share of the tests.
+
+**Checks.**
+
+- H1 (unit, `scripts/test_gate_shards.py`): with the binaries given in two different orders and the same times, the
+  shard of every test is the same; over the N shards every test occurs once. Control: with the order key removed
+  (the old sort), the two splits differ for tests without a record.
+- H2 (unit): `gate_shards_check.py` accepts a complete set and fails, with a message naming the reason, on each of: a
+  missing shard, two different M, a sum below M, one test in two shards.
+- H3 (workflow text, same file): the matrix comes from `decide`; `--shard` and `--timeout-min 3600` are passed only
+  when shards > 1; the hooks step is limited to shard 1; the artifact names carry the shard; `complete` needs `gate`
+  and runs only when shards > 1; with shards = 1 the expressions give today's job and artifact names. The existing
+  checks W1 to W3 of `scripts/test_gate_hooks_f761.py` pass unchanged.
+- H4 (one dispatched run of the branch with 4 shards on windows-latest): `complete` is green; the sum of passed, failed
+  and ignored over the shards is reported beside the last unsharded gate; wall time and runner minutes are recorded.
+  A failure of a test in that run is a result of the tests, not of this amendment, and is reported as such.
+
+**Not changed.** Which tests run, their limits, the attribution rules, the daily schedule.
+
+**Correction to D10 and H2, before any code (2026-11-18).** The times file names a test by binary name and test name,
+and two crates have binaries of the same name (`sites_adr0739` in rcfd-mcp and rcfd-runner), so "no test in the times
+of two shards" cannot be decided from the times. In its place: in shard mode `gate_test.py` prints
+`gate_test: shard K/N runs m of M tests, split <digest>`, where the digest is the SHA-256 of the ordered list of
+(binary, manifest path, test, recorded seconds) that the split was dealt from. Shards with one digest dealt from the
+same list in the same order, and the dealing is a function of that list, so their parts are disjoint and together
+complete. `gate_shards_check.py` requires: shards exactly 1 to N, one M, one digest, the sum of m equal to M, and in
+each shard as many result rows in its times as its m. H2 tests a failure on each of: a missing shard, two M, two
+digests, a sum below M, a shard with fewer rows than its m.
+
+## Addendum 3: results of Amendment 3 (2026-11-18)
+
+**H1 to H3.** 10 unit tests in `scripts/test_gate_shards.py` pass; W1 to W3 pass unchanged; 193 script self-tests in
+all. Locally the 87 tests of rcfd-runner ran as three shards of 29 and `gate_shards_check.py` passed.
+
+**H4.** One dispatched run of the branch at dd2ab837 with 4 shards on windows-latest, GitHub run 44361504875.
+
+| shard | part | build | tests (wall) | job | result |
+|---|---|---|---|---|---|
+| 1 | 1447 | 22 min | 61 min | 87 min | green |
+| 2 | 1447 | 29 min | 78 min | 151 min | red: one test timed out at 3600 s |
+| 3 | 1448 | 18 min | 47 min | 68 min | green |
+| 4 | 1544 | 30 min | 76 min | 111 min | red: one test failed, passed on the re-run (flaky) |
+
+- `complete` is green: shards 1 to 4, one total of 5886, one split digest, parts summing to 5886, and each shard's
+  times hold its part. The times came from run 44276505780, the newest completed gate on main when `decide` ran.
+- Sums over the shards: 5884 passed, 2 failed, 1698 ignored. The last unsharded gate, at 39269587, had 5884 passed,
+  0 failed, 1698 ignored of 5884 tests; this branch has two tests more.
+- Wall time of the run 2 h 32 min, against 4 h 41 min for the unsharded gate of the same day. The last test finished
+  1 h 47 min after the start; the rest of shard 2's job was the attribution re-running its 3600 s test. Runner time
+  417 minutes against 281.
+- The attribution ran in each failed shard and named its own test. `issues` was not asked for.
+
+**The two failures are results of the tests, not of the split.**
+
+- `immersed_solid_f219::a3_two_d_two_strouhal_number` timed out at the 3600 s limit. It took 2066 s in the gate at
+  205889bf and 3060 s in the gate at 39269587, both unsharded. `immersed_unsteady_force_f346::a2t_c1...` took 3230 s
+  at 39269587 and 2880 s here. Two tests of the gate therefore run within a factor of 1.2 of the per-test limit on
+  this runner, sharded or not, and the next slow runner fails the daily gate on them. For the lead: an item for these
+  two tests (a shorter set-up, or a registered limit for them) is due before the daily gate depends on shards.
+- `monitors_filtered_f456::f456_i2_storing_an_increment_of_100_samples_at_1e5` failed once and passed on the re-run.
+
+**What the trial shows about the gain.** The shards were dealt equal recorded time, yet their test steps took 47 to
+78 minutes and their builds 18 to 30 minutes: the runners differ by more than the split can even out, and one test of
+close to an hour is a floor under its shard. Four shards cut the wall time from about 4 h 40 min to about 1 h 50 min
+of testing, not to a quarter, for one and a half times the runner minutes.
+
+**Deviation.** H4 asked for a green `complete` and the sums; both are as registered. The run as a whole is red
+because of the two test failures above.
+
+**Left for the lead.** The default of `shards` for the scheduled run stays 1. Changing it is one expression in
+`gate.yml` (`inputs.shards || '1'`).
