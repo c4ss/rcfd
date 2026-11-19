@@ -1,0 +1,14 @@
+# expect-fail: cargo test --release -p rcfd-fem --test sa_cyclic_beams_default_adr0744
+diff --git a/crates/rcfd-fem/src/mpc.rs b/crates/rcfd-fem/src/mpc.rs
+index 3e0abbc..5634de0 100644
+--- a/crates/rcfd-fem/src/mpc.rs
++++ b/crates/rcfd-fem/src/mpc.rs
+@@ -1369,7 +1369,7 @@ fn check_transformation_model(model: &SolidModel) -> Result<()> {
+     crate::cyclic::check_beams_option(model)?;
+     crate::cyclic::check_cyclic_beam_boundaries(model)?;
+     let shells = crate::cyclic::shells_opted_in(model);
+-    let refusal = if has(crate::mesh::ElementKind::Beam2) && !shells {
++    let refusal = if has(crate::mesh::ElementKind::Beam2) && !crate::cyclic::beams_opted_in(model) {
+         Some(("Beam2", crate::beam::FOLLOW_UP))
+     } else if shells {
+         None

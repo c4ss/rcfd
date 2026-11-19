@@ -1356,7 +1356,7 @@ pub fn add_supports(k: &mut CsrMatrix, model: &SolidModel) -> Result<()> {
 /// is refused with [`FemError::BeamSolidNode`], a shell node shared with a solid naming the node), and a model with Beam2
 /// or Shell4 and a cyclic constraint refused naming [`crate::beam::FOLLOW_UP`] or [`crate::shell::FOLLOW_UP`] (the cyclic
 /// rows rotate translations only). ADR 0556 D1: with the shells option of the cyclic constraint Shell4 and Shell3 are taken;
-/// ADR 0595 D1: with the beams option as well, Beam2.
+/// ADR 0595 D1, ADR 0744 D1: and Beam2, on matched boundaries (ADR 0744 D2).
 fn check_transformation_model(model: &SolidModel) -> Result<()> {
     // ADR 0457 D2: also the orthotropic and the tabulated material on solid elements (ADR 0452 D6).
     model.check_supported_with_materials()?;
@@ -1364,11 +1364,12 @@ fn check_transformation_model(model: &SolidModel) -> Result<()> {
     // with cylindrical axes about the constraint's axis and origin.
     crate::mat_ortho::check_cyclic_axes(model)?;
     let has = |kind: crate::mesh::ElementKind| model.mesh().blocks().iter().any(|b| b.kind() == kind);
-    // ADR 0556 D1: with the shells option of the cyclic constraint, Shell4 and Shell3 are taken; Beam2 stays refused unless
-    // the beams option is also set (ADR 0595 D1).
+    // ADR 0556 D1: with the shells option of the cyclic constraint, Shell4 and Shell3 are taken, and Beam2 (ADR 0595 D1;
+    // without the beams option since ADR 0744 D1). Without the shells option Beam2 stays refused.
     crate::cyclic::check_beams_option(model)?;
+    crate::cyclic::check_cyclic_beam_boundaries(model)?;
     let shells = crate::cyclic::shells_opted_in(model);
-    let refusal = if has(crate::mesh::ElementKind::Beam2) && !crate::cyclic::beams_opted_in(model) {
+    let refusal = if has(crate::mesh::ElementKind::Beam2) && !shells {
         Some(("Beam2", crate::beam::FOLLOW_UP))
     } else if shells {
         None

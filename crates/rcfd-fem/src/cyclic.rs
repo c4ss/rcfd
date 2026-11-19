@@ -38,7 +38,9 @@
 //!
 //! ADR 0595 (F-672): with [`crate::model::CyclicOptions::beams`] as well, the static and the modal paths take Beam2 elements
 //! (the rows of ADR 0556 D2 on their six-unknown nodes; the sector stands for the ring of its beams rotated by `R^j`,
-//! orientation vectors included).
+//! orientation vectors included). ADR 0744: the shells option alone takes them (the maintainer's approval of 2026-11-18);
+//! a beam end on an interpolated boundary or on the axis stays refused, and the beams option still selects the beam
+//! Coriolis route of the whirl paths (ADR 0598) and qualifies `full_rotor_beams`.
 //!
 //! ADR 0601 (F-674): with [`crate::model::CyclicOptions::full_rotor_beams`] as well, [`full_rotor`] takes Beam2 blocks: each
 //! becomes `N` consecutive blocks of the full mesh, copy `j` with the orientation `R^j v` ([`FullRotor::block`]).
@@ -242,6 +244,25 @@ pub(crate) fn check_beams_option(model: &SolidModel) -> Result<()> {
                 return Err(cyclic_error(format!(
                     "constraint {i}: Beam2 in the cyclic constraint (ADR 0595) is not taken with interpolated \
                      boundaries or nodes on the axis"
+                )));
+            }
+        }
+    }
+    Ok(())
+}
+
+/// ADR 0744 D2: Beam2 is taken by a cyclic constraint with the shells option alone, and, as with the beams option (ADR 0595
+/// D1), not with interpolated boundaries or nodes on the axis. A no-op for a model without a Beam2 block.
+pub(crate) fn check_cyclic_beam_boundaries(model: &SolidModel) -> Result<()> {
+    if !model.mesh().blocks().iter().any(|b| b.kind() == ElementKind::Beam2) {
+        return Ok(());
+    }
+    for (i, c) in model.constraints().iter().enumerate() {
+        if let Constraint::Cyclic { options, .. } = c {
+            if options.shells && (options.interpolation.is_some() || options.axis_nodes) {
+                return Err(cyclic_error(format!(
+                    "constraint {i}: Beam2 in the cyclic constraint (ADR 0595, by default since ADR 0744) is not taken \
+                     with interpolated boundaries or nodes on the axis"
                 )));
             }
         }
@@ -864,42 +885,15 @@ fn check_cyclic_model(model: &SolidModel) -> Result<bool> {
         crate::mat_ortho::check_cyclic_axes(model)?;
         Ok(true)
     } else if shells_opted_in(model) {
-        // ADR 0556 D1: Shell4 and Shell3 are taken (a shell node shared with a solid stays refused); Beam2 stays refused.
-        // ADR 0595 D1: with the beams option as well, Beam2 is taken.
+        // ADR 0556 D1: Shell4 and Shell3 are taken (a shell node shared with a solid stays refused). ADR 0595 D1, ADR 0744
+        // D1: and Beam2, on matched boundaries (ADR 0744 D2).
         model.check_supported_with_structures()?;
-        if !beams_opted_in(model) {
-            refuse_cyclic_beams(model)?;
-        }
+        check_cyclic_beam_boundaries(model)?;
         Ok(false)
     } else {
         model.check_supported()?;
         Ok(false)
     }
-}
-
-/// A model with Beam2 and a cyclic constraint is refused naming [`crate::beam::FOLLOW_UP`] (ADR 0556 D1: a beam's
-/// orientation vector is a global direction).
-pub(crate) fn refuse_cyclic_beams(model: &SolidModel) -> Result<()> {
-    let beams = model
-        .mesh()
-        .blocks()
-        .iter()
-        .any(|b| b.kind() == crate::mesh::ElementKind::Beam2);
-    if let (true, Some(i)) = (
-        beams,
-        model
-            .constraints()
-            .iter()
-            .position(|c| matches!(c, Constraint::Cyclic { .. })),
-    ) {
-        return Err(FemError::NotYetSupported {
-            item: "constraint",
-            variant: "Cyclic",
-            location: format!("constraint {i}, a model with Beam2"),
-            package: crate::beam::FOLLOW_UP,
-        });
-    }
-    Ok(())
 }
 
 /// The sector stiffness: the per-point stiffness for a model with either material (ADR 0462 D2), else [`stiffness_with`].

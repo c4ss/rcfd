@@ -596,6 +596,7 @@ fn dist(a: Vec3, b: Vec3) -> f64 {
 }
 
 #[test]
+#[ignore = "ADR 0744: retired record, NC3 asserts the Beam2 refusal that is lifted by default; restated in sa_cyclic_shells_refusals_adr0744.rs"]
 fn nc1_to_nc6_refusals() {
     let mut fails = Vec::new();
     let mut hold = |name: &str, ok: bool, detail: String| {
