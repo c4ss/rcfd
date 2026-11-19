@@ -549,7 +549,7 @@ One row per record of this folder, grouped by the roadmap category of the item i
 | [0720](0720-f773-registration-a-git-commit-that-names-an-adr-or-an-item-as-evidence-of-the-files-it-adds.md) | F-773 registration: the ADR or item named by the commit that adds a test file as evidence of kind E8 | REGISTERED | 2026-11-17 | 1 | F-773 | partial |
 | [0721](0721-f839-registration-a-second-reader-for-the-e8-primary-files-and-the-supplementary-sample-of-adr-0720.md) | F-839 registration: a second reader for the E8-primary files and the supplementary sample of ADR 0720 | REGISTERED | 2026-11-17 | 2 | F-839 | done |
 
-## Records with no item in the file name (258)
+## Records with no item in the file name (259)
 
 | ADR | Title | Status word | Date | Addenda | Items whose note cites it |
 |---|---|---|---|---|---|
@@ -809,5 +809,6 @@ One row per record of this folder, grouped by the roadmap category of the item i
 | [0339](0339-plastic-fan-blade-and-housing-demonstration.md) | Demonstration on the 120 mm fan: a polymer blade (orthotropy, temperature, creep, fatigue at a Campbell crossing) and the radiated power of the frame | PLANNED | 2026-11-12 | 0 | F-436 |
 | [0346](0346-defaults-registration-wall-pressure-flip.md) | registration of the default flip of the two wall-pressure keys (ADR 0269 Q1, ADR 0342 Q1): `prescribed_gradient` for the body force of the six-DOF driver and for the force reports on moving walls | REGISTERED | 2026-11-12 | 1 | F-358, F-440 |
 | [0350](0350-electron-studio-performance-spike-and-rcfd-studio-retirement.md) | An Electron Studio over the rcfd APIs: a performance spike, and the conditions for retiring rcfd-studio | PROPOSED | 2026-11-12 | 1 | F-447, F-448, F-449, F-456, F-804, F-819 |
+| [0745](0745-citations-2026-w47-audit-five-citations-drawn-by-seed.md) | citations 2026 week 47, audit: five citations drawn by seed and re-read against their sources | REGISTERED | 2026-11-19 | 0 |  |
 | [0800](0800-electron-studio-roadmap.md) | The Electron Studio roadmap, generated from guardrails, PRODUCT.md and DESIGN.md | ACCEPTED | 2026-11-16 | 0 | F-448, F-449, F-800, F-801, F-802, F-803, F-804, F-805, F-806, F-807, F-808, F-809 and 23 more |
 | [0801](0801-studio-web-dependencies-and-layout.md) | The dependencies and the directory layout of apps/studio-web | ACCEPTED | 2026-11-16 | 25 | F-800, F-801, F-803, F-804, F-805, F-807, F-808, F-809, F-810, F-811, F-813, F-814 and 13 more |

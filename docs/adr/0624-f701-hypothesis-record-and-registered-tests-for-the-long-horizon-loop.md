@@ -965,3 +965,21 @@ rule gives at most partial; it does not give todo, because every guard check is 
 > Follow-up proposed: Hypothesis record, seeded re-run sample and evidence-parameter guard. Deps F-701. Acceptance: verify with a registered sample of k evidence pairs (derived seed, k recorded in the result) catches an impostor evaluator on at least the registered share of synthetic worlds; a check that edits one evidence parameter and rewrites the reference hashes is refused only by the parameter comparison (the mutation "parameters not compared" fails it); every ADR 0624 check keeps its result.
 
 > Follow-up proposed: Coupled held metrics and the held-tolerance resolution floor for hypotheses. Deps F-701. Acceptance: two held metrics (flow and speed) solved together on a synthetic evaluator with a known joint solution within the registered tolerance, the floor from the held tolerance computed against a closed form, a registration below that floor refused with both values named, and every ADR 0624 check keeps its result.
+
+## Sources read (2026-11-19)
+
+Appended by the weekly citation item of week 47 ([ADR 0745](0745-citations-2026-w47-audit-five-citations-drawn-by-seed.md); the form is
+that of `docs/process/lead-process.md`). Nothing above this section is changed. The item re-reads one citation per drawn
+ADR: here the first entry of the list "References", which the ADR heads "All cited from memory". The other entries of that
+list were not worked and stay from memory.
+
+| citation | status | where | finding |
+|---|---|---|---|
+| Student (W. S. Gosset) (1908), "The probable error of a mean", Biometrika 6, 1-25; the ADR takes from it the one-sided bounds `L = m - t SE`, `U = m + t SE` with `t = t_{1-a, n-1}` (D5, "Student 1908") | `read` | The paper itself, as a scan with a text layer under its archive cover sheet ("Biometrika, Vol. 6, No. 1 (Mar., 1908), pp. 1-25", stable address jstor.org/stable/2331554), read at https://faculty.fiu.edu/~blissl/t-testpaper.pdf . Places: the head of page 1 ("VOLUME VI, MARCH, 1908, No. 1", "By STUDENT"); Section III (the distribution of `z`, the distance of the sample mean from the population mean in units of the standard deviation `s` of the sample); Sections VII and VIII (tables of the probability integral of `z` for `n` from 4 to 10); Section IX, Illustration I (ten differences, mean `.75`, "S. D. 1.70", `z = .44`). | The volume, year and pages agree; the issue is No. 1, March 1908. The bound agrees in substance and differs in form: the paper tabulates `z = (mean - mu)/s` with `s` on the divisor `n` (recomputed here from the ten values of Illustration I: `1.697` on `n`, `1.789` on `n - 1`; the paper prints `1.70`), not `t`, and it has no "degrees of freedom". The ADR's `t = (mean - mu)/(sd/sqrt(n))` with `sd` on `n - 1` is `z sqrt(n - 1)`, the later standard form of the same distribution, so `t_{1-a, n-1}` is the same quantile. The paper's tables stop at `n = 10`; the ADR's `n = 64` is outside them, and the ADR computes the quantile itself. |
+
+### Differences for the lead
+
+None in a number. One of wording, for the record only: the form `t_{1-a, n-1}` and the divisor `n - 1` are not printed in
+Student (1908), which works with `z` and the divisor `n`; the two are equivalent as shown in the row. The code that uses the
+quantile is `student_t_quantile` in `crates/rcfd-api/src/design/hypothesis.rs` (line 106), which computes it from the
+incomplete beta function and is checked by row K1 of this ADR against closed forms, not against the paper's tables.

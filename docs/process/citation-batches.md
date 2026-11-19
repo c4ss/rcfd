@@ -54,3 +54,14 @@ that rate the remaining 305 ADRs are of the order of 50 million tokens if their 
 **Things an agent did that the lead should know.** One agent's attempt to retry refused repositories with another
 client name was denied by the permission check and it stopped there. One navigation in the browser pane showed a save
 dialog; nothing was downloaded that way. One agent declined a site's cookie banner.
+
+## Weekly item, week 47 (2026-11-19, ADR 0745)
+
+Five citations drawn by seed 20261119 from 305 ADRs (0588, 0624, 0344, 0028, 0379), one agent (Claude Fable 5.2). 1 read
+in the source itself, 3 not obtainable with second sources read, 1 not a source; 3 differences, none in a number the code
+uses that a source contradicts. The Schiller-Naumann switch at Re 1000 and the value 0.44 above it (ADR 0028,
+`crates/rcfd-particles/src/drag.rs`) remain without a read source; the only range read is narrower (0.1 to 700).
+
+The report's open count falls from 305 to 300, because it counts ADRs without a `Sources read` heading. Each of the five
+addenda covers the one drawn citation; ADR 0624, ADR 0344 and ADR 0028 name further citations from memory as not worked.
+The ceiling in `exceptions/from-memory-count.txt` therefore stays at 305 until those three are complete.

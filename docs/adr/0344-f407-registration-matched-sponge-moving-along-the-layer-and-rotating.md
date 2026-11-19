@@ -518,3 +518,22 @@ Deps: F-407. Size S. Acceptance:
 The maintainer decided these on 2026-11-18 as sets of options with a recommendation; until now the decision stood in the roadmap note of the item only. Nothing above this section is changed.
 
 - **F-446, the addendum's remaining question 1 (first asked as Q1).** Asked: the lab-frame memory as the behaviour of `SpongeFrame::AttachedToMesh` for the matched forms, with the F-341 records re-recorded. Answer: Held. The default change is not approved now: it moves existing results, and it waits until the fan path needs it. Not to be issued.
+
+## Sources read (2026-11-19)
+
+Appended by the weekly citation item of week 47 ([ADR 0745](0745-citations-2026-w47-audit-five-citations-drawn-by-seed.md); the form is
+that of `docs/process/lead-process.md`). Nothing above this section is changed. The item re-reads one citation per drawn
+ADR: here the first paper named after the sentence "Papers are cited from memory where named". The two other papers of the
+list "Sources" (Berenger 1994; Tam, Auriault and Cambuli 1998) were not worked and stay from memory.
+
+| citation | status | where | finding |
+|---|---|---|---|
+| "Hu 2001" (DR2), in "Sources" F. Q. Hu, J. Comput. Phys. 173 (2001), "matched layer with a mean flow"; the ADR takes the statement that the paper discusses growing modes of matched layers with a mean flow ("from memory, not used") | `not obtainable` (the paper); `read` of two second sources, named as such | The paper: https://doi.org/10.1006/jcph.2001.6887 leads to https://linkinghub.elsevier.com/retrieve/pii/S0021999101968871 , which returned only a redirecting page to the fetch; the article is sold by the publisher and no open copy was found by search. Second source 1: F. Nataf, "A new construction of perfectly matched layers for the linearized Euler equations", arXiv:math/0502083, Section 1 and the bibliography, read at https://ar5iv.labs.arxiv.org/html/math/0502083 . Second source 2: P. Marchner, H. Beriot, X. Antoine, C. Geuzaine, "Stable perfectly matched layers with Lorentz transformation for the convected Helmholtz equation", J. Comput. Phys. (2021), the introduction and references [10] to [15], read as the authors' deposited manuscript (HAL hal-02556182v2) at https://orbi.uliege.be/bitstream/2268/259055/1/2021_marchner_stable.pdf . | Bibliographic data agree and are completed: both second sources give "A stable, perfectly matched layer for linearized Euler equations in unsplit physical variables", J. Comput. Phys. 173(2), 455-480, 2001. The subject agrees: Nataf writes that a first stable matched layer "was proposed in [Hu01] for flows normal to the boundary". The statement the ADR takes is not confirmed for this paper: Marchner et al. credit the finding that convection makes the phase and group velocities differ in sign, "which in turn leads to an exponentially growing solution inside the layer", to their [10], [11], [12] (Hu 1996; Hesthaven 1998; Abarbanel, Gottlieb and Hesthaven 1999), and Hu 2001 [14] with the stable formulation that answers it. Whether Hu 2001 itself discusses the growing modes could not be read. |
+
+### Differences for the lead
+
+1. The attribution "Hu 2001 ... discuss growing modes of matched layers with a mean flow" is not confirmed by what could be
+   read: the second sources describe Hu 2001 as the stable formulation and give the growing modes to earlier papers. No
+   code depends on it: the ADR marks the citation "not used", and the instability of DR2 and the lab-frame memory of DR3
+   (`SpongeFrame::AttachedWithLabMemory`, `crates/rcfd-fv/src/sponge.rs`) are derived in the ADR and checked by its own
+   tests. No item is named; it is a matter of the record.

@@ -357,3 +357,27 @@ Baseline hashes (`baseline_hashes.rs`) and the layering test pass unchanged on a
   Rosin-Rammler form are verified in secondary sources only (see `docs/reference-data.md`).
 * Shared files touched (small hunks): `Cargo.toml`, `Cargo.lock`, `crates/rcfd-api/Cargo.toml`, `crates/rcfd-api/src/{lib,schema,case}.rs`,
   `crates/rcfd-cli/tests/workspace_graph.rs`, `docs/architecture.md`, `docs/case-schema.md`, `docs/reference-data.md`.
+
+## Sources read (2026-11-19)
+
+Appended by the weekly citation item of week 47 ([ADR 0745](0745-citations-2026-w47-audit-five-citations-drawn-by-seed.md); the form is
+that of `docs/process/lead-process.md`). Nothing above this section is changed. The item re-reads one citation per drawn
+ADR: here the first thing this ADR marks unverified, which its status words define as "from memory only". The SplitMix64
+constants of D7 were not worked here (the same constants were read against Vigna's `splitmix64.c` for ADR 0273 on
+2026-11-18).
+
+| citation | status | where | finding |
+|---|---|---|---|
+| D2, `schiller_naumann`: the validity limit of the Schiller-Naumann correlation, taken as `Re <= 1000` with `C_D = 0.44` above ("the switch at 1000 is marked UNVERIFIED"; "original not accessed") | `not obtainable` (the 1933 paper); `read` of two second sources, named as such | The paper (L. Schiller and A. Naumann, Zeitschrift des Vereins Deutscher Ingenieure 77 (1933) 318-320) was not found online in three searches by title, authors and journal; no address of it exists to try. Second source 1: Y. M. F. El Hasadi and J. T. Padding, "Do logarithmic terms exist in the drag coefficient of a single sphere at high Reynolds numbers?", Chem. Eng. Sci. 265 (2023) 118195, the description of the three data sets and the paragraph before the fitted equation of the third, read as the university's deposited copy at https://repository.tudelft.nl/file/File_ce95c237-eaaf-48ad-882b-1e02cff5e7e6 . Second source 2: J. Q. Feng, "Fluid drags on a sphere at finite Reynolds number: a classical problem examined afresh", arXiv:2610.00334v3, the introduction and the reference list, read at https://arxiv.org/pdf/2610.00334 . | The form and constants agree with second source 2: `C_d = 24 (1 + alpha Re^beta)/Re` with `alpha = 0.15`, `beta = 0.687`, credited to Schiller and Naumann (1933), "77.12, pp. 318-320". The limit `1000` is not confirmed: second source 2 states no range for this formula (its `Re <= 1000` and `Re < 1000` belong to the formula of Klyachko and to the piecewise formula of its equation (1), whose constant above 1000 is `0.424`); second source 1 takes the correlation as data only over `0.1 < Re < 700`. Neither read source gives `0.44` as the value above the limit. The limit stays from memory, as the ADR says. |
+
+Aside, the ADR's own arithmetic and not a citation: at `Re = 1000` the bracket gives `24/1000 (1 + 0.15 * 1000^0.687) =
+0.4383`; D2 prints `0.437`. The jump to `0.44` is then 0.4 percent, not 0.7.
+
+### Differences for the lead
+
+1. The switch at `Re = 1000` and the constant `0.44` above it have no read source. One second source uses the correlation
+   only up to `Re = 700`. Code: `crates/rcfd-particles/src/drag.rs`, lines 51 to 56 (`if re <= 1000.0 { 1.0 + 0.15 *
+   re.powf(0.687) } else { 0.44 * re / 24.0 }`). Item F-056. The ADR already marks the limit UNVERIFIED; what is new is
+   that the search for a source of `1000` failed and that the only range found is narrower.
+2. D2 prints `0.437` for the first branch at `Re = 1000`; the formula gives `0.4383`. Text only; no code or test uses the
+   printed number.
