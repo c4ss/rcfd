@@ -228,3 +228,21 @@ change of the limit is a new registration under F-849 (rule 13).
   `immersed_piso_stop_f355::a_two_d_two_on_m2_strouhal` 991 to 1994 s): on the slowest runner seen they stay below 3600 s by
   a factor of 1.8 or more and get no row.
 - The bisect of the attribution: its own budget and its probe limit are as before.
+
+## Amendment 1 (2026-11-19, before the corrected run of N1): the command of N1 named a ref that is not the base
+
+N1 as registered is `git diff --name-only main...HEAD -- crates`. Its first run listed four files under `crates/`
+(`rcfd-api/tests/case_schema_page.rs`, `rcfd-cli/tests/docs_site.rs`, `rcfd-runner/src/site/remote.rs`,
+`rcfd-runner/tests/sites_adr0739.rs`). None of them is touched by this branch: in this checkout the local ref `main` is
+39269587, 44 commits behind b52b882a, the commit this branch was made from (the header of this ADR), so the command compared
+with an older tree. That run is void: a defective set-up, the command and not the branch. It was the only check run with
+that ref.
+
+Corrected check, run once after this amendment is committed:
+
+| Id | Check | Limit | Source of the limit | Estimate | Margin | Kind |
+| --- | --- | --- | --- | --- | --- | --- |
+| N1' (c3; replaces N1) | `git diff --name-only b52b882a HEAD -- crates` | no file | acceptance; bit-identity row | 0 files | exact | unchanged default output |
+
+The limit is unchanged. Known before this run: the three commits of the branch so far were made by me and hold no file
+under `crates/`.
