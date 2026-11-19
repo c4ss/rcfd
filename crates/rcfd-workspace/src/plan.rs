@@ -23,10 +23,11 @@ pub const STORE_SNAPSHOTS: u64 = 100;
 pub const STORE_FIELDS: u64 = 4;
 
 /// Whether `start_run` of a project case that exists already applies the plan when the call does not say (`store`
-/// omitted). `false` keeps such a call as it was before ADR 0186: ADR 0173 D7 (a) turns it on, which changes what
-/// `start_run` writes for cases with no store setting and so waits for the maintainer's approval (ADR 0186 Q2). A case
-/// made by the same call (`new_case`) had no behaviour before and gets the plan unless `store` is `"none"`.
-pub const PLAN_FOR_PROJECT_CASES: bool = false;
+/// omitted). `true` since ADR 0741: ADR 0173 D7 (a), option (a) of ADR 0186 Q2, approved by the maintainer on
+/// 2026-11-18, so every `start_run` in project mode stores the run's fields unless the case or a `set` entry gives the
+/// store. `store: "none"` is the caller's way back: the run gets only what the case asks for, as every such call did
+/// while this was `false` (ADR 0186). A case made by the same call (`new_case`) got the plan from the start.
+pub const PLAN_FOR_PROJECT_CASES: bool = true;
 
 /// The keys that decide whether and how often a store is written.
 pub const INTERVAL_KEYS: [&str; 2] = ["output.store_interval", "output.store_time_interval"];
