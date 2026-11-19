@@ -436,3 +436,13 @@ F-466, each one line:
 > ADR 0743, 2026-11-19 (F-471): with the corrected order as the default on its branch the stopping system of step 2951 converges in 10 iterations with every r^T z > 0, the T run does not stop, and the old breakdown is reproduced under the old order (stop at 2951, r^T z -2.006e-9, interchanges at 13, 16, 17).
 
 > ADR 0743, 2026-11-19 (F-471): the default T run with the bounded forcing reaches t = 8 without the IC repeat on the branch of ADR 0743; its extrema equal those of ADR 0363 H3 to 2e-6 relative (max C_D 3.22695, max C_L 1.00253, St 0.30144), so A2-T-2 of ADR 0268 stays met.
+
+## Answer of the maintainer (2026-11-19), written into this ADR by the lead's brief
+
+Asked by the lead on 2026-11-19 (question 1 of ADR 0743, addendum 1), as three options with a recommendation. The maintainer
+answered on 2026-11-19: "Approve the move". That is option (a): the move of FP4 of ADR 0374 N0 under the corrected order of
+the coarsest dense LU is approved, under a further registration that restates the test and runs the four long files before
+anything merges. Option (c), an approval in advance of further fingerprints, was not given: any other registered hash or
+fingerprint that moves stops the work again and is reported.
+
+The further registration is ADR 0747 (brief `docs/adr/briefs/f471-fp4-move.md`).
