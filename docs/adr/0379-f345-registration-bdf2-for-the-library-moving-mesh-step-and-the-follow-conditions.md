@@ -511,3 +511,18 @@ No roadmap file was edited. **F-345**, proposed status: `partial`. Proposed note
 > Not delivered: the case-tree wiring. BDF2 for the library's moving-mesh step and the three-level follow conditions of a moving wall came with F-345 (ADR 0379; prepare takes them when BDF2 is on, and the BDF2 overset step with every cell calculated equals the library's bit for bit).
 
 No follow-up item is proposed (question 1 belongs to ADR 0359 question 2).
+
+## Sources read (2026-11-19)
+
+Appended by the weekly citation item of week 47 ([ADR 0745](0745-citations-2026-w47-audit-five-citations-drawn-by-seed.md); the form is
+that of `docs/process/lead-process.md`). Nothing above this section is changed. The item re-reads one citation per drawn
+ADR, the first in file order; this ADR has no other line with the words.
+
+| citation | status | where | finding |
+|---|---|---|---|
+| D. J. Mavriplis and Z. Yang, "Construction of the discrete geometric conservation law for high-order time-accurate simulations on dynamic meshes", J. Comput. Phys. 213 (2006) 557-573; the ADR takes the swept-volume form of the mesh flux of BDF2 at constant step, weights `3/2, -1/2` | `not obtainable` (the paper); `read` of a second source, named as such, for the bibliographic data and the subject only | The paper: https://doi.org/10.1016/j.jcp.2005.08.018 leads to https://linkinghub.elsevier.com/retrieve/pii/S002199910500392X , which returned only a redirecting page to the fetch; the article is sold by the publisher, and three searches found no open copy and no open copy of the conference paper that preceded it. Second source: M. Benoit and S. Nadarajah, "On the geometric conservation law for the non linear frequency domain and time-spectral methods", arXiv:1804.03731v1, the introduction, the paragraph after its equation (33) and reference [13], read at https://arxiv.org/pdf/1804.03731 . | Bibliographic data agree and are completed: reference [13] there is the same title, "Journal of Computational Physics 213 (2) (2006) 557-573", DOI 10.1016/j.jcp.2005.08.018. The subject agrees: the second source cites the paper for discrete geometric conservation laws "derived in order to preserve the time accuracy for high temporal-order schemes" and for the approach that splits the law "over each face". The weights `3/2, -1/2` were not read anywhere: the second source does not print the BDF2 form. They stay from memory as a citation; in this ADR they do not rest on the citation, since D2 derives `m_f = c0 m_f^{n+1} - (c2/r) m_f^n` from the per-cell conservation law and the constant-step case follows with `c0 = 3/2`, `c2 = 1/2`. |
+
+### Differences for the lead
+
+None. The code that uses the weights is `crates/rcfd-fv/src/ale.rs`, line 215 (`c0 * step.mesh_flux[f] - c2 / r *
+h.flux[i]`), checked by `crates/rcfd-fv/tests/ale_bdf2_f345.rs` against the ADR's own derivation.
