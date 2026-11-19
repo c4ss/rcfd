@@ -207,3 +207,33 @@ The four heavy runs are the four long files (25 to 55 minutes each in the gate l
 ## Open questions
 
 None is open at registration. The form of the retiring line (D1) is taken on the standing instruction and changes no result.
+
+## Amendment 1 (2026-11-19): the mutation M1 was defective; a corrected mutation M1a, registered before its run
+
+Written after the run of the new test file on the code commit 5536aa90 (4 passed) and after the runs of M1, M2 and M3 on
+the scratch copy, and before any run of M1a. No test, no limit and no registered value changes.
+
+**What happened.** M1 (the `Default` of `AmgSettings` back to `coarse_lu_interchanges_first: false`) was run once on the
+scratch copy and was **not caught**: all four tests of `immersed_single_corrector_fp_adr0747` passed
+(`logs/0747-mutation-M1.log`). M2 and M3 were caught by F2 as registered.
+
+**Why.** The pressure solve of a `PimpleSolver` does not read that default. Since ADR 0743 D2 it takes its settings from
+`LinearOptions::amg_settings()`, which writes `coarse_lu_interchanges_first: !amg_coarse_lu_interleaved` over the default
+settings. With `amg_coarse_lu_interleaved` false the pressure AMG has the corrected order whatever the `Default` of
+`AmgSettings` says, so M1 changes no operation of any run of this file. The defect is in the plan of the mutation, which
+was copied from ADR 0743 (where M1 must fail tests that build an `Amg` from `AmgSettings::default()` directly, and does);
+the registration of this ADR did not follow the call path. The committed patch of this file would not make it fail, so it
+is replaced.
+
+**M1a (committed, rule 16), in place of M1:** in `crates/rcfd-linalg/src/backend.rs`, `LinearOptions::amg_settings`
+returns `coarse_lu_interchanges_first: false` always (the pressure solve of the flow solvers takes the interleaved order
+of before ADR 0743 by default, which is what "the default switched back" means on this call path). It must fail **F1 at
+FP4**, with the left value the old `0x279c4c4ed4cf89be`. The patch
+`crates/rcfd-fv/tests/immersed_single_corrector_fp_adr0747.mutation.patch` is replaced by this mutation in the commit of
+this amendment; its first line stays `# expect-fail: cargo test --release -p rcfd-fv --test
+immersed_single_corrector_fp_adr0747`. M1a is run once on the scratch copy after that commit. The patch of ADR 0743
+(`amg_coarse_lu_default_adr0743.mutation.patch`) is untouched and still fails its own file.
+
+**Consequence for the decision.** The registered rule says done needs every mutation "caught by the tests named for them
+without an amendment after a run". This amendment is written after a run, so by that rule the outcome of this registration
+cannot be done on the mutations alone, whatever M1a gives; the addendum reports it so.

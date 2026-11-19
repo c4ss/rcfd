@@ -1,14 +1,13 @@
 # expect-fail: cargo test --release -p rcfd-fv --test immersed_single_corrector_fp_adr0747
-diff --git a/crates/rcfd-linalg/src/amg.rs b/crates/rcfd-linalg/src/amg.rs
-index 1c89cc14..363bf35a 100644
---- a/crates/rcfd-linalg/src/amg.rs
-+++ b/crates/rcfd-linalg/src/amg.rs
-@@ -44,7 +44,7 @@ impl Default for AmgSettings {
-             pre_sweeps: 1,
-             post_sweeps: 1,
-             cycle_index: 2,
--            coarse_lu_interchanges_first: true,
+diff --git a/crates/rcfd-linalg/src/backend.rs b/crates/rcfd-linalg/src/backend.rs
+--- a/crates/rcfd-linalg/src/backend.rs
++++ b/crates/rcfd-linalg/src/backend.rs
+@@ -76,7 +76,7 @@
+     /// the coarsest dense LU solve when [`LinearOptions::amg_coarse_lu_interleaved`] is set.
+     pub fn amg_settings(&self) -> crate::amg::AmgSettings {
+         crate::amg::AmgSettings {
+-            coarse_lu_interchanges_first: !self.amg_coarse_lu_interleaved,
 +            coarse_lu_interchanges_first: false,
+             ..crate::amg::AmgSettings::default()
          }
      }
- }
