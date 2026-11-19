@@ -384,8 +384,8 @@ impl RunStore for FsStore {
         let mut s = status.clone();
         s.updated = records::now_iso();
         // replaced up to every poll period; without fsync, as before the switch (ADR 0123 limits: a killed process
-        // loses nothing). An fsync after the rename widened the window in which a reader sees the final status
-        // before its state event (S7 on Linux).
+        // loses nothing). The terminal status is the last write of a run (ADR 0742): its state event is appended
+        // before it.
         let path = self.run_dir(id).join("status.json");
         let mut bytes = serde_json::to_vec_pretty(&s).map_err(bad)?;
         bytes.push(b'\n');
@@ -394,8 +394,8 @@ impl RunStore for FsStore {
 
     fn append_event(&self, id: &str, mut event: Value) -> io::Result<()> {
         event["t"] = json!(records::now_iso());
-        // without an fsync, as before the switch: the state event follows the status write closely (a reader that
-        // sees the final status.json finds the event and no request files a moment later, ADR 0123 S7)
+        // without an fsync, as before the switch. The state event of a run's end is appended before its terminal
+        // status.json (ADR 0742; a reader that sees that status finds the event and no request files, ADR 0123 S7)
         let (mut a, _) = jsonl::Appender::open(&self.run_dir(id).join("events.jsonl")).map_err(io_error)?;
         a.append(&event).map_err(io_error)
     }
