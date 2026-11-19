@@ -428,3 +428,19 @@ because of the two test failures above.
 
 **Left for the lead.** The default of `shards` for the scheduled run stays 1. Changing it is one expression in
 `gate.yml` (`inputs.shards || '1'`).
+
+## The lead's decision on the shard default (2026-11-19)
+
+The default of `shards` for the scheduled gate stays 1. D7 lets the lead change it after a green sharded run, and the
+trial of Addendum 3 was red on two tests, neither of them a fault of the split:
+
+- `immersed_solid_f219::a3_two_d_two_strouhal_number` and `immersed_unsteady_force_f346::a2t_c1_two_d_two_on_t` run within a
+  factor of 1.2 of the 3600 s per-test limit. They are roadmap item F-849 (ADR 0740, issued 2026-11-19), which comes
+  first: a sharded gate would put the same time-out in one of its shards.
+- `monitors_filtered_f456::f456_i2_storing_an_increment_of_100_samples_at_1e5` failed once and passed on the re-run: a 2 ms
+  timing limit on a shared runner. One occurrence; no item is entered, and a second occurrence in a gate line of the
+  ledger makes it one, under F-456.
+
+The default changes to 4 when F-849 is done and one dispatched run with four shards is green: 2 h 32 min against 4 h 41 min
+of wall time, for about one and a half times the runner minutes (417 against 281). That is one expression in `gate.yml`
+and an amendment line here. Nothing above this section is changed.
