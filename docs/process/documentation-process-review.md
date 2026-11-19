@@ -398,13 +398,22 @@ A fourth part, the same day, is the maintainer's decisions. Seventeen sets of op
 
 The report's count of unanswered questions went from 88 to none. That count reads markers and headings; it does not show that each question was answered well.
 
+A fifth part (2026-11-18 and 2026-11-19) followed the merge of the branch into main (`10ba1a34`). It is on six pull requests that are green and not yet merged; [the handover note](handover-2026-11-19.md) lists them with what was found:
+
+- The full run in parallel jobs (pull request 26): gate.yml takes an input `shards`, each shard deals the same split, and a job `complete` fails unless every shard ran, from one split, with parts that sum to the total. A four-shard trial ran every one of 5886 tests once in 2 h 32 min against 4 h 41 min, for about 1.5 times the runner minutes (ADR 0653 Addendum 3). The scheduled run is still one job.
+- I10 (pull request 28): a citation from memory is closed by a dated "Sources read" addendum, and the report counts the ADRs without one (311 to 305). Batch 1 read 51 of 70 citations of six ADRs and found 11 differences in the record, none in a number the code uses.
+- I9 (pull request 25): the trial of another kind of reader on 8 items with planted defects. Both models found them (5 of 6 and 6 of 6); of the 16 places both flagged in unchanged text, one is a false sentence, ten are minor and five are not defects.
+- The hand-written distillation of the structural page (pull request 29), drafted from the roadmap text, not from the ADRs.
+- The full run on main was recorded twice (pull request 27): red at `205889bf` on one test of F-848, green at `39269587` (5884 passed, 1698 ignored, 281 minutes). The fix registered for F-848 is pull request 24; its cause is inferred, not reproduced.
+
 Not in place, with who acts next:
 
-- The rules in the maintainer's work folder still govern running agents until this branch is on main and the lead's briefs point at agent-rules.md (lead).
+- The six pull requests are not merged (lead).
+- The lead's briefs do not yet point at agent-rules.md: the rules in the maintainer's work folder still govern running agents (lead).
 - Issuing the items the decisions unblocked, within the budgets; the registered item that makes the approved default of `start_run`; the answers written into the ADR of each of the thirty-one items (lead).
-- Never run: `push_main.py --run`, `--push`, `--left-out-run` and `--mutants --run` (cargo-mutants is not installed here and its run time on this workspace is unmeasured), and `gate_test.py --skip-pattern` and `--shard` on a real gate; gate.yml passes neither.
-- The full run split into parallel jobs: the script can shard, the workflow does not yet. The workflow change cannot be tried from a branch, and the attribution step would have to read the logs of all shards.
-- Items to issue: the hand-written distillation of the structural page, the trial of another kind of reader (I9), and the replacement of citations from memory (I10; the ADRs are append-only, so each is an addendum).
+- Never run: `push_main.py --run`, `--push`, `--left-out-run` and `--mutants --run` (cargo-mutants is not installed here and its run time on this workspace is unmeasured), and `gate_test.py --skip-pattern` on a real gate.
+- The scheduled full run does not use shards, and two tests run within a factor of 1.2 of the 3600 s per-test limit; an item for them is drafted in the handover note (lead).
+- How far the replacement of citations from memory goes (305 ADRs, of the order of 50 million tokens at the cost of batch 1), and whether a fresh reader per item becomes a rule (maintainer).
 - Rules that still rest on convention: one-line note entries, citation locators, the validation rule, the limit on reading and the weekly audit.
 
 Three measures changed when the script counted them. 311 ADRs contain the words "from memory" (G18 counted 218 registration files); 55 Rust test root files and 12 Studio spec files name no record in their leading comment (I1 said 54 and 12); 97 file names carry none of the ten kind words of rule 18 (G3 counted 103 against four words).
