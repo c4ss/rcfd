@@ -1763,4 +1763,7 @@ mod tests {
         assert_eq!(seqs_2, [1, 2]);
         let _ = std::fs::remove_dir_all(&dir);
     }
+
+    // ADR 0742 (F-262): the order of the final writes of a run
+    mod f262;
 }
