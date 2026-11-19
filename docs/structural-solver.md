@@ -186,8 +186,9 @@ above (the fan-blade demonstration is F-387) are not repeated.
   (F-577, F-583); the own-frequency iteration can skip pseudo-modes (F-609).
 * Power-law creep with time hardening, backward Euler and a consistent tangent, on the quasi-static time-stepping
   driver (F-411, F-651, F-636); a temperature history and an opt-in thermal predictor (F-592, F-617).
-* Hyperelastic (base item F-425 partial): Beam2 and shells take the linearised material, opt-in (F-645); linear-path
-  checks (F-644); modes, buckling and harmonic response about a nonlinear state (F-646, F-669).
+* Hyperelastic (base item F-425 partial): Beam2 and shells take the linearised material (F-645), by default since
+  ADR 0746 (F-666); linear-path checks (F-644); modes, buckling and harmonic response about a nonlinear state (F-646,
+  F-669).
 * J2 plasticity (base item F-422 partial): thick sphere on 16 radial Hex20 layers, residual hoop stress at the bore
   4.52e-3 (F-602); yielded-set record checked (F-606).
 
@@ -317,7 +318,9 @@ Built, but the item is partial (a registered check missed, or the maintainer has
 * Beams (F-514): centrifugal, nodal body force and thermal loads are refused. Warping (F-635): no warping inertia, no
   mode superposition. Beam2 in a cyclic sector: taken with the shells option alone (F-672, ADR 0744); `full_rotor` and
   the whirl paths keep their own options, beam ends on interpolated or axis boundaries are refused. Hyperelastic
-  structural elements by default: approved, not yet made (F-666).
+  material on Beam2 and shells: taken by default on the linear paths as its linearised material (F-666, ADR 0746;
+  `set_hyperelastic_structures` is without effect); a temperature load with it, a hyperelastic ply and the corotated
+  shells are still refused.
 * Shells: temperature loads have rounding misses and no per-ply temperatures (F-525, F-527, F-687); the
   energy-momentum step, `solve_in_time` and `buckling_factors` still refuse geometrically nonlinear shells (F-585).
 * Creep on B-bar and F-bar Hex8 (F-580, F-587, F-597, F-637): growth bound 6.0e-3 against 2e-3; no finite-strain

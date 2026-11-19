@@ -649,6 +649,7 @@ fn l7_linear_against_nonlinear_at_small_strain() {
 // ----------------------------------------------------------------------------------------------- refusals
 
 #[test]
+#[ignore = "ADR 0746: retired record, RF1 asserts the refusal of a hyperelastic material on a structural element that is lifted by default; restated in sa_hyper_structures_default_adr0746.rs"]
 fn rf1_to_rf4_refusals() {
     let mut c = Checks::new();
     // RF1: a 2 x 2 Shell4 plate.

@@ -13,11 +13,11 @@
 //!   (Full and BBar Hex8, the BBar block being the mean-dilatation element, [`crate::nonlinear_md`]) and the nonlinear transient
 //!   Method step (ADR 0555 D4); the linear paths take the linearised material, the isotropic elasticity of the small-strain
 //!   moduli ([`linearised_elasticity`], through [`crate::model::Material::linear_elasticity_matrix`] and
-//!   [`crate::model::Material::linear_stress`], ADR 0555 D1, D2), refusing a temperature load and, unless the model opts in
-//!   ([`crate::model::SolidModel::set_hyperelastic_structures`], ADR 0584), Beam2 and shell elements, naming
-//!   [`LINEAR_FOLLOW_UP`] (ADR 0555 D3); opted in, a structural element takes the isotropic element of
-//!   [`small_strain_young_poisson`] (ADR 0584 D2); the element-constant matrix
-//!   ([`crate::model::Material::elasticity_matrix`]) stays refused naming [`FOLLOW_UP`].
+//!   [`crate::model::Material::linear_stress`], ADR 0555 D1, D2), refusing a temperature load, naming
+//!   [`LINEAR_FOLLOW_UP`] (ADR 0555 D3); a Beam2, Shell4 or Shell3 element takes the isotropic element of
+//!   [`small_strain_young_poisson`] (ADR 0584 D2), by default since ADR 0746 (it was the opt-in
+//!   [`crate::model::SolidModel::set_hyperelastic_structures`] of ADR 0584, now without effect); the element-constant
+//!   matrix ([`crate::model::Material::elasticity_matrix`]) stays refused naming [`FOLLOW_UP`].
 
 use crate::error::{FemError, Result};
 use crate::material::{HyperelasticEnergy, Matrix6};
@@ -28,8 +28,8 @@ pub const PENDING: Option<&'static str> = None;
 /// The package named by the paths that do not take the hyperelastic material (ADR 0541 D2 to D4).
 pub const FOLLOW_UP: &str = "a follow-up of ADR 0541";
 
-/// The package named by the linear paths' refusals of the hyperelastic material on a structural element or with a
-/// temperature load (ADR 0555 D3).
+/// The package named by the linear paths' refusal of the hyperelastic material with a temperature load (ADR 0555 D3; its
+/// refusal on a structural element named it too, until ADR 0746).
 pub const LINEAR_FOLLOW_UP: &str = "a follow-up of ADR 0555";
 
 /// The Voigt pairs of the driver: `(0,0), (1,1), (2,2), (0,1), (1,2), (2,0)`.

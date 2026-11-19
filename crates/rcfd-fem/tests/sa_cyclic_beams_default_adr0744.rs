@@ -755,6 +755,7 @@ fn twin() -> Material {
 
 /// `a_b_beam2_cyclic_refused_for_its_own_reason` of `sa_hyper_structures_f666.rs` (ADR 0593 A-B) restated by ADR 0744.
 #[test]
+#[ignore = "ADR 0746: retired record, H-D asserts the refusal of a hyperelastic material on a structural element that is lifted by default; restated in sa_hyper_structures_default_adr0746.rs"]
 fn ab_a_h_d_h_t_hyperelastic_beams_on_the_cyclic_path() {
     let mut fails = Vec::new();
     let mut hold = |name: &str, ok: bool, what: String| {

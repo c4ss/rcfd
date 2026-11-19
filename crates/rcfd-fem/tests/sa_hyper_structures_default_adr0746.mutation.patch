@@ -1,0 +1,42 @@
+# expect-fail: cargo test --release -p rcfd-fem --test sa_hyper_structures_default_adr0746
+diff --git a/crates/rcfd-fem/src/model.rs b/crates/rcfd-fem/src/model.rs
+index 7ec5c3ef..e9d40ff1 100644
+--- a/crates/rcfd-fem/src/model.rs
++++ b/crates/rcfd-fem/src/model.rs
+@@ -1503,16 +1503,29 @@ impl SolidModel {
+             // ADR 0555 D3: the linear paths take the hyperelastic material as its linearised material, without a temperature
+             // load (ADR 0541 D3 refused it on every linear path). ADR 0746 D1: on Beam2, Shell4 and Shell3 elements too, by
+             // default (the refusal of ADR 0555 D3 on a structural element, an opt-in since ADR 0584 D1, is lifted).
+-            if !history
+-                && matches!(m, Material::Hyperelastic { .. })
+-                && self.loads.iter().any(|l| matches!(l, Load::Temperature { .. }))
+-            {
+-                return Err(FemError::NotYetSupported {
++            if !history && matches!(m, Material::Hyperelastic { .. }) {
++                let refused = |what: &str| FemError::NotYetSupported {
+                     item: "material",
+                     variant: m.name(),
+-                    location: format!("material {i}, element set '{set}': a temperature load"),
++                    location: format!("material {i}, element set '{set}': {what}"),
+                     package: crate::mat_hyper::LINEAR_FOLLOW_UP,
+-                });
++                };
++                let elements = self.mesh.element_set(set).unwrap_or(&[]);
++                if !self.hyperelastic_structures
++                    && elements.iter().any(|&e| {
++                        matches!(
++                            self.mesh.element_kind(e),
++                            crate::mesh::ElementKind::Beam2
++                                | crate::mesh::ElementKind::Shell4
++                                | crate::mesh::ElementKind::Shell3
++                        )
++                    })
++                {
++                    return Err(refused("a structural element (Beam2, Shell4, Shell3)"));
++                }
++                if self.loads.iter().any(|l| matches!(l, Load::Temperature { .. })) {
++                    return Err(refused("a temperature load"));
++                }
+             }
+             // ADR 0452 D6: a path that does not take the per-point materials refuses them.
+             if !point_materials && crate::mat_ortho::is_point_material(m) {

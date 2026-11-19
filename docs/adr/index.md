@@ -160,7 +160,7 @@ One row per record of this folder, grouped by the roadmap category of the item i
 | [0687](0687-f757-registration-rhie-chow-ddt-correction-on-coupled-faces-in-the-fractional-step-and-with-bdf2.md) | F-757 registration: Rhie-Chow ddt correction on coupled faces in the fractional step and with BDF2 | REGISTERED | 2026-11-17 | 1 | F-757 | partial |
 | [0691](0691-f771-registration-body-force-in-the-fractional-step.md) | F-771 registration: body force in the fractional step | REGISTERED | 2026-11-17 | 1 | F-771 | partial |
 
-## Structural solver (265)
+## Structural solver (266)
 
 | ADR | Title | Status word | Date | Addenda | Item | Item status |
 |---|---|---|---|---|---|---|
@@ -429,6 +429,7 @@ One row per record of this folder, grouped by the roadmap category of the item i
 | [0728](0728-f845-registration-the-library-arc-length-driver-through-rule-l-s-16-3-fold-with-warm-started-local-modes.md) | F-845 registration: the library arc-length driver through rule L's 16^3 fold with warm-started local modes (ADR 0726's `arclength::trace_from` from ADR 0711's rung 5 on the model with the warm start of the incompatible modes, the committed element states carried by the driver, through the fold computed by ADR 0724: the fold read from the load factor and the inertia, the states against a bordered reference on the warm model, the constraint measured with a floor for short arcs; a fast control on a closed-form fold with a local unknown) | REGISTERED | 2026-11-17 | 1 | F-845 | done |
 | [0729](0729-f847-registration-the-element-entry-points-of-the-incompatible-hex8-given-a-committed-state-with-the-nine-modes-of-the-warm-start.md) | F-847 registration: the element entry points of the incompatible Hex8 given a committed state with the nine modes of the warm start (a length rule that leaves every current call bit-identical, the modes as the start of the local iteration, and the text of the transient restore's refusal) | REGISTERED | 2026-11-17 | 1 | F-847 | done |
 | [0744](0744-f672-registration-beam2-in-the-cyclic-constraint-by-default.md) | F-672 registration: Beam2 in the cyclic constraint by default | REGISTERED | 2026-11-19 | 1 | F-672 | partial |
+| [0746](0746-f666-registration-hyperelastic-structural-elements-by-default.md) | F-666 registration: hyperelastic materials on structural elements by default | REGISTERED | 2026-11-19 | 2 | F-666 | partial |
 
 ## Meshing and mesh formats (9)
 

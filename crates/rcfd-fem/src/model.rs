@@ -991,7 +991,8 @@ pub struct SolidModel {
     constraints: Vec<Constraint>,
     loads: Vec<Load>,
     supports: Vec<ElasticSupport>,
-    /// ADR 0584 D1: the linear paths take a hyperelastic material on Beam2, Shell4 and Shell3 elements (default `false`).
+    /// ADR 0584 D1: the opt-in to a hyperelastic material on Beam2, Shell4 and Shell3 elements on the linear paths (default
+    /// `false`). ADR 0746 D2: stored and returned, read by no path (the linear paths take the material by default).
     hyperelastic_structures: bool,
     /// ADR 0614 D2: the nonlinear driver evaluates an Incompatible Hex8 with the stabilisation of its modes (default `Off`);
     /// ADR 0630 D3: by the rule of its coefficient.
@@ -1123,13 +1124,15 @@ impl SolidModel {
         self.incompatible_mode_trust_region = on;
     }
 
-    /// Whether the linear paths take a hyperelastic material on Beam2, Shell4 and Shell3 elements (ADR 0584 D1).
+    /// The value given to [`SolidModel::set_hyperelastic_structures`] (default `false`). Since ADR 0746 no path reads it.
     pub fn hyperelastic_structures(&self) -> bool {
         self.hyperelastic_structures
     }
-    /// Opts in (`true`) to the hyperelastic material on Beam2, Shell4 and Shell3 elements on the linear paths, as its linearised
-    /// material, the isotropic element of the small-strain `E`, `nu` (ADR 0584 D1, D2). Off (the default), such a material set
-    /// is refused naming [`crate::mat_hyper::LINEAR_FOLLOW_UP`] (ADR 0555 D3). A temperature load stays refused either way.
+    /// Without effect since ADR 0746 (D1, D2): the linear paths take a hyperelastic material on Beam2, Shell4 and Shell3
+    /// elements by default, as its linearised material, the isotropic element of the small-strain `E`, `nu` (ADR 0584 D2),
+    /// whatever is set here. It was the opt-in of ADR 0584 D1 to that, the refusal of ADR 0555 D3 being the default then.
+    /// The value is stored and returned by [`SolidModel::hyperelastic_structures`]. A temperature load with the material
+    /// stays refused naming [`crate::mat_hyper::LINEAR_FOLLOW_UP`].
     pub fn set_hyperelastic_structures(&mut self, on: bool) {
         self.hyperelastic_structures = on;
     }
@@ -1497,32 +1500,19 @@ impl SolidModel {
                     package: crate::mat_creep::FOLLOW_UP,
                 });
             }
-            // ADR 0555 D3: the linear paths take the hyperelastic material as its linearised material, on solid elements
-            // and without a temperature load (ADR 0541 D3 refused it on every linear path).
-            if !history && matches!(m, Material::Hyperelastic { .. }) {
-                let refused = |what: &str| FemError::NotYetSupported {
+            // ADR 0555 D3: the linear paths take the hyperelastic material as its linearised material, without a temperature
+            // load (ADR 0541 D3 refused it on every linear path). ADR 0746 D1: on Beam2, Shell4 and Shell3 elements too, by
+            // default (the refusal of ADR 0555 D3 on a structural element, an opt-in since ADR 0584 D1, is lifted).
+            if !history
+                && matches!(m, Material::Hyperelastic { .. })
+                && self.loads.iter().any(|l| matches!(l, Load::Temperature { .. }))
+            {
+                return Err(FemError::NotYetSupported {
                     item: "material",
                     variant: m.name(),
-                    location: format!("material {i}, element set '{set}': {what}"),
+                    location: format!("material {i}, element set '{set}': a temperature load"),
                     package: crate::mat_hyper::LINEAR_FOLLOW_UP,
-                };
-                let elements = self.mesh.element_set(set).unwrap_or(&[]);
-                // ADR 0584 D1: unless the model opts in to the linearised material on structural elements.
-                if !self.hyperelastic_structures
-                    && elements.iter().any(|&e| {
-                        matches!(
-                            self.mesh.element_kind(e),
-                            crate::mesh::ElementKind::Beam2
-                                | crate::mesh::ElementKind::Shell4
-                                | crate::mesh::ElementKind::Shell3
-                        )
-                    })
-                {
-                    return Err(refused("a structural element (Beam2, Shell4, Shell3)"));
-                }
-                if self.loads.iter().any(|l| matches!(l, Load::Temperature { .. })) {
-                    return Err(refused("a temperature load"));
-                }
+                });
             }
             // ADR 0452 D6: a path that does not take the per-point materials refuses them.
             if !point_materials && crate::mat_ortho::is_point_material(m) {
