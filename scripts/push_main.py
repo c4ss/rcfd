@@ -336,7 +336,7 @@ def make_plan(root, info, idx, times, rows, budget_min, default_s):
     touched = touched_crates(info["files"], crates)
     always = []
     for c in touched:
-        always.append(f"cargo fmt -p {c} -- --check")
+        always.append(f"python scripts/fmt_check.py {c}")  # cargo fmt -p, in batches (os error 206 on Windows for rcfd-fem)
     if touched:
         always.append("cargo clippy " + " ".join(f"-p {c}" for c in touched) + " --all-targets -- -D warnings")
     import adr_test_index
