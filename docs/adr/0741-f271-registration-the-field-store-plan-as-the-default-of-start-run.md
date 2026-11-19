@@ -202,3 +202,90 @@ Size (agent): done; 0; 0; 1; 103070
 - The Studio is read, not run; `npm test` of `apps/studio-web` is not run because nothing there is touched.
 - Disk use: every run Claude starts of a case without a store setting now writes a store. The size is in the reply; no
   budget is set here (ADR 0173, risks).
+
+## Addendum 1: results (2026-11-19)
+
+Built as registered, on the code commit 3d6a6390 (after the registration e1488f80). `PLAN_FOR_PROJECT_CASES` is `true`
+(`crates/rcfd-workspace/src/plan.rs`, the constant and its comment; no other library line). The old C-7 test has its
+`#[ignore]` attribute and no other change. The new file is `crates/rcfd-mcp/tests/start_run_default_plan_adr0741.rs`. All
+runs in the release profile, each registered run made once; no amendment was needed.
+
+| # | Check | Limit | Measured | Met |
+|---|---|---|---|---|
+| 1 | C-7 restated (`c7_restated`) | byte-equal; exact; 50 <= n <= 101 | `cases/sod.toml` byte-equal; `store.set` [`output.store_time_interval=0.002`, `output.store_precision=f32`], `snapshots` 100, `estimated_bytes` 160 000; `settings.set` equal; finished in 0.35 s; n = 100; p min 0.1, max 1.0; controls (i), (iii) and the interval-key entry as registered | yes |
+| 2 | `start_run {case: "cases/sod.toml"}`, no `store` | keys `case`, `run`, `state`, `store`; the two sod entries; 50 <= n <= 101 | exactly those keys; `store.applied` true; `store.set` and `settings.set` the two entries; n = 100 | yes |
+| 3 | `plain.toml`, no `store` | exact; 30 <= n <= 31 | keys `case`, `run`, `state`, `store`; `store.set` [`output.store_interval=1`, `output.store_precision=f32`]; `snapshots` 30; `estimated_bytes` 69 120; `settings.set` equal; finished at step 30; n = 30; p finite | yes |
+| 4 | `store: "none"` (the way back) | exact | keys `case`, `run`, `state`; `settings.set` empty; finished at step 30; no `store.rts` | yes |
+| 5 | A case with its own store | exact | `applied` false, `set` [], note "the case sets its own field store (output.store_*)"; `settings.set` empty; snapshot steps [10, 20, 30] with and without `store: "none"` | yes |
+| 6 | The store does not change the solution | exact | 30 residual lines, equal line for line; `lid_drag` -1.025564180656281e-2 in both, equal bits | yes |
+| 7 | `set` entries | exact | `output.store_interval=5`: `applied` false, `settings.set` that entry; `solver.max_iterations=250`: `store.set` [`output.store_interval=3`, `output.store_precision=f32`], `snapshots` 84 (`estimated_bytes` 193 536), `settings.set` those two then the caller's | yes |
+| 8 | Dry run; a file that is no case | exact | dry run: `applied` true, `set` the two entries, run folders unchanged; `cases/bad.toml`: 1003 ("not a valid case, so no start plan: line 1: ..."), no run folder; with `store: "none"`: queued, the run ended `failed` | yes |
+| 9 | Additive golden edit | 1 shape differs, `start_run`; then 0 | committed golden: "18 of 19 result shapes equal the golden", the one named is `start_run` (got the registered `store` shape); with the key added to the golden in the working tree (restored afterwards, not committed): 19 of 19, the file's 3 tests pass | yes |
+| 10 | Existing tests, unedited | 0 failures | `rcfd-mcp`: `project_w48f` 10, `case_facts_adr0737` 3, `feed_f273` 3, `run_records_adr0734` 2, `runner_stdio_w48l` 2 (1 ignored before), `sites_adr0739` 1, `project_list_f270` 1, `tool_list_f275` 8, `tool_list_adr0730` 2, `default_f1` 2, `new_simulations_f271` 1 (1 ignored), `--lib` 18; `rcfd-workspace`: `--lib` 2, `new_case_f271` 4, `store_plan_f834` 7, `store_runs_f834` 2, `stop_f834` 1; `rcfd-cli` `docs_site` 2. 0 failed | yes |
+| 11 | The retired record run once with `--ignored` | fails at control (ii) | fails at `new_simulations_f271.rs` line 123, the key-set assertion of control (ii) | yes |
+| 12 | The Studio reading | stated | R5: the Studio uses the shared plan; every start names `store` | yes |
+
+### Mutations (each on 3d6a6390, the new file run once, the file restored and the binaries rebuilt)
+
+| Mutation | Registered to fail | Result |
+|---|---|---|
+| M1, committed as `crates/rcfd-mcp/tests/start_run_default_plan_adr0741.mutation.patch` | rows 2 and 3 | both tests failed: `c7_restated` at line 155 (the key set of row 2), `default_plan_case_by_case` at line 212 (the key set of row 3) |
+| M2 (`Some("none") => true` in `runs.rs`) | rows 1 (i) and 4 | both tests failed: line 147 (control (i), a `store` key in the reply) and line 233 (the key set of row 4) |
+
+### Checks of rule 7
+
+`cargo fmt -p rcfd-mcp --check` and `-p rcfd-workspace --check`: clean. `cargo clippy -p rcfd-mcp -p rcfd-workspace
+--all-targets -- -D warnings`: clean. `baseline_hashes` not run: no shared solver file is touched. `npm test` of
+`apps/studio-web` not run: nothing there is touched.
+
+### Additive golden edit (for the lead to re-record)
+
+`crates/rcfd-mcp/tests/golden/project_shapes.json`, one key added to one entry, nothing removed or changed:
+
+```
+-  "start_run": {"case": "string", "run": "string", "state": "string"},
++  "start_run": {"case": "string", "run": "string", "state": "string", "store": {"applied": "bool", "estimated_bytes": "null", "note": "string", "set": [], "snapshots": "null"}},
+```
+
+Until it is re-recorded, `cargo test -p rcfd-mcp --release --test project_runs_w48f` fails in
+`f3_f11_project_tools_on_runner_made_runs` at this shape and nowhere else.
+
+### Deviations
+
+None from the registration. The documents changed are the `start_run` row of `docs/mcp-tools.md` and the start-plan
+paragraph of `docs/run-control.md`.
+
+### Not run, not done
+
+- The description of `start_run`'s property `store` is unchanged and now wrong for `case` (D3, open question 1).
+- `dynamic_mesh.enabled`, `site` and `continue_from` with the new default were not run (registered as not covered).
+- The Studio was read, not run.
+
+### Size
+
+Size (agent): done; 0; 0; 1; about 160000
+
+### Decision
+
+By the registered rule: **done**. Rows 1 to 11 are met; what is left out is the additive golden edit of row 9 and the
+description of D3, as the rule allows. Every clause of the roadmap acceptance of F-271 has a passing check (rows 1 and 2
+here, C-S, C-N and C-P of ADR 0186), and both halves of the gap are answered: the default is made, and the Electron Studio
+uses the shared plan (R5). The lead may prefer partial until the golden is re-recorded and question 1 is answered.
+
+## Open questions for the maintainer
+
+1. **The description of `start_run`'s `store` argument.** It says "Default plan with new_case, none with case", which is
+   no longer true for `case`. Changing it changes the text of an existing tool in the MCP tools list (no golden holds this
+   property, `project_list_f270.rs` reads it from the live list, but it is not an additive edit). Options: (a) change the
+   last sentence to "Default plan; none is the way back to a run that stores only what its case asks for"; (b) leave it.
+   Recommendation: (a). A client that reads the present text expects no store from `start_run {case}` and gets one.
+
+## For the lead: roadmap entries
+
+Status proposed for F-271: done.
+
+> ADR 0741, 2026-11-19, done: the field-store plan is the default of every start_run in project mode (PLAN_FOR_PROJECT_CASES true, the maintainer's approval of ADR 0186 Q2 (a)); store none is the way back and is tested; the old C-7 control is an ignored record and C-7 is restated; the Electron Studio already uses the shared plan (every start names store); one additive golden edit (project_shapes.json, start_run gains store) and the description of the store argument wait for the lead and the maintainer.
+
+Follow-up proposed (Studio stream, small):
+
+> Title: Studio texts that name the old default of start_run. Deps: F-271. Acceptance: the comment at apps/studio-web/src/shared/actions/runs.ts line 146 and any note of the Studio's actions that says start_run's own default is none say that the default is the plan since ADR 0741, with no change of behaviour; npm test of apps/studio-web passes unchanged.

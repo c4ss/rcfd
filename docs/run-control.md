@@ -229,9 +229,12 @@ store. A store key counts as the case's own only when its value differs from its
 spells out every key at its default, so an explicit `store_interval = 0` cannot be told from the default and does not turn
 the plan's store off. The removed egui Studio `rcfd-studio` (F-449) used the same rule for every run it started, with a
 start dialog that could turn the store off or pick `"f64"`; the desktop Studio has no such dialog yet.
-`rcfd run`, `rcfd-runner submit` and Claude Code's `start_run` read the case as written: 0 is off. So do Run, Queue… and
-F5 of the desktop Studio (`apps/studio-web/`): they store only what the case asks for. Its first-path action Run the
-example asks `start_run` for the start plan, which stores the fields.
+`rcfd run`, `rcfd-runner submit` and `rcfd-runner start` read the case as written: 0 is off. The project tool `start_run`
+applies the start plan by default, also to an existing case
+([ADR 0741](adr/0741-f271-registration-the-field-store-plan-as-the-default-of-start-run.md)); its `store: "none"` gives a
+run that stores only what the case asks for. Run, Queue… and the first-path action Run the example of the desktop Studio
+(`apps/studio-web/`) call `start_run` with `store: "plan"` written out (Queue… also offers `none`), so they use the same
+plan.
 
 ## Workflows
 
