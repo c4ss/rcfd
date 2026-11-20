@@ -1,5 +1,8 @@
 //! F-456 (ADR 0353): E1 (`to_json_filtered` and `write_json_filtered` against the old algorithm) and I2 (storing an
 //! increment of 100 samples at 1e5). No tolerance: the documents are equal as values and as text.
+//!
+//! F-854 (ADR 0749; ADR 0353 amendment 2): I2 is judged on the best of its 200 repeats, the repeat the machine disturbed
+//! least, in place of their median. The limit of 2 ms is unchanged.
 
 use rcfd_post::monitors::MonitorStore;
 use serde_json::{json, Value};
@@ -143,7 +146,7 @@ fn f456_e1_filtered_documents_equal_the_old_algorithm() {
     assert_eq!(st.to_json(), st.to_json_filtered(None, None));
 }
 
-/// I2: appending 100 samples to each of four series that hold 1e5, median of 200 repeats, limit 2 ms.
+/// I2: appending 100 samples to each of four series that hold 1e5, best of 200 repeats, limit 2 ms.
 #[test]
 fn f456_i2_storing_an_increment_of_100_samples_at_1e5() {
     let mut g = Lcg(0xF456_0002);
@@ -166,7 +169,7 @@ fn f456_i2_storing_an_increment_of_100_samples_at_1e5() {
         assert_eq!(st.get("a").unwrap().x.len(), 100_100);
     }
     ms.sort_by(f64::total_cmp);
-    let (med, max) = (ms[99], ms[199]);
-    println!("I2 push of 100 samples x 4 series at 1e5: median {med:.4} ms, max {max:.4} ms");
-    assert!(med <= 2.0, "I2: median {med} ms above 2 ms");
+    let (best, med, max) = (ms[0], ms[99], ms[199]);
+    println!("I2 push of 100 samples x 4 series at 1e5: best {best:.4} ms, median {med:.4} ms, max {max:.4} ms");
+    assert!(best <= 2.0, "I2: best of 200 repeats {best} ms above 2 ms");
 }

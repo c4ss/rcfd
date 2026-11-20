@@ -2,6 +2,9 @@
 //! 120, root cause in `rcfd-linalg::amg`, ADR 0052 addendum 1). Limits registered before the fix: no NaN, every pressure corrector
 //! converges below the cap with at most 60 iterations, mean iterations at most half of the plain CG run, wall time not above plain
 //! CG, D1/D2/D3 as in `vof_dambreak.rs`, and the front at t* = 3 within one cell of the plain-CG run.
+//!
+//! F-854 (ADR 0749; ADR 0052 amendment 1): the two runs advance in turn, one step each, and the wall time of a run is the sum
+//! of the times of its own steps, so a load of the machine that comes during the test falls on both. The limit is unchanged.
 
 use rcfd_fv::vof::{indicator_fraction, VofSettings, VofSolver};
 use rcfd_fv::{FixedValue, FvGeometry, ScalarField, VectorField};
@@ -57,13 +60,22 @@ struct Run {
     finite: bool,
 }
 
-fn run(amg: bool) -> Run {
-    let h = 2.0 * A;
-    let t_unit = (h / G).sqrt();
-    let mut s = dam(amg);
+/// A run in progress: the solver, its start volume, the pressure iterations so far and the record.
+struct Live {
+    s: VofSolver,
+    v0: f64,
+    total: usize,
+    r: Run,
+}
+
+fn t_unit() -> f64 {
+    (2.0 * A / G).sqrt()
+}
+
+fn start(amg: bool) -> Live {
+    let s = dam(amg);
     let v0 = s.phase_volume();
-    let t0 = std::time::Instant::now();
-    let mut r = Run {
+    let r = Run {
         track: vec![(0.0, front(&s))],
         mean_iters: 0.0,
         max_iters_step: 0,
@@ -74,22 +86,52 @@ fn run(amg: bool) -> Run {
         secs: 0.0,
         finite: true,
     };
-    let mut total = 0usize;
-    while s.time < 3.6 * t_unit {
+    Live { s, v0, total: 0, r }
+}
+
+impl Live {
+    fn running(&self) -> bool {
+        self.s.time < 3.6 * t_unit()
+    }
+
+    /// One step with its bookkeeping; its wall time is added to `secs`.
+    fn advance(&mut self) {
+        let t0 = std::time::Instant::now();
+        let (s, r) = (&mut self.s, &mut self.r);
         let i = s.step(1.5e-3).unwrap();
-        total += i.p_iters;
+        self.total += i.p_iters;
         r.max_iters_step = r.max_iters_step.max(i.p_iters);
-        r.dv = r.dv.max((s.phase_volume() - v0).abs() / v0);
+        r.dv = r.dv.max((s.phase_volume() - self.v0).abs() / self.v0);
         r.lo = r.lo.min(i.alpha_min);
         r.hi = r.hi.max(i.alpha_max);
         r.co = r.co.max(i.courant);
         r.finite &=
             s.p_rgh.values.iter().all(|v| v.is_finite()) && s.transport.alpha.values.iter().all(|v| v.is_finite());
-        r.track.push((s.time / t_unit, front(&s)));
+        r.track.push((s.time / t_unit(), front(s)));
+        r.secs += t0.elapsed().as_secs_f64();
     }
-    r.mean_iters = total as f64 / (3 * (r.track.len() - 1)) as f64;
-    r.secs = t0.elapsed().as_secs_f64();
-    r
+
+    fn finish(mut self) -> Run {
+        self.r.mean_iters = self.total as f64 / (3 * (self.r.track.len() - 1)) as f64;
+        self.r
+    }
+}
+
+/// The plain-CG run and the AMG run, advanced in turn: one step of each per pair, the order within a pair alternating
+/// (ADR 0052 amendment 1). The two solvers share nothing, so each run is the run it would be alone.
+fn run_both() -> (Run, Run) {
+    let (mut cg, mut am) = (start(false), start(true));
+    let mut pair = 0usize;
+    while cg.running() || am.running() {
+        for amg_turn in [pair % 2 == 1, pair % 2 == 0] {
+            let live = if amg_turn { &mut am } else { &mut cg };
+            if live.running() {
+                live.advance();
+            }
+        }
+        pair += 1;
+    }
+    (cg.finish(), am.finish())
 }
 
 fn at(track: &[(f64, f64)], ts: f64) -> f64 {
@@ -100,8 +142,7 @@ fn at(track: &[(f64, f64)], ts: f64) -> f64 {
 
 #[test]
 fn a4_dam_break_with_amg() {
-    let cg = run(false);
-    let am = run(true);
+    let (cg, am) = run_both();
     let h = 2.0 * A;
     let dx = 12.0 * A / NX as f64;
     let v13 = ((at(&am.track, 3.0) - at(&am.track, 1.0)) / h) / 2.0;
