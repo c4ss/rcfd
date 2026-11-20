@@ -419,3 +419,14 @@ Nothing above this section is changed, and no result changes.
 | M-A4 | code verification (negative control) |
 | M-I2 | code verification (negative control) |
 | G | code verification (gate runs, not made) |
+
+## Answer of the maintainer (2026-11-20), written into this ADR by the lead's brief
+
+From `docs/adr/briefs/f854-i2-store-increment.md`, section "The maintainer's answer", word for word:
+
+Asked by the lead on 2026-11-20 as question Q1 of ADR 0749, two options with a recommendation (time an increment of a
+store that grew by pushes; leave I2 as it is). The maintainer answered on 2026-11-20: "Go with your recommendation". That
+is option (b) of Q1: I2 times an increment of 100 samples per series of a store that grew by pushes, with the reallocation
+outside the timer, limit 2 ms unchanged; the increment that crosses the end of the capacity is reported by a test without
+a limit. The clause of F-456, "an increment of 100 samples at 1e5 stored in at most 2 ms", is read in that sense from now
+on. Nothing else is approved: no other limit, test or acceptance changes.
