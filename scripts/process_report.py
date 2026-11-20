@@ -445,6 +445,24 @@ def checks_table(text):
     return None, []
 
 
+def kinds_table(text):
+    """The kinds an amendment gives to the rows of a table of checks that has no column "kind": the first table whose
+    header is exactly "| Id | Kind |", as {id: kind}; None if there is none."""
+    lines = text.splitlines()
+    for n, ln in enumerate(lines):
+        if ln.startswith("|") and n + 1 < len(lines) and re.match(r"^\|[\s:|-]+\|\s*$", lines[n + 1]):
+            if [c.strip().lower() for c in ln.strip().strip("|").split("|")] == ["id", "kind"]:
+                out = {}
+                for row in lines[n + 2:]:
+                    if not row.startswith("|"):
+                        break
+                    cells = [c.strip() for c in row.strip().strip("|").split("|")]
+                    if len(cells) == 2:
+                        out[cells[0]] = cells[1]
+                return out
+    return None
+
+
 def sec_r(root, adrs):
     """Registrations written under docs/process/agent-rules.md (they cite that path): the brief, the size, and the columns
     kind, margin and source of the table of checks (rules 1, 14, 15, 17). Older registrations are not read."""
@@ -462,16 +480,20 @@ def sec_r(root, adrs):
             fail.append(f"r: registration has no table of checks with a column \"limit\", {f}")
             continue
         col = {name: next((i for i, c in enumerate(head) if c.startswith(name)), None) for name in ("kind", "margin", "source")}
+        # a registration cannot be edited: where its table has no column "kind", an amendment in the same file may give
+        # the kind of every row in a table "| Id | Kind |"; a row that table does not name fails as a row without a kind
+        later = kinds_table(t) if col["kind"] is None else None
         for name, i in col.items():
-            if i is None:
+            if i is None and not (name == "kind" and later is not None):
                 fail.append(f"r: table of checks has no column \"{name}\", {f}")
         for row in rows:
-            cell = lambda name: row[col[name]] if col[name] is not None and col[name] < len(row) else ""
+            cell = lambda name: (later.get(row[0], "") if name == "kind" and later is not None
+                                 else row[col[name]] if col[name] is not None and col[name] < len(row) else "")
             # one of the four, alone or followed by a qualifier in round or square brackets; a row the lead has listed in
             # exceptions/registration-kind.txt as "<file>: <row>" is not a check and is passed over (ADRs are append-only)
             k = cell("kind").lower()
             named = k in KINDS or any(k.startswith((x + " (", x + " [")) for x in KINDS)
-            if col["kind"] is not None and not named and f"{f}: {row[0]}" not in kind_exc:
+            if (col["kind"] is not None or later is not None) and not named and f"{f}: {row[0]}" not in kind_exc:
                 fail.append(f"r: kind {cell('kind')!r} is not one of the four, {f}: {row[0][:60]}")
             m = re.search(r"\d+(?:\.\d+)?(?:e[+-]?\d+)?", cell("margin"), re.I)
             if m and float(m.group(0)) > MARGIN_MAX:

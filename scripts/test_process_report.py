@@ -290,6 +290,24 @@ class NewRules(Repo):
         self.put("docs/adr/0005-f004-registration-x.md", reg.replace("(negative control)", "[negative control]"))
         self.assertEqual(pr.sec_r(self.root, pr.load_adrs(self.root))[1], [])
 
+    def test_an_amendment_gives_the_kinds_of_a_table_without_the_column(self):
+        reg = (self.REG.replace("| Margin | Kind |", "| Margin |").replace("|---|---|---|---|---|---|", "|---|---|---|---|---|")
+               .replace(" | solution verification |", " |").replace(" | code verification |", " |"))
+        self.put("docs/adr/0005-f004-registration-x.md", reg)
+        fail = pr.sec_r(self.root, pr.load_adrs(self.root))[1]
+        self.assertEqual(len(fail), 1)
+        self.assertIn('no column "kind"', fail[0])
+        kinds = "\n## Amendment 1\n\n| Id | Kind |\n|---|---|\n| C1 order | solution verification |\n"
+        self.put("docs/adr/0005-f004-registration-x.md", reg + kinds)
+        fail = pr.sec_r(self.root, pr.load_adrs(self.root))[1]
+        self.assertEqual(len(fail), 1)
+        self.assertIn("kind '' is not one of the four", fail[0])
+        self.assertIn("C2 drift", fail[0])
+        self.put("docs/adr/0005-f004-registration-x.md", reg + kinds + "| C2 drift | code verification |\n")
+        self.assertEqual(pr.sec_r(self.root, pr.load_adrs(self.root))[1], [])
+        self.put("docs/adr/0005-f004-registration-x.md", reg + kinds + "| C2 drift | a check |\n")
+        self.assertEqual(len(pr.sec_r(self.root, pr.load_adrs(self.root))[1]), 1)
+
     def test_older_registrations_are_not_read(self):
         self.assertEqual(pr.sec_r(self.root, pr.load_adrs(self.root))[1], [])
 
