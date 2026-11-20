@@ -239,3 +239,165 @@ No run is heavy: the longest overset test of the gate is 328 s.
 ## Open questions
 
 None is open at registration. D2 is taken on the standing instruction and changes no result.
+
+## Addendum 1: results (2026-11-20)
+
+Built as registered. Commits: the registration d09b35eb (with the maintainer's answer appended to ADR 0743 and ADR 0747),
+the code 7503b091, the committed mutation patch 0a1abe82. All runs in the release profile, each registered run made once,
+on Windows. Logs are in `w49i-work/f471-overset-fingerprints-scratch/logs`. No limit and no registered value was changed,
+and no amendment was written.
+
+**The work stopped at two further moved values (R3).** Behind the first failing assertion of two of the nine tests the
+gate had measured nothing, and two registered values there move with the default as well: the hash of TG_1 moving with the
+linear stencils (ADR 0376 B1, asserted by T7 and T9) and the hash of G (ADR 0409 A6, asserted twice by T9). Both come back
+bit for bit under the old order. The maintainer's approval of 2026-11-20 was given without them, so they are not restated:
+the two restated default tests `f450::t7_b1_default` and `f479::t9_a6_default` are left as registered and **fail** on the
+branch. What was already planned and changes nothing in the tree (the existing files, the mutations on the scratch copy,
+the diagnosis of the store hash, D1) was run to the end, so that the report is complete; nothing was edited after the
+stop but this addendum.
+
+### The nine tests
+
+| # | Test | Old (registered) | Under the old order (W) | Under the default (N) |
+|---|---|---|---|---|
+| T1 | `overset_f487` D1c | `0x6820a06f1b6a1496`, `0x861ab174c9e7dbe2` | equal | `0x0c3ec8cd8e210f07`, `0xec0a524a76ab219e`, as the gate |
+| T2 | `overset_f472` D1b | `0x6e6117e1b91851a9`, `0x69a719b86040e649` | equal | `0x149540b75a11eb76`, `0x688bd9678efe83d4`, as the gate |
+| T3 | `overset_f335_records` R2b | `75ac2daf13879872` | equal | `a126cd75e3d481d7`, as the gate |
+| T4 | `overset_f335_records` R2' | `7aa14d1e2e2da052`, `75ac2daf13879872`, `fddb420dc287502a` | equal | `7aa14d1e2e2da052`, `a126cd75e3d481d7`, `fddb420dc287502a` (R2'c, not reached by the gate: unchanged) |
+| T5 | `overset_motion_f442` F0 | `0x3deeab3cfda1d8d0`, `0x4758f6c215970201`, two connectivities | equal | `0xb66f8e865defb9eb`, `0x87e9c7c8539a0a98`, the connectivities unchanged, as the gate |
+| T6 | `overset_f338` R2e | `7aa14d1e2e2da052` twice, `75ac2daf13879872` twice | equal | `7aa14d1e2e2da052` twice, `a126cd75e3d481d7` twice (the fourth, not reached by the gate: the new value of the record, as registered) |
+| T7 | `overset_f450` B1 | `0xe43a026a778e83b3`, `0x9c5ab1e5b21d5368` | equal | `0x9f56741b853c367b` as the gate; **linear `0xb7eacfdad14044af`, moved, not seen by the gate** |
+| T8 | `overset_f368` D1 | the eight values of the table of the registration | equal | the eight values of its column "New", as the gate |
+| T9 | `overset_f479` A6 | `0xe43a026a778e83b3`, `0x9c5ab1e5b21d5368`, `0xb2b43812eb166b04` twice | equal | `0x9f56741b853c367b` as the gate; **linear `0xb7eacfdad14044af` and G `0xe8f1628a95798aab` twice, moved, not seen by the gate** |
+
+### Results
+
+| # | Check | Limit | Measured | Met |
+|---|---|---|---|---|
+| W1 to W9 | each test under the old order | bit for bit | every registered value equal (9 tests passed) | yes |
+| N1 to N6, N8 | the test under the default | bit for bit | equal (7 tests passed) | yes |
+| N7 | T7 under the default | quadratic new, linear as registered | quadratic `0x9f56741b853c367b` (met); linear `0xb7eacfdad14044af` against the registered `0x9c5ab1e5b21d5368`: fails at "N7: linear stencils under the default" (line 1529) | **no** |
+| N9 | T9 under the default | quadratic new; linear, G, G set off as registered | `0x9f56741b853c367b` (met), `0xb7eacfdad14044af`, `0xe8f1628a95798aab`, `0xe8f1628a95798aab`: fails at "N9: default, linear stencils" (line 2069); G is read from the printed line | **no** |
+| O1 | the 21 `overset*` files | 0 failures in each | 0 failures in each (list below) | yes |
+| O2 | `ale_bdf2_f345`, `bdf2_remainder_f344`, `--lib` | 0 failures | 8 passed, 2 ignored; 4 passed, 4 ignored; 115 passed, 6 ignored | yes |
+| O3 | `baseline_hashes` | passes | 3 passed, 1 ignored (as on main) | yes |
+| D1 | the nine retired records with `--ignored` | each fails at the assertion of the gate log with its left value | each fails there with the left value of the gate (R2b, R2'b, R2e TG_1 `a126cd75e3d481d7`; the arrays of T1, T2, T5, T8; quadratic 11481491961575913083 in T7 and T9) | yes |
+| S0 | `shipped_store_f834` D1, unedited (scratch copy of 0a1abe82) | fails with exactly one changed value | fails; of 20 values one differs: the first of `axial_fan_cgrid`, `0x03d18f072e9caca5` | yes |
+| S1 | the same with the scalar AMG on the old order everywhere | passes | passes: `axial_fan_cgrid` `0xe4539468a88f2746`, `0x5234e433bd8358f4` | yes |
+
+The new file `overset_fingerprints_adr0748`: 16 passed, 2 failed, in 13 s.
+
+**O1, each file** (passed / ignored; seconds of the file's run): `overset_f134` 12/2 (187), `overset_f134_records` 1/0 (1),
+`overset_f314` 4/8 (68), `overset_f334` 3/8 (60), `overset_f335` 5/4 (16), `overset_f335_records` 2/2 (23), `overset_f336`
+5/2 (72), `overset_f338` 8/10 (90), `overset_f349` 3/10 (24), `overset_f353` 1/1 (9), `overset_f357` 5/0 (22),
+`overset_f359` 5/2 (51), `overset_f368` 9/1 (34), `overset_f445` 9/5 (7), `overset_f450` 2/3 (17), `overset_f468` 1/1 (3),
+`overset_f472` 7/4 (46), `overset_f479` 3/2 (13), `overset_f487` 9/1 (40), `overset_f503` 1/2 (26), `overset_motion_f442`
+2/7 (3). No failure in any of them.
+
+### The store hash of `axial_fan_cgrid` (the tenth failure of the gate)
+
+**The cause is F-471**: the default of ADR 0743, reached through the pressure solve of `pressure.rs`. Evidence, on the
+scratch copy of 0a1abe82 (the tip, with every candidate merge in), `shipped_store_f834` D1 unedited in every run:
+
+- unedited (S0): fails; the first hash of `axial_fan_cgrid` is `0x03d18f072e9caca5`, the other 19 values are the table's;
+- `AmgSettings::default()` with `coarse_lu_interchanges_first: false` and `LinearOptions::amg_settings` returning `false`
+  always (S1): **passes**, the first hash is the registered `0xe4539468a88f2746` (16452657040940017478);
+- not registered, the two halves alone: `LinearOptions::amg_settings` returning `false` alone: passes, the registered
+  value; the `Default` of `AmgSettings` alone: fails with `0x03d18f072e9caca5`. So the solve that decides the hash takes
+  its settings from `LinearOptions::amg_settings`, which only `pressure.rs` (and now `overset.rs`) reads.
+
+So the order of the coarsest dense LU solve alone decides this hash, and the old value is reproduced under the old order.
+The bisect over the six merges was not made (D5). The other nine cases do not move. Which factorisation of the case
+interchanges, and at which step, was not looked at. The brief's hexadecimal for the old value (`0xe453d1b2ca2a6c06`) is a
+misprint (R4). The test and its table are untouched; it still fails on this branch as on main.
+
+### Mutations (each alone on the scratch copy of 0a1abe82, the new test file once, the file restored byte for byte)
+
+The unmutated file already fails at N7 and N9, so those two tests say nothing under a mutation; they are left out below.
+
+| Mutation | Registered to fail | Result |
+|---|---|---|
+| M1 (committed patch: `overset_pressure` takes `rcfd_linalg::AmgSettings::default()`) | W1 to W9 | caught: all nine old-order tests fail (W1 line 286, W2 540, W3 and W4 at `check` line 606, W5 1051, W6 1299, W7 1537, W8 1863, W9 2079); the seven default tests that pass unmutated pass |
+| M2 (`LinearOptions::amg_settings` returns `false` always) | N1 to N9 | caught by N1 to N6 and N8 (each at its first new value); N7 and N9 fail at their quadratic value, one assertion earlier than unmutated |
+| M3 (reported: `prescribed_pressure` takes `rcfd_linalg::AmgSettings::default()`) | W8 or W9 if a run under the prescribed fringe flux differs between the orders | caught by W9: under the old order G is `0xe8f1628a95798aab` in place of `0xb2b43812eb166b04`. The G run of T9 does differ between the orders, so the second site is covered by a run |
+
+The committed patch applies (`git apply --check`). The lead's push script expects the patched file to fail; it fails
+already without the patch (N7, N9), so the script's check proves nothing until question 1 is answered.
+
+### Checks of rule 7
+
+`python scripts/fmt_check.py rcfd-fv rcfd-linalg`: clean. `cargo clippy -p rcfd-fv -p rcfd-linalg --all-targets -- -D
+warnings`: clean. `cargo test -p rcfd-cli --release --test docs_site`: 2 passed. `python scripts/process_report.py --write`
+and `--check`: see the commit of this addendum (0 failures).
+
+Shared solver file changed, `crates/rcfd-fv/src/overset.rs` (line numbers of 7503b091): 64 (the import without
+`AmgSettings`), 2027 to 2029 (`overset_pressure`: two comment lines and `Amg::new(&a, s.linear.amg_settings())`), 2174 and
+2175 (`prescribed_pressure`: one comment line and the same call). Test files: one attribute line in each of
+`overset_f487.rs`, `overset_f472.rs`, `overset_motion_f442.rs`, `overset_f338.rs`, `overset_f450.rs`, `overset_f368.rs`,
+`overset_f479.rs` and two in `overset_f335_records.rs`; new `overset_fingerprints_adr0748.rs` and its `.mutation.patch`.
+
+### Deviations and disclosures
+
+- The session's file tools were bound to another worktree at the start; the session was switched into the worktree of the
+  brief with the harness's own command before the first file was written. Nothing was written in any other worktree.
+- After the run of the new file an amendment was prepared that would have kept the two failing default tests as ignored
+  `known_miss` records and restated them with the measured values. It was not made: it would have ignored tests to make a
+  run pass and pinned values the maintainer has not seen. No amendment exists; the two tests fail as registered.
+- Runs made after the stop: the 23 existing files (started before the stop was decided, let finish), M1 to M3, S0 and S1
+  with the two unregistered halves, D1, `--lib`, `baseline_hashes`, `docs_site`. None writes to the tree.
+- S0, S1 and the mutations ran on a scratch copy made with `git archive` of 0a1abe82, not in the worktree.
+- The new test file is generated by a script of the scratch folder (`gen_test.py`) that copies the named helpers from the
+  eight source files at d09b35eb; in the copy of `overset_f479.rs` the enum `Mode` carries `#[allow(dead_code)]`, since
+  its variant `Q` is not used by A6. That line was not in the registration's description of the copies.
+- Of the brief's reading list `overset.rs`, `amg.rs` and the eight test files were read in the parts the registration
+  names, not whole.
+- `process_report.py --write` regenerates pages that rule 9 gives to the lead (`docs/adr/index.md` among them); it was run
+  and its output committed because the working conditions of this dispatch ask for it.
+
+### Not run, not done
+
+- The two further moved values are not restated; `f450::t7_b1_default` and `f479::t9_a6_default` fail, so **the branch
+  cannot be merged as it stands**.
+- The bisect of the store hash over the six merges (not needed after S1).
+- Which factorisation of each run interchanges (registered as not covered).
+- The whole suites and the lead's push script.
+
+### Size
+
+Size (agent): partial; 1; 0; 2; about 190000
+
+### Decision
+
+By the registered rule: **partial, and the work is stopped**. All nine tests have their registered values bit for bit under
+the old order (W1 to W9), every value the gate measured is reproduced under the default, every overset file passes, O2, O3
+and D1 are met, and M1, M2 and M3 are caught. N7 and N9 are missed: two values of R3 moved (the rule's "a value of R3
+moves"), and by R3 they go to the maintainer and are not restated here.
+
+## Open questions for the maintainer
+
+1. **Two further registered values move with the approved default, inside two of the nine tests, behind the assertion at
+   which the gate stopped.** (a) ADR 0376 B1, TG_1 moving for 40 steps with the default coupling and the linear stencils
+   (`B1_LINEAR` of `overset_f450::b1_defaults_bit_identical` and of `overset_f479::a6_without_the_opt_in_every_bit_is_kept`):
+   registered `0x9c5ab1e5b21d5368`, with the default `0xb7eacfdad14044af`. (b) ADR 0409 A6, the same run under the
+   prescribed fringe flux G with the quadratic stencils (`G_EB13160D` of the A6 test, asserted with and without the opt-in
+   set off): registered `0xb2b43812eb166b04`, with the default `0xe8f1628a95798aab`. Both are the registered values bit for
+   bit under the old order (W7, W9). Options: (i) approve these two moves as well: an amendment of this ADR restates T7
+   and T9 with the four measured values and keeps the two failing tests as ignored records; (ii) keep the overset solver
+   on the old order (the way back as its default); (iii) revert the default of ADR 0743. Recommendation: **(i)**. The
+   evidence is the same as for the nine: the old order reproduces each old value exactly, and both tests are already
+   among the nine the answer of 2026-11-20 names.
+2. **The store hash of `axial_fan_cgrid`** (`shipped_store_f834` D1, the table of ADR 0373 D1) moved with the default of
+   ADR 0743: registered `0xe4539468a88f2746`, now `0x03d18f072e9caca5`; under the old order the registered value (S1).
+   This is a row of a case hash table, which rule 3 keeps from an agent. Options: (i) approve the move: the lead
+   re-records the one value; (ii) revert the default. Recommendation: **(i)**, with a way for a case run to ask for the
+   old order only if a record of the old store is wanted (none is today).
+
+## For the lead: roadmap entries
+
+Status proposed for F-471: partial.
+
+> ADR 0748, 2026-11-20, partial and stopped: the overset solver takes its AMG settings from the solver's linear options (the way back of ADR 0743 for overset.rs); the nine tests of the red gate of 252c9279 are ignored records and are restated in overset_fingerprints_adr0748.rs; all nine give their registered values bit for bit under the old order and the gate's values under the default; the 21 overset files pass; three of three mutations caught; stopped because two further registered values of T7 and T9 move that the gate had not reached (B1 linear 0x9c5ab1e5b21d5368 to 0xb7eacfdad14044af, A6 G 0xb2b43812eb166b04 to 0xe8f1628a95798aab), so two restated tests fail; the store hash of axial_fan_cgrid moved with the default of ADR 0743 through pressure.rs and is the registered value under the old order.
+
+> Gap: the branch of ADR 0748 is not mergeable: f450::t7_b1_default and f479::t9_a6_default of overset_fingerprints_adr0748 fail at two registered values the maintainer has not seen (ADR 0748 question 1), and shipped_store_f834 D1 fails at the first hash of axial_fan_cgrid, which moved with the default of ADR 0743 (question 2). Needs the maintainer's answers; then an amendment of ADR 0748 restates T7 and T9 and the lead re-records or keeps the store hash.
+
+No new item is proposed.
