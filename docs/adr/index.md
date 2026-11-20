@@ -29,7 +29,7 @@ One row per record of this folder, grouped by the roadmap category of the item i
 | [0617](0617-f550-registration-non-vanishing-outer-criterion-scale.md) | F-550 registration: a non-vanishing scale for the outer-iteration criterion | REGISTERED | 2026-11-15 | 1 | F-550 | partial |
 | [0743](0743-f471-registration-the-corrected-order-of-the-coarsest-dense-lu-as-the-default.md) | F-471 registration: the corrected order of the coarsest dense LU as the default of the scalar AMG | REGISTERED | 2026-11-19 | 1 | F-471 | partial |
 | [0747](0747-f471-registration-the-moved-fingerprint-fp4-of-adr-0374-under-the-new-default.md) | F-471 registration: the moved fingerprint FP4 of ADR 0374 N0 under the new default of the coarsest dense LU | REGISTERED | 2026-11-19 | 1 | F-471 | partial |
-| [0748](0748-f471-registration-the-moved-fingerprints-of-the-overset-solver-under-the-new-default.md) | F-471 registration: the nine moved fingerprints of the overset solver under the new default of the coarsest dense LU | REGISTERED | 2026-11-20 | 1 | F-471 | partial |
+| [0748](0748-f471-registration-the-moved-fingerprints-of-the-overset-solver-under-the-new-default.md) | F-471 registration: the nine moved fingerprints of the overset solver under the new default of the coarsest dense LU | REGISTERED | 2026-11-20 | 2 | F-471 | partial |
 
 ## Turbulence (7)
 

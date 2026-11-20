@@ -491,3 +491,74 @@ run once in release, the file restored byte for byte:
   moves; one of the nineteen other store values among them.
 
 Size (agent), amendment 1: done; 0; 0; 0; 30000
+
+## Addendum 2: results of amendment 1 (2026-11-20), written by the lead
+
+The agent of this registration committed the maintainer's second answer and amendment 1 (45c8f1b4) and could go no
+further: the permission system of its session denied the test change. The maintainer then told the lead directly, on
+2026-11-20, to make the changes in the lead's session ("Yes, do it here"). Everything below was done and run by the lead
+on this branch. Code commit 334613c3, mutation patch 206f695c. No library file changed and no limit changed.
+
+### What was changed
+
+- `overset_fingerprints_adr0748.rs`, by the agent's generator with its prepared change (A1): `f450::t7_b1_default` and
+  `f479::t9_a6_default` are the ignored records `..._known_miss`, bodies unchanged; `t7_b1_default_amended` (N7a) and
+  `t9_a6_default_amended` (N9a) are added.
+- `shipped_store_f834.rs`: one `#[ignore = "..."]` line on D1 (A2); body and table untouched.
+- `shipped_store_adr0748.rs`, new: S2 and S3. `shipped_store_adr0748.mutation.patch`, new: M4.
+
+### Results
+
+| # | Check | Limit | Measured | Met |
+|---|---|---|---|---|
+| N7a | T7 under the default | bit for bit | `0x9f56741b853c367b`, `0xb7eacfdad14044af` | yes |
+| N9a | T9 under the default | bit for bit | `0x9f56741b853c367b`, `0xb7eacfdad14044af`, `0xe8f1628a95798aab` twice | yes |
+| S2 | D1 restated, ten cases | bit for bit | `axial_fan_cgrid` `0x03d18f072e9caca5`, `0x5234e433bd8358f4`; the eighteen values of the nine other cases as registered | yes |
+| S3 | `axial_fan_cgrid` under the old order through `simple_solver_mut` | `0xe4539468a88f2746`, `0x5234e433bd8358f4` | the same, bit for bit; the hypothesis of A2 holds | yes |
+| O1a | `overset_fingerprints_adr0748` and the 21 `overset*` files | 0 failures in each | 0 failures in each; `overset_fingerprints_adr0748` 18 passed, 2 ignored (the two known misses) | yes |
+| O4 | every test file of `rcfd-workspace` | 0 failures | second run: 17 binaries, 0 failures (see the deviations for the first run) | yes |
+| O3a | `rcfd-api` `baseline_hashes` | passes | 3 passed, 1 ignored | yes |
+| D2 | the retired D1 with `--ignored` | fails with exactly the one changed value | fails; left `275158313255873701` (`0x03d18f072e9caca5`) against right `16452657040940017478` (`0xe4539468a88f2746`) for `axial_fan_cgrid`, the other nineteen values equal | yes |
+
+### Mutations (each alone on the scratch copy, brought to 334613c3 by copying the four changed files; restored byte for byte)
+
+Without a mutation: `overset_fingerprints_adr0748` 18 passed, 2 ignored; `shipped_store_adr0748` 2 passed.
+
+| Mutation | Must fail | Failed | Caught |
+|---|---|---|---|
+| M1 | W1 to W9 | the nine `..._old_order` tests, nothing else | yes |
+| M2 | N1 to N6, N7a, N8, N9a | the nine default tests (`t7_b1_default_amended` and `t9_a6_default_amended` among them), nothing else | yes |
+| M3 | W9 | `f479::t9_a6_old_order`, nothing else | yes |
+| M4 | S2 | `d1_restated_under_the_default`, nothing else | yes |
+| M5 | S3 | `d1_axial_fan_cgrid_under_the_old_order`, nothing else | yes |
+
+### Checks of rule 7
+
+`python scripts/fmt_check.py rcfd-fv rcfd-linalg rcfd-workspace`: clean. `cargo clippy -p rcfd-fv -p rcfd-linalg -p
+rcfd-workspace --all-targets -- -D warnings`: clean. `python scripts/process_report.py --check` and `docs_site`: with the
+commit of this addendum.
+
+### Deviations and disclosures
+
+- The work of amendment 1 was done by the lead, not by the agent, for the reason given at the head of this addendum.
+- The first run of O4 failed in `stop_f834` before any test body ran: `target/release/rcfd-runner.exe` was missing in this
+  worktree (the test's own message names the build command). The lead built `rcfd-runner` and `rcfd-cli` and ran the
+  whole suite again without any change of a file; the second run is the one reported. No amendment precedes it: the
+  defect was in the lead's set-up of the run, not in a registered set-up.
+- M1 was run as the replacement of the patch's one line, not with `git apply` of the committed patch as A4 says. The two
+  committed patches are applied with `git apply` by the lead's push script at the merge.
+- S2 and S3 were run once before the code commit, to see that the new file compiled; they were run again in O4.
+- The brief gave the old store hash in hex with a misprint (`0xe453d1b2ca2a6c06`); the registered value is
+  `0xe4539468a88f2746`, as in the test's table.
+
+### Not run
+
+The files of other crates; the heavy immersed files of ADR 0747 (unchanged code paths); the full gate, which follows the
+merge.
+
+### Decision
+
+By A5: **done** for this registration. Every row of amendment 1 is met, M1 to M5 are caught by the tests named for them,
+fmt and clippy are clean. N7 and N9 stay missed rows of the registration, kept as the two known-miss records; their
+values are the ones the maintainer approved. The status of F-471 follows from the full gate of the merge commit, which
+has to show the ten failures of run 44599067147 gone and no other registered value moved.
