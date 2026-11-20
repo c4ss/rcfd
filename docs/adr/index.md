@@ -556,7 +556,7 @@ One row per record of this folder, grouped by the roadmap category of the item i
 | [0720](0720-f773-registration-a-git-commit-that-names-an-adr-or-an-item-as-evidence-of-the-files-it-adds.md) | F-773 registration: the ADR or item named by the commit that adds a test file as evidence of kind E8 | REGISTERED | 2026-11-17 | 1 | F-773 | partial |
 | [0721](0721-f839-registration-a-second-reader-for-the-e8-primary-files-and-the-supplementary-sample-of-adr-0720.md) | F-839 registration: a second reader for the E8-primary files and the supplementary sample of ADR 0720 | REGISTERED | 2026-11-17 | 2 | F-839 | done |
 | [0740](0740-f849-registration-a-registered-time-limit-for-two-immersed-solid-tests-of-the-full-gate.md) | F-849 registration: a registered time limit for two immersed-solid tests of the full gate | REGISTERED | 2026-11-19 | 1 | F-849 | partial |
-| [0749](0749-f854-registration-two-wall-clock-limits-measured-so-that-load-alone-does-not-fail-them.md) | F-854 registration: two wall-clock limits measured so that the load of the machine alone does not fail them | REGISTERED | 2026-11-20 | 1 | F-854 | todo |
+| [0749](0749-f854-registration-two-wall-clock-limits-measured-so-that-load-alone-does-not-fail-them.md) | F-854 registration: two wall-clock limits measured so that the load of the machine alone does not fail them | REGISTERED | 2026-11-20 | 1 | F-854 | partial |
 
 ## Records with no item in the file name (259)
 
@@ -613,7 +613,7 @@ One row per record of this folder, grouped by the roadmap category of the item i
 | [0049](0049-wave27a-vof-free-surface.md) | Wave 27A, volume-of-fluid free-surface multiphase with interface compression and surface tension (F-055) | ACCEPTED |  | 1 | F-055 |
 | [0050](0050-wave27b-robustness-adaptive-stepping.md) | Wave 27B, SIMPLEC non-orthogonal-corrector divergence and adaptive time stepping (F-209) | ACCEPTED |  | 1 | F-209, F-235, F-322 |
 | [0051](0051-wave27c-viscoelastic-structural-export.md) | Wave 27C, viscoelastic constitutive models with log-conformation, format registry and one-way structural load export (F-135, F-237) | ACCEPTED |  | 1 | F-135, F-237 |
-| [0052](0052-wave28a-vof-wiring.md) | Wave 28A, AMG on the variable-density pressure matrix, and wiring of mass transfer (F-226) and waves (F-227) into the VOF host | ACCEPTED |  | 2 | F-055, F-226, F-227 |
+| [0052](0052-wave28a-vof-wiring.md) | Wave 28A, AMG on the variable-density pressure matrix, and wiring of mass transfer (F-226) and waves (F-227) into the VOF host | ACCEPTED |  | 2 | F-055, F-226, F-227, F-854 |
 | [0053](0053-wave28b-chemistry-acceleration-combustion.md) | Wave 28B, stiff-chemistry acceleration (F-223) and combustion extensions (F-129) | ACCEPTED |  | 0 | F-129, F-223 |
 | [0054](0054-wave28c-adaptation-turbo-post.md) | Wave 28C, mesh adaptation and turbomachinery post-processing (F-102, F-123) | ACCEPTED |  | 3 | F-102, F-123, F-132, F-348 |
 | [0055](0055-wave29a-rotor-interfaces-bcs.md) | Wave 29A, frozen-rotor interface library and checks, mixing-plane library, guarded secant outlet update (F-126, F-200) | ACCEPTED |  | 4 | F-126, F-200 |
