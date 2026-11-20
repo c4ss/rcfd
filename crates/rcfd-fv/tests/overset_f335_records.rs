@@ -283,6 +283,7 @@ fn r2a_uniform_flow_record() {
 
 /// R2b: TG_1, 200 steps, a solver that does not opt in.
 #[test]
+#[ignore = "retired record (ADR 0748, F-471): moved with the default of ADR 0743, approved by the maintainer on 2026-11-20; restated in overset_fingerprints_adr0748.rs"]
 fn r2b_taylor_green_level_1_record() {
     check("R2b", &tg_hash(|_| {}), R2B);
 }
@@ -302,6 +303,7 @@ fn one(s: &mut OversetSolver) {
 
 /// R2': the three runs after `set_outer_iterations(1, 1.0, 1.0)` give the records R2.
 #[test]
+#[ignore = "retired record (ADR 0748, F-471): moved with the default of ADR 0743, approved by the maintainer on 2026-11-20; restated in overset_fingerprints_adr0748.rs"]
 fn r2_prime_opted_in_with_one_outer_iteration_gives_the_records() {
     check("R2'a", &u_hash(one), R2A);
     check("R2'b", &tg_hash(one), R2B);

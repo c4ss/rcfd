@@ -249,6 +249,7 @@ fn d1c_l_fingerprint_record() {
 /// ADR 0387 D1c: the fingerprints on this tree equal those of the tree before any library change of F-487 (recorded by
 /// `d1c_l_fingerprint_record` on f49fdd1f, the base library of ea491736).
 #[test]
+#[ignore = "retired record (ADR 0748, F-471): moved with the default of ADR 0743, approved by the maintainer on 2026-11-20; restated in overset_fingerprints_adr0748.rs"]
 fn d1c_l_fingerprint_equals_the_base_tree() {
     const BASE: [u64; 2] = [0x6820_a06f_1b6a_1496, 0x861a_b174_c9e7_dbe2];
     let f = d1c_fingerprints();

@@ -1,0 +1,14 @@
+# expect-fail: cargo test --release -p rcfd-fv --test overset_fingerprints_adr0748
+diff --git a/crates/rcfd-fv/src/overset.rs b/crates/rcfd-fv/src/overset.rs
+index 0d40dbd1..0207f6e2 100644
+--- a/crates/rcfd-fv/src/overset.rs
++++ b/crates/rcfd-fv/src/overset.rs
+@@ -2026,7 +2026,7 @@ impl OversetSolver {
+                 let (a, b) = overset_system(&pm, conn, &scale, &current);
+                 // ADR 0748 (F-471): the settings of the solver's linear options, so that
+                 // `linear.amg_coarse_lu_interleaved` gives the coarsest-solve order of before ADR 0743
+-                let amg = Amg::new(&a, s.linear.amg_settings());
++                let amg = Amg::new(&a, rcfd_linalg::AmgSettings::default());
+                 *psys = Some(PressureSystem { a, amg, p1: None });
+                 b
+             }

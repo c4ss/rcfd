@@ -446,3 +446,30 @@ anything merges. Option (c), an approval in advance of further fingerprints, was
 fingerprint that moves stops the work again and is reported.
 
 The further registration is ADR 0747 (brief `docs/adr/briefs/f471-fp4-move.md`).
+
+## Answer of the maintainer (2026-11-20), written into this ADR by the lead's brief
+
+Asked by the lead on 2026-11-20 as three options with a recommendation (approve the moves; keep the overset solver on the
+old order; revert the default). The maintainer answered on 2026-11-20: "Approve the moves". That is: the moves of the nine
+registered values listed above under the corrected order of the coarsest dense LU are approved, under a further
+registration that adds a way back to the old order for the overset solver, shows each old value bit for bit under it, and
+restates the nine tests with the new values, as ADR 0747 did for FP4. Nothing else is approved: any other registered hash,
+fingerprint or record that moves stops the work and is reported.
+
+The statement of D2 above, "No record of the old behaviour runs through them", is false for the overset solver
+(`overset.rs`): nine tests of registered fingerprints and records of its default results (the list of the brief
+`docs/adr/briefs/f471-overset-fingerprints.md`) moved with the default; it is corrected by ADR 0748.
+
+The further registration is ADR 0748 (brief `docs/adr/briefs/f471-overset-fingerprints.md`).
+
+## Answer of the maintainer (2026-11-20, second), written into this ADR by the lead
+
+The lead asked the maintainer on 2026-11-20, as three options with a recommendation (approve all three; approve the two
+overset values and keep axial_fan_cgrid on the old order through a case key; revert the default). The maintainer answered
+on 2026-11-20: "Approve all three". That is: the moves of B1 linear (0x9c5ab1e5b21d5368 to 0xb7eacfdad14044af; overset_f450
+B1 and overset_f479 A6), of A6 G (0xb2b43812eb166b04 to 0xe8f1628a95798aab; overset_f479 A6) and of the first store hash of
+cases/axial_fan_cgrid/axial_fan_cgrid.toml in shipped_store_f834 D1 (0xe4539468a88f2746 to 0x03d18f072e9caca5) under the
+corrected order are approved, under ADR 0748. Nothing else is approved: any further registered value that moves stops the
+work again and is reported.
+
+It is written into ADR 0748 as well, with its amendment 1.

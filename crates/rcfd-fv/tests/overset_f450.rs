@@ -520,6 +520,7 @@ fn b1_hash(donors: DonorInterpolation) -> u64 {
 /// ADR 0376 B1: the default coupling gives the bytes of the library before F-450, with the quadratic and with the
 /// default stencils.
 #[test]
+#[ignore = "retired record (ADR 0748, F-471): moved with the default of ADR 0743, approved by the maintainer on 2026-11-20; restated in overset_fingerprints_adr0748.rs"]
 fn b1_defaults_bit_identical() {
     let (q, l) = (b1_hash(Q), b1_hash(L));
     println!("B1: TG_1 moving, 40 steps: quadratic {q:016x}, linear {l:016x}");
