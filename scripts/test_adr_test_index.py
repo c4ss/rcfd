@@ -212,8 +212,18 @@ class Index(unittest.TestCase):
             "cargo test -p rcfd-a --release --test beta -- --exact beta_one",
             "cargo test -p rcfd-a --release --test gamma -- --exact gamma_distinctive_test",
         ])
-        self.assertEqual(ati.adr_commands(self.idx, "0101"),
-                         ["cargo test -p rcfd-a --release --lib -- --exact solver::tests::solver_case --include-ignored"])
+        # the one test of ADR 0101 is ignored: a record or a heavy run, not run by the commands
+        self.assertEqual(ati.adr_commands(self.idx, "0101"), [])
+
+    def test_adr_commands_leave_out_ignored_tests(self):
+        t = {"crate": "c", "kind": "lib", "target": "c", "adrs": ["0007"]}
+        idx = {"tests": [
+            dict(t, name="m::tests::g0_limit_known_miss", ignored=True),
+            dict(t, name="m::tests::retired_record", ignored=True),
+            dict(t, name="m::tests::runs", ignored=False),
+            dict(t, name="m::tests::other", ignored=False, adrs=[]),
+        ]}
+        self.assertEqual(ati.adr_commands(idx, "7"), ["cargo test -p c --release --lib -- --exact m::tests::runs"])
 
     def test_blank_keeps_offsets(self):
         src = 'a "x{" b /* { */ c \'}\' d // }\ne r#"}"# f'

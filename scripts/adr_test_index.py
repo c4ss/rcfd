@@ -762,7 +762,12 @@ def coverage(idx):
 
 
 def adr_commands(idx, adr):
-    """cargo commands that run the tests the index maps to one ADR, one command per binary."""
+    """cargo commands that run the tests the index maps to one ADR, one command per binary.
+
+    Ignored tests are left out, as the full gate and a command for a whole binary leave them out. An ignored test is a
+    record (a known miss of rule 2, a retired test, a defective set-up kept beside its correction) that fails by design,
+    or a heavy run its own registration runs; until 2026-11-20 they were run one by one with --include-ignored, which
+    failed the push of ADR 0748 twice on records the merge had not touched."""
     adr = f"{int(adr):04d}"
     per = {}
     for t in idx["tests"]:
@@ -775,8 +780,8 @@ def adr_commands(idx, adr):
             cmds.append(f"cargo test -p {crate} --release {sel}")
         else:
             for t in ts:
-                cmds.append(f"cargo test -p {crate} --release {sel} -- --exact {t['name']}" +
-                            (" --include-ignored" if t["ignored"] else ""))
+                if not t["ignored"]:
+                    cmds.append(f"cargo test -p {crate} --release {sel} -- --exact {t['name']}")
     return cmds
 
 
