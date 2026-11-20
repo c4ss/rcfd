@@ -228,3 +228,131 @@ propose for F-854 is partial, whatever its own verdict.
   step: D2 reports the worst case only.
 - What the reallocation costs and why (ADR 0749 left it unmeasured; it is not measured here either).
 - The other wall-clock limits of the workspace.
+
+## Addendum 1: results (2026-11-20)
+
+Commits: 0374a32e (the maintainer's answer appended to ADR 0749 and ADR 0353, from the brief), a2a7bb44 (this
+registration, alone), 5f02e6c9 (ADR 0353 amendment 4, before the code), af898fac (the new test file and the `#[ignore]`
+line of the old I2), b46b4d68 (the committed mutation patch), then this addendum with the generated ADR index. Changed against
+main 43597bd1: `crates/rcfd-post/tests/monitors_store_increment_adr0750.rs` (new) and its `.mutation.patch`, one added
+line in `crates/rcfd-post/tests/monitors_filtered_f456.rs`, and files under `docs/adr`. No library file, no golden, no
+hash table and not `gate.yml`.
+
+All runs in release on the lead's machine (16 logical processors), the test executable built from the test files of af898fac started as the gate
+starts it. Each series was run once, in the registered order, 22:00 to 22:12; the total processor load sampled before
+the series was 15, 15 and 23 percent. Raw rows: `new-I2.tsv`, the mutation logs and `rule7.log` in the scratch folder,
+not committed.
+
+### The series (failures of 30; times in ms, the range over the 30 runs of the best, the median and the maximum of 200)
+
+| Test | Load | Failed | Best of 200 | Median of 200 | Maximum of 200 |
+|---|---|---|---|---|---|
+| D1, within the capacity (limit 2 ms on the median) | L0 | 0 | 0.0109 to 0.0119 | 0.0120 to 0.0135 | 0.025 to 0.21 |
+| D1 | LS | 0 | 0.0179 to 0.0207 | 0.0214 to 0.0220 | 0.027 to 2.09 |
+| D1 | LM | 0 | 0.0212 to 0.0250 | 0.0295 to 0.0346 | 0.063 to 3.27 |
+| D2, across the end of the capacity (no limit) | L0 | 0 | 0.82 to 0.87 | 0.89 to 0.94 | 1.16 to 3.61 |
+| D2 | LS | 0 | 1.07 to 1.24 | 1.17 to 1.30 | 1.97 to 3.65 |
+| D2 | LM | 0 | 1.44 to 2.60 | 3.41 to 4.16 | 6.3 to 10.9 |
+
+D1 passed 90 of 90 runs. Its largest median is 0.0346 ms (under LM), a margin of 58 against the limit; without load the
+margin is 148 to 167, under LS 91 to 93. The estimates held (0.013, 0.015 to 0.03 and 0.035 ms). Single repeats of D1
+reached 2.09 ms under LS and 3.27 ms under LM (a repeat that lost its processor); the median does not see them.
+
+The capacity-crossing increment, as measured by D2: a median of 0.89 to 0.94 ms without load, 1.17 to 1.30 ms under 16
+spinning processes and 3.41 to 4.16 ms under 16 processes that copy memory, which is 70, 55 and 115 times the median of
+D1 under the same load, in the same runs. Under LM every one of the 30 medians of D2 is above 2 ms: with the limit on
+it, as the old I2 had it, it would have failed 30 of 30 (ADR 0749 measured 30 of 30 for the old I2). This is also the
+negative control of the timer: where there is a reallocation inside the timer, the timer shows it. The assertions on
+the capacities (S1, S2) held in every repeat of every run.
+
+### Checks
+
+| Id | Limit | Measured | Met |
+|---|---|---|---|
+| C-I2 | 0 failures in each series; median at most 2 ms | 0, 0, 0 of 30 (L0, LS, LM); largest median 0.0135, 0.0220, 0.0346 ms | **yes** |
+| S1 | holds in every repeat | no panic in 90 runs of 200 repeats | yes |
+| R-X | none | medians 0.89 to 0.94, 1.17 to 1.30, 3.41 to 4.16 ms | reported |
+| S2 | holds in every repeat | no panic in 90 runs of 200 repeats | yes |
+| E-old | one added line; 1 passed, 1 ignored | `git diff 43597bd1 -- crates/rcfd-post/tests/monitors_filtered_f456.rs`: one line added, the `#[ignore]` attribute; `cargo test -p rcfd-post --release --test monitors_filtered_f456`: 1 passed, 0 failed, 1 ignored | yes |
+| E-lib | no library file, golden, hash table or `gate.yml` | `git diff --stat 43597bd1`: the two test files, the patch file and `docs/adr` only | yes |
+| M-I2 | MI1 fails D1 at its limit only | median 4.63 ms, panic "I2: median 4.63... ms above 2 ms" at the last assertion; no capacity assertion failed; D2 passed and printed 5.88 ms | yes, caught |
+| M-I2b | none | MI2: D1 passed with a median of 0.375 ms | reported: not caught, as registered |
+| P | 0 failures | 0 failures, after `python scripts/process_report.py --write` had regenerated `docs/adr/index.md` (see deviations) | yes |
+| G | 3 of 3 full gates | not run here | open, the lead's |
+
+### Mutations (scratch copy of the tree of af898fac with its own target directory; the unmutated copy first: D1 0.0133 ms, D2 1.22 ms, 2 passed)
+
+| Mutation | D1 | D2 | Caught by |
+|---|---|---|---|
+| MI1, a copy of the abscissa on every push (the committed patch) | median 4.63 ms, best 4.38 ms | 5.88 ms | "I2: median ... above 2 ms" of D1 |
+| MI2, the copy on every sixteenth stored length | median 0.375 ms | 1.52 ms | not caught, as registered: it adds 0.36 ms, below the limit |
+
+The smallest slowdown the test catches, with the measured medians: (2 - 0.0135) / 400 = 4.97 microseconds added to
+every call of `push` without load, 4.91 microseconds under LM; a call costs 0.03 to 0.09 microseconds today. MI1 adds
+11.5 microseconds a call (4.62 ms over 400 calls) and is caught with a factor of 2.3 over the limit; MI2's 28 copies
+cost 12.9 microseconds each and pass. So a push whose cost is linear in the stored length is caught from about 4.3e4
+stored samples per series on; a push 100 times as dear as today's is not. The limit is the acceptance's and was not
+tightened.
+
+Rule 7, in the worktree at the tree of af898fac, release: `cargo test -p rcfd-post --release --test monitors_store_increment_adr0750`
+2 passed (0.96 s; D1 0.0158 ms, D2 1.27 ms, while the scratch copy was compiling); `--test monitors_filtered_f456`
+1 passed, 1 ignored; `--lib` 29 passed; `cargo fmt -p rcfd-post --check` clean;
+`cargo clippy -p rcfd-post --all-targets -- -D warnings` clean; `cargo test -p rcfd-cli --release --test docs_site`
+passed, run after this addendum was written.
+
+### Deviations and disclosures
+
+- Three commits were made again after the runs. Amendment 4 of ADR 0353 as first committed (956cb4ea) named the rules by
+  their path; the process check takes any registration that holds that path for one written under those rules and failed
+  ADR 0353 on four counts (no size, no columns kind, margin and source). An appended line cannot remove a string, and a
+  later commit that changes the line fails the append-only check, so the three commits not yet handed over were built
+  again from the registration a2a7bb44: 956cb4ea, a9345ebe and 6d7fa7d9 became 5f02e6c9, af898fac and b46b4d68. The
+  only difference is one line of amendment 4 ("By rule 2 of the agent rules (version 3):"); the test files and the
+  patch are byte for byte those the series, the mutations and the rule 7 runs used, and none of them was run again.
+  The registration itself and the commit before it are untouched.
+- Order of the commits. The brief asks for the maintainer's answer "in the same commit as the registration or before
+  it" and for the registration as the first commit, alone; the process check fails a registration whose creating commit
+  changes another file. So the answer is the commit before the registration and the registration is alone but second.
+  No code and no test came before either.
+- `docs/adr/index.md` is regenerated by `python scripts/process_report.py --write` and committed with this addendum,
+  on the lead's instruction for this work; rule 9 otherwise leaves that file to the lead. Without it the process check
+  gives one failure ("generated file is not current").
+- The old I2 is ignored (R4, R5). The acceptance of F-854 says that neither test is ignored "to make it pass"; the
+  reading R5 is that its measurement stays in the gate as D2 and its limit as D1. It is the form the brief and option
+  (b) of Q1 name, and it is pointed out here so that the lead can read it against the acceptance.
+- The new tests are in a new file, not in `monitors_filtered_f456.rs` (Design). The name of the test that carries the
+  limit is new; the acceptance of F-854 and row G name the old one.
+- The rule 7 run of the new file was made while the scratch copy compiled; its numbers are not results of a series.
+
+### Not run
+
+Any run on a hosted runner; the three gate runs of row G; the ignored old I2 (as registered); the whole workspace
+suite; `baseline_hashes` (no library file changed); the committed patch through `scripts/push_main.py` (the same patch
+text was applied to the scratch copy with `git apply`, and `git apply --check` of the committed file passes in the
+worktree).
+
+### Size
+
+Size (agent), actual: done; 0; 2; 0; 120000
+
+(No amendment to this registration. The two heavy runs were the series under LS, 4.3 minutes, and under LM,
+5.6 minutes.)
+
+### Decision by the registered rule
+
+**Done.** D1 passed 30 of 30 runs under each of L0, LS and LM, MI1 is caught at the limit, and the process check gives
+0 failures. No library code and no other test changed. For the roadmap the item stays partial until row G is run.
+
+### Open questions for the maintainer
+
+None.
+
+### For the lead: roadmap entries
+
+Proposed status of F-854: partial (row G, the three consecutive full gates, is not run).
+
+> F-854: ADR 0750, 2026-11-20, done by its registered rule. After the maintainer's answer of 2026-11-20 to Q1 of ADR 0749 (option (b); ADR 0353 amendment 4), I2 is `monitors_store_increment_adr0750::f854_i2_storing_an_increment_of_100_samples_at_1e5_within_the_capacity`: 100 samples per series onto a store of 1e5 whose vectors have spare capacity, the reallocation outside the timer and asserted to be outside it, median of 200 repeats, limit 2 ms unchanged. It failed 0, 0 and 0 of 30 runs without load, under 16 spinning processes and under 16 processes copying memory (largest medians 0.0135, 0.0220 and 0.0346 ms, a margin of 58 to 167). The increment that crosses the end of the capacity is printed by a second running test without a limit: medians 0.89 to 0.94, 1.17 to 1.30 and 3.41 to 4.16 ms under the same loads. The old `f456_i2` is an ignored record with its body untouched. The committed mutation (a copy of the abscissa on every push, 4.63 ms) is caught; the smallest slowdown caught is 4.9 microseconds a call. No library code changed; no run on a hosted runner.
+
+> gap: Not run: three consecutive full gates of main with A4 of vof_dambreak_amg and the I2 of ADR 0750 (monitors_store_increment_adr0750, f854_i2_..._within_the_capacity) passing at the first attempt, and any repeat on a hosted windows-latest runner. The limit of 2 ms is 58 to 167 times the measured time, so the test catches only a push that costs 4.9 microseconds more per call.
+
+No new item.
