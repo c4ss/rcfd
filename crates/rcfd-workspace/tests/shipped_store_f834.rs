@@ -98,6 +98,7 @@ fn store_warnings(events: &[Value]) -> Vec<String> {
 /// (ADR 0373 D1, F-476): the field store of every shipped case without `[mesh.adapt]` is byte for byte the store it
 /// wrote before F-476, against the recorded table, unchanged.
 #[test]
+#[ignore = "retired record (ADR 0748, F-471): the first hash of axial_fan_cgrid moved with the default of ADR 0743, approved by the maintainer on 2026-11-20; restated in shipped_store_adr0748.rs"]
 fn d1_the_store_of_every_non_adaptive_shipped_case_is_unchanged() {
     let tmp = f834::temp("f476-d1");
     let mut measured = Vec::new();

@@ -1355,7 +1355,7 @@ mod f338 {
     }
 }
 
-/// Copies from `overset_f450.rs` and the restated test.
+/// Copies from `overset_f450.rs` and the restated tests.
 mod f450 {
     use super::under_old_order;
     use rcfd_core::vec3::Vec3;
@@ -1519,10 +1519,24 @@ mod f450 {
     /// The quadratic stencils under the default of ADR 0743 (gate run 44599067147).
     const NEW_QUADRATIC: u64 = 0x9f56741b853c367b;
 
+    /// The linear stencils under the default of ADR 0743: measured by the run of N7 on 0a1abe82 (ADR 0748 addendum 1), the
+    /// move approved by the maintainer's second answer of 2026-11-20.
+    const NEW_LINEAR: u64 = 0xb7eacfdad14044af;
+
+    /// ADR 0748 N7a (amendment 1): `overset_f450::b1_defaults_bit_identical` under the default, with both new values.
+    #[test]
+    fn t7_b1_default_amended() {
+        let (q, l) = (b1_hash(Q), b1_hash(L));
+        println!("N7a B1, default: quadratic {q:016x}, linear {l:016x}");
+        assert_eq!(q, NEW_QUADRATIC, "N7a: quadratic stencils under the default");
+        assert_eq!(l, NEW_LINEAR, "N7a: linear stencils under the default");
+    }
+
     /// ADR 0748 N7: `overset_f450::b1_defaults_bit_identical` under the default: the quadratic stencils the new value, the
     /// linear stencils as registered (the gate did not reach them).
     #[test]
-    fn t7_b1_default() {
+    #[ignore = "known miss, ADR 0748 amendment 1: the linear stencils moved as well (0x9c5ab1e5b21d5368 to 0xb7eacfdad14044af); restated by t7_b1_default_amended"]
+    fn t7_b1_default_known_miss() {
         let (q, l) = (b1_hash(Q), b1_hash(L));
         println!("N7 B1, default: quadratic {q:016x}, linear {l:016x}");
         assert_eq!(q, NEW_QUADRATIC, "N7: quadratic stencils under the default");
@@ -1864,7 +1878,7 @@ mod f368 {
     }
 }
 
-/// Copies from `overset_f479.rs` and the restated test.
+/// Copies from `overset_f479.rs` and the restated tests.
 mod f479 {
     use super::under_old_order;
     use rcfd_core::vec3::Vec3;
@@ -2059,10 +2073,28 @@ mod f479 {
         ]
     }
 
+    /// The linear stencils and G under the default of ADR 0743: measured by the run of N9 on 0a1abe82 (ADR 0748 addendum 1),
+    /// the moves approved by the maintainer's second answer of 2026-11-20.
+    const NEW_LINEAR: u64 = 0xb7eacfdad14044af;
+    const NEW_G: u64 = 0xe8f1628a95798aab;
+
+    /// ADR 0748 N9a (amendment 1): A6 under the default, with the four new values.
+    #[test]
+    fn t9_a6_default_amended() {
+        let h = a6_hashes();
+        println!("N9a A6, default: {h:#018x?}");
+        assert_eq!(
+            h,
+            [NEW_QUADRATIC, NEW_LINEAR, NEW_G, NEW_G],
+            "N9a: A6 under the default"
+        );
+    }
+
     /// ADR 0748 N9: A6 under the default: the quadratic stencils the new value; the linear stencils and both G values as
     /// registered (the gate did not reach them).
     #[test]
-    fn t9_a6_default() {
+    #[ignore = "known miss, ADR 0748 amendment 1: the linear stencils and G moved as well (0x9c5ab1e5b21d5368 to 0xb7eacfdad14044af, 0xb2b43812eb166b04 to 0xe8f1628a95798aab); restated by t9_a6_default_amended"]
+    fn t9_a6_default_known_miss() {
         let h = a6_hashes();
         println!("N9 A6, default: {h:#018x?}");
         assert_eq!(h[0], NEW_QUADRATIC, "N9: default, quadratic stencils");
