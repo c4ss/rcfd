@@ -446,3 +446,18 @@ anything merges. Option (c), an approval in advance of further fingerprints, was
 fingerprint that moves stops the work again and is reported.
 
 The further registration is ADR 0747 (brief `docs/adr/briefs/f471-fp4-move.md`).
+
+## Answer of the maintainer (2026-11-20), written into this ADR by the lead's brief
+
+Asked by the lead on 2026-11-20 as three options with a recommendation (approve the moves; keep the overset solver on the
+old order; revert the default). The maintainer answered on 2026-11-20: "Approve the moves". That is: the moves of the nine
+registered values listed above under the corrected order of the coarsest dense LU are approved, under a further
+registration that adds a way back to the old order for the overset solver, shows each old value bit for bit under it, and
+restates the nine tests with the new values, as ADR 0747 did for FP4. Nothing else is approved: any other registered hash,
+fingerprint or record that moves stops the work and is reported.
+
+The statement of D2 above, "No record of the old behaviour runs through them", is false for the overset solver
+(`overset.rs`): nine tests of registered fingerprints and records of its default results (the list of the brief
+`docs/adr/briefs/f471-overset-fingerprints.md`) moved with the default; it is corrected by ADR 0748.
+
+The further registration is ADR 0748 (brief `docs/adr/briefs/f471-overset-fingerprints.md`).

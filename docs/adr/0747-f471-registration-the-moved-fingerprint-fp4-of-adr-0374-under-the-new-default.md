@@ -360,3 +360,14 @@ by the letter of the registered rule otherwise.
 No new item is proposed. Note proposed for F-363, one line:
 
 > ADR 0747, 2026-11-19 (F-471): the fingerprint FP4 of ADR 0374 N0 moved with the corrected order of the coarsest dense LU (approved by the maintainer on 2026-11-19); n0_fingerprints_of_the_defaults is an ignored record and immersed_single_corrector_fp_adr0747.rs restates it with the old value reproduced under the old order.
+
+## Answer of the maintainer (2026-11-20), written into this ADR by the lead's brief
+
+Asked by the lead on 2026-11-20 as three options with a recommendation (approve the moves; keep the overset solver on the
+old order; revert the default). The maintainer answered on 2026-11-20: "Approve the moves". That is: the moves of the nine
+registered values listed above under the corrected order of the coarsest dense LU are approved, under a further
+registration that adds a way back to the old order for the overset solver, shows each old value bit for bit under it, and
+restates the nine tests with the new values, as ADR 0747 did for FP4. Nothing else is approved: any other registered hash,
+fingerprint or record that moves stops the work and is reported.
+
+The further registration is ADR 0748 (brief `docs/adr/briefs/f471-overset-fingerprints.md`).
