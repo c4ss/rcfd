@@ -1,0 +1,13 @@
+# expect-fail: cargo test --release -p rcfd-post --test monitors_store_increment_adr0750
+diff --git a/crates/rcfd-post/src/monitors.rs b/crates/rcfd-post/src/monitors.rs
+index 89e5fe4f..a87ff17c 100644
+--- a/crates/rcfd-post/src/monitors.rs
++++ b/crates/rcfd-post/src/monitors.rs
+@@ -46,6 +46,7 @@ impl MonitorStore {
+         if s.x.is_empty() {
+             s.unit = unit.into();
+         }
++        std::hint::black_box(s.x.clone());
+         s.x.push(x);
+         s.y.push(y);
+     }

@@ -340,3 +340,47 @@ most 2 ms. `crates/rcfd-post/tests/monitors_filtered_f456.rs` is restored to its
 for byte. The finding (what I2 times is mostly the eight reallocations that the cloned store forces, and a load on
 the memory slows every repeat) and the options that would change what I2 measures are in ADR 0749; they are for
 the owner of this ADR.
+
+## Answer of the maintainer (2026-11-20), written into this ADR by the lead's brief
+
+From `docs/adr/briefs/f854-i2-store-increment.md`, section "The maintainer's answer", word for word:
+
+Asked by the lead on 2026-11-20 as question Q1 of ADR 0749, two options with a recommendation (time an increment of a
+store that grew by pushes; leave I2 as it is). The maintainer answered on 2026-11-20: "Go with your recommendation". That
+is option (b) of Q1: I2 times an increment of 100 samples per series of a store that grew by pushes, with the reallocation
+outside the timer, limit 2 ms unchanged; the increment that crosses the end of the capacity is reported by a test without
+a limit. The clause of F-456, "an increment of 100 samples at 1e5 stored in at most 2 ms", is read in that sense from now
+on. Nothing else is approved: no other limit, test or acceptance changes.
+
+## Amendment 4: I2 times an increment of a store with spare capacity; the old I2 is an ignored record (2026-11-20, F-854, ADR 0750)
+
+Written after the registration [ADR 0750](0750-f854-registration-i2-times-an-increment-of-a-store-with-spare-capacity.md)
+and before any test code of it. Nothing above this amendment is changed. It rests on the answer of the maintainer of
+2026-11-20, in the section before this one.
+
+The clause of F-456, "an increment of 100 samples at 1e5 stored in at most 2 ms", is read from now on as the maintainer
+answered: the time of storing 100 samples per series in a store that grew by pushes, with the reallocation outside the
+timer. The limit stays 2 ms and stays on the median of 200 repeats. I2 as registered in the table of checks above (the
+clone of the store, then the pushes timed) had a defective set-up in that sense: the clone has no spare capacity, so about
+99 percent of what it timed was the reallocation of the eight vectors by the system allocator (ADR 0749, D-I2), and it
+failed in three gate runs of 2026-11-20 with the code unchanged (2.0807 ms in run 44756958425; in the unfinished run
+44711018197; 3.3863 ms in run 44801883205).
+
+By rule 2 of the agent rules (version 3):
+
+- The corrected test is `f854_i2_storing_an_increment_of_100_samples_at_1e5_within_the_capacity` in the new file
+  `crates/rcfd-post/tests/monitors_store_increment_adr0750.rs`: the store is built by pushes to 99,999 samples per
+  series; each of the 200 repeats clones it, pushes sample 100,000 to each series outside the timer (which reallocates
+  the eight vectors and leaves them with spare capacity), and times samples 100,001 to 100,100 of the four series; the
+  test asserts that no capacity changes inside the timer and that the median is at most 2 ms. From now on this test is
+  check I2 of F-456.
+- The old test `f456_i2_storing_an_increment_of_100_samples_at_1e5` of `monitors_filtered_f456.rs` stays as an ignored
+  record: one `#[ignore]` attribute is added; its name, its body and its assertion with the 2 ms are untouched. Its
+  registered result (addendum 1: median 1.17 ms, met) stands as what was measured on 2026-11-12.
+- What the old test measured is still run: `f854_i2x_the_increment_that_crosses_the_capacity_at_1e5_is_reported` in the
+  new file has the set-up of the old I2, prints best, median and maximum, and asserts no time. The increment that
+  crosses the end of the capacity is reported, not limited.
+
+E1 and every other check of this ADR are untouched. The design, the estimates (0.013 ms without load, 0.035 ms under a
+memory load, a margin of 57 to 154 against the 2 ms), the runs under load and the mutation that the corrected test must
+catch are in ADR 0750, and its addendum has the results.

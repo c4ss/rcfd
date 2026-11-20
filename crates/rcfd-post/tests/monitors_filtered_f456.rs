@@ -145,6 +145,7 @@ fn f456_e1_filtered_documents_equal_the_old_algorithm() {
 
 /// I2: appending 100 samples to each of four series that hold 1e5, median of 200 repeats, limit 2 ms.
 #[test]
+#[ignore = "retired record (ADR 0750, F-854; ADR 0353 amendment 4): the clone has no spare capacity, so this times the system allocator; with the code unchanged it failed in the gate on 2026-11-20 (2.0807 ms, 3.3863 ms). Corrected and reported in monitors_store_increment_adr0750.rs"]
 fn f456_i2_storing_an_increment_of_100_samples_at_1e5() {
     let mut g = Lcg(0xF456_0002);
     let mut base = MonitorStore::new("iteration");
