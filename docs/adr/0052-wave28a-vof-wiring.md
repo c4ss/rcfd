@@ -330,3 +330,34 @@ comparison with published tank data.
 
 F-227 stays partial: generation and absorption are met on the registered coarse checks, not the full acceptance (no Stokes-2 /
 irregular run, no 3-D, no refinement). F-228 (population balance) was NOT attempted.
+
+## Amendment 1 (2026-11-20, F-854, ADR 0749): how the wall time of A4 is taken
+
+Written after the baseline runs of [ADR 0749](0749-f854-registration-two-wall-clock-limits-measured-so-that-load-alone-does-not-fail-them.md)
+and before any change of `crates/rcfd-fv/tests/vof_dambreak_amg.rs`. Nothing above this amendment is changed.
+
+The limit of A4 stays as registered: "wall time at most that of plain CG", asserted as `am.secs <= cg.secs`. What changes
+is how the two times are taken. Until now the test ran the whole plain-CG run and then the whole AMG run, each inside one
+timer. From this amendment the two runs advance in turn, one step of each per pair with the order inside a pair
+alternating, each step inside its own timer (the step and the bookkeeping the loop did before), and the wall time of a
+run is the sum of the times of its own steps. The two solvers share no state, so the fields, the iteration counts and
+every other assertion of the test are those of before; none of them is touched.
+
+Reason. With one run after the other, a load of the machine that arrives during the second run is counted against AMG
+alone. The unchanged test at 0360c638, 10 runs each on the lead's machine (ADR 0749, series B-A4):
+
+| Load | Failed of 10 | AMG wall, s | CG wall, s |
+|---|---|---|---|
+| none | 0 | 7.0 to 7.3 | 18.7 to 19.5 |
+| 16 spinning processes through the whole test | 0 | 24.4 to 25.7 | 45.0 to 49.4 |
+| 32 spinning processes started 20 s after the launch (during the AMG run) | 10 | 25.1 to 28.3 | 19.6 to 20.1 |
+
+A load that lasts through both runs does not fail the test; the same kind of load placed on the second run fails it
+every time. That is the failure of the gates of 2026-11-12 (ADR 0229) and of 46cea4f8 (AMG 35.1 s against CG 26.8 s).
+The claim of A4 is about the code (AMG is not slower than plain CG on this case), so both runs are now measured through
+the same stretch of time.
+
+What the amended measure still catches: an AMG path that costs more than the plain-CG path costs more in every step, so
+the sum over its steps is above that of CG whatever the load (the committed mutation of ADR 0749 beside the test). What it
+does not remove: under a steady load the AMG run is slowed more than the CG run (a factor of 3.5 against 2.5 in the table,
+ratio 0.52 against 0.38); a load that raised that ratio above 1 would still fail the test.

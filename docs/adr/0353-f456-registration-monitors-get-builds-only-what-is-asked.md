@@ -293,3 +293,34 @@ Proposed status of F-456: done.
 > F-456: ADR 0353, 2026-11-12. `monitors.get {names, since}` selects the series and the samples before the document is built (`MonitorStore::to_json_filtered`), and on the line protocol the reply is written straight into the reply line without a JSON tree (`write_json_filtered`, `serve_stream`); `Service::call` still returns a `Value`. Replies are equal to the unchanged code byte for byte: 0 differing of 3000 stores (E1) and of 594 requests through the call and through the wire (E2, E3), including NaN and infinities, escapes, ties, an unsorted series, error and notification cases, four series of 1e5 samples (E3b), and the hash of the old tree's lines reproduced; the existing tests of `rcfd-api`, `rcfd-post`, `rcfd-mcp`, `rcfd-assistant` and `rcfd-gui` pass unedited, no hash or golden moved. P3 of ADR 0350 measured again as registered (Electron 45.1.0, 4 series of 1e5 samples, 12.0 MB): median 82.6 ms against 100 (the control on the unchanged server, same day: 151.4 ms, 1.4 ms above the registered band of the control). An increment of 100 samples at 1e5: fetched in a median of 0.30 ms (control 21.1 ms), stored (800 pushes) in a median of 1.17 ms, limit 2 ms. Eight mutations caught.
 
 Notes for other items: F-447 (partial, P3 missed): its note may add that P3 is met after F-456 (ADR 0353, 2026-11-12) at 82.6 ms. F-448 (Studio design): the history is fetched once, then `since` increments at 0.3 ms.
+
+## Amendment 2: I2 is judged on the best of its 200 repeats (2026-11-20, F-854, ADR 0749)
+
+Written after the baseline runs of [ADR 0749](0749-f854-registration-two-wall-clock-limits-measured-so-that-load-alone-does-not-fail-them.md)
+and before any change of `crates/rcfd-post/tests/monitors_filtered_f456.rs`. Nothing above this amendment is changed.
+
+The limit of I2 stays 2 ms, from the acceptance of F-456 ("an increment of 100 samples at 1e5 stored in at most 2 ms").
+The store, the 200 repeats and what each repeat times stay as registered. What changes is the value compared with the
+limit: the smallest of the 200 times in place of their median. The printed line gives the best, the median and the
+maximum. E1 and every other line of the file are untouched.
+
+Reason. Each repeat does the same pushes and the same eight reallocations, so the cost of the code is the same in
+every repeat; a time above the smallest one is what the machine added (a shared core, a contended memory bus, a wait
+for a processor). The median takes half of that into the judgement, the minimum the least of it, and the minimum is
+never below the cost of the code. The unchanged test at 0360c638, 30 runs each on the lead's machine (ADR 0749, series
+B-I2):
+
+| Load | Failed of 30 | Median of a run, ms | Maximum of a run, ms |
+|---|---|---|---|
+| none | 0 | 0.90 to 1.11 | 1.15 to 2.62 |
+| 16 spinning processes | 0 | 1.28 to 1.43 | 1.79 to 4.13 |
+| 16 processes that copy 64 MB without end | 30 | 3.85 to 4.88 | 6.2 to 11.1 |
+
+The gate of 46cea4f8 measured a median of 2.0807 ms on a runner that ran other tests beside this one. So the median
+follows the load of the machine: by a third under processes that only compute, by a factor of four under processes that
+move memory, which is what a reallocation of 0.8 MB also does.
+
+What the amended measure still catches: a slower `push`, or a slower growth of a series, is in every repeat and so in
+the best one (the committed mutation of ADR 0749 beside the test). What it no longer sees: a cost that falls on only
+some of the 200 identical repeats. Whether the best repeat stays under 2 ms while the memory of the machine is saturated
+is not known at the time of this amendment; ADR 0749 measures it and reports it either way.
