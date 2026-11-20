@@ -461,3 +461,15 @@ The statement of D2 above, "No record of the old behaviour runs through them", i
 `docs/adr/briefs/f471-overset-fingerprints.md`) moved with the default; it is corrected by ADR 0748.
 
 The further registration is ADR 0748 (brief `docs/adr/briefs/f471-overset-fingerprints.md`).
+
+## Answer of the maintainer (2026-11-20, second), written into this ADR by the lead
+
+The lead asked the maintainer on 2026-11-20, as three options with a recommendation (approve all three; approve the two
+overset values and keep axial_fan_cgrid on the old order through a case key; revert the default). The maintainer answered
+on 2026-11-20: "Approve all three". That is: the moves of B1 linear (0x9c5ab1e5b21d5368 to 0xb7eacfdad14044af; overset_f450
+B1 and overset_f479 A6), of A6 G (0xb2b43812eb166b04 to 0xe8f1628a95798aab; overset_f479 A6) and of the first store hash of
+cases/axial_fan_cgrid/axial_fan_cgrid.toml in shipped_store_f834 D1 (0xe4539468a88f2746 to 0x03d18f072e9caca5) under the
+corrected order are approved, under ADR 0748. Nothing else is approved: any further registered value that moves stops the
+work again and is reported.
+
+It is written into ADR 0748 as well, with its amendment 1.

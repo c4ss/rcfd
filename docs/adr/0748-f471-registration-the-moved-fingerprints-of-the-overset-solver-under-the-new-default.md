@@ -401,3 +401,93 @@ Status proposed for F-471: partial.
 > Gap: the branch of ADR 0748 is not mergeable: f450::t7_b1_default and f479::t9_a6_default of overset_fingerprints_adr0748 fail at two registered values the maintainer has not seen (ADR 0748 question 1), and shipped_store_f834 D1 fails at the first hash of axial_fan_cgrid, which moved with the default of ADR 0743 (question 2). Needs the maintainer's answers; then an amendment of ADR 0748 restates T7 and T9 and the lead re-records or keeps the store hash.
 
 No new item is proposed.
+
+## Answer of the maintainer (2026-11-20, second), written into this ADR by the lead
+
+The lead asked the maintainer on 2026-11-20, as three options with a recommendation (approve all three; approve the two
+overset values and keep axial_fan_cgrid on the old order through a case key; revert the default). The maintainer answered
+on 2026-11-20: "Approve all three". That is: the moves of B1 linear (0x9c5ab1e5b21d5368 to 0xb7eacfdad14044af; overset_f450
+B1 and overset_f479 A6), of A6 G (0xb2b43812eb166b04 to 0xe8f1628a95798aab; overset_f479 A6) and of the first store hash of
+cases/axial_fan_cgrid/axial_fan_cgrid.toml in shipped_store_f834 D1 (0xe4539468a88f2746 to 0x03d18f072e9caca5) under the
+corrected order are approved, under ADR 0748. Nothing else is approved: any further registered value that moves stops the
+work again and is reported.
+
+## Amendment 1 (2026-11-20): T7 and T9 restated with the two further values; the store hash of `axial_fan_cgrid` restated
+
+Written after addendum 1 and after the maintainer's second answer above, and before any code or test of this amendment
+and before any run of its checks. What was done beforehand is reading (`crates/rcfd-workspace/tests/f834/mod.rs` lines 1 to
+100, `crates/rcfd-api/src/sim.rs` lines 1281 to 1293 and 2920 to 2942, `crates/rcfd-fv/src/simple.rs` lines 455 to 480 and
+the lines that name `linear`). No limit of this or any other ADR changes. No library file changes.
+
+**A1. T7 and T9 (rule 2).** The two default tests that missed, `f450::t7_b1_default` and `f479::t9_a6_default`, stay in
+`overset_fingerprints_adr0748.rs` as ignored records: each is renamed with the suffix `_known_miss` and gets one
+`#[ignore = "known miss, ADR 0748 amendment 1: ..."]` line with the measured numbers; its body and its limits stay as
+they are. This is rule 2's form for a missed limit; these two are the only tests ignored beyond the attributes the lead
+names, and they are tests of this registration, not of another record. Two tests are added in the form of the others:
+
+- `f450::t7_b1_default_amended` (N7a): quadratic `0x9f56741b853c367b`, linear `0xb7eacfdad14044af`.
+- `f479::t9_a6_default_amended` (N9a): `0x9f56741b853c367b`, `0xb7eacfdad14044af`, `0xe8f1628a95798aab`,
+  `0xe8f1628a95798aab`.
+
+The old values under the old order are already running tests and are not changed: `f450::t7_b1_old_order` (W7) and
+`f479::t9_a6_old_order` (W9); both passed in addendum 1.
+
+**A2. The store hash (the lead's decisions, given with the maintainer's second answer).** In
+`crates/rcfd-workspace/tests/shipped_store_f834.rs` the test
+`d1_the_store_of_every_non_adaptive_shipped_case_is_unchanged` is retired with one line above its `fn`,
+`#[ignore = "retired record (ADR 0748, F-471): the first hash of axial_fan_cgrid moved with the default of ADR 0743, approved by the maintainer on 2026-11-20; restated in shipped_store_adr0748.rs"]`;
+its body and its table are untouched. It is restated in the new file `crates/rcfd-workspace/tests/shipped_store_adr0748.rs`
+(header: ADR 0748, F-471; it restates D1 of ADR 0373, F-476, as kept by F-834), which declares `mod f834;` and holds copies
+of the table and of `planned` of the retired test:
+
+- `d1_restated_under_the_default` (S2): the body of D1 over the same ten cases, against the table with the first hash of
+  `axial_fan_cgrid` `0x03d18f072e9caca5` and the nineteen other values exactly as registered. If any of the nineteen
+  differs, the work stops and it is reported.
+- `d1_axial_fan_cgrid_under_the_old_order` (S3): the lead asked for old-order evidence as a running test only if an
+  existing API gives it without a new key of the case schema and without touching a golden. One does:
+  `Simulation::simple_solver_mut()` ("diagnostics and tests") returns the SIMPLE/SIMPLEC solver of a steady run, whose
+  public `settings.linear` is the `LinearOptions` the pressure solve reads. The test builds the planned case of
+  `axial_fan_cgrid` as D1 does, sets `settings.linear.amg_coarse_lu_interleaved = true` on that solver before the first
+  step, runs the same three steps and hashes the same two files: the registered `0xe4539468a88f2746` and
+  `0x5234e433bd8358f4`. That the flag set after `Simulation::new` reaches the three steps is a hypothesis of this row (the
+  solver passes `linear: s.linear` to the pressure solve in each iteration, `simple.rs` line 1251); if the row misses it
+  is recorded by rule 2, and the evidence of the old value is then the scratch-copy runs S1 of addendum 1.
+
+No key of the case schema is added, no golden and no hash table is edited.
+
+**A3. Checks added.** Limits are from the tolerance table's row "Bit-identity of default output".
+
+| # | Check | Limit | Source of the limit | Estimate | Margin | Kind |
+|---|---|---|---|---|---|---|
+| N7a | T7 under the default: quadratic `0x9f56741b853c367b`, linear `0xb7eacfdad14044af` | bit for bit | addendum 1 (the run of N7 on 0a1abe82); the maintainer's second answer of 2026-11-20 | equal | 1 | unchanged default output |
+| N9a | T9 under the default: `0x9f56741b853c367b`, `0xb7eacfdad14044af`, `0xe8f1628a95798aab` twice | bit for bit | addendum 1 (the run of N9 on 0a1abe82); the maintainer's second answer | equal | 1 | unchanged default output |
+| S2 | D1 restated: the ten cases, the first hash of `axial_fan_cgrid` `0x03d18f072e9caca5`, the nineteen other values as registered | bit for bit | ADR 0373 D1 (nineteen values); gate run 44599067147 and S0 of addendum 1; the maintainer's second answer | equal | 1 | unchanged default output |
+| S3 | `axial_fan_cgrid` under the old order through `simple_solver_mut` | `0xe4539468a88f2746`, `0x5234e433bd8358f4`, bit for bit | ADR 0373 D1 (the registered old result) | equal (S1 of addendum 1, by another route) | 1 | unchanged default output (under the old order) |
+| O1a | `overset_fingerprints_adr0748` and the 21 `overset*` files, again | 0 failures in each | the lead's instruction with the second answer; tolerance table, bit-identity | 0 | 1 | unchanged default output |
+| O4 | Every test file of `rcfd-workspace` (`cargo test -p rcfd-workspace --release`), with `shipped_store_f834` and the new file among them | 0 failures | the lead's instruction with the second answer; rule 7 | 0 | 1 | unchanged default output |
+| O3a | `rcfd-api` `baseline_hashes`, again | the test passes | rule 3 | passes | 1 | unchanged default output |
+| D2 | The retired D1 of `shipped_store_f834`, run once with `--ignored` | fails with exactly the one changed value, as S0 | S0 of addendum 1 | as stated | 1 | code verification (negative control) |
+
+**A4. Mutations**, each alone on the scratch copy (brought to the code commit of this amendment), the named test file
+run once in release, the file restored byte for byte:
+
+| Mutation | Must fail |
+|---|---|
+| M1 again (the committed patch of `overset_fingerprints_adr0748`, applied with `git apply`): the unmutated file passes whole, so the patch's expect-fail now has a meaning | W1 to W9 |
+| M2 again (`LinearOptions::amg_settings` returns `false` always) | N1 to N6, N7a, N8, N9a |
+| M3 again (`prescribed_pressure` takes `rcfd_linalg::AmgSettings::default()`) | W9 |
+| M4 (committed, rule 16, patch `crates/rcfd-workspace/tests/shipped_store_adr0748.mutation.patch`): `LinearOptions::amg_settings` returns `coarse_lu_interchanges_first: false` always | S2, at the first hash of `axial_fan_cgrid`, with the old value on the left |
+| M5: `LinearOptions::amg_settings` returns `coarse_lu_interchanges_first: true` always (the way back cut) | S3 |
+
+**A5. The decision rule, extended to the three values; no limit changes.**
+
+- **done**: every row of the registration other than N7 and N9 is met as in addendum 1 or again here; N7a, N9a, S2, S3,
+  O1a, O4, O3a and D2 are met; M1 to M5 are caught by the tests named for them; `fmt` and `clippy` are clean for
+  `rcfd-fv`, `rcfd-linalg` and `rcfd-workspace`. N7 and N9 stay missed rows of the registration, recorded as the two
+  `known_miss` tests; their values are the ones the maintainer approved in the second answer.
+- **partial**: a row of this amendment is missed or not run, or a mutation is not caught. If only S3 misses, the store
+  hash has no running old-order test and the outcome is partial with that stated.
+- **stopped and reported**: any registered value other than the nine tests' values and the three of the second answer
+  moves; one of the nineteen other store values among them.
+
+Size (agent), amendment 1: done; 0; 0; 0; 30000
