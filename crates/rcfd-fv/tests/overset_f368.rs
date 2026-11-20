@@ -300,6 +300,7 @@ fn d1_defaults_fingerprint_record() {
 /// ADR 0367 D1: the fingerprints on this tree equal those of the tree before any library change of F-368 (recorded by
 /// `d1_defaults_fingerprint_record` on 68849b03, the base library 2ecb97f6).
 #[test]
+#[ignore = "retired record (ADR 0748, F-471): moved with the default of ADR 0743, approved by the maintainer on 2026-11-20; restated in overset_fingerprints_adr0748.rs"]
 fn d1_defaults_fingerprint_equals_the_base_tree() {
     const BASE: [u64; 8] = [
         0x7ed9_37a9_e05b_b338,

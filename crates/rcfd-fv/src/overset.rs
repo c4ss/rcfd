@@ -61,7 +61,7 @@ use crate::pressure::{
     PressureBc, PressureControls,
 };
 use rcfd_core::vec3::{self, Vec3};
-use rcfd_linalg::{bicgstab, gmres, Amg, AmgSettings, CsrMatrix, Ilu0, LinearDevice, SolveControl, SolveStats};
+use rcfd_linalg::{bicgstab, gmres, Amg, CsrMatrix, Ilu0, LinearDevice, SolveControl, SolveStats};
 use rcfd_mesh::motion::Pose;
 use rcfd_mesh::overset::{pose_inverse_apply, CellKind, Connectivity, DonorInterpolation, Overset};
 use std::sync::Arc;
@@ -2024,7 +2024,9 @@ impl OversetSolver {
             Some(_) => overset_rhs(&pm, conn, &scale, &current),
             None => {
                 let (a, b) = overset_system(&pm, conn, &scale, &current);
-                let amg = Amg::new(&a, AmgSettings::default());
+                // ADR 0748 (F-471): the settings of the solver's linear options, so that
+                // `linear.amg_coarse_lu_interleaved` gives the coarsest-solve order of before ADR 0743
+                let amg = Amg::new(&a, s.linear.amg_settings());
                 *psys = Some(PressureSystem { a, amg, p1: None });
                 b
             }
@@ -2169,7 +2171,8 @@ fn prescribed_pressure(
         Some(_) => overset_rhs(&pm, conn, &scale, &current),
         None => {
             let (a, b) = overset_system(&pm, conn, &scale, &current);
-            let amg = Amg::new(&a, AmgSettings::default());
+            // ADR 0748 (F-471): as in `overset_pressure`, the settings of the solver's linear options
+            let amg = Amg::new(&a, s.linear.amg_settings());
             *psys = Some(PressureSystem { a, amg, p1: None });
             b
         }

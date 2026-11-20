@@ -738,6 +738,7 @@ fn check_hash(name: &str, got: &str, want: &str) {
 /// ADR 0241 R2e: U for 80 steps and TG_1 for 200 steps after `set_time_scheme(ImplicitEuler)`, directly and after
 /// `set_time_scheme(Bdf2)`, give the records R2a and R2b of ADR 0238.
 #[test]
+#[ignore = "retired record (ADR 0748, F-471): moved with the default of ADR 0743, approved by the maintainer on 2026-11-20; restated in overset_fingerprints_adr0748.rs"]
 fn r2e_implicit_euler_chosen_by_the_method_gives_the_records() {
     let euler = |s: &mut OversetSolver| s.set_time_scheme(TimeScheme::ImplicitEuler).unwrap();
     let back = |s: &mut OversetSolver| {

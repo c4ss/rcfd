@@ -483,6 +483,7 @@ fn f0_defaults_fingerprint_printed() {
 /// ADR 0359 F0: the fingerprints printed by `f0_defaults_fingerprint_printed` on the tree before any library change of
 /// F-442 (commit 9bb0bff3, log `f442-scratch/fast-base.log`); the final tree must give the same.
 #[test]
+#[ignore = "retired record (ADR 0748, F-471): moved with the default of ADR 0743, approved by the maintainer on 2026-11-20; restated in overset_fingerprints_adr0748.rs"]
 fn f0_defaults_fingerprint_equals_the_base_tree() {
     let base: [u64; 4] = [
         0x3dee_ab3c_fda1_d8d0,

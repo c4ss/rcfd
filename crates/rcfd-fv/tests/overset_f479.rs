@@ -666,6 +666,7 @@ const G_EB13160D: u64 = 0xb2b43812eb166b04;
 
 /// ADR 0409 A6: without the opt-in the default coupling and G give the bytes of the library before F-479.
 #[test]
+#[ignore = "retired record (ADR 0748, F-471): moved with the default of ADR 0743, approved by the maintainer on 2026-11-20; restated in overset_fingerprints_adr0748.rs"]
 fn a6_without_the_opt_in_every_bit_is_kept() {
     let (q, l) = (hash_40(Mode::Default, QD, false), hash_40(Mode::Default, LD, false));
     let (g, g_off) = (hash_40(Mode::G, QD, false), hash_40(Mode::G, QD, true));
