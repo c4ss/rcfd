@@ -1,0 +1,14 @@
+# expect-fail: cargo test --release -p rcfd-workspace --test shipped_store_adr0748
+diff --git a/crates/rcfd-linalg/src/backend.rs b/crates/rcfd-linalg/src/backend.rs
+index 80459508..ab27d9c1 100644
+--- a/crates/rcfd-linalg/src/backend.rs
++++ b/crates/rcfd-linalg/src/backend.rs
+@@ -76,7 +76,7 @@ impl LinearOptions {
+     /// the coarsest dense LU solve when [`LinearOptions::amg_coarse_lu_interleaved`] is set.
+     pub fn amg_settings(&self) -> crate::amg::AmgSettings {
+         crate::amg::AmgSettings {
+-            coarse_lu_interchanges_first: !self.amg_coarse_lu_interleaved,
++            coarse_lu_interchanges_first: false,
+             ..crate::amg::AmgSettings::default()
+         }
+     }
