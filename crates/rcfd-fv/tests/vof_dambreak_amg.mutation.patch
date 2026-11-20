@@ -1,0 +1,16 @@
+# expect-fail: cargo test --release -p rcfd-fv --test vof_dambreak_amg
+diff --git a/crates/rcfd-fv/src/fvmatrix.rs b/crates/rcfd-fv/src/fvmatrix.rs
+index 4bb0a3cd..75a1dd93 100644
+--- a/crates/rcfd-fv/src/fvmatrix.rs
++++ b/crates/rcfd-fv/src/fvmatrix.rs
+@@ -79,6 +79,10 @@ impl FvMatrix {
+     /// [`FvMatrix::solve_amg`] with the given AMG settings (ADR 0743: the pressure solve passes
+     /// `LinearOptions::amg_settings`, which can ask for the coarsest-solve order of before that ADR).
+     pub fn solve_amg_with(&self, x: &mut [f64], ctl: &SolveControl, settings: AmgSettings) -> SolveStats {
++        for _ in 0..2 {
++            let mut discarded = x.to_vec();
++            self.solve(&mut discarded, ctl);
++        }
+         let amg = Amg::new(&self.a.to_csr(), settings);
+         cg(&self.a, &self.b, x, &amg, ctl)
+     }
