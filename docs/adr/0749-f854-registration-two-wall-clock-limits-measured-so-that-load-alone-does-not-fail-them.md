@@ -400,3 +400,22 @@ Proposed status of F-854: partial.
 > gap: I2 of monitors_filtered_f456 still fails when the runner's memory is loaded: it times the reallocation of a cloned store (99 percent of 1.07 ms against 2 ms), which no way of taking the time removes; question Q1 of ADR 0749 (what I2 is to time) is with the maintainer. Not run: the 3 consecutive full gates of main with both tests passing at the first attempt, and any repeat on a hosted windows-latest runner.
 
 No new item. If Q1 is answered (b), the work is a further registration under F-854.
+
+## Amendment 2 (2026-11-20), by the lead: the kinds of the checks
+
+The table of checks of this registration has no column "kind" (agent rules, version 3, rule 14); the process report
+stopped the merge on that. A registration cannot be edited, so the kinds are given here, one row per check of the table.
+None of the rows is a validation or a solution verification: every row checks the test code or the way a time is taken.
+Nothing above this section is changed, and no result changes.
+
+| Id | Kind |
+|---|---|
+| B-A4 | code verification (baseline, reported without a limit) |
+| B-I2 | code verification (baseline, reported without a limit) |
+| C-A4 | code verification (a limit on a time) |
+| C-I2 | code verification (a limit on a time) |
+| E1 | unchanged default output (the printed line of the test) |
+| E2 | code verification (reading of the diff) |
+| M-A4 | code verification (negative control) |
+| M-I2 | code verification (negative control) |
+| G | code verification (gate runs, not made) |
