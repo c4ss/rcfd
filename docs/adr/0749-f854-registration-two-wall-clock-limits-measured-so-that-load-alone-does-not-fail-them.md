@@ -259,3 +259,144 @@ Prediction: under 0.1 ms without load (the estimate of ADR 0353 before its run),
 
 By the decision rule the verdict of this registration can now be at most **partial** (one of the two tests is left
 as it is with its finding).
+
+## Addendum 1: results (2026-11-20)
+
+Commits: 37e4cf5c (this registration, alone), 818b3c92 (ADR 0052 amendment 1 and ADR 0353 amendment 2, before the
+code), f2bfa2ae (both tests changed), 2f850e7d (amendment 1 above and ADR 0353 amendment 3, before the restoring),
+ae2b088c (I2 restored), 69ce9114 (the mutation patch of A4). Changed against 0360c638 in the end:
+`crates/rcfd-fv/tests/vof_dambreak_amg.rs` and its `.mutation.patch`; `crates/rcfd-post/tests/monitors_filtered_f456.rs`
+is byte for byte what it was. No library file, no golden, no hash table and not `gate.yml`.
+
+All runs in release on the lead's machine (16 logical processors), each test executable started as the gate starts
+it. Every series was run once, in the registered order. No cargo or rustc process of anyone else was seen when the
+series began; the total processor load sampled before each series was 11 to 45 percent (the higher values straight
+after the load of the series before had been stopped), from what I do not know. Raw rows: `base-A4.tsv`,
+`base-I2.tsv`, `new-A4.tsv`, `new-I2.tsv`, `D-I2.tsv` and the mutation logs in the scratch folder, not committed.
+
+### A4 (failures of 10; wall times in seconds; ratio = AMG / CG of a run)
+
+| Series | Load | Failed | AMG | CG | Ratio |
+|---|---|---|---|---|---|
+| B-A4, unchanged | L0 | 0 | 7.0 to 7.3 | 18.7 to 19.5 | 0.36 to 0.39 |
+| B-A4, unchanged | LS | 0 | 24.4 to 25.7 | 45.0 to 49.4 | 0.50 to 0.56 |
+| B-A4, unchanged | LL | **10** | 25.1 to 28.3 | 19.6 to 20.1 | 1.28 to 1.41 |
+| C-A4, changed | L0 | 0 | 7.2 to 7.7 | 18.4 to 19.9 | 0.39 to 0.40 |
+| C-A4, changed | LS | 0 | 22.6 to 24.8 | 42.1 to 45.3 | 0.52 to 0.56 |
+| C-A4, changed | LL | 0 | 11.2 to 14.6 | 25.8 to 29.2 | 0.43 to 0.50 |
+
+The cause is shown: a steady load does not fail the unchanged test and the same kind of load placed on its second run
+fails it 10 times of 10, as predicted. With the runs taken in turn the same late load leaves the ratio at 0.43 to 0.50.
+The smallest margin of the changed test is 1.8 (ratio 0.56 under LS). A steady load slows the AMG run more than the CG
+run (ratio about 0.54 against 0.38); the changed measure does not remove that and did not need to.
+
+### I2 (failures of 30; times in ms, the range over the 30 runs)
+
+| Series | Load | Failed | Best of 200 | Median of 200 | Maximum of 200 |
+|---|---|---|---|---|---|
+| B-I2, unchanged (median judged) | L0 | 0 | not printed | 0.90 to 1.11 | 1.15 to 2.62 |
+| B-I2, unchanged | LS | 0 | not printed | 1.28 to 1.43 | 1.79 to 4.13 |
+| B-I2, unchanged | LM | **30** | not printed | 3.85 to 4.88 | 6.2 to 11.1 |
+| C-I2, changed (best judged), withdrawn | L0 | 0 | 0.81 to 1.06 | 1.07 to 1.18 | 1.28 to 2.14 |
+| C-I2, changed, withdrawn | LS | 0 | 1.15 to 1.31 | 1.29 to 1.52 | 2.11 to 3.97 |
+| C-I2, changed, withdrawn | LM | **21** | 1.42 to 2.70 | 3.17 to 4.61 | 6.4 to 12.1 |
+
+The unchanged test does not fail under processes that only compute and fails every time under processes that move
+memory; the gate's median of 2.0807 ms lies between the two. The best of 200 does not hold under LM (amendment 1), so
+I2 is left as registered in ADR 0353.
+
+Diagnostic D-I2 (scratch, 5 runs each, the eight reallocations made outside the timer): without load best 0.011,
+median 0.012 to 0.013, maximum 0.02 to 0.08 ms; under LM best 0.021 to 0.025, median 0.032 to 0.035, maximum 0.10 to
+1.06 ms. So about 99 percent of what I2 times (a median of 1.07 ms without load) is the reallocation that the cloned
+store forces, and the 400 calls of `push` themselves take 0.013 ms, in line with the estimate ADR 0353 made before
+its run. MI1 below puts a warm copy of 0.8 MB at about 0.011 ms, so the cost of the reallocation is not the copying
+of the samples; what it is (new pages from the system, going by the size of the blocks) was not measured.
+
+### Checks
+
+| Id | Limit | Measured | Met |
+|---|---|---|---|
+| B-A4 | none | 0, 0, 10 of 10 failed (L0, LS, LL) | reported; as predicted |
+| B-I2 | none | 0, 0, 30 of 30 failed (L0, LS, LM) | reported |
+| C-A4 | 0 failures in each series | 0, 0, 0 of 10 | **yes** |
+| C-I2 | 0 failures in each series | 0, 0, 21 of 30 | **no** (LM); the change is withdrawn |
+| E1 | printed line equal but for the two wall times | one and the same text in all 60 runs of A4, unchanged and changed | yes |
+| E2 | the diff touches only the timing | A4: `run` replaced by `Live`, `start`, `run_both`, the two calls replaced by one, the header comment; no assertion and not the printed line. I2: no difference | yes |
+| M-A4 | MA1 fails at "A4 wall time" only | AMG 40.6 s against CG 18.6 s, panic "A4 wall time", every other field as in E1 | yes |
+| M-I2 | MI1 fails the changed I2 | not run: there is no changed I2 | not run |
+| G | 3 consecutive full gates | not run here | open |
+
+### Mutations (scratch copy; the unmutated copy passed both files first: A4 7.4 s against 18.5 s, I2 median 0.96 ms)
+
+| Mutation | Result | Caught by |
+|---|---|---|
+| MA1, two discarded plain solves before each AMG solve (committed patch) | AMG 40.6 s, CG 18.6 s | "A4 wall time" |
+| MA2, one discarded plain solve | AMG 24.2 s, CG 18.8 s | "A4 wall time" |
+| MI1, a copy of the abscissa on every push, against the restored I2 | median 5.37 ms | "I2: median ... above 2 ms" |
+| MI2, the copy on every sixteenth sample, against the restored I2 | median 0.99 ms | **not caught** |
+
+MI2 is not caught because my estimate of it was wrong by a factor of ten: 28 copies cost about 0.3 ms, not 3 ms, so
+the mutated store still stores the increment in under 2 ms and the test is right to pass. It is not a slowdown beyond
+the limit.
+
+Rule 7, in the worktree at 69ce9114: `cargo test -p rcfd-fv --release --test vof_dambreak_amg` 1 passed (26.4 s);
+`cargo test -p rcfd-post --release --test monitors_filtered_f456` 2 passed; `cargo fmt -p rcfd-fv -p rcfd-post --check`
+clean; `cargo clippy -p rcfd-fv -p rcfd-post --all-targets -- -D warnings` clean; `cargo test -p rcfd-cli --release
+--test docs_site` 2 passed, run again after this addendum was written.
+
+### Deviations and disclosures
+
+- I2 was changed (f2bfa2ae) and restored (ae2b088c); the amendments that precede each are 818b3c92 and 2f850e7d.
+- No mutation patch is committed beside the I2 test, because the test is unchanged. Rule 16 asks for one committed
+  mutation; it is MA1.
+- The estimate of MI2 was wrong (above). The estimate of C-I2 under load ("up to 1.5 ms") was wrong for LM.
+- During the first run of C-A4 under L0 two commits were made on this machine (that run: 7.7 s against 19.9 s).
+- D1 says "the 260 pieces" where the facts say "about 260 steps"; the loop of the test decides the count.
+
+### Not run
+
+Any run on a hosted runner; the three gate runs of row G; LM on A4 and LL on I2 (as registered); the whole
+workspace suite; `--lib` and `baseline_hashes` (no library file changed).
+
+### Size
+
+Size (agent), actual: partial; 0; 4; 1; 260000
+
+(One amendment to this registration and no further registration. The four heavy runs were the loaded series of A4,
+7 to 13 minutes each; the two LM series of I2, 5 minutes each with the memory loaded, come on top.)
+
+### Decision by the registered rule
+
+**Partial.** A4: the changed test passes every registered repeat without load and under both loads, E1 and E2 hold
+and both mutations are caught at the timing assertion. I2 is left as it is with its finding: no way of taking the
+time of the same pushes holds 2 ms while the memory of the machine is loaded. Nothing other than the measurement of
+the two times was changed.
+
+### Open questions for the maintainer
+
+**Q1. What I2 is to time.** D-I2 shows that I2 times the reallocation of a store without spare capacity (99 percent)
+and not `push`. In a live store that state is the one increment per doubling that crosses the end of the capacity;
+every other increment costs 0.013 ms.
+
+- (a) Leave I2 as registered. It passes on an idle machine with a margin of 1.8 to 2.2 and fails when the memory of
+  the runner is loaded, as in the gate of 46cea4f8; the gate's re-run then calls it flaky.
+- (b) A further registration under F-854 (rule 13) with ADR 0353 amended: I2 times an increment of a store that
+  grew by pushes (the reallocation outside the timer, as D-I2), limit 2 ms unchanged. It measured 0.035 ms under the
+  memory load, a margin of 57, and it still fails a `push` whose cost grows with the stored length (MI1 adds 4.4 ms).
+  The increment that crosses the capacity is then reported by the test without a limit, or kept as an ignored
+  record. This changes what "an increment" means in the acceptance of F-456, which is why it is not taken here.
+- (c) The best of 200 as in the withdrawn amendment 2: 21 of 30 failures under the memory load instead of 30,
+  nothing gained under a load that only computes; a looser judgement that is still not robust.
+
+Recommendation: (b). The clause of F-456 is about what the store costs a running solver, and (b) times the code of
+the store; (a) keeps a limit on the system allocator in the gate.
+
+### For the lead: roadmap entries
+
+Proposed status of F-854: partial.
+
+> F-854: ADR 0749, 2026-11-20, partial. A4 of `vof_dambreak_amg` now advances the plain-CG run and the AMG run in turn, one step each, and compares the sums of the step times (ADR 0052 amendment 1, limit unchanged): the unchanged test failed 0, 0 and 10 of 10 runs without load, under 16 spinning processes and under 32 started during its AMG run; the changed test 0, 0 and 0 of 10 (AMG/CG 0.39 to 0.56), and two mutations that make the AMG path dearer than CG are caught at "A4 wall time". I2 of `monitors_filtered_f456` is left as registered: it failed 0, 0 and 30 of 30 runs without load, under 16 spinning processes and under 16 processes copying memory, and judged on the best of its 200 repeats still 21 of 30 under the last (ADR 0353 amendments 2 and 3, the change withdrawn); 99 percent of what it times is the reallocation of a cloned store, not `push` (0.013 ms). No run on a hosted runner.
+
+> gap: I2 of monitors_filtered_f456 still fails when the runner's memory is loaded: it times the reallocation of a cloned store (99 percent of 1.07 ms against 2 ms), which no way of taking the time removes; question Q1 of ADR 0749 (what I2 is to time) is with the maintainer. Not run: the 3 consecutive full gates of main with both tests passing at the first attempt, and any repeat on a hosted windows-latest runner.
+
+No new item. If Q1 is answered (b), the work is a further registration under F-854.
