@@ -213,3 +213,49 @@ The roadmap status is a separate matter (reading 2): row G is not run here.
 - The baseline cannot say why the runner's AMG run took 35.1 s; it can only show whether a load placed on the second
   run reproduces the failure and a steady one does not.
 - The other wall-clock limits of the workspace are not examined.
+
+## Amendment 1 (2026-11-20): I2 by the contingency D3; a diagnostic registered
+
+Written after the six baseline series and the three series of the changed I2, while the series of the changed A4 run,
+and before any further code or run for I2. Nothing above is changed. The full numbers go in addendum 1.
+
+What the runs gave for I2 (failures of 30; the unchanged test is judged on the median, the changed one on the best):
+
+| Load | Unchanged test | Changed test | Best of 200, ms (changed) | Median, ms (changed) |
+|---|---|---|---|---|
+| L0 | 0 | 0 | 0.81 to 1.06 | 1.07 to 1.18 |
+| LS | 0 | 0 | 1.15 to 1.31 | 1.29 to 1.52 |
+| LM | 30 | 21 | 1.42 to 2.70 | 3.17 to 4.61 |
+
+Check C-I2 is missed under LM. D3 applies: the minimum does not remove the failure.
+
+**Finding.** Under processes that move memory without end, every one of the 200 repeats is slower, the best one
+included: the load is there the whole time, and there is no undisturbed repeat for a statistic to find. The best
+repeat lies 5 to 10 percent under the median without load and under LS; it takes out the scatter and none of a
+load that lasts. By inspection (ADR 0353 addendum 1) what a repeat times is mostly the eight reallocations of
+0.8 MB that the cloned store forces, which is memory traffic of the system allocator and not `push`; the diagnostic
+below measures that share. No way of taking the time of these same pushes (a statistic of the repeats, parts taken
+in turn, a time that leaves out waiting) removes a slowdown of the memory itself. With the limit at 2 ms and the
+store cloned as registered, I2 does not hold on this machine while its memory is saturated, whatever the measure.
+
+**Decision (by D3 and the brief: "report it and leave that test as it is").** I2 is left as it was at 0360c638:
+`crates/rcfd-post/tests/monitors_filtered_f456.rs` is restored to that content, byte for byte, in a commit after
+this amendment, and amendment 2 of ADR 0353 is withdrawn by an amendment 3 there, committed with this one. The
+restored test is the test of series B-I2, so it is not run again. Not taken, because it would change more than how
+the time is taken (what an increment is, or the form of the limit), and so belongs to the owner of ADR 0353: a
+store that keeps spare capacity; a limit relative to a reference copy. They are listed as options in addendum 1.
+Keeping the best of 200 without its criterion met is not taken either: it is a looser judgement (the minimum is
+never above the median) with no registered result behind it.
+
+Consequences for the checks: C-I2 is missed under LM and its change withdrawn; M-I2 has no changed test to run
+against, so no mutation patch is committed beside the I2 test, and MI1 and MI2 are run on the scratch copy against
+the restored test only as a record that it catches them. A4 is not touched by this amendment.
+
+**Diagnostic D-I2 (scratch copy only, nothing committed, no limit).** The I2 test with one change: after
+`base.clone()` one sample is pushed to each of the four series outside the timer (this makes the eight
+reallocations), and the next 100 samples are timed as before. 5 runs under L0 and 5 under LM; best, median and
+maximum reported. It shows what share of I2's time is the reallocation and what the load does to the rest.
+Prediction: under 0.1 ms without load (the estimate of ADR 0353 before its run), under 0.5 ms under LM.
+
+By the decision rule the verdict of this registration can now be at most **partial** (one of the two tests is left
+as it is with its finding).

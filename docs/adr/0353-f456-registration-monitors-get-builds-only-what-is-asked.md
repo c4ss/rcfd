@@ -324,3 +324,19 @@ What the amended measure still catches: a slower `push`, or a slower growth of a
 the best one (the committed mutation of ADR 0749 beside the test). What it no longer sees: a cost that falls on only
 some of the 200 identical repeats. Whether the best repeat stays under 2 ms while the memory of the machine is saturated
 is not known at the time of this amendment; ADR 0749 measures it and reports it either way.
+
+## Amendment 3: amendment 2 is withdrawn; I2 is judged on the median as registered (2026-11-20, F-854, ADR 0749)
+
+Written after the runs of the changed I2 and before the test file is restored. Nothing above is changed.
+
+Amendment 2 left open whether the best of the 200 repeats stays under 2 ms while the memory of the machine is
+saturated. It does not: under 16 processes that copy 64 MB without end, 21 of 30 runs of the changed test failed
+(best repeat 1.42 to 2.70 ms; ADR 0749, amendment 1). Without load and under 16 spinning processes the changed and
+the unchanged test both passed 30 of 30. The best repeat removes the scatter of the repeats and nothing of a load
+that lasts through all of them.
+
+So amendment 2 is withdrawn. I2 is as registered in the table of checks above: the median of the 200 repeats, at
+most 2 ms. `crates/rcfd-post/tests/monitors_filtered_f456.rs` is restored to its content before amendment 2, byte
+for byte. The finding (what I2 times is mostly the eight reallocations that the cloned store forces, and a load on
+the memory slows every repeat) and the options that would change what I2 measures are in ADR 0749; they are for
+the owner of this ADR.
