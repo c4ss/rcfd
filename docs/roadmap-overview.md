@@ -23,7 +23,7 @@ The lines of work, in the order of the priority statement of 2026-11-18:
 | Studio desktop app | 40 | 12 | 6 |
 | Moving meshes, rotors and coupling | 42 | 40 | 14 |
 | Structural solver | 154 | 127 | 27 |
-| Quality, docs and validation | 10 | 16 | 8 |
+| Quality, docs and validation | 10 | 16 | 9 |
 | Design studies and optimisation | 20 | 16 | 8 |
 | Numerics and solvers | 29 | 19 | 5 |
 | Compressible flow and acoustics | 9 | 8 | 9 |
@@ -34,7 +34,6 @@ The lines of work, in the order of the priority statement of 2026-11-18:
 | Meshing and mesh formats | 18 | 10 | 2 |
 | Post-processing and output | 10 | 2 | 0 |
 | Command line, Python and API | 13 | 2 | 1 |
-| Other | 0 | 0 | 1 |
 <!-- process-report:overview end -->
 
 ## What works today
