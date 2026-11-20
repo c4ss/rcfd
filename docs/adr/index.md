@@ -27,9 +27,9 @@ One row per record of this folder, grouped by the roadmap category of the item i
 | [0471](0471-f535-registration-opt-in-refusal-at-the-pressure-lag-onset.md) | F-535 registration: opt-in refusal of the PISO step at the pressure-lag onset, naming the diffusion number | REGISTERED | 2026-11-14 | 1 | F-535 | partial |
 | [0613](0613-f538-registration-averaged-component-diagonal-in-the-relaxed-pimple-loop.md) | F-538 registration: the averaged component diagonal in the relaxed PIMPLE loop | REGISTERED | 2026-11-15 | 1 | F-538 | partial |
 | [0617](0617-f550-registration-non-vanishing-outer-criterion-scale.md) | F-550 registration: a non-vanishing scale for the outer-iteration criterion | REGISTERED | 2026-11-15 | 1 | F-550 | partial |
-| [0743](0743-f471-registration-the-corrected-order-of-the-coarsest-dense-lu-as-the-default.md) | F-471 registration: the corrected order of the coarsest dense LU as the default of the scalar AMG | REGISTERED | 2026-11-19 | 1 | F-471 | partial |
-| [0747](0747-f471-registration-the-moved-fingerprint-fp4-of-adr-0374-under-the-new-default.md) | F-471 registration: the moved fingerprint FP4 of ADR 0374 N0 under the new default of the coarsest dense LU | REGISTERED | 2026-11-19 | 1 | F-471 | partial |
-| [0748](0748-f471-registration-the-moved-fingerprints-of-the-overset-solver-under-the-new-default.md) | F-471 registration: the nine moved fingerprints of the overset solver under the new default of the coarsest dense LU | REGISTERED | 2026-11-20 | 2 | F-471 | partial |
+| [0743](0743-f471-registration-the-corrected-order-of-the-coarsest-dense-lu-as-the-default.md) | F-471 registration: the corrected order of the coarsest dense LU as the default of the scalar AMG | REGISTERED | 2026-11-19 | 1 | F-471 | done |
+| [0747](0747-f471-registration-the-moved-fingerprint-fp4-of-adr-0374-under-the-new-default.md) | F-471 registration: the moved fingerprint FP4 of ADR 0374 N0 under the new default of the coarsest dense LU | REGISTERED | 2026-11-19 | 1 | F-471 | done |
+| [0748](0748-f471-registration-the-moved-fingerprints-of-the-overset-solver-under-the-new-default.md) | F-471 registration: the nine moved fingerprints of the overset solver under the new default of the coarsest dense LU | REGISTERED | 2026-11-20 | 2 | F-471 | done |
 
 ## Turbulence (7)
 
