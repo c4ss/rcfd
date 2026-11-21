@@ -303,3 +303,31 @@ The project folder of the killed fourth run (`proj/rcfd-project-f751-f2-74452`) 
 removal was refused by the tool's safety check and is not made another way. The run script no longer empties `proj` at
 the start of a series (it still removes the folder of each run it made). Under K3 the reader of the lock files also
 opens the files of that leftover folder, if any are there; they belong to no running test.
+
+## Amendment 2 (2026-11-21, after A2, A3, AD, E1, E1f, G, MJ1 to MJ3 and the registered runs of M2r and M6r; before any corrected run)
+
+The registered runs of M2r (one run) and M6r (three runs) were made on the scratch copy of the tip with
+`RCFD_PROJECT_SCRATCH` on E:, as every run of this registration: F2 **passed all four** (10000 of 10000 with each
+mutation). Both mutations survived these runs. That is a result and stays in the addendum.
+
+The set-up differs from ADR 0669's in one thing that the mutations depend on: ADR 0669 ran its tests without
+`RCFD_PROJECT_SCRATCH`, so the project lay in the temporary folder on C:, as on the gate's runner; here it lies on E:.
+M2 and M6 are caught only when the first `resolve_in` of a probe call fails because of the racer's rename (the
+canonical path of the replaced file under `\$Extend\$Deleted`, or delete-pending); how often that happens is a property
+of the volume and of what else opens files on it, not of the code changed here (`paths.rs` is unchanged since ADR
+0669, and changes A and B touch only the removal of two files). Whether the volume is the reason is not known; the
+corrected runs say.
+
+Corrected runs, registered now, each made once, all without `RCFD_PROJECT_SCRATCH` (the project in the default
+temporary folder on C:), F2 of the default build, the scratch copy of the tip:
+
+* **M2r-c**: M2, one run; caught when F2 fails.
+* **M6r-c**: M6, at most three runs, stopped at the first failure; caught when one fails.
+* **M2-base** (a control, only if M2r-c survives): M2 on a scratch copy of the base commit c547b175, one run; if it
+  survives too, the survival does not come from changes A and B.
+* **A0c** (added): F2 of the default build at the tip (`bin/f2_after.exe`), 10 runs under K0 with the project in the
+  default temporary folder, by the gate's command; limit 10 of 10, source and kind as A0. It is the set-up of the gate,
+  which the series on E: did not have.
+
+If M2r-c or M6r-c survives, the verdict is partial by the registered rule (a mutation survives), and nothing is changed
+to make it caught.
