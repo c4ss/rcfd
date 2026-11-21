@@ -9,6 +9,10 @@ The rules are those of the section "The replay, registered" of ADR 0755. On the 
 A is the first commit at which the ADR's file has the heading "For the lead: roadmap entries"; L is the first commit at or
 after A in which the item's entry in docs/roadmap.json differs from that of its first parent; the base is the merge base
 of A's second parent and L^ when A is a merge, and A's first parent when it is not.
+
+Amendment 1 of ADR 0755: a follow-up is matched with the item L adds that has its title, and only then by place; an entry
+that belongs to a proposal of another of the six with the same L is not counted; the proposals with one L are also applied
+as one set, in both orders (check J).
 """
 import argparse
 import contextlib
@@ -90,6 +94,76 @@ def show(label, ours, theirs):
     print(f"    lead:   {theirs!r}")
 
 
+def matched(proposal, before, after):
+    """{index of a follow-up: the item L adds for it}: by the title letter for letter, then by place among the rest."""
+    known = {e["id"] for e in before}
+    left = [e for e in after if e["id"] not in known]
+    ups = proposal.get("follow_ups", [])
+    pairs = {}
+    for n, up in enumerate(ups):
+        same = next((e for e in left if e["title"] == up["title"]), None)
+        if same is not None:
+            pairs[n] = same
+            left.remove(same)
+    for n in range(len(ups)):
+        if n not in pairs and left:
+            pairs[n] = left.pop(0)
+    return pairs
+
+
+def of_others(adr, lead):
+    """The ids that proposals of the other ADRs with the same L name or are matched to (Amendment 1, point 2)."""
+    out = set()
+    for other in ADRS:
+        if other == adr:
+            continue
+        for file in files_of(other):
+            proposal = rp.read_proposal(file)
+            if commits(other, proposal["item"])[1] == lead:
+                out.add(proposal["item"])
+                out |= {e["id"] for e in matched(proposal, roadmap_at(lead + "^1"), roadmap_at(lead)).values()}
+    return out
+
+
+def joint(scratch):
+    """Check J: the proposals that have one L applied as one set, in both orders of the arguments. None when no two
+    proposals have one L."""
+    groups = {}
+    for adr in ADRS:
+        for file in files_of(adr):
+            groups.setdefault(commits(adr, rp.read_proposal(file)["item"])[1], []).append((adr, file))
+    held = None
+    for lead, members in groups.items():
+        if len(members) < 2:
+            continue
+        folder = scratch / "replay-joint"
+        folder.mkdir(parents=True, exist_ok=True)
+        files = [file for _, file in members]
+        start = commits(members[0][0], rp.read_proposal(files[0])["item"])[3]
+        source = scratch / f"replay-{members[0][0]}" / "before.json"
+        before = {e["id"]: e for e in rs.read_json(source)}
+        outs = []
+        for name, order in (("forward.json", files), ("backward.json", files[::-1])):
+            status, message = run("apply", *order, "--repo", ROOT, "--roadmap", source, "--at", lead + "^1", "--start",
+                                  start, "--output", folder / name)
+            if status != 0:
+                print(f"== J, L {lead[:8]}: NOT APPLIED: {message}")
+                return False
+            outs.append((folder / name).read_bytes())
+        both = rs.read_json(folder / "forward.json")
+        singles = True
+        for adr, _ in members:
+            for e in rs.read_json(scratch / f"replay-{adr}" / "after.json"):
+                if before.get(e["id"]) != e and entry(both, e["id"]) != e:
+                    singles = False
+                    print(f"  J: {e['id']} of the set is not that of the single application of ADR {adr}")
+        print(f"== J, L {lead[:8]}, ADR {' and '.join(adr for adr, _ in members)}, start {start}: both orders give the "
+              f"same bytes: {outs[0] == outs[1]}; entries equal to the single applications: {singles}; "
+              f"{len(both) - len(before)} item(s) added")
+        held = (held is None or held) and outs[0] == outs[1] and singles
+    return held
+
+
 def compare(adr, scratch):
     """Print the differences of one ADR; return their number."""
     files = files_of(adr)
@@ -139,19 +213,19 @@ def compare(adr, scratch):
                 show(f"{key} of {x} (the form has no key for it)", was.get(key), theirs.get(key))
         known = {e["id"] for e in before}
         our_new = [e for e in ours if e["id"] not in known]
-        their_new = [e for e in after if e["id"] not in known]
+        pairs = matched(proposal, before, after)
         for n, up in enumerate(our_new):
-            if n >= len(their_new):
+            if n not in pairs:
                 count += 1
                 print(f"  DIFFERENT follow-up {up['title']!r}: L adds no item for it")
                 continue
-            other = their_new[n]
+            other = pairs[n]
             print(f"  follow-up {up['id']} against the lead's {other['id']}")
             for key in FIELDS:
                 if up.get(key) != other.get(key):
                     count += 1
                     show(f"{key} of {other['id']}", up.get(key), other.get(key))
-        named = {x} | {e["id"] for e in their_new[:len(our_new)]}
+        named = {x} | {e["id"] for e in pairs.values()} | of_others(adr, lead)
         for e in after:
             old = entry(before, e["id"])
             if e["id"] in named or e == old:
@@ -185,7 +259,9 @@ def main(argv=None):
         n = compare(adr, args.scratch)
         print(f"  differences of ADR {adr}: {n}")
         total += n
-    print(f"\ndifferences in all: {total}")
+    print(f"\ndifferences in all: {total}\n")
+    held = joint(args.scratch)
+    print("J: " + ("no two proposals have one L" if held is None else "holds" if held else "DOES NOT HOLD"))
     return 0
 
 
