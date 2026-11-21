@@ -258,3 +258,145 @@ line changes; a first-attempt run of one merge writes none of them. Taken on the
   `scripts/` and `docs/process/lead-process.md`") and is reported if it now disagrees.
 * Findings 10, 11 and 16 are not changed; options and a recommendation go in the addendum. Findings 12, 15 and 17 are
   checked against point 1 and the named commits, and reported only if something more is needed.
+
+## Addendum 1: results (2026-11-21)
+
+Commits: the registration d929835f (this file alone); the code and tests d0685c9c; the four mutation patches 24a13449;
+this addendum with the regenerated ADR index. No amendment was needed: no registered number, limit or design point was
+changed after a run.
+
+### Checks
+
+"Before" is the new test class run against the files of e097520e on a scratch copy (`before.sh`); "after" is the
+committed tree. All by `python scripts/test_push_main.py` unless a file is named.
+
+| Id | Tests (class of `scripts/test_push_main.py`) | Before | After | Met |
+|---|---|---|---|---|
+| T1 | `Retries`, 7 tests | 7 of 7 fail | pass | yes |
+| T2 | `Resume`, 4 tests | 4 of 4 fail | pass | yes |
+| T3 | `Build`, 4 tests | 4 of 4 fail | pass | yes |
+| T4 | `Joint`, 5 tests | 5 of 5 fail | pass | yes |
+| T4s | `scripts/test_process_report.py`, `State.test_a_brief_whose_branch_is_one_of_several_in_a_merge_line_is_merged` | fails | passes | yes |
+| T5 | `Times`, 3 tests | 3 of 3 fail | pass | yes |
+| T6 | `Tree`, 5 tests | 5 of 5 fail | pass | yes |
+| T7 | `NoPatch`, 2 tests | 2 of 2 fail | pass | yes |
+| T8 | `LeadProcess`, 1 test | fails | passes | yes |
+| F9 | `Regenerate`, 2 tests | 2 of 2 fail | pass | yes |
+| F13 | `ScriptTests`, 3 tests | 3 of 3 fail | pass | yes |
+| F14 | `scripts/test_fmt_check.py`, 4 tests | 4 of 4 fail | pass | yes |
+| F18 | `Items`, 6 tests | 5 of 6 fail; the sixth only guards the corrected line of 26856a9027 and passes before and after | pass | yes |
+| E | the 19 existing tests of `test_push_main.py`, unedited; the 17 other script test files | pass | 19 pass unedited; all 19 script test files exit 0 (`test_push_main.py` 62 tests, `test_process_report.py` 28) | yes |
+| U | `FirstAttempt`, 1 test: the whole ledger line of a run with no failure | fails (`do_run` took no recorder) | passes: detail `exit=0;mutations=0;cmds=...` and no other field | yes |
+| P | `python scripts/process_report.py --check`; `cargo test -p rcfd-cli --release --test docs_site` | 0 failures on the unchanged tree | see "Closing checks" below | see below |
+| M | 13 mutations | n/a | 13 of 13 caught | yes |
+
+What "fails before" is worth: most of the new tests fail on the base commit because the function they call does not
+exist there (an error, not a failed assertion). That satisfies the row and proves little; the evidence that each test
+checks its point is the mutation table.
+
+The registered numbers, unchanged: `RETRIES` = 2 further runs; `BUILD_SECONDS` = 1.8 s per selected binary.
+
+### Mutations
+
+Each on a scratch copy of the committed tree (`mutate.py`), by `python scripts/test_push_main.py` (M14:
+`python scripts/test_fmt_check.py`).
+
+| Id | Caught by | Result |
+|---|---|---|
+| M1 (committed, `test_push_main.retries.mutation.patch`) | `Retries` (fails every time: 2 tests), and 4 of `Resume` | caught |
+| M1b | `Retries` (5 tests), `Resume` (3) | caught |
+| M2 (committed, `test_push_main.resume.mutation.patch`) | `Resume.test_the_record_of_another_merge_commit_is_not_used` | caught |
+| M2b | `Resume` (3 tests) | caught |
+| M3 | `Build` (3 tests) | caught |
+| M4 (committed, `test_push_main.joint.mutation.patch`) | `Joint` (2 tests) | caught |
+| M5 | `Times` (2 tests) | caught |
+| M6 | `Tree` (2 tests) | caught |
+| M7 | `NoPatch` (2 tests) | caught |
+| M9 | `Regenerate` (2 tests) and 6 others | caught |
+| M13 | `ScriptTests` (3 tests) | caught |
+| M14 | `test_fmt_check.py` (3 tests) | caught |
+| M18 (committed, `test_push_main.items.mutation.patch`) | `Items` (3 tests) | caught |
+
+The four committed patches were also put through `push_main.verify_patch` in the worktree: each applied, the command
+failed, each was removed and the tree was clean.
+
+### Deviations and things to know
+
+* The session's file-writing tool refused the worktree at first (it was bound to another worktree). The session was
+  switched into this worktree with the tool made for that; nothing was written to another checkout.
+* Two edit scripts were first passed to the shell as heredocs. One did not run; the other halved the backslashes of a
+  regular expression in `push_main.py`. It was found by the next test run and corrected before anything was committed.
+* A helper of the class `NoPatch` was named `tests` and was collected as a test; renamed before the commit.
+* Beyond the registered design: `--gate-times` also refuses a path that does not exist; the choice of the times path is
+  a function of its own (`times_source`) so that "--times given wins" has a unit test; a command's output now reaches
+  the log through the script (stderr joined to stdout, line by line), because the failed names are read from it.
+* `python scripts/test_push_main.py` took 1.5 s and takes about 32 s (temporary git repositories). The lead's script
+  runs it once per committed patch and once in the plan: about three minutes for this merge.
+* The ADR index is regenerated in this addendum's commit with `process_report.py --write`, as ADR 0751's addendum
+  commit did; without it `--check` fails on the branch for the reason finding 9 names.
+* `docs/test-process.md` section 7.4 now disagrees with the script in two sentences ("On the first failing command the
+  script stops"; "On success it regenerates the generated pages") and does not mention the default of `--times`, the
+  build figure or the script tests. Not edited: outside the brief's scope.
+
+### What was not run
+
+No `--run` on a real merge and no `--push`. Cargo, rustfmt and npm were never started through `do_run`; the function
+that runs a command was tried once by hand on a one-line Python command. `--left-out-run`, `--mutants` and the studio
+branch of `do_run` have no new test. Dry runs by hand on the merge 26856a90: items `F-855` alone; with the build figure
+and no times file 29 binaries are selected (the default 60 s each).
+
+### Findings 12, 15 and 17
+
+12 (a one-off failure stops a run): answered by point 1. 15 (ignored records run with `--include-ignored`): b9879519
+is enough; nothing more found. 17: cb591cbb is enough for the script; the note's last sentence stands: the rules do not
+ask an agent for `process_report.py --check` before its report (the briefs now do). Adding it to rule 7 is a change of a
+rule and needs the maintainer's word; it is listed below for the lead.
+
+### Open questions (for the lead; none for the maintainer)
+
+1. **The detail fields.** `flaky=`, `resumed=`, `joint=` in a merge line and `times=` in a gate line are taken not to
+   be a change of the ledger's format (the decision rule above). If the lead reads them as one, points 1, 2, 4 and 5
+   need another place for these facts and the item is partial.
+2. **Finding 10** (the left-out tests run in the checkout the lead merges in). Options: (a) one fixed worktree of its
+   own for left-out runs, checked out at the merge commit, with its own target folder: the right code, warm after the
+   first run, at the cost of a second target folder and of processor time beside the lead's next push; (b) keep the
+   checkout and write the commit at the start and at the end of the run into the left-out line, so that a line whose
+   code moved says so; (c) stop running them locally: the gate on main runs every test several times a day.
+   Recommendation: (b) now, it is small and makes the two lines of 2026-11-19 impossible to repeat unseen; (a) as an
+   item if the left-out runs are kept.
+3. **Finding 11** (the tests the index maps to the merge's ADRs are outside the budget). Options: (a) charge their
+   recorded seconds to the budget first and never cut them, so that the diff-selected group shrinks by what they cost;
+   (b) the same and print the recorded minutes of the always group in the dry run; (c) move those above a registered
+   length to the left-out run. Recommendation: (b). (c) would let a merge be pushed without its own registered tests.
+4. **Finding 16** (10 of 21 overset test files for a change of `overset.rs`). The cut is by recorded time alone.
+   Options: (a) inside the touched crate, first the binaries whose file name begins with the stem of a changed source
+   file, then the rest by time; (b) first the binaries of the ADRs whose tests live in the changed source files, from
+   the index; (c) leave it to the full gate. Recommendation: (a), with the number of name-matched binaries the budget
+   still left out printed by the plan.
+5. **Rule 7 and the process check** (finding 17): ask the maintainer to add `python scripts/process_report.py --check`
+   to the checks an agent runs before its report.
+6. `lead-process.md` keeps "Version 1"; a dated line under "Changes" records the edit. The lead may renumber.
+
+### Size
+
+Size (agent, actual): done; 0; 0; 0; 150000
+
+### Decision
+
+By the registered rule: **done**. Every point in scope has tests that fail before its change and pass after; the 19
+existing tests of the script pass unedited; 13 of 13 mutations are caught, four of them committed; rows E, U and P
+hold. It rests on question 1 above being read as the registration reads it.
+
+### For the lead: roadmap entries
+
+> Status of F-851: done.
+
+> ADR 0752, 2026-11-21, done: scripts/push_main.py runs a failed check two further times and names a flaky test in the ledger line, resumes a stopped run, counts 1.8 s of build per selected binary, takes several merges as one diff (--base), takes its times from the newest gate line that names them (--gate-times), lets appended ledger lines and generated files stand, names an ADR without a mutation patch, regenerates before the checks, runs the script tests and reads the item from the brief or the head of the branch name; 62 unit tests, 13 of 13 mutations caught.
+
+> Follow-up (proposed): "push_main.py: the left-out run on the code of its merge, the ADR's tests charged to the budget, the selection by changed file". Deps F-851. Acceptance: every limit not stated here is registered in the ADR before the run; (1) a left-out line names the commit its tests were built from, and a test shows that a later merge cannot change it; (2) the recorded seconds of the tests the index maps to the merge's ADRs are charged to the budget and printed by the dry run, and none of them is cut; (3) for a merge that changes one source file, the test binaries named after that file are selected before the others of the crate, shown on the merge of ADR 0748 (21 overset files).
+
+### Closing checks (row P)
+
+Run on the tree of this addendum, before its commit: `python scripts/process_report.py --check`: 0 failures, after
+`--write` regenerated `docs/adr/index.md`; `cargo test -p rcfd-cli --release --test docs_site`: 2 passed, 0 failed
+(release profile). Row P is met. No crate was touched, so there is no fmt or clippy run.

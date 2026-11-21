@@ -528,7 +528,7 @@ One row per record of this folder, grouped by the roadmap category of the item i
 | [0739](0739-f848-proposal-run-sites-a-remote-simulation-service-for-the-studio-cli-and-mcp.md) | F-848 proposal: run sites, a remote simulation service for the Studio, the CLI and the MCP server | ACCEPTED | 2026-11-17 | 0 | F-848 | todo |
 | [0742](0742-f262-diagnosis-the-terminal-status-of-a-run-is-written-before-its-last-state-event.md) | F-262 diagnosis: the terminal status of a run is written before its last state event and before its request files are removed (S7 of ADR 0123 fails intermittently on the held run) | REGISTERED | 2026-11-19 | 1 | F-262 | partial |
 
-## Quality, docs and validation (28)
+## Quality, docs and validation (29)
 
 | ADR | Title | Status word | Date | Addenda | Item | Item status |
 |---|---|---|---|---|---|---|
@@ -560,6 +560,7 @@ One row per record of this folder, grouped by the roadmap category of the item i
 | [0750](0750-f854-registration-i2-times-an-increment-of-a-store-with-spare-capacity.md) | F-854 registration: I2 times an increment of a store with spare capacity; the increment that crosses the capacity is reported | REGISTERED | 2026-11-20 | 1 | F-854 | done |
 | [0751](0751-f855-registration-the-edit-locks-f2-lockbusy-diagnosed-under-loads.md) | F-855 registration: the edit lock's F2 ended four probe calls in LockBusy; the cause diagnosed under registered loads | REGISTERED | 2026-11-21 | 1 | F-002 | partial |
 | [0751](0751-f855-registration-the-edit-locks-f2-lockbusy-diagnosed-under-loads.md) | F-855 registration: the edit lock's F2 ended four probe calls in LockBusy; the cause diagnosed under registered loads | REGISTERED | 2026-11-21 | 1 | F-855 | partial |
+| [0752](0752-f851-registration-push-main-after-its-first-real-runs.md) | F-851 registration: scripts/push_main.py after its first real runs | REGISTERED | 2026-11-21 | 1 | F-851 | todo |
 
 ## Records with no item in the file name (259)
 
