@@ -223,3 +223,109 @@ No figure file. No edit of `docs/roadmap.json`, `docs/ROADMAP.md`, `docs/roadmap
 key. The notes of the items are read only around keyword matches and for the eleven items named above; the second
 reading is of 40 pairs, not of the mapping. The published references are cited from the repository's rows, not from
 the papers. No cargo build or test other than `docs_site` (the brief).
+
+## Addendum 1: results (2026-11-21)
+
+Commits: 07e84341 (this registration, alone), a9da6717 (code and tests), 8e9c4999 (two mutation patches), ae779911
+(definitions and mapping, first reading), 9588bfa1 (three corrections of the mapping), and the commit of this addendum.
+No amendment was needed.
+
+| Id | Measured | Met |
+| --- | --- | --- |
+| A1 | `Key`, 3 tests of `scripts/test_roadmap_milestones.py`, pass; before the code the file failed at import | yes |
+| A2 | `Validation`, 8 tests (V1 to V7, ten forms of V6), and `Command.test_each_validation_problem_fails_the_check`, pass | yes |
+| A3 | `Figures.test_counts_and_per_cent_...`: 50, 50, 75, 67 and 69 for 385/293/93 | yes |
+| A4 | 9 done and a partial headline: 95 % and "not met" with the gap; the three words from the headline items alone | yes |
+| A5 | install, write, check 0, check 1 after a status change, the process report's block byte for byte | yes |
+| A6 | `Live` passes; `python -m unittest discover -s scripts -p "test_*.py"`: 304 tests, OK (5 skipped), 91 s | yes |
+| A7 | `git status` after every run: no file under `docs/` changed but this ADR's three files; `render_roadmap.py --check`, `roadmap_progress.py --check`, `roadmap_milestones.py --check` each exit 0 on the tree; the plain command writes nothing. Negative control: after `--apply` on a copy `render_roadmap.py --check` exits 1 | yes |
+| A8 | on a copy of the live roadmap: 61 memberships written, 32 items changed and each only by the key, the other 739 equal, validation and `--check` clean, `render_roadmap.py --check` 0 after a render, a second `--apply` byte-identical | yes |
+| A9 | below | yes |
+| A10 | below: 4 disagreements of 40 | yes |
+| A11 | below, 12 proposed | yes |
+| E | the discover run above; no existing test edited | yes |
+| P | `python scripts/process_report.py --check`: 1 failure, "generated file is not current: docs/adr/index.md", left to the lead (rule 9); `cargo test -p rcfd-cli --release --test docs_site`: 2 passed | yes |
+| M | M1 to M6 each fail `scripts/test_roadmap_milestones.py` (M1: the V2 test and two command tests; M2: three figure tests; M3: the V1 test and one command test; M4: the 95 % test; M5: the install test; M6: two key tests, and the live `render_roadmap.py --check` exits 1). M1 and M2 are committed as patches | yes |
+
+**The three milestones on the roadmap of c60965fc** (the whole roadmap: 771 items, 385 done, 293 partly done, 93 not
+started, 69 %).
+
+| Milestone | Headline | Members | Done | Partly done | Not started | Per cent | Headline result |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| `vortex-shedding` | F-029 (done) | 18 | 15 | 3 | 0 | 92 % | met |
+| `fan` | F-126 (partial) | 22 | 17 | 5 | 0 | 89 % | not met |
+| `aerofoil-lift` | F-043 (partial) | 21 | 17 | 4 | 0 | 90 % | not met |
+
+With the first reading (before the corrections): fan 22 members, 18/4/0, 91 %; aerofoil lift 20 members, 16/4/0, 90 %.
+Every item is mapped: the 61 memberships of 32 items are in `docs/adr/0756-f865-mapping.tsv`, each with its reason;
+the other 739 items are members of none. The non-members by class: all 308 structural items (N5, no title names one
+of the three flows), the Studio, assistant, process and design-study lines (N3, N2), the immersed, overset, sliding
+and moving-mesh items (N1 or N5), the models and algorithms the runs of record do not use (N4), and F-001 and F-003
+(N3, workspace foundation; F-003 is the nearest to a member and is named here as the borderline).
+
+The command the lead runs on main, then the usual regeneration:
+`python scripts/roadmap_milestones.py --apply docs/adr/0756-f865-mapping.tsv --definitions docs/adr/0756-f865-milestones.json --install`
+and `python scripts/render_roadmap.py`.
+
+**The sample check.** Drawn by `sample.py` (scratch) with `random.Random(865756)` from the mapping of ae779911: 60
+member pairs, 2253 non-member pairs, 826 of them in the doubtful lines. Second reading by a fresh agent with the rule,
+the definitions and the sheet, not the mapping. Disagreements: 1 of 20 in the member half, 3 of 20 in the non-member
+half (0 of the 10 uniform, 3 of the 10 doubtful).
+
+| Pair | First reading | Second reading | Taken |
+| --- | --- | --- | --- |
+| F-295, fan | member, M4 (the seam diffusivity was made because of the seam of FAN-01) | not, N4: no listed fan run sets the option | second; removed |
+| F-011, aerofoil-lift | not | member, M2: the sweep runs `rcfd check-mesh` on every O-grid | second; added |
+| F-106, fan | not (closure only) | member, M2 (close): arms S8, S9 of `fan01_stall_w43c.rs` use the pseudo-transient step | second; added |
+| F-082, aerofoil-lift | not (the subject of the item is programmatic use) | member, M2 (close): `Simulation` is the engine behind `rcfd run` | first; kept |
+
+The reader also named as hard: F-210 for vortex shedding (a workaround arm, read as a member by both), and that the
+aerofoil headline F-043 is the SST arm while the lift curve of record is the SA arm. What the check shows: the rule is
+least sharp where a run of record has diagnostic arms, and where an item is read by its title or by what it delivered.
+
+**Deviations.** (1) The registration says of the uniform non-member draw "two fifths structural"; the share is 308 of
+771. (2) F-006 is not a member of vortex shedding: `cases/` holds no cylinder case. (3) `scripts/roadmap_shards.py`
+was not run against a roadmap with the key. Not run: any cargo command but `docs_site`.
+
+Actual size: done; 0; 0; 4; about 190000.
+
+## Open questions for the maintainer
+
+1. **The aerofoil headline.** The clause of F-043 is "NACA0012 validation passes" for k-omega SST, and its gap reads
+   "NACA0012 not done"; the lift curves that were run (ADR 0159, 0167: steady SA, cl within 0.013 of Ladson from 2 to
+   15 degrees, as the head of ADR 0167 states) are held by no item. Options: (a) keep F-043 as the only headline; (b)
+   enter an item "NACA 0012 lift curve against Ladson at Re 6e6" whose acceptance is the registered comparison of
+   ADR 0167, and make it the headline beside F-043. Recommendation: (b). Not taken: it changes the scope of the roadmap.
+2. **The drag of the cylinder.** The acceptance of F-029 is the Strouhal number alone; the mean drag is compared by
+   `validation_cylinder_re100.rs` (ADR 0060) under no item. Options: (a) leave it; (b) enter an item for the K1 to K4
+   checks as a second headline. Recommendation: (b), with question 1.
+3. **The fan headline.** F-126 is the rotating-interface item; its gap says the acceptance is "not attempted" while
+   `fan01_validation.rs` is its attempt on FAN-01 and misses. Options: (a) keep; (b) enter an item whose acceptance is
+   the FAN-01 design point (126.46 Pa, 333.30 W) within a registered band, as the headline. Recommendation: (b).
+4. **Further milestones.** Proposed; the member counts are rough (a keyword search of titles and acceptances, not a
+   mapping). Recommendation: approve the first six now, the others when their headline item exists.
+
+| Proposed milestone | Reference (as the repository records it) | Headline items | Rough count |
+| --- | --- | --- | --- |
+| Lid-driven cavity | Ghia et al. (1982), `docs/reference-data.md` | F-028 | 7, plus the common core of about 12 |
+| Backward-facing step | Gartling (1990) Re 800, secondary sources, `docs/reference-data.md`; the numbers of Armaly not obtained | F-042, F-043 (clauses) | 5 |
+| Flat plate skin friction | NASA TMR and correlations, `docs/reference-data.md` | F-041, F-043, F-203 | 11 |
+| Heated cavity | de Vahl Davis (1983) Table V, read (F-006 note) | F-050 | 2 |
+| Shock tube and wedge | exact Riemann solution and oblique-shock relation (closed forms); Sod (1978) not obtained | F-060 | 3 |
+| Packed bed | Ergun pressure drop; not read by me | F-031 | 2 |
+| Conjugate heat transfer | analytic slab; no measured case | F-051 | 4 |
+| Immersed cylinder, DFG 2D-2 | FeatFlow benchmark page, read 2026-11-07 (`docs/reference-data.md`) | F-219, F-346, F-354 | 24 |
+| Overset moving cylinder | a body-fitted run of this repository; no published reference | F-134 | 26 |
+| Rotor-stator sliding interface | none read | F-250, F-303 | 10 |
+| Rotor with cyclic symmetry (structural) | not read | none found by title; an item would have to be named | 15 |
+| Dam break and rising bubble | Hysing et al. (2009) named in F-055; not read by me | F-055 | 2 |
+
+## For the lead: roadmap entries
+
+> Status proposed for F-865: done.
+
+> Note entry: ADR 0756, 2026-11-21, done: the key `milestones`, `scripts/roadmap_milestones.py` with validation, figures, a generated block of the overview and `--apply`; the three milestones defined and 61 memberships of 32 items delivered with reasons (vortex shedding 18 items, 92 %, met; fan 22, 89 %, not met; aerofoil lift 21, 90 %, not met); sample check of 40 pairs, 4 disagreements, 3 corrections taken; the mapping is applied by the lead with the command of addendum 1.
+
+> Follow-up (proposed, question 1): "NACA 0012 lift curve against Ladson at Re 6e6", deps F-041, F-043; acceptance: the lift comparison registered in ADR 0167 (the limits of that ADR) holds as a recorded test; milestones aerofoil-lift, headline.
+
+> Follow-up (proposed, question 3): "FAN-01 design point against the measured characteristic", deps F-126, F-133; acceptance: total-to-static pressure rise and shaft power at 1.4032 m^3/s against 126.46 Pa and 333.30 W within limits handed to the registration; milestones fan, headline.
