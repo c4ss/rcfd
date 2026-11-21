@@ -289,3 +289,10 @@ Status proposed for F-271: done.
 Follow-up proposed (Studio stream, small):
 
 > Title: Studio texts that name the old default of start_run. Deps: F-271. Acceptance: the comment at apps/studio-web/src/shared/actions/runs.ts line 146 and any note of the Studio's actions that says start_run's own default is none say that the default is the plan since ADR 0741, with no change of behaviour; npm test of apps/studio-web passes unchanged.
+
+## Answers of the maintainer (2026-11-21)
+
+Question 1 (the description of `start_run`'s `store` argument): the lead put it on 2026-11-21 with the recommendation (a),
+and the maintainer answered "Yes, both" (this question and question 1 of ADR 0744). Option (a) is approved: the last
+sentence of the description is corrected, since "none with case" is no longer true. It is a change of the text of an
+existing tool, so it is made by a registration of its own, roadmap item F-862, and not by the lead.

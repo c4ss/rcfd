@@ -350,3 +350,12 @@ Status proposed for F-672: done.
 > ADR 0744, 2026-11-19, done: a cyclic constraint with the shells option takes Beam2 without CyclicOptions::beams (the maintainer's approval of 2026-11-18); the wheel sector of ADR 0595 with shells alone gives the full ring within 6.6e-13 (static k = 0), 6.1e-13 (harmonic static), 8.3e-13 (eigenvalues of k = 0..3), limit 1e-10, with the bits of the beams option; NC3 of ADR 0556, A-B of ADR 0593 and NC3 of ADR 0595 are ignored records restated in two new files; beam ends on interpolated or axis boundaries stay refused by a new check, full_rotor and the whirl paths keep their opt-ins; existing tests, bit records and baseline hashes unchanged; four of four mutations caught.
 
 No follow-up item is proposed; the remaining opt-ins are open question 1.
+
+## Answers of the maintainer (2026-11-21)
+
+Question 1 (the two opt-ins that are left on a beam sector): the lead put it on 2026-11-21 with the recommendation (b),
+and the maintainer answered "Yes, both" (this question and question 1 of ADR 0741). Option (b) is approved: the whirl
+paths and `full_rotor` take a beam sector without `CyclicOptions::beams` and `full_rotor_beams`, in one further
+registration under F-672, with the two options kept as documented no-ops. The controls that this retires (N-W of this ADR,
+NC4 of ADR 0595 as restated here, NC1 of ADR 0601, NC1 of `sa_rotating_cyclic_shells.rs`) are retired as ignored records
+by that registration, under rule 2, and restated. Nothing else is approved by this answer.
