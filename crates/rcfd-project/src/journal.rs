@@ -116,7 +116,8 @@ pub fn append(root: &Path, mut line: Value) -> Option<u64> {
     let held = lock(root);
     let mut seq = None;
     let mut torn = false;
-    if let Some((_, broke)) = &held {
+    if let Some((h, broke)) = &held {
+        crate::atomic::hook_journal_locked(&h.0);
         if let Ok((s, t)) = next_seq(&path) {
             seq = Some(s);
             torn = t;
