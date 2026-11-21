@@ -331,3 +331,163 @@ temporary folder on C:), F2 of the default build, the scratch copy of the tip:
 
 If M2r-c or M6r-c survives, the verdict is partial by the registered rule (a mutation survives), and nothing is changed
 to make it caught.
+
+## Addendum 1: results (2026-11-21)
+
+Commits: 4c735af1 (this registration, alone), 24cc2938 (the hook `journal_locked` and the tests F2d, CJ, CC; no change of
+behaviour), 0b75f63b (changes A and B), 8dd25811 (the committed mutation MJ1), b7947f9c (amendment 1), ed535481
+(amendment 2). Release builds, `CARGO_TARGET_DIR` in the scratch folder; Windows 11, 16 logical processors; the machine
+was shared with other agents throughout. Logs in the scratch folder: `B0` to `B3`, `A0`, `A1`, `A2-cut`, `A2`, `A3`,
+`AD3`, `A0c` (one log per run, `summary.tsv`), `controls_before.log`, `controls_after.log`, `e1.log`, `g1.txt`,
+`mut_*.log`, `corrected.log`; scripts `loads.py`, `series.py`, `mutate.py`.
+
+### The series before any change (F2d, library of 24cc2938)
+
+| Series | Load | Failed runs of 10 | Refused probe calls and their class | Seconds per run |
+|---|---|---|---|---|
+| B0 | K0, none | 0 | none | 58.2 to 71.3 |
+| B1 | K1, 16 busy processes | 0 | none | 48.3 to 57.2 |
+| B2 | K2, 4 disk writers | 0 | none | 113.8 to 159.7 |
+| B3 | K3, the reader of the lock files (a forced cause) | **1** (run 9) | 4, all class **J** | 63.1 to 71.2; the failed run 88.5 |
+
+The failed run of B3 printed `conflicts=9996 refused=4 racer_ok=7665 racer_errs=0 no_seq=4 journal_lock_broken=2
+remove_failed=0 stale_broken=0`, no file left in `.rcfd/locks`. The four refused calls (indices 6803, 6804, 6809 and
+6814 of the 10000) each waited 2.001 to 2.002 s; no claim file existed after any of them; the edit lock file was the
+racer's, 1.98 to 2.00 s old (one hold of the racer for the whole wait); `journal.lock` was 2.00, 4.00, 2.02 and 4.03 s
+old. That is two events of candidate J as the arithmetic of the registration gives it: per event two refused probe
+calls, two journal lines without `seq`, one line with `journal_lock_broken_s`, no racer error, about 10 s added. It is
+the gate's print in every figure it has (9996 of 10000, 4 `LockBusy`, 0 racer errors, a longer run). The estimate of
+the registration for B3 (10 of 10, about 8 events a run) was wrong by a factor of about 40: the reader met the journal
+lock at the moment of its removal twice in ten runs (its counts over the series: 2617 polls, 38 opens of
+`journal.lock`, most of them of the lock already left behind, 37 of a claim, 2033 of an edit lock).
+
+No run under K0, K1 or K2 failed, and no refused call of class S, V, C or X was seen in any series. So the gate's
+failure was **not reproduced without the forced load**; with 10 runs a rate of 1 in 6 would have shown with
+probability 0.84 (the registration's own limit).
+
+### The controls
+
+| Check | Limit | Measured | Met |
+|---|---|---|---|
+| CJ-before (24cc2938) | fails | failed: the journal lock present when edit 1 returned (6.8 ms after the handle opened); edit 2 `Ok` after 2108.5 ms; the probe `LockBusy` after 2001.8 ms; 1 of 2 journal lines without `seq` | yes |
+| CC-before (24cc2938) | fails | failed: the claim left; the second edit `LockBusy` after 2001.7 ms | yes |
+| CJ (0b75f63b) | passes; edit 2 and the probe under 1.0 s | passed: edit 1 returned 337.0 ms after the handle opened, no journal lock; edit 2 in 107.8 ms; the probe `Conflict` in 108.5 ms; 0 lines without `seq` | yes |
+| CC (0b75f63b) | passes; second edit under 1.0 s | passed: edit 1 in 396.7 ms, no claim left; edit 2 accepted in 6.0 ms | yes |
+
+CJ-before is the gate's signature made on purpose: a writer whose removal of the journal lock fails once returns `Ok`
+twice, and the other writer's call is refused with `LockBusy` after 2.0 s.
+
+### The series after changes A and B (library of 0b75f63b)
+
+| Check | Load | Limit | Measured | Met |
+|---|---|---|---|---|
+| A0 | K0 | 10 of 10 | 10 of 10 (56.5 to 62.0 s) | yes |
+| A1 | K1 | 10 of 10 | 10 of 10 (49.6 to 59.9 s) | yes |
+| A2 (corrected run, amendment 1) | K2 | 10 of 10 | 10 of 10 (117.0 to 156.3 s) | yes |
+| A3 | K3 | 10 of 10 | 10 of 10 (63.4 to 113.2 s); the reader opened `journal.lock` 7 times and a claim 13 times in the series, and no journal has a line without `seq` | yes |
+| AD (F2d under K3, the one load whose B-series failed) | K3 | 10 of 10; no line without `seq` | 10 of 10 (59.1 to 71.9 s), 0 refused calls, 0 lines without `seq`; the reader met no journal lock in this series (0 opens) | yes |
+| A0c (amendment 2) | K0, project on C: | 10 of 10 | 10 of 10 (69.8 to 115.5 s) | yes |
+
+In all 50 journals of A0 to A3 and AD every line has `seq`, none has `journal_lock_broken_s`, `edit_lock_remove_failed`
+or `stale_lock_broken`, and no file was left in `.rcfd/locks`. What the K3 series can carry is small: at the rate of B3
+(2 events in 10 runs) the unchanged library would also pass most runs, and AD met no event. The evidence that change A
+removes the fault is CJ and MJ1, and the 7 opens of the journal lock in A3 without a line lacking `seq`.
+
+### The other checks
+
+| Check | Limit | Measured | Met |
+|---|---|---|---|
+| E1 | every test passes | `rcfd-project`: `edit_lock_f751` F1, F1c, F3a, F3b 4 of 4 and F2 in every run of A0 to A3 and A0c; `edit_lock_w48f` 4 of 4; `journal_f273` 4 of 4; `--lib` 4 of 4; `rcfd-workspace` `journal_f273` 9 of 9 | yes |
+| E1f | every test passes | `edit_lock_f755` with the feature: 7 of 7 | yes |
+| G | no `test-hooks` in the feature tree of the workspace; 0 tests in the default `edit_lock_f855` | 0 of 21 lines; `running 0 tests` | yes |
+| FS | only with change C | not made (change C was not made) | n/a |
+| M | each mutation caught | MJ1, MJ2, MJ3 caught; **M2r and M6r survived** (below) | **no** |
+| P | 0 failures; clean; passes | 0 failures; `fmt_check.py rcfd-project` clean; clippy clean with and without the feature; `docs_site` passes | yes |
+
+### Mutations
+
+| | Mutation | Run against | Result |
+|---|---|---|---|
+| MJ1 (committed patch) | the removal of the journal lock not retried | CJ: lock left, edit 2 in 2118.9 ms, the probe `LockBusy` | caught |
+| MJ2 | the removal of the claim not retried | CC: claim left, second edit `LockBusy` | caught |
+| MJ3 | `journal_locked` never called | CJ: "the handle was not opened" | caught |
+| M2r | M2 of ADR 0669 at the tip, project on E: | F2, one run: 10000 of 10000, passed | **survived** |
+| M6r | M6 of ADR 0669 at the tip, project on E: | F2, three runs: passed each | **survived** |
+| M2r-c (amendment 2) | M2 at the tip, project in the temporary folder on C: | F2, one run: passed | **survived** |
+| M6r-c (amendment 2) | M6 at the tip, project on C: | F2, three runs: passed each | **survived** |
+| M2-base (amendment 2, control) | M2 on the base commit c547b175 (no change of F-855), project on C: | F2, one run: passed | **survived** |
+
+The unmutated scratch copy passed CJ and CC first. M2 and M6 are not caught by F2 on this machine today, on either
+volume, and M2 is not caught on the base commit either, so the survival does not come from changes A and B. In ADR
+0669 (2026-11-17, the same test, the same `paths.rs`) M2 refused 13 of 10000 probe calls and M6 one. Both depend on the
+first `resolve_in` of a probe call failing because of the rename of the racer; that did not happen once in about 90000
+probe calls of the mutation runs here. Why the race no longer shows on this machine was not looked into (the toolchain,
+the system or its scanner may have changed since); it is open question 5. F2 is unchanged, so what it asserts about a
+refused or failed probe is unchanged; what is not shown today is that it meets one.
+
+### Deviations
+
+1. The after-series was killed from outside in A2 after three runs (amendment 1, b7947f9c, committed before the
+   corrected run). The three results (all passed) are kept and not counted; A2 was run again from run 1.
+2. M2r and M6r survived their registered runs; corrected runs on C: by amendment 2 (ed535481, committed before them)
+   survived too.
+3. The A-series and A0c added `--nocapture` to the command of the gate so that the printed line of F2 would be kept;
+   the pass rule is that of the gate. (libtest still dropped the line of a passed run; the journals were read instead.)
+4. CJ, CC, E1 and E1f were run by `cargo test ... -- --test-threads=1` per test binary, not one process per test.
+5. The estimate of the registration for the rate of events under K3 was about 40 times too high (above).
+6. The removal of the project folder of the killed run in the scratch folder was refused by the safety check of the
+   tool; the folder is left there (amendment 1), and under K3 in A3 and AD the reader also opened its one stale edit
+   lock file at every poll (most of the 5979 and 4539 opens of an edit lock counted there).
+7. Ten project folders of A0c and those of the corrected mutation runs are left in the temporary folder on C:, as every
+   run of these tests without `RCFD_PROJECT_SCRATCH` leaves them.
+
+### What was not run
+
+Change C and its checks (FS, MS1): no run without the forced load showed class S. AD under K0, K1 and K2: their
+B-series had no failure. L1 of ADR 0669. Anything on Linux or macOS.
+
+### What the measurements say
+
+* A fault of the library is shown by a control that fails before the change and passes after it: one failed removal
+  of the journal lock (a handle without delete sharing for some milliseconds) made the next two appends wait 2 s each
+  inside the edit lock, and a second cooperating writer was refused with `LockBusy` while the first had no error. In a
+  running F2 a reader of the lock files produced the print of the gate exactly (run 9 of B3). The same fault in the
+  removal of the claim (CC) refuses both writers and is not the signature of the gate; it is fixed with it.
+* Whether the gate met this fault is not shown. Its project folder was not kept; under processor and disk load on this
+  machine F2 did not fail in 20 runs, and without load in 10. The other candidate that fits the print, a holder stalled
+  for 2 s by the runner (S), was not seen here and is not excluded; the F3a reading of the gate (5.77 s against 2.03 s)
+  speaks for stalls of that size on the runner. If S is what the gate met, F2 will fail there again, and change C of
+  this registration is the proposal for it.
+* Defaults: an append and a claim whose removal succeeds at the first attempt do what they did; no constant, error or
+  message changed; every ADR 0135, ADR 0669, ADR 0676 and ADR 0188 test named in E1 and E1f passed.
+
+Size (agent), actual: partial; 0; 5; 6; 130000
+
+### Decision by the registered rule
+
+**partial**: no run of B0, B1 or B2 failed, so the cause of the failure of the gate is not reproduced (a forced control
+shows a fault that fits its signature); and two mutations (M2r, M6r) survived. Changes A and B do not rest on the
+repeated runs: each has its control, failing before and passing after, and its caught mutation.
+
+## Open questions for the maintainer
+
+None that rule 6 leaves open for the maintainer. For the lead, beyond the four of the registration:
+
+5. M2 and M6 of ADR 0669 are no longer caught by F2 on this machine (also on the base commit). Options: (a) a follow-up
+   that finds why the first `resolve_in` no longer fails under the rename of the racer here and gives the second
+   resolve of D1 a forced control with the hooks, as ADR 0676 did for the claim; (b) leave it until the gate shows a
+   refused path. Recommendation: (a).
+6. Whether to make change C (F2 accepts a `LockBusy` whose whole wait lay inside one accepted call of the racer, with a
+   clean journal) without a reproduction of class S. Recommendation: wait for the next failure of F2 in the gate; with
+   changes A and B merged, a repeat would speak for S, and keeping the project folder of a failed test as a gate
+   artifact (`gate.yml`, the file of the lead) would then say which it was.
+
+## For the lead: roadmap entries
+
+> Proposed status: partial.
+
+> ADR 0751, 2026-11-21, partial: the gate failure of F2 (4 of 10000 probe calls LockBusy, racer without error) was not reproduced in 10 runs each without load, with 16 busy processes and with 4 disk writers; a reader of the lock files without delete sharing reproduced the print of the gate exactly in 1 of 10 runs, by a journal lock left behind when its one removal fails (the next two appends wait 2 s each inside the edit lock); the removal of the journal lock and of an edit claim is now retried as that of the edit lock is since ADR 0676, shown by the controls CJ and CC (fail before, pass after) and three caught mutations; F2 is unchanged and passed 10 of 10 under each load afterwards; M2 and M6 of ADR 0669 survived F2 on this machine, also on the base commit.
+
+> gap: Not shown that the gate met the journal-lock fault (its project folder was not kept); a holder stalled 2 s by the runner is not excluded, and F2 is unchanged, so it can fail again in the gate. The mutations M2 and M6 of ADR 0669 are no longer caught by F2 on the agent machine (also on the base commit): the second resolve under the lock has no forced control. The controls CJ and CC (edit_lock_f855, feature test-hooks) are not run by the gate.
+
+> Follow-up proposed: A forced control of the second resolve under the edit lock (ADR 0669 D1). Deps F-855. Acceptance: Every limit not stated here is registered in the ADR before the run. A test-only hook makes the first resolve of replace_if_hash fail as a concurrent rename does; with it a call without the second resolve (ADR 0669 M2) and one with the lexical key joined by the platform separator (M6) each fail a registered test in every run, and the unmutated library passes it; the default bits unchanged.
