@@ -1,0 +1,17 @@
+{
+  "form": 1,
+  "adr": "0755",
+  "item": "F-864",
+  "base": "47961cd58bfe64d4368cf19a12907557f20038dd",
+  "status": "done",
+  "note": "ADR 0755, 2026-11-21, done: scripts/roadmap_proposals.py validates roadmap proposals of form 1 (one JSON file per item: status, note entry, gap, follow-ups without ids, base commit) and applies them, and does not write docs/roadmap.json unless it is named with --in-place; the addenda of ADR 0748 to 0753 were written as six files and replayed on the roadmap before the lead's edit: six of six applied, with the status, the place and separator of the note and the deps and phase of the follow-ups as the lead wrote them, and 21 differences, all explained (10 changed wordings, 8 additions of the lead, 2 entries not taken, 1 stale base); the lead took no note (0 of 6) and no gap (0 of 4) letter for letter; ten named failures each leave the roadmap as it was (37 unit tests); five of five mutations caught; the proposals of ADR 0752 and 0753 give the same bytes in both orders.",
+  "follow_ups": [
+    {
+      "title": "Roadmap proposals of form 1 in shadow use on live merges, with the lead's own entry kept apart",
+      "deps": [
+        "F-864"
+      ],
+      "acceptance": "Every limit not stated here is registered in the ADR before the run. Subject to the maintainer's answer to question 1 of ADR 0755. For 10 consecutive merges of agents' work the addendum is accompanied by a proposal file of form 1, the lead applies it with scripts/roadmap_proposals.py and writes what he adds as a note entry of his own after it; the registration fixes beforehand what the stale check compares (ADR 0755: 1 of 6 refused for a gate note of the lead) and how a gap names a follow-up that has no id yet; reported for each merge: whether the agent's note and gap stand letter for letter in docs/roadmap.json (ADR 0755: 0 of 6 and 0 of 4), and the lead's minutes for the roadmap edit; no reader of roadmap.json changes."
+    }
+  ]
+}

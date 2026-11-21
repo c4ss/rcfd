@@ -340,3 +340,170 @@ One check is added, on the case that 2 shows:
 
 The corrected comparison is run once, with J, by a command `compare` of the changed driver; the addendum gives both
 counts. The decision rule is unchanged; J is added to the checks that "done" needs.
+
+## Addendum 1: results (2026-11-21)
+
+All runs on the agent's machine, Python 3.9.13, in the worktree; logs in the scratch folder. Commits: registration
+069a5ea1; tests 1787b861; script f908a411; mutation patches b3cc16e6; proposal files and driver 767f71d9; Amendment 1
+41e76813; the amended driver 9a10135b.
+
+### Checks
+
+| Id | Limit | Measured | Met |
+|---|---|---|---|
+| A0 | files under `scripts/` and this ADR only | `git diff --stat 47961cd5`: this ADR, `scripts/roadmap_proposals.py`, `scripts/test_roadmap_proposals.py`, its two patches, `scripts/roadmap_replay_f864.py`, seven files of `scripts/roadmap_replay_f864/`; the five named files and `docs/roadmap.json` have no diff | yes |
+| A1 | 6 of 6 | six files written by a script from the quoted paragraphs, six of six read as form 1, six of six applied; ADR 0749 at the registered second application (its first was refused as `stale-item`) | yes |
+| A3 | all listed; 0 unexplained | first run 25 by the registered counting; corrected run (Amendment 1) 21, listed below; 0 unexplained | yes |
+| C1 to C7 | fail before, pass after | before the script: the import fails, no test runs (`before-code.log`); after: 37 of 37 tests pass (C1 2, C2 2, C3 2, C4 2, C5 1, C6 5, C7 3 tests with 24 malformed files and 3 wrong names) | yes |
+| W | fail before, pass after | 6 tests pass; the eight failing cases write nothing, leave the roadmap's bytes and no temporary file | yes |
+| V | fail before, pass after | 8 tests pass | yes |
+| U | fail before, pass after | passes on the 770 items | yes |
+| E | all pass | `test_roadmap_shards.py` 9 of 9, both files without a diff; `python -m unittest discover -s scripts -p "test_*.py"`: 320 tests, OK, 5 skipped (run at the state of f908a411) | yes |
+| M | each caught | 5 of 5, below | yes |
+| J (Amendment 1) | same bytes in both orders; entries as in the single applications | holds: ADR 0752 and 0753 on 62a6fec3^, start 860, one item added | yes |
+| P | no failure but a generated file | 1 failure: `docs/adr/index.md` is not current (left to the lead, rule 9) | yes |
+
+### The replay
+
+L and the base by the registered rules: ADR 0748 c8f981a3 / ddcea7de; 0749 24a26223 / bf33e216; 0750 e9378ecb / d34195a7;
+0751 a5c25ae8 / 55bae9e1; 0752 and 0753 both 62a6fec3 / ceac587c and 47f9c71d. In all six the lead's edit is after the
+merge, so the base by the rule is the tip of the merged work (the second parent of A); its roadmap is the one the agent
+had.
+
+What the script wrote as the lead did: the status, 6 of 6; the note entry appended after one space to the note as it
+was, 6 of 6 in place and separator; new items at the end of the array; the deps and the phase of the two follow-ups, 2
+of 2; one follow-up title of 2. What it did not: the text of the note, 0 of 6 letter for letter, and of the gap, 0 of 4.
+
+The 21 differences (kind in brackets):
+
+1. 0748, gap (c). Not taken: after the addendum the maintainer approved the moved values and Amendment 1 of ADR 0748
+   restated them before the merge, so the gap "not mergeable ... needs the maintainer's answers" was no longer true; the
+   lead wrote the state after the merge. The proposed gap also says "the branch of ADR 0748", against rule 9.
+2. 0748, note (c). The same cause: the entry says "partial and stopped ... two restated tests fail"; the lead wrote an
+   entry of his own ("Lead (2026-11-20): the maintainer approved ...").
+3. 0748, F-851 (a): findings 15 and 16 of the push script, seen at this merge.
+4. 0749, stale base (f): between the base and the edit the lead added a gate note to F-854 (8e581254, "a second
+   occurrence of I2"); the entry-wide comparison refuses that, although the note is only appended to.
+5. 0749, gap (b): shortened; "99 percent of 1.07 ms against 2 ms" became "about 99 percent of its time", "of main" and
+   the repeat on a hosted runner were dropped.
+6. 0749, note (b): the same facts retold under "Lead (2026-11-20): PARTIAL by the registered rule, ADR 0749, merged at
+   6cc7127c", with the lead's additions (the merge, the missing kind column and his amendment 2).
+7. 0749, F-851 (a): finding 17.
+8. 0750, gap (b): rewritten as the state after both merges with row G open; the sentence on the margin of 58 to 167 was
+   dropped.
+9. 0750, note (b): begins with the maintainer's answer and the issue and merge of the ADR, retells the results, adds one
+   fact from the ADR's body (a copy on every sixteenth push is not caught) and the lead's reading of the acceptance.
+10. 0750, F-456 (a): the maintainer's reading of a clause of F-456, a decision.
+11. 0751, gap (b): shortened, and it names F-858 and F-859, ids that did not exist when the agent wrote; form 1 cannot
+    name a follow-up inside a text.
+12. 0751, note (b): the agent's head kept ("ADR 0751, 2026-11-21, partial"), then "merged at 26856a90", numbers from
+    the ADR's body, the lead's answers; "M2 also on the base commit" where the agent wrote it of M2 and M6 (the ADR ran
+    the base commit for M2 only: an imprecision of the addendum, corrected).
+13. 0751, acceptance of F-859 (a): the agent's acceptance letter for letter, with one sentence added by the lead.
+14. 0751, note of F-859 (a): the lead's note on the new item (why, "Not issued yet").
+15. 0751, F-851 (a): finding 18.
+16. 0751, F-858 (a): an item of the lead's, from his answers to questions 4 and 6 of the ADR.
+17. 0752, note (b): head "ADR 0752, 2026-11-21, DONE, merged at 42b6d7b6 by the changed script (4.2 minutes ...)", a
+    shorter account, and what is not yet seen in a real merge.
+18. 0752, title of F-860 (b): the three points renamed after the lead's answers.
+19. 0752, acceptance of F-860 (b): point 1 changed in substance (the commits of the checkout at the start and the end of
+    the left-out run in place of "a later merge cannot change it"), point 3 by a rule of naming in place of the merge of
+    ADR 0748, and a clause on the unchanged ledger added.
+20. 0752, note of F-860 (a).
+21. 0753, note (b): head "ADR 0753, 2026-11-21, DONE, merged at c9ac1e04 (push run 22.7 minutes ...)", the counts added
+    up (6 of 60), a correction of the lead's own earlier note, and the remark "Not searched: other test files", which
+    the addendum has outside its quoted paragraphs.
+
+By kind: (a) the lead's own addition 8; (b) a changed wording 10; (c) not taken 2; (d) 0; (e) 0; (f) 1; unexplained 0. By
+the registered counting of the first run there were 25: the 21, less numbers 13, 14 and 16, plus four of ADR 0751 (its
+follow-up compared with F-858 in title, acceptance and note; F-859 counted as not proposed) and the other's entries in
+the replays of 0752 and 0753 (three).
+
+What the form did not carry: three remarks outside the quoted paragraphs (0749 "If Q1 is answered (b) ...", 0750 the
+reason beside the status, 0753 "Seen and not followed ..."). They are not entries by rule 9, and the lead took one of
+them into a note (21).
+
+### Mutations
+
+| | Mutation | Tests that fail |
+|---|---|---|
+| M1 (committed) | the comparison with the base removed | 4: the two `stale-item` tests of C2 and C6, the `check` test, W |
+| M2 (committed) | the proposals in the order given | 1: C1, the set in either order |
+| M3 | the check of two proposals for one item removed | 2: C2, W |
+| M4 | the gap kept when the status is not partial | 1: V (the result is refused as `invalid-roadmap`) |
+| M5 | the check of the output path removed | 1: W, `refused-output` |
+
+Both committed patches were applied again at the end with `git apply`; `python scripts/test_roadmap_proposals.py` exits 1
+under each.
+
+### Deviations and disclosures
+
+- Amendment 1 (41e76813) precedes the corrected comparison (driver 9a10135b): the registered matching of a follow-up by
+  place and the counting of another proposal's entries were defects of the comparison. Both counts are given.
+- The first run of the tests with the script had 1 failure of 37: a faulty roadmap given was named by its fault
+  (`missing-dependency`) and not `invalid-roadmap` as D2 says. The script was corrected before its commit; the test file
+  is as committed before the script.
+- The driver was written before the proposal files, and its command `commits` was run to get the six bases (it prints
+  hashes and the start number). The files were then written and committed with the driver (767f71d9) before `compare`
+  ran; the registered order had the files before the driver.
+- The test file has more tests than the rows name (an unknown item, a faulty roadmap, `check`, a roadmap of an earlier
+  commit read from a copy).
+- A seventh file, `scripts/roadmap_replay_f864/0755-F-864.json`, is this ADR's own entry in form 1, with base 47961cd5;
+  `python scripts/roadmap_proposals.py check scripts/roadmap_replay_f864/0755-F-864.json` passes on this work's tip.
+  It is not part of the replay.
+- A scratch script that was to edit the driver failed at its first assertion (a heredoc had halved its backslashes) and
+  wrote nothing; the driver was edited directly.
+
+### What was not run
+
+- `cargo test -p rcfd-cli --release --test docs_site` (no cargo run was allowed to this work). Whether that test accepts
+  a JSON file under `docs/roadmap/proposals/` is therefore not known.
+- No replay of the other seven ADRs. No proposal written by an agent unaided.
+
+### Size
+
+Size (agent): done; 0; 0; 2; 140000
+
+(One amendment in this file, no further registration.)
+
+### Decision by the registered rule
+
+**Done**: A1 six of six, A3 with 0 unexplained, C1 to C7 with W, V, U, E and J met, five of five mutations caught, A0
+holds, P gives the generated index alone.
+
+One thing the rule does not weigh and the lead should: clause (1) says "with the result the lead would have typed". That
+holds for the status and for every mechanical part, and it does not hold for the wording: the lead retyped every note and
+every gap. If the clause is read as equality of the text, it is not met, and by rule 8 the item is partial with the gap
+"the lead's wording replaces the agent's in every note and gap of the six replays; no rule says whose wording stands".
+
+### Open questions for the maintainer
+
+**Q1. The change of rule 9 that would let an agent commit a proposal file.** Options: (a) no change; (b) rule 9 allows,
+beside the quoted paragraphs, the file `docs/roadmap/proposals/<ADR>-<item>.json` of form 1 with the same entries,
+checked by the agent with `python scripts/roadmap_proposals.py check`; the lead applies it with the script and still
+writes `docs/roadmap.json` alone; (c) as (b) without the quoted paragraphs. **Recommendation: (b), and with it a rule for
+the lead: the agent's entry stands as written and the lead adds what he knows (the merge, the push run, a decision) as
+an entry of his own after it.** Without that rule the file saves no retyping: in the replay the lead rewrote 6 of 6
+notes and 4 of 4 gaps. Before use, two points of form 1 need a registration (the follow-up below): the stale check
+refuses an item to which the lead only added a note (1 of 6), and a gap cannot name a follow-up that has no id.
+
+**Q2. The cutover: `docs/roadmap/items/` as the source, `docs/roadmap.json` generated.** Options: (a) not now, decided on
+the differences of Q1 (b) in use; (b) cut over with `roadmap.json` generated by `roadmap_shards.py join` and committed;
+(c) cut over and move every reader to the item files. **Recommendation: (a).** Cost by reading the readers: under (b) none
+of them changes, since each reads the array (`render_roadmap.py` `load`, `roadmap_progress.py` line 19,
+`process_report.py` line 114, `adr_test_index.py` line 345, `apps/studio-web/scripts/write-capabilities.mjs` line 62,
+`apps/studio-web/tests/unit/capabilities.spec.ts` line 37); what is new is 770 item files, one more generated file that
+can be stale (a check in `process_report.py` and the push script), the lead's edits moved to item files, and rule 9 and
+the lead's process rewritten. Under (c) six readers change, two of them in the Studio. The replay gives no reason to pay
+this yet: no difference came from two writers meeting in one file (agents do not write the roadmap), and 18 of 21 came
+from wording and from the lead's additions, which the layout of the files does not touch.
+
+### For the lead: roadmap entries
+
+Proposed status of F-864: done.
+
+> ADR 0755, 2026-11-21, done: scripts/roadmap_proposals.py validates roadmap proposals of form 1 (one JSON file per item: status, note entry, gap, follow-ups without ids, base commit) and applies them, and does not write docs/roadmap.json unless it is named with --in-place; the addenda of ADR 0748 to 0753 were written as six files and replayed on the roadmap before the lead's edit: six of six applied, with the status, the place and separator of the note and the deps and phase of the follow-ups as the lead wrote them, and 21 differences, all explained (10 changed wordings, 8 additions of the lead, 2 entries not taken, 1 stale base); the lead took no note (0 of 6) and no gap (0 of 4) letter for letter; ten named failures each leave the roadmap as it was (37 unit tests); five of five mutations caught; the proposals of ADR 0752 and 0753 give the same bytes in both orders.
+
+> Title: Roadmap proposals of form 1 in shadow use on live merges, with the lead's own entry kept apart. Deps: F-864. Acceptance: Every limit not stated here is registered in the ADR before the run. Subject to the maintainer's answer to question 1 of ADR 0755. For 10 consecutive merges of agents' work the addendum is accompanied by a proposal file of form 1, the lead applies it with scripts/roadmap_proposals.py and writes what he adds as a note entry of his own after it; the registration fixes beforehand what the stale check compares (ADR 0755: 1 of 6 refused for a gate note of the lead) and how a gap names a follow-up that has no id yet; reported for each merge: whether the agent's note and gap stand letter for letter in docs/roadmap.json (ADR 0755: 0 of 6 and 0 of 4), and the lead's minutes for the roadmap edit; no reader of roadmap.json changes.
+
+The same entries are in `scripts/roadmap_replay_f864/0755-F-864.json`.
