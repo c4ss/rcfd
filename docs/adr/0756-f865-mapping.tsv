@@ -1,4 +1,4 @@
-# ADR 0756 (F-865): the membership of every roadmap item in the three simulation milestones, first reading.
+# ADR 0756 (F-865): the membership of every roadmap item in the three simulation milestones (first reading, with the three corrections of the sample check, ADR 0756 addendum 1).
 # One line per membership: <item id> tab <milestone id> tab <reason>. An item that is not listed for a milestone is not
 # a member of it. M1 headline, M2 used, M3 data, M4 trust: the reading of the membership rule registered in ADR 0756.
 # Applied by: python scripts/roadmap_milestones.py --apply docs/adr/0756-f865-mapping.tsv --definitions docs/adr/0756-f865-milestones.json --install
@@ -10,6 +10,7 @@ F-010	vortex-shedding	M2 used: the mesh structure the O-grid is built in and the
 F-010	fan	M2 used: the mesh structure of the sector mesh
 F-010	aerofoil-lift	M2 used: the mesh structure of the O-grid
 F-011	fan	M2 used: the quality measures by which the passage mesh is judged and its registered gates are missed
+F-011	aerofoil-lift	M2 used: the sweep runs rcfd check-mesh on every aerofoil O-grid and keeps the quality with the mesh record
 F-012	vortex-shedding	M2 used: the generator cylinder_ogrid builds the mesh of every run of record
 F-012	aerofoil-lift	M2 used: the generator cylinder_ogrid, whose points are moved onto the aerofoil
 F-014	aerofoil-lift	M2 used: the O-grid is written and read as an OpenFOAM polyMesh
@@ -53,6 +54,7 @@ F-080	fan	M2 used: the FAN-01 case is a case file text
 F-080	aerofoil-lift	M2 used: every run of the sweep is a case file
 F-081	aerofoil-lift	M2 used: the sweep runs rcfd run, rcfd convert and rcfd check-mesh
 F-104	fan	M2 used: the casing's wall velocity in the rotating frame is given as an expression
+F-106	fan	M2 used: the arms S8 and S9 of fan01_stall_w43c.rs run the stalled FAN-01 state with the pseudo-transient step
 F-107	fan	M2 used: the rotationally periodic pair of the one-blade sector
 F-125	vortex-shedding	M3 data: the manifest entry cylinder-re100-literature holds the published St and C_D the test reads
 F-125	fan	M3 data: the dataset w34d-fan01-fau-eaa-axial-fan holds the measured characteristic and the blade sections
@@ -60,5 +62,4 @@ F-125	aerofoil-lift	M3 data: the pack holds the Ladson force data the lift is co
 F-126	fan	M1 headline: its acceptance is a public low-speed rotor case against published pressure rise and efficiency; fan01_validation.rs is its attempt
 F-133	fan	M2 used: the axial_fan_sector generator and its C-grid build the FAN-01 passage mesh
 F-210	vortex-shedding	M2 used: the fractional step is the time advance the refined O-grid runs clean with (ADR 0154, W3)
-F-295	fan	M4 trust: one diffusivity per periodic seam pair, made because FAN-01's rotational seam was not conservative for k, omega and momentum
 F-301	vortex-shedding	M4 trust: its benchmark set holds the known misses K1 and K2 of ADR 0154, the default PISO diverging on the refined cylinder O-grid
