@@ -10,7 +10,7 @@
 //! writer may hold a file's edit lock while it waits for this lock, never the reverse. Only writers that use this
 //! function take the lock; a line appended by an older build at the same moment can share a number with one of ours.
 
-use crate::atomic::{is_transient, EDIT_LOG};
+use crate::atomic::{is_transient, with_retry, DEFAULT_RETRY, EDIT_LOG};
 use serde_json::Value;
 use std::fs::{self, OpenOptions};
 use std::io::{self, Read, Seek, SeekFrom, Write};
@@ -31,8 +31,13 @@ pub const TAIL: u64 = 64 * 1024;
 struct Held(PathBuf);
 
 impl Drop for Held {
+    /// The removal is retried on a transient error ([`DEFAULT_RETRY`], ADR 0751 change A): a lock left behind by one
+    /// failed removal makes the next appends wait [`LOCK_WAIT`] each, inside the edit lock of their file. A removal that
+    /// still fails leaves the lock, which is broken after [`LOCK_STALE`].
     fn drop(&mut self) {
-        let _ = fs::remove_file(&self.0);
+        let _ = with_retry("remove journal lock", &self.0, &DEFAULT_RETRY, || {
+            fs::remove_file(&self.0)
+        });
     }
 }
 
@@ -116,7 +121,8 @@ pub fn append(root: &Path, mut line: Value) -> Option<u64> {
     let held = lock(root);
     let mut seq = None;
     let mut torn = false;
-    if let Some((_, broke)) = &held {
+    if let Some((h, broke)) = &held {
+        crate::atomic::hook_journal_locked(&h.0);
         if let Ok((s, t)) = next_seq(&path) {
             seq = Some(s);
             torn = t;

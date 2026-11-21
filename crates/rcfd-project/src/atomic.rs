@@ -300,13 +300,15 @@ fn remove_lock(lock: &Path) -> io::Result<()> {
     fs::remove_file(lock)
 }
 
-/// A claim this writer made; removed when dropped (the lock is held, or the wait ended).
+/// A claim this writer made; removed when dropped (the lock is held, or the wait ended). The removal is retried on a
+/// transient error ([`DEFAULT_RETRY`], ADR 0751 change B): a claim left behind refuses every writer until it is
+/// [`EDIT_CLAIM_STALE`] old.
 struct Claim(Option<PathBuf>);
 
 impl Drop for Claim {
     fn drop(&mut self) {
         if let Some(p) = self.0.take() {
-            let _ = fs::remove_file(p);
+            let _ = with_retry("remove edit claim", &p, &DEFAULT_RETRY, || fs::remove_file(&p));
         }
     }
 }
@@ -535,6 +537,13 @@ pub(crate) fn mkdirs(path: &Path) -> Result<()> {
     fs::create_dir_all(path).map_err(io_err("create directory", path))
 }
 
+/// The test hook of the journal's append (ADR 0751): called with the path of the journal's lock right after it is
+/// taken. Nothing in a build without the feature `test-hooks`.
+#[inline(always)]
+pub(crate) fn hook_journal_locked(lock: &Path) {
+    hooks::journal_locked(lock);
+}
+
 /// The call sites of the test hooks; constant in a build without the feature `test-hooks`.
 #[cfg(not(feature = "test-hooks"))]
 mod hooks {
@@ -555,6 +564,8 @@ mod hooks {
     pub(super) fn before_attempt(_: &Path) {}
     #[inline(always)]
     pub(super) fn after_lock(_: &Path) {}
+    #[inline(always)]
+    pub(super) fn journal_locked(_: &Path) {}
 }
 
 #[cfg(feature = "test-hooks")]
@@ -603,6 +614,18 @@ mod hooks {
             });
         }
     }
+    pub(super) fn journal_locked(lock: &Path) {
+        let f = HOOKS.with(|h| h.borrow_mut().journal_locked.take());
+        if let Some(mut f) = f {
+            f(lock);
+            HOOKS.with(|h| {
+                let mut h = h.borrow_mut();
+                if h.journal_locked.is_none() {
+                    h.journal_locked = Some(f);
+                }
+            });
+        }
+    }
 }
 
 /// Test-only hooks of the edit lock (ADR 0676 H), compiled only with the feature `test-hooks`, which no default build and no
@@ -629,6 +652,8 @@ pub mod test_hooks {
         pub after_lock: Option<Callback>,
         /// The next this many removal attempts of the lock fail with a synthetic `PermissionDenied`.
         pub fail_removals: u32,
+        /// Called with the path of the journal's lock right after `journal::append` has taken it (ADR 0751).
+        pub journal_locked: Option<Callback>,
     }
 
     thread_local! {
