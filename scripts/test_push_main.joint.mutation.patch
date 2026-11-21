@@ -1,0 +1,13 @@
+# expect-fail: python scripts/test_push_main.py
+diff --git a/scripts/push_main.py b/scripts/push_main.py
+index c99fd742..ee46e329 100644
+--- a/scripts/push_main.py
++++ b/scripts/push_main.py
+@@ -499,6 +499,7 @@ def merge_info(root, rev, base=None):
+         if len(line[0]) < 3:
+             raise SystemExit(f"push_main: {rev}, the last commit of {base}..{rev}, is not a merge")
+         sha, second = line[0][0], line[0][2]
++        first = line[0][1]
+         merges = [ln[0] for ln in reversed(line) if len(ln) >= 3]
+     subjects = [git(root, "log", "-1", "--format=%s", m).strip() for m in merges]
+     files = [f for f in git(root, "diff", "--name-only", first, sha).splitlines() if f]

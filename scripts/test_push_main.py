@@ -191,5 +191,613 @@ class Git(unittest.TestCase):
             self.assertEqual(pm.since_verified(d, rows)[1], 1)
 
 
+# ---------------------------------------------------------------- ADR 0752 (F-851): the script after its first real runs
+#
+# Everything below runs in temporary repositories or on the script's functions. No cargo, rustfmt or npm is started and
+# nothing is pushed: `do_run` is given a recorder in place of the function that runs a command.
+
+import argparse  # noqa: E402
+import contextlib  # noqa: E402
+import io  # noqa: E402
+import json  # noqa: E402
+
+HERE = os.path.dirname(os.path.abspath(__file__))
+WRITE, CHECK = "python scripts/process_report.py --write", "python scripts/process_report.py --check"
+LISTED = "python scripts/process_report.py --list-generated"
+SLOW, FAST = "cargo test -p a --release --test slow", "cargo test -p a --release --test fast"
+CARGO_FAILED = """
+running 2 tests
+test one ... FAILED
+test two ... ok
+
+failures:
+
+---- one stdout ----
+thread 'one' panicked at crates/a/tests/slow.rs:3:5:
+boom
+
+failures:
+    one
+
+test result: FAILED. 1 passed; 1 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+error: test failed, to rerun pass `-p a --test slow`
+"""
+
+
+class Runner:
+    """Stands in for push_main.sh: records each command and answers from `script` (command -> a list of (exit code, output),
+    one per run; an exhausted or absent list means the command passes). Each run counts half a minute."""
+
+    def __init__(self, script=None, listed=""):
+        self.script, self.listed, self.calls = {k: list(v) for k, v in (script or {}).items()}, listed, []
+
+    def __call__(self, cmd, cwd, capture=False):
+        self.calls.append(cmd)
+        if cmd == LISTED:
+            return 0, 0.0, self.listed
+        code, out = self.script[cmd].pop(0) if self.script.get(cmd) else (0, "")
+        return code, 0.5, out
+
+    def checks(self):
+        """The commands of the plan that were run: without the regeneration and the listing of the generated files."""
+        return [c for c in self.calls if c not in pm.REGENERATE and c != LISTED]
+
+
+class TempRepo(unittest.TestCase):
+    """A repository with one commit on main; `merge` makes a branch with files and merges it without fast-forward."""
+
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.d = self.tmp.name
+        self.g("init", "-q", "-b", "main")
+        for k, v in (("user.name", "t"), ("user.email", "t@example.invalid"), ("commit.gpgsign", "false"), ("core.autocrlf", "false")):
+            self.g("config", k, v)
+        self.put(".gitignore", "/target\n")
+        self.commit("README", "first")
+        self.base = self.g("rev-parse", "HEAD")
+
+    def tearDown(self):
+        self.tmp.cleanup()
+
+    def g(self, *a):
+        return subprocess.run(["git", *a], cwd=self.d, check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True).stdout.strip()
+
+    def put(self, name, text="x\n", mode="w"):
+        p = os.path.join(self.d, name)
+        os.makedirs(os.path.dirname(p), exist_ok=True)
+        with open(p, mode, encoding="utf-8", newline="\n") as fh:
+            fh.write(text)
+
+    def commit(self, name, msg, text="x\n"):
+        self.put(name, text, "a")
+        self.g("add", "-A")
+        self.g("commit", "-q", "-m", msg)
+
+    def merge(self, branch, files, subject=None):
+        self.g("checkout", "-q", "-b", branch)
+        for f in files:
+            self.commit(f, "work on " + f)
+        self.g("checkout", "-q", "main")
+        self.g("merge", "-q", "--no-ff", branch, "-m", subject or f"Merge branch '{branch}'")
+        return self.g("rev-parse", "HEAD")
+
+    def plan(self, *cmds, **more):
+        p = {"touched": [], "always": list(cmds), "selected": [], "left": [], "selected_minutes": 0.0, "left_minutes": 0.0,
+             "patches": [], "studio": False}
+        p.update(more)
+        return p
+
+    def run_plan(self, plan, runner, base=None, **flags):
+        """do_run on the merge at HEAD: (exit code or the SystemExit text, what was printed)."""
+        a = argparse.Namespace(push=False, left_out_run=False, fresh=False)
+        vars(a).update(flags)
+        buf = io.StringIO()
+        with contextlib.redirect_stdout(buf):
+            try:
+                code = pm.do_run(self.d, a, pm.merge_info(self.d, "HEAD", base), plan, run=runner)
+            except SystemExit as e:
+                code = str(e)
+        return code, buf.getvalue()
+
+    def rows(self):
+        return pm.read_ledger(os.path.join(self.d, pm.LEDGER))
+
+    def state_files(self):
+        d = os.path.join(self.d, "target", "push_main")
+        return sorted(os.listdir(d)) if os.path.isdir(d) else []
+
+
+class Retries(TempRepo):
+    """Point 1: a failed check is run RETRIES further times; failed and then passed is flaky; failed every time stops."""
+
+    def test_the_registered_number_of_further_runs_is_two(self):
+        self.assertEqual(pm.RETRIES, 2)
+
+    def test_failed_names_are_read_from_cargos_output(self):
+        self.assertEqual(pm.failed_names(SLOW, CARGO_FAILED), ["slow::one"])
+        self.assertEqual(pm.failed_names("cargo test -p rcfd-fv --release --lib -- --exact m::tests::x",
+                                         "test m::tests::x ... FAILED\n"), ["rcfd_fv::m::tests::x"])
+        self.assertEqual(pm.failed_names(SLOW, "error[E0308]: mismatched types\n"), ["slow::*"])  # no test ran
+        self.assertEqual(pm.failed_names(CHECK, "FAIL r: x\n"), [CHECK])
+        two = "test a ... FAILED\ntest b ... FAILED\n\nfailures:\n    a\n    b\n\ntest result: FAILED.\n"
+        self.assertEqual(pm.failed_names(FAST, two), ["fast::a", "fast::b"])
+
+    def test_a_command_that_fails_once_and_then_passes_is_run_twice_and_names_the_test(self):
+        r = Runner({SLOW: [(101, CARGO_FAILED)]})
+        with contextlib.redirect_stdout(io.StringIO()):
+            got = pm.run_with_retries(SLOW, ".", r)
+        self.assertEqual((got["ok"], got["runs"], got["failed"], got["minutes"]), (True, 2, {"slow::one": 1}, 1.0))
+        self.assertEqual(r.calls, [SLOW, SLOW])
+
+    def test_a_command_that_passes_is_run_once(self):
+        r = Runner()
+        got = pm.run_with_retries(SLOW, ".", r)
+        self.assertEqual((got["ok"], got["runs"], got["failed"], r.calls), (True, 1, {}, [SLOW]))
+
+    def test_a_command_that_fails_every_time_is_run_three_times_and_fails(self):
+        r = Runner({SLOW: [(101, CARGO_FAILED)] * 5})
+        with contextlib.redirect_stdout(io.StringIO()):
+            got = pm.run_with_retries(SLOW, ".", r)
+        self.assertEqual((got["ok"], got["runs"], got["code"], list(got["failed"])), (False, 3, 101, ["slow::one"]))
+        self.assertEqual(r.calls, [SLOW] * 3)
+
+    def test_a_flaky_test_is_named_in_the_ledger_line_and_in_the_output(self):
+        self.merge("f001-work", ["crates/a/src/one.rs"])
+        r = Runner({SLOW: [(101, CARGO_FAILED), (101, CARGO_FAILED)]})
+        code, out = self.run_plan(self.plan(CHECK, SLOW, FAST), r)
+        self.assertEqual(code, 0, out)
+        self.assertEqual(r.checks(), [CHECK, SLOW, SLOW, SLOW, FAST])  # the run goes on after the flaky command
+        row = self.rows()[-1]
+        self.assertEqual(row["detail"], f"exit=0;mutations=0;flaky=slow::one;cmds={CHECK} | {SLOW} | {FAST}")
+        self.assertEqual((row["result"], row["minutes"]), ("pass", "2.5"))  # five runs of half a minute
+        self.assertIn(f"push_main: FLAKY: slow::one failed in run 1 of 3 of {SLOW}", out)
+        self.assertIn("push_main: flaky in this run (failed, then passed in a further run): slow::one", out)
+
+    def test_a_test_that_fails_every_time_stops_the_push_and_writes_no_ledger_line(self):
+        self.merge("f001-work", ["crates/a/src/one.rs"])
+        head = self.g("rev-parse", "HEAD")
+        r = Runner({SLOW: [(101, CARGO_FAILED)] * 9})
+        code, out = self.run_plan(self.plan(CHECK, SLOW, FAST), r)
+        self.assertEqual(code, 1)
+        self.assertEqual(r.checks(), [CHECK, SLOW, SLOW, SLOW])  # FAST is not reached
+        self.assertEqual(self.rows(), [])
+        self.assertEqual(self.g("rev-parse", "HEAD"), head)  # no commit
+        self.assertIn(f"push_main: FAILED (exit 101): {SLOW}", out)
+        self.assertIn("nothing written to the ledger; the merge is not pushed", out)
+
+
+class FirstAttempt(TempRepo):
+    """What a run that passes at the first attempt writes is what it wrote before ADR 0752."""
+
+    def test_the_ledger_line_of_a_run_with_no_failure(self):
+        sha = self.merge("f001-work", ["crates/a/src/one.rs", "docs/adr/0900-f001-registration-x.md"])
+        r = Runner()
+        code, out = self.run_plan(self.plan(CHECK, SLOW), r)
+        self.assertEqual(code, 0, out)
+        (row,) = self.rows()
+        self.assertEqual(row, {"date": pm.today(), "kind": "merge", "commit": sha[:10], "branch": "f001-work", "items": "F-001",
+                               "adrs": "0900", "result": "pass", "minutes": "1.0", "left_out": "0", "left_out_minutes": "0.0",
+                               "detail": f"exit=0;mutations=0;cmds={CHECK} | {SLOW}"})
+        self.assertEqual(self.g("log", "-1", "--format=%s"), "Ledger and generated pages after the merge of F-001")
+        self.assertEqual(self.g("status", "--porcelain"), "")
+        self.assertEqual(self.state_files(), [])
+        self.assertNotIn("FLAKY", out)
+
+
+class Resume(TempRepo):
+    """Point 2: a stopped run is resumed without repeating the commands that passed on the same merge commit."""
+
+    C1, C3 = "python scripts/process_report.py --check", "cargo test -p a --release --test slow"
+
+    def stopped(self):
+        self.merge("f001-work", ["crates/a/src/one.rs"])
+        r = Runner({FAST: [(101, "test one ... FAILED\n")], self.C3: [(101, CARGO_FAILED)] * 3})
+        code, _ = self.run_plan(self.plan(self.C1, FAST, self.C3), r)
+        self.assertEqual((code, r.checks()), (1, [self.C1, FAST, FAST, self.C3, self.C3, self.C3]))
+        self.assertEqual(self.rows(), [])
+        self.assertEqual(self.state_files(), [f"run-{self.g('rev-parse', 'HEAD')[:8]}.json"])
+
+    def test_the_next_run_repeats_nothing_that_passed_and_the_line_says_what_was_checked(self):
+        self.stopped()
+        r = Runner()
+        code, out = self.run_plan(self.plan(self.C1, FAST, self.C3), r)
+        self.assertEqual(code, 0, out)
+        self.assertEqual(r.checks(), [self.C3])
+        row = self.rows()[-1]
+        self.assertEqual(row["detail"], f"exit=0;mutations=0;flaky=fast::one;resumed=2;cmds={self.C1} | {FAST} | {self.C3}")
+        self.assertEqual(row["minutes"], "2.0")  # 0.5 and two runs of 0.5 from the stopped run, 0.5 now
+        self.assertIn(f"push_main: passed earlier on this merge commit, not repeated: {self.C1}", out)
+        self.assertEqual(self.state_files(), [])  # gone once the ledger line is written
+
+    def test_the_record_of_another_merge_commit_is_not_used(self):
+        self.stopped()
+        name = self.state_files()[0]
+        self.g("commit", "-q", "--amend", "-m", "Merge branch 'f001-work' again")  # another commit with the same tree
+        new = self.g("rev-parse", "HEAD")
+        os.replace(os.path.join(self.d, "target", "push_main", name), os.path.join(self.d, "target", "push_main", f"run-{new[:8]}.json"))
+        r = Runner()
+        code, out = self.run_plan(self.plan(self.C1, FAST, self.C3), r)
+        self.assertEqual((code, r.checks()), (0, [self.C1, FAST, self.C3]), out)
+        self.assertEqual(self.rows()[-1]["detail"], f"exit=0;mutations=0;cmds={self.C1} | {FAST} | {self.C3}")
+        self.assertIn("is of another merge commit or base; not used", out)
+
+    def test_fresh_repeats_everything(self):
+        self.stopped()
+        r = Runner()
+        code, out = self.run_plan(self.plan(self.C1, FAST, self.C3), r, fresh=True)
+        self.assertEqual((code, r.checks()), (0, [self.C1, FAST, self.C3]), out)
+        self.assertNotIn("resumed", self.rows()[-1]["detail"])
+
+    def test_a_verified_mutation_patch_is_not_verified_again(self):
+        self.put("scripts/t.mutation.patch", "# expect-fail: the-test\n")
+        self.commit("scripts/x.py", "a patch and a script")
+        self.merge("f001-work", ["crates/a/src/one.rs"])
+        applied = []
+        real = subprocess.run
+
+        def fake(cmd, **kw):  # verify_patch applies and removes the patch with `git apply`
+            if cmd[:2] == ["git", "apply"]:
+                applied.append(cmd)
+                return argparse.Namespace(returncode=0)
+            return real(cmd, **kw)
+        plan = self.plan(self.C1, self.C3, patches=["scripts/t.mutation.patch"])
+        pm.subprocess.run = fake
+        try:
+            code, _ = self.run_plan(plan, Runner({"the-test": [(1, "")], self.C3: [(1, "")] * 3}))
+            self.assertEqual(code, 1)  # C3 fails every time, before the patch
+            code, out = self.run_plan(plan, Runner({self.C3: [(1, "")] * 3}))
+            self.assertEqual((code, applied), (1, []))  # the patch is only reached when the commands pass
+            r = Runner({"the-test": [(1, "")]})
+            code, out = self.run_plan(plan, r)
+            self.assertEqual((code, len(applied), r.checks()), (0, 2, [self.C3, "the-test"]), out)
+        finally:
+            pm.subprocess.run = real
+        self.assertEqual(self.rows()[-1]["detail"], f"exit=0;mutations=1;resumed=1;cmds={self.C1} | {self.C3}")
+
+
+class Build(unittest.TestCase):
+    """Point 3: the budget counts build time from a recorded figure."""
+
+    def test_the_registered_figure(self):
+        self.assertEqual(pm.BUILD_SECONDS, 1.8)
+
+    def test_the_cost_of_a_binary_holds_the_build_figure(self):
+        u = {x["target"]: x for x in pm.binary_units(IDX, {"a"}, TIMES, 60, 1.8)}
+        self.assertAlmostEqual(u["fast"]["cost"], 12.8)
+        self.assertAlmostEqual(u["norec"]["cost"], 61.8)
+        self.assertEqual((u["fast"]["seconds"], u["norec"]["seconds"]), (11.0, None))  # the record itself is unchanged
+
+    def test_fewer_binaries_fit_the_same_budget(self):
+        without = pm.cut([pm.order_group(pm.binary_units(IDX, {"a"}, TIMES, 60), set())], 575.0)
+        with_build = pm.cut([pm.order_group(pm.binary_units(IDX, {"a"}, TIMES, 60, 1.8), set())], 575.0)
+        self.assertEqual(([x["target"] for x in without[0]], without[2]), (["fast", "norec", "slow"], 571.0))
+        self.assertEqual([x["target"] for x in with_build[0]], ["fast", "norec"])
+        self.assertAlmostEqual(with_build[2], 74.6)
+
+    def test_the_plan_uses_the_figure_and_says_so(self):
+        info = {"sha": "0" * 40, "first": "1" * 40, "branch": "f001-work", "items": [], "adrs": [], "files": ["crates/a/src/lib.rs"]}
+        with tempfile.TemporaryDirectory() as d:
+            plan = pm.make_plan(d, info, IDX, TIMES, [], 575.0 / 60.0, 60)
+            self.assertEqual(([u["target"] for u in plan["selected"]], plan["build_s"]), (["fast", "norec"], 1.8))
+            self.assertEqual([u["target"] for u in plan["left"]], ["slow", "ct", "bt"])
+            self.assertAlmostEqual(plan["left_minutes"], (501.8 + 21.8 + 31.8) / 60.0)
+            zero = pm.make_plan(d, info, IDX, TIMES, [], 575.0 / 60.0, 60, 0.0)
+            self.assertEqual([u["target"] for u in zero["selected"]], ["fast", "norec", "slow"])
+        buf = io.StringIO()
+        with contextlib.redirect_stdout(buf):
+            pm.print_plan(info, plan, "2" * 40, 0)
+        self.assertIn("diff-selected (2 binaries, 1.2 recorded minutes, with 1.8 s of build counted per binary):", buf.getvalue())
+
+
+class Joint(TempRepo):
+    """Point 4: several merges are taken as one joint diff."""
+
+    def two_merges(self):
+        m1 = self.merge("f001-work", ["docs/adr/0900-f001-registration-x.md", "crates/a/src/one.rs"],
+                        "Merge branch 'f001-work': F-001 done (ADR 0900)")
+        self.commit("docs/notes.md", "the lead's notes")
+        m2 = self.merge("f002-work", ["crates/b/src/two.rs", "docs/adr/0901-f002-registration-y.md"])
+        return m1, m2
+
+    def test_subject_branches(self):
+        self.assertEqual(pm.subject_branches("Merge branch 'f529-work': F-529 partial (ADR 0503), F-431 note"), ["f529-work"])
+        self.assertEqual(pm.subject_branches("Merge branches 'a', 'b' and 'c' into main"), ["a", "b", "c"])
+        self.assertEqual(pm.subject_branches("Merge branches 'a' and 'b'"), ["a", "b"])
+        self.assertEqual(pm.subject_branches("Merge remote-tracking branch 'origin/x'"), ["origin/x"])
+        self.assertEqual(pm.subject_branches("Merge commit '058ef506'"), [])
+        self.assertEqual(pm.subject_branches("Ledger: the line of 'x'"), [])
+
+    def test_a_range_of_first_parent_merges_is_one_diff(self):
+        m1, m2 = self.two_merges()
+        info = pm.merge_info(self.d, "HEAD", self.base)
+        self.assertEqual(sorted(info["files"]), ["crates/a/src/one.rs", "crates/b/src/two.rs", "docs/adr/0900-f001-registration-x.md",
+                                                 "docs/adr/0901-f002-registration-y.md", "docs/notes.md"])
+        self.assertEqual((info["branch"], info["items"], info["adrs"]), ("f001-work,f002-work", ["F-001", "F-002"], ["0900", "0901"]))
+        self.assertEqual((info["sha"], info["first"], info["merges"]), (m2, self.base, [m1, m2]))
+        alone = pm.merge_info(self.d, "HEAD")  # without --base the last merge alone, as before
+        self.assertEqual((sorted(alone["files"]), alone["branch"], alone["merges"]),
+                         (["crates/b/src/two.rs", "docs/adr/0901-f002-registration-y.md"], "f002-work", [m2]))
+
+    def test_a_range_that_is_not_one_stops(self):
+        m1, m2 = self.two_merges()
+        side = self.g("rev-parse", "f001-work")  # an ancestor of HEAD that is not on main's first-parent line
+        for base in (side, "HEAD"):
+            with self.assertRaises(SystemExit):
+                pm.merge_info(self.d, "HEAD", base)
+        self.commit("docs/notes.md", "more notes")  # the last commit of the range is not a merge
+        with self.assertRaises(SystemExit):
+            pm.merge_info(self.d, "HEAD", self.base)
+
+    def test_a_merge_of_more_than_two_parents_is_one_diff(self):
+        for br, f in (("f003-x", "crates/a/src/three.rs"), ("f004-y", "crates/b/src/four.rs")):
+            self.g("checkout", "-q", "-b", br, "main")
+            self.commit(f, "work")
+        self.g("checkout", "-q", "main")
+        self.g("merge", "-q", "--no-ff", "f003-x", "f004-y", "-m", "Merge branches 'f003-x' and 'f004-y'")
+        self.assertEqual(len(self.g("rev-list", "--parents", "-n", "1", "HEAD").split()), 4)
+        info = pm.merge_info(self.d, "HEAD")
+        self.assertEqual((sorted(info["files"]), info["branch"], info["items"]),
+                         (["crates/a/src/three.rs", "crates/b/src/four.rs"], "f003-x,f004-y", ["F-003", "F-004"]))
+
+    def test_one_ledger_line_for_the_joint_run(self):
+        m1, m2 = self.two_merges()
+        code, out = self.run_plan(self.plan(CHECK), Runner(), base=self.base)
+        self.assertEqual(code, 0, out)
+        (row,) = self.rows()
+        self.assertEqual((row["commit"], row["branch"], row["items"], row["adrs"]),
+                         (m2[:10], "f001-work,f002-work", "F-001,F-002", "0900,0901"))
+        self.assertEqual(row["detail"], f"exit=0;mutations=0;joint={m1[:10]};cmds={CHECK}")
+        buf = io.StringIO()
+        with contextlib.redirect_stdout(buf):
+            pm.print_plan(pm.merge_info(self.d, m2, self.base), self.plan(CHECK), "2" * 40, 2)
+        self.assertIn(f"joint diff of 2 merges, {self.base[:8]}..{m2[:8]}: {m1[:8]}, {m2[:8]}", buf.getvalue())
+
+
+class Times(TempRepo):
+    """Point 5: --times has a default, the newest gate times path the ledger names."""
+
+    ROWS = [{"kind": "gate", "commit": "aaa", "detail": "passed=1;failed=0;ignored=0;times=gates/old"},
+            {"kind": "merge", "commit": "bbb", "detail": "exit=0;mutations=0;cmds=x;times=gates/not-a-gate-line"},
+            {"kind": "gate", "commit": "ccc", "detail": "passed=1;failed=0;ignored=0;times=gates/new;GitHub run 7"},
+            {"kind": "gate", "commit": "ddd", "detail": "passed=1;failed=0;ignored=0;times=gates/gone"},
+            {"kind": "gate", "commit": "eee", "detail": "passed=1;failed=0;ignored=0;GitHub run 9"}]
+
+    def test_the_newest_gate_line_with_a_path_that_exists(self):
+        here = lambda p: not p.replace("\\", "/").endswith("gates/gone")  # noqa: E731
+        self.assertEqual(pm.default_times(self.ROWS, "R", here), (os.path.join("R", "gates/new"), "ccc"))
+        self.assertEqual(pm.default_times(self.ROWS[:2], "R", here), (os.path.join("R", "gates/old"), "aaa"))
+        self.assertEqual(pm.default_times(self.ROWS, "R", lambda p: False), (None, None))
+        self.assertEqual(pm.default_times(self.ROWS[4:], "R", here), (None, None))
+        absolute = os.path.abspath(self.d)
+        rows = [{"kind": "gate", "commit": "fff", "detail": "passed=1;failed=0;ignored=0;times=" + absolute}]
+        self.assertEqual(pm.default_times(rows, "R"), (absolute, "fff"))
+
+    def test_times_given_wins_and_the_plan_says_what_it_used(self):
+        here = lambda p: True  # noqa: E731
+        self.assertEqual(pm.times_source("mine.tsv", self.ROWS, "R", 60, here), ("mine.tsv", "recorded seconds: mine.tsv (--times)"))
+        path, note = pm.times_source(None, self.ROWS, "R", 60, here)
+        self.assertEqual((path, note), (os.path.join("R", "gates/gone"), f"recorded seconds: {path} (named by the gate line of ddd)"))
+        path, note = pm.times_source(None, self.ROWS, "R", 60, lambda p: False)
+        self.assertIsNone(path)
+        self.assertIn("recorded seconds: none", note)
+        self.assertIn("every binary counts 60 s", note)
+
+    def test_the_gate_line_names_the_times_path(self):
+        self.assertEqual(pm.gate_detail(10, 0, 3, note="GitHub run 1", skipped=2, times="../gate-abc"),
+                         "passed=10;failed=0;ignored=3;skipped=2;times=../gate-abc;GitHub run 1")
+        self.put("gates/abc/shard-1/times.tsv", "binary\ttest\toutcome\tseconds\tpeak_mb\nfast\tone\tok\t5.00\t6\nfast\ttwo\tok\t6.00\t6\n")
+        self.put("gates/abc/shard-1/times_hooks.tsv", "binary\ttest\toutcome\tseconds\tpeak_mb\nfast\tone\tok\t9.00\t6\n")
+        self.put("gates/abc/shard-2/times.tsv", "binary\ttest\toutcome\tseconds\tpeak_mb\nslow\tone\tok\t500.00\t6\nfast\ttwo\tok\t2.00\t6\n")
+        self.put("gates/abc/shard-2/test.log", "not a times file\n")
+        a = argparse.Namespace(commit="HEAD", passed=5, failed=0, ignored=1, skipped=None, attribution=None, date="2026-11-21",
+                               minutes="", note="", gate_times="gates\\abc")
+        with contextlib.redirect_stdout(io.StringIO()):
+            self.assertEqual(pm.do_gate_line(self.d, a), 0)
+        rows = self.rows()
+        self.assertEqual(rows[-1]["detail"], "passed=5;failed=0;ignored=1;times=gates/abc")
+        path, gate = pm.default_times(rows, self.d)
+        self.assertEqual((path, gate), (os.path.join(self.d, "gates/abc"), self.base[:10]))
+        self.assertEqual(pm.read_times(path), {("fast", "one"): 9.0, ("fast", "two"): 6.0, ("slow", "one"): 500.0})
+        self.assertEqual(pm.read_times(os.path.join(path, "shard-2", "times.tsv")), {("slow", "one"): 500.0, ("fast", "two"): 2.0})
+        for bad in ("gates/abc;x", "gates/none"):
+            a.gate_times = bad
+            with self.assertRaises(SystemExit):
+                pm.do_gate_line(self.d, a)
+        self.assertEqual(len(self.rows()), len(rows))
+
+
+class Tree(TempRepo):
+    """Point 6: a left-out line in the working tree does not stop the next run. Finding 9: nor do the generated files."""
+
+    HEAD_LINE = "\t".join(pm.COLUMNS) + "\n"
+    GATE = pm.ledger_line(date="2026-11-12", kind="gate", commit="49fbf1a3", result="green", detail="passed=1;failed=0;ignored=0") + "\n"
+    LEFT = pm.ledger_line(date="2026-11-21", kind="leftout", commit="abc", branch="f000-x", result="green", detail="ran=2;failed=0") + "\n"
+
+    def setUp(self):
+        super().setUp()
+        self.put(pm.LEDGER, self.HEAD_LINE + self.GATE)
+        self.put("docs/adr/index.md", "the index\n")
+        self.commit("docs/page.md", "a ledger, an index and a page")
+        self.merge("f001-work", ["crates/a/src/one.rs"])
+
+    def test_appended_or_not(self):
+        old = self.HEAD_LINE + self.GATE
+        self.assertTrue(pm.ledger_appended(old, old + self.LEFT))
+        self.assertTrue(pm.ledger_appended(old, old))
+        self.assertTrue(pm.ledger_appended("", old))
+        self.assertFalse(pm.ledger_appended(old, self.HEAD_LINE + self.GATE.replace("green", "red") + self.LEFT))
+        self.assertFalse(pm.ledger_appended(old, self.HEAD_LINE))  # a line removed
+        self.assertFalse(pm.ledger_appended(old.rstrip("\n"), old.rstrip("\n") + ";more\n"))  # the last line made longer
+
+    def test_what_stops_a_run(self):
+        gen = {"docs/adr/index.md", pm.LEDGER}
+        self.assertEqual(pm.blocking_changes([pm.LEDGER], gen, True), [])
+        self.assertEqual(pm.blocking_changes([pm.LEDGER], gen, False), [pm.LEDGER])
+        self.assertEqual(pm.blocking_changes(["docs/adr/index.md", "crates/a/src/lib.rs", pm.LEDGER], gen, True), ["crates/a/src/lib.rs"])
+
+    def test_a_left_out_line_in_the_working_tree_does_not_stop_the_run_and_is_committed(self):
+        self.put(pm.LEDGER, self.LEFT, "a")
+        code, out = self.run_plan(self.plan(CHECK), Runner())
+        self.assertEqual(code, 0, out)
+        self.assertEqual([r["kind"] for r in self.rows()], ["gate", "leftout", "merge"])
+        self.assertEqual(self.g("status", "--porcelain"), "")
+        self.assertIn("\tleftout\tabc\t", self.g("show", f"HEAD:{pm.LEDGER}"))
+
+    def test_a_changed_line_of_the_ledger_stops_the_run(self):
+        self.put(pm.LEDGER, self.HEAD_LINE + self.GATE.replace("green", "red") + self.LEFT)
+        r = Runner()
+        code, _ = self.run_plan(self.plan(CHECK), r)
+        self.assertEqual((code, r.checks()), (f"push_main: the working tree has uncommitted changes: {pm.LEDGER}", []))
+
+    def test_another_changed_file_stops_the_run_and_a_generated_one_does_not(self):
+        self.put("docs/adr/index.md", "the index, regenerated by a stopped run\n")
+        r = Runner(listed="docs/adr/index.md\ndocs/ROADMAP.md\n")
+        self.put("docs/page.md", "edited\n")
+        code, _ = self.run_plan(self.plan(CHECK), r)
+        self.assertEqual((code, r.checks()), ("push_main: the working tree has uncommitted changes: docs/page.md", []))
+        self.g("checkout", "--", "docs/page.md")
+        code, out = self.run_plan(self.plan(CHECK), r)
+        self.assertEqual(code, 0, out)
+        self.assertEqual(self.g("show", "HEAD:docs/adr/index.md"), "the index, regenerated by a stopped run")
+
+
+class NoPatch(unittest.TestCase):
+    """Point 7: a merge whose ADR has registered tests and no mutation patch is named in the output."""
+
+    def registered(self):
+        def reg(crate, target, name, adrs, kind="test"):
+            return dict(t(crate, target, name, kind=kind), adrs=adrs)
+        return [reg("a", "fast", "one", ["0900"]), reg("a", "fast", "two", ["0900"]), reg("a", "a", "unit", ["0900"], kind="lib"),
+                reg("b", "bt", "one", ["0901"]), reg("c", "ct", "one", [])]
+
+    def test_which_adrs_have_no_patch(self):
+        ts = self.registered()
+        self.assertEqual(pm.unpatched_adrs(ts, ["0900", "0901", "0902"], []), [("0900", 3), ("0901", 1)])  # 0902 has no test
+        self.assertEqual(pm.unpatched_adrs(ts, ["0900", "0901"], ["crates/a/tests/fast.mutation.patch"]), [("0901", 1)])
+        self.assertEqual(pm.unpatched_adrs(ts, ["0900"], ["crates/b/tests/bt.mutation.patch", "scripts/test_x.mutation.patch"]), [])
+        self.assertEqual(pm.unpatched_adrs(ts, ["0900", "0901"], ["scripts/test_x.mutation.patch"]), [])  # beside no ADR's test
+        self.assertEqual(pm.unpatched_adrs(ts, [], []), [])
+
+    def test_the_plan_names_them(self):
+        info = {"sha": "0" * 40, "first": "1" * 40, "branch": "f001-work", "items": ["F-001"], "adrs": ["0900", "0901"],
+                "files": ["crates/a/tests/fast.mutation.patch"]}
+        idx = {"crates": CRATES, "tests": self.registered()}
+        with tempfile.TemporaryDirectory() as d:
+            plan = pm.make_plan(d, info, idx, {}, [], 30.0, 60)
+        self.assertEqual(plan["no_patch"], [("0901", 1)])
+        buf = io.StringIO()
+        with contextlib.redirect_stdout(buf):
+            pm.print_plan(info, plan, "2" * 40, 0)
+        self.assertIn("no mutation patch: ADR 0901 has 1 registered tests and no committed mutation patch (agent rules, rule 16)",
+                      buf.getvalue())
+        self.assertNotIn("ADR 0900 has", buf.getvalue())
+
+
+class LeadProcess(unittest.TestCase):
+    """Point 8: lead-process.md says what the script does with the roadmap status (it writes none)."""
+
+    def test_the_page_says_the_script_writes_no_roadmap_status(self):
+        with open(os.path.join(HERE, "..", "docs", "process", "lead-process.md"), encoding="utf-8") as fh:
+            text = " ".join(fh.read().split())
+        self.assertIn("The script writes no roadmap status.", text)
+        self.assertNotIn("with the item's roadmap status", text)
+        self.assertIn("writes no roadmap status", pm.__doc__)
+
+
+class Regenerate(TempRepo):
+    """Finding 9: the generated files are regenerated before the process check, not after it."""
+
+    def test_the_index_is_written_before_it_is_checked(self):
+        self.merge("f001-work", ["docs/adr/0900-f001-registration-x.md"])
+        docs = "cargo test -p rcfd-cli --release --test docs_site"
+        r = Runner()
+        code, out = self.run_plan(self.plan(docs, CHECK), r)
+        self.assertEqual(code, 0, out)
+        self.assertEqual(r.calls[:4], [WRITE, "python scripts/roadmap_progress.py", docs, CHECK])
+        self.assertEqual(r.calls.count(WRITE), 1)
+        self.assertEqual(self.rows()[-1]["detail"], f"exit=0;mutations=0;cmds={docs} | {CHECK}")  # not a command of the plan
+
+    def test_a_failed_regeneration_stops_the_run(self):
+        self.merge("f001-work", ["docs/adr/0900-f001-registration-x.md"])
+        r = Runner({WRITE: [(1, "")]})
+        code, _ = self.run_plan(self.plan(CHECK), r)
+        self.assertEqual((code, r.calls, self.rows()), (1, [WRITE], []))
+
+
+class ScriptTests(unittest.TestCase):
+    """Finding 13: a merge that changes scripts/ has the script tests of scripts/ in its plan."""
+
+    NAMES = ["test_b.py", "push_main.py", "test_a.py", "test_a.mutation.patch", "mytest_c.py", "test_d.txt"]
+
+    def test_the_commands(self):
+        want = ["python scripts/test_a.py", "python scripts/test_b.py"]
+        self.assertEqual(pm.script_test_commands(["docs/x.md", "scripts/push_main.py"], self.NAMES), want)
+        self.assertEqual(pm.script_test_commands(["scripts/docker/Dockerfile"], self.NAMES), want)
+        self.assertEqual(pm.script_test_commands(["docs/scripts/x.md", "crates/a/scripts/y.py"], self.NAMES), [])
+
+    def test_the_plan_begins_with_them(self):
+        info = {"sha": "0" * 40, "first": "1" * 40, "branch": "f001-work", "items": [], "adrs": [], "files": ["scripts/push_main.py"]}
+        with tempfile.TemporaryDirectory() as d:
+            os.makedirs(os.path.join(d, "scripts"))
+            for n in self.NAMES:
+                open(os.path.join(d, "scripts", n), "w").close()
+            plan = pm.make_plan(d, info, IDX, {}, [], 30.0, 60)
+            self.assertEqual(plan["always"][:2], ["python scripts/test_a.py", "python scripts/test_b.py"])
+            other = pm.make_plan(d, dict(info, files=["docs/x.md"]), IDX, {}, [], 30.0, 60)
+            self.assertFalse(any(c.startswith("python scripts/test_") for c in other["always"]))
+
+    def test_this_repository_has_script_tests_and_each_can_be_run_as_a_file(self):
+        cmds = pm.script_test_commands(["scripts/x"], os.listdir(HERE))
+        self.assertIn("python scripts/test_push_main.py", cmds)
+        self.assertIn("python scripts/test_fmt_check.py", cmds)
+        for c in cmds:
+            with open(os.path.join(HERE, c.split("/")[-1]), encoding="utf-8") as fh:
+                self.assertIn('__name__ == "__main__"', fh.read(), c)
+
+
+class Items(TempRepo):
+    """Finding 18: the ledger's item field is read from the brief or from the head of the branch name."""
+
+    def test_the_head_of_a_branch_name(self):
+        self.assertEqual(pm.branch_items("f855-edit-lock-f2-lockbusy"), ["F-855"])
+        self.assertEqual(pm.branch_items("f828-f814-x"), ["F-814", "F-828"])
+        self.assertEqual(pm.branch_items("citations-2026-w47"), [])
+        self.assertEqual(pm.branch_items("dependabot/cargo/wat-1.263.0"), [])
+        self.assertEqual(pm.branch_items("fix-f2-lock"), [])
+        self.assertEqual(pm.branch_items("f855"), [])  # no segment after it: not the form of a branch of an item
+
+    def test_the_items_line_of_a_brief(self):
+        self.assertEqual(pm.brief_items("# Brief\n\nBranch: x\nItems: F-851, F-12\nADR: 0752\n"), ["F-012", "F-851"])
+        self.assertEqual(pm.brief_items("Branch: x\nItems: none\n"), [])
+        self.assertIsNone(pm.brief_items("Branch: x\nThe Items: F-1 of another line\n"))
+        self.assertIsNone(pm.brief_items(None))
+
+    def test_the_brief_wins_and_only_a_missing_brief_falls_back_to_the_name(self):
+        briefs = {"f777-y": "Items: F-778\n", "f100-z": "Items: none\n", "citations-w47": "Items: F-431\n"}
+        self.assertEqual(pm.merge_items(["f777-y"], briefs.get), ["F-778"])
+        self.assertEqual(pm.merge_items(["f100-z"], briefs.get), [])
+        self.assertEqual(pm.merge_items(["f855-edit-lock-f2-lockbusy", "citations-w47"], briefs.get), ["F-431", "F-855"])
+        self.assertEqual(pm.brief_path("dependabot/cargo/wat-1"), "docs/adr/briefs/dependabot-cargo-wat-1.md")
+
+    def test_a_merge_gives_no_item_from_inside_a_name_from_an_adr_file_or_from_the_subject(self):
+        self.merge("f855-a-f2-b", ["docs/adr/0901-f855-registration-the-f2-x.md", "crates/a/src/lock.rs"],
+                   "Merge branch 'f855-a-f2-b' (F-855, ADR 0901: the lock; F-431 note; F2 unchanged)")
+        info = pm.merge_info(self.d, "HEAD")
+        self.assertEqual((info["branch"], info["items"], info["adrs"]), ("f855-a-f2-b", ["F-855"], ["0901"]))
+
+    def test_a_merge_reads_the_brief_of_its_branch_from_the_merge_commit(self):
+        self.commit("docs/adr/briefs/f777-y.md", "a brief", "# Brief\n\nBranch: f777-y\nItems: F-778, F-779\n")
+        self.merge("f777-y", ["crates/a/src/y.rs"])
+        self.assertEqual(pm.merge_info(self.d, "HEAD")["items"], ["F-778", "F-779"])
+        self.commit("docs/adr/briefs/tidy-up.md", "a brief with no item", "Branch: tidy-up\nItems: none\n")
+        self.merge("tidy-up", ["crates/a/src/z.rs"])
+        self.assertEqual(pm.merge_info(self.d, "HEAD")["items"], [])
+
+    def test_the_corrected_line_of_the_f855_merge_is_as_the_lead_left_it(self):
+        rows = [r for r in pm.read_ledger(os.path.join(HERE, "..", pm.LEDGER)) if r["commit"] == "26856a9027"]
+        self.assertEqual([(r["branch"], r["items"]) for r in rows], [("f855-edit-lock-f2-lockbusy", "F-855")])
+
+
 if __name__ == "__main__":
     unittest.main()

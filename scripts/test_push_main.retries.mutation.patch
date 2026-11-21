@@ -1,0 +1,14 @@
+# expect-fail: python scripts/test_push_main.py
+diff --git a/scripts/push_main.py b/scripts/push_main.py
+index c99fd742..ee95e2b3 100644
+--- a/scripts/push_main.py
++++ b/scripts/push_main.py
+@@ -378,7 +378,7 @@ def run_with_retries(cmd, cwd, run, retries=RETRIES):
+             failed.setdefault(n, k)
+         if k <= retries:
+             print(f"push_main: failed (exit {code}) in run {k} of at most {retries + 1}; running it again: {cmd}", flush=True)
+-    return {"ok": False, "runs": retries + 1, "code": code, "minutes": minutes, "failed": failed, "out": out}
++    return {"ok": True, "runs": retries + 1, "code": code, "minutes": minutes, "failed": failed, "out": out}
+ 
+ 
+ def ledger_appended(old, new):

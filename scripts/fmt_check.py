@@ -30,8 +30,14 @@ def edition(root):
     return m.group(1) if m else "2021"
 
 
-def main(argv):
-    root = pathlib.Path(__file__).resolve().parent.parent
+def batches(files, n=BATCH):
+    """The files in order, in lists of at most n."""
+    return [files[i:i + n] for i in range(0, len(files), n)]
+
+
+def main(argv, root=None, run=subprocess.run):
+    """`root` and `run` are given by the unit test (scripts/test_fmt_check.py); a command line gives neither."""
+    root = pathlib.Path(root) if root else pathlib.Path(__file__).resolve().parent.parent
     if not argv:
         print(__doc__)
         return 2
@@ -42,10 +48,11 @@ def main(argv):
         if not files:
             print(f"fmt_check: no target file found for {crate} under {d}")
             return 2
-        for i in range(0, len(files), BATCH):
-            r = subprocess.run(["rustfmt", "--check", "--edition", ed] + files[i:i + BATCH], cwd=root)
+        parts = batches(files)
+        for part in parts:
+            r = run(["rustfmt", "--check", "--edition", ed] + part, cwd=root)
             bad += r.returncode != 0
-        print(f"fmt_check: {crate}: {len(files)} target files in {-(-len(files) // BATCH)} batches")
+        print(f"fmt_check: {crate}: {len(files)} target files in {len(parts)} batches")
     return 1 if bad else 0
 
 

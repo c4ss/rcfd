@@ -242,6 +242,15 @@ class State(Repo):
                  "2026-11-18\tmerge\tabc\ttwo\tF-003\t0002\tpass\t1.0\t0\t0.0\texit=0\n")
         self.assertEqual([b["branch"] for b in pr.sec_h(self.root)[1]], ["one"])
 
+    def test_a_brief_whose_branch_is_one_of_several_in_a_merge_line_is_merged(self):
+        # ADR 0752 (F-851, point 4): push_main.py writes one line for several merges checked as one joint diff
+        head = "Branch: {0}\nItems: F-003\nADR: 0002\nRules version: 1\nModel: m\nIssued: 2026-11-18\n"
+        for name in ("one", "two", "three"):
+            self.put(f"{pr.BRIEFS}/{name}.md", head.format(name))
+        self.put(pr.LEDGER, "date\tkind\tcommit\tbranch\titems\tadrs\tresult\tminutes\tleft_out\tleft_out_minutes\tdetail\n"
+                 "2026-11-21\tmerge\tabc\ttwo,three\tF-003\t0002\tpass\t1.0\t0\t0.0\texit=0;mutations=0;joint=def;cmds=x\n")
+        self.assertEqual([b["branch"] for b in pr.sec_h(self.root)[1]], ["one"])
+
     def test_weekly_list(self):
         self.put("docs/ROADMAP.md", ROADMAP.replace("2. Numerics and solvers", "2. Numerics and solvers, F-002 first"))
         self.items[1]["note"] = "NEEDS THE USER: which default"
