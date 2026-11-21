@@ -313,3 +313,30 @@ A count of differences, however large, does not by itself make the work partial.
 - The Markdown views, the SVGs and the ADR index are not generated from item files here.
 - Proposals that change an existing item's title, deps, acceptance or phase: form 1 has no key for them; they stay with
   the lead.
+
+## Amendment 1 (2026-11-21): two defects of the registered comparison, and a joint application; written before the corrected run
+
+Written after the first run of the comparison (the driver at 767f71d9, log `compare.log` in the scratch folder) and
+before any change of the driver. The first run stands as it is: six of six proposals applied, 25 differences by the
+registered counting (3, 4, 3, 7, 5 and 3 for ADR 0748 to 0753). The form, `scripts/roadmap_proposals.py`, its tests and
+the six proposal files are not changed by this amendment. Two rules of the section "The comparison" compared the wrong
+things:
+
+1. **A follow-up was matched by its place.** For ADR 0751 the lead's edit a5c25ae8 adds two items: F-858, an item of the
+   lead's own from his answers in the ADR, and F-859, which has the title of the agent's follow-up letter for letter. The
+   rule compared the follow-up with F-858 (three differences that are not differences of the proposal) and counted F-859
+   as "added by the lead, not proposed". Corrected rule: a follow-up is matched with the item L adds that has its title
+   letter for letter; a follow-up without such an item is matched by place among the items L adds that no title matched.
+2. **Two of the six have one L.** The lead applied ADR 0752 and ADR 0753 in one commit, 62a6fec3. Each replay counted the
+   other's item as "other entry" (F-853 in the replay of 0752; F-851 and the follow-up F-860 in that of 0753): three
+   counted differences that are the other proposal's entries. Corrected rule: an entry that a proposal of another of the
+   six with the same L names, or that is matched to one of its follow-ups, is not counted for this ADR.
+
+One check is added, on the case that 2 shows:
+
+| Id | Check | Limit | Source of the limit | Estimate | Margin | Kind |
+|---|---|---|---|---|---|---|
+| J | the proposals of ADR 0752 and ADR 0753 (two items, two bases, one follow-up) applied as one set to the roadmap of 62a6fec3^ with start 860, in both orders of the arguments | the same bytes in both orders; the entries of F-851, F-853 and F-860 equal to those of the two single applications | acceptance of F-864, its title and clause (2) ("two such proposals for different items ... apply in either order with the same result"), here on two merged proposals | holds | n/a | code verification |
+
+The corrected comparison is run once, with J, by a command `compare` of the changed driver; the addendum gives both
+counts. The decision rule is unchanged; J is added to the checks that "done" needs.
