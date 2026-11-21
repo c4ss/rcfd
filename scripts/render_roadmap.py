@@ -17,7 +17,8 @@ Usage (from the repository root):
                                                 is stale. Before adoption only the schema is checked.
 
 Schema of an item: id, title, phase, deps, status (done, partial, todo), acceptance, note, and for a partial item an optional
-`gap` of at most 500 characters. Ids are unique and every dep is an id.
+`gap` of at most 500 characters. Ids are unique and every dep is an id. An item may have `milestones`, the list of the
+simulation milestones it belongs to (F-865, ADR 0756); scripts/roadmap_milestones.py checks the ids against docs/milestones.json.
 """
 import argparse
 import json
@@ -33,11 +34,12 @@ PHASES = {0: "Workspace and architecture", 1: "Mesh data structures and IO", 2: 
           7: "Scripting API, CLI and settings tree", 8: "AI assistant and desktop app integration",
           9: "Advanced physics and scale (stretch)"}
 MARK = {"done": "x", "partial": "~", "todo": " "}
-KEYS = {"id", "title", "phase", "deps", "status", "acceptance", "note", "gap"}
+KEYS = {"id", "title", "phase", "deps", "status", "acceptance", "note", "gap", "milestones"}
 REQUIRED = {"id", "title", "phase", "deps", "status", "acceptance"}
 GAP_MAX = 500
+MILESTONE_ID = re.compile(r"[a-z][a-z0-9-]*")
 ITEM = re.compile(r"^- \[(x|~| )\] \*\*(F-\d+)\*\* (.*)")
-FIELD = re.compile(r"^  - (depends on|acceptance|gap|note): (.*)")
+FIELD = re.compile(r"^  - (depends on|milestones|acceptance|gap|note): (.*)")
 
 
 def load(root):
@@ -74,6 +76,11 @@ def schema_problems(items):
                 out.append(f"{k}: gap on an item that is not partial")
             if not gap.strip() or len(gap) > GAP_MAX or "\n" in gap:
                 out.append(f"{k}: gap must be one line of 1 to {GAP_MAX} characters")
+        if "milestones" in i:
+            ms = i["milestones"]
+            if not (isinstance(ms, list) and ms and len(set(map(str, ms))) == len(ms)
+                    and all(isinstance(m, str) and MILESTONE_ID.fullmatch(m) for m in ms)):
+                out.append(f"{k}: milestones must be a list of one or more distinct milestone ids")
     return out
 
 
@@ -85,6 +92,8 @@ def item_block(it):
     out = [f"- [{MARK[it['status']]}] **{it['id']}** {one_line(it['title'])}",
            f"  - depends on: {', '.join(it.get('deps') or []) or 'none'}",
            f"  - acceptance: {one_line(it['acceptance'])}"]
+    if it.get("milestones"):
+        out.insert(2, f"  - milestones: {', '.join(it['milestones'])}")
     if it.get("gap"):
         out.append(f"  - gap: {one_line(it['gap'])}")
     if it.get("note"):

@@ -1,0 +1,14 @@
+# expect-fail: python -m unittest scripts/test_roadmap_milestones.py
+diff --git a/scripts/roadmap_milestones.py b/scripts/roadmap_milestones.py
+index 57eb8a92..9d78fe4a 100644
+--- a/scripts/roadmap_milestones.py
++++ b/scripts/roadmap_milestones.py
+@@ -141,7 +141,7 @@ def problems(defs, items, root=None):
+         for h in m["headline"]:
+             if h not in ids:
+                 out.append(f"milestones: the headline item {h} of '{k}' is not an item")
+-            elif h not in inside and by[k]:
++            elif False:
+                 out.append(f"milestones: the headline item {h} of '{k}' is not a member of it")
+     return out
+ 

@@ -1,0 +1,14 @@
+# expect-fail: python -m unittest scripts/test_roadmap_milestones.py
+diff --git a/scripts/roadmap_milestones.py b/scripts/roadmap_milestones.py
+index 57eb8a92..417d22e0 100644
+--- a/scripts/roadmap_milestones.py
++++ b/scripts/roadmap_milestones.py
+@@ -150,7 +150,7 @@ def counts(group):
+     """(done, partly done, not started, per cent with a partly done item as one half): the overview's formula."""
+     d, p, t = (sum(1 for i in group if i["status"] == s) for s in ("done", "partial", "todo"))
+     n = d + p + t
+-    return d, p, t, (round(100 * (d + 0.5 * p) / n) if n else 0)
++    return d, p, t, (round(100 * (d + p) / n) if n else 0)
+ 
+ 
+ def headline_word(item):
