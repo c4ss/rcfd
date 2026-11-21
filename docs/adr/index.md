@@ -694,7 +694,7 @@ One row per record of this folder, grouped by the roadmap category of the item i
 | [0125](0125-wave47d-wgpu-render-core-v0.md) | Wave 47D, the wgpu render core v0 (`rcfd-render`, layer L4 of the Studio plan) | ACCEPTED | 2026-10-26 | 1 | F-264 |
 | [0126](0126-wave47e-claude-code-bridge-library.md) | Wave 47E, the Claude Code bridge library `rcfd-claude` (Studio layer L6) | ACCEPTED | 2026-10-26 | 1 | F-265 |
 | [0127](0127-test-gate-efficiency.md) | A faster release test stage with the same tests (process per test, one pool) | ACCEPTED | 2026-10-26 | 1 |  |
-| [0128](0128-audit-fixes-runner-claude-project-tsstore-render-api.md) | Sixteen audit fixes (runner, Claude bridge, project folder, time-series store, renderer, API) | ACCEPTED | 2026-10-27 | 1 | F-261, F-262, F-265 |
+| [0128](0128-audit-fixes-runner-claude-project-tsstore-render-api.md) | Sixteen audit fixes (runner, Claude bridge, project folder, time-series store, renderer, API) | ACCEPTED | 2026-10-27 | 1 | F-261, F-262, F-265, F-866 |
 | [0129](0129-test-time-limit-jobs5-measurement-limit-audit.md) | Per-test time limit, one measurement at five jobs, and an audit of tests that cannot fail | ACCEPTED | 2026-10-27 | 1 |  |
 | [0130](0130-wave48a-overview-and-run-record-contract.md) | Wave 48 overview, and 48A: one run-record contract for the runner, the Studio and the plugin | ACCEPTED | 2026-10-28 | 1 | F-274, F-287 |
 | [0131](0131-wave48b-studio-application-shell.md) | Wave 48B, the Studio application shell (`rcfd-studio`, layer L5) | ACCEPTED | 2026-10-28 | 1 |  |
@@ -703,7 +703,7 @@ One row per record of this folder, grouped by the roadmap category of the item i
 | [0134](0134-wave48e-claude-code-sidebar.md) | Wave 48E, the Claude Code sidebar in the Studio (`rcfd-claude` in the UI) | ACCEPTED | 2026-10-28 | 3 |  |
 | [0135](0135-wave48f-plugin-and-project-tools.md) | Wave 48F, the Claude Code plugin: project tools in `rcfd-mcp`, skills, slash commands, file watching and edit conflicts | ACCEPTED | 2026-10-28 | 2 | F-755 |
 | [0136](0136-fidelity-tiers-xhigh-to-xlow.md) | Fidelity tiers xhigh to xlow | PROPOSED | 2026-10-28 | 0 | F-286 |
-| [0137](0137-linux-gate-platform-values.md) | The first Linux full gate: per-platform expected values, the L1 control rule per run, reported defects | REGISTERED | 2026-10-28 | 1 |  |
+| [0137](0137-linux-gate-platform-values.md) | The first Linux full gate: per-platform expected values, the L1 control rule per run, reported defects | REGISTERED | 2026-10-28 | 1 | F-866 |
 | [0138](0138-wave48g1-mesh-preview-from-case.md) | Wave 48G1, the mesh preview of a case (first run to first picture, item 1 of 4) | PROPOSED | 2026-10-28 | 1 |  |
 | [0139](0139-wave48g2-case-starter.md) | Wave 48G item 2, case starter: new case files from the shipped examples | PROPOSED | 2026-10-28 | 1 |  |
 | [0140](0140-wave48g3-store-fields-by-default.md) | Wave 48G job 3, first run gives a picture: Studio-started runs store fields by default, helpful empty states | PROPOSED | 2026-10-28 | 1 | F-837 |
