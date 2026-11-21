@@ -220,6 +220,21 @@ class State(Repo):
         q = pr.open_questions(self.items, pr.load_adrs(self.root))
         self.assertEqual([w for w, _ in q], ["F-002", "ADR 0002"])
 
+    def test_a_questions_heading_that_says_none_asks_nothing(self):
+        head = "# ADR 000{}: x\n\nStatus: REGISTERED 2026-11-17.\n\n"
+        self.put("docs/adr/0002-f003-registration-plates.md",
+                 head.format(2) + f"### {pr.Q_HEADING}\n\nNone. Taken on the standing instruction: route (b).\n\n### For the lead\n\nx\n")
+        self.put("docs/adr/0003-f003-registration-shells.md",
+                 head.format(3) + f"## {pr.Q_HEADING}\n\n1. Nonetheless a question.\n\n## For the lead\n\nNone.\n")
+        q = pr.open_questions(self.items, pr.load_adrs(self.root))
+        self.assertEqual([w for w, _ in q], ["ADR 0003"])
+
+    def test_the_heading_answer_of_the_maintainer_answers(self):
+        self.put("docs/adr/0002-f003-registration-plates.md",
+                 f"# ADR 0002: x\n\nStatus: REGISTERED 2026-11-17.\n\n## {pr.Q_HEADING}\n\nQ1.\n\n"
+                 "## Answer of the maintainer (2026-11-20), written into this ADR by the lead\n\nA1.\n")
+        self.assertEqual(pr.open_questions(self.items, pr.load_adrs(self.root)), [])
+
     def test_a_dated_entry_of_the_maintainer_after_the_marker_answers_it(self):
         self.items[1]["note"] = "NEEDS THE USER: a default change. Maintainer (2026-11-18): approved."
         self.items[3]["note"] = "Maintainer (2026-11-10): go ahead. NEEDS USER: a later question."

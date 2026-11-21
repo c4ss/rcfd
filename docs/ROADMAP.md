@@ -941,7 +941,7 @@ exist, and Phase 9 items are stretch. Phase numbers 5 and 6 may run in parallel 
 
 ## Phase 9 - Advanced physics and scale (stretch)
 
-565 items: 254 done, 231 partly done, 80 not started.
+566 items: 254 done, 231 partly done, 81 not started.
 
 - [~] **F-055** Volume-of-fluid free-surface multiphase (interface compression) and surface tension
   - depends on: F-029, F-125
@@ -3433,3 +3433,7 @@ exist, and Phase 9 items are stretch. Phase numbers 5 and 6 may run in parallel 
   - depends on: F-851
   - acceptance: Every limit not stated here is registered in the ADR before the run. scripts/push_main.py, with a unit test for each point that fails before the change: (1) a left-out line records the commit of the checkout at the start and at the end of the left-out run, and says when they differ; (2) the tests the index maps to the merge's ADRs are charged to the budget and never cut, and the dry run prints their recorded minutes; (3) inside a touched crate, the test binaries named after a changed source file are selected first, by a registered rule of naming. The ledger's columns, every existing line and what a run that passes at the first attempt writes are unchanged.
   - note: Lead (2026-11-21): entered from ADR 0752 (open questions 2 to 4 and the lead's answers there; findings 10, 11 and 16 of F-851). If point 1 shows the two commits differing in practice, a worktree of its own for the left-out run is proposed in the report. Not issued yet.
+- [ ] **F-861** The process report checks the rules that rest on convention: one-line note entries, citation locators, the reading limit, test headers
+  - depends on: none
+  - acceptance: Every limit not stated here is registered in the ADR before the run. scripts/process_report.py --check fails, each shown by a unit test that fails before the change, on: (1) a roadmap note entry added after the registered date that is not one line in the form the agent rules give; (2) a citation in an ADR registered after that date that names a source without a place in it; (3) a brief whose reading list exceeds the registered limit or whose stated total is not the sum of its files; (4) a test root file under crates/*/tests or a Studio spec without its record in the leading comment. What exists before the date goes on a dated exceptions list that may only shrink; the 56 Rust and 12 Studio files without a header get one where the record can be found from git history or the ADR index, and the rest are listed with the reason. No test's code changes and no default output changes.
+  - note: Lead (2026-11-21): entered to finish the move to the process framework of 2026-11-18: the process review lists these as rules that still rest on convention. The weekly audit stays an item the lead issues and is not part of this. Not issued yet.

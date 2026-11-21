@@ -101,6 +101,10 @@ further addendum of that ADR. Main may be red on a test that was left out of a p
   rule each registration fixed, and of the briefs against the rules. Findings of scope go on the weekly list.
 - Issue one citation item: five citations drawn by seed, re-read against their sources. The count of citations from memory
   may not rise.
+- A batch of citations beyond the weekly item is issued only for an ADR whose numbers the code uses and that marks a value
+  UNVERIFIED (the maintainer, 2026-11-21). The other citations from memory are not a backlog.
+- A reader, an agent that reads an item's work afresh, is issued for an item that changes a default result or a golden,
+  and not as a rule for every item (the maintainer, 2026-11-21).
 - Issue a distillation item for an area whose list of done items missing from its page has passed the size the maintainer
   chose.
 
@@ -133,6 +137,8 @@ count measures citations looked at, and the rows say what was found.
 - Version 1, 2026-11-18: first written, from the documentation process review and the maintainer's decisions of that day.
 - 2026-11-21 (F-851, ADR 0752): "Merging and pushing" says what `scripts/push_main.py` does after its first real runs; it
   writes no roadmap status. The version number is unchanged: no step of the lead's process changed, only its description.
+- 2026-11-21: "Weekly" carries the maintainer's two answers of that day on citation batches and on readers (handover note of
+  2026-11-19, "Answers of the maintainer").
 
 ## Golden files
 
