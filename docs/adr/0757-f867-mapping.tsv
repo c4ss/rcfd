@@ -1,4 +1,4 @@
-# ADR 0757 (F-867): the members of the milestone fan as the whole fan design goal (first reading).
+# ADR 0757 (F-867): the members of the milestone fan as the whole fan design goal (first reading, with the corrections of the sample check, ADR 0757 addendum 1).
 # One line per membership: <item id> tab <milestone id> tab <reason>. An item that is not listed is not a member.
 # M1 headline, M2 used, M3 data, M4 trust, M5 link (L1 to L9 of docs/milestone-fan.md, B1 to B5 of the breakdown): the
 # membership rule registered in ADR 0757. The M2 and M3 lines of F-005 to F-133 are carried over from ADR 0756.
@@ -38,6 +38,7 @@ F-133	fan	M2 used: the axial_fan_sector generator and its C-grid build the FAN-0
 F-136	fan	M5 link L6: the time-domain FW-H far field the noise link needs (breakdown D2)
 F-147	fan	M5 link L8: the assistant tool layer with approvals, the layer the goal names
 F-148	fan	M5 link L8, L9: the assistant's tools for mesh assessment, case validation and the explanation of a diverging residual
+F-200	fan	M2 used: arm C3 of fan01_diagnosis_w35c.rs runs FAN-01 with the radial_equilibrium_outlet this item delivered (second reading of the sample check)
 F-218	fan	M5 link B1: the breakdown names it for part C7, the reduced-order tier
 F-232	fan	M5 link L2: the breakdown names it for part B5, the mesh verdict with located failures
 F-243	fan	M1 headline: the page names it for the noise link; its gap names the comparison with a measured fan and the proxy calibration as not built (L6)
