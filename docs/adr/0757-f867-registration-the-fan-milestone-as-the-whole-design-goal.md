@@ -375,3 +375,20 @@ two of ADR 0755.
 Not done by this item and noted for the next reader: the 21 memberships of the classes M2 and M3 were carried over from
 ADR 0756 and not read again (the sample check found one missing member of that kind, F-200); the chain table of
 `docs/milestone-fan.md` names F-254 and F-257 and is stale.
+
+## Answers of the maintainer (2026-11-21)
+
+The lead put the five questions above to the maintainer on 2026-11-21, each with the agent's recommendation, which the
+lead shares, and asked whether to take all five. The maintainer answered: "Yes, all five".
+
+1. Option (b): the FAN-01 characteristic curve is roadmap item F-872, the headline of the operating map.
+2. Option (b): the fan noise estimate on the operating curve is F-873, the noise headline; F-243 stays a member and is no
+   longer a headline.
+3. Option (b): one assistant-driven design iteration on a fan is F-874, a headline beside F-702.
+4. Option (a): no record items for done work of the chain that no item carries.
+5. Option (c): structure and vibration stay outside this milestone and get a milestone of their own, with the cyclic
+   rotor that ADR 0756 proposed; its definition and mapping are roadmap item F-875.
+
+The three items are entered with the titles, dependencies and acceptance of the agent's proposal file, as written there,
+each a member of the milestone `fan` (reason: headline item of the design goal, this answer) and not started. The
+headline of the milestone is F-870, F-872, F-873, F-260, F-702 and F-874 from this day.

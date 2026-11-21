@@ -37,9 +37,11 @@
       "reference": "for the fan solve, the measured characteristic of the FAN 01 benchmark, Zenodo doi:10.5281/zenodo.20037409 (v5), file characteristic_n1ug.mat, design point 1.4032 m^3/s, 126.46 Pa, 333.30 W, as recorded in docs/validation-data.md, \"1. FAN-01\" (the primary rig paper, SAE 2016-01-1805, is recorded there as not read); for the noise, no measured fan noise is recorded (docs/fan-project-breakdown.md, part D5: missing, needs data)",
       "headline": [
         "F-870",
-        "F-243",
+        "F-872",
+        "F-873",
         "F-260",
-        "F-702"
+        "F-702",
+        "F-874"
       ],
       "page": "docs/milestone-fan.md"
     },

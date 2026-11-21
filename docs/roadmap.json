@@ -9557,7 +9557,7 @@
     ],
     "status": "done",
     "acceptance": "Every limit not stated here is registered in the ADR before the run. The milestone fan of docs/milestones.json is the design goal of docs/milestone-fan.md (the assistant iterates on fan shape and size towards low noise at high flow over a range of operating points), with a headline item, or the words that no item carries it, for every link of that page's capability chain; every item of the roadmap is read against a registered membership rule, every membership has a reason, and every item that names a fan in its title is a member or is listed with the reason it is not; a sample drawn by seed is read a second time and its disagreements are reported; one command replaces the fan milestone on main and leaves the other milestones byte for byte as they are.",
-    "note": "Maintainer (2026-11-21): \"Whole design goal\", to the lead's question whether the fan milestone is the validation of FAN-01 alone (ADR 0756: 22 members, 89 %, headline not met) or the whole design goal. Lead (2026-11-21): entered and issued, ADR 0757, brief docs/adr/briefs/f867-fan-milestone-design-goal.md. It is tooling and belongs to no milestone. ADR 0757, 2026-11-21, done: the milestone fan redefined as the design goal of docs/milestone-fan.md (\"Assistant-driven fan design\"), headline F-870, F-243, F-260 and F-702, with an item or the words \"no item\" for each of 14 links; 89 memberships with reasons in docs/adr/0757-f867-mapping.tsv (49 done, 30 partly done, 10 not started, 72 %, not met; before: 23 members, 85 %), all 21 fan-titled items placed (12 members, 9 listed), sample of 40 pairs read a second time with 1 disagreement, taken (F-200 added); the command of addendum 1 leaves vortex-shedding and aerofoil-lift byte for byte, shown on a copy of main 059c9423. Lead (2026-11-21): merged at e66e3cc3 and pushed at fc1f032f; the command of the ADR run on main: 89 members, 49 done, 30 partly done, 10 not started, 72 %, headline not met; the other two milestones unchanged. The proposal file was applied by the script without its three follow-ups: entering them is the maintainer's (questions 1 to 3 of ADR 0757), with questions 4 and 5."
+    "note": "Maintainer (2026-11-21): \"Whole design goal\", to the lead's question whether the fan milestone is the validation of FAN-01 alone (ADR 0756: 22 members, 89 %, headline not met) or the whole design goal. Lead (2026-11-21): entered and issued, ADR 0757, brief docs/adr/briefs/f867-fan-milestone-design-goal.md. It is tooling and belongs to no milestone. ADR 0757, 2026-11-21, done: the milestone fan redefined as the design goal of docs/milestone-fan.md (\"Assistant-driven fan design\"), headline F-870, F-243, F-260 and F-702, with an item or the words \"no item\" for each of 14 links; 89 memberships with reasons in docs/adr/0757-f867-mapping.tsv (49 done, 30 partly done, 10 not started, 72 %, not met; before: 23 members, 85 %), all 21 fan-titled items placed (12 members, 9 listed), sample of 40 pairs read a second time with 1 disagreement, taken (F-200 added); the command of addendum 1 leaves vortex-shedding and aerofoil-lift byte for byte, shown on a copy of main 059c9423. Lead (2026-11-21): merged at e66e3cc3 and pushed at fc1f032f; the command of the ADR run on main: 89 members, 49 done, 30 partly done, 10 not started, 72 %, headline not met; the other two milestones unchanged. The proposal file was applied by the script without its three follow-ups: entering them is the maintainer's (questions 1 to 3 of ADR 0757), with questions 4 and 5. Maintainer (2026-11-21): \"Yes, all five\": the three follow-ups entered as F-872, F-873 and F-874, headline items of the milestone; no record items; a structural milestone of its own, F-875."
   },
   {
     "id": "F-868",
@@ -9611,5 +9611,63 @@
     "status": "todo",
     "acceptance": "Every limit not stated here is registered in the ADR before the run. Each of the six is defined in docs/milestones.json with its cases, its published reference as a page of the repository records it, and its headline items; every item of the roadmap is read against the membership rule of ADR 0756 for each, every membership has a reason, a sample drawn by seed is read a second time and its disagreements are reported, and one command adds the six on main and leaves the existing milestones byte for byte as they are. A milestone for which the roadmap holds no headline item is reported with the item that would have to be entered, and is not added.",
     "note": "Lead (2026-11-21): entered on the maintainer's answer of that day to ADR 0756 question 4. The other six proposed there (conjugate heat transfer, the immersed DFG 2D-2 cylinder, the overset cylinder, the sliding rotor-stator, the cyclic rotor, the dam break) wait for a headline item each. Not issued: it follows F-867 on the same files, and the stop condition of a red gate applies on that day."
+  },
+  {
+    "id": "F-872",
+    "title": "FAN-01 characteristic curve: pressure rise and efficiency over the measured flow range by an operating map",
+    "phase": 9,
+    "deps": [
+      "F-870",
+      "F-095"
+    ],
+    "status": "todo",
+    "acceptance": "Every limit not stated here is registered in the ADR before the run. An operating map (rcfd map or design::opmap) of the FAN-01 rotor over at least five flow rates of the measured characteristic recorded in docs/validation-data.md (1. FAN-01), each point restarted from its neighbour and converged by the registered rule, gives the total-to-static pressure rise and the efficiency at each point within a band registered before the run; a point that stalls or diverges is recorded with its located reason and is not a pass. Milestone fan, headline for the link operating map.",
+    "note": "Lead (2026-11-21): entered on the maintainer's answer of that day (\"Yes, all five\") to question 1 of ADR 0757, with the title, dependencies and acceptance of the agent's proposal file docs/roadmap/proposals/0757-F-867.json as written; a headline item of the milestone fan. Not issued yet.",
+    "milestones": [
+      "fan"
+    ]
+  },
+  {
+    "id": "F-873",
+    "title": "Fan noise estimate on the operating curve: blade-passing tones and a stated broadband proxy",
+    "phase": 9,
+    "deps": [
+      "F-243",
+      "F-136",
+      "F-872"
+    ],
+    "status": "todo",
+    "acceptance": "Every limit not stated here is registered in the ADR before the run. For at least three points of the FAN-01 operating map the tonal level at the first three blade-passing harmonics and one stated steady-RANS broadband proxy are reported from the flow solution, each with its distance from a measured fan noise reference that a page of the repository records, or, where no such reference is recorded, with the words that it is not validated and the item stays partial. Milestone fan, headline for the link noise.",
+    "note": "Lead (2026-11-21): entered on the maintainer's answer of that day (\"Yes, all five\") to question 2 of ADR 0757, with the title, dependencies and acceptance of the agent's proposal file docs/roadmap/proposals/0757-F-867.json as written; a headline item of the milestone fan. Not issued yet.",
+    "milestones": [
+      "fan"
+    ]
+  },
+  {
+    "id": "F-874",
+    "title": "One assistant-driven design iteration on a fan through the MCP tools, with its measured limitations",
+    "phase": 9,
+    "deps": [
+      "F-702",
+      "F-260"
+    ],
+    "status": "todo",
+    "acceptance": "Every limit not stated here is registered in the ADR before the run. A recorded session in which an assistant, through the MCP tools alone, creates at least three variants of a parametric fan, runs each over at least three operating points, fetches flow, pressure rise and the noise estimate, compares them and proposes the next variant, with every evaluation in the design ledger and the run reproducible from the ledger within a registered tolerance; the tier of each evaluation (reduced-order or CFD) and what was not validated are stated. Milestone fan, headline for the link assistant tools.",
+    "note": "Lead (2026-11-21): entered on the maintainer's answer of that day (\"Yes, all five\") to question 3 of ADR 0757, with the title, dependencies and acceptance of the agent's proposal file docs/roadmap/proposals/0757-F-867.json as written; a headline item of the milestone fan. Not issued yet.",
+    "milestones": [
+      "fan"
+    ]
+  },
+  {
+    "id": "F-875",
+    "title": "A simulation milestone for the structure and vibration of a fan rotor, with the cyclic rotor",
+    "phase": 9,
+    "deps": [
+      "F-865",
+      "F-867"
+    ],
+    "status": "todo",
+    "acceptance": "Every limit not stated here is registered in the ADR before the run. A milestone for the structural fan demonstrations is defined in docs/milestones.json with its cases, its published reference as a page of the repository records it, and its headline items (F-406 or F-436, or the reason for another); the five fan-titled structural items F-387, F-406, F-436, F-593 and F-604 and the cyclic rotor are placed; every item of the roadmap is read against the membership rule of ADR 0756, every membership has a reason, a sample drawn by seed is read a second time and its disagreements are reported, and one command adds the milestone on main and leaves the others byte for byte as they are.",
+    "note": "Lead (2026-11-21): entered on the maintainer's answer of that day (\"Yes, all five\") to question 5 of ADR 0757, option (c): structure and vibration are outside the milestone fan and get a milestone of their own. It is tooling and belongs to no milestone. Not issued: it follows F-871 on the same files."
   }
 ]
