@@ -1,0 +1,64 @@
+# ADR 0756 (F-865): the membership of every roadmap item in the three simulation milestones, first reading.
+# One line per membership: <item id> tab <milestone id> tab <reason>. An item that is not listed for a milestone is not
+# a member of it. M1 headline, M2 used, M3 data, M4 trust: the reading of the membership rule registered in ADR 0756.
+# Applied by: python scripts/roadmap_milestones.py --apply docs/adr/0756-f865-mapping.tsv --definitions docs/adr/0756-f865-milestones.json --install
+F-005	vortex-shedding	M2 used: the refined O-grid runs of w48t_cylinder_spokes.rs go through the case's settings tree
+F-005	fan	M2 used: the FAN-01 case is a settings tree parsed by Case and run by Simulation
+F-005	aerofoil-lift	M2 used: every run of the sweep is a settings tree
+F-006	aerofoil-lift	M3 data: cases/naca0012 holds the case definition and the thickness formula
+F-010	vortex-shedding	M2 used: the mesh structure the O-grid is built in and the solver reads
+F-010	fan	M2 used: the mesh structure of the sector mesh
+F-010	aerofoil-lift	M2 used: the mesh structure of the O-grid
+F-011	fan	M2 used: the quality measures by which the passage mesh is judged and its registered gates are missed
+F-012	vortex-shedding	M2 used: the generator cylinder_ogrid builds the mesh of every run of record
+F-012	aerofoil-lift	M2 used: the generator cylinder_ogrid, whose points are moved onto the aerofoil
+F-014	aerofoil-lift	M2 used: the O-grid is written and read as an OpenFOAM polyMesh
+F-020	vortex-shedding	M2 used: the fields and the fixed-value and far-field conditions of the run
+F-020	fan	M2 used: the fields and the wall, inlet, outlet and periodic conditions of the sector
+F-020	aerofoil-lift	M2 used: the fields and the wall and far-field conditions
+F-021	vortex-shedding	M2 used: the gradients that linear upwind and the pressure step take
+F-021	fan	M2 used: the gradients and the Barth-Jespersen limiter that keeps linear upwind stable on the sector mesh
+F-021	aerofoil-lift	M2 used: the gradients of linear upwind and of the turbulence sources
+F-022	vortex-shedding	M2 used: linear-upwind convection, the scheme of the run
+F-022	fan	M2 used: upwind and the TVD schemes of the registered FAN-01 runs
+F-022	aerofoil-lift	M2 used: convection linear_upwind of the case
+F-023	vortex-shedding	M2 used: the viscous term and the pressure Laplacian on the stretched O-grid
+F-023	fan	M2 used: diffusion with non-orthogonal correction on a mesh of up to 85 degrees non-orthogonality
+F-023	aerofoil-lift	M2 used: diffusion on the stretched wall cells
+F-024	vortex-shedding	M2 used: implicit Euler and BDF2, the two time schemes of the runs of record
+F-025	vortex-shedding	M2 used: the matrices of the momentum and pressure equations
+F-025	fan	M2 used: the matrices of the steady solve
+F-025	aerofoil-lift	M2 used: the matrices of the steady solve
+F-026	vortex-shedding	M2 used: the linear solvers of the momentum and pressure equations
+F-026	fan	M2 used: the linear solvers of the steady solve
+F-026	aerofoil-lift	M2 used: the linear solvers of the steady solve
+F-027	vortex-shedding	M2 used: cylinder.rs sets amg_pressure, the pressure solve of the run
+F-028	vortex-shedding	M2 used: the collocated Rhie-Chow pressure-velocity discretisation the PISO step is built on
+F-028	fan	M2 used: algorithm simplec, the steady solve of the case
+F-028	aerofoil-lift	M2 used: algorithm simplec of the case
+F-029	vortex-shedding	M1 headline: its acceptance is the cylinder Strouhal number within 5 percent at Re 100
+F-030	fan	M2 used: the under-relaxation, the convergence test and the restart from the stalled state
+F-030	aerofoil-lift	M2 used: the iteration limits and residual targets the sweep sets, and the under-relaxation
+F-031	fan	M2 used: the rotating_frame source of the case
+F-040	fan	M2 used: wall distance and wall functions for k-omega SST with the first cell at y+ 30
+F-040	aerofoil-lift	M2 used: the wall distance both turbulence models need
+F-041	aerofoil-lift	M2 used: Spalart-Allmaras is the primary arm of the sweep
+F-043	fan	M2 used: turbulence model k_omega_sst of the case
+F-043	aerofoil-lift	M1 headline: its acceptance holds the NACA 0012 validation; k-omega SST is the second arm of the sweep
+F-071	vortex-shedding	M2 used: wall_force_and_moment gives the drag coefficient that is compared
+F-071	fan	M2 used: the moment and mass-flow reports give the shaft torque and the pressure rise that are compared
+F-071	aerofoil-lift	M2 used: the force-coefficient reports give the lift and drag that are compared
+F-080	vortex-shedding	M2 used: the refined O-grid runs of w48t_cylinder_spokes.rs are a case file
+F-080	fan	M2 used: the FAN-01 case is a case file text
+F-080	aerofoil-lift	M2 used: every run of the sweep is a case file
+F-081	aerofoil-lift	M2 used: the sweep runs rcfd run, rcfd convert and rcfd check-mesh
+F-104	fan	M2 used: the casing's wall velocity in the rotating frame is given as an expression
+F-107	fan	M2 used: the rotationally periodic pair of the one-blade sector
+F-125	vortex-shedding	M3 data: the manifest entry cylinder-re100-literature holds the published St and C_D the test reads
+F-125	fan	M3 data: the dataset w34d-fan01-fau-eaa-axial-fan holds the measured characteristic and the blade sections
+F-125	aerofoil-lift	M3 data: the pack holds the Ladson force data the lift is compared with
+F-126	fan	M1 headline: its acceptance is a public low-speed rotor case against published pressure rise and efficiency; fan01_validation.rs is its attempt
+F-133	fan	M2 used: the axial_fan_sector generator and its C-grid build the FAN-01 passage mesh
+F-210	vortex-shedding	M2 used: the fractional step is the time advance the refined O-grid runs clean with (ADR 0154, W3)
+F-295	fan	M4 trust: one diffusivity per periodic seam pair, made because FAN-01's rotational seam was not conservative for k, omega and momentum
+F-301	vortex-shedding	M4 trust: its benchmark set holds the known misses K1 and K2 of ADR 0154, the default PISO diverging on the refined cylinder O-grid
