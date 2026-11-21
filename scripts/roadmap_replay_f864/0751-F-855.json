@@ -1,0 +1,18 @@
+{
+  "form": 1,
+  "adr": "0751",
+  "item": "F-855",
+  "base": "55bae9e1adbb2c0154fe7c5e035dda36c565431a",
+  "status": "partial",
+  "note": "ADR 0751, 2026-11-21, partial: the gate failure of F2 (4 of 10000 probe calls LockBusy, racer without error) was not reproduced in 10 runs each without load, with 16 busy processes and with 4 disk writers; a reader of the lock files without delete sharing reproduced the print of the gate exactly in 1 of 10 runs, by a journal lock left behind when its one removal fails (the next two appends wait 2 s each inside the edit lock); the removal of the journal lock and of an edit claim is now retried as that of the edit lock is since ADR 0676, shown by the controls CJ and CC (fail before, pass after) and three caught mutations; F2 is unchanged and passed 10 of 10 under each load afterwards; M2 and M6 of ADR 0669 survived F2 on this machine, also on the base commit.",
+  "gap": "Not shown that the gate met the journal-lock fault (its project folder was not kept); a holder stalled 2 s by the runner is not excluded, and F2 is unchanged, so it can fail again in the gate. The mutations M2 and M6 of ADR 0669 are no longer caught by F2 on the agent machine (also on the base commit): the second resolve under the lock has no forced control. The controls CJ and CC (edit_lock_f855, feature test-hooks) are not run by the gate.",
+  "follow_ups": [
+    {
+      "title": "A forced control of the second resolve under the edit lock (ADR 0669 D1)",
+      "deps": [
+        "F-855"
+      ],
+      "acceptance": "Every limit not stated here is registered in the ADR before the run. A test-only hook makes the first resolve of replace_if_hash fail as a concurrent rename does; with it a call without the second resolve (ADR 0669 M2) and one with the lexical key joined by the platform separator (M6) each fail a registered test in every run, and the unmutated library passes it; the default bits unchanged."
+    }
+  ]
+}
