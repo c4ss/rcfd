@@ -284,3 +284,22 @@ The brief's, with its terms fixed:
   only.
 * K0 is not an idle machine: other agents build on it.
 * ADR 0669's L1 (200 runs of the `edit_lock_w48f` test) is not repeated.
+
+## Amendment 1 (2026-11-21, after B0 to B3, the controls, A0, A1 and three runs of A2; before the corrected run of A2)
+
+The after-series was started once as one background command (A0, A1, A2, A3, then AD). It was killed from outside during
+A2: `series_after.log` ends at "A2 K2 run 3: ok 129.2 s", the last write in the scratch folder is of 13:49, and at 15:13
+no process of the series, of its loads or of a test was alive (checked with the process list). No test failed or timed
+out; the command's exit code was 4. What ran: A0 10 of 10 passed, A1 10 of 10 passed, A2 runs 1 to 3 passed (123.9,
+141.5 and 129.2 s; journals without a line lacking `seq`). A3 and AD were not started.
+
+A series cut off is not a series. The three results of the cut-off A2 are kept (`A2-cut` and `series_after_cut.log` in
+the scratch folder) and reported as a deviation; they are not counted. Corrected run, registered now: **A2 again from
+run 1**, 10 runs under K2, the same binary (`bin/f2_after.exe`, built at 0b75f63b), command and limit; then A3 and AD as
+registered. The four files left by the dead disk load (`load-disk`, 256 MiB) were removed first, and no load process of
+the dead series was running. A0 and A1 stand as run.
+
+The project folder of the killed fourth run (`proj/rcfd-project-f751-f2-74452`) is left in the scratch folder: its
+removal was refused by the tool's safety check and is not made another way. The run script no longer empties `proj` at
+the start of a series (it still removes the folder of each run it made). Under K3 the reader of the lock files also
+opens the files of that leftover folder, if any are there; they belong to no running test.
