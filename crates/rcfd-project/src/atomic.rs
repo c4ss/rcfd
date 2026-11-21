@@ -300,13 +300,15 @@ fn remove_lock(lock: &Path) -> io::Result<()> {
     fs::remove_file(lock)
 }
 
-/// A claim this writer made; removed when dropped (the lock is held, or the wait ended).
+/// A claim this writer made; removed when dropped (the lock is held, or the wait ended). The removal is retried on a
+/// transient error ([`DEFAULT_RETRY`], ADR 0751 change B): a claim left behind refuses every writer until it is
+/// [`EDIT_CLAIM_STALE`] old.
 struct Claim(Option<PathBuf>);
 
 impl Drop for Claim {
     fn drop(&mut self) {
         if let Some(p) = self.0.take() {
-            let _ = fs::remove_file(p);
+            let _ = with_retry("remove edit claim", &p, &DEFAULT_RETRY, || fs::remove_file(&p));
         }
     }
 }
