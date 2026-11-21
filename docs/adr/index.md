@@ -528,7 +528,7 @@ One row per record of this folder, grouped by the roadmap category of the item i
 | [0739](0739-f848-proposal-run-sites-a-remote-simulation-service-for-the-studio-cli-and-mcp.md) | F-848 proposal: run sites, a remote simulation service for the Studio, the CLI and the MCP server | ACCEPTED | 2026-11-17 | 0 | F-848 | todo |
 | [0742](0742-f262-diagnosis-the-terminal-status-of-a-run-is-written-before-its-last-state-event.md) | F-262 diagnosis: the terminal status of a run is written before its last state event and before its request files are removed (S7 of ADR 0123 fails intermittently on the held run) | REGISTERED | 2026-11-19 | 1 | F-262 | partial |
 
-## Quality, docs and validation (33)
+## Quality, docs and validation (34)
 
 | ADR | Title | Status word | Date | Addenda | Item | Item status |
 |---|---|---|---|---|---|---|
@@ -565,6 +565,7 @@ One row per record of this folder, grouped by the roadmap category of the item i
 | [0754](0754-f863-registration-process-measures-and-stop-conditions-before-more-workers.md) | F-863 registration: process measures and stop conditions before more workers | REGISTERED | 2026-11-21 | 1 | F-863 | done |
 | [0755](0755-f864-registration-a-roadmap-proposal-as-a-file-validated-applied-and-replayed.md) | F-864 registration: a roadmap proposal as a file, validated, applied and replayed on six merged ADRs | REGISTERED | 2026-11-21 | 1 | F-864 | partial |
 | [0756](0756-f865-registration-per-cent-complete-for-the-roadmap-and-for-each-simulation-milestone.md) | F-865 registration: per cent complete for the roadmap and for each simulation milestone | REGISTERED | 2026-11-21 | 1 | F-865 | done |
+| [0757](0757-f867-registration-the-fan-milestone-as-the-whole-design-goal.md) | F-867 registration: the fan milestone as the whole fan design goal | REGISTERED | 2026-11-21 | 1 | F-867 | todo |
 
 ## Records with no item in the file name (259)
 

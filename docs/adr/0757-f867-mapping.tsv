@@ -1,0 +1,94 @@
+# ADR 0757 (F-867): the members of the milestone fan as the whole fan design goal (first reading, with the corrections of the sample check, ADR 0757 addendum 1).
+# One line per membership: <item id> tab <milestone id> tab <reason>. An item that is not listed is not a member.
+# M1 headline, M2 used, M3 data, M4 trust, M5 link (L1 to L9 of docs/milestone-fan.md, B1 to B5 of the breakdown): the
+# membership rule registered in ADR 0757. The M2 and M3 lines of F-005 to F-133 are carried over from ADR 0756.
+# Applied by: python scripts/roadmap_milestones.py --apply docs/adr/0757-f867-mapping.tsv --definitions docs/adr/0757-f867-milestones.json
+F-005	fan	M2 used: the FAN-01 case is a settings tree parsed by Case and run by Simulation
+F-010	fan	M2 used: the mesh structure of the sector mesh
+F-011	fan	M2 used: the quality measures by which the passage mesh is judged and its registered gates are missed
+F-020	fan	M2 used: the fields and the wall, inlet, outlet and periodic conditions of the sector
+F-021	fan	M2 used: the gradients and the Barth-Jespersen limiter that keeps linear upwind stable on the sector mesh
+F-022	fan	M2 used: upwind and the TVD schemes of the registered FAN-01 runs
+F-023	fan	M2 used: diffusion with non-orthogonal correction on a mesh of up to 85 degrees non-orthogonality
+F-025	fan	M2 used: the matrices of the steady solve
+F-026	fan	M2 used: the linear solvers of the steady solve
+F-028	fan	M2 used: algorithm simplec, the steady solve of the case
+F-030	fan	M2 used: the under-relaxation, the convergence test and the restart from the stalled state
+F-031	fan	M2 used: the rotating_frame source of the case
+F-040	fan	M2 used: wall distance and wall functions for k-omega SST with the first cell at y+ 30
+F-043	fan	M2 used: turbulence model k_omega_sst of the case
+F-071	fan	M2 used: the moment and mass-flow reports give the shaft torque and the pressure rise that are compared
+F-080	fan	M2 used: the FAN-01 case is a case file text
+F-081	fan	M2 used: rcfd map and the study commands are subcommands of the CLI (docs/design-loop.md, Operating maps)
+F-085	fan	M2 used: the design.* methods of the solver service are what the design MCP tools call (note of F-095)
+F-090	fan	M5 link L8: the MCP server and its tools to create a case, set settings, mesh, run and read status
+F-091	fan	M5 link L8: the permission model that grants and bounds the assistant's tool calls
+F-094	fan	M5 link L8: assistant-guided workflows for set-up, convergence diagnosis, sweeps and reports
+F-095	fan	M5 link L5, L7, L8, L9: its note records rcfd map and design::opmap, the samplers and optimisers, the resumable store, ten design_* MCP tools and the PIMPLE divergence guard (ADR 0067)
+F-104	fan	M2 used: the casing's wall velocity in the rotating frame is given as an expression
+F-106	fan	M2 used: the arms S8 and S9 of fan01_stall_w43c.rs run the stalled FAN-01 state with the pseudo-transient step
+F-107	fan	M2 used: the rotationally periodic pair of the one-blade sector
+F-113	fan	M5 link L5, B1: the breakdown names it for parts C5 and C7, the fan curve against a system curve
+F-119	fan	M5 link L1: the breakdown names it for part A4, geometry export so that any variant is a file (STL)
+F-123	fan	M5 link L5: the breakdown names it for part C4, the performance metrics (pressure rise, efficiency) from any solution
+F-125	fan	M3 data: the dataset w34d-fan01-fau-eaa-axial-fan holds the measured characteristic and the blade sections
+F-126	fan	M5 link L3: its gap holds MRF on the bladed FAN-01 passage, and fan01_validation.rs, the present attempt of F-870, runs under it; the page names it for the validation
+F-131	fan	M5 link L2: the breakdown names it for part B5, the automatic mesh sizing and quality verdict
+F-133	fan	M2 used: the axial_fan_sector generator and its C-grid build the FAN-01 passage mesh
+F-136	fan	M5 link L6: the time-domain FW-H far field the noise link needs (breakdown D2)
+F-147	fan	M5 link L8: the assistant tool layer with approvals, the layer the goal names
+F-148	fan	M5 link L8, L9: the assistant's tools for mesh assessment, case validation and the explanation of a diverging residual
+F-200	fan	M2 used: arm C3 of fan01_diagnosis_w35c.rs runs FAN-01 with the radial_equilibrium_outlet this item delivered (second reading of the sample check)
+F-218	fan	M5 link B1: the breakdown names it for part C7, the reduced-order tier
+F-232	fan	M5 link L2: the breakdown names it for part B5, the mesh verdict with located failures
+F-243	fan	M1 headline: the page names it for the noise link; its gap names the comparison with a measured fan and the proxy calibration as not built (L6)
+F-249	fan	M5 link L7: the multi-objective optimiser, the Nelder-Mead target and the warm-started sweep point
+F-260	fan	M1 headline: its acceptance holds a multi-objective study on the FAN-01 passage with the Pareto members re-run within 1 per cent (L7)
+F-267	fan	M5 link L8: Claude Code tools to edit project files, start and stop runs, read metrics and compare runs
+F-268	fan	M5 link B4: the design ledger and the tolerance study driver, with bands on the reduced-order fan (breakdown H4, F1)
+F-271	fan	M5 link L8: the MCP server creates a case in project mode
+F-272	fan	M5 link L8: the MCP server checks and sets up a case's mesh in project mode
+F-274	fan	M5 link L8, L7: design study evaluations as runner runs in project mode
+F-287	fan	M5 link L5, L8: the run settings by which a chained design study and an operating map are evaluated on the runner
+F-288	fan	M5 link L8, L7: a restarted MCP server adopts the matching runs when it resumes a design study
+F-297	fan	M5 link L7: the per-variable crossover with which NSGA-II meets its registered multi-objective check
+F-310	fan	M5 link L7, L8: the exchange crossover as the default of new NSGA-II studies and the description of the design_create_study tool
+F-315	fan	M5 link L7: a CMA-ES study over blade parameters of the 120 mm fan against the baseline pressure rise
+F-329	fan	M5 link L5: the extended warm start of rcfd map for energy and two-equation turbulence cases
+F-339	fan	M5 link B4, L8: MCP tools for the tolerance and Sobol studies of the reduced-order fan evaluator
+F-697	fan	M5 link B2: the fan objective layer, flow at the system operating point over a set of impedances, tonal noise and power (breakdown H1)
+F-698	fan	M5 link B3, L7: the Gaussian-process surrogate over the design ledger and its proposal of the next variant (breakdown H3)
+F-699	fan	M5 link B3: the fidelity driver that screens with the reduced-order fan model and confirms with a higher tier (breakdown H7)
+F-700	fan	M5 link B4: the ledger records for objectives, surrogates and multi-fidelity data (breakdown H4)
+F-701	fan	M5 link B5: the hypothesis record of the long-horizon design loop in the ledger (breakdown H6)
+F-702	fan	M1 headline: its acceptance is that the objective, surrogate, fidelity driver, hypothesis record and ledger are reachable through MCP tools (L8, B5)
+F-705	fan	M5 link B4, L7: the study store reopens and resumes after a torn first write
+F-706	fan	M5 link B4: the private ledger refuses a path inside a repository
+F-713	fan	M5 link L1, B1: the schema default fan, the parametric geometry the reduced-order model is run on
+F-714	fan	M5 link L7, L8: the Gaussian-process study method through the study store and the design MCP tools
+F-715	fan	M5 link B3: the robustness of the surrogate's expected improvement on multimodal functions
+F-716	fan	M5 link B3, L7: a stall pre-check for the initial design of the fan study
+F-717	fan	M5 link B3: the uncertainty guard of the fidelity driver
+F-718	fan	M5 link B3: the Gaussian-process discrepancy rung R3 of the fidelity driver
+F-722	fan	M5 link L1, B1: a named reference fan in the schema that runs unstalled in the reduced-order model and is to mesh with the C-grid
+F-726	fan	M5 link L2: the camber_seam_h C-grid on strongly staggered blades, the passage mesh of the reference fan (follow-up of F-722's missed clause)
+F-727	fan	M5 link B5: the seeded re-run sample and the evidence-parameter guard of the hypothesis record
+F-728	fan	M5 link B5: coupled held metrics and the held-tolerance floor of the hypotheses
+F-733	fan	M5 link B3: the basin restart of the surrogate on a second multimodal function and on the fan set-up
+F-734	fan	M5 link B3: the leave-one-out standard deviation of the fidelity driver's rung R3
+F-735	fan	M5 link B3: the zero-mean mode of the surrogate that the fidelity driver's rung R3 uses
+F-741	fan	M5 link B3: the stall pre-check with the metrics of the named point, a fast fan check
+F-745	fan	M5 link B5: the verifier-drawn re-run sample for hypotheses
+F-749	fan	M5 link B5: the held-tolerance floor of the hypotheses over a sample of the design
+F-758	fan	M5 link B3: the repetition trigger of the surrogate's basin restart
+F-766	fan	M5 link B3: a fast check of the plain-pick condition of the repetition trigger (follow-up of F-758)
+F-770	fan	M5 link B3: a fast check of the window condition of the repetition trigger (follow-up of F-758)
+F-776	fan	M5 link B5: the lessons query reads the verifier-drawn checks
+F-777	fan	M5 link L2: construction S of the C-grid without the first-cell stretch on strongly staggered blades
+F-778	fan	M5 link L2: the case value that lets a fan case ask for the C-grid construction S
+F-781	fan	M5 link B5: drawn checks of the hypothesis record must be newer than their evidence
+F-782	fan	M5 link L2: the wake stacks of the C-grid construction S' at the thin end-wall layers (skewness of the passage mesh)
+F-784	fan	M5 link L2: the ramp length of the wake-stack remap of the C-grid construction S''
+F-791	fan	M5 link L2: the non-orthogonality of the blade-line faces of the C-grid construction S'''
+F-814	fan	M5 link L8: the Studio registers the project server with Claude Code and follows what Claude Code changes (the one Studio item whose subject is the assistant's driving)
+F-870	fan	M1 headline: its acceptance is the FAN-01 design point, pressure rise and shaft power, within a band registered before the run (L4)

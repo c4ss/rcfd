@@ -1,0 +1,38 @@
+{
+  "form": 1,
+  "adr": "0757",
+  "item": "F-867",
+  "base": "059c942319df2658b159b0cf2cef68582fd15571",
+  "status": "done",
+  "note": "ADR 0757, 2026-11-21, done: the milestone fan redefined as the design goal of docs/milestone-fan.md (\"Assistant-driven fan design\"), headline F-870, F-243, F-260 and F-702, with an item or the words \"no item\" for each of 14 links; 89 memberships with reasons in docs/adr/0757-f867-mapping.tsv (49 done, 30 partly done, 10 not started, 72 %, not met; before: 23 members, 85 %), all 21 fan-titled items placed (12 members, 9 listed), sample of 40 pairs read a second time with 1 disagreement, taken (F-200 added); the command of addendum 1 leaves vortex-shedding and aerofoil-lift byte for byte, shown on a copy of main 059c9423.",
+  "follow_ups": [
+    {
+      "key": "fan-curve",
+      "title": "FAN-01 characteristic curve: pressure rise and efficiency over the measured flow range by an operating map",
+      "deps": [
+        "F-870",
+        "F-095"
+      ],
+      "acceptance": "Every limit not stated here is registered in the ADR before the run. An operating map (rcfd map or design::opmap) of the FAN-01 rotor over at least five flow rates of the measured characteristic recorded in docs/validation-data.md (1. FAN-01), each point restarted from its neighbour and converged by the registered rule, gives the total-to-static pressure rise and the efficiency at each point within a band registered before the run; a point that stalls or diverges is recorded with its located reason and is not a pass. Milestone fan, headline for the link operating map."
+    },
+    {
+      "key": "fan-noise",
+      "title": "Fan noise estimate on the operating curve: blade-passing tones and a stated broadband proxy",
+      "deps": [
+        "F-243",
+        "F-136",
+        "new:fan-curve"
+      ],
+      "acceptance": "Every limit not stated here is registered in the ADR before the run. For at least three points of the FAN-01 operating map the tonal level at the first three blade-passing harmonics and one stated steady-RANS broadband proxy are reported from the flow solution, each with its distance from a measured fan noise reference that a page of the repository records, or, where no such reference is recorded, with the words that it is not validated and the item stays partial. Milestone fan, headline for the link noise."
+    },
+    {
+      "key": "fan-loop",
+      "title": "One assistant-driven design iteration on a fan through the MCP tools, with its measured limitations",
+      "deps": [
+        "F-702",
+        "F-260"
+      ],
+      "acceptance": "Every limit not stated here is registered in the ADR before the run. A recorded session in which an assistant, through the MCP tools alone, creates at least three variants of a parametric fan, runs each over at least three operating points, fetches flow, pressure rise and the noise estimate, compares them and proposes the next variant, with every evaluation in the design ledger and the run reproducible from the ledger within a registered tolerance; the tier of each evaluation (reduced-order or CFD) and what was not validated are stated. Milestone fan, headline for the link assistant tools."
+    }
+  ]
+}
