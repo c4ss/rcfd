@@ -1,0 +1,14 @@
+# expect-fail: cargo test -p rcfd-project --release --test listing_budget
+diff --git a/crates/rcfd-project/tests/listing_budget.rs b/crates/rcfd-project/tests/listing_budget.rs
+index 98a09e0f..c0bf69f4 100644
+--- a/crates/rcfd-project/tests/listing_budget.rs
++++ b/crates/rcfd-project/tests/listing_budget.rs
+@@ -36,7 +36,7 @@ const REGISTERED_BUDGET: Duration = Duration::from_millis(500);
+ /// budget, the budget in force must reject them; otherwise nothing is asserted. With `BUDGET` as registered no pair of
+ /// durations fails it (C3); the worst of the three listings does not enter.
+ fn control(m: &Measured) -> Result<bool, String> {
+-    if m.ten > REGISTERED_BUDGET {
++    if m.worst * 10 > REGISTERED_BUDGET {
+         if m.ten <= BUDGET {
+             Err("negative control: the budget does not catch a 10x slower listing".to_string())
+         } else {

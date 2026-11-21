@@ -26,15 +26,21 @@ struct Measured {
     ten: Duration,
 }
 
+/// The budget of ADR 0122 L1 as registered, 500 ms, written a second time: the control decides by this value and
+/// asserts by `BUDGET`, so a `BUDGET` that is no longer the registered one fails the control.
+const REGISTERED_BUDGET: Duration = Duration::from_millis(500);
+
 /// The negative control of L1 as a function of the measured durations: `Ok(true)` asserted and held, `Ok(false)` not
-/// asserted, `Err` failed. The rule here is that of ADR 0128 finding 12 as ADR 0137 applies it, unchanged: if
-/// 10 w > budget, the ten listings must exceed the budget; otherwise nothing is asserted.
+/// asserted, `Err` failed. The rule is that of ADR 0759, which amends ADR 0128 finding 12 and ADR 0137: the decision
+/// and the assertion are both on the time of the ten listings. If the ten listings took longer than the registered
+/// budget, the budget in force must reject them; otherwise nothing is asserted. With `BUDGET` as registered no pair of
+/// durations fails it (C3); the worst of the three listings does not enter.
 fn control(m: &Measured) -> Result<bool, String> {
-    if m.worst * 10 > BUDGET {
-        if m.ten > BUDGET {
-            Ok(true)
-        } else {
+    if m.ten > REGISTERED_BUDGET {
+        if m.ten <= BUDGET {
             Err("negative control: the budget does not catch a 10x slower listing".to_string())
+        } else {
+            Ok(true)
         }
     } else {
         Ok(false)
@@ -96,11 +102,10 @@ fn l1_listing_hundreds_of_runs_within_budget() {
     );
     assert_eq!(p.runs_in_state(RunState::Finished).unwrap().len(), RUNS.div_ceil(3));
 
-    // Negative control (ADR 0128 finding 12; replaces 500 sleeps of 2 ms, which exceeded the budget whatever the
-    // listing cost): the same listing done 10 times must exceed the budget, i.e. the budget catches a listing 10x
-    // slower than the one measured. Finding 12's registered rule decides per run (ADR 0137): if 10 w <= budget the
-    // budget cannot catch a 10x slowdown on this machine, the control is not asserted and the budget assertion below
-    // is the remaining guard.
+    // Negative control (ADR 0128 finding 12, amended by ADR 0759): the same listing done 10 times is a listing 10x
+    // slower than the one measured, really run and timed. `control` decides and asserts on that one duration: above
+    // the registered 500 ms the budget must reject it; at or below, the budget cannot catch a 10x slowdown on this
+    // machine, the control is not asserted and the budget assertion below is the remaining guard.
     let t = Instant::now();
     for _ in 0..10 {
         list(&p);
@@ -110,16 +115,16 @@ fn l1_listing_hundreds_of_runs_within_budget() {
         ten: t.elapsed(),
     };
     eprintln!(
-        "L1: worst of 3 listings {worst:?} (budget {BUDGET:?}); the listing 10 times: {:?}",
-        m.ten
+        "L1: worst of 3 listings {:?} (budget {BUDGET:?}); the listing 10 times: {:?}",
+        m.worst, m.ten
     );
     match control(&m) {
         Ok(true) => {}
         Ok(false) => eprintln!(
-            "L1: 10 w = {:?} <= budget: the budget catches a listing {:.0}x slower than measured, not 10x (ADR 0128 finding 12 \
-             rule); control not asserted, the budget assertion is the remaining guard",
-            worst * 10,
-            BUDGET.as_secs_f64() / worst.as_secs_f64()
+            "L1: the listing 10 times took {:?} <= {REGISTERED_BUDGET:?}: the budget catches a listing {:.0}x slower than \
+             the mean of these ten, not 10x (ADR 0759); control not asserted, the budget assertion is the remaining guard",
+            m.ten,
+            10.0 * BUDGET.as_secs_f64() / m.ten.as_secs_f64()
         ),
         Err(e) => panic!("{e}"),
     }
