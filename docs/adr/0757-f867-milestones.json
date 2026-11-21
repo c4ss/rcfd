@@ -1,0 +1,64 @@
+{
+  "milestones": [
+    {
+      "id": "vortex-shedding",
+      "title": "Vortex shedding behind a cylinder",
+      "result": "Laminar flow past a circular cylinder at Re 100 on a body-fitted O-grid: the Strouhal number and the mean drag coefficient against the published values.",
+      "cases": [
+        "crates/rcfd-fv/tests/cylinder.rs",
+        "crates/rcfd-api/tests/validation_cylinder_re100.rs",
+        "crates/rcfd-api/tests/validation_cylinder_re100_w31.rs",
+        "crates/rcfd-api/tests/validation_cylinder_re100_w33b.rs",
+        "crates/rcfd-api/tests/w48t_cylinder_spokes.rs"
+      ],
+      "reference": "St 0.164 to 0.167 and C_D 1.314 to 1.370 at Re 100 (arXiv:2303.09262 Table 1 and arXiv:1401.6513 Table 3, read as quotations) and Williamson, J. Fluid Mech. 206 (1989), eq. (6), St(100) = 0.164335, as recorded in docs/reference-data.md, section \"Cylinder wake\" and the rows \"Cylinder Re 100\"",
+      "headline": [
+        "F-029",
+        "F-869"
+      ]
+    },
+    {
+      "id": "fan",
+      "title": "Assistant-driven fan design",
+      "result": "Claude, through the assistant tool layer, iterates on fan shape and size, sets up and runs the test cases, reads the results, and converges on designs that keep noise low while flow is high across a range of operating conditions.",
+      "cases": [
+        "crates/rcfd-api/tests/fan01_validation.rs",
+        "crates/rcfd-api/tests/fan01_diagnosis_w35c.rs",
+        "crates/rcfd-api/tests/fan01_gci_w37c.rs",
+        "crates/rcfd-api/tests/fan01_stall_w43c.rs",
+        "crates/rcfd-api/tests/fan01_second_order_w49q.rs",
+        "cases/axial_fan_sector",
+        "crates/rcfd-api/tests/fan_sector.rs",
+        "crates/rcfd-post/tests/fan_rom_w46b.rs",
+        "crates/rcfd-api/tests/design_opmap_w32c.rs",
+        "crates/rcfd-api/tests/design_e2e_w32c.rs",
+        "crates/rcfd-api/tests/f697_fan_objective.rs"
+      ],
+      "reference": "for the fan solve, the measured characteristic of the FAN 01 benchmark, Zenodo doi:10.5281/zenodo.20037409 (v5), file characteristic_n1ug.mat, design point 1.4032 m^3/s, 126.46 Pa, 333.30 W, as recorded in docs/validation-data.md, \"1. FAN-01\" (the primary rig paper, SAE 2016-01-1805, is recorded there as not read); for the noise, no measured fan noise is recorded (docs/fan-project-breakdown.md, part D5: missing, needs data)",
+      "headline": [
+        "F-870",
+        "F-243",
+        "F-260",
+        "F-702"
+      ],
+      "page": "docs/milestone-fan.md"
+    },
+    {
+      "id": "aerofoil-lift",
+      "title": "Aerofoil lift (NACA 0012)",
+      "result": "The NACA 0012 at Re 6e6 in incompressible steady RANS on an O-grid: the lift curve up to maximum lift against the measured lift.",
+      "cases": [
+        "cases/naca0012/case.json",
+        "scripts/w48y_aoa_sweep.py",
+        "scripts/w49d_aoa_sweep_fixed.py",
+        "crates/rcfd-api/tests/aoa_sweep_w48y.rs",
+        "crates/rcfd-api/tests/aoa_sweep_w49d.rs"
+      ],
+      "reference": "Ladson, NASA TM 4074 (1988), tripped, M 0.15, Re 6e6, as the file CLCD_Ladson_expdata.dat of the NASA turbulence modeling resource page naca0012_val, as recorded in docs/reference-data.md, row \"NACA 0012 force and Cp data\" (the report itself is not recorded as read)",
+      "headline": [
+        "F-043",
+        "F-868"
+      ]
+    }
+  ]
+}
