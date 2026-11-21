@@ -1,0 +1,14 @@
+# expect-fail: cargo test --release -p rcfd-api --test restart_w19c tmp_gives_every_call_its_own_folder
+diff --git a/crates/rcfd-api/tests/restart_w19c.rs b/crates/rcfd-api/tests/restart_w19c.rs
+index 2039d901..ab1b78f6 100644
+--- a/crates/rcfd-api/tests/restart_w19c.rs
++++ b/crates/rcfd-api/tests/restart_w19c.rs
+@@ -39,7 +39,7 @@ tolerance_p = 1e-7
+ fn tmp(tag: &str) -> PathBuf {
+     // ADR 0753 (F-853): the number of the call is in the name, so no two calls of a process share a folder
+     static CALLS: AtomicUsize = AtomicUsize::new(0);
+-    let n = CALLS.fetch_add(1, Ordering::Relaxed);
++    let n = CALLS.load(Ordering::Relaxed);
+     let d = std::env::temp_dir().join(format!("rcfd_restart_w19c_{tag}_{}_{n}", std::process::id()));
+     let _ = std::fs::remove_dir_all(&d);
+     std::fs::create_dir_all(&d).unwrap();
