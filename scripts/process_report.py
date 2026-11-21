@@ -14,7 +14,8 @@ Usage (from the repository root, Python 3.9 standard library):
     python scripts/process_report.py --seed-exceptions   write today's findings to docs/process/exceptions/ (once, by the lead)
 
 Sections: a roadmap checks, b ADR index, c registration lint (history), d open questions, e provenance, f overview numbers,
-g dispatch, h the lead's state, i area pages, j weekly list, k merge hygiene, l test headers, m process measures,
+g dispatch, h the lead's state, i area pages, j weekly list, k merge hygiene, l test headers, m process measures (with the
+four of ADR 0754 over the last 28 days: queue age, review minutes, status written against proposed, escaped defects),
 r registrations written under docs/process/agent-rules.md (brief, size, the kind, margin and source columns), and with
 --history t, the tests without a primary ADR.
 
@@ -27,6 +28,7 @@ import datetime
 import json
 import os
 import re
+import statistics
 import subprocess
 import sys
 from collections import Counter, defaultdict
@@ -753,7 +755,71 @@ def since_green(root):
     return n, base
 
 
-def sec_m(root, items, cats, adrs, questions, mem, rust, specs):
+def detail_entries(kind, detail):
+    """The `key=value` entries of a ledger line's detail, the first of each key. The detail of a merge line is read up to
+    `;cmds=`: the commands after it may hold anything."""
+    head = detail.split(";cmds=", 1)[0] if kind == "merge" else detail
+    out = {}
+    for part in head.split(";"):
+        key, eq, value = part.partition("=")
+        if eq and re.fullmatch(r"[a-z_]+", key):
+            out.setdefault(key, value)
+    return out
+
+
+def ledger_measures(rows, today, days=28):
+    """The four measures of F-863 (ADR 0754) over the `days` days that end `today`, from the entries scripts/push_main.py
+    writes into the ledger: a heading line and one line per measure. A line without an entry does not state the measure;
+    it is never counted as zero."""
+    first = today - datetime.timedelta(days=days - 1)
+
+    def inside(r):
+        try:
+            return first <= datetime.date.fromisoformat(r.get("date") or "") <= today
+        except ValueError:
+            return False
+
+    def numbers(key):
+        out = []
+        for e in merges:
+            try:
+                v = float(e[key])
+            except (KeyError, ValueError):
+                continue
+            if v == v and abs(v) != float("inf"):
+                out.append(v)
+        return out
+
+    def spread(what, key):
+        v = numbers(key)
+        if not v:
+            return f"{what}: not stated by any of {len(merges)} merge lines"
+        return f"{what}: median {statistics.median(v):g}, largest {max(v):g}; stated by {len(v)} of {len(merges)} merge lines"
+
+    win = [r for r in rows if inside(r)]
+    merges = [detail_entries("merge", r.get("detail") or "") for r in win if r.get("kind") == "merge"]
+    red = [detail_entries("gate", r.get("detail") or "") for r in win if r.get("kind") == "gate" and r.get("result") == "red"]
+    rep = [f"F-863, the {days} days to {today.isoformat()}: {len(merges)} merge lines, {len(red)} red gate lines",
+           spread("queue age, minutes from the agent's report to the merge", "queue_minutes"),
+           spread("review minutes of the lead", "review_minutes")]
+    both = [(e["proposed"], e["written"]) for e in merges if e.get("proposed") and e.get("written")]
+    what = "status written differed from the status proposed"
+    if both:
+        differ = sum(1 for p, w in both if sorted(p.split(",")) != sorted(w.split(",")))
+        rep.append(f"{what}: {differ} of {len(both)} merges that state both; stated by {len(both)} of {len(merges)} merge lines")
+    else:
+        rep.append(f"{what}: not stated by any of {len(merges)} merge lines")
+    stated = [e["escaped"] for e in red if e.get("escaped")]
+    if stated:
+        pairs = {x for s in stated if s != "none" for x in s.split(",") if "=" in x}
+        rep.append(f"escaped defects: {len(pairs)} (a commit and a test), brought in by {len({x.split('=')[0] for x in pairs})} "
+                   f"commits; merges in the window: {len(merges)}; stated by {len(stated)} of {len(red)} red gate lines")
+    else:
+        rep.append(f"escaped defects: not stated by any of {len(red)} red gate lines")
+    return rep
+
+
+def sec_m(root, items, cats, adrs, questions, mem, rust, specs, today=None):
     n, base = since_green(root)
     pushes = [r for r in load_ledger(root) if r.get("kind") == "merge"]
     rep = [f"merges on main since the newest green full run ({base}): {n if n is not None else 'not countable here (shallow checkout)'}",
@@ -768,7 +834,7 @@ def sec_m(root, items, cats, adrs, questions, mem, rust, specs):
         rep.append(f"  minutes of selected tests per push: median {mins[len(mins) // 2]:.1f}, largest {mins[-1]:.1f}; tests left out in all: {left}")
     sized = [a for a in adrs if re.search(r"^Size \(agent\):", a["text"], re.M)]
     rep.append(f"registrations that carry a size (I12): {len(sized)}; calibration is printed once results state the actuals")
-    return rep
+    return rep + ledger_measures(load_ledger(root), today or datetime.date.today())
 
 
 def sec_j(root, items, cats, questions, over):

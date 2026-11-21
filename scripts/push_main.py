@@ -8,8 +8,11 @@ Run on the main checkout, with the merge of one branch at HEAD:
     python scripts/push_main.py --run --left-out-run   after the commit, start the left-out tests detached; a `leftout` line follows
     python scripts/push_main.py --run --base REV    several merges at once: the diff REV..HEAD is one joint diff (an octopus merge needs no --base)
     python scripts/push_main.py --run --fresh       do not resume: repeat the commands that passed on this merge commit in a stopped run
+    python scripts/push_main.py --run [--reported TIME] [--review-minutes N] [--proposed STATUS] [--written STATUS]
+                                the process measures of this merge, as the lead states them (ADR 0754; below)
     python scripts/push_main.py --gate-line --commit SHA --passed N --failed N --ignored N [--skipped N] [--attribution gate_attribute.json]
                                 [--gate-times PATH]   PATH (a times TSV or a folder of them) becomes the default of --times
+                                [--escaped COMMIT=BINARY::TEST ...]   the commit that brought a failed test of a red gate in
     python scripts/push_main.py --mutants [--merge REV] [--mutants-timeout S] [--run]   generated mutants on the lines the merge changed
     python scripts/push_main.py --since-verified
 
@@ -46,8 +49,18 @@ one line: the branches joined by `,`, the items and ADRs of all, and `joint=<the
 
 The ledger, docs/process/ledger.tsv, is changed only on main. Columns: date, kind (merge, gate, leftout, mutants, ci), commit,
 branch, items, adrs, result, minutes, left_out, left_out_minutes, detail. A gate line's detail is
-`passed=N;failed=N;ignored=N[;skipped=N];fails=binary::test=ADR/F-item,...[;times=PATH]`; `skipped` is the number of passed tests that
+`passed=N;failed=N;ignored=N[;skipped=N];fails=binary::test=ADR/F-item,...[;times=PATH][;escaped=...]`; `skipped` is the number of passed tests that
 reported a skip (the closing line of `scripts/gate_test.py --skip-pattern`). A green gate line moves the local tag `verified`.
+
+Process measures (ADR 0754, F-863). Four options of --run put entries into the detail of the merge line, after `joint=` and
+before `cmds=`; an option that is not given writes no entry, and a run without them writes the line it wrote before.
+--reported TIME (ISO, `2026-11-21T14:05`, with an optional offset; without one it is local time) writes `reported=TIME` and
+`queue_minutes=N`, the minutes from that time to the committer time of the merge commit. --review-minutes N writes
+`review_minutes=N`, the lead's minutes on the agent's report. --proposed STATUS and --written STATUS write the status the agent
+proposed and the status the lead writes: `done`, `partial` or `todo`, or for several items `F-863=done,F-864=partial`. A value
+that cannot be read stops the run before any check. With --gate-line on a red gate, --escaped COMMIT=BINARY::TEST (several
+times for several tests) writes `escaped=<commit>=<binary::test>,...` after `times=`: the commit that brought the failure in;
+`--escaped none` says that the lead looked and no commit did. scripts/process_report.py --weekly reads the entries.
 
 --mutants (docs/process/documentation-process-review.md, "Mutations the author did not write"): the diff of the merge against
 its first parent, Rust files under crates/ only, is written to a temporary file and `cargo mutants --in-diff` runs on it for the
@@ -78,6 +91,13 @@ RETRIES = 2  # further runs of a command that failed (ADR 0752: a test that fail
 BUILD_SECONDS = 1.8  # build seconds counted per selected test binary (ADR 0752: 1592.1 s over 891 commands of the lead's runs)
 BRIEFS = "docs/adr/briefs"
 REGENERATE = ("python scripts/process_report.py --write", "python scripts/roadmap_progress.py")
+# the process measures of ADR 0754 (F-863)
+STATUSES = ("done", "partial", "todo")
+STATUS_LIST = re.compile(r"F-\d{1,4}=(?:done|partial|todo)(?:,F-\d{1,4}=(?:done|partial|todo))*")
+REPORT_TIME = re.compile(r"\d{4}-\d\d-\d\d[T ]\d\d:\d\d")
+ESCAPED = re.compile(r"([^=;,\s]+)=([^=;,\s:]+::[^=;,\s]+)")
+MEASURE_OPTIONS = (("reported", "--reported"), ("review_minutes", "--review-minutes"), ("proposed", "--proposed"),
+                   ("written", "--written"))
 
 
 # ---------------------------------------------------------------- pure parts
@@ -413,7 +433,84 @@ def save_state(path, sha, base, passed):
     os.replace(path + ".tmp", path)
 
 
-def gate_detail(passed, failed, ignored, attribution=None, note="", skipped=None, times=None):
+def report_time(text):
+    """The time of --reported as a datetime with an offset: ISO, `YYYY-MM-DDTHH:MM`, with optional seconds and an optional
+    offset; a time without an offset is the local time of the machine."""
+    try:
+        if not REPORT_TIME.match(str(text).strip()):
+            raise ValueError(text)
+        t = datetime.datetime.fromisoformat(str(text).strip())
+    except ValueError:
+        raise SystemExit(f"push_main: --reported: {text!r} is not a time like 2026-11-21T14:05 or 2026-11-21T14:05+01:00")
+    return t if t.tzinfo else t.astimezone()
+
+
+def queue_minutes(reported, merge_epoch):
+    """Whole minutes, rounded to the nearest, from the agent's report to the merge commit (its committer time in seconds)."""
+    return int((float(merge_epoch) - reported.timestamp()) / 60.0 + 0.5)
+
+
+def status_value(text, option):
+    """A status as --proposed and --written take it: one of STATUSES, or `F-NNN=status` for each of several items."""
+    v = str(text).strip()
+    if v not in STATUSES and not STATUS_LIST.fullmatch(v):
+        raise SystemExit(f"push_main: {option}: {text!r} is not done, partial or todo, nor a list like F-863=done,F-864=partial")
+    return v
+
+
+def measure_entries(reported=None, review_minutes=None, proposed=None, written=None, merge_epoch=None):
+    """The entries the options of --run add to the detail of a merge line (ADR 0754), in their fixed order; an option that
+    is not given (None) adds none. A value that cannot be read raises SystemExit."""
+    out = []
+    if reported is not None:
+        t = report_time(reported)
+        if merge_epoch is None or float(merge_epoch) < t.timestamp():
+            raise SystemExit(f"push_main: --reported: {reported} is after the merge commit")
+        out += [f"reported={t.isoformat(timespec='minutes')}", f"queue_minutes={queue_minutes(t, merge_epoch)}"]
+    if review_minutes is not None:
+        try:
+            m = float(review_minutes)
+        except (TypeError, ValueError):
+            m = -1.0
+        if not 0.0 <= m < float("inf"):
+            raise SystemExit(f"push_main: --review-minutes: {review_minutes!r} is not a number of minutes, zero or more")
+        out.append(f"review_minutes={m:g}")
+    p = None if proposed is None else status_value(proposed, "--proposed")
+    w = None if written is None else status_value(written, "--written")
+    if p is not None and w is not None:
+        if (p in STATUSES) != (w in STATUSES):
+            raise SystemExit("push_main: --written and --proposed: one is a status and the other a list of items")
+        if p not in STATUSES and sorted(x.split("=")[0] for x in p.split(",")) != sorted(x.split("=")[0] for x in w.split(",")):
+            raise SystemExit("push_main: --written and --proposed name different items")
+    out += [] if p is None else [f"proposed={p}"]
+    out += [] if w is None else [f"written={w}"]
+    return out
+
+
+def escaped_entry(values, resolve):
+    """The entry `escaped=...` of a gate line from the values of --escaped, or None when there is none. Each value is
+    `COMMIT=BINARY::TEST`; `resolve(COMMIT)` gives the full commit or None. `none` alone gives `escaped=none`."""
+    if not values:
+        return None
+    if "none" in values:
+        if len(values) > 1:
+            raise SystemExit("push_main: --escaped: none stands alone")
+        return "escaped=none"
+    out = []
+    for v in values:
+        m = ESCAPED.fullmatch(v)
+        if not m:
+            raise SystemExit(f"push_main: --escaped: {v!r} is not COMMIT=BINARY::TEST (no `;`, `,` or white space)")
+        sha = resolve(m.group(1))
+        if not sha:
+            raise SystemExit(f"push_main: --escaped: {m.group(1)} is not a commit of this repository")
+        entry = f"{sha[:10]}={m.group(2)}"
+        if entry not in out:
+            out.append(entry)
+    return "escaped=" + ",".join(out)
+
+
+def gate_detail(passed, failed, ignored, attribution=None, note="", skipped=None, times=None, escaped=None):
     d = f"passed={passed};failed={failed};ignored={ignored}" + ("" if skipped is None else f";skipped={skipped}")
     if attribution:
         fails = []
@@ -426,6 +523,8 @@ def gate_detail(passed, failed, ignored, attribution=None, note="", skipped=None
             d += ";fails=" + ",".join(fails)
     if times:
         d += ";times=" + times
+    if escaped:
+        d += ";" + escaped
     return d + (";" + note if note else "")
 
 
@@ -657,6 +756,10 @@ def do_run(root, a, info, plan, run=sh):
     ledger = os.path.join(root, LEDGER)
     if git(root, "rev-parse", "HEAD").strip() != info["sha"]:
         raise SystemExit("push_main: --run needs the merge at HEAD")
+    # the process measures the lead states (ADR 0754): read before any check, so that a value that cannot be read stops here
+    given = {name: getattr(a, name, None) for name, _ in MEASURE_OPTIONS}
+    epoch = int(git(root, "log", "-1", "--format=%ct", info["sha"]).strip()) if given["reported"] is not None else None
+    measures = measure_entries(merge_epoch=epoch, **given)
     blockers = tree_blockers(root, run)
     if blockers:
         raise SystemExit("push_main: the working tree has uncommitted changes: " + ", ".join(blockers[:8]))
@@ -744,6 +847,7 @@ def do_run(root, a, info, plan, run=sh):
         detail += f";resumed={resumed}"
     if len(info.get("merges", [])) > 1:
         detail += ";joint=" + ",".join(m[:10] for m in info["merges"] if m != info["sha"])
+    detail += "".join(";" + e for e in measures)
     detail += ";cmds=" + " | ".join(cmds)
     append_ledger(ledger, ledger_line(date=today(), kind="merge", commit=info["sha"][:10], branch=info["branch"],
                                       items=",".join(info["items"]), adrs=",".join(info["adrs"]), result="pass",
@@ -856,9 +960,17 @@ def do_gate_line(root, a):
     green = a.failed == 0 and not (att and (att.get("build_failed") or att.get("doc_failures")))
     sha = git(root, "rev-parse", a.commit).strip()
     times = gate_times_field(a.gate_times, root) if getattr(a, "gate_times", None) else None
+    values = getattr(a, "escaped", None)
+    if values and green:
+        raise SystemExit("push_main: --escaped is for a red gate; this one is green")
+
+    def resolve(rev):
+        code, out = git_try(root, "rev-parse", "--verify", "--quiet", rev + "^{commit}")
+        return None if code else out.strip()
+    escaped = escaped_entry(values, resolve)
     append_ledger(os.path.join(root, LEDGER), ledger_line(
         date=a.date or today(), kind="gate", commit=sha[:10], result="green" if green else "red",
-        minutes=a.minutes or "", detail=gate_detail(a.passed, a.failed, a.ignored, att, a.note or "", a.skipped, times)))
+        minutes=a.minutes or "", detail=gate_detail(a.passed, a.failed, a.ignored, att, a.note or "", a.skipped, times, escaped)))
     if green:
         git(root, "tag", "-f", "verified", sha)
         print(f"push_main: tag verified moved to {sha[:10]}")
@@ -897,7 +1009,21 @@ def main(argv=None):
     ap.add_argument("--minutes")
     ap.add_argument("--note")
     ap.add_argument("--attribution", help="JSON written by scripts/gate_attribute.py")
+    ap.add_argument("--reported", metavar="TIME", help="with --run: the time of the agent's report (2026-11-21T14:05, local "
+                    "time without an offset); the merge line gets reported= and queue_minutes=")
+    ap.add_argument("--review-minutes", metavar="N", help="with --run: the lead's minutes on the agent's report")
+    ap.add_argument("--proposed", metavar="STATUS", help="with --run: the status the agent proposed (done, partial, todo, or "
+                    "F-863=done,F-864=partial for several items)")
+    ap.add_argument("--written", metavar="STATUS", help="with --run: the status the lead writes, in the same form")
+    ap.add_argument("--escaped", metavar="COMMIT=BINARY::TEST", action="append",
+                    help="with --gate-line on a red gate: the commit that brought the failure of that test in (repeat for "
+                    "several); `none` when no commit did")
     a = ap.parse_args(argv)
+    for name, flag in MEASURE_OPTIONS:
+        if getattr(a, name) is not None and not a.run:
+            raise SystemExit(f"push_main: {flag} needs --run")
+    if a.escaped and not a.gate_line:
+        raise SystemExit("push_main: --escaped needs --gate-line")
     root = os.path.abspath(a.root)
     rows = read_ledger(os.path.join(root, LEDGER))
     if a.run_left_out:

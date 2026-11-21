@@ -350,5 +350,135 @@ class NewRules(Repo):
         self.assertEqual([i for i, _ in pr.roadmap_md(self.root)], [])
 
 
+import datetime  # noqa: E402
+
+import push_main as pm  # noqa: E402
+
+LEDGER_HEAD = "date\tkind\tcommit\tbranch\titems\tadrs\tresult\tminutes\tleft_out\tleft_out_minutes\tdetail\n"
+
+
+def line(date, kind, detail, result="pass"):
+    return {"date": date, "kind": kind, "commit": "abc", "result": result, "detail": detail}
+
+
+class Measures(Repo):
+    """ADR 0754 (F-863): the four measures of the ledger over the last four weeks."""
+
+    TODAY = datetime.date(2026, 12, 19)
+    ROWS = [
+        line("2026-12-01", "merge", "exit=0;mutations=0;reported=2026-12-01T10:00+00:00;queue_minutes=30;review_minutes=10;"
+             "proposed=done;written=done;cmds=x | y;queue_minutes=9999;review_minutes=9999"),
+        line("2026-12-02", "merge", "exit=0;mutations=1;flaky=a::b;queue_minutes=90;review_minutes=20;proposed=done;written=partial;cmds=x"),
+        line("2026-12-03", "merge", "exit=0;mutations=0;queue_minutes=600;proposed=done;cmds=x"),
+        line("2026-12-04", "merge", "exit=0;mutations=0;cmds=x"),
+        line("2026-12-05", "merge", "exit=0;mutations=0;queue_minutes=soon;review_minutes=45;written=todo;cmds=x"),
+        line("2026-11-21", "merge", "exit=0;mutations=0;queue_minutes=5000;review_minutes=5000;proposed=done;written=todo;cmds=x"),
+        line("2026-12-02", "gate", "passed=10;failed=2;ignored=0;fails=slow::one=0503/F-529;escaped=aaaaaaaaaa=slow::one,bbbbbbbbbb=bt::x;"
+             "GitHub run 1", "red"),
+        line("2026-12-03", "gate", "passed=10;failed=2;ignored=0;escaped=aaaaaaaaaa=slow::one,aaaaaaaaaa=slow::two", "red"),
+        line("2026-12-04", "gate", "passed=10;failed=1;ignored=0;escaped=none", "red"),
+        line("2026-12-05", "gate", "passed=10;failed=1;ignored=0;GitHub run 4", "red"),
+        line("2026-12-06", "gate", "passed=11;failed=0;ignored=0", "green"),
+        line("2026-11-20", "gate", "passed=10;failed=1;ignored=0;escaped=dddddddddd=q::q", "red"),
+        line("2026-12-06", "leftout", "ran=3;failed=0;queue_minutes=1", "green"),
+    ]
+
+    def measures(self, rows=None, today=None):
+        return pr.ledger_measures(self.ROWS if rows is None else rows, today or self.TODAY)
+
+    def test_the_heading_names_the_window_and_its_lines(self):
+        self.assertEqual(self.measures()[0], "F-863, the 28 days to 2026-12-19: 5 merge lines, 4 red gate lines")
+        self.assertEqual(len(self.measures()), 5)
+
+    def test_queue_age(self):
+        self.assertEqual(self.measures()[1], "queue age, minutes from the agent's report to the merge: median 90, largest 600; "
+                         "stated by 3 of 5 merge lines")
+        self.assertEqual(self.measures(self.ROWS[:2] + self.ROWS[3:4])[1], "queue age, minutes from the agent's report to the "
+                         "merge: median 60, largest 90; stated by 2 of 3 merge lines")
+
+    def test_review_minutes(self):
+        self.assertEqual(self.measures()[2], "review minutes of the lead: median 20, largest 45; stated by 3 of 5 merge lines")
+        rows = [line("2026-12-01", "merge", "exit=0;mutations=0;review_minutes=12.5;cmds=x")]
+        self.assertEqual(self.measures(rows)[2], "review minutes of the lead: median 12.5, largest 12.5; stated by 1 of 1 merge lines")
+
+    def test_status_written_against_status_proposed(self):
+        self.assertEqual(self.measures()[3], "status written differed from the status proposed: 1 of 2 merges that state both; "
+                         "stated by 2 of 5 merge lines")
+        rows = [line("2026-12-01", "merge", "exit=0;mutations=0;proposed=F-001=done,F-002=done;written=F-002=done,F-001=done;cmds=x")]
+        self.assertEqual(self.measures(rows)[3], "status written differed from the status proposed: 0 of 1 merges that state both; "
+                         "stated by 1 of 1 merge lines")
+
+    def test_escaped_defects(self):
+        self.assertEqual(self.measures()[4], "escaped defects: 3 (a commit and a test), brought in by 2 commits; merges in the "
+                         "window: 5; stated by 3 of 4 red gate lines")
+        self.assertEqual(self.measures(self.ROWS[:5] + self.ROWS[8:10])[4], "escaped defects: 0 (a commit and a test), brought in "
+                         "by 0 commits; merges in the window: 5; stated by 1 of 2 red gate lines")
+
+    def test_a_measure_no_line_states_is_not_stated_and_never_zero(self):
+        rows = [line("2026-12-04", "merge", "exit=0;mutations=0;cmds=x"), line("2026-12-05", "merge", "exit=0;mutations=0;cmds=y"),
+                line("2026-12-05", "gate", "passed=10;failed=1;ignored=0", "red")]
+        self.assertEqual(self.measures(rows), [
+            "F-863, the 28 days to 2026-12-19: 2 merge lines, 1 red gate lines",
+            "queue age, minutes from the agent's report to the merge: not stated by any of 2 merge lines",
+            "review minutes of the lead: not stated by any of 2 merge lines",
+            "status written differed from the status proposed: not stated by any of 2 merge lines",
+            "escaped defects: not stated by any of 1 red gate lines"])
+        self.assertEqual(self.measures([])[1:], [
+            "queue age, minutes from the agent's report to the merge: not stated by any of 0 merge lines",
+            "review minutes of the lead: not stated by any of 0 merge lines",
+            "status written differed from the status proposed: not stated by any of 0 merge lines",
+            "escaped defects: not stated by any of 0 red gate lines"])
+
+    def test_the_window_is_the_28_days_that_end_today(self):
+        rows = [line("2026-11-21", "merge", "exit=0;mutations=0;queue_minutes=5;cmds=x"),
+                line("2026-11-22", "merge", "exit=0;mutations=0;queue_minutes=7;cmds=x"),
+                line("2026-12-19", "merge", "exit=0;mutations=0;queue_minutes=9;cmds=x"),
+                line("2026-12-20", "merge", "exit=0;mutations=0;queue_minutes=11;cmds=x"),
+                line("not a date", "merge", "exit=0;mutations=0;queue_minutes=13;cmds=x")]
+        self.assertEqual(self.measures(rows)[:2], ["F-863, the 28 days to 2026-12-19: 2 merge lines, 0 red gate lines",
+                         "queue age, minutes from the agent's report to the merge: median 8, largest 9; stated by 2 of 2 merge lines"])
+        self.assertIn("6 merge lines", self.measures(self.ROWS, datetime.date(2026, 12, 18))[0])
+
+    def test_lines_written_by_push_main_are_read_back(self):
+        merge = datetime.datetime(2026, 12, 1, 11, 30, tzinfo=datetime.timezone.utc).timestamp()
+        entries = pm.measure_entries(reported="2026-12-01T10:00+00:00", review_minutes="25", proposed="done", written="partial",
+                                     merge_epoch=merge)
+        path = os.path.join(self.root, pr.LEDGER)
+        pm.append_ledger(path, pm.ledger_line(date="2026-12-01", kind="merge", commit="abc", result="pass",
+                                              detail="exit=0;mutations=0;" + ";".join(entries) + ";cmds=x | y"))
+        pm.append_ledger(path, pm.ledger_line(date="2026-12-01", kind="merge", commit="abd", result="pass", detail="exit=0;mutations=0;cmds=x"))
+        escaped = pm.escaped_entry(["abc=slow::one"], lambda rev: "a" * 40)
+        pm.append_ledger(path, pm.ledger_line(date="2026-12-02", kind="gate", commit="abe", result="red",
+                                              detail=pm.gate_detail(10, 1, 0, note="GitHub run 1", escaped=escaped)))
+        self.assertEqual(pr.ledger_measures(pr.load_ledger(self.root), self.TODAY), [
+            "F-863, the 28 days to 2026-12-19: 2 merge lines, 1 red gate lines",
+            "queue age, minutes from the agent's report to the merge: median 90, largest 90; stated by 1 of 2 merge lines",
+            "review minutes of the lead: median 25, largest 25; stated by 1 of 2 merge lines",
+            "status written differed from the status proposed: 1 of 1 merges that state both; stated by 1 of 2 merge lines",
+            "escaped defects: 1 (a commit and a test), brought in by 1 commits; merges in the window: 2; stated by 1 of 1 red gate lines"])
+
+    def test_the_weekly_list_prints_them_under_process_measures(self):
+        today = datetime.date.today()
+        day = (today - datetime.timedelta(days=1)).isoformat()
+        old = (today - datetime.timedelta(days=40)).isoformat()
+        self.put(pr.LEDGER, LEDGER_HEAD
+                 + f"{old}\tmerge\taaa\told\tF-003\t0002\tpass\t1.0\t0\t0.0\texit=0;mutations=0;queue_minutes=4000;cmds=x\n"
+                 + f"{day}\tmerge\tabc\tone\tF-003\t0002\tpass\t1.0\t0\t0.0\texit=0;mutations=0;queue_minutes=45;review_minutes=15;"
+                   "proposed=done;written=done;cmds=x\n"
+                 + f"{day}\tgate\tabd\t\t\t\tred\t\t\t\tpassed=1;failed=1;ignored=0;escaped=abc=t::one\n")
+        self.git_init()
+        code, out = self.run_main("--weekly")
+        self.assertEqual(code, 0)
+        tail = [ln.strip() for ln in out.split("\nProcess measures\n", 1)[1].splitlines()]
+        want = [f"F-863, the 28 days to {today.isoformat()}: 1 merge lines, 1 red gate lines",
+                "queue age, minutes from the agent's report to the merge: median 45, largest 45; stated by 1 of 1 merge lines",
+                "review minutes of the lead: median 15, largest 15; stated by 1 of 1 merge lines",
+                "status written differed from the status proposed: 0 of 1 merges that state both; stated by 1 of 1 merge lines",
+                "escaped defects: 1 (a commit and a test), brought in by 1 commits; merges in the window: 1; stated by 1 of 1 red gate lines"]
+        self.assertEqual([ln for ln in tail if ln in want], want)
+        code, out = self.run_main("--sections", "m")
+        self.assertIn(want[1], out)
+
+
 if __name__ == "__main__":
     unittest.main()
