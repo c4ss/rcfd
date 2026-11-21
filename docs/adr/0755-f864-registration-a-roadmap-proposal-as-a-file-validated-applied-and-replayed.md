@@ -507,3 +507,21 @@ Proposed status of F-864: done.
 > Title: Roadmap proposals of form 1 in shadow use on live merges, with the lead's own entry kept apart. Deps: F-864. Acceptance: Every limit not stated here is registered in the ADR before the run. Subject to the maintainer's answer to question 1 of ADR 0755. For 10 consecutive merges of agents' work the addendum is accompanied by a proposal file of form 1, the lead applies it with scripts/roadmap_proposals.py and writes what he adds as a note entry of his own after it; the registration fixes beforehand what the stale check compares (ADR 0755: 1 of 6 refused for a gate note of the lead) and how a gap names a follow-up that has no id yet; reported for each merge: whether the agent's note and gap stand letter for letter in docs/roadmap.json (ADR 0755: 0 of 6 and 0 of 4), and the lead's minutes for the roadmap edit; no reader of roadmap.json changes.
 
 The same entries are in `scripts/roadmap_replay_f864/0755-F-864.json`.
+
+## The lead's reading (2026-11-21), after the merge
+
+Merged at 40b0f7e1 and pushed with the merge of ADR 0754 as one joint diff (ledger line of 76ccb225, 3.0 minutes, four
+mutation patches caught). The first push run stopped, rightly, on `scripts/test_push_main.py`: two of its tests read the
+live ledger and failed on the first line of kind `mutants`, which the lead had pushed at b544f462 without running the
+script tests. Corrected at 9405b016; no fault of this branch.
+
+Status: **partial**, not done. Clause (1) of the acceptance asks that a proposal applies "with the result the lead would
+have typed". On the six replays the status, the place of the note and the follow-ups' dependencies were the lead's in
+every case; the text of the note was the lead's in none of six, and the text of the gap in none of four. The agent says
+so and leaves the reading to the lead; the lead reads the clause as it is written. What is missing is not code: it is the
+rule that says whose words stand, which is question 1.
+
+The two questions are the maintainer's and are put with the agent's recommendations: (1) rule 9, option (b), the file
+beside the quoted paragraphs, the agent's entry standing and the lead adding an entry of his own after it; (2) no cutover
+now. The proposed follow-up (form 1 in shadow use on ten live merges, after the stale check stops refusing a note the lead
+appended and a gap can name a follow-up without an id) waits for the answer to question 1.

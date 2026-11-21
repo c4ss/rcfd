@@ -365,3 +365,18 @@ maintainer).
 Follow-up, if the maintainer wants the count of waiting reports read from a file and not counted by the lead:
 
 > Title: The time an agent's report arrives is recorded when it arrives, so that the reports not yet read can be counted. Deps: F-863. Acceptance: Every limit not stated here is registered in the ADR before the run. A command of the lead records the arrival of a report for a brief in a file beside the ledger; scripts/process_report.py prints the number of reports that have arrived and are neither merged nor closed, shown by a unit test; push_main.py --run takes the report time from that file when --reported is not given; no existing ledger line and no column changes.
+
+## The lead's reading (2026-11-21), after the merge
+
+Merged at 76ccb225 and pushed with the merge of ADR 0755 as one joint diff, the first real use of `--base` and of the
+options `--proposed` and `--written` (ledger line of 76ccb225). The lead gave neither `--reported` nor
+`--review-minutes` for it: the times of the two reports were not noted when they came, and a figure made up afterwards
+would be worse than none. From the next merge on the lead notes the time of a report when it arrives.
+
+Status: **partial**. The recording, the reading and their tests are done. The acceptance asks for the stop conditions as
+numbers "approved by the maintainer before they apply"; they are written as a proposal and not approved. The four numbers
+are put to the maintainer with the agent's recommendations; the item is done when the answer is written here and the
+section of lead-process.md says "in force".
+
+The optional follow-up (a file that records a report's arrival, so that the count of unread reports is read and not
+counted by the lead) is not entered: with one lead and at most four agents the count is at most four.
