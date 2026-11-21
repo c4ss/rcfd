@@ -219,3 +219,140 @@ must be rebuilt from main (the addendum gives the script). `docs/milestone-fan.m
 table is dated; that is named for the lead. The 21 memberships of ADR 0756 of class M2 and M3 are not read again. The
 notes of the items are read only around keyword matches. The second reading is of 40 pairs. The published references
 are named from `docs/milestones.json` and the two pages; no paper was read. No cargo command but `docs_site`.
+
+## Addendum 1: results (2026-11-21)
+
+Commits: fc9114a0 (this registration, alone, on main 059c9423), ef2900d4 (the definition and the mapping, first reading),
+c281ac05 (one correction of the mapping), and the commit of this addendum with the proposal file. No amendment was
+needed: the lead's message about F-870 came before the registration's commit and is in its head.
+
+| Id | Measured | Met |
+| --- | --- | --- |
+| C1 | 14 of 14 links: the table "The capability chain and the items that carry each link" stands as registered; "no item" is said for the headline of L5 and for the geometry checker (L1), the steady guard and the stall diagnoses (L9) and the reduced-order model (B1) | yes |
+| C2 | 777 of 777 items read (308 structural by title); 89 memberships, each with a reason that starts M1, M2, M3 or M5 (the build script asserts it); 688 items are not members | yes |
+| C3 | 21 titles match; 12 members, 9 listed below; 0 unplaced. Control: with F-819 taken from the list the script names F-819 | yes |
+| C4 | 40 pairs by seed 867757, second reading by a fresh agent: 1 disagreement (below) | yes |
+| C5 | on a copy of the `docs/` of main 059c9423 (`proof.py`, scratch): the definitions of `vortex-shedding` and `aerofoil-lift` equal in bytes, and the whole file outside the fan object; 0 of 777 items with a changed list of other milestones; 66 items change their fan membership and differ by the key alone; 711 items equal; the table row and the three headline lines of each of the other two milestones in the generated block equal; a second run writes nothing; `roadmap_milestones.py --check` 0; `render_roadmap.py --check` 0 after a render. K1 (one character of the aerofoil title): three differences reported. K2: see deviation 2 | yes |
+| C6 | the script's validation is clean with the headline F-870, F-243, F-260, F-702; each is a member | yes |
+| C7 | below | yes |
+| P | `python scripts/process_report.py --check`: 1 failure, "generated file is not current: docs/adr/index.md", left to the lead (rule 9). `cargo test -p rcfd-cli --release --test docs_site`: 2 passed | yes |
+
+**Figures** on the roadmap of main 059c9423 (777 items, 387 done, 294 partly done, 96 not started, 69 %).
+
+| Milestone fan | Members | Done | Partly done | Not started | Per cent | Headline result |
+| --- | --- | --- | --- | --- | --- | --- |
+| at 1a5bbac5 (ADR 0756) | 22 | 17 | 5 | 0 | 89 % | not met (F-126 partly met) |
+| at 059c9423, before this work | 23 | 17 | 5 | 1 | 85 % | not met (F-126 partly met, F-870 not started) |
+| first reading of this work | 88 | 49 | 29 | 10 | 72 % | not met |
+| with the correction (delivered) | 89 | 49 | 30 | 10 | 72 % | not met |
+
+Headline items: F-870 not started; F-243 partly met; F-260 partly met; F-702 not started. By class: M1 4 (2 partly done,
+2 not started); M2 23 (19 done, 4 partly done); M3 1 (partly done); M4 none; M5 61 (30 done, 23 partly done, 8 not
+started). F-126 is a member by M5 and no longer a headline item, as registered.
+
+**The fan-titled items that are not members** (9 of 21): F-217, N4 (a heat-exchanger model whose fan boundary takes a
+given curve; no link names it). F-387, F-406, F-436, F-593, F-604, N6 (i) (structural demonstrations and their blade
+mesher and hub fit; the page leaves structural coupling to the user; open question 5). F-819, N1 (the Studio draws a
+fan mesh as a large-mesh test). F-865, F-867, N3 (the process items about this figure).
+
+**What was left out of what the brief names**, by N6 as registered: the structural checks of blade and rotor; the
+sliding-interface and full-annulus route (F-250, F-303, F-304, F-704, F-710 to F-712, F-720, F-721, F-724, F-725, F-729,
+F-730 and F-138); transition (F-046); degradation. Of the Studio only F-814 is a member; of the assistant line the chat
+sidebar, the providers and the project bookkeeping are N3 (F-092, F-093, F-145, F-146, F-149, F-150, F-265, F-270, F-273,
+F-275, F-862). The acoustic boundary, sponge and duct wave-solver follow-ups of F-243 (F-330 to F-333, F-340, F-341,
+F-407, F-446, F-451 to F-453, F-473, F-478, F-480) are N4: the noise link names FW-H, proxies and tones, not duct
+propagation. Borderline and left out: F-082, F-109, F-121 (no text names their use by an added run of record), F-006,
+F-108, F-233, F-248, F-295.
+
+**The sample check.** Drawn by `sample.py` (scratch) with `random.Random(867757)` from the mapping of ef2900d4: 88
+members, 689 non-members, 288 of them in the doubtful lines. The reader was a fresh agent given `rule.md` (the sections
+"The definition" and "The membership rule" of this ADR and the names of the links, without the table of carriers),
+copies of the two pages and the sheet, with the repository's code and topic pages to consult; it reports that it opened
+none of the files it was told not to open. Disagreements: 0 of 20 in the member half; 1 of 20 in the non-member half
+(0 of the 10 uniform, 1 of the 10 doubtful).
+
+| Pair | First reading | Second reading | Taken |
+| --- | --- | --- | --- |
+| F-200, fan | not (N4: a catalogue of boundary conditions, no use read) | member, M2 (close): `fan01_diagnosis_w35c.rs`, arm C3, runs FAN-01 with `radial_equilibrium_outlet` | second; added. Checked: line 427 of that file sets `bc_kind = "radial_equilibrium_outlet"`, the note of F-200 lists that condition, and the file is one of the five FAN-01 runs of record (the precedent of F-106 in ADR 0756) |
+
+The reader's table held 39 rows; F-095 was in its text as a member by M5, which agrees. It named as hard: F-119 (a
+member only because the breakdown names it; no run uses STL), F-791 and F-315 (computer-fan work against N6 (iv)),
+F-715, F-297 and F-735 (follow-ups checked on test functions, members by M5 (c) alone), F-287 and F-329. It found the
+rule unclear in six places: no criterion between N6 and N5 for structural items (membership not affected); no
+precedence between M2 and M5; no depth limit of M5 (c), which makes the tails of B3 and B5 long; the labels B1 to B5
+of this ADR collide with the breakdown's part letters B1 to B5; N6 (iv) against M5 for computer-fan geometry and
+mesh; and the five FAN-01 files were not named in its folder. What the check shows: the M2 class carried over from
+ADR 0756 is the part of the mapping most likely to miss a member, because it was not read again (F-200 was found by
+the one sampled item of that kind); the M5 members were confirmed, 15 of 15.
+
+**What the figure will and will not say** (for the maintainer). Of the 89 members, 24 are foundation items of class M2
+and M3, general solver, mesh and command-line work that the fan runs use (19 done, 5 partly done; by class, since the
+dates on which items became done were not read); the other 65 are items of the goal itself, of which 30 are done and 35
+are open, and in all 40 members are open (30 partly done, 10 not started). The per cent now moves with the open fan
+work, by a little over half a point for each step of one item, where before all of it sat in one headline item; it
+still does not say whether a fan is predicted or designed: most of the goal's 30 done items are done on test functions, the
+reduced-order model or channel cases, not on a fan solve, and the four headline items, none of them done, are what says "not met".
+
+**The command the lead runs on main**, then the usual regeneration (`python scripts/render_roadmap.py`; the block of
+the overview is written by the command):
+
+`python scripts/roadmap_milestones.py --apply docs/adr/0757-f867-mapping.tsv --definitions docs/adr/0757-f867-milestones.json`
+
+The definitions file is `docs/milestones.json` of main 059c9423 with the object of `fan` replaced and every other byte
+kept. If main's file changes before the command is run, the file is rebuilt the same way: the fan object of
+`docs/adr/0757-f867-milestones.json` put in place of the fan object of main's file. No `--install` is needed.
+
+**Deviations.** (1) The branch was moved from main 1a5bbac5 to main 059c9423 before the registration's commit, on the
+lead's message; F-870 is the validation headline and F-126 a member. (2) K2 as registered could not reach a
+comparison: with F-029 as the only line for `vortex-shedding` the script refuses to write ("the headline item F-869 of
+'vortex-shedding' is not a member of it"), which is the protection wanted; the comparison's sight of a changed item is
+shown by K1 and by the 66 changed items it counts. (3) Read in addition to the registration's list: the acceptance, gap and
+the note around one match of F-200, for the sample check. (4) `docs/milestone-fan.md` was not edited: its
+chain table of 2026-10-18 names F-254 and F-257, which are not those items, and says "none" for the operating map
+and the optimiser, which F-095, F-249 and F-329 have since delivered on channel cases; that is for the lead or a
+documentation job. (5) The proposal file `docs/roadmap/proposals/0757-F-867.json` of rules version 5 was written and
+checked, though the brief was issued under version 4.
+
+Not run: any cargo command but `docs_site`; any solver. Not read: see "What was read".
+
+Actual size: done; 0; 0; 5; about 330000.
+
+Decision by the registered rule: **done**. Every link has an item or "no item"; every fan-titled item is placed; every
+item is mapped with reasons; the sample check was made and is reported; the command leaves the other two milestones
+unchanged. The goal has four headline items that can be met or missed.
+
+## Open questions for the maintainer
+
+1. **The operating map has no headline item.** No item's acceptance is the characteristic curve of a fan. Options: (a)
+   leave the link without a headline; (b) enter the first follow-up below as a headline item. Recommendation: (b).
+2. **The noise headline.** The acceptance of F-243 is an impedance tube and a quiet boundary; the fan result is only in
+   its gap. Options: (a) keep F-243; (b) enter the second follow-up below as the headline and keep F-243 as a member.
+   Recommendation: (b); it needs a measured fan noise reference that the repository does not record (breakdown D5),
+   so it would stay partial until one is read.
+3. **The assistant-driven iteration itself.** F-702 is the tools; no item is the loop run on a fan (wave 34 of the
+   page). Options: (a) keep F-702 alone; (b) enter the third follow-up below as a headline beside it. Recommendation: (b).
+4. **Done work of the chain under no item**: the parametric geometry and its checker and perturbation operators (ADR
+   0065, ADR 0118), the reduced-order fan model (ADR 0119), the steady divergence guard (ADR 0077) and the stall
+   diagnoses of the page. Options: (a) leave them to the page; (b) enter record items so that the figure counts them.
+   Recommendation: (a): record items would raise the per cent without moving the goal.
+5. **Structure and vibration.** The page leaves structural coupling as an open decision of the user; the breakdown's
+   target names vibration, and five fan-titled structural items exist (F-387 done; F-593, F-604 partly done; F-406,
+   F-436 not started). Options: (a) outside the milestone, as mapped; (b) the five as members by a class of their own
+   (94 members, 50 done, 32 partly done, 12 not started, 70 %); (c) a milestone of its own for the structural fan
+   demonstrations, with F-406 or F-436 as headline. Recommendation: (c), with the cyclic rotor that ADR 0756 proposed.
+   The sliding-interface route stays with the rotor-stator milestone ADR 0756 proposed.
+
+## For the lead: roadmap entries
+
+> Status proposed for F-867: done.
+
+> Note entry: ADR 0757, 2026-11-21, done: the milestone fan redefined as the design goal of docs/milestone-fan.md ("Assistant-driven fan design"), headline F-870, F-243, F-260 and F-702, with an item or the words "no item" for each of 14 links; 89 memberships with reasons in docs/adr/0757-f867-mapping.tsv (49 done, 30 partly done, 10 not started, 72 %, not met; before: 23 members, 85 %), all 21 fan-titled items placed (12 members, 9 listed), sample of 40 pairs read a second time with 1 disagreement, taken (F-200 added); the command of addendum 1 leaves vortex-shedding and aerofoil-lift byte for byte, shown on a copy of main 059c9423.
+
+> Follow-up (proposed, open question 1): "FAN-01 characteristic curve: pressure rise and efficiency over the measured flow range by an operating map", deps F-870, F-095; acceptance: Every limit not stated here is registered in the ADR before the run. An operating map (rcfd map or design::opmap) of the FAN-01 rotor over at least five flow rates of the measured characteristic recorded in docs/validation-data.md (1. FAN-01), each point restarted from its neighbour and converged by the registered rule, gives the total-to-static pressure rise and the efficiency at each point within a band registered before the run; a point that stalls or diverges is recorded with its located reason and is not a pass. Milestone fan, headline for the link operating map.
+
+> Follow-up (proposed, open question 2): "Fan noise estimate on the operating curve: blade-passing tones and a stated broadband proxy", deps F-243, F-136, new:fan-curve; acceptance: Every limit not stated here is registered in the ADR before the run. For at least three points of the FAN-01 operating map the tonal level at the first three blade-passing harmonics and one stated steady-RANS broadband proxy are reported from the flow solution, each with its distance from a measured fan noise reference that a page of the repository records, or, where no such reference is recorded, with the words that it is not validated and the item stays partial. Milestone fan, headline for the link noise.
+
+> Follow-up (proposed, open question 3): "One assistant-driven design iteration on a fan through the MCP tools, with its measured limitations", deps F-702, F-260; acceptance: Every limit not stated here is registered in the ADR before the run. A recorded session in which an assistant, through the MCP tools alone, creates at least three variants of a parametric fan, runs each over at least three operating points, fetches flow, pressure rise and the noise estimate, compares them and proposes the next variant, with every evaluation in the design ledger and the run reproducible from the ledger within a registered tolerance; the tier of each evaluation (reduced-order or CFD) and what was not validated are stated. Milestone fan, headline for the link assistant tools.
+
+The same entries are in `docs/roadmap/proposals/0757-F-867.json` (form 1 of ADR 0755, base 059c9423), checked with
+`python scripts/roadmap_proposals.py check`.
