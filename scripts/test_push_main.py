@@ -95,7 +95,7 @@ class Ledger(unittest.TestCase):
     def test_committed_ledger_has_the_header_and_the_seed_line(self):
         rows = pm.read_ledger(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", pm.LEDGER))
         self.assertTrue(rows and rows[0]["kind"] == "gate" and rows[0]["commit"].startswith("49fbf1a3"))
-        self.assertTrue(all(r["kind"] in ("merge", "gate", "leftout", "ci") for r in rows))
+        self.assertTrue(all(r["kind"] in ("merge", "gate", "leftout", "mutants", "ci") for r in rows))
 
 
 class Mutation(unittest.TestCase):
@@ -795,7 +795,7 @@ class Items(TempRepo):
         self.assertEqual(pm.merge_info(self.d, "HEAD")["items"], [])
 
     def test_the_corrected_line_of_the_f855_merge_is_as_the_lead_left_it(self):
-        rows = [r for r in pm.read_ledger(os.path.join(HERE, "..", pm.LEDGER)) if r["commit"] == "26856a9027"]
+        rows = [r for r in pm.read_ledger(os.path.join(HERE, "..", pm.LEDGER)) if r["commit"] == "26856a9027" and r["kind"] == "merge"]
         self.assertEqual([(r["branch"], r["items"]) for r in rows], [("f855-edit-lock-f2-lockbusy", "F-855")])
 
 
