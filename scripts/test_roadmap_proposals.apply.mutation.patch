@@ -1,0 +1,14 @@
+# expect-fail: python scripts/test_roadmap_proposals.py
+diff --git a/scripts/roadmap_proposals.py b/scripts/roadmap_proposals.py
+index f2f86c32..e508d7ff 100644
+--- a/scripts/roadmap_proposals.py
++++ b/scripts/roadmap_proposals.py
+@@ -190,7 +190,7 @@ def apply(items, proposals, start=None, base_items=None):
+             raise ProposalError("same-item", f"{item_id} has two proposals, of ADR {seen[item_id]} and ADR "
+                                              f"{proposal['adr']}; they are applied one by one, by the lead")
+         seen[item_id] = proposal["adr"]
+-    ordered = sorted(proposals, key=lambda p: (p["adr"], number(p["item"])))
++    ordered = list(proposals)
+     if base_items is not None:
+         for proposal in ordered:
+             item_id, base = proposal["item"], proposal["base"]
