@@ -565,7 +565,7 @@ One row per record of this folder, grouped by the roadmap category of the item i
 | [0754](0754-f863-registration-process-measures-and-stop-conditions-before-more-workers.md) | F-863 registration: process measures and stop conditions before more workers | REGISTERED | 2026-11-21 | 1 | F-863 | done |
 | [0755](0755-f864-registration-a-roadmap-proposal-as-a-file-validated-applied-and-replayed.md) | F-864 registration: a roadmap proposal as a file, validated, applied and replayed on six merged ADRs | REGISTERED | 2026-11-21 | 1 | F-864 | partial |
 | [0756](0756-f865-registration-per-cent-complete-for-the-roadmap-and-for-each-simulation-milestone.md) | F-865 registration: per cent complete for the roadmap and for each simulation milestone | REGISTERED | 2026-11-21 | 1 | F-865 | done |
-| [0757](0757-f867-registration-the-fan-milestone-as-the-whole-design-goal.md) | F-867 registration: the fan milestone as the whole fan design goal | REGISTERED | 2026-11-21 | 1 | F-867 | todo |
+| [0757](0757-f867-registration-the-fan-milestone-as-the-whole-design-goal.md) | F-867 registration: the fan milestone as the whole fan design goal | REGISTERED | 2026-11-21 | 1 | F-867 | done |
 
 ## Records with no item in the file name (259)
 

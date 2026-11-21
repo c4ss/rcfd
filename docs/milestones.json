@@ -19,19 +19,27 @@
     },
     {
       "id": "fan",
-      "title": "The fan case (FAN-01)",
-      "result": "The FAN-01 low-pressure axial fan as a rotor-only periodic sector in the rotating frame with k-omega SST: the total-to-static pressure rise and the shaft torque at the design point against the measured characteristic.",
+      "title": "Assistant-driven fan design",
+      "result": "Claude, through the assistant tool layer, iterates on fan shape and size, sets up and runs the test cases, reads the results, and converges on designs that keep noise low while flow is high across a range of operating conditions.",
       "cases": [
         "crates/rcfd-api/tests/fan01_validation.rs",
         "crates/rcfd-api/tests/fan01_diagnosis_w35c.rs",
         "crates/rcfd-api/tests/fan01_gci_w37c.rs",
         "crates/rcfd-api/tests/fan01_stall_w43c.rs",
-        "crates/rcfd-api/tests/fan01_second_order_w49q.rs"
+        "crates/rcfd-api/tests/fan01_second_order_w49q.rs",
+        "cases/axial_fan_sector",
+        "crates/rcfd-api/tests/fan_sector.rs",
+        "crates/rcfd-post/tests/fan_rom_w46b.rs",
+        "crates/rcfd-api/tests/design_opmap_w32c.rs",
+        "crates/rcfd-api/tests/design_e2e_w32c.rs",
+        "crates/rcfd-api/tests/f697_fan_objective.rs"
       ],
-      "reference": "the measured characteristic of the FAN 01 benchmark, Zenodo doi:10.5281/zenodo.20037409 (v5), file characteristic_n1ug.mat, design point 1.4032 m^3/s, 126.46 Pa, 333.30 W, as recorded in docs/validation-data.md, \"1. FAN-01\" (the primary rig paper, SAE 2016-01-1805, is recorded there as not read)",
+      "reference": "for the fan solve, the measured characteristic of the FAN 01 benchmark, Zenodo doi:10.5281/zenodo.20037409 (v5), file characteristic_n1ug.mat, design point 1.4032 m^3/s, 126.46 Pa, 333.30 W, as recorded in docs/validation-data.md, \"1. FAN-01\" (the primary rig paper, SAE 2016-01-1805, is recorded there as not read); for the noise, no measured fan noise is recorded (docs/fan-project-breakdown.md, part D5: missing, needs data)",
       "headline": [
-        "F-126",
-        "F-870"
+        "F-870",
+        "F-243",
+        "F-260",
+        "F-702"
       ],
       "page": "docs/milestone-fan.md"
     },

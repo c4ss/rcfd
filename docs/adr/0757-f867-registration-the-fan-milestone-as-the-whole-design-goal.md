@@ -356,3 +356,22 @@ unchanged. The goal has four headline items that can be met or missed.
 
 The same entries are in `docs/roadmap/proposals/0757-F-867.json` (form 1 of ADR 0755, base 059c9423), checked with
 `python scripts/roadmap_proposals.py check`.
+
+## The lead's reading (2026-11-21), after the merge
+
+Merged at e66e3cc3 and pushed at fc1f032f (ledger line of e66e3cc3: the report read one minute after it came, 12 minutes
+of reading, proposed done, written done). Checked by the lead before the merge: the registration is the first commit and
+alone; the definitions file equals main's for `vortex-shedding` and `aerofoil-lift`; the mapping has 89 rows, 89 distinct
+items, a reason in each. The command of the addendum was run on main after the merge: 89 members, 49 done, 30 partly
+done, 10 not started, 72 per cent, headline not met; `python scripts/roadmap_milestones.py --check` passes.
+
+Status: **done**, as proposed. The first live use of form 1 (ADR 0755): `docs/roadmap/proposals/0757-F-867.json` was
+applied with `python scripts/roadmap_proposals.py apply`, status and note as the agent wrote them, from a copy without
+the three follow-ups. The follow-ups are new roadmap items, and entering them is a question of scope: they are questions
+1 to 3 above and are put to the maintainer with the agent's recommendations, together with questions 4 and 5. That a
+proposal's follow-ups can wait on the maintainer while its status is applied is a third point for the form, beside the
+two of ADR 0755.
+
+Not done by this item and noted for the next reader: the 21 memberships of the classes M2 and M3 were carried over from
+ADR 0756 and not read again (the sample check found one missing member of that kind, F-200); the chain table of
+`docs/milestone-fan.md` names F-254 and F-257 and is stale.
