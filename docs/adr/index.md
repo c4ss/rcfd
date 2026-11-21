@@ -559,7 +559,7 @@ One row per record of this folder, grouped by the roadmap category of the item i
 | [0749](0749-f854-registration-two-wall-clock-limits-measured-so-that-load-alone-does-not-fail-them.md) | F-854 registration: two wall-clock limits measured so that the load of the machine alone does not fail them | REGISTERED | 2026-11-20 | 1 | F-854 | done |
 | [0750](0750-f854-registration-i2-times-an-increment-of-a-store-with-spare-capacity.md) | F-854 registration: I2 times an increment of a store with spare capacity; the increment that crosses the capacity is reported | REGISTERED | 2026-11-20 | 1 | F-854 | done |
 | [0751](0751-f855-registration-the-edit-locks-f2-lockbusy-diagnosed-under-loads.md) | F-855 registration: the edit lock's F2 ended four probe calls in LockBusy; the cause diagnosed under registered loads | REGISTERED | 2026-11-21 | 1 | F-002 | partial |
-| [0751](0751-f855-registration-the-edit-locks-f2-lockbusy-diagnosed-under-loads.md) | F-855 registration: the edit lock's F2 ended four probe calls in LockBusy; the cause diagnosed under registered loads | REGISTERED | 2026-11-21 | 1 | F-855 | todo |
+| [0751](0751-f855-registration-the-edit-locks-f2-lockbusy-diagnosed-under-loads.md) | F-855 registration: the edit lock's F2 ended four probe calls in LockBusy; the cause diagnosed under registered loads | REGISTERED | 2026-11-21 | 1 | F-855 | partial |
 
 ## Records with no item in the file name (259)
 

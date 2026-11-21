@@ -491,3 +491,26 @@ None that rule 6 leaves open for the maintainer. For the lead, beyond the four o
 > gap: Not shown that the gate met the journal-lock fault (its project folder was not kept); a holder stalled 2 s by the runner is not excluded, and F2 is unchanged, so it can fail again in the gate. The mutations M2 and M6 of ADR 0669 are no longer caught by F2 on the agent machine (also on the base commit): the second resolve under the lock has no forced control. The controls CJ and CC (edit_lock_f855, feature test-hooks) are not run by the gate.
 
 > Follow-up proposed: A forced control of the second resolve under the edit lock (ADR 0669 D1). Deps F-855. Acceptance: Every limit not stated here is registered in the ADR before the run. A test-only hook makes the first resolve of replace_if_hash fail as a concurrent rename does; with it a call without the second resolve (ADR 0669 M2) and one with the lexical key joined by the platform separator (M6) each fail a registered test in every run, and the unmutated library passes it; the default bits unchanged.
+
+## The lead's answers (2026-11-21), after the merge
+
+Merged at 26856a90 by `scripts/push_main.py` (22.9 minutes; the committed mutation MJ1 caught). The six questions are
+not of scope or priority, so the lead decides them.
+
+1. Changes A and B are inside the brief. A writer whose own removal fails retries for at most 527 ms, the trade ADR 0676
+   made for the edit lock; no wait of another writer is lengthened, and a lock or claim left behind cost the others 2 s
+   and more. Both stay.
+2. and 6. Change C is not made. F2 stays as ADR 0669 registered it: without a reproduction of a stalled holder, a test
+   that accepts a refused probe would hide the next occurrence. If F2 fails again in a gate with changes A and B merged,
+   the question is opened again with that gate's evidence; in place or as a record is decided then.
+3. The journal's wait of 2 s inside the edit lock's 2 s is noted and not changed. It belongs to ADR 0188 and has no
+   failure of its own on record after change A; it is named in the follow-up below as a thing to measure, not to change.
+4. The gate is to run `edit_lock_f855` with the feature beside `edit_lock_f755`, and is to keep the project folder of a
+   failed edit-lock test as an artifact: roadmap item F-858.
+5. Option (a): a forced control of the second resolve, so that M2 and M6 of ADR 0669 are caught again: roadmap item
+   F-859. Until then the second resolve of ADR 0669 D1 has no test that fails without it on the lead's machine; that is
+   said in the gap of F-855.
+
+Status of F-855: partial, by the registered rule (the gate's failure was not reproduced without a forced cause; M2 and M6
+survived). Finding on the push script, in F-851: the ledger's item field read "F-002" out of the branch name
+(`...-f2-...`); the line is corrected to F-855 in the commit that adds this section.
