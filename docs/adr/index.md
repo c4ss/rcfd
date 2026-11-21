@@ -556,8 +556,8 @@ One row per record of this folder, grouped by the roadmap category of the item i
 | [0720](0720-f773-registration-a-git-commit-that-names-an-adr-or-an-item-as-evidence-of-the-files-it-adds.md) | F-773 registration: the ADR or item named by the commit that adds a test file as evidence of kind E8 | REGISTERED | 2026-11-17 | 1 | F-773 | partial |
 | [0721](0721-f839-registration-a-second-reader-for-the-e8-primary-files-and-the-supplementary-sample-of-adr-0720.md) | F-839 registration: a second reader for the E8-primary files and the supplementary sample of ADR 0720 | REGISTERED | 2026-11-17 | 2 | F-839 | done |
 | [0740](0740-f849-registration-a-registered-time-limit-for-two-immersed-solid-tests-of-the-full-gate.md) | F-849 registration: a registered time limit for two immersed-solid tests of the full gate | REGISTERED | 2026-11-19 | 1 | F-849 | partial |
-| [0749](0749-f854-registration-two-wall-clock-limits-measured-so-that-load-alone-does-not-fail-them.md) | F-854 registration: two wall-clock limits measured so that the load of the machine alone does not fail them | REGISTERED | 2026-11-20 | 1 | F-854 | partial |
-| [0750](0750-f854-registration-i2-times-an-increment-of-a-store-with-spare-capacity.md) | F-854 registration: I2 times an increment of a store with spare capacity; the increment that crosses the capacity is reported | REGISTERED | 2026-11-20 | 1 | F-854 | partial |
+| [0749](0749-f854-registration-two-wall-clock-limits-measured-so-that-load-alone-does-not-fail-them.md) | F-854 registration: two wall-clock limits measured so that the load of the machine alone does not fail them | REGISTERED | 2026-11-20 | 1 | F-854 | done |
+| [0750](0750-f854-registration-i2-times-an-increment-of-a-store-with-spare-capacity.md) | F-854 registration: I2 times an increment of a store with spare capacity; the increment that crosses the capacity is reported | REGISTERED | 2026-11-20 | 1 | F-854 | done |
 
 ## Records with no item in the file name (259)
 

@@ -430,3 +430,19 @@ is option (b) of Q1: I2 times an increment of 100 samples per series of a store 
 outside the timer, limit 2 ms unchanged; the increment that crosses the end of the capacity is reported by a test without
 a limit. The clause of F-456, "an increment of 100 samples at 1e5 stored in at most 2 ms", is read in that sense from now
 on. Nothing else is approved: no other limit, test or acceptance changes.
+
+## Result of row G (2026-11-21), by the lead
+
+Row G (3 consecutive full gate runs of main with both tests passing at the first attempt) is met, 3 of 3. The three full
+gates of main after the merge of ADR 0750, in order, each dispatched with four shards on windows-latest:
+
+| Run | Commit | Gate | Passed; failed; ignored | A4 | D1 and D2 of ADR 0750 |
+|---|---|---|---|---|---|
+| 44828624630 | e9378ecb | red | 5935; 1; 1727 | ok at the first attempt | ok at the first attempt |
+| 44842718750 | 5637150a | green | 5936; 0; 1727 | ok at the first attempt | ok at the first attempt |
+| 44854704415 | a9570de6 | green | 5936; 0; 1727 | ok at the first attempt | ok at the first attempt |
+
+The first gate is red on another test alone (`rcfd-project` `edit_lock_f751`, F2: 4 of 10000 probe calls `LockBusy`),
+entered as F-855. The lead counts it: the row asks that both tests pass at the first attempt, not that the gate is green.
+No full gate of main lies between the three. The retired I2 of ADR 0353 is among the ignored tests in all three. Read from
+the `test.log` of each shard (artifacts in `E:/projects/cfd/w49i-work/gate-e9378ecb`, `gate-5637150a`, `gate-a9570de6`).
