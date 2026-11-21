@@ -1,0 +1,14 @@
+# expect-fail: python scripts/test_push_main.py
+diff --git a/scripts/push_main.py b/scripts/push_main.py
+index 2bdc5488..262f8d9b 100644
+--- a/scripts/push_main.py
++++ b/scripts/push_main.py
+@@ -447,7 +447,7 @@ def report_time(text):
+ 
+ def queue_minutes(reported, merge_epoch):
+     """Whole minutes, rounded to the nearest, from the agent's report to the merge commit (its committer time in seconds)."""
+-    return int((float(merge_epoch) - reported.timestamp()) / 60.0 + 0.5)
++    return int((float(merge_epoch) - reported.timestamp()) + 0.5)
+ 
+ 
+ def status_value(text, option):

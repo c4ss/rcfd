@@ -1,0 +1,14 @@
+# expect-fail: python scripts/test_process_report.py
+diff --git a/scripts/process_report.py b/scripts/process_report.py
+index a491dbf9..0c499683 100644
+--- a/scripts/process_report.py
++++ b/scripts/process_report.py
+@@ -785,7 +785,7 @@ def ledger_measures(rows, today, days=28):
+             try:
+                 v = float(e[key])
+             except (KeyError, ValueError):
+-                continue
++                v = 0.0
+             if v == v and abs(v) != float("inf"):
+                 out.append(v)
+         return out

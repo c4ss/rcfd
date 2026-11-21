@@ -135,9 +135,42 @@ with the heading `## Sources read (YYYY-MM-DD)` and one row per citation the ADR
 count may fall and never rise. An addendum whose rows are all `not obtainable` still closes the ADR for the count: the
 count measures citations looked at, and the rows say what was found.
 
+## When no further agent is started
+
+The numbers of this section are proposed, not in force until the maintainer approves them (ADR 0754, F-863, "Open
+questions for the maintainer"). Until then the lead works as before and records the measures.
+
+What the lead records, from the merge of F-863 on (a value that is not given is absent from the line, not zero):
+
+- With the push of a merge: `python scripts/push_main.py --run --reported <time of the agent's report> --review-minutes
+  <the lead's minutes on the report> --proposed <the status the agent proposed> --written <the status the lead writes>`.
+  The time is `2026-11-21T14:05`, local time unless it carries an offset; the line gets the minutes from the report to
+  the merge commit. A status is `done`, `partial` or `todo`; a line of several items takes `F-863=done,F-864=partial`,
+  the time of the oldest report and the minutes together.
+- With the line of a red full gate: `--gate-line ... --escaped <commit>=<binary::test>` for each failed test whose commit
+  can be named, the commit that brought the failure in; `--escaped none` when the lead has looked and no commit did (a
+  limit that depends on the load). Without the option nothing is known of that gate.
+- `python scripts/process_report.py --weekly` prints the four measures over the last 28 days under "Process measures",
+  each with the number of lines that state it.
+
+The conditions:
+
+| Condition | Proposed number | What it counts |
+| --- | --- | --- |
+| Reports not yet read | no further agent while 3 or more wait | reports from the agent's final message until the lead has checked them against the branch; the lead's count |
+| Escaped defects | no further agent when, over the last 28 days, 2 or more commits brought a failure into a full gate and they are more than 1 in 10 of the merges | the line "escaped defects" of the weekly list; it ends when each fix is issued and the lead has written why the push run left the failing tests out |
+| A red full gate | while the newest gate line is red, no agent except on the fix of a test that failed in it | the newest line of kind `gate` in the ledger |
+| Agents at work at once | at most 4 | the briefs issued and neither merged nor closed (section h of the process report), less those that are not an agent's work |
+
+The reasons, and what of them can be read from the ledger of November 2026 and what cannot, are in ADR 0754. The number
+of agents is put to the maintainer again after four weeks of the measures.
+
 ## Changes
 
 - Version 1, 2026-11-18: first written, from the documentation process review and the maintainer's decisions of that day.
+- 2026-11-21 (F-863, ADR 0754): "When no further agent is started" added as a proposal: the options that record the
+  process measures, and four stop conditions whose numbers are not in force until the maintainer approves them. The
+  version number is unchanged for that reason.
 - 2026-11-21 (F-851, ADR 0752): "Merging and pushing" says what `scripts/push_main.py` does after its first real runs; it
   writes no roadmap status. The version number is unchanged: no step of the lead's process changed, only its description.
 - 2026-11-21: "Weekly" carries the maintainer's two answers of that day on citation batches and on readers (handover note of

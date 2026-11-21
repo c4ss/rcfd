@@ -799,5 +799,177 @@ class Items(TempRepo):
         self.assertEqual([(r["branch"], r["items"]) for r in rows], [("f855-edit-lock-f2-lockbusy", "F-855")])
 
 
+import datetime  # noqa: E402
+
+
+class Measures(TempRepo):
+    """ADR 0754 (F-863): the options of --run that record the queue age, the review minutes and the two statuses."""
+
+    def merged(self):
+        sha = self.merge("f001-work", ["crates/a/src/one.rs"])
+        return sha, int(self.g("log", "-1", "--format=%ct", sha))
+
+    def stops(self, word, **flags):
+        """The run stops with `word` in its message before any check, and no ledger line is written."""
+        r = Runner()
+        code, out = self.run_plan(self.plan(CHECK), r, **flags)
+        self.assertIsInstance(code, str, out)
+        self.assertIn(word, code)
+        self.assertEqual((r.calls, self.rows()), ([], []))
+
+    def detail(self, **flags):
+        code, out = self.run_plan(self.plan(CHECK), Runner(), **flags)
+        self.assertEqual(code, 0, out)
+        return self.rows()[-1]["detail"]
+
+    def test_the_queue_age_is_the_minutes_from_the_report_to_the_merge_commit(self):
+        _, ct = self.merged()
+        reported = datetime.datetime.fromtimestamp(ct - 90 * 60, datetime.timezone(datetime.timedelta(hours=1)))
+        self.assertEqual(self.detail(reported=reported.isoformat(timespec="seconds")),
+                         f"exit=0;mutations=0;reported={reported.isoformat(timespec='minutes')};queue_minutes=90;cmds={CHECK}")
+
+    def test_the_minutes_are_rounded_and_a_time_without_an_offset_is_local_time(self):
+        merge = datetime.datetime(2026, 11, 21, 11, 29, 40, tzinfo=datetime.timezone.utc).timestamp()
+        self.assertEqual(pm.queue_minutes(pm.report_time("2026-11-21T10:00+00:00"), merge), 90)
+        self.assertEqual(pm.queue_minutes(pm.report_time("2026-11-21T12:00:00+02:00"), merge), 90)
+        self.assertEqual(pm.queue_minutes(pm.report_time("2026-11-21 11:29+00:00"), merge), 1)
+        local = pm.report_time("2026-11-21T10:00")
+        self.assertIsNotNone(local.utcoffset())
+        self.assertEqual(local.timestamp(), datetime.datetime(2026, 11, 21, 10, 0).timestamp())
+        self.assertEqual(pm.measure_entries(reported="2026-11-21T10:00+00:00", merge_epoch=merge),
+                         ["reported=2026-11-21T10:00+00:00", "queue_minutes=90"])
+
+    def test_a_report_after_the_merge_or_an_unreadable_time_stops_before_any_check(self):
+        _, ct = self.merged()
+        late = datetime.datetime.fromtimestamp(ct + 120, datetime.timezone.utc)
+        self.stops("--reported", reported=late.isoformat(timespec="seconds"))
+        self.stops("--reported", reported="yesterday")
+        self.stops("--reported", reported="2026-11-21")
+
+    def test_the_review_minutes_are_written_as_the_lead_states_them(self):
+        self.merged()
+        self.assertEqual(self.detail(review_minutes="25"), f"exit=0;mutations=0;review_minutes=25;cmds={CHECK}")
+        self.assertEqual(pm.measure_entries(review_minutes="12.5"), ["review_minutes=12.5"])
+        self.assertEqual(pm.measure_entries(review_minutes=0), ["review_minutes=0"])
+
+    def test_review_minutes_that_are_negative_or_no_number_stop_before_any_check(self):
+        self.merged()
+        for bad in ("-1", "soon", "nan", "inf"):
+            self.stops("--review-minutes", review_minutes=bad)
+
+    def test_the_proposed_and_the_written_status(self):
+        self.merged()
+        self.assertEqual(self.detail(proposed="done", written="partial"),
+                         f"exit=0;mutations=0;proposed=done;written=partial;cmds={CHECK}")
+        self.assertEqual(pm.measure_entries(proposed="todo"), ["proposed=todo"])
+        self.assertEqual(pm.measure_entries(written="done"), ["written=done"])
+        self.assertEqual(pm.measure_entries(proposed="F-863=done,F-864=partial", written="F-864=partial,F-863=partial"),
+                         ["proposed=F-863=done,F-864=partial", "written=F-864=partial,F-863=partial"])
+
+    def test_a_status_that_is_no_status_stops_before_any_check(self):
+        self.merged()
+        self.stops("--proposed", proposed="finished")
+        self.stops("--written", proposed="done", written="Done.")
+        self.stops("--written", proposed="done", written="F-863=done")
+        self.stops("--written", proposed="F-863=done,F-864=done", written="F-863=done,F-865=done")
+        self.stops("--proposed", proposed="F-863=done;F-864=done")
+
+    def test_no_option_gives_no_entry(self):
+        self.assertEqual(pm.measure_entries(), [])
+        self.merged()
+        self.assertEqual(self.detail(reported=None, review_minutes=None, proposed=None, written=None),
+                         f"exit=0;mutations=0;cmds={CHECK}")
+
+    def test_the_entries_stand_after_joint_and_before_cmds_in_the_registered_order(self):
+        m1 = self.merge("f001-work", ["crates/a/src/one.rs"])
+        self.commit("docs/notes.md", "the lead's notes")
+        m2 = self.merge("f002-work", ["crates/b/src/two.rs"])
+        ct = int(self.g("log", "-1", "--format=%ct", m2))
+        reported = datetime.datetime.fromtimestamp(ct - 7 * 60, datetime.timezone.utc)
+        code, out = self.run_plan(self.plan(CHECK, SLOW), Runner({SLOW: [(101, CARGO_FAILED)]}), base=self.base,
+                                  written="F-001=done,F-002=partial", proposed="F-001=done,F-002=done", review_minutes="40",
+                                  reported=reported.isoformat(timespec="seconds"))
+        self.assertEqual(code, 0, out)
+        detail = self.rows()[-1]["detail"]
+        self.assertRegex(detail, r"^exit=0;mutations=0;flaky=[^;]+;joint=" + m1[:10] + ";reported=")
+        self.assertTrue(detail.endswith(
+            f";joint={m1[:10]};reported={reported.isoformat(timespec='minutes')};queue_minutes=7;review_minutes=40;"
+            f"proposed=F-001=done,F-002=done;written=F-001=done,F-002=partial;cmds={CHECK} | {SLOW}"), detail)
+
+    def test_an_option_without_run_stops(self):
+        self.merged()
+        for flag, value in (("--reported", "2026-11-21T10:00"), ("--review-minutes", "5"), ("--proposed", "done"),
+                            ("--written", "done")):
+            with self.assertRaisesRegex(SystemExit, flag + " needs --run"):
+                pm.main(["--root", self.d, flag, value])
+        with self.assertRaisesRegex(SystemExit, "--escaped needs --gate-line"):
+            pm.main(["--root", self.d, "--run", "--escaped", "none"])
+        self.assertEqual(self.rows(), [])
+
+
+class Escaped(TempRepo):
+    """ADR 0754 (F-863): --escaped of --gate-line names the commit that brought a failed test of a red gate in."""
+
+    def gate(self, escaped, failed=2, note="GitHub run 1"):
+        a = argparse.Namespace(commit="HEAD", passed=5, failed=failed, ignored=1, skipped=None, attribution=None,
+                               date="2026-11-21", minutes="", note=note, gate_times=None, escaped=escaped)
+        with contextlib.redirect_stdout(io.StringIO()):
+            return pm.do_gate_line(self.d, a)
+
+    def test_the_gate_line_names_the_commit_and_the_test(self):
+        sha = self.merge("f001-work", ["crates/a/src/one.rs"])
+        self.assertEqual(self.gate([f"{sha[:8]}=slow::one", f"{self.base}=bt::x", f"{sha}=slow::one"]), 0)
+        self.assertEqual(self.rows()[-1]["detail"],
+                         f"passed=5;failed=2;ignored=1;escaped={sha[:10]}=slow::one,{self.base[:10]}=bt::x;GitHub run 1")
+        self.assertEqual(self.rows()[-1]["result"], "red")
+        self.assertEqual(pm.gate_detail(5, 2, 1, note="n", times="gates/abc", escaped="escaped=abc=slow::one"),
+                         "passed=5;failed=2;ignored=1;times=gates/abc;escaped=abc=slow::one;n")
+
+    def test_none_says_that_no_commit_brought_a_failure_in(self):
+        self.assertEqual(self.gate(["none"], note=""), 0)
+        self.assertEqual(self.rows()[-1]["detail"], "passed=5;failed=2;ignored=1;escaped=none")
+
+    def test_without_the_option_the_line_has_no_entry(self):
+        self.assertEqual(self.gate(None, note=""), 0)
+        self.assertEqual(self.rows()[-1]["detail"], "passed=5;failed=2;ignored=1")
+        self.assertIsNone(pm.escaped_entry(None, lambda rev: None))
+        self.assertIsNone(pm.escaped_entry([], lambda rev: None))
+
+    def test_a_green_gate_or_a_value_that_cannot_be_read_stops_and_writes_no_line(self):
+        sha = self.merge("f001-work", ["crates/a/src/one.rs"])
+        cases = [dict(escaped=[f"{sha}=slow::one"], failed=0), dict(escaped=["none"], failed=0),
+                 dict(escaped=["none", f"{sha}=slow::one"]), dict(escaped=["0123456789abcdef=slow::one"]),
+                 dict(escaped=["slow::one"]), dict(escaped=[f"{sha}=slow"]), dict(escaped=[f"{sha}=slow::one;x=y"]),
+                 dict(escaped=[f"{sha}=slow::one,bt::x"]), dict(escaped=[f"{sha}=slow::one two"])]
+        for case in cases:
+            with self.assertRaisesRegex(SystemExit, "--escaped", msg=str(case)):
+                self.gate(**case)
+        self.assertEqual(self.rows(), [])
+        self.assertEqual(self.g("tag", "-l", "verified"), "")
+
+
+class StopConditions(unittest.TestCase):
+    """ADR 0754 (F-863): lead-process.md states the stop conditions, as a proposal until the maintainer approves the numbers."""
+
+    def test_the_page_states_the_four_conditions_and_the_options(self):
+        with open(os.path.join(HERE, "..", "docs", "process", "lead-process.md"), encoding="utf-8") as fh:
+            page = fh.read()
+        self.assertIn("\n## When no further agent is started\n", page)
+        text = " ".join(page.split("\n## When no further agent is started\n", 1)[1].split("\n## ", 1)[0].split())
+        for words in ("Reports not yet read", "Escaped defects", "A red full gate", "Agents at work at once", "--reported",
+                      "--review-minutes", "--proposed", "--written", "--escaped", "ADR 0754"):
+            self.assertIn(words, text)
+        adr = [n for n in os.listdir(os.path.join(HERE, "..", "docs", "adr")) if n.startswith("0754-")]
+        self.assertEqual(len(adr), 1)
+        with open(os.path.join(HERE, "..", "docs", "adr", adr[0]), encoding="utf-8") as fh:
+            record = fh.read()
+        self.assertIn("Open questions for the maintainer", record)
+        # the numbers are a proposal until the lead has written the maintainer's answers into the record
+        if "Answers of the maintainer" not in record:
+            self.assertIn("proposed, not in force until the maintainer approves them", text)
+        for option in ("--reported", "--review-minutes", "--proposed", "--written", "--escaped"):
+            self.assertIn(option, pm.__doc__)
+
+
 if __name__ == "__main__":
     unittest.main()
