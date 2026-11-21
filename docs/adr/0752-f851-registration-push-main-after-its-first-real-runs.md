@@ -400,3 +400,25 @@ hold. It rests on question 1 above being read as the registration reads it.
 Run on the tree of this addendum, before its commit: `python scripts/process_report.py --check`: 0 failures, after
 `--write` regenerated `docs/adr/index.md`; `cargo test -p rcfd-cli --release --test docs_site`: 2 passed, 0 failed
 (release profile). Row P is met. No crate was touched, so there is no fmt or clippy run.
+
+## The lead's answers (2026-11-21), after the merge
+
+Merged at 42b6d7b6 by the changed script itself, its first real run (4.2 minutes; 19 script tests, the four committed
+mutations caught, pushed). None of the questions is of scope or priority except question 5.
+
+1. `flaky=`, `resumed=`, `joint=` and `times=` in the detail column are not a change of the ledger's format: the columns
+   and every existing line are as they were, and the detail was a list of `key=value` before. The item is done.
+2. Finding 10: option (b) now, the start and the end commit in the left-out line; option (a), a worktree of its own for
+   the left-out run, in the same follow-up if (b) shows the two commits differing.
+3. Finding 11: option (b), the ADR's tests charged to the budget and never cut, their minutes printed in the dry run.
+4. Finding 16: option (a), the binaries named after a changed source file first.
+   Questions 2 to 4 are roadmap item F-860.
+5. Finding 17, a run of `process_report.py --check` by the agent before its report: this would be a rule of
+   `docs/process/agent-rules.md`, which is the maintainer's to change. Put to the maintainer with the recommendation to
+   add it; until then the lead asks for it in each brief, as the briefs of ADR 0752 and 0753 did.
+6. `lead-process.md` keeps version 1 with its dated line: accepted, no step of the process changed.
+
+The four patches beside one test file (`test_push_main.<name>.mutation.patch`) are accepted: the script verifies every
+patch in the merge's file list, and did. `docs/test-process.md` section 7.4 is brought in line with the script by the lead
+in the commit that adds this section. Not shown by any run yet: a further run of a failed check, a resumed run and a joint
+diff in a real merge; the first of each is read by the lead in the ledger line.

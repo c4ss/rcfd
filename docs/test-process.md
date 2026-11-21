@@ -568,7 +568,8 @@ Then, in this order:
 7. The diff-selected tests, within a budget of 30 minutes of recorded run time (`--budget-minutes`): the integration-test binaries
    of the crates the merge touches, then those of the crates that depend on them. Inside each group, binaries with a test that
    failed in a recent gate line of the ledger come first, then the others by recorded time, shortest first. Recorded times come
-   from `--times`, a TSV written by `scripts/gate_test.py --tsv`; a binary with no record counts 60 s (`--default-seconds`).
+   from `--times`, a TSV written by `scripts/gate_test.py --tsv` or a folder of them (default: the newest path a gate line names),
+   with 1.8 s of build counted per binary; a binary with no record counts 60 s (`--default-seconds`).
    Selection stops at the first binary that does not fit. What is left out is not run before the push: it runs in CI on `main`,
    and `--left-out-run` starts it in the background for this one merge. No test is switched off to make a run pass.
 8. Mutation patches. A registration commits one of its planned mutations as `crates/<crate>/tests/<test>.mutation.patch` beside
@@ -577,9 +578,12 @@ Then, in this order:
    requires the command to fail, and removes it again.
 9. `npm test` in `apps/studio-web`, when the merge touches it.
 
-On the first failing command the script stops, prints the line, writes nothing and leaves the merge unpushed. On success it
-regenerates the generated pages (`process_report.py --write`, `roadmap_progress.py`), appends one line to the ledger
-`docs/process/ledger.tsv` and commits both; `--push` then pushes. The ledger is changed only on `main`. Its columns are date, kind
+Before the checks the script regenerates the generated pages (`process_report.py --write`, `roadmap_progress.py`), and when the
+merge changes `scripts/` the plan begins with the script tests. A command that fails is run two further times (ADR 0752): if it
+then passes, its failed tests are named as flaky in the output and in the ledger line and the run goes on; a command that fails
+every time stops the script, which prints the line, writes nothing to the ledger and leaves the merge unpushed. A stopped run
+started again does not repeat what passed on the same merge commit. On success it appends one line to the ledger
+`docs/process/ledger.tsv` and commits it with the generated pages; `--push` then pushes. The ledger is changed only on `main`. Its columns are date, kind
 (`merge`, `gate`, `leftout`, `mutants`, `ci`), commit, branch, items, adrs, result, minutes, left_out (binaries the budget left out),
 left_out_minutes and detail (the commands run; for a gate line `passed=N;failed=N;ignored=N;fails=binary::test=ADR/F-item,...`).
 

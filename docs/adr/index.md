@@ -560,8 +560,8 @@ One row per record of this folder, grouped by the roadmap category of the item i
 | [0750](0750-f854-registration-i2-times-an-increment-of-a-store-with-spare-capacity.md) | F-854 registration: I2 times an increment of a store with spare capacity; the increment that crosses the capacity is reported | REGISTERED | 2026-11-20 | 1 | F-854 | done |
 | [0751](0751-f855-registration-the-edit-locks-f2-lockbusy-diagnosed-under-loads.md) | F-855 registration: the edit lock's F2 ended four probe calls in LockBusy; the cause diagnosed under registered loads | REGISTERED | 2026-11-21 | 1 | F-002 | partial |
 | [0751](0751-f855-registration-the-edit-locks-f2-lockbusy-diagnosed-under-loads.md) | F-855 registration: the edit lock's F2 ended four probe calls in LockBusy; the cause diagnosed under registered loads | REGISTERED | 2026-11-21 | 1 | F-855 | partial |
-| [0752](0752-f851-registration-push-main-after-its-first-real-runs.md) | F-851 registration: scripts/push_main.py after its first real runs | REGISTERED | 2026-11-21 | 1 | F-851 | todo |
-| [0753](0753-f853-registration-every-call-of-tmp-in-restart-w19c-gets-its-own-folder.md) | F-853 registration: every call of `tmp` in `restart_w19c` gets its own folder | REGISTERED | 2026-11-21 | 1 | F-853 | todo |
+| [0752](0752-f851-registration-push-main-after-its-first-real-runs.md) | F-851 registration: scripts/push_main.py after its first real runs | REGISTERED | 2026-11-21 | 1 | F-851 | done |
+| [0753](0753-f853-registration-every-call-of-tmp-in-restart-w19c-gets-its-own-folder.md) | F-853 registration: every call of `tmp` in `restart_w19c` gets its own folder | REGISTERED | 2026-11-21 | 1 | F-853 | done |
 
 ## Records with no item in the file name (259)
 
