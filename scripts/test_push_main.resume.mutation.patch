@@ -1,0 +1,14 @@
+# expect-fail: python scripts/test_push_main.py
+diff --git a/scripts/push_main.py b/scripts/push_main.py
+index c99fd742..9ad14d8d 100644
+--- a/scripts/push_main.py
++++ b/scripts/push_main.py
+@@ -401,7 +401,7 @@ def load_state(path, sha, base):
+             st = json.load(fh)
+     except (OSError, ValueError):
+         return {}, f"the record of an earlier run, {path}, cannot be read; not used"
+-    if st.get("commit") != sha or st.get("base") != base:
++    if False:
+         return {}, f"the record of an earlier run, {path}, is of another merge commit or base; not used"
+     return dict(st.get("passed") or {}), ""
+ 

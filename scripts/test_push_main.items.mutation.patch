@@ -1,0 +1,15 @@
+# expect-fail: python scripts/test_push_main.py
+diff --git a/scripts/push_main.py b/scripts/push_main.py
+index c99fd742..3f65c90b 100644
+--- a/scripts/push_main.py
++++ b/scripts/push_main.py
+@@ -109,8 +109,7 @@ def subject_branches(subject):
+ def branch_items(branch):
+     """The items the head of a branch name gives: its leading run of `f<digits>-` segments. `f855-edit-lock-f2-lockbusy` is
+     F-855 alone (finding 18 of F-851: the `-f2-` inside a name is not an item)."""
+-    m = re.match(r"(?:f\d{1,4}-)+", branch)
+-    return sorted({f"F-{int(n):03d}" for n in re.findall(r"f(\d+)-", m.group(0))}) if m else []
++    return sorted({f"F-{int(n):03d}" for n in re.findall(r"(?:^|-)f(\d{1,4})(?=-)", branch)})
+ 
+ 
+ def brief_items(text):
