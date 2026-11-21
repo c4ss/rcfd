@@ -23,7 +23,7 @@ on:
         type: number
         default: 30
       shards:
-        description: Parallel shards of the test step (ADR 0653 Amendment 3); 1 is the single job of the daily gate
+        description: Parallel shards of the test step (ADR 0653 Amendment 3); 1 is a single job, a scheduled run uses 4 (Amendment 4)
         type: choice
         options: ["1", "2", "3", "4", "6", "8"]
         default: "1"
@@ -70,7 +70,7 @@ jobs:
           EVENT: ${{ github.event_name }}
           REF: ${{ github.ref }}
           SHA: ${{ github.sha }}
-          SHARDS: ${{ inputs.shards || '1' }}
+          SHARDS: ${{ inputs.shards || '4' }}
           OS: ${{ inputs.os || 'windows-latest' }}
         run: |
           last=""

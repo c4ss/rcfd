@@ -118,7 +118,7 @@ class H3Workflow(unittest.TestCase):
 
     def test_h3_the_matrix_comes_from_decide_and_one_shard_keeps_the_names(self):
         self.assertIn("shard: ${{ fromJSON(needs.decide.outputs.shards) }}", self.gate)
-        self.assertIn("SHARDS: ${{ inputs.shards || '1' }}", self.text)  # a scheduled run has no input: one shard
+        self.assertIn("SHARDS: ${{ inputs.shards || '4' }}", self.text)  # a scheduled run has no input: four shards (ADR 0653 Amendment 4)
         name = re.search(r"\n    name: (.+)", self.gate).group(1)
         self.assertTrue(name.startswith("full gate, ${{ inputs.os || 'windows-latest' }}${{ needs.decide.outputs.n != '1' && "), name)
         self.assertTrue(name.endswith("|| '' }}"), name)
