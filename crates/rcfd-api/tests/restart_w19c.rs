@@ -3,6 +3,8 @@
 //! S1 steady same-mesh identity; S2 transient restart equals the continued run bit for bit (PISO
 //! Euler, PISO BDF2, PIMPLE BDF2); S3 steady file into a transient run; S4 embedded mesh, source
 //! case, refusals; S5 coarse-to-fine iteration counts (reported, pass/fail as registered).
+//!
+//! ADR 0753 (F-853): every call of `tmp` gets a folder of its own; the control is the last test.
 
 use rcfd_api::case::Case;
 use rcfd_api::runctl::{self, RunOptions};
@@ -10,6 +12,7 @@ use rcfd_api::sim::Simulation;
 use rcfd_io::container::Container;
 use rcfd_post::remap::RemapMethod;
 use std::path::PathBuf;
+use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Mutex;
 
 const CAVITY: &str = r#"
@@ -34,7 +37,10 @@ tolerance_p = 1e-7
 "#;
 
 fn tmp(tag: &str) -> PathBuf {
-    let d = std::env::temp_dir().join(format!("rcfd_restart_w19c_{tag}_{}", std::process::id()));
+    // ADR 0753 (F-853): the number of the call is in the name, so no two calls of a process share a folder
+    static CALLS: AtomicUsize = AtomicUsize::new(0);
+    let n = CALLS.fetch_add(1, Ordering::Relaxed);
+    let d = std::env::temp_dir().join(format!("rcfd_restart_w19c_{tag}_{}_{n}", std::process::id()));
     let _ = std::fs::remove_dir_all(&d);
     std::fs::create_dir_all(&d).unwrap();
     d
@@ -363,4 +369,17 @@ fn s5b_iterations_to_distance_are_fewer_than_cold() {
         let (d, dc) = (d.expect("never reached"), dc.expect("cold never reached"));
         assert!(d < dc, "S5b {m}: {d} vs cold {dc}");
     }
+}
+
+/// ADR 0753 (F-853), the forced control: a second call of `tmp` with the tag of the S5 tests, made
+/// while the first caller is between its save and its read, leaves the first caller's file alone.
+#[test]
+fn tmp_gives_every_call_its_own_folder() {
+    let first = tmp("s5");
+    let file = first.join("c.rcfd");
+    std::fs::write(&file, b"f853").unwrap();
+    let second = tmp("s5");
+    assert_ne!(first, second, "two calls of tmp gave one folder");
+    assert!(file.exists(), "the second call of tmp removed the file of the first");
+    assert_eq!(std::fs::read(&file).unwrap(), b"f853");
 }
