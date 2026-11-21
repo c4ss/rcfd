@@ -8,6 +8,8 @@ the record of merges into main and of full runs, written on main only; the `exce
 cases that the checks of the process report pass over, which only shrink.
 [documentation-process-review.md](documentation-process-review.md) is the review these pages came from, with the
 maintainer's decisions of 2026-11-18.
+[framework-reconciliation.md](framework-reconciliation.md) says how a wider proposal of 2026-11-17, kept in the folder
+`framework-2026-11-17/`, stands against these pages: what of it is adopted and what is not.
 
 Commands, from the repository root:
 
