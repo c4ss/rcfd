@@ -347,3 +347,22 @@ None. Taken on the maintainer's standing instruction of 2026-11-11 (take the rec
 > Gap of F-849: the three consecutive full gates on windows-latest of the acceptance have not run. After the merge, download the logs of three consecutive gates (gh run download RUN -p "gate-windows-latest-*" -D DIR, one folder per gate) and run python scripts/gate_limit_check.py --limits scripts/gate_limits.tsv DIR1 DIR2 DIR3: exit 0 means each of the two tests passed in at most 5400 s in each gate. A gate of one job on a slow runner can still run out of its 290 min tests step.
 
 No follow-up item is proposed.
+
+## Result of G1 (2026-11-21), by the lead
+
+G1 is met: `python scripts/gate_limit_check.py --limits scripts/gate_limits.tsv` on the logs of three consecutive full
+gates of main on windows-latest gives "met (2 tests, 3 gates)", exit 0. Each gate was dispatched with four shards and is
+green; no full gate of main lies between them.
+
+| Run | Commit | Passed; failed; ignored | `a3_two_d_two_strouhal_number` | `a2t_c1_two_d_two_on_t` |
+|---|---|---|---|---|
+| 44842718750 | 5637150a | 5936; 0; 1727 | 2299 s | 2058 s |
+| 44854704415 | a9570de6 | 5936; 0; 1727 | 3698 s | 3801 s |
+| 44865647753 | 5819a15c | 5936; 0; 1727 | 2146 s | 3885 s |
+
+The limit of the check is 5400 s; the largest time is 3885 s, a margin of 1.39. The three commits differ in the ledger,
+the roadmap and one ADR only, so the spread of 2058 to 3885 s for one test is the runner's. Two four-shard gates before
+these three also met the limit (46cea4f8: 4034 s and 3805 s; e9378ecb: 3020 s and 2982 s) and are not counted, because
+they were red on other tests (F-854, F-855). With this the decision rule gives done. Not shown by any run: a gate of one
+job, which did not finish within its tests step on 2026-11-20 (run 44711018197). Artifacts:
+`E:/projects/cfd/w49i-work/gate-5637150a`, `gate-a9570de6`, `gate-5819a15c`.

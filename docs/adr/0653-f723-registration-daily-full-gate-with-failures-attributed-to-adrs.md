@@ -454,3 +454,20 @@ test). The re-run of the attribution (D5) takes its limit from the same table an
 the job's 340 min have left, and the attribution step's limit goes from 40 to 240 min (Q3: the attribution stays in the
 gate job). In shard 2 of the trial of Addendum 3 the step was ended after 40 min in the re-run of the timed-out test and
 wrote no attribution; Addendum 3 read that as the re-run taking the rest of the job. Nothing above this section is changed.
+
+## Amendment 4 (2026-11-21), by the lead: a scheduled run uses four shards, written before its code
+
+The two conditions of "The lead's decision on the shard default (2026-11-19)" are met: F-849 is done (ADR 0740, "Result
+of G1") and three dispatched runs with four shards are green (44842718750, 44854704415, 44865647753; 1 h 52 min to 2 h
+1 min each). The last scheduled run of one job did not finish (run 44711018197, stopped by the limit of its tests step at
+5092 of 5918 tests). D7 is therefore changed in one place: a run without the input `shards` (a scheduled run) uses 4.
+
+- `gate.yml`: `SHARDS: ${{ inputs.shards || '4' }}`, and the description of the input says so. The input of a dispatch
+  keeps its options and its default of 1; with 1 the job names, artifact names and commands stay those of the unsharded
+  gate.
+- `scripts/test_gate_shards.py`: the one line of H3 that reads this expression reads the new one. No other assertion
+  changes.
+
+Check: the tests of the gate scripts pass (`test_gate_shards.py`, `test_gate_test.py`, `test_gate_attribute.py`,
+`test_gate_hooks_f761.py`); kind: unchanged default output. Not shown before the merge: a scheduled run with four
+shards; the first one after this change is read by the lead and recorded in the ledger as its gate line.
