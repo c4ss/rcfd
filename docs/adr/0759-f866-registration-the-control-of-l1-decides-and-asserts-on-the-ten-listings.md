@@ -247,3 +247,45 @@ A run that fails in S1, S2 or S3 is not repeated and no limit is changed (rule 2
 - The other platform: nothing is run on Linux; the pure checks are the same there and L1's control prints as before.
 - The edit lock's F2 (F-855) and every file under `crates/rcfd-project/src/`.
 - Whether `w` is measured around the listing (point (c) above), under the old rule and the new one alike.
+
+## Amendment 1 (2026-11-21): the scaled copy of the band, corrected; written before its runs
+
+Written after the calibration, A1, S1, S2, S0 and S3 were run and before S0b, S3b, the mutations and the house checks.
+Nothing of the test, the rule, the budget or the band changes; the set-up that brings the listing into the band was
+defective and is corrected once, by rule 2 ("a defective set-up gets a corrected test by an amendment written and
+committed before the corrected run"). S0 and S3 stay as records and are reported in the addendum as they came out.
+
+**What came out.** `w0` = 117.0 ms (calibration: 121.9, 117.0, 113.8 ms), above the band, so the registered means was the
+scaled copy with `RUNS` = round(500 x 50 / 117.0) = 214. With 214 runs the median `worst` was 34.57 ms in S0 and 34.58 ms
+in S3, under the band's 40 ms: **the band is not reproduced by S3 as registered.** Two things were wrong in the set-up,
+both in the registered derivation and not in the test: the three calibration runs read high (the 20 runs of S1 gave a
+median `worst` of 98.2 ms), and the listing time is not proportional to the number of runs (ten listings took 925.7 ms
+with 500 runs and 328.9 ms with 214: 0.185 and 0.154 ms per run and listing).
+
+**The corrected set-up.** The quantity that decides the old failure is the time of the ten listings against 500 ms, so
+the copy is aimed at a mean listing of 50 ms, by a straight line through the two measured medians of the ten listings
+after the change, (214 runs, 32.89 ms) from S3 and (500 runs, 92.57 ms) from S1:
+`RUNS` = 214 + (50 - 32.89) x 286 / (92.57 - 32.89) = 296.0, so `RUNS` = 296. Nothing else in the copy changes.
+
+- **S3b**, after the change, release, the copy with `RUNS` = 296: 20 runs; limit 0 failed of 20; the band counts as
+  reproduced if the median `worst` of these 20 runs is between 40 and 62.5 ms (the band of the registration, unchanged).
+- **S0b**, the old rule (the file of commit 80bb50a2 with `RUNS` = 296), release: 20 runs, reported without a limit.
+  **A correction of the count:** at that commit C1, C2 and C3 are red by design, so the command exits non-zero in every
+  run and the registered count "the command exits non-zero" says nothing; that was an oversight of the registration, and
+  S0 gave 20 of 20 by it. For S0 and S0b the count reported is the runs whose log has the line
+  `test l1_listing_hundreds_of_runs_within_budget ... FAILED`.
+
+**The decision rule**, amended in one place: where it says S3, read S3b for the 20 runs and for the band. S3 as
+registered stays in the table of results as run, with its 0 failed of 20 and its band not reproduced. This is a second
+attempt at one set-up after seeing the first; the lead may read the registered rule without this amendment, by which the
+outcome is partial for the band alone. If S3b's median is outside the band too, no third set-up is tried and the outcome
+is partial.
+
+| Id | Check | Limit | Source of the limit | Estimate | Margin | Kind |
+| --- | --- | --- | --- | --- | --- | --- |
+| S3b | 20 runs in release on the copy with `RUNS` = 296, after the change; and the band reproduced (median `worst` in 40 to 62.5 ms) | 0 failed of 20; band reproduced | the brief, task 3; the decision rule of the brief | 0; median `worst` about 53 ms | n/a | code verification |
+| S0b | 20 runs in release on the copy with `RUNS` = 296, old rule: runs in which L1 failed | none (reported) | the brief, task 1 | 3 to 10 | n/a | code verification (reported without a limit) |
+
+One more disclosure of the runs made so far: every run of a series was made with `-- --nocapture` after the registered
+command, so that a passing run prints its times; and the proposal file is committed with the addendum, not with the
+change, because its text states the outcome.
