@@ -422,3 +422,9 @@ The four patches beside one test file (`test_push_main.<name>.mutation.patch`) a
 patch in the merge's file list, and did. `docs/test-process.md` section 7.4 is brought in line with the script by the lead
 in the commit that adds this section. Not shown by any run yet: a further run of a failed check, a resumed run and a joint
 diff in a real merge; the first of each is read by the lead in the ledger line.
+
+## Answers of the maintainer (2026-11-21)
+
+Question 5 (finding 17): "Yes, add it". Rule 7 of `docs/process/agent-rules.md` asks for a run of
+`python scripts/process_report.py --check` before the report, from version 4 of that day. The lead worded it so that rule 9
+stands: a generated file that is only not current is named in the report and left to the lead, not committed by the agent.

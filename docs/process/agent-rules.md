@@ -1,6 +1,6 @@
 # House rules for implementation agents
 
-Version 3 (2026-11-18). This file is the governing copy of the rules for every agent that works on rcfd, in the campaign
+Version 4 (2026-11-21). This file is the governing copy of the rules for every agent that works on rcfd, in the campaign
 stream and in the Studio stream alike. It replaces `w49i-work/AGENT_RULES.md` (2026-11-12) and `w49i-work/briefs/common.md`
 (2026-11-08) from the moment the lead's briefs point here; ADRs that cite "house rule N" of the earlier file mean the rule
 of the same number below. A change to a rule needs the maintainer's word, raises the version, and is dated in the list at
@@ -49,7 +49,10 @@ number, the branch, the worktree and your scratch folder.
    run the whole workspace suite or a whole crate's integration tests: the lead's push script and the full run do that. Never
    kill a cargo process that is not yours, and do not stop your own runs to save time. The machine is shared: prefer small
    checks. A new test that takes more than about two minutes in release is `#[ignore]`d as a heavy record, run once by you,
-   with a fast test on the same code path.
+   with a fast test on the same code path. Last, before your report, run `python scripts/process_report.py --check` in your
+   worktree and say what it gave. Every failure it names is corrected before the report (a registration is corrected by an
+   amendment, not by an edit), except one: a generated file that is only not current, such as `docs/adr/index.md`, is named
+   in the report and left to the lead (rule 9).
 8. Write "Addendum 1: results" in the ADR: every check with the measured number and whether the limit was met, deviations,
    what was not run, the actual size (rule 17), and the decision by the registered rule. A miss with a diagnosed cause is an
    acceptable outcome; in that case, or if a clause of the acceptance was not met or not run, propose partial, not done.
@@ -108,6 +111,8 @@ plainly anything that failed or was skipped.
 
 ## Changes
 
+- Version 4, 2026-11-21: rule 7 asks for a run of `scripts/process_report.py --check` before the report (the maintainer's
+  word of that day, from finding 17 of F-851, ADR 0752).
 - Version 3, 2026-11-18: rule 4 names the fragment files of the reference-data page, which is now generated.
 - Version 2, 2026-11-18: rule 3 gains the class of additive golden edits, approved in advance by the maintainer and
   re-recorded by the lead.
