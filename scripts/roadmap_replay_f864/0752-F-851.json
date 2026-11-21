@@ -1,0 +1,17 @@
+{
+  "form": 1,
+  "adr": "0752",
+  "item": "F-851",
+  "base": "ceac587c417712722ad7fcd920bc97963021c062",
+  "status": "done",
+  "note": "ADR 0752, 2026-11-21, done: scripts/push_main.py runs a failed check two further times and names a flaky test in the ledger line, resumes a stopped run, counts 1.8 s of build per selected binary, takes several merges as one diff (--base), takes its times from the newest gate line that names them (--gate-times), lets appended ledger lines and generated files stand, names an ADR without a mutation patch, regenerates before the checks, runs the script tests and reads the item from the brief or the head of the branch name; 62 unit tests, 13 of 13 mutations caught.",
+  "follow_ups": [
+    {
+      "title": "push_main.py: the left-out run on the code of its merge, the ADR's tests charged to the budget, the selection by changed file",
+      "deps": [
+        "F-851"
+      ],
+      "acceptance": "every limit not stated here is registered in the ADR before the run; (1) a left-out line names the commit its tests were built from, and a test shows that a later merge cannot change it; (2) the recorded seconds of the tests the index maps to the merge's ADRs are charged to the budget and printed by the dry run, and none of them is cut; (3) for a merge that changes one source file, the test binaries named after that file are selected before the others of the crate, shown on the merge of ADR 0748 (21 overset files)."
+    }
+  ]
+}

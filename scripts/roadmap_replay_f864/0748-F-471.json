@@ -1,0 +1,9 @@
+{
+  "form": 1,
+  "adr": "0748",
+  "item": "F-471",
+  "base": "ddcea7def6616d36ab30db872ca3ab0ff99d2899",
+  "status": "partial",
+  "note": "ADR 0748, 2026-11-20, partial and stopped: the overset solver takes its AMG settings from the solver's linear options (the way back of ADR 0743 for overset.rs); the nine tests of the red gate of 252c9279 are ignored records and are restated in overset_fingerprints_adr0748.rs; all nine give their registered values bit for bit under the old order and the gate's values under the default; the 21 overset files pass; three of three mutations caught; stopped because two further registered values of T7 and T9 move that the gate had not reached (B1 linear 0x9c5ab1e5b21d5368 to 0xb7eacfdad14044af, A6 G 0xb2b43812eb166b04 to 0xe8f1628a95798aab), so two restated tests fail; the store hash of axial_fan_cgrid moved with the default of ADR 0743 through pressure.rs and is the registered value under the old order.",
+  "gap": "the branch of ADR 0748 is not mergeable: f450::t7_b1_default and f479::t9_a6_default of overset_fingerprints_adr0748 fail at two registered values the maintainer has not seen (ADR 0748 question 1), and shipped_store_f834 D1 fails at the first hash of axial_fan_cgrid, which moved with the default of ADR 0743 (question 2). Needs the maintainer's answers; then an amendment of ADR 0748 restates T7 and T9 and the lead re-records or keeps the store hash."
+}

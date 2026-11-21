@@ -1,0 +1,8 @@
+{
+  "form": 1,
+  "adr": "0753",
+  "item": "F-853",
+  "base": "47f9c71d68d6f99ded6eef647e133deb35a19cce",
+  "status": "done",
+  "note": "ADR 0753, 2026-11-21, done by its registered rule. `tmp` of `crates/rcfd-api/tests/restart_w19c.rs` puts the number of the call (an atomic counter) into the name of the folder, so no two calls of a process share one; the three tests that call `s5_numbers()` have a folder each. Before the change the three S5 tests in parallel failed in 5 of 20 runs and the whole file in 1 of 20 (0 of 20 on two threads), each time with \"The system cannot find the file specified\" at `save_restart` in `s5_numbers()`; after it 0 of 20 in each of the three series. The forced control `tmp_gives_every_call_its_own_folder` fails on the old `tmp` and passes on the new; the committed mutation (the shared folder put back) is caught by it. No other tag of the file was shared by two tests. No assertion, no number and no library file changed; the S5 numbers are those of ADR 0031."
+}

@@ -1,0 +1,14 @@
+# expect-fail: python scripts/test_roadmap_proposals.py
+diff --git a/scripts/roadmap_proposals.py b/scripts/roadmap_proposals.py
+index f2f86c32..abc74a5d 100644
+--- a/scripts/roadmap_proposals.py
++++ b/scripts/roadmap_proposals.py
+@@ -199,7 +199,7 @@ def apply(items, proposals, start=None, base_items=None):
+                 raise ProposalError("stale-base", f"{item_id} is not in the roadmap of base {base}")
+             now = by_id[item_id]
+             moved = sorted(k for k in set(then) | set(now) if then.get(k) != now.get(k))
+-            if moved:
++            if False and moved:
+                 raise ProposalError("stale-item", f"{item_id} changed since base {base[:8]}: {', '.join(moved)}")
+ 
+     out = copy.deepcopy(items)

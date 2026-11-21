@@ -1,0 +1,9 @@
+{
+  "form": 1,
+  "adr": "0750",
+  "item": "F-854",
+  "base": "d34195a72dcd1576a5808215efb61bcce1a708cc",
+  "status": "partial",
+  "note": "ADR 0750, 2026-11-20, done by its registered rule. After the maintainer's answer of 2026-11-20 to Q1 of ADR 0749 (option (b); ADR 0353 amendment 4), I2 is `monitors_store_increment_adr0750::f854_i2_storing_an_increment_of_100_samples_at_1e5_within_the_capacity`: 100 samples per series onto a store of 1e5 whose vectors have spare capacity, the reallocation outside the timer and asserted to be outside it, median of 200 repeats, limit 2 ms unchanged. It failed 0, 0 and 0 of 30 runs without load, under 16 spinning processes and under 16 processes copying memory (largest medians 0.0135, 0.0220 and 0.0346 ms, a margin of 58 to 167). The increment that crosses the end of the capacity is printed by a second running test without a limit: medians 0.89 to 0.94, 1.17 to 1.30 and 3.41 to 4.16 ms under the same loads. The old `f456_i2` is an ignored record with its body untouched. The committed mutation (a copy of the abscissa on every push, 4.63 ms) is caught; the smallest slowdown caught is 4.9 microseconds a call. No library code changed; no run on a hosted runner.",
+  "gap": "Not run: three consecutive full gates of main with A4 of vof_dambreak_amg and the I2 of ADR 0750 (monitors_store_increment_adr0750, f854_i2_..._within_the_capacity) passing at the first attempt, and any repeat on a hosted windows-latest runner. The limit of 2 ms is 58 to 167 times the measured time, so the test catches only a push that costs 4.9 microseconds more per call."
+}
