@@ -638,7 +638,8 @@ def sec_g(root, items, cats, adrs):
 
 def sec_h(root):
     briefs, ledger = load_briefs(root), load_ledger(root)
-    merged = {r.get("branch", "") for r in ledger if r.get("kind") == "merge"}
+    # a merge line of several branches checked as one joint diff names them all, joined by "," (scripts/push_main.py, ADR 0752)
+    merged = {b for r in ledger if r.get("kind") == "merge" for b in r.get("branch", "").split(",")}
     out = [b for b in briefs if not b["closed"] and b["branch"] not in merged]
     rep = [f"briefs: {len(briefs)}; issued and neither merged nor closed: {len(out)}"]
     rep += [f"  {b['branch']} ({', '.join(b['items']) or 'no item'}), issued {b['issued'] or 'date not given'}" for b in out[:40]]

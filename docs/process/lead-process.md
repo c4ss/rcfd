@@ -36,16 +36,31 @@ results one by one: an item is done when its registered decision rule says so an
 ## Merging and pushing
 
 Merge the branch into main locally, then run `python scripts/push_main.py`. The script is the one list of per-merge checks
-([test-process.md](../test-process.md) section 7.4). It runs fmt and clippy of the touched packages, the ADR's registered
-tests, the committed mutation patch (expecting a failure), `baseline_hashes`, `docs_site` when `docs/` is touched,
-`npm test` in `apps/studio-web` when it is touched, the process report's checks, and then the tests the diff selects, up to
-30 minutes of recorded run time. It regenerates the generated files, commits them with the item's roadmap status and the
-ledger line, pushes, and starts the selected tests that did not fit in the background. If a check fails, nothing is pushed.
+([test-process.md](../test-process.md) section 7.4). It first regenerates the generated files, so that the checks see the
+pages the push will carry. It then runs the script tests when `scripts/` is touched, fmt and clippy of the touched
+packages, the ADR's registered tests, `baseline_hashes`, `docs_site` when `docs/` is touched, the process report's
+checks, the tests the diff selects, up to 30 minutes of recorded run time with a recorded build figure per binary, the
+committed mutation patches (expecting a failure), and `npm test` in `apps/studio-web` when it is touched. It commits the
+generated files with the ledger line, pushes, and starts the selected tests that did not fit in the background.
 
-- Roadmap status is written after the checks, not before.
+- The script writes no roadmap status. The lead writes the item's status in `docs/roadmap.json` on main, in a commit of
+  its own after the script's commit: after the checks, not before.
+- A check that fails is run two further times. If it then passes, the run goes on and the ledger line names the test as
+  flaky (`flaky=` in its detail). A check that fails every time stops the run, and nothing is pushed. No test is left
+  out of a further run.
+- A stopped run is started again with the same command line: what passed on the same merge commit is not repeated
+  (`--fresh` repeats everything).
+- The tree must be clean. Two things do not count: lines appended to the ledger (the line of a left-out run, which the
+  next run commits) and the generated files.
+- The item field of the ledger line comes from the branch's brief, or from the head of the branch name.
+- The script names an ADR of the merge that has registered tests and no committed mutation patch; it does not stop for it.
+- Recorded test times: `--gate-line --gate-times <file or folder>` writes the path into the gate line, and the newest
+  such path that exists is the default of `--times`.
 - A conflict in a generated file is not resolved by hand: take either side and let the script regenerate it.
 - Merging never stops for the full run. No test is marked ignored, skipped or removed to make a run pass.
-- If pushes queue up, merge several branches and run one selection over their joint diff.
+- If pushes queue up, merge several branches and run one selection over their joint diff:
+  `python scripts/push_main.py --run --base <the commit before the first merge>` (an octopus merge needs no `--base`).
+  One ledger line names every branch.
 
 ## Shared files and their one writer
 
@@ -116,6 +131,8 @@ count measures citations looked at, and the rows say what was found.
 ## Changes
 
 - Version 1, 2026-11-18: first written, from the documentation process review and the maintainer's decisions of that day.
+- 2026-11-21 (F-851, ADR 0752): "Merging and pushing" says what `scripts/push_main.py` does after its first real runs; it
+  writes no roadmap status. The version number is unchanged: no step of the lead's process changed, only its description.
 
 ## Golden files
 

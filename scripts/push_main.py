@@ -6,7 +6,10 @@ Run on the main checkout, with the merge of one branch at HEAD:
     python scripts/push_main.py --run           run the plan; on success regenerate the generated files, append the ledger line and commit
     python scripts/push_main.py --run --push    the same, then `git push origin HEAD:main`
     python scripts/push_main.py --run --left-out-run   after the commit, start the left-out tests detached; a `leftout` line follows
+    python scripts/push_main.py --run --base REV    several merges at once: the diff REV..HEAD is one joint diff (an octopus merge needs no --base)
+    python scripts/push_main.py --run --fresh       do not resume: repeat the commands that passed on this merge commit in a stopped run
     python scripts/push_main.py --gate-line --commit SHA --passed N --failed N --ignored N [--skipped N] [--attribution gate_attribute.json]
+                                [--gate-times PATH]   PATH (a times TSV or a folder of them) becomes the default of --times
     python scripts/push_main.py --mutants [--merge REV] [--mutants-timeout S] [--run]   generated mutants on the lines the merge changed
     python scripts/push_main.py --since-verified
 
@@ -24,11 +27,26 @@ The plan, in order:
     (crates/<crate>/tests/<test>.mutation.patch for <test>.rs). Its first line is `# expect-fail: <command>`. The patch is applied
     with git apply, the command must FAIL, and the patch is removed again whatever happens.
  4. `npm test` in apps/studio-web when the merge touches it; Playwright's skipped count goes in the ledger line.
-On the first failing command the script stops, prints the line, writes nothing and leaves the merge unpushed.
+Before the plan runs, the generated files are regenerated (process_report.py --write, roadmap_progress.py), so that the process
+check and docs_site see the pages the push will carry (ADR 0752, finding 9 of F-851).
+A command that fails is run RETRIES (2) further times (ADR 0752). If it then passes, the tests that failed are flaky: they are
+printed and named in the ledger line (`flaky=binary::test,...`) and the run goes on. A command that fails every time stops the
+script: it prints the line, writes nothing to the ledger and leaves the merge unpushed. Nothing is left out of a further run.
+A stopped run is resumed by the same command line: what passed on the same merge commit is not repeated (the record is
+target/push_main/run-<commit>.json; --fresh repeats everything; the ledger line then has `resumed=N`). The tree must be clean,
+except for lines appended to the ledger (a left-out line, which the run commits) and the generated files.
+The script writes no roadmap status: the lead writes it on main.
+When the merge changes scripts/, the plan begins with every scripts/test_*.py. An ADR of the merge that has registered tests and
+no committed mutation patch is named in the output. The budget counts BUILD_SECONDS (1.8; --build-seconds) per selected binary
+beside its recorded seconds. Without --times the recorded seconds come from the newest gate line of the ledger that names a
+times path that exists (`times=PATH` in its detail, written by --gate-times).
+The item field of a merge line comes from the brief of the branch (its `Items:` line) or, without a brief, from the head of the
+branch name (`f855-edit-lock-f2-lockbusy` is F-855). Several merges checked as one joint diff (--base, or an octopus merge) give
+one line: the branches joined by `,`, the items and ADRs of all, and `joint=<the other merge commits>` in the detail.
 
 The ledger, docs/process/ledger.tsv, is changed only on main. Columns: date, kind (merge, gate, leftout, mutants, ci), commit,
 branch, items, adrs, result, minutes, left_out, left_out_minutes, detail. A gate line's detail is
-`passed=N;failed=N;ignored=N[;skipped=N];fails=binary::test=ADR/F-item,...`; `skipped` is the number of passed tests that
+`passed=N;failed=N;ignored=N[;skipped=N];fails=binary::test=ADR/F-item,...[;times=PATH]`; `skipped` is the number of passed tests that
 reported a skip (the closing line of `scripts/gate_test.py --skip-pattern`). A green gate line moves the local tag `verified`.
 
 --mutants (docs/process/documentation-process-review.md, "Mutations the author did not write"): the diff of the merge against
@@ -56,6 +74,10 @@ LAST_GREEN = "49fbf1a3"  # the last green full gate before the ledger began (202
 EXPECT = re.compile(r"^#\s*expect-fail:\s*(\S.*?)\s*$")
 # Committed after a merge, with whatever `process_report.py --list-generated` names (the ADR index and the pages with a generated block).
 GENERATED = ["docs/roadmap-progress.svg", "docs/roadmap-categories.svg", LEDGER]
+RETRIES = 2  # further runs of a command that failed (ADR 0752: a test that fails 15 % of its runs then stops one push in 290)
+BUILD_SECONDS = 1.8  # build seconds counted per selected test binary (ADR 0752: 1592.1 s over 891 commands of the lead's runs)
+BRIEFS = "docs/adr/briefs"
+REGENERATE = ("python scripts/process_report.py --write", "python scripts/roadmap_progress.py")
 
 
 # ---------------------------------------------------------------- pure parts
@@ -67,6 +89,50 @@ def parse_subject(subject):
     items = sorted({f"F-{int(n):03d}" for n in re.findall(r"\bF-(\d{1,4})\b", subject)})
     adrs = sorted({f"{int(n):04d}" for n in re.findall(r"\bADR[ -]?(\d{1,4})\b", subject)})
     return (m.group(1) if m else ""), items, adrs
+
+
+def subject_branches(subject):
+    """Every branch a merge subject names: `Merge branch 'a'`, `Merge branches 'a', 'b' and 'c'`."""
+    m = re.search(r"Merge (?:remote-tracking )?branch(?:es)? ", subject)
+    out, rest = [], subject[m.end():] if m else ""
+    while True:
+        q = re.match(r"'([^']+)'", rest)
+        if not q:
+            return out
+        out.append(q.group(1))
+        sep = re.match(r", and |, | and ", rest[q.end():])
+        if not sep:
+            return out
+        rest = rest[q.end() + sep.end():]
+
+
+def branch_items(branch):
+    """The items the head of a branch name gives: its leading run of `f<digits>-` segments. `f855-edit-lock-f2-lockbusy` is
+    F-855 alone (finding 18 of F-851: the `-f2-` inside a name is not an item)."""
+    m = re.match(r"(?:f\d{1,4}-)+", branch)
+    return sorted({f"F-{int(n):03d}" for n in re.findall(r"f(\d+)-", m.group(0))}) if m else []
+
+
+def brief_items(text):
+    """The items of a brief's `Items:` line (`none` gives an empty list); None if the text has no such line."""
+    m = re.search(r"^Items:[ \t]*(.*)$", text or "", re.M)
+    if not m:
+        return None
+    return sorted({f"F-{int(n):03d}" for n in re.findall(r"\bF-(\d{1,4})\b", m.group(1))})
+
+
+def brief_path(branch):
+    return f"{BRIEFS}/{branch.replace('/', '-')}.md"
+
+
+def merge_items(branches, brief_text):
+    """The ledger's item field: for each branch the items of its brief (`brief_text(branch)` is the brief's text or None),
+    else those of the head of its name. Nothing else gives an item (ADR 0752)."""
+    items = set()
+    for b in branches:
+        got = brief_items(brief_text(b))
+        items.update(branch_items(b) if got is None else got)
+    return sorted(items)
 
 
 def adrs_in_files(files):
@@ -105,9 +171,16 @@ def dependents(crates, touched):
 
 
 def read_times(path):
-    """(binary, test) -> seconds from a gate_test.py TSV."""
+    """(binary, test) -> seconds from a gate_test.py TSV, or from every `times*.tsv` under a folder (one per shard of a gate;
+    where two files have the same test the larger seconds are kept)."""
     out = {}
-    if path and os.path.isfile(path):
+    if path and os.path.isdir(path):
+        for d, _, names in sorted(os.walk(path)):
+            for n in sorted(names):
+                if n.startswith("times") and n.endswith(".tsv"):
+                    for k, v in read_times(os.path.join(d, n)).items():
+                        out[k] = max(v, out.get(k, v))
+    elif path and os.path.isfile(path):
         for ln in open(path, encoding="utf-8").read().splitlines()[1:]:
             f = ln.split("\t")
             if len(f) >= 4 and f[3]:
@@ -118,8 +191,33 @@ def read_times(path):
     return out
 
 
-def binary_units(idx, crates_wanted, times, default_s):
-    """One unit per integration-test binary of the wanted crates: crate, target, binary, seconds (None if no record), cost."""
+def default_times(rows, root, exists=os.path.exists):
+    """(path, commit) of the newest gate line whose detail names a times path that exists (`times=PATH`; a relative path is
+    taken from the repository root); (None, None) if no line does."""
+    for r in reversed(rows):
+        m = re.search(r"(?:^|;)times=([^;]+)", r["detail"]) if r["kind"] == "gate" else None
+        if m:
+            p = m.group(1).strip()
+            p = p if os.path.isabs(p) else os.path.join(root, p)
+            if exists(p):
+                return p, r["commit"]
+    return None, None
+
+
+def times_source(given, rows, root, default_s, exists=os.path.exists):
+    """(path or None, the line the plan prints) of the recorded seconds: --times when given, else the ledger's default."""
+    if given:
+        return given, f"recorded seconds: {given} (--times)"
+    path, gate = default_times(rows, root, exists)
+    if path:
+        return path, f"recorded seconds: {path} (named by the gate line of {gate})"
+    return None, (f"recorded seconds: none (no gate line of the ledger names a times path that exists; every binary counts "
+                  f"{default_s:g} s)")
+
+
+def binary_units(idx, crates_wanted, times, default_s, build_s=0.0):
+    """One unit per integration-test binary of the wanted crates: crate, target, binary, seconds (None if no record), cost.
+    The cost is the recorded seconds (or the default) plus `build_s`, the build seconds counted per binary."""
     per = {}
     for t in idx["tests"]:
         if t["kind"] == "test" and t["crate"] in crates_wanted and not t["ignored"]:
@@ -129,7 +227,7 @@ def binary_units(idx, crates_wanted, times, default_s):
         rec = [times[(binary, n)] for n in names if (binary, n) in times]
         secs = sum(rec) if rec else None
         units.append({"crate": crate, "target": target, "binary": binary, "seconds": secs,
-                      "cost": secs if secs is not None else float(default_s),
+                      "cost": (secs if secs is not None else float(default_s)) + float(build_s),
                       "cmd": f"cargo test -p {crate} --release --test {target}"})
     return units
 
@@ -217,7 +315,105 @@ def patch_paths(files, test_files, exists=os.path.isfile):
     return sorted(set(out))
 
 
-def gate_detail(passed, failed, ignored, attribution=None, note="", skipped=None):
+def unpatched_adrs(tests, adrs, patches):
+    """[(ADR, number of its registered tests)] for each ADR of the merge that has tests in the index and no mutation patch:
+    no patch of `patches` lies beside one of its test files, and none lies beside no ADR's test file (such a patch, of a
+    script test for example, counts for every ADR of the merge)."""
+    def beside(f):
+        return re.sub(r"\.(rs|ts|tsx)$", "", f) + ".mutation.patch"
+    files = {a: {t["file"] for t in tests if a in t["adrs"] and t["kind"] == "test"} for a in adrs}
+    count = {a: sum(1 for t in tests if a in t["adrs"]) for a in adrs}
+    owned = {beside(f) for a in adrs for f in files[a]}
+    if any(p not in owned for p in patches):
+        return []
+    return [(a, count[a]) for a in adrs if count[a] and not any(beside(f) in patches for f in files[a])]
+
+
+def script_test_commands(files, names):
+    """The script tests of scripts/ (`names`: the file names of that folder) when the merge changes a file under scripts/."""
+    if not any(f.startswith("scripts/") for f in files):
+        return []
+    return [f"python scripts/{n}" for n in sorted(names) if re.match(r"test_.*\.py$", n)]
+
+
+def command_binary(cmd):
+    """The test binary a cargo command runs: the target of --test, or the crate (with `_`) for --lib; None otherwise."""
+    m = re.search(r"--test (\S+)", cmd)
+    if m:
+        return m.group(1)
+    p = re.search(r"-p (\S+)", cmd)
+    return p.group(1).replace("-", "_") if p and "--lib" in cmd.split() else None
+
+
+def failed_names(cmd, out):
+    """The tests a failed command names, as `binary::test`: cargo's `test <name> ... FAILED` lines and its last `failures:`
+    list. A failure with no test name (a build error, a script) is `binary::*`, or the command itself."""
+    def clean(x):
+        return re.sub(r"[,;\t\r\n]+", " ", x)
+    names = re.findall(r"^test (.+?) \.\.\. FAILED\s*$", out or "", re.M)
+    lines = (out or "").splitlines()
+    heads = [n for n, ln in enumerate(lines) if ln.strip() == "failures:"]
+    for ln in lines[heads[-1] + 1:] if heads else []:
+        m = re.match(r"^    (\S.*?)\s*$", ln)
+        if not m:
+            break
+        names.append(m.group(1))
+    b = command_binary(cmd)
+    if not names:
+        return [f"{b}::*" if b else clean(cmd)]
+    return [f"{b or clean(cmd)}::{clean(n)}" for n in dict.fromkeys(names)]
+
+
+def run_with_retries(cmd, cwd, run, retries=RETRIES):
+    """Run a command; after a failure run it again, up to `retries` further times, and stop at the first run that passes.
+    Returns {ok, runs, code, minutes, failed, out}: `out` is the last run's output, `failed` maps each name that failed (failed_names) to the first run it failed
+    in; ok with a non-empty `failed` means flaky. A further run is the same command: nothing is filtered out of it."""
+    failed, minutes, code, out = {}, 0.0, 0, ""
+    for k in range(1, retries + 2):
+        code, m, out = run(cmd, cwd, True)
+        minutes += m
+        if code == 0:
+            return {"ok": True, "runs": k, "code": 0, "minutes": minutes, "failed": failed, "out": out}
+        for n in failed_names(cmd, out):
+            failed.setdefault(n, k)
+        if k <= retries:
+            print(f"push_main: failed (exit {code}) in run {k} of at most {retries + 1}; running it again: {cmd}", flush=True)
+    return {"ok": False, "runs": retries + 1, "code": code, "minutes": minutes, "failed": failed, "out": out}
+
+
+def ledger_appended(old, new):
+    """True when the working-tree ledger `new` is the committed one `old` with whole lines appended (or unchanged)."""
+    return new == old or (new.startswith(old) and (not old or old.endswith("\n")))
+
+
+def blocking_changes(changed, generated, ledger_ok):
+    """The changed tracked files that stop a run: all but the generated files (the run rewrites them) and the ledger when
+    lines were only appended to it (a left-out line; the run commits it)."""
+    return [p for p in changed if not (p in generated and p != LEDGER) and not (p == LEDGER and ledger_ok)]
+
+
+def load_state(path, sha, base):
+    """({command: {minutes, flaky, ...}}, note) of a stopped run on the same merge commit and base; ({}, why) otherwise."""
+    if not os.path.isfile(path):
+        return {}, ""
+    try:
+        with open(path, encoding="utf-8") as fh:
+            st = json.load(fh)
+    except (OSError, ValueError):
+        return {}, f"the record of an earlier run, {path}, cannot be read; not used"
+    if st.get("commit") != sha or st.get("base") != base:
+        return {}, f"the record of an earlier run, {path}, is of another merge commit or base; not used"
+    return dict(st.get("passed") or {}), ""
+
+
+def save_state(path, sha, base, passed):
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    with open(path + ".tmp", "w", encoding="utf-8") as fh:
+        json.dump({"commit": sha, "base": base, "passed": passed}, fh, indent=1)
+    os.replace(path + ".tmp", path)
+
+
+def gate_detail(passed, failed, ignored, attribution=None, note="", skipped=None, times=None):
     d = f"passed={passed};failed={failed};ignored={ignored}" + ("" if skipped is None else f";skipped={skipped}")
     if attribution:
         fails = []
@@ -228,6 +424,8 @@ def gate_detail(passed, failed, ignored, attribution=None, note="", skipped=None
         fails += [f"doc::{x['name']}=none/none" for x in attribution.get("doc_failures", [])]
         if fails:
             d += ";fails=" + ",".join(fails)
+    if times:
+        d += ";times=" + times
     return d + (";" + note if note else "")
 
 
@@ -277,18 +475,42 @@ def git(root, *args, check=True):
     return p.stdout
 
 
-def merge_info(root, rev):
-    parents = git(root, "rev-list", "--parents", "-n", "1", rev).split()
-    if len(parents) != 3:
-        raise SystemExit(f"push_main: {rev} is not a merge of one branch (parents: {len(parents) - 1})")
-    sha, first, second = parents
-    subject = git(root, "log", "-1", "--format=%s", sha).strip()
+def git_try(root, *args):
+    """(exit code, stdout) of a git command that may fail."""
+    p = subprocess.run(["git", *args], cwd=root, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, encoding="utf-8")
+    return p.returncode, p.stdout
+
+
+def merge_info(root, rev, base=None):
+    """What is checked as one diff. Without `base`: the merge `rev` against its first parent (two parents or more). With
+    `base`: every merge on the first-parent line of base..rev, as the one diff base..rev; `rev` itself is a merge.
+    Branches and ADRs are those of all the merges; the items come from the briefs or the heads of the branch names."""
+    if base is None:
+        parents = git(root, "rev-list", "--parents", "-n", "1", rev).split()
+        if len(parents) < 3:
+            raise SystemExit(f"push_main: {rev} is not a merge (parents: {len(parents) - 1})")
+        sha, first, second = parents[0], parents[1], parents[2]
+        merges = [sha]
+    else:
+        first = git(root, "rev-parse", f"{base}^{{commit}}").strip()
+        line = [ln.split() for ln in git(root, "rev-list", "--first-parent", "--parents", f"{first}..{rev}").splitlines() if ln]
+        if not line or line[-1][1:2] != [first]:
+            raise SystemExit(f"push_main: --base {base} is not on the first-parent line below {rev}")
+        if len(line[0]) < 3:
+            raise SystemExit(f"push_main: {rev}, the last commit of {base}..{rev}, is not a merge")
+        sha, second = line[0][0], line[0][2]
+        merges = [ln[0] for ln in reversed(line) if len(ln) >= 3]
+    subjects = [git(root, "log", "-1", "--format=%s", m).strip() for m in merges]
     files = [f for f in git(root, "diff", "--name-only", first, sha).splitlines() if f]
     added = [f for f in git(root, "diff", "--name-only", "--diff-filter=A", first, sha).splitlines() if f]
-    branch, items, adrs = parse_subject(subject)
-    a2, i2 = adrs_in_files(added)
-    return {"sha": sha, "first": first, "second": second, "subject": subject, "files": files, "branch": branch,
-            "items": sorted(set(items) | set(i2)), "adrs": sorted(set(adrs) | set(a2))}
+    branches = list(dict.fromkeys(b for s in subjects for b in subject_branches(s)))
+    adrs = {a for s in subjects for a in parse_subject(s)[2]} | set(adrs_in_files(added)[0])
+
+    def brief_text(branch):
+        code, text = git_try(root, "show", f"{sha}:{brief_path(branch)}")
+        return None if code else text
+    return {"sha": sha, "first": first, "second": second, "subject": subjects[-1], "files": files, "branch": ",".join(branches),
+            "branches": branches, "merges": merges, "items": merge_items(branches, brief_text), "adrs": sorted(adrs)}
 
 
 def since_verified(root, rows, head="HEAD"):
@@ -298,13 +520,23 @@ def since_verified(root, rows, head="HEAD"):
 
 
 def sh(cmd, cwd, capture=False):
-    """Run one shell command; returns (exit code, minutes, output or '')."""
+    """Run one shell command; returns (exit code, minutes, output or ''). With `capture` the output (stderr with it) is
+    printed line by line as it comes and also returned."""
     t0 = time.time()
     if capture:
-        p = subprocess.run(cmd, cwd=cwd, shell=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True,
-                           encoding="utf-8", errors="replace")
-        sys.stdout.write(p.stdout)
-        return p.returncode, (time.time() - t0) / 60.0, p.stdout
+        sys.stdout.flush()
+        raw = getattr(sys.stdout, "buffer", None)
+        p = subprocess.Popen(cmd, cwd=cwd, shell=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+        kept = []
+        for chunk in iter(p.stdout.readline, b""):
+            kept.append(chunk)
+            if raw is not None:  # the bytes as they are: the console's encoding may not hold every character
+                raw.write(chunk)
+                raw.flush()
+            else:
+                sys.stdout.write(chunk.decode("utf-8", errors="replace"))
+        p.stdout.close()
+        return p.wait(), (time.time() - t0) / 60.0, b"".join(kept).decode("utf-8", errors="replace").replace("\r\n", "\n")
     return subprocess.run(cmd, cwd=cwd, shell=True).returncode, (time.time() - t0) / 60.0, ""
 
 
@@ -331,10 +563,11 @@ def verify_patch(root, path, run=sh, apply=None):
 # ---------------------------------------------------------------- plan
 
 
-def make_plan(root, info, idx, times, rows, budget_min, default_s):
+def make_plan(root, info, idx, times, rows, budget_min, default_s, build_s=BUILD_SECONDS):
     crates = idx["crates"]
     touched = touched_crates(info["files"], crates)
-    always = []
+    sdir = os.path.join(root, "scripts")
+    always = script_test_commands(info["files"], os.listdir(sdir) if os.path.isdir(sdir) else [])
     for c in touched:
         always.append(f"python scripts/fmt_check.py {c}")  # cargo fmt -p, in batches (os error 206 on Windows for rcfd-fem)
     if touched:
@@ -352,29 +585,38 @@ def make_plan(root, info, idx, times, rows, budget_min, default_s):
     always.append("python scripts/process_report.py --check")
     always = list(dict.fromkeys(always))
     failed = recent_failed_binaries(rows)
-    g1 = order_group(binary_units(idx, set(touched), times, default_s), failed)
-    g2 = order_group(binary_units(idx, set(dependents(crates, touched)), times, default_s), failed)
+    g1 = order_group(binary_units(idx, set(touched), times, default_s, build_s), failed)
+    g2 = order_group(binary_units(idx, set(dependents(crates, touched)), times, default_s, build_s), failed)
     taken, left, used = cut([g1, g2], budget_min * 60.0, set(always))
     adr_tests = sorted({t["file"] for t in idx["tests"] if set(t["adrs"]) & set(info["adrs"]) and t["kind"] == "test"})
     patches = patch_paths(info["files"], adr_tests, lambda p: os.path.isfile(os.path.join(root, p)))
     studio = any(f.startswith("apps/studio-web/") for f in info["files"])
     return {"touched": touched, "always": always, "selected": taken, "left": left, "selected_minutes": used / 60.0,
-            "left_minutes": sum(u["cost"] for u in left) / 60.0, "patches": patches, "studio": studio}
+            "left_minutes": sum(u["cost"] for u in left) / 60.0, "patches": patches, "studio": studio, "build_s": float(build_s),
+            "no_patch": unpatched_adrs(idx["tests"], info["adrs"], patches)}
 
 
-def print_plan(info, plan, base, n):
+def print_plan(info, plan, base, n, times_note=""):
     print(f"merge {info['sha'][:8]} of '{info['branch']}': items {','.join(info['items']) or '-'}; ADRs {','.join(info['adrs']) or '-'}; "
           f"{len(info['files'])} files; crates {','.join(plan['touched']) or '-'}")
+    if len(info.get("merges", [])) > 1:
+        print(f"joint diff of {len(info['merges'])} merges, {info['first'][:8]}..{info['sha'][:8]}: "
+              + ", ".join(m[:8] for m in info["merges"]))
     print(f"merges on main since the newest green full run ({base[:8]}): {n}")
+    if times_note:
+        print(times_note)
     print("always:")
     for c in plan["always"]:
         print("  " + c)
-    print(f"diff-selected ({len(plan['selected'])} binaries, {plan['selected_minutes']:.1f} recorded minutes):")
+    build = f", with {plan['build_s']:g} s of build counted per binary" if plan.get("build_s") else ""
+    print(f"diff-selected ({len(plan['selected'])} binaries, {plan['selected_minutes']:.1f} recorded minutes{build}):")
     for u in plan["selected"]:
         print(f"  {u['cmd']}    # {u['seconds']:.0f} s" if u["seconds"] is not None else f"  {u['cmd']}    # no record")
     print(f"left out for CI on main: {len(plan['left'])} binaries, {plan['left_minutes']:.1f} recorded minutes")
     for p in plan["patches"]:
         print(f"mutation patch: {p}")
+    for adr, count in plan.get("no_patch", []):
+        print(f"no mutation patch: ADR {adr} has {count} registered tests and no committed mutation patch (agent rules, rule 16)")
     if plan["studio"]:
         print("studio: npm test in apps/studio-web")
 
@@ -395,51 +637,121 @@ def today():
     return datetime.date.today().isoformat()
 
 
-def do_run(root, a, info, plan):
+def tree_blockers(root, run):
+    """The changed tracked files that stop a run (blocking_changes): the list of generated files is asked for only when a
+    file is changed, and the committed ledger is compared with the working-tree one only when the ledger is."""
+    changed = [f for f in git(root, "diff", "--name-only", "HEAD").splitlines() if f]
+    if not changed:
+        return []
+    code, _, listed = run("python scripts/process_report.py --list-generated", root, True)
+    ledger_ok = False
+    if LEDGER in changed and os.path.isfile(os.path.join(root, LEDGER)):
+        code2, old = git_try(root, "show", f"HEAD:{LEDGER}")
+        with open(os.path.join(root, LEDGER), encoding="utf-8") as fh:
+            ledger_ok = ledger_appended("" if code2 else old, fh.read())
+    return blocking_changes(changed, set(GENERATED) | set([] if code else (listed or "").split()), ledger_ok)
+
+
+def do_run(root, a, info, plan, run=sh):
+    """Run the plan and write the ledger line. `run(cmd, cwd, capture)` runs one command (sh; the tests give a recorder)."""
     ledger = os.path.join(root, LEDGER)
     if git(root, "rev-parse", "HEAD").strip() != info["sha"]:
         raise SystemExit("push_main: --run needs the merge at HEAD")
-    if git(root, "status", "--porcelain", "--untracked-files=no").strip():
-        raise SystemExit("push_main: the working tree has uncommitted changes")
-    cmds, minutes, studio_skipped = [], 0.0, None
-    for cmd in plan["always"] + [u["cmd"] for u in plan["selected"]]:
-        print(f"push_main: {cmd}", flush=True)
-        code, m, _ = sh(cmd, root)
-        minutes += m
-        cmds.append(cmd)
+    blockers = tree_blockers(root, run)
+    if blockers:
+        raise SystemExit("push_main: the working tree has uncommitted changes: " + ", ".join(blockers[:8]))
+    state = os.path.join(root, "target", "push_main", f"run-{info['sha'][:8]}.json")
+    earlier, note = ({}, "") if getattr(a, "fresh", False) else load_state(state, info["sha"], info["first"])
+    if note:
+        print("push_main: " + note)
+    passed, cmds, flaky, minutes, resumed, studio_skipped = dict(earlier), [], [], 0.0, 0, None
+
+    def stopped(what, code=None):
+        print(f"push_main: FAILED{'' if code is None else f' (exit {code})'}: {what}\n"
+              "push_main: nothing written to the ledger; the merge is not pushed")
+        return 1
+
+    def repeated(key):
+        """True, with the earlier run's minutes and flaky names counted, when `key` passed on this merge commit before."""
+        nonlocal minutes, resumed
+        if key not in earlier:
+            return False
+        print(f"push_main: passed earlier on this merge commit, not repeated: {key}", flush=True)
+        minutes += float(earlier[key].get("minutes") or 0.0)
+        flaky.extend(n for n in earlier[key].get("flaky") or [] if n not in flaky)
+        resumed += 1
+        return True
+
+    def record(key, m, names=(), **more):
+        passed[key] = dict(minutes=round(m, 3), flaky=list(names), **more)
+        save_state(state, info["sha"], info["first"], passed)
+
+    def checked(cmd, cwd, key):
+        """Run one command with its further runs; True if it passed. Flaky names are printed and kept."""
+        nonlocal minutes
+        r = run_with_retries(cmd, cwd, run)
+        minutes += r["minutes"]
+        if not r["ok"]:
+            return False, r
+        for name, k in r["failed"].items():
+            print(f"push_main: FLAKY: {name} failed in run {k} of {r['runs']} of {key}", flush=True)
+            if name not in flaky:
+                flaky.append(name)
+        return True, r
+
+    # the generated files first: the process check and docs_site then see the pages the push will carry (finding 9 of F-851)
+    for cmd in REGENERATE:
+        code = run(cmd, root, True)[0]
         if code:
-            print(f"push_main: FAILED (exit {code}): {cmd}\npush_main: nothing written; the merge is not pushed")
-            return 1
+            return stopped(cmd, code)
+    for cmd in plan["always"] + [u["cmd"] for u in plan["selected"]]:
+        cmds.append(cmd)
+        if repeated(cmd):
+            continue
+        print(f"push_main: {cmd}", flush=True)
+        ok, r = checked(cmd, root, cmd)
+        if not ok:
+            return stopped(f"{cmd} (in each of {r['runs']} runs: {', '.join(r['failed'])})", r["code"])
+        record(cmd, r["minutes"], r["failed"])
     for p in plan["patches"]:
+        if repeated(f"mutation {p}"):
+            continue
         t0 = time.time()
-        ok, msg = verify_patch(root, p)
+        ok, msg = verify_patch(root, p, run=run)
         minutes += (time.time() - t0) / 60.0
         print("push_main: mutation " + msg)
         if not ok:
-            print("push_main: FAILED; nothing written; the merge is not pushed")
-            return 1
+            return stopped("mutation " + msg)
+        record(f"mutation {p}", (time.time() - t0) / 60.0)
     if plan["studio"]:
-        code, m, out = sh("npm test", os.path.join(root, "apps", "studio-web"), capture=True)
-        minutes += m
-        cmds.append("npm test (apps/studio-web)")
-        if code:
-            print(f"push_main: FAILED (exit {code}): npm test in apps/studio-web\npush_main: nothing written; the merge is not pushed")
-            return 1
-        studio_skipped = skipped_count(out)
-    for cmd in ("python scripts/process_report.py --write", "python scripts/roadmap_progress.py"):
-        code = sh(cmd, root)[0]
-        if code:
-            print(f"push_main: FAILED (exit {code}): {cmd}\npush_main: nothing written to the ledger; the merge is not pushed")
-            return 1
+        key = "npm test (apps/studio-web)"
+        cmds.append(key)
+        if repeated(key):
+            studio_skipped = earlier[key].get("skipped")
+        else:
+            ok, r = checked("npm test", os.path.join(root, "apps", "studio-web"), key)
+            if not ok:
+                return stopped(f"npm test in apps/studio-web (in each of {r['runs']} runs)", r["code"])
+            studio_skipped = skipped_count(r["out"])
+            record(key, r["minutes"], r["failed"], skipped=studio_skipped)
     detail = "exit=0;mutations=%d" % len(plan["patches"])
     if studio_skipped is not None:
         detail += f";studio_skipped={studio_skipped}"
+    if flaky:
+        print("push_main: flaky in this run (failed, then passed in a further run): " + ", ".join(flaky))
+        detail += ";flaky=" + ",".join(flaky)
+    if resumed:
+        detail += f";resumed={resumed}"
+    if len(info.get("merges", [])) > 1:
+        detail += ";joint=" + ",".join(m[:10] for m in info["merges"] if m != info["sha"])
     detail += ";cmds=" + " | ".join(cmds)
     append_ledger(ledger, ledger_line(date=today(), kind="merge", commit=info["sha"][:10], branch=info["branch"],
                                       items=",".join(info["items"]), adrs=",".join(info["adrs"]), result="pass",
                                       minutes=f"{minutes:.1f}", left_out=len(plan["left"]),
                                       left_out_minutes=f"{plan['left_minutes']:.1f}", detail=detail))
-    code, _, listed = sh("python scripts/process_report.py --list-generated", root, capture=True)
+    if os.path.isfile(state):
+        os.remove(state)
+    code, _, listed = run("python scripts/process_report.py --list-generated", root, True)
     paths = [p for p in GENERATED + ([] if code else (listed or "").split()) if os.path.exists(os.path.join(root, p))]
     git(root, "add", "--", *paths)
     if git(root, "diff", "--cached", "--name-only").strip():
@@ -447,7 +759,7 @@ def do_run(root, a, info, plan):
         git(root, "commit", "-m", f"Ledger and generated pages after the merge of {what}")
     lo = left_out_file(root, info, plan) if plan["left"] else None
     if a.push:
-        if sh("git push origin HEAD:main", root)[0]:
+        if run("git push origin HEAD:main", root, False)[0]:
             print("push_main: FAILED: git push; the ledger commit is local")
             return 1
     if lo:
@@ -527,15 +839,26 @@ def do_mutants(root, a, info, touched):
     return 0
 
 
+def gate_times_field(path, root):
+    """The path of --gate-times as the ledger holds it: forward slashes; it must exist and hold no `;`, tab or line break."""
+    p = path.replace(chr(92), "/")
+    if any(c in p for c in (";", chr(9), chr(10), chr(13))):
+        raise SystemExit("push_main: --gate-times: the path holds a `;`, a tab or a line break")
+    if not os.path.exists(p if os.path.isabs(p) else os.path.join(root, p)):
+        raise SystemExit(f"push_main: --gate-times: {p} does not exist")
+    return p
+
+
 def do_gate_line(root, a):
     if not a.commit or a.passed is None or a.failed is None or a.ignored is None:
         raise SystemExit("push_main: --gate-line needs --commit, --passed, --failed and --ignored")
     att = json.load(open(a.attribution, encoding="utf-8")) if a.attribution else None
     green = a.failed == 0 and not (att and (att.get("build_failed") or att.get("doc_failures")))
     sha = git(root, "rev-parse", a.commit).strip()
+    times = gate_times_field(a.gate_times, root) if getattr(a, "gate_times", None) else None
     append_ledger(os.path.join(root, LEDGER), ledger_line(
         date=a.date or today(), kind="gate", commit=sha[:10], result="green" if green else "red",
-        minutes=a.minutes or "", detail=gate_detail(a.passed, a.failed, a.ignored, att, a.note or "", a.skipped)))
+        minutes=a.minutes or "", detail=gate_detail(a.passed, a.failed, a.ignored, att, a.note or "", a.skipped, times)))
     if green:
         git(root, "tag", "-f", "verified", sha)
         print(f"push_main: tag verified moved to {sha[:10]}")
@@ -546,11 +869,18 @@ def main(argv=None):
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     ap.add_argument("--root", default=".")
     ap.add_argument("--merge", default="HEAD", help="the merge commit (dry run only; --run needs HEAD)")
+    ap.add_argument("--base", metavar="REV", help="several merges as one joint diff: the commit on main before the first of them")
+    ap.add_argument("--fresh", action="store_true", help="with --run: repeat what passed on this merge commit in a stopped run")
+    ap.add_argument("--build-seconds", type=float, default=BUILD_SECONDS,
+                    help="build seconds counted per selected test binary (default: the figure of ADR 0752)")
+    ap.add_argument("--gate-times", metavar="PATH",
+                    help="with --gate-line: the times TSV of this gate, or the folder of its shards; it becomes the default of --times")
     ap.add_argument("--run", action="store_true")
     ap.add_argument("--push", action="store_true")
     ap.add_argument("--left-out-run", action="store_true")
     ap.add_argument("--run-left-out", metavar="JSON", help="internal: run the left-out commands of one merge")
-    ap.add_argument("--times", help="TSV of an earlier gate_test.py --tsv run (recorded seconds per test)")
+    ap.add_argument("--times", help="TSV of an earlier gate_test.py --tsv run (recorded seconds per test), or a folder of "
+                    "them; default: the newest times path a gate line of the ledger names")
     ap.add_argument("--budget-minutes", type=float, default=30.0)
     ap.add_argument("--default-seconds", type=float, default=60.0)
     ap.add_argument("--metadata", help="cargo metadata JSON (default: run cargo metadata --no-deps)")
@@ -582,13 +912,14 @@ def main(argv=None):
         raise SystemExit("push_main: --push needs --run")
     sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
     import adr_test_index
-    info = merge_info(root, a.merge)
+    info = merge_info(root, a.merge, a.base)
     idx = adr_test_index.build(root, adr_test_index.metadata(root, a.metadata), "git", e8=True)
     if a.mutants:
         return do_mutants(root, a, info, touched_crates(info["files"], idx["crates"]))
-    plan = make_plan(root, info, idx, read_times(a.times), rows, a.budget_minutes, a.default_seconds)
+    times, times_note = times_source(a.times, rows, root, a.default_seconds)
+    plan = make_plan(root, info, idx, read_times(times), rows, a.budget_minutes, a.default_seconds, a.build_seconds)
     base, n = since_verified(root, rows, info["sha"])
-    print_plan(info, plan, base, n)
+    print_plan(info, plan, base, n, times_note)
     if not a.run:
         print("dry run: nothing was run (use --run)")
         return 0
