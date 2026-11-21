@@ -9352,5 +9352,16 @@
     "status": "todo",
     "acceptance": "Every limit not stated here is registered in the ADR before the run. The negative control of rcfd-project listing_budget::l1_listing_hundreds_of_runs_within_budget no longer fails on a machine whose worst listing times ten is above the budget while ten listings together are below it, shown by a control that fails before the change with the times of the gate of 62a6fec3 (worst of three 51.59 ms, ten listings 498.15 ms, budget 500 ms); the budget of 500 ms and the assertion that a listing stays within it are unchanged, and the control still fails a listing that is ten times slower, shown by a mutation. The test is not ignored or retried.",
     "note": "Lead (2026-11-21): entered from the full gate of 62a6fec3 (run 44942062298, four shards), red on this test alone, 5936 passed, 1 failed, 1727 ignored; the gate's re-run passed (flaky), and the attribution names no candidate merge. Cause read from the test: the rule of ADR 0128 finding 12 (ADR 0137) asserts the control when worst * 10 > budget, and then asks that ten real listings exceed the budget; ten listings cost ten times the mean, not the worst, so between the two the control fails. It is a defect of the test's control, not of the listing, and not of the merges of that day. Not issued yet."
+  },
+  {
+    "id": "F-867",
+    "title": "The fan milestone is the whole fan design goal: its headline items, its members and its figure",
+    "phase": 9,
+    "deps": [
+      "F-865"
+    ],
+    "status": "todo",
+    "acceptance": "Every limit not stated here is registered in the ADR before the run. The milestone fan of docs/milestones.json is the design goal of docs/milestone-fan.md (the assistant iterates on fan shape and size towards low noise at high flow over a range of operating points), with a headline item, or the words that no item carries it, for every link of that page's capability chain; every item of the roadmap is read against a registered membership rule, every membership has a reason, and every item that names a fan in its title is a member or is listed with the reason it is not; a sample drawn by seed is read a second time and its disagreements are reported; one command replaces the fan milestone on main and leaves the other milestones byte for byte as they are.",
+    "note": "Maintainer (2026-11-21): \"Whole design goal\", to the lead's question whether the fan milestone is the validation of FAN-01 alone (ADR 0756: 22 members, 89 %, headline not met) or the whole design goal. Lead (2026-11-21): entered and issued, ADR 0757, brief docs/adr/briefs/f867-fan-milestone-design-goal.md. It is tooling and belongs to no milestone."
   }
 ]

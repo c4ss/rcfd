@@ -348,3 +348,9 @@ What the figures do and do not say, for the maintainer:
 - Questions 1 to 3 (a headline item of its own for the aerofoil's lift curve, for the cylinder's drag and for the FAN-01
   design point) and question 4 (the further milestones) are the maintainer's and are put with the agent's
   recommendations, together with one of the lead's: whether the fan milestone is the validation alone or the design goal.
+
+## The maintainer on the scope of the fan milestone (2026-11-21)
+
+The lead asked whether the fan milestone is the validation of FAN-01 alone or the whole design goal of
+`docs/milestone-fan.md`, and recommended the whole goal. The maintainer answered: "Whole design goal". The milestone `fan`
+is redefined by roadmap item F-867 (ADR 0757). Questions 1 to 4 of this ADR are not answered by this and stay open.
