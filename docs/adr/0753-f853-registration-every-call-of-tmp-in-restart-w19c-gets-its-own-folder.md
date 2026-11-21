@@ -184,3 +184,108 @@ work partial, since the brief allows the forced control in its place.
 - The folders are not removed when a test ends, as before; after the change a run of the file leaves one folder per call
   (ten in a default run, each with at most a few small restart files) where it left six.
 - Other test files that key a temporary folder by the process id alone. They are not searched here.
+
+## Addendum 1: results (2026-11-21)
+
+Commits: the registration 313ea64b; the test file 09e52f23; the mutation patch 360b18bd. Every run was made in the
+release profile, from the worktree, on the lead's machine with another agent at work on it. Logs and the driver
+`drive.py` are in the scratch folder.
+
+### The series (failed runs of 20)
+
+| Series | Before the change (e097520e) | After the change (09e52f23) |
+| --- | --- | --- |
+| R1, the three S5 tests in parallel | **5** (runs 3, 6, 12, 13, 20) | 0 |
+| R2, the whole file on two threads | 0 | 0 |
+| R3, the whole file as the gate runs it | **1** (run 4) | 0 |
+
+The failures before the change, all with the message `called Result::unwrap() on an Err value: Io("The system cannot
+find the file specified. (os error 2)")` and all at line 314 of the file, column 30, which is the `unwrap` of
+`coarse.save_restart(&ck)` in `s5_numbers()`:
+
+- R1 run 3 and run 6: `s5b_iterations_to_distance_are_fewer_than_cold`.
+- R1 run 12: `s5_coarse_to_fine_iteration_counts_are_reported` and `s5b_iterations_to_distance_are_fewer_than_cold`.
+- R1 run 13: `s5_coarse_to_fine_iteration_counts_are_reported`.
+- R1 run 20: `s5a_iterations_to_tolerance_known_miss`, at line 314 and not at its own assertion; counted by the
+  registered rule (a panic of the known miss other than its assertion).
+- R3 run 4: `s5_coarse_to_fine_iteration_counts_are_reported`.
+
+So the failure is reproduced by the registered repeats, in 6 runs of 60. What was seen is a failure at the save, where
+the lead's note names `load_restart`; the message is the same. Of the forms the registration lists, the save beside
+another test's removal of the folder is the nearest; which step inside `save_restart` reports the missing file was not
+looked for, since no library file is in scope. R2 did not fail in 20 runs: the derivation from the order of the names
+did not give a failure on this machine, where the whole file ends in under a second; the registration said the rate was
+not known, and its estimate "R2 more than R3" was wrong. The estimate for R1 (0 to 2) was low.
+
+### Checks
+
+| Id | Limit | Measured | Met |
+| --- | --- | --- | --- |
+| A1 | the control fails on the unchanged `tmp` | failed: `assertion left != right failed: two calls of tmp gave one folder`, both `...\Temp\rcfd_restart_w19c_s5_34644` (working tree: the control added, `tmp` as at e097520e; not committed in that state) | **yes** |
+| A2 | the control passes after D1 | passed alone; passed in 40 of 40 runs of R2 and R3 after the change | **yes** |
+| B1 | none | 5, 0 and 1 failed of 20 (R1, R2, R3) | reported |
+| B2 | 0 of 20 in each | 0, 0 and 0 of 20; R2 and R3: `8 passed; 0 failed; 1 ignored` in each of the 40 runs | **yes** |
+| N | the S5 numbers of ADR 0031; no line removed outside `tmp` | in 20 of 20 runs of R1 after the change: cold 89 iterations and 23 to the distance; gradient 103, least_squares 96, conservative_overlap 103; 10 to the distance for each. The same lines in the 19 runs of R1 before the change in which the known miss reached its assertion. `git diff e097520e` of the test file removes one line, the `format!` line of `tmp` | yes |
+| E | the test file, its patch, `docs/adr` only | `git diff --stat e097520e`: `restart_w19c.rs` (21 added, 1 removed), `restart_w19c.mutation.patch`, this ADR | yes |
+| O | none | see below | reported |
+| M | M1 fails the control at an assertion, the file compiles | compiled without a warning; the control failed at its first assertion (`two calls of tmp gave one folder`), exit 101 | yes, caught |
+| F | clean; clean; passes | `cargo fmt -p rcfd-api --check` clean; `cargo clippy -p rcfd-api --all-targets -- -D warnings` clean; `docs_site` 2 passed, 0 failed; the whole file once more after the mutation was taken back: 8 passed, 0 failed, 1 ignored | yes |
+| P | 0 failures | run after this addendum is committed; stated in the report of this work | see the report |
+
+### The other calls of `tmp` (O)
+
+`grep` of the changed file gives eight calls: `"s1"` in `s1_steady_same_mesh_restart_is_exact`; `"s2"` in the loop of
+`s2_transient_restart_equals_the_continued_run_bit_for_bit` (three passes, one after the other, in one test); `"s2d"` in
+`s2_driver_writes_and_continues_from_a_transient_restart_file`; `"s3"` in `s3_steady_file_starts_a_transient_run`;
+`"s4"` in `s4_embedded_mesh_source_case_and_refusals`; `"s5"` in `s5_numbers()` (three tests) and twice in the control.
+No tag other than `"s5"` was shared by two tests, so the fault was at `"s5"` alone; no failure of the 60 runs before the
+change was in another test. With D1 the three passes of S2 take three folders where they took one, one after the other.
+The folders left by a run were not counted one by one; the temporary folder of this machine holds 867 folders of this
+file from all earlier runs, which nothing removes, before this change as after it.
+
+### Mutation
+
+M1, the committed patch (`fetch_add(1, ...)` to `load(...)`): applied in the worktree with `git apply`, the command of
+its first line run, taken back with `git apply -R`; the tree was clean afterwards. Caught by the control. No other
+mutation was planned.
+
+### Deviations and disclosures
+
+- The harness refused a write into the worktree at first, because the session of this agent was pinned to another
+  worktree; the session was moved into this worktree with the harness's own tool for that (EnterWorktree with the path)
+  and nothing was written by another route. Before that, the registration was not on disk and no run had been made.
+- The first attempt at A1 ran no test: the edit that adds the control had been refused by the editor (the file had to
+  be read again after the move), so the filter matched nothing (`0 passed; 8 filtered out`). The log is kept as
+  `A1-void-no-test.log`. The control was then added as registered and A1 run once.
+- The sentences of the registration on check N (the lines of R1 are read from the output of the known miss) were
+  written before the registration was committed, when the driver was written; they are not an amendment.
+- Run 20 of R1 before the change is counted through the rule for the known miss; the driver printed no message for it
+  and the message was read from its log.
+- No amendment was needed.
+
+### Not run
+
+`baseline_hashes` (no library file changed); the unit tests of `rcfd-api` (`--lib`; no library file changed); the whole
+workspace suite; the committed patch through `scripts/push_main.py`; any run under an added load or on a hosted runner.
+
+### Size
+
+Size (agent), actual: done; 0; 0; 0; 75000
+
+### Decision by the registered rule
+
+**Done.** The control fails before the change (A1) and passes after it (A2); the registered repeats failed in 6 runs of
+60 before the change and in 0 of 60 after it (B2); N, E, M and F are met; nothing outside the test file changed. P is
+run on the commit of this addendum and stated in the report.
+
+### Open questions for the maintainer
+
+None.
+
+### For the lead: roadmap entries
+
+Proposed status of F-853: done.
+
+> F-853: ADR 0753, 2026-11-21, done by its registered rule. `tmp` of `crates/rcfd-api/tests/restart_w19c.rs` puts the number of the call (an atomic counter) into the name of the folder, so no two calls of a process share one; the three tests that call `s5_numbers()` have a folder each. Before the change the three S5 tests in parallel failed in 5 of 20 runs and the whole file in 1 of 20 (0 of 20 on two threads), each time with "The system cannot find the file specified" at `save_restart` in `s5_numbers()`; after it 0 of 20 in each of the three series. The forced control `tmp_gives_every_call_its_own_folder` fails on the old `tmp` and passes on the new; the committed mutation (the shared folder put back) is caught by it. No other tag of the file was shared by two tests. No assertion, no number and no library file changed; the S5 numbers are those of ADR 0031.
+
+No gap. No new item. Seen and not followed: other test files may key a temporary folder by the process id alone; they were not searched.
