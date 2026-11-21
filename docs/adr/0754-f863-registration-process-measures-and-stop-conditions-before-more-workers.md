@@ -236,3 +236,22 @@ if a measure cannot be recorded without a new column of the ledger or a change o
 * Nothing is run with `--push`, no line is written into main's ledger, and no cargo test other than `docs_site` is run
   (a timing measurement of another job runs on the machine).
 * The stop conditions are not enforced by any script: they are sentences of the lead's process, and not in force.
+
+## Amendment 1 (2026-11-21, before any code and before any run)
+
+Written after the registration's commit and before any script or test code of F-863. It adds two things the design left
+open and changes no check, limit or number above.
+
+* **An option without its mode stops.** `--reported`, `--review-minutes`, `--proposed` or `--written` without `--run`,
+  and `--escaped` without `--gate-line`, stop `push_main.py` with a message and write nothing. The design above would
+  have passed over them in a dry run, and the lead would have believed a value recorded that was not.
+* **A heading line of the four measures.** `ledger_measures` gives a first line before the four,
+  `F-863, the 28 days to <today>: N merge lines, G red gate lines`, so that the reader of the weekly list sees the window
+  the numbers are of. The four lines are as registered.
+
+| Id | Check | Limit | Source of the limit | Estimate | Margin | Kind |
+|---|---|---|---|---|---|---|
+| A6 | `push_main.py` with one of the four options and no `--run`, or with `--escaped` and no `--gate-line`, exits with a message and writes no ledger line | fails before, passes after | this amendment; the brief ("a unit test for each new option") | passes | n/a | code verification |
+| R7 | the first line of `ledger_measures` names the window's last day and the numbers N and G | fails before, passes after | this amendment; acceptance of F-863 ("over the last four weeks") | passes | n/a | code verification |
+
+Mutation M11: the options without `--run` are passed over. Must be caught by A6. Not committed.
