@@ -105,6 +105,9 @@ further addendum of that ADR. Main may be red on a test that was left out of a p
   UNVERIFIED (the maintainer, 2026-11-21). The other citations from memory are not a backlog.
 - A reader, an agent that reads an item's work afresh, is issued for an item that changes a default result or a golden,
   and not as a rule for every item (the maintainer, 2026-11-21).
+- Run `python scripts/push_main.py --mutants --run` on one merge of the week that changes library lines, in a worktree at
+  that merge, and copy its ledger line to main. A missed mutant in code that only a feature-gated test reaches is noted,
+  not followed; any other missed mutant goes to the item's note as a finding (the lead, 2026-11-21, after the first trial).
 - Issue a distillation item for an area whose list of done items missing from its page has passed the size the maintainer
   chose.
 
@@ -139,6 +142,8 @@ count measures citations looked at, and the rows say what was found.
   writes no roadmap status. The version number is unchanged: no step of the lead's process changed, only its description.
 - 2026-11-21: "Weekly" carries the maintainer's two answers of that day on citation batches and on readers (handover note of
   2026-11-19, "Answers of the maintainer").
+- 2026-11-21: "Weekly" gains the run of generated mutants on one merge, after the first trial (cargo-mutants 27.1.0;
+  the merge of ADR 0751: 7 mutants in 36 minutes, 5 caught, 1 missed, 1 timed out).
 
 ## Golden files
 
