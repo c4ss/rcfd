@@ -329,3 +329,22 @@ Actual size: done; 0; 0; 4; about 190000.
 > Follow-up (proposed, question 1): "NACA 0012 lift curve against Ladson at Re 6e6", deps F-041, F-043; acceptance: the lift comparison registered in ADR 0167 (the limits of that ADR) holds as a recorded test; milestones aerofoil-lift, headline.
 
 > Follow-up (proposed, question 3): "FAN-01 design point against the measured characteristic", deps F-126, F-133; acceptance: total-to-static pressure rise and shaft power at 1.4032 m^3/s against 126.46 Pa and 333.30 W within limits handed to the registration; milestones fan, headline.
+
+## The lead's reading (2026-11-21), after the merge
+
+Merged at 6637d902 (push run 4.1 minutes, two mutation patches caught). The lead then ran the command of the addendum on
+main: 61 memberships of 32 items written to `docs/roadmap.json`, `docs/milestones.json` installed, the block of
+`docs/roadmap-overview.md` generated. Status: done by the registered rule.
+
+What the figures do and do not say, for the maintainer:
+
+- The three per cents are 92, 89 and 90. They are high because the members of a milestone are, by the rule the lead gave,
+  what its run of record uses, and those are mostly foundation items done long ago. The open work of the fan and of the
+  aerofoil is not spread over many items: it sits inside one partly done headline item each (F-126, F-043). The per cent
+  therefore moves little while the headline result stays "not met". The column "Headline result" is the one to read.
+- The fan milestone is the validation of FAN-01 at its design point. The items of the fan design goal of
+  `docs/milestone-fan.md` (noise, the operating map, the optimiser, the reduced-order model, the structural
+  demonstrations) are not members: 19 items that name a fan in their title belong to no milestone.
+- Questions 1 to 3 (a headline item of its own for the aerofoil's lift curve, for the cylinder's drag and for the FAN-01
+  design point) and question 4 (the further milestones) are the maintainer's and are put with the agent's
+  recommendations, together with one of the lead's: whether the fan milestone is the validation alone or the design goal.
