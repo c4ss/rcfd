@@ -255,3 +255,113 @@ open and changes no check, limit or number above.
 | R7 | the first line of `ledger_measures` names the window's last day and the numbers N and G | fails before, passes after | this amendment; acceptance of F-863 ("over the last four weeks") | passes | n/a | code verification |
 
 Mutation M11: the options without `--run` are passed over. Must be caught by A6. Not committed.
+
+## Addendum 1: results (2026-11-21)
+
+Commits on the branch, in order: d1647b83 (the registration, alone), 6b109f1a (amendment 1, before any code), 7f8c4b70
+(the tests, the two scripts and `lead-process.md`), 980cbde4 (the two mutation patches), and the commit of this addendum.
+The tests were written first and run on the unchanged scripts (logs `before_push.log` and `before_report.log` in the
+scratch folder), then the scripts were changed. Python 3, standard library; no cargo build but `docs_site`.
+
+### Checks
+
+| Id | Tests | Before the change | After | Met |
+|---|---|---|---|---|
+| A1 | `test_push_main.py`, `Measures`: `test_the_queue_age_is_the_minutes_from_the_report_to_the_merge_commit`, `test_the_minutes_are_rounded_and_a_time_without_an_offset_is_local_time`, `test_a_report_after_the_merge_or_an_unreadable_time_stops_before_any_check` | 3 of 3 fail | pass; `queue_minutes=90` for a report 90 minutes before the merge commit | yes |
+| A2 | `Measures`: `test_the_review_minutes_are_written_as_the_lead_states_them`, `test_review_minutes_that_are_negative_or_no_number_stop_before_any_check` | 2 of 2 fail | pass | yes |
+| A3 | `Measures`: `test_the_proposed_and_the_written_status`, `test_a_status_that_is_no_status_stops_before_any_check` | 2 of 2 fail | pass | yes |
+| A4 | `Escaped`, 4 tests | 4 of 4 fail | pass | yes |
+| A5 | `Measures.test_the_entries_stand_after_joint_and_before_cmds_in_the_registered_order` | fails | passes | yes |
+| A6 | `Measures.test_an_option_without_run_stops` | fails | passes | yes |
+| R1 | `test_process_report.py`, `Measures.test_queue_age` | fails | passes: median 90, largest 600, stated by 3 of 5 | yes |
+| R2 | `Measures.test_review_minutes` | fails | passes: median 20, largest 45, stated by 3 of 5 | yes |
+| R3 | `Measures.test_status_written_against_status_proposed` | fails | passes: 1 of 2 that state both, of 5 | yes |
+| R4 | `Measures.test_escaped_defects` | fails | passes: 3 pairs, 2 commits, stated by 3 of 4 red gate lines | yes |
+| R5 | `Measures.test_a_measure_no_line_states_is_not_stated_and_never_zero`, `test_the_window_is_the_28_days_that_end_today` | 2 of 2 fail | pass | yes |
+| R6 | `Measures.test_the_weekly_list_prints_them_under_process_measures`, `test_lines_written_by_push_main_are_read_back` | 2 of 2 fail | pass | yes |
+| R7 | `Measures.test_the_heading_names_the_window_and_its_lines` | fails | passes | yes |
+| S | `test_push_main.py`, `StopConditions.test_the_page_states_the_four_conditions_and_the_options` | fails | passes | yes |
+| E | the 62 and 30 existing tests, and the 18 other script test files | pass | all pass, none edited: `test_push_main.py` 77 tests, `test_process_report.py` 39, all 20 files exit 0 (`all_scripts.log`) | yes |
+| U | `FirstAttempt`, `Times.test_the_gate_line_names_the_times_path` (unedited), `Measures.test_no_option_gives_no_entry`, `Escaped.test_without_the_option_the_line_has_no_entry`; `git diff 47961cd5 -- docs/process/ledger.tsv` is empty | holds | holds | yes |
+| P | `python scripts/process_report.py --check`; `cargo test -p rcfd-cli --release --test docs_site` | 0 failures | 1 failure, `generated file is not current: docs/adr/index.md`, left to the lead (rules 7 and 9); `docs_site` 2 passed | yes |
+| M | 11 mutations | n/a | 11 of 11 caught | yes |
+
+On the ledger of main as it is, `--weekly` now ends with: `F-863, the 28 days to 2026-11-21: 16 merge lines, 5 red gate
+lines` and four lines that say "not stated by any of 16 merge lines" (the fourth: "of 5 red gate lines").
+
+### Mutations
+
+Each on a scratch copy (`mutate.py`, `mutations.log` in the scratch folder); the unmutated copy passes both files.
+
+| Id | Caught by | Result |
+|---|---|---|
+| M1 (committed, `scripts/test_push_main.measures.mutation.patch`) | `Measures`, 3 tests (A1, A5) | caught |
+| M2 | 11 tests, among them `FirstAttempt` (U) and `Measures.test_no_option_gives_no_entry` | caught |
+| M3 | `Measures`, 2 tests (A3, A5) | caught |
+| M4 | `Escaped.test_a_green_gate_or_a_value_that_cannot_be_read_stops_and_writes_no_line` | caught |
+| M5 | `Measures.test_a_report_after_the_merge_or_an_unreadable_time_stops_before_any_check` | caught |
+| M6 (committed, `scripts/test_process_report.measures.mutation.patch`) | `Measures`, 4 tests (R1, R2, R5, R6) | caught |
+| M7 | `Measures`, 7 tests | caught |
+| M8 | `Measures.test_status_written_against_status_proposed` | caught |
+| M9 | `Measures.test_escaped_defects` | caught |
+| M10 | `Measures`, 3 tests | caught |
+| M11 | `Measures.test_an_option_without_run_stops` | caught |
+
+Both committed patches were also checked with `push_main.verify_patch` in the worktree: each applies, its command fails,
+and it is removed again.
+
+### Deviations
+
+* Amendment 1 (6b109f1a) precedes every code commit: an option without its mode stops, and the heading line.
+* Not in the registration, decided when the tests were written and before the scripts were changed: in the reading, two
+  status lists that hold the same pairs in another order are equal (`F-001=done,F-002=done` against
+  `F-002=done,F-001=done` is no difference); `--review-minutes` refuses `nan` and `inf`; the binary of `--escaped` holds
+  no `:`; an `--escaped` value given twice is written once.
+* No registered test was changed after its first run with the changed scripts; both files passed at that run.
+
+### Not run
+
+Nothing with `--push`; no `--run` on the repository itself (only `do_run` in temporary repositories); no cargo test but
+`docs_site`; `fmt` and `clippy` do not apply (no crate is touched). `process_report.py --check --history` was run once:
+its 7 failures of section c name ADRs 0741 to 0751 and none names this one.
+
+### Size
+
+Actual: done; 0 further registrations (one amendment); 0 heavy runs; 4 questions; about 190000 bytes read.
+
+### Decision by the registered rule
+
+Each of the four measures has its recording (A1 to A4), its line in the weekly list (R1 to R4, R6) and tests that failed
+before the change; the existing script tests pass unedited; the 11 mutations are caught; the stop conditions are in
+`lead-process.md` as a proposal and below as open questions. No measure rests on a manual count, and none needed a column
+or a change of the gate workflow. By the rule: **done**. One clause of the acceptance is the maintainer's and is not met
+by this work: the numbers are "approved by the maintainer before they apply". They are proposed and not in force; if the
+lead reads that clause as part of done, the item is partial until the answers below are written.
+
+## Open questions for the maintainer
+
+The numbers of the stop conditions. Each is proposed in `docs/process/lead-process.md`, "When no further agent is
+started", and none is in force. The reasons are in the design above ("Stop conditions").
+
+1. **Reports not yet read.** From how many waiting reports on is no further agent started? Options: (a) 2; (b) 3; (c) 4,
+   the cap of question 4; (d) no such condition. Recommendation: (b), 3. The ledger cannot show the queue of November;
+   its mean push of 23.8 minutes puts three waiting reports at 71 minutes of pushes alone.
+2. **Escaped defects.** At what rate is no further agent started? Options: (a) 2 or more commits that brought a failure
+   in over the last 28 days, and more than 1 in 20 of the merges; (b) the same with 1 in 10; (c) with 1 in 5; (d) no such
+   condition. Recommendation: (b). By the roadmap notes 1 merge of 16 did so in November (6 %); the ledger names none.
+3. **A red full gate.** Options: (a) as today, only new work on the line of the failing test stops; (b) while the newest
+   gate line is red, no agent is started except on the fix of a test that failed in it; (c) as (b), but only from the
+   second red gate in a row. Recommendation: (b). On 2026-11-20 and 2026-11-21 four gates in a row were red.
+4. **Agents at work at once.** Options: (a) 3; (b) 4, the number in use, chosen now and put again after four weeks of
+   the measures; (c) 5. Recommendation: (b). No line of the ledger supports another number.
+
+## For the lead: roadmap entries
+
+Status proposed for F-863: done (see the last sentences of the decision above for the one clause that waits on the
+maintainer).
+
+> ADR 0754, 2026-11-21, done: scripts/push_main.py --run takes --reported, --review-minutes, --proposed and --written and --gate-line takes --escaped, each a key=value entry in the detail of the ledger line and absent when not given; scripts/process_report.py --weekly prints queue age, review minutes, status written against proposed and escaped defects over the last 28 days with the number of lines that state each; docs/process/lead-process.md states four stop conditions (3 waiting reports, 2 commits and more than 1 in 10 merges with an escaped defect, a red newest gate, 4 agents) as proposed, not in force until the maintainer answers the four questions of the ADR.
+
+Follow-up, if the maintainer wants the count of waiting reports read from a file and not counted by the lead:
+
+> Title: The time an agent's report arrives is recorded when it arrives, so that the reports not yet read can be counted. Deps: F-863. Acceptance: Every limit not stated here is registered in the ADR before the run. A command of the lead records the arrival of a report for a brief in a file beside the ledger; scripts/process_report.py prints the number of reports that have arrived and are neither merged nor closed, shown by a unit test; push_main.py --run takes the report time from that file when --reported is not given; no existing ledger line and no column changes.
