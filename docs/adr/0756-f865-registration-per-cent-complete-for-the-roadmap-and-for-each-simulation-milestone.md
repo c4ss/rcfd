@@ -354,3 +354,18 @@ What the figures do and do not say, for the maintainer:
 The lead asked whether the fan milestone is the validation of FAN-01 alone or the whole design goal of
 `docs/milestone-fan.md`, and recommended the whole goal. The maintainer answered: "Whole design goal". The milestone `fan`
 is redefined by roadmap item F-867 (ADR 0757). Questions 1 to 4 of this ADR are not answered by this and stay open.
+
+## Answers of the maintainer (2026-11-21)
+
+The lead put the open questions of ADR 0754, 0755 and 0756 to the maintainer on 2026-11-21 as four decisions, each with its
+recommendation, and asked whether to take all four. The maintainer answered: "Yes, all four".
+
+For this ADR: questions 1 to 3, option (b) each: an item of its own for the NACA 0012 lift curve (F-868), for the mean
+drag of the cylinder (F-869) and for the FAN-01 design point (F-870), each a headline of its milestone beside the present
+one. Question 4: the first six further milestones are approved (the lid-driven cavity, the backward-facing step, the flat
+plate, the heated cavity, the shock tube and the wedge, the packed bed); their definitions and mapping are roadmap item
+F-871. The other six wait until a headline item exists for each.
+
+The three new items are entered as not started. Registered runs of the first two exist (ADR 0167; ADR 0060 K1 to K4):
+whether they meet the item is decided by a registration of that item, not by the lead on entry. So the headline of vortex
+shedding reads "partly met" from this day, where it read "met" on the Strouhal number alone.

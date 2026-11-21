@@ -525,3 +525,20 @@ The two questions are the maintainer's and are put with the agent's recommendati
 beside the quoted paragraphs, the agent's entry standing and the lead adding an entry of his own after it; (2) no cutover
 now. The proposed follow-up (form 1 in shadow use on ten live merges, after the stale check stops refusing a note the lead
 appended and a gap can name a follow-up without an id) waits for the answer to question 1.
+
+## Answers of the maintainer (2026-11-21)
+
+The lead put the open questions of ADR 0754, 0755 and 0756 to the maintainer on 2026-11-21 as four decisions, each with its
+recommendation, and asked whether to take all four. The maintainer answered: "Yes, all four".
+
+For this ADR: question 1, option (b) with the rule for the lead: an agent writes, beside the quoted paragraphs of its
+addendum, the file `docs/roadmap/proposals/<ADR>-<item>.json` of form 1 and checks it with
+`python scripts/roadmap_proposals.py check`; the lead applies it with the script and still writes `docs/roadmap.json`
+alone; the agent's entry stands as written, and the lead adds what he knows as an entry of his own after it. Rule 9 of
+`docs/process/agent-rules.md` says so from version 5, and `docs/process/lead-process.md` carries the lead's side.
+Question 2, option (a): no cutover now; it is decided on the differences of the proposals in use.
+
+Still open after the answer, and why the item stays partial: the two points of form 1 the addendum names (the stale check
+refuses an item to which the lead only added a note; a gap cannot name a follow-up that has no id), and the use on live
+merges. Until the two points are registered and fixed, a proposal the script refuses for one of them is applied by the
+lead by hand and noted.

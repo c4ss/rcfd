@@ -562,7 +562,7 @@ One row per record of this folder, grouped by the roadmap category of the item i
 | [0751](0751-f855-registration-the-edit-locks-f2-lockbusy-diagnosed-under-loads.md) | F-855 registration: the edit lock's F2 ended four probe calls in LockBusy; the cause diagnosed under registered loads | REGISTERED | 2026-11-21 | 1 | F-855 | partial |
 | [0752](0752-f851-registration-push-main-after-its-first-real-runs.md) | F-851 registration: scripts/push_main.py after its first real runs | REGISTERED | 2026-11-21 | 1 | F-851 | done |
 | [0753](0753-f853-registration-every-call-of-tmp-in-restart-w19c-gets-its-own-folder.md) | F-853 registration: every call of `tmp` in `restart_w19c` gets its own folder | REGISTERED | 2026-11-21 | 1 | F-853 | done |
-| [0754](0754-f863-registration-process-measures-and-stop-conditions-before-more-workers.md) | F-863 registration: process measures and stop conditions before more workers | REGISTERED | 2026-11-21 | 1 | F-863 | partial |
+| [0754](0754-f863-registration-process-measures-and-stop-conditions-before-more-workers.md) | F-863 registration: process measures and stop conditions before more workers | REGISTERED | 2026-11-21 | 1 | F-863 | done |
 | [0755](0755-f864-registration-a-roadmap-proposal-as-a-file-validated-applied-and-replayed.md) | F-864 registration: a roadmap proposal as a file, validated, applied and replayed on six merged ADRs | REGISTERED | 2026-11-21 | 1 | F-864 | partial |
 | [0756](0756-f865-registration-per-cent-complete-for-the-roadmap-and-for-each-simulation-milestone.md) | F-865 registration: per cent complete for the roadmap and for each simulation milestone | REGISTERED | 2026-11-21 | 1 | F-865 | done |
 
@@ -728,7 +728,7 @@ One row per record of this folder, grouped by the roadmap category of the item i
 | [0156](0156-job48v-adaptive-pressure-correctors.md) | Job 48V, adaptive pressure correctors and a pre-run coupling warning | REGISTERED | 2026-10-28 | 1 | F-301, F-321 |
 | [0157](0157-job48w-merge-48u-rotated-cases-with-the-linux-tree.md) | Job 48W, merging job 48U with job 48P's per-platform trees | REGISTERED | 2026-10-29 | 1 |  |
 | [0158](0158-job48x-studio-run-plan-adaptive-pressure-correctors.md) | Job 48X, the Studio's Run makes the pressure correctors adaptive | REGISTERED | 2026-10-29 | 1 |  |
-| [0159](0159-job48y-naca0012-angle-of-attack-sweep-through-stall.md) | Job 48Y, NACA 0012 angle-of-attack sweep up to and through stall | REGISTERED | 2026-10-29 | 1 |  |
+| [0159](0159-job48y-naca0012-angle-of-attack-sweep-through-stall.md) | Job 48Y, NACA 0012 angle-of-attack sweep up to and through stall | REGISTERED | 2026-10-29 | 1 | F-868 |
 | [0160](0160-job48z-end-time-stamp-corrector-count-record-sv301-wiring.md) | Job 48Z, three follow-ups: final time stamp, corrector count, SV301 wiring | REGISTERED | 2026-10-29 | 1 |  |
 | [0161](0161-job48aa-stop-in-runs-place.md) | Job 48AA, Stop in Run's place on the Studio toolbar | REGISTERED | 2026-10-29 | 1 |  |
 | [0162](0162-job48ab-adaptive-correctors-follow-the-time-step.md) | Job 48AB, the adaptive corrector count follows the time step (the dt trigger) | REGISTERED | 2026-10-29 | 1 |  |
@@ -736,7 +736,7 @@ One row per record of this folder, grouped by the roadmap category of the item i
 | [0164](0164-job49a-why-the-sa-drag-of-the-naca0012-is-wrong.md) | Job 49A, why the steady Spalart-Allmaras drag of the NACA 0012 is wrong (ADR 0159 question 4) | REGISTERED | 2026-10-29 | 1 |  |
 | [0165](0165-job49b-rcfd-gui-on-egui-036.md) | Job 49B, the legacy desktop app `rcfd-gui` moves to egui 0.36 | REGISTERED | 2026-10-29 | 1 |  |
 | [0166](0166-job49c-effective-wall-shear-and-sa-far-field-defaults.md) | Job 49C, the effective wall shear and the SA far-field turbulence become defaults (ADR 0164 questions 1, 2, 4, 5) | REGISTERED | 2026-10-29 | 1 |  |
-| [0167](0167-job49d-naca0012-aoa-sweep-with-the-sa-drag-fixes-at-500-chords.md) | Job 49D, the NACA 0012 angle-of-attack sweep again, with ADR 0164's two fixes and a 500-chord far field | REGISTERED | 2026-10-29 | 1 |  |
+| [0167](0167-job49d-naca0012-aoa-sweep-with-the-sa-drag-fixes-at-500-chords.md) | Job 49D, the NACA 0012 angle-of-attack sweep again, with ADR 0164's two fixes and a 500-chord far field | REGISTERED | 2026-10-29 | 1 | F-868 |
 | [0168](0168-job49e-sa-wall-treatment-in-the-buffer-layer.md) | Job 49E, Spalart-Allmaras wall treatment with the wall cell in the buffer layer (ADR 0164 question 8) | REGISTERED | 2026-10-29 | 1 |  |
 | [0169](0169-job49f-sst-and-k-epsilon-far-field-default-and-the-naca-example-runs.md) | Job 49F, `freestream` becomes the far-field default of k-omega SST and k-epsilon; the 8 stored NACA 0012 example runs are regenerated | REGISTERED | 2026-10-29 | 1 |  |
 | [0170](0170-job49g-moment-reports-follow-the-effective-wall-shear-default.md) | Job 49G, moment reports follow the effective wall-shear default (ADR 0166 question 2 (a)) | REGISTERED | 2026-10-29 | 1 |  |

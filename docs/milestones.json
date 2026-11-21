@@ -13,7 +13,8 @@
       ],
       "reference": "St 0.164 to 0.167 and C_D 1.314 to 1.370 at Re 100 (arXiv:2303.09262 Table 1 and arXiv:1401.6513 Table 3, read as quotations) and Williamson, J. Fluid Mech. 206 (1989), eq. (6), St(100) = 0.164335, as recorded in docs/reference-data.md, section \"Cylinder wake\" and the rows \"Cylinder Re 100\"",
       "headline": [
-        "F-029"
+        "F-029",
+        "F-869"
       ]
     },
     {
@@ -29,7 +30,8 @@
       ],
       "reference": "the measured characteristic of the FAN 01 benchmark, Zenodo doi:10.5281/zenodo.20037409 (v5), file characteristic_n1ug.mat, design point 1.4032 m^3/s, 126.46 Pa, 333.30 W, as recorded in docs/validation-data.md, \"1. FAN-01\" (the primary rig paper, SAE 2016-01-1805, is recorded there as not read)",
       "headline": [
-        "F-126"
+        "F-126",
+        "F-870"
       ],
       "page": "docs/milestone-fan.md"
     },
@@ -46,7 +48,8 @@
       ],
       "reference": "Ladson, NASA TM 4074 (1988), tripped, M 0.15, Re 6e6, as the file CLCD_Ladson_expdata.dat of the NASA turbulence modeling resource page naca0012_val, as recorded in docs/reference-data.md, row \"NACA 0012 force and Cp data\" (the report itself is not recorded as read)",
       "headline": [
-        "F-043"
+        "F-043",
+        "F-868"
       ]
     }
   ]

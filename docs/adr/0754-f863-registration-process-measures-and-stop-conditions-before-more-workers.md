@@ -380,3 +380,18 @@ section of lead-process.md says "in force".
 
 The optional follow-up (a file that records a report's arrival, so that the count of unread reports is read and not
 counted by the lead) is not entered: with one lead and at most four agents the count is at most four.
+
+## Answers of the maintainer (2026-11-21)
+
+The lead put the open questions of ADR 0754, 0755 and 0756 to the maintainer on 2026-11-21 as four decisions, each with its
+recommendation, and asked whether to take all four. The maintainer answered: "Yes, all four".
+
+For this ADR that is the recommended option of each of the four questions: (1) no further agent while 3 or more reports
+wait unread; (2) none when, over the last 28 days, 2 or more commits brought a failure into a full gate and they are more
+than 1 in 10 of the merges; (3) while the newest gate line is red, no agent is started except on the fix of a test that
+failed in it; (4) at most 4 agents at work at once, put again after four weeks of the measures. The section of
+`docs/process/lead-process.md` says "in force" from this day. With this the item is done by its rule.
+
+On the day of the answer the newest gate line is red (62a6fec3, `listing_budget` L1, F-866), so condition 3 applies at
+once: until a gate line is green the lead starts no agent except on F-866. The agent of F-867 was started before the
+answer and finishes its work.

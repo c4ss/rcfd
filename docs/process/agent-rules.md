@@ -1,6 +1,6 @@
 # House rules for implementation agents
 
-Version 4 (2026-11-21). This file is the governing copy of the rules for every agent that works on rcfd, in the campaign
+Version 5 (2026-11-21). This file is the governing copy of the rules for every agent that works on rcfd, in the campaign
 stream and in the Studio stream alike. It replaces `w49i-work/AGENT_RULES.md` (2026-11-12) and `w49i-work/briefs/common.md`
 (2026-11-08) from the moment the lead's briefs point here; ADRs that cite "house rule N" of the earlier file mean the rule
 of the same number below. A change to a rule needs the maintainer's word, raises the version, and is dated in the list at
@@ -65,7 +65,10 @@ number, the branch, the worktree and your scratch folder.
    for a partial item its `gap` (at most 500 characters that say what is missing now; it replaces the previous gap), and any
    follow-up items with title, deps and acceptance. Each is one quoted paragraph on a single line starting with "> ". A
    follow-up's acceptance names a number or a named reference, or hands its limits to the registration. Describe the work as
-   "ADR <number>, <date>" without the words "branch" or "not merged". You may update the topic page under `docs/` of your
+   "ADR <number>, <date>" without the words "branch" or "not merged". Beside the quoted paragraphs, write the same entries
+   as the file `docs/roadmap/proposals/<ADR>-<item>.json` (form 1 of ADR 0755) and check it with
+   `python scripts/roadmap_proposals.py check`; this one path under the roadmap's name is yours to commit. The lead applies
+   it as you wrote it and adds his own entry after it. You may update the topic page under `docs/` of your
    subject, except its generated sections.
 10. Scratch files (mutation scripts, logs, copies) go in your scratch folder named in the brief and nowhere else.
 11. Commits: plain messages in the repository's style, unsigned, with no Co-Authored-By or other trailers. Commit on your
@@ -111,6 +114,8 @@ plainly anything that failed or was skipped.
 
 ## Changes
 
+- Version 5, 2026-11-21: rule 9 asks for the roadmap entries as a proposal file beside the quoted paragraphs, which the
+  lead applies as written (the maintainer's answer of that day in ADR 0755, F-864).
 - Version 4, 2026-11-21: rule 7 asks for a run of `scripts/process_report.py --check` before the report (the maintainer's
   word of that day, from finding 17 of F-851, ADR 0752).
 - Version 3, 2026-11-18: rule 4 names the fragment files of the reference-data page, which is now generated.

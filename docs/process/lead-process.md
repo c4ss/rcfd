@@ -61,6 +61,11 @@ generated files with the ledger line, pushes, and starts the selected tests that
 - If pushes queue up, merge several branches and run one selection over their joint diff:
   `python scripts/push_main.py --run --base <the commit before the first merge>` (an octopus merge needs no `--base`).
   One ledger line names every branch.
+- An agent's roadmap entry stands as the agent wrote it. The lead applies the agent's proposal file
+  (`docs/roadmap/proposals/<ADR>-<item>.json`, form 1 of ADR 0755) with `python scripts/roadmap_proposals.py apply`, and
+  adds what he knows (the merge, the push run, a decision, a different status with its reason) as an entry of his own
+  after it; he does not reword the agent's entry (the maintainer, 2026-11-21). A proposal the script refuses is applied
+  by hand and the refusal noted in the item.
 
 ## Shared files and their one writer
 
@@ -137,8 +142,8 @@ count measures citations looked at, and the rows say what was found.
 
 ## When no further agent is started
 
-The numbers of this section are proposed, not in force until the maintainer approves them (ADR 0754, F-863, "Open
-questions for the maintainer"). Until then the lead works as before and records the measures.
+The numbers of this section are in force from 2026-11-21, approved by the maintainer on that day (ADR 0754, F-863,
+"Answers of the maintainer").
 
 What the lead records, from the merge of F-863 on (a value that is not given is absent from the line, not zero):
 
@@ -155,7 +160,7 @@ What the lead records, from the merge of F-863 on (a value that is not given is 
 
 The conditions:
 
-| Condition | Proposed number | What it counts |
+| Condition | Number in force | What it counts |
 | --- | --- | --- |
 | Reports not yet read | no further agent while 3 or more wait | reports from the agent's final message until the lead has checked them against the branch; the lead's count |
 | Escaped defects | no further agent when, over the last 28 days, 2 or more commits brought a failure into a full gate and they are more than 1 in 10 of the merges | the line "escaped defects" of the weekly list; it ends when each fix is issued and the lead has written why the push run left the failing tests out |
@@ -167,6 +172,9 @@ of agents is put to the maintainer again after four weeks of the measures.
 
 ## Changes
 
+- 2026-11-21: the stop conditions of "When no further agent is started" are in force (the maintainer's answer in ADR
+  0754); "Merging and pushing" says that an agent's roadmap entry stands and the lead adds his own after it (the
+  maintainer's answer in ADR 0755).
 - Version 1, 2026-11-18: first written, from the documentation process review and the maintainer's decisions of that day.
 - 2026-11-21 (F-863, ADR 0754): "When no further agent is started" added as a proposal: the options that record the
   process measures, and four stop conditions whose numbers are not in force until the maintainer approves them. The
