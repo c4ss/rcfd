@@ -400,3 +400,149 @@ Ten runs each cannot settle a rate of one in ten; that is known beforehand.
 
 The decision rule gains AK6 beside AK0, AK5 and AK4 ("every run passes"). AK5 and AK4 as registered are running while
 this is written; no build is started until AK5 has ended, and AK0 runs after BK6 and AK6 with nothing else of this work.
+
+## Addendum 1: results (2026-11-22)
+
+All on one machine (Windows 11, 32 logical processors, shared with other agents), release builds, none on a hosted
+runner. Commits: 384b8227 (the registration, alone), 10ddf63e (the amended F2, its record, FS, CW, CH, CV; no change of
+the library), 4541467c (change W), 35cceeab (a printed line, see deviations), 5151d82b (the committed mutation),
+25b642de (amendment 1). The logs are in the scratch folder (`BK5/`, `BK4/`, `AK5/`, `AK4/`, `BK6/`, `AK6/`, `AK0/`,
+`cw_before.log`, `after_*.log`, `mut_*.log`, `e1.log`, `e1f.log`, `g1.txt`).
+
+### The checks
+
+| Id | Limit | Measured | Met |
+|---|---|---|---|
+| BK5 | none (reported) | 1 of 10 failed: run 5, `probe 9999 of 10000 conflicts, 1 other` (`LockBusy`), racer 3152 accepted, 0 errors, 125.8 s; the other nine 10000 of 10000; 61.2 to 132.8 s a run | n/a |
+| BK4 | none; reproduced when at least one run fails with only `LockBusy` among the probe's other results | 5 of 5 failed; 3, 4, 3, 3, 3 probe calls in `LockBusy` and nothing else; racer errors 1, 0, 0, 2, 2 (each `LockBusy` of the racer's own call); 8, 8, 8, 9, 9 stops; run 2 printed `probe 9996 of 10000 conflicts, 4 other`, `racer 4201 accepted, 0 errors` | reproduced |
+| CW-before | fails with `LockBusy` | failed: `LockBusy` after 2203.3 ms and 2 looks | yes |
+| CW | `Ok` in under 3.2 s; at least 3 looks; no claim left | `Ok` after 2323.0 ms, 43 looks, no claim left | yes |
+| CH | exactly 1 `LockBusy`, class S; `Adr0669` fails, `Adr0758` passes with count 1 | 1 `LockBusy` of 300 calls, class S (wait 2.003 s, the lock the racer's, 2.003 s old); `Adr0669`: `Err` ("299 of 300 probe calls are conflicts"); `Adr0758`: `Ok(1)` | yes |
+| CV | at least 1 `LockBusy`; all of class V; `Adr0758` fails | 3 `LockBusy`, classes "VVV" (45 to 50 racer calls ended inside each wait); `Err` | yes |
+| FS | every case as listed | passes | yes |
+| AK0 | 20 of 20 pass | 20 of 20; no `LockBusy` call; longest probe call 0.082 to 0.447 s; racer 6327 to 7656 accepted, 0 errors; journals clean, nothing left; 84.1 to 107.2 s a run | yes |
+| AK5 | 20 of 20 pass | 20 of 20; no `LockBusy` call; longest probe call 0.145 to 0.513 s; racer 2847 to 6065 accepted, 0 errors; 47.6 to 116.9 s | yes |
+| AK4 | 10 of 10 pass; no `LockBusy` call of any class | 10 of 10; no `LockBusy` call; 99 stops in all (8 to 11 a run), every one seen by the ticker (gaps of 2.52 to 2.55 s); longest probe call 2.534 to 2.668 s, every call `Conflict`; racer errors 0; 102.0 to 140.1 s | yes |
+| BK6 (amendment 1) | none (reported) | 10 of 10 pass by `Adr0758`; run 4: 1 `LockBusy`, class S (call 1071, wait 2.004 s, the lock the racer's and 2.004 s old, no claim, no journal lock, the racer's call from 16.463 to 19.013 s, accepted); no gap of the ticker in any run; run 3: a probe call of 2.484 s that ended in `Conflict`; 60.5 to 109.3 s | n/a |
+| AK6 (amendment 1) | 10 of 10 pass; class S counts reported | 10 of 10; class S calls 0, 0, 0, 1, 0, 0, 0, 0, 0, 0; run 4: call 4785, wait 2.002 s, the lock the racer's and 2.002 s old, no claim, no journal lock, the racer's call from 47.201 to 49.745 s, accepted; run 3: probe and racer calls of 2.554 and 2.544 s, every probe call `Conflict`; no gap of the ticker in any run; 81.2 to 98.2 s; 57 builds of 12 to 17 s beside the two series | yes |
+| S-count | at most 4 in one run | at most 1 (AK6 run 4; none in AK0, AK5, AK4) | yes |
+| E1 | every test passes | 21 test binaries, every test passes; `edit_lock_f751` 6 passed, 1 ignored (the record), 95.13 s | yes |
+| E1f | every test passes | every test passes; `edit_lock_f751` 6 and 1 ignored, `edit_lock_f755` 7, `edit_lock_f855` 2 and 1 ignored, `edit_lock_f855_stall` 3 | yes |
+| G | no `test-hooks` in the tree; 0 tests in the default build of the new file | 21 lines of `cargo tree`, none with `test-hooks`; `edit_lock_f855_stall` lists 0 tests without the feature | yes |
+| M | each caught by the named test | 6 of 6 caught (below) | yes |
+| P | 0 failures; clean; passes | `cargo fmt -p rcfd-project --check` clean; clippy clean without and with `test-hooks`; `docs_site` 2 passed; `roadmap_proposals.py check docs/roadmap/proposals/0758-F-855.json`: accepted ("F-855: partial -> done; gap removed; note + 1036 characters"); `process_report.py --check`: 1 failure, "generated file is not current: docs/adr/index.md", the lead's file (rule 7, rule 9) | yes, but for the index |
+
+### Mutations
+
+On the scratch copy of the tree of 5151d82b, its own target folder; the unmutated copy passes `edit_lock_f855_stall`
+and FS.
+
+| Mutation | Caught by | What it printed |
+|---|---|---|
+| MW1 (the step not capped; the committed patch) | CW | `LockBusy`, the stalled waiter refused |
+| ME1 (a refused probe: `acquire` gives up at its first look) | the new F2, one run | failed: 5373 of 10000 conflicts, 4627 `LockBusy`, every one of class E |
+| MS1 (a starved probe: every `LockBusy` is class S) | CV and FS | CV: classes "S", verdict `Ok(1)` where it must fail |
+| MS2 (a failed probe: other results not looked at) | FS | fails |
+| MS3 (the limit of 4 not applied) | FS | fails |
+| MS4 (the journal not looked at) | FS | fails |
+
+M2 and M6 of ADR 0669 were not run and are not touched, as registered (F-859).
+
+### What the measurements say
+
+* **The four gates.** F2 failed in e9378ecb (shard 3, 112.93 s, 4 `LockBusy`, racer 5395 accepted, 0 errors) and in
+  f6e68b4a (shard 2, 89.30 s, 1 `LockBusy`, racer 6146, 0 errors) and passed in a5c25ae8 (75.24 s) and 62a6fec3
+  (70.09 s). Nothing in the neighbouring tests separates the failed shards from the passing ones; other tests delayed by
+  2 s or more are found only in e9378ecb's shard 3 and not in f6e68b4a's shard 2. The project folder of a gate run is
+  not kept. **Which candidate the two gate runs met is not shown and cannot be shown from their artifacts.**
+* **W, a stalled waiter, is a cause of the gate's print and is removed.** A process stopped for 2.5 s gives the old F2
+  the print of the first gate in every run (BK4, 5 of 5; run 2 to the digit), because the waiter's deadline was read
+  from the wall clock at its second look. After change W the same stops refuse no call (AK4, 99 stops, 10 of 10), and
+  the control CW fails before and passes after. This is a forced cause: no run under a load that was not forced showed
+  a stop of the whole process (the ticker saw no gap in AK0, AK5, BK6 or AK6).
+* **H, a stalled holder, occurs on this machine without being forced, and change W does not remove it.** Under a build
+  beside the test (K6) one call of the racer held the edit lock for 2.3 to 2.6 s in four of twenty runs (runs 3 and 4
+  of both series, which ran in the same minutes), on the old library and on the new one alike, with a running ticker, no claim, no journal lock and a clean journal: the holder
+  stood in its own file calls, the waiter looked the whole time. Twice the probe's wait ran out against it (BK6 run 4,
+  AK6 run 4: class S, the racer's call spanning the wait and accepted); twice the hold was a little shorter or began
+  later and the probe got `Conflict` after 2.5 s. BK5's failed run fits it: its journal has a standstill of 2.38 s
+  inside a build of this work. BK6 and AK6 do not differ, so nothing under K6 speaks for W.
+* **So the answer to a gate failure of this kind is the amended F2, not the library.** A `LockBusy` after the full wait
+  against a lock that the racer held for the whole wait, in a call that then succeeded, with no claim, no journal wait
+  and a clean journal, is the registered behaviour of the lock after `EDIT_LOCK_WAIT` and is counted and printed
+  (at most 4 a run). Everything else fails as before: a refusal before the wait is over (E, ME1), a refusal while
+  the racer finished calls (V, CV, MS1), a claim or a journal lock in the way (C, J), any other result, more than 4,
+  an unclean journal.
+
+### What a further gate failure of F2 would mean
+
+The amended F2 fails only with its record printed: the class of every refused call, the wait, whose lock it was and how
+old, the racer's spanning call, the ticker's gaps and the journal counts. A further failure is therefore not a third
+unexplained one: class E, C, J or V, a result other than `Conflict` and `LockBusy`, or an unclean journal names a fault
+of the lock (or, for V, the registered blind spot of a snapshot taken after the holder let go) and is to be diagnosed
+from that line; more than 4 calls of class S in one run means a holder stalled five times in about a minute, which is
+a question about the runner or about the 2 s of `EDIT_LOCK_WAIT` and not about the test. In neither case is the limit
+raised or the test retried.
+
+### Deviations
+
+1. The first start of BK5 and BK4 ended before any test ran (a relative path in `series.py`); corrected and started
+   again from run 1 (amendment 1).
+2. BK5 was not alone: the mutation builds and the build of E1 ran beside it (amendment 1). BK4 overlapped with them
+   too. E1 and E1f ran while AK4 and AK5 ran.
+3. CW, CH and CV were run as registered on 4541467c; after those runs one printed line of the test code was corrected
+   (35cceeab: a tuple printed with `{:.3?}` showed `true` as `tru`; no assertion, class or limit changed). E1f ran all
+   three again on the corrected code and they pass. BK6's binary is built from 10ddf63e and still prints `tru`.
+4. K4 made 8 to 11 stops a run where the registration says "about six": the runs took 95 to 140 s, not 70 s.
+5. BK4's racer had errors (1, 0, 0, 2, 2), each a `LockBusy` of its own call after a stop; the registration estimated
+   "0 or few".
+6. AK0 ran with nothing else of this work, but two `cargo` or `rustc` processes of other agents were seen during it;
+   its runs took 84 to 107 s (ADR 0676 E1: 68 s).
+7. The mutation copy had comment lines appended to `src/time.rs` by the build loop of K6 when ME1 ran; no code differs.
+8. `docs/adr/index.md` is not current (this ADR is not in it); it is the lead's file (rule 9).
+
+### What was not run
+
+* Nothing on a hosted runner; no full gate. Whether F2 passes there is seen in the next gates only.
+* M2 and M6 of ADR 0669 (F-859).
+* No series under K0 before the change (as registered) and none under K6 beyond 10 runs each: a rate of one class S
+  call in ten runs under a build is an observation, not a measured rate.
+* Linux and macOS.
+* The controls CW, CH and CV are not in the gate: `.github/workflows/gate.yml` is not changed (F-858).
+
+Size (agent), actual: done; 0; 7; 3; 260000
+
+### Decision by the registered rule
+
+**done**: CW fails before change W and passes after it; BK4 reproduces the print of the gate by the forced stop and AK4
+passes; CH, CV and FS are met as well; six of six mutations are caught; every run of AK0 (20), AK5 (20), AK4 (10) and
+AK6 (10) passes; E1, E1f and G are met, and P but for the generated index that rule 7 leaves to the lead. As the rule
+says beforehand, this does not show that the gate's two events were W or H. What the trials add is that H happens on
+this machine under a build at about one run in ten and is then accepted on measured facts, and that W, the only
+candidate that the old code turned into a refusal without any holder being slow, is removed.
+
+## Open questions for the maintainer
+
+None that rule 6 leaves open for the maintainer. For the lead:
+
+1. Change W (registered question 1). No run under a load that was not forced showed a stalled waiter; W rests on CW
+   and K4 alone. Options: (a) keep it; (b) take it out and keep only the amended F2 (a stopped process would then fail
+   F2 as class S only if the racer's call spans the wait, and otherwise as class V). Recommendation: (a): it is a few
+   lines, it is right for a user's machine that slept, and without it a stop of the runner fails the gate again.
+2. The record `f2_adr_0669_body_known_miss` (registered question 2). Options: (a) keep it ignored; (b) remove it.
+   Recommendation: (a).
+3. The status. The registered rule gives done; the acceptance of F-855 asks that "the cause" be shown by a control, and
+   the gate's own events are not identified. Options: (a) done now; (b) partial until a number of full gates that the
+   lead names have passed F2 or failed it with a printed class. Recommendation: (b) costs nothing and is what was done
+   for F-854 (row G); the proposal below says done because the registered rule does, with the gap for (b) given beside
+   it.
+
+## For the lead: roadmap entries
+
+> Proposed status for F-855: done.
+
+> ADR 0758, 2026-11-22, done: a process stopped for 2.5 s gave the old F2 the gate's print in 5 of 5 runs (once 9996 conflicts and 4 LockBusy to the digit) because a waiter's deadline was read from the wall clock at its second look; a step between two looks now counts for at most 100 ms of EDIT_LOCK_WAIT (control CW fails before, passes after; 10 of 10 runs with 99 stops refuse no call). Under a build beside the test the racer held the lock for 2.3 to 2.6 s in 4 of 20 runs on the old and the new library alike; F2 (amendment of ADR 0669) accepts a LockBusy only when the racer's lock is as old as the wait, its call spans the wait and succeeds, no claim or journal lock is in the way and the journal is clean, at most 4 a run, counted and printed (controls CH, CV, FS); 20 of 20 runs without load, 20 of 20 under the shard's load, 10 of 10 under a build (one accepted call); six of six mutations caught (a refused, a failed and a starved probe fail). Which cause the two gates met is not shown; all runs were on the agent's machine.
+
+> Gap, should the lead keep the item partial: The gate's two failures are not identified from their artifacts. ADR 0758 removed the refusal of a stalled waiter and lets F2 accept, counted and printed, at most 4 calls refused against a holder stalled for the whole wait; no hosted runner has run the amended F2 yet. Missing: full gates in which F2 passes or fails with a printed class. M2 and M6 of ADR 0669 are not caught by F2 (F-859); the controls CJ, CC, CW, CH and CV are not run by the gate (F-858).
+
+> Follow-ups: none new. F-858 should name `edit_lock_f855_stall` beside the files of ADR 0751 and could keep the line "F2 run" of a passing F2, which libtest drops in the gate.
