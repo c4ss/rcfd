@@ -9509,7 +9509,7 @@
     ],
     "status": "todo",
     "acceptance": "Every limit not stated here is registered in the ADR before the run. The description of the store argument of start_run in the project-mode tools list no longer says \"none with case\": it says that plan is the default and that none is the way back to a run that stores only what its case asks for, shown by a test that reads the live tools list; no other text of the tools list, no argument, no default and no golden changes, and the Studio's calls are unchanged.",
-    "note": "Lead (2026-11-21): entered on the maintainer's answer of that day to ADR 0741 question 1 (option a). The text is in crates/rcfd-mcp/src/project.rs. Not an additive edit, which is why it was a question. Not issued yet."
+    "note": "Lead (2026-11-21): entered on the maintainer's answer of that day to ADR 0741 question 1 (option a). The text is in crates/rcfd-mcp/src/project.rs. Not an additive edit, which is why it was a question. Not issued yet. Lead (2026-11-22): issued by docs/adr/briefs/f862-start-run-store-description.md (ADR 0774)."
   },
   {
     "id": "F-863",
@@ -9678,7 +9678,7 @@
     "deps": [],
     "status": "todo",
     "acceptance": "Every limit not stated here is registered in the ADR before the run. For rcfd-mcp adopt_f288::a_n_a_run_that_differs_in_one_item_is_not_adopted, which failed once with Retry { op: replace, attempts: 12, PermissionDenied } on the run.json of a run: the cause is shown by a registered control (another handle of the test or of the server on the file, a scanner of the machine, or the load beside it), with a registered number of repeated runs with and without a registered load; the code or the test is then changed under the registration so that the registered repeats pass, and a mutation shows the test still catches an adopted run that differs. The test is not ignored, skipped or retried to make it pass, and the number of attempts is not raised without the cause.",
-    "note": "Lead (2026-11-22): entered from the left-out run of the merge of F-869 (ledger line of d08569e7, red on this test alone, 126 binaries); the merge changed a test file of rcfd-api and reference data, three heavy solves of other agents ran beside it on the machine, and the same test passed in the left-out run of the next merge. The lead's reading, not shown: a race on the file on this machine, not a fault of that merge. It has not failed in a gate. Not issued yet."
+    "note": "Lead (2026-11-22): entered from the left-out run of the merge of F-869 (ledger line of d08569e7, red on this test alone, 126 binaries); the merge changed a test file of rcfd-api and reference data, three heavy solves of other agents ran beside it on the machine, and the same test passed in the left-out run of the next merge. The lead's reading, not shown: a race on the file on this machine, not a fault of that merge. It has not failed in a gate. Not issued yet. Lead (2026-11-22): issued by docs/adr/briefs/f876-adopt-f288-access-denied.md (ADR 0773)."
   },
   {
     "id": "F-877",
@@ -9739,7 +9739,7 @@
     ],
     "status": "todo",
     "acceptance": "Every limit not stated here is registered in the ADR before the run. The observed order of the mean drag of the cylinder at Re 100 (1.38 on the sequence of ADR 0761, 1.387 on that of ADR 0763) is explained by a cause that a registered run shows: candidates named before the run (among them the grading of the O-grid, the wall force integral, the far-field condition), each tested by a run that changes it alone, with the order it gives; a cause is named only if its run moves the order by more than a registered amount, and none is named otherwise. No solver change is made by this item; a fix, if one is found, is a proposal for a further item.",
-    "note": "Lead (2026-11-22): entered on the maintainer's answer of that day (\"Yes, option (c)\") to question 1 of ADR 0763. A member of the milestone vortex-shedding: it reads the convergence of the headline case. Not issued yet.",
+    "note": "Lead (2026-11-22): entered on the maintainer's answer of that day (\"Yes, option (c)\") to question 1 of ADR 0763. A member of the milestone vortex-shedding: it reads the convergence of the headline case. Not issued yet. Lead (2026-11-22): issued by docs/adr/briefs/f881-cylinder-drag-order.md (ADR 0771).",
     "milestones": [
       "vortex-shedding"
     ]
@@ -9751,9 +9751,10 @@
     "deps": [
       "F-878"
     ],
-    "status": "todo",
+    "status": "partial",
     "acceptance": "Every limit not stated here is registered in the ADR before the run. The loss of total pressure of the FAN-01 design-point solve between the inlet and the measured plane of ADR 0765 (62.87 Pa on B1, 78.75 Pa on B2, 104.34 Pa on B3) is divided, by a rule registered before the run, into the parts that arise at the blade surfaces, at the hub and casing, in the tip gap and in the interior of the passage, and is recomputed on one mesh finer than B1 that also refines the wall-normal direction; the report states the loss the family extrapolates to with its band and what that leaves of the missing pressure rise of F-870 for the installation by the identity of ADR 0765. A run that does not decide is recorded as not deciding.",
-    "note": "Lead (2026-11-22): entered on the maintainer's answer of that day (\"Yes, all six\") to question 2 of ADR 0765, with the title, dependencies and acceptance of the agent's proposal file docs/roadmap/proposals/0765-F-878.json as written. Not issued yet. Lead (2026-11-22): issued by docs/adr/briefs/f882-fan01-rotor-loss.md (ADR 0768)."
+    "gap": "Missing for done: a valid extrapolation of the loss. The step B1 to B0c keeps the first cell (y+ 30) and is not of the kind of the other steps; a family refined at the wall too is limited by the wall functions. Whether F-880 is issued on this result is question 1 of ADR 0768.",
+    "note": "Lead (2026-11-22): entered on the maintainer's answer of that day (\"Yes, all six\") to question 2 of ADR 0765, with the title, dependencies and acceptance of the agent's proposal file docs/roadmap/proposals/0765-F-878.json as written. Not issued yet. Lead (2026-11-22): issued by docs/adr/briefs/f882-fan01-rotor-loss.md (ADR 0768). ADR 0768, 2026-11-22, partial: the loss of total pressure of the FAN-01 design-point solve up to x = 90 mm is divided by a rothalpy budget that closes by two routes on B3, B2, B1 and a finer mesh B0c (106 692 cells; amendment 1: the registered B0 diverged at iteration 106): whole 86.6, 69.4, 58.0, 52.4 Pa, of which the passage interior 61.8, 45.2, 33.5, 30.4 Pa, the blade surfaces 20.1, 19.5, 19.5, 16.9, hub and casing 2.8 to 3.5, the tip gap 1.6 to 1.9; L_s 104.34, 78.75, 62.87, 56.78 Pa. The extrapolation over B2, B1, B0c is monotone with observed order 2.786, outside the registered [1.5, 2.5], so it is not valid and the loss at mesh convergence is not shown (known miss, f882_b0c_acceptance_known_miss); the formula gives 41.9 to 53.0 Pa for orders 1 to 2.79, which would leave 35 to 46 Pa of the missing 52.47 Pa to the installation. B0c misses all three mesh gates. Lead (2026-11-22): merged at 1b939c19; partial as proposed. Whether F-880 is issued now is the maintainer's (ADR 0768, open question)."
   },
   {
     "id": "F-884",
@@ -9767,7 +9768,7 @@
     "milestones": [
       "aerofoil-lift"
     ],
-    "note": "Lead (2026-11-22): entered on the maintainer's answer of that day (\"Yes, all six\") to the question of ADR 0764, with the title, dependencies and acceptance of the agent's proposal file docs/roadmap/proposals/0764-F-868.json as written. Not issued yet. Lead (2026-11-22): issued by docs/adr/briefs/f884-naca0012-17-steady.md (ADR 0770). ADR 0770, 2026-11-22, done by its registered rule: on M1w-far500 with ADR 0760's set-up the steady SIMPLEC solve at 17 degrees with the one opt-in setting turbulence.relax_nut = 1.0 ends steady by ADR 0167's window rule at cl 1.5514, 0.0002 from the time-accurate 1.5516 (control at 15 degrees 1.493201 against 1.4932034), and with a global pseudo step (pseudo_mode physical, dt 0.02) at 1.5660; alpha_u 0.7 converges but 0.025 high, the potential start and a non-orthogonal corrector do not converge; the unchanged case reproduces ADR 0760 bit for bit; no solver source changed; the gate holds the record, four negative controls and five coarse runs (crates/rcfd-api/tests/naca0012_17_degrees_steady_f884.rs). Lead (2026-11-22): merged at fe1e4d31; done as proposed, applied without its follow-up. The follow-up (ADR 0760's twelve angles with relax_nut 1.0) is the maintainer's with the open question of ADR 0770; the agent called it F-886, a number already used on the maintainer's checkout, so it is entered under the next free number if the maintainer takes it."
+    "note": "Lead (2026-11-22): entered on the maintainer's answer of that day (\"Yes, all six\") to the question of ADR 0764, with the title, dependencies and acceptance of the agent's proposal file docs/roadmap/proposals/0764-F-868.json as written. Not issued yet. Lead (2026-11-22): issued by docs/adr/briefs/f884-naca0012-17-steady.md (ADR 0770). ADR 0770, 2026-11-22, done by its registered rule: on M1w-far500 with ADR 0760's set-up the steady SIMPLEC solve at 17 degrees with the one opt-in setting turbulence.relax_nut = 1.0 ends steady by ADR 0167's window rule at cl 1.5514, 0.0002 from the time-accurate 1.5516 (control at 15 degrees 1.493201 against 1.4932034), and with a global pseudo step (pseudo_mode physical, dt 0.02) at 1.5660; alpha_u 0.7 converges but 0.025 high, the potential start and a non-orthogonal corrector do not converge; the unchanged case reproduces ADR 0760 bit for bit; no solver source changed; the gate holds the record, four negative controls and five coarse runs (crates/rcfd-api/tests/naca0012_17_degrees_steady_f884.rs). Lead (2026-11-22): merged at fe1e4d31; done as proposed, applied without its follow-up. The follow-up (ADR 0760's twelve angles with relax_nut 1.0) is the maintainer's with the open question of ADR 0770; the agent called it F-886, a number already used on the maintainer's checkout, so it is entered under the next free number if the maintainer takes it. Maintainer (2026-11-22): \"Yes, option (a)\": no default change; the twelve angles with relax_nut 1.0 are F-887."
   },
   {
     "id": "F-885",
@@ -9791,5 +9792,19 @@
     "status": "done",
     "acceptance": "Every limit not stated here is registered in the ADR before the reading. The wall-pressure data of the FAN-01 record (Zenodo doi:10.5281/zenodo.23943494, the file named in ADR 0765) are fetched, checksummed and read for a time-mean static pressure on the casing or hub behind the rotor at the design point, with its station, its uncertainty as the record states it, and the page or file it comes from; if one is there, the identity of ADR 0765 is evaluated with it and the rotor's share of the missing pressure rise is stated with its band; if none is there, that is recorded as the result.",
     "note": "Lead (2026-11-22): entered on the maintainer's answer of that day (\"Yes, all six\") to question 2 of ADR 0765, option (c), a short reading beside F-882. Not issued yet. Lead (2026-11-22): issued by docs/adr/briefs/f883-fan01-wall-pressure.md (ADR 0769). ADR 0769, 2026-11-22, done: the record's wall pressure (mic_kulite.tar, MD5 equal to the record's, checksums in docs/reference-data.d/0769-F-883.part) gives a time-mean casing pressure against the chamber of 113.90 Pa at x = 90 mm (no stated uncertainty), 93.96 Pa +-7.50 Pa over the measured span by the radial equilibrium of the LDA profiles; with it the rotor's share of the missing 52.47 Pa is 32.26 Pa +-29.19 Pa (rig rotor loss 26.85 Pa against 62.87 Pa simulated), so by the rule of ADR 0765 it cannot be told which part is larger; held by crates/rcfd-api/tests/f883_fan01_wall_pressure.rs, three gate tests, five mutations caught. Lead (2026-11-22): merged at dff83cee; done as proposed. Whether the casing pressure becomes a compared quantity of F-870 is the maintainer's (ADR 0769, open question). Maintainer (2026-11-22): \"Yes, add it\": the casing pressure becomes a compared quantity of F-870."
+  },
+  {
+    "id": "F-887",
+    "title": "Steady Spalart-Allmaras without eddy-viscosity relaxation over the NACA 0012 lift curve",
+    "phase": 9,
+    "deps": [
+      "F-884"
+    ],
+    "status": "todo",
+    "acceptance": "Every limit not stated here is registered in the ADR before the run. ADR 0760's twelve steady cases from 0 to 17 degrees with turbulence.relax_nut = 1.0 added each end steady by ADR 0167's window rule with cl within 0.018 of ADR 0760's steady values at 0 to 16 degrees and of ADR 0764's 1.5516 at 17 degrees, or each angle that does not is recorded with its number; the result informs whether relax_nut = 1.0 can become the default of steady Spalart-Allmaras.",
+    "note": "Lead (2026-11-22): entered on the maintainer's answer of that day (\"Yes, option (a)\") to the open question of ADR 0770, with the title, dependencies and acceptance of the agent's proposal file docs/roadmap/proposals/0770-F-884.json as written (it names the item F-886, a number already used on the maintainer's checkout). Not issued yet. Lead (2026-11-22): issued by docs/adr/briefs/f887-naca0012-lift-curve-relax-nut.md (ADR 0772).",
+    "milestones": [
+      "aerofoil-lift"
+    ]
   }
 ]

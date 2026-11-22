@@ -490,3 +490,13 @@ maintainer's checkout, so it is entered under the next free number if the mainta
 default change, is put to the maintainer with the agent's recommendation (a), which the lead shares: a default change
 would move every Spalart-Allmaras result and the hashes, and the twelve angles of ADR 0760 should be run with the setting
 first.
+
+## Answer of the maintainer (2026-11-22)
+
+The lead put the open question above to the maintainer on 2026-11-22 with the agent's recommendation (a), which the
+lead shares. The maintainer answered: "Yes, option (a)".
+
+1. Option (a): no default is changed. The follow-up of the proposal file, the steady Spalart-Allmaras solve without
+   eddy-viscosity relaxation over the twelve angles of ADR 0760, is entered as F-887 (the proposal file calls it F-886,
+   a number already used on the maintainer's checkout) with the title, dependencies and acceptance written there.
+   Whether the setting becomes a default is asked again when F-887 reports.

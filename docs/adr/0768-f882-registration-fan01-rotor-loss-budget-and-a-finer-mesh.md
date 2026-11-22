@@ -511,3 +511,17 @@ docs/roadmap/proposals/0768-F-882.json`: "F-882: todo -> partial; gap set; note 
 rcfd-cli --release --test docs_site` on the tree with this addendum: 2 passed. `python scripts/process_report.py
 --check`: 1 failure, "generated file is not current: docs/adr/index.md"; no failure of the registration. The page is
 left to the lead (rule 9).
+
+## The lead's reading (2026-11-22), at the merge
+
+Merged at 1b939c19 (the report read at 22:04 UTC, 5 minutes of reading, proposed partial, written partial). Checked by
+the lead before the merge: the registration is the first commit and alone, and amendment 1 (the corrected mesh B0c) is
+committed before that mesh was run; no solver source is changed; the diverged B0 tests stay as the ignored record and
+the known miss keeps its limit. The push script ran the committed mutation and it failed as expected.
+
+Status: **partial**, as proposed. The budget closes by both routes on all four meshes and puts most of the simulated
+loss in the passage interior, which falls with every refinement, while the blade, hub, casing and tip-gap parts hardly
+move; the observed order 2.79 is above the registered range, so no extrapolated loss is a result. Noted, as the agent
+notes them: the mutation M6 as registered was not caught (an unregistered variant was), B0c misses all three mesh
+gates, and the inlet-duct share does not fall steadily. The open question, whether F-880 is issued now, is put to the
+maintainer with the agent's recommendation (a), which the lead shares.
