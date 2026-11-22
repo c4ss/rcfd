@@ -528,7 +528,7 @@ One row per record of this folder, grouped by the roadmap category of the item i
 | [0739](0739-f848-proposal-run-sites-a-remote-simulation-service-for-the-studio-cli-and-mcp.md) | F-848 proposal: run sites, a remote simulation service for the Studio, the CLI and the MCP server | ACCEPTED | 2026-11-17 | 0 | F-848 | todo |
 | [0742](0742-f262-diagnosis-the-terminal-status-of-a-run-is-written-before-its-last-state-event.md) | F-262 diagnosis: the terminal status of a run is written before its last state event and before its request files are removed (S7 of ADR 0123 fails intermittently on the held run) | REGISTERED | 2026-11-19 | 1 | F-262 | partial |
 
-## Quality, docs and validation (35)
+## Quality, docs and validation (36)
 
 | ADR | Title | Status word | Date | Addenda | Item | Item status |
 |---|---|---|---|---|---|---|
@@ -566,6 +566,7 @@ One row per record of this folder, grouped by the roadmap category of the item i
 | [0755](0755-f864-registration-a-roadmap-proposal-as-a-file-validated-applied-and-replayed.md) | F-864 registration: a roadmap proposal as a file, validated, applied and replayed on six merged ADRs | REGISTERED | 2026-11-21 | 1 | F-864 | partial |
 | [0756](0756-f865-registration-per-cent-complete-for-the-roadmap-and-for-each-simulation-milestone.md) | F-865 registration: per cent complete for the roadmap and for each simulation milestone | REGISTERED | 2026-11-21 | 1 | F-865 | done |
 | [0757](0757-f867-registration-the-fan-milestone-as-the-whole-design-goal.md) | F-867 registration: the fan milestone as the whole fan design goal | REGISTERED | 2026-11-21 | 1 | F-867 | done |
+| [0758](0758-f855-registration-a-stall-of-the-waiter-or-of-the-holder-separated-from-a-fault-of-the-edit-lock.md) | F-855 registration: a stall of the waiter or of the holder separated from a fault of the edit lock, after F2 failed in a second gate | REGISTERED | 2026-11-21 | 1 | F-855 | partial |
 | [0759](0759-f866-registration-the-control-of-l1-decides-and-asserts-on-the-ten-listings.md) | F-866 registration: the control of L1 decides and asserts on the ten listings | REGISTERED | 2026-11-21 | 1 | F-866 | done |
 
 ## Records with no item in the file name (259)

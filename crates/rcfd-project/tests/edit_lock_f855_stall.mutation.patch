@@ -1,0 +1,14 @@
+# expect-fail: cargo test --release -p rcfd-project --features test-hooks --test edit_lock_f855_stall
+diff --git a/crates/rcfd-project/src/atomic.rs b/crates/rcfd-project/src/atomic.rs
+index 06c25272..7855df0a 100644
+--- a/crates/rcfd-project/src/atomic.rs
++++ b/crates/rcfd-project/src/atomic.rs
+@@ -390,7 +390,7 @@ fn acquire(root: &Path, rel: &str, file: &Path, who: &str) -> Result<(EditLock,
+                     continue;
+                 }
+                 let now = std::time::Instant::now();
+-                seen += now.duration_since(last_look).min(EDIT_LOCK_WAIT_STEP);
++                seen += now.duration_since(last_look);
+                 last_look = now;
+                 if seen >= EDIT_LOCK_WAIT {
+                     return Err(ProjectError::LockBusy {

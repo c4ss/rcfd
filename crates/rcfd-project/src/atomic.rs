@@ -217,6 +217,10 @@ fn to_json<T: serde::Serialize>(path: &Path, value: &T) -> Result<Vec<u8>> {
 pub const EDIT_LOCK_STALE: Duration = Duration::from_secs(30);
 /// How long [`replace_if_hash`] waits for a busy edit lock before it gives up with [`ProjectError::LockBusy`].
 pub const EDIT_LOCK_WAIT: Duration = Duration::from_secs(2);
+/// The most that the time between two looks of a waiter at a busy edit lock counts toward [`EDIT_LOCK_WAIT`] (ADR 0758
+/// change W): a waiter that was not run for a while (a stopped process, a machine that slept) has not seen the lock held
+/// in that time, so [`ProjectError::LockBusy`] is given only after looks no further apart than this add up to the wait.
+pub const EDIT_LOCK_WAIT_STEP: Duration = Duration::from_millis(100);
 /// A writer that has waited this long for a busy edit lock claims it ([`edit_claim_path`], ADR 0669 D2): while a fresh claim
 /// exists, no other cooperating writer takes the lock, so the claimant gets it at the next release.
 pub const EDIT_CLAIM_AFTER: Duration = Duration::from_millis(50);
@@ -340,6 +344,8 @@ fn acquire(root: &Path, rel: &str, file: &Path, who: &str) -> Result<(EditLock, 
     let claim_path = edit_claim_path(root, rel);
     let mut claim = Claim(None);
     let t0 = std::time::Instant::now();
+    // the wait as this waiter has seen it: the time between two looks at a busy lock, each step capped (ADR 0758 W)
+    let (mut seen, mut last_look) = (Duration::ZERO, t0);
     let mut broke = false;
     let claim_on = !hooks::claim_off();
     loop {
@@ -383,7 +389,10 @@ fn acquire(root: &Path, rel: &str, file: &Path, who: &str) -> Result<(EditLock, 
                     );
                     continue;
                 }
-                if t0.elapsed() >= EDIT_LOCK_WAIT {
+                let now = std::time::Instant::now();
+                seen += now.duration_since(last_look).min(EDIT_LOCK_WAIT_STEP);
+                last_look = now;
+                if seen >= EDIT_LOCK_WAIT {
                     return Err(ProjectError::LockBusy {
                         path: file.to_path_buf(),
                         lock,
@@ -417,6 +426,8 @@ fn acquire(root: &Path, rel: &str, file: &Path, who: &str) -> Result<(EditLock, 
 /// Limits: only writers that use this function take the lock. A writer that does not (an editor, Claude Code's own
 /// file tools) can still replace the file between the check and the rename; the watcher sees such edits afterwards.
 /// Breaking a stale lock is not atomic against a second writer breaking the same stale lock at the same moment.
+///
+/// A busy lock is waited for [`EDIT_LOCK_WAIT`], counted in looks no further apart than [`EDIT_LOCK_WAIT_STEP`] (ADR 0758).
 ///
 /// ADR 0669: a writer that has waited [`EDIT_CLAIM_AFTER`] claims the lock ([`edit_claim_path`]) so that a writer taking the
 /// lock again at once cannot starve it; a path whose first resolve fails in a way a concurrent rename can cause is resolved
@@ -514,7 +525,7 @@ impl std::fmt::Debug for EditGuard {
 
 /// Take the edit lock of the project-relative path `rel` (normalised, `/` separators) as [`replace_if_hash`] does, for
 /// a writer that changes the path otherwise (the project trash moves it, ADR 0736): the same wait, claim and stale-lock
-/// rules; [`ProjectError::LockBusy`] after [`EDIT_LOCK_WAIT`].
+/// rules; [`ProjectError::LockBusy`] after [`EDIT_LOCK_WAIT`] (counted as [`EDIT_LOCK_WAIT_STEP`] says).
 pub fn lock_edit(root: &Path, rel: &str, who: &str) -> Result<EditGuard> {
     let (held, broke) = acquire(root, rel, &root.join(rel), who)?;
     Ok(EditGuard {

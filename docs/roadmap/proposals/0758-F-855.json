@@ -1,0 +1,8 @@
+{
+  "form": 1,
+  "adr": "0758",
+  "item": "F-855",
+  "base": "cd74f3885d51793ba2b7ad026e549efdebfdef88",
+  "status": "done",
+  "note": "ADR 0758, 2026-11-22, done: a process stopped for 2.5 s gave the old F2 the gate's print in 5 of 5 runs (once 9996 conflicts and 4 LockBusy to the digit) because a waiter's deadline was read from the wall clock at its second look; a step between two looks now counts for at most 100 ms of EDIT_LOCK_WAIT (control CW fails before, passes after; 10 of 10 runs with 99 stops refuse no call). Under a build beside the test the racer held the lock for 2.3 to 2.6 s in 4 of 20 runs on the old and the new library alike; F2 (amendment of ADR 0669) accepts a LockBusy only when the racer's lock is as old as the wait, its call spans the wait and succeeds, no claim or journal lock is in the way and the journal is clean, at most 4 a run, counted and printed (controls CH, CV, FS); 20 of 20 runs without load, 20 of 20 under the shard's load, 10 of 10 under a build (one accepted call); six of six mutations caught (a refused, a failed and a starved probe fail). Which cause the two gates met is not shown; all runs were on the agent's machine."
+}
