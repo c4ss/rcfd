@@ -23,19 +23,19 @@ The direct and iterative solution of linear systems as used in CFD: Cramer's rul
 
 ## Key points
 
-- **Lecture 5, Cramer's rule:** impractical for `n > 3`; operation count `O(n!)`.
-- **Lecture 5, Gauss elimination:** forward elimination to an upper triangular system, then back substitution; grand total `O(2/3 n^3)` operations, most of them in the elimination; pivot elements must be non-zero and not close to zero.
+- **Lecture 5, Cramer's rule:** impractical for $n > 3$; operation count $O(n!)$.
+- **Lecture 5, Gauss elimination:** forward elimination to an upper triangular system, then back substitution; grand total $O(\tfrac{2}{3} n^3)$ operations, most of them in the elimination; pivot elements must be non-zero and not close to zero.
 - **Lecture 5, pivoting:** partial pivoting by columns (search the largest coefficient below the pivot and swap rows), full pivoting (rows and columns, "rarely done" because it reorders the unknowns); codes usually keep a pointer vector instead of swapping rows; equations should be equilibrated (normalised) for partial pivoting; neither guarantees stability.
-- **Lecture 5, multiple right-hand sides:** `O(n^3 + p n^2)`; when a right-hand side depends on the previous solution, use LU factorisation.
-- **Lecture 6, LU factorisation:** Gauss elimination directly yields `A = L U` with unit lower triangular `L` (Doolittle); compact storage; the solution is then two triangular substitutions; pivoting is recorded in a pivot vector `p` and applied as `b(p(k))`.
-- **Lecture 6, condition number:** the ratio of relative errors; for linear systems `K(A) = ||A|| ||A^-1||` bounds the amplification of relative errors in `b` or `A`; worked ill-conditioned 2 x 2 examples.
-- **Lecture 7, slides 4-12, special matrices:** banded and tridiagonal matrices; the Thomas algorithm (`O(n)`); banded storage.
+- **Lecture 5, multiple right-hand sides:** $O(n^3 + p\, n^2)$; when a right-hand side depends on the previous solution, use LU factorisation.
+- **Lecture 6, LU factorisation:** Gauss elimination directly yields $A = L U$ with unit lower triangular $L$ (Doolittle); compact storage; the solution is then two triangular substitutions; pivoting is recorded in a pivot vector $p$ and applied as $b(p(k))$.
+- **Lecture 6, condition number:** the ratio of relative errors; for linear systems $K(A) = \lVert A \rVert\, \lVert A^{-1} \rVert$ bounds the amplification of relative errors in $b$ or $A$; worked ill-conditioned $2 \times 2$ examples.
+- **Lecture 7, slides 4-12, special matrices:** banded and tridiagonal matrices; the Thomas algorithm ($O(n)$); banded storage.
 - **Lecture 7, slide ~13, skyline storage:** applicable when no pivoting is needed, "e.g. for banded, symmetric, and positive definite matrices: FEM and FD methods. Skyline solvers are usually based on Cholesky factorization (which preserves the skyline)".
-- **Lecture 7, slides 15-16, symmetric positive definite matrices:** Sylvester's criterion; for SPD `A` no pivoting is needed and the elimination is stable; Cholesky factorisation `A = L L^T` (written with the conjugate transpose for complex matrices).
-- **Lecture 7, last slides, iterative methods:** for sparse large full-bandwidth systems iterative methods are efficient; an iteration `x(k+1) = B x(k) + c` converges for every start if and only if the spectral radius of `B` is smaller than one.
-- **Lecture 8, Jacobi and Gauss-Seidel:** matrix forms of both; both converge if `A` is strictly diagonally dominant; Gauss-Seidel also converges if `A` is symmetric positive definite; a worked tridiagonal example shows where diagonal dominance fails.
-- **Lecture 8, SOR:** an extrapolation of each Gauss-Seidel step that aims to reduce the spectral radius of `B`; `omega = 1` is Gauss-Seidel, `1 < omega < 2` over-relaxation, `0 < omega < 1` under-relaxation; converges for `0 < omega < 2` if `A` is symmetric positive definite.
-- **Lecture 8, gradient methods:** the earlier schemes are "stationary" (fixed `B`); for SPD matrices the solution minimises a quadratic form; steepest descent reduces it every step but slowly; the conjugate gradient method (Hestenes and Stiefel, 1952) uses search directions that are `A`-conjugate (`v_i^T A v_j = 0` for `i != j`).
+- **Lecture 7, slides 15-16, symmetric positive definite matrices:** Sylvester's criterion; for SPD $A$ no pivoting is needed and the elimination is stable; Cholesky factorisation $A = L L^T$ (written with the conjugate transpose for complex matrices).
+- **Lecture 7, last slides, iterative methods:** for sparse large full-bandwidth systems iterative methods are efficient; an iteration $x^{(k+1)} = B x^{(k)} + c$ converges for every start if and only if the spectral radius of $B$ is smaller than one.
+- **Lecture 8, Jacobi and Gauss-Seidel:** matrix forms of both; both converge if $A$ is strictly diagonally dominant; Gauss-Seidel also converges if $A$ is symmetric positive definite; a worked tridiagonal example shows where diagonal dominance fails.
+- **Lecture 8, SOR:** an extrapolation of each Gauss-Seidel step that aims to reduce the spectral radius of $B$; $\omega = 1$ is Gauss-Seidel, $1 < \omega < 2$ over-relaxation, $0 < \omega < 1$ under-relaxation; converges for $0 < \omega < 2$ if $A$ is symmetric positive definite.
+- **Lecture 8, gradient methods:** the earlier schemes are "stationary" (fixed $B$); for SPD matrices the solution minimises a quadratic form; steepest descent reduces it every step but slowly; the conjugate gradient method (Hestenes and Stiefel, 1952) uses search directions that are $A$-conjugate ($v_i^T A v_j = 0$ for $i \ne j$).
 
 ## Contradictions with the wiki
 

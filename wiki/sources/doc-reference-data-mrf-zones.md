@@ -23,7 +23,7 @@ MRF zones (F-031, F-114, ADR 0008): analytic Taylor-Couette checks M1 to M6 and 
 The section text follows verbatim so that every value, citation and verification label is quoted exactly. Headings are demoted and relative links rebased to the repo.
 
 
-All reference values are analytic (solid-body rotation, Taylor-Couette flow `u_theta = A r + B/r`, torque `4 pi rho nu W_i r_i^2 r_o^2/(r_o^2 - r_i^2)` per unit height) and derived in the ADR. No literature data and no pump or turbine benchmark are used or claimed. The set-up is r_i 0.5, r_o 1, nu 0.1, 48 cells around. Limits were registered before the runs; misses are ignored `*_known_miss` tests.
+All reference values are analytic (solid-body rotation, Taylor-Couette flow $u_\theta = A r + B/r$, torque $4\pi\rho\nu W_i r_i^2 r_o^2/(r_o^2 - r_i^2)$ per unit height) and derived in the ADR. No literature data and no pump or turbine benchmark are used or claimed. The set-up is r_i 0.5, r_o 1, nu 0.1, 48 cells around. Limits were registered before the runs; misses are ignored `*_known_miss` tests.
 
 | Check | Measured | Limit | Result |
 |---|---|---|---|

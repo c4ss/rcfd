@@ -147,3 +147,79 @@ Append-only. Newest at the bottom. Entry header: `## [YYYY-MM-DD] <op> | <title>
 - Nothing downloaded into `raw/`.
 - The TMR's nasa.gov hosts did not resolve or failed TLS on 2026-11-22; the TMBWG GitHub Pages mirror (already cited by the repo) was used.
 - Gaps: no verified copyable primary source for Rhie-Chow/SIMPLE/PISO, unstructured limiters, smoothed-aggregation AMG, MRF/mixing plane, sliding interfaces, immersed boundaries, GCL, VOF compression/CSF, FEM (only CC BY-NC-SA course material), GCI per Celik 2008, NSGA-II/kriging.
+
+## [2026-11-22] ingest | P6 foundations: turbulence (p6-turbulence)
+
+- p6-turbulence: 4 ref source pages (TMR, Menter TM-103975, MIT 2.29 L24-25, Davidson notes) and 20 turbulence foundation concepts, the chain stress/shear/viscosity -> Reynolds stress -> eddy viscosity -> blending + Bradshaw limiter -> k-omega SST.
+- Raw copies: 9 TMR pages + CC0 licence in `raw/tmr-turbmodels/`; Menter TM-103975 PDF in `raw/`. MIT and Davidson are cite-only (not copied).
+- k-omega-sst, k-epsilon, spalart-allmaras, flat-plate: additive `builds_on` and `## Builds on`; k-omega-sst and k-epsilon got sourced `## In short`.
+- One external contradiction recorded on [[wall-distance]] (Davidson "closest wall node" vs TMR "incorrect").
+- rcfd's SST constants (doc-reference-data-sst-wall) match TMR SST-2003; no contradiction with repo docs found.
+
+## [2026-11-22] ingest | P6 foundations: shared roots and V&V (p6-roots)
+
+- P6 job p6-roots: wrote the 14 shared-root foundation pages and the 4 new V&V foundation pages, from 11 new `ref-*` source pages, all read on 2026-11-22.
+- All references are cite only (CC BY-NC-SA, GFDL, NASA/NIST pages without a licence statement, a DOE release statement, an NETL copyright); nothing copied into `raw/`.
+- The Celik et al. GCI procedure, recorded on [[gci-richardson]] as never read, was read from an ASME-hosted copy of the JFE numerical-accuracy policy; rcfd's F-870 form matches its Eq. 7 in absolute units; rcfd's `p_band = min(p, 1)` cap and the cylinder window [1.5, 2.5] are rcfd's own rules.
+- Oberkampf and Trucano (SAND2002-0529) read in the parts used: AIAA definitions, code vs calculation verification, MMS (21 mistakes test), E1-E4 decomposition, validation-metric features.
+- Updated [[gci-richardson]] and [[verification-vs-validation]] additively with `builds_on` and `## Builds on`.
+- Links to nodes of branches not running in this wave (structural, acoustics, multiphase, heat, optimisation) are written as backticked map names, not wikilinks; links to pressure-velocity nodes are left as wikilinks for the running job.
+
+## [2026-11-22] ingest | P6 foundations: pressure-velocity coupling and discretisation (p6-pv-discretisation)
+
+- p6-pv-discretisation: 25 foundation concept pages for pressure-velocity coupling, time stepping, discretisation, gradients and limiters; all map nodes of the two sections covered.
+- 7 new source pages: MIT OCW 2.29 numerics (cite only), Jasak 1996 thesis (cite only), Klaij and Vuik 2013 (cite only), Berger-Aftosmis-Murman 2005 (cite only), Venkatakrishnan ICASE 95-3, van Leer ICASE 92-43, Langtangen and Linge 2017.
+- Copied to raw/: van-leer-1992-icase-92-43.pdf and venkatakrishnan-1995-icase-95-3.pdf (US Gov public use), langtangen-linge-2017-finite-difference-computing.pdf (CC BY 4.0).
+- Rhie-Chow, SIMPLE, PISO and limiter nodes, flagged as gaps by the sources survey, were written from readable cite-only sources (Klaij-Vuik, Jasak, Berger et al.).
+- Licence conflicts recorded on two source pages: Jasak (Spiral: CC BY-ND text, CC BY-NC-ND link, "Author Permission: Not Granted") and Berger et al. (NTRS "Public Use Permitted" vs AIAA "All other rights are reserved"); both treated as cite only.
+- Existing pages simple, piso, component-diagonal, mesh-quality, mesh-adaptation, divergence-guard got `builds_on` and a `## Builds on` section (additive).
+
+## [2026-11-22] ingest | P6 foundations: linear solvers and rotating frames (p6-linear-rotating)
+
+- P6 branch "Linear solvers" and "Rotating frames and moving meshes" written by p6-linear-rotating: 21 foundation concept pages, 13 `ref-*` source pages.
+- Sources read in this job: Shewchuk CG notes (text extracted from the PDF; equations garbled, cited by number), Templates (Barrett et al.), Falgout AMG, MIT OCW 2.29 lectures 5-8, eigenvalue Templates (four sections), Spenke et al. 2020, Cline ch. 12-13, Meakin CR-200828, Chima TM-1998-206613, Liu and Hasegawa 2026, Yao 2026, Banks et al. 2016, Thompkins CR-3560.
+- Meakin CR-200828 copied to `raw/meakin-1996-nasa-cr-200828.pdf` (US Gov public use).
+- Eight existing rcfd pages got `builds_on` and `## Builds on` (amg, mrf, sliding-mesh, overset-mesh, dynamic-mesh, immersed-solid, fan-passage-mesh, strong-fsi-coupling).
+- Saad's book was unreachable (certificate rejected); Templates and the OCW lectures replaced it.
+- Two pages left at stub for lack of a source for part of their scope: periodic-and-cyclic-boundaries (vector transformation across a rotational seam), non-conformal-interfaces (face intersection and weighting).
+
+## [2026-11-22] ingest | P6 foundations: compressible flow and acoustics (p6-compressible-acoustics)
+
+- P6 compressible-and-acoustics branch: 15 foundation concept pages from NACA 1135, Farassat 2007, Hubbard RP-1258 vols. 1-2, Liou 2001, Hu 1995 and van Leer 1992, all read in this job (NTRS, US-Gov public use).
+- 6 new `ref-*` source pages; 4 PDFs copied to `raw/`; Hubbard volumes left uncopied for size.
+- [[fw-h]], [[aeroacoustics]] and [[roadmap-compressible-flow-and-acoustics]] now have `builds_on` and `## Builds on`.
+- `structural-sound-radiation` skipped: only a one-line definition of radiation efficiency was found in an open source.
+- Concept pages written with LaTeX equations (maintainer rule of 2026-11-22); the six new `ref-*` pages still write equations as ASCII in backticks.
+
+## [2026-11-22] ingest | P6 foundations: optimisation and surrogates (p6-optimisation)
+
+- P6 optimisation branch: 4 `ref-*` source pages (Hansen 2016/2023 CMA-ES tutorial, Frazier 2018 BayesOpt tutorial, Martins and Ning 2021 textbook, Rasmussen and Williams 2006 GPML), all cite only; nothing copied to `raw/`.
+- 9 foundation concept pages: optimisation-basics, design-of-experiments, nelder-mead-simplex, evolutionary-algorithms, multi-objective-optimisation, multivariate-normal-and-kernels, maximum-likelihood-estimation, cross-validation, multi-fidelity-modelling; equations in LaTeX with source equation numbers.
+- 7 existing rcfd pages got `builds_on` and `## Builds on`: gaussian-process-surrogate, fidelity-management, design-loop, parametric-study, design-ledger, hypothesis-record, computer-fan-target.
+- NSGA-II and kriging, reported thin in the survey, are covered from Martins and Ning sec. 9.3.4 and 10.4 (read, cite only).
+- Rcfd checks: Hansen eq. (48)-(49) defaults equal the F-260 record; Martins-Ning Nelder-Mead factors equal rcfd's "1, 2, 0.5, 0.5"; the GA tournament constraint rules in Martins-Ning sec. 7.6.3 are the Deb rules rcfd states "as commonly stated".
+
+## [2026-11-22] ingest | P6 foundations: multiphase and heat transfer (p6-multiphase-heat)
+
+- p6-multiphase-heat: 19 foundation concept pages for the multiphase/particles and heat-transfer branches (11 + 8 map rows), all with LaTeX equations and source equation numbers.
+- 14 new ref source pages; 5 PDFs copied into `raw/` (4 CC BY, 1 NASA); 2 large CC BY PDFs not copied (Barreiro-Villaverde 2021, Salimnezhad 2025).
+- Survey gaps closed: VOF compression and CSF (Barreiro-Villaverde, Sharifi), heat transfer beyond entry level (Lienhard AHTT 6e, cite only), CHT (Monge-Birken), nucleation (Yang 2017), DRW (Marzouk-Huckaby).
+- Open secondary sources now state forms that rcfd recorded as recalled from memory/UNVERIFIED: Schnerr-Sauer $\alpha_v = x/(1+x)$ and the Rayleigh growth rate (Folden-Aschmoneit eqs. 43, 45; ADR 0056), and the ε-NTU definition and parallel/counterflow formulas (Lienhard eqs. 3.17, 3.20, 3.21; ADR 0039/0012).
+- Additive `builds_on` on vof, lagrangian-particles, differentially-heated-cavity, rcfd-reactor.
+- heat-conduction lists [[divergence-theorem]] in `builds_on` (the map says floor), because Lienhard's derivation uses Gauss's theorem.
+
+## [2026-11-22] ingest | P6 foundations: structural mechanics and FEM (p6-structural)
+
+- p6-structural: 12 reference source pages (MIT OCW Roylance and Bathe notes, Felippa IFEM/NFEM, three NASA reports, two arXiv papers, UF contact notes, Wikipedia as secondary).
+- 25 structural/FEM foundation concepts created, equations in LaTeX with source equation numbers.
+- strain-and-strain-rate gained the solid small-strain tensor (additive).
+- 9 existing structural pages gained builds_on links to the new foundations.
+- Vendor documentation avoided throughout (clean-room); NC and unlicensed sources cite only, nothing copied to raw/.
+
+## [2026-11-22] lint | P6 foundations complete
+
+- `build_index.py`: 711 pages. `lint.py`: 0 broken links, 0 orphans, 0 missing from index, 0 frontmatter errors.
+- Foundation checks: 152 foundation pages, each cites at least one `ref-*` source read in its job; every `builds_on` target exists; every `builds_on` chain reaches a foundation root (13 roots). 43 rcfd pages are wired into the ladders; the 41 rcfd concepts without `builds_on` are process/software ideas (adr, gate, known-miss, mcp, ...).
+- Lead check: Martins-Ning eq. 1.4, 7.3-7.5, 10.100-10.102 compared against rendered PDF pages; all match.
+- Gaps with no readable open source are listed under "Not ingested" in each `.handoff/p6-*.md` and as Open questions on the pages.
+- P7 (LaTeX) running; "Possible math in backticks" at 918 spans in 233 pages before batches 2 and 4 finish.

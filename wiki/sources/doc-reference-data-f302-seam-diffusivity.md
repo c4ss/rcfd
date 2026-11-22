@@ -27,7 +27,7 @@ Nothing was read for ADR 0227. The rule is the flux balance of a pair of finite-
 
 | Item | Status | Source |
 |---|---|---|
-| Both faces of a periodic pair take one diffusivity, the internal-face formula with the pair's weight `w = dn_g / (dn_f + dn_g)`: `mu(w T_P + (1 - w) T_Q) / rho` for a property law, the module at the centre of the pair's face of lower index with `w T_P + (1 - w) T_Q` and `w abs(u_P) + (1 - w) abs(u_Q)` for a user function | derived | ADR 0205 D1, ADR 0212 D1, ADR 0227 D1 (the face of lower index is a choice of ADR 0227, question 1) |
+| Both faces of a periodic pair take one diffusivity, the internal-face formula with the pair's weight $w = \mathit{dn}_g / (\mathit{dn}_f + \mathit{dn}_g)$: $\mu(w T_P + (1 - w) T_Q) / \rho$ for a property law, the module at the centre of the pair's face of lower index with $w T_P + (1 - w) T_Q$ and $w \lvert u_P\rvert + (1 - w) \lvert u_Q\rvert$ for a user function | derived | ADR 0205 D1, ADR 0212 D1, ADR 0227 D1 (the face of lower index is a choice of ADR 0227, question 1) |
 | The property viscosity is already one value per pair by default, up to rounding (the periodic face temperature is the same interpolation) | derived | ADR 0227 item 2 (code read), checked by F2p, G2p and T4p |
 
 

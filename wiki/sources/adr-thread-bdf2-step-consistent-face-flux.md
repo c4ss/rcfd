@@ -37,7 +37,7 @@ The BDF2 step of the overset path missed its second-order ratio (F-338, ADR 0241
 ## Key numbers and limits
 
 - ADR 0245 decision record: the default face flux's step dependence is "`5.13e-6` at a ratio of `2.30` on the mesh at rest, `3.7e-4` in the steady cavity".
-- ADR 0245 Q1: the remainder of the coupled meshes in motion is `2.06e-5` on TG_2 (ratio `2.45`), `5.2e-5` on level 1 moving against `1.3e-7` at rest, below the spatial error of TG_2 (`3.2e-4`) by a factor 15. H8: the remainder is spatial with order `1.8` to `1.9` at fixed `nu dt / h^2`.
+- ADR 0245 Q1: the remainder of the coupled meshes in motion is `2.06e-5` on TG_2 (ratio `2.45`), `5.2e-5` on level 1 moving against `1.3e-7` at rest, below the spatial error of TG_2 (`3.2e-4`) by a factor 15. H8: the remainder is spatial with order `1.8` to `1.9` at fixed $\nu\, dt / h^2$.
 - ADR 0352 Q2: the fractional step's own step dependence is `8.69e-2` in the steady cavity between `dt = 0.04` and `0.01`, "large against the PISO step's `3.7e-4`" (became F-454).
 - ADR 0359 Q1: a pose-continuous stencil would take the component cells from `2.06e-5` to `1.2e-6`; Q2: the kind changes give `9.9e-6`, ratio `1.85`, "below the spatial error by a factor 29 at level 2".
 - F-344 gap: R2b on SECT-M is `0.578` against the default `0.538` (the seam floor of ADR 0076).

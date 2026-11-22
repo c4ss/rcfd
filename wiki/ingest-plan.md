@@ -100,8 +100,8 @@ Rules (maintainer decisions 2026-11-22):
 Steps:
 - [x] Map: from every concept page, draft the prerequisite graph (`analyses/foundations-map.md`, a to-do list, not claims).
 - [x] Sources: find and fetch open references per branch (turbulence, pressure-velocity coupling, linear solvers, rotating frames and moving meshes, acoustics, structural mechanics, verification); make source pages `ref-<short-name>`.
-- [ ] Write foundation pages branch by branch (subagents, max 4), merging shared nodes.
-- [ ] Lint: every concept page reachable from a foundation root; no foundation page without a cited `ref-*` source.
+- [x] Write foundation pages branch by branch (subagents, max 4), merging shared nodes. Done 2026-11-22: 8 jobs, 152 foundation pages, ~80 `ref-*` source pages; gaps per job in `.handoff/p6-*.md`.
+- [x] Lint: every concept page reachable from a foundation root; no foundation page without a cited `ref-*` source. Done 2026-11-22 (see log); the 41 process/software concepts have no physics prerequisites and stay outside the ladders.
 
 ### P7 — Equations to LaTeX (maintainer decision 2026-11-22)
 

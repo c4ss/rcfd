@@ -29,11 +29,11 @@ No external source was consulted in this wave; every entry below is from memory 
 | --- | --- | --- |
 | Geometric conservation law: cell volume change equals the sum of the face swept volumes | Thomas and Lombard (1979); Demirdzic and Peric (1988) | UNVERIFIED citation; the identity is checked to round-off by G1 to G3 |
 | Time accuracy and the GCL of implicit schemes on moving meshes | Farhat, Geuzaine and Grandmont (2001) | UNVERIFIED citation, not used quantitatively |
-| Variable-diffusivity Laplacian mesh motion (inverse distance) | Jasak and Tukovic (2006/2007) | UNVERIFIED citation; the diffusivity `1/l^k` is implemented as described in the ADR |
-| Stokes second problem `u = U0 exp(-eta) cos(omega t - eta)`, `eta = y sqrt(omega/(2 nu))` | Schlichting, Boundary-Layer Theory | UNVERIFIED citation; the profile was checked by substitution into the diffusion equation |
+| Variable-diffusivity Laplacian mesh motion (inverse distance) | Jasak and Tukovic (2006/2007) | UNVERIFIED citation; the diffusivity $1/l^k$ is implemented as described in the ADR |
+| Stokes second problem $u = U_0 \exp(-\eta) \cos(\omega t - \eta)$, $\eta = y \sqrt{\omega/(2\nu)}$ | Schlichting, Boundary-Layer Theory | UNVERIFIED citation; the profile was checked by substitution into the diffusion equation |
 | Newmark average acceleration (beta 1/4, gamma 1/2) | Newmark (1959) | UNVERIFIED citation; second-order convergence measured (ratio 3.99) |
-| Euler's equations, axisymmetric torque-free precession `e^{+i Omega t}` with `Omega = (I3 - I1) w3 / I1` | rigid-body dynamics | derived here; the registered sign (`e^{-i Omega t}`) of the ADR was wrong |
-| Piston pushing a fluid column, `v^2/2 = -(F/(rho A)) ln(1 - rho A x/m0)` | unsteady Bernoulli for plug flow | derived here (ADR 0033), no external source |
+| Euler's equations, axisymmetric torque-free precession $e^{+i \Omega t}$ with $\Omega = (I_3 - I_1)\, w_3 / I_1$ | rigid-body dynamics | derived here; the registered sign ($e^{-i \Omega t}$) of the ADR was wrong |
+| Piston pushing a fluid column, $v^2/2 = -\frac{F}{\rho A} \ln\left(1 - \frac{\rho A x}{m_0}\right)$ | unsteady Bernoulli for plug flow | derived here (ADR 0033), no external source |
 | Added-mass instability of explicit partitioned coupling | Causin, Gerbeau and Nobile (2005) | UNVERIFIED citation; not reproduced, the checks use a fluid-to-body mass ratio of 0.2 |
 
 
