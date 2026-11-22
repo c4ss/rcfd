@@ -39,7 +39,7 @@ Stress is force per unit area inside a material. Because the force on a small su
 
 - [[viscosity]] (fluid stress from strain rate) and [[shear-stress]].
 - [[navier-stokes-equations]] (momentum balance with `div sigma`).
-- [[linear-elasticity]], [[equilibrium-equations]], [[finite-strain-kinematics]], [[reynolds-stress]], [[fatigue]].
+- `linear-elasticity`, `equilibrium-equations`, `finite-strain-kinematics`, [[reynolds-stress]], `fatigue`.
 
 ## How rcfd uses it
 

@@ -43,10 +43,10 @@ Here `u_n` is the boundary's normal speed and `v` the material velocity; for a f
 
 ## Leads to
 
-- [[navier-stokes-equations]] (mass and momentum balances of a viscous fluid), [[euler-equations]], [[energy-equation]].
+- [[navier-stokes-equations]] (mass and momentum balances of a viscous fluid), `euler-equations`, `energy-equation`.
 - [[finite-volume-method]], [[convection-diffusion-equation]].
 - [[ale-formulation]] and [[geometric-conservation-law]] (balances over moving control volumes, the `u_n` term above).
-- [[two-way-coupling]] (sources exchanged between particles and fluid).
+- `two-way-coupling` (sources exchanged between particles and fluid).
 
 ## How rcfd uses it
 

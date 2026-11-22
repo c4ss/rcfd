@@ -34,7 +34,7 @@ Shear stress is the part of stress that acts along a surface rather than across 
 ## Leads to
 
 - [[skin-friction-coefficient]], [[friction-velocity-and-y-plus]], [[boundary-layer]], [[law-of-the-wall]].
-- [[reynolds-stress]] and [[bradshaw-assumption-and-sst-limiter]] (turbulent shear stress), [[linear-elasticity]] (shear modulus).
+- [[reynolds-stress]] and [[bradshaw-assumption-and-sst-limiter]] (turbulent shear stress), `linear-elasticity` (shear modulus).
 
 ## How rcfd uses it
 

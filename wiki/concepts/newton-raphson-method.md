@@ -40,7 +40,7 @@ Floor only: derivatives, tangent lines, linear systems `A x = b` (for the system
 
 ## Leads to
 
-- [[nonlinear-fem-newton]] (residual and tangent stiffness), [[fixed-point-iteration-and-acceleration]] (quasi-Newton), [[stability-of-equilibrium]].
+- `nonlinear-fem-newton` (residual and tangent stiffness), [[fixed-point-iteration-and-acceleration]] (quasi-Newton), `stability-of-equilibrium`.
 - rcfd: [[arc-length-continuation]], [[hyperelastic-materials]], [[incompatible-modes-hex8]].
 
 ## How rcfd uses it

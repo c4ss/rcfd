@@ -37,7 +37,7 @@ The differences `y_i - f(x_i; beta)` are the residuals (the handbook calls them 
 
 ## Leads to
 
-- [[gradient-reconstruction]] (least-squares cell gradients), [[cross-validation]], [[multi-fidelity-modelling]] (discrepancy corrections fitted to data), [[fixed-point-iteration-and-acceleration]] (least-squares quasi-Newton).
+- [[gradient-reconstruction]] (least-squares cell gradients), `cross-validation`, `multi-fidelity-modelling` (discrepancy corrections fitted to data), [[fixed-point-iteration-and-acceleration]] (least-squares quasi-Newton).
 - [[solution-verification]]: the least-squares version of the GCI for noisy grid convergence ([[ref-celik-2008-jfe-discretisation-uncertainty]]).
 
 ## How rcfd uses it

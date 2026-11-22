@@ -36,7 +36,7 @@ Dividing by `rho` puts `nu = mu / rho` in front of the Laplacian. The terms are:
 
 **The full set.** The NASA page shows the 3D unsteady compressible set as five coupled equations: continuity, three momentum components, energy; the unknowns are pressure, density, temperature and three velocity components ([[ref-nasa-glenn-beginners-guide]]). In nondimensional form the viscous stress terms carry `1/Re` ([[ref-nasa-glenn-beginners-guide]]; Reynolds number in [[dimensionless-numbers]]).
 
-**Simplifications.** Dropping the viscous terms gives the [[euler-equations]], which cannot model boundary layers; a boundary-layer simplification exists; in CFD the stress terms are often supplemented by a turbulence model ([[ref-nasa-glenn-beginners-guide]]).
+**Simplifications.** Dropping the viscous terms gives the `euler-equations`, which cannot model boundary layers; a boundary-layer simplification exists; in CFD the stress terms are often supplemented by a turbulence model ([[ref-nasa-glenn-beginners-guide]]).
 
 **What it adds.** The [[conservation-law]] template plus a material law turns into a closed system: as many equations as unknowns. What it does not give is an equation for pressure in incompressible flow; that is the subject of [[incompressible-flow]] and [[pressure-velocity-coupling]].
 
@@ -49,7 +49,7 @@ Dividing by `rho` puts `nu = mu / rho` in front of the Laplacian. The terms are:
 ## Leads to
 
 - [[incompressible-flow]], [[pressure-velocity-coupling]], [[turbulence]], [[reynolds-averaging]], [[boundary-layer]].
-- [[relative-and-absolute-velocity-formulations]] (rotating frames), [[immersed-boundary-method]], [[two-phase-flow-basics]], [[lighthill-acoustic-analogy]].
+- [[relative-and-absolute-velocity-formulations]] (rotating frames), [[immersed-boundary-method]], `two-phase-flow-basics`, `lighthill-acoustic-analogy`.
 - rcfd: [[simple]], [[piso]], [[mrf]], [[immersed-solid]].
 
 ## How rcfd uses it

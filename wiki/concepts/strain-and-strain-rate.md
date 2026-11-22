@@ -16,7 +16,7 @@ Strain measures how much a piece of material is deformed (stretched, squeezed or
 
 ## Explanation
 
-**Strain in a solid (first-year).** Strain is a dimensionless fractional change: tensile strain `dL / L0` (Eq. 12.35), bulk strain `dV / V0` (Eq. 12.37) and shear strain `dx / L0`, the sideways shift over the transverse distance (Eq. 12.41). In the linear range stress = modulus x strain (Eq. 12.33), with Young's modulus `Y`, bulk modulus `B = -dp/(dV/V0)` and shear modulus `S` ([[ref-openstax-university-physics-1]] sec. 12.3). The tensor form for solids (displacement gradient, small-strain tensor) was not covered by the sources read in this job; see [[linear-elasticity]] and [[finite-strain-kinematics]].
+**Strain in a solid (first-year).** Strain is a dimensionless fractional change: tensile strain `dL / L0` (Eq. 12.35), bulk strain `dV / V0` (Eq. 12.37) and shear strain `dx / L0`, the sideways shift over the transverse distance (Eq. 12.41). In the linear range stress = modulus x strain (Eq. 12.33), with Young's modulus `Y`, bulk modulus `B = -dp/(dV/V0)` and shear modulus `S` ([[ref-openstax-university-physics-1]] sec. 12.3). The tensor form for solids (displacement gradient, small-strain tensor) was not covered by the sources read in this job; see `linear-elasticity` and `finite-strain-kinematics`.
 
 **Velocity gradient in a fluid.** Near a point `p`, the velocity is `v(p + r) ~ v(p) + J r` with `J_ij = dv_i/dx_j`, the velocity gradient `L = grad v`, unit 1/time ([[ref-wikipedia-shared-roots]] "Strain-rate tensor"). It splits into two parts:
 
@@ -37,7 +37,7 @@ Strain measures how much a piece of material is deformed (stretched, squeezed or
 ## Leads to
 
 - [[viscosity]] (Newtonian stress is linear in `E`) and [[shear-stress]].
-- [[boussinesq-eddy-viscosity]] (eddy-viscosity models use `S`), [[linear-elasticity]], [[finite-strain-kinematics]].
+- [[boussinesq-eddy-viscosity]] (eddy-viscosity models use `S`), `linear-elasticity`, `finite-strain-kinematics`.
 
 ## How rcfd uses it
 

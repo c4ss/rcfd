@@ -24,7 +24,7 @@ A dimensionless number is a ratio of two effects in a flow, for example inertia 
 - **Prandtl** `Pr = nu / alpha`: viscous diffusion to thermal diffusion.
 - **Strouhal** `St = omega l / U`: unsteady effects to inertia (shedding frequency made dimensionless).
 - **Froude** `Fr = U / sqrt(g l)`: inertia to gravity. **Euler** `Eu = (P0 - P_inf)/(rho U^2/2)`: pressure to inertia. **Weber** `We = rho U^2 l / sigma`: inertia to surface tension. **Knudsen** `Kn = lambda / l`: mean free path to length ([[continuum-hypothesis]]).
-- **Stokes number:** Table 9.8 describes it as particle relaxation time to Kolmogorov time, but its printed formula is the Galileo number's, so the formula is not used here ([[ref-bar-meir-fluid-mechanics]]); see [[particle-equation-of-motion]].
+- **Stokes number:** Table 9.8 describes it as particle relaxation time to Kolmogorov time, but its printed formula is the Galileo number's, so the formula is not used here ([[ref-bar-meir-fluid-mechanics]]); see `particle-equation-of-motion`.
 - **Peclet number:** not in the sources read in this job; see [[convection-diffusion-equation]].
 
 **Numerical (grid) numbers.** The Courant number `C = u dt / dx` compares the distance a wave travels in one step with the cell size; explicit schemes need `C <= C_max`, typically 1, while implicit schemes tolerate more; in n-D `C = dt sum(u_i / dx_i)` ([[ref-wikipedia-shared-roots]] "Courant-Friedrichs-Lewy condition"). By analogy, the diffusion number `nu dt / dx^2` compares viscous diffusion in one step with the cell size (used on rcfd pages; no general source for its limits was read in this job; see [[stability-and-cfl]]).
@@ -38,7 +38,7 @@ A dimensionless number is a ratio of two effects in a flow, for example inertia 
 
 ## Leads to
 
-- [[turbulence]] (Reynolds number sets transition), [[incompressible-flow]] (Mach), [[stability-and-cfl]] (Courant), [[boundary-layer]], [[particle-equation-of-motion]] (Stokes number), [[boussinesq-buoyancy-approximation]].
+- [[turbulence]] (Reynolds number sets transition), [[incompressible-flow]] (Mach), [[stability-and-cfl]] (Courant), [[boundary-layer]], `particle-equation-of-motion` (Stokes number), `boussinesq-buoyancy-approximation`.
 
 ## How rcfd uses it
 

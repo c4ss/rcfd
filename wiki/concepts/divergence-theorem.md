@@ -40,7 +40,7 @@ Floor only: partial derivatives, multiple and surface integrals (first-year calc
 
 - [[conservation-law]]: integral and differential balances are equivalent through this theorem.
 - [[finite-volume-method]]: a cell balance is the theorem applied to one cell, with the surface integral split into face fluxes.
-- [[equilibrium-equations]] and [[principle-of-virtual-work]]: the weak form of solid mechanics uses the same integration by parts.
+- `equilibrium-equations` and `principle-of-virtual-work`: the weak form of solid mechanics uses the same integration by parts.
 - [[geometric-conservation-law]]: a moving cell's volume change equals the volume swept by its faces.
 
 ## How rcfd uses it

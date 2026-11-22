@@ -38,7 +38,7 @@ Viscosity is a fluid's internal friction: the resistance of fluid layers to slid
 ## Leads to
 
 - [[shear-stress]], [[navier-stokes-equations]], [[dimensionless-numbers]] (Reynolds number).
-- [[boussinesq-eddy-viscosity]] (turbulent "viscosity" as a modelled, not a fluid, property), [[boundary-layer]], [[particle-equation-of-motion]] (Stokes drag).
+- [[boussinesq-eddy-viscosity]] (turbulent "viscosity" as a modelled, not a fluid, property), [[boundary-layer]], `particle-equation-of-motion` (Stokes drag).
 
 ## How rcfd uses it
 

@@ -36,7 +36,7 @@ Floor only: sine waves, complex exponentials `exp(i theta)`, sums and integrals.
 
 ## Leads to
 
-- [[rotor-tone-noise]] (blade-passing frequency and harmonics), [[sound-levels-and-metrics]] (bands, SPL), [[harmonic-and-random-response]] (PSD response of structures), [[cyclic-symmetry]] (harmonic index).
+- `rotor-tone-noise` (blade-passing frequency and harmonics), `sound-levels-and-metrics` (bands, SPL), `harmonic-and-random-response` (PSD response of structures), [[cyclic-symmetry]] (harmonic index).
 - rcfd: [[aeroacoustics]], [[fw-h]], [[campbell-diagram]].
 
 ## How rcfd uses it

@@ -1,7 +1,8 @@
 ---
 type: concept
 tags: [validation, verification, process]
-sources: [doc-reference-data, doc-verification-report, doc-milestone-fan, doc-reference-data-f869-cylinder-mean-drag, doc-changelog, doc-fan-measurement-protocol, doc-design-loop, doc-test-process, adr-thread-simulation-milestones-validation, adr-thread-fan01-design-point, adr-thread-design-surrogate-and-fidelity]
+sources: [doc-reference-data, doc-verification-report, doc-milestone-fan, doc-reference-data-f869-cylinder-mean-drag, doc-changelog, doc-fan-measurement-protocol, doc-design-loop, doc-test-process, adr-thread-simulation-milestones-validation, adr-thread-fan01-design-point, adr-thread-design-surrogate-and-fidelity, ref-oberkampf-trucano-2002-sand2002-0529, ref-nparc-vv-tutorial, ref-mfix-vv-manual, ref-nist-tn-1297]
+builds_on: [code-verification-and-manufactured-solutions, solution-verification, validation-comparison]
 created: 2026-11-22
 updated: 2026-11-22
 status: draft
@@ -23,6 +24,16 @@ Verification asks whether the numbers are computed (or quoted) correctly; valida
 - **Band from the measurement's scatter (ADR 0760):** for NACA 0012 the band term s = 0.018 is the scatter of Ladson's three grit zones, because "a computed value cannot be asked to agree with the measurement more closely than the measurement's three sets agree with each other" ([[adr-thread-simulation-milestones-validation]]).
 - **A band needs the measurement's stated uncertainty (ADR 0762):** the round-robin scatter is "another quantity than the one the acceptance names", so F-870 cannot be done until F-877 reads the uncertainty ([[adr-thread-fan01-design-point]]).
 - **Model-only claims:** every design-loop result carries the caveat "every number ranks variants of the model, not real fans" ([[adr-thread-design-surrogate-and-fidelity]]).
+
+## Builds on
+
+The general terms, from the open V&V literature read in P6:
+- [[code-verification-and-manufactured-solutions]]: AIAA verification, "solving the equations right"; order-of-accuracy tests against exact and manufactured solutions ([[ref-oberkampf-trucano-2002-sand2002-0529]] sec. 2.1, 3.4.3; [[ref-mfix-vv-manual]] sec. 1.1, 2.1).
+- [[solution-verification]]: the numerical error of one calculation (round-off, iteration, discretisation) and grid convergence studies ([[ref-nparc-vv-tutorial]]).
+- [[validation-comparison]]: AIAA validation, "the degree to which a model is an accurate representation of the real world from the perspective of the intended uses of the model"; "Individual computational outcomes of a model are validated; codes are not validated" ([[ref-oberkampf-trucano-2002-sand2002-0529]] sec. 2.1, 4.1.1).
+- [[measurement-uncertainty]]: the standard, combined and expanded uncertainty a measured value carries ([[ref-nist-tn-1297]]).
+
+None of the V&V sources read in P6 discusses rcfd's first kind of checking, reference-value verification (does the number in the repo match its source); see [[provenance]] for how rcfd records it.
 
 ## Related
 

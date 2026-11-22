@@ -37,7 +37,7 @@ Floor only: sums, square roots, the exponential function, integrals of a functio
 ## Leads to
 
 - [[measurement-uncertainty]] (standard uncertainty is a standard deviation), [[validation-comparison]].
-- [[linear-regression-least-squares]], [[design-of-experiments]], [[multivariate-normal-and-kernels]], [[maximum-likelihood-estimation]], [[cross-validation]], [[evolutionary-algorithms]], [[turbulent-dispersion-random-walk]].
+- [[linear-regression-least-squares]], `design-of-experiments`, `multivariate-normal-and-kernels`, `maximum-likelihood-estimation`, `cross-validation`, `evolutionary-algorithms`, `turbulent-dispersion-random-walk`.
 
 ## How rcfd uses it
 
