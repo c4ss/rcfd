@@ -1,0 +1,10 @@
+{
+  "form": 1,
+  "adr": "0768",
+  "item": "F-882",
+  "base": "21054b68cf6797d8c1fc21ed6064ffa0b33393b1",
+  "status": "partial",
+  "note": "ADR 0768, 2026-11-22, partial: the loss of total pressure of the FAN-01 design-point solve up to x = 90 mm is divided by a rothalpy budget that closes by two routes on B3, B2, B1 and a finer mesh B0c (106 692 cells; amendment 1: the registered B0 diverged at iteration 106): whole 86.6, 69.4, 58.0, 52.4 Pa, of which the passage interior 61.8, 45.2, 33.5, 30.4 Pa, the blade surfaces 20.1, 19.5, 19.5, 16.9, hub and casing 2.8 to 3.5, the tip gap 1.6 to 1.9; L_s 104.34, 78.75, 62.87, 56.78 Pa. The extrapolation over B2, B1, B0c is monotone with observed order 2.786, outside the registered [1.5, 2.5], so it is not valid and the loss at mesh convergence is not shown (known miss, f882_b0c_acceptance_known_miss); the formula gives 41.9 to 53.0 Pa for orders 1 to 2.79, which would leave 35 to 46 Pa of the missing 52.47 Pa to the installation. B0c misses all three mesh gates.",
+  "gap": "Missing for done: a valid extrapolation of the loss. The step B1 to B0c keeps the first cell (y+ 30) and is not of the kind of the other steps; a family refined at the wall too is limited by the wall functions. Whether F-880 is issued on this result is question 1 of ADR 0768.",
+  "follow_ups": []
+}
