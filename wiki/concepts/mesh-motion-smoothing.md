@@ -34,8 +34,7 @@ The boundary of a moving-mesh problem is told how to move (a wall, a piston, a f
 
 ## How rcfd uses it
 
-- **Interior motion:** `rigid` or `smoothing` (Laplacian, inverse distance, inverse volume $1/V^k$, F-290, ADR 0203); every moved mesh is validated ([[dynamic-mesh]]).
-- **Topology changes:** layering on a `box_3d` piston stack (F-230, ADR 0090; tree F-259, ADR 0191/0257; prisms F-257, ADR 0213; thresholds 0.4 / 1.6 in the tree); local tet remeshing (F-247, ADR 0215, library, compressible only) ([[dynamic-mesh]], [[adr-thread-layering-remeshing-ale]]).
+- rcfd's interior motion options (`rigid`, `smoothing` with Laplacian, inverse-distance and inverse-volume diffusivity) and its topology changes (layering, local tet remeshing), with item and ADR numbers, are on [[dynamic-mesh]]; the ADR history is [[adr-thread-layering-remeshing-ale]]. (Trimmed 2026-11-22 to a cross-reference by the maintainer's page-structure decision; the facts live on [[dynamic-mesh]].)
 
 ## Related
 

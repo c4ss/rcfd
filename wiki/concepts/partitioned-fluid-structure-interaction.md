@@ -36,5 +36,4 @@ Fluid-structure interaction can be solved with one big coupled system (monolithi
 
 ## How rcfd uses it
 
-- **Loose and strong six-DOF coupling:** loose explicit coupling, unstable above an added-mass ratio of 2 (ADR 0250); the strong step `rcfd_fv::fsi::strong_step` (F-251) selectable from a case by `[dynamic_mesh.six_dof.coupling] scheme = "strong"` (F-350, ADR 0266) ([[strong-fsi-coupling]], [[dynamic-mesh]]).
-- **Co-simulation protocol:** an external structural participant coupled through `rcfd_fv::cosim::coupled_step`; converged when $\lvert r \rvert \le \texttt{tolerance} \times \max(\lvert ft \rvert,\, \texttt{force\_scale})$; `max_iterations = 1` is loose coupling ([[cosimulation-protocol]]).
+- rcfd's loose and strong six-DOF coupling (with its added-mass limit, the strong step and its case key) is on [[strong-fsi-coupling]]; the external-solver coupling and its convergence test are on [[cosimulation-protocol]]; both build on the ideas above. (Trimmed 2026-11-22 to a cross-reference by the maintainer's page-structure decision; the facts live on those pages.)
