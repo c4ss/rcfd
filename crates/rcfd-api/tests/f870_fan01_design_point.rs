@@ -59,7 +59,7 @@ const DP_0086: [f64; 3] = [73.988, 64.233, 46.778];
 const B1_QUALITY_RECORD: [f64; 3] = [83.37, 3.765, 252.4];
 
 /// The recorded state: (torque [N m], pressure rise [Pa]) of the first run on main 13b0937d (ADR 0762, addendum 1).
-const B1_RECORD: (f64, f64) = (f64::NAN, f64::NAN);
+const B1_RECORD: (f64, f64) = (2.098164, 73.9881);
 const B3_SHORT_RECORD: (f64, f64) = (1.918174, 46.5819);
 /// The recorded verdicts of the acceptance clauses on B1: A1 pressure rise in the band, A2 shaft power in the band, A3a non-orthogonality,
 /// A3b skewness, A3c aspect ratio, A4 converged. `true` = met.
@@ -525,10 +525,11 @@ fn f870_b1_design_point_state_record() {
 }
 
 /// The acceptance of F-870 with the limits of ADR 0762 intact: pressure rise and shaft power within the band, the mesh within the
-/// registered gates, the solve converged.
+/// registered gates, the solve converged. Measured once (ADR 0762, addendum 1): MISSED. The band holds no uncertainty of the
+/// measurement (none could be read), so a pass of this test alone would not be the acceptance.
 #[test]
-#[ignore = "heavy, ADR 0762: the acceptance of F-870 on B1 (shares the solve of the state record)"]
-fn f870_b1_design_point_acceptance() {
+#[ignore = "known miss, ADR 0762: F-870 on B1 MISSES A1 (pressure rise 73.99 Pa against 126.46 Pa, distance 52.47 Pa, band 29.75 Pa), A3a (non-orthogonality 83.37 deg against 70), A3b (skewness 3.765 against 2.0) and A4 (res_u 1.2e-3 against 1e-5); A2 (shaft power 326.50 W against 333.30 W) and A3c are met; shares the 50-minute solve of the state record"]
+fn f870_b1_design_point_acceptance_known_miss() {
     let o = b1_outcome();
     let v = o.verdicts();
     let names = [
