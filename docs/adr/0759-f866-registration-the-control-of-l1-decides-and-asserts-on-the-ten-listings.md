@@ -289,3 +289,110 @@ is partial.
 One more disclosure of the runs made so far: every run of a series was made with `-- --nocapture` after the registered
 command, so that a passing run prints its times; and the proposal file is committed with the addendum, not with the
 change, because its text states the outcome.
+
+## Addendum 1: results (2026-11-22)
+
+Commits: cb061a7b (this registration, alone), 80bb50a2 ("before": the old rule as the function `control`, C1 to C3),
+67367620 (the new rule and the mutation patch), dc3aceba (amendment 1), and the commit of this addendum with the proposal
+file. Machine: the maintainer's Windows machine, 16 logical processors, shared with other work; release unless said.
+Logs are in the scratch folder under `logs/`.
+
+### The lead's reading and the gates (G)
+
+The reading holds, as derived in the registration from the test and the printed line of the gate: the old control fails
+exactly when `T <= 500 ms < 10 w`. Of the three gates only the failed run printed its times (mean of ten 49.8 ms, worst
+of three 51.6 ms); the two passing gates give the whole time of the test alone (16.40 s and 18.66 s against 15.73 s).
+
+### Checks
+
+| Id | Limit | Measured | Met |
+| --- | --- | --- | --- |
+| A1 | C1 fails at commit 2 | failed: `the control fails on a sound listing: Err("negative control: the budget does not catch a 10x slower listing")`. C2 and C3 failed there too (C2 at 500 ms + 1 ns: `Ok(false)`, the old rule with `worst` = `ten`/10 rounds down; C3 first at `worst` 50.1 ms, `ten` 50.1 ms); L1 passed | **yes** |
+| A2 | C1 and C3 pass after | pass, in each of the 23 runs of S1 and S2 and the 40 of S3 and S3b | **yes** |
+| A3 | lines 10 to 13 and 94 to 96 of the file at cd74f388 unchanged | each of the seven lines is in the file as it was; `git diff cd74f388` removes none of them | **yes** |
+| A4 | M2: L1 fails at the budget assertion | failed: `listing 500 runs took 1.9364767s > 500ms` (the ten listings 18.45 s; C1 to C3 pass) | **yes** |
+| A5 | no `#[ignore]`, no loop around the control, no second attempt | none in the file | **yes** |
+| C2 | passes | passes in every run after the change | **yes** |
+| S1 | 0 failed of 20 | 0 of 20; `worst` median 98.2 ms (86.5 to 119.3), ten listings median 925.7 ms (857.7 to 1050.0); the control asserted and held in all 20 | **yes** |
+| S2 | 0 failed of 3 (debug) | 0 of 3; `worst` 98.3, 86.7, 97.9 ms | **yes** |
+| S3 | 0 failed of 20; band reproduced | 0 of 20 on the copy with `RUNS` = 214; median `worst` 34.58 ms (29.0 to 73.5), ten listings median 328.9 ms: **band not reproduced**, under 40 ms. Run 17 (`worst` 73.5 ms, ten 365.3 ms) is a pair the old rule fails; it passed | failed 0: **yes**; band: **no** |
+| S3b (amendment 1) | 0 failed of 20; band reproduced | 0 of 20 on the copy with `RUNS` = 296; median `worst` 61.66 ms (41.6 to 154.4), ten listings median 574.7 ms (431.7 to 1088.3): in the band, at its upper edge. The first five runs had ten listings of 432 to 559 ms; from run 6 the machine was slower by a load that is not of this work (ten listings up to 1.09 s) | **yes** |
+| S0 | none | on the copy with `RUNS` = 214, old rule: L1 failed in **3 of 20** (runs 1, 16, 18: `worst` 51.8, 52.4, 50.7 ms with ten listings 323.0, 429.5, 310.0 ms), each with the message of the gate. By the registered count (the command exits non-zero) 20 of 20, because C1 to C3 are red at that commit (amendment 1) | reported |
+| S0b (amendment 1) | none | on the copy with `RUNS` = 296, old rule: L1 failed in 0 of 20. The machine was under the foreign load for the whole series: median `worst` 104.9 ms (70.5 to 279.6), ten listings 674 ms to 1.21 s, so the series was not in the band and shows nothing about it | reported |
+| M0 | C1 fails | fails (and C2, C3); the committed patch applies to the tip | **yes** |
+| M1 | caught | C2 fails (`left: Err(..)`, `right: Ok(true)` at 500.000001 ms), C3 fails, and L1 fails at the control (ten listings 1.18 s, budget 5 s) | **yes** |
+| M3 | caught | C1, C2 and C3 fail; L1 passes (not asserted on this machine, as expected) | **yes** |
+| E | no other file | `git diff --stat cd74f388`: the test file, its mutation patch, this ADR, and the proposal file; nothing under `crates/rcfd-project/src/` | **yes** |
+| F | clean; clean; passes; passes | `cargo fmt -p rcfd-project --check` clean; `cargo clippy -p rcfd-project --all-targets -- -D warnings` clean; `--lib` 4 passed; `cargo test -p rcfd-cli --release --test docs_site` **FAILED** (1 passed, 1 failed): `docs_site_builds_with_no_broken_links` names one link, in this registration, `0122-wave47a-rcfd-project.html` (see "Failed" below) | first three: **yes**; `docs_site`: **no** |
+| P | no failure of this work | `python scripts/process_report.py --check`: 1 failure, `generated file is not current: docs/adr/index.md`, left to the lead (rules 7 and 9); `python scripts/roadmap_proposals.py check docs/roadmap/proposals/0759-F-866.json` accepts the file (F-866: todo to partial) | **yes** |
+
+### The new rule, and what it no longer tests
+
+The control decides and asserts on one measured duration, the time of the ten listings: above the registered 500 ms the
+budget in force must reject it, at or below nothing is asserted. With the budget at its registered value no pair of
+durations fails it. It no longer tests any relation between ten listings and one (that relation was the defect), and
+with a sound budget its asserted branch is true by arithmetic: it guards the budget constant, with a measured duration,
+and the proof that a real slowdown is caught is the budget assertion under M2.
+
+### Deviations and disclosures
+
+- The band was produced by a scaled copy and not by a load, as registered beforehand (`w0` = 117.0 ms was above the band,
+  and a load only slows the listing). The first copy missed the band; amendment 1 corrected the set-up once before S3b.
+  By the registration without the amendment the band is not reproduced.
+- S3b's median is inside the band by 0.8 ms, and it got there with the help of a load that this work did not start; the
+  first five runs, before it, had `worst` of 41.6 to 57.0 ms, all in the band; an unloaded series of 20 was not run.
+- S0b did not run in the band and reproduced nothing; the live reproduction of the old failure is S0 (3 of 20).
+- The count registered for S0 was wrong (amendment 1).
+- Every run of a series had `-- --nocapture` after the registered command.
+- The proposal file is committed with this addendum, not with the change.
+- At commit 80bb50a2 the test binary is red by design (C1 to C3).
+- ADR 0128 was read in its passages on L1, not whole.
+
+### Failed
+
+`docs_site` fails because of this registration and nothing else: line 11 links ADR 0122 as `0122-wave47a-rcfd-project.md`,
+a file name that was written without looking it up; the file is `0122-wave47a-project-folder-library.md`. The test
+lists that one link and no other (857 pages, 3937 relative links). It was run once, on the tree of dc3aceba, before this
+addendum, which adds no link. An ADR is append-only from its creating commit (rule 18), so the line is not corrected
+here, and an amendment cannot make the link resolve. **For the lead:** the correction is that one file name in line 11,
+with the entry it needs in `docs/process/exceptions/adr-rewritten.txt`; the merge cannot pass `docs_site` without it.
+After it, `docs_site` was not run by this work.
+
+### Not run
+
+Nothing on Linux. No load ladder (not the registered branch for this `w0`). The mutations were run on the scratch copy
+only; the lead's push script applies M0. The whole crate's integration tests and the workspace suite, by rule 7.
+
+### Size
+
+Actual: partial (registered: done); 0 further registrations, 1
+amendment; 1 heavy run (108 runs of the test and 4 mutation runs, about 25 minutes, and one release build of
+`rcfd-cli` for `docs_site`); 0 questions; about 75000 bytes read.
+
+### Decision by the registered rule
+
+A1 failed before and A2 passes after; M1, M2 and M3 are caught; A3, A5, C2, S1 and S2 are met; E and P hold. S3 as
+registered: 0 failed, band not reproduced. S3b by amendment 1: 0 failed, band reproduced. F is missed: `docs_site` fails
+on the link of this registration. **Partial**, by the clause "a check other than A1 and A2 is missed": for `docs_site`
+under the rule as amended, and for the band as well under the rule as first registered. Every clause of the acceptance
+of F-866 is met; no code or test stands between this and done, only the corrected link and a passing `docs_site`, and
+the lead's reading of amendment 1.
+
+### Open questions for the maintainer
+
+None. Two points for the lead, not the maintainer. (1) The link of line 11: correct it on main with an exception entry
+(recommended), or leave the registration and have `docs_site` pass by another means, of which this work knows none.
+(2) Whether amendment 1 is accepted as rule 2's correction of a defective set-up: accept it (recommended, since C3 shows
+for every duration that the control cannot fail, and that does not rest on the band runs), or hold to the first
+registration, by which the band is not reproduced on this machine.
+
+### For the lead: roadmap entries
+
+Status proposed: partial; done once the link is corrected and `docs_site` passes, if the lead accepts amendment 1.
+
+> ADR 0759, 2026-11-22, partial: the control of listing_budget L1 decides and asserts on the time of the ten listings (above the registered 500 ms the budget must reject them, else nothing is asserted), so it fails for no pair of durations while BUDGET is 500 ms; the pure check C1 with the times of gate 62a6fec3 failed before and passes after; 0 failed of 20 release, 3 debug and 20 runs in the band (scaled copy, RUNS 296, median worst 61.7 ms, by amendment 1; the first copy with RUNS 214 was under the band at 34.6 ms); the old rule failed L1 in 3 of 20 runs on the first copy; mutations budget 5 s, listing ten times slower, condition inverted and old rule all caught; budget and its assertion byte for byte; docs_site fails on one wrong link in the registration itself.
+
+> Every clause of the acceptance is met. Missing: docs_site fails on one link of the registration (line 11 of ADR 0759 names 0122-wave47a-rcfd-project.md; the file is 0122-wave47a-project-folder-library.md), which an agent may not edit; the lead corrects it and runs docs_site. The band of the brief was reproduced only by the set-up of amendment 1 (the first set-up gave 34.6 ms, under 40 ms).
+
+No follow-up item. The same entries are in `docs/roadmap/proposals/0759-F-866.json`. `docs/adr/index.md` is not current
+and is left to the lead.
