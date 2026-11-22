@@ -148,13 +148,13 @@ def main():
                 stale.append((p.stem, "ADR thread", "; ".join(moved)))
             continue
         path = origin.split()[0].rstrip("/")
-        old, new = show(base, path), show(args.to, path)
-        if old is None and new is None:
-            # a directory origin: compare the tree listing
+        if (git("cat-file", "-t", f"{base}:{path}") or "").strip() == "tree":
+            # a directory origin: `git show` of a tree prints a header with the revision, so diff the trees instead
             d = git("diff", "--stat", base, args.to, "--", path)
             if d and d.strip():
                 stale.append((p.stem, path, d.strip().splitlines()[-1].strip()))
             continue
+        old, new = show(base, path), show(args.to, path)
         m = SECTION.search(text)
         if m:
             split_docs.add((path, base))
