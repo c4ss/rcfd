@@ -189,13 +189,15 @@ fn f884_c15_controls_hold_for_every_change_that_meets_the_target() {
         }
         let (_, _, st, cl) = d5(r17);
         let ctl = &r["runs"][format!("{p}-a15")];
-        if st && within(cl, TARGET) {
-            assert!(
-                ctl.is_object(),
-                "{p} meets the target but has no control run at 15 degrees"
-            );
+        if !(st && within(cl, TARGET)) {
+            // ADR 0770 amendment 2: a control run of a change that misses the target is reported, not judged
+            continue;
         }
-        if ctl.is_object() {
+        assert!(
+            ctl.is_object(),
+            "{p} meets the target but has no control run at 15 degrees"
+        );
+        {
             let (rcl, rcd, st15, cl15) = d5(ctl);
             assert!(
                 st15 && within(cl15, CONTROL),
