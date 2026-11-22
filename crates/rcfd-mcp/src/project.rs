@@ -396,7 +396,7 @@ pub(crate) fn tools() -> Vec<Tool> {
                 obj(
                     json!({
                         "new_case": {"description": "instead of case: a new case made first, with the arguments of new_case, then run", "type": "object", "properties": new_case_schema()["properties"], "required": ["name"], "additionalProperties": false},
-                        "store": {"type": "string", "enum": ["plan", "none"], "description": "plan: the Studio's start plan stores the run's fields (about 100 snapshots, f32) unless the case or set gives the store; none: only what the case asks for. Default plan with new_case, none with case"},
+                        "store": {"type": "string", "enum": ["plan", "none"], "description": "plan: the Studio's start plan stores the run's fields (about 100 snapshots, f32) unless the case or set gives the store; none: only what the case asks for. Default plan; none is the way back to a run that stores only what its case asks for"},
                         "reason": reason_schema(),
                         "case": {"type": "string", "description": "project-relative case file"},
                         "set": {"type": "array", "items": {"type": "string"}, "description": "overrides path=value, in order"},
