@@ -236,3 +236,9 @@ Append-only. Newest at the bottom. Entry header: `## [YYYY-MM-DD] <op> | <title>
 - New `tools/stale.py` → [[stale-report]]: against origin/main 6dddc9e7, 7 source pages changed (55 citing pages), 1 new reference-data section (F-878), 2 new ADRs (0764, 0765), roadmap.json changed. This replaces the hand-made ingest backlog list.
 - New `tools/search.py` (Ollama `qwen3-embedding:0.6b` + BM25, cache in `.handoff/`): search, similar, and the [[related-candidates]] report.
 - `CLAUDE.md` Query and Lint steps updated to use them.
+
+## [2026-11-22] lint | first embedding index and related-candidates report
+
+- `search.py index`: 711 pages, 4,210 sections, `qwen3-embedding:0.6b`; first build about 50 min (shared GPU), incremental refresh seconds; cache `.handoff/embeddings.json` (45 MB, gitignored).
+- Test queries ranked the expected pages first (SST limiter, FAN-01 design point, GCI sources); about 23 s per query, almost all of it the Ollama call.
+- [[related-candidates]]: 49 missing-link candidates (capped at 2 per page so the templated crate pages don't fill the list), 25 similar concept pairs, 28 similar pages with no shared source (foundation/rcfd `builds_on` pairs excluded). Not yet worked through; first leads: explicit vs implicit time integration unlinked; `mesh-generators` and `mesh-quality` lack `builds_on` to [[mesh-generation-basics]].

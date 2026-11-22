@@ -93,6 +93,7 @@ def load_pages():
             "title": title,
             "body": body,
             "sources": fm_list(fm, "sources"),
+            "builds_on": fm_list(fm, "builds_on"),
             "links": set(LINK.findall(body)),
             "type": (re.search(r"^type:\s*(\S+)", fm, re.M) or [None, ""])[1],
             "chunks": chunks(p.stem, title, body),
@@ -248,11 +249,27 @@ def cmd_report(data):
     # thresholds from the distribution, so they adapt to the model
     sims = [s for s, _, _ in allp]
     p99 = sims[max(0, len(sims) // 100)]
-    missing = [(s, a, b) for s, a, b in allp if s >= p99 and not linked(data, a, b)][:60]
+    def capped(rows, limit, per_page=2):
+        """At most `per_page` rows per page, so a family of templated pages (the crates) can't fill the list."""
+        seen, out = Counter(), []
+        for s, a, b in rows:
+            if seen[a] < per_page and seen[b] < per_page:
+                out.append((s, a, b))
+                seen[a] += 1
+                seen[b] += 1
+            if len(out) == limit:
+                break
+        return out
+
+    def ladder(a, b):
+        """One builds on the other: a foundation page and the rcfd page above it cite different kinds of source by design."""
+        return b in data[a]["builds_on"] or a in data[b]["builds_on"]
+
+    missing = capped([(s, a, b) for s, a, b in allp if s >= p99 and not linked(data, a, b)], 60)
     concepts = [n for n in knowledge if data[n]["type"] == "concept"]
-    dup = [(s, a, b) for s, a, b in pairs(data, concepts)][:25]
-    nosrc = [(s, a, b) for s, a, b in allp if s >= p99 and data[a]["sources"] and data[b]["sources"]
-             and not set(data[a]["sources"]) & set(data[b]["sources"])][:30]
+    dup = capped(pairs(data, concepts), 25)
+    nosrc = capped([(s, a, b) for s, a, b in allp if s >= p99 and data[a]["sources"] and data[b]["sources"]
+                    and not set(data[a]["sources"]) & set(data[b]["sources"]) and not ladder(a, b)], 30)
 
     lines = [BEGIN, "",
              f"Model `{MODEL}`, {len(data)} pages, {len(knowledge)} concept/entity/analysis pages compared pairwise on "
