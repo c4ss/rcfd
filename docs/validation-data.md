@@ -98,6 +98,17 @@ passage). The compressible solver is explicit Euler without rotation, viscosity 
   Stall onset about 1.1 m^3/s. LDA profiles 20 mm and 90 (or 110) mm from a datum that the sources read do not settle.
 - Uncertainty and ambient state: no density, no ambient state, no FAU uncertainty statement in anything read; the round
   robin quotes +-3 Pa and 1.5 % flow and agrees with the FAU curve within about 3 %.
+- Re-read on 2026-11-22 for F-870 (ADR 0762). Version 6 of the Zenodo record (doi:10.5281/zenodo.23943494, published
+  2026-11-04, concept doi:10.5281/zenodo.8418340; README and the 19-page description READ) changes no measured value. It
+  states that the bearing friction was measured with the fan removed and subtracted, so the stored shaft power does not
+  contain it; it renames the power column `P_shaft_in_W`, gives the design point as 1.403 m^3/s, 126.46 Pa and efficiency
+  0.532, and the rotor speed from the trigger as 1486.08 per minute. It still gives no uncertainty of pressure, flow,
+  torque or power, and no density or ambient state. The +-3 Pa and 1.5 % of the round robin (Vourakis and Karlsson, READ
+  again) are the measurement error of that paper's own rig, for 3-D printed copies; it gives no number for power.
+  Kromer's thesis (FAU University Press 2018, doi:10.25593/978-3-96147-089-1), which the v6 description names for the
+  rig and the measurements, could NOT be fetched (the repository asks for an automated-access check), and SAE
+  2016-01-1805 is still NOT read. So the stated uncertainty of the FAN-01 measurement is not recorded here, and F-870
+  has no measurement part in its band; see [reference data](reference-data.md), section F-870.
 - Representable: the rotor, hub cylinder and duct are; the bellmouth, the finite blunt hub, the 3 mm root fillet,
   struts, motor and diffuser are not; the measured pressure rise includes them.
 - Status after ADR 0075: see the addendum there (the registered attempt was NOT RUNNABLE). Diagnosis of the attempt-3

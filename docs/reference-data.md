@@ -2438,3 +2438,22 @@ the test is `crates/rcfd-api/tests/f869_cylinder_re100_mean_drag.rs`. The earlie
 | C_D 1.328, amplitude of C_L 0.31, St 0.164 at Re 100 (the paper's own computation); H. Ding as quoted: 1.325, 0.28, 0.164 | S.-K. Park, G. Jo, H. J. Choe, "Virtual Interpolation Point Method for Viscous Flows in Complex Geometries", arXiv:1401.6513v2 (2014), Table 3; C_D is defined there as the time-averaged value and C_L as the largest deviation of the lift coefficient from its mean | read (primary for the first row); Ding's paper was NOT read |
 | Band of the mean drag coefficient at Re 100: [1.314, 1.370], the smallest and the largest of the eleven values above without the 32 D by 16 D row; width 0.056, middle 1.342, half-width 2.09 % of the middle; no allowance for discretisation added | derived from the rows above | registered in ADR 0761 before any run. Nine of the eleven values are quotations and two are primary; all are computations, none is a measurement |
 | Not obtained: the originals of the nine quoted values; a measured mean drag at Re 100. Two searches of 2026-11-22 for open copies of Qu et al. (J. Fluids Struct. 39 (2013) 347) and of Posdziech and Grundmann (2007) gave bibliographic records only | - | data not obtained |
+
+
+## F-870 the FAN-01 design point: the measurement, what its sources state, and the band of ADR 0762
+
+Recorded 2026-11-22 for ADR 0762. Every source named "read" was fetched that day and read as text; nothing here is from
+memory except the one line marked so. The transcribed characteristic is
+`validation-data/reference/w34d_fan01_characteristic_n1ug.csv`; the page that records the case is
+[validation-data.md](validation-data.md), section "Rotating machinery sources".
+
+| Quantity | Source | Value and use |
+|---|---|---|
+| Design point of the measured characteristic of FAN-01 (fan N1UG) | Zenodo record doi:10.5281/zenodo.20037409 (v5), `characteristic_n1ug.mat`, row 13 of the transcription; confirmed by the description of v6, doi:10.5281/zenodo.23943494, Appendix A.1 (read) | 1.40324 m^3/s, 126.457 Pa total-to-static (ambient minus the static pressure in the inlet chamber), 333.301 W shaft power, efficiency 0.532; used as 1.4032 m^3/s, 126.46 Pa, 333.30 W by `f870_fan01_design_point.rs` (test `f870_reference_and_band`) |
+| Rotational speed | description of v6, Table 1 (read) | 1486 per minute; 1486.08 per minute from the rotor trigger. The tests use 1486 |
+| Bearing friction in the shaft power | description of v6, section "Test rig" and Table A1 (read) | measured with the fan removed and subtracted: the stored shaft power does not contain it. ADR 0075, 0078 and 0086 listed it as unknown |
+| Uncertainty of the FAU measurement of pressure, flow, torque, power | v5 and v6 descriptions and README of the Zenodo record; Schoder and Czwielong, arXiv:2211.12014; Vourakis and Karlsson, FAN 2022, doi:10.26083/tuprints-00021703 (all read) | **not stated in any of them.** Kromer's thesis (FAU University Press 2018, doi:10.25593/978-3-96147-089-1), which the v6 description names for the rig, could not be fetched; SAE 2016-01-1805 was not read. No band of F-870 uses a measurement uncertainty (ADR 0762, open question 1) |
+| Round-robin scatter | Vourakis and Karlsson, FAN 2022, section on the aerodynamic results under its Figure 4 (read) | +-3 Pa and 1.5 % of flow: the measurement error of the rig of that paper, for three 3-D printed copies; pressure curve within 3 % of the FAU curve, the largest deviation in the stall region; no number for power. Used by ADR 0075 for F-126 ("published scatter"); **not** used as the uncertainty of the measurement by ADR 0762 |
+| Air density and ambient state of the measurement | the same sources (read) | **not stated.** The tests assume 1.2 kg/m^3 (ADR 0075); pressure rise and shaft power of the simulation scale with it |
+| Mesh-convergence estimate of the simulation at the design point (the numerical half of the band of F-870) | computed in this repository, not a published value: the three C-grid meshes of ADR 0086, torque of ADR 0170, pressure rise of ADR 0086; formula derived in ADR 0762 | 0.21190 N m (32.98 W) and 29.75 Pa; factor of safety 1.25 and the three-mesh form after Roache and Celik et al. (2008), from memory as in ADR 0086, no source could be read |
+| Registered mesh quality gates of the fan passage mesh | [meshing.md](meshing.md), section on the fan passage mesh, set-up A | non-orthogonality 70 deg, skewness 2.0, aspect ratio 300; held against the B1 mesh by `f870_b1_mesh_gates_as_recorded` |
