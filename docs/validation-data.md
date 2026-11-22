@@ -95,7 +95,8 @@ passage). The compressible solver is explicit Euler without rotation, viscosity 
   to 2.08 m^3/s (`validation-data/reference/w34d_fan01_characteristic_n1ug.csv`): total-to-static pressure rise of the
   installation (inlet-chamber depression against ambient; ISO 5801 inlet chamber, bellmouth flow measurement) and shaft
   power (the file column says N m, the values are W). Design point 1.4032 m^3/s, 126.46 Pa, 333.30 W, efficiency 0.532.
-  Stall onset about 1.1 m^3/s. LDA profiles 20 mm and 90 (or 110) mm from a datum that the sources read do not settle.
+  Stall onset about 1.1 m^3/s. LDA profiles 20 mm and 90 (or 110) mm from a datum that the sources read on 2026-10-19 did not
+  settle; the v6 description settles it (the re-reading for F-878 below).
 - Uncertainty and ambient state: no density, no ambient state, no FAU uncertainty statement in anything read; the round
   robin quotes +-3 Pa and 1.5 % flow and agrees with the FAU curve within about 3 %.
 - Re-read on 2026-11-22 for F-870 (ADR 0762). Version 6 of the Zenodo record (doi:10.5281/zenodo.23943494, published
@@ -109,6 +110,14 @@ passage). The compressible solver is explicit Euler without rotation, viscosity 
   rig and the measurements, could NOT be fetched (the repository asks for an automated-access check), and SAE
   2016-01-1805 is still NOT read. So the stated uncertainty of the FAN-01 measurement is not recorded here, and F-870
   has no measurement part in its band; see [reference data](reference-data.md), section F-870.
+- Re-read on 2026-11-22 for F-878 (ADR 0765): `lda_data.zip` of v6 (doi:10.5281/zenodo.23943494; MD5
+  4cafb1602e81dc18f1681e6facd495a0, equal to the record's) and the description, READ. The LDA data are two radial lines at the
+  design point, x = 20 mm and x = 90 mm from the upstream face of the hub (description: the section on the coordinate system,
+  Table 4, and the errata of Appendix C, which list the "110 mm behind the hub" of the scripts of v2 to v5 as an error), 26
+  radii from 133 to 246 mm, three components, time-averaged and in 180 bins of the rotor angle. The line at 90 mm is 2.2 mm
+  behind the trailing edge at r = 133 mm and 27.2 mm at r = 246 mm. No uncertainty of the LDA is stated. The profiles are
+  transcribed in `docs/investigations/f878-fan01-lda-profiles/lda_profiles.csv`; see
+  [reference data](reference-data.md), section F-878.
 - Representable: the rotor, hub cylinder and duct are; the bellmouth, the finite blunt hub, the 3 mm root fillet,
   struts, motor and diffuser are not; the measured pressure rise includes them.
 - Status after ADR 0075: see the addendum there (the registered attempt was NOT RUNNABLE). Diagnosis of the attempt-3
