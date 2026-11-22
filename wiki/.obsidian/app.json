@@ -5,5 +5,8 @@
   "newLinkFormat": "shortest",
   "useMarkdownLinks": false,
   "alwaysUpdateLinks": true,
-  "userIgnoreFilters": ["tools/", ".handoff/"]
+  "userIgnoreFilters": [
+    "tools/",
+    ".handoff/"
+  ]
 }

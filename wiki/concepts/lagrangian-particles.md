@@ -1,0 +1,37 @@
+---
+type: concept
+tags: [particles, lagrangian, multiphase]
+sources: [doc-particles]
+created: 2026-11-22
+updated: 2026-11-22
+status: draft
+---
+
+# Lagrangian particle tracking
+
+Following point particles (parcels) through a computed flow by integrating their equations of motion, cell to cell. rcfd tracks them with one-way coupling by default: "The particles never act on the flow, so existing flow results and the baseline hashes are unchanged" (F-056, ADR 0028; F-056 `partial`, F-128 done) ([[doc-particles]]).
+
+## How rcfd uses it
+
+- **Equation:** `dv/dt = f(Re) (u - v)/tau_p + (1 - rho_f/rho_p) g`, `tau_p = rho_p d^2/(18 mu)`; drag `stokes`, `schiller_naumann` (switch at Re 1000 UNVERIFIED), `none` ([[doc-particles]]).
+- **Not modelled:** added mass, pressure-gradient force, Basset history, lift, Brownian motion, rotation, particle-particle interaction ([[doc-particles]]).
+- **Integrators:** `analytic` (exact for Stokes drag in a uniform field), `euler`, `rk2`, `rk4` ([[doc-particles]]).
+- **Tracking:** monotone face-crossing walk on fan-triangulated faces; bounding-box brute-force fallback for non-convex domains; periodic patches rejected; non-conformal interfaces only after `join_non_conformal` (not tested) ([[doc-particles]]).
+- **Walls:** `reflect`, `stick`, `escape`; `max_bounces` 1000 then `stuck` ([[doc-particles]]).
+- **Reproducibility:** SplitMix64 seeded from `particles.seed`, bit for bit ([[doc-particles]]).
+- **Run loop:** since ADR 0037 `Simulation::new` builds the tracker and transient steps advance it; steady runs track once on the final field; transient runs with particles are not restartable ([[doc-particles]]).
+- **Two-way:** the exchange record (F-128, ADR 0057) is an observation only; the droplet path (F-326, ADR 0348) feeds vapour mass, momentum and sensible heat into the carrier in the transient two-way path, conserved to 1.8e-15 / 5.8e-16 / 6.7e-13 of the largest term ([[doc-particles]]).
+- **Dispersion:** discrete random walk; `k`, `epsilon` from k-epsilon or SST (`epsilon = beta* k omega`, `beta* = 0.09`) since F-255 (ADR 0208); other turbulence models refused ([[doc-particles]]).
+- **Extensions:** surface reaction (library), evaporation and TAB breakup (library F-245, case tables F-326), wall film (F-253, F-292), erosion (DNV RP O501) and rough walls (Sommerfeld virtual wall) (F-254, ADR 0194) ([[doc-particles]]).
+
+## Related
+
+- [[rcfd-particles]]
+- [[rcfd-api]]
+- [[unverified]]
+- [[provenance]]
+
+## Open questions
+
+- No cyclone separation case (named by the roadmap acceptance) ([[doc-particles]]).
+- The DNV steel preset comes from an unchecked third-party copy of RP O501 Rev 4.2-2007 ([[doc-particles]]).

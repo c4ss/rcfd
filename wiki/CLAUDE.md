@@ -1,8 +1,6 @@
 # rcfd wiki — schema
 
-This folder is an Obsidian vault and an LLM-maintained wiki (pattern: Karpathy, "LLM Wiki").
-The LLM owns the wiki pages. The human curates sources, asks questions, and edits this schema.
-This file is the contract; change it together with the maintainer when a convention stops working.
+This folder is an Obsidian vault and an LLM-maintained wiki (pattern: Karpathy, "LLM Wiki"). The LLM owns the wiki pages. The human curates sources, asks questions, and edits this schema. This file is the contract; change it together with the maintainer when a convention stops working.
 
 ## Layers
 
@@ -13,9 +11,7 @@ This file is the contract; change it together with the maintainer when a convent
 | Wiki | `index.md`, `log.md`, `overview.md`, `sources/`, `entities/`, `concepts/`, `analyses/` | LLM | Create, update, cross-link freely. |
 | Schema | `CLAUDE.md` (this file), `templates/` | Human + LLM | Co-evolved. Ask before changing conventions. |
 
-The repo docs stay the source of truth for decisions (ADRs, F-items). The wiki is the compiled,
-cross-linked understanding on top of them. When the wiki and a source disagree, the source wins and
-the wiki page gets fixed.
+The repo docs stay the source of truth for decisions (ADRs, F-items). The wiki is the compiled, cross-linked understanding on top of them. When the wiki and a source disagree, the source wins and the wiki page gets fixed.
 
 ## Page types
 
@@ -32,8 +28,7 @@ Start every page from the matching file in `templates/`.
 ## Conventions
 
 - File names: lowercase kebab-case, `.md`. Title in the H1 may be prettier.
-- Links: Obsidian wikilinks `[[page-name]]` (no folder, no extension) between wiki pages.
-  Links to repo files: ordinary relative markdown links, e.g. `[ADR 0115](../../docs/adr/0115-....md)`.
+- Links: Obsidian wikilinks `[[page-name]]` (no folder, no extension) between wiki pages. Links to repo files: ordinary relative markdown links, e.g. `[ADR 0115](../../docs/adr/0115-....md)`.
 - Frontmatter on every page (Dataview reads it):
   ```yaml
   ---
@@ -46,32 +41,25 @@ Start every page from the matching file in `templates/`.
   ---
   ```
 - Every factual claim on entity/concept/analysis pages cites a source page: `([[source-page]])`.
-- Contradictions are never silently resolved. Add a `> [!warning] Contradiction` callout naming both
-  sources, and record it in the log.
+- Contradictions are never silently resolved. Add a `> [!warning] Contradiction` callout naming both sources, and record it in the log.
 - Superseded claims: strike through (`~~old~~`) with the newer source cited, don't just delete.
 - Keep pages focused. Split when a page passes ~400 lines or covers two concepts.
+- No hard wraps: one line per paragraph, list item or callout line (Obsidian renders every newline as a line break). Fix with `python tools/unwrap.py` (idempotent; `--check` reports).
 - Dates are absolute ISO (`2026-11-22`), never "yesterday".
-- No invented decisions: the wiki records what sources say. Open questions go in an `## Open questions`
-  section, not into the text as if decided.
+- No invented decisions: the wiki records what sources say. Open questions go in an `## Open questions` section, not into the text as if decided.
 
 ## Special files
 
-- `index.md` — catalog of every wiki page, grouped by type, one line each:
-  `- [[page-name]] — one-line summary (n sources, updated YYYY-MM-DD)`. Updated on every ingest and
-  every new page. On a query, read `index.md` first, then drill down.
-- `log.md` — append-only, newest at the bottom. Every entry starts with
-  `## [YYYY-MM-DD] <op> | <title>` where `<op>` is `ingest`, `query`, `lint`, `schema`, or `init`.
-  Last entries: `grep "^## \[" log.md | tail -5`.
+- `index.md` — catalog of every wiki page, grouped by type, one line each: `- [[page-name]] — one-line summary (n sources, updated YYYY-MM-DD)`. Updated on every ingest and every new page. On a query, read `index.md` first, then drill down.
+- `log.md` — append-only, newest at the bottom. Every entry starts with `## [YYYY-MM-DD] <op> | <title>` where `<op>` is `ingest`, `query`, `lint`, `schema`, or `init`. Last entries: `grep "^## \[" log.md | tail -5`.
 - `overview.md` — the synthesis. Revise when an ingest changes the big picture.
 
 ## Operations (the loop)
 
 ### Ingest — "ingest <file or path>"
-1. Raw file: the human drops it in `raw/` (web articles via Obsidian Web Clipper; images in `raw/assets/`).
-   Repo doc: just name the path.
+1. Raw file: the human drops it in `raw/` (web articles via Obsidian Web Clipper; images in `raw/assets/`). Repo doc: just name the path.
 2. Read the source fully. For images, read the text first, then open referenced images separately.
-3. Tell the human the 3-7 key takeaways and anything that contradicts the wiki. Wait for steer
-   unless told to batch.
+3. Tell the human the 3-7 key takeaways and anything that contradicts the wiki. Wait for steer unless told to batch.
 4. Write `sources/<name>.md` from `templates/source.md`.
 5. Update or create the entity/concept pages it touches (often 5-15). Add backlinks both ways.
 6. Flag contradictions (callout + log).
@@ -82,16 +70,12 @@ Start every page from the matching file in `templates/`.
 ### Query — "wiki: <question>"
 1. Read `index.md`, then the relevant pages; fall back to sources/raw only to fill gaps.
 2. Answer with citations to wiki pages (`[[...]]`) and, where useful, repo files.
-3. If the answer is worth keeping (new synthesis, comparison, non-trivial lookup), file it as
-   `analyses/<name>.md`, link it from the pages it draws on, add it to `index.md`.
+3. If the answer is worth keeping (new synthesis, comparison, non-trivial lookup), file it as `analyses/<name>.md`, link it from the pages it draws on, add it to `index.md`.
 4. Append `## [date] query | <question>` noting whether it was filed.
 
 ### Lint — "lint the wiki"
-1. Run `python tools/lint.py` (from `wiki/`): broken links, orphans, pages missing from the index,
-   missing frontmatter, stale `updated` dates.
-2. Then the judgement pass the script can't do: contradictions between pages, claims superseded by
-   newer ADRs/sources, concepts mentioned in 3+ pages without their own page, missing cross-links,
-   gaps worth a new source.
+1. Run `python tools/unwrap.py`, then `python tools/lint.py` (from `wiki/`): broken links, orphans, pages missing from the index, missing frontmatter, stale `updated` dates.
+2. Then the judgement pass the script can't do: contradictions between pages, claims superseded by newer ADRs/sources, concepts mentioned in 3+ pages without their own page, missing cross-links, gaps worth a new source.
 3. Fix what's mechanical; list the rest for the human with suggested sources/questions.
 4. Append `## [date] lint | <summary>`.
 
@@ -106,15 +90,10 @@ Start every page from the matching file in `templates/`.
 
 ## Steady-state ingest (maintainer decision 2026-11-22)
 
-Every loop merge to `main` (roadmap loop, studio loop, any other) that adds or changes an ADR, a
-`ROADMAP.md` F-item, or a doc under `docs/` or the repo root also updates the wiki in the same session:
-1. Add the ADR to its thread page in `sources/adr-thread-*.md` (new thread page if none fits); update
-   the F-item row on its `entities/roadmap-*` page; update the source page of a changed doc.
+Every loop merge to `main` (roadmap loop, studio loop, any other) that adds or changes an ADR, a `ROADMAP.md` F-item, or a doc under `docs/` or the repo root also updates the wiki in the same session:
+1. Add the ADR to its thread page in `sources/adr-thread-*.md` (new thread page if none fits); update the F-item row on its `entities/roadmap-*` page; update the source page of a changed doc.
 2. Update the entity/concept pages whose claims changed; flag contradictions.
 3. Update `index.md` and append `## [date] ingest | <ADR/F/doc id> (loop merge)` to `log.md`.
-4. Commit the wiki changes with the merge (or right after it), same rules as the merge.
-Subagents in a loop may draft wiki edits for their own item; only the lead session edits `index.md`,
-`log.md` and `overview.md`.
+4. Commit the wiki changes with the merge (or right after it), same rules as the merge. Subagents in a loop may draft wiki edits for their own item; only the lead session edits `index.md`, `log.md` and `overview.md`.
 
-Until the initial ingest (`ingest-plan.md`) has built the thread pages, a loop merge only appends a
-`log.md` entry and an `## Ingest backlog` line in `ingest-plan.md`; the planned phase picks it up.
+Until the initial ingest (`ingest-plan.md`) has built the thread pages, a loop merge only appends a `log.md` entry and an `## Ingest backlog` line in `ingest-plan.md`; the planned phase picks it up.

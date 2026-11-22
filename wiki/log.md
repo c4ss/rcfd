@@ -4,8 +4,7 @@ type: log
 
 # Log
 
-Append-only. Newest at the bottom. Entry header: `## [YYYY-MM-DD] <op> | <title>`.
-Last five: `grep "^## \[" log.md | tail -5`
+Append-only. Newest at the bottom. Entry header: `## [YYYY-MM-DD] <op> | <title>`. Last five: `grep "^## \[" log.md | tail -5`
 
 ## [2026-11-22] init | Vault created
 - Folders: `raw/`, `raw/assets/`, `sources/`, `entities/`, `concepts/`, `analyses/`, `templates/`, `tools/`.

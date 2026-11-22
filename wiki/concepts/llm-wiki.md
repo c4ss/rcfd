@@ -9,14 +9,12 @@ status: draft
 
 # LLM wiki
 
-A knowledge base the LLM writes and maintains, rather than a pile of documents searched at query
-time ([[karpathy-llm-wiki]]).
+A knowledge base the LLM writes and maintains, rather than a pile of documents searched at query time ([[karpathy-llm-wiki]]).
 
 ## How it differs from RAG
 
 - RAG re-derives understanding from raw chunks on every question; nothing accumulates.
-- An LLM wiki integrates each source once: summaries, entity/concept updates, cross-links,
-  contradiction flags. Answers compound because good ones are filed back ([[karpathy-llm-wiki]]).
+- An LLM wiki integrates each source once: summaries, entity/concept updates, cross-links, contradiction flags. Answers compound because good ones are filed back ([[karpathy-llm-wiki]]).
 
 ## In this vault
 

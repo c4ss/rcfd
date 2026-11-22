@@ -5,8 +5,7 @@ updated: 2026-11-22
 
 # Index
 
-Catalog of every wiki page. Read this first on any query. Format:
-`- [[page-name]] — one-line summary (n sources, updated YYYY-MM-DD)`
+Catalog of every wiki page. Read this first on any query. Format: `- [[page-name]] — one-line summary (n sources, updated YYYY-MM-DD)`
 
 ## Overview
 
