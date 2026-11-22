@@ -5,7 +5,7 @@ updated: 2026-11-22
 
 # Index
 
-Catalog of every wiki page (486 pages). Read this first on any query. Format: `- [[page-name]] — one-line summary (n sources, updated YYYY-MM-DD)`. Rebuilt by `tools/build_index.py`.
+Catalog of every wiki page (488 pages). Read this first on any query. Format: `- [[page-name]] — one-line summary (n sources, updated YYYY-MM-DD)`. Rebuilt by `tools/build_index.py`.
 
 ## Overview
 
@@ -514,6 +514,7 @@ Catalog of every wiki page (486 pages). Read this first on any query. Format: `-
 - [[wave]] — A numbered batch of work, sometimes split into lettered parts (wave 35C). (1 sources, updated 2026-11-22)
 - [[work-streams]] — The campaign and Studio streams, their differences before 2026-11-18, and the one rule set since. (6 sources, updated 2026-11-22)
 
-## Analyses (0)
+## Analyses (2)
 
-_none yet_
+- [[foundations-map]] — P6 step 1: drafted prerequisite graph under every rcfd method page, 186 nodes in 12 groups (33 existing pages, 153 proposed), a to-do list, not claims (0 sources, updated 2026-11-22)
+- [[foundations-sources]] — P6 step 2: 56 candidate open references per branch with licence status checked on 2026-11-22 and copy-to-raw/ verdicts; gaps listed (0 sources, updated 2026-11-22)

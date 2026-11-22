@@ -140,3 +140,10 @@ Append-only. Newest at the bottom. Entry header: `## [YYYY-MM-DD] <op> | <title>
 - Coverage: all 760 ADR files under `docs/adr/` are linked from an `adr-thread-*` page; 0 dead ADR links; 0 broken wikilinks.
 - Contradiction callout added on [[rcfd-mcp]] (tool count 25/42 vs the 36-row table).
 - [[overview]] rewritten; [[ingest-plan]] backlog lists the 11 commits on `origin/main` after the snapshot.
+
+## [2026-11-22] ingest | P6 steps 1-2: foundations map and open-source survey
+- P6 step 1 (map): drafted `analyses/foundations-map.md` from the "How rcfd uses it" sections of 32 method concept pages and 5 method-like entity pages; 186 rows in shared roots plus 11 branches, 153 new foundation nodes proposed.
+- P6 step 2 (sources): `analyses/foundations-sources.md` lists 56 references; 7 US Government public-use (NTRS: Menter TM-103975, Farassat TM-2007-214853, NACA 1135, Hubbard RP-1258 vol. 1, van Leer ICASE 92-43, Meakin CR-200828), TMR via the CC0 TMBWG repository, 23 copyable now after verification.
+- Nothing downloaded into `raw/`.
+- The TMR's nasa.gov hosts did not resolve or failed TLS on 2026-11-22; the TMBWG GitHub Pages mirror (already cited by the repo) was used.
+- Gaps: no verified copyable primary source for Rhie-Chow/SIMPLE/PISO, unstructured limiters, smoothed-aggregation AMG, MRF/mixing plane, sliding interfaces, immersed boundaries, GCL, VOF compression/CSF, FEM (only CC BY-NC-SA course material), GCI per Celik 2008, NSGA-II/kriging.
