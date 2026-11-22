@@ -56,35 +56,35 @@ Sets the taxonomy every later phase hangs on.
 - [x] `docs/architecture.md` → `entities/` page per crate (+ [[crate-graph]]).
 - [x] `docs/glossary.md` → `concepts/` pages for project terms (20 concepts; [[fan-01]], [[studio]] as entities).
 - [x] `CONTRIBUTING.md`, `docs/process/README.md`, `docs/process/agent-rules.md` (in place of `working-framework.md`, moved upstream) → [[registration]] and the evidence concepts. `lead-process.md` and the framework pages move to P1 'Process & meta'.
-- [ ] Review the taxonomy with the maintainer before P1.
+- [ ] Review the taxonomy with the maintainer — deferred by the maintainer to after the full pipeline (2026-11-22).
 
 ### P1 — Prose docs, by theme (supervised, one theme per session)
-- [ ] **Numerics & physics:** `meshing`, `mesh-quality`, `mesh-import`, `dynamic-mesh`, `structural-solver`, `cosimulation-protocol`, `particles`, `acoustics`, `reactor-and-acoustics`, `gpu`, `component-diagonal-default`, `bfs-convergence-findings`.
-- [ ] **Interfaces:** `case-schema` (by section), `solid-case-file`, `run-control`, `studies`, `mcp-tools`, `service-protocol`, `interchange-formats`, `python`, `udf-abi`, tutorials (5).
-- [ ] **Evidence & validation:** `validation-data`, `reference-data` (by section), `verification-report`, `provenance`, `parity-matrix`, `test-process`, `releasing`, `CHANGELOG.md`.
-- [ ] **Fan programme:** `milestone-fan`, `fan-project-breakdown`, `fan-measurement-protocol`, `design-loop`, `docs/designs/*`.
-- [ ] **Studio:** `ui-restart-plan`, `studio-guardrails`, `studio-coverage`, `design-themes-proposal`, `DESIGN.md`, `.impeccable/surfaces`, `clients/claude-plugin/skills`.
-- [ ] **Process & meta:** `docs/process/lead-process.md`, `tolerances.md`, `framework-reconciliation.md`, `handover-2026-11-19.md`, `framework-2026-11-17/*`, `documentation-process-review`, `docs/adr/briefs/README.md`, `audit-report`, `docs/audit/*`, `product-suites`, `SECURITY.md`.
+- [x] **Numerics & physics:** `meshing`, `mesh-quality`, `mesh-import`, `dynamic-mesh`, `structural-solver`, `cosimulation-protocol`, `particles`, `acoustics`, `reactor-and-acoustics`, `gpu`, `component-diagonal-default`, `bfs-convergence-findings`.
+- [x] **Interfaces:** `case-schema` (by section), `solid-case-file`, `run-control`, `studies`, `mcp-tools`, `service-protocol`, `interchange-formats`, `python`, `udf-abi`, tutorials (5).
+- [x] **Evidence & validation:** `validation-data`, `reference-data` (by section), `verification-report`, `provenance`, `parity-matrix`, `test-process`, `releasing`, `CHANGELOG.md`.
+- [x] **Fan programme:** `milestone-fan`, `fan-project-breakdown`, `fan-measurement-protocol`, `design-loop`, `docs/designs/*`.
+- [x] **Studio:** `ui-restart-plan`, `studio-guardrails`, `studio-coverage`, `design-themes-proposal`, `DESIGN.md`, `.impeccable/surfaces`, `clients/claude-plugin/skills`.
+- [x] **Process & meta:** `docs/process/lead-process.md`, `tolerances.md`, `framework-reconciliation.md`, `handover-2026-11-19.md`, `framework-2026-11-17/*`, `documentation-process-review`, `docs/adr/briefs/README.md`, `audit-report`, `docs/audit/*`, `product-suites`, `SECURITY.md`.
 
 ### P2 — ROADMAP (batched, light supervision)
-- [ ] One source page per `##` section (19), one `entities/roadmap-<area>` page each.
-- [ ] Identify hub F-items (cited by many ADRs) → own pages.
-- [ ] Cross-link F-items to the concept/entity pages from P0-P1.
+- [x] One source page per `##` section (19), one `entities/roadmap-<area>` page each.
+- [x] Identify hub F-items (cited by many ADRs) → own pages.
+- [x] Cross-link F-items to the concept/entity pages from P0-P1.
 
 ### P3 — ADR threads (batched, subagents)
-- [ ] Use the generated `docs/adr/index.md` as the catalog (category, item, item status per ADR). Threads follow the item in the file name (`NNNN-fMMM-...`); the 259 records with no item get clustered by title/citations.
-- [ ] Cluster into threads using the citation graph + title keywords. Seed list (filename hits): mesh (~48), fan/FAN-01 (~34), studio/UI (~25), structural (~16), compressible (~13), turbulence (~12), cylinder (~10), gate/test process (~9+4), particles (~6), MCP (~6), loops (~6), heat (~5), NACA (~5), VOF, MRF, limiter, cavity, validation, docs. Expect ~25-35 threads.
-- [ ] Ingest threads in priority order: FAN-01/fan milestone → validation (cylinder, NACA, cavity, BFS) → Studio → numerics threads → process threads → the rest.
-- [ ] Parallel: up to 4 subagents, one thread each. Subagents write only their thread page + the concept/entity pages they own; the main session alone edits `index.md`, `log.md`, `overview.md` (avoids merge conflicts).
+- [x] Use the generated `docs/adr/index.md` as the catalog (category, item, item status per ADR). Threads follow the item in the file name (`NNNN-fMMM-...`); the 259 records with no item get clustered by title/citations.
+- [x] Cluster into threads using the citation graph + title keywords. Seed list (filename hits): mesh (~48), fan/FAN-01 (~34), studio/UI (~25), structural (~16), compressible (~13), turbulence (~12), cylinder (~10), gate/test process (~9+4), particles (~6), MCP (~6), loops (~6), heat (~5), NACA (~5), VOF, MRF, limiter, cavity, validation, docs. Expect ~25-35 threads.
+- [x] Ingest threads in priority order: FAN-01/fan milestone → validation (cylinder, NACA, cavity, BFS) → Studio → numerics threads → process threads → the rest.
+- [x] Parallel: up to 4 subagents, one thread each. Subagents write only their thread page + the concept/entity pages they own; the main session alone edits `index.md`, `log.md`, `overview.md` (avoids merge conflicts).
 
 ### P4 — Leftovers
-- [ ] `docs/investigations/*/README.md` (6) → linked from the ADR thread pages that cite them.
-- [ ] `example-projects/*/notes` → entity pages for the example projects.
+- [x] `docs/investigations/*/README.md` (6) → linked from the ADR thread pages that cite them.
+- [x] `example-projects/*/notes` → entity pages for the example projects.
 
 ### P5 — Consolidate
-- [ ] Full lint (`python tools/lint.py` + judgement pass).
-- [ ] Rewrite [[overview]] from the finished wiki.
-- [ ] Record the steady-state rule (below) in `CLAUDE.md`.
+- [x] Full lint (`python tools/lint.py` + judgement pass).
+- [x] Rewrite [[overview]] from the finished wiki.
+- [x] Record the steady-state rule (below) in `CLAUDE.md` (done 2026-11-22).
 
 ### P6 — Foundations (concept ladders under every rcfd concept)
 
@@ -118,6 +118,8 @@ Every new ADR / F-item / doc change merged to `main` gets ingested into its thre
 
 ## Ingest backlog
 
-Loop merges that land before their phase is ingested. One line each: date, id, phase.
+Changes on `origin/main` after the snapshot `2e94e5ef` (checked 2026-11-22 at `7330f3ac`, 11 commits). Ingest them with the steady-state rule when the wiki branch is merged.
 
-_empty_
+- 2026-11-22 · ADR 0763 answer of the maintainer, option (c): F-869 done, the cylinder milestone's headline (vortex shedding) met; F-881 entered. Touches [[adr-thread-simulation-milestones-validation]], [[cylinder-re100]], [[simulation-milestones]], [[overview]].
+- 2026-11-22 · F-878 / ADR 0765 (registration, amendment 1, addendum 1): FAN-01 rotor against the measured LDA profiles and Euler work. Partial, profiles miss at 12 of 26 radii, kept as a known miss. Touches [[adr-thread-fan01-design-point]], [[fan-01]], [[f-126]].
+- 2026-11-22 · Generated pages and data: `docs/roadmap.json`, `ROADMAP.md`, `roadmap-overview.md`, `docs/adr/index.md`, `reference-data.md` (LDA fragment), `validation-data.md` (FAN-01 paragraph), `docs/process/ledger.tsv`. Rerun `tools/gen_roadmap_pages.py`.

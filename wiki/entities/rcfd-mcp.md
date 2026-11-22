@@ -21,6 +21,10 @@ status: stub
 
 - Decision records: ADR 0135, ADR 0185 ([[doc-architecture]]).
 - Tool reference [[doc-mcp-tools]]: 34 session tools over the solver service; `--project <dir>` drops 16 session tools and `create_project` and adds 25 project tools (42 listed); refuses to start (exit 2) without `rcfd-project.json` ([[doc-mcp-tools]]).
+
+> [!warning] Contradiction (within the repo docs)
+> The "25 project tools (42 listed)" count is the prose of [[doc-mcp-tools]]; the same page's project-tool table names 36 tools, and ADR 0738 stated "27 project tools, 44 with `--project`" before the trash tools and `list_sites` were added. The table is the better count. See [[adr-thread-mcp-tools]] and [[mcp]].
+
 - Options: `--root` (sandbox, 1004 outside), `--read-only` (1100), `--max-cells`, `--max-steps`, `--max-run-seconds`, `--max-design-evaluations`, `--client <name>` (journal actor), `--edit-hook` ([[doc-mcp-tools]], [[doc-tutorial-mcp-design-loop]]).
 - Every tool has an [[mcp-access-class]]; results stay under 36 000 bytes in project mode ([[doc-mcp-tools]]).
 - The run tools need `rcfd-runner` and `rcfd` in the same folder as `rcfd-mcp`; on Windows a runner it starts inherits its stdio pipes (ADR 0146 C2) ([[doc-mcp-tools]], [[doc-run-control]]).

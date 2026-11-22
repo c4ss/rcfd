@@ -1,7 +1,7 @@
 ---
 type: overview
 tags: [overview]
-sources: [doc-readme, doc-product, doc-index, doc-roadmap-overview, doc-architecture, doc-glossary, doc-contributing, doc-process-agent-rules]
+sources: [doc-readme, doc-product, doc-index, doc-roadmap-overview, doc-architecture, doc-glossary, doc-contributing, doc-process-agent-rules, doc-roadmap-json, doc-dynamic-mesh, doc-structural-solver, doc-validation-data, doc-reference-data, doc-milestone-fan, doc-fan-project-breakdown, doc-design-loop, doc-mcp-tools, doc-run-control, doc-service-protocol, doc-studio-guardrails, doc-process-lead-process, adr-thread-fan01-rotating-solve, adr-thread-sliding-mesh-rotor-stator, adr-thread-structural-plan, adr-thread-studio-electron, adr-thread-workspace-layer, adr-thread-simulation-milestones-validation, adr-thread-founding-decisions]
 created: 2026-11-22
 updated: 2026-11-22
 status: draft
@@ -9,55 +9,91 @@ status: draft
 
 # rcfd — overview
 
-Synthesis after P0 (repo docs at `origin/main` 2e94e5ef). Start here, then follow links; the map of the repo's own documentation is [[doc-index]].
+The synthesis after the full initial ingest (P0-P5): all repo docs, the roadmap and all 760 ADRs, at snapshot `2e94e5ef` (2026-11-22). Start here, then follow the links. [[index]] lists every page. The map of the repo's own documentation is [[doc-index]]. Changes that landed on `main` after the snapshot are listed under "Ingest backlog" in [[ingest-plan]].
 
 ## What rcfd is
 
-A clean-room, open-source (AGPL-3.0 plus a commercial licence) finite-volume CFD suite in Rust: a command-line solver, a solver service, an [[mcp]] server that lets an AI assistant (Claude Code) drive the solver, and a desktop [[studio]] ([[doc-readme]]). Every algorithm comes from published literature or first principles ([[clean-room]], [[provenance]]). Long-term goal: an open toolset covering what commercial simulation packages do, starting with CFD, so small teams can build cheap products on it ([[doc-roadmap-overview]]).
-
-It is early-stage and **not validated for engineering decisions** ([[doc-readme]]).
+A clean-room, open-source (AGPL-3.0 plus a commercial licence) finite-volume CFD suite in Rust. It has a command-line solver, a solver service, an [[mcp]] server that lets Claude Code drive the solver, and a desktop [[studio]] ([[doc-readme]]). Every algorithm comes from published literature or first principles ([[clean-room]], [[provenance]]). The long-term goal is an open toolset that covers what commercial packages do, starting with CFD ([[doc-roadmap-overview]]). It is early-stage and **not validated against measurement for engineering use**: nothing in 0.1.0 is validated against a measured case ([[verification-vs-validation]]).
 
 ## How it is built
 
-- 19 Rust crates in a strict layered [[crate-graph]], from [[rcfd-core]] up to [[rcfd-mcp]] and [[rcfd-cli]]. The project-folder stack is [[rcfd-project]] (L1) → [[rcfd-runner]] (L2) → [[rcfd-tsstore]] (L3), tied together for both Claude and the Studio by [[rcfd-workspace]] ([[doc-architecture]]).
-- The [[studio]] is an Electron/TypeScript app outside the workspace that runs the binaries ([[doc-product]]).
-- Users write a [[case-file]], check it with `rcfd check`, and start a [[run]]; runs store fields for playback ([[field-store]]) and compute [[report]]s ([[doc-glossary]]).
+- **Crates:** 19 Rust crates in a strict layered [[crate-graph]] ([[doc-architecture]]). The founding conventions still shape everything: a validated settings tree with a content hash, flat SoA fields, and bit-reproducible chunked reductions (ADRs 0001-0003). They are the root of the "defaults stay [[bit-identical]]" rule ([[adr-thread-founding-decisions]]).
+- **One run contract** is shared by the CLI, the service, MCP and Python: exit codes 0-8, the status stream, checkpoints, and stop/pause files instead of signals ([[exit-codes]], [[status-stream]], [[checkpoint]], [[stop-file]]). The service [[rcfd-service-protocol]] is loopback-only with no authentication; opt-in layers leave default replies byte-identical.
+- **Project folders:** [[rcfd-project]] (L1), [[rcfd-runner]] (L2), [[rcfd-tsstore]] (L3), tied together by the workspace layer [[rcfd-workspace]] (ADR 0173). The workspace layer is the shared core of the MCP server and the Studio: one hash-checked write rule and a [[project-journal]] ([[adr-thread-workspace-layer]]).
+- **The Studio** is an Electron/TypeScript app (ADR 0800, 0801). It replaced the egui Studio on 2026-11-16 ([[adr-thread-wave48-egui-studio]]). Claude Code is no longer embedded: since ADR 0801 Addendum 23 the Studio registers the project server with Claude Code and follows its changes through the journal feed. The rule is "engine first": every Studio action has a CLI/MCP twin. 22 guardrails govern the Studio, and it reaches 78.5 % of 1363 engine capabilities ([[studio-guardrails]], [[adr-thread-studio-electron]]).
+- **Much of the capability is library-only** and has no case key or CLI/MCP route:
+  - overset ([[overset-mesh]]), immersed solids ([[immersed-solid]]) and the planar slider;
+  - the acoustics stack (impedance, sponges, wave solver) ([[aeroacoustics]]);
+  - AMR/directional refinement and the tet mesher;
+  - the co-simulation coupler;
+  - the structural solver ([[structural-solver]]).
+
+  Users reach rcfd through the [[case-file]] (49 schema sections, [[doc-case-schema]]), [[run]]s and [[field-store]] playback.
 
 ## How work is done
 
-The process is evidence-first and heavily agent-driven ([[doc-process-agent-rules]]):
+The process is evidence-first and agent-driven, with written roles ([[lead]], [[implementation-agent]], [[maintainer]]) and state kept outside any session: briefs, the [[process-ledger]] and the [[process-report]] ([[doc-process-agent-rules]], [[doc-process-lead-process]]).
 
-- Work is tracked as [[f-item]]s in the [[roadmap]] (`docs/roadmap.json` is the source of truth).
-- Each item starts with a [[registration]] [[adr]] that fixes checks and [[registered-limit]]s before code.
-- A miss is kept as a [[known-miss]], never tuned away; defaults stay [[bit-identical]].
-- 'Done' follows the registered rule ([[roadmap-status]]); the maintainer approves lines of work, not each result.
-- A lead issues briefs to agents, merges and is the single writer of the roadmap and generated pages; the [[gate]] runs the full suite on `main` daily in CI.
+- **Roadmap:** work is tracked as [[f-item]]s. `docs/roadmap.json` is the source of truth, and there are 15 lines of work, one [[roadmap]] area page each ([[doc-roadmap-json]]).
+- **Registration first:** each item starts with a [[registration]] [[adr]] that fixes its checks and [[registered-limit]]s before any code. Each limit cites a [[tolerance-class]], a reference or the parent's acceptance.
+- **Misses:** a miss stays a [[known-miss]] and is never tuned away. "Done" follows the registered rule ([[roadmap-status]]). The maintainer approves lines of work, not single results.
+- **Partial by rule:** many items are partial only by that rule (a check met only after an amendment, an equivalent mutant, or the maintainer not yet closing it) rather than by a missed acceptance. That makes a large maintainer queue, mostly in the structural line.
+- **Gate:** the full [[gate]] runs daily in CI and attributes failures to ADRs ([[test-to-adr-index]]). Per-merge checks are reduced and recorded in the ledger.
+- **Stop conditions on new agents (since 2026-11-21):** three unread reports, the escaped-defect rate, a red gate, or more than 4 agents ([[adr-thread-process-measures-and-roadmap-form]]).
+- **Defaults on hold:** the maintainer's answers of 2026-11-18 hold every result-moving default change in the numerics and moving-mesh areas "until the fan path needs it". New keys are approved as additive golden edits.
 
-## Where it stands (2026-11-18)
+## Where it stands (snapshot 2026-11-22)
 
-- 786 roadmap items: 389 done, 297 partial, 100 not started (~68%) — a count of landed work, not of accuracy. The structural solver line alone has 308 items ([[doc-roadmap-overview]]).
-- None of the three [[simulation-milestones]] has its headline result met: cylinder vortex shedding (89%), NACA 0012 lift (89%), assistant-driven fan design (70%).
-- [[fan-01]], the reference fan, stalls in its steady [[mrf]] solve; diagnosis open. The real target is a 120 mm axial computer fan, with no measured data yet ([[doc-roadmap-overview]]).
-- The structural solver ([[rcfd-fem]]) is partly built and unvalidated.
+- **Roadmap:** 786 items, with 389 done, 297 partial and 100 not started (~68 %). That counts landed work, not accuracy. The structural line alone has 308 items ([[roadmap-structural-solver]]).
+- **Validation milestones** ([[simulation-milestones]], [[adr-thread-simulation-milestones-validation]]):
+  - **NACA 0012 lift** is met from 0 to 16 degrees and at maximum lift. 17 degrees is a known miss with steady SA. The maintainer answered ADR 0760 Q1 with option (a) on 2026-11-22, and the unsteady arm is ADR 0764. The path ran through five investigations that found report and boundary-condition defects, not model defects ([[naca0012]], [[adr-thread-naca0012-sa-drag]]).
+  - **Cylinder at Re 100:** the drag is in the band, but the observed order 1.387 misses the registered [1.5, 2.5]. On `main` after the snapshot, ADR 0763 was answered with option (c), which makes F-869 done and meets the milestone's headline ([[cylinder-re100]], [[ingest-plan]] backlog).
+  - **FAN-01 design point:** the pressure rise is 41.5 % low, while shaft power is within 2.0 %. The band can't be completed until a person reads the measurement's uncertainty and density (F-877) ([[adr-thread-fan01-design-point]]).
+- **FAN-01 rotating solve** has been the central open problem since ADR 0075 ([[fan-01]], [[f-126]], [[adr-thread-fan01-rotating-solve]]). The deficit is attributed to numerical swirl from momentum convection, and the steady bladed run limit-cycles. MRF is blocked on the bladed passage, and wave 49 located the drivers, but every fix was "not accepted". EXP-ROT and M-FAN-B are proposed next steps ([[doc-milestone-fan]]).
+- **Computer fan (120 mm):** there is no open reference. It needs a fan measured under [[doc-fan-measurement-protocol]]. Until then the [[design-loop]] (optimisers, [[design-ledger]], [[gaussian-process-surrogate]], [[fidelity-management]], [[hypothesis-record]]) ranks variants of the reduced-order model, not real fans ([[computer-fan-target]]).
+- **Sliding mesh** runs from a case file for the full annulus (F-303, ADR 0637) and the sector (F-711, ADR 0646). It is limited to laminar constant-property PISO/PIMPLE with Euler and no restart ([[sliding-mesh]], [[adr-thread-sliding-mesh-rotor-stator]]).
+- **Structural solver:** a broad, verified-only library ([[rcfd-fem]], `rcfd_api::solid_case`): static, modal, buckling, dynamics, rotordynamics, nonlinear, contact, fracture and fatigue. It was planned as 66 packages on 2026-11-12 and mostly built within a week ([[adr-thread-structural-plan]]). It has one published-reference comparison (the hinged roof, ADR 0716) and no measured one. The CLI, MCP, flow case and Studio have no route to it yet (F-404, F-405; approved but unbuilt keys F-593, F-605, F-616, F-621, F-625, F-842).
+- **Numerics:** November's work was diagnosis plus opt-ins. The only default change was the coarsest dense LU order of the scalar [[amg]] (F-471), approved hash by hash. Transient RANS on PIMPLE exists for [[k-omega-sst]], [[k-epsilon]] and [[spalart-allmaras]]; k-epsilon's BDF2 order miss has no known cause ([[adr-thread-piso-stability-consistent-correctors]], [[adr-thread-transient-rans]]).
 
 ## Main threads
 
-1. **Workspace layer** for Claude Code and the Studio (ADR 0173, F-270..F-275) — top priority since 2026-11-04.
-2. **Fan programme** — FAN-01 diagnosis, the computer-fan target, design loop.
-3. **Studio** — Electron rebuild (ADR 0800/0801).
-4. **Structural solver** — plan ADR 0270/0290/0310.
-5. **Validation milestones** — cylinder, NACA 0012.
-6. **Faster, strict tests** — per-test limits, better runner.
+1. **Workspace layer** for Claude Code and the Studio (ADR 0173, F-270..F-275), the top priority since 2026-11-04 ([[adr-thread-workspace-layer]]).
+2. **Fan programme:** the FAN-01 diagnosis, the design point and LDA profiles, the computer-fan target, and the design loop ([[adr-thread-fan01-rotating-solve]], [[adr-thread-fan01-design-point]], [[adr-thread-design-optimisers-and-ledger]]).
+3. **Studio:** the Electron rebuild and its engine entry points ([[adr-thread-studio-electron]], [[adr-thread-studio-engine-entry-points]], [[adr-thread-runner-records-and-run-sites]]).
+4. **Structural solver:** user entry points and fan demonstrations ([[roadmap-structural-solver]]).
+5. **Validation milestones:** cylinder, NACA 0012, FAN-01 ([[simulation-milestones]]).
+6. **Process and tests:** the daily gate, test-to-ADR attribution, the edit lock and stop conditions ([[adr-thread-daily-gate-and-edit-lock]], [[adr-thread-test-to-adr-attribution]]).
 
 ## Contradictions
 
-> [!warning] Contradiction — sliding mesh
-> [[doc-readme]] says transient sliding-mesh solves run from a case file for the full-annulus rotor-stator generator and its sector form (F-303, ADR 0637; F-711, ADR 0646). [[doc-roadmap-overview]] ("What does not work yet", hand-written parts reviewed 2026-11-18) says they are not available. To settle against the ADRs in P3 (moving meshes thread).
+> [!success] Settled — sliding mesh
+> [[doc-readme]] and [[doc-dynamic-mesh]] say transient sliding-mesh solves run from a case file. The ADRs confirm it: ADR 0637 c1 met, bit for bit against the in-process run; ADR 0646 done. The "not available" line in [[doc-roadmap-overview]], reviewed 2026-11-18 after both ADRs, is stale ([[sliding-mesh]]).
 
-> [!warning] Contradiction — structural solver in the Studio
-> [[doc-product]] says a structural solver "does not exist"; [[doc-architecture]] and [[doc-roadmap-overview]] say it is partly built. See [[studio]].
+> [!success] Settled — structural solver
+> [[doc-product]] and the Studio plan say a structural solver "does not exist". The library does exist (see above). What is true is that the Studio, CLI and MCP have no route to it and the Studio has no stress/strain colouring. The documentation review of 2026-11-18 (G12) already calls the wording stale ([[structural-solver]], [[roadmap-structural-solver]]).
 
-## Open questions
+> [!warning] Stale roadmap entries and docs (within the repo)
+> The ingest found many places where an ADR's outcome or the maintainer's answer is newer than a roadmap gap, a status or a doc sentence. Examples:
+> - F-474 gap vs ADR 0743 (AMG default switched).
+> - F-666 partial vs ADR 0746 done.
+> - F-625 "NEEDS THE USER" though approved on 2026-11-18.
+> - F-848 todo though phase 1 is built.
+> - The F-868 gap and the overview still call ADR 0760 Q1 open.
+> - Guardrail G11 still describes Claude Code inside the Studio.
+> - The MCP tool counts (25/42 vs a 36-row table) ([[rcfd-mcp]]).
+>
+> Each has a callout on its page, and the per-job lists are in the log ([[log]]).
 
-- ADR 0763 Q1 (cylinder) and ADR 0760 Q1 (NACA 0012) wait for the maintainer ([[simulation-milestones]]).
-- Close the FAN-01 diagnosis or choose another reference case? ([[fan-01]])
+## Open questions for the maintainer (as recorded)
+
+- ADR 0645 Q1: reclassify F-716 from todo to partial.
+- ADR 0762 Q4: the compared quantity and convergence rule for FAN-01, deferred until F-878 and F-879 report.
+- F-877: a person must read the FAN-01 measurement's uncertainty and air density.
+- The default for `solver.component_diagonal` (`averaged` vs `corrected`) ([[component-diagonal]]).
+- The structural defaults pending approval (warm-start local update, contact line search, stagnation held) and the entry points F-404/F-405 ([[roadmap-structural-solver]]).
+- Close the FAN-01 diagnosis or choose another reference case for the rotating-machinery path ([[fan-01]]).
+
+## Next for the wiki
+
+- P6, Foundations: build the concept chains under every rcfd concept (e.g. [[k-omega-sst]] ← eddy viscosity ← Reynolds stress ← shear stress), from cited open references ([[ingest-plan]]).
+- Ingest the backlog after the snapshot, then switch to the steady-state rule in `CLAUDE.md`.
