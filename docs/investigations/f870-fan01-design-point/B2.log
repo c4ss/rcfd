@@ -1,0 +1,32 @@
+
+running 1 test
+F870 B2 it 1: continuity 6.684e-4 res_u 1.000e0 res_p 1.000e0 torque 1.832038 dp_ts -81.6672 (0.0 min)
+F870 B2 it 2: continuity 4.807e-4 res_u 4.848e-1 res_p 3.564e-1 torque 1.451810 dp_ts 2.0532 (0.0 min)
+F870 B2 it 3: continuity 1.726e-3 res_u 4.455e-1 res_p 2.516e-1 torque 1.830796 dp_ts -14.6190 (0.0 min)
+F870 B2 it 10: continuity 7.438e-4 res_u 9.680e-2 res_p 5.017e-2 torque 1.947708 dp_ts 69.9208 (0.0 min)
+F870 B2 it 30: continuity 1.522e-4 res_u 1.465e-2 res_p 8.527e-3 torque 2.030807 dp_ts 66.7083 (0.1 min)
+F870 B2 it 100: continuity 1.765e-5 res_u 1.131e-3 res_p 8.152e-4 torque 2.027249 dp_ts 64.1288 (0.6 min)
+test f870_family_run has been running for over 60 seconds
+F870 B2 it 500: continuity 1.793e-5 res_u 1.004e-3 res_p 6.287e-4 torque 2.028696 dp_ts 64.2326 (2.3 min)
+F870 B2 it 1000: continuity 1.807e-5 res_u 1.004e-3 res_p 6.270e-4 torque 2.028694 dp_ts 64.2327 (3.8 min)
+F870 B2 it 1500: continuity 1.792e-5 res_u 1.003e-3 res_p 6.291e-4 torque 2.028697 dp_ts 64.2326 (5.3 min)
+F870 B2 it 2000: continuity 1.807e-5 res_u 1.005e-3 res_p 6.307e-4 torque 2.028693 dp_ts 64.2328 (6.5 min)
+F870 B2 it 2500: continuity 1.796e-5 res_u 1.004e-3 res_p 6.302e-4 torque 2.028696 dp_ts 64.2328 (7.6 min)
+F870 B2 it 3000: continuity 1.809e-5 res_u 1.004e-3 res_p 6.303e-4 torque 2.028693 dp_ts 64.2329 (8.8 min)
+F870 B2 it 3500: continuity 1.798e-5 res_u 1.004e-3 res_p 6.297e-4 torque 2.028694 dp_ts 64.2327 (9.9 min)
+F870 B2 it 4000: continuity 1.799e-5 res_u 1.004e-3 res_p 6.291e-4 torque 2.028693 dp_ts 64.2329 (11.0 min)
+F870 B2 it 4500: continuity 1.798e-5 res_u 1.006e-3 res_p 6.275e-4 torque 2.028695 dp_ts 64.2328 (12.1 min)
+F870 B2 it 5000: continuity 1.800e-5 res_u 1.004e-3 res_p 6.281e-4 torque 2.028693 dp_ts 64.2329 (13.2 min)
+F870 B2 it 5500: continuity 1.800e-5 res_u 1.005e-3 res_p 6.234e-4 torque 2.028696 dp_ts 64.2327 (14.3 min)
+F870 B2 it 6000: continuity 1.799e-5 res_u 1.004e-3 res_p 6.282e-4 torque 2.028693 dp_ts 64.2328 (15.4 min)
+F870 B2 it 6500: continuity 1.801e-5 res_u 1.005e-3 res_p 6.248e-4 torque 2.028695 dp_ts 64.2328 (16.6 min)
+F870 B2 it 7000: continuity 1.799e-5 res_u 1.004e-3 res_p 6.277e-4 torque 2.028692 dp_ts 64.2328 (17.8 min)
+F870 B2 it 7500: continuity 1.800e-5 res_u 1.004e-3 res_p 6.268e-4 torque 2.028694 dp_ts 64.2327 (18.9 min)
+F870 B2 it 8000: continuity 1.801e-5 res_u 1.003e-3 res_p 6.269e-4 torque 2.028692 dp_ts 64.2329 (20.0 min)
+F870 B2 RESULT: 13627 cells, 8000 iterations, 20.0 min; torque 2.028692 N m, shaft power 315.692 W, dp_ts 64.2329 Pa; change over 1000: 3.073e-7 N m, 6.378e-5 Pa; mass balance 6.20e-9; res_u 1.003e-3 res_p 6.269e-4; is_converged false; cap rule true; stop None; mesh non-orthogonality 79.54 deg, skewness 4.618, aspect 204.0
+F870 BAND: dp_ts 64.233 Pa against 126.46 Pa: distance 62.227 Pa (-49.2 %), U_num 29.75 Pa, u_meas needed 32.477 Pa; shaft power 315.692 W against 333.3 W: distance 17.608 W (-5.3 %), U_num 32.975 W, u_meas needed 0.000 W; verdicts A1 A2 A3a A3b A3c A4 [false, true, false, false, true, false]
+F870 B2 OUTCOME Outcome { cells: 13627, iterations: 8000, minutes: 19.988591478333333, torque: 2.028692092297656, dp_ts: 64.23286018930064, change: (3.072880678800516e-7, 6.377520296041439e-5), mass_balance: 6.201356789594672e-9, res_u: 0.0010032791872917075, res_p: 0.0006269025244830184, converged: false, cap_rule: true, stop: None, quality: [79.54068236743332, 4.618293110065649, 204.0187683461977] }
+test f870_family_run ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 5 filtered out; finished in 1200.58s
+

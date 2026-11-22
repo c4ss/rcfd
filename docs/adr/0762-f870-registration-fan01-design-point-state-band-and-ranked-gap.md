@@ -329,3 +329,212 @@ number it checks. Corrected, fixed now: S2 asserts each `U_num` to half a unit o
 
 The first values of S1 are the record of the registration's words ("the recorded values are those of the first run of
 each test on current main"): B3 at iteration 300, 1.918174 N m and 46.5819 Pa.
+
+## Addendum 1: results
+
+Written 2026-11-22, after the runs. Commits on the branch, from main 13b0937d: a2c58ff1 (this registration, alone),
+a6566b21 (amendment 1, before the corrected run of S2 and before any solve), da68a8bf (the test file), df09d254 (the
+mutation patch, the reference-data fragment, the line of `docs/validation-data.md`), 024ef792 (the recorded B1 state and
+the acceptance test kept as a known miss), and the commit of this addendum with the proposal file and the logs. The
+heavy runs were made from da68a8bf; their logs are `docs/investigations/f870-fan01-design-point/B1.log`, `B2.log` and
+`B3.log`, and the arithmetic of the band is `band.py` beside them.
+
+### The result against the band
+
+FAN-01, design point, 1.4032 m^3/s at 1486 rpm, B1 (38 184 cells), 8000 iterations, 49.9 minutes.
+
+| Quantity | Simulated | Measured | Distance | Registered band (numerical part; `u_meas` not registered) | Verdict |
+| --- | --- | --- | --- | --- | --- |
+| total-to-static pressure rise | 73.988 Pa | 126.46 Pa | 52.47 Pa (-41.5 %) | 29.75 Pa | **missed**; a measurement uncertainty of 22.72 Pa (18 % of the measured value) would be needed to close it |
+| shaft power | 326.50 W (torque 2.098164 N m) | 333.30 W | 6.80 W (-2.0 %) | 32.98 W | inside the numerical part of the band; not a pass of the clause, because the band is not complete without `u_meas` |
+
+### Every check
+
+| Id | Measured | Met |
+| --- | --- | --- |
+| A1 | `abs(73.988 - 126.46)` = 52.472 Pa against 29.75 Pa | **no, a miss** |
+| A2 | `abs(326.503 - 333.30)` = 6.797 W against 32.98 W | yes, for the numerical part only |
+| A3a | largest non-orthogonality of B1 83.37 deg against 70 | **no, a miss** |
+| A3b | largest skewness of B1 3.765 against 2.0 | **no, a miss** |
+| A3c | largest aspect ratio of B1 252.4 against 300 | yes |
+| A4 | `is_converged()` false at 8000 iterations: `res_u` 1.208e-3 and `res_p` 9.290e-4 against 1e-5 | **no, a miss** |
+| A5 | the first heavy run of `f870_b1_design_point_acceptance` failed and named A1, A3a, A3b and A4; it is kept, ignored, as `f870_b1_design_point_acceptance_known_miss`, with the numbers in its reason; `f870_b1_design_point_state_record` asserts the six verdicts and the two values | yes |
+| R1 | B1 2.098164 N m and 73.9881 Pa, B2 2.028692 and 64.2329, B3 1.918189 and 46.7776: each equal to the triplets of ADR 0170 and ADR 0086 to their printed digits (difference 0 against 1 %) | yes |
+| R2 | the cap rule on B1: change over the last 1000 iterations 5.784e-6 N m (2.8e-4 %) and 9.747e-5 Pa (1.3e-4 %), mass balance 5.94e-10: met. Reported; it is not the registered convergence rule. B2 and B3 the same (`res_u` 1.003e-3 and 1.030e-3, cap rule met, 20.0 and 9.1 minutes) | report |
+| R3 | `U_num` from the three runs of current main: 0.21190 N m and 29.75 Pa, the registered values | report |
+| S1 | B3 at iteration 300: 1.918174 N m and 46.5819 Pa, equal to the recorded values in every run made (K1) | yes |
+| S2 | passes with the tolerance of amendment 1 | yes, after amendment 1 |
+| S3 | B1 mesh 38 184 cells, 83.372 deg, 3.7647, 252.42; verdicts missed, missed, met as recorded | yes |
+| D1 | `git diff --name-only 13b0937d` names no file under `crates/*/src`; two files under `crates/rcfd-api/tests` | yes |
+| P | see "The checks of rule 7" below | see below |
+
+Mesh gates of the other two meshes, reported: B2 79.54 deg, 4.618, 204.0; B3 78.39 deg, 1.578, 168.9.
+
+### What is a gate test and what is a heavy record
+
+All in `crates/rcfd-api/tests/f870_fan01_design_point.rs`.
+
+* Run with every `cargo test` (about 25 s together in release): `f870_reference_and_band` (the CSV row of the
+  measurement and the arithmetic of the band), `f870_b1_mesh_gates_as_recorded` (the B1 mesh, its three numbers and
+  their verdicts against the registered gates), `f870_b3_short_run_holds_the_state` (the same case text and the same
+  code path as the heavy record, on B3 for 300 iterations, each value within 1 % of 1.918174 N m and 46.5819 Pa, either
+  way).
+* Ignored, heavy, run by name: `f870_b1_design_point_state_record` (50 minutes; fails if torque or pressure rise leave
+  1 % of 2.098164 N m and 73.9881 Pa either way, or if any of the six verdicts changes, so an improvement fails it too
+  and has to be recorded); `f870_b1_design_point_acceptance_known_miss` (the acceptance as a test; it fails today, and
+  its ignore reason carries the numbers; it is the test that passes when F-870 is done); `f870_family_run` (B2 and B3
+  for R1 and R3).
+
+### Mutations and negative controls
+
+Run on a copy of the tree in the scratch folder with its own target folder. All five were caught by the test named in
+the registration.
+
+| Id | What happened |
+| --- | --- |
+| M1 | Coriolis factor -2.0 to -1.9: B3 at iteration 300 gives 34.09 Pa against 46.58 (-27 %); torque 1.918645 against 1.918174 (0.02 %, inside its tolerance). Caught by the pressure rise. Committed as the mutation patch |
+| M2 | 1501 rpm: 1.9586 N m (+2.1 %) and 49.49 Pa (+6.2 %). Caught |
+| M3 | factor of safety 3: `f870_reference_and_band` fails. Caught |
+| M4 | `n_span` 20: 36 960 cells against 38 184. Caught |
+| M5 | gate 85 deg: the verdict assertion fails ("gate 0: 83.37 against 85"). Caught |
+| K1 | the B3 short run gave 1.918174 N m and 46.5819 Pa in each of its runs on the unmutated tree |
+
+M1 shows a weakness worth saying: at 1 % the torque alone would not have caught a 5 % error of the Coriolis term on
+this short run; the pressure rise did.
+
+### Deviations
+
+1. Amendment 1: the tolerance of S2 on `U_num` was tighter than the rounding of the number it checks. Committed before
+   the corrected run and before any solve. The band is unchanged.
+2. The case text of the new test is that of `fan01_gci_w37c.rs` without its report-only sections; R1 shows the values
+   are the same to the printed digits.
+3. `f870_b1_design_point_state_record` was run a second time after its values were recorded, to see the test pass with
+   its constants: one more heavy solve than the three of the Size line. Its result is in the last line of this section.
+4. In the first B1 run both heavy tests failed, as planned: the acceptance test on its four misses, the state record
+   because no value was recorded yet. Neither failure was hidden; the values were recorded from that run (024ef792).
+5. The registration says no cargo command was run before it. `cargo test -p rcfd-cli --release --test docs_site` was
+   run on the registration's text before its commit, to check its links. No test of F-870 existed then.
+6. The mutation patch was applied and run by hand on the scratch copy; the repository's mutation runner was not used.
+
+Confirmation run of deviation 3: `f870_b1_design_point_state_record` passed (1 passed, 38.1 minutes): torque 2.098164 N m, pressure rise
+73.9881 Pa, the six verdicts as recorded, every printed digit equal to the first run. Its log is
+`docs/investigations/f870-fan01-design-point/B1_confirm.log`.
+
+### What was not run
+
+* Nothing with a registered `u_meas`: the uncertainty of the measurement is not traced, so the clauses A1 and A2 are
+  evaluated on the numerical part alone.
+* The off-design point, a fourth mesh, the empty-passage check of ADR 0086, check H of ADR 0183, the H-slit set-up with
+  minmod: as said under "What is not covered".
+* The comparison with the LDA profiles (rank 1 of the gap) is proposed, not made.
+* The full workspace test run and the heavy tests of other files: not run. Of the workspace only the new file's tests,
+  `docs_site`, fmt and clippy of `rcfd-api` were run.
+* Kromer's thesis and the SAE paper were not read: the open-access server of the thesis answered an automated client
+  with a check that I did not go around.
+
+### The checks of rule 7
+
+* `cargo fmt -p rcfd-api --check`: clean. `cargo clippy -p rcfd-api --all-targets -- -D warnings`: clean.
+* `cargo test -p rcfd-cli --release --test docs_site`: 2 passed, with this addendum in the tree.
+* `cargo test -p rcfd-api --release --test f870_fan01_design_point`: 3 passed, 3 ignored (the heavy records).
+* `python scripts/roadmap_proposals.py check docs/roadmap/proposals/0762-F-870.json`: passes (F-870 todo to partial,
+  gap set, four new items).
+* `python scripts/process_report.py --check`: 2 failures, both "generated file is not current": `docs/adr/index.md` and
+  `docs/reference-data.md`. Both are generated pages and are left to the lead (rule 9). No other failure.
+
+### Size
+
+Size (agent): partial; 0; 4; 4; 900000
+
+Four heavy runs against three registered (deviation 3). The bytes read are an estimate.
+
+### Decision by the registered rule
+
+**Stopped and reported**: the uncertainty of the measurement cannot be traced to a source that was read, so the band of
+the acceptance could not be registered in full. Beside it, as the rule says: the band's numerical part, the run, the
+ranked gap and the test are delivered as for partial, and the result is a miss on four clauses (A1, A3a, A3b, A4) with
+the numbers above. The roadmap has no status "stopped"; I propose **partial** and the lead weighs it.
+
+### The gap, ranked (task 4)
+
+What misses, in the order of the acceptance: the pressure rise (A1), the mesh gates (A3a, A3b) and the convergence
+(A4); the shaft power (A2) is inside the numerical part of its band. The ranking below is by what each cause blocks and
+by the evidence for its share. A number is given where a record gives one; where none does, that is said. Sizes are
+mine: small is one registration without solver code, medium one registration with solver or mesher code, large more
+than one.
+
+**The shape of the miss, from the records.** The power agrees and the pressure does not. On B1 the rotor takes
+326.5 W of the measured 333.3 W (-2.0 %) and raises the mass-averaged absolute total pressure by 157.25 Pa (ADR 0086,
+table of the bladed balance, B1; prose, not rerun here), a total-to-total efficiency of 1.4032 x 157.25 / 326.5 = 0.68.
+The compared total-to-static value, 73.99 Pa, is that total rise less everything that leaves the passage as velocity:
+157.25 - 73.99 = 83.3 Pa, of which the axial dynamic pressure of the annulus is `rho/2 (Q/A)^2` = 0.6 x (1.4032 /
+0.14804)^2 = 53.9 Pa and the outlet swirl energy 23.5 Pa (ADR 0086, the same table). The measurement is taken behind a
+finite hub and a diffuser, to ambient. The miss of 52.5 Pa is 63 % of the 83.3 Pa that the rotor-only definition
+discards. Mesh error does not close it on this family: the extrapolated pressure rise of ADR 0086 is 85.9 Pa, still
+40.5 Pa (32 %) below the measurement, and its band [44, 104] Pa does not contain 126.46 Pa.
+
+| Rank | Cause still standing | Blocks | Evidence for its share | What would have to be built or changed | Roadmap item | Size |
+| --- | --- | --- | --- | --- | --- | --- |
+| 1 | **The compared quantity.** A rotor-only passage with a cylindrical hub through the outlet is compared with a pressure measured across the installation: inlet nozzle, a hub that ends 12 mm behind the blade root (rear hub face at x = 104.5 mm, root trailing edge at 92.1 mm), a diffuser to x = 286.3 mm, exit to ambient (v6 description of the record, table of axial positions) | A1 | The numbers above: 52.5 Pa missing, 83.3 Pa of outlet dynamic pressure discarded, of which 53.9 Pa axial. From first principles, the axial dynamic pressure falls from 53.9 Pa on the annulus to 30.6 Pa on the full duct area (0.19635 m^2) behind the hub, so an ideal recovery to the duct area alone is 23 Pa, and a sudden expansion recovers `rho u_2 (u_1 - u_2)` = 20.0 Pa; the diffuser adds to that. This is my arithmetic, not a diagnosis. Diagnoses: the outlet type alone moves the pressure rise by 8.2 Pa (ADR 0078, arm C3); ADR 0078 concluded that the pressure and efficiency limits "cannot be met in principle without modelling the installation or redefining the compared quantity"; the 40.5 Pa left by the extrapolation of ADR 0086. No record separates the installation from the rest of the 40.5 Pa | (i) Compare a quantity of the rotor alone: the LDA profiles of the record 2.2 mm behind the trailing edge (x = 90 mm, r 133 to 246 mm, 26 points; the v6 description settles the datum that `docs/validation-data.md` calls unsettled), meridional and circumferential velocity, and the Euler work from them. Post-processing of the existing solve, no solver or mesher code. (ii) Model the outlet: a hub that ends and a shroud contour (duct and diffuser) as surfaces of revolution in `axial_fan_sector`, the pressure taken as on the rig | no item. `docs/validation-data.md` names the need ("an inlet nozzle / finite hub / diffuser model or a rig-independent measured quantity"). F-133 carries the passage mesher but not hub or shroud contours of this generator | (i) small; (ii) medium to large |
+| 2 | **No converged second-order solution.** The limited `linear_upwind` solve of the bladed passage ends in a limit cycle (ADR 0110), driven at the leading-edge root and at the hub trailing edge (ADR 0175, 0178, 0181) | A4; it also makes every functional of rows A1 and A2 a sample of a cycle, and blocks F-260 | Share of the value: small. The one converged mixed-order state on B3 (ADR 0178, first order in 322 hub cells) differs from the cycle sample by -0.2 % in torque (1.9144 against 1.9177 N m) and -2 % in pressure rise (45.75 against 46.7 Pa); the automatic selector moved the B2 torque by 2.9 % (ADR 0179); three TVD schemes move the B2 pressure rise by -6 % (ADR 0180). Share of the clause: all of it (`res_u` 1.2e-3 against 1e-5) | First the registered, unrun check H of ADR 0183: a time-accurate SST run on B2 from the stalled state, runnable since F-286 (ADR 0199), which classes the pocket as steady, physical or numerical. If physical, no steady state exists and the convergence rule of F-870 has to become a rule on a time mean (a maintainer decision, then an amendment of the rule); if numerical, a treatment of the deferred correction everywhere (ADR 0175 names it as the next candidate) | no item: ADR 0183 names F-276, which is not in `docs/roadmap.json`; ADR 0757 says of the stall diagnoses "no item has them as its subject" | small (check H is one registered run); the fix after it medium |
+| 3 | **The mesh gates.** B1 has 83.37 deg against 70 and skewness 3.765 against 2.0 (aspect 252.4 against 300 is met); the worst faces are at the lower seam corner of the tip layers (`docs/milestone-fan.md`) | A3a, A3b | Share of the value: no record gives one. The stall cells are not at the bad faces (ADR 0110: 26 to 28 deg; ADR 0174). ADR 0087 moved the corner from 83 to 78 deg and was rejected; the later construction S gives 88.0 deg and 4.30 on FAN-01 (ADR 0692, R2), worse | A topology change at the tip (the index-offset topology of ADR 0087 was not tried), or a decision of the maintainer that the gate for this case is another number, registered before a run | F-133 (its gap names the gates); F-726, F-777, F-778 work on other blades | large |
+| 4 | **Resolution, and whether the estimate can be believed.** | the band itself (A1, A2) | `U_num` is 40 % of the pressure rise and 10 % of the torque; the wall-normal direction is not refined (first cell 0.565 mm by the y+ 30 rule, two stack cells); ADR 0086's check of the estimate on the empty passage failed. B1 is 12.0 Pa and 0.113 N m below the extrapolated values | A fourth mesh with the first cell and the stacks refined too, and the empty-passage check repeated; worth little before rank 2 is settled, since each value is a cycle sample | no item of its own; part of F-870 | small to medium (compute, about 3 h for one finer mesh alone) |
+| 5 | **The rotating-frame discretisation** (limit (a) of the milestone page): convection of the rigid swirl creates angular momentum | A1 and A2, by a few per cent | Empty passage on the B1 mesh: 0.106 N m of outlet angular momentum that should be zero (5 % of the measured torque), growing with refinement, and 4.5 to 9.2 Pa of total pressure created in an empty duct (ADR 0086); the bladed balance of B1 is open by -0.059 N m, 2.8 % of the torque (ADR 0170) | The absolute-velocity form on the bladed passage (built and removed in ADR 0082 and ADR 0085 because it did not converge), or rigid rotation of the mesh, arm 1 of ADR 0183 (registered, not run) | F-126 (its gap: "MRF on the bladed FAN-01 passage") | medium to large |
+| 6 | **The unknowns of the measurement**: its stated uncertainty and the air density | the registration of the band, so "done" itself; A1 and A2 by the density | Both simulated quantities scale with the assumed 1.2 kg/m^3: one per cent of density is one per cent of each (0.74 Pa and 3.3 W). No source read gives either number | Reading Kromer's thesis (open access; the fetch was refused to an automated client) or the SAE paper | none; open question 1 | small (a person and a browser) |
+| 7 | **Geometry and model**: CAD chords 4 to 5 % shorter than the published table, no 3 mm root fillet, NACA 4-digit thickness law (the CAD has its maximum at 0.23 chord), fully turbulent SST with wall functions at chord Reynolds numbers of 1.25e5 to 1.5e5 | A1, A2 | No record gives a number. The strip estimate of ADR 0078 exceeds the measured torque by 12 to 22 %, so the blade as modelled can absorb the power, and B1 does to 2 % | Not proposed before ranks 1 to 3 | F-046 (transition) is outside the milestone | - |
+
+**Which one or two pieces of work move the headline, and in what order.** The pressure clause cannot be met by any
+change of scheme or mesh while a rotor-only passage is compared with an installation value: the repository's own
+extrapolation leaves 40 Pa. So the first piece is rank 1, in its cheap form first: the comparison with the LDA profiles
+behind the rotor says, from the solve that exists, whether the rotor's work is right, and so whether the 52.5 Pa is
+installation or rotor; the hub end and diffuser then follow only if it is installation. The second piece is rank 2,
+check H of ADR 0183: one registered run that decides whether the convergence clause of F-870 can be met by a steady
+solve at all. Rank 6 costs a person a few minutes and should be done before either, because without it no band can be
+registered in full. Ranks 3, 4 and 5 do not move the headline until 1 and 2 are answered.
+
+## Open questions for the maintainer
+
+1. **The uncertainty of the measurement.** No source read states it (the record at Zenodo in versions 5 and 6 with its
+   description, the benchmark paper arXiv:2211.12014, the two conference papers named under "What was read"). Options:
+   (a) a person opens Kromer's thesis (doi:10.25593/978-3-96147-089-1, open access) and the SAE paper 2016-01-1805 in
+   a browser and records the stated uncertainty of pressure, flow, torque and the density, with the page; (b) the
+   maintainer sets the band of this measured case, as `docs/process/tolerances.md` allows ("to be set by the maintainer
+   per measured case"); (c) the scatter between the laboratories of the round robin is taken as the uncertainty, which
+   is another quantity than the one the acceptance names. I recommend (a), and (b) only if the thesis does not state
+   it. Until one of them, F-870 cannot be done by its own words.
+2. **The air density of the measurement.** The repository assumes 1.2 kg/m^3; no source read gives it, and both compared
+   quantities scale with it. Options: (a) read it with question 1; (b) keep 1.2 and carry one per cent of density
+   (0.74 Pa, 3.3 W) in `u_meas`. I recommend (a).
+3. **Which follow-ups, in what order.** Four are proposed below. I recommend this order: the reading of question 1; the
+   comparison with the LDA profiles behind the rotor (small, no solver code, says whether the 52.5 Pa is rotor or
+   installation); check H of ADR 0183 (one registered run, decides whether a steady solve can converge at all); the
+   hub end and diffuser in the passage generator only if the LDA comparison says installation. The mesh gates stay
+   with F-133 and no new item is proposed for them.
+4. **The compared quantity and the convergence rule.** If the LDA comparison shows the rotor's work is right, the
+   headline of F-870 compares a rotor-only model with an installation value and cannot be met without the outlet
+   model: is the outlet model wanted for the milestone, or does the headline become a rotor quantity? And if check H
+   classes the hub pocket as physical, no steady state exists: is a rule on a time mean acceptable for F-870? Both are
+   changes of the acceptance, so they are the maintainer's. I recommend deciding neither before the two cheap runs of
+   question 3 have given their answers.
+
+## For the lead: roadmap entries
+
+> Status proposed for F-870: partial.
+
+> Note entry: ADR 0762, 2026-11-22, partial, and by its own rule stopped on the band: the stated uncertainty of the FAN-01 measurement is in no source that could be read, so the band is its numerical part alone (29.75 Pa, 32.98 W from the B1/B2/B3 family of ADR 0086, factor of safety 1.25). On main 13b0937d, B1 (38 184 cells, 8000 iterations): pressure rise 73.99 Pa against 126.46 Pa (-41.5 %, distance 52.47 Pa, a miss), shaft power 326.50 W against 333.30 W (-2.0 %, inside), non-orthogonality 83.37 deg against 70 and skewness 3.765 against 2.0 (misses), res_u 1.2e-3 against 1e-5 (a miss). The state is held by crates/rcfd-api/tests/f870_fan01_design_point.rs: three gate tests (a B3 short run on the heavy record's path, 1 % either way) and a heavy record of B1; five mutations caught. The ranked gap and four questions are in the ADR.
+
+> Gap entry: Missing for done: the stated uncertainty and density of the measurement (not traced; no full band can be registered); the pressure rise (73.99 Pa against 126.46 Pa, band 29.75 Pa), where a rotor-only passage is compared with an installation value; the mesh gates of B1 (83.37 deg, skewness 3.765), with F-133; a converged solve (limit cycle, res_u 1.2e-3). Shaft power is within 2.0 %.
+
+> Follow-up (proposed, open question 1): "FAN-01 measurement: its stated uncertainty and air density, read from the thesis of the measurement and recorded", deps F-870; acceptance: Every limit not stated here is registered in the ADR before the run. The uncertainty of the pressure rise, the volume flow and the torque of the FAN-01 measurement and the air density of the measurement are recorded in docs/validation-data.md, each with its source, page and the date it was read, from a published source that was read; or, where the source does not state one, the page says so and names the band the maintainer sets for this measured case. The band of F-870 is then registered in full by an amendment before any run that uses it.
+
+> Follow-up (proposed, open question 3): "FAN-01 rotor alone: the solved field against the measured LDA profiles behind the trailing edge and the Euler work from them", deps F-870; acceptance: Every limit not stated here is registered in the ADR before the run. The circumferentially averaged meridional and circumferential velocity of the FAN-01 design-point solve at the measured plane behind the trailing edge is compared with the LDA profiles of the published record, which a page of the repository records with their citation, at each measured radius, within a band registered before the comparison; the Euler work of the measured and of the simulated profile is reported with the measured shaft power, and the report states what part of the miss of the pressure rise of F-870 is the rotor's and what part the installation's. A miss is recorded as a miss with its numbers.
+
+> Follow-up (proposed, open question 3): "FAN-01 hub pocket: check H of ADR 0183, a time-accurate SST run that classes it as steady, physical or numerical", deps F-870, F-286; acceptance: Every limit not stated here is registered in the ADR before the run. The check H of ADR 0183 is run as registered there, a time-accurate k-omega SST run of the FAN-01 passage from the stalled steady state, and classes the reversed-flow pocket at the hub trailing edge as steady, physical unsteadiness or numerical by the rule registered before the run, with the time step, the time run and the measured amplitude and frequency of torque and pressure rise; the report states what the class means for the convergence rule of F-870. A run that does not decide is recorded as not deciding.
+
+> Follow-up (proposed, open question 4): "FAN-01 outlet as on the rig: a hub that ends and the diffuser contour in the passage generator, the pressure rise taken as measured", deps new:fan01-lda, F-133; acceptance: Every limit not stated here is registered in the ADR before the run. The FAN-01 passage is generated with the hub ending at its published axial position and the duct and diffuser contour of the published rig as surfaces of revolution, within the registered mesh gates, and the total-to-static pressure rise is taken between the stations of the measurement; the design point is run and reported against the band of F-870, with the change against the rotor-only passage of ADR 0762 as a number. A miss is recorded as a miss.
+
+The same entries are in `docs/roadmap/proposals/0762-F-870.json` (form 1 of ADR 0755, base 13b0937d), checked with
+`python scripts/roadmap_proposals.py check`.
+
+Generated pages not current on this work, left to the lead (rule 9): `docs/adr/index.md` (ADR 0762 is new) and
+`docs/reference-data.md` (the fragment `docs/reference-data.d/0762-F-870.part` is new).

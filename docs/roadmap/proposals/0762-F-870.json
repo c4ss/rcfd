@@ -1,0 +1,45 @@
+{
+  "form": 1,
+  "adr": "0762",
+  "item": "F-870",
+  "base": "13b0937dad03b46d6d55edde0404748292dd01b3",
+  "status": "partial",
+  "note": "ADR 0762, 2026-11-22, partial, and by its own rule stopped on the band: the stated uncertainty of the FAN-01 measurement is in no source that could be read, so the band is its numerical part alone (29.75 Pa, 32.98 W from the B1/B2/B3 family of ADR 0086, factor of safety 1.25). On main 13b0937d, B1 (38 184 cells, 8000 iterations): pressure rise 73.99 Pa against 126.46 Pa (-41.5 %, distance 52.47 Pa, a miss), shaft power 326.50 W against 333.30 W (-2.0 %, inside), non-orthogonality 83.37 deg against 70 and skewness 3.765 against 2.0 (misses), res_u 1.2e-3 against 1e-5 (a miss). The state is held by crates/rcfd-api/tests/f870_fan01_design_point.rs: three gate tests (a B3 short run on the heavy record's path, 1 % either way) and a heavy record of B1; five mutations caught. The ranked gap and four questions are in the ADR.",
+  "gap": "Missing for done: the stated uncertainty and density of the measurement (not traced; no full band can be registered); the pressure rise (73.99 Pa against 126.46 Pa, band 29.75 Pa), where a rotor-only passage is compared with an installation value; the mesh gates of B1 (83.37 deg, skewness 3.765), with F-133; a converged solve (limit cycle, res_u 1.2e-3). Shaft power is within 2.0 %.",
+  "follow_ups": [
+    {
+      "title": "FAN-01 measurement: its stated uncertainty and air density, read from the thesis of the measurement and recorded",
+      "deps": [
+        "F-870"
+      ],
+      "acceptance": "Every limit not stated here is registered in the ADR before the run. The uncertainty of the pressure rise, the volume flow and the torque of the FAN-01 measurement and the air density of the measurement are recorded in docs/validation-data.md, each with its source, page and the date it was read, from a published source that was read; or, where the source does not state one, the page says so and names the band the maintainer sets for this measured case. The band of F-870 is then registered in full by an amendment before any run that uses it.",
+      "key": "fan01-uncertainty"
+    },
+    {
+      "title": "FAN-01 rotor alone: the solved field against the measured LDA profiles behind the trailing edge and the Euler work from them",
+      "deps": [
+        "F-870"
+      ],
+      "acceptance": "Every limit not stated here is registered in the ADR before the run. The circumferentially averaged meridional and circumferential velocity of the FAN-01 design-point solve at the measured plane behind the trailing edge is compared with the LDA profiles of the published record, which a page of the repository records with their citation, at each measured radius, within a band registered before the comparison; the Euler work of the measured and of the simulated profile is reported with the measured shaft power, and the report states what part of the miss of the pressure rise of F-870 is the rotor's and what part the installation's. A miss is recorded as a miss with its numbers.",
+      "key": "fan01-lda"
+    },
+    {
+      "title": "FAN-01 hub pocket: check H of ADR 0183, a time-accurate SST run that classes it as steady, physical or numerical",
+      "deps": [
+        "F-870",
+        "F-286"
+      ],
+      "acceptance": "Every limit not stated here is registered in the ADR before the run. The check H of ADR 0183 is run as registered there, a time-accurate k-omega SST run of the FAN-01 passage from the stalled steady state, and classes the reversed-flow pocket at the hub trailing edge as steady, physical unsteadiness or numerical by the rule registered before the run, with the time step, the time run and the measured amplitude and frequency of torque and pressure rise; the report states what the class means for the convergence rule of F-870. A run that does not decide is recorded as not deciding.",
+      "key": "fan01-check-h"
+    },
+    {
+      "title": "FAN-01 outlet as on the rig: a hub that ends and the diffuser contour in the passage generator, the pressure rise taken as measured",
+      "deps": [
+        "new:fan01-lda",
+        "F-133"
+      ],
+      "acceptance": "Every limit not stated here is registered in the ADR before the run. The FAN-01 passage is generated with the hub ending at its published axial position and the duct and diffuser contour of the published rig as surfaces of revolution, within the registered mesh gates, and the total-to-static pressure rise is taken between the stations of the measurement; the design point is run and reported against the band of F-870, with the change against the rotor-only passage of ADR 0762 as a number. A miss is recorded as a miss.",
+      "key": "fan01-outlet"
+    }
+  ]
+}
