@@ -265,3 +265,15 @@ skipped or retried to make a run pass. ADR 0760's known miss stays as it is in e
 
 1. Whether a setting found here becomes a default of the steady route (or of the aerofoil cases). Written out with
    options and a recommendation in the addendum, under the fixed heading, once the result is known.
+
+## Amendment 1 (2026-11-22): FT-U, before the commit of the test file and before any record
+
+The first run of the five fast tests (constants unset, so they failed by construction) gave after 600 iterations on the
+coarse mesh: FT-S 1.4197453512, FT-T 0.6849084672, FT-C -0.0781516830, FT-G 0.0571143866, and for **FT-U 2.3e55**: the
+coarse run with `alpha_u = 0.7` diverges. A tolerance of 0.018 about such a number is not a record of the path (it
+depends on the last bits of a divergent sequence). The set-up of that row is defective, so by rule 2 it is corrected
+here, before the commit of the test file: **FT-U asserts that the coarse run at 17 degrees with `alpha_u = 0.7` has
+diverged after 600 iterations, `abs(cl_eff) > 100` or not finite**, which is what the first run shows; the gate then
+sees a change of that path that stops the divergence. The limit 100 is two orders above any lift of this aerofoil
+(ADR 0760's largest swing is 1.95). The other four rows stand as registered, with the values above as `R_x`. The
+divergence on the coarse mesh is reported in the addendum with the heavy run KU; it is not diagnosed further here.
