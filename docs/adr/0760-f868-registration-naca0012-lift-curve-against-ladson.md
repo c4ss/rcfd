@@ -465,3 +465,22 @@ Status proposed: partial.
 No follow-up item is proposed: the arm of question 1 (a) adds no acceptance clause and would be registered under F-868
 (rule 13). The same entries are in `docs/roadmap/proposals/0760-F-868.json`. `docs/adr/index.md` and
 `docs/reference-data.md` are not current and are left to the lead.
+
+## The lead's reading (2026-11-22), after the merge
+
+The report was read when it came (2026-11-22, 05:37 UTC). Merged at fbf9b786 and pushed at 8818aee7 (ledger line of
+fbf9b786). Checked against the branch: the registration is the first commit and alone; the driver, the case texts and the
+reference fragment were committed before any run and the test file before the evaluation; no solver source and no
+existing test was changed.
+
+Status: **partial**, as proposed. Question 1 (whether the headline needs 17 degrees) is the maintainer's and is put with
+the agent's recommendation.
+
+Question 2 is the lead's (a detail of later registrations, not of scope): a later registration against this measured set
+takes the scatter of the three grit zones, 0.018, as the band below stall, and not the larger of it and 5 per cent. The
+band of this ADR stands as registered; it was fixed before the run and is not narrowed after it. The agent's own remark
+is repeated: from 6 degrees up the 5 per cent is 3.5 to 125 times the difference found, so "within the band" there says
+less than the differences themselves, which are at most 0.0143.
+
+Not read by the agent and to be closed by a citation batch: NASA TM 4074 itself (the data file was fetched and its
+checksum compared).

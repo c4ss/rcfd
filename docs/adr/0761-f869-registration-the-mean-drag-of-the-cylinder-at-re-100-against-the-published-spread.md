@@ -461,3 +461,17 @@ note + 592 characters", exit 0. `python scripts/process_report.py --check`: 2 fa
 current" (`docs/adr/index.md`, `docs/reference-data.md`); no failure of the registration, and no limit of it is listed
 as having only an agent's own number as its source. Both pages are left to the lead (rule 7, rule 9).
 `cargo test -p rcfd-cli --release --test docs_site` on the tree with this addendum: 2 passed.
+
+## The lead's reading (2026-11-22), after the merge
+
+The report was read when it came (2026-11-22, 05:13 UTC). Merged at d08569e7 and pushed at a818a3ef (ledger line of
+d08569e7). Checked against the branch: the registration is the first commit and alone; the reference values were committed
+before the test file; amendment 1 was committed before the change of the test it describes; no existing test was changed.
+
+Status: **partial**, as proposed. The reference fragment in place of an edit of the page's section is accepted: the page
+is generated from fragments, and the brief's wording was the lead's mistake.
+
+Read with the result, for the next reader: the band was registered with the earlier value 1.35247 known, which the agent
+discloses; nine of the eleven published values are quotations in the two papers that were read; and the comparison uses
+the second-order time step, which is an option. The two questions are the maintainer's and are put with the agent's
+recommendations.
