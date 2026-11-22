@@ -36,7 +36,7 @@ The standard review of V&V terminology and practice for CFD: AIAA definitions, c
 
 ### Sec. 3.3.1 (pp. 31-32) convergence of discretisations
 - Truncation error is introduced by the discrete approximation; discretisation error is the difference between the discrete solution and the exact PDE solution. Strongly consistent: zero truncation error as grid spacing and time step go to zero (not guaranteed with shocks).
-- Eq. 3: `||u_exact - u_(h,tau)|| = O(h^p, tau^q)`; the questions are whether the discrete solution converges, what the observed `p` and `q` are, and what error is observed on finite grids.
+- Eq. 3: $\lVert u_\text{exact} - u_{h,\tau} \rVert = O(h^p, \tau^q)$; the questions are whether the discrete solution converges, what the observed $p$ and $q$ are, and what error is observed on finite grids.
 
 ### Sec. 3.4.3 (pp. 49-51) algorithm testing, benchmarks and MMS
 - Highly accurate solutions: analytical solutions, benchmark ODE solutions (Blasius, Taylor-Maccoll, stagnation flow), benchmark PDE solutions (flat plate, lid-driven cavity, natural-convection cavity, cylinder, backward-facing step). No published solution should be a benchmark until computed independently, preferably with different methods. "code comparisons are a verification activity--NOT a validation activity".
@@ -44,7 +44,7 @@ The standard review of V&V terminology and practice for CFD: AIAA definitions, c
 
 ### Sec. 4.1.1-4.1.2 (pp. 56-60) validation, prediction, error decomposition
 - "Individual computational outcomes of a model are validated; codes are not validated". AIAA *prediction*: "use of a computational model to foretell the state of a physical system under conditions for which the computational model has not been validated."
-- Eq. 12-14: `u_nature - u_discrete = E1 + E2 + E3 + E4`, with `E1 = u_nature - u_exp` (measurement error, incl. bias), `E2 = u_exp - u_exact` ("modeling error", e.g. continuum, incompressibility at low speed, constant turbulent Prandtl number, turbulence models; also unmeasured inputs), `E3`, `E4` the numerical parts of sec. 3.2. The authors consider bias (systematic) error the more important part of `E1`.
+- Eq. 12-14: $u_\text{nature} - u_\text{discrete} = E_1 + E_2 + E_3 + E_4$, with $E_1 = u_\text{nature} - u_\text{exp}$ (measurement error, incl. bias), $E_2 = u_\text{exp} - u_\text{exact}$ ("modeling error", e.g. continuum, incompressibility at low speed, constant turbulent Prandtl number, turbulence models; also unmeasured inputs), $E_3$, $E_4$ the numerical parts of sec. 3.2. The authors consider bias (systematic) error the more important part of $E_1$.
 
 ### Sec. 4.7.1 (pp. 82-83) recommended features of a validation metric
 - Include an estimate of numerical error, but not grouped with experimental uncertainty nor represented probabilistically: "Numerical error represents a bias error in the solution".

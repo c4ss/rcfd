@@ -19,11 +19,11 @@ status: draft
 
 ## Summary
 
-User's manual of a time-marching Euler code for a single compressor blade row in cylindrical coordinates `(R, theta, X)`; only its periodic-boundary treatment was read here.
+User's manual of a time-marching Euler code for a single compressor blade row in cylindrical coordinates $(R, \theta, X)$; only its periodic-boundary treatment was read here.
 
 ## Key points
 
-- **Grid section (before "Periodic Boundaries"):** the grid is offset (staggered) so that boundaries lie midway between grid lines, which simplifies hard-wall and periodic boundaries; blade-to-blade grid lines stay at constant `(r, z)` because the radial and axial stretchings are independent of `theta`.
+- **Grid section (before "Periodic Boundaries"):** the grid is offset (staggered) so that boundaries lie midway between grid lines, which simplifies hard-wall and periodic boundaries; blade-to-blade grid lines stay at constant $(r, z)$ because the radial and axial stretchings are independent of $\theta$.
 - **"Periodic Boundaries", p. 35:** the flow is assumed periodic blade to blade; with the staggered grid, periodicity is imposed "simply by using the fact that the conditions at k=1 are those of k=NTH-1 and conditions at k=NTH are those of k=2", i.e. the ghost layer on one side of the passage takes the values one pitch away on the other side; for the non-staggered grid of fig. 9 the periodicity is maintained by averaging across the seam (equation garbled in the OCR).
 
 ## Contradictions with the wiki
