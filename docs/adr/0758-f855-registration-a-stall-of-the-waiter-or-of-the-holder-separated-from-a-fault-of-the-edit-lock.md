@@ -356,3 +356,47 @@ The brief's, with its terms fixed:
   run is therefore not in its log (F-858 could keep it).
 * The controls CW, CH and CV are not run by the gate until `gate.yml` names their file (F-858, the lead's file).
 * Linux and macOS: nothing here is Windows-only, but only Windows 11 is measured. K4 uses a Windows call.
+
+## Amendment 1 (2026-11-22, after BK4, BK5, CW-before, CW, CH, CV, FS, E1, E1f, G and the mutations but ME1; before any run of BK6 or AK6)
+
+What happened, as far as it bears on what is registered now (the full results are in the addendum):
+
+* The first start of BK5 and BK4 ended before any test ran: `series.py` gave the test binary by a relative path with
+  another working directory (`FileNotFoundError`). The script was corrected and the two series were started again from
+  run 1. No test had started, so no run was made twice.
+* BK4 (the forced stop): 5 of 5 runs failed, with 3, 4, 3, 3 and 3 probe calls in `LockBusy` and 1, 0, 0, 2 and 2 racer
+  errors. Run 2 printed `probe 9996 of 10000 conflicts, 4 other`, `racer 4201 accepted, 0 errors`: the print of the gate
+  of e9378ecb.
+* BK5 (the shard's load): **run 5 of 10 failed**, `probe 9999 of 10000 conflicts, 1 other` (`LockBusy`), `racer 3152
+  accepted, 0 errors`, 125.8 s: the print of the gate of f6e68b4a, without a forced cause. On this machine the project
+  folder is kept. Its journal has 3152 lines, every one with `seq`, none of another kind than `edit`, no file left in
+  `.rcfd/locks`; the times of consecutive lines are 0.029 s apart in the median and three times far apart: 1.32 s (at
+  00:04:36), 1.50 s (00:05:37) and **2.38 s** (00:06:02 to 00:06:04). In the nine passing runs the largest distance is
+  0.23 to 0.91 s. So in the failed run the racer wrote nothing for 2.4 s once, and nothing was left or broken.
+* The series was not alone on the machine, against what the registration intends for a series: while BK5 ran, this
+  work also built and ran the mutation copy (release builds of the crate's test binaries, 00:04:30 to 00:05:43, all
+  processors) and built the 20 default test binaries of E1 (from about 00:06:00, bound to processors 0 to 7). The three
+  standstills of run 5 fall into those builds. The other agents' work on the machine is not known.
+
+The old F2 keeps no record, so run 5 does not say whether the probe kept looking while the racer stood still (H) or
+stood still with it (W). The load that produced it was not the registered K5 alone. Both are corrected by two further
+series, registered now, each run made once:
+
+* **K6, the shard's load and a build**: K5, and beside it a loop that rebuilds and links the test binaries of
+  `rcfd-project` in release in the scratch copy (`cargo test -p rcfd-project --release --no-run` after a changed comment
+  in `src/time.rs`, again and again until the series ends), bound to processors 0 to 7.
+* **BK6**: the amended F2 with its record on the **library before change W** (the test binary of `edit_lock_f751`
+  built from commit 10ddf63e), 10 runs under K6. No limit; reported: failed runs, the class of every refused call, the
+  ticker's gaps, the journal counts. It is a diagnosis: with the record, a refused call under the old library is
+  class S whether the probe looked or not, so what it adds is the ticker and the snapshot.
+* **AK6**: the amended F2 at the tip, 10 runs under K6. Limit: 10 of 10 pass (source: the acceptance of F-855, "the
+  registered number of repeats passes"); the number of calls of class S of every run is reported. Kind: code
+  verification.
+
+BK6 and AK6 run at the same time under one build loop, each on its own four processors with its own four busy loops,
+so that the two libraries meet the same minutes of the machine. Read together: refused calls in BK6 that are absent in
+AK6 speak for W (the probe stood still too, and change W removed the refusal); calls of class S in AK6 speak for H.
+Ten runs each cannot settle a rate of one in ten; that is known beforehand.
+
+The decision rule gains AK6 beside AK0, AK5 and AK4 ("every run passes"). AK5 and AK4 as registered are running while
+this is written; no build is started until AK5 has ended, and AK0 runs after BK6 and AK6 with nothing else of this work.
