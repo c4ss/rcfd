@@ -277,3 +277,15 @@ diverged after 600 iterations, `abs(cl_eff) > 100` or not finite**, which is wha
 sees a change of that path that stops the divergence. The limit 100 is two orders above any lift of this aerofoil
 (ADR 0760's largest swing is 1.95). The other four rows stand as registered, with the values above as `R_x`. The
 divergence on the coarse mesh is reported in the addendum with the heavy run KU; it is not diagnosed further here.
+
+## Amendment 2 (2026-11-22): a reported run KU-a15, before it is run
+
+KU-a17 ended at iteration 3517 with exit code 0 (the residual targets met), steady by D5, at cl_eff 1.5768: it names its
+cause and misses the target by +0.025. The registration runs a control at 15 degrees only for a change that meets the
+target. To tell whether the 0.025 is a shift of the fixed point by `alpha_u` (arithmetic 1 and "the control at 15
+degrees": the relaxation enters the face-flux interpolation through `a_P`) or another state at 17 degrees, the committed
+case `KU-a15.toml` is run once as well, **reported without a limit**: its difference from 1.4932034 beside KU-a17's
+difference from 1.5516. It decides no row: F17-U stays a miss whatever it gives, and C15-U is not a row of the decision
+because KU does not meet F17-U. The test of the C15 rows (`f884_c15_controls_hold_for_every_change_that_meets_the_target`)
+applies its limit to every control run in the record; it is corrected, in the commit after this amendment and before
+the run, to apply it only to the changes that meet the target, so that this reported run is not judged by it.
