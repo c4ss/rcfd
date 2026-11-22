@@ -1,0 +1,14 @@
+# expect-fail: cargo test --release -p rcfd-api --test f869_cylinder_re100_mean_drag g1_
+diff --git a/crates/rcfd-post/src/integrals.rs b/crates/rcfd-post/src/integrals.rs
+index 44ba68e..78254ba 100644
+--- a/crates/rcfd-post/src/integrals.rs
++++ b/crates/rcfd-post/src/integrals.rs
+@@ -191,7 +191,7 @@ fn force_and_moment(
+             }
+         }
+         let nu = nu_of(f);
+-        let fv = tr.map(|t| -rho * nu * t * area);
++        let fv = tr.map(|t| 0.0 * rho * nu * t * area);
+         pf = vec3::add(pf, fp);
+         vf = vec3::add(vf, fv);
+         moment = vec3::add(moment, vec3::cross(vec3::sub(cf[f], origin), vec3::add(fp, fv)));
