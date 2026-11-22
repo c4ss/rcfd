@@ -9596,12 +9596,13 @@
     "deps": [
       "F-865"
     ],
-    "status": "todo",
+    "status": "partial",
     "acceptance": "Every limit not stated here is registered in the ADR before the run. The total-to-static pressure rise and the shaft power of the FAN-01 rotor at its design point (1.4032 m^3/s; measured 126.46 Pa and 333.30 W, as recorded in docs/validation-data.md) are each within a band registered before the run from the measurement's stated uncertainty and a mesh-convergence estimate, on a mesh that meets the registered quality gates, with the solve converged by its registered rule; a miss is recorded with its number and is not a pass.",
-    "note": "Lead (2026-11-21): entered on the maintainer's answer of that day to ADR 0756 question 3, as a headline item of the milestone fan. fan01_validation.rs is the present attempt, under F-126, and misses; docs/milestone-fan.md gives the known limits (the rotating-frame discretisation on bladed sectors, the missed mesh gates, the residual stall). Not issued yet; blocked in substance by those limits. Maintainer (2026-11-21): to be issued once a full gate is green; the gate of f6e68b4a was red, and the two flaky tests (F-855, F-866) are fixed first. Lead (2026-11-22): the full gate of 5d2bb6b1 (run 44976047458) is green, 5941 passed, 0 failed, 1728 ignored; issued as the maintainer asked: ADR 0762, brief docs/adr/briefs/f870-fan01-design-point.md.",
     "milestones": [
       "fan"
-    ]
+    ],
+    "gap": "Missing for done: the stated uncertainty and density of the measurement (not traced; no full band can be registered); the pressure rise (73.99 Pa against 126.46 Pa, band 29.75 Pa), where a rotor-only passage is compared with an installation value; the mesh gates of B1 (83.37 deg, skewness 3.765), with F-133; a converged solve (limit cycle, res_u 1.2e-3). Shaft power is within 2.0 %.",
+    "note": "Lead (2026-11-21): entered on the maintainer's answer of that day to ADR 0756 question 3, as a headline item of the milestone fan. fan01_validation.rs is the present attempt, under F-126, and misses; docs/milestone-fan.md gives the known limits (the rotating-frame discretisation on bladed sectors, the missed mesh gates, the residual stall). Not issued yet; blocked in substance by those limits. Maintainer (2026-11-21): to be issued once a full gate is green; the gate of f6e68b4a was red, and the two flaky tests (F-855, F-866) are fixed first. Lead (2026-11-22): the full gate of 5d2bb6b1 (run 44976047458) is green, 5941 passed, 0 failed, 1728 ignored; issued as the maintainer asked: ADR 0762, brief docs/adr/briefs/f870-fan01-design-point.md. ADR 0762, 2026-11-22, partial, and by its own rule stopped on the band: the stated uncertainty of the FAN-01 measurement is in no source that could be read, so the band is its numerical part alone (29.75 Pa, 32.98 W from the B1/B2/B3 family of ADR 0086, factor of safety 1.25). On main 13b0937d, B1 (38 184 cells, 8000 iterations): pressure rise 73.99 Pa against 126.46 Pa (-41.5 %, distance 52.47 Pa, a miss), shaft power 326.50 W against 333.30 W (-2.0 %, inside), non-orthogonality 83.37 deg against 70 and skewness 3.765 against 2.0 (misses), res_u 1.2e-3 against 1e-5 (a miss). The state is held by crates/rcfd-api/tests/f870_fan01_design_point.rs: three gate tests (a B3 short run on the heavy record's path, 1 % either way) and a heavy record of B1; five mutations caught. The ranked gap and four questions are in the ADR. Lead (2026-11-22): merged at 3a241b6d and pushed at 06e7cbc8 (11.9 minutes, the mutation patch caught); partial as proposed, with the agent's own rule reading stopped on the band. The proposal file was applied without its four follow-ups: entering them and their order is the maintainer's (questions 1 to 4 of ADR 0762)."
   },
   {
     "id": "F-871",
@@ -9671,5 +9672,14 @@
     "status": "todo",
     "acceptance": "Every limit not stated here is registered in the ADR before the run. A milestone for the structural fan demonstrations is defined in docs/milestones.json with its cases, its published reference as a page of the repository records it, and its headline items (F-406 or F-436, or the reason for another); the five fan-titled structural items F-387, F-406, F-436, F-593 and F-604 and the cyclic rotor are placed; every item of the roadmap is read against the membership rule of ADR 0756, every membership has a reason, a sample drawn by seed is read a second time and its disagreements are reported, and one command adds the milestone on main and leaves the others byte for byte as they are.",
     "note": "Lead (2026-11-21): entered on the maintainer's answer of that day (\"Yes, all five\") to question 5 of ADR 0757, option (c): structure and vibration are outside the milestone fan and get a milestone of their own. It is tooling and belongs to no milestone. Not issued: it follows F-871 on the same files."
+  },
+  {
+    "id": "F-876",
+    "title": "rcfd-mcp adopt_f288: the replace of run.json was refused with access denied after 12 attempts in a left-out run",
+    "phase": 9,
+    "deps": [],
+    "status": "todo",
+    "acceptance": "Every limit not stated here is registered in the ADR before the run. For rcfd-mcp adopt_f288::a_n_a_run_that_differs_in_one_item_is_not_adopted, which failed once with Retry { op: replace, attempts: 12, PermissionDenied } on the run.json of a run: the cause is shown by a registered control (another handle of the test or of the server on the file, a scanner of the machine, or the load beside it), with a registered number of repeated runs with and without a registered load; the code or the test is then changed under the registration so that the registered repeats pass, and a mutation shows the test still catches an adopted run that differs. The test is not ignored, skipped or retried to make it pass, and the number of attempts is not raised without the cause.",
+    "note": "Lead (2026-11-22): entered from the left-out run of the merge of F-869 (ledger line of d08569e7, red on this test alone, 126 binaries); the merge changed a test file of rcfd-api and reference data, three heavy solves of other agents ran beside it on the machine, and the same test passed in the left-out run of the next merge. The lead's reading, not shown: a race on the file on this machine, not a fault of that merge. It has not failed in a gate. Not issued yet."
   }
 ]

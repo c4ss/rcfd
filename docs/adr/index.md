@@ -570,7 +570,7 @@ One row per record of this folder, grouped by the roadmap category of the item i
 | [0759](0759-f866-registration-the-control-of-l1-decides-and-asserts-on-the-ten-listings.md) | F-866 registration: the control of L1 decides and asserts on the ten listings | REGISTERED | 2026-11-21 | 1 | F-866 | done |
 | [0760](0760-f868-registration-naca0012-lift-curve-against-ladson.md) | F-868 registration: the NACA 0012 lift curve against Ladson's measured lift at Re 6e6 | REGISTERED | 2026-11-22 | 1 | F-868 | partial |
 | [0761](0761-f869-registration-the-mean-drag-of-the-cylinder-at-re-100-against-the-published-spread.md) | F-869 registration: the mean drag of the cylinder at Re 100 against the published spread | REGISTERED | 2026-11-22 | 1 | F-869 | partial |
-| [0762](0762-f870-registration-fan01-design-point-state-band-and-ranked-gap.md) | F-870 registration: FAN-01 at its design point, the state, the band and the ranked gap | REGISTERED | 2026-11-22 | 1 | F-870 | todo |
+| [0762](0762-f870-registration-fan01-design-point-state-band-and-ranked-gap.md) | F-870 registration: FAN-01 at its design point, the state, the band and the ranked gap | REGISTERED | 2026-11-22 | 1 | F-870 | partial |
 
 ## Records with no item in the file name (259)
 
@@ -661,7 +661,7 @@ One row per record of this folder, grouped by the roadmap category of the item i
 | [0083](0083-wave36d-cgrid-fan-mesh-quality-and-robustness.md) | Wave 36D, the cause of the FAN-01 laminar smoke miss, and C-grid changes | REGISTERED |  | 1 |  |
 | [0084](0084-wave37a-sheared-mesh-simplec-linearisation.md) | Wave 37A, the SIMPLEC instability on uniformly sheared meshes and an opt-in fix | REGISTERED |  | 1 | F-248 |
 | [0085](0085-wave37b-rotor-passage-robustness.md) | Wave 37B, rotor-passage non-convergence on M0 and M2, and three remedies | REGISTERED |  | 1 |  |
-| [0086](0086-wave37c-fan01-solution-verification.md) | Wave 37C, the first solution-verification study of FAN-01 | ACCEPTED |  | 1 |  |
+| [0086](0086-wave37c-fan01-solution-verification.md) | Wave 37C, the first solution-verification study of FAN-01 | ACCEPTED |  | 1 | F-870 |
 | [0087](0087-wave37d-fan01-tip-corner-inclined-front-edge.md) | Wave 37D, a front edge inclined with the stagger at the FAN-01 C-grid seam corner (opt-in construction `camber_seam_i`) | REGISTERED |  | 1 |  |
 | [0088](0088-wave38a-udf-hook-catalogue-v2.md) | Wave 38A, user-function hook catalogue v2 (F-239), first slice | REGISTERED |  | 1 | F-239 |
 | [0089](0089-wave38b-docs-site-tutorials-gallery.md) | Wave 38B, F-096 documentation site, executed tutorials and example gallery | REGISTERED |  | 1 | F-096 |

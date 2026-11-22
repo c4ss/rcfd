@@ -538,3 +538,24 @@ The same entries are in `docs/roadmap/proposals/0762-F-870.json` (form 1 of ADR 
 
 Generated pages not current on this work, left to the lead (rule 9): `docs/adr/index.md` (ADR 0762 is new) and
 `docs/reference-data.md` (the fragment `docs/reference-data.d/0762-F-870.part` is new).
+
+## The lead's reading (2026-11-22), after the merge
+
+The report was read when it came (2026-11-22, 06:18 UTC); the merge waited 94 minutes for the left-out runs of the two
+merges before it, which build from the same tree. Merged at 3a241b6d and pushed at 06e7cbc8 (ledger line of 3a241b6d).
+Checked against the branch: the registration is the first commit and alone; amendment 1 was committed before the test
+file; no solver source and no existing test was changed; the acceptance test is an ignored known miss with its numbers
+and its limits intact, as the repository holds known misses.
+
+Status: **partial**. By the agent's registered rule the work stopped on the band, because the measurement's stated
+uncertainty and the air density are in no source that could be read; the run, the test that holds the state and the
+ranked gap are delivered all the same, and the roadmap shows that as partial with the gap saying what is missing. The
+agent did not go around the automated-access check of the thesis's site, which is right.
+
+The proposal file was applied without its four follow-ups. Whether they are entered, and in what order, is a question of
+scope and priority, and questions 1 to 4 above are put to the maintainer with the agent's recommendations. Question 1
+needs a person: the thesis has to be opened in a browser and the uncertainty and density read from it.
+
+Read with the result, for the next reader: that 63 per cent of the missing pressure rise is the outlet dynamic pressure
+of a rotor-only passage is the agent's inference from the numbers and from ADR 0086's extrapolation; no run of this work
+shows it. The comparison with the measured profiles behind the rotor is the run that would.
