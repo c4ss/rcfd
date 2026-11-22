@@ -3,6 +3,7 @@ type: entity
 tags: [crate]
 sources: [doc-architecture, adr-thread-transient-rans, adr-thread-periodic-seam-diffusivity, adr-thread-early-turbulence]
 created: 2026-11-22
+builds_on: [turbulence]
 updated: 2026-11-22
 status: stub
 ---
@@ -23,6 +24,10 @@ status: stub
 - **Periodic seam pair diffusivity** for every model (`turbulence.periodic_seam.diffusivity = "pair"`) ([[adr-thread-periodic-seam-diffusivity]]).
 - The F-040 channel test `crates/rcfd-turb/tests/channel_wall_function.rs` predates the ADR process (ADR 0707) ([[adr-thread-transient-rans]]).
 - **Early models (added by p3-records-a):** SA-noft2 (`sa.rs`), the turbulence-model interface with a plugin registry and coefficients in the settings tree, and runtime model switching (ADR 0014); k-epsilon Standard, RNG, Realizable, SST, BSL and the near-wall catalogue (ADR 0015); Smagorinsky, WALE, mixing length (ADR 0026); DES / DDES and RSM for transient algorithms (ADR 0032). The SST audit of ADR 0070 found "no defect in the SST implementation" ([[adr-thread-early-turbulence]]).
+
+## Builds on
+
+- [[turbulence]]: the phenomenon the crate's models close.
 
 ## Open questions
 

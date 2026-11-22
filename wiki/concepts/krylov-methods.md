@@ -40,3 +40,7 @@ Krylov methods build the solution out of the vectors $r_0, A r_0, A^2 r_0, \ldot
 - **GPU:** CG and BiCGStab run entirely on the device for `simple`, `piso`, `pimple`; GMRES is not on the device ([[doc-gpu]]). `linear_solver.device = "cuda"` runs preconditioned CG on an NVIDIA device ([[doc-case-schema-linear-solver]]).
 - **Structural solver:** CG with incomplete Cholesky, block Jacobi or AMG preconditioners (F-381, F-460, F-470) ([[adr-thread-structural-linear-solvers]]).
 - **An open guard:** an `rz <= 0` guard inside `cg` would change default solves and is the maintainer's decision (ADR 0369 Q4, ADR 0363 Q6) ([[amg]]).
+
+## Related
+
+- [[stationary-iterative-methods]] — Jacobi and Gauss-Seidel, the stationary methods whose fixed coefficients Krylov methods replace; also the Jacobi-type preconditioners.

@@ -3,7 +3,7 @@ type: concept
 tags: [mesh, quality]
 sources: [doc-mesh-quality, doc-meshing, doc-dynamic-mesh, adr-thread-steady-kernel-warped-mesh, adr-thread-gradient-options, adr-thread-tet-mesher-output-checks]
 created: 2026-11-22
-builds_on: [non-orthogonal-and-skewness-correction]
+builds_on: [non-orthogonal-and-skewness-correction, mesh-generation-basics]
 updated: 2026-11-22
 status: draft
 ---
@@ -29,7 +29,7 @@ The measures by which rcfd judges a mesh before a run: non-orthogonality, skewne
 ## Builds on
 
 - [[non-orthogonal-and-skewness-correction]]: what non-orthogonality and skewness do to the face fluxes and how the solver corrects for them.
-- Also relevant: [[mesh-generation-basics]].
+- [[mesh-generation-basics]]: cell types, structured and unstructured meshes, and why cell shape sets the discretisation error.
 
 ## Related
 
@@ -37,6 +37,7 @@ The measures by which rcfd judges a mesh before a run: non-orthogonality, skewne
 - [[fan-passage-mesh]]
 - [[rcfd-mesh]]
 - [[known-miss]]
+- [[roadmap-meshing-and-mesh-formats]] — the roadmap area of F-011 (quality metrics and check report, done) and the inflation item F-108.
 
 ## Open questions
 

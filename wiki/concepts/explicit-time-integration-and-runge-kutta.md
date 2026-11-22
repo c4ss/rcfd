@@ -38,6 +38,10 @@ An explicit scheme computes the new value directly from known (old) values: no l
 
 - Lagrangian particle tracking offers the integrators `analytic` (exact for Stokes drag in a uniform field), `euler`, `rk2` and `rk4` ([[lagrangian-particles]]).
 
+## Related
+
+- [[implicit-time-integration]] — the implicit counterpart: one linear system per step, in exchange for no Courant or diffusion-number stability limit.
+
 ## Open questions
 
 - The Runge-Kutta stage formulas (RK2, RK3, RK4) and the TVD/SSP Runge-Kutta family were not covered by a readable source in this ingest (an attempt on Gottlieb and Shu, ICASE 96-50, failed); the map's link to an RK3 in [[adr-thread-compressible-acoustic-boundaries]] was not confirmed on that page.

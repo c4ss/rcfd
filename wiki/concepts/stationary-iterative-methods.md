@@ -37,3 +37,7 @@ Instead of eliminating, guess $x$ and repeatedly improve it: solve each equation
 
 - **Jacobi preconditioning** is the default preconditioner of the GPU CG path (`linear_solver.preconditioner = "jacobi"`) ([[doc-case-schema-linear-solver]], [[doc-gpu]]).
 - **Block Gauss-Seidel smoothing:** the structural elasticity multigrid uses two block Gauss-Seidel sweeps per side on quadratic elements (F-477, ADR 0375) ([[adr-thread-structural-linear-solvers]]).
+
+## Related
+
+- [[krylov-methods]] — the nonstationary methods these sweeps precondition (Jacobi on the GPU CG path).

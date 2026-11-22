@@ -47,3 +47,7 @@ The MIT notes summarise the point: one "can avoid the need to solve k-epsilon ri
 - The standard k-epsilon wall function's description is "UNVERIFIED against a published source"; rcfd differs for $y^* < y^*_\text{lam}$ ($G = 0$, $\varepsilon = 2 \nu k/y^2$) ([[doc-reference-data-wave31b-turbulence-wall]]). ADR 0063 traced the k-epsilon wall-function mesh dependence in the $Re_\tau$ 178 channel to "the validity limit of the log-law function with a viscous fall-back branch and a positive feedback of $y^*$ on $k$" ([[adr-thread-early-turbulence]]).
 - F-042: scalable wall functions "are not wired to the settings tree" ([[roadmap-turbulence]]); SA wall modes `auto` / `resolved` / `auto_sa_law` ([[spalart-allmaras]]).
 - F-043 asks for SST "with low-Re wall treatment"; "the low-Re toggle" is not done ([[roadmap-turbulence]]).
+
+## Related
+
+- [[wall-distance]] — F-040 pairs wall distance with standard wall functions; both live in [[rcfd-turb]].

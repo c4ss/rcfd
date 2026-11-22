@@ -56,6 +56,7 @@ A mesh whose points move during a run, with the flow solved in the arbitrary Lag
 - [[adr-thread-layering-remeshing-ale]], [[adr-thread-six-dof-fsi-cosimulation]]
 - [[rcfd-fv]]
 - [[rcfd-mesh]]
+- [[roadmap-moving-meshes-rotors-and-coupling]] — the roadmap area holding F-063 (dynamic mesh) and F-229 (six-DOF bodies).
 
 ## Open questions
 

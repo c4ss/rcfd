@@ -72,3 +72,4 @@ status: draft
 - [[run-site]]
 - [[roadmap-studio-desktop-app]]
 - [[doc-example-projects]], [[example-project-wind-tunnel]], [[example-project-quick-start]], [[example-project-axial-fan]]
+- [[roadmap-claude-and-the-mcp-server]] — the area of ADR 0173 (MCP server and Studio on one crate) and of the removed Studio assistant panel.

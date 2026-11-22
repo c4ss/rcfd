@@ -37,3 +37,7 @@ Many coupled problems are solved by applying a map $H$ repeatedly, $x^{(k+1)} = 
 
 - **Strong FSI step:** `rcfd_fv::fsi::strong_step` (F-251, ADR 0250) with Aitken relaxation and the safe start $2M/(2M + m_a)$; with `max_iterations = 1` it equals loose coupling bit for bit ([[strong-fsi-coupling]]).
 - **Co-simulation:** `rcfd_fv::cosim::coupled_step` offers fixed, Aitken or least-squares quasi-Newton updates (ADR 0261); Aitken stays the default (ADR 0261 Q1); Aitken took 8.8 iterations a step on the model problem; on a flow-coupled elastic bar Aitken and least-squares converge to $10^{-6}$ in 3 iterations on a matching wall, least-squares better on a 3:2 non-matching wall (F-401, ADR 0434) ([[cosimulation-protocol]], [[strong-fsi-coupling]]).
+
+## Related
+
+- [[nonlinear-fem-newton]] — the structural side: relaxed, modified and quasi-Newton variants of the Newton iteration in nonlinear FEM.

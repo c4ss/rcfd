@@ -266,3 +266,11 @@ Append-only. Newest at the bottom. Entry header: `## [YYYY-MM-DD] <op> | <title>
 - [[stale-report]]: 0 changed sources, 0 new ADRs or sections, roadmap current. Three false positives fixed in `tools/stale.py` (directory origins, sections with a page at a newer commit, roadmap compared against [[doc-roadmap-json]]'s commit).
 - `tools/search.py`: 127.0.0.1 instead of localhost cut each Ollama call from 21 s to 0.06 s on Windows; a search now takes about 2 s.
 - [[overview]] "Where it stands" revised to 5b96a1f8; ADR 0762 Q4 answered; no maintainer questions left open in ADRs 0762-0766.
+
+## [2026-11-22] lint | judgement pass on related-candidates (lint-related-1)
+
+- `## [2026-11-22] lint | related-candidates judgement pass (lint-related-1)`
+- 20 link pairs added with reasons (17 from the report, 3 from the re-run report); 4 `builds_on` added (mesh-generators, mesh-quality ← mesh-generation-basics; f-126 ← frozen-rotor-and-mixing-plane; rcfd-turb ← turbulence).
+- 25 concept pairs judged: 23 distinct, 2 overlapping in their rcfd bullets (dynamic-mesh / mesh-motion-smoothing; partitioned-fluid-structure-interaction / strong-fsi-coupling), 0 duplicates.
+- 30 no-shared-source pairs compared: no contradictions.
+- lint: 0 broken links, 0 orphans; report regenerated (41 missing links, 28 no-shared-source pairs).

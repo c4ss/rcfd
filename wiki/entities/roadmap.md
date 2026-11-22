@@ -33,3 +33,4 @@ status: draft
 - [[adr]]
 - [[lead]]
 - [[process-report]]
+- [[roadmap-proposal]] — the form-1 proposal file an agent writes instead of editing `docs/roadmap.json`.

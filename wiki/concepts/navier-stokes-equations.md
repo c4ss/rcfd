@@ -57,3 +57,7 @@ Dividing by $\rho$ puts $\nu = \mu / \rho$ in front of the Laplacian. The terms 
 - rcfd's segregated pressure-velocity solvers [[simple]] (steady) and [[piso]] (transient) solve the incompressible equations; the co-simulation fluid side is "the incompressible PISO/PIMPLE step with implicit Euler on a moving mesh" ([[piso]]).
 - [[mrf]] computes a rotating zone "in its own rotating frame" (ADR 0008) ([[mrf]]); [[immersed-solid]] gives the cells inside and next to a body that does not fit the mesh "a modified forcing that imposes the wall" (F-219, ADR 0218) ([[immersed-solid]]).
 - Turbulence enters through RANS models ([[k-omega-sst]], [[k-epsilon]], [[spalart-allmaras]]) on top of these equations ([[turbulence]]).
+
+## Related
+
+- [[euler-equations]] — the inviscid, non-conducting limit, closed by the equation of state; rcfd's explicit compressible solver solves it.

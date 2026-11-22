@@ -50,3 +50,7 @@ the logarithmic law due to von Karman. The MIT notes derive it the same way from
 - rcfd records log-law $\kappa = 0.41$, $B = 5.2$ (Pope 2000) as verified, the wall-function pair $\kappa = 0.4187$, $E = 9.793$ as UNVERIFIED (rounded to 0.41 / 9.8), and Reichardt's profile as verified against DNS ([[doc-reference-data-turbulence-constants]]).
 - Spalding's single formula for the whole inner region, $y^+ = u^+ + e^{-\kappa B}\left[e^{\kappa u^+} - 1 - \kappa u^+ - (\kappa u^+)^2/2 - (\kappa u^+)^3/6\right]$, is in `wall.rs`; the repo marks it "confirmed (secondary)", original paper not read ([[doc-reference-data-sst-wall]], [[rcfd-turb]]). No open source for it was read in this job.
 - Wave 30C's SST flat plate missed the D2 log-law fit; ADR 0063 left "the log-law slope 2.78" unexplained ([[adr-thread-early-turbulence]]).
+
+## Related
+
+- [[wall-distance]] — the wall distance $y$ is the only length in the log layer, $l = \kappa y$.

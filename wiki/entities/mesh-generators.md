@@ -3,6 +3,7 @@ type: entity
 tags: [mesh, meshing]
 sources: [doc-meshing, doc-mesh-import, doc-mesh-quality, doc-dynamic-mesh, doc-acoustics, doc-structural-solver, adr-thread-tet-mesher-output-checks, adr-thread-acoustic-wave-solver]
 created: 2026-11-22
+builds_on: [mesh-generation-basics]
 updated: 2026-11-22
 status: draft
 ---
@@ -39,6 +40,10 @@ status: draft
 - **Tetrahedral mesher:** the fold panic on a thin box fixed in `try_edge_removal` (F-306); output check inside `tetrahedralize` and on the F-247 remesher (F-324, F-327) ([[adr-thread-tet-mesher-output-checks]]).
 - **O-grid of a circular duct:** `rcfd_mesh::gen::circular_duct_ogrid` (F-453) ([[adr-thread-acoustic-wave-solver]]).
 
+## Builds on
+
+- [[mesh-generation-basics]]: structured and unstructured meshes, Delaunay tetrahedra and layered wall cells, which the generators implement.
+
 ## Related
 
 - [[rcfd-mesh]]
@@ -46,6 +51,8 @@ status: draft
 - [[mesh-adaptation]]
 - [[fan-passage-mesh]]
 - [[rcfd-io]]
+- [[roadmap-meshing-and-mesh-formats]] — the roadmap area with the status of the generator items (F-012, F-108, F-132, F-234 and others).
+- [[mesh-motion-smoothing]] — the method page for the moving-mesh tools `rcfd_mesh::layering` and `rcfd_mesh::remesh`.
 
 ## Open questions
 

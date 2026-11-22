@@ -40,6 +40,11 @@ status: stub
 - After a restart the server adopts runs of a design study with the same tags, case snapshot hash and entries instead of submitting them again (F-288, ADR 0201) ([[adr-thread-workspace-layer]]).
 - The allow-list support module `crates/rcfd-mcp/tests/claude_allow/` (moved from `rcfd-claude` on 2026-11-17) was removed with the Studio panel the same day ([[adr-thread-studio-electron]]).
 
+## Related
+
+- [[roadmap-claude-and-the-mcp-server]] — the roadmap area of the MCP server (F-090, F-091) and the workspace series F-270 to F-275.
+- [[rcfd-cli]] — the `rcfd` binary its run tools need in the same folder as `rcfd-mcp`.
+
 ## Open questions
 
 _Filled in by P1-P3 ingests._

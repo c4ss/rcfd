@@ -40,6 +40,10 @@ An implicit scheme evaluates the spatial terms (at least partly) at the new time
 - **BDF2 opt-in:** moving meshes use Euler only in the case tree; BDF2 is a library opt-in (F-345, ADR 0379; uniform flow to $7 \times 10^{-15}$) ([[dynamic-mesh]]).
 - **BDF2 order misses:** with the step-consistent Rhie-Chow face flux BDF2 meets its order at rest but not on the moving overset TG_2 (`2.454` against 4) ([[adr-thread-bdf2-step-consistent-face-flux]]); on overset meshes the time error does not fall with the square of the step (ratio 2.46 against 5; 2.30 on a single mesh) ([[overset-mesh]]); k-epsilon's BDF2 time order is a known miss whose cause is not found ([[k-epsilon]]).
 
+## Related
+
+- [[explicit-time-integration-and-runge-kutta]] — the explicit counterpart: no linear system per step, but a Courant or diffusion-number limit on $\Delta t$.
+
 ## Open questions
 
 - Variable-step BDF2 (coefficients for unequal steps) is not covered by the sources read for this page.

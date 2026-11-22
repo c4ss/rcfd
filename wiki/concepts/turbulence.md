@@ -45,3 +45,7 @@ The MIT lectures add that vortex stretching "is one of the main mechanisms to ma
 - rcfd's turbulence models live in [[rcfd-turb]]: k-epsilon, SST, Spalart-Allmaras, wall functions and wall distance, plus Smagorinsky, WALE, mixing length, DES/DDES and an RSM from the early waves ([[rcfd-turb]], [[adr-thread-early-turbulence]]).
 - `turbulence.model` defaults to `laminar`; the other values are `k_epsilon`, `k_omega_sst`, `spalart_allmaras`, `smagorinsky`, `wale`, `mixing_length`, `rsm`, `plugin` ([[doc-case-schema-turbulence]]).
 - The state of the whole turbulence line of work (16 items, 7 done, 9 partial at the snapshot) is on [[roadmap-turbulence]].
+
+## Related
+
+- [[two-equation-turbulence-models]] — the $k$-plus-length-scale model family of rcfd's k-epsilon and SST.

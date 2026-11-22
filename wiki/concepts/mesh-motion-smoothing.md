@@ -36,3 +36,8 @@ The boundary of a moving-mesh problem is told how to move (a wall, a piston, a f
 
 - **Interior motion:** `rigid` or `smoothing` (Laplacian, inverse distance, inverse volume $1/V^k$, F-290, ADR 0203); every moved mesh is validated ([[dynamic-mesh]]).
 - **Topology changes:** layering on a `box_3d` piston stack (F-230, ADR 0090; tree F-259, ADR 0191/0257; prisms F-257, ADR 0213; thresholds 0.4 / 1.6 in the tree); local tet remeshing (F-247, ADR 0215, library, compressible only) ([[dynamic-mesh]], [[adr-thread-layering-remeshing-ale]]).
+
+## Related
+
+- [[mesh-generators]] — the catalogue entry of the layer-stack and local tet remeshing tools.
+- [[roadmap-moving-meshes-rotors-and-coupling]] — the roadmap area of F-290 (inverse-volume smoothing), F-230 (layering) and F-247 (local tet remeshing).

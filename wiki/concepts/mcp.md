@@ -38,3 +38,4 @@ The interface through which an AI assistant calls rcfd's tools ([[doc-glossary]]
 - [[rcfd-service-protocol]]
 - [[project-journal]]
 - [[claude-plugin]] (the Claude Code plugin with three skills over the project tools; [[doc-claude-plugin-skills]])
+- [[roadmap-claude-and-the-mcp-server]] — the roadmap area of the MCP server, its tool list and the workspace series.

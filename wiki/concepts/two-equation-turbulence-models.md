@@ -51,3 +51,7 @@ The source terms of the second equation are taken proportional to those of $k$, 
 
 - rcfd's two-equation models are the k-epsilon family (standard, RNG, realizable) and k-omega SST (plus BSL) ([[rcfd-turb]], [[adr-thread-early-turbulence]]); their constants are recorded on [[doc-reference-data-turbulence-constants]] and [[doc-reference-data-sst-wall]].
 - A "generalised two-equation model with tunable coefficients" is in F-206 and not delivered ([[roadmap-turbulence]]).
+
+## Related
+
+- [[turbulence]] — the phenomenon these models close.

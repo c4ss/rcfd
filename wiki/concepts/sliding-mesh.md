@@ -52,6 +52,7 @@ A transient rotor-stator method: a rotor block turns against a stator block, and
 - [[overset-mesh]]
 - [[fan-01]]
 - [[piso]]
+- [[frozen-rotor-and-mixing-plane]] — the steady rotor-stator alternatives; MRF against a sliding mesh on a rotating cuboid (Liu and Hasegawa, sec. 3.4).
 
 ## Open questions
 

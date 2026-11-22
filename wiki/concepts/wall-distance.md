@@ -46,6 +46,11 @@ Many turbulence models need, at every cell, the distance $d$ to the nearest wall
 - F-040 "Wall distance calculation and standard wall functions" is done (milestones fan, aerofoil-lift) ([[roadmap-turbulence]]).
 - RANS models need a wall patch ([[doc-case-schema-turbulence]]).
 
+## Related
+
+- [[wall-functions]] — F-040 pairs wall distance with standard wall functions; both live in [[rcfd-turb]].
+- [[law-of-the-wall]] — uses the wall distance $y$ as the length scale of the log layer.
+
 ## Open questions
 
 - How rcfd computes $d$ (exact search or a PDE-based approximation) is not stated in the wiki pages read for this job; the method sources (Poisson or eikonal equation) were not read either. See the handoff of job p6-turbulence.

@@ -27,6 +27,11 @@ status: stub
 - Numerics/physics subcommands named in the P1 docs: `rcfd check-mesh <mesh|case> [--json]` (exit 4 on quality errors), `rcfd inflate`, `rcfd partition` ([[doc-mesh-quality]]); `rcfd convert` ([[doc-mesh-import]]); `rcfd fwh` (`crates/rcfd-cli/src/cmd_fwh.rs`) ([[doc-acoustics]]); `rcfd acoustics` and `rcfd reactor` (exit 3 invalid input, 1 I/O, 2 usage) ([[doc-reactor-and-acoustics]]); `rcfd serve --cosim <case>` ([[doc-cosimulation-protocol]]).
 - GPU support is built with `cargo build --release -p rcfd-cli --features cuda` ([[doc-gpu]]).
 
+## Related
+
+- [[rcfd-runner]] — starts `rcfd run` as child processes and owns the runs of a project (ADR 0123).
+- [[rcfd-project]] — `rcfd project init <dir>` is one route to `Project::create` (ADR 0731).
+
 ## Open questions
 
 _Filled in by P1-P3 ingests._

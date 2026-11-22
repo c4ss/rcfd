@@ -55,3 +55,7 @@ $$p = \frac{1}{\gamma}\rho^{\gamma}, \qquad \frac{\partial p}{\partial t} + \mat
 - `solver.algorithm = "compressible"` selects "the explicit density-based Euler solver (no viscosity, no heat conduction)", with fluxes `rusanov`, `roe`, `hllc`, `ausm_plus`, first-order or TVD-limited reconstruction and Runge-Kutta order 1 to 3 ([[doc-case-schema-compressible]]).
 - The explicit compressible solver also runs on moving meshes, with prescribed motion or a layered piston (`CompressibleSolver::step_ale`) ([[dynamic-mesh]]).
 - The linear acoustic wave solver is "the small-amplitude limit of the Euler equations of `CompressibleSolver`", two unknowns instead of five ([[adr-thread-acoustic-wave-solver]]).
+
+## Related
+
+- [[navier-stokes-equations]] — the Euler equations are these without the viscous and heat-conduction terms.

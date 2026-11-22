@@ -33,6 +33,10 @@ status: stub
 - The committed example projects are instances of the contract, with `check.json`, `fields/` (`index.json`, `store.rts`) and `output/` (`monitors.csv`, `monitors.json`, `report.html`) in each run folder; quick-start and axial-fan keep an empty `meshes/` with a README because the contract "and `rcfd-project`'s validation expect it to exist" ([[doc-example-projects]]). See [[example-project-wind-tunnel]], [[example-project-quick-start]], [[example-project-axial-fan]].
 - **Created by ADR 0122 (wave 47A, 2026-10-26, added by p3-records-a):** typed records, atomic replace, JSONL with torn-tail handling, path safety, a poll-based watcher, a migration hook and a query API, "built first, headless, with no UI and no solver dependency"; recorded defect: NaN in `residuals.jsonl` or `status.json` "would make the whole residual file unreadable and drop the run into `skipped`"; "The kill checks test atomicity, not durability across power loss." Audit fixes in ADR 0128 ([[adr-thread-studio-foundation-crates]]).
 
+## Related
+
+- [[rcfd-cli]] — `rcfd project init <dir> [--name <name>]` reaches `Project::create` (ADR 0731).
+
 ## Open questions
 
 _Filled in by P1-P3 ingests._

@@ -41,3 +41,7 @@ When the material yields, the geometry changes a lot or contact opens and closes
 - Newton driver: total Lagrangian, tangent $K_{\mathrm{mat}}(F) + K_{\sigma}(S)$, step halving (F-397, ADR 0404, partial) ([[adr-thread-structural-materials-nonlinear]]).
 - Newton inside Newmark and generalised-alpha for nonlinear transients (F-423, ADR 0479) ([[adr-thread-structural-materials-nonlinear]]; [[newmark-and-generalised-alpha]]).
 - J2 plasticity in the driver measured Newton orders 1.27 to 1.44 against 1.8 (F-422, partial) ([[adr-thread-structural-materials-nonlinear]]; [[plasticity-j2]]).
+
+## Related
+
+- [[fixed-point-iteration-and-acceleration]] — relaxation, Aitken and quasi-Newton acceleration of the partitioned FSI iteration, the coupling-side relatives of these Newton variants.
