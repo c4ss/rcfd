@@ -25,7 +25,7 @@ What the mesh quality report contains, how its poor-mesh list relates to pass/fa
 - Default `Thresholds` ("rules of thumb, not guarantees"): warp 15 deg; face angle below 20 or above 160 deg; inverse orthogonal quality 0.9; ortho-skew 0.85; face edge-length ratio 100; size change 100; at most 10 entries per measure. Library: `rcfd_mesh::quality::check_mesh_with`, `rcfd_mesh::measures::compute_measures`.
 - Not done: GUI display of the new measures; case-level limits for the poor-mesh list.
 - Mesh editing (`rcfd_mesh::edit`, library only): `Affine` + `transform_mesh`, `merge_meshes`, `copy_by_offset`, `extrude_patch`, `repair_face_orientation` / `repair_mesh`, `merge_patches`, `separate_patch`. Not done: baffles, cell-zone merge/split, any CLI / case-tree / GUI entry.
-- Post-hoc note: non-orthogonality is now `atan2(|d x n|, d . n)` instead of `acos(cos)`; ADR 0018 E1 invariance test renamed `e1_non_orthogonality_invariance` and un-ignored, limit 1e-9 untouched; shipped meshes change by at most 1.21e-6 deg; baseline hashes pass without re-recording; ADR 0018 not edited.
+- Post-hoc note: non-orthogonality is now $\operatorname{atan2}(\lvert \mathbf{d}\times\mathbf{n}\rvert,\ \mathbf{d}\cdot\mathbf{n})$ instead of $\arccos(\cos)$; ADR 0018 E1 invariance test renamed `e1_non_orthogonality_invariance` and un-ignored, limit 1e-9 untouched; shipped meshes change by at most 1.21e-6 deg; baseline hashes pass without re-recording; ADR 0018 not edited.
 - `rcfd inflate <case|mesh> --patch p --layers n <sizing> --json` prints the `InflateReport` (F-108, ADR 0021); exit 4 on quality errors.
 
 ## Contradictions with the wiki

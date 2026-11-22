@@ -23,7 +23,7 @@ status: draft
 - Algorithms: `simple`, `simplec`, `piso`, `pimple` (ADR 0045: evaluated at the start of every outer iteration). `rotating_frame` runs with `pimple` on a static mesh (ADR 0183 P-C) and is refused with `piso`; `mrf` is steady-only.
 - `zone`: `all` (default), `box`, `cell_zone` (and `register`, see [[doc-case-schema-registers]]).
 - `porous`: Ergun or Darcy-Forchheimer, superficial-velocity form.
-- `rotating_frame`: relative-velocity form `-2 Omega x u - Omega x (Omega x r)`; `centrifugal = false` keeps Coriolis only.
+- `rotating_frame`: relative-velocity form $-2\,\boldsymbol{\Omega}\times\mathbf{u} - \boldsymbol{\Omega}\times(\boldsymbol{\Omega}\times\mathbf{r})$; `centrifugal = false` keeps Coriolis only.
 - `mrf`: absolute-velocity frozen-rotor zone (ADR 0008); `cyclic_seams = true` (ADR 0113) for rotationally cyclic pairs; case-tree mesh `annulus_3d_sector` (ADR 0116). Validation errors: zone boundaries not surfaces of revolution, overlap with another zone, transient algorithms (ADR 0045 D4).
 - "Not validated: any pump or turbine benchmark, turbulence models or the energy equation with an MRF zone."
 - `actuator_disk` (ADR 0036): total force exactly `thrust` to round-off; `distribution` `smooth` (default) or `cell`.

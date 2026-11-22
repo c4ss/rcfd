@@ -28,8 +28,8 @@ No source was read in this wave. Every reference below is recalled from memory a
 | Item | Status | Note |
 |------|--------|------|
 | Saad, "Iterative Methods for Sparse Linear Systems": preconditioned CG and BiCGStab, block-Jacobi and additive-Schwarz preconditioning | unverified | the algorithms are the ones already in `rcfd-linalg`, copied with global inner products; the book was not read in this wave |
-| Higham, "Accuracy and Stability of Numerical Algorithms": `gamma_k = k u / (1 - k u)` bounds for dot products and matrix-vector products | unverified | the bound used in B4/B5 is DERIVED from the standard model of floating-point arithmetic; the text was not read |
-| Condition number of the 2-D Dirichlet five-point Laplacian, `kappa = cot^2(pi / (2 (n+1)))` | derived | from the known eigenvalues `4 - 2 cos` sums; used to state the solution-difference limit 2e-7 (kappa 973 for 48 x 48) |
+| Higham, "Accuracy and Stability of Numerical Algorithms": $\gamma_k = k u / (1 - k u)$ bounds for dot products and matrix-vector products | unverified | the bound used in B4/B5 is DERIVED from the standard model of floating-point arithmetic; the text was not read |
+| Condition number of the 2-D Dirichlet five-point Laplacian, $\kappa = \cot^2\!\left(\pi / (2 (n+1))\right)$ | derived | from the known eigenvalues $4 - 2\cos$ sums; used to state the solution-difference limit 2e-7 (kappa 973 for 48 x 48) |
 | Rank-ordered sequential reduction (deterministic, O(P) messages) | derived | a design choice, not taken from an MPI implementation; MPI collectives do not guarantee a fixed order, which is why the order is fixed here |
 | Green-Gauss gradient with linear face interpolation, upwind convection with deferred linear-upwind correction | unverified | standard finite-volume practice recalled from memory; verified here only by exactness on linear fields and by distributed-versus-serial agreement |
 | Strong-scaling timings of in-process threads | measured | one 16-logical-core host, shared memory bandwidth and rayon pool; NOT a cluster or network measurement and not compared with any published scaling |

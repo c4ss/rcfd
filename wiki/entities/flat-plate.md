@@ -32,9 +32,9 @@ status: draft
 
 *(added by p6-turbulence)*
 - [[boundary-layer]]: the zero-pressure-gradient layer the case tests; on the TMR plate the maximum thickness is "about 0.03 L" ([[ref-nasa-tmr]] `flatplate.html`).
-- [[blasius-solution]]: the laminar check values (`Cf = 0.664/sqrt(Re_x)`, `delta*`).
-- [[skin-friction-coefficient]]: `c_f = tau_w/((1/2) rho U^2)` and the turbulent correlations; the TMR validation page uses Karman-Schoenherr in `Re_theta` and warns the correlations "are not necessarily perfect" ([[ref-nasa-tmr]] `flatplate_val.html`).
-- [[friction-velocity-and-y-plus]] and [[law-of-the-wall]]: the `u+` vs `y+` comparison at `Re_theta = 10 000` (Coles profile) and the first-cell `y+` sensitivity of omega-based models ([[ref-nasa-tmr]] `flatplate_val_ypluseffect.html`).
+- [[blasius-solution]]: the laminar check values ($C_f = 0.664/\sqrt{Re_x}$, $\delta^*$).
+- [[skin-friction-coefficient]]: $c_f = \tau_w/(\tfrac{1}{2} \rho U^2)$ and the turbulent correlations; the TMR validation page uses Karman-Schoenherr in $Re_\theta$ and warns the correlations "are not necessarily perfect" ([[ref-nasa-tmr]] `flatplate_val.html`).
+- [[friction-velocity-and-y-plus]] and [[law-of-the-wall]]: the $u^+$ vs $y^+$ comparison at $Re_\theta = 10\,000$ (Coles profile) and the first-cell $y^+$ sensitivity of omega-based models ([[ref-nasa-tmr]] `flatplate_val_ypluseffect.html`).
 - [[k-omega-sst]], [[spalart-allmaras]]: the turbulence models verified on it; the TMR purpose of the verification case is to show a model "has been implemented correctly", not its "goodness" against experiment ([[ref-nasa-tmr]] `flatplate.html`).
 
 ## Open questions

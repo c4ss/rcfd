@@ -14,7 +14,7 @@ status: draft
 **Origin:** the ADRs in the table below, `docs/adr/` at `origin/main` 2e94e5ef.
 **Kind:** ADR thread (one diagnosis, one default switch, two registrations of moved fingerprints), 4 ADRs, 2026-11-12 to 2026-11-20.
 
-The immersed DFG 2D-2 run on the mesh T stopped at step 2951 inside the AMG-preconditioned pressure CG, with `r^T z < 0` from iteration 1 (F-466, ADR 0363, see [[adr-thread-immersed-solid]]). F-474 (ADR 0369) located the cause in the scalar AMG of `rcfd_linalg::amg`: the dense LU of the coarsest level applied its row interchanges in the wrong order whenever a pivot interchange happened at a step `k >= 1`, so the coarse solve was wrong, the V-cycle became non-symmetric and indefinite, and CG broke down. The same defect had been found and fixed in `amg_elastic.rs` by ADR 0305 amendment 1 (F-402); its question 1 became F-471. See [[amg]].
+The immersed DFG 2D-2 run on the mesh T stopped at step 2951 inside the AMG-preconditioned pressure CG, with $r^T z < 0$ from iteration 1 (F-466, ADR 0363, see [[adr-thread-immersed-solid]]). F-474 (ADR 0369) located the cause in the scalar AMG of `rcfd_linalg::amg`: the dense LU of the coarsest level applied its row interchanges in the wrong order whenever a pivot interchange happened at a step $k \ge 1$, so the coarse solve was wrong, the V-cycle became non-symmetric and indefinite, and CG broke down. The same defect had been found and fixed in `amg_elastic.rs` by ADR 0305 amendment 1 (F-402); its question 1 became F-471. See [[amg]].
 
 ## Current state
 

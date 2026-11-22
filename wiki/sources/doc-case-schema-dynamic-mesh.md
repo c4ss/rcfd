@@ -20,9 +20,9 @@ status: draft
 
 ## Key points
 
-- `motion` `prescribed`/`six_dof`; `deformation` `rigid`/`smoothing`/`layering`; `moving_patches`, `follow_patches`, `fixed_patches`, `rest_patches` (ADR 0183 P-B); displacement and rotation expressions of `t`.
+- `motion` `prescribed`/`six_dof`; `deformation` `rigid`/`smoothing`/`layering`; `moving_patches`, `follow_patches`, `fixed_patches`, `rest_patches` (ADR 0183 P-B); displacement and rotation expressions of $t$.
 - Six-DOF: `mass`, `inertia`, `rotation` `locked`/`free`/`about_axis`/`hinge`, `integrator` `rk4`/`newmark`.
-- Strong coupling `[dynamic_mesh.six_dof.coupling] scheme = "strong"` (F-350, ADR 0266): the loose coupling "is unstable when the added mass of the fluid exceeds about twice the body's mass" (growth `sqrt(m_a/(2M))` per step, ADR 0250 D3).
+- Strong coupling `[dynamic_mesh.six_dof.coupling] scheme = "strong"` (F-350, ADR 0266): the loose coupling "is unstable when the added mass of the fluid exceeds about twice the body's mass" (growth $\sqrt{m_a/(2M)}$ per step, ADR 0250 D3).
 - `wall_pressure = "prescribed_gradient"` became the default for the body force (F-358) and for force reports (`[dynamic_mesh.force_reports]`, F-440, ADR 0342) by ADR 0346, "approved by the maintainer on 2026-11-12"; this moved the result of every six-DOF case that does not write the key (piston `omega_m/omega` `1.001307` to `1.000264`).
 - Layering: `box_3d`, piston `xmax`, merge below 0.4 and split above 1.6 of `lx / nx` (ADR 0090 thresholds, no key).
 - Not implemented together: turbulence, energy, scalars, particles, sources, rheology, statistics, restart.

@@ -53,7 +53,7 @@ Parts H1, H3 and H7 of `docs/fan-project-breakdown.md`: a fan objective over imp
 - **ADR 0651:** restart fires "when the best expected improvement falls below 1e-4 of the spread of the evaluated values", basin "an ellipsoid of radius 2 in the fitted length scales"; imputation at m + s keeps the failed share at 0.035 "where m - s gives 0.832 and no imputation 0.862".
 - **ADR 0673:** the step's own process scores 11 of 20 on Shekel 10 "against 17 for the fresh process, so the fresh process is needed"; Shekel 10 minimum "confirmed numerically at -10.536443".
 - **ADR 0680:** the repetition trigger fires "when the plain pick of the step and each of the last d + 1 evaluated observations lie in the incumbent's basin"; "388 picks, 0 violations"; "With the repetition trigger, propose depends on the order of the observations."
-- **ADR 0663:** zero-mean mode `y ~ N(0, s_f^2 (R + 1e-8 I) + diag(v))`; "against brute force within 2e-13 of the process sd, gradient within 2.6e-7 of central differences".
+- **ADR 0663:** zero-mean mode $y \sim \mathcal{N}\left(0,\ s_f^2 (R + 10^{-8} I) + \operatorname{diag}(v)\right)$; "against brute force within 2e-13 of the process sd, gradient within 2.6e-7 of central differences".
 
 ## Open questions
 

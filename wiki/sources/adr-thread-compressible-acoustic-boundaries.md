@@ -38,7 +38,7 @@ F-243's acceptance asked for an impedance boundary of `CompressibleSolver`; its 
 ## Key numbers and limits
 
 - ADR 0233 D2: `z == 0.0` returns `pressure_outlet` bit for bit; a supersonic outflow returns the interior state.
-- ADR 0237 D1: plain form `S = -rate (U - U_ref)` on the five conserved variables; matched form only for a reference at rest. Recommended keys `sponge_thickness`, `sponge_form`, `sponge_reflection` (default `1e-6`) (Q1 (a)).
+- ADR 0237 D1: plain form $S = -\mathrm{rate}\,(U - U_{ref})$ on the five conserved variables; matched form only for a reference at rest. Recommended keys `sponge_thickness`, `sponge_form`, `sponge_reflection` (default `1e-6`) (Q1 (a)).
 - ADR 0243 Q3: oblique incidence not checked; closed form `(Z cos - rho c)/(Z cos + rho c)`.
 - ADR 0248 Q1: hiding the ringing would need "about twice the rate integral of the D7 layer, so about 80 cells".
 

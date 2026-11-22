@@ -18,14 +18,14 @@ High-order convection schemes wiggle near steep gradients; first-order upwind do
 
 **Total variation.** The total variation of a discrete solution is the sum over faces of the absolute difference between the two cell values around the face; a scheme is TVD if it does not grow from one time step to the next (Sweby's condition), so no new extrema appear ([[ref-jasak-1996-phd-thesis]] 3.4.1, Eqns. 3.64-3.65). Harten introduced the notion to characterise oscillation-free flux-limited schemes, and flux limiting gives schemes of higher than first order without the oscillations of classical second-order schemes ([[ref-jasak-1996-phd-thesis]] 3.4.1).
 
-**Sweby's form.** Write the scheme as the upwind flux plus a limited anti-diffusive correction towards a second-order flux; the correction is multiplied by `psi(r)`, a function of the ratio `r` of consecutive gradients of the solution ([[ref-jasak-1996-phd-thesis]] Eqns. 3.66-3.69; [[ref-berger-aftosmis-murman-2005-slope-limiters]] II.A, Eqns. 1-2). Choosing `psi` inside Sweby's shaded region gives a second-order TVD scheme ([[ref-berger-aftosmis-murman-2005-slope-limiters]] Fig. 1). Second order away from extrema needs `psi(1) = 1` ("the method should not do any limiting when the solution is a linear function"), and `psi` must be symmetric ([[ref-berger-aftosmis-murman-2005-slope-limiters]] II.A).
+**Sweby's form.** Write the scheme as the upwind flux plus a limited anti-diffusive correction towards a second-order flux; the correction is multiplied by $\psi(r)$, a function of the ratio $r$ of consecutive gradients of the solution ([[ref-jasak-1996-phd-thesis]] Eqns. 3.66-3.69; [[ref-berger-aftosmis-murman-2005-slope-limiters]] II.A, Eqns. 1-2). Choosing $\psi$ inside Sweby's shaded region gives a second-order TVD scheme ([[ref-berger-aftosmis-murman-2005-slope-limiters]] Fig. 1). Second order away from extrema needs $\psi(1) = 1$ ("the method should not do any limiting when the solution is a linear function"), and $\psi$ must be symmetric ([[ref-berger-aftosmis-murman-2005-slope-limiters]] II.A).
 
-**Common limiters** (for `R >= 0`; all set `psi = 0` for `R <= 0`, an extremum), in order of increasing dissipation ([[ref-berger-aftosmis-murman-2005-slope-limiters]] Eq. 3):
-- superbee `min[max(1, R), 2, 2R]` (follows the boundary of the TVD region);
+**Common limiters** (for $R \ge 0$; all set $\psi = 0$ for $R \le 0$, an extremum), in order of increasing dissipation ([[ref-berger-aftosmis-murman-2005-slope-limiters]] Eq. 3):
+- superbee $\min[\max(1, R), 2, 2R]$ (follows the boundary of the TVD region);
 - Barth-Jespersen (see [[slope-limiters-unstructured]]);
-- van Leer `2R/(R + 1)`;
-- van Albada `(R^2 + R)/(R^2 + 1)`;
-- min (minmod) `min(1, R)`.
+- van Leer $2R/(R + 1)$;
+- van Albada $(R^2 + R)/(R^2 + 1)$;
+- min (minmod) $\min(1, R)$.
 
 Superbee and Barth-Jespersen "are the most compressive, and are known to turn smooth waves into square waves" ([[ref-berger-aftosmis-murman-2005-slope-limiters]] II.A). Jasak's summary is that TVD schemes are "either too diffusive" (MINMOD) "or too compressive" (SUPERBEE) ([[ref-jasak-1996-phd-thesis]] 3.4.1).
 
@@ -48,5 +48,5 @@ Superbee and Barth-Jespersen "are the most compressive, and are known to turn sm
 ## How rcfd uses it
 
 - F-022 (done): rcfd's convection schemes include QUICK/MUSCL and TVD limiters ([[roadmap-numerics-and-solvers]]).
-- **Limit cycle at Re_h = 400:** on the backward-facing step a TVD limiter (vanLeer) with SIMPLE 0.7/0.3 limit-cycles; "the working recipe is vanLeer + SIMPLEC alpha_u 0.9" ([[simple]]). This matches the convergence difficulty of nonlinear limited schemes described above ([[ref-berger-aftosmis-murman-2005-slope-limiters]] I).
-- VOF keeps the volume-fraction interface sharp with interface compression ([[vof]]); which bounded scheme carries alpha is not recorded on that page.
+- **Limit cycle at $Re_h = 400$:** on the backward-facing step a TVD limiter (vanLeer) with SIMPLE 0.7/0.3 limit-cycles; "the working recipe is vanLeer + SIMPLEC alpha_u 0.9" ([[simple]]). This matches the convergence difficulty of nonlinear limited schemes described above ([[ref-berger-aftosmis-murman-2005-slope-limiters]] I).
+- VOF keeps the volume-fraction interface sharp with interface compression ([[vof]]); which bounded scheme carries $\alpha$ is not recorded on that page.

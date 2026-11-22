@@ -35,13 +35,13 @@ Topology-changing moving meshes and the compressible ALE path: the tree wiring o
 | [0203](../../docs/adr/0203-f290-registration-inverse-volume-mesh-smoothing-in-the-case-tree.md) | 2026-11-06 | registration | F-290 | Inverse-volume mesh smoothing in the case tree | done | |
 | [0207](../../docs/adr/0207-f258-registration-compressible-ale-boundaries-and-mesh-speed-time-step.md) | 2026-11-07 | registration | F-258 | Compressible ALE boundaries and the mesh-speed time step | done in the library; S1 far-field outlet `4.56e-4` (limit `1e-2`); Q2 (mesh-speed default) open | 0257 |
 | [0213](../../docs/adr/0213-f257-registration-prism-layering-and-incompressible-layering.md) | 2026-11-07 | registration | F-257 | Prism layering and layering in the incompressible PIMPLE path | done in the library (`PimpleSolver::replace_mesh`, the first topology change in the PISO path) | 0257 |
-| [0215](../../docs/adr/0215-f247-registration-local-remeshing-on-unstructured-tetrahedral-meshes.md) | 2026-11-07 | registration | F-247 | Local remeshing on unstructured tetrahedral meshes | done in the library; A1 `3.69e-6` at `t = T` (limit `2e-2`); conservation per event about `1e-15` (limit `1e-13`) | |
+| [0215](../../docs/adr/0215-f247-registration-local-remeshing-on-unstructured-tetrahedral-meshes.md) | 2026-11-07 | registration | F-247 | Local remeshing on unstructured tetrahedral meshes | done in the library; A1 `3.69e-6` at $t = T$ (limit `2e-2`); conservation per event about `1e-15` (limit `1e-13`) | |
 | [0257](../../docs/adr/0257-f259-registration-tree-wiring-of-prism-and-incompressible-layering-and-moving-characteristic-faces.md) | 2026-11-12 | registration | F-259 | Tree runs prism and incompressible layering, moving characteristic faces, mesh-speed step | every check met, proposed done; default held 2026-11-18 | |
 
 ## Key numbers and limits
 
-- ADR 0215 A1: `V/V0 = 0.400000`, 729 cells, `p_bar = 3.606763` against the isentrope's `3.606750`; A2 at `t = 2T` `9.45e-6` (1860 cells); B1v, B1m, B1p, B1e per event `1.55e-15`, `1.22e-15`, `1.19e-15`, `1.11e-15`.
-- ADR 0213 reading: "The cell velocity next to the piston lags the plug flow by 4.7e-3 of `a0 t` on the layered mesh, against the 2.9e-4 of ADR 0033's smoothed mesh"; printed, not checked ("That is a reading, not a diagnosis").
+- ADR 0215 A1: $V/V_0 = 0.400000$, 729 cells, $\bar p = 3.606763$ against the isentrope's `3.606750`; A2 at $t = 2T$ `9.45e-6` (1860 cells); B1v, B1m, B1p, B1e per event `1.55e-15`, `1.22e-15`, `1.19e-15`, `1.11e-15`.
+- ADR 0213 reading: "The cell velocity next to the piston lags the plug flow by 4.7e-3 of $a_0 t$ on the layered mesh, against the 2.9e-4 of ADR 0033's smoothed mesh"; printed, not checked ("That is a reading, not a diagnosis").
 - ADR 0257 Q1: the mesh-speed step as default "changes the bits of every moving compressible tree run (625 to 613 steps on P-X)".
 - Layer thresholds 0.4 and 1.6 of `lx / nx`, no key (ADR 0191, ADR 0257).
 

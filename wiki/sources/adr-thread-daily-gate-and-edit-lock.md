@@ -53,7 +53,7 @@ ADR 0653 put the full [[gate]] into GitHub Actions as a daily run whose failed t
 - **F-755** (ADR 0676): under the delay hook "the old acquire starved to LockBusy in 10 of 10 trials and the claim was accepted in 10 of 10 within 177 ms"; `EditLock::drop` retries a transient removal error "with the default retry (527 ms)".
 - **F-854 I2** (ADRs 0749, 0750): 99 percent of what the old I2 timed "is the reallocation of a cloned store, not `push` (0.013 ms)"; the new test's largest medians 0.0135, 0.0220 and 0.0346 ms under no load, 16 spinning processes and 16 memory copiers; "the test catches only a push that costs 4.9 microseconds more per call".
 - **F-855 change W** (ADR 0758): "a step between two looks now counts for at most 100 ms of EDIT_LOCK_WAIT"; under a build beside the test "the racer held the lock for 2.3 to 2.6 s in 4 of 20 runs on the old and the new library alike".
-- **F-866** (ADR 0759): "the old control fails exactly when `T <= 500 ms < 10 w`"; the failed gate printed a mean of ten of 49.8 ms. The lead corrected a broken link in line 11 of the registration in the merge commit and entered the ADR in `docs/process/exceptions/adr-rewritten.txt`.
+- **F-866** (ADR 0759): "the old control fails exactly when $T \le 500\ \text{ms} < 10\,w$"; the failed gate printed a mean of ten of 49.8 ms. The lead corrected a broken link in line 11 of the registration in the merge commit and entered the ADR in `docs/process/exceptions/adr-rewritten.txt`.
 
 ## Open questions
 

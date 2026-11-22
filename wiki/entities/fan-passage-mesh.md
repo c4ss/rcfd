@@ -16,8 +16,8 @@ status: draft
 ## Details
 
 - **Blade geometry** (`AxialFan`, F-133 partial, ADR 0065): radial stations with chord, stagger, camber, thickness, sweep, lean; NACA 4-digit or double circular arc sections on cylinders; `validate()` returns every problem as located `FanError`. Blade surface watertight; area and volume converge at orders 1.96 and 2.00 ([[doc-meshing]]).
-- **Patches:** `inlet`, `outlet`, `hub`, `shroud`, `blade`, rotational pair `seam_lo` / `seam_hi` (rotated by exactly `2 pi / N`, mismatch 1.1e-16 m); cell zone `rotor` ([[doc-meshing]]).
-- **Boundary-layer stack:** `h1 = 2 y+ nu / u_tau` with `Cf = 0.0576 Re_c^(-1/5)` at mid-span ([[doc-meshing]]).
+- **Patches:** `inlet`, `outlet`, `hub`, `shroud`, `blade`, rotational pair `seam_lo` / `seam_hi` (rotated by exactly $2 \pi / N$, mismatch 1.1e-16 m); cell zone `rotor` ([[doc-meshing]]).
+- **Boundary-layer stack:** $h_1 = 2 y^+ \nu / u_\tau$ with $C_f = 0.0576\, Re_c^{-1/5}$ at mid-span ([[doc-meshing]]).
 - **Solver use:** `FvGeometry::new` accepts the sector; the absolute-formulation `mrf` source is refused (blade and seam faces are not surfaces of revolution), so smoke solves use `rotating_frame`. Seam mass flows do not cancel exactly (relative 3.5e-6 to 2.7e-5) ([[doc-meshing]]).
 
 ### Measured quality (max non-orthogonality / skewness / aspect; gates as registered)

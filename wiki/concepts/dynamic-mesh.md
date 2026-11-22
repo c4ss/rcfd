@@ -16,7 +16,7 @@ A mesh whose points move during a run, with the flow solved in the arbitrary Lag
 
 - **Solvers:** incompressible laminar PISO/PIMPLE with implicit Euler on moving points; the explicit compressible solver with prescribed motion or a layered piston (`CompressibleSolver::step_ale`) ([[doc-dynamic-mesh]]).
 - **Case section** `dynamic_mesh`; static errors located at the key, incompatible sections at `dynamic_mesh.enabled` ([[doc-dynamic-mesh]]).
-- **Motion:** prescribed displacement `d(t)` and rotation `angle(t)` on moving patches; interior `rigid` or `smoothing` (Laplacian, inverse distance, inverse volume `1/V^k`, F-290, ADR 0203). Every moved mesh is validated ([[doc-dynamic-mesh]]).
+- **Motion:** prescribed displacement `d(t)` and rotation `angle(t)` on moving patches; interior `rigid` or `smoothing` (Laplacian, inverse distance, inverse volume $1/V^k$, F-290, ADR 0203). Every moved mesh is validated ([[doc-dynamic-mesh]]).
 - **GCL:** face swept volume / `dt` is the mesh flux; cell volume change equals the sum of swept volumes to round-off (checks G1 to G3) ([[doc-dynamic-mesh]]).
 - **Walls:** following walls take the mesh velocity, pressure condition `dp/dn = -n.a_wall`; `dynamic_mesh.rest_patches` (ADR 0183 P-B) for walls at rest on a rigidly moving mesh (e.g. faceted hub and casing) ([[doc-dynamic-mesh]]).
 - **Time schemes:** Euler only in the case tree; BDF2 opt-in in the library (F-345, ADR 0379; uniform flow to `7e-15`) ([[doc-dynamic-mesh]]).

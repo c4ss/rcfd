@@ -23,7 +23,7 @@ Wave 16W wiring (ADR 0021): no new reference value.
 The section text follows verbatim so that every value, citation and verification label is quoted exactly. Headings are demoted and relative links rebased to the repo.
 
 
-Wave 16W introduces no new literature value. The expected values of the registered checks are closed forms or equalities with the library call the wiring surfaces: the linear velocity field `u = x + 2y`, `v = 3x - y` (vorticity 1, Q = -7), the Couette wall shear `mu U/h` with `U = 3`, `h = 0.5`, and the y+ definition `y+ = y u_tau / nu` with `u_tau = sqrt(tau/rho)`. The references already marked unverified under the wave 15B heading (partitioning, reverse Cuthill-McKee, isentropic total pressure) are unchanged and still unverified (memory).
+Wave 16W introduces no new literature value. The expected values of the registered checks are closed forms or equalities with the library call the wiring surfaces: the linear velocity field $u = x + 2y$, $v = 3x - y$ (vorticity 1, Q = -7), the Couette wall shear $\mu U/h$ with $U = 3$, $h = 0.5$, and the y+ definition $y^+ = y u_\tau / \nu$ with $u_\tau = \sqrt{\tau/\rho}$. The references already marked unverified under the wave 15B heading (partitioning, reverse Cuthill-McKee, isentropic total pressure) are unchanged and still unverified (memory).
 
 
 ## Contradictions with the wiki

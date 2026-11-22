@@ -16,7 +16,7 @@ status: draft
 
 ## Summary
 
-Four keys that change the explicit non-orthogonal part of `-div(gamma grad phi)` (ADR 0016 D2, wired by ADR 0190), and the table `[solver.gradient_equations]` that extends them to momentum, pressure, turbulence and the electric potential (ADR 0204, ADR 0221).
+Four keys that change the explicit non-orthogonal part of $-\nabla\cdot(\gamma \nabla\phi)$ (ADR 0016 D2, wired by ADR 0190), and the table `[solver.gradient_equations]` that extends them to momentum, pressure, turbulence and the electric potential (ADR 0204, ADR 0221).
 
 ## Key points
 

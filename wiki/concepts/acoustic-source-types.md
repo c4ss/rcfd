@@ -39,6 +39,6 @@ Sources of sound are classed by how they enter the wave equation. A monopole is 
 
 ## How rcfd uses it
 
-- rcfd's FW-H computes the thickness and loading surface terms and no volume (quadrupole) term ([[fw-h]]); for an impermeable fan blade `U_i = v_i`, `L_i = p' n_i`, and `loading` mode sets `U = 0` ([[fw-h]]).
+- rcfd's FW-H computes the thickness and loading surface terms and no volume (quadrupole) term ([[fw-h]]); for an impermeable fan blade $U_i = v_i$, $L_i = p' n_i$, and `loading` mode sets $U = 0$ ([[fw-h]]).
 - It is verified on closed forms including a pulsating sphere and a compact dipole ([[fw-h]]).
 - The broadband proxies (Proudman for turbulence, Curle for surfaces, trailing edge) are "NOT validated", constants uncalibrated, "not predictions" ([[aeroacoustics]]).

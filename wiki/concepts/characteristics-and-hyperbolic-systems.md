@@ -45,7 +45,7 @@ where $\alpha_k$ is the strength of wave $k$ and $\lambda_k$ its speed. Waves wi
 
 - The density-based Euler solver's boundaries `TotalInlet`, `PressureOutlet`, `NonReflecting`, `FarField` come from 1-D characteristic analysis (ADR 0006); "Only normally incident waves are treated as non-reflecting; oblique incidence reflects" ([[adr-thread-early-physics-models]]).
 - In the case file these are the `compressible_bc` kinds `total_inlet`, `pressure_outlet`, `nonreflecting` (`reflection_value` default `0.02`) and `farfield` ([[doc-case-schema-compressible]]).
-- The characteristic (LODI) treatment and the pressure-relaxation outlet `K (p - p_ref)` are cited to Thompson (1987) and Poinsot and Lele (1992); the formulas were re-derived in ADR 0006, "not checked against the papers, unverified"; the Riemann-invariant far field and total-pressure inlet are cited to Blazek, "book not accessed here, unverified" ([[doc-reference-data-compressible-bcs]]).
+- The characteristic (LODI) treatment and the pressure-relaxation outlet $K\,(p - p_{ref})$ are cited to Thompson (1987) and Poinsot and Lele (1992); the formulas were re-derived in ADR 0006, "not checked against the papers, unverified"; the Riemann-invariant far field and total-pressure inlet are cited to Blazek, "book not accessed here, unverified" ([[doc-reference-data-compressible-bcs]]).
 
 ## Open questions
 

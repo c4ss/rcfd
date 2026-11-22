@@ -2,6 +2,7 @@
 type: entity
 tags: [structural, fem, solver]
 sources: [doc-structural-solver, doc-cosimulation-protocol, doc-acoustics, doc-product, doc-roadmap-overview, adr-thread-structural-case-file-and-fan-blade, adr-thread-structural-incompatible-hex8-rule-l, adr-thread-structural-hyperelastic-and-follower, adr-thread-structural-plan]
+builds_on: [finite-element-method-basics, linear-elasticity, modal-analysis, isoparametric-elements-and-quadrature, stress-recovery, substructuring-and-craig-bampton]
 created: 2026-11-22
 updated: 2026-11-22
 status: draft
@@ -37,6 +38,15 @@ status: draft
 - Concepts: [[cyclic-symmetry]], [[campbell-diagram]], [[mpc-transformation]], [[mutation-testing]].
 - Most items in these threads are partial without a numeric miss. The usual cause is a mutation that was not caught, or a check met only after an amendment, and the gap reads "The maintainer decides done" ([[roadmap-structural-solver]]).
 - **The plan and the basic tier** (job p3-records-b): [[adr-thread-structural-plan]] (ADRs 0270, 0290, 0310 and the 49 stubs that stayed PLANNED, each mapped to its item and registration) and [[adr-thread-structural-basic-tier]] (the 17 registrations under the plan's own numbers: crate, elements, direct solver, assembly, loads, recovery, output, orders, thermal strain, CG, eigensolver, modal, static participant, scaffold, Hex20, MPCs, elasticity AMG).
+
+## Builds on
+
+- [[finite-element-method-basics]]: shape functions, element stiffness, assembly.
+- [[linear-elasticity]]: Hooke's law and the small-strain tensor.
+- [[modal-analysis]]: natural frequencies and mode shapes.
+- [[isoparametric-elements-and-quadrature]]: mapped elements and Gauss quadrature.
+- [[stress-recovery]]: Gauss-point stresses, averaging, patch recovery.
+- [[substructuring-and-craig-bampton]]: static condensation and component mode synthesis.
 
 ## Related
 

@@ -24,7 +24,7 @@ EXP-ROT is the experiment that decides how M-FAN-A1 models the FAN-01 rotor. Arm
 - The bladed steady iteration cycles at the blade-root leading edge on B3 and at the hub trailing edge (z 0.1716) on B2. ADR 0110 falsified SST, the seam gradient, the pressure-velocity coupling and the explicit Coriolis source as causes; jobs 49K to 49R (ADRs 0174, 0175, 0177 to 0181, "unmerged, not yet accepted by the maintainer") did not converge B2. ADR 0181: the B2 site is a near-stagnant, partly reversed corner pocket.
 - Goals EG1 to EG5 with verdict classes (Q-ROT YES / NO / NOT REPRODUCED / NOT EVALUABLE; Q-POCKET STEADY / PHYSICAL / NUMERICAL / NOT EVALUABLE; Q-LC STAYS / GONE). EG5: every limit, prediction and stop rule is written in ADR 0183 before any code or run.
 - Mapping (ADR 0183 D9): Q-ROT YES means A1 on rigid rotation, time-marched (F-277 moves into A1); NO means A1 stays rotating-frame; Q-LC STAYS with H STEADY or NUMERICAL means A1 starts from the M-FAN-B mesh.
-- Arm 1 time step `Omega dt = 1 deg` (dt = 1.12156e-4 s, 360 steps per revolution); at most 15 revolutions. Check H: dt = T_c / 100 with T_c = 4.605 ms, STEADY threshold 1 % of `Omega r_hub` (0.193 m/s).
+- Arm 1 time step $\Omega\,\Delta t = 1^\circ$ (dt = 1.12156e-4 s, 360 steps per revolution); at most 15 revolutions. Check H: dt = T_c / 100 with T_c = 4.605 ms, STEADY threshold 1 % of $\Omega\, r_{hub}$ (0.193 m/s).
 - Cost estimates: arm 1 about 7 h, check H about 2.5 h, arm 2 about 1.1 h.
 - Non-goals include grading against the measured fan and "Any change of a default"; `baseline_hashes.rs` is not re-recorded.
 - Seven open questions, each with a recommendation; "These are recommendations, not decisions."

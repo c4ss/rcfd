@@ -2,6 +2,7 @@
 type: entity
 tags: [coupling, fsi, protocol, service]
 sources: [doc-cosimulation-protocol, doc-dynamic-mesh, doc-structural-solver, adr-thread-structural-fsi-coupling, adr-thread-six-dof-fsi-cosimulation]
+builds_on: [newmark-and-generalised-alpha, structural-dynamics]
 created: 2026-11-22
 updated: 2026-11-22
 status: draft
@@ -27,6 +28,11 @@ status: draft
 - **Versioning:** incompatible change -> `rcfd-cosim/2`; added methods or reply members do not change the id ([[doc-cosimulation-protocol]]).
 - **Flow-side ADR statuses:** F-139 done (ADR 0256: "an in-process library interface, a mock structure and the protocol page. No transport and no real structural solver"); F-361 done (Aitken stays the default, ADR 0261 Q1); F-362 roadmap done, ADR 0263 partial by its rule (E1 missed on the registered code, E1b met after amendment 1); F-360 done (protocol version 1.1, `rcfd-service/1` kept, ADR 0345 Q1); F-444 partial (the `cosim` schema property and the `--cosim` help line await the maintainer's approval, ADR 0380 Q1); F-481 done ([[adr-thread-six-dof-fsi-cosimulation]]).
 - **Mapping scale:** the brute-force search and dense radial-basis rows limit the builders "to a few thousand nodes" (ADR 0263 Q3) ([[adr-thread-six-dof-fsi-cosimulation]]).
+
+## Builds on
+
+- [[newmark-and-generalised-alpha]]: time integration of the structural side.
+- [[structural-dynamics]]: mass, damping and stiffness matrices.
 
 ## Related
 

@@ -14,7 +14,7 @@ The transient segregated pressure-velocity coupling: per time step a momentum pr
 
 ## How rcfd uses it
 
-- **Time-step limit in narrow gaps** (F-244, ADR 0211; located by F-299, ADR 0214): the default PISO step "grows unstable above a diffusion number `nu dt/dx^2` of about 3 to 4 across the finest cells" (16 cells across the gap, two correctors); the mode alternates in sign every step. Same limit in a plane channel (F-530, ADR 0451) ([[doc-dynamic-mesh]]).
+- **Time-step limit in narrow gaps** (F-244, ADR 0211; located by F-299, ADR 0214): the default PISO step "grows unstable above a diffusion number $\nu\,\Delta t/\Delta x^2$ of about 3 to 4 across the finest cells" (16 cells across the gap, two correctors); the mode alternates in sign every step. Same limit in a plane channel (F-530, ADR 0451) ([[doc-dynamic-mesh]]).
 - **Remedy:** consistent (SIMPLEC-type) correctors, case key `[solver.consistent_correctors] enabled = true` (F-301, ADR 0223); at large diffusion numbers also outer iterations (8, two correctors, no relaxation: within 0.6 percent of the discrete model) ([[doc-dynamic-mesh]]).
 - **Library opt-ins without case keys:** `outer_pressure_tolerance` makes `n_outer` a cap (F-536, ADR 0458; "keep a cap"); `outer_scale_window` (F-550, ADR 0617); `lag_onset_refusal` refuses the first step when the ADR 0073 lag estimate is at least one (F-535, ADR 0471); `moving_mesh_lag` (ADR 0223 E0) ([[doc-dynamic-mesh]]).
 - **Moving meshes:** Euler only in the case tree; BDF2 opt-in in the library (F-345, ADR 0379) ([[doc-dynamic-mesh]]).
@@ -29,7 +29,7 @@ The transient segregated pressure-velocity coupling: per time step a momentum pr
 
 ## Builds on
 
-- [[simple]]: the same predictor-corrector building blocks; in PISO the explicit velocity correction neglects the neighbour corrections, so `H(U)` is updated and the pressure equation solved again with fixed `H` coefficients ([[ref-jasak-1996-phd-thesis]] 3.8.2.1).
+- [[simple]]: the same predictor-corrector building blocks; in PISO the explicit velocity correction neglects the neighbour corrections, so $H(U)$ is updated and the pressure equation solved again with fixed $H$ coefficients ([[ref-jasak-1996-phd-thesis]] 3.8.2.1).
 - [[implicit-time-integration]]: implicit Euler and the opt-in BDF2.
 - [[stability-and-cfl]]: Courant and diffusion numbers behind the time-step limits above.
 - Also relevant: [[projection-method]] (`fractional_step`), [[rhie-chow-interpolation]] (step-consistent face flux).

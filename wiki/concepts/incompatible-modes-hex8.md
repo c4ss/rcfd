@@ -2,6 +2,7 @@
 type: concept
 tags: [structural, fem, element, hex8, locking, finite-strain]
 sources: [adr-thread-structural-incompatible-hex8-rule-l, adr-thread-structural-verification-elements]
+builds_on: [element-locking, finite-strain-kinematics]
 created: 2026-11-22
 updated: 2026-11-22
 status: draft
@@ -18,6 +19,11 @@ An eight-node hexahedron whose strain (at finite strain, its deformation gradien
 - **Known weakness:** a spurious zero (hourglass) eigenvalue in compression, at stretch `lambda_s = 0.60797` on the registered patch (ADR 0614). The opt-in `IncompatibleStabilisation` (Off by default) offers `RestStress`, `Deviatoric` and `LinearStress` ("rule L"); ADR 0630 shows that a coefficient without the bulk modulus cannot stabilise confined compression near incompressibility ([[adr-thread-structural-incompatible-hex8-rule-l]]).
 - **Local mode update:** the default starts the local iteration at `alpha = 0`; the opt-in warm start from the committed modes passes 11 of 11 hard set-ups where the default passes 7 (ADR 0725). Switching the default is open for the maintainer (ADR 0725, ADR 0727, ADR 0729) ([[adr-thread-structural-incompatible-hex8-rule-l]]).
 - Compared throughout against the F-bar Hex8 of ADR 0506 as the locking-free reference ([[adr-thread-structural-materials-nonlinear]]).
+
+## Builds on
+
+- [[element-locking]]: shear and volumetric locking and its cures.
+- [[finite-strain-kinematics]]: deformation gradient, Green-Lagrange strain, second Piola-Kirchhoff stress.
 
 ## Related
 

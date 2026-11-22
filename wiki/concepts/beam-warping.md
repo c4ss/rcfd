@@ -2,6 +2,7 @@
 type: concept
 tags: [structural, fem, beams, warping, thin-walled, buckling]
 sources: [adr-thread-structural-beam-warping, adr-thread-structural-beams-shells]
+builds_on: [beam-theory, linear-buckling-and-stress-stiffening]
 created: 2026-11-22
 updated: 2026-11-22
 status: draft
@@ -15,6 +16,11 @@ Open thin-walled sections (I, channel) resist twist both by Saint-Venant torsion
 
 - An opt-in 14-unknown Beam2 in `rcfd_fem::beam_warping` (cubic Hermite twist, warping unknowns numbered after the six-unknown DofMap), F-598, ADR 0546: doubly symmetric I under uniform moment within `5.9e-4` at 16 elements ([[adr-thread-structural-beam-warping]]). The six-unknown Beam2 without warping had missed I-section LTB by `-19.2` percent (F-558) ([[roadmap-structural-solver]]).
 - Static, modal, pre-stressed, harmonic and transient paths, monosymmetric sections, load height for point and distributed loads, and a negative-pivot count of the pre-stressed solves ([[adr-thread-structural-beam-warping]]).
+
+## Builds on
+
+- [[beam-theory]]: Euler-Bernoulli and Timoshenko beams.
+- [[linear-buckling-and-stress-stiffening]]: geometric stiffness and the buckling eigenproblem.
 
 ## Related
 

@@ -38,7 +38,7 @@ The lattice `rcfd_mesh::adapt` (`AmrMesh`, ADR 0054) had refinement and criteria
 ## Key numbers and limits
 
 - ADR 0242 R2: "Adaptation pays little on Re 100. The uniform 48 x 48 is nearly as close per cell."
-- ADR 0247: the uniform 90 x 90 with 8100 cells misses the layer acceptance "by a factor 1.9"; exponents `r = 1` and `r = 2` of the edge-length weighting gave the same layer error (R2).
+- ADR 0247: the uniform 90 x 90 with 8100 cells misses the layer acceptance "by a factor 1.9"; exponents $r = 1$ and $r = 2$ of the edge-length weighting gave the same layer error (R2).
 - ADR 0267 R2: in 3-D "pair merges can leave a five-box tiling that they cannot undo" (settled by the box merge of ADR 0341).
 - ADR 0343 Q2: `E(DC) <= 0.00298` read as the quoted number, not `E(D)` of the same run (`0.0029752`); R1: the ratio rule cannot see 251 of the 413 far-field x splits.
 

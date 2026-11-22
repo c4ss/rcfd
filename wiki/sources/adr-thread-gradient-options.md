@@ -14,7 +14,7 @@ status: draft
 **Origin:** the ADRs in the table below, `docs/adr/` at `origin/main` 2e94e5ef.
 **Kind:** ADR thread (registrations with result addenda and one decision record), 4 ADRs, 2026-11-05 to 2026-11-07.
 
-F-208 (ADR 0016 D2) built a library `GradientOptions` for the explicit non-orthogonal (secondary) part of `-div(gamma grad phi)`: a face correction, a secondary limiter (Barth-Jespersen or Venkatakrishnan), and a boundary rule. It was "not claimed through the tree". This thread wires it: first to the energy and scalar sweep (F-256), then to momentum, pressure, turbulence and the electric potential (F-291), and makes the reports that read those fields consistent with the solved operator (the conjugate `heat_flow`, F-289; the electric current and Joule heat, F-298). All four items are done; every option is opt-in and bit-identical at its default. See [[doc-case-schema-gradient-options]].
+F-208 (ADR 0016 D2) built a library `GradientOptions` for the explicit non-orthogonal (secondary) part of $-\nabla\cdot(\gamma \nabla\phi)$: a face correction, a secondary limiter (Barth-Jespersen or Venkatakrishnan), and a boundary rule. It was "not claimed through the tree". This thread wires it: first to the energy and scalar sweep (F-256), then to momentum, pressure, turbulence and the electric potential (F-291), and makes the reports that read those fields consistent with the solved operator (the conjugate `heat_flow`, F-289; the electric current and Joule heat, F-298). All four items are done; every option is opt-in and bit-identical at its default. See [[doc-case-schema-gradient-options]].
 
 ## Current state
 

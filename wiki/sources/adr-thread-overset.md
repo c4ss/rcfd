@@ -19,8 +19,8 @@ F-134 (ADR 0219) built one rigidly moving component mesh over a static backgroun
 ## Current state
 
 - **F-134 stays partial** (roadmap gap): "The case-tree, CLI and Studio wiring is not delivered, nor are several components, a moving background, hole cutting from wall geometry, non-orthogonal correctors and turbulence. Taylor-Green order misses with default linear donor stencils: 1.618 vs 1.7 (T1c), fine-level ratio 3.31 vs 2." The tree item F-312 and several components / moving background / hole cutting F-313 are todo.
-- **Acceptance met** (ADR 0219): continuity `8.1e-17`, net outflow `7.5e-15` of `U D L` over 400 steps, drag within `6.25e-3` of the body-fitted run at every step of `[2, 8]` (limit `5e-2`).
-- **The misses are explained, not removed.** ADR 0232: T1 (`0.747`) and T2 at level 2 (`3.31`) are "a first-order time error of the library's moving-mesh PISO step (the lagged convecting flux ...), not of the overset coupling"; T1c (`1.618`) is "the truncation of the linear donor interpolation at one component fringe cell". ADR 0246 traces the first-order term of the calculated component cells to the same truncation; ADR 0340 names why the response stays below second order: the normal fringe velocity is imposed softly through a resistance `dJ = -(16 nu / (3 h)) D`.
+- **Acceptance met** (ADR 0219): continuity `8.1e-17`, net outflow `7.5e-15` of $U D L$ over 400 steps, drag within `6.25e-3` of the body-fitted run at every step of `[2, 8]` (limit `5e-2`).
+- **The misses are explained, not removed.** ADR 0232: T1 (`0.747`) and T2 at level 2 (`3.31`) are "a first-order time error of the library's moving-mesh PISO step (the lagged convecting flux ...), not of the overset coupling"; T1c (`1.618`) is "the truncation of the linear donor interpolation at one component fringe cell". ADR 0246 traces the first-order term of the calculated component cells to the same truncation; ADR 0340 names why the response stays below second order: the normal fringe velocity is imposed softly through a resistance $dJ = -\left(\dfrac{16 \nu}{3 h}\right) D$.
 - **Opt-ins that restore order** (each default off, bit-identical): outer iterations `set_outer_iterations` (F-335: T2 at level 2 `1.862`, time error `1.69e-4`, not below `1.2e-4`); BDF2 `set_time_scheme(Bdf2)` (F-338 partial: ratio `2.46` against 4, T1c `1.664`); `DonorInterpolation::Quadratic` (F-336 done: order `1.993`, `2.000`); `DonorInterpolation::Continuous` (F-468 done); `set_fringe_flux(PrescribedOwnGradient)` (F-445 partial, "Not a default candidate") with `set_second_order_ring_gradient` (F-479, F-503 done: within `0.25` percent of the default coupling on RE and RL); `set_geometry_corrections` (F-368 done) and `set_consistent_geometry_corrections` (F-487 done: vortex on B3d `1.21` and `1.41` times its B3 error, limit 2).
 - **Default questions are all open for the maintainer:** `Quadratic` as default (ADR 0251 Q1, ADR 0259 Q1: recommendation keep `Linear`), outer iterations by default (ADR 0238 Q5), BDF2 by default (ADR 0241 Q6), geometry corrections by default (ADR 0367 Q1), `Continuous` (ADR 0396 Q4: keep `Linear`), the ring gradient as G's behaviour (ADR 0418 Q1: recommends making it so, as a separate item).
 - **The BDF2 remainder on a moving overset mesh** (kind changes next to the hole, ADR 0359 event 2) is accepted until a case needs it (ADR 0379 Q1, ADR 0396 Q1).
@@ -53,11 +53,11 @@ F-134 (ADR 0219) built one rigidly moving component mesh over a static backgroun
 
 ## Key numbers and limits
 
-- ADR 0219 TR: Re 40 cylinder (`D = 1`) translating 7.5 diameters through a static Cartesian background; `MassMode::Conservative`. T2c (dt proportional to `h^2`) `1.404`, `1.821` met.
+- ADR 0219 TR: Re 40 cylinder ($D = 1$) translating 7.5 diameters through a static Cartesian background; `MassMode::Conservative`. T2c (dt proportional to $h^2$) `1.404`, `1.821` met.
 - ADR 0238: three outer iterations cost "a factor 2.6 in wall time on TG_2" (Q5).
-- ADR 0259 Q2: step-to-step drag oscillation, rms `1.8e-3` of `C_D` with linear, `1.0e-3` with quadratic, body-fitted `7e-6`; heavy record 288 s ignored, fast test 10 s in the gate.
-- ADR 0264 Q1: B3d is "a strong distortion (`0.15 h` random, faces warped up to `0.14 h`)"; error of a linear field `1.4e-2`.
-- ADR 0382: Green-Gauss gradient of a linear pressure on B3d off by `0.195 abs(c)`; a pressure error of `4.3e-2 V^2` common to all runs is not diagnosed (Q3, recorded).
+- ADR 0259 Q2: step-to-step drag oscillation, rms `1.8e-3` of $C_D$ with linear, `1.0e-3` with quadratic, body-fitted `7e-6`; heavy record 288 s ignored, fast test 10 s in the gate.
+- ADR 0264 Q1: B3d is "a strong distortion ($0.15\,h$ random, faces warped up to $0.14\,h$)"; error of a linear field `1.4e-2`.
+- ADR 0382: Green-Gauss gradient of a linear pressure on B3d off by $0.195\,\lvert c\rvert$; a pressure error of $4.3\times 10^{-2}\, V^2$ common to all runs is not diagnosed (Q3, recorded).
 - ADR 0251 Q4: the two gate order tests take "about seven minutes on a loaded machine".
 
 ## Open questions

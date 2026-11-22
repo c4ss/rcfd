@@ -35,7 +35,7 @@ F-333 (ADR 0351) built `AcousticWaveSolver` in `rcfd-fv/src/acoustic_wave.rs`: t
 
 ## Key numbers and limits
 
-- ADR 0366 D1: new generator `rcfd_mesh::gen::circular_duct_ogrid` (Cartesian core `[-a, a]^2` plus four ring blocks, extruded along `z`; every face planar).
+- ADR 0366 D1: new generator `rcfd_mesh::gen::circular_duct_ogrid` (Cartesian core $[-a, a]^2$ plus four ring blocks, extruded along `z`; every face planar).
 - ADR 0366 Q1: the SP checks stay a known miss (recommendation (c)); a clean counter-rotating amplitude only "if a later item needs ... a fan's modal content".
 - ADR 0378 Q1: one section of pressure "carries no information on the split", so the residual is measured against a second section (`entering_residual`).
 

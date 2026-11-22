@@ -16,14 +16,14 @@ The one-equation RANS model transporting a modified eddy viscosity `nuTilda`. rc
 
 *(added by p6-turbulence)*
 - [[boussinesq-eddy-viscosity]]: SA is a linear eddy-viscosity model; one-equation models "solve one partial differential equation for the eddy-viscosity" and "appear to be very robust numerically" ([[ref-menter-1992-nasa-tm-103975]] p. 1).
-- [[wall-distance]]: the destruction term depends on `d`, which must be the true minimum distance to the wall, not the distance to the nearest wall gridpoint; the source terms are non-zero but small in the free stream, "proportional to 1/d2" ([[ref-nasa-tmr]] `spalart.html`).
+- [[wall-distance]]: the destruction term depends on $d$, which must be the true minimum distance to the wall, not the distance to the nearest wall gridpoint; the source terms are non-zero but small in the free stream, "proportional to 1/d2" ([[ref-nasa-tmr]] `spalart.html`).
 - [[convection-diffusion-equation]]: the form of the `nuTilda` transport equation.
-- [[les-and-des]]: in DES the wall distance is replaced by `min(d, C_des Delta)`, `C_des = 0.65` ([[ref-davidson-turbulence-notes]] eq. 20.3); the TMR notes that with DES/DDES the `ft2` term "may cause an undesirable delay in transition to turbulence in the RANS region", and that SA-neg "should yield essentially identical results to (SA), and is generally recommended because of its more robust numerical behavior" ([[ref-nasa-tmr]] `spalart.html`).
+- [[les-and-des]]: in DES the wall distance is replaced by $\min(d,\, C_{DES} \Delta)$, $C_{DES} = 0.65$ ([[ref-davidson-turbulence-notes]] eq. 20.3); the TMR notes that with DES/DDES the `ft2` term "may cause an undesirable delay in transition to turbulence in the RANS region", and that SA-neg "should yield essentially identical results to (SA), and is generally recommended because of its more robust numerical behavior" ([[ref-nasa-tmr]] `spalart.html`).
 
 ## How rcfd uses it
 
 - **Constants:** sigma `2/3`, cb1 `0.1355`, cb2 `0.622`, kappa `0.41`, cw2 `0.3`, cw3 `2`, cv1 `7.1` ([[doc-reference-data-spalart-allmaras]]).
-- **Validation state (F-041 partial):** flat plate Cf misses the power law `0.0576 Re_x^-0.2` at x = 1.0 (`+5.29%` against 5 percent), though it passes against TMR CFL3D, TMR theory and White; no mesh study and no other validation case ([[roadmap-turbulence]], from [[doc-roadmap-json]]).
+- **Validation state (F-041 partial):** flat plate Cf misses the power law $0.0576\, Re_x^{-0.2}$ at x = 1.0 (`+5.29%` against 5 percent), though it passes against TMR CFL3D, TMR theory and White; no mesh study and no other validation case ([[roadmap-turbulence]], from [[doc-roadmap-json]]).
 - **DES:** `sa.des` `off`/`des`/`ddes`, transient only and "not validated on a separated flow" ([[doc-case-schema-turbulence]]).
 - **Transient without DES (F-294):** on the outer iterations of `pimple` (ADR 0210); SA-DES stays on the once-per-step path; `supports_transient("spalart_allmaras")` answers true for every DES mode (ADR 0225 Q1) ([[adr-thread-transient-rans]]).
 - **Periodic seams:** the `nuTilda` diffusivity was already one value per pair; whether `pair` should use the internal-face rule (which differs where `nuTilda < 0`) is ADR 0212 Q3 ([[adr-thread-periodic-seam-diffusivity]]).

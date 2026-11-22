@@ -28,7 +28,7 @@ rcfd tracks point particles through a computed flow with one-way coupling (parti
 - **Injection:** point or surface, rate, parcel count, Rosin-Rammler; SplitMix64 seeded from `particles.seed` (bit-for-bit reproducible).
 - **Run hooks:** since ADR 0037 (wave 21C) the run loop drives the tracker; a transient run with particles is not restartable. Outputs `particles.vtp`, `particle_report.json`, optional `particle_tracks.csv`.
 - **F-128 (ADR 0057):** two-way exchange record (observation only), discrete random walk, cone/equal-mass injection.
-- **F-255 (ADR 0208):** DRW from the turbulence model (k-epsilon, SST with `beta* = 0.09`); Taylor check within 1 percent (limit 5 percent); library surface reaction.
+- **F-255 (ADR 0208):** DRW from the turbulence model (k-epsilon, SST with $\beta^* = 0.09$); Taylor check within 1 percent (limit 5 percent); library surface reaction.
 - **F-245 (ADR 0224):** evaporation (Bird-corrected film model, arXiv:2201.02818) and TAB breakup (O'Rourke and Amsden 1987), library; F-323 (ADR 0230) droplet exchange record; **F-326 (ADR 0348)** case tables `[particles.evaporation]`, `[particles.breakup]` feed the carrier in the transient two-way path.
 - **Wall film** (F-253, ADR 0192): Nusselt film; gas buoyancy and shear opt-ins (F-292, ADR 0206).
 - **Wall interaction** (F-254, ADR 0194): DNV RP O501 erosion (steel angle function), steel preset `dnv_o501_2007_steel` (ADR 0197) from "a third-party copy ... that has not been checked against the maintainer's edition"; Sommerfeld virtual-wall roughness.

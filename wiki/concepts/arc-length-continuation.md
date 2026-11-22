@@ -2,6 +2,7 @@
 type: concept
 tags: [structural, fem, nonlinear, continuation, stability]
 sources: [adr-thread-structural-hyperelastic-and-follower, adr-thread-structural-incompatible-hex8-rule-l, adr-thread-structural-beams-shells, adr-thread-structural-materials-nonlinear]
+builds_on: [stability-of-equilibrium, nonlinear-fem-newton]
 created: 2026-11-22
 updated: 2026-11-22
 status: draft
@@ -18,6 +19,11 @@ A path-following method for nonlinear equilibrium: the load factor becomes an un
 - With corotated Shell4 and Shell3 (F-585, ADR 0522), checked against the published limit load of the hinged cylindrical roof, `2226.3 N` (F-610, ADR 0716) ([[adr-thread-structural-beams-shells]]).
 - `arclength::trace_from` (opt-in) starts from a given converged state under prescribed-displacement loading (F-797, ADR 0726, partial) and passes the fold of rule L's `16^3` punch branch with warm-started local modes (F-845, ADR 0728, done) ([[adr-thread-structural-incompatible-hex8-rule-l]]).
 - Related stability tools in the same chain: the indefinite-tangent Newton, a driver retry that reports the inertia of each accepted state (ADR 0694, ADR 0719), bisection of a bifurcation, a branch switch and a Moore-Spence extended system for the fold (ADR 0697, ADR 0700, ADR 0724) ([[adr-thread-structural-incompatible-hex8-rule-l]]).
+
+## Builds on
+
+- [[stability-of-equilibrium]]: bifurcation and limit points.
+- [[nonlinear-fem-newton]]: incremental Newton iterations.
 
 ## Related
 

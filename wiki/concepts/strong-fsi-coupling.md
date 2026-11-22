@@ -14,7 +14,7 @@ Loose coupling exchanges force and motion once per time step; strong coupling it
 
 ## How rcfd uses it
 
-- **Strong step:** `rcfd_fv::fsi::strong_step` (F-251, ADR 0250), opt-in, with Aitken relaxation and the safe start `2M/(2M + m_a)`; with `max_iterations = 1` it equals the loose coupling bit for bit. Checked on a spring-mounted piston at a ratio of 4 ([[adr-thread-six-dof-fsi-cosimulation]]).
+- **Strong step:** `rcfd_fv::fsi::strong_step` (F-251, ADR 0250), opt-in, with Aitken relaxation and the safe start $2M/(2M + m_a)$; with `max_iterations = 1` it equals the loose coupling bit for bit. Checked on a spring-mounted piston at a ratio of 4 ([[adr-thread-six-dof-fsi-cosimulation]]).
 - **From a case:** `[dynamic_mesh.six_dof.coupling] scheme = "strong"` (F-350, ADR 0266) with relaxation, added-mass estimate, tolerance, force scale and iteration cap; Newmark and rest patches are refused with it ([[adr-thread-six-dof-fsi-cosimulation]]).
 - **Wall pressure of the body force:** the default extrapolation of `patch_force_moment` was first order on a fixed-flux moving wall (1.25 percent of the added mass on 20 cells, F-351); `wall_pressure = "prescribed_gradient"` corrects it (F-358), default since ADR 0346 per `docs/case-schema.md` ([[adr-thread-six-dof-fsi-cosimulation]]).
 - **Co-simulation:** the same iteration drives external structural participants through `rcfd_fv::cosim::coupled_step`, with fixed, Aitken or least-squares quasi-Newton updates (F-361; Aitken 8.8 iterations a step on the model problem) ([[adr-thread-six-dof-fsi-cosimulation]], [[doc-cosimulation-protocol]]). See [[cosimulation-protocol]].

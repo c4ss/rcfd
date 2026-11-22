@@ -2,6 +2,7 @@
 type: concept
 tags: [structural, fem, rotor, method]
 sources: [adr-thread-structural-modal-buckling-cyclic, adr-thread-structural-rotordynamics, doc-reference-data-f555-cyclic-campbell]
+builds_on: [multi-point-constraints, modal-analysis, periodic-and-cyclic-boundaries, fourier-analysis-and-spectra]
 created: 2026-11-22
 updated: 2026-11-22
 status: draft
@@ -18,6 +19,13 @@ A rotor made of N identical sectors is solved on one sector: the boundary unknow
 - Extended to harmonic loads and rigid sets at `k > 0` (F-489), cylindrical material axes (F-544), pre-stressed modes with per-point materials (F-547) ([[adr-thread-structural-modal-buckling-cyclic]]), tied non-matching cyclic boundaries and nodes on the axis (F-426) ([[adr-thread-structural-beams-shells]]).
 - Rotating sectors: modes by harmonic family and the [[campbell-diagram]] (F-500), whirl and stability per index (F-507, F-511), the split Campbell table on the modal subspace (F-555) ([[adr-thread-structural-rotordynamics]], [[doc-reference-data-f555-cyclic-campbell]]).
 - The demonstration on a bladed disc (F-406) is not started ([[roadmap-structural-solver]]).
+
+## Builds on
+
+- [[multi-point-constraints]]: elimination, penalty and Lagrange multipliers.
+- [[modal-analysis]]: natural frequencies and mode shapes.
+- [[periodic-and-cyclic-boundaries]]: periodic and rotated-periodic boundaries.
+- [[fourier-analysis-and-spectra]]: harmonic decomposition of the sector unknowns.
 
 ## Related
 

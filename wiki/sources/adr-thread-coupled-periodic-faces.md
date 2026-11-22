@@ -31,7 +31,7 @@ Opened by F-725 (ADR 0661, [[adr-thread-sliding-mesh-rotor-stator]]): a sector r
 | [0664](../../docs/adr/0664-f743-registration-implicit-momentum-coupling-of-periodic-pairs.md) | 2026-11-16 | registration | F-743 | Implicit momentum coupling of rotational periodic pairs | done; J1 `6.74e-4` (default `3.494e-2`, limit `5e-3`); K1s `2.36e-4` against `1.5e-3`; translational pairs implicit since ADR 0046 | default: F-746 |
 | [0667](../../docs/adr/0667-f744-registration-non-orthogonal-correction-on-coupled-faces.md) | 2026-11-16 | registration | F-744 | Non-orthogonal correction on coupled faces (`CoupledNonOrth`) | partial; N1 `3.80e-5` (limit `3e-4`), N2 `1.104e-4` (limit `4.5e-4`) met; MN1, MN4 not caught | 0672, 0674 |
 | [0672](../../docs/adr/0672-f752-registration-pressure-part-of-the-non-orthogonal-correction-on-coupled-faces.md) | 2026-11-16 | registration | F-752 | Pressure part on a tilted periodic channel (`abs(k)/abs(S)` 0.298) against its unrolled twin | done | |
-| [0674](../../docs/adr/0674-f753-registration-pressure-part-of-the-coupled-non-orthogonal-correction-on-rotational-pairs.md) | 2026-11-17 | registration | F-753 | Pressure part on rotational pairs (60 deg sector, tilt up to 0.363, body force `phi ~ r^6 cos 6 theta`) | done | |
+| [0674](../../docs/adr/0674-f753-registration-pressure-part-of-the-coupled-non-orthogonal-correction-on-rotational-pairs.md) | 2026-11-17 | registration | F-753 | Pressure part on rotational pairs (60 deg sector, tilt up to 0.363, body force $\phi \sim r^6 \cos 6\theta$) | done | |
 | [0675](../../docs/adr/0675-f754-registration-rhie-chow-ddt-correction-on-coupled-faces.md) | 2026-11-17 | registration | F-754 | Rhie-Chow ddt correction on coupled faces | done; periodic run within `5.6e-15 U_ref` of its twin on 200 steps (limit `1e-8`) | 0687 |
 | [0687](../../docs/adr/0687-f757-registration-rhie-chow-ddt-correction-on-coupled-faces-in-the-fractional-step-and-with-bdf2.md) | 2026-11-17 | registration | F-757 | The same in the fractional step and with BDF2 | done on the amended rule (P1b of the first set-up missed, diagnosed); roadmap partial | |
 | [0691](../../docs/adr/0691-f771-registration-body-force-in-the-fractional-step.md) | 2026-11-17 | registration | F-771 | Body force in the fractional step (`fractional_body_force`, incremental form; Chorin refused) | done on the amended rule (S2a missed first); roadmap partial; default held 2026-11-18 | |
@@ -39,7 +39,7 @@ Opened by F-725 (ADR 0661, [[adr-thread-sliding-mesh-rotor-stator]]): a sector r
 ## Key numbers and limits
 
 - ADR 0664 D0: default step-1 difference `3.494134721e-2` (limit `3.494135e-2` within `1e-8`); D1, D2: setting on against off bit for bit on translational pairs and on the annulus.
-- ADR 0667 D0h: largest `G_(6,0)` `1.483922e-4`; largest `G_*` `5.890778e-3` (step 102).
+- ADR 0667 D0h: largest $G_{(6,0)}$ `1.483922e-4`; largest $G_*$ `5.890778e-3` (step 102).
 - ADR 0687 question 2: a default BDF2 periodic PISO run differs from its twin by `4.2e-4 U_ref`; the plain fractional step's lagged partner gives `1.9e-2 U_ref`.
 - ADR 0691 question 3: the lagged periodic partner of the plain fractional step costs `5.8e-2` of the start-up channel's mean at step 1 at the cut.
 

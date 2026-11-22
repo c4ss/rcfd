@@ -43,7 +43,7 @@ The first half adds models: Spalart-Allmaras and the turbulence-model interface 
 - ADR 0015 catalogue: "SST at y+~1, Standard at y+~30 and SST roughness (by 17 to 22 percent) miss; Enhanced did not converge and is unvalidated; non-equilibrium wall functions were not attempted."
 - ADR 0017: A0 = 4.0 moves the medium-mesh reattachment "from a miss (6.413) to a pass (6.349)"; "P3 misses at 0.105, and on the fine mesh x_r = 6.453 is outside the window".
 - ADR 0026: channel profile against DNS at `Re_tau` = 395 "worst 3.99 % for the linear profile, 3.12 % for the Nikuradse analogy, limit 10 %"; "In this solver WALE dissipates more than Smagorinsky, the opposite of the registered ordering."
-- ADR 0032: C2(d) `k(40)/k0` = 1.83e13 (ssg) and 4.58e16 (lrr_ip) against `k(t_end) < 1e3 k0`, "not a property of the model".
+- ADR 0032: C2(d) $k(40)/k_0$ = 1.83e13 (ssg) and 4.58e16 (lrr_ip) against $k(t_{end}) < 10^3 k_0$, "not a property of the model".
 - ADR 0063: the residual is "a slowly (first order) decaying sensitivity to the published wall-face omega factor 10, not a defect"; still unexplained then: "the log-law slope 2.78, the +3 % fixed-x difference against CFL3D after extrapolation".
 - ADR 0070: "the finest rcfd value is -0.67 percent from the incompressible TMR mean, but rcfd's own Richardson value is still +2.3 percent above it"; observed order "0.66 against about 1.1 to 1.2 for the TMR codes".
 - ADR 0074: the flipped `corrected` default "moves exactly one registered baseline hash (`packed_bed`), but the two lumped heat-exchanger tests do NOT converge with it".

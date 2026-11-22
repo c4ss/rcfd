@@ -27,11 +27,11 @@ ADR 0035 derives the closed forms below from conservation and Fourier/Ohm laws, 
 
 | Quantity | Source | Status |
 | --- | --- | --- |
-| Series thermal resistance, composite wall with contact resistance, `q = dT / (sum t_i/k_i + R_c)` | heat-conduction theory | derived here (ADR 0035 D1); no external source needed |
-| Ohm bar, Joule parabola `T = T0 + (J^2 rho/ (2 k)) x (L - x)`, `sigma(T) = sigma_0/(1 + a (T - T_ref))` bar solution and lumped Joule ODE | conduction theory | derived here (ADR 0035 D2); checked by H1 to H6 |
-| Two-phase Neumann/Stefan solution `St_l e^{-l^2}/(sqrt(pi) erf l) - St_s e^{-l^2}/(sqrt(pi) erfc l) = l`, front `s = 2 l sqrt(alpha t)` (one-phase limit `St_s = 0`) | textbook form (H. S. Carslaw and J. C. Jaeger 1959, Conduction of Heat in Solids; V. Alexiades and A. D. Solomon 1993; J. Crank 1984) | UNVERIFIED against a primary text: a search tool returned the same form but not from the textbook; the root is checked in the tests through the residual (P7) and the numerical front converges to it |
-| Enthalpy-porosity model, Carman-Kozeny damping `A(f) = C (1 - f)^2 / (f^3 + b)` | V. R. Voller and C. Prakash (1987), Int. J. Heat Mass Transfer 30(8), 1709-1719 | verified citation (bibliographic record by search); paper not read. `C` (mushy constant) and `b` are case dependent: no universal value is claimed, the tests choose `C` from the target permeability `kappa` |
-| Brinkman channel `u = (G/kappa)(1 - cosh(m(y - H))/cosh(mH))`, `m = sqrt(kappa/nu)` | momentum balance with a linear sink | derived here (ADR 0035, K2) |
+| Series thermal resistance, composite wall with contact resistance, $q = \Delta T / (\textstyle\sum t_i/k_i + R_c)$ | heat-conduction theory | derived here (ADR 0035 D1); no external source needed |
+| Ohm bar, Joule parabola $T = T_0 + \left(J^2 \rho / (2 k)\right) x (L - x)$, $\sigma(T) = \sigma_0/\left(1 + a (T - T_{ref})\right)$ bar solution and lumped Joule ODE | conduction theory | derived here (ADR 0035 D2); checked by H1 to H6 |
+| Two-phase Neumann/Stefan solution $\dfrac{St_l\, e^{-l^2}}{\sqrt{\pi}\, \operatorname{erf} l} - \dfrac{St_s\, e^{-l^2}}{\sqrt{\pi}\, \operatorname{erfc} l} = l$, front $s = 2 l \sqrt{\alpha t}$ (one-phase limit $St_s = 0$) | textbook form (H. S. Carslaw and J. C. Jaeger 1959, Conduction of Heat in Solids; V. Alexiades and A. D. Solomon 1993; J. Crank 1984) | UNVERIFIED against a primary text: a search tool returned the same form but not from the textbook; the root is checked in the tests through the residual (P7) and the numerical front converges to it |
+| Enthalpy-porosity model, Carman-Kozeny damping $A(f) = C (1 - f)^2 / (f^3 + b)$ | V. R. Voller and C. Prakash (1987), Int. J. Heat Mass Transfer 30(8), 1709-1719 | verified citation (bibliographic record by search); paper not read. $C$ (mushy constant) and $b$ are case dependent: no universal value is claimed, the tests choose $C$ from the target permeability $\kappa$ |
+| Brinkman channel $u = (G/\kappa)\left(1 - \cosh(m(y - H))/\cosh(mH)\right)$, $m = \sqrt{\kappa/\nu}$ | momentum balance with a linear sink | derived here (ADR 0035, K2) |
 | Gallium-melting cavity experiment (published front shape) | not obtained | NOT used: not delivered, named gap of F-212 |
 
 

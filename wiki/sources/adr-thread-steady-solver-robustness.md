@@ -40,7 +40,7 @@ Each ADR answers a steady SIMPLE / SIMPLEC run that diverged or stalled, usually
 
 ## Key numbers and limits
 
-- ADR 0042: SIMPLEC plug-flow deviation 0.159 between symmetry side walls; "A lossless pressure-pressure duct with `dp != 0` is ill-posed and must not be asked to converge"; at the fixed-pressure inlet "the convective terms cancel and leave a first-cell diagonal that is only viscous".
+- ADR 0042: SIMPLEC plug-flow deviation 0.159 between symmetry side walls; "A lossless pressure-pressure duct with $\Delta p \neq 0$ is ill-posed and must not be asked to converge"; at the fixed-pressure inlet "the convective terms cancel and leave a first-cell diagonal that is only viscous".
 - ADR 0077: the pressure-lag check "warned on 10 runs of 3 existing tests (C4 MISSED), all with two correctors, so it was restricted to one corrector"; the `corrected` diagonal "reaches the exact plug flow to 2.5e-13 on the heat-exchanger channel".
 - ADR 0084: "raw K40 60: 4.26e-4 against 1e-4"; final gate "1879 passed, 0 failed, 525 ignored"; on FAN-01 "P10 (L / c10 0.330 against 8.36)" met, "`res_u` and `res_p` are never both below 1e-4 within 1500 iterations".
 - ADR 0102: D1 "1.553e-4 against 1e-4" at plain u = 1; with the key, "the F-200 C3 forward vent is non-finite at iteration 2767, and the X7 duct shows a second, transverse mode (not registered, not diagnosed further)".

@@ -2,6 +2,7 @@
 type: concept
 tags: [structural, rotordynamics, method]
 sources: [adr-thread-structural-rotordynamics, doc-reference-data-f415-coriolis-campbell, doc-reference-data-f555-cyclic-campbell]
+builds_on: [rotordynamics-gyroscopic-effects, modal-analysis]
 created: 2026-11-22
 updated: 2026-11-22
 status: draft
@@ -18,6 +19,11 @@ The natural frequencies of a rotating part plotted (or tabulated) against its sp
 - F-415 (ADR 0472): split Campbell table on the modal subspace; F-555 (ADR 0481) the same for a cyclic sector by index ([[doc-reference-data-f555-cyclic-campbell]]).
 - F-564 (ADR 0501): damped critical speeds as unbalance-response peaks and checked Campbell crossings of the flexible rotor on bearings ([[adr-thread-structural-rotordynamics]]).
 - Not done: a Campbell diagram of the fan blade (F-406, todo) ([[roadmap-structural-solver]]).
+
+## Builds on
+
+- [[rotordynamics-gyroscopic-effects]]: whirl, gyroscopic coupling, critical speeds.
+- [[modal-analysis]]: natural frequencies and mode shapes.
 
 ## Related
 

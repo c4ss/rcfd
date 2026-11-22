@@ -18,15 +18,15 @@ Validation asks how well a model represents the real world for its intended use,
 
 **Definition.** Validation: "The process of determining the degree to which a model is an accurate representation of the real world from the perspective of the intended uses of the model" (AIAA Guide, in [[ref-oberkampf-trucano-2002-sand2002-0529]] sec. 2.1, p. 14); "solving the right equations" ([[ref-nparc-vv-tutorial]]; [[ref-mfix-vv-manual]] sec. 1.1). Verification comes first: "Verification is a mathematics issue; not a physics issue" (Roache 2009, in [[ref-mfix-vv-manual]] sec. 1.1).
 
-**Decomposing the discrepancy.** For a quantity `u` both computed and measured ([[ref-oberkampf-trucano-2002-sand2002-0529]] sec. 4.1.2, Eq. 12-14):
+**Decomposing the discrepancy.** For a quantity $u$ both computed and measured ([[ref-oberkampf-trucano-2002-sand2002-0529]] sec. 4.1.2, Eq. 12-14):
 
-`u_nature - u_discrete = E1 + E2 + E3 + E4`
+$$u_\text{nature} - u_\text{discrete} = E_1 + E_2 + E_3 + E_4$$
 
-- `E1 = u_nature - u_exp`: measurement error, random and bias ([[measurement-uncertainty]]);
-- `E2 = u_exp - u_exact`: modelling error, the gap between the measurement and the exact solution of the model equations, e.g. continuum, incompressibility at low speed, constant turbulent Prandtl number, turbulence model, or inputs that were not measured;
-- `E3`, `E4`: numerical error of the discrete solution ([[solution-verification]]).
+- $E_1 = u_\text{nature} - u_\text{exp}$: measurement error, random and bias ([[measurement-uncertainty]]);
+- $E_2 = u_\text{exp} - u_\text{exact}$: modelling error, the gap between the measurement and the exact solution of the model equations, e.g. continuum, incompressibility at low speed, constant turbulent Prandtl number, turbulence model, or inputs that were not measured;
+- $E_3$, $E_4$: numerical error of the discrete solution ([[solution-verification]]).
 
-Only after `E1`, `E3` and `E4` are estimated can a difference be read as a statement about the model `E2`. Unconverged numerical error can dominate the discrepancy or produce apparent agreement ([[ref-oberkampf-trucano-2002-sand2002-0529]] sec. 3.2.1).
+Only after $E_1$, $E_3$ and $E_4$ are estimated can a difference be read as a statement about the model $E_2$. Unconverged numerical error can dominate the discrepancy or produce apparent agreement ([[ref-oberkampf-trucano-2002-sand2002-0529]] sec. 3.2.1).
 
 **Validation metrics.** Oberkampf and Trucano recommend that a metric include the numerical error estimate, but not grouped with the experimental uncertainty nor treated probabilistically, since "Numerical error represents a bias error in the solution"; exclude no modelling assumption; include random and correlated bias errors of the data; depend on the number of replications; and propagate input uncertainty through the model. They call Coleman and Stern's metric, under which a difference smaller than the metric means "validated", conceptually flawed in certain respects ([[ref-oberkampf-trucano-2002-sand2002-0529]] sec. 4.7.1).
 
@@ -38,8 +38,8 @@ Only after `E1`, `E3` and `E4` are estimated can a difference be read as a state
 
 ## Builds on
 
-- [[measurement-uncertainty]]: the measurement side of the comparison (`E1`).
-- [[solution-verification]]: the numerical side (`E3`, `E4`).
+- [[measurement-uncertainty]]: the measurement side of the comparison ($E_1$).
+- [[solution-verification]]: the numerical side ($E_3$, $E_4$).
 
 ## Leads to
 

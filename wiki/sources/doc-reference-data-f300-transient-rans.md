@@ -25,8 +25,8 @@ The section text follows verbatim so that every value, citation and verification
 
 | Item | Status | What was read (source) |
 |---|---|---|
-| Spalding (1961) law of the wall `y+ = u+ + (1/E)[exp(kappa u+) - 1 - kappa u+ - (kappa u+)^2/2 - (kappa u+)^3/6]`, used for the k-based wall eddy viscosity `nu (y*/u+ - 1)` of the opt-in `wall_nut_law = spalding` (`WallConstants::nut_wall_from_k_spalding`) and its inverse `SpaldingLaw::u_plus` | existing | the row "Spalding (1961) law of the wall" above (standard cubic form, two secondary sources, original paper not read); no new source was read for F-300 |
-| The standard k-based wall eddy viscosity `nu (y* kappa/ln(E y*) - 1)` above `y*_lam` and 0 below, written as `nu (y*/u+ - 1)` with `u+ = min(y*, ln(E y*)/kappa)`; its slope jump `0.0684 nu` at `y*_lam = 11.53` | derived | from the existing `WallConstants::nut_wall_from_k` (Launder and Spalding 1974 as recorded above, not read) |
+| Spalding (1961) law of the wall $y^+ = u^+ + \tfrac{1}{E}\left[e^{\kappa u^+} - 1 - \kappa u^+ - (\kappa u^+)^2/2 - (\kappa u^+)^3/6\right]$, used for the k-based wall eddy viscosity $\nu\,(y^*/u^+ - 1)$ of the opt-in `wall_nut_law = spalding` (`WallConstants::nut_wall_from_k_spalding`) and its inverse `SpaldingLaw::u_plus` | existing | the row "Spalding (1961) law of the wall" above (standard cubic form, two secondary sources, original paper not read); no new source was read for F-300 |
+| The standard k-based wall eddy viscosity $\nu\,(y^* \kappa/\ln(E y^*) - 1)$ above $y^*_{lam}$ and 0 below, written as $\nu\,(y^*/u^+ - 1)$ with $u^+ = \min(y^*,\, \ln(E y^*)/\kappa)$; its slope jump $0.0684\,\nu$ at $y^*_{lam} = 11.53$ | derived | from the existing `WallConstants::nut_wall_from_k` (Launder and Spalding 1974 as recorded above, not read) |
 
 
 ## Contradictions with the wiki
