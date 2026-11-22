@@ -300,3 +300,177 @@ here, before its run; NC1 stays as it is. **NC1b**: D5 must call not steady a wi
 KT-a17 (3.1e-6) and the cd_eff range of ADR 0760's run (0.6835); each limit of D5 is so controlled alone. Limit: both
 not steady; source: D5, the other way round; kind: solution verification (negative control). M3 is then run once more
 on a scratch copy with NC1b in place (M3b), and both outcomes are reported.
+
+## Addendum 1: results (2026-11-22)
+
+Commits: 46f01e24 (this registration, alone), 66739a37 (the driver and the ten case texts; before any run), 056c8471
+(amendment 1), 330ba502 (the test file with the recorded fast-test values; before the record), c716f408 (amendment 2,
+before KU-a15 ran) and e4205434 (the C15 test as amendment 2 says), 01c01418 (the record; the five misses as ignored
+known-miss records; the driver's hash helper, see deviations), 1dd384a9 (the committed mutation), b5cb019d (amendment 3)
+and 01515a8f (NC1b), and the commit of this addendum with the proposal file. Machine: the maintainer's Windows machine,
+shared with three other agents. Binary as in the status lines. Runs, each made once, one thread each, three at a time: the
+six at 17 degrees from 18:35 to 20:15 local time (1117 s to 3587 s each), the three at 15 degrees from 20:15 to 20:54.
+Record: `docs/investigations/f884-naca0012-17-steady/` (README, `results.json`, `cases/`); status streams in the scratch
+folder.
+
+### The runs
+
+| Run | Iterations (exit) | Window range cl_eff / cd_eff | cl_eff (D5 value) | Difference | N-x (steady) | F17-x or C15-x |
+| --- | --- | --- | --- | --- | --- | --- |
+| K0-a17 | 8000 (5) | 2.0202 / 0.6835 | 1.04762 (mean) | -0.5040 | no | no |
+| KU-a17 | 3517 (0) | 4.3e-4 / 4.0e-5 | 1.57677 | +0.0252 | **yes** | **miss** |
+| KS-a17 | 3730 (0) | 0.0232 / 0.0042 | 1.50932 | -0.0423 | **miss** | **miss** |
+| KT-a17 | 8000 (5) | 3.1e-6 / 2.2e-6 | 1.55140 | -0.0002 | **yes** | **met** |
+| KC-a17 | 8000 (5) | 2.0105 / 0.6680 | 1.02599 (mean) | -0.5256 | **miss** | **miss** |
+| KG-a17 | 8000 (5) | 1.8e-4 / 8.4e-5 | 1.56603 | +0.0144 | **yes** | **met** |
+| KT-a15 (C15-T) | 8000 (5) | 4.2e-6 / 2.2e-6 | 1.493201 | -0.000002 | yes | **met** |
+| KG-a15 (C15-G) | 8000 (5) | 4.5e-4 / 1.5e-4 | 1.491724 | -0.0015 | yes | **met** |
+| KU-a15 (reported, amendment 2) | 8000 (5) | 1e-10 / 1e-10 | 1.501414 | +0.0082 | yes | reported |
+
+The difference is to 1.5516 at 17 degrees and to 1.4932034 at 15. Drag (D5 value of cd_eff, reported without a limit):
+KT-a17 0.04352, KG-a17 0.04349, KU-a17 0.04101, against ADR 0764's time mean 0.04369; KT-a15 0.02676 and KG-a15 0.02713
+against ADR 0760's 0.02676.
+
+**What the runs show.**
+
+- **The eddy-viscosity relaxation is a cause, and its removal is a fix (KT).** With `relax_nut = 1.0` and nothing else
+  changed, the iteration goes through the same irregular start as K0 (cl_eff between about 0 and 1.8 to iteration
+  2700), then falls into the attached state and stays there: 1.5469 at 3000, 1.5504 at 3500, 1.5514 from 4000 on, the
+  residuals stalled at 1.4e-7 (so exit 5 at the cap, the window mean the value). cl_eff 1.55140 is 0.0002 from the
+  time-accurate 1.5516, cd_eff within 0.0002 of its time mean, and at 15 degrees the same setting gives ADR 0760's
+  steady value to six digits. The default `relax_nut = 0.5` lets the eddy viscosity of the boundary layer lag the
+  momentum (arithmetic 3); with the lag the iteration does not leave the separated states in 8000 iterations, without it
+  it does.
+- **The local pseudo time step is a cause too, and a global step is a fix (KG).** With `pseudo_mode = "physical"`,
+  `pseudo_dt = 0.02`, the iteration follows a time-like path from the first iteration (1.557 at 500, 1.579 at 1000,
+  then a slow fall), as ADR 0764's time-accurate run does, and never visits the separated states. At the cap it is
+  steady by D5 at 1.56603, 0.0144 above the target (within 0.018) and still falling by about 2e-5 per 100 iterations; at
+  15 degrees it is 0.0015 low. The slow fall at the end is of the size arithmetic 2 gives for the starting vortex.
+- **The velocity under-relaxation is a cause, but the state it reaches misses the target (KU).** With `alpha_u = 0.7`
+  the iteration rises without the separated excursions and meets the residual targets at 3517 iterations, steady, at
+  1.57677: 0.0252 above the target. The reported run at 15 degrees (amendment 2) is 0.0082 above ADR 0760's steady value
+  there, so `alpha_u` moves the converged fixed point (arithmetic 1: the relaxation enters the face-flux interpolation
+  through `a_P`), by more at 17 degrees than at 15; KU names its cause and is not a fix.
+- **The start state and the corrector are not causes by this test.** KS (the potential-flow start) begins with lift
+  values of order 1e5 and an eddy viscosity whose volume mean stays at 1.667e-2 (1e5 nu) from iteration 10 to the end;
+  it met the residual targets at 3730 iterations with cl_eff still falling (window range 0.023, not steady) and cd_eff
+  0.35, a separated state. That start is not a usable test of the start state on this case; why the eddy viscosity sits
+  at 1e5 nu was not examined. KC (one non-orthogonal corrector with the compensation) behaves as K0: window range
+  2.0105, mean 1.026.
+
+So the sentence the brief asks for: **the steady solver reaches the attached state at 17 degrees by the registered
+opt-in setting `turbulence.relax_nut = 1.0` (cl 1.5514 against 1.5516), and also by `pseudo_mode = "physical"` with
+`pseudo_dt = 0.02` (cl 1.5660); the non-convergence of the default iteration is caused by the lag of the relaxed eddy
+viscosity behind a momentum iteration with a local pseudo step, shown by these two runs, each of which removes it alone.**
+One trajectory per setting: KT left the irregular phase after about 2700 iterations, as ADR 0760's run at 16 degrees left
+it after about 850; whether it always does at 17 degrees, or at other angles, is not shown.
+
+### The other checks
+
+| Id | Limit | Measured | Met |
+| --- | --- | --- | --- |
+| D0 | equal bits | K0-a17 equals ADR 0760's SA-a17 in iterations, exit code and the mean, minimum, maximum and final iterate of cl_eff and cd_eff | **yes** |
+| P2 | equal | `59e707a8...3a70c889` | **yes** |
+| T1 | all ten files | all ten | **yes** |
+| T2 | all runs | all nine | **yes** |
+| FT-S, FT-T, FT-C, FT-G | abs(cl_eff - R_x) <= 0.018 | equal to the ten printed digits on every later run | **yes** |
+| FT-U (amendment 1) | diverged, abs(cl_eff) > 100 | 2.3e55 on every run | **yes** |
+| NC1 | not steady | not steady | **yes** |
+| NC1b (amendment 3) | both not steady | both | **yes** |
+| NC2 | both > 0.018 | 0.0584 and 0.504 | **yes** |
+| NC3 | both > 0.018 | 0.0697 and 0.0504 (16 degrees met the residual targets, so its final iterate 1.5436) | **yes** |
+| B1 | <= 200 000 bytes | 155 601 bytes | **yes** |
+| E | no file under `crates/*/src/` | `git diff --stat 21054b68`: this ADR, the driver, the record folder, the test file and its mutation patch, the proposal file | **yes** |
+| F, P | see "The house checks" | | see below |
+
+Test file, release: 19 passed, 5 ignored (the known misses N-S, N-C, F17-U, F17-S, F17-C, each with its number in its
+comment; with `--ignored` all five fail), about 32 s, of which the five coarse runs take most.
+
+### Mutations (scratch copy of the tree, own target folder, release, each run once)
+
+| Id | Mutation | What failed |
+| --- | --- | --- |
+| M1 (committed patch) | `relax_nut = 1.0` to `0.5` in `KT-a17.toml` (the decisive case: KT is the first fix in the order U, S, T, C, G) | T1; and FT-T: cl_eff 0.3166, 0.368 from R_T |
+| M2 | KT-a17's cl_eff window maximum raised by 0.01 in `results.json` | T2, N-T and F17-T |
+| M3 | D5's cl_eff range 0.005 multiplied by 1000 in the test | **nothing** (NC1 is carried by the cd_eff limit alone; amendment 3) |
+| M3b | the same, with NC1b in place | NC1b |
+| M4 | the tolerance 0.018 multiplied by ten in the test | NC2, NC3 and T2 |
+
+`git apply --check` accepts the committed patch on the tip.
+
+### What the gate runs and what is a heavy record
+
+- **In the gate** (`crates/rcfd-api/tests/naca0012_17_degrees_steady_f884.rs`, 19 tests): the judgement of all nine runs
+  by D5 from the committed record, the reproduction D0, the set-up of the ten cases, four negative controls, and five
+  solver runs of 600 iterations of the changed cases on the 6144-cell example mesh (one of them, KU, diverges there and
+  is held as diverging).
+- **Heavy record, not a cargo test:** the nine runs of up to 8000 iterations on 32 768 cells, made by the driver on
+  demand (commands in the folder's README). The gate does not see a change of these runs directly; it sees a change of
+  a coarse run's lift above 0.018, or any edit of the record or the cases. ADR 0760's known miss is unchanged.
+
+### Deviations and disclosures
+
+- Amendment 1: the coarse run with `alpha_u = 0.7` diverges, so FT-U asserts the divergence; why a lower relaxation
+  diverges on the coarse mesh was not examined.
+- Amendment 2: a reported run KU-a15, not registered at first; it decides no row.
+- Amendment 3: M3 was not caught by the registered NC1; NC1b was added and M3 was run again (M3b) and caught. By the
+  decision rule's words ("M1 to M4 ... hold") the registered M3 missed; it is reported here for the lead to weigh.
+- `collect` failed at its first call on the record because the driver called a hash function that ADR 0167's driver
+  does not have; a local `sha256_of` was added (01c01418) and `collect` was run again. Nothing of the judgement changed.
+  A preliminary `collect` into the scratch folder was made before the controls ran, to read the verdicts at 17 degrees.
+- The first fast-test run, with the constants unset, failed by construction; `RAYON_NUM_THREADS=2` was set for the test
+  runs (the shared machine); the values were equal to ten digits on every later run.
+- While the runs went, their status streams were read to see progress; that KT and KG would meet the target was seen
+  before they finished; no limit or run depended on it.
+- The second fast-test run used a name filter that also ran D0, which failed there because the record did not yet exist.
+- ADR 0167 and the pressure part of `simple.rs` were not read whole (said in the registration).
+
+### The house checks (F, P)
+
+- `cargo test -p rcfd-api --release --test naca0012_17_degrees_steady_f884`: 19 passed, 5 ignored.
+- `cargo test -p rcfd-api --release --lib`, `cargo fmt -p rcfd-api --check`, `cargo clippy -p rcfd-api --all-targets --
+  -D warnings`, `python scripts/f884_naca0012_17_steady.py selftest`, `python scripts/w49d_aoa_sweep_fixed.py selftest`,
+  `cargo test -p rcfd-cli --release --test docs_site`, `python scripts/roadmap_proposals.py check` and
+  `python scripts/process_report.py --check` on the last tree: given in the report.
+
+### Not run
+
+Any combination of settings or another value of one; the local pseudo mode; a start from an attached state (needs
+`sim.rs`); other angles than 15 and 17; Linux; `baseline_hashes` (no file under `crates/*/src/` changed); the whole
+integration tests of `rcfd-api` and the workspace suite (rule 7).
+
+### Size
+
+Actual: done (registered: done); 0 further registrations and three amendments; 1 heavy batch (nine runs, about 2.3
+hours of wall time, with one release build of `rcfd-cli`, the test-file builds and one build of a scratch copy for the
+mutations); 1 question; about 240 000 bytes read.
+
+### Decision by the registered rule
+
+KT meets F17-T (1.55140 against 1.5516, tolerance 0.018) and C15-T (1.493201 against 1.4932034); KG meets F17-G and C15-G;
+D0, P2, T1, T2, the five fast tests (FT-U as amended), NC1 to NC3 and NC1b hold; M1, M2 and M4 are caught, M3 only
+after amendment 3 (M3b); E holds; no source of the solver was changed, so every default is bit-identical by
+construction. By the clause "done (fixed)": **done**, with the M3 deviation stated, for the lead to decide.
+
+### Open questions for the maintainer
+
+1. **Does a setting found here become a default?** Options: (a) no default changes: the case files of this aerofoil near
+   stall (and the topic page) name `turbulence.relax_nut = 1.0` as the setting that reaches the attached state, and a
+   follow-up runs ADR 0760's twelve angles with it to see whether it is safe as a default; (b) make `relax_nut = 1.0` the
+   default for Spalart-Allmaras on the steady route now, which changes every steady SA result and would need the
+   baseline hashes re-recorded; (c) make the global pseudo step the default for aerofoil cases. **Recommendation (a)**:
+   the evidence is one trajectory at each of two angles of one case; a default change alters every steady SA result,
+   and KT's escape from the irregular phase took 2700 iterations, so its robustness is not shown.
+
+### For the lead: roadmap entries
+
+Status proposed: done.
+
+> ADR 0770, 2026-11-22, done by its registered rule: on M1w-far500 with ADR 0760's set-up the steady SIMPLEC solve at 17 degrees with the one opt-in setting turbulence.relax_nut = 1.0 ends steady by ADR 0167's window rule at cl 1.5514, 0.0002 from the time-accurate 1.5516 (control at 15 degrees 1.493201 against 1.4932034), and with a global pseudo step (pseudo_mode physical, dt 0.02) at 1.5660; alpha_u 0.7 converges but 0.025 high, the potential start and a non-orthogonal corrector do not converge; the unchanged case reproduces ADR 0760 bit for bit; no solver source changed; the gate holds the record, four negative controls and five coarse runs (crates/rcfd-api/tests/naca0012_17_degrees_steady_f884.rs).
+
+Follow-up proposed (a new item, with its own acceptance):
+
+> Title: Steady Spalart-Allmaras without eddy-viscosity relaxation over the NACA 0012 lift curve. Deps: F-884. Acceptance: Every limit not stated here is registered in the ADR before the run. ADR 0760's twelve steady cases from 0 to 17 degrees with turbulence.relax_nut = 1.0 added each end steady by ADR 0167's window rule with cl within 0.018 of ADR 0760's steady values at 0 to 16 degrees and of ADR 0764's 1.5516 at 17 degrees, or each angle that does not is recorded with its number; the result informs whether relax_nut = 1.0 can become the default of steady Spalart-Allmaras.
+
+The same entries are in `docs/roadmap/proposals/0770-F-884.json`. `docs/adr/index.md` is not current and is left to the
+lead.
