@@ -725,3 +725,17 @@ ones, so the missing pressure rise of F-870 lies in loss or recovery and not in 
 alone cannot divide it between the rotor and the installation. The simulated loss falls from 104 to 63 Pa from B3 to B1
 and is not converged, which makes the loss budget on a finer mesh the next step that can decide. Questions 1 and 2 are
 put to the maintainer, the follow-up with question 2.
+
+## Answers of the maintainer (2026-11-22)
+
+The lead put questions 1 and 2 above to the maintainer on 2026-11-22, with the question of ADR 0764 and three of ADR
+0766, each with the agent's recommendation, which the lead shares, and asked whether to take all six. The maintainer answered: "Yes, all six".
+
+1. Option (b): the Euler head and the kinetic energy leaving the rotor over the measured span and the profiles of c_x and
+   c_t at the measured plane are compared quantities of F-870 beside the pressure rise and the shaft power, each with a
+   band registered before its run; the pressure rise stays a compared quantity and its miss stays a miss. The acceptance
+   of F-870 is extended by a sentence that says so. This also answers question 4 of ADR 0762 as to the compared
+   quantity; the convergence rule is answered in ADR 0766.
+2. Options (b) and (c): first the loss budget of the simulated rotor on a finer mesh, the follow-up of the proposal
+   file, entered as F-882 with the title, dependencies and acceptance written there; beside it a short reading of the
+   wall-pressure data of the record for a mean static pressure behind the rotor, entered as F-883. F-880 waits on both.

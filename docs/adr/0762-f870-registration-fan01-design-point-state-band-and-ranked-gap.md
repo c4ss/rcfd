@@ -578,3 +578,10 @@ For this ADR:
    pressure rise is the installation's.
 4. Neither the compared quantity nor the convergence rule of F-870 is decided now; both are put again when F-878 and
    F-879 have reported.
+
+## Question 4 answered (2026-11-22)
+
+Question 4 above, the compared quantity and the convergence rule of F-870, was put again after F-878 and F-879 reported,
+as their questions. The maintainer's answers of 2026-11-22 are recorded in ADR 0765 (question 1: the rotor quantities
+the record measures are compared beside the pressure rise) and ADR 0766 (question 2: the convergence rule waits on
+F-885).

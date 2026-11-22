@@ -589,3 +589,32 @@ The same entries are in `docs/roadmap/proposals/0766-F-879.json` (form 1 of ADR 
 `python scripts/roadmap_proposals.py check`.
 
 Generated pages that this work may leave not current, for the lead (rule 9): `docs/adr/index.md` (ADR 0766 is new).
+
+## The lead's reading (2026-11-22), at the merge
+
+Merged at ff89d0cc (the report read at 14:55 UTC, 6 minutes of reading, proposed partial, written partial). Checked by
+the lead before the merge: the registration is the first commit and alone, and amendment 1 is committed before the
+corrected check and before any registered run; no solver source is changed and `f870_fan01_design_point.rs` is
+untouched; the two heavy records are ignored with the reason in the attribute. The committed mutation is M3, the
+registered fallback, because M1 was not caught by the 20-step run; that is as registered. Noted, not held against the
+merge: the two record CSVs (1.1 and 2.3 MB) are the largest files under `docs/investigations/`; they are the evidence of
+the two runs and are kept.
+
+Status: **partial**, as proposed, from a copy of `docs/roadmap/proposals/0766-F-879.json` without its follow-up. The lead
+reads the result as the agent does, including its own caution: the substitute for the outer-iteration rule (D-2) does
+not measure time accuracy on a state that has become steady, so neither the miss of H(dt) nor the pass of H(dt/2) says
+much, and the decay of the site oscillation is an observation and not a class. Questions 1 to 3 were put to the
+maintainer the same day.
+
+## Answers of the maintainer (2026-11-22)
+
+The lead put questions 1 to 3 above to the maintainer on 2026-11-22, with the question of ADR 0764 and two of ADR 0765,
+each with the agent's recommendation, which the lead shares, and asked whether to take all six. The maintainer answered: "Yes, all six".
+
+1. Option (a): an opt-in, read-only record of the velocity change of each outer iteration is added to the transient
+   solver and check H is run again by ADR 0183's own outer-iteration rule. Entered as F-885 with the title,
+   dependencies and acceptance of the proposal file as written there. The existing records are not read as STEADY.
+2. The convergence rule of F-870 is decided after F-885 reports, with the agent's caution recorded: the time-marched
+   pressure rise on B2 is 8 to 9 per cent above the SIMPLEC sample.
+3. The acceptance of F-879 is reworded from "from the stalled steady state" to "from the start state registered
+   there", which is what departure D-7 of this ADR ran.

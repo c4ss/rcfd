@@ -568,13 +568,13 @@ One row per record of this folder, grouped by the roadmap category of the item i
 | [0757](0757-f867-registration-the-fan-milestone-as-the-whole-design-goal.md) | F-867 registration: the fan milestone as the whole fan design goal | REGISTERED | 2026-11-21 | 1 | F-867 | done |
 | [0758](0758-f855-registration-a-stall-of-the-waiter-or-of-the-holder-separated-from-a-fault-of-the-edit-lock.md) | F-855 registration: a stall of the waiter or of the holder separated from a fault of the edit lock, after F2 failed in a second gate | REGISTERED | 2026-11-21 | 1 | F-855 | partial |
 | [0759](0759-f866-registration-the-control-of-l1-decides-and-asserts-on-the-ten-listings.md) | F-866 registration: the control of L1 decides and asserts on the ten listings | REGISTERED | 2026-11-21 | 1 | F-866 | done |
-| [0760](0760-f868-registration-naca0012-lift-curve-against-ladson.md) | F-868 registration: the NACA 0012 lift curve against Ladson's measured lift at Re 6e6 | REGISTERED | 2026-11-22 | 1 | F-868 | partial |
+| [0760](0760-f868-registration-naca0012-lift-curve-against-ladson.md) | F-868 registration: the NACA 0012 lift curve against Ladson's measured lift at Re 6e6 | REGISTERED | 2026-11-22 | 1 | F-868 | done |
 | [0761](0761-f869-registration-the-mean-drag-of-the-cylinder-at-re-100-against-the-published-spread.md) | F-869 registration: the mean drag of the cylinder at Re 100 against the published spread | REGISTERED | 2026-11-22 | 1 | F-869 | done |
 | [0762](0762-f870-registration-fan01-design-point-state-band-and-ranked-gap.md) | F-870 registration: FAN-01 at its design point, the state, the band and the ranked gap | REGISTERED | 2026-11-22 | 1 | F-870 | partial |
 | [0763](0763-f869-registration-the-mesh-converged-mean-drag-of-the-cylinder-at-re-100.md) | F-869 registration: the mesh-converged mean drag of the cylinder at Re 100 | REGISTERED | 2026-11-22 | 1 | F-869 | done |
-| [0764](0764-f868-registration-naca0012-17-degrees-by-an-unsteady-arm.md) | F-868 registration: the NACA 0012 at 17 degrees by an unsteady arm | REGISTERED | 2026-11-22 | 1 | F-868 | partial |
+| [0764](0764-f868-registration-naca0012-17-degrees-by-an-unsteady-arm.md) | F-868 registration: the NACA 0012 at 17 degrees by an unsteady arm | REGISTERED | 2026-11-22 | 1 | F-868 | done |
 | [0765](0765-f878-registration-fan01-lda-profiles-euler-work-and-the-division-of-the-missing-pressure-rise.md) | F-878 registration: the FAN-01 rotor against the measured LDA profiles, the Euler work and the division of the missing pressure rise | REGISTERED | 2026-11-22 | 1 | F-878 | partial |
-| [0766](0766-f879-registration-fan01-check-h-the-hub-pocket-in-time.md) | F-879 registration: FAN-01, check H of ADR 0183, the hub trailing-edge pocket in time | REGISTERED | 2026-11-22 | 1 | F-879 | todo |
+| [0766](0766-f879-registration-fan01-check-h-the-hub-pocket-in-time.md) | F-879 registration: FAN-01, check H of ADR 0183, the hub trailing-edge pocket in time | REGISTERED | 2026-11-22 | 1 | F-879 | partial |
 
 ## Records with no item in the file name (259)
 
@@ -761,7 +761,7 @@ One row per record of this folder, grouped by the roadmap category of the item i
 | [0179](0179-job49p-an-automatic-first-order-fallback-for-the-fan01-stall-cells.md) | Job 49P, an automatic first-order fallback for the FAN-01 stall cells | REGISTERED | 2026-10-31 | 1 |  |
 | [0180](0180-job49q-a-face-bounded-second-order-convection-scheme-for-the-fan01-stall.md) | Job 49Q, a face-bounded second-order convection scheme for the FAN-01 bladed stall, tested on B3 and B2 | REGISTERED | 2026-10-31 | 2 |  |
 | [0181](0181-job49r-a-mesh-change-at-the-fan01-hub-trailing-edge-site.md) | Job 49R, a mesh change at the FAN-01 z 0.17 hub site (the hub trailing edge), second-order convection kept | REGISTERED | 2026-10-31 | 4 | F-723 |
-| [0183](0183-exp-rot-registration.md) | EXP-ROT (F-276) registration | REGISTERED | 2026-11-04 | 2 | F-286, F-296 |
+| [0183](0183-exp-rot-registration.md) | EXP-ROT (F-276) registration | REGISTERED | 2026-11-04 | 2 | F-286, F-296, F-879 |
 | [0184](0184-m-fan-b-registration-and-obj-gltf-readers.md) | M-FAN-B registration (surface import and meshing pipeline) and job J4, the OBJ and glTF surface readers (F-280) | REGISTERED | 2026-11-04 | 1 |  |
 | [0229](0229-runner-liveness-identity-status-and-append-retries-and-the-shutdown-start-race.md) | Runner: solver identity by a held file, retried status and stream writes, and the shutdown-start race | REGISTERED | 2026-11-11 | 1 |  |
 | [0235](0235-small-follow-ups-sv202-text-map-warm-start-flag-t2-vacuous-pass.md) | three small follow-ups: SV202's fuller text (F-328), the `rcfd map` flag for the extended warm start (F-329), the vacuous pass of `schemes_wave13` T2 (F-269) | REGISTERED | 2026-11-12 | 1 | F-249, F-269, F-328, F-329 |

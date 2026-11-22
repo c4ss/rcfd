@@ -490,3 +490,13 @@ does not reach it. Whether that meets the acceptance is a reading of its words, 
 agent's recommendation (a), which the lead shares: the flow found is steady and attached, and the model and mesh are
 those of the steady arm; the steady route's failure is a separate defect for its own item. On (a) the status becomes done
 and the follow-up of the proposal file is entered.
+
+## Answers of the maintainer (2026-11-22)
+
+The lead put the open question above to the maintainer on 2026-11-22, with five questions of ADRs 0765 and 0766, each
+with the agent's recommendation, which the lead shares, and asked whether to take all six. The maintainer answered: "Yes, all six".
+
+1. Option (a): a steady state reached by a time-accurate run of the same model on the same mesh meets the acceptance of
+   F-868 at 17 degrees. F-868 is done. The follow-up of the proposal file, the steady solver reaching the attached state
+   at 17 degrees or the cause of its non-convergence diagnosed, is entered as F-884 with the title, dependencies and
+   acceptance written there.
