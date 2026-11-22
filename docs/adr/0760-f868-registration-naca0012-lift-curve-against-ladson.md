@@ -301,3 +301,167 @@ make a run pass.
 2. Whether the band max(5 %, 0.018) is the maintainer's value for this measured case in the tolerance table.
 
 Both are written out with options and a recommendation in the addendum, under the fixed heading.
+
+## Addendum 1: results (2026-11-22)
+
+Commits: c9c9e2b7 (this registration, alone), 1961e2cd (the driver of the evaluation, the twelve case texts, the reference
+fragment; before any run), 09ab5577 (the test file with the recorded R4; before the evaluation of the sweep), 515445fd
+(the record of the sweep, V17 as a known miss), dd8763c1 (the committed mutation), and the commit of this addendum with
+the proposal file. Machine: the maintainer's Windows machine, 16 logical processors, shared with two other agents' solves.
+Binary: `rcfd-cli`, release, built from main 13b0937d (no crate source differs on this branch), sha256
+`00848da110de638130b0dfa2c9af197b04fa34039edf9b7234222aec2ec8b081`. Twelve runs, each made once, one thread each, three at
+a time, 62 s to 41 minutes a run, 46 minutes in all. Record:
+`docs/investigations/f868-naca0012-lift-curve/` (README, `results.json`, `cases/`); logs in the scratch folder.
+
+### The lift at every registered angle
+
+| Id | alpha | cl | Ladson 80 grit | Difference | Limit (band) | Flow value | Iterations (exit code) | Met |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| V00 | 0 | -0.0000 | -0.0072 | +0.0072 | 0.0180 | yes | 254 (0) | **yes** |
+| V02 | 2 | 0.2202 | 0.2071 | +0.0130 | 0.0180 | yes | 299 (0) | **yes** |
+| V04 | 4 | 0.4388 | 0.4272 | +0.0116 | 0.0214 | yes | 332 (0) | **yes** |
+| V06 | 6 | 0.6540 | 0.6448 | +0.0092 | 0.0322 | yes | 380 (0) | **yes** |
+| V08 | 8 | 0.8638 | 0.8557 | +0.0081 | 0.0428 | yes | 459 (0) | **yes** |
+| V10 | 10 | 1.0656 | 1.0586 | +0.0070 | 0.0529 | yes | 533 (0) | **yes** |
+| V12 | 12 | 1.2552 | 1.2493 | +0.0058 | 0.0625 | yes | 648 (0) | **yes** |
+| V13 | 13 | 1.3423 | 1.3384 | +0.0039 | 0.0669 | yes | 777 (0) | **yes** |
+| V14 | 14 | 1.4235 | 1.4189 | +0.0045 | 0.0709 | yes | 8000 (5) | **yes** |
+| V15 | 15 | 1.4932 | 1.4938 | -0.0006 | 0.0747 | yes | 8000 (5) | **yes** |
+| V16 | 16 | 1.5420 | 1.5563 | -0.0143 | 0.0778 | yes | 2008 (0) | **yes** |
+| V17 | 17 | 1.0476 (iteration mean) | 1.6057 | -0.5581 | 0.0803 | **no** | 8000 (5) | **no** |
+
+**V17 is a miss**, as expected. The run ended at its cap without meeting the residual targets; over its last 1000
+iterations cl swings between -0.066 and 1.955 (last iterate 0.397). The mean 1.0476 is not a flow value, and it is 0.558
+under the measured 1.6057, seven times the band. The measured aerofoil is attached at 17 degrees; steady SA on this mesh
+has stalled one degree early. The limit is unchanged; the test is the ignored record
+`f868_v17_lift_within_the_band_at_17_degrees_known_miss`, which fails when run.
+
+Reported without a limit: at all eleven angles from 0 to 16 degrees the difference is within the scatter s = 0.018 alone
+(largest 0.0143 at 16, then 0.0130 at 2). At 13 and 16 degrees the runs met the residual targets and ADR 0167's window
+rule flags them, so the curve holds their window means (final iterates 1.3429 and 1.5436); by the registered rule they
+are flow values.
+
+### The other checks
+
+| Id | Limit | Measured | Met |
+| --- | --- | --- | --- |
+| VM | abs(cl_max / 1.6116 - 1) <= 0.05 | cl_max 1.5420 at 16 degrees, -4.32 % | **yes** (margin 1.16) |
+| L2 | 0.90 to 1.05 | 0.9855 | **yes** |
+| L4 | abs(cl(0)) <= 0.005 | -1.4e-6 | **yes** |
+| R1 | 12 of 12 runs end with exit code 0 or 5 | 12: exit 0 at 0 to 13 and at 16 degrees, exit 5 at 14, 15 and 17 | **yes** |
+| P2 | mesh sha256 equal | `59e707a8...3a70c889`, equal (M1w also equal) | **yes** |
+| T1 | the twelve committed case files equal the record's texts and name angle, model and mesh | all twelve | **yes** |
+| S1 | largest spread <= 0.018 | 0.01769 (at 17 degrees) | **yes** |
+| FT0 | abs(cl_eff) <= 0.005 on the coarse mesh at 0 degrees | -9.2e-9; the run met the residual targets after 195 steps | **yes** |
+| FT4 | abs(cl_eff - R4) <= 0.018 | R4 = 0.3292877732, recorded from the first run (600 steps, residual targets not met; 0.32968 after 450 steps). Every later run gave the same ten digits | **yes** |
+| FT4u | 0 < cl_eff <= 0.4606 | 0.3293 | **yes** |
+| NC1 | offset of one degree rejected at >= 8 of 11 angles | 10 of 11 (all but the value of 16 degrees judged at 15) | **yes** |
+| NC2 | cl x 1.1 rejected at >= 8 of 11 angles | 10 of 11 (all but 0 degrees) | **yes** |
+| D1 | none (reported) | cl, cd and the iteration count of every one of the twelve runs equal ADR 0167's committed curve bit for bit; no difference, so no commit to look for | reported |
+| B1 | <= 200 000 bytes | 88 949 bytes | **yes** |
+| E | no file under `crates/*/src/`, no existing test, no golden, no hash table | `git diff --stat 13b0937d`: the new test file and its mutation patch, this ADR, the record's folder, the reference fragment, the new driver, and the proposal file | **yes** |
+| F | clean; clean; passes; pass | `cargo fmt -p rcfd-api --check` clean; `cargo clippy -p rcfd-api --all-targets -- -D warnings` clean; `docs_site` and the three selftests: see "The house checks" below | see below |
+| P | no failure of this work | see "The house checks" below | see below |
+
+Test file, release: 22 passed, 0 failed, 1 ignored (V17), 20 s; with `--ignored` the known miss fails with "the run
+neither met the residual targets nor is steady; 1.0476 is an iteration mean".
+
+### Mutations (scratch copy of the tree at 515445fd, its own target folder, release, each run once)
+
+| Id | Mutation | What failed |
+| --- | --- | --- |
+| M1 (committed patch) | `rotate_z_deg = -4` to `-5` in `SA-a04.toml` | FT4, at its first assertion (FT4u): cl_eff 0.4659 above 0.4606; that value is also 0.137 from R4, against 0.018. T1 |
+| M2 | `a_ref` of `cl_eff` 0.1 to 0.11 in `SA-a04.toml` | FT4: cl_eff 0.2994, 0.0299 from R4, against 0.018. T1 |
+| M3 | cl at 10 degrees raised by 0.06 in `results.json` | V10: +0.0670 against the band 0.0529 |
+| M4 | s and the factor 0.05 multiplied by ten in the test | NC1 and NC2 (0 angles rejected each), and S1 |
+
+All four are caught. `git apply --check` accepts the committed patch on the tip.
+
+### What the gate runs and what is a heavy record
+
+- **In the gate** (the 22 tests of `crates/rcfd-api/tests/naca0012_lift_curve_f868.rs`): the band at eleven angles and the
+  other limits on the committed record; the two negative controls; and two solver runs of the committed cases of 0 and
+  4 degrees on the 6144-cell example mesh (FT0, FT4), about 20 s together.
+- **Heavy record, not in the gate and not a cargo test:** the twelve runs on the 32 768-cell mesh, made by the two
+  drivers on demand (the commands are in the folder's README). The gate does not see a change of the lift of that sweep
+  directly; it sees a change of the coarse-mesh lift at 4 degrees above 0.018, or any edit of the record.
+
+### Deviations and disclosures
+
+- The binary was built before the commit of the registration, from the same tree (said in its status lines).
+- The runs were queued 14, 15, 17, 16, 13, 12, 10, 8, 6, 4, 2, 0; the registration fixed no order and no run depends
+  on another.
+- R4 was recorded by a first run of FT4 with the constant unset (that run failed by construction). Between that run and
+  the commit of the test, `fast_lift` was changed to take its 600 steps as 450 and 150, to print the value in between;
+  the steps are the same and the value came out the same to the ten printed digits.
+- The coarse run at 4 degrees is not settled after 600 steps (cl moved by 4e-4 over the last 150), and M1 showed 0.4659
+  at 5 degrees against 0.3293 at 4, more than a lift slope accounts for. FT4 is a record of this path's output on a
+  coarse mesh, as registered, and says nothing physical; why the coarse mesh behaves so was not examined.
+- The test of V17 was committed un-ignored in 09ab5577 and became the ignored known-miss record in 515445fd, after the
+  run, by rule 2.
+- The 5 % term makes the band 3.5 to 125 times the difference found from 6 to 15 degrees; the scatter alone would have
+  been met at every angle up to 16.
+- ADR 0159 was not read whole and ADR 0164 not at all (said in the registration). NASA TM 4074 was not read; the
+  measured values are those of the TMR file.
+
+### The house checks (F, P)
+
+- `cargo test -p rcfd-api --release --lib`: 159 passed, 4 ignored. `cargo test -p rcfd-api --release --test
+  aoa_sweep_w49d`: 8 passed, 2 ignored, as before.
+- `cargo test -p rcfd-cli --release --test docs_site`: passed on the registration before its commit; the run on the last
+  tree, with this addendum, is given in the report.
+- `python scripts/f868_naca0012_lift_curve.py selftest`, `python scripts/w49d_aoa_sweep_fixed.py selftest` and
+  `python scripts/w48y_aoa_sweep.py selftest`: pass.
+- `python scripts/roadmap_proposals.py check docs/roadmap/proposals/0760-F-868.json`: accepted (F-868: todo to partial).
+- `python scripts/process_report.py --check`: 2 failures, both generated files that are only not current,
+  `docs/adr/index.md` and `docs/reference-data.md` (the page generated from the fragments, to which this work adds
+  `docs/reference-data.d/0760-F-868.part`); both are left to the lead (rules 7 and 9).
+
+### Not run
+
+The angles 18, 20, 22 and 24 degrees and negative angles; SST, DDES or any unsteady arm; another mesh (M2w) or far-field
+distance; anything on Linux; the whole integration tests of `rcfd-api` and the workspace suite (rule 7);
+`baseline_hashes` (no shared solver file changed).
+
+### Size
+
+Actual: partial (registered: partial); 0 further registrations and no amendment; 1 heavy run (the sweep, 46 minutes
+of wall time, with one release build of `rcfd-cli`, the test file's builds and one build of a scratch copy for the
+mutations); 2 questions; about 220 000 bytes read.
+
+### Decision by the registered rule
+
+V00 to V16 and VM are met on the runs of this work; R1, P2, T1, S1, L2 and L4 hold; FT0, FT4 and FT4u pass; NC1 and NC2
+reject; M1 to M4 are caught; E holds. **V17 misses: at 17 degrees there is no steady value, and the iteration mean 1.0476
+is 0.558 under Ladson's 1.6057 (band 0.0803).** By the clause "partial if some of V00 to V17 or VM miss": **partial**.
+
+What the record shows for the headline: on current main the lift is predicted within the band, and within the scatter
+of the measurement, from 0 to 16 degrees, with a maximum 4.3 % under the measured one; it is not predicted at 17
+degrees, the last registered angle below the measured maximum lift.
+
+### Open questions for the maintainer
+
+1. **Does the headline need 17 degrees?** Options: (a) yes: F-868 stays partial, and a follow-up under this item (rule 13)
+   registers an arm that can give a flow value at 16 and 17 degrees on the same mesh (unsteady SA, ADR 0167's question 2),
+   with this band; (b) no: the headline is "up to the computed maximum lift", 0 to 16 degrees, with the stall one degree
+   early and the maximum 4.3 % low stated as its limits, and the item is done by this record; (c) leave it partial with
+   no follow-up. **Recommendation (a)**: the milestone says "up to maximum lift against the measured lift", the measured
+   maximum is at 17.13 degrees, and a miss should not become a pass by a change of words. If the unsteady arm stalls
+   early as well, (b) is then a statement of the model's limit and not of an untried one.
+2. **The band for this measured case** (the tolerance table's row "Agreement with a measured case" has no value).
+   Options: (a) max(5 %, 0.018), as registered here; (b) the scatter alone, 0.018 at every angle below the stall, which
+   this record meets at all eleven angles and which is four times tighter at high lift; (c) another value.
+   **Recommendation (b) for the table and for any later registration of this case**; the outcome of this ADR is the same
+   under (a) and (b), and its band is not changed after the run.
+
+### For the lead: roadmap entries
+
+Status proposed: partial.
+
+> ADR 0760, 2026-11-22, partial: on main 13b0937d steady Spalart-Allmaras on the mesh M1w-far500 (ADR 0167's SA arm, reproduced bit for bit at twelve angles) gives the lift within the registered band max(5 %, 0.018) of Ladson's 80-grit lift at 0, 2, 4, 6, 8, 10, 12, 13, 14, 15 and 16 degrees (largest difference 0.0143 at 16, all eleven within the measured scatter 0.018) and a maximum of 1.542, 4.3 % under the measured 1.6116 (limit 5 %); 17 degrees is a known miss (no steady value, iteration mean 1.0476 against 1.6057); the gate holds the record, two negative controls and a fast solver run of the same cases on the coarse example mesh (crates/rcfd-api/tests/naca0012_lift_curve_f868.rs), four mutations caught; 18 to 24 degrees, drag and moment are not compared.
+
+> Met at 0 to 16 degrees (band max(5 %, 0.018) of Ladson 80 grit; largest difference 0.0143) and for the maximum lift (1.542, 4.3 % under 1.6116), held by the gate. Missing: 17 degrees, below the measured maximum lift at 17.13, where steady SA on M1w-far500 does not converge (iteration mean 1.0476 against 1.6057, known miss); it needs an arm that gives a flow value there, or the maintainer's word that the headline ends at 16 degrees (ADR 0760, question 1).
+
+No follow-up item is proposed: the arm of question 1 (a) adds no acceptance clause and would be registered under F-868
+(rule 13). The same entries are in `docs/roadmap/proposals/0760-F-868.json`. `docs/adr/index.md` and
+`docs/reference-data.md` are not current and are left to the lead.
