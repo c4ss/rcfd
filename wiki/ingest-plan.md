@@ -135,7 +135,7 @@ Every new ADR / F-item / doc change merged to `main` gets ingested into its thre
 
 ## Ingest backlog
 
-Changes on `origin/main` after the snapshot `2e94e5ef` (checked 2026-11-22 at `7330f3ac`, 11 commits). Ingest them with the steady-state rule when the wiki branch is merged.
+~~Changes on `origin/main` after the snapshot `2e94e5ef` (checked 2026-11-22 at `7330f3ac`, 11 commits). Ingest them with the steady-state rule when the wiki branch is merged.~~ **Ingested 2026-11-22** up to `origin/main` `5b96a1f8` (jobs catchup-adrs and catchup-docs, after the maintainer's "go ahead"); this list is superseded by [[stale-report]], which `tools/stale.py` regenerates from each page's `origin_commit`.
 
 - 2026-11-22 · ADR 0763 answer of the maintainer, option (c): F-869 done, the cylinder milestone's headline (vortex shedding) met; F-881 entered. Touches [[adr-thread-simulation-milestones-validation]], [[cylinder-re100]], [[simulation-milestones]], [[overview]].
 - 2026-11-22 · F-878 / ADR 0765 (registration, amendment 1, addendum 1): FAN-01 rotor against the measured LDA profiles and Euler work. Partial, profiles miss at 12 of 26 radii, kept as a known miss. Touches [[adr-thread-fan01-design-point]], [[fan-01]], [[f-126]].

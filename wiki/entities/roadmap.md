@@ -1,7 +1,7 @@
 ---
 type: entity
 tags: [roadmap, process]
-sources: [doc-roadmap-overview, doc-process-agent-rules, doc-glossary, doc-process-lead-process, doc-process-documentation-review, doc-process-framework-reconciliation, doc-audit-report, doc-partials-audit]
+sources: [doc-roadmap-overview, doc-roadmap-json, doc-process-agent-rules, doc-glossary, doc-process-lead-process, doc-process-documentation-review, doc-process-framework-reconciliation, doc-audit-report, doc-partials-audit]
 created: 2026-11-22
 updated: 2026-11-22
 status: draft
@@ -15,7 +15,7 @@ status: draft
 ## Details
 
 - Written on main only, by the lead; agents propose entries as `docs/roadmap/proposals/<ADR>-<item>.json` ([[doc-process-agent-rules]], rule 9).
-- Counts (2026-11-18): 786 items, 389 done, 297 partial, 100 not started ([[doc-roadmap-overview]]).
+- Counts (2026-11-18): 786 items, 389 done, 297 partial, 100 not started ([[doc-roadmap-overview]]). At origin/main 5b96a1f8 (2026-11-22): 791 items, 391 done, 297 partial, 103 not started ([[doc-roadmap-overview]], [[doc-roadmap-json]]).
 - Lines of work (priority order of 2026-11-18): Claude and the MCP server; Studio; moving meshes, rotors and coupling; structural solver; quality, docs and validation; design studies; numerics; compressible + acoustics; multiphase + particles; turbulence; heat/materials/chemistry; parallel + GPU; meshing; post-processing; CLI/Python/API ([[doc-roadmap-overview]]).
 - Per-area pages `roadmap-<area>` come in P2 ([[ingest-plan]]).
 - The **priority statement** at the head of `docs/ROADMAP.md` (above its marker line) is the maintainer's acceptance: dated, restated at each new instruction, naming the lines of work in order with a weekly budget in registrations ([[doc-process-lead-process]], [[maintainer]]).

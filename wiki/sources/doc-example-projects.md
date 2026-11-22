@@ -3,7 +3,7 @@ type: source
 tags: [studio, example-projects, project-folder, tutorial]
 sources: []
 origin: example-projects/
-origin_commit: 2e94e5ef
+origin_commit: 5b96a1f8
 created: 2026-11-22
 updated: 2026-11-22
 status: draft
@@ -11,7 +11,7 @@ status: draft
 
 # Example projects: README, manifest and project notes
 
-**Origin:** [example-projects/README.md](../../example-projects/README.md), [example-projects/manifest.json](../../example-projects/manifest.json), the notes `wind-tunnel/notes/{README,cylinder,naca0012,step}.md`, `quick-start/notes/README.md`, `axial-fan/notes/README.md`, the `meshes/README.md` of quick-start and axial-fan, and the recipe header of `wind-tunnel/meshes/naca0012-ogrid.recipe.toml`, at origin/main 2e94e5ef. Also [example-projects-linux/README.md](../../example-projects-linux/README.md).
+**Origin:** [example-projects/README.md](../../example-projects/README.md), [example-projects/manifest.json](../../example-projects/manifest.json), the notes `wind-tunnel/notes/{README,cylinder,naca0012,step}.md`, `quick-start/notes/README.md`, `axial-fan/notes/README.md`, the `meshes/README.md` of quick-start and axial-fan, and the recipe header of `wind-tunnel/meshes/naca0012-ogrid.recipe.toml`, at origin/main 5b96a1f8 (first read at 2e94e5ef; `git diff --stat 2e94e5ef 5b96a1f8 -- example-projects example-projects-linux` is empty, so nothing changed). Also [example-projects-linux/README.md](../../example-projects-linux/README.md).
 **Kind:** repo docs (user-facing project notes) plus the folder layout. Decisions: [ADR 0142](../../docs/adr/0142-wave48h-example-projects.md) (wind tunnel, quick start), [ADR 0150](../../docs/adr/0150-job48p-linux-example-stores.md) (Linux tree), [ADR 0176](../../docs/adr/0176-job49m-fan01-blade-passage-as-a-3d-example-project.md) (axial fan).
 
 ## Summary

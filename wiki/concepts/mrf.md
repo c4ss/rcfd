@@ -1,7 +1,7 @@
 ---
 type: concept
 tags: [physics, rotating]
-sources: [doc-glossary, doc-readme, doc-meshing, doc-component-diagonal-default, adr-thread-fan01-rotating-solve, adr-thread-sliding-mesh-rotor-stator]
+sources: [doc-glossary, doc-readme, doc-meshing, doc-component-diagonal-default, adr-thread-fan01-rotating-solve, adr-thread-sliding-mesh-rotor-stator, adr-thread-fan01-design-point]
 builds_on: [relative-and-absolute-velocity-formulations, rotating-reference-frame, frozen-rotor-and-mixing-plane, periodic-and-cyclic-boundaries, simple]
 created: 2026-11-22
 updated: 2026-11-22
@@ -25,6 +25,7 @@ A steady solve in which a rotating zone is computed in its own rotating frame (A
 - **Rotating frame without a fan (ADR 0071):** the solver is second order in the `rotating_frame` and `mrf` formulations; a seam imbalance was a defect of `SimpleSolver::iterate`, fixed opt-in by `coupled_body_pair_mean` ([[adr-thread-fan01-rotating-solve]]).
 - **Cyclic seams (ADR 0113):** `sources.<name>.cyclic_seams` (default `false`) "gives the frame flux to both faces of a seam pair when both owner cells are in the zone", with the solver flag `coupled_offdiag_in_h1`; verified at library level only ([[adr-thread-fan01-rotating-solve]]).
 - **On FAN-01:** the steady relative-frame solve with first-order upwind manufactures swirl that the walls do not supply (ADRs 0078, 0082), and the steady run stalls in a limiter cycle (ADRs 0110, 0111) ([[adr-thread-fan01-rotating-solve]]). Hub item: [[f-126]].
+- **Absolute velocity from the relative-frame solve (ADR 0765):** to compare the rotating-frame FAN-01 solve with LDA profiles the value at a point is the cell's absolute velocity $\mathbf{c} = \mathbf{w} + \omega\,\mathbf{e}_z \times \mathbf{x}_c$ at the cell centre, $c_t = w_t + \omega r_c$. Amendment 1 replaced the registered $w_t + \omega r$ of the point, which put a sawtooth of $\omega$ times the cell's radial extent on the profile (0.78 m/s per 5 mm on B3) ([[adr-thread-fan01-design-point]]).
 
 ## Builds on
 

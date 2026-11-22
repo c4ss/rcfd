@@ -124,6 +124,7 @@ def main():
     unknown = []        # (page, reason)
     linked_adrs = set()
     split_docs = set()
+    recorded_sections = defaultdict(set)
     snapshots = set()
     for p in sorted((ROOT / "sources").glob("*.md")):
         text = p.read_text(encoding="utf-8")
@@ -158,6 +159,7 @@ def main():
         m = SECTION.search(text)
         if m:
             split_docs.add((path, base))
+            recorded_sections[path].add(norm(m.group(1)))
             so, sn = section_text(old, m.group(1)), section_text(new, m.group(1))
             if so is None:
                 unknown.append((p.stem, f'section "{m.group(1)}" not found at {base}'))
@@ -177,7 +179,9 @@ def main():
             continue
         hs = lambda d: [m.group(2).strip() for m in re.finditer(r"^(##)\s+(.*)$", d, re.M)]
         known = {norm(h) for h in hs(old)}
-        new_sections += [(path, h) for h in hs(new) if norm(h) not in known]
+        # a heading that some page already records (the page may sit at a newer commit) is not new
+        has_page = lambda h: any(norm(h) == s or norm(h).startswith(s) for s in recorded_sections.get(path, ()))
+        new_sections += [(path, h) for h in hs(new) if norm(h) not in known and not has_page(h)]
 
     stale_names = {s[0] for s in stale}
     dependents = defaultdict(list)
@@ -195,7 +199,10 @@ def main():
             if "/" not in name and name.endswith(".md") and re.match(r"\d{4}-", name) and name not in linked_adrs:
                 new_adrs.append(name)
     new_adrs = sorted(set(new_adrs))
-    roadmap = any(git("diff", "--quiet", b, args.to, "--", "docs/roadmap.json") is None for b in snapshots)
+    # the roadmap area pages are regenerated together with doc-roadmap-json, so its origin_commit is the reference
+    rj = ROOT / "sources" / "doc-roadmap-json.md"
+    rbase = frontmatter(rj.read_text(encoding="utf-8")).get("origin_commit", "") if rj.exists() else ""
+    roadmap = bool(rbase) and git("diff", "--quiet", rbase, args.to, "--", "docs/roadmap.json") is None
 
     out = [f"Compared each page's `origin_commit` ({', '.join(sorted(snapshots))}) with `{args.to}` ({target}) on {date.today().isoformat()}.", ""]
     out.append(f"## Source pages whose origin changed ({len(stale)})")

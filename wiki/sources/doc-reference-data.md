@@ -3,7 +3,7 @@ type: source
 tags: [reference-data, validation, hub]
 sources: []
 origin: docs/reference-data.md
-origin_commit: 2e94e5ef
+origin_commit: 5b96a1f8
 created: 2026-11-22
 updated: 2026-11-22
 status: draft
@@ -11,12 +11,12 @@ status: draft
 
 # Reference data audit (hub)
 
-**Origin:** [docs/reference-data.md](../../docs/reference-data.md) at origin/main 2e94e5ef (2459 lines, generated from `docs/reference-data.d/*.part`).
-**Kind:** repo doc: lookup record of where every benchmark value or published constant in a test, case or data file comes from and how well it was checked. Split into 147 section pages, one per top-level `##` section.
+**Origin:** [docs/reference-data.md](../../docs/reference-data.md) at origin/main 5b96a1f8 (~~2459 lines~~ at 2e94e5ef; 2507 lines at 5b96a1f8, generated from `docs/reference-data.d/*.part`; the one change is the new section F-878 from `docs/reference-data.d/0765-F-878.part`).
+**Kind:** repo doc: lookup record of where every benchmark value or published constant in a test, case or data file comes from and how well it was checked. Split into ~~147~~ 148 section pages, one per top-level `##` section (148 since the F-878 section of 5b96a1f8).
 
 ## Summary
 
-The page started as the wave 6a audit: every benchmark value or published constant that earlier waves typed from memory was checked against a citable public source. Counted by table row, wave 6a found "about 34 verified, 3 mismatched, about 8 unverifiable or not re-checked". The three mismatches were "one sign error in a test helper (Taylor-Green initial pressure) and two citation or label errors (Darwish-Moukalled journal; flat-plate "Prandtl-Schlichting" label)"; nothing was loosened and "no benchmark number in a data file or assertion turned out to be wrong". Wave 13 re-checked items marked unverified or from memory; "One code constant differs from the original (Realizable A0 4.04 vs 4.0)". Later waves appended their own sections in the order the work was done, ending with the fan sections (F-868, F-869, F-870).
+The page started as the wave 6a audit: every benchmark value or published constant that earlier waves typed from memory was checked against a citable public source. Counted by table row, wave 6a found "about 34 verified, 3 mismatched, about 8 unverifiable or not re-checked". The three mismatches were "one sign error in a test helper (Taylor-Green initial pressure) and two citation or label errors (Darwish-Moukalled journal; flat-plate "Prandtl-Schlichting" label)"; nothing was loosened and "no benchmark number in a data file or assertion turned out to be wrong". Wave 13 re-checked items marked unverified or from memory; "One code constant differs from the original (Realizable A0 4.04 vs 4.0)". Later waves appended their own sections in the order the work was done, ending with the fan sections (F-868, F-869, F-870), and since 5b96a1f8 the FAN-01 LDA profiles of F-878 (ADR 0765).
 
 Label vocabulary used throughout: "Verified" means the repo value agrees with the source; "secondary" means the source is a reputable paper or repository that reproduces the primary table, not the original printed table. Later sections also use "NOT read", "from memory", "UNVERIFIED", "derived" and "data not obtained". For downloadable datasets, checksums and licences the doc points to [[doc-validation-data]]; the per-item re-check of wave 13 is in [[doc-verification-report]].
 
@@ -27,6 +27,7 @@ Label vocabulary used throughout: "Verified" means the repo value agrees with th
 - "Not verifiable online" lists what still rests on secondary copies ([[doc-reference-data-not-verifiable-online]]).
 - The structural (FEM) sections mostly say the formula is derived in the ADR and the named literature was "NOT read" or recalled from memory.
 - The last three sections record the milestone headline data: Ladson NACA 0012 maximum lift (F-868, ADR 0760), the cylinder mean drag band at Re 100 (F-869, ADR 0761) and the FAN-01 design point (F-870, ADR 0762).
+- Since 5b96a1f8 a fourth fan section follows: F-878 (ADR 0765), the FAN-01 LDA profiles of the Zenodo record v6 (doi:10.5281/zenodo.23943494, `lda_data.zip`, checksummed), fetched and read on 2026-11-22. It settles the datum of x (the upstream face of the hub; the plane behind the rotor is at x = 90 mm, the "110 mm behind the hub" of the v2 to v5 scripts is listed in the record's errata as an error), states that the LDA uncertainty is **not stated**, maps the record frame to the mesh ($z_{mesh} = 0.1\,\mathrm{m} + (x - 21.45\,\mathrm{mm})$, offset 45.15 mm $\pm$1.3 mm), and gives integrals over the measured span at x = 90 mm computed in this repository (volume flow 1.3525 m^3/s; Euler work 299.20 W time-averaged and 297.66 W from the ensemble file, against 333.30 W measured shaft power; Euler head 221.22 and 220.02 Pa; kinetic-energy flux per volume flow 97.13 and 99.20 Pa), plus the transcribed time-averaged profiles at 26 radii ([[doc-reference-data-f878-fan01-lda-profiles]]).
 
 ## Section pages
 
@@ -197,6 +198,7 @@ Label vocabulary used throughout: "Verified" means the repo value agrees with th
 - [[doc-reference-data-f868-ladson-naca0012]] — ADR 0760 (F-868): Ladson NACA 0012 maximum lift for the 120-grit and 180-grit zones and the three-zone scatter.
 - [[doc-reference-data-f869-cylinder-mean-drag]] — F-869 cylinder mean drag coefficient at Re 100 and the band of ADR 0761.
 - [[doc-reference-data-f870-fan01-design-point]] — F-870 FAN-01 design point: the measurement, what its sources state, and the band of ADR 0762.
+- [[doc-reference-data-f878-fan01-lda-profiles]] — F-878 FAN-01 LDA profiles (ADR 0765): the published Zenodo v6 record, what it holds (two radial lines at x = 20 and 90 mm, 26 radii, three components), the settled datum, no stated LDA uncertainty, and the integrals of ADR 0765 (added at 5b96a1f8).
 
 ## Contradictions with the wiki
 
@@ -220,5 +222,5 @@ None with existing wiki pages. Contradictions and conflicts recorded within the 
 ## Pages this source informs
 
 - [[lid-driven-cavity]], [[differentially-heated-cavity]], [[cylinder-re100]], [[backward-facing-step]], [[flat-plate]], [[naca0012]], [[dfg-cylinder-benchmark]]
-- [[fan-01]], [[validation-data-pack]], [[design-loop]], [[gci-richardson]], [[verification-vs-validation]]
+- [[fan-01]] (also the F-878 LDA profiles), [[validation-data-pack]], [[design-loop]], [[gci-richardson]], [[verification-vs-validation]]
 - [[known-miss]], [[unverified]], [[provenance]], [[benchmark-descriptor]]

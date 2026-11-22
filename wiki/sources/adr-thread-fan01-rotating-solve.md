@@ -1,9 +1,9 @@
 ---
 type: source
 tags: [adr-thread, fan, fan-01, mrf, rotating, rotor-stator, f-126]
-sources: [doc-roadmap-json, doc-milestone-fan, doc-meshing, adr-thread-naca0012-sa-drag, doc-designs-exp-rot, doc-designs-m-fan-b]
+sources: [adr-thread-fan01-design-point, doc-roadmap-json, doc-milestone-fan, doc-meshing, adr-thread-naca0012-sa-drag, doc-designs-exp-rot, doc-designs-m-fan-b]
 origin: docs/adr/ (ADR list below)
-origin_commit: 2e94e5ef
+origin_commit: 5b96a1f8
 created: 2026-11-22
 updated: 2026-11-22
 status: draft
@@ -11,13 +11,14 @@ status: draft
 
 # ADR thread: FAN-01 rotating solve (F-126, frozen rotor / MRF, rotor-stator interfaces)
 
-**Origin:** the ADRs in the table below, `docs/adr/` at `origin/main` 2e94e5ef.
+**Origin:** the ADRs in the table below, `docs/adr/` at `origin/main` 5b96a1f8 (re-read 2026-11-22 for the changes to ADR 0762 and the new ADRs 0765, 0766, which live on [[adr-thread-fan01-design-point]]).
 **Kind:** ADR thread. Created by the moving-meshes job (P3) as the home of the F-126 / FAN-01 chain; the wave ADRs of that chain (file names without an item, for example 0075, 0078, 0086, 0109, 0110, 0112, 0113, 0115, 0116, 0117, 0174 to 0181) belong to the records job, which adds them here. Until then this page holds only the item-level state and the links to the transient rotor-stator path.
 
 F-126 is the hub item of the `fan` milestone in this category: "Turbomachinery rotating interfaces: frozen-rotor and stage (mixing-plane) interfaces with sector periodicity" ([[doc-roadmap-json]]). Its steady path is the rotating frame ([[mrf]]) on the FAN-01 blade passage ([[fan-01]], [[fan-passage-mesh]]); its transient alternative is the sliding interface ([[adr-thread-sliding-mesh-rotor-stator]]).
 
 ## Current state
 
+- **Newest (2026-11-22): check H of ADR 0183 has been run** (ADR 0766, F-879, partial): on B2 with SST, `pimple` with 5 outer iterations, BDF2 and seam diffusivity `pair`, from the uniform start, H(dt) and H(dt/2) of 0.2532 s each "does not decide": H(dt) meets the outer-iteration substitute D-2 at 43.76 % of the window's steps against 99 %, so the class is NOT EVALUABLE. Observed, not a class: the hub-pocket oscillation at the six site cells decays below 1e-4 m/s in the last flow-through time in both runs. The maintainer's answer (ADR 0766 Q1 (a)) enters F-885: an opt-in record of the velocity change of each outer iteration and check H again by ADR 0183's own rule; "The existing records are not read as STEADY." The convergence rule of F-870 waits on F-885 (ADR 0766 Q2). Beside it ADR 0765 (F-878) finds the rotor's Euler work and outflow kinetic energy close to the measured LDA values and the missing pressure rise in loss or recovery; loss budget F-882 and wall-pressure reading F-883 entered. Detail on [[adr-thread-fan01-design-point]].
 - **F-126 is partial** (roadmap gap at 2e94e5ef): "The acceptance (a public compressor case reproducing pressure ratio and efficiency within published scatter) is not attempted. Also missing: MRF on the bladed FAN-01 passage (blade wall refused by the revolution check), compressible mixed-out state, rothalpy, a downstream-velocity constraint, and transient and coupled solvers." ([[roadmap-moving-meshes-rotors-and-coupling]]).
 - **Transient rotor-stator from a case file exists** for laminar constant-property piso / pimple with Euler: full annulus (F-303, ADR 0637) and sector (F-711, ADR 0646) on the cylindrical-interface generators, which carry no blade ([[adr-thread-sliding-mesh-rotor-stator]]). No ADR of the moving-meshes list runs a sliding interface on the bladed FAN-01 passage or with turbulence.
 - **Defaults held for the fan path.** On 2026-11-18 the maintainer held several default changes with the same words, "waits until the fan path needs it": the coupled periodic sliding step (ADR 0641, F-721; ADR 0659, F-724), the bounded second-order immersed forcing (ADR 0254, F-364), the mesh-speed compressible step (ADR 0257, F-365) and the fractional-step coupled-face opt-ins (ADR 0691, F-775).
@@ -64,6 +65,8 @@ F-126 is the hub item of the `fan` milestone in this category: "Turbomachinery r
 
 **Design-point check of this solve (added by job p3-quality-design):** [ADR 0762](../../docs/adr/0762-f870-registration-fan01-design-point-state-band-and-ranked-gap.md) (2026-11-22, F-870, partial) runs mesh B1 at 1.4032 m^3/s: pressure rise 73.988 Pa against 126.46 Pa (-41.5 %), shaft power 326.50 W against 333.30 W (-2.0 %), non-orthogonality 83.37 deg and skewness 3.765 against 70 and 2.0, `res_u` 1.2e-3 against 1e-5. Its task-1 table summarises ADRs 0075, 0078, 0086, 0110, 0111, 0170, 0174 to 0181 and 0183 against the three limits of `docs/milestone-fan.md`. Follow-ups F-877 to F-880 (ADRs 0765 and 0766 issued). Detail on [[adr-thread-fan01-design-point]].
 
+**Check H run and the LDA comparison (added 2026-11-22 from origin/main 5b96a1f8):** [ADR 0766](../../docs/adr/0766-f879-registration-fan01-check-h-the-hub-pocket-in-time.md) (F-879, partial) runs check H of ADR 0183 below, with departures D-1 (seam diffusivity `pair`, as ADR 0205 Q2 recommended) to D-7 (the uniform start); verdict "does not decide". [ADR 0765](../../docs/adr/0765-f878-registration-fan01-lda-profiles-euler-work-and-the-division-of-the-missing-pressure-rise.md) (F-878, partial) compares B1 with the LDA profiles: 12 of 26 radii miss in $c_x$ and in $c_t$. Both on [[adr-thread-fan01-design-point]].
+
 ## Key numbers and limits
 
 - ADR 0637 D3 / ADR 0112: a sliding step whose interface non-orthogonality exceeds 70 deg stops the run (the cylindrical-interface pre-flight).
@@ -109,7 +112,7 @@ After ADR 0171 traced the NACA 0012 trailing-edge divergence to unlimited `linea
 | [0179](../../docs/adr/0179-job49p-an-automatic-first-order-fallback-for-the-fan01-stall-cells.md) | 2026-10-31 | registration | | Automatic first-order fallback for the stall cells, B3 and held-out B2 | not accepted; rule 4 (oscillation amplitude not a usable selector); R1 missed | 0180 |
 | [0180](../../docs/adr/0180-job49q-a-face-bounded-second-order-convection-scheme-for-the-fan01-stall.md) | 2026-10-31 | registration | | A face-bounded second-order TVD scheme (minmod, van Albada; van Leer as control) | no arm accepted; stopped by reading rule 6 | 0181 |
 | [0181](../../docs/adr/0181-job49r-a-mesh-change-at-the-fan01-hub-trailing-edge-site.md) | 2026-10-31 | diagnosis + registration | F-723 | A mesh change at the z 0.17 hub trailing-edge site, second order kept | no arm accepted (M-W, M-RW withdrawn; M-R misses C1 to C3, SB); stopped by rule 6; `c_grid_grading` hash-neutral | 0183 (check H) |
-| [0183](../../docs/adr/0183-exp-rot-registration.md) | 2026-11-04 | registration (experiment) | F-276 (F-286, F-296) | EXP-ROT: rigid rotation against the rotating frame, the rotation term, the pocket in time | design registered; prerequisites P-A, P-B, P-C kept; experiment not run; check H NOT RUNNABLE | |
+| [0183](../../docs/adr/0183-exp-rot-registration.md) | 2026-11-04 | registration (experiment) | F-276 (F-286, F-296) | EXP-ROT: rigid rotation against the rotating frame, the rotation term, the pocket in time | design registered; prerequisites P-A, P-B, P-C kept; experiment not run; check H NOT RUNNABLE | check H run by ADR 0766 (F-879, does not decide); rerun by its own outer rule is F-885 |
 | [0184](../../docs/adr/0184-m-fan-b-registration-and-obj-gltf-readers.md) | 2026-11-04 | registration (milestone) + job J4 | F-280 | M-FAN-B acceptance A1 to A7; OBJ and glTF surface readers | J4 met except R3 (set-up error); acceptance waits on Q2, Q3 | |
 
 Open from this section: ADR 0174 part L and its question 2 (scheme side, locus open); ADR 0176 question 2 (the 6 MB cap); ADR 0181 the report-only pocket check; ADR 0183 open question 8 and the PC-2N drafting conflict "for the maintainer"; ADR 0184 Q2 (the FAN-01 surface) and Q3 (the domain).

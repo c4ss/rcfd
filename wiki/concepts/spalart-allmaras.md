@@ -1,7 +1,7 @@
 ---
 type: concept
 tags: [turbulence, rans, one-equation, des]
-sources: [doc-case-schema-turbulence, doc-reference-data-spalart-allmaras, adr-thread-transient-rans, adr-thread-periodic-seam-diffusivity, doc-roadmap-json, doc-investigation-job49a-sa-drag, doc-investigation-job49e-sa-wall, doc-investigation-job49d-aoa-sweep-fixed, adr-thread-naca0012-sa-drag, ref-nasa-tmr, ref-menter-1992-nasa-tm-103975, ref-davidson-turbulence-notes]
+sources: [doc-case-schema-turbulence, doc-reference-data-spalart-allmaras, adr-thread-transient-rans, adr-thread-periodic-seam-diffusivity, doc-roadmap-json, doc-investigation-job49a-sa-drag, doc-investigation-job49e-sa-wall, doc-investigation-job49d-aoa-sweep-fixed, adr-thread-naca0012-sa-drag, ref-nasa-tmr, ref-menter-1992-nasa-tm-103975, ref-davidson-turbulence-notes, adr-thread-simulation-milestones-validation]
 builds_on: [boussinesq-eddy-viscosity, wall-distance, convection-diffusion-equation, les-and-des]
 created: 2026-11-22
 updated: 2026-11-22
@@ -30,6 +30,7 @@ The one-equation RANS model transporting a modified eddy viscosity `nuTilda`. rc
 - On the NACA 0012 at wall y+ about 40 the default molecular force report gave about a third of the applied wall-function friction (0.32), and a `zero_gradient` far field let nuTilda grow to 6.0e4 nu; the fixes `total_effective` and far-field role `freestream` ([[doc-investigation-job49a-sa-drag]]) gave cd +2.5 % (0 degrees) and +9.8 % (10 degrees) against TMR on 500 chords ([[doc-investigation-job49d-aoa-sweep-fixed]]). With the wall cell in the buffer layer, wall mode `auto` over-predicts plate friction by about 20 % at y+ 5 to 8 (linear interpolation of the eddy viscosity across the buffer layer); opt-in `auto_sa_law` brings the plate within +2.3 % to +4.4 % of TMR at y+ 1 to 60 ([[doc-investigation-job49e-sa-wall]]).
 - **Defaults since 2026-10-29** ([[adr-thread-naca0012-sa-drag]]): force and force-coefficient reports with `total` or `viscous` take the momentum equation's face viscosity under a turbulence model (old values `total_molecular`, `viscous_molecular`; ADR 0166), moment reports follow (ADR 0170), and a `velocity = "freestream"` patch gets the `freestream` turbulence role under `turbulence = "auto"` (SA in ADR 0166, SST and k-epsilon in ADR 0169).
 - **Buffer layer:** with the wall cell at y+ 5 the default `auto` wall mode over-predicts plate friction by +19.9 % against TMR, because `effective_viscosity` interpolates nut linearly across the buffer layer; the opt-in `turbulence.sa.wall_mode = "auto_sa_law"` meets every limit after amendment 1 (plate +2.3 % to +4.4 % at all 10 y+), and the default stays `auto` pending one more job (ADR 0168, [[adr-thread-naca0012-sa-drag]]).
+- **Spalart-Allmaras without DES on `pimple` (ADR 0764):** the first time-accurate SA run without DES on the NACA 0012 (BDF2, dt 0.02 c/U, two correctors at every step, no `corrector_cap` warning) settles at 17 degrees to a steady attached flow with $c_l$ 1.5516, where the steady SIMPLEC iteration of the same model and mesh swings between -0.07 and 1.95; "the state exists and the steady iteration did not find it" ([[adr-thread-simulation-milestones-validation]]).
 
 ## Related
 

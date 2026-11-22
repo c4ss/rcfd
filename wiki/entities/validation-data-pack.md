@@ -1,7 +1,7 @@
 ---
 type: entity
 tags: [validation, data, provenance]
-sources: [doc-validation-data, doc-reference-data-validation-pack, doc-test-process, doc-changelog, doc-fan-measurement-protocol]
+sources: [doc-validation-data, doc-reference-data-validation-pack, doc-test-process, doc-changelog, doc-fan-measurement-protocol, doc-reference-data-f878-fan01-lda-profiles, adr-thread-fan01-design-point]
 created: 2026-11-22
 updated: 2026-11-22
 status: draft
@@ -29,3 +29,4 @@ status: draft
 
 - No open-licence upstream for the Hannover compressor cascade; GRI-Mech 3.0 legal status unverified ([[doc-validation-data]]).
 - Whether data-gated tests get their data and a fail-on-skip switch in the gate remains open ([[doc-test-process]]).
+- `validation-data/manifest.json` does not list the FAN-01 LDA transcription `docs/investigations/f878-fan01-lda-profiles/lda_profiles.csv` of ADR 0765; whether it becomes a file of the data pack "is the lead's" ([[adr-thread-fan01-design-point]], [[doc-reference-data-f878-fan01-lda-profiles]]).

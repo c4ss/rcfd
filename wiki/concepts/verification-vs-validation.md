@@ -1,7 +1,7 @@
 ---
 type: concept
 tags: [validation, verification, process]
-sources: [doc-reference-data, doc-verification-report, doc-milestone-fan, doc-reference-data-f869-cylinder-mean-drag, doc-changelog, doc-fan-measurement-protocol, doc-design-loop, doc-test-process, adr-thread-simulation-milestones-validation, adr-thread-fan01-design-point, adr-thread-design-surrogate-and-fidelity, ref-oberkampf-trucano-2002-sand2002-0529, ref-nparc-vv-tutorial, ref-mfix-vv-manual, ref-nist-tn-1297]
+sources: [doc-reference-data, doc-reference-data-f878-fan01-lda-profiles, doc-roadmap-json, doc-verification-report, doc-milestone-fan, doc-reference-data-f869-cylinder-mean-drag, doc-changelog, doc-fan-measurement-protocol, doc-design-loop, doc-test-process, adr-thread-simulation-milestones-validation, adr-thread-fan01-design-point, adr-thread-design-surrogate-and-fidelity, ref-oberkampf-trucano-2002-sand2002-0529, ref-nparc-vv-tutorial, ref-mfix-vv-manual, ref-nist-tn-1297]
 builds_on: [code-verification-and-manufactured-solutions, solution-verification, validation-comparison]
 created: 2026-11-22
 updated: 2026-11-22
@@ -23,6 +23,8 @@ Verification asks whether the numbers are computed (or quoted) correctly; valida
 
 - **Band from the measurement's scatter (ADR 0760):** for NACA 0012 the band term s = 0.018 is the scatter of Ladson's three grit zones, because "a computed value cannot be asked to agree with the measurement more closely than the measurement's three sets agree with each other" ([[adr-thread-simulation-milestones-validation]]).
 - **A band needs the measurement's stated uncertainty (ADR 0762):** the round-robin scatter is "another quantity than the one the acceptance names", so F-870 cannot be done until F-877 reads the uncertainty ([[adr-thread-fan01-design-point]]).
+- **A measurement with no stated uncertainty (ADR 0765):** the FAN-01 LDA record states no accuracy of the velocity and nothing on bias correction or weighting, so "The band of ADR 0765 has no measurement part"; the Euler work and heads compared beside it are integrals computed in this repository from the record, not published values ([[doc-reference-data-f878-fan01-lda-profiles]], [[doc-reference-data]]).
+- **A known miss kept on a done item (F-869):** the cylinder mean drag was made done "as it stands, the order miss kept as a known miss" (observed order 1.387 outside the registered [1.5, 2.5]); why the order is near 1.4 is the separate item F-881 ([[doc-roadmap-json]]).
 - **Model-only claims:** every design-loop result carries the caveat "every number ranks variants of the model, not real fans" ([[adr-thread-design-surrogate-and-fidelity]]).
 
 ## Builds on

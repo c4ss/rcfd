@@ -22,6 +22,8 @@ Richardson extrapolation estimates the mesh-converged value of a quantity from s
 
 - **Validity condition on the observed order (ADR 0763):** for the cylinder the extrapolation counts only if the observed order is in [1.5, 2.5]. The sequence gave 1.387, so "the extrapolation is therefore not valid and the mesh-converged drag is not shown", although every order from 1 to 2.5 puts the value in the band. The coarser sequence of ADR 0761 gave the same order (1.38) ([[adr-thread-simulation-milestones-validation]]).
 - **F-870 band form (ADR 0762):** $U_{num} = 1.25\,\lvert f_2 - f_1\rvert / (r_{21}^{p_{band}} - 1)$, $p_{band} = \min(p, 1)$, $r_{21} = 1.40981$. It is added, not combined in quadrature, to the measurement uncertainty, which is not registered ([[adr-thread-fan01-design-point]]).
+- **The order miss does not hold the item (2026-11-22):** the maintainer answered ADR 0763 Q1 with option (c): F-869 is done because the fine value and the Richardson value at every order from 1 to 2.5 are in the band; the miss of the validity condition (order 1.387 against [1.5, 2.5]) stays a known miss, and F-881 diagnoses the order ([[adr-thread-simulation-milestones-validation]]).
+- **The mesh term dominates the FAN-01 LDA bands (ADR 0765):** the band of each profile value and of each share of the missing pressure rise is $U = U_{num} + S + T (+ u_{cov} + u_{data})$, with $U_{num}$ formed from B1 and B2 as for F-870; for the conditional rotor share 27.17 of 31.10 Pa is the mesh term. Where the staircase steps of B1 and B2 fall between different measured radii, $U_{num}$ is 4 to 8 m/s and "within" says little ([[adr-thread-fan01-design-point]]).
 
 ## The procedure in the open sources (P6)
 

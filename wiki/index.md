@@ -5,7 +5,7 @@ updated: 2026-11-22
 
 # Index
 
-Catalog of every wiki page (714 pages). Read this first on any query. Format: `- [[page-name]] — one-line summary (n sources, updated YYYY-MM-DD)`. Rebuilt by `tools/build_index.py`.
+Catalog of every wiki page (715 pages). Read this first on any query. Format: `- [[page-name]] — one-line summary (n sources, updated YYYY-MM-DD)`. Rebuilt by `tools/build_index.py`.
 
 ## Overview
 
@@ -15,7 +15,7 @@ Catalog of every wiki page (714 pages). Read this first on any query. Format: `-
 
 - [[ingest-plan]] — Phased plan to ingest the existing repo docs; P0 done
 
-## Sources: repo docs (272)
+## Sources: repo docs (273)
 
 - [[doc-acoustics]] — Fan-noise chain (FW-H 1A, Gutin tones, unvalidated broadband proxies, metrics) and library acoustic boundaries, sponges, wave solver, duct modes, structural radiation (origin `docs/acoustics.md`, updated 2026-11-22)
 - [[doc-adr-briefs-readme]] — The form of a brief: header lines read by the process report, reading list, task, closing line. (origin `docs/adr/briefs/README.md`, updated 2026-11-22)
@@ -201,6 +201,7 @@ Catalog of every wiki page (714 pages). Read this first on any query. Format: `-
 - [[doc-reference-data-f868-ladson-naca0012]] — reference-data section: ADR 0760 (F-868): Ladson NACA 0012 maximum lift for the 120-grit and 180-grit zones and the three-zone scatter. (origin `docs/reference-data.md`, updated 2026-11-22)
 - [[doc-reference-data-f869-cylinder-mean-drag]] — reference-data section: F-869 cylinder mean drag coefficient at Re 100 and the band of ADR 0761. (origin `docs/reference-data.md`, updated 2026-11-22)
 - [[doc-reference-data-f870-fan01-design-point]] — reference-data section: F-870 FAN-01 design point: the measurement, what its sources state, and the band of ADR 0762. (origin `docs/reference-data.md`, updated 2026-11-22)
+- [[doc-reference-data-f878-fan01-lda-profiles]] — reference-data section F-878: the FAN-01 LDA record (Zenodo v6), its two planes and 26 radii, the settled datum, no stated LDA uncertainty, the mesh-frame offset and the measured Euler-work integrals of ADR 0765 (origin `docs/reference-data.md`, updated 2026-11-22)
 - [[doc-reference-data-flat-plate]] — reference-data section: Flat-plate skin-friction correlations (Blasius, power laws, White) and the corrected Prandtl-Schlichting label. (origin `docs/reference-data.md`, updated 2026-11-22)
 - [[doc-reference-data-fluent-mesh-format]] — reference-data section: Fluent mesh-format details (F-118): boundary type ids typed from memory and the elbow.msh check. (origin `docs/reference-data.md`, updated 2026-11-22)
 - [[doc-reference-data-heated-cavity]] — reference-data section: de Vahl Davis (1983) benchmark values for the differentially heated cavity at Ra 1e3 to 1e6, read in the primary Table V scan in wave 30C, plus other values read in that wave. (origin `docs/reference-data.md`, updated 2026-11-22)
@@ -439,7 +440,7 @@ Catalog of every wiki page (714 pages). Read this first on any query. Format: `-
 - [[aeroacoustics]] — The fan-noise library chain plus acoustic boundaries, sponges, wave solver, duct modes and structural radiation; status per part (5 sources, updated 2026-11-22)
 - [[backward-facing-step]] — Driver-Seegmiller turbulent step (6.26 +/- 0.10, F-042 known misses) and laminar ER 2 step (Erturk/Gartling, conflict). (10 sources, updated 2026-11-22)
 - [[claude-plugin]] — The rcfd Claude Code plugin in `clients/claude-plugin/`: MCP project tools plus three skills. (5 sources, updated 2026-11-22)
-- [[computer-fan-target]] — The small computer-fan goal (40-140 mm, 120 mm worked example): scope, outputs, data gap, plan status. (11 sources, updated 2026-11-22)
+- [[computer-fan-target]] — The small computer-fan goal (40-140 mm, 120 mm worked example): scope, outputs, data gap, plan status. (12 sources, updated 2026-11-22)
 - [[cosimulation-protocol]] — `rcfd-cosim/1`: fluid/structure participants, mapping, coupled step, service methods, `rcfd serve --cosim` (5 sources, updated 2026-11-22)
 - [[crate-graph]] — The dependency graph of the 19 workspace crates under `crates/` and its layering rule. (1 sources, updated 2026-11-22)
 - [[cylinder-re100]] — Cylinder wake at Re 100: St references and Williamson fit, mean-drag band [1.314, 1.370] of F-869, recorded runs. (10 sources, updated 2026-11-22)
@@ -450,7 +451,7 @@ Catalog of every wiki page (714 pages). Read this first on any query. Format: `-
 - [[example-project-quick-start]] — Studio example: lid-driven cavity Re 100/400 and heated cavity Ra 1e3/1e4, runs of 1-2 s (1 sources, updated 2026-11-22)
 - [[example-project-wind-tunnel]] — Studio example: cylinder Re 100/200, NACA 0012 SST at 4/2 degrees (flow- and mesh-rotated), laminar step Re 800/400 (1 sources, updated 2026-11-22)
 - [[f-126]] — F-126, turbomachinery rotating interfaces, the hub item of the fan milestone: what exists, the FAN-01 acceptance attempt and its diagnosis (4 sources, updated 2026-11-22)
-- [[fan-01]] — The reference fan case, a 500 mm low-pressure axial fan from the FAU / EAA open data set (CAD and measured characteristic, CC BY 4.0). (16 sources, updated 2026-11-22)
+- [[fan-01]] — The reference fan case, a 500 mm low-pressure axial fan from the FAU / EAA open data set (CAD and measured characteristic, CC BY 4.0). (17 sources, updated 2026-11-22)
 - [[fan-passage-mesh]] — Axial-fan blade-passage meshes (H-slit ADR 0065, C-grid ADR 0068 and constructions to S''''); gates mostly missed, not validated (4 sources, updated 2026-11-22)
 - [[flat-plate]] — Flat-plate correlations, Blasius to 32 digits, TMR SST/SA skin friction, GCI, F-043 known miss. (10 sources, updated 2026-11-22)
 - [[implementation-agent]] — The agent role: one brief, registration first, own ADR and proposal files, no merge, push or roadmap writes. (4 sources, updated 2026-11-22)
@@ -494,18 +495,18 @@ Catalog of every wiki page (714 pages). Read this first on any query. Format: `-
 - [[roadmap-numerics-and-solvers]] — the 'Numerics and solvers' line of work (Solver family) of the roadmap, with every f-item in it. (8 sources, updated 2026-11-22)
 - [[roadmap-parallel-and-gpu]] — the 'Parallel and GPU' line of work (Solver family) of the roadmap, with every f-item in it. (2 sources, updated 2026-11-22)
 - [[roadmap-post-processing-and-output]] — the 'Post-processing and output' line of work (Data family) of the roadmap, with every f-item in it. (3 sources, updated 2026-11-22)
-- [[roadmap-quality-docs-and-validation]] — the 'Quality, docs and validation' line of work (Project family) of the roadmap, with every f-item in it. (7 sources, updated 2026-11-22)
+- [[roadmap-quality-docs-and-validation]] — the 'Quality, docs and validation' line of work (Project family) of the roadmap, with every f-item in it. (8 sources, updated 2026-11-22)
 - [[roadmap-structural-solver]] — the 'Structural solver' line of work (Solver family) of the roadmap, with every f-item in it. (21 sources, updated 2026-11-22)
 - [[roadmap-studio-desktop-app]] — the 'Studio desktop app' line of work (Use family) of the roadmap, with every f-item in it. (8 sources, updated 2026-11-22)
 - [[roadmap-turbulence]] — the 'Turbulence' line of work (Solver family) of the roadmap, with every f-item in it. (5 sources, updated 2026-11-22)
-- [[roadmap]] — The list of all f-items with dependencies, acceptance and status. (8 sources, updated 2026-11-22)
+- [[roadmap]] — The list of all f-items with dependencies, acceptance and status. (9 sources, updated 2026-11-22)
 - [[simulation-milestones]] — Named simulations with a stated result; the per cent counts landed prerequisite items, and only the 'headline result' says whether the result agrees. (8 sources, updated 2026-11-22)
 - [[structural-solver]] — The FEM structural solver (rcfd-fem): entry points, tiers, counts, fan-blade demonstration, coupling; not validated (9 sources, updated 2026-11-22)
 - [[studio-design-system]] — "The Wayfinding Program": the Studio's Aicher-style visual system, hue jobs, Quiet Rule, three themes. (4 sources, updated 2026-11-22)
 - [[studio-guardrails]] — The 22 Studio guardrails G1-G22 with their rules, one row each. (8 sources, updated 2026-11-22)
 - [[studio]] — The desktop application, an Electron app in `apps/studio-web/` (ADR 0800), in development and run from a checkout; no installer yet. (18 sources, updated 2026-11-22)
 - [[test-to-adr-index]] — `scripts/adr_test_index.py`: maps every test to its ADRs and a primary (registering) ADR for gate attribution (2 sources, updated 2026-11-22)
-- [[validation-data-pack]] — validation-data/ pack (F-125): manifest, fetch, checksums, licence rules, data-gated tests. (5 sources, updated 2026-11-22)
+- [[validation-data-pack]] — validation-data/ pack (F-125): manifest, fetch, checksums, licence rules, data-gated tests. (7 sources, updated 2026-11-22)
 
 ## Concepts (227)
 
@@ -569,7 +570,7 @@ Catalog of every wiki page (714 pages). Read this first on any query. Format: `-
 - [[executable-tutorials]] — docs/tutorials run by the tutorials test (ADR 0089) and what they do not check (5 sources, updated 2026-11-22)
 - [[exit-codes]] — rcfd run exit codes 0-8 with final states, and the codes of check/study/inflate/UDF (9 sources, updated 2026-11-22)
 - [[explicit-time-integration-and-runge-kutta]] — forward Euler, RK2/RK4 comparison, multi-stage RK, explicit limits (4 sources, updated 2026-11-22)
-- [[f-item]] — A roadmap item id such as F-028. (3 sources, updated 2026-11-22)
+- [[f-item]] — A roadmap item id such as F-028. (4 sources, updated 2026-11-22)
 - [[fatigue]] — S-N curves, Goodman, Miner's rule (3 sources, updated 2026-11-22)
 - [[fidelity-management]] — screen with the reduced-order fan, confirm with a higher tier, correct by a trusted discrepancy (F-699, R0 to R3) (4 sources, updated 2026-11-22)
 - [[field-store]] — A field is a value in every cell (`ux`, `uy`, `p`). (9 sources, updated 2026-11-22)
@@ -606,7 +607,7 @@ Catalog of every wiki page (714 pages). Read this first on any query. Format: `-
 - [[interface-compression]] — artificial compression flux $\nabla\cdot(\vec U_r\alpha(1-\alpha))$, its coefficient and its price in mass error and parasitic currents (2 sources, updated 2026-11-22)
 - [[isoparametric-elements-and-quadrature]] — mapped elements, Jacobian, Gauss rules, rank (5 sources, updated 2026-11-22)
 - [[k-epsilon]] — k-epsilon variants in rcfd: BFS misses, transient BDF2 order miss, wall eddy viscosity law (6 sources, updated 2026-11-22)
-- [[k-omega-sst]] — Menter SST in rcfd: constants, validation misses, transient PIMPLE path, seam diffusivity (11 sources, updated 2026-11-22)
+- [[k-omega-sst]] — Menter SST in rcfd: constants, validation misses, transient PIMPLE path, seam diffusivity (12 sources, updated 2026-11-22)
 - [[k-omega-wilcox]] — Wilcox k-omega 1988/2006: near-wall strengths, free-stream sensitivity (3 sources, updated 2026-11-22)
 - [[known-miss]] — A registered limit the current code does not meet; its test is kept, `#[ignore]`d, with the limit unchanged. (7 sources, updated 2026-11-22)
 - [[krylov-methods]] — CG recurrences and bound, GMRES(m), BiCG, Bi-CGSTAB, Chebyshev; rcfd GPU CG/BiCGStab (3 sources, updated 2026-11-22)
@@ -633,7 +634,7 @@ Catalog of every wiki page (714 pages). Read this first on any query. Format: `-
 - [[modal-analysis]] — generalised eigenproblem, orthogonality, mode superposition, subspace iteration (5 sources, updated 2026-11-22)
 - [[momentum-matrix-and-h-operator]] — a_P U_P = H(U) - grad p, HbyA, diag(Q) (2 sources, updated 2026-11-22)
 - [[mpc-transformation]] — the "transformation path" x = T q + g of linear constraints, rigid sets and elastic supports (3 sources, updated 2026-11-22)
-- [[mrf]] — A steady solve in which a rotating zone is computed in its own rotating frame (ADR 0008). (6 sources, updated 2026-11-22)
+- [[mrf]] — A steady solve in which a rotating zone is computed in its own rotating frame (ADR 0008). (7 sources, updated 2026-11-22)
 - [[multi-fidelity-modelling]] — fidelity-indexed sources, additive discrepancy GP, multi-information sources, why plain EI fails (2 sources, updated 2026-11-22)
 - [[multi-objective-optimisation]] — dominance, Pareto set and front, weighted sum, epsilon-constraint, NBI, NSGA-II (1 sources, updated 2026-11-22)
 - [[multi-point-constraints]] — master-slave elimination, penalty, Lagrange multipliers (4 sources, updated 2026-11-22)
@@ -695,7 +696,7 @@ Catalog of every wiki page (714 pages). Read this first on any query. Format: `-
 - [[solution-verification]] — round-off, iterative and discretisation error of one calculation; grid convergence study; r 1.1 vs 1.3 note (4 sources, updated 2026-11-22)
 - [[sound-levels-and-metrics]] — SPL, PWL, OASPL, bands, A-weighted energy sum, 6 dB per doubling (2 sources, updated 2026-11-22)
 - [[sources-read-addendum]] — The dated addendum that closes citations from memory in an append-only ADR, and the weekly citation item. (3 sources, updated 2026-11-22)
-- [[spalart-allmaras]] — SA-noft2 in rcfd: constants, flat-plate miss, DES, transient path (12 sources, updated 2026-11-22)
+- [[spalart-allmaras]] — SA-noft2 in rcfd: constants, flat-plate miss, DES, transient path (13 sources, updated 2026-11-22)
 - [[sparse-linear-systems]] — sparsity and CSR storage, SPD, diagonal dominance, condition number `O(h^-2)` (3 sources, updated 2026-11-22)
 - [[speed-of-sound-and-mach-number]] — a = sqrt(gamma R T), Mach number, M^2 compressibility scaling, stagnation ratios, Mach angle (3 sources, updated 2026-11-22)
 - [[sst-blending-functions]] — Menter F1/F2, cross-diffusion and blended constants: k-omega inside, k-epsilon outside (3 sources, updated 2026-11-22)
@@ -726,7 +727,7 @@ Catalog of every wiki page (714 pages). Read this first on any query. Format: `-
 - [[unverified]] — UNVERIFIED marks a value not checked against its source; 'NOT read' means a source was not opened. (6 sources, updated 2026-11-22)
 - [[upwind-and-central-differencing]] — UD, CD, blended, QUICK; numerical diffusion v dx/2; dx/epsilon <= 2 (4 sources, updated 2026-11-22)
 - [[validation-comparison]] — AIAA validation, error decomposition E1-E4, validation-metric features, validation vs prediction (4 sources, updated 2026-11-22)
-- [[verification-vs-validation]] — How rcfd separates reference-value checks, solution verification and comparison with measurement. (15 sources, updated 2026-11-22)
+- [[verification-vs-validation]] — How rcfd separates reference-value checks, solution verification and comparison with measurement. (17 sources, updated 2026-11-22)
 - [[view-and-report]] — The maintainer's human look at a Studio surface, because agents cannot see the window. (4 sources, updated 2026-11-22)
 - [[viscoelasticity-and-creep]] — spring-dashpot models, exponential relaxation, power-law creep (3 sources, updated 2026-11-22)
 - [[viscosity]] — Newtonian fluid, dynamic and kinematic viscosity, values, tensor constitutive law, bulk viscosity and Stokes hypothesis (3 sources, updated 2026-11-22)

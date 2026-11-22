@@ -9,7 +9,7 @@ status: draft
 
 # rcfd — overview
 
-The synthesis after the full initial ingest (P0-P5): all repo docs, the roadmap and all 760 ADRs, at snapshot `2e94e5ef` (2026-11-22). Start here, then follow the links. [[index]] lists every page. The map of the repo's own documentation is [[doc-index]]. Changes that landed on `main` after the snapshot are listed under "Ingest backlog" in [[ingest-plan]].
+The synthesis after the full initial ingest (P0-P5): all repo docs, the roadmap and all 760 ADRs, at snapshot `2e94e5ef` (2026-11-22), caught up to `origin/main` `5b96a1f8` the same day (ADRs 0762-0766, six changed docs; [[stale-report]] empty). Start here, then follow the links. [[index]] lists every page. The map of the repo's own documentation is [[doc-index]]. What the repo changed since a page was ingested is listed in [[stale-report]]; known gaps in [[open-gaps]].
 
 ## What rcfd is
 
@@ -42,13 +42,13 @@ The process is evidence-first and agent-driven, with written roles ([[lead]], [[
 - **Stop conditions on new agents (since 2026-11-21):** three unread reports, the escaped-defect rate, a red gate, or more than 4 agents ([[adr-thread-process-measures-and-roadmap-form]]).
 - **Defaults on hold:** the maintainer's answers of 2026-11-18 hold every result-moving default change in the numerics and moving-mesh areas "until the fan path needs it". New keys are approved as additive golden edits.
 
-## Where it stands (snapshot 2026-11-22)
+## Where it stands (origin/main 5b96a1f8, 2026-11-22)
 
-- **Roadmap:** 786 items, with 389 done, 297 partial and 100 not started (~68 %). That counts landed work, not accuracy. The structural line alone has 308 items ([[roadmap-structural-solver]]).
+- **Roadmap:** 791 items, with 391 done, 297 partial and 103 not started (~68 %; at the snapshot ~~786, 389/297/100~~) ([[doc-roadmap-json]], [[doc-changelog]]). That counts landed work, not accuracy. The structural line alone has 308 items ([[roadmap-structural-solver]]).
 - **Validation milestones** ([[simulation-milestones]], [[adr-thread-simulation-milestones-validation]]):
-  - **NACA 0012 lift** is met from 0 to 16 degrees and at maximum lift. 17 degrees is a known miss with steady SA. The maintainer answered ADR 0760 Q1 with option (a) on 2026-11-22, and the unsteady arm is ADR 0764. The path ran through five investigations that found report and boundary-condition defects, not model defects ([[naca0012]], [[adr-thread-naca0012-sa-drag]]).
-  - **Cylinder at Re 100:** the drag is in the band, but the observed order 1.387 misses the registered [1.5, 2.5]. On `main` after the snapshot, ADR 0763 was answered with option (c), which makes F-869 done and meets the milestone's headline ([[cylinder-re100]], [[ingest-plan]] backlog).
-  - **FAN-01 design point:** the pressure rise is 41.5 % low, while shaft power is within 2.0 %. The band can't be completed until a person reads the measurement's uncertainty and density (F-877) ([[adr-thread-fan01-design-point]]).
+  - **NACA 0012 lift** is met from 0 to 16 degrees and at maximum lift. ~~17 degrees is a known miss with steady SA.~~ F-868 is done: at 17 degrees a time-accurate run (ADR 0764, answering ADR 0760 Q1 option (a)) settles to the attached state with $c_l$ 1.5516 inside the band; the steady route at 17 degrees is F-884. The milestone headline is still not met because F-043 (SST) is partial (87 %). The path ran through five investigations that found report and boundary-condition defects, not model defects ([[naca0012]], [[adr-thread-naca0012-sa-drag]]).
+  - **Cylinder at Re 100: the first milestone headline met** (vortex shedding, 88 %). The drag is in the band; the observed order 1.387 misses the registered [1.5, 2.5] and is kept as a known miss; ADR 0763 answer (c) made F-869 done, and F-881 asks why the drag converges at an order near 1.4 ([[cylinder-re100]], [[adr-thread-simulation-milestones-validation]]).
+  - **FAN-01 design point:** the pressure rise is 41.5 % low, while shaft power is within 2.0 %. The band can't be completed until a person reads the measurement's uncertainty and density (F-877). The LDA comparison (F-878, ADR 0765, partial) shows the rotor does the measured work (Euler head 226.86 against 220.02 Pa) and leaves the same kinetic energy, so the missing 52.47 Pa is loss or recovery, which the profiles cannot divide (they miss at 12 of 26 radii). Check H (F-879, ADR 0766) did not decide; the oscillation decays. Next: F-882 (loss budget on a finer mesh), F-883 (wall-pressure data), F-885 (outer-iteration record), then F-880 (outlet as on the rig); F-870 now also compares the Euler head, the outflow kinetic energy and the $c_x$, $c_t$ profiles ([[adr-thread-fan01-design-point]], [[doc-reference-data-f878-fan01-lda-profiles]]).
 - **FAN-01 rotating solve** has been the central open problem since ADR 0075 ([[fan-01]], [[f-126]], [[adr-thread-fan01-rotating-solve]]). The deficit is attributed to numerical swirl from momentum convection, and the steady bladed run limit-cycles. MRF is blocked on the bladed passage, and wave 49 located the drivers, but every fix was "not accepted". EXP-ROT and M-FAN-B are proposed next steps ([[doc-milestone-fan]]).
 - **Computer fan (120 mm):** there is no open reference. It needs a fan measured under [[doc-fan-measurement-protocol]]. Until then the [[design-loop]] (optimisers, [[design-ledger]], [[gaussian-process-surrogate]], [[fidelity-management]], [[hypothesis-record]]) ranks variants of the reduced-order model, not real fans ([[computer-fan-target]]).
 - **Sliding mesh** runs from a case file for the full annulus (F-303, ADR 0637) and the sector (F-711, ADR 0646). It is limited to laminar constant-property PISO/PIMPLE with Euler and no restart ([[sliding-mesh]], [[adr-thread-sliding-mesh-rotor-stator]]).
@@ -78,7 +78,7 @@ The process is evidence-first and agent-driven, with written roles ([[lead]], [[
 > - F-666 partial vs ADR 0746 done.
 > - F-625 "NEEDS THE USER" though approved on 2026-11-18.
 > - F-848 todo though phase 1 is built.
-> - The F-868 gap and the overview still call ADR 0760 Q1 open.
+> - ~~The F-868 gap and the overview still call ADR 0760 Q1 open.~~ Resolved on `main`: F-868 done (ADR 0764).
 > - Guardrail G11 still describes Claude Code inside the Studio.
 > - The MCP tool counts (25/42 vs a 36-row table) ([[rcfd-mcp]]).
 >
@@ -87,7 +87,7 @@ The process is evidence-first and agent-driven, with written roles ([[lead]], [[
 ## Open questions for the maintainer (as recorded)
 
 - ADR 0645 Q1: reclassify F-716 from todo to partial.
-- ADR 0762 Q4: the compared quantity and convergence rule for FAN-01, deferred until F-878 and F-879 report.
+- ~~ADR 0762 Q4: the compared quantity and convergence rule for FAN-01, deferred until F-878 and F-879 report.~~ Answered 2026-11-22: compared quantities by ADR 0765 Q1 (b); the convergence rule after F-885 reports (ADR 0766 Q2) ([[adr-thread-fan01-design-point]]).
 - F-877: a person must read the FAN-01 measurement's uncertainty and air density.
 - The default for `solver.component_diagonal` (`averaged` vs `corrected`) ([[component-diagonal]]).
 - The structural defaults pending approval (warm-start local update, contact line search, stagnation held) and the entry points F-404/F-405 ([[roadmap-structural-solver]]).
@@ -95,5 +95,5 @@ The process is evidence-first and agent-driven, with written roles ([[lead]], [[
 
 ## Next for the wiki
 
-- P6, Foundations: build the concept chains under every rcfd concept (e.g. [[k-omega-sst]] ← eddy viscosity ← Reynolds stress ← shear stress), from cited open references ([[ingest-plan]]).
-- Ingest the backlog after the snapshot, then switch to the steady-state rule in `CLAUDE.md`.
+- ~~P6, Foundations~~ done: 152 foundation pages under the rcfd concepts, from cited open references ([[ingest-plan]]); ~~P7~~ equations in LaTeX done.
+- ~~Ingest the backlog after the snapshot~~ done (caught up to `5b96a1f8`). Next: work through [[related-candidates]] (lint judgement pass), the page-structure review, the `raw/` size decision, then merge and switch to the steady-state rule in `CLAUDE.md` with `/wiki-ingest` per loop merge.
