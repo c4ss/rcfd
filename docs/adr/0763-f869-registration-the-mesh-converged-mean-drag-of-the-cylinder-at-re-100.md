@@ -275,3 +275,148 @@ By rule 2 the missed limit becomes an ignored test named `*_known_miss` with the
 The heavy runs are not made a second time (rule 2, "each registered run is made once"): the three ignored tests after
 the change are built, formatted and linted, and not run. The gate-side tests are run again after the change, because
 the file they are in was changed; their code is the same.
+
+## Addendum 1: results (2026-11-22)
+
+All runs in the release profile, on the branch at 790ed327 (the test file as first committed; the solver is that of main
+2bab1863), `CARGO_TARGET_DIR` under the scratch folder, beside the solves of other agents. Each registered run was made
+once. Logs in the scratch folder: `gate_run1.log`, `heavy_record.log`, `m1_run.log`, `m2_run.log`, `m3_run.log`,
+`lib_run.log`, `gate_run2.log`. No limit, band or range was changed.
+
+### The sequence (BDF2, dt 0.025, far field 30 D, window of the last 8 whole periods)
+
+| Mesh | C_D | In [1.314, 1.370] | St | C_L amplitude | C_L rms | Crossings | Window | C_D on W1, W2 |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| 90 x 70 | 1.32259 | yes (not a check) | 0.16169 | 0.3135 | 0.2216 | 17 | 110.3 to 159.7 | 1.32259, 1.32260 |
+| 128 x 100 | 1.33285 | yes (not a check) | 0.16395 | 0.3283 | 0.2321 | 16 | 108.8 to 157.6 | 1.33285, 1.33286 |
+| 181 x 141 (the fine value, W1) | 1.33900 | **yes** | 0.16486 | 0.3412 | 0.2412 | 16 | 108.0 to 156.5 | 1.33900, 1.33901 |
+
+The sequence is monotone. The observed order (unequal ratios 1.42539 and 1.41203) is **1.387**, outside the registered
+range [1.5, 2.5]. By the registration the extrapolation is therefore **not valid** and the mesh-converged drag is **not
+shown**. The numbers the formulas give, printed as registered and not results: with the observed order 1.34901; by the
+equal-ratio form of ADR 0761 1.34818 (order 1.479); at the formal order 2, 1.34519; on the half windows 1.34900 and
+1.34902 (orders 1.388 and 1.387). GCI_fine is 0.935 %.
+
+### Every check
+
+| Id | Limit | Measured | Met |
+| --- | --- | --- | --- |
+| W1 | C_D on 181 x 141 in [1.314, 1.370] | 1.33900 (-0.22 % of 1.342) | yes |
+| W2 | Richardson value in [1.314, 1.370] | 1.34901 passes the comparison, but the value is not a valid extrapolation (W3 b) | not shown |
+| W3 (a) | monotone with a root | monotone, order 1.387 | yes |
+| W3 (b) | observed order in [1.5, 2.5] | 1.387 | **no: missed** |
+| W3 (c) | on each half window the fine value and the Richardson value in the band | 1.33900 and 1.33901; 1.34900 and 1.34902 | yes |
+| S1 | GCI_fine(C_D) at most 3 % | 0.935 % | yes |
+| K4w | more than 9 crossings, every run | 17, 16, 16 | yes |
+| G1 | (i) relative error at most 1e-9; (ii) within 1e-4 of 1.37479, within 0.01 of 1.38 | (i) passed at 1e-9 (printed as 0.00000); (ii) 1.37483 (0.00004 off), 1.3774 (0.0026 off) | yes |
+| N1 | the seven verdicts, and the limit of S1 in the decision | all as stated | yes |
+| G3 | relative error at most 1e-3 | at most 1e-5 (the rms; the others print as 0.00000) | yes |
+| G4 | 40 samples, finite, the guard silent | 40, finite, t = 1.000 in 3 s | yes |
+| M1 | committed mutation (the Richardson step dropped): `g1_` fails | failed: G1 (i) limit off by 0.00595 at each order, G1 (ii) by 0.02232 | caught |
+| M2 | the band's upper end as 1.380: `n1_` fails at (a) | failed at (a): "left: Done, right: Partial(OutsideBand)" | caught |
+| M3 | the order range's lower end as 0.5: `n1_` fails at (c) | failed at (c): "left: Done, right: Partial(Order)" | caught |
+| E | only the files of this work changed | `git diff --stat 2bab1863`: this ADR, the test file, its patch, the proposal file | yes |
+| F | fmt, clippy, `--lib`, docs_site | `cargo fmt -p rcfd-api --check` clean; `cargo clippy -p rcfd-api --all-targets -- -D warnings` clean; `cargo test -p rcfd-api --release --lib` 159 passed, 4 ignored; docs_site given below | yes |
+| P | the process check and the proposal check | given at the end of this addendum | see there |
+
+Reported rows. **R1**: the Strouhal number is in K1's unchanged window [0.16005, 0.16995] on all three meshes (0.16486
+on the fine mesh, -0.08 % of 0.165). The rms of the lift coefficient on the fine mesh, 0.2412, is above the published
+0.222 to 0.236 of source A of ADR 0761 by 2.2 % of its upper end; the amplitude, 0.3412, is above the 0.31 and 0.28 of
+source B. Both still rise with the mesh. No limit was registered for either. **R2**: as in the paragraph above the
+table. The value on 128 x 100 here, 1.33285, against the records of ADR 0761 on the same mesh: 1.34511 at dt 0.025 and
+20 D, 1.33884 at dt 0.05 and 30 D.
+
+### What the gate runs and what is a heavy record
+
+- The gate runs `g1_`, `n1_`, `g3_` and `g4_` of the new file (3 s together) and, unchanged, the gate-side tests of ADR
+  0761. They hold the arithmetic of the procedure, the decision, the statistics, and that the set-up at 30 D runs.
+- The heavy record `h1_...` (ignored) carries W1, S1 and K4w; `w2_...` (ignored) carries W3 (a), W3 (c) and W2's
+  comparison; the three solves took 349 s, 1297 s and 1614 s, 3260 s together. No gate runs them.
+- The known miss `w3b_observed_order_of_the_mesh_sequence_in_the_registered_range_known_miss` (ignored) carries W3 (b)
+  with its range intact (amendment 1). The known miss V2b of ADR 0761 is untouched.
+
+### Reading of the miss of W3 (b)
+
+Arithmetic on the numbers above; none of it is a check, nothing was run for it, and the cause is not diagnosed.
+
+- The order is the same as on the sequence of ADR 0761 (1.38 at dt 0.05 and 20 D, one mesh step coarser). Halving the
+  step, widening the domain and refining by one step left it where it was. The expectation of the registration, that
+  the time error held the order down, is therefore not supported: the low order looks like a property of the spatial
+  discretisation of this case on these meshes. What it is was not looked for (candidates that were not examined: the
+  strongly graded O-grid, the wall force integral, the far-field condition). No blow-up and no defect of the solver
+  appeared, and nothing in the solver was changed.
+- How far the conclusion "in the band" hangs on the order, for the fine pair 1.33285 and 1.33900: the Richardson step
+  is 0.00615 / (1.41203^p - 1), which gives 1.35393 at order 1, 1.34902 at 1.387, 1.34807 at 1.5, 1.34519 at 2 and
+  1.34349 at 2.5. It reaches the upper end 1.370 only for an order under 0.52. So every order from 1 to 2.5 puts the
+  extrapolated drag between 1.343 and 1.354, inside the band; this is an observation and not the registered check,
+  which asked for the order to be in its range first.
+- Against the miss V2b of ADR 0761 (1.37479 at dt 0.05 and 20 D): the same procedure on this sequence gives 1.349. The
+  smaller step and the wider domain go with the difference, as ADR 0761's arithmetic supposed; the two were changed
+  together here and are not separated.
+
+### Deviations
+
+- M1 was made as `f3 + 0.0 * (f3 - f2) / (...)` in place of a bare `f3`, so that the mutated file builds without
+  warnings of unused arguments; the effect is the registered one (`f_h` returns f3).
+- The gate-side tests were run a second time after amendment 1 (`gate_run2.log`, 4 passed), as the amendment says.
+- A first attempt to write this file was refused because the session stood in another worktree; the session was
+  switched into this worktree and nothing was written elsewhere.
+
+### What was not run
+
+- The three ignored tests as they stand after amendment 1 (built, formatted and linted only; their runs are those of
+  the heavy record before the split).
+- The whole workspace suite, the other integration tests of `rcfd-api` (among them the tests of ADR 0761, whose file is
+  unchanged), and `baseline_hashes` (no solver file was touched).
+- A fourth mesh, a far field beyond 30 D, an extrapolation in the time step at 30 D, any diagnosis run for the order.
+- The lead's application of the committed mutation patch (checked here with `git apply --check` on the final tree, and
+  M1 was run from the same diff on the scratch copy).
+
+### Size
+
+Size (agent, actual): partial; 0; 1; 1; 105000
+
+### Decision by the registered rule
+
+**Partial.** W1 is met: the fine value, 1.33900 on 181 x 141 at dt 0.025 with the far field at 30 D, is in the band
+[1.314, 1.370]. W3 does not hold: the observed order, 1.387, is outside [1.5, 2.5], so by the registration the
+extrapolation is not valid and the mesh-converged drag is not shown, although the number the formula gives, 1.34901, is
+in the band, as is the value at every order from 1 to 2.5. S1, K4w and the gate-side checks are met and the three
+mutations are caught. What is missing: a mesh-converged value by an extrapolation that is valid, or the maintainer's
+word that the registered order range is not the measure.
+
+## Open questions for the maintainer
+
+1. **The fine value and every extrapolated value are in the band, but the observed order of the sequence is 1.39, under
+   the range [1.5, 2.5] that this registration set for a valid extrapolation. Is the item done?** Options: (a) the item
+   stays partial; a further registration under F-869 (rule 13) adds a fourth mesh, 256 x 200 at the same step and far
+   field, and registers before the run whether the mesh-converged drag is then read from the finest triple with the
+   same range, or from the bound over a registered range of orders; (b) the item is done as it stands: the fine value
+   is in the band, and the Richardson value is in the band for every order from 1 to 2.5 (1.343 to 1.354), with the
+   known miss of the order kept as a record; (c) as (b), and a new item diagnoses why the drag converges at order 1.4
+   on this case (the same order on two sequences). Recommendation: (c). The acceptance of F-869 is about the drag
+   against the band, and that conclusion does not depend on the order within any range one would register; the low
+   order is a finding about the discretisation and deserves its own item rather than holding the headline. It is not
+   taken on the standing instruction because it changes how the registered rule of a headline item is read and adds an
+   item (rule 6).
+
+## For the lead: roadmap entries
+
+Status proposed: partial.
+
+> ADR 0763, 2026-11-22, partial: on the mesh sequence 90 x 70, 128 x 100, 181 x 141 with BDF2 at dt 0.025 and the far field at 30 D the mean drag is 1.32259, 1.33285, 1.33900 (St 0.16169, 0.16395, 0.16486; GCI 0.94 %), the fine value inside the band [1.314, 1.370], but the observed order is 1.387, outside the registered range [1.5, 2.5], so the extrapolation is not valid by the registration and the mesh-converged drag is not shown (known miss W3b); the formula gives 1.34901, and 1.343 to 1.354 for every order from 1 to 2.5, all inside the band.
+
+> The drag is in the published band [1.314, 1.370] on the fine mesh of the registered sequence (1.33900 on 181 x 141, BDF2, dt 0.025, far field 30 D), and a Richardson value at any order from 1 to 2.5 is in it too (1.343 to 1.354). Missing: the observed order is 1.387, outside the registered [1.5, 2.5] (known miss W3b, ADR 0763), so the mesh-converged drag is not shown by a valid extrapolation; the maintainer decides whether that holds the item (ADR 0763, question 1).
+
+No follow-up item is proposed here: whether one is entered is question 1. The same entries are in
+`docs/roadmap/proposals/0763-F-869.json`.
+
+For the lead, not roadmap: `docs/adr/index.md` is generated and not current after this work (the new ADR); it is left
+to the lead (rule 9). No reference fragment was added, so `docs/reference-data.md` is not touched by this work.
+
+### The process check (row P)
+
+`python scripts/roadmap_proposals.py check docs/roadmap/proposals/0763-F-869.json`: "F-869: partial -> partial; gap set;
+note + 549 characters", exit 0. `python scripts/process_report.py --check`: 1 failure, "generated file is not current:
+docs/adr/index.md"; no failure of the registration. The page is left to the lead (rule 7, rule 9).
+`cargo test -p rcfd-cli --release --test docs_site` on the tree with this addendum: 2 passed.
