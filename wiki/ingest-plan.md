@@ -98,8 +98,8 @@ Rules (maintainer decisions 2026-11-22):
 - **Depth stop:** stop descending where a reader with first-year calculus and physics would follow; don't write a textbook.
 
 Steps:
-- [ ] Map: from every concept page, draft the prerequisite graph (`analyses/foundations-map.md`, a to-do list, not claims).
-- [ ] Sources: find and fetch open references per branch (turbulence, pressure-velocity coupling, linear solvers, rotating frames and moving meshes, acoustics, structural mechanics, verification); make source pages `ref-<short-name>`.
+- [x] Map: from every concept page, draft the prerequisite graph (`analyses/foundations-map.md`, a to-do list, not claims).
+- [x] Sources: find and fetch open references per branch (turbulence, pressure-velocity coupling, linear solvers, rotating frames and moving meshes, acoustics, structural mechanics, verification); make source pages `ref-<short-name>`.
 - [ ] Write foundation pages branch by branch (subagents, max 4), merging shared nodes.
 - [ ] Lint: every concept page reachable from a foundation root; no foundation page without a cited `ref-*` source.
 
@@ -115,6 +115,7 @@ Every new ADR / F-item / doc change merged to `main` gets ingested into its thre
 4. **Steady state:** every roadmap/studio loop merge also ingests its new or changed docs into the wiki (rule in `CLAUDE.md` > Steady-state ingest).
 
 5. **Foundations pass (P6):** cited open sources only; scope is all rcfd concept pages (both 2026-11-22).
+6. **P6 licences (2026-11-22):** non-commercial material (CC BY-NC-SA: MIT OCW, LibreTexts/OpenStax NC books) is cite-only, never copied into `raw/`. Wikipedia is a cited secondary source for elementary concepts only, never the sole source of a model-level claim, never copied.
 
 ## Ingest backlog
 
