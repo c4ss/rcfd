@@ -3,6 +3,7 @@ type: source
 tags: [reference, foundation, discretisation, unstructured, copy]
 sources: []
 origin: https://ntrs.nasa.gov/citations/19950016514
+raw: raw/venkatakrishnan-1995-icase-95-3.pdf
 licence: "Work of the US Gov. Public Use Permitted." (NTRS record, checked 2026-11-22)
 read: 2026-11-22
 created: 2026-11-22

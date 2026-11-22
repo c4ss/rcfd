@@ -3,6 +3,7 @@ type: source
 tags: [reference, foundation, acoustics, absorbing-boundary, pml, linearized-euler, public-domain]
 sources: []
 origin: https://ntrs.nasa.gov/citations/19960007445
+raw: raw/hu-1995-icase-95-70.pdf
 licence: NTRS determination GOV_PUBLIC_USE_PERMITTED (record API read 2026-11-22)
 read: 2026-11-22
 created: 2026-11-22

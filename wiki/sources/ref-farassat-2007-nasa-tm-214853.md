@@ -3,6 +3,7 @@ type: source
 tags: [reference, foundation, acoustics, fw-h, retarded-time, public-domain]
 sources: []
 origin: https://ntrs.nasa.gov/citations/20070010579
+raw: raw/farassat-2007-nasa-tm-214853.pdf
 licence: NTRS determination GOV_PUBLIC_USE_PERMITTED ("Work of the US Gov. Public Use Permitted.", record API read 2026-11-22)
 read: 2026-11-22
 created: 2026-11-22

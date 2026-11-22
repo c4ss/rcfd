@@ -3,6 +3,7 @@ type: source
 tags: [reference, foundation, compressible, gas-dynamics, shock, public-domain]
 sources: []
 origin: https://ntrs.nasa.gov/citations/19930091059
+raw: raw/naca-1953-report-1135.pdf
 licence: NTRS determination GOV_PUBLIC_USE_PERMITTED ("Work of the US Gov. Public Use Permitted.", record API read 2026-11-22)
 read: 2026-11-22
 created: 2026-11-22

@@ -2,9 +2,11 @@
 """Mechanical lint for the rcfd wiki. Run from anywhere: python wiki/tools/lint.py
 
 Checks: broken [[wikilinks]], orphan pages (no inbound links), pages missing from index.md,
-missing/invalid frontmatter, stale `updated` dates (> STALE_DAYS). Judgement checks
-(contradictions, superseded claims, missing concepts) are the LLM's job; see CLAUDE.md > Lint.
-Exit code 1 if any broken link or index gap is found.
+missing/invalid frontmatter, stale `updated` dates (> STALE_DAYS), raw/ coverage (a source
+page's `raw:` exists; every raw file has a source page), log.md heading form, and math left in
+backticks (warning). Judgement checks (contradictions, superseded claims, missing concepts)
+are the LLM's job; see CLAUDE.md > Lint and the /wiki-lint skill.
+Exit code 1 on a broken link, an index gap or a malformed log heading.
 """
 import datetime as dt
 import re
@@ -22,6 +24,7 @@ MATHY = re.compile(r"`([^`\n]{3,})`")
 MATH_HINT = re.compile(r"(\^|_[a-zA-Z0-9]|\b(sqrt|max|min|exp|log|sin|cos|nabla|partial|rho|nu|mu|omega|tau|epsilon|beta|alpha|sigma|kappa|phi|delta|Delta)\b|[a-zA-Z]\s*[=<>]\s*[-a-zA-Z0-9(])")
 CODE_HINT = re.compile(r"(\.toml|\.rs|\.md|\.json|/|\\|::|\"|\[[a-z_]+\]|^[a-z_]+\.[a-z_]+|--)")
 LINK = re.compile(r"\[\[([^\]|#^]+)(?:[#^][^\]|]*)?(?:\|[^\]]*)?\]\]")
+LOG_HEAD = re.compile(r"^## \[\d{4}-\d{2}-\d{2}\] (init|setup|ingest|query|lint|schema) \| .+$")
 
 
 def pages():
@@ -95,6 +98,31 @@ def main():
         except ValueError:
             pass
 
+    # raw/ coverage (from the brewtiful wiki lint): every source page's `raw:` exists, every raw file has a source page
+    raw_files = {p.relative_to(ROOT).as_posix() for p in (ROOT / "raw").rglob("*")
+                 if p.is_file() and p.name not in {"README.md", ".gitkeep"} and "assets" not in p.parts}
+    covered, raw_issues = set(), []
+    for name, path in all_pages.items():
+        fm = frontmatter(path.read_text(encoding="utf-8")) or {}
+        if fm.get("type") != "source":
+            continue
+        refs = [fm.get("raw", "")] + fm.get("raw_also", "").strip("[]").split(",")
+        for ref in (r.strip().strip("\"'") for r in refs):
+            if not ref:
+                continue
+            hit = {f for f in raw_files if f == ref or f.startswith(ref.rstrip("/") + "/")}
+            if hit:
+                covered |= hit
+            else:
+                raw_issues.append((path.relative_to(ROOT), f"raw path '{ref}' does not exist"))
+    raw_issues += [(f, "raw file with no source page (raw:/raw_also:)") for f in sorted(raw_files - covered)]
+
+    log_issues = []
+    if "log" in names:
+        for i, line in enumerate((ROOT / "log.md").read_text(encoding="utf-8").splitlines(), 1):
+            if line.startswith("## ") and not LOG_HEAD.match(line):
+                log_issues.append(f"log.md:{i}: heading not in '## [YYYY-MM-DD] op | title' form")
+
     index_text = (ROOT / "index.md").read_text(encoding="utf-8") if "index" in names else ""
     indexed = {Path(t.strip()).stem for t in LINK.findall(strip_code(index_text))}
     not_indexed = sorted(n for n in names - SPECIAL if n not in indexed)
@@ -112,12 +140,15 @@ def main():
     section("Orphans (no inbound links besides index/log)", orphans)
     section("Frontmatter", fm_issues)
     section(f"Stale (updated > {STALE_DAYS} days ago)", stale)
+    section("raw/ coverage", raw_issues)
+    section("log.md headings", log_issues)
     files = sorted({str(p) for p, _ in mathy})
     print()
     print(f"## Possible math in backticks (warning only): {len(mathy)} spans in {len(files)} pages")
     for f in files[:15]:
         print("- " + f)
-    return 1 if broken or not_indexed else 0
+    print("\nRepo staleness: python wiki/tools/stale.py   Gaps: wiki/tools/build_gaps.py   Relatedness: wiki/tools/search.py report")
+    return 1 if broken or not_indexed or log_issues else 0
 
 
 if __name__ == "__main__":

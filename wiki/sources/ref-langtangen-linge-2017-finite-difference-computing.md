@@ -3,6 +3,7 @@ type: source
 tags: [reference, foundation, discretisation, time-stepping, copy]
 sources: []
 origin: https://link.springer.com/content/pdf/10.1007/978-3-319-55456-3.pdf
+raw: raw/langtangen-linge-2017-finite-difference-computing.pdf
 licence: CC BY 4.0 ("Open Access This book is distributed under the terms of the Creative Commons Attribution 4.0 International License", copyright page of the PDF, checked 2026-11-22); third-party images excepted as stated there
 read: 2026-11-22
 created: 2026-11-22

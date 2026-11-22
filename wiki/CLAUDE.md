@@ -57,6 +57,8 @@ Start every page from the matching file in `templates/`.
 
 ## Operations (the loop)
 
+Each operation has a Claude Code skill in the repo's `.claude/skills/` (adapted 2026-11-22 from the brewtiful wiki setup): `/wiki-ingest <source | stale>`, `/wiki-query <question>`, `/wiki-lint`. The skills hold the step-by-step; the summary below is the contract.
+
 ### Ingest — "ingest <file or path>"
 1. Raw file: the human drops it in `raw/` (web articles via Obsidian Web Clipper; images in `raw/assets/`). Repo doc: just name the path.
 2. Read the source fully. For images, read the text first, then open referenced images separately.
@@ -85,6 +87,15 @@ Start every page from the matching file in `templates/`.
 5. Append `## [date] lint | <summary>`.
 
 When re-ingesting a repo source after [[stale-report]] lists it, update the page and set its `origin_commit` to the commit read, so the next report starts from there.
+
+## Search
+
+The wiki is past the size where `index.md` alone works (700+ pages), so search is local and embedding-based: `tools/search.py` splits each page at its `##` sections, embeds them with Ollama (default `qwen3-embedding:0.6b`; `WIKI_EMBED_MODEL` and `OLLAMA_HOST` override), caches the vectors in `.handoff/embeddings.json` (gitignored; only changed sections are re-embedded) and fuses the vector ranking with BM25 keyword ranking. Nothing leaves the machine.
+- `search "<question>"`: Query step 1, and ingest routing (which pages a new source touches; whether a concept page already exists).
+- `similar <page>`: nearest pages, marking those not linked (one-hop widening, orphan fixing).
+- `report`: [[related-candidates]] for lint.
+
+Exact identifiers (ADR numbers, F-items, case keys) are still best found with grep. Without Ollama, fall back to `index.md` + grep.
 
 ## Obsidian setup notes
 

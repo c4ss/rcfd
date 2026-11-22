@@ -3,6 +3,7 @@ type: source
 tags: [reference, foundation, compressible, riemann-solver, ausm, flux-splitting, public-domain]
 sources: []
 origin: https://ntrs.nasa.gov/citations/20020009014
+raw: raw/liou-2001-nasa-tm-210977.pdf
 licence: NTRS determination GOV_PUBLIC_USE_PERMITTED (record API read 2026-11-22); no AIAA copyright notice found in the report text
 read: 2026-11-22
 created: 2026-11-22
