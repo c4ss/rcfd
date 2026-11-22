@@ -12,24 +12,14 @@ status: draft
 # ADR thread: structural solver, contact and interference fits
 
 **Origin:** the ADRs in the table below, `docs/adr/` at `origin/main` 2e94e5ef.
-**Kind:** ADR thread (registrations with result addenda), 3 ADRs in this half, all 2026-11-14. The contact follow-ups (F-600
-Newton order on short solves, F-601 bucket search and rigid targets, F-608 lifted contactor and line search, F-615, F-618 the
-supernodal factor in the contact drivers, F-623 mortar contactor, F-638 pressure recovery, F-639, F-684) are in the other half of
-the category and belong on this page.
+**Kind:** ADR thread (registrations with result addenda), 3 ADRs in this half, all 2026-11-14. The contact follow-ups (F-600 Newton order on short solves, F-601 bucket search and rigid targets, F-608 lifted contactor and line search, F-615, F-618 the supernodal factor in the contact drivers, F-623 mortar contactor, F-638 pressure recovery, F-639, F-684) are in the other half of the category and belong on this page.
 
-Frictionless contact in [[rcfd-fem]]: node-to-surface contact with an augmented Lagrangian on rigid and deformable targets and
-interference (press) fits (F-427), with two re-registrations of the interference-fit clauses (F-599, F-604).
+Frictionless contact in [[rcfd-fem]]: node-to-surface contact with an augmented Lagrangian on rigid and deformable targets and interference (press) fits (F-427), with two re-registrations of the interference-fit clauses (F-599, F-604).
 
 ## Current state
 
-- `contact.rs` (F-427, ADR 0507): frictionless node-to-surface contact on bilinear Hex8 target faces or a rigid plane,
-  closest-point projection with the exact gap gradient and second derivative, a per-node augmented Lagrangian force
-  `max(0, lambda - eps A g)` with Uzawa updates, a linear-body Newton driver (sparse `L D L^T`, `eps G G^T` on a refused pivot) and
-  a total Lagrangian body. **Partial**: the uniform shaft stress of the interference fit missed (7.0e-3 against 1e-6) and the punch
-  residual order missed (least 0.17 against 1.8).
-- F-599 (ADR 0513) explains the through-thickness variation of the interference-fit contact pressure and re-registers I3 as met
-  (done). F-604 (ADR 0517, press fit of a finite hub on a longer shaft, edge pressure peak, bore-cell rule) is partial: the
-  plane-strain clause misses at 8.6e-2 against 2e-2, as derived before the run.
+- `contact.rs` (F-427, ADR 0507): frictionless node-to-surface contact on bilinear Hex8 target faces or a rigid plane, closest-point projection with the exact gap gradient and second derivative, a per-node augmented Lagrangian force `max(0, lambda - eps A g)` with Uzawa updates, a linear-body Newton driver (sparse `L D L^T`, `eps G G^T` on a refused pivot) and a total Lagrangian body. **Partial**: the uniform shaft stress of the interference fit missed (7.0e-3 against 1e-6) and the punch residual order missed (least 0.17 against 1.8).
+- F-599 (ADR 0513) explains the through-thickness variation of the interference-fit contact pressure and re-registers I3 as met (done). F-604 (ADR 0517, press fit of a finite hub on a longer shaft, edge pressure peak, bore-cell rule) is partial: the plane-strain clause misses at 8.6e-2 against 2e-2, as derived before the run.
 - "No [contact] case-file table exists, and the maintainer must decide on it" (F-427 gap, [[roadmap-structural-solver]]).
 
 ## ADRs
@@ -42,11 +32,8 @@ interference (press) fits (F-427), with two re-registrations of the interference
 
 ## Key numbers and limits
 
-- F-427 gap: "Uniform shaft stress in the interference fit missed (7.0e-3 against 1e-6); the note says F-599 explains and
-  re-registers it as met. The total Lagrangian punch residual order missed (least 0.17 against 1.8); F-600 reads it as a bound, met"
-  ([[roadmap-structural-solver]]).
-- F-604 gap: "The plane-strain clause misses at 8.6e-2 against 2e-2, as derived before the run: the hub and shaft each have zero
-  axial resultant, so the mid-length pressure follows the free-ended closed form (2.1e-3)".
+- F-427 gap: "Uniform shaft stress in the interference fit missed (7.0e-3 against 1e-6); the note says F-599 explains and re-registers it as met. The total Lagrangian punch residual order missed (least 0.17 against 1.8); F-600 reads it as a bound, met" ([[roadmap-structural-solver]]).
+- F-604 gap: "The plane-strain clause misses at 8.6e-2 against 2e-2, as derived before the run: the hub and shaft each have zero axial resultant, so the mid-length pressure follows the free-ended closed form (2.1e-3)".
 
 ## Open questions
 

@@ -14,11 +14,18 @@ status: draft
 
 ## Synthesis
 
-_Current state of this line of work, written from the ADR threads (P3)._
+The base solvers (F-060 density-based, F-061 pressure-based with EOS, F-136 FW-H) are done; the P3 ADRs (13, 2026-11-07 to 2026-11-12) add acoustics and wet steam, all **in the library only**.
+
+- **Acoustic boundaries and sponges** on `CompressibleSolver`: impedance boundary, plain and matched sponge, mass-spring-damper wall, memory-decay matched layer, sponge on moving meshes. Each meets its acceptance in the library; none is selectable from a case file until F-330 (keys approved 2026-11-18 as an additive golden edit). Defaults held: `reflection_value = 0.02`, the sponge shift, the lab-frame memory (F-446) ([[adr-thread-compressible-acoustic-boundaries]]).
+- **Linear acoustic wave solver** (F-333) with duct modal export, an O-grid circular duct, and a drive from a sampled CFD surface (the FW-H `rcfd-surface-series` files) with the split of returning waves: done except F-453's counter-rotating content; `rcfd duct-modes` (F-451) and an axial-velocity series (F-480) are approved todo ([[adr-thread-acoustic-wave-solver]]).
+- **Wet steam** (F-221): the nozzle comparison is met, inviscid with a perfect-gas vapour; the roadmap keeps it todo although ADR 0226 recommends partial; case keys, real-gas vapour, viscous terms and polydispersion are todo items F-316 to F-319 ([[adr-thread-wet-steam]]).
+- 9 of 26 items are not started; most are the wiring and follow-ups above ([[doc-roadmap-json]]). See [[aeroacoustics]].
 
 ## ADR threads
 
-_Thread pages in `sources/adr-thread-*` that cover this area (P3)._
+- [[adr-thread-compressible-acoustic-boundaries]] — F-243, F-331, F-332, F-340, F-341, F-407 (ADRs 0233, 0237, 0243, 0248, 0265, 0344)
+- [[adr-thread-acoustic-wave-solver]] — F-333, F-453, F-473, F-452, F-478 (ADRs 0351, 0366, 0371, 0372, 0378)
+- [[adr-thread-wet-steam]] — F-221, F-320 (ADRs 0217, 0226)
 
 ## Items
 

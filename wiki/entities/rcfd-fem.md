@@ -1,7 +1,7 @@
 ---
 type: entity
 tags: [crate]
-sources: [doc-architecture, doc-roadmap-overview, doc-structural-solver, doc-solid-case-file, adr-thread-structural-linear-solvers, adr-thread-structural-case-file-and-fan-blade, adr-thread-structural-modal-buckling-cyclic]
+sources: [doc-architecture, doc-roadmap-overview, doc-structural-solver, doc-solid-case-file, adr-thread-structural-linear-solvers, adr-thread-structural-case-file-and-fan-blade, adr-thread-structural-modal-buckling-cyclic, adr-thread-structural-incompatible-hex8-rule-l, adr-thread-structural-hyperelastic-and-follower, adr-thread-structural-beam-warping, adr-thread-structural-fracture, adr-thread-structural-creep-and-temperature]
 created: 2026-11-22
 updated: 2026-11-22
 status: draft
@@ -37,3 +37,5 @@ _Filled in by P1-P3 ingests._
 
 - Modules named in the threads: `cyclic`, `mpc`, `transient`, `harmonic`, `rotor`, `fatigue`, `random`, `estimate`, `follower`, `contact.rs`, `laminate.rs`, `mat_j2.rs`, `mat_visco.rs`, `mat_creep.rs`, `hex8x`, `builders`, plus `rcfd_api::solid_case` and `rcfd_api::solid_parallel` ([[adr-thread-structural-case-file-and-fan-blade]], [[adr-thread-structural-linear-solvers]]).
 - Thread pages: [[adr-thread-structural-verification-elements]], [[adr-thread-structural-linear-solvers]], [[adr-thread-structural-modal-buckling-cyclic]], [[adr-thread-structural-rotordynamics]], [[adr-thread-structural-dynamics-harmonic]], [[adr-thread-structural-fatigue-and-radiated-sound]], [[adr-thread-structural-beams-shells]], [[adr-thread-structural-materials-nonlinear]], [[adr-thread-structural-contact]], [[adr-thread-structural-fsi-coupling]], [[adr-thread-structural-case-file-and-fan-blade]].
+- Second half of the category (ADR 0519 to 0746, p3-structural-b): modules `nl_incompatible` ([[adr-thread-structural-incompatible-hex8-rule-l]]), `mat_hyper` ([[adr-thread-structural-hyperelastic-and-follower]]), `beam_warping` ([[adr-thread-structural-beam-warping]]), `fracture` ([[adr-thread-structural-fracture]]), `thermal` temperature fields ([[adr-thread-structural-creep-and-temperature]]), and in `rcfd-linalg` `eigen_pencil` and `sparse_chol::SupernodalAnalysis` ([[adr-thread-structural-hyperelastic-and-follower]], [[adr-thread-structural-linear-solvers]]). Concepts: [[incompatible-modes-hex8]], [[hyperelastic-materials]], [[arc-length-continuation]], [[beam-warping]].
+- Two default changes made in the library on maintainer approval of 2026-11-18: Beam2 in the cyclic constraint (ADR 0744) and hyperelastic materials on structural elements (ADR 0746) ([[adr-thread-structural-modal-buckling-cyclic]], [[adr-thread-structural-hyperelastic-and-follower]]).

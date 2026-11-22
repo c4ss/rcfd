@@ -14,11 +14,11 @@ status: draft
 
 ## Synthesis
 
-_Current state of this line of work, written from the ADR threads (P3)._
+Most of this area (energy, CHT, radiation, species, combustion, reactors, properties) predates the P3 ADRs and is read from the generated table: 13 done, 11 partial, 1 todo; the partials are catalogue extensions (combustion, radiation, chemistry formats, reactor networks, per-region model sets, solidification) ([[doc-roadmap-json]]). Only two P3 ADRs fall here, both done: the conjugate `heat_flow` report (F-289) and the electric current and Joule heat (F-298) follow the solver when the gradient options are on, checked by a heat balance and by the Joule heat equalling the boundary power. The one todo, F-311, is the lift of the bit-identical rule for the default Joule heat and the fixed-pressure flux correction, which ADR 0221 left on "leave and document" ([[adr-thread-gradient-options]]).
 
 ## ADR threads
 
-_Thread pages in `sources/adr-thread-*` that cover this area (P3)._
+- [[adr-thread-gradient-options]] — F-289, F-298 (ADRs 0202, 0221), with F-256 and F-291 of numerics
 
 ## Items
 

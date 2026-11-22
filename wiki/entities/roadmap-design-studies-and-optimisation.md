@@ -1,7 +1,7 @@
 ---
 type: entity
 tags: [roadmap, area]
-sources: [doc-roadmap-json, doc-roadmap-overview]
+sources: [doc-roadmap-json, doc-roadmap-overview, adr-thread-design-optimisers-and-ledger, adr-thread-design-surrogate-and-fidelity, adr-thread-design-hypothesis-record, adr-thread-rom-reference-fan-and-c-grid]
 created: 2026-11-22
 updated: 2026-11-22
 status: draft
@@ -14,11 +14,21 @@ status: draft
 
 ## Synthesis
 
-_Current state of this line of work, written from the ADR threads (P3)._
+The design loop is a full library stack on the reduced-order fan, and none of it has run on a real fan yet.
+
+- **Optimisers.** NSGA-II, the Nelder-Mead options, the exchange crossover and CMA-ES are all opt-in (ADRs 0209, 0220, 0222). F-249 keeps two known misses. F-260 is a headline of the `fan` milestone and stays partial because "FAN-01 has no converged solve ... and no case key carries a scalar blade parameter" ([[adr-thread-design-optimisers-and-ledger]]).
+- **Ledger and uncertainty.** Sobol indices, ledger logging from studies and uncertainty bands on the reduced-order fan are done (F-268). So are the optional ledger records and the measured tier written only to private ledgers (F-700, F-705, F-706) ([[adr-thread-design-optimisers-and-ledger]], [[design-ledger]]).
+- **Objective, surrogate and fidelity.** F-697 is done. The [[gaussian-process-surrogate]] (F-698) and [[fidelity-management]] (F-699) are partial, with follow-ups for a basin restart, a stall pre-check and a GP discrepancy rung. F-716 is todo by its own rule, and its reclassification is open (ADR 0645 question 1). Everything is verified on analytic or reduced-order sources only, and "every number ranks variants of the model, not real fans" ([[adr-thread-design-surrogate-and-fidelity]]).
+- **Hypotheses.** The [[hypothesis-record]] (F-701, partial) and six follow-ups make design claims registered, family-wise-level tested and re-checkable by a verifier's own draw ([[adr-thread-design-hypothesis-record]]).
+- **Reference fan and mesh.** The schema default fan stalls in the reduced-order model, so `ComputerFan::rom_reference()` was added beside it (F-722). Five successive opt-in C-grid constructions mesh it and a second strongly staggered blade within 84.5 deg / 4.0 / 1000 (F-791 done). No case value exists for them yet (F-778 todo) ([[adr-thread-rom-reference-fan-and-c-grid]]).
+- **Exposure.** Every part is library only until F-702 (MCP tools, with F-339), by decision D1 of 2026-11-15. Both items may be issued under the additive-golden class rule ([[adr-thread-design-optimisers-and-ledger]]).
 
 ## ADR threads
 
-_Thread pages in `sources/adr-thread-*` that cover this area (P3)._
+- [[adr-thread-design-optimisers-and-ledger]]: F-249, F-297, F-260, F-268, F-700, F-705, F-706 (8 ADRs)
+- [[adr-thread-design-surrogate-and-fidelity]]: F-697, F-698, F-699, F-715 to F-718, F-733 to F-735, F-758, F-766, F-770 (13 ADRs)
+- [[adr-thread-design-hypothesis-record]]: F-701, F-727, F-728, F-745, F-749, F-776, F-781 (7 ADRs)
+- [[adr-thread-rom-reference-fan-and-c-grid]]: F-713, F-722, F-726, F-777, F-782, F-784, F-791 (7 ADRs)
 
 ## Items
 

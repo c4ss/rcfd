@@ -1,7 +1,7 @@
 ---
 type: concept
 tags: [design-loop, ledger, provenance, fan]
-sources: [doc-design-loop, doc-fan-project-breakdown, doc-fan-measurement-protocol, doc-changelog, doc-test-process]
+sources: [doc-design-loop, doc-fan-project-breakdown, doc-fan-measurement-protocol, doc-changelog, doc-test-process, adr-thread-design-optimisers-and-ledger, adr-thread-design-hypothesis-record]
 created: 2026-11-22
 updated: 2026-11-22
 status: draft
@@ -22,6 +22,11 @@ The design ledger (`design::ledger`, ADR 0121) is one JSON-lines file that keeps
 - **Hypotheses (ADR 0624).** Claims are registered before their evidence. Hypothesis `i` is tested at `0.05 * 6 / (pi^2 i^2)`, so the levels of all hypotheses sum to at most 0.05. Verdicts are recomputed from the record, never taken from a written line ([[doc-design-loop]]).
 - **Plan status.** H4 is partial (F-268; ADR 0121, 0240, 0623; F-700) ([[doc-fan-project-breakdown]]). The 0.1.0 changelog lists "a design ledger that keeps every variant" ([[doc-changelog]]).
 - **Mutation check.** The ledger re-run check was one of the 10 of 12 detected mutations (ADR 0121 L6) ([[doc-test-process]]).
+
+- **Store header fix (F-705, ADR 0644):** a kill inside the first append left a store that could not be reopened. Now "the header is written when the opened file is empty", shown at every byte of the first append (1354 points) ([[adr-thread-design-optimisers-and-ledger]]).
+- **Ledger sink (ADR 0623):** `Study::set_ledger_sink` writes one entry per evaluated pair, with "0 duplicate and 0 missing at all 55 kill points of a Nelder-Mead study" ([[adr-thread-design-optimisers-and-ledger]]).
+- **Public ledger rule (decision D3, 2026-11-15):** "A public ledger gets rounded aggregates only (3 significant digits, at least 5 pairs)" ([[adr-thread-design-optimisers-and-ledger]]).
+- **Hypothesis guards:** seeded and verifier-drawn re-run samples, and drawn checks that count only when newer than the evidence (ADRs 0662, 0693, 0698). Records are not signed ([[adr-thread-design-hypothesis-record]]). See [[hypothesis-record]].
 
 ## Related
 

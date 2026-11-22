@@ -14,11 +14,11 @@ status: draft
 
 ## Synthesis
 
-_Current state of this line of work, written from the ADR threads (P3)._
+A largely finished area: 10 of 12 items done (VTK, probes and integrals, derived fields, the headless renderer, monitors, report definitions and stopping criteria, run-time statistics, registers, the report catalogue); glTF export (F-117) and turbomachinery post-processing (F-123) are partial ([[doc-roadmap-json]]). The one P3 ADR, ADR 0373 (F-476, done), makes the field store of a run with `[mesh.adapt]` write the adapted mesh; the gap was found by gate 4 of the adaptive case key (F-342) ([[adr-thread-mesh-adaptation]], [[field-store]]).
 
 ## ADR threads
 
-_Thread pages in `sources/adr-thread-*` that cover this area (P3)._
+- [[adr-thread-mesh-adaptation]] — F-476 (ADR 0373)
 
 ## Items
 

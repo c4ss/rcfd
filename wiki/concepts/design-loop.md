@@ -1,7 +1,7 @@
 ---
 type: concept
 tags: [design-loop, optimisation, doe, mcp, fan]
-sources: [doc-design-loop, doc-reference-data-wave32c-design-loop, doc-reference-data-f249-nsga2-nelder-mead, doc-reference-data-f297-nsga2-crossover, doc-reference-data-f260-cma-es, doc-reference-data-f698-gaussian-process, doc-fan-project-breakdown, doc-milestone-fan, doc-parity-matrix]
+sources: [doc-design-loop, doc-reference-data-wave32c-design-loop, doc-reference-data-f249-nsga2-nelder-mead, doc-reference-data-f297-nsga2-crossover, doc-reference-data-f260-cma-es, doc-reference-data-f698-gaussian-process, doc-fan-project-breakdown, doc-milestone-fan, doc-parity-matrix, adr-thread-design-optimisers-and-ledger, adr-thread-design-surrogate-and-fidelity, adr-thread-design-hypothesis-record, adr-thread-rom-reference-fan-and-c-grid]
 created: 2026-11-22
 updated: 2026-11-22
 status: draft
@@ -37,6 +37,14 @@ The design loop is rcfd's machinery for running a case over many operating point
 
 > [!warning] Contradiction
 > [[doc-milestone-fan]] (capability table dated 2026-10-18) lists the operating map, the optimiser and the design-loop tools as "none", citing "F-254 candidate" and "F-257 candidate". Those ids are proposals of [[doc-parity-matrix]]. [[doc-design-loop]] documents all three as built. Within the docs (stale table).
+
+### ADR threads (P3)
+
+- Optimisers, Sobol indices and the ledger: [[adr-thread-design-optimisers-and-ledger]]. The maintainer's shared decisions of 2026-11-15 (D1 to D6, B1 to B4) set the exposure (library only until F-702), the privacy split and the build order "F-268 and F-700, then F-697, then F-698 and F-699 in parallel, then F-701" ([[adr-thread-design-optimisers-and-ledger]]).
+- Objective, [[gaussian-process-surrogate]] and [[fidelity-management]]: [[adr-thread-design-surrogate-and-fidelity]]. The basin restart's repetition trigger (ADR 0680) reaches the Hartmann 6 target on 8 of 10 seeds and the Shekel 10 target on 19 of 20. The stall pre-check (ADR 0645) cuts failed fan evaluations from 34 to 39 of 50 to 0 ([[adr-thread-design-surrogate-and-fidelity]]).
+- [[hypothesis-record]]: [[adr-thread-design-hypothesis-record]].
+- The reduced-order reference fan and its C-grid: [[adr-thread-rom-reference-fan-and-c-grid]].
+- F-260 (CMA-ES and a real-fan study) is a headline of the `fan` milestone (ADR 0757). Its FAN-01 study is not attempted ([[adr-thread-design-optimisers-and-ledger]]).
 
 ## Related
 

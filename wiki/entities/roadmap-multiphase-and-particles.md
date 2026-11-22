@@ -14,11 +14,15 @@ status: draft
 
 ## Synthesis
 
-_Current state of this line of work, written from the ADR threads (P3)._
+The VOF, Euler-Euler/mixture, mass-transfer and wave items (F-055, F-127, F-226, F-227) are partial from earlier waves and are read from the generated table ([[doc-roadmap-json]]). The P3 ADRs (8) are all on the Lagrangian particle library ([[lagrangian-particles]]):
+
+- **Wall models:** a wall film with the Nusselt thickness (F-253), gas buoyancy and shear on it (F-292), erosion and rough-wall rebound with a named steel preset `dnv_o501_2007_steel` (F-254). Each meets every registered check and stays partial only because the maintainer has not closed it; the shadow-effect distribution waits for a paper ([[adr-thread-particle-wall-and-droplets]]).
+- **Carrier coupling:** dispersion from k-epsilon or SST fields (F-255, partial for the same reason), and droplet evaporation and TAB breakup (F-245) whose mass, heat and momentum reach the exchange record (F-323) and the carrier of a case on the transient two-way path (F-326), all done ([[adr-thread-particle-wall-and-droplets]]).
+- Still todo: spray penetration against a public data set (F-252, which also gates a variable-density vapour source) and splash at a wall film (F-284) ([[doc-roadmap-json]]).
 
 ## ADR threads
 
-_Thread pages in `sources/adr-thread-*` that cover this area (P3)._
+- [[adr-thread-particle-wall-and-droplets]] — F-253, F-254, F-292, F-255, F-245, F-323, F-326 (ADRs 0192, 0194, 0197, 0206, 0208, 0224, 0230, 0348)
 
 ## Items
 

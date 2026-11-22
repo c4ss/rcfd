@@ -1,7 +1,7 @@
 ---
 type: entity
 tags: [fan, validation, rotating]
-sources: [doc-glossary, doc-readme, doc-roadmap-overview, doc-meshing, doc-validation-data, doc-milestone-fan, doc-reference-data-f870-fan01-design-point, doc-designs-exp-rot, doc-designs-m-fan-b, doc-changelog, doc-milestones-json, adr-thread-fan01-rotating-solve, adr-thread-sliding-mesh-rotor-stator]
+sources: [doc-glossary, doc-readme, doc-roadmap-overview, doc-meshing, doc-validation-data, doc-milestone-fan, doc-reference-data-f870-fan01-design-point, doc-designs-exp-rot, doc-designs-m-fan-b, doc-changelog, doc-milestones-json, adr-thread-fan01-rotating-solve, adr-thread-sliding-mesh-rotor-stator, adr-thread-fan01-design-point]
 created: 2026-11-22
 updated: 2026-11-22
 status: draft
@@ -41,6 +41,11 @@ status: draft
 - The ADR chain of the rotating solve is collected on [[adr-thread-fan01-rotating-solve]] (F-126 partial; the wave ADRs are added by the records job).
 - The transient rotor-stator path exists from a case file only on bladeless cylindrical-interface annuli and sectors, laminar, Euler, no restart (F-303, F-711); no ADR of the moving-meshes list runs it on the FAN-01 passage ([[adr-thread-sliding-mesh-rotor-stator]]).
 - On 2026-11-18 the maintainer held several solver default changes "until the fan path needs it" (F-721, F-724, F-364, F-365, F-775) ([[adr-thread-fan01-rotating-solve]]).
+
+- **F-870 in the ADR (ADR 0762):** by its own rule the work is "stopped and reported" on the band, and the item is written partial. B1 gives 73.988 Pa, where a measurement uncertainty of 22.72 Pa would be needed to close the gap, and 326.50 W (torque 2.098164 N m). `crates/rcfd-api/tests/f870_fan01_design_point.rs` holds the state ([[adr-thread-fan01-design-point]]).
+- The ranked gap puts the compared quantity first: a rotor-only passage is compared with an installation value. Next come the missing converged second-order solution and then the mesh gates. By the agent's arithmetic, "The miss of 52.5 Pa is 63 % of the 83.3 Pa that the rotor-only definition discards"; the lead notes that no run shows this ([[adr-thread-fan01-design-point]]).
+- The maintainer's answers of 2026-11-22 entered four follow-ups. F-877: a person reads the thesis for the uncertainty and the density. F-878: the LDA profiles, ADR 0765. F-879: check H, ADR 0766. F-880: the outlet as on the rig, not issued ([[adr-thread-fan01-design-point]]).
+- The FAN-01 version-6 record says that the bearing friction "was measured with the fan removed and subtracted" ([[adr-thread-fan01-design-point]]). See also [[adr-thread-fan01-rotating-solve]].
 
 ## Related
 

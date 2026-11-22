@@ -1,7 +1,7 @@
 ---
 type: entity
 tags: [roadmap, validation]
-sources: [doc-roadmap-overview, doc-milestones-json, doc-reference-data-f868-ladson-naca0012, doc-reference-data-f869-cylinder-mean-drag, doc-reference-data-f870-fan01-design-point, adr-thread-fan01-rotating-solve]
+sources: [doc-roadmap-overview, doc-milestones-json, doc-reference-data-f868-ladson-naca0012, doc-reference-data-f869-cylinder-mean-drag, doc-reference-data-f870-fan01-design-point, adr-thread-fan01-rotating-solve, adr-thread-simulation-milestones-validation, adr-thread-fan01-design-point]
 created: 2026-11-22
 updated: 2026-11-22
 status: draft
@@ -26,6 +26,13 @@ status: draft
 - Fan: the design point is 1.4032 m^3/s, 126.46 Pa, 333.30 W. The band's numerical half is 29.75 Pa, and the measurement uncertainty is not stated in any source read ([[doc-reference-data-f870-fan01-design-point]]). See [[fan-01]].
 - Fan milestone, moving-meshes side: F-126 (rotating interfaces) and F-218 (actuator disk) carry the `fan` milestone in [[roadmap-moving-meshes-rotors-and-coupling]], both partial; the thread is [[adr-thread-fan01-rotating-solve]].
 
+## From the ADR threads (P3)
+
+- The milestone figures were built by F-865 (ADR 0756, done). At the merge the three per cents were 92, 89 and 90. The lead wrote that they are high because members are "what its run of record uses", so "The column 'Headline result' is the one to read" ([[adr-thread-simulation-milestones-validation]]).
+- F-868, F-869 and F-870 exist because of the maintainer's answers of 2026-11-21 to ADR 0756 questions 1 to 3 (option (b) each). With F-869 entered, the vortex-shedding headline "reads 'partly met' from this day, where it read 'met' on the Strouhal number alone". The first six further milestones are approved as F-871 (todo) ([[adr-thread-simulation-milestones-validation]]).
+- F-867 (ADR 0757) made the fan milestone the whole design goal: 89 members, 49 done, 30 partly done, 10 not started, 72 per cent at the merge. Structure and vibration get a milestone of their own (F-875, todo) ([[adr-thread-simulation-milestones-validation]]).
+- F-870 is detailed on [[adr-thread-fan01-design-point]]. Its follow-ups F-877 to F-880 were entered on 2026-11-22 ([[adr-thread-fan01-design-point]]).
+
 ## Related
 
 - [[cylinder-re100]], [[naca0012]], [[computer-fan-target]], [[doc-milestones-json]]
@@ -38,3 +45,4 @@ status: draft
 ## Open questions
 
 - ADR 0763 Q1: does the cylinder order miss hold F-869? ADR 0760 Q1: does the NACA headline end at 16 deg? Both are the maintainer's ([[doc-roadmap-overview]]).
+- ~~ADR 0760 Q1: does the NACA headline end at 16 deg?~~ The maintainer answered on 2026-11-22 with option (a): F-868 stays partial and an unsteady arm at 17 degrees is registered under F-868, issued as ADR 0764 ([[adr-thread-simulation-milestones-validation]]). ADR 0763 Q1 is still open; the agent and the lead recommend (c) ([[adr-thread-simulation-milestones-validation]]).

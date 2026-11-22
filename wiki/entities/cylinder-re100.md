@@ -1,7 +1,7 @@
 ---
 type: entity
 tags: [validation, benchmark, vortex-shedding, milestone]
-sources: [doc-reference-data-cylinder-wake, doc-reference-data-f869-cylinder-mean-drag, doc-reference-data-wave30b-incompressible-validation, doc-reference-data-wave31c-reference-reading, doc-reference-data-wave31a-solver-defects, doc-milestones-json]
+sources: [doc-reference-data-cylinder-wake, doc-reference-data-f869-cylinder-mean-drag, doc-reference-data-wave30b-incompressible-validation, doc-reference-data-wave31c-reference-reading, doc-reference-data-wave31a-solver-defects, doc-milestones-json, adr-thread-simulation-milestones-validation]
 created: 2026-11-22
 updated: 2026-11-22
 status: draft
@@ -23,6 +23,10 @@ status: draft
 > [!warning] Contradiction
 > The in-repo CSV row "Williamson (experiment) 0.165" (1996 review) and the 1989 fit 0.164335 differ by 0.4 %; both lie inside the 1 % window of the cylinder test ([[doc-reference-data-wave31c-reference-reading]] discrepancy 5, [[doc-reference-data-cylinder-wake]]). Within the docs, recorded.
 
+- **F-869 first sequence (ADR 0761, partial; BDF2, far field 20 D):** the drag is 1.35247 on 128 x 100 at dt 0.05 (V1, in the band) and 1.34511 at dt 0.025. The Richardson value is 1.37479, 0.0048 above the band (known miss V2b). The default first-order step gives 1.30996, outside the band ([[adr-thread-simulation-milestones-validation]]).
+- **F-869 second sequence (ADR 0763, partial; BDF2, dt 0.025, far field 30 D):** the drag is 1.32259, 1.33285 and 1.33900 on 90 x 70, 128 x 100 and 181 x 141 (St 0.16169, 0.16395, 0.16486; GCI_fine 0.935 %). The observed order is 1.387, outside the registered [1.5, 2.5] (known miss W3b), so the mesh-converged drag "is not shown". The extrapolation gives 1.343 to 1.354 for every order from 1 to 2.5 ([[adr-thread-simulation-milestones-validation]]).
+- The comparison uses the option `time_scheme = Bdf2`. The default step stays unchanged, by the maintainer's answer to ADR 0761 Q2 (a) ([[adr-thread-simulation-milestones-validation]]).
+
 ## Related
 
 [[simulation-milestones]], [[dfg-cylinder-benchmark]], [[verification-vs-validation]], [[doc-reference-data]]
@@ -30,3 +34,4 @@ status: draft
 ## Open questions
 
 - No measured mean drag at Re 100 was obtained; the originals of the nine quoted values were not read ([[doc-reference-data-f869-cylinder-mean-drag]]).
+- ADR 0763 question 1 (open): is F-869 done when the fine value and every extrapolated value are in the band but the observed order is 1.39? The recommendation is (c): done, with a new item to diagnose the order ([[adr-thread-simulation-milestones-validation]]).

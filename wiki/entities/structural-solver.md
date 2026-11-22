@@ -1,7 +1,7 @@
 ---
 type: entity
 tags: [structural, fem, solver]
-sources: [doc-structural-solver, doc-cosimulation-protocol, doc-acoustics, doc-product, doc-roadmap-overview, adr-thread-structural-case-file-and-fan-blade]
+sources: [doc-structural-solver, doc-cosimulation-protocol, doc-acoustics, doc-product, doc-roadmap-overview, adr-thread-structural-case-file-and-fan-blade, adr-thread-structural-incompatible-hex8-rule-l, adr-thread-structural-hyperelastic-and-follower]
 created: 2026-11-22
 updated: 2026-11-22
 status: draft
@@ -28,6 +28,8 @@ status: draft
 > [[doc-product]] says a structural solver "does not exist"; [[doc-structural-solver]] documents a large library with 150+ done items (already flagged on [[overview]]).
 >
 > **Settled as far as ADR 0354 to 0518 allow (p3-structural-a, 2026-11-22):** the solver exists as a library (`rcfd-fem` plus `rcfd_api::solid_case`). It has static, modal, buckling, transient, harmonic, rotating and nonlinear analyses, `.vtu` stress output and a solid case file ([[adr-thread-structural-case-file-and-fan-blade]]). It is not reachable from the CLI, MCP or the flow case (F-405 and F-404 todo; ADR 0438 Q3). So the PRODUCT.md sentence is wrong about the solver but right that the Studio cannot reach stress results today. The full callout is on [[roadmap-structural-solver]].
+>
+> **From ADR 0519 to 0746 (p3-structural-b, 2026-11-22):** confirmed. The second half adds finite-strain elements, hyperelastic materials, contact, fracture and rotor paths, and names "the solid case's output" as an approved target for the driver's inertia (F-842, ADR 0719) ([[adr-thread-structural-incompatible-hex8-rule-l]], [[adr-thread-structural-hyperelastic-and-follower]]). The part that is still true: the Studio has no stress or strain colouring; its capability inventory lists only flow-case keys and its sources have no stress view at the snapshot ([[roadmap-structural-solver]]).
 
 ## ADR threads (2026-11-12 to 2026-11-14)
 

@@ -1,7 +1,7 @@
 ---
 type: concept
 tags: [process, testing]
-sources: [doc-glossary, doc-readme, doc-contributing, doc-process-lead-process, doc-process-documentation-review, doc-process-handover-2026-11-19, doc-audit-report, doc-test-process, doc-releasing, doc-changelog]
+sources: [doc-glossary, doc-readme, doc-contributing, doc-process-lead-process, doc-process-documentation-review, doc-process-handover-2026-11-19, doc-audit-report, doc-test-process, doc-releasing, doc-changelog, adr-thread-daily-gate-and-edit-lock, adr-thread-test-to-adr-attribution]
 created: 2026-11-22
 updated: 2026-11-22
 status: draft
@@ -36,6 +36,8 @@ status: draft
 - Per-merge checks are the nine-item list of `scripts/push_main.py --run`, with a 30-minute diff-selected budget, committed mutation patches and retry-twice flaky detection (ADR 0752) ([[doc-test-process]]).
 - Releases: a release tag goes only on a `main` commit on which the full gate passed, "A gate on any other commit does not count" ([[doc-releasing]]). The gate does not run the about 660 `#[ignore]` tests ([[doc-releasing]]).
 - The 0.1.0 changelog repeats that the gate "runs on `main` in CI on Windows, not before each merge" ([[doc-changelog]]).
+
+- **Daily CI gate (F-723, ADR 0653):** the gate runs daily at 02:00 UTC on main and attributes failures to ADRs through the [[test-to-adr-index]]. Scheduled runs have used four shards since 2026-11-21 (amendment 4), and two tests have a 10 800 s limit (ADR 0740). The failures it found are on [[adr-thread-daily-gate-and-edit-lock]] ([[adr-thread-daily-gate-and-edit-lock]]).
 
 ## Related
 

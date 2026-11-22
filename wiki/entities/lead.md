@@ -1,7 +1,7 @@
 ---
 type: entity
 tags: [process, role]
-sources: [doc-process-lead-process, doc-process-documentation-review, doc-process-framework-reconciliation, doc-process-handover-2026-11-19, doc-adr-briefs-readme, doc-process-agent-rules]
+sources: [doc-process-lead-process, doc-process-documentation-review, doc-process-framework-reconciliation, doc-process-handover-2026-11-19, doc-adr-briefs-readme, doc-process-agent-rules, adr-thread-process-measures-and-roadmap-form, adr-thread-daily-gate-and-edit-lock]
 created: 2026-11-22
 updated: 2026-11-22
 status: draft
@@ -25,6 +25,10 @@ status: draft
 - **Golden files:** re-records an "additive golden edit" on main after checking the diff only adds; any other golden change and every `baseline_hashes.rs` change needs the maintainer's word ([[doc-process-lead-process]]).
 - Historical signs that motivated the written process: F-571 merged twice (2026-11-15); F-287 and F-288 waiting on the lead's approval since 2026-11-06; the lead committed roadmap status a median 32 s after a merge, before its checks ([[doc-process-documentation-review]]).
 - No reviewer of the lead exists other than the maintainer; a weekly seeded audit item and the weekly list make its state readable "and stop there" ([[doc-process-documentation-review]]).
+
+- **Stop conditions in force** are recorded with their basis in [[adr-thread-process-measures-and-roadmap-form]]. Condition 3 applied on the day of the answer: "until a gate line is green the lead starts no agent except on F-866" (ADR 0754) ([[adr-thread-process-measures-and-roadmap-form]]).
+- **Proposal files:** the lead applies [[roadmap-proposal]] files. Follow-ups are entered only after the maintainer answers questions of scope (ADRs 0757, 0762) ([[adr-thread-process-measures-and-roadmap-form]]).
+- **Lead decisions recorded in ADRs:** the lead fixed a broken link inside ADR 0759 and entered the ADR in `docs/process/exceptions/adr-rewritten.txt`. The lead also wrote F-855 partial, against the agent's "done" by the registered rule (ADR 0758) ([[adr-thread-daily-gate-and-edit-lock]]).
 
 ## Related
 

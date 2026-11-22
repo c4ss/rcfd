@@ -1,7 +1,7 @@
 ---
 type: entity
 tags: [fan, computer-fan, target, plan]
-sources: [doc-fan-project-breakdown, doc-fan-measurement-protocol, doc-validation-data, doc-design-loop, doc-changelog, doc-milestone-fan]
+sources: [doc-fan-project-breakdown, doc-fan-measurement-protocol, doc-validation-data, doc-design-loop, doc-changelog, doc-milestone-fan, adr-thread-rom-reference-fan-and-c-grid, adr-thread-design-surrogate-and-fidelity, adr-thread-design-hypothesis-record]
 created: 2026-11-22
 updated: 2026-11-22
 status: draft
@@ -21,6 +21,10 @@ status: draft
 - In 0.1.0, the parts not needing a converged fan solve exist: parametric blade geometry and sector meshes, tolerance tools, a reduced-order fan model, rotor-dynamics checks and a design ledger ([[doc-changelog]]).
 - The fan objective of the design loop runs on the reduced-order fan only: "Every number is a model proxy: no measured fan data exists" ([[doc-design-loop]]).
 - Status of the plan parts (2026-10-26 with later edits): B2, C6, D2 done; G3 exists; H3 done (F-698); everything else partial or missing ([[doc-fan-project-breakdown]]).
+
+- The schema default `ComputerFan::default()` stalls in the reduced-order model; a usable default "needs a hub zero-lift angle of about 58 deg or more" (ADR 0639). Beside it, `ComputerFan::rom_reference()` (ADR 0643) is a 120 mm 7-blade fan that runs unstalled on [0.4, 1] q_f at 3000 rpm ([[adr-thread-rom-reference-fan-and-c-grid]]).
+- Five opt-in C-grid constructions (S to S'''') mesh the reference and a second strongly staggered blade within 84.5 deg / 4.0 / 1000 (F-791 done). No case value exists yet (F-778) ([[adr-thread-rom-reference-fan-and-c-grid]]).
+- The surrogate, the fidelity driver and the hypothesis record run on the reduced-order fan. GP/EI finds the grid optimum within 1 percent in 10 of 10 runs, and "+1 mm tip gap lowers eta_s by 7.39e-3 (confirmed, 'Not tested at cfd')" ([[adr-thread-design-surrogate-and-fidelity]], [[adr-thread-design-hypothesis-record]]).
 
 ## Related
 

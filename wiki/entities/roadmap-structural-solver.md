@@ -14,44 +14,16 @@ status: draft
 
 ## Synthesis
 
-Written from the first 133 ADRs of the category (ADR 0354 to 0518, 2026-11-12 to 2026-11-14; job p3-structural-a). The other
-133 (ADR 0519 onward) may extend this section.
+Written from the first 133 ADRs of the category (ADR 0354 to 0518, 2026-11-12 to 2026-11-14; job p3-structural-a). The other 133 (ADR 0519 onward) may extend this section.
 
-- **A large library exists and runs, all of it in `crates/rcfd-fem`.** Between 2026-11-12 and 2026-11-14 the intermediate tier
-  (plan ADR 0290) and much of the advanced tier (plan ADR 0310) were registered and built item by item. That covers Beam2,
-  Shell4, Shell3 and laminates ([[adr-thread-structural-beams-shells]]), cyclic symmetry, buckling and the transformation path
-  ([[adr-thread-structural-modal-buckling-cyclic]]), rotor dynamics with Coriolis, whirl, Campbell tables and bearings
-  ([[adr-thread-structural-rotordynamics]]), transient, harmonic, random and Craig-Bampton dynamics
-  ([[adr-thread-structural-dynamics-harmonic]]), Newton, J2, creep, viscoelastic and orthotropic materials
-  ([[adr-thread-structural-materials-nonlinear]]), contact ([[adr-thread-structural-contact]]), fatigue and radiated sound
-  ([[adr-thread-structural-fatigue-and-radiated-sound]]), and sparse direct, multigrid, rank and CUDA solves
-  ([[adr-thread-structural-linear-solvers]]).
-- **The checks are verification, not validation.** The registered checks are closed forms, manufactured solutions, observed
-  orders, patch tests, bit-identities and mutation catches ([[adr-thread-structural-verification-elements]]). No ADR in this half
-  compares against a measured structure.
-- **Many items are partial without a numeric miss.** Often every acceptance clause is met, but a planned mutation was not
-  caught or a check was met only after an amendment written after its run. The roadmap gap then reads "The maintainer decides
-  done" (for example F-461, F-470, F-500, F-505, F-512, F-513, F-529, F-537, F-542, F-548, F-555, F-557, F-594; see
-  [[mutation-testing]]). The numeric known misses that remain are listed on the thread pages. Examples: F-395's buckling factor
-  2.0135e-2 against 2e-2, F-396's flap-lag 1.9e-3 against 1e-4 Omega^2, F-422's residual hoop stress 2.6 percent against 2
-  percent, F-558's I-section LTB -19.2 percent.
-- **Reach from outside Rust:** the [[solid-case-file]] runs static and modal analyses through
-  `rcfd_api::solid_case::run_solid_case_file`. No CLI subcommand and no MCP tool exist: F-405 is todo, and ADR 0438 left them to
-  the maintainer because each changes a golden file ([[adr-thread-structural-case-file-and-fan-blade]]). The fan-blade
-  demonstration is done (F-387). The fan-blade case-file keys were approved on 2026-11-18 (ADR 0505 answers) but were not built
-  at the snapshot.
-- **Coupling with the flow** is shown only by library checks: the elastic bar with the PISO solver (F-401, partial) and the
-  dynamic solid as a co-simulation participant (F-400, partial). F-404 (a `[solid]` table in the flow case), F-406 and F-436 (fan
-  demonstrations) and F-434 (public coupled benchmark) are todo ([[adr-thread-structural-fsi-coupling]]).
+- **A large library exists and runs, all of it in `crates/rcfd-fem`.** Between 2026-11-12 and 2026-11-14 the intermediate tier (plan ADR 0290) and much of the advanced tier (plan ADR 0310) were registered and built item by item. That covers Beam2, Shell4, Shell3 and laminates ([[adr-thread-structural-beams-shells]]), cyclic symmetry, buckling and the transformation path ([[adr-thread-structural-modal-buckling-cyclic]]), rotor dynamics with Coriolis, whirl, Campbell tables and bearings ([[adr-thread-structural-rotordynamics]]), transient, harmonic, random and Craig-Bampton dynamics ([[adr-thread-structural-dynamics-harmonic]]), Newton, J2, creep, viscoelastic and orthotropic materials ([[adr-thread-structural-materials-nonlinear]]), contact ([[adr-thread-structural-contact]]), fatigue and radiated sound ([[adr-thread-structural-fatigue-and-radiated-sound]]), and sparse direct, multigrid, rank and CUDA solves ([[adr-thread-structural-linear-solvers]]).
+- **The checks are verification, not validation.** The registered checks are closed forms, manufactured solutions, observed orders, patch tests, bit-identities and mutation catches ([[adr-thread-structural-verification-elements]]). No ADR in this half compares against a measured structure.
+- **Many items are partial without a numeric miss.** Often every acceptance clause is met, but a planned mutation was not caught or a check was met only after an amendment written after its run. The roadmap gap then reads "The maintainer decides done" (for example F-461, F-470, F-500, F-505, F-512, F-513, F-529, F-537, F-542, F-548, F-555, F-557, F-594; see [[mutation-testing]]). The numeric known misses that remain are listed on the thread pages. Examples: F-395's buckling factor 2.0135e-2 against 2e-2, F-396's flap-lag 1.9e-3 against 1e-4 Omega^2, F-422's residual hoop stress 2.6 percent against 2 percent, F-558's I-section LTB -19.2 percent.
+- **Reach from outside Rust:** the [[solid-case-file]] runs static and modal analyses through `rcfd_api::solid_case::run_solid_case_file`. No CLI subcommand and no MCP tool exist: F-405 is todo, and ADR 0438 left them to the maintainer because each changes a golden file ([[adr-thread-structural-case-file-and-fan-blade]]). The fan-blade demonstration is done (F-387). The fan-blade case-file keys were approved on 2026-11-18 (ADR 0505 answers) but were not built at the snapshot.
+- **Coupling with the flow** is shown only by library checks: the elastic bar with the PISO solver (F-401, partial) and the dynamic solid as a co-simulation participant (F-400, partial). F-404 (a `[solid]` table in the flow case), F-406 and F-436 (fan demonstrations) and F-434 (public coupled benchmark) are todo ([[adr-thread-structural-fsi-coupling]]).
 
 > [!warning] Contradiction — does a structural solver exist?
-> `PRODUCT.md` ([[doc-product]]) says stress and strain colouring "needs a structural solver, which does not exist". The ADRs of
-> this area show that a structural solver library exists. It has static, modal, buckling, dynamic and nonlinear analyses, writes
-> stresses to `.vtu` (F-377, F-512, F-521), and has a solid case file (F-386, ADR 0438) and a fan-blade demonstration (F-387, ADR
-> 0500). What does not exist is any route from the Studio or the tools to that library: no CLI subcommand, no MCP tool (F-405
-> todo, ADR 0438 Q3) and no `[solid]` table in the flow case (F-404 todo). So the PRODUCT.md sentence is false about the solver
-> and true about what the Studio can reach today ([[adr-thread-structural-case-file-and-fan-blade]],
-> [[doc-structural-solver]]). This is a contradiction within the repo docs.
+> `PRODUCT.md` ([[doc-product]]) says stress and strain colouring "needs a structural solver, which does not exist". The ADRs of this area show that a structural solver library exists. It has static, modal, buckling, dynamic and nonlinear analyses, writes stresses to `.vtu` (F-377, F-512, F-521), and has a solid case file (F-386, ADR 0438) and a fan-blade demonstration (F-387, ADR 0500). What does not exist is any route from the Studio or the tools to that library: no CLI subcommand, no MCP tool (F-405 todo, ADR 0438 Q3) and no `[solid]` table in the flow case (F-404 todo). So the PRODUCT.md sentence is false about the solver and true about what the Studio can reach today ([[adr-thread-structural-case-file-and-fan-blade]], [[doc-structural-solver]]). This is a contradiction within the repo docs.
 
 ### Second half (ADR 0519 to 0746, 2026-11-14 to 2026-11-19; job p3-structural-b)
 

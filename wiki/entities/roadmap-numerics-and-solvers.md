@@ -14,11 +14,22 @@ status: draft
 
 ## Synthesis
 
-_Current state of this line of work, written from the ADR threads (P3)._
+The P3 ADRs of this area (24, 2026-11-05 to 2026-11-20) are almost all diagnoses of the incompressible kernels followed by opt-in remedies that leave the defaults bit for bit; only one default moved.
+
+- **Transient stability (the largest thread).** The default PISO/PIMPLE step has an alternating pressure mode above a cell diffusion number of about 2.5 to 4 (F-299 thin gap, F-530 channel). The remedy is the opt-in consistent correctors with a case key `[solver.consistent_correctors]`, extended to periodic faces and one settings value, plus outer-iteration control and an onset refusal; the default flip is "Held" by the maintainer (2026-11-18) until the fan path needs it ([[adr-thread-piso-stability-consistent-correctors]]).
+- **Time order.** The step-size dependence of the Rhie-Chow face flux (F-344) is removable by the opt-in `[solver.rhie_chow] step_consistent` (merged as opt-in by the maintainer in person, 2026-11-12); the fractional step got its own opt-in (F-454); on a moving overset mesh a remainder from cells changing kind stays ([[adr-thread-bdf2-step-consistent-face-flux]]).
+- **Linear solver.** The one default change: the corrected order of the coarsest dense LU of the scalar AMG (F-471, ADR 0743), after AMG-CG lost definiteness on an immersed run (F-474); every moved fingerprint was approved one by one ([[adr-thread-amg-coarse-lu]], [[amg]]). The F-474 gap still reads as if the default were not switched (contradiction noted on the thread page).
+- **Non-orthogonal meshes.** The gradient options reach every equation through `solver.gradient_*` and `[solver.gradient_equations]` with no accuracy benefit claimed ([[adr-thread-gradient-options]]); the steady kernel's divergence on the warped mesh W is fixed by the opt-in `implicit_non_orth_pressure` (F-285), while the pressure-interpolation variants of F-246 stay partial ([[adr-thread-steady-kernel-warped-mesh]]).
+- **Pattern.** Most partials are partial by the registered rule (a mutation caught only after an amendment, a supporting check missed) rather than by a missed acceptance; the open decisions are defaults that would move existing results ([[adr-thread-piso-stability-consistent-correctors]], [[adr-thread-bdf2-step-consistent-face-flux]]).
 
 ## ADR threads
 
-_Thread pages in `sources/adr-thread-*` that cover this area (P3)._
+- [[adr-thread-piso-stability-consistent-correctors]] — F-299, F-301, F-322, F-367, F-530, F-531, F-535, F-536, F-538, F-550 (ADRs 0214, 0223, 0258, 0360, 0451, 0455, 0458, 0471, 0613, 0617)
+- [[adr-thread-bdf2-step-consistent-face-flux]] — F-344, F-443, F-454, F-442 (ADRs 0245, 0352, 0356, 0359)
+- [[adr-thread-amg-coarse-lu]] — F-474, F-471 (ADRs 0369, 0743, 0747, 0748)
+- [[adr-thread-gradient-options]] — F-256, F-291 (and F-289, F-298 of heat) (ADRs 0190, 0204, 0202, 0221)
+- [[adr-thread-steady-kernel-warped-mesh]] — F-246, F-285 (ADRs 0193, 0196, 0198)
+- [[adr-thread-immersed-solid]] — F-309 (ADR 0234) added to the moving-meshes thread
 
 ## Items
 

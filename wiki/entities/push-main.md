@@ -1,7 +1,7 @@
 ---
 type: entity
 tags: [process, script, testing]
-sources: [doc-process-lead-process, doc-process-documentation-review, doc-process-handover-2026-11-19]
+sources: [doc-process-lead-process, doc-process-documentation-review, doc-process-handover-2026-11-19, adr-thread-process-measures-and-roadmap-form, adr-thread-daily-gate-and-edit-lock]
 created: 2026-11-22
 updated: 2026-11-22
 status: draft
@@ -20,6 +20,9 @@ status: draft
 - `--run --base <commit>` runs one selection over several merged branches; `--gate-line` writes a full-run line; `--mutants --run` runs cargo-mutants on the changed Rust lines (weekly, in a worktree); F-863 options record the process measures ([[doc-process-lead-process]]).
 - Selection rule (I11): always the item's registered tests, baseline_hashes, docs_site and lints; then the touched crates' tests, then dependants'; recent CI failures first, then shortest recorded time first. "The 30 minutes is a cap, not a target": the median summed test time of an item over 194 agent logs was 17 seconds ([[doc-process-documentation-review]]).
 - History: written 2026-11-18; `--run`, `--push`, `--left-out-run` and `--mutants --run` had never run as of 2026-11-19; PR 24 (F-848) was proposed as the first real case ([[doc-process-handover-2026-11-19]]). The first `--mutants` trial (cargo-mutants 27.1.0, merge of ADR 0751): 7 mutants in 36 minutes, 5 caught, 1 missed, 1 timed out ([[doc-process-lead-process]]).
+
+- **F-851 (ADR 0752, done):** a failed check is run two further times, and a test that then passes is named as flaky in the ledger line. A stopped run resumes. Build time is counted at 1.8 s per selected binary. `--base` takes several merges as one diff, and `--gate-times` reads the newest gate times. The change was merged "by the changed script itself, its first real run". F-860 (todo) carries three further changes: commits named in the left-out run, the ADR's tests charged to the budget, and selection by changed file ([[adr-thread-process-measures-and-roadmap-form]]).
+- A finding from ADR 0751: the ledger's item field read "F-002" out of the branch name `...-f2-...`; it was corrected to F-855 ([[adr-thread-daily-gate-and-edit-lock]]).
 
 ## Related
 

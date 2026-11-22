@@ -12,39 +12,18 @@ status: draft
 # ADR thread: structural solver, materials and nonlinear statics and dynamics
 
 **Origin:** the ADRs in the table below, `docs/adr/` at `origin/main` 2e94e5ef.
-**Kind:** ADR thread (registrations with result addenda), 20 ADRs, 2026-11-13 to 2026-11-14. The later hyperelastic,
-incompatible-mode finite-strain, rule-L punch-path, F-bar creep and Newton-residual ADRs (F-425, F-571, F-596, F-597, F-607,
-F-620, F-685, F-747 ...) are in the other half of the category and may be added here.
+**Kind:** ADR thread (registrations with result addenda), 20 ADRs, 2026-11-13 to 2026-11-14. The later hyperelastic, incompatible-mode finite-strain, rule-L punch-path, F-bar creep and Newton-residual ADRs (F-425, F-571, F-596, F-597, F-607, F-620, F-685, F-747 ...) are in the other half of the category and may be added here.
 
-The nonlinear route of [[rcfd-fem]]: the total Lagrangian Newton driver with load steps (F-397), its roll-back and extension
-points (the advanced-tier scaffold F-408), orthotropic and temperature-tabulated materials on every path, J2 plasticity, linear
-viscoelasticity (Prony series), power-law creep, follower loads with arc-length continuation, the nonlinear transient (Newton
-inside Newmark and generalised-alpha) and the energy-momentum step, and locking-free Hex8 (B-bar / F-bar) in the nonlinear driver.
+The nonlinear route of [[rcfd-fem]]: the total Lagrangian Newton driver with load steps (F-397), its roll-back and extension points (the advanced-tier scaffold F-408), orthotropic and temperature-tabulated materials on every path, J2 plasticity, linear viscoelasticity (Prony series), power-law creep, follower loads with arc-length continuation, the nonlinear transient (Newton inside Newmark and generalised-alpha) and the energy-momentum step, and locking-free Hex8 (B-bar / F-bar) in the nonlinear driver.
 
 ## Current state
 
-- **Newton driver** (`nonlinear::solve`, F-397, ADR 0404): total Lagrangian Tet4, Hex8, Tet10, Hex20 with St. Venant-Kirchhoff,
-  tangent `K_mat(F) + K_sigma(S)`, step halving. **Partial**: A5 (linear limit at load factor 1e-6) met only after amendment 1;
-  the roll-back of a failed attempt was then made observable by F-497 (ADR 0406, done).
-- **Advanced-tier scaffold** (F-408, ADR 0440, partial): modules, material variants with a point context and a state layout,
-  Shell3, the layup and section-stiffness hook, two extension points of the Newton driver, the complex type; D6, R2 to R4 met only
-  after set-up amendments.
-- **Orthotropy and tables:** orthotropic elasticity from nine constants with fixed, cylindrical or per-element axes and
-  temperature tables on the linear static solve (F-409, ADR 0452, done); on the modal and transformation paths (F-537, ADR 0457,
-  partial by an equivalent mutant) and on the rotating, buckling and transient paths (F-542, ADR 0459, partial; transient miss
-  settled by F-545).
-- **Inelastic materials:** J2 with isotropic and kinematic hardening, radial return and consistent tangent (F-422, ADR 0475,
-  partial: residual hoop stress 2.6 percent against 2 percent and Newton order 1.27 to 1.44 against 1.8); the sphere re-run on 8 then
-  16 radial Hex20 layers (F-561, ADR 0512, partial; F-602, ADR 0518, done with a thin 7 percent E1 margin); a convergence-order
-  reading that fits an active-set change (F-560, ADR 0515, partial). Linear viscoelasticity (F-410, ADR 0485, done), in the direct
-  harmonic solve (F-577, ADR 0491, done; harmonic stress F-583, ADR 0494, done), in the damped modes at a reference frequency
-  (F-582, ADR 0495, partial by MU7), quasi-static viscoelastic time stepping (F-576, ADR 0499, done). Power-law creep with time
-  hardening on a minimal time-stepping driver (F-411, ADR 0489, done).
-- **Follower loads and arc length** (F-424, ADR 0480, done): follower pressure with its load stiffness, centrifugal follower,
-  arc-length continuation, modes about a nonlinear equilibrium.
-- **Nonlinear transient:** Newton inside Newmark and generalised-alpha (F-423, ADR 0479, partial: free spinning bar momentum check
-  missed by the trapezoidal rule's nonlinear instability); the Simo-Tarnow energy-momentum step (F-570, ADR 0514, partial: case-file
-  key open).
+- **Newton driver** (`nonlinear::solve`, F-397, ADR 0404): total Lagrangian Tet4, Hex8, Tet10, Hex20 with St. Venant-Kirchhoff, tangent `K_mat(F) + K_sigma(S)`, step halving. **Partial**: A5 (linear limit at load factor 1e-6) met only after amendment 1; the roll-back of a failed attempt was then made observable by F-497 (ADR 0406, done).
+- **Advanced-tier scaffold** (F-408, ADR 0440, partial): modules, material variants with a point context and a state layout, Shell3, the layup and section-stiffness hook, two extension points of the Newton driver, the complex type; D6, R2 to R4 met only after set-up amendments.
+- **Orthotropy and tables:** orthotropic elasticity from nine constants with fixed, cylindrical or per-element axes and temperature tables on the linear static solve (F-409, ADR 0452, done); on the modal and transformation paths (F-537, ADR 0457, partial by an equivalent mutant) and on the rotating, buckling and transient paths (F-542, ADR 0459, partial; transient miss settled by F-545).
+- **Inelastic materials:** J2 with isotropic and kinematic hardening, radial return and consistent tangent (F-422, ADR 0475, partial: residual hoop stress 2.6 percent against 2 percent and Newton order 1.27 to 1.44 against 1.8); the sphere re-run on 8 then 16 radial Hex20 layers (F-561, ADR 0512, partial; F-602, ADR 0518, done with a thin 7 percent E1 margin); a convergence-order reading that fits an active-set change (F-560, ADR 0515, partial). Linear viscoelasticity (F-410, ADR 0485, done), in the direct harmonic solve (F-577, ADR 0491, done; harmonic stress F-583, ADR 0494, done), in the damped modes at a reference frequency (F-582, ADR 0495, partial by MU7), quasi-static viscoelastic time stepping (F-576, ADR 0499, done). Power-law creep with time hardening on a minimal time-stepping driver (F-411, ADR 0489, done).
+- **Follower loads and arc length** (F-424, ADR 0480, done): follower pressure with its load stiffness, centrifugal follower, arc-length continuation, modes about a nonlinear equilibrium.
+- **Nonlinear transient:** Newton inside Newmark and generalised-alpha (F-423, ADR 0479, partial: free spinning bar momentum check missed by the trapezoidal rule's nonlinear instability); the Simo-Tarnow energy-momentum step (F-570, ADR 0514, partial: case-file key open).
 - **B-bar / F-bar Hex8 in the nonlinear driver** (F-587, ADR 0506, partial: creep cylinder growth bound C4 6.0e-3 against 2e-3).
 
 ## ADRs
@@ -74,17 +53,11 @@ inside Newmark and generalised-alpha) and the energy-momentum step, and locking-
 
 ## Key numbers and limits
 
-- F-397 (ADR 0404 roadmap note): "Tangent against central differences 2e-11 to 8e-11 (limit 1e-6), rigid rotation 2e-16 E l^2".
-  Gap: "The linear-limit clause (load factor 1e-6) missed in its registered run and was met only after amendment 1 (2e-7)"
-  ([[roadmap-structural-solver]]).
-- F-422 gap: "Residual hoop stress at the bore is 2.6 percent against 2 percent. The order of the last three residuals is 1.27 to
-  1.44 against 1.8. Both are known misses".
-- F-561 gap: "residual hoop stress at the bore is 2.70e-2 against the 2e-2 limit, and the elastic Lame hoop stress in the inner
-  layer is 1.162e-2 against 1e-2. Cause is radial resolution of 8 Hex20 layers (16 layers gave 4.5e-3 and 9.3e-3)".
-- F-587 gap: "Growth bound C4 from 5 t* to 20 t* is missed at p: 6.0e-3 against 2e-3 (finite-strain drift of the bore); met only
-  at p/10 (1.06e-4)".
-- F-577 (ADR 0491): "the acceptance's `1e-6` is out of reach at 40 elements: the dispersion of the linear element with consistent
-  mass, `2.47e-3` at the peak of rod A".
+- F-397 (ADR 0404 roadmap note): "Tangent against central differences 2e-11 to 8e-11 (limit 1e-6), rigid rotation 2e-16 E l^2". Gap: "The linear-limit clause (load factor 1e-6) missed in its registered run and was met only after amendment 1 (2e-7)" ([[roadmap-structural-solver]]).
+- F-422 gap: "Residual hoop stress at the bore is 2.6 percent against 2 percent. The order of the last three residuals is 1.27 to 1.44 against 1.8. Both are known misses".
+- F-561 gap: "residual hoop stress at the bore is 2.70e-2 against the 2e-2 limit, and the elastic Lame hoop stress in the inner layer is 1.162e-2 against 1e-2. Cause is radial resolution of 8 Hex20 layers (16 layers gave 4.5e-3 and 9.3e-3)".
+- F-587 gap: "Growth bound C4 from 5 t* to 20 t* is missed at p: 6.0e-3 against 2e-3 (finite-strain drift of the bore); met only at p/10 (1.06e-4)".
+- F-577 (ADR 0491): "the acceptance's `1e-6` is out of reach at 40 elements: the dispersion of the linear element with consistent mass, `2.47e-3` at the peak of rod A".
 
 ## Open questions
 

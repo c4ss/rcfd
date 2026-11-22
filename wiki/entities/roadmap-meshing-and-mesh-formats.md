@@ -14,11 +14,15 @@ status: draft
 
 ## Synthesis
 
-_Current state of this line of work, written from the ADR threads (P3)._
+The data structure, readers, writers, generators and quality metrics (F-010 to F-015, F-118, F-119, F-131, F-231, F-233, F-235) are done; the partials of the generated table are importers, inflation, interpolation onto a new mesh and the turbomachinery and Cartesian meshers ([[doc-roadmap-json]]). The P3 ADRs (9) cover two lines:
+
+- **Tetrahedral mesher robustness:** the neighbour-link panic on a thin box is fixed (F-306), and an output validity check (positive cells, cell volume equal to the enclosed volume) runs inside `tetrahedralize` (F-324) and on the remesher's outputs (F-327), all done with unchanged outputs; Linux fingerprint records (F-325) are todo ([[adr-thread-tet-mesher-output-checks]]).
+- **Adaptive refinement in the solver loop:** a loop hook and the adapted cavity (F-102), new criteria and a suction layer where adaptation pays (F-343), the case key `[mesh.adapt]` (F-342), a directional lattice with per-axis levels (F-348) with box coarsening (F-439, F-441). Acceptance numbers are met; F-343 and F-348 are partial on scope and on supporting checks; the directional lattice has no case key yet (F-438, todo) ([[adr-thread-mesh-adaptation]], [[mesh-adaptation]]).
 
 ## ADR threads
 
-_Thread pages in `sources/adr-thread-*` that cover this area (P3)._
+- [[adr-thread-tet-mesher-output-checks]] — F-306, F-324, F-327 (ADRs 0228, 0231, 0236)
+- [[adr-thread-mesh-adaptation]] — F-102, F-343, F-342, F-348, F-439, F-441 (ADRs 0242, 0247, 0262, 0267, 0341, 0343), with F-476 of post-processing (ADR 0373)
 
 ## Items
 

@@ -1,7 +1,7 @@
 ---
 type: entity
 tags: [process, script]
-sources: [doc-process-documentation-review, doc-process-lead-process, doc-adr-briefs-readme, doc-process-agent-rules]
+sources: [doc-process-documentation-review, doc-process-lead-process, doc-adr-briefs-readme, doc-process-agent-rules, adr-thread-process-measures-and-roadmap-form, adr-thread-simulation-milestones-validation]
 created: 2026-11-22
 updated: 2026-11-22
 status: draft
@@ -20,6 +20,10 @@ status: draft
 - Reads brief header lines (`Branch:`, `Items:`, `ADR:`, `Rules version:`, `Model:`, `Issued:`, `Size (lead):`) by their prefix ([[doc-adr-briefs-readme]]).
 - "Only the lead regenerates docs/adr/index.md, on main; branches never do, so it cannot conflict" ([[doc-process-documentation-review]]).
 - The unanswered-question count went from 88 to none on 2026-11-18; "That count reads markers and headings; it does not show that each question was answered well" ([[doc-process-documentation-review]]).
+
+- From version 4 of the agent rules (2026-11-21), rule 7 asks agents to run `python scripts/process_report.py --check` before their report. This follows the maintainer's answer to ADR 0752 question 5 ("Yes, add it") ([[adr-thread-process-measures-and-roadmap-form]]).
+- `--weekly` prints the four process measures of F-863: queue age, the lead's review minutes, proposed against written status, and escaped defects (ADR 0754) ([[adr-thread-process-measures-and-roadmap-form]]).
+- A typical agent result on 2026-11-22: the only failures are "generated file is not current" (`docs/adr/index.md`, `docs/reference-data.md`), which rule 9 leaves to the lead ([[adr-thread-simulation-milestones-validation]]).
 
 ## Related
 

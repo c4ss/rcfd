@@ -32,6 +32,8 @@ F-126 is the hub item of the `fan` milestone in this category: "Turbomachinery r
 
 _The FAN-01 wave ADRs (steady rotating-frame solve, mesh, diagnosis, limiters, cyclic seams, sector generators) are to be added by the records job._
 
+**Design-point check of this solve (added by job p3-quality-design):** [ADR 0762](../../docs/adr/0762-f870-registration-fan01-design-point-state-band-and-ranked-gap.md) (2026-11-22, F-870, partial) runs mesh B1 at 1.4032 m^3/s: pressure rise 73.988 Pa against 126.46 Pa (-41.5 %), shaft power 326.50 W against 333.30 W (-2.0 %), non-orthogonality 83.37 deg and skewness 3.765 against 70 and 2.0, `res_u` 1.2e-3 against 1e-5. Its task-1 table summarises ADRs 0075, 0078, 0086, 0110, 0111, 0170, 0174 to 0181 and 0183 against the three limits of `docs/milestone-fan.md`. Follow-ups F-877 to F-880 (ADRs 0765 and 0766 issued). Detail on [[adr-thread-fan01-design-point]].
+
 ## Key numbers and limits
 
 - ADR 0637 D3 / ADR 0112: a sliding step whose interface non-orthogonality exceeds 70 deg stops the run (the cylindrical-interface pre-flight).

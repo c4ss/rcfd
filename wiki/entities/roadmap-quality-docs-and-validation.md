@@ -1,7 +1,7 @@
 ---
 type: entity
 tags: [roadmap, area]
-sources: [doc-roadmap-json, doc-roadmap-overview]
+sources: [doc-roadmap-json, doc-roadmap-overview, adr-thread-simulation-milestones-validation, adr-thread-fan01-design-point, adr-thread-daily-gate-and-edit-lock, adr-thread-test-to-adr-attribution, adr-thread-process-measures-and-roadmap-form]
 created: 2026-11-22
 updated: 2026-11-22
 status: draft
@@ -14,11 +14,20 @@ status: draft
 
 ## Synthesis
 
-_Current state of this line of work, written from the ADR threads (P3)._
+Three kinds of work share this line: validation headlines, the reliability of the full gate, and the lead's tooling.
+
+- **Validation headlines.** F-865 (ADR 0756) made per cent complete per simulation milestone; its own reading is that the per cents run high and "The column 'Headline result' is the one to read". The maintainer's answers of 2026-11-21 created three headline items. F-868 (NACA 0012 lift, ADR 0760) is partial: the lift is within max(5 %, 0.018) of Ladson from 0 to 16 degrees, and 17 degrees is a known miss. An unsteady arm was approved and issued as ADR 0764 ([[adr-thread-simulation-milestones-validation]]). F-869 (cylinder drag, ADRs 0761, 0763) is partial: the fine-mesh drag 1.33900 is in [1.314, 1.370], but the observed order 1.387 is outside [1.5, 2.5]; ADR 0763 question 1 is with the maintainer ([[adr-thread-simulation-milestones-validation]]). F-870 (FAN-01 design point, ADR 0762) is partial: the pressure rise is 73.99 Pa against 126.46 Pa and the shaft power is within 2.0 %. The band cannot be completed without the measurement's uncertainty, which is follow-up F-877 and needs a person to read it ([[adr-thread-fan01-design-point]]). F-867 (ADR 0757) made the fan milestone the whole design goal ([[adr-thread-simulation-milestones-validation]]).
+- **Gate reliability.** The daily full gate runs in CI with failures attributed to ADRs (F-723, ADR 0653), and scheduled runs have used four shards since 2026-11-21. The failures it found were fixed one item at a time: per-test time limits (F-849), wall-clock limits on a loaded runner (F-854), a shared temporary folder (F-853) and a negative control (F-866). The [[edit-lock]] needed four items (F-751, F-755, F-761, F-855), and F-855 stays partial until a hosted gate shows F2 passing or failing with a printed class ([[adr-thread-daily-gate-and-edit-lock]]). The [[test-to-adr-index]] that the attribution reads went through 19 ADRs of rules and readings. Coverage is near complete, but the agreement between readers of the primary-ADR samples is what most often missed its limits ([[adr-thread-test-to-adr-attribution]]).
+- **Lead tooling.** The push script after its first real runs (F-851), process measures and four stop conditions in force from 2026-11-21 (F-863), and agent-written [[roadmap-proposal]] files (F-864, partial) ([[adr-thread-process-measures-and-roadmap-form]]).
+- **Not started:** hosted CI for F-001 and F-002, F-736, F-764, F-858 to F-861, F-871 (six further milestones), F-872 to F-880 (the fan headlines and the follow-ups of F-870).
 
 ## ADR threads
 
-_Thread pages in `sources/adr-thread-*` that cover this area (P3)._
+- [[adr-thread-simulation-milestones-validation]]: F-865, F-867, F-868, F-869 (ADRs 0756, 0757, 0760, 0761, 0763)
+- [[adr-thread-fan01-design-point]]: F-870 (ADR 0762); see also [[adr-thread-fan01-rotating-solve]]
+- [[adr-thread-daily-gate-and-edit-lock]]: F-723, F-751, F-755, F-761, F-849, F-853, F-854, F-855, F-866 (11 ADRs)
+- [[adr-thread-test-to-adr-attribution]]: F-737 to F-795, F-839 (19 ADRs)
+- [[adr-thread-process-measures-and-roadmap-form]]: F-851, F-863, F-864 (ADRs 0752, 0754, 0755)
 
 ## Items
 
