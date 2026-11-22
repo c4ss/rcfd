@@ -125,3 +125,72 @@ Size (agent): done; 0; 0; 0; 110000
   it is not edited here; it is named for the lead in the addendum.
 - `npm test` of `apps/studio-web` is not run: nothing there is touched (rule 7).
 - The tools list without `--project` has no `start_run`; row 2 checks it is unchanged.
+
+## Addendum 1: results (2026-11-22)
+
+Built as registered: the registration eaa78707, then the code commit 1c62c2bc (the one string of `project.rs` line 399 and
+the new test file), then the committed mutation patch with this addendum. The before lists of D4 were written from the
+binary of eaa78707 (the unchanged code) before the code commit. All runs in the release profile, each registered run made
+once; the record (the four lists, the scripts and the logs) is in the scratch folder
+`E:/projects/cfd/w49i-work/f862-start-run-store-description-scratch`. No amendment was needed.
+
+| # | Check | Limit | Measured | Met |
+|---|---|---|---|---|
+| 1 | The live `store` property of `start_run` | exact value | `store_description_names_plan_as_the_default`: 1 passed; the property is `{"type": "string", "enum": ["plan", "none"], "description": <D1 new text>}`, no "none with case" | yes |
+| 2 | The whole list before and after, less the one description | equal bytes | without `--project`: 34 tools, 28 104 bytes before and after, SHA-256 a68843af005758f5... both, equal; with `--project`: 53 tools, 53 944 bytes before (368ca07bc7018905...), 53 985 after (f1906f35903338a4...), the new text once, and with the old text put back equal bytes. The 41 bytes are the length of the new last sentence (83 characters) less the old (42) | yes |
+| 3 | No golden changes; the list tests unedited | empty; 0 failures | no file under `crates/rcfd-mcp/tests/golden` changed; `project_list_f270` 1, `tool_list_f275` 8, `tool_list_adr0730` 2, `default_f1` 2 passed | yes |
+| 4 | The Studio's calls | stated; empty | no file under `apps/` changed; read at their lines: `runs.ts` 147 `store: 'plan'`, 175 `store: p.store ?? 'plan'`, 211 `from_run`; `first.ts` 36 `store: 'plan'`; `control.ts` 304 `store: 'plan', dry_run: true` | yes |
+| 5 | No behaviour change | 0 failures | `start_run_default_plan_adr0741` 2 passed, `new_simulations_f271` 1 passed (1 ignored record), `rcfd-mcp --lib` 18 passed (1 ignored, as before) | yes |
+| 6 | The only source change | as stated | `crates/rcfd-mcp/src/project.rs` 1 added, 1 removed; `tests/start_run_store_description_f862.rs` 45 added; the patch | yes |
+| 7 | fmt, clippy, docs_site | clean; 0 failures | `cargo fmt -p rcfd-mcp --check` clean; `cargo clippy -p rcfd-mcp --all-targets -- -D warnings` clean; `docs_site` 2 passed | yes |
+
+### Mutations (each in the working tree on 1c62c2bc, run once, restored)
+
+| Mutation | Registered to fail | Result |
+|---|---|---|
+| M1, committed as `crates/rcfd-mcp/tests/start_run_store_description_f862.mutation.patch` | row 1 | the new test failed at line 32 (the exact value) |
+| M2, `enum` `["plan"]` | row 1 and the D4 script | the new test failed at line 32; the script: not met, one difference, `start_run.inputSchema.properties.store.enum` |
+| M3, `dry_run`'s description gains "exactly" | the D4 script | the script: not met, one difference, `start_run.inputSchema.properties.dry_run.description`; `project_list_f270` and the new test passed, as read (neither holds that text) |
+
+The negative control of the D4 script (the after list without the old text put back) reported exactly one difference,
+`start_run.inputSchema.properties.store.description`.
+
+### Deviations
+
+- The registration names `git diff main` for rows 3, 4 and 6. The local branch `main` of this checkout is not the base of
+  this work (it is at another line of history), so the diffs were taken against the base d6e44b27, the commit the brief
+  was issued at.
+- The first invocation of rows 3 and 5 stopped before any check of `start_run_default_plan_adr0741` ran: its two tests need
+  `rcfd-runner.exe` next to `rcfd-mcp.exe`, which was not yet built in this target folder (the helper's message names it),
+  and cargo stopped there, so `tool_list_*` and the new test were not reached in that invocation. After
+  `cargo build --release -p rcfd-cli -p rcfd-runner` the whole set was run once with `--no-fail-fast`, with the results
+  above. No code or test was changed between the two.
+- The mutation runs M1 to M3 came before the run of rows 3 and 5; the binary was rebuilt from the clean code afterwards and
+  its list is byte-equal to the after list of row 2.
+
+### Not run, not done
+
+- `docs/mcp-tools.md`, the `start_run` row, still ends its `store` clause with "the tool's own description of `store`
+  still names the earlier default until its change is approved", now stale. Outside the files of the brief; for the lead.
+- The comment at `apps/studio-web/src/shared/actions/runs.ts` line 146 ("start_run's own default (none)") is the Studio
+  follow-up ADR 0741 proposed; not touched.
+- `npm test` of `apps/studio-web`: not run, nothing there is touched.
+
+### Size
+
+Size (agent): done; 0; 0; 0; about 120000
+
+### Decision
+
+By the registered rule: **done**. Rows 1 to 7 are met and M1 is caught; every clause of the acceptance of F-862 has a
+passing check (rows 1 to 4).
+
+## Open questions for the maintainer
+
+None.
+
+## For the lead: roadmap entries
+
+Status proposed for F-862: done.
+
+> ADR 0774, 2026-11-22, done: the description of start_run's store argument now ends "Default plan; none is the way back to a run that stores only what its case asks for" (ADR 0741 question 1, option (a)), held by a test that reads the live tools list; the whole list before and after is byte-equal with the old text put back, no golden, argument or default changed and no Studio call changed.
