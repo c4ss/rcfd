@@ -326,3 +326,50 @@ M2 is committed as `crates/rcfd-api/tests/f882_fan01_rotor_loss.mutation.patch` 
 * The dissipation resolved by the cell gradients against the numerical one: not separated.
 * The mesh gates (expected missed; F-133), the outlet as on the rig (F-880), the wall-pressure data (F-883, another
   agent's work), the density and the uncertainty of the measurement (F-877).
+
+## Amendment 1 (2026-11-22, before the corrected run): the registered B0 diverged; the corrected B0 keeps the first cell
+
+Written after the one registered run of B0 and before any run of the corrected mesh. What was run and seen before this
+text: the gate tests of the new file (committed at 1723e46d with the first values of S1 and S3 recorded as registered);
+the registered B0 run (`f882_b0_loss_state_record` and `f882_acceptance` in one process); and, on a scratch copy, the
+mesh builds named below, without a solve. The family runs of B3, B2, B1 were running; the B3 run had passed iteration
+6000 and no sample of it had been read. No value of the loss on B0, B1 or B2 had been seen.
+
+**What happened.** The registered B0 (106 692 cells; non-orthogonality 88.07 deg, skewness 14.59, aspect ratio 323.1,
+all three gates missed) diverged: continuity 1.6e3 at iteration 100, and the steady divergence guard of ADR 0762 stopped
+it at iteration 106 (`velocity_runaway`). No sample was taken. By the registration this run is made once, and it is
+recorded here as made: the solve on the registered B0 stops, and the registered tests `f882_b0_loss_state_record` and
+`f882_acceptance` stay in the file, unchanged and ignored, as the record of that run.
+
+**Diagnosis (mesh only, no solve).** The face of the largest skewness of the registered B0 is at r = 0.2197 m, z =
+0.1534 m, in the wake behind the trailing edge, and 15 faces have a skewness above 4 (none on B1). Built on the scratch
+copy and checked with `compute_metrics`:
+
+| Mesh | Largest skewness | Faces above 4 | Largest non-orthogonality [deg] |
+| --- | --- | --- | --- |
+| B0 as registered (n_bl 3, growth 1.13797, y+ 21.277) | 14.594 | 15 | 88.07 |
+| B0 counts, B1's wall layers (n_bl 2, growth 1.2, y+ 30) | 15.184 | 10 | 87.95 |
+| B0 counts, n_bl 2, growth 1.2, y+ 21.277 | 13.575 | 21 | 88.55 |
+| B0 counts, n_bl 3, growth 1.13797, y+ 30 | 2.564 | 0 | 83.69 |
+| B1 counts, n_bl 3, growth 1.13797, y+ 21.277 | 1.866 | 0 | 81.34 |
+| B1 | 3.765 | 0 | 83.37 |
+
+The skewed cells appear on the B0 counts whenever the exact stack (`h1 (1 + g + ... + g^(n_bl - 1))`: 0.88, 1.24 and
+1.38 mm in the three bad rows, 1.94 mm in the good one) is thin against the in-plane cells of the wake that it has to
+join. That a skewness of 14.6 is the cause of the divergence is my reading, not shown; B1 runs with 3.765.
+
+**Corrected, fixed now.** B0 keeps the counts of the registration, `n_bl = 3` and growth `1.2^(1 / 1.41) = 1.13797`, and
+takes the first cell of the family, `y+ = 30`. The wall-normal direction is refined in its cells, not in its first
+cell: the exact stack has three cells instead of two (0.565, 0.643, 0.732 mm against 0.565, 0.678 mm on B1) and the
+cells from the stack to the seam are `n_side - n_bl = 18` instead of 13. The first cell is not refined; the acceptance's
+"refines the wall-normal direction" is met in that sense only, and the addendum says so. Taken on the maintainer's
+standing instruction of 2026-11-11 (take the recommendation). This specification was chosen among the four built above
+by its mesh quality alone, which I disclose; it was not chosen by any result of the loss.
+
+In the test file the registered `b0()` and its two heavy tests and `f882_b0_mesh_gates_as_recorded` stay unchanged. New:
+`b0c()` with the corrected specification; the gate test `f882_b0c_mesh_gates_as_recorded` (the form of S3); the heavy
+tests `f882_b0c_loss_state_record` and `f882_b0c_acceptance` (the forms of the registered two, sharing one solve). The
+constants `B0_STATE` and `B0_S_T`, and with them S2 and the extrapolation, take the values of the corrected B0, whose
+cell count is the same, 106 692. Everything else of the registration stands: the regions, the budget, the extrapolation
+and its validity, the share of the installation, the tolerances and the decision rule; "B0" in them is the corrected
+mesh. The corrected run is made once.
