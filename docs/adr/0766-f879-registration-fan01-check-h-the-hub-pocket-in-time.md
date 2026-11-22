@@ -335,3 +335,257 @@ unchanged (unchanged default output). Mutation M4 stays as planned.
 
 The first values of S1 are the record of the registration's words ("those of the first run of each"): 13.824327 m/s,
 2.607352 N m, 110.1842 Pa after 20 steps.
+
+## Addendum 1: results
+
+Written 2026-11-22, after the runs. Commits on the branch, from main 2bab1863: 39f35a63 (this registration, alone),
+1bb31a70 (amendment 1, before the corrected run of C1 and before any registered run), fc1ed61e (the test file; the two
+registered runs were made from it), ef3305e2 (the mutation patch), 22598042 (the records, the logs and the recorded
+values), and the commit of this addendum with the proposal file. The records are
+`docs/investigations/f879-fan01-check-h/H_dt.csv` and `H_dt2.csv` (one row per step), with `H_dt.log`, `H_dt2.log` and
+`mutations.log` beside them.
+
+### The sentence
+
+**The run does not decide.** By the registered rule the class of ADR 0183 is NOT EVALUABLE and the verdict of F-879 is
+"does not decide": H(dt) is not TIME-ACCURATE by the rule of D-2 (43.76 % of the window's steps against 99 %). No class
+is asserted.
+
+What the two runs show, as an observation and not as a class: in both, the oscillation at the six site cells decays to
+nothing. Its amplitude over the window is 0.0054 m/s in H(dt) and 0.0065 m/s in H(dt/2), against the STEADY threshold of
+0.193 m/s, and over the last flow-through time it is 7.6e-5 and 3.8e-5 m/s. Had both runs met the outer rule, the class
+would have been STEADY.
+
+### The runs
+
+B2, 13 627 cells, k-omega SST, rotating frame, `pimple` with 5 outer iterations, BDF2, limited `linear_upwind`, seam
+diffusivity `pair` (D-1), from the uniform start (D-7). Both ran 0.25318 s, 6.27 rotor revolutions, six flow-through
+times; the window is the last 0.1266 s (3.14 revolutions). Neither failed; every field is finite at the end.
+
+| | H(dt) | H(dt/2) |
+| --- | --- | --- |
+| time step | 4.605e-5 s | 2.3025e-5 s |
+| steps (window) | 5 498 (2 749) | 10 996 (5 498) |
+| wall time | 131.3 min, 1.43 s per step | 230.2 min, 1.26 s per step |
+| outer rule D-2: share of window steps by the ratio alone; by the rule | 0.4376; 0.4376 | 1.0000; 1.0000 |
+| recorded ratio `c_4` over the window: smallest, median, largest | 0.0039, 0.0109, 0.0200 | 0.0033, 0.0060, 0.0088 |
+| first pressure change of a step, `max abs(p_1 - p^n)` | 159.96 to 159.97 m^2/s^2 | 300.78 to 300.79 m^2/s^2 |
+| pressure change of the 4th outer iteration | 0.62 to 3.20 m^2/s^2 | 1.00 to 2.64 m^2/s^2 |
+| TIME-ACCURATE | **no** | yes |
+| site signal: cell of largest `A`; `A` over the window | c157; 5.365e-3 m/s | c157; 6.493e-3 m/s |
+| upward crossings; `f`; DFT peak | 0; none; 7.9 Hz (the first bin: a drift) | 0; none; 7.9 Hz (the same) |
+| `A` over the first and second half of the window | 5.34e-3; 7.9e-5 m/s | 6.40e-3; 9.3e-5 m/s |
+| the decay: `A` of c157 in flow-through times 1 to 6 | 8.94; 0.301; 0.0470; 5.06e-3; 3.2e-4; 7.6e-5 m/s | 10.09; 0.300; 0.0441; 6.01e-3; 4.9e-4; 3.8e-5 m/s |
+| torque: mean; `A`; crossings; `f` | 2.007096 N m (312.33 W); 2.83e-4 N m; 42; 1009.5 Hz | 2.010156 N m (312.81 W); 3.53e-4 N m; 161; 1307.6 Hz |
+| pressure rise: mean; `A`; crossings; `f` | 69.6172 Pa; 0.0212 Pa; 41; 395.1 Hz | 70.0729 Pa; 0.0364 Pa; 106; 957.5 Hz |
+| torque and pressure rise, `A` in flow-through time 6 | 6.7e-5 N m; 7.9e-3 Pa | 1.9e-4 N m; 1.7e-2 Pa |
+| smallest axial relative velocity at the six cells: whole run; after the first flow-through time | -1.08; +0.291 m/s | -3.33; +0.279 m/s |
+| five cells of largest `A` over the window | c7887 0.161, c6878 0.155, c12252 0.114, c11621 0.099, c10991 0.099 m/s (r 0.244 to 0.249, z 0.106 to 0.120: the tip) | c10492 0.522, c10493 0.485, c9861 0.418, c9911 0.397, c11173 0.364 m/s (r 0.248 to 0.249, z 0.120: the tip gap) |
+| largest seam-pair flux sum (every 50 steps of the window) | 2.3e-15 | 2.3e-15 |
+| mass balance at the end | 1.6e-14 | 1.4e-14 |
+
+Ratios between the runs: `A(dt/2) / A(dt)` of the site signal 1.21; no frequency ratio (no crossing in either). Torque:
+`A` ratio 1.25, `f` ratio 1.30; pressure rise: `A` ratio 1.72, `f` ratio 2.42. The torque and the pressure rise have no
+oscillation to speak of: their half ranges over the window are 0.014 % and 0.03 % of the mean in H(dt), and the crossing
+counts are those of noise on a slow drift, different at the two steps.
+
+**The time means beside the other values** (no limit; none is a pass or a miss):
+
+| | torque | shaft power | pressure rise |
+| --- | --- | --- | --- |
+| H(dt), window mean | 2.007096 N m | 312.33 W | 69.617 Pa |
+| H(dt/2), window mean | 2.010156 N m | 312.81 W | 70.073 Pa |
+| B2, steady SIMPLEC at iteration 8000 (ADR 0762, R1) | 2.028692 N m | 315.69 W | 64.2329 Pa |
+| B2, cycle means of ADR 0181 | 2.0308 N m | not given | 63.860 Pa |
+| B1, steady SIMPLEC at iteration 8000 (ADR 0762) | 2.098164 N m | 326.50 W | 73.9881 Pa |
+| measured (FAN-01 design point) | 2.14184 N m | 333.30 W | 126.46 Pa |
+
+The time-marched state of B2 has 1.0 % less torque and 8.4 to 9.1 % more pressure rise than the SIMPLEC cycle sample of
+the same mesh. The two differ in more than the algorithm: the time march has the seam diffusivity `pair` (D-1), and the
+`pimple` face interpolation carries a term in the time step (ADR 0199, "Not in scope"); the two time steps differ by
+0.15 % in torque and 0.65 % in pressure rise. Against the measurement the B2 time means are 6.2 % low in power and 45 %
+low in pressure rise; B2 is not the mesh of F-870.
+
+### Every check
+
+| Id | Measured | Met |
+| --- | --- | --- |
+| A1 | H(dt) 5 498 of 5 498 steps, H(dt/2) 10 996 of 10 996; no failure, no guard trip, fields finite | yes |
+| A2 | H(dt): 43.76 % of the window's steps meet D-2, against 99 %; H(dt/2): 100 % | **no, for H(dt)** |
+| A3 | class NOT EVALUABLE (first clause: a NOT TIME-ACCURATE run); verdict "does not decide" | a verdict by the rule, and it is the one that does not decide |
+| A4 | the table above | yes |
+| A5 | "What this means for F-870" below | yes |
+| A6 | the verdict is recorded as `Verdict::DoesNotDecide` and held by `f879_class_from_the_committed_records` | yes |
+| C1 | as registered: failed at c57 (z 0.171589 against 0.1716), a defect of the set-up; by amendment 1: 13 627 cells, r and z of the six cells equal to the record of ADR 0181 to its 12 printed digits | yes, after amendment 1 |
+| C2 | 20 steps with and without the outer record: the six site speeds, torque and pressure rise equal in every bit at every step | yes |
+| C3 | sine: `A` 0.369987 against 0.37 (3.5e-5), `f` 123.000 against 123 (1e-16) | yes |
+| C4 | ten built pairs and one cut series: each got the verdict it was built for | yes |
+| S1 | after 20 steps: 13.824327 m/s, 2.607352 N m, 110.1842 Pa, in every run made on the unmutated tree (K1) | yes |
+| G1 | counts 5 498 and 10 996, window 2 749 and 5 498, class and verdict as recorded, `A` 5.364938e-3 and 6.493334e-3 m/s | yes |
+| R1 | not run: no heavy record was rerun (each registered run is made once) | not run |
+| D1 | `git diff --name-only 2bab1863` names no file under `crates/*/src` | yes |
+| P | see "The checks of rule 7" | see below |
+
+### Why H(dt) fails the outer rule, and what that says about D-2
+
+The rule of D-2 failed where the state is steadiest, and the record shows why. In the window the pressure change of the
+4th outer iteration is 0.6 to 3.2 m^2/s^2 in H(dt) and 1.0 to 2.6 m^2/s^2 in H(dt/2): the same size at both steps, and
+far above the floor of 0.0415 m^2/s^2, while the site speeds change by less than 1.1e-4 m/s over the last 500 steps. The
+denominator, the pressure change of the step's first outer iteration, is constant in the window and close to doubling
+with the halved step (160 against 301 m^2/s^2). So the ratio halves with the step for a reason that has nothing to do
+with the flow, and H(dt/2) meets the rule and H(dt) does not on a denominator that goes about as `1 / dt`. The pressure
+inside a step moves by an amount that does not go to zero as the state becomes steady, in the first iteration and in the
+fourth; what moves it was not looked for (no solver source is in the scope of this work, and no defect is claimed).
+
+Said plainly: the quantity I registered in D-2 in place of the velocity change does not measure the time accuracy of
+this state. The "yes" of H(dt/2) is as weak as the "no" of H(dt). The floor of reason (iii) was set for a pressure
+change that vanishes in a steady state, and it does not vanish. The rule is not changed after the run; the verdict stands
+as "does not decide". The velocity change of the outer iterations, the quantity ADR 0183 registered, is still not
+measured.
+
+### What this means for F-870 (task 4; a proposal, nothing is changed)
+
+By the rule nothing is decided, so nothing follows for the convergence rule of F-870 yet. What would follow from each
+class, and what the observation points to:
+
+* If a decided run confirms what both records show, the class is STEADY: on B2 the hub pocket has a steady state in
+  time, the six site cells carry no reversed axial flow in it (at least +0.28 m/s after the first flow-through time),
+  and the SIMPLEC limit cycle is a property of the steady iteration, as ADR 0183 predicted (PR5). A steady state then
+  exists to converge to, and no rule on a time mean is needed. What the convergence rule of F-870 would have to allow is
+  another way to reach it: `is_converged()` of SIMPLEC at 1e-5 does not get there (`res_u` 1.2e-3), a time march does.
+* A rule "converged by a time march" would have to state, to be registered: the time step and that a halved step is run
+  beside it; the length (here six flow-through times, of which the first four still move the site by more than 1e-3
+  m/s); the window (here one flow-through time, 42.2 ms, about one revolution); the settled rule on that window, for
+  example a half range of torque and of pressure rise of at most a stated share of the mean, and the agreement of the
+  two time steps within a stated share. The numbers these runs give for scale, not as limits: half ranges over the last
+  flow-through time of 0.003 % and 0.011 % of the mean (H(dt)), 0.010 % and 0.025 % (H(dt/2)); the two steps apart by
+  0.15 % in torque and 0.65 % in pressure rise.
+* If the class had been PHYSICAL, no steady state would exist and the rule would be one on a time mean over a stated
+  number of periods; nothing in the records points there. If NUMERICAL, the oscillation would be the time scheme's and
+  neither rule would apply before a fix; nothing points there either.
+
+Limits of all of this: B2, not B1, the mesh of F-870; one scheme and one mesh in time; the seam diffusivity `pair`,
+which the SIMPLEC run of F-870 does not set; the time-marched pressure rise is 8 to 9 % above the SIMPLEC sample on the
+same mesh, so a change of the route to convergence also changes the number that is compared with the measurement. The
+largest unsteadiness left in the window is not at the hub: the five cells of largest amplitude are at the tip (0.16 m/s
+in H(dt), 0.52 m/s in H(dt/2), the latter above the 0.193 m/s that the rule applies to the site cells only). Whether
+that still decays is not in the records, which hold the whole-window range of those cells and no history.
+
+### What is a gate test and what is a heavy record
+
+All in `crates/rcfd-api/tests/f879_fan01_check_h.rs`.
+
+* Run with every `cargo test` (about 45 s together in release): `f879_measures_and_classes_on_known_signals`,
+  `f879_site_cells_are_at_the_hub_trailing_edge`, `f879_short_run_holds_the_state` (20 steps of H(dt) on the path of the
+  heavy records, twice: the state within 1 % of its first run, and equal bits with and without the outer record),
+  `f879_class_from_the_committed_records` (the class and the verdict from the two committed records: it holds "does not
+  decide" and fails if the records or the rule give anything else).
+* Ignored, heavy, run by name: `f879_h_dt_record` (2.2 h on the shared machine) and `f879_h_dt2_record` (3.8 h). A rerun
+  compares its measures with the committed record of the run within 1 %.
+
+### Mutations and negative controls
+
+Run on a copy of the tree in the scratch folder with its own target folder (`mutations.log`; M6 was run after the
+records existed and is not in that log).
+
+| Id | What happened |
+| --- | --- |
+| M1 | Coriolis factor -2.0 to -1.9: after 20 steps 13.820946 m/s (-0.02 %), 2.610286 N m (+0.11 %), 109.5689 Pa (-0.56 %). **Not caught**: every value is inside 1 % |
+| M2 | time step 4.7e-5 s: caught by `f879_short_run_holds_the_state` (the time), and by the window count of the built pairs |
+| M3 | threshold 0.5 m/s: caught ("the same oscillation at both steps" is called steady). Committed as the mutation patch, as the registration said for the case that M1 is not caught |
+| M4 | site cell 13000: caught by the site test and by the short run (40.42 against 13.82 m/s) |
+| M5 | frequency band [0.4, 2.5]: caught ("the frequency doubles with the halved step") |
+| M6 | `H_dt.csv` cut to its first half: caught (2 749 rows against 5 498) |
+| M7 | persistence removed: caught ("an oscillation that decays across the window") |
+| K1 | the short run gave 13.824327 m/s, 2.607352 N m and 110.1842 Pa in each of its runs on the unmutated tree |
+
+M1 is a weakness of the fast test worth saying: 20 steps from an impulsive start do not show a 5 per cent error of the
+Coriolis term at 1 %. The fast test holds the path and the set-up; a change of the rotating-frame physics of that size
+is held by `f870_fan01_design_point.rs` (its M1), not here.
+
+### Deviations
+
+1. Amendment 1: the bound of C1 on z was a wrong reading of ADR 0181; corrected before its rerun and before any
+   registered run. No limit of the class was touched.
+2. D-1 to D-7 of the registration are departures from ADR 0183, registered before the run. D-2 turned out not to
+   measure what it was registered for (above).
+3. The committed mutation patch is M3, a patch of the test file, because M1 was not caught; registered as the fallback.
+4. `cargo test -p rcfd-cli --release --test docs_site` was run on the registration's text before its commit, to check
+   its links. No test of F-879 existed then.
+5. After the registered runs the test file was changed in two places only: the recorded class of G1, and two type names
+   for clippy. The recorded values of S1 and the corrected C1 went in before the runs. The path of the runs is
+   unchanged.
+6. The two record files are 1.1 and 2.3 MB of text, larger than any other file under `docs/investigations/`. They are
+   the whole evidence of the class, one row per step, as D-6 registered.
+7. The tests of the heavy records pass in their first run by design (no committed record to compare with); their
+   comparison branch (R1) has not been executed on a real rerun.
+
+### What was not run
+
+* The velocity change of the outer iterations (ADR 0183's own rule): it needs a record the solver does not keep.
+* A rerun of either heavy record (R1); a third time step, a longer run, another start, another scheme or mesh (stop
+  rule 4 of ADR 0183); the run from the stalled SIMPLEC state that the acceptance of F-879 words (D-7).
+* B1; arm 1 and arm 2 of ADR 0183; its decision mapping.
+* The full workspace test run. Of the workspace only the new file's tests, `docs_site`, fmt and clippy of `rcfd-api`
+  were run.
+
+### The checks of rule 7
+
+* `cargo fmt -p rcfd-api --check`: clean. `cargo clippy -p rcfd-api --all-targets -- -D warnings`: clean (after two type
+  names were added; the first run named two `type_complexity` findings in the new file).
+* `cargo test -p rcfd-api --release --test f879_fan01_check_h`: 4 passed, 2 ignored (the heavy records).
+* `cargo test -p rcfd-cli --release --test docs_site`: 2 passed, with this addendum in the tree.
+* `python scripts/roadmap_proposals.py check docs/roadmap/proposals/0766-F-879.json`: passes (F-879 todo to partial, gap set, one new item).
+* `python scripts/process_report.py --check`: 1 failure, "generated file is not current: docs/adr/index.md", a generated page left to the lead (rule 9). No other failure.
+
+### Size
+
+Size (agent): partial; 1; 2; 3; 450000
+
+Two heavy runs, as registered. One further registration is expected if the maintainer takes option (a) of question 1.
+
+### Decision by the registered rule
+
+**Partial**: the two runs were made and the verdict is "does not decide". The reason by the rule: H(dt) is not
+TIME-ACCURATE by D-2. What it would take: the velocity change of each outer iteration as a read-only record of the
+transient solver (ADR 0199, question 4), and the two runs made again under a registration that reads ADR 0183's own
+rule from it; or a decision of the maintainer on how the outer rule is to be read for a state that has become steady
+(question 1).
+
+## Open questions for the maintainer (addendum 1)
+
+1. **The outer-iteration rule of check H.** The registered substitute (D-2) does not measure time accuracy on this
+   state, and by it the run does not decide, while both records show the site oscillation decaying to below 1e-4 m/s.
+   Options: (a) a small solver item adds an opt-in, read-only record of the velocity change of each outer iteration
+   (defaults bit-identical), and check H is registered and run again with ADR 0183's rule as written, about six hours of
+   the shared machine; (b) the maintainer decides that for a state that is steady to a stated bound the outer rule is
+   not needed, since a state that no longer changes from step to step is not an oscillation whose time accuracy could
+   be in doubt, and the class is then read from the records that exist (STEADY) by a new registration without a run;
+   (c) leave F-879 partial. I recommend (a): it is the evidence ADR 0183 registered, and (b) would be a rule written
+   with the result known. If the six hours are not wanted, (b) is defensible and should be recorded as the maintainer's
+   reading, not as the outcome of the registered rule.
+2. **The convergence rule of F-870.** Not to be decided before question 1. If the class becomes STEADY: options (a) the
+   rule stays `is_converged()` of the steady solve at 1e-5 and F-870 waits for a steady iteration that converges; (b)
+   the rule allows a time march to a settled state, registered with the terms listed under "What this means for
+   F-870", on B1, with the halved step beside it; (c) a rule on a time mean. I recommend (b), with the caution that the
+   time-marched pressure rise on B2 is 8 to 9 % above the SIMPLEC sample, so the compared number changes with the
+   route; (c) is not supported by anything in the records.
+3. **The words of the acceptance of F-879** ("from the stalled steady state") against ADR 0183 D5 (the uniform start).
+   Options: (a) the acceptance is read as "as registered there" and its start-state words are corrected by the lead in
+   the note; (b) a run from the stalled SIMPLEC state is wanted as well, which needs a hand-over of a SIMPLEC state with
+   its k and omega to `pimple` that the case tree does not have. I recommend (a).
+
+## For the lead: roadmap entries
+
+> Status proposed for F-879: partial.
+
+> Note entry: ADR 0766, 2026-11-22, partial: check H of ADR 0183 was run on B2 (13 627 cells, SST, pimple with 5 outer iterations, BDF2, seam diffusivity pair, uniform start) as H(dt) with 4.605e-5 s and H(dt/2), 0.2532 s or 6.27 revolutions each, and by the registered rule the run does not decide: the outer-iteration rule, read on the recorded pressure ratio because the solver keeps no velocity change of an outer iteration, is met by 43.8 % of the window's steps of H(dt) against 99 % (100 % in H(dt/2)), so the class is NOT EVALUABLE. Observed, not a class: the oscillation at the six site cells decays in both runs (amplitude over the window 0.0054 and 0.0065 m/s against the threshold 0.193 m/s; below 1e-4 m/s in the last flow-through time), with no reversed axial flow there after the first flow-through time; window means 2.0071 and 2.0102 N m (312.3 and 312.8 W) and 69.62 and 70.07 Pa, against 2.0287 N m and 64.23 Pa of the steady B2 run of ADR 0762 and the measured 333.30 W and 126.46 Pa. The result is held by crates/rcfd-api/tests/f879_fan01_check_h.rs (four gate tests, two heavy records) and the records under docs/investigations/f879-fan01-check-h; six of seven mutations caught.
+
+> Gap entry: Missing for done: a class by the registered rule. H(dt) fails the outer-iteration rule as ADR 0766 registered it (a pressure ratio that does not measure time accuracy on a steady state). ADR 0183's own rule needs the velocity change of each outer iteration, a record the transient solver does not keep, and the two runs made again (about six hours); or the maintainer's reading of the rule for a state that has become steady. Both records show the site oscillation decaying below 1e-4 m/s.
+
+> Follow-up (proposed, open question 1): "Transient solver: a read-only record of the velocity change of each outer iteration, and check H of ADR 0183 read by its own outer-iteration rule", deps F-879, F-286; acceptance: Every limit not stated here is registered in the ADR before the run. The pimple step keeps, opt-in and with defaults unchanged bit for bit (baseline hashes unchanged), the largest velocity change of each outer iteration of a step; a closed-form or two-route check registered in the ADR shows the recorded values are the changes of the iterations. Check H of ADR 0183 is then run as registered there and in ADR 0766, with the outer-iteration rule of ADR 0183 as written (the velocity change of the 5th outer iteration at most 1e-2 of the 1st in at least 99 % of the window's steps), and classes the hub pocket as steady, physical or numerical, or is recorded as not deciding.
+
+The same entries are in `docs/roadmap/proposals/0766-F-879.json` (form 1 of ADR 0755, base 2bab1863), checked with
+`python scripts/roadmap_proposals.py check`.
+
+Generated pages that this work may leave not current, for the lead (rule 9): `docs/adr/index.md` (ADR 0766 is new).
