@@ -289,3 +289,14 @@ difference from 1.5516. It decides no row: F17-U stays a miss whatever it gives,
 because KU does not meet F17-U. The test of the C15 rows (`f884_c15_controls_hold_for_every_change_that_meets_the_target`)
 applies its limit to every control run in the record; it is corrected, in the commit after this amendment and before
 the run, to apply it only to the changes that meet the target, so that this reported run is not judged by it.
+
+## Amendment 3 (2026-11-22): NC1b, after mutation M3 was not caught and before its corrected run
+
+Mutation M3 (D5's cl_eff range 0.005 multiplied by 1000 in the test file) was run once on the scratch copy and **no test
+failed**: NC1 judges ADR 0760's window at 17 degrees, whose cd_eff range (0.68) alone already makes it not steady, so
+NC1 does not control the cl_eff limit by itself. That is a defect of NC1's set-up. By rule 2 a corrected control is added
+here, before its run; NC1 stays as it is. **NC1b**: D5 must call not steady a window with the cl_eff range of ADR
+0760's run at 17 degrees (2.0202) and the cd_eff range of KT-a17 (2.2e-6), and a window with the cl_eff range of
+KT-a17 (3.1e-6) and the cd_eff range of ADR 0760's run (0.6835); each limit of D5 is so controlled alone. Limit: both
+not steady; source: D5, the other way round; kind: solution verification (negative control). M3 is then run once more
+on a scratch copy with NC1b in place (M3b), and both outcomes are reported.
