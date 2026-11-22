@@ -569,9 +569,9 @@ One row per record of this folder, grouped by the roadmap category of the item i
 | [0758](0758-f855-registration-a-stall-of-the-waiter-or-of-the-holder-separated-from-a-fault-of-the-edit-lock.md) | F-855 registration: a stall of the waiter or of the holder separated from a fault of the edit lock, after F2 failed in a second gate | REGISTERED | 2026-11-21 | 1 | F-855 | partial |
 | [0759](0759-f866-registration-the-control-of-l1-decides-and-asserts-on-the-ten-listings.md) | F-866 registration: the control of L1 decides and asserts on the ten listings | REGISTERED | 2026-11-21 | 1 | F-866 | done |
 | [0760](0760-f868-registration-naca0012-lift-curve-against-ladson.md) | F-868 registration: the NACA 0012 lift curve against Ladson's measured lift at Re 6e6 | REGISTERED | 2026-11-22 | 1 | F-868 | partial |
-| [0761](0761-f869-registration-the-mean-drag-of-the-cylinder-at-re-100-against-the-published-spread.md) | F-869 registration: the mean drag of the cylinder at Re 100 against the published spread | REGISTERED | 2026-11-22 | 1 | F-869 | partial |
+| [0761](0761-f869-registration-the-mean-drag-of-the-cylinder-at-re-100-against-the-published-spread.md) | F-869 registration: the mean drag of the cylinder at Re 100 against the published spread | REGISTERED | 2026-11-22 | 1 | F-869 | done |
 | [0762](0762-f870-registration-fan01-design-point-state-band-and-ranked-gap.md) | F-870 registration: FAN-01 at its design point, the state, the band and the ranked gap | REGISTERED | 2026-11-22 | 1 | F-870 | partial |
-| [0763](0763-f869-registration-the-mesh-converged-mean-drag-of-the-cylinder-at-re-100.md) | F-869 registration: the mesh-converged mean drag of the cylinder at Re 100 | REGISTERED | 2026-11-22 | 1 | F-869 | partial |
+| [0763](0763-f869-registration-the-mesh-converged-mean-drag-of-the-cylinder-at-re-100.md) | F-869 registration: the mesh-converged mean drag of the cylinder at Re 100 | REGISTERED | 2026-11-22 | 1 | F-869 | done |
 
 ## Records with no item in the file name (259)
 

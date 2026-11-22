@@ -435,3 +435,13 @@ band, and the order of 1.39 is the same on two sequences that differ in step, fa
 not what held it down. The lead's recommendation on question 1 is (c), with the agent's reason: the acceptance of F-869
 is the drag against the band, and the order is a finding about the discretisation. Question 1 is put to the maintainer
 because it changes how a registered rule of a headline item is read and adds an item.
+
+## Answers of the maintainer (2026-11-22)
+
+The lead put question 1 above to the maintainer on 2026-11-22 with the agent's recommendation, which the lead shares.
+The maintainer answered: "Yes, option (c)".
+
+1. Option (c): F-869 is done as it stands. The fine value, 1.33900, is in the band [1.314, 1.370], and the Richardson
+   value is in the band for every order from 1 to 2.5 (1.343 to 1.354); the miss of W3 (b) (observed order 1.387 against
+   [1.5, 2.5]) is kept as a known-miss test and a record, and the registered rule is not changed. A new item, F-881,
+   diagnoses why the mean drag of this case converges at an order near 1.4 on two sequences.
