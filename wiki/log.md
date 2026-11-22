@@ -274,3 +274,13 @@ Append-only. Newest at the bottom. Entry header: `## [YYYY-MM-DD] <op> | <title>
 - 25 concept pairs judged: 23 distinct, 2 overlapping in their rcfd bullets (dynamic-mesh / mesh-motion-smoothing; partitioned-fluid-structure-interaction / strong-fsi-coupling), 0 duplicates.
 - 30 no-shared-source pairs compared: no contradictions.
 - lint: 0 broken links, 0 orphans; report regenerated (41 missing links, 28 no-shared-source pairs).
+
+## [2026-11-22] schema | merged to local main; raw PDFs in Git LFS
+
+- Maintainer decisions 2026-11-22: overlapping "How rcfd uses it" sections of [[mesh-motion-smoothing]] and [[partitioned-fluid-structure-interaction]] trimmed to cross-references (facts checked present on [[dynamic-mesh]], [[strong-fsi-coupling]], [[cosimulation-protocol]]); `wiki/raw/**/*.pdf` in Git LFS (branch history migrated; backup branch `wiki-ingest-pre-lfs`); the Smart Connections cache `.smart-env/` ignored and purged from the branch history; branch `wiki-ingest` merged into local main (8e4490a1), not pushed.
+- From now on the steady-state rule in `CLAUDE.md` applies: each merge to main runs `/wiki-ingest`.
+
+## [2026-11-22] ingest | F-886 entered (loop merge)
+
+- Roadmap item F-886 (sources read for the Schnerr-Sauer model of ADR 0056, the effectiveness-NTU relations of ADR 0039 and the GCI of ADR 0762) entered on main (8ee32b1c) on the maintainer's answer to the wiki's citation question.
+- Updated [[doc-roadmap-json]], [[doc-roadmap-overview]], [[doc-changelog]] (origin_commit 8ee32b1c); roadmap area pages regenerated ([[roadmap-quality-docs-and-validation]] 66 items).

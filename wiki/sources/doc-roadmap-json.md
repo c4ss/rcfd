@@ -3,7 +3,7 @@ type: source
 tags: [roadmap]
 sources: []
 origin: docs/roadmap.json
-origin_commit: 5b96a1f8
+origin_commit: 8ee32b1c
 created: 2026-11-22
 updated: 2026-11-22
 status: stable
@@ -16,12 +16,12 @@ status: stable
 
 ## Summary
 
-A JSON list of ~~786~~ 791 (at 5b96a1f8) [[f-item]]s, each with `id`, `title`, `phase`, `deps`, `status` (`done` / `partial` / `todo`), `acceptance`, `gap`, `note` and `milestones`. `docs/ROADMAP.md` and the counts in `docs/roadmap-overview.md` are generated from it ([[doc-roadmap-overview]]). The file holds phases only; the 15 lines of work (categories) are an id list in `scripts/roadmap_progress.py`, in 4 families (Solver, Data, Use, Project). An item in no category, or in two, makes that script exit with an error.
+A JSON list of ~~786~~ ~~791 (at 5b96a1f8)~~ 792 (at 8ee32b1c) [[f-item]]s, each with `id`, `title`, `phase`, `deps`, `status` (`done` / `partial` / `todo`), `acceptance`, `gap`, `note` and `milestones`. `docs/ROADMAP.md` and the counts in `docs/roadmap-overview.md` are generated from it ([[doc-roadmap-overview]]). The file holds phases only; the 15 lines of work (categories) are an id list in `scripts/roadmap_progress.py`, in 4 families (Solver, Data, Use, Project). An item in no category, or in two, makes that script exit with an error.
 
 ## Key points
 
 - Status counts at the snapshot: 389 done, 297 partial, 100 todo. They match the overview table of 2026-11-18, line of work by line of work.
-- Status counts at 5b96a1f8: 791 items, 391 done, 297 partial, 103 todo ([[doc-roadmap-overview]]). The difference: F-868 and F-869 partial to done, F-878 and F-879 todo to partial, and five new todo items F-881 to F-885.
+- ~~Status counts at 5b96a1f8: 791 items, 391 done, 297 partial, 103 todo~~; at 8ee32b1c: 792 items, 391 done, 297 partial, 104 todo ([[doc-roadmap-overview]]). F-886 (todo, Quality, docs and validation) was entered on 2026-11-22 on the maintainer's answer to the wiki's citation question: sources read for the Schnerr-Sauer model (ADR 0056), the effectiveness-NTU relations (ADR 0039) and the GCI of ADR 0762, from the open sources the foundations pass found ([[cavitation-and-mass-transfer-models]], [[heat-exchanger-effectiveness-ntu]], [[gci-richardson]]). The difference: F-868 and F-869 partial to done, F-878 and F-879 todo to partial, and five new todo items F-881 to F-885.
 - The per-area pages `entities/roadmap-<area>` are generated from this file by `wiki/tools/gen_roadmap_pages.py`. It rewrites only the marked generated block, so the hand-written synthesis on those pages survives a rerun.
 - `note` holds the dated history entries of an item (often long). `gap` (at most 500 characters) says what is missing now and replaces the previous gap ([[doc-process-agent-rules]], rule 9). The generated pages show `gap` and leave out `note`.
 - Only the lead writes this file, on main. Agents propose entries as `docs/roadmap/proposals/<ADR>-<item>.json` ([[doc-process-agent-rules]]).
