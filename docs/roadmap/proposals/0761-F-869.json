@@ -1,0 +1,10 @@
+{
+  "form": 1,
+  "adr": "0761",
+  "item": "F-869",
+  "base": "13b0937dad03b46d6d55edde0404748292dd01b3",
+  "status": "partial",
+  "note": "ADR 0761, 2026-11-22, partial: the mean drag of the cylinder at Re 100 is 1.35247 on 128 x 100 with BDF2 at dt 0.05 (1.34511 at dt 0.025), inside the band [1.314, 1.370] of the eleven published values of arXiv:2303.09262 Table 1 and arXiv:1401.6513 Table 3 (heavy record, GCI 2.06 % in the mesh and 0.23 % in the step), and a gate test holds 64 x 50 at 1.31674 in K2's window with a negative control and two caught mutations, but the Richardson value of the mesh sequence is 1.37479, 0.0048 above the band (known miss V2b), and the default first-order step stays outside the band at 1.30996.",
+  "gap": "The drag is in the published band [1.314, 1.370] on the registered mesh (1.35247 on 128 x 100, BDF2, dt 0.05) and a gate test holds the coarse mesh in K2's window. Missing: the Richardson value of the mesh sequence (dt 0.05, far field 20 D) is 1.37479, 0.0048 above the band (known miss V2b); a registered sequence at dt 0.025 with the far field at 30 D or more has to show the mesh-converged drag in the band. The comparison uses the option Bdf2, not the default step (1.30996, outside).",
+  "follow_ups": []
+}

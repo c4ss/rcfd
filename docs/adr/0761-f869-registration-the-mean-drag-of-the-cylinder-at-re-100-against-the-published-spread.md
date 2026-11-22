@@ -312,3 +312,152 @@ By rule 2 the missed limit becomes an ignored test named `*_known_miss` with the
 
 The heavy runs are not made a second time (rule 2, "each registered run is made once"): the two ignored tests after the
 change are built, formatted and linted, and not run. That is said in the addendum under "what was not run".
+
+## Addendum 1: results (2026-11-22)
+
+All runs in the release profile, on the branch at dcdb5ae8 (the test file as first committed; the solver is that of main
+13b0937d), `CARGO_TARGET_DIR` under the scratch folder, beside the solves of two other agents. Each registered run was
+made once. Logs: `gate_run1.log`, `heavy_record.log`, `r3_existing_k.log`, `m1_run.log`, `m2_run.log` in the scratch
+folder. No limit and no band was changed.
+
+### The mean drag against the band [1.314, 1.370]
+
+| Run (BDF2, far field 20 D unless said) | C_D | In the band | St | C_L amplitude | C_L rms | Crossings |
+| --- | --- | --- | --- | --- | --- | --- |
+| 64 x 50, dt 0.05 | 1.31674 | yes, 0.0027 above the lower end (compared by G1 with K2's window, not with the band) | 0.15778 | 0.2969 | 0.2098 | 16 |
+| 90 x 70, dt 0.05 | 1.33879 | yes | 0.16263 | 0.3333 | 0.2357 | 17 |
+| 128 x 100, dt 0.05 (V1) | 1.35247 | yes | 0.16480 | 0.3614 | 0.2555 | 16 |
+| 128 x 100, dt 0.025 (V2 a) | 1.34511 | yes | 0.16489 | 0.3369 | 0.2381 | 16 |
+| 128 x 100, dt 0.05, far field 30 D (R2) | 1.33884 | yes | 0.16392 | 0.3468 | 0.2452 | 16 |
+| Richardson value of the three meshes at dt 0.05 (V2 b) | 1.37479 | **no, 0.0048 above the upper end** | | | | |
+
+The value of V1 equals the record of ADR 0069 to all printed digits (1.35247, St 0.16480).
+
+### Every check
+
+| Id | Limit | Measured | Met |
+| --- | --- | --- | --- |
+| V1 | C_D on 128 x 100, dt 0.05, in [1.314, 1.370] | 1.35247 (+0.78 % of 1.342) | yes |
+| V2 (a) | C_D on 128 x 100, dt 0.025, in [1.314, 1.370] | 1.34511 | yes |
+| V2 (b) | Richardson value in [1.314, 1.370] | 1.37479 (monotone; observed order 1.38), 0.35 % above 1.370 | **no: missed** |
+| S1 | GCI_fine(C_D) at most 3 % | 2.06 % | yes |
+| S2 | GCI_t(C_D) at most 3 % | 0.23 % | yes |
+| K4h | more than 9 crossings, every run | 16, 17, 16, 16, 16 | yes |
+| G1 | C_D on 64 x 50 in [1.2883, 1.3957] (gate) | 1.31674 (-1.88 % of 1.342) | yes |
+| G2 | more than 9 crossings (gate) | 16 | yes |
+| G3 | the band is the recorded spread and rejects outside (gate) | holds | yes |
+| N1 | the pressure part alone fails G1's window; under the full drag by at least 0.056 | 0.97839, fails the window; 0.33835 under | yes |
+| A1 | the band's origin and width stated | "The band, registered" above; `docs/reference-data.d/0761-F-869.part` | yes |
+| M1 | committed mutation (viscous force zeroed): G1 fails | G1 failed with C_D 0.97839; N1 (b) failed too (0 against 0.056) | caught |
+| M2 | reference area doubled: G1 fails | G1 failed with C_D 0.65837 | caught |
+| E | only the files of this work changed | `git diff --stat 13b0937d`: this ADR, the fragment, the test file, its patch, the proposal file | yes |
+| F | fmt, clippy, `--lib`, docs_site | `cargo fmt -p rcfd-api --check` clean; `cargo clippy -p rcfd-api --all-targets -- -D warnings` clean; `cargo test -p rcfd-api --release --lib` 159 passed, 4 ignored; docs_site 2 passed | yes |
+| P | the process check and the proposal check | given at the end of this addendum | see there |
+
+Reported rows. **R1**: the Strouhal number with BDF2 is in K1's unchanged window [0.16005, 0.16995] on 90 x 70 and on
+128 x 100 (0.16480, -0.12 % of 0.165) and outside it on 64 x 50 (0.15778, -4.37 %). The rms of the lift coefficient is
+0.2555 on the fine mesh at dt 0.05, above the published 0.222 to 0.236 of source A by 8 % of its upper end, and 0.2381
+at dt 0.025 (0.9 % above); the amplitude is 0.3614 and 0.3369 against the 0.31 and 0.28 of source B. No limit was
+registered for either. **R2**: the far field at 30 D lowers the drag by 1.01 % (ADR 0060 measured 1.1 % with the
+first-order step). **R3**: `validation_cylinder_re100.rs`, unchanged, on current main gives 1.25143, 1.28734, 1.30996
+with St 0.14665, 0.15450, 0.15878: the numbers of ADR 0060 to all printed digits; K2 met (2.39 %), K4 met, and the
+known miss failed as recorded (K1 3.77 %, K3 4.06 % for St and 3.67 % for C_D against 3 %). The default first-order
+step at 128 x 100 and dt 0.05 is therefore still outside the band, at 1.30996.
+
+### What the gate runs and what is a heavy record
+
+- The gate runs `g1_coarse_mesh_mean_drag_within_the_k2_window_and_the_pressure_part_alone_fails` (G1, G2, N1) and
+  `g3_the_band_is_the_recorded_spread_and_rejects_a_drag_outside_it` (G3). The run of G1 took 60 s alone and 121 s
+  beside two other runs of mine.
+- The heavy record `h1_fine_mesh_mean_drag_in_the_published_band_heavy_record` (ignored) carries V1, V2 (a), S1, S2 and
+  K4h; it took 1897 s. No gate runs it. The comparison with the band itself is therefore a record of 2026-11-22 and the
+  gate holds the coarse mesh in K2's wider window.
+- The known miss `v2b_richardson_value_of_the_mesh_sequence_in_the_band_known_miss` (ignored) carries V2 (b) with its
+  limit intact (amendment 1).
+
+### Diagnosis of the miss of V2 (b)
+
+Arithmetic on the numbers above; none of it is a check and nothing was run for it.
+
+- The observed order of the drag on the three meshes is 1.38, under the formal 2. With the formal order the Richardson
+  value would be 1.35247 + 0.01368 = 1.36615, inside the band; the registered expression uses the observed order and
+  gives 1.37479.
+- The time step and the mesh err in opposite directions. Halving dt lowers the fine-mesh drag by 0.00736; with the
+  formal order 2 of BDF2 the value at dt to zero on 128 x 100 is 1.34511 - 0.00245 = 1.34266, so the value at dt 0.05
+  carries about +0.0098 of time error. The mesh sequence was run at dt 0.05 and its Richardson value carries the time
+  error of that step, whatever it is on the coarser meshes.
+- The far field at 20 D raises the drag by 0.0136 against 30 D on the fine mesh. The published values are for larger
+  domains (source A: 64 D by 32 D, and it calls 32 D by 16 D too small).
+- If these three were additive, the mesh-converged drag at dt to zero with the far field at 30 D would be about
+  1.37479 - 0.0098 - 0.0136 = 1.351, inside the band. This is not shown: it needs a mesh sequence at the smaller step
+  and with the wider domain. No defect of the solver appeared; nothing in the solver was changed.
+
+### Deviations
+
+- The published values are on the page as the fragment `docs/reference-data.d/0761-F-869.part` and not as an edit of the
+  section "Cylinder wake", by rule 4 (said in the registration).
+- The test file was changed once after the run, by amendment 1, to move the missed V2 (b) into its known-miss test.
+- The gate-side run of G1 took 121 s when it ran inside the heavy record beside two other runs; alone it is 60 s. Rule 7
+  draws its line at about two minutes; the test stays in the gate.
+
+### What was not run
+
+- The two ignored tests as they stand after amendment 1 (built, formatted and linted only; their runs are those of
+  the heavy record before the split).
+- The gate-side tests after amendment 1 (their code is unchanged; one run, before it).
+- The whole workspace suite, the integration tests of `rcfd-api` other than the two files named, and
+  `baseline_hashes` (no solver file was touched).
+- A mesh finer than 128 x 100, a far field beyond 30 D, and a mesh sequence at dt 0.025.
+- The lead's application of the committed mutation patch (checked here with `git apply --check`, and M1 was run from the
+  same diff on the scratch copy).
+
+### Size
+
+Size (agent, actual): partial; 1; 2; 2; 150000
+
+### Decision by the registered rule
+
+**Partial.** V1 is met: the mean drag coefficient on the registered mesh and step, 1.35247, is within the band of the
+published values, by a registered heavy record with its fast test in the gate; the band's sources are recorded; the
+negative control fails and both mutations are caught. V2 (b) is missed: the Richardson value of the mesh sequence,
+1.37479, is 0.0048 above the band, so by the rule "the drag is in the band on the registered mesh and step, and leaves
+it ... in the Richardson value: the result depends on the mesh". What is missing: a registered mesh sequence at dt 0.025
+with the far field at 30 D or more, whose mesh-converged drag is in the band.
+
+## Open questions for the maintainer
+
+1. **Which drag decides the headline: the one on the registered mesh, or the mesh-converged one?** Options: (a) the item
+   stays partial and a follow-up registration under F-869 (rule 13) runs the mesh sequence at dt 0.025 with the far
+   field at 30 D or more, with the same band; done when its fine value and its Richardson value are in the band;
+   (b) the fine-mesh value alone is the measure and the item is done as it stands, with the known miss recorded.
+   Recommendation: (a). The miss is 0.35 % and the arithmetic above suggests the time step and the domain explain it,
+   but that is not shown, and (b) changes how a headline item is read.
+2. **The comparison uses the option `time_scheme = Bdf2`; the default first-order step gives 1.30996 at the same mesh and
+   step, outside the band.** Options: (a) F-869 is accepted as shown with the option, and the roadmap note says so;
+   (b) a new item makes the second-order step the default of the transient incompressible solver, which changes default
+   results and the hash tables and needs the maintainer's approval (rule 3). Recommendation: (a) for F-869; (b) is a
+   separate decision that this work does not ask for.
+
+Not taken on the standing instruction: both would change the scope of the item or a default result (rule 6).
+
+## For the lead: roadmap entries
+
+Status proposed: partial.
+
+> ADR 0761, 2026-11-22, partial: the mean drag of the cylinder at Re 100 is 1.35247 on 128 x 100 with BDF2 at dt 0.05 (1.34511 at dt 0.025), inside the band [1.314, 1.370] of the eleven published values of arXiv:2303.09262 Table 1 and arXiv:1401.6513 Table 3 (heavy record, GCI 2.06 % in the mesh and 0.23 % in the step), and a gate test holds 64 x 50 at 1.31674 in K2's window with a negative control and two caught mutations, but the Richardson value of the mesh sequence is 1.37479, 0.0048 above the band (known miss V2b), and the default first-order step stays outside the band at 1.30996.
+
+> The drag is in the published band [1.314, 1.370] on the registered mesh (1.35247 on 128 x 100, BDF2, dt 0.05) and a gate test holds the coarse mesh in K2's window. Missing: the Richardson value of the mesh sequence (dt 0.05, far field 20 D) is 1.37479, 0.0048 above the band (known miss V2b); a registered sequence at dt 0.025 with the far field at 30 D or more has to show the mesh-converged drag in the band. The comparison uses the option Bdf2, not the default step (1.30996, outside).
+
+No follow-up item is proposed: the follow-up of the miss adds no acceptance clause and is a registration under F-869
+(rule 13). The same entries are in `docs/roadmap/proposals/0761-F-869.json`.
+
+For the lead, not roadmap: `docs/adr/index.md` and `docs/reference-data.md` are generated and not current after this work
+(the new ADR and the new fragment); they are left to the lead (rule 9).
+
+### The process check (row P)
+
+`python scripts/roadmap_proposals.py check docs/roadmap/proposals/0761-F-869.json`: "F-869: todo -> partial; gap set;
+note + 592 characters", exit 0. `python scripts/process_report.py --check`: 2 failures, both "generated file is not
+current" (`docs/adr/index.md`, `docs/reference-data.md`); no failure of the registration, and no limit of it is listed
+as having only an agent's own number as its source. Both pages are left to the lead (rule 7, rule 9).
+`cargo test -p rcfd-cli --release --test docs_site` on the tree with this addendum: 2 passed.
