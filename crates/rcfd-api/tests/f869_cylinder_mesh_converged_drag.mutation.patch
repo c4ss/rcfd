@@ -1,0 +1,14 @@
+# expect-fail: cargo test --release -p rcfd-api --test f869_cylinder_mesh_converged_drag g1_
+diff --git a/crates/rcfd-api/tests/f869_cylinder_mesh_converged_drag.rs b/crates/rcfd-api/tests/f869_cylinder_mesh_converged_drag.rs
+index 2975bd0..ed6608c 100644
+--- a/crates/rcfd-api/tests/f869_cylinder_mesh_converged_drag.rs
++++ b/crates/rcfd-api/tests/f869_cylinder_mesh_converged_drag.rs
+@@ -76,7 +76,7 @@ fn difference_ratio(p: f64, r21: f64, r32: f64) -> f64 {
+ 
+ /// The Richardson step from the fine pair at the order `p`.
+ fn richardson_value(f2: f64, f3: f64, p: f64, r32: f64) -> f64 {
+-    f3 + (f3 - f2) / (r32.powf(p) - 1.0)
++    f3 + 0.0 * (f3 - f2) / (r32.powf(p) - 1.0)
+ }
+ 
+ /// Observed order (bisection on [0.01, 20]) and Richardson value for unequal refinement ratios.

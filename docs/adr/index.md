@@ -528,7 +528,7 @@ One row per record of this folder, grouped by the roadmap category of the item i
 | [0739](0739-f848-proposal-run-sites-a-remote-simulation-service-for-the-studio-cli-and-mcp.md) | F-848 proposal: run sites, a remote simulation service for the Studio, the CLI and the MCP server | ACCEPTED | 2026-11-17 | 0 | F-848 | todo |
 | [0742](0742-f262-diagnosis-the-terminal-status-of-a-run-is-written-before-its-last-state-event.md) | F-262 diagnosis: the terminal status of a run is written before its last state event and before its request files are removed (S7 of ADR 0123 fails intermittently on the held run) | REGISTERED | 2026-11-19 | 1 | F-262 | partial |
 
-## Quality, docs and validation (39)
+## Quality, docs and validation (40)
 
 | ADR | Title | Status word | Date | Addenda | Item | Item status |
 |---|---|---|---|---|---|---|
@@ -571,6 +571,7 @@ One row per record of this folder, grouped by the roadmap category of the item i
 | [0760](0760-f868-registration-naca0012-lift-curve-against-ladson.md) | F-868 registration: the NACA 0012 lift curve against Ladson's measured lift at Re 6e6 | REGISTERED | 2026-11-22 | 1 | F-868 | partial |
 | [0761](0761-f869-registration-the-mean-drag-of-the-cylinder-at-re-100-against-the-published-spread.md) | F-869 registration: the mean drag of the cylinder at Re 100 against the published spread | REGISTERED | 2026-11-22 | 1 | F-869 | partial |
 | [0762](0762-f870-registration-fan01-design-point-state-band-and-ranked-gap.md) | F-870 registration: FAN-01 at its design point, the state, the band and the ranked gap | REGISTERED | 2026-11-22 | 1 | F-870 | partial |
+| [0763](0763-f869-registration-the-mesh-converged-mean-drag-of-the-cylinder-at-re-100.md) | F-869 registration: the mesh-converged mean drag of the cylinder at Re 100 | REGISTERED | 2026-11-22 | 1 | F-869 | partial |
 
 ## Records with no item in the file name (259)
 

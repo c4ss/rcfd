@@ -1,0 +1,10 @@
+{
+  "form": 1,
+  "adr": "0763",
+  "item": "F-869",
+  "base": "2bab1863bd5fa845a818667a227fb6770cefa933",
+  "status": "partial",
+  "note": "ADR 0763, 2026-11-22, partial: on the mesh sequence 90 x 70, 128 x 100, 181 x 141 with BDF2 at dt 0.025 and the far field at 30 D the mean drag is 1.32259, 1.33285, 1.33900 (St 0.16169, 0.16395, 0.16486; GCI 0.94 %), the fine value inside the band [1.314, 1.370], but the observed order is 1.387, outside the registered range [1.5, 2.5], so the extrapolation is not valid by the registration and the mesh-converged drag is not shown (known miss W3b); the formula gives 1.34901, and 1.343 to 1.354 for every order from 1 to 2.5, all inside the band.",
+  "gap": "The drag is in the published band [1.314, 1.370] on the fine mesh of the registered sequence (1.33900 on 181 x 141, BDF2, dt 0.025, far field 30 D), and a Richardson value at any order from 1 to 2.5 is in it too (1.343 to 1.354). Missing: the observed order is 1.387, outside the registered [1.5, 2.5] (known miss W3b, ADR 0763), so the mesh-converged drag is not shown by a valid extrapolation; the maintainer decides whether that holds the item (ADR 0763, question 1).",
+  "follow_ups": []
+}
