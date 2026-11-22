@@ -572,7 +572,7 @@ One row per record of this folder, grouped by the roadmap category of the item i
 | [0761](0761-f869-registration-the-mean-drag-of-the-cylinder-at-re-100-against-the-published-spread.md) | F-869 registration: the mean drag of the cylinder at Re 100 against the published spread | REGISTERED | 2026-11-22 | 1 | F-869 | done |
 | [0762](0762-f870-registration-fan01-design-point-state-band-and-ranked-gap.md) | F-870 registration: FAN-01 at its design point, the state, the band and the ranked gap | REGISTERED | 2026-11-22 | 1 | F-870 | partial |
 | [0763](0763-f869-registration-the-mesh-converged-mean-drag-of-the-cylinder-at-re-100.md) | F-869 registration: the mesh-converged mean drag of the cylinder at Re 100 | REGISTERED | 2026-11-22 | 1 | F-869 | done |
-| [0765](0765-f878-registration-fan01-lda-profiles-euler-work-and-the-division-of-the-missing-pressure-rise.md) | F-878 registration: the FAN-01 rotor against the measured LDA profiles, the Euler work and the division of the missing pressure rise | REGISTERED | 2026-11-22 | 1 | F-878 | todo |
+| [0765](0765-f878-registration-fan01-lda-profiles-euler-work-and-the-division-of-the-missing-pressure-rise.md) | F-878 registration: the FAN-01 rotor against the measured LDA profiles, the Euler work and the division of the missing pressure rise | REGISTERED | 2026-11-22 | 1 | F-878 | partial |
 
 ## Records with no item in the file name (259)
 

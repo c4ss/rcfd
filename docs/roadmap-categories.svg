@@ -141,8 +141,8 @@
   <text x="24" y="574" class="row">Quality, docs and validation</text>
   <g clip-path="url(#c14)">
     <rect x="262" y="563" width="112.1" height="14" fill="var(--done)"/>
-    <rect x="374.1" y="563" width="112.1" height="14" fill="url(#h)"/>
-    <rect x="486.3" y="563" width="135.7" height="14" fill="var(--todo)"/>
+    <rect x="374.1" y="563" width="118.0" height="14" fill="url(#h)"/>
+    <rect x="492.2" y="563" width="129.8" height="14" fill="var(--todo)"/>
   </g>
   <text x="636" y="574" class="num">19 of 61 done</text>
   <text x="24" y="618" class="num">Each bar is scaled to its own item count: green is done, hatched is partly done, grey is not started.</text>

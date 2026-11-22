@@ -707,3 +707,21 @@ Generated pages not current on this work, left to the lead (rule 9): `docs/adr/i
 `docs/reference-data.md` (the fragment `docs/reference-data.d/0765-F-878.part` is new). `validation-data/manifest.json`
 does not list the transcription `docs/investigations/f878-fan01-lda-profiles/lda_profiles.csv`; whether it becomes a
 file of the data pack is the lead's.
+
+## The lead's reading (2026-11-22), at the merge
+
+Merged at 7531a4ed (the report read at 13:07 UTC, 6 minutes of reading, proposed partial, written partial). Checked by
+the lead before the merge: the registration is the first commit and alone, and amendment 1 is committed before any
+registered run; no commit of the branch touches a solver source (the transient edit of `crates/rcfd-fv/src/sources.rs`
+to make the mutation patch was restored in the same command, as the addendum says, and no commit carries it); the heavy
+tests are ignored with the reason in the attribute, one of them the known miss of the acceptance. Noted, not held
+against the merge: about 400 kB of run logs are committed under `docs/investigations/`, the mutations were run by hand
+and not by the repository's runner (the push script ran the committed M1), and `validation-data/manifest.json` does not
+list the transcription CSV.
+
+Status: **partial**, as proposed, from a copy of `docs/roadmap/proposals/0765-F-878.json` without its follow-up. The
+lead reads the result as the agent does: the measured Euler work and the outflow velocity are close to the simulated
+ones, so the missing pressure rise of F-870 lies in loss or recovery and not in the work put in, and velocity profiles
+alone cannot divide it between the rotor and the installation. The simulated loss falls from 104 to 63 Pa from B3 to B1
+and is not converged, which makes the loss budget on a finer mesh the next step that can decide. Questions 1 and 2 are
+put to the maintainer, the follow-up with question 2.
