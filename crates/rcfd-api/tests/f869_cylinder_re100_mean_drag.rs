@@ -7,8 +7,8 @@
 //!
 //! * The gate runs `g1_...` (64 x 50, dt 0.05: G1 the mean drag in the window of K2 of ADR 0060, G2 sustained shedding, N1 the
 //!   pressure part of the drag alone must fail) and the pure `g3_...` (the band is the recorded spread).
-//! * `h1_..._heavy_record` (ignored, 25 to 65 minutes) carries the comparison with the band itself: V1, V2, S1, S2, K4h and
-//!   the reported rows R1 and R2. Command:
+//! * `h1_..._heavy_record` (ignored, about 32 minutes) carries the comparison with the band itself: V1, V2a, S1, S2, K4h and
+//!   the reported rows R1 and R2; `v2b_..._known_miss` (ignored) is the missed V2b, limit intact (amendment 1). Command:
 //!   `cargo test --release -p rcfd-api --test f869_cylinder_re100_mean_drag -- --ignored --nocapture`.
 //!
 //! Every limit is registered in ADR 0761 and is not changed after a run. The existing ignored tests of
@@ -24,7 +24,7 @@ use rcfd_fv::pressure::{boundary_values, pressure_bc};
 use rcfd_fv::{FixedValue, Freestream, FvGeometry, ScalarField, VectorField};
 use rcfd_mesh::gen::{cylinder_ogrid, Grading};
 use rcfd_post::integrals::wall_force_and_moment;
-use std::sync::Arc;
+use std::sync::{Arc, OnceLock};
 use validation_common::*;
 
 const DEPTH: f64 = 0.1;
@@ -269,17 +269,45 @@ fn g1_coarse_mesh_mean_drag_within_the_k2_window_and_the_pressure_part_alone_fai
     c.finish();
 }
 
-/// The heavy record of ADR 0761 (V1, V2, S1, S2, K4h; R1 and R2 printed): five runs one after the other.
+/// The five runs of the heavy record, one after the other, made once for the ignored tests of this file.
+struct Record {
+    coarse: Shed,
+    medium: Shed,
+    fine: Shed,
+    fine_half_dt: Shed,
+    far: Shed,
+}
+
+fn record() -> &'static Record {
+    static RECORD: OnceLock<Record> = OnceLock::new();
+    RECORD.get_or_init(|| Record {
+        coarse: run(64, 50, 0.05, 20.0),
+        medium: run(90, 70, 0.05, 20.0),
+        fine: run(128, 100, 0.05, 20.0),
+        fine_half_dt: run(128, 100, 0.025, 20.0),
+        far: run(128, 100, 0.05, 30.0),
+    })
+}
+
+/// Of the three meshes at dt 0.05: (monotone, observed order, the order used, the Richardson value).
+fn richardson(m: &Record) -> (bool, f64, f64, f64) {
+    let ratio = 2f64.sqrt();
+    let (f1, f2, f3) = (m.coarse.cd, m.medium.cd, m.fine.cd);
+    let monotone = (f1 - f2) * (f2 - f3) > 0.0;
+    let p_obs = observed_order(f1, f2, f3, ratio);
+    let p = if p_obs.is_finite() { p_obs.clamp(1.0, 2.0) } else { 1.0 };
+    (monotone, p_obs, p, f3 + (f3 - f2) / (ratio.powf(p) - 1.0))
+}
+
+/// The heavy record of ADR 0761 (V1, V2a, S1, S2, K4h; R1 and R2 printed). V2b is the known miss below (amendment 1).
+/// Recorded on 2026-11-22 (1897 s): C_D 1.31674, 1.33879, 1.35247 on the three meshes at dt 0.05, 1.34511 at dt 0.025,
+/// 1.33884 with the far field at 30 D; GCI_fine 2.06 %, GCI_t 0.23 %.
 #[test]
-#[ignore = "heavy record of ADR 0761 (25 to 65 minutes): cargo test --release -p rcfd-api --test f869_cylinder_re100_mean_drag -- --ignored --nocapture"]
+#[ignore = "heavy record of ADR 0761 (about 32 minutes): cargo test --release -p rcfd-api --test f869_cylinder_re100_mean_drag -- --ignored --nocapture"]
 fn h1_fine_mesh_mean_drag_in_the_published_band_heavy_record() {
-    let coarse = run(64, 50, 0.05, 20.0);
-    let medium = run(90, 70, 0.05, 20.0);
-    let fine = run(128, 100, 0.05, 20.0);
-    let fine_half_dt = run(128, 100, 0.025, 20.0);
-    let far = run(128, 100, 0.05, 30.0);
+    let m = record();
     let mut c = Checks::default();
-    for r in [&coarse, &medium, &fine, &fine_half_dt, &far] {
+    for r in [&m.coarse, &m.medium, &m.fine, &m.fine_half_dt, &m.far] {
         c.is_true(
             &format!("K4h {}", r.label),
             r.crossings > 9,
@@ -288,35 +316,25 @@ fn h1_fine_mesh_mean_drag_in_the_published_band_heavy_record() {
     }
     c.is_true(
         "V1 mean C_D on 128x100 dt 0.05 in [1.314, 1.370]",
-        within(fine.cd, BAND),
-        &format!("C_D {:.5} ({:+.2} % of 1.342)", fine.cd, pct(fine.cd, 1.342)),
+        within(m.fine.cd, BAND),
+        &format!("C_D {:.5} ({:+.2} % of 1.342)", m.fine.cd, pct(m.fine.cd, 1.342)),
     );
     c.is_true(
         "V2a mean C_D on 128x100 dt 0.025 in [1.314, 1.370]",
-        within(fine_half_dt.cd, BAND),
-        &format!("C_D {:.5}", fine_half_dt.cd),
+        within(m.fine_half_dt.cd, BAND),
+        &format!("C_D {:.5}", m.fine_half_dt.cd),
     );
-    let ratio = 2f64.sqrt();
-    let (f1, f2, f3) = (coarse.cd, medium.cd, fine.cd);
-    let monotone = (f1 - f2) * (f2 - f3) > 0.0;
-    let p_obs = observed_order(f1, f2, f3, ratio);
-    let p = if p_obs.is_finite() { p_obs.clamp(1.0, 2.0) } else { 1.0 };
-    let richardson = f3 + (f3 - f2) / (ratio.powf(p) - 1.0);
+    let (f1, f2, f3) = (m.coarse.cd, m.medium.cd, m.fine.cd);
+    let (monotone, p_obs, p, value) = richardson(m);
     println!(
-        "mesh sequence at dt 0.05: C_D {f1:.5}, {f2:.5}, {f3:.5}; monotone {monotone}; observed order {p_obs:.2} (used {p:.2}); \
-         Richardson value {richardson:.5}"
-    );
-    c.is_true(
-        "V2b the Richardson value of the three meshes in [1.314, 1.370]",
-        monotone && within(richardson, BAND),
-        &format!("monotone {monotone}, Richardson value {richardson:.5}"),
+        "mesh sequence at dt 0.05: C_D {f1:.5}, {f2:.5}, {f3:.5}; monotone {monotone}; observed order {p_obs:.2} (used {p:.2}); Richardson value {value:.5}"
     );
     c.at_most(
         "S1 GCI_fine(C_D), three meshes at dt 0.05",
-        gci_fine(f2, f3, p_obs, ratio),
+        gci_fine(f2, f3, p_obs, 2f64.sqrt()),
         0.03,
     );
-    let g = fine_half_dt.cd;
+    let g = m.fine_half_dt.cd;
     c.at_most(
         "S2 GCI_t(C_D), dt 0.05 and 0.025 on 128x100, order 2",
         1.25 * (g - f3).abs() / (g.abs() * 3.0),
@@ -324,9 +342,25 @@ fn h1_fine_mesh_mean_drag_in_the_published_band_heavy_record() {
     );
     println!(
         "R2 far field at 30 D: C_D {:.5} ({:+.2} % of the 20 D value), in the band: {}",
-        far.cd,
-        pct(far.cd, fine.cd),
-        within(far.cd, BAND)
+        m.far.cd,
+        pct(m.far.cd, m.fine.cd),
+        within(m.far.cd, BAND)
+    );
+    c.finish();
+}
+
+/// KNOWN MISS (V2b of ADR 0761; the band unchanged): the Richardson value of the mean drag on 64 x 50, 90 x 70, 128 x 100
+/// at dt 0.05 is 1.37479 (observed order 1.38), 0.0048 above the upper end of the band [1.314, 1.370]. The fine-mesh
+/// value itself, 1.35247, is in the band (V1). Diagnosis and what is missing: ADR 0761, addendum 1.
+#[test]
+#[ignore = "known miss V2b (Richardson value 1.37479 against [1.314, 1.370]); heavy, shares the runs of h1: -- --ignored v2b"]
+fn v2b_richardson_value_of_the_mesh_sequence_in_the_band_known_miss() {
+    let (monotone, _, _, value) = richardson(record());
+    let mut c = Checks::default();
+    c.is_true(
+        "V2b the Richardson value of the three meshes in [1.314, 1.370]",
+        monotone && within(value, BAND),
+        &format!("monotone {monotone}, Richardson value {value:.5}"),
     );
     c.finish();
 }
