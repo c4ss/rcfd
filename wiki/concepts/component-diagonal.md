@@ -3,6 +3,7 @@ type: concept
 tags: [numerics, simple, piso, symmetry, default]
 sources: [doc-component-diagonal-default, doc-dynamic-mesh, adr-thread-piso-stability-consistent-correctors]
 created: 2026-11-22
+builds_on: [momentum-matrix-and-h-operator, boundary-conditions]
 updated: 2026-11-22
 status: draft
 ---
@@ -20,6 +21,11 @@ The choice of momentum-matrix diagonal used for `HbyA = H/a_P` and the pressure 
 - **Cost of flipping the default:** exactly one registered baseline hash moves, `packed_bed` (60, 19e53df373637262) -> (16, fb46cdfee5d0d781); 11 `rcfd-api` tests change outcome (ADR 0650) ([[doc-component-diagonal-default]]). See [[bit-identical]].
 - The dynamic-mesh page lists "`Symmetry` boundaries with the averaged diagonal produce a spurious tangential force (use `zero_gradient` sides)" as a known limitation ([[doc-dynamic-mesh]]).
 - **Transient evidence (F-531, F-538):** next to `Symmetry` planes the averaged diagonal gives an O(1) error in the tangential viscous flux that grows under refinement, and in the relaxed PIMPLE loop its error "can have either sign and depends on `alpha_u`, the time step and the flow-direction spacing"; `corrected` as the transient default with `packed_bed` re-registered was "Held" by the maintainer on 2026-11-18 ([[adr-thread-piso-stability-consistent-correctors]]).
+
+## Builds on
+
+- [[momentum-matrix-and-h-operator]]: `a_P`, `H(U)` and `HbyA = H/a_P` per velocity component.
+- [[boundary-conditions]]: conditions that act on one velocity component only (symmetry and its kin) make the component diagonals differ.
 
 ## Related
 

@@ -1,8 +1,9 @@
 ---
 type: concept
 tags: [numerics, pressure-velocity, steady]
-sources: [doc-bfs-convergence-findings, doc-component-diagonal-default, doc-gpu, doc-meshing, adr-thread-steady-kernel-warped-mesh, adr-thread-gradient-options]
+sources: [doc-bfs-convergence-findings, doc-component-diagonal-default, doc-gpu, doc-meshing, adr-thread-steady-kernel-warped-mesh, adr-thread-gradient-options, ref-mit-ocw-2-29-numerics, ref-klaij-vuik-2013-simple-preconditioners, ref-jasak-1996-phd-thesis]
 created: 2026-11-22
+builds_on: [pressure-correction-equation, rhie-chow-interpolation, under-relaxation]
 updated: 2026-11-22
 status: draft
 ---
@@ -23,6 +24,13 @@ The steady segregated pressure-velocity coupling: solve a momentum predictor, th
 - **Warped mesh W (F-285):** the default steady kernel diverges on F-208's warped mesh W from `n = 32` because the deferred-correction pressure step has an eigenvalue of about `-1.18`; the opt-in `SimpleSolver::implicit_non_orth_pressure` (fix I-R, the non-orthogonal part solved implicitly) converges W at `n = 16, 32, 64` and leaves converged results elsewhere unchanged to `3e-12` ([[adr-thread-steady-kernel-warped-mesh]]).
 - **Pressure-interpolation variants (F-246, partial):** `solver.pressure_interpolation` = `linear` (default), `skew_corrected`, `body_force_weighted`, steady kernel only ([[adr-thread-steady-kernel-warped-mesh]]).
 - **Gradient options** on the energy, scalar, momentum, pressure, turbulence and electric-potential diffusion terms, opt-in ([[adr-thread-gradient-options]]). The VOF and coupled pressure solves use [[amg]].
+
+## Builds on
+
+- [[pressure-correction-equation]]: the momentum predictor and pressure correction that SIMPLE iterates; SIMPLE neglects the neighbour velocity corrections and SIMPLEC approximates them ([[ref-mit-ocw-2-29-numerics]] L18 s.18-19; [[ref-klaij-vuik-2013-simple-preconditioners]] 3.1).
+- [[rhie-chow-interpolation]]: the face flux of the collocated kernel.
+- [[under-relaxation]]: needed by segregated SIMPLE; Peric's `alpha_p = 0.2`, `alpha_u = 0.8` ([[ref-jasak-1996-phd-thesis]] 3.8.2.2).
+- Also relevant: [[tvd-schemes-and-flux-limiters]] (the vanLeer limit cycle), [[deferred-correction]] and [[non-orthogonal-and-skewness-correction]] (warped mesh W).
 
 ## Related
 

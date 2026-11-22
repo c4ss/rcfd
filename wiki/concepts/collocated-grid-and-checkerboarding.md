@@ -22,7 +22,7 @@ A collocated (non-staggered) arrangement stores pressure and all velocity compon
 
 **Staggered alternative.** On staggered grids pressure sits at cell centres and velocity components on the faces; the arrangement "couples p and v", and the pressure and diffusion terms need no interpolation ([[ref-mit-ocw-2-29-numerics]] L17 s.19-20). On non-orthogonal grids for complex geometry, however, it needs grid-oriented velocity components and curvature terms, which are harder to treat and can create non-conservative errors, so collocated grids "became more popular with complex geometries" ([[ref-mit-ocw-2-29-numerics]] L17 s.18).
 
-**Stabilisation.** The pressure-weighted interpolation adds to the face velocity a term `h^2` times a second derivative of the pressure gradient (a third-derivative pressure term per face, fourth order in the continuity equation) that vanishes as `h -> 0` and is scaled not to spoil second-order accuracy; in matrix form it is the block `C`, whose stencil reaches "not only the neighbors of the cell but also the neighbors of the neighbors" ([[ref-klaij-vuik-2013-simple-preconditioners]] 2.1-2.3, Eqs. 2, 7-9). See [[rhie-chow-interpolation]].
+**Stabilisation.** The pressure-weighted interpolation adds to the face velocity a term `h^2` times a second derivative of the pressure gradient (a fourth-order derivative of the pressure in the momentum and mass equations) that vanishes as `h -> 0` and is scaled not to spoil second-order accuracy; in matrix form it is the block `C`, whose stencil reaches "not only the neighbors of the cell but also the neighbors of the neighbors" ([[ref-klaij-vuik-2013-simple-preconditioners]] 2.1-2.3, Eqs. 2, 7-9). See [[rhie-chow-interpolation]].
 
 ## Builds on
 

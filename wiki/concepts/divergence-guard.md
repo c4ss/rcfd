@@ -3,6 +3,7 @@ type: concept
 tags: [interface, run, numerics]
 sources: [doc-case-schema-transient-divergence-guard, doc-case-schema-steady-divergence-guard, doc-case-schema-pressure-lag-check, doc-run-control, doc-case-schema-linear-upwind-limiter]
 created: 2026-11-22
+builds_on: [stability-and-cfl]
 updated: 2026-11-22
 status: draft
 ---
@@ -19,6 +20,11 @@ Read-only checks that stop a run which is blowing up, with state `diverged`, exi
 - The record goes into the `finish` event as `divergence` (kind, quantity, cell, position, value, limit, `last_good`) ([[doc-run-control]]).
 - `solver.pressure_lag_check = "raise"` also ends a PISO/PIMPLE run as `diverged` ([[doc-case-schema-pressure-lag-check]]).
 - The guards only read the state, so results are bit-identical with and without them ([[doc-case-schema-transient-divergence-guard]], [[doc-case-schema-steady-divergence-guard]]). The limiter test forced `barth_jespersen` on in 542 steady runs and counted guard trips ([[doc-case-schema-linear-upwind-limiter]]).
+
+## Builds on
+
+- [[stability-and-cfl]]: the Courant number the transient guard checks.
+- Also relevant: [[slope-limiters-unstructured]] (the `barth_jespersen` test).
 
 ## Related
 

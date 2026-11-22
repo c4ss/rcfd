@@ -1,8 +1,9 @@
 ---
 type: concept
 tags: [numerics, pressure-velocity, transient]
-sources: [doc-dynamic-mesh, doc-component-diagonal-default, doc-cosimulation-protocol, adr-thread-piso-stability-consistent-correctors, adr-thread-bdf2-step-consistent-face-flux, adr-thread-transient-rans, doc-investigation-job48t-cylinder-spokes]
+sources: [doc-dynamic-mesh, doc-component-diagonal-default, doc-cosimulation-protocol, adr-thread-piso-stability-consistent-correctors, adr-thread-bdf2-step-consistent-face-flux, adr-thread-transient-rans, doc-investigation-job48t-cylinder-spokes, ref-jasak-1996-phd-thesis]
 created: 2026-11-22
+builds_on: [simple, implicit-time-integration, stability-and-cfl]
 updated: 2026-11-22
 status: draft
 ---
@@ -25,6 +26,13 @@ The transient segregated pressure-velocity coupling: per time step a momentum pr
 - **Transient RANS:** SST, k-epsilon and SA without DES update once per outer iteration of `pimple`; `piso` is refused for them ([[adr-thread-transient-rans]]).
 - Job 48T (ADR 0154): on a cylinder O-grid with thin wall cells the default PISO (one outer iteration, two correctors) amplifies its leftover pressure error from step to step once nu dt / dr1^2 passes an onset between 6.5 and 11.4, giving wall pressure spokes; three correctors, `fractional_step` or a smaller dt remove them ([[doc-investigation-job48t-cylinder-spokes]]).
 - **Adaptive correctors (opt-in, ADR 0156):** `solver.corrector_control = "adaptive"` counts the PISO/PIMPLE correctors up until the pressure-lag estimate is at most 0.5, with a cap of 10, and re-estimates when dt changes by a factor 1.5 (ADR 0162); SV301 warns before a run when the estimate is at least 1.3. The library default stays `fixed`; `adaptive` is refused with `dynamic_mesh` ([[adr-thread-piso-stability-consistent-correctors]]).
+
+## Builds on
+
+- [[simple]]: the same predictor-corrector building blocks; in PISO the explicit velocity correction neglects the neighbour corrections, so `H(U)` is updated and the pressure equation solved again with fixed `H` coefficients ([[ref-jasak-1996-phd-thesis]] 3.8.2.1).
+- [[implicit-time-integration]]: implicit Euler and the opt-in BDF2.
+- [[stability-and-cfl]]: Courant and diffusion numbers behind the time-step limits above.
+- Also relevant: [[projection-method]] (`fractional_step`), [[rhie-chow-interpolation]] (step-consistent face flux).
 
 ## Related
 
