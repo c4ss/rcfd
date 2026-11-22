@@ -234,3 +234,35 @@ becomes a `*_known_miss` by an amendment written before the test file changes.
   domain, a fourth mesh, the time step as a run, the convection scheme and the coupling options.
 - A mesh-converged drag: C1's Richardson value is reported, not compared with the band; F-869 is done.
 - Why the solver's field converges at the order it does, beyond what the three candidates show.
+
+## Amendment 1 (2026-11-22): C3 as registered changes nothing; corrected before any heavy run
+
+Written after the first build and run of the gate tests of `crates/rcfd-api/tests/f881_cylinder_drag_order.rs` (not yet
+committed; log `gate_run1.log` in the scratch folder: G1, G2, N1 and G4 passed) and before any heavy run. No limit, amount,
+range, mesh, step, window, B0, C1 or C2 changes.
+
+**The defect.** G4 printed, after 40 steps on 90 x 70, the same forces for C3 as for B0 in every variant (1.54758 and so
+on). The reason, read in `crates/rcfd-fv/src/pressure.rs` lines 45 to 90 (`pressure_bc`): on every boundary face where
+the velocity is fixed, the effective pressure condition of the solver is zero gradient, whatever the pressure field's
+own condition says. The faces where C3 fixed the pressure in addition are exactly the inflow faces, where `Freestream`
+fixes the velocity; there the fixed pressure is overridden. So C3 as registered is the problem of B0, and its run would
+repeat B0. That set-up is defective (rule 2); it was not run as a heavy record.
+
+**The corrected C3, the far-field condition.** The velocity fixed at the free stream (`FixedValue` (1, 0, 0)) on every
+far-field face, in place of `Freestream` (fixed on the inflow faces, zero gradient on the outflow faces); the pressure
+field's condition is left as in B0, and by `pressure_bc` it is then zero gradient on every far-field face, the level
+fixed by the solver's reference cell (`p_ref`, cell 0 at 0; read in `pimple.rs` line 2331 and `pressure.rs` line 427).
+A constant in the pressure does not change the force on the closed wall (the area vectors of a closed polygon sum to
+zero), and the boundary flux of a uniform velocity through the closed far field is zero, so the pressure problem is
+compatible. It changes the outflow half of the far field from a free velocity to a fixed one, the strongest change of
+the far-field condition the `Bc` types read allow with the solver unchanged. Everything else as B0. Taken on the
+maintainer's standing instruction of 2026-11-11 (take the recommendation). Whether the forced outflow is stable at 30 D
+is not known; a blow-up at the guard makes C3 "does not decide" and is not repeated.
+
+**A gate check added (G4b).** For C2 and for the corrected C3, the drag after 40 steps on 90 x 70 differs from B0's by
+at least 1e-8 relative: a negative control of the row "Same discrete problem by two routes" of the
+[tolerance table](../process/tolerances.md) (`<= 1e-8` when two routes are the same problem), stated the other way round
+as that table's last paragraph says. It is the check whose absence let the defect through to the gate run only.
+
+**Deviation recorded now.** The test file was written in the worktree before the registration was committed; it was not
+built or run before that commit (ad4b1967), and its first build is the gate run above.
