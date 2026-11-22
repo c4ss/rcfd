@@ -1,7 +1,7 @@
 ---
 type: concept
 tags: [acoustics, fw-h, noise]
-sources: [doc-acoustics, doc-reactor-and-acoustics]
+sources: [doc-acoustics, doc-reactor-and-acoustics, adr-thread-acoustic-wave-solver]
 created: 2026-11-22
 updated: 2026-11-22
 status: draft
@@ -22,6 +22,7 @@ An integral method that gives the far-field acoustic pressure from the flow on a
 - **Verification:** fourth-order convergence; pulsating sphere; compact dipole; W5d permeable monopole in flow 4.5e-6. W5a/W5b impermeable sphere in flow MISSED (7.7e-2, 6.7e-2 vs 1e-2, 1e-3), attributed to the test construction, kept as `*_known_miss` ([[doc-acoustics]]).
 - **Gutin-type tones** are derived independently and match FW-H on a point-force rotor within 4e-5 ([[doc-acoustics]]).
 - **Assumptions:** subsonic, no quadrupole ("small for subsonic tip Mach numbers, not zero"), free field; result only as good as the sampled surface pressure, which must resolve the blade-passing frequency ([[doc-acoustics]]).
+- **Wave-solver drive:** the `rcfd-surface-series` files of the FW-H chain can drive the linear acoustic wave solver as a boundary (F-452), with the split of entering and returning waves from two or more sampled sections (F-478); an optional axial-velocity series in the format is approved as F-480 ([[adr-thread-acoustic-wave-solver]]).
 
 ## Related
 

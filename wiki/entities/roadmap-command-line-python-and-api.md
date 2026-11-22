@@ -1,7 +1,7 @@
 ---
 type: entity
 tags: [roadmap, area]
-sources: [doc-roadmap-json, doc-roadmap-overview]
+sources: [doc-roadmap-json, doc-roadmap-overview, doc-run-control, doc-python, doc-service-protocol, doc-udf-abi, adr-thread-studio-engine-entry-points, adr-thread-runner-records-and-run-sites]
 created: 2026-11-22
 updated: 2026-11-22
 status: draft
@@ -14,11 +14,17 @@ status: draft
 
 ## Synthesis
 
-_Current state of this line of work, written from the ADR threads (P3)._
+No ADR of the P3 lists is filed under this area; this synthesis is written from the generated table below and the P1 interface pages.
+
+- **The headless contract is done.** 13 of 16 items are done: the settings tree and its schema (F-005), the case file (F-080), the CLI `rcfd run / check-mesh / convert / post / schema / serve` (F-081), the Rust library API (F-082), command journals with replay (F-084), the solver service (F-085), expressions (F-104), the task-based workflow engine (F-120), the headless run-control contract (F-121), sandboxed WASM user functions (F-122), the setup rule engine (F-240) and chained runs (F-241) ([[doc-roadmap-json]]). One implementation serves every caller: "`rcfd-api` (`runctl`, `workflow`) implements everything; the CLI, the service and the MCP tools share it, 'so all of them behave the same way'" ([[doc-run-control]], [[rcfd-api]]).
+- **The CLI** ([[rcfd-cli]]) is the shared surface the Studio and Claude Code also reach: `rcfd run` with [[exit-codes]], the [[status-stream]], [[checkpoint]]s and the [[stop-file]] ([[doc-run-control]]); `rcfd serve` hosts [[rcfd-service-protocol]] (`rcfd-service/1`, protocol 1.1 with opt-in families) ([[doc-service-protocol]]). Many later subcommands came from Studio items under guardrail G16 (`rcfd project init|hash|trash`, `rcfd schema --ui`, `rcfd help`, `rcfd check --facts|--refine|--inputs`, `rcfd post derive`, `rcfd site`, `rcfd version --json`) ([[adr-thread-studio-engine-entry-points]], [[adr-thread-runner-records-and-run-sites]]).
+- **Python is a driver, not a binding.** F-083 is partial: "there is no PyO3 extension, no pip-installable wheel, no numpy field access without a VTU round trip"; the pure-Python package in `python/rcfd/` drives `run`, `check` and `study` through the CLI, because "the workspace forbids `unsafe_code` and PyO3's macros expand to unsafe code" (ADR 0034 D5) ([[rcfd-python]], [[doc-python]]).
+- **User-function hooks are partly delivered.** F-239 partial: turbulence source, species source, adjust, a separate exit hook, reaction rate, dynamic-zone motion, specific heat and density hooks are not delivered, and no hook runs in the compressible, variable-density or VOF solvers ([[doc-roadmap-json]], [[udf-sandbox]], [[doc-udf-abi]]).
+- **Not started:** F-307, an optional `immersed_solids` table in the case tree ([[doc-roadmap-json]], [[immersed-solid]]).
 
 ## ADR threads
 
-_Thread pages in `sources/adr-thread-*` that cover this area (P3)._
+- None of the P3 thread pages is filed under this area. Related: [[adr-thread-studio-engine-entry-points]] and [[adr-thread-runner-records-and-run-sites]] (the CLI twins of Studio capabilities), [[adr-thread-workspace-layer]] (`rcfd-cli` depends on `rcfd-workspace` since ADR 0731).
 
 ## Items
 

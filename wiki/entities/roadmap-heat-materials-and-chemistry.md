@@ -1,7 +1,7 @@
 ---
 type: entity
 tags: [roadmap, area]
-sources: [doc-roadmap-json, doc-roadmap-overview]
+sources: [doc-roadmap-json, doc-roadmap-overview, adr-thread-gradient-options]
 created: 2026-11-22
 updated: 2026-11-22
 status: draft

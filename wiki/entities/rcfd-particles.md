@@ -1,7 +1,7 @@
 ---
 type: entity
 tags: [crate]
-sources: [doc-architecture, doc-particles]
+sources: [doc-architecture, doc-particles, adr-thread-particle-wall-and-droplets]
 created: 2026-11-22
 updated: 2026-11-22
 status: draft
@@ -28,6 +28,7 @@ status: draft
 
 > [!warning] Contradiction — layer number
 > [[doc-particles]] calls the crate "layer 2: depends on `rcfd-core` and `rcfd-mesh` only"; [[doc-architecture]] puts it in layer 3 (io / fv / particles). The dependencies agree; only the layer number differs (between repo docs).
+- **P3 ADR thread:** wall film, erosion preset, dispersion from turbulence fields, droplet evaporation and breakup, `Tracker::enable_droplet_exchange()` ([[adr-thread-particle-wall-and-droplets]]).
 
 ## Open questions
 

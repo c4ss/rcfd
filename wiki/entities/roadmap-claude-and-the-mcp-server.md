@@ -1,7 +1,7 @@
 ---
 type: entity
 tags: [roadmap, area]
-sources: [doc-roadmap-json, doc-roadmap-overview]
+sources: [doc-roadmap-json, doc-roadmap-overview, adr-thread-workspace-layer, adr-thread-mcp-tools, adr-thread-runner-records-and-run-sites, adr-thread-studio-engine-entry-points, adr-thread-studio-electron]
 created: 2026-11-22
 updated: 2026-11-22
 status: draft
@@ -14,11 +14,19 @@ status: draft
 
 ## Synthesis
 
-_Current state of this line of work, written from the ADR threads (P3)._
+- **The base is done.** The MCP server (F-090), its safety and permission model (F-091), assistant workflows (F-094) and the assistant tool layer (F-145 to F-149) are done ([[doc-roadmap-json]]). The in-app local-model assistant those items served was removed on 2026-11-17 (F-838, option (a)): "The Studio's Claude Code panel is the only assistant", and that panel was itself replaced the same day by Claude Code in its own terminal (ADR 0801 Addendum 23) ([[adr-thread-studio-electron]]). F-150 (local models, verified only against fixtures) and the Claude Code mod items F-092, F-093 ("demoted") stay partial.
+- **The workspace layer is the priority series.** ADR 0173 (2026-11-04) put the MCP server and the Studio on one crate, `rcfd-workspace`, so "whatever Claude changes, the Studio shows, and whatever the Studio can change, Claude can change". F-270 to F-275 were built on 2026-11-05 and 2026-11-06 and re-scoped on 2026-11-18 after the egui Studio was deleted; F-271 is done (the field-store plan is the default of `start_run` since ADR 0741), the others are partial with the lead to decide by the registered rule, as are F-287 and F-288 ("Nothing measured is missing") ([[adr-thread-workspace-layer]]).
+- **The tool list grew additively.** Each new tool was checked by restating the list tests, never by re-recording a golden: mesh tools, the feed, runner budgets, file hashes, the trash (with a new access class `delete`), case facts and Refine x2, derived pictures, run sites. The Studio's first allow-list reached 17 read tools before it went with the panel ([[adr-thread-mcp-tools]]).
+- **Not built, by decision.** Linking an MCP actor to a Claude Code session (ADR 0188 Q4 (c)); Claude Code session discovery in the engine (ADR 0735 P3 declined); the plugin edit hook is a guide rail that fails open and is untested under the bypass modes ([[adr-thread-workspace-layer]], [[adr-thread-studio-engine-entry-points]]).
+- **Open.** F-267 (a Claude Code plugin with project tools, todo; the plugin in `clients/claude-plugin` exists, see [[claude-plugin]]), F-265 (the bridge library, observed on one CLI build only; `rcfd-claude` was removed on 2026-11-17), F-862 (the description of `start_run`'s `store` argument) ([[adr-thread-mcp-tools]], [[adr-thread-studio-electron]]).
 
 ## ADR threads
 
-_Thread pages in `sources/adr-thread-*` that cover this area (P3)._
+- [[adr-thread-workspace-layer]] — ADR 0173 and amendments 0185 to 0189, 0195; ADRs 0200, 0201, 0741 (F-270 to F-275, F-287, F-288).
+- [[adr-thread-mcp-tools]] — the MCP tool list, access classes and the allow-list across ADRs 0186 to 0741.
+- [[adr-thread-runner-records-and-run-sites]] — `set_runner_config`, `hash_project_file`, `start_run {from_run, site}` (ADRs 0733, 0734, 0739).
+- [[adr-thread-studio-engine-entry-points]] — `create_project`, the trash tools, `case_facts`, `refine_case_mesh`, `derive_picture` (ADRs 0731, 0736, 0737, 0738).
+- [[adr-thread-studio-electron]] — the removal of the assistant, `rcfd-claude` and the Claude Code panel (ADR 0800 §10, ADR 0801 Addendum 23).
 
 ## Items
 

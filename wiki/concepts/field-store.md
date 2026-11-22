@@ -1,7 +1,7 @@
 ---
 type: concept
 tags: [run, studio]
-sources: [doc-glossary, doc-product, doc-run-control, doc-case-schema-statistics-output, doc-mcp-tools, doc-service-protocol, doc-tutorial-desktop-assistant]
+sources: [doc-glossary, doc-product, doc-run-control, doc-case-schema-statistics-output, doc-mcp-tools, doc-service-protocol, doc-tutorial-desktop-assistant, adr-thread-workspace-layer, adr-thread-studio-electron]
 created: 2026-11-22
 updated: 2026-11-22
 status: draft
@@ -23,6 +23,11 @@ A field is a value in every cell (`ux`, `uy`, `p`). The field store is what a ru
 
 > [!warning] Contradiction (within the repo docs)
 > [[doc-run-control]] says the Studio's Run, Queue… and Run the example call `start_run` with `store: "plan"`; the desktop tutorial says "A run started this way stores the fields the case asks for, and no others" ([[doc-tutorial-desktop-assistant]]).
+
+### From the P3 ADR threads (2026-11-22)
+
+- The default start plan was ADR 0173 D7 (a), approved by the maintainer on 2026-11-18 (ADR 0186 Q2) and built by ADR 0741: "an approved change of a default, so rule 3's 'defaults stay bit-identical' is lifted for exactly the outputs listed". Measured: the store does not change the solution (`lid_drag` equal bits with and without it) ([[adr-thread-workspace-layer]]).
+- The Electron Studio reads `store.rts` with its own TypeScript reader (R2), measured in the ADR 0350 spike at p50 14.2 ms, p99 22.4 ms for a 1e6-cell scalar, bit for bit with the Rust reader ([[adr-thread-studio-electron]]).
 
 ## Related
 

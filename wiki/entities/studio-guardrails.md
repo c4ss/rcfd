@@ -1,7 +1,7 @@
 ---
 type: entity
 tags: [studio, guardrails, process]
-sources: [doc-studio-guardrails, doc-ui-restart-plan, doc-studio-coverage, doc-design, doc-impeccable-surfaces]
+sources: [doc-studio-guardrails, doc-ui-restart-plan, doc-studio-coverage, doc-design, doc-impeccable-surfaces, adr-thread-studio-electron, adr-thread-studio-engine-entry-points, adr-thread-runner-records-and-run-sites]
 created: 2026-11-22
 updated: 2026-11-22
 status: draft
@@ -42,6 +42,19 @@ status: draft
 - Coverage status at the snapshot: 1070 of 1363 capabilities (78.5 %) have a UI path; 293 have exemptions, 215 of them pointing at an item whose acceptance does not cover them ([[doc-studio-coverage]]).
 - Open for the maintainer: the UI framework and component approach; macOS (not asked); certificate type for signing ([[doc-studio-guardrails]]).
 
+### How the guardrails were applied (P3, 2026-11-22)
+
+- ADR 0800 (2026-11-16) generated the Electron roadmap from the guardrails, `PRODUCT.md` and `DESIGN.md`; every guardrail "that needs work, not only restraint, becomes an item or an acceptance clause (G3 picture checks, G7 kill-the-app test, G9 benchmark, G10 hardening, G13 test harness)", and G15 "makes coverage the organising rule of the UX" ([[adr-thread-studio-electron]]).
+- G2, G4 and G16 in practice: each Studio gap that needed the engine became an engine ADR with an opt-in switch or a new name and a CLI or MCP twin (ADRs 0730 to 0738), "Defaults and `baseline_hashes.rs` are unchanged" in each ([[adr-thread-studio-engine-entry-points]]).
+- G7 amended 2026-11-17 after the maintainer found `rcfd-runner serve` and a paused `rcfd run` still running when the Studio closed: "the runner should close with studio by default if no external (existing) runner env var is specified" (ADR 0801, unnumbered addendum "Runner closes with the Studio") ([[adr-thread-studio-electron]]).
+- G9: the idle baseline of 2026-11-17 met every judged line; under load P10 missed in three of four runs (F-817) ([[adr-thread-studio-electron]]).
+- G10: remote [[run-site]]s added 2026-11-17 (ADR 0739 Q3 (a)); `rcfd serve` refuses a non-loopback address unless `--allow-unauthenticated-remote` ([[adr-thread-runner-records-and-run-sites]]).
+- G18: the project trash with restore and compare-and-set on `settings.set` (ADR 0736) ([[adr-thread-studio-engine-entry-points]]).
+- G22: the word budget per surface, chosen by the maintainer as option (a) of three on 2026-11-16, "raising a budget needs the maintainer's word" (ADR 0800 §8); the build ADRs report each budget held ([[adr-thread-studio-electron]], [[adr-thread-studio-engine-entry-points]]).
+
+> [!warning] Contradiction (within the repo docs)
+> G11 as the table quotes it ([[doc-studio-guardrails]]) describes Claude Code sessions inside the Studio. ADR 0801 Addendum 23 (2026-11-17) removed the embedded panel; the Studio registers the project server with Claude Code and opens Claude Code in its own terminal, where "Claude Code's own permission prompts govern" ([[adr-thread-studio-electron]]).
+
 ## Related
 
 - [[studio]]
@@ -49,6 +62,7 @@ status: draft
 - [[work-streams]]
 - [[doc-process-agent-rules]]
 - [[roadmap-studio-desktop-app]]
+- [[adr-thread-studio-electron]]
 
 ## Open questions
 

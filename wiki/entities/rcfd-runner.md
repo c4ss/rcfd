@@ -1,7 +1,7 @@
 ---
 type: entity
 tags: [crate]
-sources: [doc-architecture, doc-ui-restart-plan, doc-studio-guardrails, doc-security, doc-studio-coverage, doc-run-control, doc-mcp-tools, doc-tutorial-desktop-assistant]
+sources: [doc-architecture, doc-ui-restart-plan, doc-studio-guardrails, doc-security, doc-studio-coverage, doc-run-control, doc-mcp-tools, doc-tutorial-desktop-assistant, adr-thread-runner-records-and-run-sites, adr-thread-workspace-layer]
 created: 2026-11-22
 updated: 2026-11-22
 status: stub
@@ -30,6 +30,14 @@ status: stub
 - Guardrail G7: runs outlive the Studio window. Amended 2026-11-17: the runner records who started it as `started_by` ("studio", "cli" or "mcp") in `.rcfd/runner.json`, with `studio_pid` for the Studio (ADR 0801 Q-RL-2); the Studio shuts down only a runner it owns, quietly when idle (`rcfd-runner shutdown`) and after asking when runs are active ([[doc-studio-guardrails]], [[studio-guardrails]]).
 - Starts the solver binary given by `RCFD_BIN`, or the `rcfd` binary next to it; reads per-project settings from `<project>/.rcfd/runner-config.json` ([[doc-security]]).
 - CLI surface seen by the capability inventory: `rcfd-runner ensure`, `start` (with `--site` for a remote run site, F-848, ADR 0739), `serve`, `shutdown`, `wait`, `rerun`, `site` ([[doc-studio-coverage]]).
+
+### From the P3 ADR threads (2026-11-22)
+
+- Launch records (ADR 0734): `runs/<id>/launch.json`, then `launch-<n>.json`, immutable, written before `spawn` ("the solver was not started" if it cannot be written), with `argv`, `cwd` and the solver's `build {exe_hash, git_rev}`; `rerun_of` in `run.json` only on a rerun; `mesh` and `mesh_hash` for mesh-file cases ([[adr-thread-runner-records-and-run-sites]]).
+- Budgets (ADR 0733): `Config::set` checks a change with the same checks as `Config::load` and writes it with `replace_if_hash_with`, journalled; `rcfd-runner config set` exits 4 on a conflict ([[adr-thread-runner-records-and-run-sites]]).
+- Remote runs (ADR 0739): a run whose `run.json` has `site` is handed to `site::remote::RemoteRuns`, one worker thread per site; "Local runs never use the seam" ([[adr-thread-runner-records-and-run-sites]], [[run-site]]).
+- The order of the final writes (ADR 0742, 2026-11-19): a new `set_terminal` writes the state event, removes the request files, writes the status, removes the request files again; "the terminal status is now the last write of a run" ([[adr-thread-runner-records-and-run-sites]]).
+- Runs continued from another (`continue_from`, `max_steps`, ADR 0200) and runs of design studies tagged `study`, `variant`, `condition` (ADR 0189) are run settings and record fields approved on 2026-11-18 and 2026-11-06 ([[adr-thread-workspace-layer]]).
 
 ## Open questions
 

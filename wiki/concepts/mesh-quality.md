@@ -1,7 +1,7 @@
 ---
 type: concept
 tags: [mesh, quality]
-sources: [doc-mesh-quality, doc-meshing, doc-dynamic-mesh]
+sources: [doc-mesh-quality, doc-meshing, doc-dynamic-mesh, adr-thread-steady-kernel-warped-mesh, adr-thread-gradient-options, adr-thread-tet-mesher-output-checks]
 created: 2026-11-22
 updated: 2026-11-22
 status: draft
@@ -21,6 +21,9 @@ The measures by which rcfd judges a mesh before a run: non-orthogonality, skewne
 - **Registered quality gates for fan passages** are typically non-orthogonality 70 deg / skewness 2.0 / aspect 300 (3000 for y+ 1 set-ups), later 85 / 4.0 / 1000 and 84.5 / 4.0 / 1000 for the camber-seam S constructions; most are missed. See [[fan-passage-mesh]] ([[doc-meshing]]).
 - **After every mesh move** the moved mesh is validated; a failure stops the run with a located "non-positive volume" error ([[doc-dynamic-mesh]]).
 - Tetrahedral meshes report the radius-edge fraction, minimum dihedral angle and minimum volume (`tet_quality`); the opt-in `TetOptions::quality_sweeps` (ADR 0104, default 0) improves them ([[doc-meshing]]).
+- **Warped mesh W:** on F-208's W the default steady kernel diverges from `n = 32`; the modes sit at interior points where the map compresses the cells to `0.37` of their size along `(1, 1, 1)`, not at the most non-orthogonal edges; opt-in fix `implicit_non_orth_pressure` (F-285) ([[adr-thread-steady-kernel-warped-mesh]]).
+- **Gradient options** for the secondary (non-orthogonal) flux: face correction, Barth-Jespersen or Venkatakrishnan limiter, boundary rule; "no benefit is claimed" ([[adr-thread-gradient-options]]).
+- **Tet mesher output check:** every cell positive and the cell volume equal to the enclosed volume, inside `tetrahedralize` and on remesher outputs (F-324, F-327) ([[adr-thread-tet-mesher-output-checks]]).
 
 ## Related
 

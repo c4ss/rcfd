@@ -1,7 +1,7 @@
 ---
 type: entity
 tags: [crate]
-sources: [doc-architecture, doc-dynamic-mesh, doc-cosimulation-protocol, doc-acoustics, doc-bfs-convergence-findings, doc-component-diagonal-default, doc-meshing]
+sources: [doc-architecture, doc-dynamic-mesh, doc-cosimulation-protocol, doc-acoustics, doc-bfs-convergence-findings, doc-component-diagonal-default, doc-meshing, adr-thread-piso-stability-consistent-correctors, adr-thread-bdf2-step-consistent-face-flux, adr-thread-steady-kernel-warped-mesh, adr-thread-gradient-options, adr-thread-compressible-acoustic-boundaries, adr-thread-acoustic-wave-solver]
 created: 2026-11-22
 updated: 2026-11-22
 status: draft
@@ -24,6 +24,7 @@ status: draft
 - **Co-simulation:** `cosim` (`coupled_step`, `FlowWall`, `SprungWall`, `InterfaceMap`) ([[doc-cosimulation-protocol]]); see [[cosimulation-protocol]].
 - **Compressible solver and acoustics:** `compressible.rs`, `compressible_bc.rs` (impedance, quiet, `MsdWall`), `sponge.rs`, `acoustic_wave.rs` ([[doc-acoustics]]); see [[aeroacoustics]].
 - **Adaptive SIMPLE loops:** `rcfd_fv::adaptive` (`axis_variations`, `directional_axes`, `run_adaptive_simple_directional*`) ([[doc-meshing]]); see [[mesh-adaptation]].
+- **P3 ADR threads touching this crate:** PISO/PIMPLE consistent correctors and outer criteria in `pimple.rs` ([[adr-thread-piso-stability-consistent-correctors]]); the step-consistent face flux ([[adr-thread-bdf2-step-consistent-face-flux]]); `implicit_non_orth_pressure` in `simple.rs` ([[adr-thread-steady-kernel-warped-mesh]]); `GradientOptions` helpers in `diffusion.rs`, `cht.rs`, `electric.rs` ([[adr-thread-gradient-options]]); the sponge and acoustic boundaries of `CompressibleSolver` ([[adr-thread-compressible-acoustic-boundaries]]); `acoustic_wave.rs` ([[adr-thread-acoustic-wave-solver]]).
 
 ## Open questions
 

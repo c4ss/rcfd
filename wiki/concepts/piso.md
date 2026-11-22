@@ -1,7 +1,7 @@
 ---
 type: concept
 tags: [numerics, pressure-velocity, transient]
-sources: [doc-dynamic-mesh, doc-component-diagonal-default, doc-cosimulation-protocol]
+sources: [doc-dynamic-mesh, doc-component-diagonal-default, doc-cosimulation-protocol, adr-thread-piso-stability-consistent-correctors, adr-thread-bdf2-step-consistent-face-flux, adr-thread-transient-rans]
 created: 2026-11-22
 updated: 2026-11-22
 status: draft
@@ -20,6 +20,9 @@ The transient segregated pressure-velocity coupling: per time step a momentum pr
 - **Periodic and sliding opt-ins:** `rotational_periodic_implicit`, `coupled_non_orth`, `coupled_ddt_correction`, `fractional_body_force` ([[doc-dynamic-mesh]]); see [[sliding-mesh]].
 - **Component diagonal:** the key reaches PISO/PIMPLE since ADR 0074 W1 (before "silently ignored although documented"); the split is applied in every cell without the bit-equality guard ([[doc-component-diagonal-default]]). See [[component-diagonal]].
 - **Co-simulation fluid side** is the incompressible PISO/PIMPLE step with implicit Euler on a moving mesh ([[doc-cosimulation-protocol]]).
+- **ADR thread:** the full chain from F-299 to F-550, with the benchmark set of ADR 0223 (cavity 88 of 88 stable with the option, default 84 of 88) and the maintainer's "Held" of 2026-11-18 on the default flip, is in [[adr-thread-piso-stability-consistent-correctors]].
+- **Step-consistent face flux:** the opt-in `PimpleSettings::rhie_chow_step_consistent` / `[solver.rhie_chow] step_consistent` removes the step-size dependence of the Rhie-Chow face flux on internal faces (F-344, F-443); BDF2 then meets its order at rest but not on the moving overset TG_2 (`2.454` against 4) ([[adr-thread-bdf2-step-consistent-face-flux]]).
+- **Transient RANS:** SST, k-epsilon and SA without DES update once per outer iteration of `pimple`; `piso` is refused for them ([[adr-thread-transient-rans]]).
 
 ## Related
 

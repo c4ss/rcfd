@@ -1,7 +1,7 @@
 ---
 type: entity
 tags: [roadmap, area]
-sources: [doc-roadmap-json, doc-roadmap-overview]
+sources: [doc-roadmap-json, doc-roadmap-overview, adr-thread-studio-electron, adr-thread-studio-engine-entry-points, adr-thread-runner-records-and-run-sites, adr-thread-workspace-layer, adr-thread-mcp-tools]
 created: 2026-11-22
 updated: 2026-11-22
 status: draft
@@ -14,11 +14,19 @@ status: draft
 
 ## Synthesis
 
-_Current state of this line of work, written from the ADR threads (P3)._
+- **Two Studios, one left.** The egui Studio (`rcfd-studio`, layers L1 to L7 of the Studio plan) was built in waves 47 and 48; on 2026-11-12 the maintainer asked for an Electron spike over the rcfd APIs (ADR 0350, F-447), on 2026-11-16 ADR 0800 split F-448 into F-800 to F-832 and the maintainer said yes, and the same day `rcfd-studio` and `rcfd-gui` were deleted before parity (F-449 done) ([[adr-thread-studio-electron]]). F-140 to F-144, F-261 to F-266 and F-293 belong to that earlier line; F-293 is retired (2026-11-18) ([[adr-thread-workspace-layer]]).
+- **The Electron Studio is mostly built.** Of the 58 items, 40 are done; the F-80x / F-81x / F-83x items each recorded their build in an addendum of ADR 0801 (25 addenda, to 2026-11-17). What keeps F-448 open: F-813 and F-830 wait for a learner's [[view-and-report]] step, F-817 for a diagnosis of P10 under load (the idle baseline of 2026-11-17 met every limit), F-821 for Linux GPU runs and the WebGL 2 bench lines, F-823 for a first green run on GitHub Actions, F-828 for Studio numbers that still have no provenance ([[adr-thread-studio-electron]], [[adr-thread-studio-engine-entry-points]]).
+- **Engine first.** Every Studio item that needed a number, a write or a check got an engine entry point through its own ADR, accepted and built on 2026-11-17: the opt-in `rcfd serve --ui` family (schema metadata, help, error catalogue, `mesh.preview`, `case.facts`, `mesh.refine`, `case.save`), `rcfd project init`, launch records and rerun, session journals on disk, a project trash, compare-and-set, derived pictures, and `set_runner_config` ([[adr-thread-studio-engine-entry-points]], [[adr-thread-runner-records-and-run-sites]]). The rule behind it is G2 and G16 of the [[studio-guardrails]].
+- **Claude Code outside the Studio.** The embedded Claude Code panel was removed on 2026-11-17 (ADR 0801 Addendum 23): the Studio registers the engine's project server with Claude Code for the folder, opens Claude Code in a terminal, and follows its changes through the [[project-journal]]'s feed; F-814 is still partial for a test with a real Claude Code session and the maintainer's view-and-report ([[adr-thread-studio-electron]]).
+- **Next lines.** F-848 (run sites; phase 1 built by ADR 0739, the roadmap still says `todo`) ([[run-site]]), F-852 (an end-to-end test that times out on Windows in CI), F-151 (3D viewport of the old plan), F-266 (egui shell, todo), F-262 (the runner: socket control and runs started from the application; S5 an ignored known miss; the order of its final writes fixed by ADR 0742) ([[adr-thread-runner-records-and-run-sites]]).
 
 ## ADR threads
 
-_Thread pages in `sources/adr-thread-*` that cover this area (P3)._
+- [[adr-thread-studio-electron]] — ADR 0350 spike, ADR 0353 (F-456), ADR 0800 roadmap, ADR 0801 dependencies and its 25 addenda.
+- [[adr-thread-studio-engine-entry-points]] — ADRs 0377, 0730, 0731, 0732, 0735, 0736, 0737, 0738: the engine entry points of the Studio items.
+- [[adr-thread-runner-records-and-run-sites]] — ADRs 0733, 0734, 0739, 0742: runner budgets, launch records, run sites, final writes (F-837, F-828, F-848, F-262).
+- [[adr-thread-workspace-layer]] — ADR 0173 and its amendments (F-270 to F-275), which the Studio and the MCP server share.
+- [[adr-thread-mcp-tools]] — the tool list and allow-list changes these ADRs made.
 
 ## Items
 

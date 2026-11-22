@@ -1,7 +1,7 @@
 ---
 type: entity
 tags: [crate]
-sources: [doc-architecture]
+sources: [doc-architecture, adr-thread-amg-coarse-lu]
 created: 2026-11-22
 updated: 2026-11-22
 status: stub
@@ -16,6 +16,10 @@ status: stub
 
 - Depends on: [[rcfd-core]]
 - Used by: [[rcfd-gpu]], [[rcfd-dist]], [[rcfd-fem]], [[rcfd-fv]]
+
+## Details
+
+- **Scalar AMG** (`rcfd_linalg::amg`, smoothed aggregation) and `amg_elastic.rs`; the coarsest dense LU applies row interchanges before the forward substitution by default since ADR 0743 (F-471); `AmgSettings::coarse_lu_interchanges_first` ([[adr-thread-amg-coarse-lu]], [[amg]]).
 
 ## Open questions
 

@@ -1,7 +1,7 @@
 ---
 type: entity
 tags: [roadmap, area]
-sources: [doc-roadmap-json, doc-roadmap-overview]
+sources: [doc-roadmap-json, doc-roadmap-overview, adr-thread-piso-stability-consistent-correctors, adr-thread-bdf2-step-consistent-face-flux, adr-thread-amg-coarse-lu, adr-thread-gradient-options, adr-thread-steady-kernel-warped-mesh]
 created: 2026-11-22
 updated: 2026-11-22
 status: draft

@@ -1,7 +1,7 @@
 ---
 type: entity
 tags: [mesh, meshing]
-sources: [doc-meshing, doc-mesh-import, doc-mesh-quality, doc-dynamic-mesh, doc-acoustics, doc-structural-solver]
+sources: [doc-meshing, doc-mesh-import, doc-mesh-quality, doc-dynamic-mesh, doc-acoustics, doc-structural-solver, adr-thread-tet-mesher-output-checks, adr-thread-acoustic-wave-solver]
 created: 2026-11-22
 updated: 2026-11-22
 status: draft
@@ -36,6 +36,8 @@ status: draft
 - All literature attributions of the meshing page "are from memory and unverified" ([[doc-meshing]]).
 - The remesher depends on input vertex numbering, so the same geometry from an STL file and from code remeshes to different surfaces; the tetrahedral mesher does not ([[doc-meshing]]).
 - The tetrahedral mesher does not mesh a thin fan blade reliably (smallest dihedral 0.16 deg); the structural solver uses a structured blade split instead ([[doc-structural-solver]]).
+- **Tetrahedral mesher:** the fold panic on a thin box fixed in `try_edge_removal` (F-306); output check inside `tetrahedralize` and on the F-247 remesher (F-324, F-327) ([[adr-thread-tet-mesher-output-checks]]).
+- **O-grid of a circular duct:** `rcfd_mesh::gen::circular_duct_ogrid` (F-453) ([[adr-thread-acoustic-wave-solver]]).
 
 ## Related
 

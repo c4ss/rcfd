@@ -1,7 +1,7 @@
 ---
 type: concept
 tags: [particles, lagrangian, multiphase]
-sources: [doc-particles]
+sources: [doc-particles, adr-thread-particle-wall-and-droplets]
 created: 2026-11-22
 updated: 2026-11-22
 status: draft
@@ -23,6 +23,7 @@ Following point particles (parcels) through a computed flow by integrating their
 - **Two-way:** the exchange record (F-128, ADR 0057) is an observation only; the droplet path (F-326, ADR 0348) feeds vapour mass, momentum and sensible heat into the carrier in the transient two-way path, conserved to 1.8e-15 / 5.8e-16 / 6.7e-13 of the largest term ([[doc-particles]]).
 - **Dispersion:** discrete random walk; `k`, `epsilon` from k-epsilon or SST (`epsilon = beta* k omega`, `beta* = 0.09`) since F-255 (ADR 0208); other turbulence models refused ([[doc-particles]]).
 - **Extensions:** surface reaction (library), evaporation and TAB breakup (library F-245, case tables F-326), wall film (F-253, F-292), erosion (DNV RP O501) and rough walls (Sommerfeld virtual wall) (F-254, ADR 0194) ([[doc-particles]]).
+- **Wall models and droplet feedback (ADR thread):** wall film with gas buoyancy and shear (F-253, F-292), erosion with the `dnv_o501_2007_steel` preset and rough-wall rebound (F-254), dispersion from turbulence-model fields (F-255), d-squared evaporation and TAB breakup (F-245) with feedback in the exchange record (`Tracker::enable_droplet_exchange()`, F-323) and on the transient two-way path (F-326) ([[adr-thread-particle-wall-and-droplets]]).
 
 ## Related
 

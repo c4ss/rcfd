@@ -1,7 +1,7 @@
 ---
 type: entity
 tags: [acoustics, noise, fan, compressible]
-sources: [doc-acoustics, doc-reactor-and-acoustics, doc-structural-solver]
+sources: [doc-acoustics, doc-reactor-and-acoustics, doc-structural-solver, adr-thread-compressible-acoustic-boundaries, adr-thread-acoustic-wave-solver]
 created: 2026-11-22
 updated: 2026-11-22
 status: draft
@@ -34,6 +34,8 @@ status: draft
 - **Validation path stated:** a fan or airfoil with measured operating point, wall-pressure data and far-field spectra; calibrate on one data set, compare on a held-out second, report an error band ([[doc-acoustics]]).
 - **ERP** "is the only figure for a fan frame or housing"; it assumes radiation efficiency one ([[doc-acoustics]]).
 - The structural solver's radiation impedance of a baffled plane is in `rcfd-post` (F-579) ([[doc-structural-solver]]).
+- **Compressible acoustic boundaries (P3 ADR thread):** impedance boundary, plain and matched sponge layers (with memory decay, corners, moving meshes) and a mass-spring-damper wall on `CompressibleSolver`, all library only until the wiring item F-330 ([[adr-thread-compressible-acoustic-boundaries]]).
+- **Linear acoustic wave solver** (`AcousticWaveSolver`, F-333) with duct modal export in `rcfd-post`, an O-grid circular duct (F-453), and a drive from sampled CFD surfaces (F-452, F-478) ([[adr-thread-acoustic-wave-solver]]).
 
 ## Related
 

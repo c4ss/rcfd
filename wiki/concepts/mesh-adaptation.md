@@ -1,7 +1,7 @@
 ---
 type: concept
 tags: [mesh, adaptation, amr]
-sources: [doc-meshing]
+sources: [doc-meshing, adr-thread-mesh-adaptation]
 created: 2026-11-22
 updated: 2026-11-22
 status: draft
@@ -20,6 +20,8 @@ Refining and coarsening a mesh during a solve where an error indicator asks for 
 - **Directional (`AnisoMesh`, F-348, ADR 0267):** one level per axis; isotropic states give `AmrMesh::to_mesh` bit for bit; box merge opt-in (F-439, ADR 0341); coarsening in the adaptive SIMPLE loop opt-in (F-441, ADR 0343) with `phi <= theta / 4`; `phi = 0` is the loop without coarsening bit for bit ([[doc-meshing]]).
 - **Measured on the suction layer** (ADR 0247 set-up): directional 1547 cells error 0.00298; isotropic 3841 cells 0.01159; inverted axis choice 1.18 ([[doc-meshing]]).
 - Non-orthogonal correction on adapted meshes needs deferred iterations (ADR 0054 addendum 1) ([[doc-meshing]]).
+- **ADR thread (F-102 to F-476):** a solver-loop hook (adapted cavity 2799 cells against 9216), target-count, edge-length-weighted and register-based criteria (suction layer 3841 cells, `0.23` of the uniform 128 x 128 with `0.26` of its error), the case key `[mesh.adapt]`, a directional lattice with per-axis levels (1547 of 3841 cells), box coarsening in 3-D and in the loop, and the field store of an adaptive run ([[adr-thread-mesh-adaptation]]).
+- The directional lattice has no case key yet (F-438, todo) ([[adr-thread-mesh-adaptation]]).
 
 ## Related
 

@@ -1,7 +1,7 @@
 ---
 type: concept
 tags: [numerics, pressure-velocity, steady]
-sources: [doc-bfs-convergence-findings, doc-component-diagonal-default, doc-gpu, doc-meshing]
+sources: [doc-bfs-convergence-findings, doc-component-diagonal-default, doc-gpu, doc-meshing, adr-thread-steady-kernel-warped-mesh, adr-thread-gradient-options]
 created: 2026-11-22
 updated: 2026-11-22
 status: draft
@@ -20,6 +20,9 @@ The steady segregated pressure-velocity coupling: solve a momentum predictor, th
 - **Component diagonal:** default `averaged`; with `corrected`, the correction is applied only in cells whose component diagonals are not bit-equal, so walls-only cases stay bit-identical. See [[component-diagonal]] ([[doc-component-diagonal-default]]).
 - **GPU:** the pressure solve of `simple`, `piso`, `pimple` can run CG/BiCGStab on a CUDA device via `linear_solver.device` ([[doc-gpu]]). See [[rcfd-gpu]].
 - **Adaptive SIMPLE loops** on directional lattices: `run_adaptive_simple_directional*` in `rcfd_fv::adaptive` ([[doc-meshing]]).
+- **Warped mesh W (F-285):** the default steady kernel diverges on F-208's warped mesh W from `n = 32` because the deferred-correction pressure step has an eigenvalue of about `-1.18`; the opt-in `SimpleSolver::implicit_non_orth_pressure` (fix I-R, the non-orthogonal part solved implicitly) converges W at `n = 16, 32, 64` and leaves converged results elsewhere unchanged to `3e-12` ([[adr-thread-steady-kernel-warped-mesh]]).
+- **Pressure-interpolation variants (F-246, partial):** `solver.pressure_interpolation` = `linear` (default), `skew_corrected`, `body_force_weighted`, steady kernel only ([[adr-thread-steady-kernel-warped-mesh]]).
+- **Gradient options** on the energy, scalar, momentum, pressure, turbulence and electric-potential diffusion terms, opt-in ([[adr-thread-gradient-options]]). The VOF and coupled pressure solves use [[amg]].
 
 ## Related
 
