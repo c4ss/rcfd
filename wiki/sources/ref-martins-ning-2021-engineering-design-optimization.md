@@ -14,7 +14,7 @@ status: draft
 
 **Citation:** J. R. R. A. Martins and A. Ning, *Engineering Design Optimization*, Cambridge University Press, 2021, ISBN 9781108833417. Electronic edition from https://mdobook.github.io (PDF http://flowlab.groups.et.byu.net/mdobook.pdf); page numbers match the printed book; first electronic edition January 2020.
 **Licence:** all rights reserved. Free to read; cite only, never copy into `raw/`.
-**Read:** 2026-11-22, by job p6-optimisation: sections 1.2-1.4, 7.1-7.3, 7.6, 9.1-9.3, 10.1-10.4, 10.6. The PDF's math glyphs did not survive text extraction, so equations below are written from the equation's described structure and the surrounding text, with the book's equation numbers.
+**Read:** 2026-11-22, by job p6-optimisation: sections 1.2-1.4, 7.1-7.3, 7.6, 9.1-9.3, 10.1-10.4, 10.6. The PDF's math glyphs did not survive text extraction, so equations below are written from the equation's described structure and the surrounding text, with the book's equation numbers. Lead check 2026-11-22: eq. (1.4), (7.3)-(7.5) and (10.100)-(10.102) compared against the rendered PDF pages (book pp. 15, 288, 416); all match as written here.
 
 ## Summary
 
