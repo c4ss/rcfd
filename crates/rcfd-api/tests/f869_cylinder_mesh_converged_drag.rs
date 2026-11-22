@@ -9,7 +9,9 @@
 //!   reproduces the record of ADR 0761), `n1_...` (the negative controls of the decision), `g3_...` (the window statistics
 //!   on a signal with a closed form) and `g4_...` (90 x 70 at 30 D, 40 steps through the path of the heavy record).
 //! * `h1_..._heavy_record` (ignored) carries W1 (the fine value in the band), S1 and K4w; `w2_..._heavy_record` (ignored)
-//!   carries W2 (the Richardson value in the band) and W3 (the extrapolation is valid). They share the three runs. Command:
+//!   carries W3a, W3c and W2; `w3b_..._known_miss` (ignored) is the missed W3b, limit intact (amendment 1): the observed
+//!   order is 1.387 against [1.5, 2.5], so the extrapolation is not valid and the mesh-converged drag is not shown. They
+//!   share the three runs. Command:
 //!   `cargo test --release -p rcfd-api --test f869_cylinder_mesh_converged_drag -- --ignored --nocapture`.
 //!
 //! Every limit is registered in ADR 0763 and is not changed after a run. The tests of ADR 0761 are untouched.
@@ -537,6 +539,8 @@ fn extrapolation(m: &[Shed; 3]) -> (Rich, [(f64, Rich); 2]) {
 }
 
 /// The heavy record of ADR 0763: W1 (the fine value in the band), S1 and K4w; R1 and R2 printed.
+/// Recorded on 2026-11-22 (3260 s): C_D 1.32259, 1.33285, 1.33900 on the three meshes; St 0.16169, 0.16395, 0.16486;
+/// GCI_fine 0.935 %; observed order 1.387.
 #[test]
 #[ignore = "heavy record of ADR 0763 (three solves): cargo test --release -p rcfd-api --test f869_cylinder_mesh_converged_drag -- --ignored --nocapture"]
 fn h1_fine_mesh_mean_drag_at_dt_0025_and_30d_in_the_band_heavy_record() {
@@ -590,7 +594,8 @@ fn h1_fine_mesh_mean_drag_at_dt_0025_and_30d_in_the_band_heavy_record() {
     c.finish();
 }
 
-/// The heavy record of ADR 0763: W3 (the extrapolation is valid) and W2 (the Richardson value in the band).
+/// The heavy record of ADR 0763: W3a, W3c and W2. W3b is the known miss below (amendment 1), so the value that W2 compares
+/// here, 1.34901 as recorded on 2026-11-22, is not a valid extrapolation by the registration and is not a result.
 #[test]
 #[ignore = "heavy record of ADR 0763, shares the runs of h1: -- --ignored --nocapture"]
 fn w2_richardson_value_of_the_mesh_sequence_valid_and_in_the_band_heavy_record() {
@@ -600,11 +605,6 @@ fn w2_richardson_value_of_the_mesh_sequence_valid_and_in_the_band_heavy_record()
         "W3a the sequence is monotone and has an observed order",
         full.monotone && full.p.is_finite(),
         &format!("monotone {}, order {:.3}", full.monotone, full.p),
-    );
-    c.is_true(
-        "W3b the observed order in [1.5, 2.5]",
-        within(full.p, ORDER_RANGE),
-        &format!("order {:.3}", full.p),
     );
     c.is_true(
         "W3c on each half window the fine value and the Richardson value in [1.314, 1.370]",
@@ -618,6 +618,22 @@ fn w2_richardson_value_of_the_mesh_sequence_valid_and_in_the_band_heavy_record()
         "W2 the Richardson value of the three meshes in [1.314, 1.370]",
         within(full.value, BAND),
         &format!("Richardson value {:.5}", full.value),
+    );
+    c.finish();
+}
+
+/// KNOWN MISS (W3b of ADR 0763; the range unchanged): the observed order of the mean drag on 90 x 70, 128 x 100, 181 x 141
+/// at dt 0.025 with the far field at 30 D is 1.387, under the range [1.5, 2.5] in which the extrapolation is valid. The
+/// fine value, 1.33900, is in the band (W1). What follows and what is missing: ADR 0763, addendum 1.
+#[test]
+#[ignore = "known miss W3b (observed order 1.387 against [1.5, 2.5]); heavy, shares the runs of h1: -- --ignored w3b"]
+fn w3b_observed_order_of_the_mesh_sequence_in_the_registered_range_known_miss() {
+    let (full, _) = extrapolation(record());
+    let mut c = Checks::default();
+    c.is_true(
+        "W3b the observed order in [1.5, 2.5]",
+        within(full.p, ORDER_RANGE),
+        &format!("order {:.3}", full.p),
     );
     c.finish();
 }
