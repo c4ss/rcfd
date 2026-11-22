@@ -372,3 +372,41 @@ not arise; the +-1.3 mm of the mesh frame is in the band.
   `q_s`, `Rec_s` and the bound `q_m - Rec_s` are the numbers this work puts beside it.
 * No outlet model, no solver change, no new mesh. Check H (F-879) is another agent's.
 * The `.h5` copies of the LDA files were not read; the description says they hold the same values as the `.mat` files.
+
+## Amendment 1 (2026-11-22, before any registered run and before the commit of the test file): the value at a point is the cell's absolute velocity
+
+Written after the first runs of the gate tests of the new file, which is not committed yet. No heavy run has been made
+and no profile of B1 or B2 has been seen. What those runs gave: V1 passed. S1 and S2 failed as they must while no value
+is recorded. V3 failed on its first run (118 and 105 points "not in the fluid" at the two outermost radii at x = 20 mm
+on B3): an error of my code, not of the method. The list of cells that are tried for a ring left out cells whose flat
+faces reach nearer to the axis than their corner points do; the list now takes the bound of the cell's convex hull. The
+registered method (the cell with the smallest largest distance from its face planes) is unchanged, and V3 then gave 0
+at every radius.
+
+The defect that needs this amendment is in the registered design. It says: the value at a point is the cylindrical
+components of the relative velocity `w` at the cell centre, and "`c_t = w_t + omega r` with r the radius of the point,
+so the part of the frame is exact". That is wrong for a cell that is not thin in the radial direction. The relative
+circumferential velocity is close to `-omega r` plus a slowly varying part, so it varies across a cell by `omega` times
+the cell's radial extent; holding it constant in the cell and adding `omega r` of the point puts a sawtooth of that size
+on the profile. The B3 short run (300 iterations, printed, not recorded) showed it: `c_t` at x = 90 mm rose by 0.78 m/s
+per 5 mm within a layer of cells, which is `omega` times 5 mm, and fell by 4 to 6 m/s at each layer boundary (for
+instance 10.64 m/s at r = 153 mm and 4.86 m/s at r = 158 mm). The quantity that is smooth across a cell is the absolute
+velocity.
+
+Corrected, fixed now: **the value at a point is the absolute velocity of its cell**, `c = w + omega e_z x x_c` formed at
+the cell centre, in cylindrical components at the cell centre: `c_t = w_t + omega r_c`. This is the cell mean of the
+absolute velocity, since the frame part is linear in position. Everything else of the design stands: the points, the
+location, the means, the integrals, the bands and the rule of division.
+
+V2 changes with it: the field of the check has constant cylindrical components (1.7, -2.3, 0.4) m/s of the **absolute**
+velocity (`w = c - omega e_z x x_c` at each cell centre), and the circumferential mean must return `c_x`, `c_t` and
+`c_r` with a relative error of at most 1e-9, at every measured radius of both planes on B3. Mutation M2 becomes: the
+part of the frame left out (`c_t = w_t`), caught by `f878_sampler_closed_forms`, as registered.
+
+What I had seen when I wrote this: the B3 values at iteration 300 with the defective sampling (`e_s` 243.0 Pa, `q_s`
+98.1 Pa, `Pi_s` 39.4 Pa, whole-annulus Euler power 343 to 347 W against a torque power of 298.5 W). No rule, band or
+limit is changed by this amendment, and none of those numbers is recorded.
+
+M6 of the table of mutations cannot be applied as written: a point is turned by all nine multiples of the pitch, so
+there is no sign of a rotation to change. It is replaced by: the sign of the circumferential unit vector in the
+decomposition of a cell's velocity, caught by `f878_sampler_closed_forms`.
