@@ -576,7 +576,7 @@ One row per record of this folder, grouped by the roadmap category of the item i
 | [0765](0765-f878-registration-fan01-lda-profiles-euler-work-and-the-division-of-the-missing-pressure-rise.md) | F-878 registration: the FAN-01 rotor against the measured LDA profiles, the Euler work and the division of the missing pressure rise | REGISTERED | 2026-11-22 | 1 | F-878 | partial |
 | [0766](0766-f879-registration-fan01-check-h-the-hub-pocket-in-time.md) | F-879 registration: FAN-01, check H of ADR 0183, the hub trailing-edge pocket in time | REGISTERED | 2026-11-22 | 1 | F-879 | partial |
 | [0769](0769-f883-registration-fan01-wall-pressure-behind-the-rotor.md) | F-883 registration: FAN-01, a mean static pressure behind the rotor from the wall-pressure data of the record | REGISTERED | 2026-11-22 | 1 | F-883 | done |
-| [0770](0770-f884-registration-naca0012-17-degrees-steady-iteration-diagnosis.md) | F-884 registration: why the steady iteration does not reach the attached NACA 0012 state at 17 degrees | REGISTERED | 2026-11-22 | 1 | F-884 | todo |
+| [0770](0770-f884-registration-naca0012-17-degrees-steady-iteration-diagnosis.md) | F-884 registration: why the steady iteration does not reach the attached NACA 0012 state at 17 degrees | REGISTERED | 2026-11-22 | 1 | F-884 | done |
 
 ## Records with no item in the file name (259)
 
@@ -748,7 +748,7 @@ One row per record of this folder, grouped by the roadmap category of the item i
 | [0164](0164-job49a-why-the-sa-drag-of-the-naca0012-is-wrong.md) | Job 49A, why the steady Spalart-Allmaras drag of the NACA 0012 is wrong (ADR 0159 question 4) | REGISTERED | 2026-10-29 | 1 |  |
 | [0165](0165-job49b-rcfd-gui-on-egui-036.md) | Job 49B, the legacy desktop app `rcfd-gui` moves to egui 0.36 | REGISTERED | 2026-10-29 | 1 |  |
 | [0166](0166-job49c-effective-wall-shear-and-sa-far-field-defaults.md) | Job 49C, the effective wall shear and the SA far-field turbulence become defaults (ADR 0164 questions 1, 2, 4, 5) | REGISTERED | 2026-10-29 | 1 |  |
-| [0167](0167-job49d-naca0012-aoa-sweep-with-the-sa-drag-fixes-at-500-chords.md) | Job 49D, the NACA 0012 angle-of-attack sweep again, with ADR 0164's two fixes and a 500-chord far field | REGISTERED | 2026-10-29 | 1 | F-868 |
+| [0167](0167-job49d-naca0012-aoa-sweep-with-the-sa-drag-fixes-at-500-chords.md) | Job 49D, the NACA 0012 angle-of-attack sweep again, with ADR 0164's two fixes and a 500-chord far field | REGISTERED | 2026-10-29 | 1 | F-868, F-884 |
 | [0168](0168-job49e-sa-wall-treatment-in-the-buffer-layer.md) | Job 49E, Spalart-Allmaras wall treatment with the wall cell in the buffer layer (ADR 0164 question 8) | REGISTERED | 2026-10-29 | 1 |  |
 | [0169](0169-job49f-sst-and-k-epsilon-far-field-default-and-the-naca-example-runs.md) | Job 49F, `freestream` becomes the far-field default of k-omega SST and k-epsilon; the 8 stored NACA 0012 example runs are regenerated | REGISTERED | 2026-10-29 | 1 |  |
 | [0170](0170-job49g-moment-reports-follow-the-effective-wall-shear-default.md) | Job 49G, moment reports follow the effective wall-shear default (ADR 0166 question 2 (a)) | REGISTERED | 2026-10-29 | 1 |  |

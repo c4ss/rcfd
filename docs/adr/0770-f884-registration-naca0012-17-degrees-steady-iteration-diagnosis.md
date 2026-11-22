@@ -474,3 +474,19 @@ Follow-up proposed (a new item, with its own acceptance):
 
 The same entries are in `docs/roadmap/proposals/0770-F-884.json`. `docs/adr/index.md` is not current and is left to the
 lead.
+
+## The lead's reading (2026-11-22), at the merge
+
+Merged at fe1e4d31 (the report read at 21:06 UTC, 5 minutes of reading, proposed done, written done). Checked by the
+lead before the merge: the registration is the first commit and alone, and amendments 1 to 3 are each committed before
+the change they allow; no file under `crates/*/src/` is changed, so the settings tried are existing options and the
+defaults are untouched; the tests of ADR 0760 and ADR 0764 are unchanged; the five misses are ignored known-miss tests
+with their limits intact. The push script ran the committed mutation and it failed as expected.
+
+Status: **done**, as proposed: the acceptance allows either the target met by a registered change of the route or the
+cause diagnosed, and both are given, with one run per setting. The lead notes the caveat the agent names: the mutation
+M3 was caught only after amendment 3 added NC1b. The follow-up names itself F-886; that number is already taken on the
+maintainer's checkout, so it is entered under the next free number if the maintainer takes it. The open question, a
+default change, is put to the maintainer with the agent's recommendation (a), which the lead shares: a default change
+would move every Spalart-Allmaras result and the hashes, and the twelve angles of ADR 0760 should be run with the setting
+first.
