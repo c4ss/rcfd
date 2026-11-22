@@ -1,0 +1,10 @@
+{
+  "form": 1,
+  "adr": "0760",
+  "item": "F-868",
+  "base": "13b0937dad03b46d6d55edde0404748292dd01b3",
+  "status": "partial",
+  "note": "ADR 0760, 2026-11-22, partial: on main 13b0937d steady Spalart-Allmaras on the mesh M1w-far500 (ADR 0167's SA arm, reproduced bit for bit at twelve angles) gives the lift within the registered band max(5 %, 0.018) of Ladson's 80-grit lift at 0, 2, 4, 6, 8, 10, 12, 13, 14, 15 and 16 degrees (largest difference 0.0143 at 16, all eleven within the measured scatter 0.018) and a maximum of 1.542, 4.3 % under the measured 1.6116 (limit 5 %); 17 degrees is a known miss (no steady value, iteration mean 1.0476 against 1.6057); the gate holds the record, two negative controls and a fast solver run of the same cases on the coarse example mesh (crates/rcfd-api/tests/naca0012_lift_curve_f868.rs), four mutations caught; 18 to 24 degrees, drag and moment are not compared.",
+  "gap": "Met at 0 to 16 degrees (band max(5 %, 0.018) of Ladson 80 grit; largest difference 0.0143) and for the maximum lift (1.542, 4.3 % under 1.6116), held by the gate. Missing: 17 degrees, below the measured maximum lift at 17.13, where steady SA on M1w-far500 does not converge (iteration mean 1.0476 against 1.6057, known miss); it needs an arm that gives a flow value there, or the maintainer's word that the headline ends at 16 degrees (ADR 0760, question 1).",
+  "follow_ups": []
+}

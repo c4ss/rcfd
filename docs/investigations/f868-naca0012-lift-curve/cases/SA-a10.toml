@@ -1,0 +1,92 @@
+# ADR 0167 (job 49D) run SA-a10; built on ADR 0159's case text
+title = "NACA 0012, alpha 10 deg, steady SA, both fixes (freestream far-field role, effective force), mesh M1w-far500 (ADR 0167, job 49D)"
+
+[mesh]
+source = "file"
+file = "../meshes/M1w-far500"
+
+[mesh.transform]
+rotate_z_deg = -10   # angle of attack 10 deg: the aerofoil turns by -alpha about the quarter chord (ADR 0155)
+rotate_origin = [0.25, 0.0, 0.0]
+
+[physics]
+nu = 1.6666666666666667e-7   # Re = U c / nu = 6e6
+
+[initial]
+velocity = [1.0, 0.0, 0.0]
+
+[boundaries.airfoil]
+velocity = "fixed"
+
+[boundaries.farfield]
+velocity = "freestream"
+velocity_value = [1.0, 0.0, 0.0]
+pressure = "freestream"
+turbulence = "freestream"   # ADR 0164 amendment 1 (opt-in): nuTilda = 3 nu on the inflow faces, zero gradient on the outflow faces
+
+[reports.cl]
+type = "force_coefficient"
+patch = "airfoil"
+direction = [0.0, 1.0, 0.0]
+a_ref = 0.1
+u_ref = 1.0
+component = "total"   # ADR 0167: the molecular wall shear (today's default), written out
+
+[reports.cd]
+type = "force_coefficient"
+patch = "airfoil"
+direction = [1.0, 0.0, 0.0]
+a_ref = 0.1
+u_ref = 1.0
+component = "total"   # ADR 0167: the molecular wall shear (today's default), written out
+
+[turbulence]
+model = "spalart_allmaras"
+
+[solver]
+algorithm = "simplec"
+convection = "linear_upwind"
+max_iterations = 8000
+min_iterations = 8000   # amendment 1: no stop at the residual targets before the cap (the forces still drift there)
+
+[output]
+store_interval = 8000   # the last snapshot only
+store_precision = "f32"
+store_fields = ["ux", "uy", "p", "nut"]
+
+# ADR 0167: the effective force (ADR 0164 D1), the curve's values; and the parts of cd (reports do not change the solution)
+[reports.cl_eff]
+type = "force_coefficient"
+patch = "airfoil"
+direction = [0.0, 1.0, 0.0]
+a_ref = 0.1
+u_ref = 1.0
+component = "total_effective"
+
+[reports.cd_eff]
+type = "force_coefficient"
+patch = "airfoil"
+direction = [1.0, 0.0, 0.0]
+a_ref = 0.1
+u_ref = 1.0
+component = "total_effective"
+
+[reports.cd_p]
+type = "force_coefficient"
+patch = "airfoil"
+direction = [1.0, 0.0, 0.0]
+a_ref = 0.1
+u_ref = 1.0
+component = "pressure"
+
+[reports.cd_veff]
+type = "force_coefficient"
+patch = "airfoil"
+direction = [1.0, 0.0, 0.0]
+a_ref = 0.1
+u_ref = 1.0
+component = "viscous_effective"
+
+[reports.nut_avg]
+type = "volume_average"
+field = "nut"
