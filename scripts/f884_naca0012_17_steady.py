@@ -13,6 +13,7 @@ made by ADR 0167's driver: python scripts/w49d_aoa_sweep_fixed.py mesh <rcfd> <w
 named when its run is steady; the target is abs(cl - 1.5516) <= 0.018 (ADR 0764) and the control at 15 degrees
 abs(cl - 1.4932034) <= 0.018 (ADR 0760). Nothing is written outside <work> and <outdir>; a run folder is never overwritten.
 """
+import hashlib
 import json
 import os
 import subprocess
@@ -168,6 +169,14 @@ def read_run(work, i):
     return r
 
 
+def sha256_of(path):
+    h = hashlib.sha256()
+    with open(path, "rb") as f:
+        for chunk in iter(lambda: f.read(1 << 20), b""):
+            h.update(chunk)
+    return h.hexdigest()
+
+
 def collect(work, outdir, binary=None, commit=None):
     runs = {}
     for i in ids():
@@ -186,7 +195,7 @@ def collect(work, outdir, binary=None, commit=None):
     mesh = w49d.mesh_info(work).get(w49d.MESH)
     out = {"adr": "0770", "item": "F-884", "target": TARGET, "tolerance": TOL, "control": CONTROL,
            "d5": {"cl_range": w49d.STEADY_CL_RANGE, "cd_range": w49d.STEADY_CD_RANGE, "window": w49d.WINDOW},
-           "binary": {"path": binary, "sha256": w49d.sha256_of(binary) if binary else None, "commit": commit},
+           "binary": {"path": binary, "sha256": sha256_of(binary) if binary else None, "commit": commit},
            "mesh": mesh, "D0": d0, "runs": runs}
     os.makedirs(os.path.join(outdir, "cases"), exist_ok=True)
     for i in ids():
