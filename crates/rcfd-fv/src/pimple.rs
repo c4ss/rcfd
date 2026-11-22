@@ -172,6 +172,12 @@ pub struct PimpleSettings {
     /// scale does not vanish at the extremes of a periodic pressure history (floor `sin(pi (w - 1)/N)` of the period's largest
     /// for `N` steps per period). `Some(1)` is ADR 0458's scale. Read only with the criterion. Default `None`: ADR 0458's scale.
     pub outer_scale_window: Option<usize>,
+    /// F-885 (ADR 0767): keep, for every outer iteration `k` of a step, the largest velocity change
+    /// `d_k = max_c |u_k(c) - u_(k-1)(c)|` (Euclidean norm of the cell velocity difference; `u_0` the velocity at the start of
+    /// the step's first outer iteration, `u_k` the iterate after the correctors of iteration `k`) in
+    /// `PimpleSolver::outer_velocity`. Read-only: the copies and the norms enter no equation. Not read by the fractional step
+    /// or the moving-mesh steps. Default `false`: no copy is made and nothing is kept (bit-identical).
+    pub outer_velocity_record: bool,
     /// F-535 (ADR 0471 D1): refuse the first step the solver takes, through the divergence guard and before any field is
     /// touched, when the pressure-lag estimate of ADR 0073 for the step's settings (`lag_preflight` with this many power
     /// iterations, at least 2) is at least one. The message names the largest cell diffusion number `nu dt/dx^2`
@@ -246,6 +252,23 @@ pub struct OuterRecord {
     /// The denominator of the ratio: `first`, or with `outer_scale_window` the windowed maximum (F-550, ADR 0617 S2; NaN when
     /// no ratio was formed).
     pub scale: f64,
+}
+
+/// The velocity change of each outer iteration of one step with `PimpleSettings::outer_velocity_record` (F-885, ADR 0767).
+#[derive(Debug, Clone, PartialEq)]
+pub struct OuterVelocity {
+    /// Step number (1-based).
+    pub step: usize,
+    /// `d_k = max_c |u_k(c) - u_(k-1)(c)|` for the outer iterations `k = 1 ..` the step ran, in that order.
+    pub change: Vec<f64>,
+}
+
+/// The largest Euclidean norm over the cells of `b - a` (F-885, ADR 0767).
+fn max_velocity_change(a: &[Vec3], b: &[Vec3]) -> f64 {
+    a.iter().zip(b).fold(0.0f64, |m, (x, y)| {
+        let (dx, dy, dz) = (y[0] - x[0], y[1] - x[1], y[2] - x[2]);
+        m.max((dx * dx + dy * dy + dz * dz).sqrt())
+    })
 }
 
 /// Every flag of the consistent (SIMPLEC-type) pressure correctors in one value (ADR 0258 V1). `enabled` asks for the correctors
@@ -1049,6 +1072,7 @@ impl PimpleSettings {
             pressure_ic_fallback: false,
             outer_pressure_tolerance: None,
             outer_scale_window: None,
+            outer_velocity_record: false,
             lag_onset_refusal: None,
             rotational_periodic_implicit: false,
             coupled_non_orth: false,
@@ -1274,6 +1298,9 @@ pub struct PimpleSolver {
     /// The outer iterations of every completed step with `PimpleSettings::outer_pressure_tolerance` (F-536, ADR 0458 C2); empty
     /// while it is `None`.
     pub outer_record: Vec<OuterRecord>,
+    /// The velocity change of each outer iteration of every completed step with `PimpleSettings::outer_velocity_record`
+    /// (F-885, ADR 0767); empty while it is `false`.
+    pub outer_velocity: Vec<OuterVelocity>,
     /// F-550 (ADR 0617 S4): the first-iteration pressure changes of the last completed steps (only with the criterion and
     /// `outer_scale_window`).
     outer_firsts: std::collections::VecDeque<f64>,
@@ -1359,6 +1386,7 @@ impl PimpleSolver {
             lag_mode: None,
             start_projected: false,
             outer_record: Vec::new(),
+            outer_velocity: Vec::new(),
             outer_firsts: std::collections::VecDeque::new(),
         }
     }
@@ -1398,6 +1426,7 @@ impl PimpleSolver {
             lag_mode: None,
             start_projected: self.start_projected,
             outer_record: Vec::new(),
+            outer_velocity: Vec::new(),
             outer_firsts: self.outer_firsts.clone(),
         }
     }
@@ -1782,10 +1811,13 @@ impl PimpleSolver {
         let mut outer_ratio = f64::NAN;
         let mut outer_first = 0.0f64;
         let mut outer_scale = 0.0f64;
+        // F-885 (ADR 0767): the velocity change of each outer iteration (only with `outer_velocity_record`)
+        let mut outer_dv: Vec<f64> = Vec::new();
         for outer in 0..s.n_outer {
             let last = outer + 1 == s.n_outer || final_next;
             let (alpha_u, alpha_p) = if last { (1.0, 1.0) } else { (s.alpha_u, s.alpha_p) };
             let p_outer_start = s.outer_pressure_tolerance.map(|_| self.p.values.clone());
+            let u_outer_start = s.outer_velocity_record.then(|| self.u.values.clone());
             if let Some(h) = hook.as_mut() {
                 let up = h(&self.u, &self.phi);
                 self.source_force = up.source_force;
@@ -2486,6 +2518,10 @@ impl PimpleSolver {
                 }
             }
             outer_used = outer + 1;
+            if let Some(u0) = &u_outer_start {
+                // ADR 0767: d_k = max_c |u_k - u_(k-1)|
+                outer_dv.push(max_velocity_change(u0, &self.u.values));
+            }
             if last {
                 break;
             }
@@ -2585,6 +2621,13 @@ impl PimpleSolver {
                     self.outer_firsts.pop_front();
                 }
             }
+        }
+        if s.outer_velocity_record {
+            // ADR 0767: the velocity change of each outer iteration of the step
+            self.outer_velocity.push(OuterVelocity {
+                step: self.step_no,
+                change: outer_dv,
+            });
         }
         let cont = divergence(&g, &self.phi).iter().fold(0.0f64, |a, &b| a.max(b.abs()));
         let area_scale = sf.iter().map(|s| vec3::norm(*s)).fold(0.0, f64::max);
