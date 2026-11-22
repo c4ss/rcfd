@@ -475,3 +475,18 @@ keeps the item partial (question 1, option (b)), the gap is: "Met at 0 to 16 deg
 degrees by a time-accurate run that settles to a steady flow (cl 1.5516 against 1.6057, band 0.0803; ADR 0764). Missing:
 a steady solve that reaches that state at 17 degrees; the SIMPLEC iteration does not converge there (ADR 0760, known
 miss)." `docs/adr/index.md` is not current and is left to the lead.
+
+## The lead's reading (2026-11-22), at the merge
+
+Merged at 52a85317 and pushed at 23031d9a (the report read at 14:07 UTC, 5 minutes of reading, proposed done, written
+partial). Checked by the lead before the merge: the registration is the first commit and alone; the driver commands and
+the case texts are committed before any run and the test file before the record; the branch changes no solver source;
+the known miss of ADR 0760 is untouched. The push script ran the committed mutation and it failed as expected.
+
+Status: written **partial** by the lead, not done as proposed. The registered rule is met: the mean lift at 17 degrees,
+1.5516, is within the unchanged band, settled, with the control at 15 degrees within its tolerance. But the acceptance of
+F-868 names an incompressible steady RANS, and the state was reached by a time-accurate run while the steady iteration
+does not reach it. Whether that meets the acceptance is a reading of its words, so it is put to the maintainer with the
+agent's recommendation (a), which the lead shares: the flow found is steady and attached, and the model and mesh are
+those of the steady arm; the steady route's failure is a separate defect for its own item. On (a) the status becomes done
+and the follow-up of the proposal file is entered.
