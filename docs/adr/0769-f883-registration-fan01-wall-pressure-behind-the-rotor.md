@@ -430,3 +430,19 @@ The same entry is in `docs/roadmap/proposals/0769-F-883.json` (form 1 of ADR 075
 `python scripts/roadmap_proposals.py check`. No follow-up is proposed; question 1 would extend the acceptance of
 F-870. Generated pages not current on this work, left to the lead (rule 9): `docs/adr/index.md` (ADR 0769 is new) and
 `docs/reference-data.md` (the fragment `docs/reference-data.d/0769-F-883.part` is new).
+
+## The lead's reading (2026-11-22), at the merge
+
+Merged at dff83cee (the report read at 18:45 UTC, 4 minutes of reading, proposed done, written done). Checked by the
+lead before the merge: the registration is the first commit and alone, made before the data were fetched; no solver
+source is changed and no solve was run; the 460 MB archive is not committed, only the transcription of the means and the
+scripts that wrote and read it; the reference fragment and the manifest entry are in. The push script ran the committed
+mutation and it failed as expected.
+
+Status: **done**, as proposed: the acceptance asks for the pressure if the record holds one and the share with its band,
+and both are given. The lead reads the result as the agent does: the share of the rotor, 32.26 Pa with a band of
+29.19 Pa, still cannot be told from the installation's by the rule of ADR 0765, and most of the band (21.68 Pa) is the
+solve's. What is new is that the rig's own terms are now measured: the rotor and inlet lose 26.85 Pa where the solve
+loses 62.87 Pa, which points to the simulated loss that F-882 is dividing. The open question, whether the casing
+pressure becomes a compared quantity of F-870, is put to the maintainer with the agent's recommendation (a), which the
+lead shares.

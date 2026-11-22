@@ -992,7 +992,7 @@ exist, and Phase 9 items are stretch. Phase numbers 5 and 6 may run in parallel 
 
 ## Phase 9 - Advanced physics and scale (stretch)
 
-590 items: 260 done, 235 partly done, 95 not started.
+590 items: 261 done, 235 partly done, 94 not started.
 
 - [~] **F-055** Volume-of-fluid free-surface multiphase (interface compression) and surface tension
   - depends on: F-029, F-125
@@ -3629,10 +3629,10 @@ exist, and Phase 9 items are stretch. Phase numbers 5 and 6 may run in parallel 
   - depends on: F-878
   - acceptance: Every limit not stated here is registered in the ADR before the run. The loss of total pressure of the FAN-01 design-point solve between the inlet and the measured plane of ADR 0765 (62.87 Pa on B1, 78.75 Pa on B2, 104.34 Pa on B3) is divided, by a rule registered before the run, into the parts that arise at the blade surfaces, at the hub and casing, in the tip gap and in the interior of the passage, and is recomputed on one mesh finer than B1 that also refines the wall-normal direction; the report states the loss the family extrapolates to with its band and what that leaves of the missing pressure rise of F-870 for the installation by the identity of ADR 0765. A run that does not decide is recorded as not deciding.
   - note: Lead (2026-11-22): entered on the maintainer's answer of that day ("Yes, all six") to question 2 of ADR 0765, with the title, dependencies and acceptance of the agent's proposal file docs/roadmap/proposals/0765-F-878.json as written. Not issued yet. Lead (2026-11-22): issued by docs/adr/briefs/f882-fan01-rotor-loss.md (ADR 0768).
-- [ ] **F-883** FAN-01: a mean static pressure behind the rotor read from the wall-pressure data of the record
+- [x] **F-883** FAN-01: a mean static pressure behind the rotor read from the wall-pressure data of the record
   - depends on: F-878
   - acceptance: Every limit not stated here is registered in the ADR before the reading. The wall-pressure data of the FAN-01 record (Zenodo doi:10.5281/zenodo.23943494, the file named in ADR 0765) are fetched, checksummed and read for a time-mean static pressure on the casing or hub behind the rotor at the design point, with its station, its uncertainty as the record states it, and the page or file it comes from; if one is there, the identity of ADR 0765 is evaluated with it and the rotor's share of the missing pressure rise is stated with its band; if none is there, that is recorded as the result.
-  - note: Lead (2026-11-22): entered on the maintainer's answer of that day ("Yes, all six") to question 2 of ADR 0765, option (c), a short reading beside F-882. Not issued yet. Lead (2026-11-22): issued by docs/adr/briefs/f883-fan01-wall-pressure.md (ADR 0769).
+  - note: Lead (2026-11-22): entered on the maintainer's answer of that day ("Yes, all six") to question 2 of ADR 0765, option (c), a short reading beside F-882. Not issued yet. Lead (2026-11-22): issued by docs/adr/briefs/f883-fan01-wall-pressure.md (ADR 0769). ADR 0769, 2026-11-22, done: the record's wall pressure (mic_kulite.tar, MD5 equal to the record's, checksums in docs/reference-data.d/0769-F-883.part) gives a time-mean casing pressure against the chamber of 113.90 Pa at x = 90 mm (no stated uncertainty), 93.96 Pa +-7.50 Pa over the measured span by the radial equilibrium of the LDA profiles; with it the rotor's share of the missing 52.47 Pa is 32.26 Pa +-29.19 Pa (rig rotor loss 26.85 Pa against 62.87 Pa simulated), so by the rule of ADR 0765 it cannot be told which part is larger; held by crates/rcfd-api/tests/f883_fan01_wall_pressure.rs, three gate tests, five mutations caught. Lead (2026-11-22): merged at dff83cee; done as proposed. Whether the casing pressure becomes a compared quantity of F-870 is the maintainer's (ADR 0769, open question).
 - [ ] **F-884** NACA 0012 at 17 degrees: the steady solver reaches the attached state that the time-accurate run finds
   - depends on: F-868
   - milestones: aerofoil-lift

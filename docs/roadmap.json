@@ -9788,8 +9788,8 @@
     "deps": [
       "F-878"
     ],
-    "status": "todo",
+    "status": "done",
     "acceptance": "Every limit not stated here is registered in the ADR before the reading. The wall-pressure data of the FAN-01 record (Zenodo doi:10.5281/zenodo.23943494, the file named in ADR 0765) are fetched, checksummed and read for a time-mean static pressure on the casing or hub behind the rotor at the design point, with its station, its uncertainty as the record states it, and the page or file it comes from; if one is there, the identity of ADR 0765 is evaluated with it and the rotor's share of the missing pressure rise is stated with its band; if none is there, that is recorded as the result.",
-    "note": "Lead (2026-11-22): entered on the maintainer's answer of that day (\"Yes, all six\") to question 2 of ADR 0765, option (c), a short reading beside F-882. Not issued yet. Lead (2026-11-22): issued by docs/adr/briefs/f883-fan01-wall-pressure.md (ADR 0769)."
+    "note": "Lead (2026-11-22): entered on the maintainer's answer of that day (\"Yes, all six\") to question 2 of ADR 0765, option (c), a short reading beside F-882. Not issued yet. Lead (2026-11-22): issued by docs/adr/briefs/f883-fan01-wall-pressure.md (ADR 0769). ADR 0769, 2026-11-22, done: the record's wall pressure (mic_kulite.tar, MD5 equal to the record's, checksums in docs/reference-data.d/0769-F-883.part) gives a time-mean casing pressure against the chamber of 113.90 Pa at x = 90 mm (no stated uncertainty), 93.96 Pa +-7.50 Pa over the measured span by the radial equilibrium of the LDA profiles; with it the rotor's share of the missing 52.47 Pa is 32.26 Pa +-29.19 Pa (rig rotor loss 26.85 Pa against 62.87 Pa simulated), so by the rule of ADR 0765 it cannot be told which part is larger; held by crates/rcfd-api/tests/f883_fan01_wall_pressure.rs, three gate tests, five mutations caught. Lead (2026-11-22): merged at dff83cee; done as proposed. Whether the casing pressure becomes a compared quantity of F-870 is the maintainer's (ADR 0769, open question)."
   }
 ]
