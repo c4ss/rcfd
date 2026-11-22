@@ -1,0 +1,54 @@
+---
+type: concept
+tags: [turbulence, rans, two-equation]
+sources: [doc-case-schema-turbulence, doc-reference-data-sst-wall, adr-thread-transient-rans, adr-thread-periodic-seam-diffusivity, adr-thread-particle-wall-and-droplets, doc-roadmap-json, adr-thread-early-turbulence, adr-thread-fan01-rotating-solve, ref-menter-1992-nasa-tm-103975, ref-nasa-tmr, ref-davidson-turbulence-notes, adr-thread-fan01-design-point]
+builds_on: [k-omega-wilcox, k-epsilon, sst-blending-functions, bradshaw-assumption-and-sst-limiter, wall-distance]
+created: 2026-11-22
+updated: 2026-11-22
+status: draft
+---
+
+# k-omega SST
+
+Menter's shear-stress-transport two-equation RANS model: k-omega near walls blended to k-epsilon behaviour in the free stream by $F_1$, with the eddy viscosity limited by $\nu_t = \dfrac{a_1 k}{\max(a_1 \omega,\, S F_2)}$. rcfd implements the Menter 2003 form as given by the NASA Turbulence Modeling Resource (`turbulence.model = "k_omega_sst"`) ([[doc-case-schema-turbulence]], [[doc-reference-data-sst-wall]]).
+
+## In short
+
+*(added by p6-turbulence)* SST is an eddy-viscosity RANS model that transports $k$ and $\omega$. It combines two older models, using each where it works: Wilcox's k-omega near walls (robust, no damping functions) and k-epsilon in the outer boundary layer and free stream (no free-stream sensitivity), switched smoothly by a blending function of the wall distance. On top of that it limits the eddy viscosity so that the turbulent shear stress in a boundary layer never exceeds $\rho a_1 k$, which is what "shear-stress transport" refers to and what improves adverse-pressure-gradient and separating flows ([[ref-menter-1992-nasa-tm-103975]], [[ref-nasa-tmr]]).
+
+## What SST adds to its prerequisites
+
+*(added by p6-turbulence)* The chain behind it: [[stress]] and [[viscosity]] give the Newtonian [[shear-stress]] $\mu\, dU/dy$; averaging the [[navier-stokes-equations]] ([[reynolds-averaging]]) adds the unknown [[reynolds-stress]]; the [[boussinesq-eddy-viscosity]] hypothesis models it with one scalar $\nu_t$; [[two-equation-turbulence-models]] compute $\nu_t$ from $k$ and a second variable. SST then adds two things.
+- **Blending (the BSL part).** Wilcox's k-omega results "depend strongly on the freestream values, omega_f", up to "more than 100%" in the eddy viscosity; k-epsilon lacks sensitivity to adverse pressure gradients and needs damping functions near walls. Menter rewrites k-epsilon in k-omega variables (one extra cross-diffusion term) and blends: k-omega times $F_1$ plus k-epsilon times $1 - F_1$, with $F_1$ about 1 over the inner half of the boundary layer and 0 outside ([[ref-menter-1992-nasa-tm-103975]] pp. 2-5; [[sst-blending-functions]]).
+- **Shear-stress limiter (the SST part).** With the Boussinesq relation the shear stress is $\rho \sqrt{P_k/\varepsilon}\, a_1 k$, too large when production exceeds dissipation as in adverse pressure gradients. Bradshaw's assumption $\tau = \rho a_1 k$ is built into $\nu_t = \dfrac{a_1 k}{\max(a_1 \omega,\, \Omega F_2)}$, so "tau does not change more rapidly than rho a1 k"; $F_2$ restricts this to boundary layers ([[ref-menter-1992-nasa-tm-103975]] pp. 6-8; [[bradshaw-assumption-and-sst-limiter]]).
+- **Later forms.** TMR's standard SST (1994) uses $a_1 = 0.31$ and a `CD_kw` term in $F_1$; SST-2003, the form rcfd implements, uses the strain invariant $S$ in the limiter and the production limiter $\min(P,\, 10\,\beta^* \rho\,\omega k)$ in both equations ([[ref-nasa-tmr]] `sst.html`). Davidson's course text summarises the same two "novelties" ([[ref-davidson-turbulence-notes]] sec. 16).
+
+## Builds on
+
+*(added by p6-turbulence)*
+- [[k-omega-wilcox]]: the inner model, its equations and the wall value of $\omega$.
+- [[k-epsilon]]: the outer model, transformed to k-omega form.
+- [[sst-blending-functions]]: $F_1$, $F_2$, the cross-diffusion term and the blended constants.
+- [[bradshaw-assumption-and-sst-limiter]]: the eddy-viscosity limiter and the production limiter.
+- [[wall-distance]]: $d$ in the blending functions.
+
+## How rcfd uses it
+
+- **Constants and wall:** beta* `0.09`, a1 `0.31`, beta1 `0.075`, beta2 `0.0828`; wall omega $10 \cdot 6\nu/(\beta_1 d_1^2)$; production limited to $10\,\beta^* \rho\,\omega k$ ([[doc-reference-data-sst-wall]]). The least accurate range is y+ about 3 to 20; `linearUpwind` for k/omega "diverged in tests" ([[doc-case-schema-turbulence]]).
+- **Validation state (F-043 partial):** flat plate misses White's 5 percent band (`-7.36%` at x = 0.97) though it is `-0.7` percent from the TMR CFL3D value; wall-resolved BFS reattachment SST `6.554` against `6.16` to `6.36` ([[doc-roadmap-json]] via [[roadmap-turbulence]], [[doc-reference-data-sst-wall]]).
+- **Transient (F-286 done):** SST on the outer iterations of `pimple` on a static mesh, one sweep per outer iteration with the momentum's time derivative; BDF2 order `2.0450` from a start that meets the walls (S3'); `piso` is refused ([[adr-thread-transient-rans]]).
+- **Periodic seams:** `turbulence.periodic_seam.diffusivity = "pair"` gives both faces of a seam pair one diffusivity; FAN-01 runs SST, so SST came first (F-295) ([[adr-thread-periodic-seam-diffusivity]]).
+- **Particles:** particle dispersion may read the k-epsilon or SST fields (`particles.dispersion_fields = "turbulence_model"`, F-255) ([[adr-thread-particle-wall-and-droplets]]).
+- **Early checks and the flat-plate diagnosis (added by p3-records-a):** SST and BSL were checked against the CFL3D flat-plate reference in ADR 0015 (B1, B3 met; B2 White curves, B4 y+~1 stability, B5 wall-resolved step missed). After the wave 30C validation missed D1, D3 and the D2 log-law fit, three diagnoses followed: ADR 0063 (no defect; a first-order sensitivity to the published wall-face omega factor 10), ADR 0070 (term-by-term audit of `sst.rs` against TMR, no defect; observed order 0.66) and ADR 0074 (on the TMR nested grids rcfd converges with order 1.07, but lies 0.82 to 0.87 percent below the mean of three incompressible codes, still open) ([[adr-thread-early-turbulence]]).
+- **On the rotating FAN-01 passage (added by p3-records-a):** ADR 0075 fixed the SST relative wall velocity (Galilean-invariance error from 2.88e-1 to 3.65e-10 of U_cl at y+ 30) and ADR 0078 let `k_omega_sst` accept a `moving_wall`; the F-126 attempt 3 ran SST with `upwind`; ADR 0111 found the SST change criterion of the stop rule "NOT A DEFECT" ([[adr-thread-fan01-rotating-solve]]).
+- **Transient SST on the bladed FAN-01 passage (ADR 0766, check H):** SST on `pimple` with 5 outer iterations and BDF2 on B2 ran 5 498 and 10 996 steps (1.43 and 1.26 s per step) without a failure or guard trip; the hub-pocket oscillation decays, but the run does not decide by the registered outer-iteration rule. F-885 adds a record of the velocity change of each outer iteration ([[adr-thread-fan01-design-point]]).
+
+## Related
+
+- [[k-epsilon]], [[spalart-allmaras]], [[rcfd-turb]], [[flat-plate]], [[backward-facing-step]], [[fan-01]], [[roadmap-turbulence]]
+- [[adr-thread-early-turbulence]], [[adr-thread-fan01-rotating-solve]]
+
+## Open questions
+
+- NACA0012, generalised k-omega/EARSM and the low-Re toggle are not done (F-043 gap) ([[roadmap-turbulence]]).
+- The 0.82 to 0.87 percent offset below the TMR mean on the nested grids is open (ADR 0074) ([[adr-thread-early-turbulence]]).
