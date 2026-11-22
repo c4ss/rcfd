@@ -27,10 +27,10 @@ No source was read for F-576. The closed forms below are derived in ADR 0499 (ar
 
 | Item | Status | Source |
 |---|---|---|
-| Stress of a strain ramp `a = r t` on the total Lagrangian cube, `E_xx = a + a^2/2`: `S_xx = E_0 (r G_1 + r^2 G_2)`, `G_1 = w_inf t + sum w_i tau_i (1 - e^{-t/tau_i})`, `G_2 = w_inf t^2/2 + sum w_i tau_i (t - tau_i (1 - e^{-t/tau_i}))`; the error of the update at most `0.6 E_0 r^2 dt^2/8` | derived | ADR 0499 arithmetic 3 (i) |
-| Creep of the standard solid under a stress ramp `sigma = s' t`: `eps = s' (t/E_inf - (1/E_inf - 1/E_0) tau_c (1 - e^{-t/tau_c}))`, `tau_c = tau E_0/E_inf` | derived | ADR 0499 arithmetic 3 (ii) |
+| Stress of a strain ramp $a = r t$ on the total Lagrangian cube, $E_{xx} = a + a^2/2$: $S_{xx} = E_0 (r G_1 + r^2 G_2)$, $G_1 = w_{\infty} t + \sum w_i \tau_i (1 - e^{-t/\tau_i})$, $G_2 = w_{\infty} t^2/2 + \sum w_i \tau_i (t - \tau_i (1 - e^{-t/\tau_i}))$; the error of the update at most $0.6 E_0 r^2 dt^2/8$ | derived | ADR 0499 arithmetic 3 (i) |
+| Creep of the standard solid under a stress ramp $\sigma = s' t$: $\varepsilon = s' (t/E_{\infty} - (1/E_{\infty} - 1/E_0) \tau_c (1 - e^{-t/\tau_c}))$, $\tau_c = \tau E_0/E_{\infty}$ | derived | ADR 0499 arithmetic 3 (ii) |
 | Relative residual of one Newton correction of the homogeneous stretch of one Hex8 under a load ramp (the halving set-up): `2.130e-2` for the step `[0, 1] s`, `1.000e-2` and `6.318e-3` for its halves | computed | ADR 0499 arithmetic 4 (`probe_h1.py`) |
-| A uniform temperature `T` with a shift `a_T` equals the reference temperature with every relaxation time `a_T tau_i` (the reduced time `dxi = dt/a_T`) | derived | ADR 0499 arithmetic 5; ADR 0485 arithmetic 4 |
+| A uniform temperature $T$ with a shift $a_T$ equals the reference temperature with every relaxation time $a_T \tau_i$ (the reduced time $d\xi = dt/a_T$) | derived | ADR 0499 arithmetic 5; ADR 0485 arithmetic 4 |
 
 
 ## Contradictions with the wiki

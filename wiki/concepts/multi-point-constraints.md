@@ -34,6 +34,6 @@ Sometimes nodal displacements must obey extra equations: two nodes move together
 
 ## How rcfd uses it
 
-- Linear MPCs, rigid sets with a reference point and elastic supports by the transformation `x = T q + g` in `rcfd_fem::mpc` (F-393, ADR 0296): the master-slave route; the ADRs call it "the transformation path" ([[mpc-transformation]]; [[adr-thread-structural-modal-buckling-cyclic]]).
-- The $k = 0$ rows of [[cyclic-symmetry]], `u_H = R u_L`, are rows of that transformation (ADR 0386) ([[adr-thread-structural-modal-buckling-cyclic]]).
+- Linear MPCs, rigid sets with a reference point and elastic supports by the transformation $x = T q + g$ in `rcfd_fem::mpc` (F-393, ADR 0296): the master-slave route; the ADRs call it "the transformation path" ([[mpc-transformation]]; [[adr-thread-structural-modal-buckling-cyclic]]).
+- The $k = 0$ rows of [[cyclic-symmetry]], $u_H = R u_L$, are rows of that transformation (ADR 0386) ([[adr-thread-structural-modal-buckling-cyclic]]).
 - Tied non-matching meshes and beam/shell joints to solids (F-426, F-543) ([[adr-thread-structural-beams-shells]]); frictionless contact by an augmented Lagrangian with Uzawa updates (F-427) ([[adr-thread-structural-contact]]).

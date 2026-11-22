@@ -25,11 +25,11 @@ The section text follows verbatim so that every value, citation and verification
 
 | Item | Status | Note |
 |------|--------|------|
-| Oldroyd-B start-up `tau_xy = eta_p gdot (1 - e^{-t/lambda})`, N1 start-up | derived | from the constitutive ODE |
-| Uniaxial extension `C_zz = 1/(1 - 2 Wi_e)`, linear growth at `Wi_e = 0.5` | derived | |
-| Steady shear: PTT `Y^2 (Y-1) = 2 eps Wi^2`, FENE-P `L2 f^2 (f-1) = 2 Wi^2`, Giesekus implicit form in `f = -A_yy` | derived | checked against the ODE to 1e-12 |
+| Oldroyd-B start-up $\tau_{xy} = \eta_p \dot{\gamma} (1 - e^{-t/\lambda})$, N1 start-up | derived | from the constitutive ODE |
+| Uniaxial extension $C_{zz} = 1/(1 - 2 \mathrm{Wi}_e)$, linear growth at $\mathrm{Wi}_e = 0.5$ | derived | |
+| Steady shear: PTT $Y^2 (Y-1) = 2 \varepsilon \mathrm{Wi}^2$, FENE-P $L^2 f^2 (f-1) = 2 \mathrm{Wi}^2$, Giesekus implicit form in $f = -A_{yy}$ | derived | checked against the ODE to 1e-12 |
 | Giesekus closed form as recalled from the literature (chi form) | unverified, found wrong | 5.1e-3 relative error at Wi = 0.1; kept only as an ignored `known_miss` test |
-| FENE-P normalisation `f = (L2-3)/(L2-tr C)`, tau = G(fC - I) | unverified | recalled |
+| FENE-P normalisation $f = (L^2-3)/(L^2-\operatorname{tr} C)$, tau = G(fC - I) | unverified | recalled |
 | Log-conformation (matrix logarithm) transport, divided-difference form | derived | chain rule of the matrix logarithm |
 | Poiseuille start-up modal series (Oldroyd-B) | derived | cross-checked against an independent 1-D PDE solve in the test |
 | PLOAD4, TEMP field layouts | verified | pyNastran documentation pages |

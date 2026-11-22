@@ -69,16 +69,22 @@ Start every page from the matching file in `templates/`.
 9. Append the log entry: `## [date] ingest | <source title>` + bullet list of pages touched.
 
 ### Query — "wiki: <question>"
-1. Read `index.md`, then the relevant pages; fall back to sources/raw only to fill gaps.
+1. Read `index.md`, and run `python tools/search.py search "<question>"` (local hybrid keyword + embedding search; needs Ollama running) for pages the index lines don't name. Then read the relevant pages; fall back to sources/raw only to fill gaps.
 2. Answer with citations to wiki pages (`[[...]]`) and, where useful, repo files.
 3. If the answer is worth keeping (new synthesis, comparison, non-trivial lookup), file it as `analyses/<name>.md`, link it from the pages it draws on, add it to `index.md`.
 4. Append `## [date] query | <question>` noting whether it was filed.
 
 ### Lint — "lint the wiki"
-1. Run `python tools/unwrap.py`, then `python tools/lint.py` (from `wiki/`): broken links, orphans, pages missing from the index, missing frontmatter, stale `updated` dates.
-2. Then the judgement pass the script can't do: contradictions between pages, claims superseded by newer ADRs/sources, concepts mentioned in 3+ pages without their own page, missing cross-links, gaps worth a new source.
-3. Fix what's mechanical; list the rest for the human with suggested sources/questions.
-4. Append `## [date] lint | <summary>`.
+1. Run `python tools/unwrap.py`, then `python tools/lint.py` (from `wiki/`): broken links, orphans, pages missing from the index, missing frontmatter, stale `updated` dates, math left in backticks.
+2. Refresh the three generated reports (each rewrites only its block between markers):
+   - `python tools/stale.py --write` → [[stale-report]]: source pages whose repo origin (file, section or ADR) changed since their `origin_commit`, the pages citing them, new ADRs and new doc sections without a page. Staleness by provenance, not by date.
+   - `python tools/build_gaps.py` → [[open-gaps]]: the "Not ingested" and "Contradictions" lists of every job handoff, kept in git.
+   - `python tools/search.py report` → [[related-candidates]]: very similar pages that don't link each other, overlapping concepts, similar pages with disjoint sources (needs Ollama).
+3. Then the judgement pass the scripts can't do, starting from those reports: contradictions between pages, claims superseded by newer ADRs/sources, concepts mentioned in 3+ pages without their own page, missing cross-links, gaps worth a new source.
+4. Fix what's mechanical; list the rest for the human with suggested sources/questions.
+5. Append `## [date] lint | <summary>`.
+
+When re-ingesting a repo source after [[stale-report]] lists it, update the page and set its `origin_commit` to the commit read, so the next report starts from there.
 
 ## Obsidian setup notes
 

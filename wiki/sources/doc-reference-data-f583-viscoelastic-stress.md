@@ -27,8 +27,8 @@ No source was read for F-583. Every formula used is derived in ADR 0494 (arithme
 
 | Item | Status | Source |
 |---|---|---|
-| Split stress of the isotropic viscoelastic solid, `sigma* = (G*/G_0) dev sigma_0 + (K*/K_0) vol sigma_0`, `sigma_0` the elastic stress of the base (`dev sigma_0 = 2 G_0 dev eps*`, `vol sigma_0 = K_0 tr eps* 1`); for equal weights `(E*/E_0) sigma_0` | derived | ADR 0494 arithmetic 1 (the correspondence principle as in ADR 0491 arithmetic 1) |
-| Stress of the rods of ADR 0491 with the lateral motion held: `sigma_xx = (K* + 4 G*/3) eps`, `sigma_yy = sigma_zz = (K* - 2 G*/3) eps` (axial), `sigma_xy = G* gamma` (shear) | derived | ADR 0494 arithmetic 2 |
+| Split stress of the isotropic viscoelastic solid, $\sigma^{*} = (G^{*}/G_0) \operatorname{dev} \sigma_0 + (K^{*}/K_0) \operatorname{vol} \sigma_0$, $\sigma_0$ the elastic stress of the base ($\operatorname{dev} \sigma_0 = 2 G_0 \operatorname{dev} \varepsilon^{*}$, $\operatorname{vol} \sigma_0 = K_0 \operatorname{tr} \varepsilon^{*} 1$); for equal weights $(E^{*}/E_0) \sigma_0$ | derived | ADR 0494 arithmetic 1 (the correspondence principle as in ADR 0491 arithmetic 1) |
+| Stress of the rods of ADR 0491 with the lateral motion held: $\sigma_{xx} = (K^{*} + 4 G^{*}/3) \varepsilon$, $\sigma_{yy} = \sigma_{zz} = (K^{*} - 2 G^{*}/3) \varepsilon$ (axial), $\sigma_{xy} = G^{*} \gamma$ (shear) | derived | ADR 0494 arithmetic 2 |
 
 
 ## Contradictions with the wiki

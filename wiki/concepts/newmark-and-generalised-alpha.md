@@ -37,6 +37,6 @@ To step $\mathbf M\ddot{\mathbf U} + \mathbf C\dot{\mathbf U} + \mathbf K\mathbf
 
 ## How rcfd uses it
 
-- `transient::Integrator` with Newmark and generalised-alpha (F-398, ADR 0389), partial on clause A8, the generalised-alpha decay at `omega dt = 1e3` (ADR 0389 Q1 open) ([[adr-thread-structural-dynamics-harmonic]]).
+- `transient::Integrator` with Newmark and generalised-alpha (F-398, ADR 0389), partial on clause A8, the generalised-alpha decay at $\omega \, dt = 10^{3}$ (ADR 0389 Q1 open) ([[adr-thread-structural-dynamics-harmonic]]).
 - Nonlinear transient: Newton inside Newmark and generalised-alpha (F-423, ADR 0479, partial: a free spinning bar's momentum check missed by "the trapezoidal rule's nonlinear instability"); the Simo-Tarnow energy-momentum step (F-570, ADR 0514) ([[adr-thread-structural-materials-nonlinear]]).
 - The dynamic co-simulation participant `DynamicSolid` ([[doc-cosimulation-protocol]]; [[cosimulation-protocol]]).

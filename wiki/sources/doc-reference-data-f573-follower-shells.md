@@ -27,10 +27,10 @@ No source was read for F-573. Every formula used is derived in ADR 0487 (arithme
 
 | Item | Status | Source |
 |---|---|---|
-| Follower shell pressure on the interpolated current mid-surface `f_a = +p int N_a (x_u x x_v) du dv` (translations, no moments) and its load stiffness `K_(ai)(bj) = p int N_a [N_b,u (e_j x x_v) + N_b,v (x_u x e_j)]_i`; the solid face arithmetic of ADR 0480 with the pressure negated | derived | virtual work of the pressure on the current surface, ADR 0487 arithmetic 1 and 2 (the linearisation as in ADR 0480 arithmetic 1) |
-| Vector area of a bilinear quad `(1/2)(x_2 - x_0) x (x_3 - x_1)`, equal to that of its projected facet: the resultants of the follower and the dead shell pressure agree on a warped Shell4 | derived | ADR 0487 arithmetic 5 |
-| Cylinder of `N` facets at the stretch `lambda`: `sum f . e_r = p N lambda R L sin(2 pi/N)` (follower), `p N R L sin(2 pi/N)` (dead); the hoop tension `p lambda R cos(pi/N)` and, with an SVK membrane of `nu = 0`, `p = E t (lambda^2 - 1)/(2 R cos(pi/N))` | derived | node balance of the facet polygon, ADR 0487 arithmetic 6 |
-| Ring buckling of shells under external pressure: `3 E I/R^3` with the load stiffness (hydrostatic), `4 E I/R^3` without (fixed-direction forces), `n = 2` | derived | ADR 0480 arithmetic 3 re-used (ADR 0487 arithmetic 7) |
+| Follower shell pressure on the interpolated current mid-surface $f_a = +p \int N_a (x_u \times x_v) du dv$ (translations, no moments) and its load stiffness $K_{(ai)(bj)} = p \int N_a [N_{b,u} (e_j \times x_v) + N_{b,v} (x_u \times e_j)]_i$; the solid face arithmetic of ADR 0480 with the pressure negated | derived | virtual work of the pressure on the current surface, ADR 0487 arithmetic 1 and 2 (the linearisation as in ADR 0480 arithmetic 1) |
+| Vector area of a bilinear quad $(1/2)(x_2 - x_0) \times (x_3 - x_1)$, equal to that of its projected facet: the resultants of the follower and the dead shell pressure agree on a warped Shell4 | derived | ADR 0487 arithmetic 5 |
+| Cylinder of $N$ facets at the stretch $\lambda$: $\sum f \cdot e_r = p N \lambda R L \sin(2 \pi/N)$ (follower), $p N R L \sin(2 \pi/N)$ (dead); the hoop tension $p \lambda R \cos(\pi/N)$ and, with an SVK membrane of $\nu = 0$, $p = E t (\lambda^2 - 1)/(2 R \cos(\pi/N))$ | derived | node balance of the facet polygon, ADR 0487 arithmetic 6 |
+| Ring buckling of shells under external pressure: $3 E I/R^3$ with the load stiffness (hydrostatic), $4 E I/R^3$ without (fixed-direction forces), $n = 2$ | derived | ADR 0480 arithmetic 3 re-used (ADR 0487 arithmetic 7) |
 
 ## Contradictions with the wiki
 

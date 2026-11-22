@@ -27,10 +27,10 @@ No source was read for F-673. Every reference is derived in ADR 0597 (D2, D3, D5
 
 | Item | Status | Source |
 |---|---|---|
-| Kinetic energy of a section with the shear centre at `(0, z_0)` from the centroid, in shear-centre unknowns: `(1/2) int (rho A (v_s + z_0 phi)_t^2 + rho I_z v_s,t'^2 + rho I_p phi_t^2) dx`, `I_p = I_y + I_z` about the centroid (the coupling `rho A z_0 v_s phi`), no warping inertia | derived | ADR 0597 D2 |
-| Rayleigh-Ritz frequencies, forks, `L = 3`, the ADR 0553 monosymmetric I, downward UDL `0.5 lambda_ref q_ref` (sine series `N = 81`, converged to `<= 4.3e-9` from `N = 41`): `omega = 166.799139498357` (shear centre), `161.354294924654` (centroid), `168.883949617271` rad/s (flange 1); unloaded `omega_0^2 = 2.338537032326e4`; without the coupling the frequencies are about `20 %` lower | computed | ADR 0597 D3, arithmetic 3 |
-| Coupled Timoshenko-Rayleigh pinned frequency, mode 1, `kappa = 5/6`: `omega_T = 152.755814868645` rad/s | derived (3 x 3 frequency equation of `v_s = sin`, `theta_z = cos`, `phi = sin`) | ADR 0597 D5 |
-| Measured, 16 elements: `prestressed_modes` `2.26e-3` below the references; the unloaded `omega_0` `5.2e-4` above `omega_T` (the mass interpolates the centroid translation from `(v_c, theta_z)`, an `O(l^2)` error: `1.3e-4` at 32, `3.2e-5` at 64 elements) | computed | ADR 0597 addendum 1 |
+| Kinetic energy of a section with the shear centre at $(0, z_0)$ from the centroid, in shear-centre unknowns: $(1/2) \int (\rho A (v_s + z_0 \phi)_t^2 + \rho I_z v_{s,t}'^2 + \rho I_p \phi_t^2) dx$, $I_p = I_y + I_z$ about the centroid (the coupling $\rho A z_0 v_s \phi$), no warping inertia | derived | ADR 0597 D2 |
+| Rayleigh-Ritz frequencies, forks, $L = 3$, the ADR 0553 monosymmetric I, downward UDL $0.5 \lambda_{\mathrm{ref}} q_{\mathrm{ref}}$ (sine series $N = 81$, converged to $\le 4.3 \times 10^{-9}$ from $N = 41$): $\omega = 166.799139498357$ (shear centre), `161.354294924654` (centroid), `168.883949617271` rad/s (flange 1); unloaded $\omega_0^2 = 2.338537032326 \times 10^{4}$; without the coupling the frequencies are about `20 %` lower | computed | ADR 0597 D3, arithmetic 3 |
+| Coupled Timoshenko-Rayleigh pinned frequency, mode 1, $\kappa = 5/6$: $\omega_T = 152.755814868645$ rad/s | derived (3 x 3 frequency equation of $v_s = \sin$, $\theta_z = \cos$, $\phi = \sin$) | ADR 0597 D5 |
+| Measured, 16 elements: `prestressed_modes` `2.26e-3` below the references; the unloaded $\omega_0$ `5.2e-4` above $\omega_T$ (the mass interpolates the centroid translation from $(v_c, \theta_z)$, an $O(l^2)$ error: `1.3e-4` at 32, `3.2e-5` at 64 elements) | computed | ADR 0597 addendum 1 |
 
 
 ## Contradictions with the wiki

@@ -25,7 +25,7 @@ The section text follows verbatim so that every value, citation and verification
 
 | Quantity | Source | Value and use |
 |---|---|---|
-| Peak hoop stress at the hole edge of the ADR 0478 two-layer Hex20 plate (`r/W = 0.05`, length equal to width), per remote stress | computed in this repository, not a published value: the uniformly graded meshes of 24, 48 and 96 cells along the hole in ADR 0627 | `K_96 = 3.03697`; mesh error about 1.5e-5 relative. It is 1.23 percent above Kirsch's `3 sigma_0` (finite plate). The finite-width forms recorded above (Howland/Peterson, from memory, not read) bracket it but are not its source. Recorded on the maintainer's standing instruction (ADR 0627 Q5). |
+| Peak hoop stress at the hole edge of the ADR 0478 two-layer Hex20 plate ($r/W = 0.05$, length equal to width), per remote stress | computed in this repository, not a published value: the uniformly graded meshes of 24, 48 and 96 cells along the hole in ADR 0627 | $K_{96} = 3.03697$; mesh error about 1.5e-5 relative. It is 1.23 percent above Kirsch's $3 \sigma_0$ (finite plate). The finite-width forms recorded above (Howland/Peterson, from memory, not read) bracket it but are not its source. Recorded on the maintainer's standing instruction (ADR 0627 Q5). |
 
 
 ## Contradictions with the wiki

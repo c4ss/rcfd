@@ -19,7 +19,7 @@ Structural elements of [[rcfd-fem]] with six unknowns per node: the shear-flexib
 ## Current state
 
 - **Beam2** is in: six unknowns per node in the DofMap, nodal moments and moment reactions, exact prismatic Timoshenko stiffness (F-391, ADR 0417, done; a mesh without beams keeps `DofMap::uniform(n, 3)`, so `baseline_hashes` are unchanged). Line and gravity loads (F-514, ADR 0422, partial: one defective reference amended); output as VTK line cells (F-512, ADR 0423, partial: MU7 caught only by a check added after the run); on the transformation (F-513, ADR 0426, partial: MU7); entry and output refusals (F-518, ADR 0429; F-516, ADR 0430; done).
-- **Shell4** (F-392, ADR 0432, done): bilinear membrane, Reissner-Mindlin bending with MITC4 shear, drilling penalty `alpha G t (theta_z - omega)^2` with `alpha = 1e-3`, rigid offsets for warped nodes (warp ratio above 0.05 refused). On the transformation and with body loads (F-522, ADR 0435, done), VTK output (F-521, ADR 0437, done), the rotating plane-stress disc (F-524, ADR 0439, done), nodal body force and thermal loads (F-525, ADR 0445, partial: rounding rigid rotation 2.1e-10 against 1e-12).
+- **Shell4** (F-392, ADR 0432, done): bilinear membrane, Reissner-Mindlin bending with MITC4 shear, drilling penalty $\alpha G t (\theta_z - \omega)^2$ with $\alpha = 10^{-3}$, rigid offsets for warped nodes (warp ratio above 0.05 refused). On the transformation and with body loads (F-522, ADR 0435, done), VTK output (F-521, ADR 0437, done), the rotating plane-stress disc (F-524, ADR 0439, done), nodal body force and thermal loads (F-525, ADR 0445, partial: rounding rigid rotation 2.1e-10 against 1e-12).
 - **Shell3** (F-419, ADR 0454, partial): CST membrane, MITC3 with Lyly-Stenberg-Vihinen stabilisation (alpha 0.1); pressure on curved facet meshes by an opt-in angle-weighted split (F-540, ADR 0461, done). Drilling membranes by ANDES OPT: Shell3 (F-539, ADR 0466, partial: mixed Shell3 + Shell4 patch test misses 2.1e-1, so mixed meshes are refused) and Shell4 (F-549, ADR 0470, done, lifting that refusal for ANDES edges).
 - **Stress stiffening of beams and shells** (F-420, ADR 0473, partial: Shell3 twisted strip 4.05e-2 against 4 percent, diagnosed by F-556, ADR 0483, as Shell3 rest stiffness); pre-stress on mixed solid + structural models (F-557, ADR 0486, partial); beam moment, shear and Wagner terms (F-558, ADR 0508, partial: I-section lateral-torsional buckling -19.2 percent, needs a warping unknown, follow-up F-598).
 - **Nonlinear shells:** follower pressure on shells (F-573, ADR 0487, partial, its cylinder clause met by F-578); corotational facets in the Newton driver (F-578, ADR 0490, partial: a library defect fixed by amendment 2 after run 1).
@@ -54,7 +54,7 @@ Structural elements of [[rcfd-fem]] with six unknowns per node: the shear-flexib
 | [0490](../../docs/adr/0490-f578-registration-corotational-shells-newton-driver.md) | 2026-11-14 | registration | F-578 | Geometrically nonlinear shells (corotational facets) | partial; library defect fixed by amendment 2 | (F-585, other half) |
 | [0496](../../docs/adr/0496-f428-registration-laminated-shell-layup-ply-stresses-failure.md) | 2026-11-14 | registration | F-428 | Laminated Shell4, ply stresses, failure criteria | done | |
 | [0502](../../docs/adr/0502-f591-registration-laminated-shell-body-loads-and-prestress.md) | 2026-11-14 | registration | F-591 | Laminated Shell4 under body loads and pre-stress | done | |
-| [0508](../../docs/adr/0508-f558-registration-beam-moment-shear-wagner-and-shell-rotation-geometric-terms.md) | 2026-11-14 | registration | F-558 | Beam moment, shear, Wagner terms; shell `t^2/12` rotation terms | partial; I-section LTB -19.2 percent | (F-598, other half) |
+| [0508](../../docs/adr/0508-f558-registration-beam-moment-shear-wagner-and-shell-rotation-geometric-terms.md) | 2026-11-14 | registration | F-558 | Beam moment, shear, Wagner terms; shell $t^2/12$ rotation terms | partial; I-section LTB -19.2 percent | (F-598, other half) |
 
 ## Key numbers and limits
 
@@ -79,10 +79,10 @@ The warping Beam2 chain (F-598 onward) is on its own page, [[adr-thread-structur
 
 ### Current state (second half)
 
-- **Corotated shells in arc length and the nonlinear transient** (F-585, ADR 0522, partial): `arclength::trace`, `solve_from` and the nonlinear transient take Shell4 and Shell3, with a constant consistent shell mass including the rotary inertia `rho t^3/12`; the hinged roof missed A1 (`2.53e-2`) and A1p (`2.61e-2`) against a solid reference with a singular hinge. The published reference closed it: Shell4 `1.8e-3` and Shell3 `2.3e-3` below the limit load of Sze, Liu and Lo (2004), Table 9a, `2226.3 N` (F-610, ADR 0716, done; "the paper itself read"). ADR 0716 Q2 leaves to the lead whether F-585 moves to done; the roadmap lists F-585 partial at the snapshot.
+- **Corotated shells in arc length and the nonlinear transient** (F-585, ADR 0522, partial): `arclength::trace`, `solve_from` and the nonlinear transient take Shell4 and Shell3, with a constant consistent shell mass including the rotary inertia $\rho t^3/12$; the hinged roof missed A1 (`2.53e-2`) and A1p (`2.61e-2`) against a solid reference with a singular hinge. The published reference closed it: Shell4 `1.8e-3` and Shell3 `2.3e-3` below the limit load of Sze, Liu and Lo (2004), Table 9a, `2226.3 N` (F-610, ADR 0716, done; "the paper itself read"). ADR 0716 Q2 leaves to the lead whether F-585 moves to done; the roadmap lists F-585 partial at the snapshot.
 - **Shell3 on the remaining paths** (F-541, ADR 0545, partial): no path takes Shell4 and refuses Shell3; three rows (multigrid, `check_supported()`, cyclic) stayed refused for both, then opened by F-629/F-641 (multigrid) and F-628 (cyclic).
 - **Warped Shell3 meshes:** an opt-in model check of the constant-strain Shell3 membrane (largest angle between facet normals, threshold `0.4` degrees, the message names the ANDES membrane of ADR 0466) (F-574, ADR 0537, done).
-- **Shell pressure on curved unstructured meshes.** The angle-weighted pressure on an unstructured sphere octant converges at order `2.07`, `2.06` with radial error `8.0e-3` at `n = 128` (F-546, ADR 0550, done); the error is `~ c h^2/(R t)`, a bending response to the nodal unevenness of the load, documented in `docs/structural-solver.md` (F-634, ADR 0562, done). An opt-in `Load::shell_pressure_curvature` (Shell3, quadric fit on each node's k-ring) is exact for the uniform membrane state (F-633, ADR 0567, partial: S1 met only after amendment 1), and a boundary jet estimator `CurvatureBoundary::Jet` extends it to a non-quadric torus segment (F-656, ADR 0579, partial: the diff-scope check B4 missed as worded).
+- **Shell pressure on curved unstructured meshes.** The angle-weighted pressure on an unstructured sphere octant converges at order `2.07`, `2.06` with radial error `8.0e-3` at $n = 128$ (F-546, ADR 0550, done); the error is $\sim c h^2/(R t)$, a bending response to the nodal unevenness of the load, documented in `docs/structural-solver.md` (F-634, ADR 0562, done). An opt-in `Load::shell_pressure_curvature` (Shell3, quadric fit on each node's k-ring) is exact for the uniform membrane state (F-633, ADR 0567, partial: S1 met only after amendment 1), and a boundary jet estimator `CurvatureBoundary::Jet` extends it to a non-quadric torus segment (F-656, ADR 0579, partial: the diff-scope check B4 missed as worded).
 
 ### ADRs (second half)
 
@@ -99,13 +99,13 @@ The warping Beam2 chain (F-598 onward) is on its own page, [[adr-thread-structur
 
 ### Key numbers and limits (second half)
 
-- Hinged cylindrical roof (`R 2540`, edges `508`, `0.1 rad`, `t 12.7`, `E 3102.75`, `nu 0.3`): published limit load `2226.3 N`; Shell4 `1.8e-3`, Shell3 `2.3e-3` below it at `16 x 16`, within `3.3e-3` at `8 x 8`; the Hex20 sequence `-2.64e-2` at `n = 16` (ADR 0716).
-- Sphere octant (`R = 1`, `t = 0.01`): errors `1.40e-1`, `3.33e-2`, `7.99e-3` at `n = 32, 64, 128`; 2 % needs `n = 128` at `t/R = 0.01` (ADR 0550, ADR 0562).
+- Hinged cylindrical roof (`R 2540`, edges `508`, `0.1 rad`, `t 12.7`, `E 3102.75`, `nu 0.3`): published limit load `2226.3 N`; Shell4 `1.8e-3`, Shell3 `2.3e-3` below it at `16 x 16`, within `3.3e-3` at `8 x 8`; the Hex20 sequence `-2.64e-2` at $n = 16$ (ADR 0716).
+- Sphere octant ($R = 1$, $t = 0.01$): errors `1.40e-1`, `3.33e-2`, `7.99e-3` at $n = 32, 64, 128$; 2 % needs $n = 128$ at $t/R = 0.01$ (ADR 0550, ADR 0562).
 - Curvature pressure: A1 `3.0e-14`, A2 `7.8e-14`, A3 `2.0e-10` (ADR 0567); torus segment `4.1e-4` and `5.3e-4` (orders `2.5`, `1.8`) with the boundary estimator, `3.7e-3` and `2.1e-3` with the ADR 0567 load (ADR 0579).
 
 ### Open questions (second half)
 
-- The thin roof `t = 6.35` with snap-back against the paper's table (ADR 0716 Q1): recommended as a follow-up.
+- The thin roof $t = 6.35$ with snap-back against the paper's table (ADR 0716 Q1): recommended as a follow-up.
 - Whether F-585 moves to done on the strength of ADR 0716 (ADR 0716 Q2): the lead's call.
 - Shell case-file key for corotated shells (ADR 0522 Q3) and for the Shell3 warp check (ADR 0537 Q1): open, schema golden.
 - The `0.4` degree threshold rests on one geometry; a second family is recommended before wider use (ADR 0537 Q2).

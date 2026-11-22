@@ -18,7 +18,7 @@ Frictionless contact in [[rcfd-fem]]: node-to-surface contact with an augmented 
 
 ## Current state
 
-- `contact.rs` (F-427, ADR 0507): frictionless node-to-surface contact on bilinear Hex8 target faces or a rigid plane, closest-point projection with the exact gap gradient and second derivative, a per-node augmented Lagrangian force `max(0, lambda - eps A g)` with Uzawa updates, a linear-body Newton driver (sparse `L D L^T`, `eps G G^T` on a refused pivot) and a total Lagrangian body. **Partial**: the uniform shaft stress of the interference fit missed (7.0e-3 against 1e-6) and the punch residual order missed (least 0.17 against 1.8).
+- `contact.rs` (F-427, ADR 0507): frictionless node-to-surface contact on bilinear Hex8 target faces or a rigid plane, closest-point projection with the exact gap gradient and second derivative, a per-node augmented Lagrangian force $\max(0, \lambda - \varepsilon A g)$ with Uzawa updates, a linear-body Newton driver (sparse $L D L^T$, $\varepsilon G G^T$ on a refused pivot) and a total Lagrangian body. **Partial**: the uniform shaft stress of the interference fit missed (7.0e-3 against 1e-6) and the punch residual order missed (least 0.17 against 1.8).
 - F-599 (ADR 0513) explains the through-thickness variation of the interference-fit contact pressure and re-registers I3 as met (done). F-604 (ADR 0517, press fit of a finite hub on a longer shaft, edge pressure peak, bore-cell rule) is partial: the plane-strain clause misses at 8.6e-2 against 2e-2, as derived before the run.
 - "No [contact] case-file table exists, and the maintainer must decide on it" (F-427 gap, [[roadmap-structural-solver]]).
 
@@ -44,7 +44,7 @@ Frictionless contact in [[rcfd-fem]]: node-to-surface contact with an augmented 
 
 ### Current state (second half)
 
-- **Newton order on short contact solves** (F-600, ADR 0519, done): on the total Lagrangian punch of ADR 0507 T2 every pair of consecutive residuals of one Newton solve whose correction did not change the active set satisfies `r_{k+1} <= max(10 r_k^2, 1e-12)`; T2 stays an ignored record.
+- **Newton order on short contact solves** (F-600, ADR 0519, done): on the total Lagrangian punch of ADR 0507 T2 every pair of consecutive residuals of one Newton solve whose correction did not change the active set satisfies $r_{k+1} \le \max(10 r_k^2, 10^{-12})$; T2 stays an ignored record.
 - **Search, targets and quadratic faces** (F-601, ADR 0540, partial): a bucket search, rigid cylinder and sphere targets, Hex20 and Tet faces; the Hertz checks HS20 and HS10 with quadratic contactors on curved targets are known misses (over-constraint of point-wise gaps).
 - **Mortar contactor** for Hex20 and Tet10 faces, `ContactOptions::quadratic_contactor(QuadraticContactor::Mortar)` (F-623, ADR 0551, partial): patch tests PT10 and PT20 within `6e-14`; HS20m/HS10m (contact radius) and HS20t/HS10t (total Lagrangian solve) known misses. The pressure recovery `ContactSet::recovered_tractions` meets HS20r and HS10r (F-638, ADR 0571, done). The opt-in curvature-free fallback tangent of the total Lagrangian body (`ContactOptions::curvature_fallback`, F-639, ADR 0570, done).
 - **Lifted contactor and line search** (F-608, ADR 0607, done): the refused pivot is diagnosed (the first correction throws the lifted half 33 to 71 gaps into the plate); "the convergence comes from the line search; the convexified tangent of the title (ADR 0570) is switched on in L1 but never taken". On the other total Lagrangian cases (F-684, ADR 0615, done) the line search solves the T2 punch and both Hertz cases on its own, the fallback solves the ADR 0542 hub P on its own; no case needs both and none gets worse with both.
@@ -55,7 +55,7 @@ Frictionless contact in [[rcfd-fem]]: node-to-surface contact with an augmented 
 
 | ADR | Date | Kind | Item | Question | Outcome | Superseded by / followed by |
 |---|---|---|---|---|---|---|
-| [ADR 0519](../../docs/adr/0519-f600-registration-contact-newton-order-reading-for-short-solves.md) | 2026-11-14 | registration | F-600 (done) | Contact Newton order reading for short solves on the TL punch of ADR 0507 T2 | done: `r_{k+1} <= max(10 r_k^2, 1e-12)` met on every solve; T2 stays an ignored record | — |
+| [ADR 0519](../../docs/adr/0519-f600-registration-contact-newton-order-reading-for-short-solves.md) | 2026-11-14 | registration | F-600 (done) | Contact Newton order reading for short solves on the TL punch of ADR 0507 T2 | done: $r_{k+1} \le \max(10 r_k^2, 10^{-12})$ met on every solve; T2 stays an ignored record | — |
 | [ADR 0540](../../docs/adr/0540-f601-registration-contact-search-rigid-cylinder-and-sphere-targets-hex20-and-tet-faces.md) | 2026-11-15 | registration | F-601 (partial) | Bucket search, rigid cylinder/sphere targets, Hex20 and Tet faces | partial: HS20, HS10 known misses | ADR 0551 |
 | [ADR 0551](../../docs/adr/0551-f623-registration-mortar-contactor-for-quadratic-faces.md) | 2026-11-15 | registration | F-623 (partial) | Mortar contactor for Hex20 and Tet10 faces | partial: HS20m/HS10m, HS20t/HS10t known misses | ADR 0570, ADR 0571 |
 | [ADR 0570](../../docs/adr/0570-f639-registration-curvature-free-fallback-of-the-total-lagrangian-contact-body.md) | 2026-11-15 | registration | F-639 (done) | Curvature-free fallback tangent of the TL contact body | done (opt-in) | ADR 0607, ADR 0615 |
@@ -65,7 +65,7 @@ Frictionless contact in [[rcfd-fem]]: node-to-surface contact with an augmented 
 
 ### Key numbers and limits (second half)
 
-- Short-solve order bound: `r_{k+1} <= max(C r_k^2, F)`, `C = 10`, `F = 1e-12` (ADR 0519).
+- Short-solve order bound: $r_{k+1} \le \max(C r_k^2, F)$, $C = 10$, $F = 10^{-12}$ (ADR 0519).
 - Mortar patch tests PT10, PT20 within `6e-14` (ADR 0551).
 
 ### Open questions (second half)
@@ -79,4 +79,4 @@ Frictionless contact in [[rcfd-fem]]: node-to-surface contact with an augmented 
 
 - [[rcfd-fem]], [[structural-solver]], [[roadmap-structural-solver]]
 - [[adr-thread-structural-materials-nonlinear]] (the Newton driver the contact body runs on)
-- [[adr-thread-structural-linear-solvers]] (sparse `L D L^T`)
+- [[adr-thread-structural-linear-solvers]] (sparse $L D L^T$)

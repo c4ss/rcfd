@@ -22,7 +22,7 @@ The participant protocol `rcfd-cosim/1` for exchanging wall displacement and flu
 
 - Participants: fluid (`cosim::FlowWall`, a `PimpleSolver` on a moving mesh) and structure (`cosim::SprungWall` mock; `rcfd_post::solid_coupling::StaticSolid`, massless, ADR 0286; `rcfd_post::solid_dynamic::DynamicSolid`, ADR 0410). The coupler `cosim::coupled_step` owns the mapping and the iteration.
 - Calls: describe, time, checkpoint, restore, forces (fluid), advance. SI units, global axes; force is the fluid's force per face or node; displacement from the reference configuration.
-- Mapping `H`: rows sum to 1 (consistent displacement), force by the transpose (conservative). Builders (F-362, ADR 0263): nearest-element projection with offset correction, Wendland radial basis, bilinear projection (F-504, ADR 0414). `Unmapped::Refuse` is the default.
+- Mapping $H$: rows sum to 1 (consistent displacement), force by the transpose (conservative). Builders (F-362, ADR 0263): nearest-element projection with offset correction, Wendland radial basis, bilinear projection (F-504, ADR 0414). `Unmapped::Refuse` is the default.
 - Step: checkpoint, predictor, iterate; converged when `|r| <= tolerance x max(|ft|, force_scale)`; fixed, Aitken, or least-squares quasi-Newton update (ADR 0261); `AtCap::Stop` default. `max_iterations = 1` is loose coupling.
 - Failure restores both participants bit for bit and returns a located `CouplingError`.
 - Service: methods `cosim.list/open/describe/time/checkpoint/restore/forces/advance`, lease numbers, error codes `-32602`, `1002`, `1005`, `1006`; numbers cross bit for bit. `rcfd serve --cosim <case>` hosts a fluid participant from a case with a `[cosim]` table (F-444, ADR 0380); `rcfd run` refuses such a case.

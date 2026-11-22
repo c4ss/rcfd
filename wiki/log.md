@@ -223,3 +223,16 @@ Append-only. Newest at the bottom. Entry header: `## [YYYY-MM-DD] <op> | <title>
 - Lead check: Martins-Ning eq. 1.4, 7.3-7.5, 10.100-10.102 compared against rendered PDF pages; all match.
 - Gaps with no readable open source are listed under "Not ingested" in each `.handoff/p6-*.md` and as Open questions on the pages.
 - P7 (LaTeX) running; "Possible math in backticks" at 918 spans in 233 pages before batches 2 and 4 finish.
+
+## [2026-11-22] lint | P7 equations to LaTeX
+
+- 4 jobs (p7-latex-1..4) converted about 5,000 math spans to `$...$`/`$$...$$` across ~330 pages; ASCII forms replaced (P7 rule), no other text changed.
+- Checks: no line with an odd `$` count, no `$` in a wikilink; braces balanced (job scripts). `unwrap.py` 0 changes; `lint.py` 0 broken links.
+- "Possible math in backticks" 1,770 → 246 spans; the remainder is code by the rule (case keys, TOML paths, signatures, values quoted from the repo). One judgement call to confirm: FENE-P `L2` on the wave27c page rendered as $L^2$ (p7-latex-4).
+
+## [2026-11-22] schema | P8 upkeep tools: open gaps, stale report, local search
+
+- New `tools/build_gaps.py` → [[open-gaps]] (22 jobs, 21 with gaps, 15 with contradictions).
+- New `tools/stale.py` → [[stale-report]]: against origin/main 6dddc9e7, 7 source pages changed (55 citing pages), 1 new reference-data section (F-878), 2 new ADRs (0764, 0765), roadmap.json changed. This replaces the hand-made ingest backlog list.
+- New `tools/search.py` (Ollama `qwen3-embedding:0.6b` + BM25, cache in `.handoff/`): search, similar, and the [[related-candidates]] report.
+- `CLAUDE.md` Query and Lint steps updated to use them.

@@ -18,9 +18,9 @@ Two post-processing families on top of the dynamic results of [[rcfd-fem]]: `rcf
 
 ## Current state
 
-- **Fatigue:** F-413 (ADR 0449) done: Basquin, power and log-log table curves with an endurance limit, Goodman, Gerber and Soderberg corrections (a mean at or above the strength refused, no compressive credit by default), the closed-form von Mises amplitude of a harmonic tensor, rainflow and Miner damage. F-534 (ADR 0453) added the rainflow residue guard and the Gerber compressive-mean message (done). Broadband Dirlik damage from `m0, m1, m2, m4` (F-566, ADR 0497) is partial by one uncaught mutation (M10) and amended checks; the moments `C_1`, `C_4` (F-589, ADR 0516) are done.
+- **Fatigue:** F-413 (ADR 0449) done: Basquin, power and log-log table curves with an endurance limit, Goodman, Gerber and Soderberg corrections (a mean at or above the strength refused, no compressive credit by default), the closed-form von Mises amplitude of a harmonic tensor, rainflow and Miner damage. F-534 (ADR 0453) added the rainflow residue guard and the Gerber compressive-mean message (done). Broadband Dirlik damage from `m0, m1, m2, m4` (F-566, ADR 0497) is partial by one uncaught mutation (M10) and amended checks; the moments $C_1$, $C_4$ (F-589, ADR 0516) are done.
 - **Case-file wiring:** a `[fatigue]` section with outputs `damage_rate` and `life` (F-605) was **approved** by the maintainer on 2026-11-18 under the additive-golden-edit class rule and "may be issued" (ADR 0516, answers section); F-605 is still todo in the roadmap.
-- **Radiated sound:** F-418 (ADR 0468) partial: every limit met, but E1 at `k a = 10` missed its one-ulp probe condition. F-551 (ADR 0488, radiation reactance by analytic face integrals of `1/R`) partial: mutation MU7 (NaN guard) not caught; its sources are "cited from memory, not re-read" (roadmap gap).
+- **Radiated sound:** F-418 (ADR 0468) partial: every limit met, but E1 at $k a = 10$ missed its one-ulp probe condition. F-551 (ADR 0488, radiation reactance by analytic face integrals of `1/R`) partial: mutation MU7 (NaN guard) not caught; its sources are "cited from memory, not re-read" (roadmap gap).
 
 ## ADRs
 

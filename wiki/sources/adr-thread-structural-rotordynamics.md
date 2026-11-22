@@ -18,7 +18,7 @@ Modes of a rotating part in [[rcfd-fem]]: stress stiffening by the centrifugal p
 
 ## Current state
 
-- **Stress stiffening and spin softening:** F-396 (ADR 0403) is **partial**: the flap-lag identity misses its limit on the beam; on a 3-D solid the difference is `(1 - 2 f_x) Omega^2`, met only in that restated form (1.1e-8). F-498 (ADR 0408) restates the acceptance (done). Rotating modes of a cyclic sector by index (F-500, ADR 0407) are partial by a tracking check met only after amendment 1.
+- **Stress stiffening and spin softening:** F-396 (ADR 0403) is **partial**: the flap-lag identity misses its limit on the beam; on a 3-D solid the difference is $(1 - 2 f_x) \Omega^2$, met only in that restated form (1.1e-8). F-498 (ADR 0408) restates the acceptance (done). Rotating modes of a cyclic sector by index (F-500, ADR 0407) are partial by a tracking check met only after amendment 1.
 - **Coriolis and whirl:** the gyroscopic matrix and whirl modes by a symmetric linearisation (F-499, ADR 0411, done); above the loss of stiffness by the state matrix with Hessenberg reduction and Francis double-shift QR (F-505, ADR 0416, partial by a corrected set-up); stationary-frame frequencies of a cyclic whirl table (F-507, ADR 0419, done); whirl stability of a cyclic sector (F-511, ADR 0420, done); odd-index instability on the model path (F-510, ADR 0424, done).
 - **Large parts:** shift-invert skew Lanczos (F-506, ADR 0427, done); a shift-invert Arnoldi state solver above the loss of stiffness (F-519, ADR 0428, partial: far-mode vectors 8.5e-8 against 1e-8) refined by inverse iteration (F-520, ADR 0442, done).
 - **On the modal subspace:** the Coriolis term by the general eigensolver of ADR 0450 and the split Campbell table (F-415, ADR 0472, partial: zero-speed frequencies miss 1e-10); the per-mode Rayleigh-quotient report (F-554, ADR 0484, done); the split Campbell table of a cyclic sector (F-555, ADR 0481, partial); its static correction vectors (F-569, ADR 0482, partial) and the second-order Ritz error (F-575, ADR 0492, done).
@@ -34,10 +34,10 @@ Modes of a rotating part in [[rcfd-fem]]: stress stiffening by the centrifugal p
 | [0408](../../docs/adr/0408-f498-registration-flap-lag-identity-of-a-rotating-solid-beam.md) | 2026-11-13 | restatement | F-498 | Flap-lag identity of a rotating solid beam, acceptance restated (1 - 2 f_x) | done (numbers known from ADR 0403, disclosed) | |
 | [0411](../../docs/adr/0411-f499-registration-coriolis-gyroscopic-whirl-modes.md) | 2026-11-13 | registration | F-499 | Gyroscopic matrix, whirl modes by symmetric linearisation, forward/backward whirl | done | |
 | [0416](../../docs/adr/0416-f505-registration-gyroscopic-stabilisation.md) | 2026-11-13 | registration | F-505 | Whirl above the loss of stiffness (state matrix, Hessenberg + Francis QR), stability flag | partial; odd-index check met on a corrected set-up | |
-| [0419](../../docs/adr/0419-f507-registration-stationary-frame-whirl.md) | 2026-11-13 | registration | F-507 | Stationary-frame frequencies `omega + tau k Omega` of a cyclic whirl table | done | |
+| [0419](../../docs/adr/0419-f507-registration-stationary-frame-whirl.md) | 2026-11-13 | registration | F-507 | Stationary-frame frequencies $\omega + \tau k \Omega$ of a cyclic whirl table | done | |
 | [0420](../../docs/adr/0420-f511-registration-sector-whirl-stability.md) | 2026-11-13 | registration | F-511 | Whirl stability of a cyclic sector above the loss of stiffness | done; eight mutations caught | |
 | [0424](../../docs/adr/0424-f510-registration-odd-index-instability.md) | 2026-11-13 | registration | F-510 | Odd-index instability on the model path (cube on springs, closed-form divergence) | done | |
-| [0427](../../docs/adr/0427-f506-registration-sparse-whirl-lanczos.md) | 2026-11-14 | registration | F-506 | Sparse whirl solver: shift-invert skew Lanczos, one sparse factor of `K_eff` per speed | done | |
+| [0427](../../docs/adr/0427-f506-registration-sparse-whirl-lanczos.md) | 2026-11-14 | registration | F-506 | Sparse whirl solver: shift-invert skew Lanczos, one sparse factor of $K_{\mathrm{eff}}$ per speed | done | |
 | [0428](../../docs/adr/0428-f519-registration-sparse-whirl-state.md) | 2026-11-14 | registration | F-519 | Sparse state solver above the loss (shift-invert Arnoldi) | partial; Q1 8.5e-8 against 1e-8 on far mode vectors | 0442 |
 | [0442](../../docs/adr/0442-f520-registration-far-mode-vectors.md) | 2026-11-14 | registration | F-520 | Far-mode vectors refined by inverse iteration on `Q(s)` | done (opt-in) | |
 | [0472](../../docs/adr/0472-f415-registration-coriolis-split-campbell-modal-subspace.md) | 2026-11-14 | registration | F-415 | Coriolis on the modal subspace, split Campbell table, stability | partial; ring 4.6e-10, beam 1.0e-10 against 1e-10 | 0484 |
@@ -63,7 +63,7 @@ Modes of a rotating part in [[rcfd-fem]]: stress stiffening by the centrifugal p
 ## Open questions
 
 - ADR 0411 Q1 (speeds above the loss of stiffness) was answered by the follow-up F-505.
-- ADR 0419 Q1: aliased lines `omega + (k + mN) Omega` and standing waves, options (a) leave out, (b) per-mode list with energy weights.
+- ADR 0419 Q1: aliased lines $\omega + (k + mN) \Omega$ and standing waves, options (a) leave out, (b) per-mode list with energy weights.
 - ADR 0424 Q1: a negative support as a model support (e.g. a magnetic bearing's negative axial stiffness in a case file).
 - F-500, F-505, F-555: "The maintainer decides done" (roadmap gaps).
 
@@ -73,9 +73,9 @@ The cyclic constraint with shells and beams, `full_rotor` and the free-sector ce
 
 ### Current state (second half)
 
-- **Split-mode Schur error.** Opt-in `RotatingOptions::corrected_frequency` and `SplitSchur::Perturbation` (one complement solve per split mode, second-order Rayleigh-Schroedinger sum) (F-584, ADR 0527, partial: G1, G2, G4 missed, a3 `0.38` against `0.01`); `SplitSchur::PerturbationChecked` with the series ratio `|delta_2/delta_1|` and a dense fallback above `0.08` (F-612, ADR 0535, partial: the cost clause b4 `0.83` against `0.5`).
-- **Shell whirl.** With `CyclicOptions::shells` the rotating sector's modes, pre-stressed and spin-softened modes and Campbell table take Shell4 and Shell3; the whirl paths take them through a new Coriolis matrix of the shell director (`coriolis_matrix_with_shells`, `RotatingOptions::shells`) (F-647, ADR 0561, partial: CO1 missed in run 1, a library defect). Independent references: the free thin ring as a cylindrical band against the closed form of the extensible thin ring in the rotating frame (F-654, ADR 0569, partial: a sign in the reference and a negative control's rounding limit); the spinning annular disc of shells, the first independent reference of the rotary block `m2 W^T [a x] W` (F-657, ADR 0573, done).
-- **Beam whirl.** A Coriolis matrix of the Beam2 section kinematics `u + theta x s` for the whirl paths on a cyclic beam sector (F-675, ADR 0598, partial by an amended check); an independent reference, the free spinning Beam2 ring at nodal diameters 2 and 3 against the exact rotating-frame solution (F-679, ADR 0602, done).
+- **Split-mode Schur error.** Opt-in `RotatingOptions::corrected_frequency` and `SplitSchur::Perturbation` (one complement solve per split mode, second-order Rayleigh-Schroedinger sum) (F-584, ADR 0527, partial: G1, G2, G4 missed, a3 `0.38` against `0.01`); `SplitSchur::PerturbationChecked` with the series ratio $\lvert \delta_2/\delta_1 \rvert$ and a dense fallback above `0.08` (F-612, ADR 0535, partial: the cost clause b4 `0.83` against `0.5`).
+- **Shell whirl.** With `CyclicOptions::shells` the rotating sector's modes, pre-stressed and spin-softened modes and Campbell table take Shell4 and Shell3; the whirl paths take them through a new Coriolis matrix of the shell director (`coriolis_matrix_with_shells`, `RotatingOptions::shells`) (F-647, ADR 0561, partial: CO1 missed in run 1, a library defect). Independent references: the free thin ring as a cylindrical band against the closed form of the extensible thin ring in the rotating frame (F-654, ADR 0569, partial: a sign in the reference and a negative control's rounding limit); the spinning annular disc of shells, the first independent reference of the rotary block $m_2 W^T [a \times] W$ (F-657, ADR 0573, done).
+- **Beam whirl.** A Coriolis matrix of the Beam2 section kinematics $u + \theta \times s$ for the whirl paths on a cyclic beam sector (F-675, ADR 0598, partial by an amended check); an independent reference, the free spinning Beam2 ring at nodal diameters 2 and 3 against the exact rotating-frame solution (F-679, ADR 0602, done).
 - **Latest decision:** the whirl paths and `full_rotor` take a beam sector without `CyclicOptions::beams` and `full_rotor_beams`; approved by the maintainer on 2026-11-21 ("Yes, both", ADR 0744 answers), to be made "in one further registration under F-672"; not made at the snapshot.
 
 ### ADRs (second half)
@@ -93,12 +93,12 @@ The cyclic constraint with shells and beams, `full_rotor` and the free-sector ce
 ### Key numbers and limits (second half)
 
 - Perturbation threshold of `PerturbationChecked`: `0.08` (the truncation miss is about the square of the ratio, so 1 percent is crossed at `0.1`); b3 `6.3e-3` against `1e-2` (ADR 0535).
-- Free thin ring (`R = 0.1 m`, `t = 0.5 mm`, `L = 5 mm`, `nu = 0`, 32 sectors): frequencies within `0.25 (k Delta)^2` (Shell4) and `0.5 (k Delta)^2` (Shell3) of the closed form; inextensional split `4 n Omega / (n^2 + 1)` (ADR 0569).
+- Free thin ring ($R = 0.1\ \mathrm{m}$, $t = 0.5\ \mathrm{mm}$, $L = 5\ \mathrm{mm}$, $\nu = 0$, 32 sectors): frequencies within $0.25 (k \Delta)^2$ (Shell4) and $0.5 (k \Delta)^2$ (Shell3) of the closed form; inextensional split $4 n \Omega / (n^2 + 1)$ (ADR 0569).
 
 ### Open questions (second half)
 
 - The public `coriolis_matrix` and `gyro::gyroscopic_matrix` stay solid-only (ADR 0561 Q2, ADR 0598 Q2): recommendation leave.
-- Rotary spin softening and `t^2/12` shell geometric terms are below the resolution of the checks (ADR 0573 Q2): recommendation leave.
+- Rotary spin softening and $t^2/12$ shell geometric terms are below the resolution of the checks (ADR 0573 Q2): recommendation leave.
 - `SplitSchur::Perturbation` cost (ADR 0535 Q1): recommendation keep as built.
 
 ## Related

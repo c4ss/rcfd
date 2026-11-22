@@ -27,9 +27,9 @@ No source was read for F-575; every item is cited from memory and derived in ADR
 
 | Item | Status | Source |
 |---|---|---|
-| Exact condensation of the projected problem by the complement: `S(w) = Q_VV(w) - Q_VW(w) Q_WW(w)^-1 Q_WV(w)`, `S_ij = v_i^T Q (v_j + x_j)` with the complement solve `(I - P)^T Q (I - P) x_j = -(I - P)^T Q v_j`; an exact mode satisfies `S(omega) y = 0` | derived | block elimination (Schur complement), textbook linear algebra, e.g. G. H. Golub, C. F. Van Loan, Matrix Computations: NOT read, from memory (ADR 0492 D1) |
-| `S` frozen at the Ritz value `theta`, the skew part of `E` folded into the gyroscopic matrix at `l = theta`: the estimate `|theta/theta' - 1|` differs from the measured error by a relative amount of the order of the error times `2 theta^2/(w_c^2 - theta^2) + O(1)` | derived | ADR 0492 D3; eigenvalue-dependent condensation in dynamic substructuring, R. J. Guyan, AIAA J. 3 (1965) 380 for the static limit: NOT read, from memory |
-| On DS B4 (modes plus static correction vectors) at 0.4 and 0.8 `omega_ref` the estimate matches the measured error of the 34 matched modes above 1e-9 within 3.4e-4 (ADR 0482's first-order `eta` within a factor 2.62) | measured | ADR 0492 addendum 1 (`f575-scratch/run1.log`) |
+| Exact condensation of the projected problem by the complement: $S(w) = Q_{VV}(w) - Q_{VW}(w) Q_{WW}(w)^{-1} Q_{WV}(w)$, $S_{ij} = v_i^T Q (v_j + x_j)$ with the complement solve $(I - P)^T Q (I - P) x_j = -(I - P)^T Q v_j$; an exact mode satisfies $S(\omega) y = 0$ | derived | block elimination (Schur complement), textbook linear algebra, e.g. G. H. Golub, C. F. Van Loan, Matrix Computations: NOT read, from memory (ADR 0492 D1) |
+| $S$ frozen at the Ritz value $\theta$, the skew part of $E$ folded into the gyroscopic matrix at $l = \theta$: the estimate $\lvert \theta/\theta' - 1 \rvert$ differs from the measured error by a relative amount of the order of the error times $2 \theta^2/(w_c^2 - \theta^2) + O(1)$ | derived | ADR 0492 D3; eigenvalue-dependent condensation in dynamic substructuring, R. J. Guyan, AIAA J. 3 (1965) 380 for the static limit: NOT read, from memory |
+| On DS B4 (modes plus static correction vectors) at 0.4 and 0.8 $\omega_{\mathrm{ref}}$ the estimate matches the measured error of the 34 matched modes above 1e-9 within 3.4e-4 (ADR 0482's first-order $\eta$ within a factor 2.62) | measured | ADR 0492 addendum 1 (`f575-scratch/run1.log`) |
 
 
 ## Contradictions with the wiki

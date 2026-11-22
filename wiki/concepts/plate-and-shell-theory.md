@@ -37,7 +37,7 @@ Plates and shells are thin in one direction, like a fan blade or a panel. Their 
 
 ## How rcfd uses it
 
-- Shell4: bilinear membrane, Reissner-Mindlin bending with MITC4 shear, a drilling penalty `alpha G t (theta_z - omega)^2` with `alpha = 1e-3`, rigid offsets for warped nodes (F-392, ADR 0432, done); Shell3: CST membrane with MITC3 and Lyly-Stenberg-Vihinen stabilisation (F-419, ADR 0454) ([[adr-thread-structural-beams-shells]]).
+- Shell4: bilinear membrane, Reissner-Mindlin bending with MITC4 shear, a drilling penalty $\alpha G t (\theta_z - \omega)^2$ with $\alpha = 10^{-3}$, rigid offsets for warped nodes (F-392, ADR 0432, done); Shell3: CST membrane with MITC3 and Lyly-Stenberg-Vihinen stabilisation (F-419, ADR 0454) ([[adr-thread-structural-beams-shells]]).
 - Laminated Shell4 by classical lamination theory with ply stresses and failure criteria (F-428, ADR 0496, done); corotational facets in the Newton driver (F-578) ([[adr-thread-structural-beams-shells]]).
 - Through-thickness temperature gradients on Shell4, Shell3 and layup Shell4 (F-527, F-687) ([[adr-thread-structural-creep-and-temperature]]).
 - The hinged cylindrical roof limit load with corotated shells, 2222.4 N against 2226.3 N of Sze, Liu and Lo (2004) (F-610) ([[structural-solver]]).

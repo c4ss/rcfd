@@ -27,10 +27,10 @@ No source was read for F-555; every item is cited from memory and derived in ADR
 
 | Item | Status | Source |
 |---|---|---|
-| A full-rotor matrix commuting with the sector shift enters index `k` as `T_k^T blockdiag(A_s, A_s) T_k`; for the Coriolis matrix the doubled `blockdiag(C_s, C_s)` | derived | ADR 0407 D1, ADR 0411 D5 |
-| Projection on expanded harmonic modes with doubled matrices equals the reduced projection: `x^T A_2 y = q^T T_k^T A_2 T_k q'` | derived | ADR 0481 D1 |
-| Ritz error of a gyroscopic mode on a subspace, first order: `eta = |e^H Q(omega) e| / (omega |s^H (2 omega M - i G) s|)`, `s` the M-projection of the exact mode, `e = phi - s`, `s^H Q s = e^H Q e` exactly | derived | the Rayleigh functional of the Hermitian family `Q(w) = K - w^2 M + i w G`; P. Lancaster, Lambda-Matrices and Vibrating Systems (Pergamon 1966), K. P. Hadeler, Arch. Rational Mech. Anal. 27 (1968) 306, B. N. Parlett, The Symmetric Eigenvalue Problem (Prentice-Hall 1980): NOT read, from memory (ADR 0481 D5) |
-| Leading order of `eta` in modal coordinates: `sum_out 2 Omega^2 |C_ja|^2/(w_j^2 - omega^2)` | derived | ADR 0481 D5, ADR 0472 arithmetic 4 |
+| A full-rotor matrix commuting with the sector shift enters index $k$ as $T_k^T \operatorname{blockdiag}(A_s, A_s) T_k$; for the Coriolis matrix the doubled $\operatorname{blockdiag}(C_s, C_s)$ | derived | ADR 0407 D1, ADR 0411 D5 |
+| Projection on expanded harmonic modes with doubled matrices equals the reduced projection: $x^T A_2 y = q^T T_k^T A_2 T_k q'$ | derived | ADR 0481 D1 |
+| Ritz error of a gyroscopic mode on a subspace, first order: $\eta = \lvert e^H Q(\omega) e \rvert / (\omega \lvert s^H (2 \omega M - i G) s \rvert)$, $s$ the M-projection of the exact mode, $e = \phi - s$, $s^H Q s = e^H Q e$ exactly | derived | the Rayleigh functional of the Hermitian family $Q(w) = K - w^2 M + i w G$; P. Lancaster, Lambda-Matrices and Vibrating Systems (Pergamon 1966), K. P. Hadeler, Arch. Rational Mech. Anal. 27 (1968) 306, B. N. Parlett, The Symmetric Eigenvalue Problem (Prentice-Hall 1980): NOT read, from memory (ADR 0481 D5) |
+| Leading order of $\eta$ in modal coordinates: $\sum_{\mathrm{out}} 2 \Omega^2 \lvert C_{ja} \rvert^2/(w_j^2 - \omega^2)$ | derived | ADR 0481 D5, ADR 0472 arithmetic 4 |
 
 
 ## Contradictions with the wiki

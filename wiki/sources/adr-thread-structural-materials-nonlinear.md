@@ -18,7 +18,7 @@ The nonlinear route of [[rcfd-fem]]: the total Lagrangian Newton driver with loa
 
 ## Current state
 
-- **Newton driver** (`nonlinear::solve`, F-397, ADR 0404): total Lagrangian Tet4, Hex8, Tet10, Hex20 with St. Venant-Kirchhoff, tangent `K_mat(F) + K_sigma(S)`, step halving. **Partial**: A5 (linear limit at load factor 1e-6) met only after amendment 1; the roll-back of a failed attempt was then made observable by F-497 (ADR 0406, done).
+- **Newton driver** (`nonlinear::solve`, F-397, ADR 0404): total Lagrangian Tet4, Hex8, Tet10, Hex20 with St. Venant-Kirchhoff, tangent $K_{\mathrm{mat}}(F) + K_{\sigma}(S)$, step halving. **Partial**: A5 (linear limit at load factor 1e-6) met only after amendment 1; the roll-back of a failed attempt was then made observable by F-497 (ADR 0406, done).
 - **Advanced-tier scaffold** (F-408, ADR 0440, partial): modules, material variants with a point context and a state layout, Shell3, the layup and section-stiffness hook, two extension points of the Newton driver, the complex type; D6, R2 to R4 met only after set-up amendments.
 - **Orthotropy and tables:** orthotropic elasticity from nine constants with fixed, cylindrical or per-element axes and temperature tables on the linear static solve (F-409, ADR 0452, done); on the modal and transformation paths (F-537, ADR 0457, partial by an equivalent mutant) and on the rotating, buckling and transient paths (F-542, ADR 0459, partial; transient miss settled by F-545).
 - **Inelastic materials:** J2 with isotropic and kinematic hardening, radial return and consistent tangent (F-422, ADR 0475, partial: residual hoop stress 2.6 percent against 2 percent and Newton order 1.27 to 1.44 against 1.8); the sphere re-run on 8 then 16 radial Hex20 layers (F-561, ADR 0512, partial; F-602, ADR 0518, done with a thin 7 percent E1 margin); a convergence-order reading that fits an active-set change (F-560, ADR 0515, partial). Linear viscoelasticity (F-410, ADR 0485, done), in the direct harmonic solve (F-577, ADR 0491, done; harmonic stress F-583, ADR 0494, done), in the damped modes at a reference frequency (F-582, ADR 0495, partial by MU7), quasi-static viscoelastic time stepping (F-576, ADR 0499, done). Power-law creep with time hardening on a minimal time-stepping driver (F-411, ADR 0489, done).
@@ -76,7 +76,7 @@ The other second-half nonlinear ADRs have their own pages: [[adr-thread-structur
 - **Active-set record** of the Newton driver (ADR 0515) checked against a count made independently from the states on the J2 load and unload sphere (F-606, ADR 0521, done); it catches MR4 of F-560.
 - **Energy-momentum step for hyperelastic materials.** `NlTransientOptions::algorithmic_stress` with `AlgorithmicStress { Auto, DiscreteGradient, Average }`, the discrete gradient of Gonzalez (F-607, ADR 0523: done by its rule, proposed partial because a library defect was corrected by amendment 2; the roadmap lists F-607 partial). `AlgorithmicStress::MaterialDiscreteGradient` takes F-425's neo-Hookean and Mooney-Rivlin materials (F-611, ADR 0544, done).
 - **Residual references.** An opt-in `ResidualReference::InertiaTerms` for the nonlinear transient in free vibration (no external load) (F-631, ADR 0603, done) and on the energy-momentum step (F-681, ADR 0609, partial: its negative control NZ converged); a negative control off rest closes that gap (F-691, ADR 0625, done) and ADR 0625 recommends that the lead move F-681 to done, the maintainer's call.
-- **Rounding floor under large translation and rotation** (F-571, ADR 0604, done): the floor is not in the total Lagrangian internal force; it comes from representing the total displacement through the step tangent `K_eff = K_T + M/(beta h^2)`, so the residual of the nearest float vector reaches `(eps/2)|(|K_eff| |u|)|` while the reference `max(|f_int|, |g|)` passes through zero every half period.
+- **Rounding floor under large translation and rotation** (F-571, ADR 0604, done): the floor is not in the total Lagrangian internal force; it comes from representing the total displacement through the step tangent $K_{\mathrm{eff}} = K_T + M/(\beta h^2)$, so the residual of the nearest float vector reaches $(\varepsilon/2)\lvert(\lvert K_{\mathrm{eff}} \rvert \lvert u \rvert)\rvert$ while the reference $\max(\lvert f_{\mathrm{int}} \rvert, \lvert g \rvert)$ passes through zero every half period.
 - **Stagnation acceptance** at that rounding bound, opt-in `NewtonOptions::stagnation` (F-690, ADR 0619): done as an opt-in. **The default flip was held by the maintainer on 2026-11-18**: "it moves existing results, and it waits until the fan path needs it. Not to be issued" (ADR 0619 answers; F-694 todo).
 
 ### ADRs (second half)
@@ -94,8 +94,8 @@ The other second-half nonlinear ADRs have their own pages: [[adr-thread-structur
 
 ### Key numbers and limits (second half)
 
-- Rounding of the total Lagrangian internal force under translation: `3e-11` to `1.1e-8 N` on S3; the residual reaches `0.03` to `0.58` of `(eps/2)|(|K_eff| |u|)|` over 60 steps (ADR 0604).
-- Negative control off rest: one step centred on a zero crossing at `h = T_1/2621440` (ADR 0625).
+- Rounding of the total Lagrangian internal force under translation: `3e-11` to `1.1e-8 N` on S3; the residual reaches `0.03` to `0.58` of $(\varepsilon/2)\lvert(\lvert K_{\mathrm{eff}} \rvert \lvert u \rvert)\rvert$ over 60 steps (ADR 0604).
+- Negative control off rest: one step centred on a zero crossing at $h = T_1/2621440$ (ADR 0625).
 
 ### Open questions (second half)
 

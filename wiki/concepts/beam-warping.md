@@ -10,7 +10,7 @@ status: draft
 
 # Beam warping (Vlasov torsion) and lateral-torsional buckling
 
-Open thin-walled sections (I, channel) resist twist both by Saint-Venant torsion `G J` and by restrained warping `E C_w`; a seventh unknown per node, the rate of twist, carries the warping. It governs lateral-torsional buckling (LTB), where the critical moment depends on `C_w`, the shear-centre position, the monosymmetry coefficient `beta_x` and the height at which the load acts ([[adr-thread-structural-beam-warping]]).
+Open thin-walled sections (I, channel) resist twist both by Saint-Venant torsion $G J$ and by restrained warping $E C_w$; a seventh unknown per node, the rate of twist, carries the warping. It governs lateral-torsional buckling (LTB), where the critical moment depends on $C_w$, the shear-centre position, the monosymmetry coefficient $\beta_x$ and the height at which the load acts ([[adr-thread-structural-beam-warping]]).
 
 ## How rcfd uses it
 
@@ -28,4 +28,4 @@ Open thin-walled sections (I, channel) resist twist both by Saint-Venant torsion
 
 ## Open questions
 
-- Warping inertia `rho C_w` is not modelled (ADR 0548 Q1); the consistent offset mass (F-678) and the case-file key (F-625) are approved and todo at the snapshot ([[adr-thread-structural-beam-warping]]).
+- Warping inertia $\rho C_w$ is not modelled (ADR 0548 Q1); the consistent offset mass (F-678) and the case-file key (F-625) are approved and todo at the snapshot ([[adr-thread-structural-beam-warping]]).

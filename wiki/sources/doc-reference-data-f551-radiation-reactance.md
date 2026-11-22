@@ -27,11 +27,11 @@ No source was read for F-551; every item is cited from memory and derived in ADR
 
 | Item | Status | Source |
 |---|---|---|
-| In-plane `int_polygon dS/R = sum_edges d ln((R+ + s+)/(R- + s-))` (signed distance `d` to the edge line, tangent coordinates `s-`, `s+`) | derived | polar integration about the point; the edge-sum form of D. R. Wilton, S. M. Rao, A. W. Glisson, D. H. Schaubert, O. M. Al-Bundak and C. M. Butler, IEEE Trans. Antennas Propag. AP-32 (1984) 276-281: NOT read |
-| Square of side `L`: centre `4 L ln(1 + sqrt 2)`, corner `2 L ln(1 + sqrt 2)`; rectangle `a x b` at a corner `a ln((b + sqrt(a^2+b^2))/a) + b ln((a + sqrt(a^2+b^2))/b)`; right triangle of legs `L` at the right angle `sqrt 2 L ln(1 + sqrt 2)` | derived | from the edge sum by hand; numpy and the A1 check to 4.4e-16 |
-| Potential of a uniform disk at an in-plane point, `int_disk dS/R = 4 a E(r/a)` | from memory | checked at `r = 0` (`2 pi a`) and `r = a` (`4 a`) by hand |
-| Added mass of a baffled piston `8 rho a^3/3` (low-frequency limit of `rho c S H1(2 k a)/(k a)/omega`) | derived | `H1(x) = 2 x^2/(3 pi) + O(x^4)`; Kinsler, Frey, Coppens and Sanders, and Morse and Ingard, chapter 7: NOT read |
-| Surface continuity `P(x + h n) = P(x) - i omega rho V_n h + O(h^2)` | derived | the Euler equation at the plane |
+| In-plane $\int_{\mathrm{polygon}} dS/R = \sum_{\mathrm{edges}} d \ln((R_+ + s_+)/(R_- + s_-))$ (signed distance $d$ to the edge line, tangent coordinates `s-`, `s+`) | derived | polar integration about the point; the edge-sum form of D. R. Wilton, S. M. Rao, A. W. Glisson, D. H. Schaubert, O. M. Al-Bundak and C. M. Butler, IEEE Trans. Antennas Propag. AP-32 (1984) 276-281: NOT read |
+| Square of side $L$: centre $4 L \ln(1 + \sqrt{2})$, corner $2 L \ln(1 + \sqrt{2})$; rectangle $a \times b$ at a corner $a \ln((b + \sqrt{a^2+b^2})/a) + b \ln((a + \sqrt{a^2+b^2})/b)$; right triangle of legs $L$ at the right angle $\sqrt{2} L \ln(1 + \sqrt{2})$ | derived | from the edge sum by hand; numpy and the A1 check to 4.4e-16 |
+| Potential of a uniform disk at an in-plane point, $\int_{\mathrm{disk}} dS/R = 4 a E(r/a)$ | from memory | checked at $r = 0$ ($2 \pi a$) and $r = a$ (`4 a`) by hand |
+| Added mass of a baffled piston $8 \rho a^3/3$ (low-frequency limit of $\rho c S H_{1}(2 k a)/(k a)/\omega$) | derived | $H_{1}(x) = 2 x^2/(3 \pi) + O(x^4)$; Kinsler, Frey, Coppens and Sanders, and Morse and Ingard, chapter 7: NOT read |
+| Surface continuity $P(x + h n) = P(x) - i \omega \rho V_n h + O(h^2)$ | derived | the Euler equation at the plane |
 
 
 ## Contradictions with the wiki

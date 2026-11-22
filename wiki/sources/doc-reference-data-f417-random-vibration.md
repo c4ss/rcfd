@@ -27,13 +27,13 @@ No source was read for F-417; the books and papers below are cited from memory f
 
 | Item | Status | Source |
 |---|---|---|
-| Output density `|Y|^2 G` of a linear system under a stationary input, cross-densities `S_ij = sum_ab G_ab Re(Y_ia conj Y_jb)` | cited | S. H. Crandall and W. D. Mark, Random Vibration in Mechanical Systems (Academic Press 1963); D. E. Newland, An Introduction to Random Vibrations, Spectral and Wavelet Analysis (3rd ed., Longman 1993), ch. 7: NOT read, from memory |
-| One mode under a flat force spectrum: `m_0 = (pi/2) f_n Q G/k^2`, `Q = 1/(2 zeta)`; `int_0^inf r^2/D dr = int_0^inf dr/D = pi/(4 zeta)`, `nu_0 = f_n` | derived | residues of `D = (r^2 + 2 s r + 1)(r^2 - 2 s r + 1)`, `s = sqrt(1 - zeta^2)`, and the substitution `r = 1/s` (ADR 0477); J. W. Miles, J. Aeronaut. Sci. 21 (1954) 753, for the name only: NOT read |
-| One mode under a flat base acceleration: absolute acceleration `m_0 = (pi/2) f_n G (Q + 1/Q)` | derived | the transmissibility `(1 + 2 i zeta r)/(1 - r^2 + 2 i zeta r)` (ADR 0477) |
-| Finite-band integrals at `zeta = 0.02`: `I_0(10) = 39.26957079652609`, `I_1 = 38.77258066850795`, `I_2 = 39.16923599186199`, `I_4 = 49.006230409610886`, `I_0 + 4 zeta^2 I_2 = 39.33224157411308` | computed | 4-point Gauss-Legendre on split intervals, `f417-scratch/refs.py`, `refs2.py` |
-| Two modes: CQC cross term `rho = 8 zeta^2 (1 + b) b^1.5/((1 - b^2)^2 + 4 zeta^2 b (1 + b)^2)` | derived | the same residues (ADR 0477); P. H. Wirsching, T. L. Paez and K. Ortiz, Random Vibrations: Theory and Practice (Wiley 1995): NOT read, from memory |
-| Zero up-crossing rate `sqrt(m_2/m_0)`, peak rate `sqrt(m_4/m_2)` | cited | S. O. Rice, Bell Syst. Tech. J. 23 (1944) 282 and 24 (1945) 46: NOT read, from memory (as F-413) |
-| Root-mean-square von Mises stress `sqrt(tr(A C))`, `A` the quadratic form of `sigma_vm^2`, `C` the stress covariance | derived | first principles (ADR 0477 D5); D. J. Segalman, C. W. G. Fulcher, G. M. Reese and R. V. Field, J. Vib. Acoust. 122 (2000) 42, for the definition: NOT read, from memory |
+| Output density $\lvert Y \rvert^2 G$ of a linear system under a stationary input, cross-densities $S_{ij} = \sum_{ab} G_{ab} \operatorname{Re}(Y_{ia} \operatorname{conj} Y_{jb})$ | cited | S. H. Crandall and W. D. Mark, Random Vibration in Mechanical Systems (Academic Press 1963); D. E. Newland, An Introduction to Random Vibrations, Spectral and Wavelet Analysis (3rd ed., Longman 1993), ch. 7: NOT read, from memory |
+| One mode under a flat force spectrum: $m_0 = (\pi/2) f_n Q G/k^2$, $Q = 1/(2 \zeta)$; $\int_0^\infty r^2/D dr = \int_0^\infty dr/D = \pi/(4 \zeta)$, $\nu_0 = f_n$ | derived | residues of $D = (r^2 + 2 s r + 1)(r^2 - 2 s r + 1)$, $s = \sqrt{1 - \zeta^2}$, and the substitution $r = 1/s$ (ADR 0477); J. W. Miles, J. Aeronaut. Sci. 21 (1954) 753, for the name only: NOT read |
+| One mode under a flat base acceleration: absolute acceleration $m_0 = (\pi/2) f_n G (Q + 1/Q)$ | derived | the transmissibility $(1 + 2 i \zeta r)/(1 - r^2 + 2 i \zeta r)$ (ADR 0477) |
+| Finite-band integrals at $\zeta = 0.02$: $I_0(10) = 39.26957079652609$, $I_1 = 38.77258066850795$, $I_2 = 39.16923599186199$, $I_4 = 49.006230409610886$, $I_0 + 4 \zeta^2 I_2 = 39.33224157411308$ | computed | 4-point Gauss-Legendre on split intervals, `f417-scratch/refs.py`, `refs2.py` |
+| Two modes: CQC cross term $\rho = 8 \zeta^2 (1 + b) b^{1.5}/((1 - b^2)^2 + 4 \zeta^2 b (1 + b)^2)$ | derived | the same residues (ADR 0477); P. H. Wirsching, T. L. Paez and K. Ortiz, Random Vibrations: Theory and Practice (Wiley 1995): NOT read, from memory |
+| Zero up-crossing rate $\sqrt{m_2/m_0}$, peak rate $\sqrt{m_4/m_2}$ | cited | S. O. Rice, Bell Syst. Tech. J. 23 (1944) 282 and 24 (1945) 46: NOT read, from memory (as F-413) |
+| Root-mean-square von Mises stress $\sqrt{\operatorname{tr}(A C)}$, $A$ the quadratic form of $\sigma_{\mathrm{vm}}^2$, $C$ the stress covariance | derived | first principles (ADR 0477 D5); D. J. Segalman, C. W. G. Fulcher, G. M. Reese and R. V. Field, J. Vib. Acoust. 122 (2000) 42, for the definition: NOT read, from memory |
 
 ## Contradictions with the wiki
 

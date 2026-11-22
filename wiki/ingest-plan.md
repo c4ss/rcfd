@@ -106,8 +106,16 @@ Steps:
 ### P7 — Equations to LaTeX (maintainer decision 2026-11-22)
 
 Obsidian renders LaTeX with MathJax; the pages wrote math as ASCII in backticks, which shows as code. Rule now in `CLAUDE.md`: inline `$...$`, display `$$...$$` on its own line, source equation number beside it; case keys, code, file names and literal repo values stay in backticks.
-- [ ] Conversion pass after P6: subagents (max 4), split by folder/branch, rewrite every equation and math symbol to LaTeX without changing its meaning, numbers or locator. Additive rule relaxed for this pass only: the ASCII form is replaced, not struck through.
-- [ ] `tools/lint.py` section "Possible math in backticks" goes to (near) zero; remaining hits checked by hand.
+- [x] Conversion pass after P6 (done 2026-11-22, 4 jobs, about 5,000 spans; reports in `.handoff/p7-latex-*.md`): subagents (max 4), split by folder/branch, rewrite every equation and math symbol to LaTeX without changing its meaning, numbers or locator. Additive rule relaxed for this pass only: the ASCII form is replaced, not struck through.
+- [x] `tools/lint.py` section "Possible math in backticks" goes to (near) zero; remaining hits checked by hand. Done: 1,770 to 246 spans; the 246 were reviewed by the jobs and are case keys, TOML paths, code signatures and values quoted from the repo, kept in backticks by the rule.
+
+### P8 — Upkeep tools (maintainer decision 2026-11-22)
+
+From the gist's "kept current" and "lint" ideas, approved items 1-3 of the upgrade list:
+- [x] `tools/build_gaps.py` → [[open-gaps]]: the jobs' "Not ingested" and "Contradictions" lists, tracked in git (they lived only in the gitignored `.handoff/`).
+- [x] `tools/stale.py` → [[stale-report]]: staleness by provenance (origin file, section or ADR changed since `origin_commit`), dependents, new ADRs and doc sections without a page.
+- [x] `tools/search.py` (local Ollama embeddings + BM25): `search`, `similar`, and `report` → [[related-candidates]]. Query and Lint in `CLAUDE.md` use these.
+- [ ] Not yet decided: `/wiki` query command, steady-state check in the gate, reading paths from `builds_on`, `raw/` manifest and write protection.
 
 ## Steady state (after P5)
 

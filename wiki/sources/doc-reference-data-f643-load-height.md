@@ -27,10 +27,10 @@ No source was read for F-643. The books are those of F-598 and F-627, cited from
 
 | Item | Status | Source |
 |---|---|---|
-| Load-height term of a dead force `F` at `p` on a section turning by `phi` about the shear centre `s`: `(1/2) (F . (p - s)) phi^2` (`-(1/2) P a phi^2` for a downward load `a` above the shear centre) | derived, cited | ADR 0582 D1; Timoshenko and Gere, Trahair, op. cit., ch. 6: NOT read, from memory |
-| Second-order energy under a non-uniform moment in shear-centre unknowns: `int M phi v'' dx + (1/2) int beta_x M phi'^2 dx` | derived, cited | ADR 0582 D2; Timoshenko and Gere, Trahair, op. cit., ch. 6: NOT read, from memory |
-| Rayleigh-Ritz references, forks, `L = 3`, central load `P_ref = 1000` N (`lambda`, sine series `N = 81`, converged to `<= 3.2e-6` from `N = 41`): doubly symmetric I at the shear centre `106.64131188`, top flange `76.653190682`, bottom flange `147.52392793`; ADR 0553 monosymmetric I at the shear centre `229.64455760` (larger flange compressed), `133.91738647` (in tension); at the centroid `285.61557187`, `106.14875777`; on flange 1 `210.84970872` | computed | ADR 0582 D4, arithmetic 3 |
-| Doubly symmetric central-load coefficient `M_max/M_cr = 1.361` | computed; the textbook `1.35` to `1.36` cited from memory, not used | ADR 0582 D4 |
+| Load-height term of a dead force $F$ at $p$ on a section turning by $\phi$ about the shear centre $s$: $(1/2) (F \cdot (p - s)) \phi^2$ ($-(1/2) P a \phi^2$ for a downward load $a$ above the shear centre) | derived, cited | ADR 0582 D1; Timoshenko and Gere, Trahair, op. cit., ch. 6: NOT read, from memory |
+| Second-order energy under a non-uniform moment in shear-centre unknowns: $\int M \phi v'' dx + (1/2) \int \beta_x M \phi'^2 dx$ | derived, cited | ADR 0582 D2; Timoshenko and Gere, Trahair, op. cit., ch. 6: NOT read, from memory |
+| Rayleigh-Ritz references, forks, $L = 3$, central load $P_{\mathrm{ref}} = 1000$ N ($\lambda$, sine series $N = 81$, converged to $\le 3.2 \times 10^{-6}$ from $N = 41$): doubly symmetric I at the shear centre `106.64131188`, top flange `76.653190682`, bottom flange `147.52392793`; ADR 0553 monosymmetric I at the shear centre `229.64455760` (larger flange compressed), `133.91738647` (in tension); at the centroid `285.61557187`, `106.14875777`; on flange 1 `210.84970872` | computed | ADR 0582 D4, arithmetic 3 |
+| Doubly symmetric central-load coefficient $M_{\mathrm{max}}/M_{\mathrm{cr}} = 1.361$ | computed; the textbook `1.35` to `1.36` cited from memory, not used | ADR 0582 D4 |
 | Measured, 16 elements: `5.3e-4`, `3.5e-4`, `7.2e-4` (doubly symmetric at, above, below the shear centre); `1.4e-3`, `6.9e-4` (monosymmetric at the shear centre, both directions); all FE values below the Euler-Bernoulli reference (shear-flexible lateral plane) | computed | ADR 0582 addendum 1 |
 
 

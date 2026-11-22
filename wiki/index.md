@@ -5,7 +5,7 @@ updated: 2026-11-22
 
 # Index
 
-Catalog of every wiki page (711 pages). Read this first on any query. Format: `- [[page-name]] — one-line summary (n sources, updated YYYY-MM-DD)`. Rebuilt by `tools/build_index.py`.
+Catalog of every wiki page (713 pages). Read this first on any query. Format: `- [[page-name]] — one-line summary (n sources, updated YYYY-MM-DD)`. Rebuilt by `tools/build_index.py`.
 
 ## Overview
 
@@ -737,7 +737,9 @@ Catalog of every wiki page (711 pages). Read this first on any query. Format: `-
 - [[wave]] — A numbered batch of work, sometimes split into lettered parts (wave 35C). (1 sources, updated 2026-11-22)
 - [[work-streams]] — The campaign and Studio streams, their differences before 2026-11-18, and the one rule set since. (6 sources, updated 2026-11-22)
 
-## Analyses (2)
+## Analyses (4)
 
 - [[foundations-map]] — P6 step 1: drafted prerequisite graph under every rcfd method page, 186 nodes in 12 groups (33 existing pages, 153 proposed), a to-do list, not claims (0 sources, updated 2026-11-22)
 - [[foundations-sources]] — P6 step 2: 56 candidate open references per branch with licence status checked on 2026-11-22 and copy-to-raw/ verdicts; gaps listed (0 sources, updated 2026-11-22)
+- [[open-gaps]] — What the ingest jobs could not cover: nodes or sections left out because no readable source was found, sources that could not be read (licence, paywall, ... (0 sources, updated 2026-11-22)
+- [[stale-report]] — Which wiki pages the repo has moved past since they were ingested, found by comparing each source page's recorded origin with the current repo (see ... (0 sources, updated 2026-11-22)

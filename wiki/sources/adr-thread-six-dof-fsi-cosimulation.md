@@ -18,7 +18,7 @@ The flow side of fluid-structure coupling: a rigid body on a moving mesh validat
 
 ## Current state
 
-- **Six-DOF validation** (F-244, done): falling block `U(10 tau)/U_t` `1.00545` (limit `abs(. - 1) <= 0.02`), time-step halving `3.4e-6` (ADR 0211).
+- **Six-DOF validation** (F-244, done): falling block $U(10 \tau)/U_t$ `1.00545` (limit `abs(. - 1) <= 0.02`), time-step halving `3.4e-6` (ADR 0211).
 - **Loose coupling is unstable above an added-mass ratio of 2**; the strong step `rcfd_fv::fsi::strong_step` (F-251, done) is stable at a ratio of 4 ("The D7 loop is stable up to a ratio of 2 ... in the flow it is stable at 1.5 and diverges at 3", ADR 0250 Q1). It is selectable from a case by the optional table `[dynamic_mesh.six_dof.coupling] scheme = "strong"` (F-350, ADR 0266, partial only because mutation MU5 passed its named test; the binding force-floor test of F-437, ADR 0349, catches it and Q1 there recommends F-350 done).
 - **Wall pressure of the body force:** the 1.25 percent added-mass deficit is "the wall-pressure extrapolation of `patch_force_moment`" (F-351, ADR 0252); the key `wall_pressure` (`extrapolated` / `prescribed_gradient`) selects it in the driver (F-358, ADR 0269), and the opt-in table `[dynamic_mesh.force_reports] wall_pressure` does the same for force reports (F-440, ADR 0342). ADR 0269 lists for the default decision: "No registered hash moves." The default was flipped later by ADR 0346 (outside this thread): `docs/case-schema.md` gives `prescribed_gradient` as "default since ADR 0346" for both keys.
 - **Co-simulation:** in-process interface `rcfd_fv::cosim` with a mock structure (F-139, done), least-squares quasi-Newton (F-361, done; Aitken stays the default, Q1), mapping builders (F-362, roadmap done; ADR 0263 proposed partial because E1 missed on the registered code, Q2 recommends done), transport over the JSON-RPC service as protocol version 1.1, identifier `rcfd-service/1` kept, calls `rcfd-cosim/1` (F-360, done), a fluid participant from a case `[cosim]` hosted by `rcfd serve --cosim` (F-444, partial: the schema property and help line await approval, ADR 0380 Q1), and the fixed-against-sliding patch check (F-481, done).
@@ -46,9 +46,9 @@ The flow side of fluid-structure coupling: a rigid body on a moving mesh validat
 
 ## Key numbers and limits
 
-- ADR 0250 Q6: the safe start `2M/(2M + m_a)` "belongs to RK4 with a constant force"; Newmark has another constant.
+- ADR 0250 Q6: the safe start $2M/(2M + m_a)$ "belongs to RK4 with a constant force"; Newmark has another constant.
 - ADR 0252 Q1: the default is "low by a quarter of the wall-cell size over the column length: 1.25 percent of the added mass on 20 cells, `+0.5` percent of frequency at a mass ratio of 4, `+0.1` percent at 0.2".
-- ADR 0269 listing: spring-mounted piston at ratio 0.2, `omega_m/omega` `1.001307` (extrapolated) against `1.000264` (prescribed gradient); at ratio 4 strong `1.005081` against `1.000042`.
+- ADR 0269 listing: spring-mounted piston at ratio 0.2, $\omega_m/\omega$ `1.001307` (extrapolated) against `1.000264` (prescribed gradient); at ratio 4 strong `1.005081` against `1.000042`.
 - ADR 0269 Q4: on the sliding step "no caller evaluates a force there; its default evaluation misses `0.41 g dn` on a rotor wall".
 - ADR 0256 Q2: Aitken needs 8.8 iterations a step on the model problem (the quasi-Newton acceptance asks at most 7).
 - ADR 0263 Q3: the brute-force search and dense radial-basis rows limit the mapping "to a few thousand nodes".

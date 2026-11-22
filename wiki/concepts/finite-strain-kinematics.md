@@ -39,5 +39,5 @@ When displacements or rotations are large, the small-strain tensor gives wrong a
 
 ## How rcfd uses it
 
-- The Newton driver is total Lagrangian, with the tangent `K_mat(F) + K_sigma(S)` from the deformation gradient and the second Piola-Kirchhoff stress (F-397, ADR 0404) ([[adr-thread-structural-materials-nonlinear]]).
+- The Newton driver is total Lagrangian, with the tangent $K_{\mathrm{mat}}(F) + K_{\sigma}(S)$ from the deformation gradient and the second Piola-Kirchhoff stress (F-397, ADR 0404) ([[adr-thread-structural-materials-nonlinear]]).
 - Hyperelastic laws (neo-Hookean and successors) are written on these kinematics ([[hyperelastic-materials]]; [[adr-thread-structural-hyperelastic-and-follower]]).

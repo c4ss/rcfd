@@ -39,6 +39,6 @@ A spinning shaft or disc that vibrates sideways traces an orbit, called whirl. S
 
 ## How rcfd uses it
 
-- Free vibration in the rotating frame `M u_tt + 2 Omega C u_t + K_eff u = 0` with `C` skew; the gyroscopic matrix and forward / backward whirl in the Campbell table (F-499, ADR 0411) ([[doc-reference-data-f415-coriolis-campbell]]; [[campbell-diagram]]).
+- Free vibration in the rotating frame $M u_{tt} + 2 \Omega C u_t + K_{\mathrm{eff}} u = 0$ with $C$ skew; the gyroscopic matrix and forward / backward whirl in the Campbell table (F-499, ADR 0411) ([[doc-reference-data-f415-coriolis-campbell]]; [[campbell-diagram]]).
 - Whirl above the loss of stiffness by a state-matrix eigensolver (F-505), whirl stability per cyclic index (F-511), shift-invert skew Lanczos for large parts (F-506) ([[adr-thread-structural-rotordynamics]]).
 - A flexible rotor of Beam2 shafts on bearings in the stationary frame (F-416), speed-dependent bearing tables (F-563), damped critical speeds as unbalance-response peaks and checked Campbell crossings (F-564, ADR 0501, done) ([[adr-thread-structural-rotordynamics]]).

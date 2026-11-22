@@ -62,7 +62,7 @@ The finite-strain incompatible-modes Hex8 and its stabilisation are on [[adr-thr
 ### Current state (second half)
 
 - **Hex8 formulations on the remaining linear paths** (F-588, ADR 0525, partial: ES3b known miss, MU12 not caught): the refusals of ADR 0493 D5 lifted in `rcfd_fem::hex8x`; free thermal expansion of the distorted patch stress-free to `1e-10` for BBar and Incompatible (`7.4e-11` worst at `nu 0.4999`), Euler buckling of a one-layer Incompatible strip within `5.1e-4` (Full control `1.5`). The ES3b miss is explained by F-614 (ADR 0530, done): with the centroid rule of Hex8 the enhanced strain is zero at the sample, so no field can separate Incompatible from the compatible strain at `element_samples`.
-- **Error density** (F-568, ADR 0616, partial): `EnergyError` gives element volumes, densities `eta_e/|K|^{1/2}` and a ranking by density; the effectivity clause is met, P3 (the hole criterion) is not. On a plate graded uniformly along the hole the tenth of largest densities holds 28 of the 48 hole-edge elements, a miss (F-695, ADR 0627, partial).
+- **Error density** (F-568, ADR 0616, partial): `EnergyError` gives element volumes, densities $\eta_e/\lvert K \rvert^{1/2}$ and a ranking by density; the effectivity clause is met, P3 (the hole criterion) is not. On a plate graded uniformly along the hole the tenth of largest densities holds 28 of the 48 hole-edge elements, a miss (F-695, ADR 0627, partial).
 
 ### ADRs (second half)
 
