@@ -1,0 +1,18 @@
+{
+  "form": 1,
+  "adr": "0764",
+  "item": "F-868",
+  "base": "2bab1863bd5fa845a818667a227fb6770cefa933",
+  "status": "done",
+  "note": "ADR 0764, 2026-11-22, done by its registered rule: at 17 degrees a time-accurate run of the same model on the same mesh (Spalart-Allmaras without DES on pimple, bdf2, dt 0.02 c/U to t = 200, mesh M1w-far500) settles to a steady attached flow with cl 1.5516 over [100, 200], 0.0541 under Ladson's 1.6057 and within the unchanged band 0.0803 (outside the measured scatter 0.018); nothing sheds (range 0.0012); the control at 15 degrees returns 1.4917 against the steady 1.4932 (tolerance 0.018); the gate holds the record, three negative controls and a 50-step run of the same case on the coarse mesh (crates/rcfd-api/tests/naca0012_17_degrees_unsteady_f868.rs), four mutations caught; the steady iteration of ADR 0760 does not reach this state and its known miss stays as the record of the steady arm.",
+  "follow_ups": [
+    {
+      "title": "NACA 0012 at 17 degrees: the steady solver reaches the attached state that the time-accurate run finds",
+      "deps": [
+        "F-868"
+      ],
+      "acceptance": "Every limit not stated here is registered in the ADR before the run. On the mesh M1w-far500 with the set-up of ADR 0760 a steady solve at 17 degrees ends steady by ADR 0167's window rule with a lift coefficient within 0.018 of 1.5516, the time-accurate value of ADR 0764, by a registered change of the steady route that leaves every default bit-identical, or the cause of the non-convergence of the SIMPLEC iteration there is diagnosed and recorded with its evidence; a run that does not decide is recorded as not deciding.",
+      "key": "naca0012-17-steady"
+    }
+  ]
+}

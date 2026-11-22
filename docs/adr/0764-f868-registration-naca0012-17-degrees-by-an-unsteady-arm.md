@@ -317,3 +317,161 @@ another number, and no test is ignored, skipped or retried to make a run pass.
    stall stated as the model's limit (option (b) of ADR 0760's question 1), or another arm (a finer or wall-resolved
    mesh, SST on `pimple`, DDES) is registered. It is written out with options and a recommendation in the addendum,
    under the fixed heading, once the result is known.
+
+## Addendum 1: results (2026-11-22)
+
+Commits: 9e8a5f27 (this registration, alone), e651e7d4 (the driver's new commands and the two case texts; before any
+run), 205ed326 (the test file with the recorded R17; before the record), a74611c2 (the record), e9d61cb6 (the committed
+mutation), and the commit of this addendum with the proposal file. Machine: the maintainer's Windows machine, shared
+with three other agents' solves. Binary: `rcfd-cli`, release, built from main 2bab1863 (no crate source differs on this
+branch), sha256 `eeb751d35817a5a92af79012ac45164b5751a27a066fe37b38b84f07a18565ce`. The two runs were started together
+at 10:55 UTC, one thread each, each made once: `U-a17` 11 064 s, `U-a15` 11 139 s. The fallback was not needed. Record:
+`docs/investigations/f868-naca0012-17-degrees-unsteady/` (README, `results.json`, `cases/`); logs in the scratch folder.
+
+### The result at 17 degrees and the control
+
+| Id | Limit | Measured | Met |
+| --- | --- | --- | --- |
+| U17 | abs(M(17) - 1.6057) <= 0.0803, settled, complete | M(17) = 1.5516; difference -0.0541 | **yes** (margin 1.5) |
+| S17 | abs(M2 - M1) <= 0.018 | M1 1.55158, M2 1.55130; -0.0003 (plain halves: 1.55187, 1.55130; -0.0006) | **yes** |
+| C15 | abs(M(15) - 1.4932034) <= 0.018 | M(15) = 1.49167; difference -0.0015 | **yes** (margin 12) |
+| S15 | abs(M2 - M1) <= 0.018 | M1 1.49167, M2 1.49217; +0.0005 (plain halves: 1.49117, 1.49217; +0.0010) | **yes** |
+| R1 | 2 of 2 runs reach t = 200 with exit code 0 and no `corrector_cap` warning | both: 10 000 steps, t = 200, exit 0, two correctors at every step, warnings SV101 only | **yes** |
+| P2 | mesh sha256 equal | `59e707a8...3a70c889`, equal | **yes** |
+| T1 | both case files are the registered set-up | both | **yes** |
+| T2 | the record follows from its samples, <= 1e-8 | equal to the twelve printed digits | **yes** |
+| FT17 | 50 steps, time 1.0, abs(cl_eff - R17) <= 0.018 | R17 = 1.2079835934, recorded from the first run (which failed by construction, the constant unset); every later run gave the same ten digits | **yes** |
+| NC1 | the band rejects 1.0476 | 0.558 against 0.0803 | **yes** |
+| NC2 | the control rejects the steady values of 14 and 16 degrees | +0.0682 and -0.0504 against 0.018 | **yes** |
+| NC3 | rejects the ramp, accepts the sine | ramp: 0.0500, not settled; sine: 1e-15 with whole periods, 7.8e-4 without | **yes** |
+| B1 | <= 300 000 bytes | 147 531 bytes | **yes** |
+| E | no file under `crates/*/src/`, no existing test, no golden, no hash table | `git diff --stat 2bab1863`: the new test file and its mutation patch, this ADR, the record's folder, the driver, the proposal file | **yes** |
+| F, P | see "The house checks" | | see below |
+
+**Which it is (task 4).** At 17 degrees the time-accurate run is **steady in time and its mean is within the band**:
+neither of the brief's three cases as worded, but the first one without the oscillation. Nothing sheds. From the free
+stream the lift rises to 1.571 at t = 11 and then falls slowly: 1.5562 at t = 41, 1.5523 at t = 100, 1.5515 at t = 150,
+1.5511 at t = 200. Over the window its range is 0.0012 (limit for "steady in time" 0.005), so no amplitude and no
+frequency are reported. The mean 1.5516 is 0.0541 (3.4 %) under Ladson's 1.6057, inside the band 0.0803 and outside
+the scatter 0.018 of the measurement. By the registered wording the verdict of the driver is "within the band, steady in
+time".
+
+**The control holds.** At 15 degrees the same set-up gives 1.49167 against the steady 1.49320 of ADR 0760: 0.0015 low,
+where the starting-vortex estimate was 0.0052 low. The lift is still rising at the end (1.11e-5 per time unit over the
+last ten), as that estimate expects.
+
+**What this says about the steady arm.** The steady SIMPLEC iteration of ADR 0760 at 17 degrees swung between -0.07 and
+1.95 and was read as a stall of the model one degree early. The time-accurate run of the same model on the same mesh
+reaches an attached steady flow there, so the state exists and the steady iteration did not find it. That is a finding
+about the steady iteration at this angle; its cause was not examined. With this value the computed maximum over the
+compared angles is 1.5516 at 17 degrees, 3.7 % under the measured 1.6116 at 17.13 (ADR 0760's VM had 1.5420 at 16
+degrees, 4.3 % under); VM is ADR 0760's check and is not judged again here.
+
+**Drag, for the record and without a claim (task 3).** Time mean of `cd_eff` over the window: 0.02727 at 15 degrees
+(0.02699 to 0.02773, falling; the steady value of ADR 0760 is 0.02676) and 0.04369 at 17 degrees (0.04353 to 0.04395,
+falling). The half means over the lift's intervals are 0.02727, 0.02710 and 0.04369, 0.04359.
+
+### Mutations (scratch copy of the tree at a74611c2, its own target folder, release, each run once)
+
+| Id | Mutation | What failed |
+| --- | --- | --- |
+| M1 (committed patch) | `rotate_z_deg = -17` to `-16` in `U-a17.toml` | T1; and FT17: cl_eff 1.1346, 0.0734 from R17, against 0.018 |
+| M2 | `time_scheme` `bdf2` to `euler` in `U-a17.toml` | T1. FT17 passed: after 50 steps the two schemes differ by less than 0.018 on the coarse mesh (the value was not printed) |
+| M3 | the recorded M of 15 degrees raised by 0.03 in `results.json` | T2 |
+| M4 | the limit 0.018 of S17, S15 and C15 multiplied by ten in the test | NC2 and NC3 |
+
+All four are caught. `git apply --check` accepts the committed patch on the tip.
+
+### What the gate runs and what is a heavy record
+
+- **In the gate** (the 12 tests of `crates/rcfd-api/tests/naca0012_17_degrees_unsteady_f868.rs`, 7 s): the judgement at
+  17 and 15 degrees computed again from the committed samples; the set-up of the committed cases; three negative
+  controls; and one solver run, 50 time steps of the committed case of 17 degrees on the 6144-cell example mesh (FT17).
+- **Heavy record, not in the gate and not a cargo test:** the two runs of 10 000 steps on the 32 768-cell mesh, about
+  three hours side by side, made by the driver on demand (the commands are in the folder's README). The gate does not
+  see a change of these runs directly; it sees a change of the coarse run's lift above 0.018, or any edit of the record
+  or the cases.
+- The known miss of ADR 0760, `f868_v17_lift_within_the_band_at_17_degrees_known_miss`, is unchanged and still fails
+  when run: it is the record of the steady arm.
+
+### Deviations and disclosures
+
+- **The whole-period rule on a signal that does not oscillate.** In the first half of each window the lift crosses its
+  mean within a few ripples of 1e-6, so the rule took M1 over a short stretch around that crossing (t = 143.98 to
+  144.32 at 15 degrees, 143.60 to 144.68 at 17) and M1 came out equal to M. The rule was registered so and is applied
+  so; the plain half means are given beside it in the table and are 0.0010 and 0.0006 apart, a thirtieth of the limit.
+  A later registration should use whole periods only when the signal oscillates by the registered range.
+- **Settled is the registered rule, not an asymptote.** At 17 degrees the lift is still falling at the end, by 6.4e-6
+  per time unit; it fell by 0.0008 over [100, 150] and by 0.0004 over [150, 200]. If that halving goes on, about 0.0004
+  remains. No run beyond t = 200 was made.
+- **The window mean of an oscillating signal** would have carried a cut-period error of up to 0.01 at ADR 0159's swing
+  (seen in the driver's selftest: 1.0056 for a sine about 1); it did not matter here, there being no oscillation.
+- The binary was built, the mesh made and the case texts validated before the commit of the registration (said in its
+  status lines); the link check `docs_site` ran on the registration after it was written and before its commit.
+- While the runs went, the last lift value of each was read every 20 time units to see that they went on; no decision
+  depended on it and nothing was changed.
+- The steps took 1.1 s under load, about as estimated (three hours).
+- The first runs of the driver's selftest failed on three assertions of the selftest itself (an exact zero asked of a
+  rounded sum; a threshold of 1e-3 on the plain half means of the sine, which are 7.8e-4 apart; the sampled amplitude
+  of the sine within 2e-3, which is 0.7579). They were corrected before the driver's commit and before any run; the
+  judgement code was not changed.
+- ADR 0167 and ADR 0210 were not read whole (said in the registration).
+
+### The house checks (F, P)
+
+- `cargo test -p rcfd-api --release --test naca0012_17_degrees_unsteady_f868`: 12 passed, 0 ignored.
+  `cargo test -p rcfd-api --release --test naca0012_lift_curve_f868`: 22 passed, 1 ignored, as before; with `--ignored`
+  the known miss fails as before. `cargo test -p rcfd-api --release --lib`: 159 passed, 4 ignored.
+- `cargo fmt -p rcfd-api --check` clean; `cargo clippy -p rcfd-api --all-targets -- -D warnings` clean.
+- `python scripts/f868_naca0012_lift_curve.py selftest`, `python scripts/w49d_aoa_sweep_fixed.py selftest` and
+  `python scripts/w48y_aoa_sweep.py selftest`: pass.
+- `cargo test -p rcfd-cli --release --test docs_site`, `python scripts/roadmap_proposals.py check` and
+  `python scripts/process_report.py --check` on the last tree: given in the report.
+
+### Not run
+
+The fallback pair (dt 0.01); a second time step or a longer run; 16 degrees, 18 degrees and above; another mesh, SST or
+DDES; anything on Linux; the whole integration tests of `rcfd-api` and the workspace suite (rule 7); `baseline_hashes`
+(no shared solver file changed).
+
+### Size
+
+Actual: done (registered: partial); 0 further registrations and no amendment; 1 heavy run (the pair, 3.1 hours of wall
+time, with one release build of `rcfd-cli`, the builds of the test file and one build of a scratch copy for the
+mutations); 1 question; about 230 000 bytes read.
+
+### Decision by the registered rule
+
+U17 is met (1.5516 against 1.6057, band 0.0803), S17 holds, C15 and S15 hold, R1, P2, T1 and T2 hold, FT17 passes, NC1
+to NC3 reject, M1 to M4 are caught, E and F hold. By the clause "done only if ...": **done**, for the lead to decide.
+
+What stands beside it, so that "done" is not read for more than it is: the value at 17 degrees is 3.4 % low, inside the
+5 % band and outside the scatter of the measurement, where the eleven angles below it are inside the scatter; it comes
+from a time-accurate run that settles to a steady flow, not from the steady solver the acceptance names, which does not
+converge there; one mesh, one time step, a wall law at y+ about 40.
+
+### Open questions for the maintainer
+
+1. **Does a steady state reached by the time-accurate run meet "incompressible steady RANS" at 17 degrees?** Options:
+   (a) yes: F-868 is done, with the headline "0 to 16 degrees by the steady solver, 17 degrees by a time-accurate run of
+   the same model that settles to a steady flow", and the non-convergence of the steady iteration at 17 degrees goes to
+   a follow-up item of its own; (b) no: F-868 stays partial until a steady solve reaches that state, and the follow-up
+   below is registered under it. **Recommendation (a)**: the flow found is steady and is the same equations' solution,
+   the maintainer's answer of 2026-11-22 asked for this arm, and the miss that remains is one of the steady iteration,
+   which the follow-up names with a number.
+
+### For the lead: roadmap entries
+
+Status proposed: done.
+
+> ADR 0764, 2026-11-22, done by its registered rule: at 17 degrees a time-accurate run of the same model on the same mesh (Spalart-Allmaras without DES on pimple, bdf2, dt 0.02 c/U to t = 200, mesh M1w-far500) settles to a steady attached flow with cl 1.5516 over [100, 200], 0.0541 under Ladson's 1.6057 and within the unchanged band 0.0803 (outside the measured scatter 0.018); nothing sheds (range 0.0012); the control at 15 degrees returns 1.4917 against the steady 1.4932 (tolerance 0.018); the gate holds the record, three negative controls and a 50-step run of the same case on the coarse mesh (crates/rcfd-api/tests/naca0012_17_degrees_unsteady_f868.rs), four mutations caught; the steady iteration of ADR 0760 does not reach this state and its known miss stays as the record of the steady arm.
+
+Follow-up proposed (a new item, with its own acceptance):
+
+> Title: NACA 0012 at 17 degrees: the steady solver reaches the attached state that the time-accurate run finds. Deps: F-868. Acceptance: Every limit not stated here is registered in the ADR before the run. On the mesh M1w-far500 with the set-up of ADR 0760 a steady solve at 17 degrees ends steady by ADR 0167's window rule with a lift coefficient within 0.018 of 1.5516, the time-accurate value of ADR 0764, by a registered change of the steady route that leaves every default bit-identical, or the cause of the non-convergence of the SIMPLEC iteration there is diagnosed and recorded with its evidence; a run that does not decide is recorded as not deciding.
+
+The same entries are in `docs/roadmap/proposals/0764-F-868.json`. No gap is proposed with the status done; if the lead
+keeps the item partial (question 1, option (b)), the gap is: "Met at 0 to 16 degrees by the steady solver and at 17
+degrees by a time-accurate run that settles to a steady flow (cl 1.5516 against 1.6057, band 0.0803; ADR 0764). Missing:
+a steady solve that reaches that state at 17 degrees; the SIMPLEC iteration does not converge there (ADR 0760, known
+miss)." `docs/adr/index.md` is not current and is left to the lead.
