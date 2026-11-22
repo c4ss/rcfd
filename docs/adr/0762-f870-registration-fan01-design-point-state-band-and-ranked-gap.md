@@ -313,3 +313,19 @@ partial, and report the verdict as the rule gives it, with what was delivered be
   and B1 is the one the mesh-convergence estimate belongs to.
 * Kromer's thesis and the SAE paper were not read.
 * The existing tests `fan01_validation.rs` and `fan01_gci_w37c.rs` are not edited, un-ignored or removed.
+
+## Amendment 1 (2026-11-22, before the corrected run of S2 and before any registered solve): the tolerance of S2 on `U_num`
+
+Written after the first run of the three gate tests of the new file (uncommitted; no heavy run has been made). That run
+gave: S3 passed (B1 mesh 38 184 cells, 83.372 deg, 3.7647, 252.42); S1 printed its first values (B3 at iteration 300:
+torque 1.918174 N m, 46.5819 Pa) and failed as written, because no value was recorded yet; S2 failed on one assertion.
+
+The defect is in the set-up of S2, not in the band. The registration gives `U_num` to the printed digits, 0.21190 N m and
+29.75 Pa, and asks S2 to reproduce them within 1e-4 relative. The arithmetic gives 0.2119034 N m and 29.75469 Pa: the
+second differs from its own rounded value by 1.6e-4, so the registered tolerance is tighter than the rounding of the
+number it checks. Corrected, fixed now: S2 asserts each `U_num` to half a unit of its last printed digit,
+`abs(U - 0.21190) <= 5e-6` N m and `abs(U - 29.75) <= 5e-3` Pa. The band is unchanged: A1 and A2 use the registered
+29.75 Pa and 0.21190 N m (32.98 W) as written. The other limits of S2 stay.
+
+The first values of S1 are the record of the registration's words ("the recorded values are those of the first run of
+each test on current main"): B3 at iteration 300, 1.918174 N m and 46.5819 Pa.
