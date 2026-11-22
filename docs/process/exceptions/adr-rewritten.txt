@@ -315,3 +315,5 @@
 0739-f848-proposal-run-sites-a-remote-simulation-service-for-the-studio-cli-and-mcp.md
 0800-electron-studio-roadmap.md
 0801-studio-web-dependencies-and-layout.md
+# 2026-11-22, the lead: one file name of a link in line 11 corrected at the merge (docs_site); recorded in the ADR.
+0759-f866-registration-the-control-of-l1-decides-and-asserts-on-the-ten-listings.md

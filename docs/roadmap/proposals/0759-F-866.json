@@ -1,0 +1,10 @@
+{
+  "form": 1,
+  "adr": "0759",
+  "item": "F-866",
+  "base": "cd74f3885d51793ba2b7ad026e549efdebfdef88",
+  "status": "partial",
+  "note": "ADR 0759, 2026-11-22, partial: the control of listing_budget L1 decides and asserts on the time of the ten listings (above the registered 500 ms the budget must reject them, else nothing is asserted), so it fails for no pair of durations while BUDGET is 500 ms; the pure check C1 with the times of gate 62a6fec3 failed before and passes after; 0 failed of 20 release, 3 debug and 20 runs in the band (scaled copy, RUNS 296, median worst 61.7 ms, by amendment 1; the first copy with RUNS 214 was under the band at 34.6 ms); the old rule failed L1 in 3 of 20 runs on the first copy; mutations budget 5 s, listing ten times slower, condition inverted and old rule all caught; budget and its assertion byte for byte; docs_site fails on one wrong link in the registration itself.",
+  "gap": "Every clause of the acceptance is met. Missing: docs_site fails on one link of the registration (line 11 of ADR 0759 names 0122-wave47a-rcfd-project.md; the file is 0122-wave47a-project-folder-library.md), which an agent may not edit; the lead corrects it and runs docs_site. The band of the brief was reproduced only by the set-up of amendment 1 (the first set-up gave 34.6 ms, under 40 ms).",
+  "follow_ups": []
+}
