@@ -257,3 +257,210 @@ set-up found before the registered runs is corrected by an amendment committed b
 
 To be completed in the addendum with options and a recommendation; not decided by this work: the convergence rule of
 F-870, after the class.
+
+## Addendum 1: results
+
+Written 2026-11-22, after the runs. Commits on the branch, from main 21054b68: 94335e42 (this registration, alone),
+235d8479 (the record in `crates/rcfd-fv/src/pimple.rs` and the test file; the two registered runs were made from it),
+3ded7768 (rustfmt of the test file and the committed mutation patch), d083a836 (the outer records, the logs, the
+mutation log and the recorded class of G1), and the commit of this addendum with the proposal file. The records are in
+`docs/investigations/f885-check-h-outer-record/`: `H_dt_outer.csv` and `H_dt2_outer.csv` (one row per step: `d_1` to
+`d_5` and the step change), `H_dt.log`, `H_dt2.log`, `mutations.log`. R0 was met, so by E-3 the site signal is read from
+the committed records of ADR 0766 and the full rows of the new runs stay in the scratch folder.
+
+### The sentence
+
+**The run does not decide.** By ADR 0183's outer-iteration rule as written, no step of the window of either run meets
+it (0 of 2 749 in H(dt), 0 of 5 498 in H(dt/2), against 99 %): both runs are NOT TIME-ACCURATE, the class of ADR 0183 is
+NOT EVALUABLE and the verdict of F-879 is "does not decide". No class is asserted.
+
+The record shows why, and it is not the flow: in every step of both runs the velocity change of the 5th outer iteration
+is about as large as that of the 1st (`d_5 / d_1` 0.93 and 0.96), while the 2nd to the 4th contract. The 5th outer
+iteration is the unrelaxed one (alpha 1 against the relaxed `alpha_u = 0.9`, `alpha_p` of the case default in the 1st
+to 4th), and it moves the velocity by about 1 m/s away from where the relaxed iterations went, and the next step's first
+iteration moves it about as far back. The rule measures that switch, not the time accuracy of the state.
+
+### The record (section 1)
+
+| Id | Measured | Met |
+| --- | --- | --- |
+| A1 | `cargo test -p rcfd-api --release --test baseline_hashes`: 3 passed, 1 ignored; `baseline_hashes.rs` unchanged | yes |
+| A2 | cavity, three steps of 5 outer iterations: record and route B equal to the 13 printed digits at every `k` (e.g. step 1: 3.4197e-2, 7.1717e-3, 1.5369e-3, 3.3740e-4, 1.4550e-3 m/s), relative difference `<= 1e-12` asserted | yes |
+| T2 | lid at rest: every `d_k` of three steps exactly 0 | yes |
+| T3 | `n_outer = 1`: 4.303299147270e-2, 4.069470398797e-2, 3.756081223779e-2 m/s, equal to the change read from outside | yes |
+| T4 | the cumulative change differs from the record at some `k >= 2` of each step | yes |
+| T5 | setting off: `outer_velocity` empty, `u`, `p` and flux equal bits after three steps | yes |
+| C2 | 20 steps of H(dt) with both records and with neither: site speeds, torque, pressure rise equal bits at every step | yes |
+| S1 | after 20 steps: within 1e-6 of 13.824327 m/s, 2.607352 N m, 110.1842 Pa | yes |
+| S2 | 20 entries of 5 finite values, `d_1 > 0` (step 1: 36.09, 26.05, 4.316, 1.340, 0.916 m/s) | yes |
+
+The cavity shows the same pattern as the fan on a case with no rotation, no turbulence and no periodic seam: `d_5` is 4
+to 15 times `d_4`.
+
+### Check H (section 2)
+
+Both runs completed (A3): 5 498 and 10 996 steps, no failure, every field finite, mass balance 1.6e-14 and 1.4e-14,
+156.8 and 256.8 min (1.71 and 1.40 s per step on the shared machine).
+
+| | H(dt) | H(dt/2) |
+| --- | --- | --- |
+| A4: window steps meeting `d_5 <= 1e-2 d_1` | **0.0000** | **0.0000** |
+| `d_5 / d_1` over the window: smallest, median, largest | 0.9309, 0.9333, 0.9356 | 0.9601, 0.9644, 0.9685 |
+| `d_1` (m/s): smallest, median, largest | 1.0125, 1.0146, 1.0160 | 0.9705, 0.9735, 0.9768 |
+| `d_5` (m/s) | 0.9451, 0.9469, 0.9485 | 0.9367, 0.9390, 0.9411 |
+| medians of `d_2/d_1`, `d_3/d_2`, `d_4/d_3`, `d_5/d_4` | 0.209, 0.602, 1.014, 6.70 | 0.199, 0.662, 0.919, 19.4 |
+| `d_5 / d_1` by flow-through time 2 to 6 (median) | 0.938, 0.934, 0.933, 0.933, 0.933 | 0.967, 0.965, 0.964, 0.964, 0.964 |
+| step change `max_c |u^(n+1) - u^n|` (m/s), median | 0.093 | 0.259 |
+| share by the rule of ADR 0766 D-2, same run (reported only) | 0.4376 | 1.0000 |
+| R0: values beyond 1e-8 of the ADR 0766 record; largest relative difference | 0; 4.9e-10 | 0; 4.8e-10 |
+| site signal: cell, `A`, crossings | c157, 5.364938e-3 m/s, 0 | c157, 6.493334e-3 m/s, 0 |
+| torque, pressure rise: window means | 2.007096 N m, 69.6172 Pa | 2.010156 N m, 70.0729 Pa |
+
+R0 was met at every step of both runs: the solution is that of ADR 0766, so everything ADR 0766 reported beside its
+class (amplitudes and frequencies of torque and pressure rise, the means against the steady and measured values, the
+smallest axial velocity at the site, +0.29 and +0.28 m/s, the five cells of largest amplitude at the tip, the seam-pair
+sum 2.3e-15) holds unchanged and is not repeated here; the logs carry it.
+
+| Id | Measured | Met |
+| --- | --- | --- |
+| A3 | both runs complete | yes |
+| A4 | 0 % and 0 % against 99 % | **no, in both runs** |
+| A5 | class NOT EVALUABLE (first clause); verdict "does not decide" | a verdict by the rule, the one that does not decide |
+| A6 | held by `f885_class_from_the_committed_records` | yes |
+| C3, C4, C5 | the sine, the ten pairs and the cut series of ADR 0766, the seven pairs of E-1: each as built | yes |
+| R0 | above | yes |
+| G1 | counts 5 498 and 10 996, windows 2 749 and 5 498, shares 0 and 0, class and verdict, `A` as recorded | yes |
+| D1 | `git diff --name-only 21054b68` names `crates/rcfd-fv/src/pimple.rs` only under `crates/*/src`; `simple.rs`, the two F-879 and F-870 test files and every golden unchanged | yes |
+
+### What the record says, and what it does not
+
+Three facts from the records. (1) `d_1` and `d_5` are about 1 m/s in every step of the window at both time steps; they
+do not shrink as the state settles and do not scale with the step (1.01 against 0.97 m/s at a halved step). (2) The step
+change, 0.09 and 0.26 m/s, is smaller than either: the 1st iteration moves the field by about 1 m/s and the 5th moves it
+most of the way back. (3) The relaxed iterations contract (`d_4 / d_1` about 0.12 in both runs) and the unrelaxed 5th
+jumps (`d_5 / d_4` 7 and 19). Together: the relaxed and the unrelaxed outer iterations do not share a fixed point, and
+each step oscillates between the two by about 1 m/s at some cell. The same pattern on the cavity (`d_5 / d_4` 4 to 15)
+says it belongs to the relaxed PIMPLE outer loop, not to the fan.
+
+Read from the code and not shown by a run: the relaxation of the momentum predictor is implicit about the current
+iterate (`FvMatrix::relax`), so it alone leaves the fixed point unchanged; but the relaxed diagonal also enters the
+correctors' `rAU` and the face interpolation built on it, which change when alpha goes to 1 in the final iteration. That
+is a candidate cause, not a diagnosis. It is consistent with ADR 0766's pressure record (a first pressure change that did
+not vanish in the steady window). Where the largest change sits was not recorded (the record keeps the norm, not the
+cell). No solver change was made beyond the record: the brief says to stop and report if anything else needs changing.
+
+Said plainly: on this set-up ADR 0183's rule cannot be met by any state, steady or not, because the quantity it reads is
+dominated by the switch from relaxed to unrelaxed iterations. Neither run's "no" says that the march is time-inaccurate
+in the sense ADR 0183 meant; it says that the outer iterations of a step do not converge to one state.
+
+### What this means for F-870 (task 3; a proposal, nothing is changed)
+
+The class is not decided, so nothing follows for the convergence rule of F-870 from check H. The observation of ADR
+0766 stands (the site signal decays to below 1e-4 m/s and the time means settle to 0.15 % in torque and 0.65 % in
+pressure rise between the steps), but it now rests on a march whose outer iterations do not converge within a step, so
+the time means themselves carry an error of the outer loop of unknown size. ADR 0766's caution stands with it: the
+time-marched pressure rise on B2 is 8 to 9 % above the SIMPLEC sample on the same mesh, and part of that gap may be this
+unconverged outer loop.
+
+### Mutations and negative controls
+
+From `mutations.log`, on a scratch copy with its own target folder; M6 in the worktree with the file restored after.
+
+| Id | What happened |
+| --- | --- |
+| K0 | unmutated: the two tests pass |
+| M1 | the change from the step start: caught by `f885_record_two_routes` (A2). Committed as the mutation patch |
+| M2 | x component only: caught (A2) |
+| M3 | the record flips the last bit of one cell's velocity: caught by T5 and by C2 of `f885_short_run_holds_the_state` |
+| M4 | ratio 1e-1: caught ("the outer rule fails in H(dt/2)" got PHYSICAL) |
+| M5 | `d_4` for `d_5`: caught ("small oscillation in both" got NOT EVALUABLE) |
+| M6 | `H_dt_outer.csv` cut to 2 749 rows: caught (2 749 against 5 498 steps) |
+| K1 | T4 holds in the unmutated test |
+
+### Deviations
+
+1. In C4 the pair "steady, with the outer ratio large where the step's first change is below the floor" of ADR 0766 is
+   about D-2's floor, which E-1 removes; it is kept with its pressure columns and a good velocity record, so it shows
+   that the pressure record does not enter the class. The other nine pairs carry their outer argument as `d_5 / d_1`.
+2. `cargo fmt -p rcfd-api --check` fails on this machine with "The filename or extension is too long (os error 206)"
+   (the command line of the crate's many files), so the new test file was checked with `rustfmt --check --edition 2021`
+   on the file itself; `cargo fmt -p rcfd-fv --check` ran as written.
+3. The first mutation run did not apply its mutations (a Python version error of the script) and reported every
+   mutation as passing; it was corrected and run again, and `mutations.log` is the second run.
+4. `cargo test -p rcfd-cli --release --test docs_site` was run on the registration's text before its commit, to check
+   its links.
+
+### What was not run
+
+* Any run with another relaxation, another `n_outer`, or a longer run (stop rule 4 of ADR 0183); any search for the
+  cell or the cause of the change of the final iteration.
+* The full workspace test run; only the checks of rule 7 named below.
+
+### The checks of rule 7
+
+* `cargo test -p rcfd-api --release --test f885_check_h_outer_record`: 4 passed, 2 ignored (the heavy records, run
+  once each).
+* `cargo test -p rcfd-api --release --test baseline_hashes`: 3 passed, 1 ignored.
+* `cargo test -p rcfd-fv --release --lib`: 115 passed, 6 ignored.
+* `cargo test -p rcfd-api --release --test f879_fan01_check_h`: 4 passed, 2 ignored.
+* `cargo fmt -p rcfd-fv --check`: clean; the new test file by `rustfmt --check`: clean (deviation 2).
+* `cargo clippy -p rcfd-fv -p rcfd-api --all-targets -- -D warnings`: clean.
+* `cargo test -p rcfd-cli --release --test docs_site`, `python scripts/roadmap_proposals.py check` and
+  `python scripts/process_report.py --check`: at the commit of this addendum, as reported to the lead.
+
+### Size
+
+Size (agent): partial; 1; 2; 2; 330000
+
+One further registration is expected if the maintainer takes option (a) of question 1.
+
+### Decision by the registered rule
+
+**Partial.** The record is in and shown correct (A2, T2 to T5), the defaults are bit-identical (A1, C2), the two runs
+were made, and the run does not decide: neither run is TIME-ACCURATE by E-1. What it would take: an outer loop whose
+iterations converge to one state within a step, so that the rule reads the time accuracy of the march; or the
+maintainer's reading of the rule for a relaxed PIMPLE loop (question 1).
+
+## Open questions for the maintainer (addendum 1)
+
+1. **The outer-iteration rule on a relaxed PIMPLE loop.** On this set-up the 5th, unrelaxed outer iteration moves the
+   velocity as far as the 1st in every step, at both time steps, so ADR 0183's rule as written cannot be met. Options:
+   (a) a diagnosis registered under F-885 (rule 13), on the cavity and on 20 steps of H(dt), that finds where and why the
+   relaxed and the unrelaxed iterations have different fixed points (the record with the cell of its largest change;
+   the same steps with alpha 1 in every outer iteration), with no long run, and then a decision on the remedy; (b) check
+   H run again with `alpha_u = alpha_p = 1` in every outer iteration, so that every iteration solves the same equations,
+   which departs from the case default and may not be stable, about seven hours of the shared machine; (c) the rule read
+   on the relaxed iterations only (`d_4 / d_1`), which is a rule written after the result and would fail as well (about
+   0.12); (d) leave F-885 and F-879 partial and take the class from the observation of ADR 0766 as the maintainer's
+   reading. I recommend (a): it is cheap, it tells whether the loop or the rule is at fault, and it bears on every
+   pimple result with `n_outer > 1` and relaxation, not only on check H.
+2. **The convergence rule of F-870.** Still not to be decided: no class exists. Options as in ADR 0766 question 2: (a)
+   keep `is_converged()` of the steady solve at 1e-5; (b) allow a time march to a settled state, registered with the
+   terms of ADR 0766; (c) a rule on a time mean. I recommend (a) for now, and (b) only after question 1 shows the outer
+   loop converges within a step, since the time means of a march whose outer iterations do not converge carry an error
+   of unknown size; ADR 0766's caution (the time-marched pressure rise on B2 is 8 to 9 % above the SIMPLEC sample) stands.
+
+## For the lead: roadmap entries
+
+> Status proposed for F-885: partial.
+
+> Note entry: ADR 0767, 2026-11-22, partial: the pimple step keeps, opt-in (PimpleSettings::outer_velocity_record, defaults bit-identical, baseline hashes unchanged), the largest velocity change of each outer iteration, shown equal to the changes of the iterates by a second route on a cavity; check H was run again on B2 (both time steps, reproducing the ADR 0766 records to 5e-10 at every step) with ADR 0183's outer rule as written, and no window step of either run meets it (d5/d1 0.93 and 0.96 against 1e-2), because the unrelaxed 5th outer iteration moves the velocity about 1 m/s from the relaxed ones in every step, so the class is NOT EVALUABLE and the run does not decide; held by crates/rcfd-api/tests/f885_check_h_outer_record.rs and docs/investigations/f885-check-h-outer-record, six of six mutations caught.
+
+> Gap entry: Missing for done: a class by ADR 0183's rule. The record is in and correct, but in every step the unrelaxed final outer iteration changes the velocity about as much as the first (d5/d1 0.93 at dt, 0.96 at dt/2; the same pattern on a cavity), so the relaxed and unrelaxed iterations do not share a fixed point and the rule cannot be met by any state. Needs a diagnosis of the outer loop (proposed under F-885), or a run without relaxation, or the maintainer's reading of the rule.
+
+The same entries are in `docs/roadmap/proposals/0767-F-885.json` (form 1 of ADR 0755, base 21054b68), checked with
+`python scripts/roadmap_proposals.py check`. No follow-up item is proposed: the diagnosis of question 1 (a) adds no
+acceptance clause and would be registered under F-885 (rule 13).
+
+Generated pages that this work may leave not current, for the lead (rule 9): `docs/adr/index.md` (ADR 0767 is new).
+
+## Addendum 2 (2026-11-22): row T3 of the table of checks is malformed
+
+Found by `python scripts/process_report.py --check` after addendum 1. In row T3 of the table of checks the formula of
+the check and of the limit, written in code spans, holds the character that separates the cells of a table, so the row
+splits into more cells than the header and its kind is read as "0". The row as it was meant, with no number changed:
+check "`n_outer = 1` on the cavity: the one value against the largest norm over the cells of `u^(n+1) - u^n`, read from
+outside"; limit "relative difference `<= 1e-12`"; source "Same discrete problem by two routes"; estimate 0; margin n/a;
+kind **code verification**. T3 was run as meant and met (addendum 1). The table cannot be edited (rule 18), so the
+process report keeps naming the row; the lead's list `docs/process/exceptions/registration-kind.txt` is where such a row
+is passed over, and that is left to the lead.
