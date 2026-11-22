@@ -2405,3 +2405,19 @@ kriging or Bayesian-optimisation code was opened. Every item is from memory and 
 | Branin, Hartmann 3 and 6 (constants, minima 0.397887, -3.86278, -3.32237) | from memory | Dixon and Szego (1978); NOT read; ADR 0621 G0 evaluates the functions at the stated minimisers (within 4e-7 and 2e-6) |
 | Basin restart of expected improvement (ADR 0651): trigger, basin ellipsoid in the length scales, a fresh process outside it | derived, parameters from smoke runs | the idea of excluding an exhausted region is in tabu search (Glover 1989) and the restarts of trust-region Bayesian optimisation (Eriksson et al. 2019); both from memory, NOT read; ADR 0651 A1 (Hartmann 6, minimum still from memory as above), A6 |
 | Shekel 10 on `[0, 10]^4` (ten centres, widths `beta = (1, 2, 2, 4, 4, 6, 3, 7, 5, 5)/10`, minimum -10.5364 near (4, 4, 4, 4)) | from memory | Dixon and Szego (1978); NOT read; ADR 0673 S0 finds the minimum numerically by Nelder-Mead from (4, 4, 4, 4) and 40 seeded starts |
+
+
+## Cylinder wake: the mean drag coefficient at Re 100 (F-869, ADR 0761)
+
+Read on 2026-11-22 as raw text (`curl`, `pdftotext -layout`) of the two PDFs from arxiv.org; nothing is filled in from
+recollection. The registration is [ADR 0761](adr/0761-f869-registration-the-mean-drag-of-the-cylinder-at-re-100-against-the-published-spread.md);
+the test is `crates/rcfd-api/tests/f869_cylinder_re100_mean_drag.rs`. The earlier rows on the cylinder (the section
+"Cylinder wake" above, and the rows of waves 30B, 31C and 31A) are unchanged.
+
+| Value | Source and what was read | Result |
+|---|---|---|
+| Time-averaged C_D, rms of C_L and St at Re 100, Newtonian, as quoted from other papers: Kravchenko et al. 1.314 / 0.222 / 0.164; Oliveira 1.370 / - / 0.167; Sivakumar et al. 1.325 / 0.229 / 0.164; Posdziech and Grundmann 1.325 / 0.228 / 0.164; Mossaz et al. 1.328 / - / 0.164; Qu et al. 1.319 / 0.225 / 0.165; Constant et al. 1.37 / - / 0.165; Peng et al. 1.361 / 0.235 / 0.165; Williamson (experiment) St 0.165 | S. Parvar, K. T. Iqbal, M. N. Ardekani, L. Brandt, O. Tammisola, "Elastoviscoplastic fluid flow past a circular cylinder", arXiv:2303.09262v1 (2023), Table 1, block "Re = 100" | verified as quotations, digit for digit; the eight originals were NOT read. The C_D and St columns equal `validation-data/reference/cylinder_re100_literature.csv` |
+| The same paper's own computation at Re 100: C_D 1.359, rms of C_L 0.236, St 0.164 on its domain of 64 D by 32 D; 1.400 / 0.254 / 0.168 on 32 D by 16 D | the same Table 1, rows "(Present 64 x 32)" and "(Present 32 x 16)"; the text below the table: "a domain size with 32D x 16D is too small and may negatively affect the results" | read (primary: the paper's own result). The 32 D by 16 D row is not used, for the paper's own reason |
+| C_D 1.328, amplitude of C_L 0.31, St 0.164 at Re 100 (the paper's own computation); H. Ding as quoted: 1.325, 0.28, 0.164 | S.-K. Park, G. Jo, H. J. Choe, "Virtual Interpolation Point Method for Viscous Flows in Complex Geometries", arXiv:1401.6513v2 (2014), Table 3; C_D is defined there as the time-averaged value and C_L as the largest deviation of the lift coefficient from its mean | read (primary for the first row); Ding's paper was NOT read |
+| Band of the mean drag coefficient at Re 100: [1.314, 1.370], the smallest and the largest of the eleven values above without the 32 D by 16 D row; width 0.056, middle 1.342, half-width 2.09 % of the middle; no allowance for discretisation added | derived from the rows above | registered in ADR 0761 before any run. Nine of the eleven values are quotations and two are primary; all are computations, none is a measurement |
+| Not obtained: the originals of the nine quoted values; a measured mean drag at Re 100. Two searches of 2026-11-22 for open copies of Qu et al. (J. Fluids Struct. 39 (2013) 347) and of Posdziech and Grundmann (2007) gave bibliographic records only | - | data not obtained |
