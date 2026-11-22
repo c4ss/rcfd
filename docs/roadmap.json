@@ -9753,7 +9753,7 @@
     ],
     "status": "todo",
     "acceptance": "Every limit not stated here is registered in the ADR before the run. The loss of total pressure of the FAN-01 design-point solve between the inlet and the measured plane of ADR 0765 (62.87 Pa on B1, 78.75 Pa on B2, 104.34 Pa on B3) is divided, by a rule registered before the run, into the parts that arise at the blade surfaces, at the hub and casing, in the tip gap and in the interior of the passage, and is recomputed on one mesh finer than B1 that also refines the wall-normal direction; the report states the loss the family extrapolates to with its band and what that leaves of the missing pressure rise of F-870 for the installation by the identity of ADR 0765. A run that does not decide is recorded as not deciding.",
-    "note": "Lead (2026-11-22): entered on the maintainer's answer of that day (\"Yes, all six\") to question 2 of ADR 0765, with the title, dependencies and acceptance of the agent's proposal file docs/roadmap/proposals/0765-F-878.json as written. Not issued yet."
+    "note": "Lead (2026-11-22): entered on the maintainer's answer of that day (\"Yes, all six\") to question 2 of ADR 0765, with the title, dependencies and acceptance of the agent's proposal file docs/roadmap/proposals/0765-F-878.json as written. Not issued yet. Lead (2026-11-22): issued by docs/adr/briefs/f882-fan01-rotor-loss.md (ADR 0768)."
   },
   {
     "id": "F-884",
@@ -9764,7 +9764,7 @@
     ],
     "status": "todo",
     "acceptance": "Every limit not stated here is registered in the ADR before the run. On the mesh M1w-far500 with the set-up of ADR 0760 a steady solve at 17 degrees ends steady by ADR 0167's window rule with a lift coefficient within 0.018 of 1.5516, the time-accurate value of ADR 0764, by a registered change of the steady route that leaves every default bit-identical, or the cause of the non-convergence of the SIMPLEC iteration there is diagnosed and recorded with its evidence; a run that does not decide is recorded as not deciding.",
-    "note": "Lead (2026-11-22): entered on the maintainer's answer of that day (\"Yes, all six\") to the question of ADR 0764, with the title, dependencies and acceptance of the agent's proposal file docs/roadmap/proposals/0764-F-868.json as written. Not issued yet.",
+    "note": "Lead (2026-11-22): entered on the maintainer's answer of that day (\"Yes, all six\") to the question of ADR 0764, with the title, dependencies and acceptance of the agent's proposal file docs/roadmap/proposals/0764-F-868.json as written. Not issued yet. Lead (2026-11-22): issued by docs/adr/briefs/f884-naca0012-17-steady.md (ADR 0770).",
     "milestones": [
       "aerofoil-lift"
     ]
@@ -9779,7 +9779,7 @@
     ],
     "status": "todo",
     "acceptance": "Every limit not stated here is registered in the ADR before the run. The pimple step keeps, opt-in and with defaults unchanged bit for bit (baseline hashes unchanged), the largest velocity change of each outer iteration of a step; a closed-form or two-route check registered in the ADR shows the recorded values are the changes of the iterations. Check H of ADR 0183 is then run as registered there and in ADR 0766, with the outer-iteration rule of ADR 0183 as written (the velocity change of the 5th outer iteration at most 1e-2 of the 1st in at least 99 % of the window's steps), and classes the hub pocket as steady, physical or numerical, or is recorded as not deciding.",
-    "note": "Lead (2026-11-22): entered on the maintainer's answer of that day (\"Yes, all six\") to question 1 of ADR 0766, with the title, dependencies and acceptance of the agent's proposal file docs/roadmap/proposals/0766-F-879.json as written. Not issued yet."
+    "note": "Lead (2026-11-22): entered on the maintainer's answer of that day (\"Yes, all six\") to question 1 of ADR 0766, with the title, dependencies and acceptance of the agent's proposal file docs/roadmap/proposals/0766-F-879.json as written. Not issued yet. Lead (2026-11-22): issued by docs/adr/briefs/f885-check-h-outer-record.md (ADR 0767)."
   },
   {
     "id": "F-883",
@@ -9790,6 +9790,6 @@
     ],
     "status": "todo",
     "acceptance": "Every limit not stated here is registered in the ADR before the reading. The wall-pressure data of the FAN-01 record (Zenodo doi:10.5281/zenodo.23943494, the file named in ADR 0765) are fetched, checksummed and read for a time-mean static pressure on the casing or hub behind the rotor at the design point, with its station, its uncertainty as the record states it, and the page or file it comes from; if one is there, the identity of ADR 0765 is evaluated with it and the rotor's share of the missing pressure rise is stated with its band; if none is there, that is recorded as the result.",
-    "note": "Lead (2026-11-22): entered on the maintainer's answer of that day (\"Yes, all six\") to question 2 of ADR 0765, option (c), a short reading beside F-882. Not issued yet."
+    "note": "Lead (2026-11-22): entered on the maintainer's answer of that day (\"Yes, all six\") to question 2 of ADR 0765, option (c), a short reading beside F-882. Not issued yet. Lead (2026-11-22): issued by docs/adr/briefs/f883-fan01-wall-pressure.md (ADR 0769)."
   }
 ]
