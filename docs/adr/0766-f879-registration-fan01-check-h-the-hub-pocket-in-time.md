@@ -310,3 +310,28 @@ are stated with it.
 
 To be completed in the addendum with options and a recommendation; not decided by this work: the convergence rule of
 F-870 (a steady state, or a rule on a time mean).
+
+## Amendment 1 (2026-11-22, before the corrected run of C1 and before any registered run): the limit of C1 on z
+
+Written after the first run of the four gate tests of the new file (uncommitted; no registered run has been made). That
+run gave: C3 and C4 passed (the sine: `A` 0.36999 against 0.37, `f` 123.000 against 123; the ten built pairs each got the
+verdict they were built for); C2 passed (20 steps with and without the outer record: equal bits); S1 printed its first
+values (after 20 steps of H(dt): largest site speed 13.824327 m/s, torque 2.607352 N m, pressure rise 110.1842 Pa; the
+outer ratio between 2.9e-3 and 7.9e-3) and failed as written, because no value was recorded yet; G1 failed, because no
+record exists yet; C1 failed at c57, z 0.171589 m against the lower bound 0.1716.
+
+The defect is in the set-up of C1, not in the site. I read ADR 0181's "the first wake column downstream of the trailing
+edge" as "every cell centre at z of at least 0.1716". The column follows the wake cut and is not a plane of constant z,
+so a cell centre of it can lie a little before the trailing-edge point in z. The record of ADR 0181 holds the six
+centres: `docs/investigations/job49r-fan01-hub-mesh/D-B2.json`, `site_cells`, gives for c7, c57, c107, c157, c621 and
+c1235 the radii 0.124280343942, 0.124280321800, 0.124279904561, 0.124278914451, 0.124902604538, 0.125648816746 m and
+the z 0.171963158688, 0.171588947980, 0.171448894521, 0.171622046962, 0.171556489357, 0.171069999584 m (tags C, i = 7,
+k 0 to 2).
+
+Corrected, fixed now: C1 asserts 13 627 cells and, for each of the six cells, r and z of the cell centre equal to those
+recorded values within 1e-8 relative (`docs/process/tolerances.md`, "Same discrete problem by two routes": the same
+mesh generator on the same counts). This is tighter than the registered bounds on r and replaces the bound on z. Kind
+unchanged (unchanged default output). Mutation M4 stays as planned.
+
+The first values of S1 are the record of the registration's words ("those of the first run of each"): 13.824327 m/s,
+2.607352 N m, 110.1842 Pa after 20 steps.
