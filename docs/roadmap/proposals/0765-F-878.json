@@ -1,0 +1,19 @@
+{
+  "form": 1,
+  "adr": "0765",
+  "item": "F-878",
+  "base": "2bab1863bd5fa845a818667a227fb6770cefa933",
+  "status": "partial",
+  "note": "ADR 0765, 2026-11-22, partial: the measured LDA profiles are traced (Zenodo doi:10.5281/zenodo.23943494, lda_data.zip, checksums in docs/reference-data.d/0765-F-878.part) and their datum is settled (x = 90 mm from the upstream hub face). On B1 at x = 90 mm c_x is within its registered band at 14 of 26 radii and c_t at 14 of 26 (largest excess over the band 3.54 and 1.36 m/s). Over the measured span the Euler work is 297.66 W measured and 312.03 W simulated (shaft power 333.30 W), the Euler head 220.02 against 226.86 Pa, the kinetic energy leaving the rotor 99.20 against 102.28 Pa. By the registered rule the missing 52.47 Pa cannot be divided: the rotor's share lies between -34.4 and 59.1 Pa (bands 23.8 and 25.0 Pa), because the loss of the measured rotor is not measured; at equal rotor loss it would be -3.8 Pa and the installation's 56.2 Pa, +-31.1 Pa. Held by crates/rcfd-api/tests/f878_fan01_lda_profiles.rs: four gate tests and a heavy record of B1; six mutations caught.",
+  "gap": "Missing for done: the division of the missing 52.47 Pa. Velocity profiles do not fix the loss of the measured rotor, so the rotor's share is only bounded (-34.4 to 59.1 Pa, bands 24 to 25 Pa); needed is a measured static pressure behind the rotor or the outlet as on the rig (F-880). And c_x misses its band at 12 of 26 radii, c_t at 12 (worst at the hub and the tip; the radial layers of B1 are coarser than the measured spacing).",
+  "follow_ups": [
+    {
+      "title": "FAN-01 rotor: the loss of total pressure of the simulated rotor up to the measured plane, where it arises and what a finer mesh makes of it",
+      "deps": [
+        "F-878"
+      ],
+      "acceptance": "Every limit not stated here is registered in the ADR before the run. The loss of total pressure of the FAN-01 design-point solve between the inlet and the measured plane of ADR 0765 (62.87 Pa on B1, 78.75 Pa on B2, 104.34 Pa on B3) is divided, by a rule registered before the run, into the parts that arise at the blade surfaces, at the hub and casing, in the tip gap and in the interior of the passage, and is recomputed on one mesh finer than B1 that also refines the wall-normal direction; the report states the loss the family extrapolates to with its band and what that leaves of the missing pressure rise of F-870 for the installation by the identity of ADR 0765. A run that does not decide is recorded as not deciding.",
+      "key": "fan01-rotor-loss"
+    }
+  ]
+}
