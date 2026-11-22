@@ -42,5 +42,4 @@ Strain measures how much a piece of material is deformed (stretched, squeezed or
 ## How rcfd uses it
 
 - The SST limiter on the rcfd page is `nu_t = a1 k / max(a1 omega, S F2)`, with `S` a strain-rate magnitude ([[k-omega-sst]]); the TMR page used for it defines the vorticity magnitude `Omega = sqrt(2 W_ij W_ij)` from the rotation tensor ([[ref-nasa-tmr]]).
-- The [[spalart-allmaras]] model is built on a vorticity measure (see that page).
 - The [[structural-solver]] handles centrifugal and thermal strain ([[structural-solver]]).

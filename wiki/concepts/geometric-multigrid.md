@@ -2,7 +2,7 @@
 type: concept
 tags: [foundation, linear-solvers, multigrid]
 sources: [ref-falgout-2006-amg-intro, ref-barrett-1994-templates-linear-systems, ref-shewchuk-1994-painless-cg]
-builds_on: [stationary-iterative-methods]
+builds_on: [stationary-iterative-methods, direct-solvers-lu-and-cholesky]
 created: 2026-11-22
 updated: 2026-11-22
 status: draft

@@ -2,6 +2,7 @@
 type: entity
 tags: [mesh, fan, rotating]
 sources: [doc-meshing, doc-structural-solver, adr-thread-sliding-mesh-rotor-stator, adr-thread-rom-reference-fan-and-c-grid]
+builds_on: [periodic-and-cyclic-boundaries, relative-and-absolute-velocity-formulations, rotating-reference-frame, mesh-generation-basics]
 created: 2026-11-22
 updated: 2026-11-22
 status: draft
@@ -47,6 +48,12 @@ status: draft
 - The sliding-interface generators of the case tree are different meshes: `annulus_3d_cylindrical_interface` (full annulus) and `annulus_3d_sector_cylindrical_interface` (sector below 180 deg, rotor and stator of one pitch, cell zone `rotor`, the 70 deg pre-flight), with no blade (F-303, ADR 0637; F-711, ADR 0646) ([[adr-thread-sliding-mesh-rotor-stator]]).
 
 - **Constructions for strongly staggered blades (ADRs 0692 to 0713):** S, S', S'', S''' and S'''' are opt-in `CGridOptions` constructions beside `camber_seam_h`. The last, `camber_seam_s_free_rows_construction()`, builds `ComputerFan::rom_reference()` blade 0 at 84.122 / 2.538 / 525.6 and a second blade at 83.887 / 2.720 / 551.7, within 84.5 deg / 4.0 / 1000 ([[adr-thread-rom-reference-fan-and-c-grid]]). On FAN-01, S gives 88.0 deg and 4.30, which is worse ([[adr-thread-rom-reference-fan-and-c-grid]]).
+
+## Builds on
+
+- [[periodic-and-cyclic-boundaries]]: one blade passage with rotationally periodic sides.
+- [[relative-and-absolute-velocity-formulations]], [[rotating-reference-frame]]: the rotating-frame solves run on these meshes ([[mrf]]).
+- [[mesh-generation-basics]]: structured hex blocks (H-slit, C-grid).
 
 ## Related
 

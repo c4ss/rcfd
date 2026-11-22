@@ -2,7 +2,7 @@
 type: concept
 tags: [foundation, linear-solvers, eigenvalues]
 sources: [ref-bai-2000-templates-eigenvalue, ref-barrett-1994-templates-linear-systems]
-builds_on: [krylov-methods]
+builds_on: [krylov-methods, direct-solvers-lu-and-cholesky]
 created: 2026-11-22
 updated: 2026-11-22
 status: draft

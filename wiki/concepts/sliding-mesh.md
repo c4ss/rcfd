@@ -2,6 +2,7 @@
 type: concept
 tags: [mesh, moving-mesh, rotating, rotor-stator]
 sources: [doc-dynamic-mesh, doc-component-diagonal-default, doc-readme, doc-roadmap-overview, adr-thread-sliding-mesh-rotor-stator, adr-thread-coupled-periodic-faces]
+builds_on: [non-conformal-interfaces, geometric-conservation-law, ale-formulation, relative-and-absolute-velocity-formulations, periodic-and-cyclic-boundaries, piso]
 created: 2026-11-22
 updated: 2026-11-22
 status: draft
@@ -33,6 +34,15 @@ A transient rotor-stator method: a rotor block turns against a stator block, and
 - **Sector against full annulus:** within `1.15e-2 U0` over 2.1 pitches (ADR 0646); with a non-axisymmetric inlet `1.981e-2 U_in` (ADR 0661), mostly the lagged partner value on the coupled faces; the opt-ins of [[adr-thread-coupled-periodic-faces]] bring it to `1.104e-4` with one outer iteration ([[adr-thread-sliding-mesh-rotor-stator]], [[adr-thread-coupled-periodic-faces]]).
 - **Defaults held:** the maintainer held the coupled periodic step and `FluxScale` as defaults on 2026-11-18, "waits until the fan path needs it" (ADR 0641 answers) ([[adr-thread-sliding-mesh-rotor-stator]]).
 - **Force on a rotor wall:** no caller evaluates a force on the sliding step; its default evaluation "misses `0.41 g dn` on a rotor wall" (ADR 0269 Q4) ([[adr-thread-six-dof-fsi-cosimulation]]).
+
+## Builds on
+
+- [[non-conformal-interfaces]]: the rotor-stator interface whose faces do not match and is rebuilt every step.
+- [[geometric-conservation-law]]: the GCL closure solved jointly with the old-flux remap (F-710).
+- [[ale-formulation]]: fluxes relative to the moving rotor faces.
+- [[relative-and-absolute-velocity-formulations]]: absolute velocity carried across the interface.
+- [[periodic-and-cyclic-boundaries]]: the periodic sector slider and its coupled faces.
+- [[piso]]: the transient PISO/PIMPLE step it runs in.
 
 ## Related
 

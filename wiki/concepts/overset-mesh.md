@@ -2,6 +2,7 @@
 type: concept
 tags: [mesh, moving-mesh, overset, chimera]
 sources: [doc-dynamic-mesh, doc-readme, adr-thread-overset]
+builds_on: [overset-interpolation, ale-formulation, geometric-conservation-law]
 created: 2026-11-22
 updated: 2026-11-22
 status: draft
@@ -28,6 +29,12 @@ A component mesh moving over a background mesh, the two coupled through interpol
 - **Opt-ins that restore order:** `DonorInterpolation::Quadratic` (F-336: `1.993`, `2.000`), `Continuous` (F-468), `set_fringe_flux(PrescribedOwnGradient)` with `set_second_order_ring_gradient` (F-479, F-503: within `0.25` percent of the default coupling), `set_consistent_geometry_corrections` on warped 3-D meshes (F-487: `1.21`, `1.41` against 2) ([[adr-thread-overset]]).
 - **Defaults:** every switch of a default (quadratic donors, outer iterations, BDF2, geometry corrections, continuous donors) is open for the maintainer; the ADRs recommend keeping `Linear` ([[adr-thread-overset]]).
 - **Next items:** F-312 (overset in the case tree), F-313 (several components, moving background, hole cutting) and F-369 are todo ([[roadmap-moving-meshes-rotors-and-coupling]]).
+
+## Builds on
+
+- [[overset-interpolation]]: fringe and hole cells, donor search, interpolation weights and mass conservation across the overlap.
+- [[ale-formulation]]: the moving component mesh.
+- [[geometric-conservation-law]]: consistent swept volumes on the moving component.
 
 ## Related
 

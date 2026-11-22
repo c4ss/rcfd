@@ -2,6 +2,7 @@
 type: concept
 tags: [immersed-boundary, forcing, moving-body, cartesian]
 sources: [adr-thread-immersed-solid]
+builds_on: [immersed-boundary-method, navier-stokes-equations]
 created: 2026-11-22
 updated: 2026-11-22
 status: draft
@@ -18,6 +19,11 @@ A solid body represented inside a mesh that does not fit its surface: the cells 
 - **Second-order forcing:** `build_second_order` stops in transient PISO; `build_second_order_bounded` runs; one PISO corrector is refused unless the start is projected (`PimpleSolver::project_immersed_start`, F-515). Making the bounded form the only constructor (F-364) was held by the maintainer on 2026-11-18 ([[adr-thread-immersed-solid]]).
 - **Moving shapes:** opt-in `MovingImmersed` (F-308), checked against body-fitted moving-mesh runs for in-line and transverse oscillation; lock-in at Re 100 not yet matched (F-731, F-750, F-756 partial) ([[adr-thread-immersed-solid]]).
 - **Not available:** a case-file key (needs the F-307 schema golden), rotating or deforming shapes, free motion, three dimensions beyond level sets ([[adr-thread-immersed-solid]]; F-219 gap in [[roadmap-moving-meshes-rotors-and-coupling]]).
+
+## Builds on
+
+- [[immersed-boundary-method]]: forcing that imposes a wall inside a non-fitting mesh; direct forcing, sharp vs diffused interfaces.
+- [[navier-stokes-equations]]: the momentum equation that carries the forcing.
 
 ## Related
 

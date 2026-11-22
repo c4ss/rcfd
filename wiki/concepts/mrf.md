@@ -2,6 +2,7 @@
 type: concept
 tags: [physics, rotating]
 sources: [doc-glossary, doc-readme, doc-meshing, doc-component-diagonal-default, adr-thread-fan01-rotating-solve, adr-thread-sliding-mesh-rotor-stator]
+builds_on: [relative-and-absolute-velocity-formulations, rotating-reference-frame, frozen-rotor-and-mixing-plane, periodic-and-cyclic-boundaries, simple]
 created: 2026-11-22
 updated: 2026-11-22
 status: draft
@@ -24,6 +25,14 @@ A steady solve in which a rotating zone is computed in its own rotating frame (A
 - **Rotating frame without a fan (ADR 0071):** the solver is second order in the `rotating_frame` and `mrf` formulations; a seam imbalance was a defect of `SimpleSolver::iterate`, fixed opt-in by `coupled_body_pair_mean` ([[adr-thread-fan01-rotating-solve]]).
 - **Cyclic seams (ADR 0113):** `sources.<name>.cyclic_seams` (default `false`) "gives the frame flux to both faces of a seam pair when both owner cells are in the zone", with the solver flag `coupled_offdiag_in_h1`; verified at library level only ([[adr-thread-fan01-rotating-solve]]).
 - **On FAN-01:** the steady relative-frame solve with first-order upwind manufactures swirl that the walls do not supply (ADRs 0078, 0082), and the steady run stalls in a limiter cycle (ADRs 0110, 0111) ([[adr-thread-fan01-rotating-solve]]). Hub item: [[f-126]].
+
+## Builds on
+
+- [[relative-and-absolute-velocity-formulations]]: the `mrf` source is the absolute form (absolute `u`, relative flux `phi_rel`), the `rotating_frame` source the relative form.
+- [[rotating-reference-frame]]: the Coriolis and centrifugal terms (here the lagged `Omega x u` source).
+- [[frozen-rotor-and-mixing-plane]]: MRF as a frozen-rotor model and its known limits (no rotor-stator unsteadiness).
+- [[periodic-and-cyclic-boundaries]]: the cyclic seams of a sector zone (ADR 0113).
+- [[simple]]: the steady `simple` / `simplec` kernel the MRF zone runs in.
 
 ## Related
 

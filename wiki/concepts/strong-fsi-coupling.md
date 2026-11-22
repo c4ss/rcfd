@@ -2,6 +2,7 @@
 type: concept
 tags: [fsi, six-dof, added-mass, coupling, aitken, quasi-newton]
 sources: [adr-thread-six-dof-fsi-cosimulation, doc-cosimulation-protocol]
+builds_on: [partitioned-fluid-structure-interaction, added-mass, fixed-point-iteration-and-acceleration, rigid-body-dynamics-six-dof]
 created: 2026-11-22
 updated: 2026-11-22
 status: draft
@@ -20,6 +21,13 @@ Loose coupling exchanges force and motion once per time step; strong coupling it
 
 > [!warning] Contradiction — default wall pressure of the body force
 > The F-350 gap in `docs/roadmap.json` ([[roadmap-moving-meshes-rotors-and-coupling]]) says "The wall pressure of the body force stays the default extrapolation (F-358)". `docs/case-schema.md` gives `dynamic_mesh.six_dof.coupling.wall_pressure` = `prescribed_gradient` "(default since ADR 0346)" ([[doc-case-schema]]), and ADR 0349 runs its case with "the default wall pressure (prescribed_gradient)" ([[adr-thread-six-dof-fsi-cosimulation]]). Within the repo docs; the roadmap gap looks stale. ADR 0346 itself is in another job's list and was not read here.
+
+## Builds on
+
+- [[partitioned-fluid-structure-interaction]]: loose vs strong coupling, interface conditions, Dirichlet-Neumann exchange.
+- [[added-mass]]: why the loose loop diverges for light bodies.
+- [[fixed-point-iteration-and-acceleration]]: Aitken relaxation and least-squares quasi-Newton updates.
+- [[rigid-body-dynamics-six-dof]]: the body side of the coupling.
 
 ## Related
 

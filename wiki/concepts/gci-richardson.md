@@ -1,7 +1,8 @@
 ---
 type: concept
 tags: [verification, numerics, mesh-convergence]
-sources: [doc-milestone-fan, doc-reference-data-f870-fan01-design-point, doc-reference-data-wave31b-turbulence-wall, doc-reference-data-wave31a-solver-defects, doc-designs-exp-rot, adr-thread-simulation-milestones-validation, adr-thread-fan01-design-point]
+sources: [doc-milestone-fan, doc-reference-data-f870-fan01-design-point, doc-reference-data-wave31b-turbulence-wall, doc-reference-data-wave31a-solver-defects, doc-designs-exp-rot, adr-thread-simulation-milestones-validation, adr-thread-fan01-design-point, ref-celik-2008-jfe-discretisation-uncertainty, ref-nparc-vv-tutorial]
+builds_on: [solution-verification, truncation-error-and-order-of-accuracy]
 created: 2026-11-22
 updated: 2026-11-22
 status: draft
@@ -22,6 +23,17 @@ Richardson extrapolation estimates the mesh-converged value of a quantity from s
 - **Validity condition on the observed order (ADR 0763):** for the cylinder the extrapolation counts only if the observed order is in [1.5, 2.5]. The sequence gave 1.387, so "the extrapolation is therefore not valid and the mesh-converged drag is not shown", although every order from 1 to 2.5 puts the value in the band. The coarser sequence of ADR 0761 gave the same order (1.38) ([[adr-thread-simulation-milestones-validation]]).
 - **F-870 band form (ADR 0762):** `U_num = 1.25 abs(f_2 - f_1) / (r_21^p_band - 1)`, `p_band = min(p, 1)`, `r_21 = 1.40981`. It is added, not combined in quadrature, to the measurement uncertainty, which is not registered ([[adr-thread-fan01-design-point]]).
 
+## The procedure in the open sources (P6)
+
+- **Celik et al. five steps** ([[ref-celik-2008-jfe-discretisation-uncertainty]]): representative size `h = [(1/N) sum dV_i]^(1/3)` (Eq. 1); three significantly different grids, "desirable" `r > 1.3`; apparent order by fixed-point iteration, `p = (1/ln r21) |ln|eps32/eps21| + q(p)|`, `q(p) = ln((r21^p - s)/(r32^p - s))`, `s = sgn(eps32/eps21)` (Eq. 3, `q = 0` for constant `r`); extrapolated `phi_ext21 = (r21^p phi1 - phi2)/(r21^p - 1)` (Eq. 4); `e_a21 = |(phi1 - phi2)/phi1|`, `e_ext21`, and `GCI_fine21 = 1.25 e_a21/(r21^p - 1)` (Eq. 5-7). Sample: reattachment length 6.063 / 5.972 / 5.863, `p = 1.53`, GCI 2.2 %, which "does not account for modeling errors".
+- **NPARC tutorial** ([[ref-nparc-vv-tutorial]] `spatconv.html`): constant-ratio order `p = ln((f3 - f2)/(f2 - f1))/ln(r)`; Richardson `f1 + (f1 - f2)/(r^p - 1)`; `GCI = Fs |eps|/(r^p - 1)` with `Fs = 3.0` for two grids and `1.25` for three or more; asymptotic check `GCI_23 ~ r^p GCI_12`; recommended `r >= 1.1`.
+- **Comparison with rcfd's form:** the F-870 band `U_num = 1.25 abs(f_2 - f_1) / (r_21^p_band - 1)` above is Celik's Eq. 7 multiplied by `|phi1|`, i.e. the same index in absolute units, with the three-grid factor 1.25 that both sources give; the FAN-01 ratio 1.41 is above both recommended minimum ratios. The cap `p_band = min(p, 1)` and the cylinder window `p` in [1.5, 2.5] (ADR 0763) are rcfd's own rules; neither source states them. Celik notes that agreement of `p` with the formal order indicates the asymptotic range, while disagreement "should not necessarily be taken as a sign of unsatisfactory calculations" ([[ref-celik-2008-jfe-discretisation-uncertainty]]).
+
+## Builds on
+
+- [[solution-verification]]: the error sources (round-off, iteration, discretisation) and the grid convergence study this index summarises.
+- [[truncation-error-and-order-of-accuracy]]: the error model `C h^p` and the formal order that the observed order is compared with.
+
 ## Related
 
 [[verification-vs-validation]], [[fan-01]], [[flat-plate]], [[cylinder-re100]]
@@ -29,3 +41,4 @@ Richardson extrapolation estimates the mesh-converged value of a quantity from s
 ## Open questions
 
 - The Roache and Celik sources have not been read. The GCI formula in use is recalled from memory ([[doc-reference-data-f870-fan01-design-point]]).
+- Update 2026-11-22 (wiki P6): the wiki has now read the Celik et al. procedure from an ASME-hosted copy ([[ref-celik-2008-jfe-discretisation-uncertainty]]); the repo docs still record the formula as recalled. Roache's 1994 paper and book remain unread by the wiki. Whether the repo should cite the read copy is for the maintainer.

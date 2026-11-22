@@ -2,6 +2,7 @@
 type: concept
 tags: [mesh, moving-mesh, ale, six-dof]
 sources: [doc-dynamic-mesh, doc-cosimulation-protocol, doc-acoustics, adr-thread-layering-remeshing-ale, adr-thread-six-dof-fsi-cosimulation, adr-thread-sliding-mesh-rotor-stator, adr-thread-overset, adr-thread-immersed-solid]
+builds_on: [ale-formulation, geometric-conservation-law, mesh-motion-smoothing, rigid-body-dynamics-six-dof]
 created: 2026-11-22
 updated: 2026-11-22
 status: draft
@@ -36,6 +37,14 @@ A mesh whose points move during a run, with the flow solved in the arbitrary Lag
 - **Strong coupling in the tree:** `[dynamic_mesh.six_dof.coupling] scheme = "strong"` (F-350, ADR 0266) and `wall_pressure` (F-358, ADR 0269); force reports `[dynamic_mesh.force_reports] wall_pressure` (F-440, ADR 0342) ([[adr-thread-six-dof-fsi-cosimulation]]). See [[strong-fsi-coupling]].
 - **BDF2 on the moving-mesh step:** `PimpleSolver::set_moving_mesh_time_scheme(Bdf2)` and three-level follow conditions (F-345, ADR 0379, partial: A-TR `1.09` against 4); `set_rest_conditions`, `step_sliding` and `replace_mesh` stay Euler-only ([[adr-thread-overset]]).
 - **Immersed bodies** as an alternative to moving the mesh: [[immersed-solid]] ([[adr-thread-immersed-solid]]).
+
+## Builds on
+
+- [[ale-formulation]]: balance laws with fluxes relative to the moving faces.
+- [[geometric-conservation-law]]: swept volumes that match the cell volume change (checks G1 to G3).
+- [[mesh-motion-smoothing]]: Laplacian and inverse-distance or inverse-volume smoothing, layering and remeshing.
+- [[rigid-body-dynamics-six-dof]]: the six-DOF body equations.
+- [[added-mass]], [[partitioned-fluid-structure-interaction]]: why the loose body coupling has a stability limit and how strong coupling lifts it.
 
 ## Related
 
