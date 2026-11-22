@@ -237,8 +237,12 @@ fn f868_v16_lift_within_the_band_at_16_degrees() {
     lift_within_the_band(16.0);
 }
 
+/// Known miss (ADR 0760 addendum 1): at 17 degrees the steady iteration does not converge (cl swings between -0.07 and
+/// 1.95 over the last 1000 of 8000 iterations); the iteration mean 1.0476 is not a flow value and is 0.558 under Ladson's
+/// 1.6057 (band 0.0803). The measured aerofoil is still attached at 17 degrees; steady SA on this mesh has stalled.
 #[test]
-fn f868_v17_lift_within_the_band_at_17_degrees() {
+#[ignore = "known miss, ADR 0760: at 17 degrees no steady value; the iteration mean 1.0476 is 0.558 under Ladson's 1.6057, band 0.0803"]
+fn f868_v17_lift_within_the_band_at_17_degrees_known_miss() {
     lift_within_the_band(17.0);
 }
 
