@@ -1,7 +1,8 @@
 ---
 type: concept
 tags: [turbulence, rans, one-equation, des]
-sources: [doc-case-schema-turbulence, doc-reference-data-spalart-allmaras, adr-thread-transient-rans, adr-thread-periodic-seam-diffusivity, doc-roadmap-json, doc-investigation-job49a-sa-drag, doc-investigation-job49e-sa-wall, doc-investigation-job49d-aoa-sweep-fixed, adr-thread-naca0012-sa-drag]
+sources: [doc-case-schema-turbulence, doc-reference-data-spalart-allmaras, adr-thread-transient-rans, adr-thread-periodic-seam-diffusivity, doc-roadmap-json, doc-investigation-job49a-sa-drag, doc-investigation-job49e-sa-wall, doc-investigation-job49d-aoa-sweep-fixed, adr-thread-naca0012-sa-drag, ref-nasa-tmr, ref-menter-1992-nasa-tm-103975, ref-davidson-turbulence-notes]
+builds_on: [boussinesq-eddy-viscosity, wall-distance, convection-diffusion-equation, les-and-des]
 created: 2026-11-22
 updated: 2026-11-22
 status: draft
@@ -10,6 +11,14 @@ status: draft
 # Spalart-Allmaras
 
 The one-equation RANS model transporting a modified eddy viscosity `nuTilda`. rcfd implements SA-noft2 with the SA-neg terms, constants from the NASA Turbulence Modeling Resource (`turbulence.model = "spalart_allmaras"`), with optional DES/DDES ([[doc-case-schema-turbulence]], [[doc-reference-data-spalart-allmaras]]).
+
+## Builds on
+
+*(added by p6-turbulence)*
+- [[boussinesq-eddy-viscosity]]: SA is a linear eddy-viscosity model; one-equation models "solve one partial differential equation for the eddy-viscosity" and "appear to be very robust numerically" ([[ref-menter-1992-nasa-tm-103975]] p. 1).
+- [[wall-distance]]: the destruction term depends on `d`, which must be the true minimum distance to the wall, not the distance to the nearest wall gridpoint; the source terms are non-zero but small in the free stream, "proportional to 1/d2" ([[ref-nasa-tmr]] `spalart.html`).
+- [[convection-diffusion-equation]]: the form of the `nuTilda` transport equation.
+- [[les-and-des]]: in DES the wall distance is replaced by `min(d, C_des Delta)`, `C_des = 0.65` ([[ref-davidson-turbulence-notes]] eq. 20.3); the TMR notes that with DES/DDES the `ft2` term "may cause an undesirable delay in transition to turbulence in the RANS region", and that SA-neg "should yield essentially identical results to (SA), and is generally recommended because of its more robust numerical behavior" ([[ref-nasa-tmr]] `spalart.html`).
 
 ## How rcfd uses it
 

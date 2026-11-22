@@ -1,7 +1,8 @@
 ---
 type: concept
 tags: [turbulence, rans, two-equation]
-sources: [doc-case-schema-turbulence, doc-reference-data-sst-wall, adr-thread-transient-rans, adr-thread-periodic-seam-diffusivity, adr-thread-particle-wall-and-droplets, doc-roadmap-json, adr-thread-early-turbulence, adr-thread-fan01-rotating-solve]
+sources: [doc-case-schema-turbulence, doc-reference-data-sst-wall, adr-thread-transient-rans, adr-thread-periodic-seam-diffusivity, adr-thread-particle-wall-and-droplets, doc-roadmap-json, adr-thread-early-turbulence, adr-thread-fan01-rotating-solve, ref-menter-1992-nasa-tm-103975, ref-nasa-tmr, ref-davidson-turbulence-notes]
+builds_on: [k-omega-wilcox, k-epsilon, sst-blending-functions, bradshaw-assumption-and-sst-limiter, wall-distance]
 created: 2026-11-22
 updated: 2026-11-22
 status: draft
@@ -10,6 +11,26 @@ status: draft
 # k-omega SST
 
 Menter's shear-stress-transport two-equation RANS model: k-omega near walls blended to k-epsilon behaviour in the free stream by `F1`, with the eddy viscosity limited by `nu_t = a1 k / max(a1 omega, S F2)`. rcfd implements the Menter 2003 form as given by the NASA Turbulence Modeling Resource (`turbulence.model = "k_omega_sst"`) ([[doc-case-schema-turbulence]], [[doc-reference-data-sst-wall]]).
+
+## In short
+
+*(added by p6-turbulence)* SST is an eddy-viscosity RANS model that transports `k` and `omega`. It combines two older models, using each where it works: Wilcox's k-omega near walls (robust, no damping functions) and k-epsilon in the outer boundary layer and free stream (no free-stream sensitivity), switched smoothly by a blending function of the wall distance. On top of that it limits the eddy viscosity so that the turbulent shear stress in a boundary layer never exceeds `rho a1 k`, which is what "shear-stress transport" refers to and what improves adverse-pressure-gradient and separating flows ([[ref-menter-1992-nasa-tm-103975]], [[ref-nasa-tmr]]).
+
+## What SST adds to its prerequisites
+
+*(added by p6-turbulence)* The chain behind it: [[stress]] and [[viscosity]] give the Newtonian [[shear-stress]] `mu dU/dy`; averaging the [[navier-stokes-equations]] ([[reynolds-averaging]]) adds the unknown [[reynolds-stress]]; the [[boussinesq-eddy-viscosity]] hypothesis models it with one scalar `nu_t`; [[two-equation-turbulence-models]] compute `nu_t` from `k` and a second variable. SST then adds two things.
+- **Blending (the BSL part).** Wilcox's k-omega results "depend strongly on the freestream values, omega_f", up to "more than 100%" in the eddy viscosity; k-epsilon lacks sensitivity to adverse pressure gradients and needs damping functions near walls. Menter rewrites k-epsilon in k-omega variables (one extra cross-diffusion term) and blends: k-omega times `F1` plus k-epsilon times `1 - F1`, with `F1` about 1 over the inner half of the boundary layer and 0 outside ([[ref-menter-1992-nasa-tm-103975]] pp. 2-5; [[sst-blending-functions]]).
+- **Shear-stress limiter (the SST part).** With the Boussinesq relation the shear stress is `rho sqrt(P_k/epsilon) a1 k`, too large when production exceeds dissipation as in adverse pressure gradients. Bradshaw's assumption `tau = rho a1 k` is built into `nu_t = a1 k/max(a1 omega, Omega F2)`, so "tau does not change more rapidly than rho a1 k"; `F2` restricts this to boundary layers ([[ref-menter-1992-nasa-tm-103975]] pp. 6-8; [[bradshaw-assumption-and-sst-limiter]]).
+- **Later forms.** TMR's standard SST (1994) uses `a1 = 0.31` and a `CD_kw` term in `F1`; SST-2003, the form rcfd implements, uses the strain invariant `S` in the limiter and the production limiter `min(P, 10 beta* rho omega k)` in both equations ([[ref-nasa-tmr]] `sst.html`). Davidson's course text summarises the same two "novelties" ([[ref-davidson-turbulence-notes]] sec. 16).
+
+## Builds on
+
+*(added by p6-turbulence)*
+- [[k-omega-wilcox]]: the inner model, its equations and the wall value of `omega`.
+- [[k-epsilon]]: the outer model, transformed to k-omega form.
+- [[sst-blending-functions]]: `F1`, `F2`, the cross-diffusion term and the blended constants.
+- [[bradshaw-assumption-and-sst-limiter]]: the eddy-viscosity limiter and the production limiter.
+- [[wall-distance]]: `d` in the blending functions.
 
 ## How rcfd uses it
 

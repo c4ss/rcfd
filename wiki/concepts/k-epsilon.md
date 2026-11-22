@@ -1,7 +1,8 @@
 ---
 type: concept
 tags: [turbulence, rans, two-equation, wall-functions]
-sources: [doc-case-schema-turbulence, adr-thread-transient-rans, adr-thread-periodic-seam-diffusivity, doc-roadmap-json]
+sources: [doc-case-schema-turbulence, adr-thread-transient-rans, adr-thread-periodic-seam-diffusivity, doc-roadmap-json, ref-mit-ocw-2-29-turbulence, ref-menter-1992-nasa-tm-103975]
+builds_on: [two-equation-turbulence-models, wall-functions]
 created: 2026-11-22
 updated: 2026-11-22
 status: draft
@@ -10,6 +11,17 @@ status: draft
 # k-epsilon
 
 The two-equation RANS model transporting the turbulent kinetic energy k and its dissipation rate epsilon, with wall functions at the wall. rcfd has the standard, RNG and realizable variants (`turbulence.model = "k_epsilon"`, `variant`); k-epsilon walls must be at rest ([[doc-case-schema-turbulence]]).
+
+## In short
+
+*(added by p6-turbulence)* The standard k-epsilon model (Launder and Spalding 1974) sets `nu_t = C_mu k^2/epsilon` and transports `k` and `epsilon`, with the epsilon equation built on the "equilibrium turbulent flows" idea that dissipation balances production; constants `C_mu = 0.09`, `C1 = 1.44`, `C2 = 1.92`, `sigma_k = 1.0`, `sigma_eps = 1.3`. At high Reynolds number the wall is handled by wall functions, which fix `k` and `epsilon` in the wall cell from the log law ([[ref-mit-ocw-2-29-turbulence]] L25 s.20-23). Its known weaknesses are a "lack of sensitivity to adverse pressure-gradients", where it "predicts significantly too high shear-stress levels and thereby delays (or completely prevents) separation", and the damping functions and non-zero wall `epsilon` that low-Re versions need ([[ref-menter-1992-nasa-tm-103975]] p. 2). Rewritten in k-omega variables it is the outer half of SST ([[sst-blending-functions]]).
+
+## Builds on
+
+*(added by p6-turbulence)*
+- [[two-equation-turbulence-models]]: the k and epsilon transport equations, production, destruction, eddy diffusion.
+- [[wall-functions]]: the standard wall treatment that sets the wall shear, `k` and `epsilon` in the first cell.
+- Further down: [[boussinesq-eddy-viscosity]], [[energy-cascade-and-kolmogorov-scales]] (meaning of `k` and `epsilon`), [[law-of-the-wall]].
 
 ## How rcfd uses it
 
