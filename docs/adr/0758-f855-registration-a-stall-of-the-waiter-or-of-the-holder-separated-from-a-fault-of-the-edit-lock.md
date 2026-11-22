@@ -546,3 +546,27 @@ None that rule 6 leaves open for the maintainer. For the lead:
 > Gap, should the lead keep the item partial: The gate's two failures are not identified from their artifacts. ADR 0758 removed the refusal of a stalled waiter and lets F2 accept, counted and printed, at most 4 calls refused against a holder stalled for the whole wait; no hosted runner has run the amended F2 yet. Missing: full gates in which F2 passes or fails with a printed class. M2 and M6 of ADR 0669 are not caught by F2 (F-859); the controls CJ, CC, CW, CH and CV are not run by the gate (F-858).
 
 > Follow-ups: none new. F-858 should name `edit_lock_f855_stall` beside the files of ADR 0751 and could keep the line "F2 run" of a passing F2, which libtest drops in the gate.
+
+## The lead's answers (2026-11-22), after the merge
+
+The report was read when it came (2026-11-22, 01:38 UTC); the merge waited 22 minutes for the left-out run of the merge
+before it, which builds from the same tree. Merged at 044e40c4 and pushed at e6e3c67a (ledger line of 044e40c4). Checked
+against the branch: the registration is the first commit and alone; the count of 10000 is unchanged; `atomic.rs` changes
+only how the wait of a waiter is counted; the rule of the amended F2 (`verdict` and `class` in
+`crates/rcfd-project/tests/edit_lock_f2/mod.rs`) accepts a `LockBusy` only as class S and at most four a run.
+
+1. Change W is kept. It rests on a forced control and not on the runner, and it changes what a caller sees: a writer that
+   was not run for a while is refused later than two seconds of the wall clock. That is the better behaviour for a waiter
+   that saw nothing, and the control CW fails without it.
+2. The ignored record of the old body of F2 is kept. The maintainer's direction is that no test is ignored to make a run
+   pass. The strict assertion is not ignored for that: it is replaced by a registered amendment of ADR 0669 that states
+   what is accepted and why, and the old body is added as a record that can be run on request. The lead has told the
+   maintainer of it in the report of this stretch, so that he can overrule.
+3. Status: **partial**, as the agent recommends in its question although its verdict by the registered rule is done. The
+   acceptance of F-855 asks that the cause of the gate's `LockBusy` is shown. It is shown for a forced stop of a process
+   and for a holder stalled under a build on one machine; which of them the runner met in the gates of e9378ecb and
+   f6e68b4a is not shown and cannot be from their artifacts. The item is done when full gates show F2 passing, or a
+   failure whose printed class is read.
+
+A further failure of F2 in a gate is not a reason to raise the limit of four or to retry: it names a class, and the class
+is read.
