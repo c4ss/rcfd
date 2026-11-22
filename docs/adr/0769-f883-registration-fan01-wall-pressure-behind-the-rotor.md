@@ -446,3 +446,13 @@ solve's. What is new is that the rig's own terms are now measured: the rotor and
 loses 62.87 Pa, which points to the simulated loss that F-882 is dividing. The open question, whether the casing
 pressure becomes a compared quantity of F-870, is put to the maintainer with the agent's recommendation (a), which the
 lead shares.
+
+## Answer of the maintainer (2026-11-22)
+
+The lead put the open question above to the maintainer on 2026-11-22 with the agent's recommendation (a), which the
+lead shares. The maintainer answered: "Yes, add it".
+
+1. Option (a): the time-mean static pressure on the casing behind the rotor, 113.90 Pa against the chamber at x = 90 mm
+   as this ADR reads the record, is a compared quantity of F-870, with a band registered before its run. The record
+   states no uncertainty for it, so the band's measurement term is registered there with its reason. The acceptance of
+   F-870 is extended by a sentence that says so.
