@@ -87,6 +87,10 @@ fn b0() -> Spec {
         y_plus: 30.0 / 1.41,
     }
 }
+/// The corrected B0 (ADR 0768, amendment 1): the counts and wall layers of B0 with the first cell of the family, `y+ = 30`.
+fn b0c() -> Spec {
+    Spec { y_plus: 30.0, ..b0() }
+}
 
 // ---------------------------------------------------------------- the case text of ADR 0762 / ADR 0765
 
@@ -1056,7 +1060,9 @@ const B3_SHORT_RECORD: [f64; 6] = [104.211633, 86.591950, 20.095895, 2.812707, 1
 /// B0: cell count, and non-orthogonality [deg], skewness, aspect ratio (S3).
 const B0_CELLS: usize = 106692;
 const B0_QUALITY_RECORD: [f64; 3] = [88.074, 14.5937, 323.08];
-/// B0 at 8000 iterations: torque [N m], pressure rise, `L_s`, the whole and the four parts [Pa]; and `S`, `T` of `L_s`.
+/// The corrected B0 (amendment 1): non-orthogonality [deg], skewness, aspect ratio; its cell count is `B0_CELLS`.
+const B0C_QUALITY_RECORD: [f64; 3] = [83.687, 2.5641, 428.08];
+/// The corrected B0 at 8000 iterations: torque [N m], pressure rise, `L_s`, the whole and the four parts [Pa]; and `S`, `T` of `L_s`.
 const B0_STATE: [f64; 8] = [f64::NAN; 8];
 const B0_S_T: [f64; 2] = [f64::NAN; 2];
 /// The recorded extrapolation: validity, and p, L_0, U_L, I_0, U_I.
@@ -1194,12 +1200,22 @@ fn f882_rules_closed_forms() {
 /// S3 (ADR 0768): the B0 mesh has the recorded cell count and quality, and each gate of ADR 0762 its recorded verdict.
 #[test]
 fn f882_b0_mesh_gates_as_recorded() {
-    let case = Case::parse_toml(&case_toml(b0(), CAP)).unwrap_or_else(|e| panic!("{e:?}"));
+    mesh_gates_as_recorded("B0", b0(), &B0_QUALITY_RECORD);
+}
+
+/// S3 for the corrected B0 (ADR 0768, amendment 1).
+#[test]
+fn f882_b0c_mesh_gates_as_recorded() {
+    mesh_gates_as_recorded("B0c", b0c(), &B0C_QUALITY_RECORD);
+}
+
+fn mesh_gates_as_recorded(name: &str, spec: Spec, record: &[f64; 3]) {
+    let case = Case::parse_toml(&case_toml(spec, CAP)).unwrap_or_else(|e| panic!("{e:?}"));
     let m = rcfd_api::sim::build_mesh(&case).unwrap_or_else(|e| panic!("{e:?}"));
     let q = check_mesh(&m);
     let v = [q.max_non_orthogonality, q.max_skewness, q.max_aspect_ratio];
     println!(
-        "S3 B0 mesh: {} cells, non-orthogonality {:.3} deg, skewness {:.4}, aspect {:.2}; gates {GATES:?}; met {:?}",
+        "S3 {name} mesh: {} cells, non-orthogonality {:.3} deg, skewness {:.4}, aspect {:.2}; gates {GATES:?}; met {:?}",
         m.n_cells(),
         v[0],
         v[1],
@@ -1209,12 +1225,12 @@ fn f882_b0_mesh_gates_as_recorded() {
     assert_eq!(m.n_cells(), B0_CELLS);
     for i in 0..3 {
         assert!(
-            (v[i] / B0_QUALITY_RECORD[i] - 1.0).abs() <= 5e-3,
+            (v[i] / record[i] - 1.0).abs() <= 5e-3,
             "quality {i}: {} against {}",
             v[i],
-            B0_QUALITY_RECORD[i]
+            record[i]
         );
-        assert_eq!(v[i] <= GATES[i], B0_QUALITY_RECORD[i] <= GATES[i], "gate {i}");
+        assert_eq!(v[i] <= GATES[i], record[i] <= GATES[i], "gate {i}");
     }
 }
 
@@ -1295,6 +1311,51 @@ fn f882_acceptance() {
     println!("F882 B0 extrapolation {x:?}");
     println!(
         "F882 B0 L_0 {:.4} Pa (valid {}), at order 1 {:.4}, at order 2 {:.4}; band {:.4}; Rec_m {:.4}; I_0 {:.4} +- {:.4} Pa",
+        x.l0, x.valid, x.l_order1, x.l_order2, x.u_l, x.rec_m, x.i0, x.u_i
+    );
+    assert!(
+        o.samples.iter().all(|s| s.budgets.iter().all(closes)) && x.valid,
+        "F-882 MISSED: extrapolation {x:?}"
+    );
+}
+
+static B0C_OUTCOME: OnceLock<Outcome> = OnceLock::new();
+
+fn b0c_outcome() -> &'static Outcome {
+    B0C_OUTCOME.get_or_init(|| run_design_point("B0c", b0c(), CAP, &SAMPLE_AT))
+}
+
+/// The heavy record of the corrected B0 (ADR 0768, amendment 1), in the form of `f882_b0_loss_state_record`.
+#[test]
+#[ignore = "heavy record, ADR 0768 amendment 1: the corrected B0 solve (106 692 cells, 8000 iterations, hours): cargo test --release -p rcfd-api --test f882_fan01_rotor_loss -- --ignored --nocapture --test-threads 1 f882_b0c_"]
+fn f882_b0c_loss_state_record() {
+    let o = b0c_outcome();
+    assert_eq!(o.iterations, CAP, "{:?}", o.stop);
+    let s = o.samples.last().unwrap();
+    let b = &s.budgets[0];
+    let v = [
+        o.torque, o.dp_ts, s.l_s[1], b.whole_b, b.parts[0], b.parts[1], b.parts[2], b.parts[3],
+    ];
+    println!("F882 B0c state {v:?}; S, T {:?}", spread(o));
+    assert!(s.budgets.iter().all(closes));
+    let tol = STATE_TOL * B0_STATE[3].abs();
+    assert!(
+        (0..4).all(|i| holds(v[i], B0_STATE[i])) && (4..8).all(|i| (v[i] - B0_STATE[i]).abs() <= tol),
+        "the B0c state moved: {v:?} against {B0_STATE:?}"
+    );
+}
+
+/// The acceptance of F-882 on the corrected B0 (ADR 0768, amendment 1), in the form of `f882_acceptance`.
+#[test]
+#[ignore = "heavy, ADR 0768 amendment 1: shares the corrected B0 solve of the state record"]
+fn f882_b0c_acceptance() {
+    let o = b0c_outcome();
+    assert_eq!(o.iterations, CAP, "{:?}", o.stop);
+    let (s, t) = spread(o);
+    let x = extrapolation_of(o.samples.last().unwrap().l_s[1], o.cells as f64, s, t);
+    println!("F882 B0c extrapolation {x:?}");
+    println!(
+        "F882 B0c L_0 {:.4} Pa (valid {}), at order 1 {:.4}, at order 2 {:.4}; band {:.4}; Rec_m {:.4}; I_0 {:.4} +- {:.4} Pa",
         x.l0, x.valid, x.l_order1, x.l_order2, x.u_l, x.rec_m, x.i0, x.u_i
     );
     assert!(
