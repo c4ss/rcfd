@@ -1,7 +1,8 @@
 ---
 type: concept
 tags: [design-loop, multi-fidelity, reduced-order, discrepancy, fan]
-sources: [adr-thread-design-surrogate-and-fidelity, adr-thread-design-optimisers-and-ledger]
+sources: [adr-thread-design-surrogate-and-fidelity, adr-thread-design-optimisers-and-ledger, ref-frazier-2018-bayesian-optimization, ref-rasmussen-williams-2006-gpml]
+builds_on: [multi-fidelity-modelling]
 created: 2026-11-22
 updated: 2026-11-22
 status: draft
@@ -19,6 +20,13 @@ Multi-fidelity design screens many candidates with a cheap model, confirms a few
 - **Rung R3** (F-718, F-734, F-735): a zero-mean [[gaussian-process-surrogate]] on the R2 residual; its leave-one-out standard deviation through the Cholesky factor agrees with a double-double brute force within 1.3e-10 and 8.1e-10 to 9.2e-10 ([[adr-thread-design-surrogate-and-fidelity]]).
 - **Records and privacy:** the pair record is "the only one" (decision D4, 2026-11-15); measured values and pairs with a measured source go only to a private ledger (D3) ([[adr-thread-design-optimisers-and-ledger]]).
 - Verified on synthetic sources only ([[adr-thread-design-surrogate-and-fidelity]]).
+
+## Builds on
+
+- [[multi-fidelity-modelling]]: screening with cheap sources, discrepancy models between fidelities, the cost budget ([[ref-frazier-2018-bayesian-optimization]] sec. 5).
+- [[cross-validation]]: the leave-one-out choice of rung ([[ref-rasmussen-williams-2006-gpml]] sec. 5.3, 5.4.2).
+- [[linear-regression-least-squares]]: the R1 and R2 corrections are low-order fits.
+- [[gaussian-process-surrogate]]: rung R3.
 
 ## Related
 

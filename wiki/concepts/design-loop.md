@@ -1,7 +1,8 @@
 ---
 type: concept
 tags: [design-loop, optimisation, doe, mcp, fan]
-sources: [doc-design-loop, doc-reference-data-wave32c-design-loop, doc-reference-data-f249-nsga2-nelder-mead, doc-reference-data-f297-nsga2-crossover, doc-reference-data-f260-cma-es, doc-reference-data-f698-gaussian-process, doc-fan-project-breakdown, doc-milestone-fan, doc-parity-matrix, adr-thread-design-optimisers-and-ledger, adr-thread-design-surrogate-and-fidelity, adr-thread-design-hypothesis-record, adr-thread-rom-reference-fan-and-c-grid]
+sources: [doc-design-loop, doc-reference-data-wave32c-design-loop, doc-reference-data-f249-nsga2-nelder-mead, doc-reference-data-f297-nsga2-crossover, doc-reference-data-f260-cma-es, doc-reference-data-f698-gaussian-process, doc-fan-project-breakdown, doc-milestone-fan, doc-parity-matrix, adr-thread-design-optimisers-and-ledger, adr-thread-design-surrogate-and-fidelity, adr-thread-design-hypothesis-record, adr-thread-rom-reference-fan-and-c-grid, ref-martins-ning-2021-engineering-design-optimization, ref-hansen-2016-cma-es-tutorial]
+builds_on: [design-of-experiments, nelder-mead-simplex, evolutionary-algorithms, multi-objective-optimisation]
 created: 2026-11-22
 updated: 2026-11-22
 status: draft
@@ -45,6 +46,14 @@ The design loop is rcfd's machinery for running a case over many operating point
 - [[hypothesis-record]]: [[adr-thread-design-hypothesis-record]].
 - The reduced-order reference fan and its C-grid: [[adr-thread-rom-reference-fan-and-c-grid]].
 - F-260 (CMA-ES and a real-fan study) is a headline of the `fan` milestone (ADR 0757). Its FAN-01 study is not attempted ([[adr-thread-design-optimisers-and-ledger]]).
+
+## Builds on
+
+- [[optimisation-basics]]: objectives, design variables, constraints, local and global search ([[ref-martins-ning-2021-engineering-design-optimization]] sec. 1.2-1.4).
+- [[design-of-experiments]]: `factorial`, `lhs`, `sobol`.
+- [[nelder-mead-simplex]]: `nelder_mead`.
+- [[evolutionary-algorithms]]: `differential_evolution`, `cma_es`, and the Deb-style constraint ranking ([[ref-hansen-2016-cma-es-tutorial]], [[ref-martins-ning-2021-engineering-design-optimization]] sec. 7.6.3).
+- [[multi-objective-optimisation]]: `nsga2` and Pareto sets.
 
 ## Related
 

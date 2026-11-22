@@ -1,7 +1,8 @@
 ---
 type: concept
 tags: [design-loop, ledger, provenance, fan]
-sources: [doc-design-loop, doc-fan-project-breakdown, doc-fan-measurement-protocol, doc-changelog, doc-test-process, adr-thread-design-optimisers-and-ledger, adr-thread-design-hypothesis-record, doc-example-projects]
+sources: [doc-design-loop, doc-fan-project-breakdown, doc-fan-measurement-protocol, doc-changelog, doc-test-process, adr-thread-design-optimisers-and-ledger, adr-thread-design-hypothesis-record, doc-example-projects, ref-martins-ning-2021-engineering-design-optimization]
+builds_on: [multi-objective-optimisation, multi-fidelity-modelling]
 created: 2026-11-22
 updated: 2026-11-22
 status: draft
@@ -27,6 +28,11 @@ The design ledger (`design::ledger`, ADR 0121) is one JSON-lines file that keeps
 - **Ledger sink (ADR 0623):** `Study::set_ledger_sink` writes one entry per evaluated pair, with "0 duplicate and 0 missing at all 55 kill points of a Nelder-Mead study" ([[adr-thread-design-optimisers-and-ledger]]).
 - **Public ledger rule (decision D3, 2026-11-15):** "A public ledger gets rounded aggregates only (3 significant digits, at least 5 pairs)" ([[adr-thread-design-optimisers-and-ledger]]).
 - **Hypothesis guards:** seeded and verifier-drawn re-run samples, and drawn checks that count only when newer than the evidence (ADRs 0662, 0693, 0698). Records are not signed ([[adr-thread-design-hypothesis-record]]). See [[hypothesis-record]].
+
+## Builds on
+
+- [[multi-objective-optimisation]]: the Pareto-set query returns the non-dominated entries ([[ref-martins-ning-2021-engineering-design-optimization]] sec. 9.2).
+- [[multi-fidelity-modelling]]: the tier and `fidelity_level` keys label each evaluation's fidelity.
 
 ## Related
 

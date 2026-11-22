@@ -1,7 +1,8 @@
 ---
 type: concept
 tags: [interface, study]
-sources: [doc-studies, doc-case-schema-study, doc-run-control, doc-python, doc-case-schema-design-loop-files, doc-mcp-tools]
+sources: [doc-studies, doc-case-schema-study, doc-run-control, doc-python, doc-case-schema-design-loop-files, doc-mcp-tools, ref-martins-ning-2021-engineering-design-optimization]
+builds_on: [design-of-experiments]
 created: 2026-11-22
 updated: 2026-11-22
 status: draft
@@ -20,6 +21,10 @@ A sweep of one case over settings values, defined in the case's `study` section 
 - Driven from Python by `rcfd.study(...)` -> `StudyResult` ([[doc-python]]).
 - Not the same as the design-loop studies (`study.json` + `evaluations.jsonl`, the MCP `design_*` tools), which are drivers outside the case schema ([[doc-case-schema-design-loop-files]], [[doc-mcp-tools]]).
 - Not delivered: service and MCP tools for `study` sections, chained studies, adaptive exploration; F-095 stays `partial` ([[doc-studies]]).
+
+## Builds on
+
+- [[design-of-experiments]]: `combine` `grid` is a full factorial plan, whose cost grows exponentially with the number of parameters ([[ref-martins-ning-2021-engineering-design-optimization]] sec. 10.2).
 
 ## Related
 

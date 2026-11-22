@@ -16,7 +16,7 @@ A differential equation has many solutions; the boundary conditions pick the one
 
 ## Explanation
 
-**Numerical conditions (3.3.3.1).** A fixed-value (Dirichlet) condition prescribes `phi_b` on the boundary face: the convection flux uses it directly and the diffusion flux uses the gradient between `phi_b` and the cell value. A fixed-gradient (Neumann) condition prescribes `g_b = n . grad phi` at the face: the face value is extrapolated as `phi_b = phi_P + |d| g_b` and the diffusion flux is `|S| g_b`; this is first order because the vector `d` from the cell centre does not in general meet the face at its centre ([[ref-jasak-1996-phd-thesis]] 3.3.3.1). Combinations of value and gradient ("radiation boundaries, for example") are built from the two ([[ref-jasak-1996-phd-thesis]] 3.3.3).
+**Numerical conditions (3.3.3.1).** A fixed-value (Dirichlet) condition prescribes $\phi_b$ on the boundary face: the convection flux uses it directly and the diffusion flux uses the gradient between $\phi_b$ and the cell value. A fixed-gradient (Neumann) condition prescribes $g_b = n \cdot \nabla \phi$ at the face: the face value is extrapolated as $\phi_b = \phi_P + \lvert d \rvert g_b$ and the diffusion flux is $\lvert S \rvert g_b$; this is first order because the vector $d$ from the cell centre does not in general meet the face at its centre ([[ref-jasak-1996-phd-thesis]] 3.3.3.1). Combinations of value and gradient ("radiation boundaries, for example") are built from the two ([[ref-jasak-1996-phd-thesis]] 3.3.3).
 
 **Physical conditions for incompressible flow (3.3.3.2).** Each physical boundary sets one condition per variable ([[ref-jasak-1996-phd-thesis]] 3.3.3.2):
 - **Inlet:** velocity fixed; pressure zero gradient.
@@ -26,7 +26,7 @@ A differential equation has many solutions; the boundary conditions pick the one
 
 **Wall and symmetry stresses (OCW L19 s.20).** A no-slip wall is a Dirichlet condition on velocity; at a symmetry plane the shear stress is zero and the normal stress is not ([[ref-mit-ocw-2-29-numerics]] L19 s.20).
 
-**Pressure and its correction.** On collocated grids the boundary pressure is extrapolated from the interior; where the mass flux is specified, the pressure-correction gradient is zero; if every boundary has a Neumann pressure condition, the pressure is defined only up to a constant and must be fixed at one point or by its mean ([[ref-mit-ocw-2-29-numerics]] L19 s.21-22). In SIMPLE the correction `p'` is zero where `p` has a Dirichlet condition and has zero normal derivative where `p` has a Neumann condition ([[ref-klaij-vuik-2013-simple-preconditioners]] 3.1.1).
+**Pressure and its correction.** On collocated grids the boundary pressure is extrapolated from the interior; where the mass flux is specified, the pressure-correction gradient is zero; if every boundary has a Neumann pressure condition, the pressure is defined only up to a constant and must be fixed at one point or by its mean ([[ref-mit-ocw-2-29-numerics]] L19 s.21-22). In SIMPLE the correction $p'$ is zero where $p$ has a Dirichlet condition and has zero normal derivative where $p$ has a Neumann condition ([[ref-klaij-vuik-2013-simple-preconditioners]] 3.1.1).
 
 ## Builds on
 
@@ -40,4 +40,4 @@ A differential equation has many solutions; the boundary conditions pick the one
 ## How rcfd uses it
 
 - The `corrected` momentum diagonal of [[component-diagonal]] answers a boundary-condition effect: where a condition acts on one velocity component only (`symmetry`, `shear`, `partial_slip`, `marangoni`), the `averaged` diagonal leaves a spurious sink on the tangential velocity that "acts like a partial no-slip wall" ([[component-diagonal]]).
-- On the NACA 0012 a `zero_gradient` far field let nuTilda grow to 6.0e4 nu; the far-field role `freestream` was part of the fix ([[spalart-allmaras]]).
+- On the NACA 0012 a `zero_gradient` far field let $\tilde{\nu}$ grow to $6.0 \times 10^4\, \nu$; the far-field role `freestream` was part of the fix ([[spalart-allmaras]]).

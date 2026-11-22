@@ -1,7 +1,8 @@
 ---
 type: entity
 tags: [fan, computer-fan, target, plan]
-sources: [doc-fan-project-breakdown, doc-fan-measurement-protocol, doc-validation-data, doc-design-loop, doc-changelog, doc-milestone-fan, adr-thread-rom-reference-fan-and-c-grid, adr-thread-design-surrogate-and-fidelity, adr-thread-design-hypothesis-record]
+sources: [doc-fan-project-breakdown, doc-fan-measurement-protocol, doc-validation-data, doc-design-loop, doc-changelog, doc-milestone-fan, adr-thread-rom-reference-fan-and-c-grid, adr-thread-design-surrogate-and-fidelity, adr-thread-design-hypothesis-record, ref-martins-ning-2021-engineering-design-optimization, ref-frazier-2018-bayesian-optimization]
+builds_on: [optimisation-basics, multi-fidelity-modelling]
 created: 2026-11-22
 updated: 2026-11-22
 status: draft
@@ -25,6 +26,11 @@ status: draft
 - The schema default `ComputerFan::default()` stalls in the reduced-order model; a usable default "needs a hub zero-lift angle of about 58 deg or more" (ADR 0639). Beside it, `ComputerFan::rom_reference()` (ADR 0643) is a 120 mm 7-blade fan that runs unstalled on [0.4, 1] q_f at 3000 rpm ([[adr-thread-rom-reference-fan-and-c-grid]]).
 - Five opt-in C-grid constructions (S to S'''') mesh the reference and a second strongly staggered blade within 84.5 deg / 4.0 / 1000 (F-791 done). No case value exists yet (F-778) ([[adr-thread-rom-reference-fan-and-c-grid]]).
 - The surrogate, the fidelity driver and the hypothesis record run on the reduced-order fan. GP/EI finds the grid optimum within 1 percent in 10 of 10 runs, and "+1 mm tip gap lowers eta_s by 7.39e-3 (confirmed, 'Not tested at cfd')" ([[adr-thread-design-surrogate-and-fidelity]], [[adr-thread-design-hypothesis-record]]).
+
+## Builds on
+
+- [[optimisation-basics]]: the fan design posed as objective, design variables and constraints over a black-box analysis ([[ref-martins-ning-2021-engineering-design-optimization]] sec. 1.2).
+- [[multi-fidelity-modelling]]: the reduced-order fan screens, CFD and measurement would confirm ([[ref-frazier-2018-bayesian-optimization]] sec. 5).
 
 ## Related
 

@@ -24,11 +24,11 @@ A single-fluid model of spontaneous (homogeneous) condensation of water vapour i
 ## Key points by section
 
 ### Sec. 2.1 "Governing equations"
-- Vapour conservation equations with sources $S_m$, $S_{u_i}$, $S_h$ (Eqs. 1-3); liquid mass fraction $Y$ and droplet number $N$ transported with sources $S_Y$ and the nucleation rate $J$ (Eqs. 4, 5); $S_m = -S_Y = -\dot m$, $S_{u_i} = -\dot m u_i$, $S_h = -\dot m h$ (Eqs. 6-8, signs as the text reads).
+- Vapour conservation equations with sources $S_m$, $S_{u_i}$, $S_h$ (Eqs. 1-3); liquid mass fraction $Y$ and droplet number $N$ transported with sources $S_Y$ and the nucleation rate $J$ (Eqs. 4, 5); all sources are written through the condensation rate $\dot m$: $S_m$ and $S_Y$ with $\dot m$, $S_{u_i}$ with $\dot m u_i$, $S_h$ with $\dot m h$ (Eqs. 6-8; the signs were lost in the text extraction).
 - Condensed mass per unit volume and time: new droplets of critical size plus growth of existing ones, $\dot m = \frac43\pi r_*^3\rho_l J + 4\pi r^2\rho_l N\,dr/dt$ (Eq. 9).
 - Kelvin-Helmholtz critical radius $r_* = 2\sigma/(\rho_l R_v T\ln S)$ (Eq. 10), with the supersaturation ratio $S$ = vapour pressure over equilibrium saturation pressure.
 - Nucleation rate from the internally consistent classical nucleation theory (Eq. 11): a prefactor in $\rho_v^2/(S\rho_l)$, the surface tension and the molecular mass $m_v$, times an exponential whose argument is proportional to $-\sigma^3/(k_B^3T_v^3\rho_l^2(\ln S)^2)$, times a correction $\exp(\Theta)$ with the dimensionless surface tension $\Theta = \sigma a_0/(k_BT_v)$ (Eq. 12), $a_0$ the molecular surface area. (Constant factors such as $\pi$ were lost in the text extraction and are not reproduced.)
-- Droplet growth by Gyarmathy's model (Eq. 13): $dr/dt$ proportional to $\lambda_v(T_s - T_v)$ over $\rho_l h_{lv} r$, reduced by the factor $(1 - r_*/r)$ and a Knudsen-number correction with the Prandtl number and the adiabatic exponent.
+- Droplet growth by Gyarmathy's model (Eq. 13): $dr/dt$ driven by $\lambda_v(T_s - T_v)$ (vapour conductivity, saturation minus vapour temperature) and divided by $\rho_l$, the enthalpy $h$ and $r$, with a factor $(1 - r_*/r)$ and a correction containing the Prandtl number and the adiabatic exponent; the exact arrangement is not legible in the extraction.
 
 ### Sec. 3 results
 - Condensation does not start when the steam reaches saturation but further downstream of the throat, in the supersaturated (supercooled) state; then nucleation is sharp, the droplet number rises "from 0 to $1.12\times10^{17}$ in a very short distance", the steam returns almost to equilibrium, and the droplets keep growing at about 2 K of supercooling.

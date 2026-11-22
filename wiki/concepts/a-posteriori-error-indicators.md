@@ -25,12 +25,12 @@ After a solution has been computed, look at it and guess where the discretisatio
 
 **Pitfall.** Refining purely to flow features can over-resolve some regions, "resulting in seemingly sharp but incorrect solutions"; Warren et al. modified the indicators against this ([[ref-venkatakrishnan-1995-icase-95-3]] 7).
 
-**Marking cells.** With the error scaling as `h^2`, a desired local cell size follows from a target error. Alternatively each cell's error is compared with the domain mean, using a refinement factor above and an unrefinement factor below it; refinement normal to the solution gradient is preferred where the solution varies mainly in one direction ([[ref-jasak-1996-phd-thesis]] 5.2).
+**Marking cells.** With the error scaling as $h^2$, a desired local cell size follows from a target error. Alternatively each cell's error is compared with the domain mean, using a refinement factor above and an unrefinement factor below it; refinement normal to the solution gradient is preferred where the solution varies mainly in one direction ([[ref-jasak-1996-phd-thesis]] 5.2).
 
 ## Builds on
 
 - [[gradient-reconstruction]]: the gradients most indicators are built from.
-- [[truncation-error-and-order-of-accuracy]]: why the error scales with a power of `h`.
+- [[truncation-error-and-order-of-accuracy]]: why the error scales with a power of $h$.
 
 ## Leads to
 
@@ -38,7 +38,7 @@ After a solution has been computed, look at it and guess where the discretisatio
 
 ## How rcfd uses it
 
-- rcfd's `AmrMesh` offers `gradient_indicator`, `hessian_indicator`, `zz_indicator` (`eta = |g* - g| sqrt(V)`) and `region_indicator`, and marks cells with a dead band (`coarsen_below < refine_above`) and level limits ([[mesh-adaptation]]).
+- rcfd's `AmrMesh` offers `gradient_indicator`, `hessian_indicator`, `zz_indicator` ($\eta = \lvert g^* - g \rvert \sqrt{V}$) and `region_indicator`, and marks cells with a dead band (`coarsen_below < refine_above`) and level limits ([[mesh-adaptation]]).
 - Directional refinement (`AnisoMesh`, one level per axis) on the suction layer reached error 0.00298 with 1547 cells against 0.01159 with 3841 isotropic cells ([[mesh-adaptation]]).
 
 ## Open questions

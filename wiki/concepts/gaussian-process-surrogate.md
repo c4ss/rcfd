@@ -1,7 +1,8 @@
 ---
 type: concept
 tags: [design-loop, surrogate, gaussian-process, kriging, expected-improvement, bayesian-optimisation]
-sources: [adr-thread-design-surrogate-and-fidelity, doc-reference-data-f698-gaussian-process, doc-design-loop]
+sources: [adr-thread-design-surrogate-and-fidelity, doc-reference-data-f698-gaussian-process, doc-design-loop, ref-rasmussen-williams-2006-gpml, ref-martins-ning-2021-engineering-design-optimization, ref-frazier-2018-bayesian-optimization]
+builds_on: [multivariate-normal-and-kernels, maximum-likelihood-estimation, direct-solvers-lu-and-cholesky, design-of-experiments]
 created: 2026-11-22
 updated: 2026-11-22
 status: draft
@@ -20,6 +21,14 @@ A Gaussian-process (kriging) surrogate fits a stochastic model to the evaluated 
 - **Stall pre-check** (F-716, ADR 0645): a cheaper model checks each pick first; 0 failed evaluations against 34 to 39 of 50 without it ([[adr-thread-design-surrogate-and-fidelity]]).
 - **Zero-mean, absolute-noise mode** (F-735, ADR 0663) used by the discrepancy rung R3 of [[fidelity-management]] ([[adr-thread-design-surrogate-and-fidelity]]).
 - Test-function minima were "from memory" ([[doc-reference-data-f698-gaussian-process]]); Shekel 10 was "confirmed numerically at -10.536443" (ADR 0673) ([[adr-thread-design-surrogate-and-fidelity]]).
+
+## Builds on
+
+- [[multivariate-normal-and-kernels]]: the multivariate normal prior and its conditioning formula give the predicted mean and variance; the Matérn 5/2 and squared-exponential kernels are Rasmussen and Williams eq. (4.17) and (4.9) ([[ref-rasmussen-williams-2006-gpml]]).
+- [[maximum-likelihood-estimation]]: length scales and nugget maximise the log marginal likelihood, eq. (5.8) of [[ref-rasmussen-williams-2006-gpml]]; ordinary kriging's concentrated likelihood is Martins and Ning eq. (10.71) ([[ref-martins-ning-2021-engineering-design-optimization]]).
+- [[direct-solvers-lu-and-cholesky]]: a Cholesky factorisation instead of an explicit inverse, faster and more stable ([[ref-frazier-2018-bayesian-optimization]] sec. 3); leave-one-out from one factorisation is eq. (5.12) of [[ref-rasmussen-williams-2006-gpml]] ([[cross-validation]]).
+- [[design-of-experiments]]: the initial Latin-hypercube sample.
+- Expected improvement in closed form, $\mathrm{EI}_n(x) = [\Delta_n]^+ + \sigma_n \varphi(\Delta_n/\sigma_n) - |\Delta_n| \Phi(-|\Delta_n|/\sigma_n)$ with $\Delta_n = \mu_n(x) - f_n^*$ (maximisation), is eq. (8) of [[ref-frazier-2018-bayesian-optimization]]; Martins and Ning give the minimisation form as eq. (10.100)-(10.102) and the EGO loop as Alg. 10.5 ([[ref-martins-ning-2021-engineering-design-optimization]]). Frazier's Constant Liar for parallel EI assumes pending points at a constant, "usually the expected value", like rcfd's pending points "believed at their mean"; his constrained EI counts improvement only at feasible points ([[ref-frazier-2018-bayesian-optimization]] sec. 5).
 
 ## Related
 
