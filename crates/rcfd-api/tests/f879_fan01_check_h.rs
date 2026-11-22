@@ -50,9 +50,18 @@ const STATE_TOL: f64 = 0.01;
 /// S1 (ADR 0766): the first 20-step run of H(dt) on main 2bab1863: largest site speed [m/s], torque [N m], pressure rise [Pa].
 const SHORT_RECORD: (f64, f64, f64) = (13.824327, 2.607352, 110.1842);
 
+/// A class with its verdict.
+type Outcome = (Class, Verdict);
+/// What G1 holds: class, verdict, and (amplitude, frequency) of H(dt) and H(dt/2).
+type Recorded = (Class, Verdict, [(f64, f64); 2]);
+
 /// G1 (ADR 0766): the recorded class by ADR 0183's rule, the verdict of F-879, and per run (H(dt), H(dt/2)) the amplitude [m/s] and the
-/// frequency [Hz] (NaN where fewer than two crossings define none) of the site signal. `None` until the registered runs are made.
-const RECORD: Option<(Class, Verdict, [(f64, f64); 2])> = None;
+/// frequency [Hz] (NaN where fewer than two crossings define none) of the site signal, from the registered runs of 2026-11-22.
+const RECORD: Option<Recorded> = Some((
+    Class::NotEvaluable,
+    Verdict::DoesNotDecide,
+    [(5.364938e-3, f64::NAN), (6.493334e-3, f64::NAN)],
+));
 
 fn omega() -> f64 {
     RPM * 2.0 * PI / 60.0
@@ -738,7 +747,7 @@ fn f879_measures_and_classes_on_known_signals() {
         assert_eq!((a.window_steps, b.window_steps), (2749, 5498));
         verdict(&a, &b)
     };
-    let cases: Vec<(&str, (Class, Verdict), (Class, Verdict))> = vec![
+    let cases: Vec<(&str, Outcome, Outcome)> = vec![
         (
             "small oscillation in both",
             pair(&sine(0.05, 100.0), &sine(0.05, 100.0), good, good),
