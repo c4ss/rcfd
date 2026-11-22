@@ -68,8 +68,12 @@ type Outcome = (Class, Verdict);
 /// amplitude [m/s] and the frequency [Hz] (NaN where fewer than two crossings define none) of the site signal.
 type Recorded = (Class, Verdict, [(f64, f64, f64); 2]);
 
-/// G1 (ADR 0767): the recorded values of the two registered runs; `None` until they are recorded.
-const RECORD: Option<Recorded> = None;
+/// G1 (ADR 0767): the recorded values of the two registered runs of 2026-11-22 (no window step of either run meets the rule).
+const RECORD: Option<Recorded> = Some((
+    Class::NotEvaluable,
+    Verdict::DoesNotDecide,
+    [(0.0, 5.364938e-3, f64::NAN), (0.0, 6.493334e-3, f64::NAN)],
+));
 
 fn omega() -> f64 {
     RPM * 2.0 * PI / 60.0
