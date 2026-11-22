@@ -1,7 +1,7 @@
 ---
 type: entity
 tags: [roadmap, area]
-sources: [doc-roadmap-json, doc-roadmap-overview, adr-thread-studio-electron, adr-thread-studio-engine-entry-points, adr-thread-runner-records-and-run-sites, adr-thread-workspace-layer, adr-thread-mcp-tools]
+sources: [doc-roadmap-json, doc-roadmap-overview, adr-thread-studio-electron, adr-thread-studio-engine-entry-points, adr-thread-runner-records-and-run-sites, adr-thread-workspace-layer, adr-thread-mcp-tools, adr-thread-wave48-egui-studio]
 created: 2026-11-22
 updated: 2026-11-22
 status: draft
@@ -30,6 +30,9 @@ status: draft
 - [[adr-thread-mcp-tools]] — the tool list and allow-list changes these ADRs made.
 - [[adr-thread-studio-foundation-crates]] — ADRs 0025, 0122 to 0126, 0128 (F-143, F-144, F-261 to F-265, F-866)
 - [[adr-thread-founding-decisions]] — ADR 0004 (F-140, the egui app and assistant crates and their MSRV)
+- [[adr-thread-wave48-egui-studio]] — ADRs 0130 to 0135, 0138 to 0141, 0144, 0147 to 0149, 0151, 0152, 0161, 0165: wave 48, the egui Studio from its shell to "first run to first picture" (records without an item; added by p3-records-b)
+- [[adr-thread-example-projects-and-linux-values]] — ADRs 0142, 0150, 0155, 0157, 0163, 0176: the shipped example projects, the Linux-built tree and the rotated aerofoil cases (p3-records-b)
+- Runner records of wave 48 and ADR 0229 (0130, 0143, 0146, 0229) added to [[adr-thread-runner-records-and-run-sites]]; the Studio's time step (ADR 0153) on [[adr-thread-setup-warnings-and-time-step]] (p3-records-b)
 
 ## Items
 

@@ -34,6 +34,7 @@ status: draft
 - [[adr-thread-layering-remeshing-ale]] — F-259, F-290, F-258, F-257, F-247 (6 ADRs).
 - [[adr-thread-fan01-rotating-solve]] — F-126 / FAN-01 ~~(stub; the wave ADRs are added by the records job)~~; 24 wave ADRs 0008 to 0117 added by p3-records-a (MRF, interfaces, mixing plane, the F-126 attempt, deficit and stall diagnoses, cyclic seams, revolution sector). Hub item: [[f-126]].
 - Structural side of the coupling: [[adr-thread-structural-fsi-coupling]].
+- Added by p3-records-b: the wave-49 stall diagnosis and the EXP-ROT and M-FAN-B registrations (ADRs 0174 to 0184) as a section of [[adr-thread-fan01-rotating-solve]]; ADR 0346 (the wall-pressure default flip, F-358, F-440) to [[adr-thread-six-dof-fsi-cosimulation]]
 
 ## Items
 

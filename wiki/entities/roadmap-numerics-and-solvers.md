@@ -1,7 +1,7 @@
 ---
 type: entity
 tags: [roadmap, area]
-sources: [doc-roadmap-json, doc-roadmap-overview, adr-thread-piso-stability-consistent-correctors, adr-thread-bdf2-step-consistent-face-flux, adr-thread-amg-coarse-lu, adr-thread-gradient-options, adr-thread-steady-kernel-warped-mesh]
+sources: [doc-roadmap-json, doc-roadmap-overview, adr-thread-piso-stability-consistent-correctors, adr-thread-bdf2-step-consistent-face-flux, adr-thread-amg-coarse-lu, adr-thread-gradient-options, adr-thread-steady-kernel-warped-mesh, adr-thread-setup-warnings-and-time-step]
 created: 2026-11-22
 updated: 2026-11-22
 status: draft
@@ -34,6 +34,8 @@ The P3 ADRs of this area (24, 2026-11-05 to 2026-11-20) are almost all diagnoses
 - [[adr-thread-immersed-solid]] — F-309 (ADR 0234) added to the moving-meshes thread
 - [[adr-thread-early-numerics-transient-accuracy]] — F-106, F-200, F-201, F-202, F-204, F-205, F-208, F-209, F-210, F-211, F-301, F-344 (18 ADRs, 0010 to 0105)
 - [[adr-thread-steady-solver-robustness]] — F-248 and the unnumbered robustness waves (ADRs 0042, 0062, 0077, 0081, 0084, 0095, 0102, 0105)
+- [[adr-thread-setup-warnings-and-time-step]] — end-time remainder step, time step at run start, SV301 wiring and settled step, SV302, SV202 text, `rcfd map --warm-start` (ADRs 0145, 0153, 0160, 0172, 0235; F-328, F-329, F-269; added by p3-records-b)
+- The wave-48 adaptive correctors (ADRs 0154, 0156, 0158, 0162; F-301, F-321) added as a section to [[adr-thread-piso-stability-consistent-correctors]] (p3-records-b)
 
 ## Items
 

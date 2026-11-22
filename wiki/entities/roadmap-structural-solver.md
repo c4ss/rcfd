@@ -1,7 +1,7 @@
 ---
 type: entity
 tags: [roadmap, area]
-sources: [doc-roadmap-json, doc-roadmap-overview, doc-product, doc-structural-solver, adr-thread-structural-verification-elements, adr-thread-structural-linear-solvers, adr-thread-structural-modal-buckling-cyclic, adr-thread-structural-rotordynamics, adr-thread-structural-dynamics-harmonic, adr-thread-structural-fatigue-and-radiated-sound, adr-thread-structural-beams-shells, adr-thread-structural-materials-nonlinear, adr-thread-structural-contact, adr-thread-structural-fsi-coupling, adr-thread-structural-case-file-and-fan-blade, adr-thread-structural-incompatible-hex8-rule-l, adr-thread-structural-hyperelastic-and-follower, adr-thread-structural-creep-and-temperature, adr-thread-structural-beam-warping, adr-thread-structural-fracture]
+sources: [doc-roadmap-json, doc-roadmap-overview, doc-product, doc-structural-solver, adr-thread-structural-verification-elements, adr-thread-structural-linear-solvers, adr-thread-structural-modal-buckling-cyclic, adr-thread-structural-rotordynamics, adr-thread-structural-dynamics-harmonic, adr-thread-structural-fatigue-and-radiated-sound, adr-thread-structural-beams-shells, adr-thread-structural-materials-nonlinear, adr-thread-structural-contact, adr-thread-structural-fsi-coupling, adr-thread-structural-case-file-and-fan-blade, adr-thread-structural-incompatible-hex8-rule-l, adr-thread-structural-hyperelastic-and-follower, adr-thread-structural-creep-and-temperature, adr-thread-structural-beam-warping, adr-thread-structural-fracture, adr-thread-structural-plan]
 created: 2026-11-22
 updated: 2026-11-22
 status: draft
@@ -59,6 +59,8 @@ Second half (job p3-structural-b), new pages:
 - [[adr-thread-structural-fracture]]: J-integral, interaction integral, curved and closed crack fronts (4)
 
 Second half added as a section to existing pages: [[adr-thread-structural-modal-buckling-cyclic]] (+12), [[adr-thread-structural-beams-shells]] (+8, shells), [[adr-thread-structural-materials-nonlinear]] (+8, driver records and residual references), [[adr-thread-structural-contact]] (+7), [[adr-thread-structural-rotordynamics]] (+7), [[adr-thread-structural-linear-solvers]] (+7), [[adr-thread-structural-dynamics-harmonic]] (+6), [[adr-thread-structural-verification-elements]] (+4), [[adr-thread-structural-fatigue-and-radiated-sound]] (+2).
+- [[adr-thread-structural-plan]]: the three tier plans (ADRs 0270, 0290, 0310) and the 49 stubs that stayed PLANNED, each mapped to its item, registration and thread (52; added by p3-records-b)
+- [[adr-thread-structural-basic-tier]]: the 17 registrations under the plan's own numbers, ADRs 0271 to 0286, 0291, 0292, 0296, 0305 (F-370 to F-385, F-388, F-389, F-393, F-402; added by p3-records-b)
 
 ## Items
 

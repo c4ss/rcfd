@@ -1,7 +1,7 @@
 ---
 type: entity
 tags: [roadmap, area]
-sources: [doc-roadmap-json, doc-roadmap-overview, adr-thread-transient-rans, adr-thread-periodic-seam-diffusivity]
+sources: [doc-roadmap-json, doc-roadmap-overview, adr-thread-transient-rans, adr-thread-periodic-seam-diffusivity, adr-thread-naca0012-sa-drag]
 created: 2026-11-22
 updated: 2026-11-22
 status: draft
@@ -26,6 +26,7 @@ The model catalogue (F-040 to F-046, F-203, F-206, F-207) predates the P3 ADRs; 
 - [[adr-thread-transient-rans]] — F-286, F-294, F-300, F-040 (ADRs 0199, 0210, 0225, 0707)
 - [[adr-thread-periodic-seam-diffusivity]] — F-295, F-296, F-302 (ADRs 0205, 0212, 0227)
 - [[adr-thread-early-turbulence]] — F-041 to F-046, F-203, F-206, F-207 (ADRs 0014, 0015, 0017, 0026, 0032, 0061, 0063, 0070, 0074)
+- [[adr-thread-naca0012-sa-drag]] — the NACA 0012 sweep and the SA drag causes, effective wall shear and `freestream` far-field defaults, SA buffer-layer wall mode, trailing-edge divergence (ADRs 0159, 0164, 0166 to 0171; F-868; added by p3-records-b)
 
 ## Items
 

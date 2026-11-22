@@ -31,6 +31,7 @@ The design loop is a full library stack on the reduced-order fan, and none of it
 - [[adr-thread-design-hypothesis-record]]: F-701, F-727, F-728, F-745, F-749, F-776, F-781 (7 ADRs)
 - [[adr-thread-rom-reference-fan-and-c-grid]]: F-713, F-722, F-726, F-777, F-782, F-784, F-791 (7 ADRs)
 - [[adr-thread-early-workflow-and-partials]] — F-095, F-137 (ADRs 0034, 0067, 0091, 0099)
+- Added by p3-records-b: ADR 0136 (the fidelity-tier proposal, superseded for T6 by ADR 0622) as a section of [[adr-thread-design-surrogate-and-fidelity]]
 
 ## Items
 

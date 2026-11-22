@@ -31,6 +31,7 @@ Three kinds of work share this line: validation headlines, the reliability of th
 - [[adr-thread-process-measures-and-roadmap-form]]: F-851, F-863, F-864 (ADRs 0752, 0754, 0755)
 - [[adr-thread-early-validation-benchmarks]]: F-006, F-125 (ADRs 0060, 0061, 0064)
 - [[adr-thread-early-workflow-and-partials]]: F-096 (ADR 0089); ADRs 0127, 0129 added to [[adr-thread-daily-gate-and-edit-lock]]
+- Added by p3-records-b: ADR 0137 (the first Linux full gate, F-866) to [[adr-thread-daily-gate-and-edit-lock]]; ADR 0745 (weekly citation audit) to [[adr-thread-process-measures-and-roadmap-form]]; the example-project stores on [[adr-thread-example-projects-and-linux-values]]
 
 ## Items
 
