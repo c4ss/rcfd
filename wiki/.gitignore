@@ -4,3 +4,6 @@
 .obsidian/plugins/
 .obsidian/themes/
 .trash/
+
+# Ingest subagent handoffs (merged by the lead, not part of the wiki)
+.handoff/
