@@ -1,0 +1,44 @@
+    Finished `release` profile [optimized] target(s) in 0.32s
+     Running tests\f879_fan01_check_h.rs (E:/projects/cfd/w49i-work/f879-fan01-check-h-scratch/target\release\deps\f879_fan01_check_h-21c0f1603e0fab6b.exe)
+
+running 1 test
+F879 H_dt step 1: t 4.60500e-5 s, res_u 1.000e0, continuity 9.482e-10, outer ratio 7.943e-3 (first 4.153e3), site speeds [29.9757, 20.1973, 19.4455, 20.2770, 33.0663, 33.5366], torque 41.240411 N m, dp_ts -682.2608 Pa, 1.485 s per step
+F879 H_dt step 2: t 9.21000e-5 s, res_u 2.335e-1, continuity 2.857e-10, outer ratio 4.556e-3 (first 5.980e3), site speeds [28.8282, 18.3351, 14.7549, 16.2091, 32.8641, 33.2513], torque -17.933998 N m, dp_ts 677.2739 Pa, 1.524 s per step
+test f879_h_dt_record has been running for over 60 seconds
+F879 H_dt step 250: t 1.15125e-2 s, res_u 6.805e-4, continuity 1.213e-10, outer ratio 1.948e-3 (first 1.714e2), site speeds [6.2056, 2.0354, 2.8311, 3.1874, 5.3053, 4.2056], torque 2.089828 N m, dp_ts 77.5636 Pa, 2.202 s per step
+F879 H_dt step 500: t 2.30250e-2 s, res_u 3.465e-4, continuity 1.009e-10, outer ratio 6.667e-3 (first 1.641e2), site speeds [6.3543, 1.9216, 2.5929, 3.2644, 5.0900, 3.1991], torque 2.040029 N m, dp_ts 73.6301 Pa, 2.077 s per step
+F879 H_dt step 750: t 3.45375e-2 s, res_u 1.135e-4, continuity 1.291e-10, outer ratio 3.653e-3 (first 1.618e2), site speeds [6.2412, 1.9672, 3.0099, 3.1148, 4.5847, 2.9662], torque 2.020115 N m, dp_ts 70.7711 Pa, 1.918 s per step
+F879 H_dt step 1000: t 4.60500e-2 s, res_u 6.742e-5, continuity 1.307e-10, outer ratio 1.646e-2 (first 1.608e2), site speeds [6.2245, 1.9637, 2.8220, 2.5461, 4.4478, 2.9301], torque 2.011722 N m, dp_ts 70.1734 Pa, 1.813 s per step
+F879 H_dt step 1250: t 5.75625e-2 s, res_u 4.963e-5, continuity 1.311e-10, outer ratio 3.620e-3 (first 1.602e2), site speeds [6.2115, 1.9567, 2.7106, 2.2883, 4.3868, 2.9200], torque 2.007902 N m, dp_ts 69.9586 Pa, 1.711 s per step
+F879 H_dt step 1500: t 6.90750e-2 s, res_u 4.037e-5, continuity 1.315e-10, outer ratio 1.082e-2 (first 1.600e2), site speeds [6.2057, 1.9519, 2.6334, 2.1435, 4.3440, 2.9111], torque 2.006835 N m, dp_ts 69.8942 Pa, 1.635 s per step
+F879 H_dt step 1750: t 8.05875e-2 s, res_u 3.418e-5, continuity 1.308e-10, outer ratio 1.766e-2 (first 1.599e2), site speeds [6.2020, 1.9476, 2.5795, 2.0579, 4.3165, 2.9061], torque 2.005592 N m, dp_ts 69.7646 Pa, 1.587 s per step
+F879 H_dt step 2000: t 9.21000e-2 s, res_u 2.969e-5, continuity 1.310e-10, outer ratio 1.046e-2 (first 1.599e2), site speeds [6.2005, 1.9447, 2.5418, 1.9981, 4.2982, 2.9035], torque 2.005593 N m, dp_ts 69.7057 Pa, 1.544 s per step
+F879 H_dt step 2250: t 1.03612e-1 s, res_u 2.695e-5, continuity 1.315e-10, outer ratio 1.558e-2 (first 1.599e2), site speeds [6.1981, 1.9422, 2.5215, 1.9684, 4.2887, 2.9031], torque 2.006069 N m, dp_ts 69.6814 Pa, 1.507 s per step
+F879 H_dt step 2500: t 1.15125e-1 s, res_u 2.525e-5, continuity 1.313e-10, outer ratio 7.758e-3 (first 1.600e2), site speeds [6.1967, 1.9407, 2.5097, 1.9510, 4.2833, 2.9028], torque 2.006400 N m, dp_ts 69.6644 Pa, 1.483 s per step
+F879 H_dt step 2750: t 1.26638e-1 s, res_u 2.428e-5, continuity 1.315e-10, outer ratio 1.531e-2 (first 1.600e2), site speeds [6.1959, 1.9399, 2.5032, 1.9413, 4.2803, 2.9025], torque 2.006691 N m, dp_ts 69.6428 Pa, 1.463 s per step
+F879 H_dt step 3000: t 1.38150e-1 s, res_u 2.364e-5, continuity 1.311e-10, outer ratio 1.756e-2 (first 1.600e2), site speeds [6.1955, 1.9395, 2.5001, 1.9359, 4.2787, 2.9023], torque 2.006862 N m, dp_ts 69.6244 Pa, 1.448 s per step
+F879 H_dt step 3250: t 1.49663e-1 s, res_u 2.324e-5, continuity 1.310e-10, outer ratio 1.659e-2 (first 1.600e2), site speeds [6.1952, 1.9393, 2.4984, 1.9331, 4.2778, 2.9021], torque 2.006985 N m, dp_ts 69.6152 Pa, 1.440 s per step
+F879 H_dt step 3500: t 1.61175e-1 s, res_u 2.305e-5, continuity 1.316e-10, outer ratio 1.691e-2 (first 1.600e2), site speeds [6.1951, 1.9391, 2.4976, 1.9316, 4.2773, 2.9020], torque 2.007129 N m, dp_ts 69.6139 Pa, 1.433 s per step
+F879 H_dt step 3750: t 1.72687e-1 s, res_u 2.297e-5, continuity 1.311e-10, outer ratio 1.212e-2 (first 1.600e2), site speeds [6.1950, 1.9391, 2.4972, 1.9310, 4.2771, 2.9020], torque 2.007150 N m, dp_ts 69.6146 Pa, 1.427 s per step
+F879 H_dt step 4000: t 1.84200e-1 s, res_u 2.294e-5, continuity 1.315e-10, outer ratio 8.005e-3 (first 1.600e2), site speeds [6.1950, 1.9391, 2.4971, 1.9307, 4.2771, 2.9020], torque 2.007168 N m, dp_ts 69.6174 Pa, 1.419 s per step
+F879 H_dt step 4250: t 1.95713e-1 s, res_u 2.297e-5, continuity 1.316e-10, outer ratio 1.223e-2 (first 1.600e2), site speeds [6.1950, 1.9391, 2.4970, 1.9306, 4.2771, 2.9020], torque 2.007167 N m, dp_ts 69.6193 Pa, 1.414 s per step
+F879 H_dt step 4500: t 2.07225e-1 s, res_u 2.300e-5, continuity 1.311e-10, outer ratio 1.196e-2 (first 1.600e2), site speeds [6.1950, 1.9391, 2.4970, 1.9306, 4.2771, 2.9021], torque 2.007108 N m, dp_ts 69.6175 Pa, 1.417 s per step
+F879 H_dt step 4750: t 2.18738e-1 s, res_u 2.304e-5, continuity 1.312e-10, outer ratio 6.458e-3 (first 1.600e2), site speeds [6.1950, 1.9391, 2.4970, 1.9306, 4.2771, 2.9021], torque 2.007130 N m, dp_ts 69.6122 Pa, 1.424 s per step
+F879 H_dt step 5000: t 2.30250e-1 s, res_u 2.304e-5, continuity 1.311e-10, outer ratio 1.047e-2 (first 1.600e2), site speeds [6.1950, 1.9391, 2.4971, 1.9306, 4.2771, 2.9020], torque 2.007170 N m, dp_ts 69.6085 Pa, 1.429 s per step
+F879 H_dt step 5250: t 2.41763e-1 s, res_u 2.298e-5, continuity 1.311e-10, outer ratio 1.266e-2 (first 1.600e2), site speeds [6.1950, 1.9391, 2.4971, 1.9307, 4.2771, 2.9020], torque 2.007183 N m, dp_ts 69.6071 Pa, 1.436 s per step
+F879 H_dt step 5498: t 2.53183e-1 s, res_u 2.294e-5, continuity 1.313e-10, outer ratio 6.822e-3 (first 1.600e2), site speeds [6.1950, 1.9391, 2.4971, 1.9307, 4.2771, 2.9020], torque 2.007206 N m, dp_ts 69.6093 Pa, 1.433 s per step
+F879 H_dt END: 5498 of 5498 steps, failed None, fields finite true, 1.433 s per step (131.3 min), mass balance 1.563e-14, solver time 2.531829e-1 s
+F879 H_dt REPORT: five cells of largest amplitude over the window: ["c7887 A 0.1613 m/s (r 0.2455, z 0.1060)", "c6878 A 0.1547 m/s (r 0.2437, z 0.1198)", "c12252 A 0.1142 m/s (r 0.2488, z 0.1081)", "c11621 A 0.0992 m/s (r 0.2484, z 0.1081)", "c10991 A 0.0986 m/s (r 0.2480, z 0.1059)"]; largest seam-pair flux sum (every 50 steps of the window) 2.308e-15
+F879 H_dt: record written to E:/projects/cfd/w49i-work/f879-fan01-check-h-scratch/records\H_dt.csv
+F879 H_dt SUMMARY: dt 4.605e-5 s, 5498 steps (6.270 revolutions), window 2749 steps; failed false; outer rule: 0.4376 of the window's steps by the ratio alone, 0.4376 by the rule, TIME-ACCURATE false; max-A site cell c157; site speed: mean 1.931881 m/s, A 5.364938e-3 m/s, crossings 0, f NaN Hz, DFT peak 7.90 Hz; halves A1 5.337317e-3 A2 7.886601e-5 (A2/A1 0.0148); period NaN steps; smallest axial relative velocity at the site 0.2907 m/s; torque: mean 2.007096 N m, A 2.829826e-4 N m, crossings 42, f 1009.5109 Hz, DFT peak 7.90 Hz; pressure rise: mean 69.617189 Pa, A 2.119701e-2 Pa, crossings 41, f 395.1391 Hz, DFT peak 7.90 Hz; shaft power mean 312.331 W
+F879 H_dt DECAY: flow-through time 1: A of the site cell c157 8.9363e0 m/s, of torque 2.9587e1 N m, of pressure rise 6.7977e2 Pa
+F879 H_dt DECAY: flow-through time 2: A of the site cell c157 3.0095e-1 m/s, of torque 4.3619e-3 N m, of pressure rise 2.9231e-1 Pa
+F879 H_dt DECAY: flow-through time 3: A of the site cell c157 4.6966e-2 m/s, of torque 6.8157e-4 N m, of pressure rise 5.3969e-2 Pa
+F879 H_dt DECAY: flow-through time 4: A of the site cell c157 5.0622e-3 m/s, of torque 2.3603e-4 N m, of pressure rise 1.9239e-2 Pa
+F879 H_dt DECAY: flow-through time 5: A of the site cell c157 3.2021e-4 m/s, of torque 8.7643e-5 N m, of pressure rise 8.7491e-3 Pa
+F879 H_dt DECAY: flow-through time 6: A of the site cell c157 7.5687e-5 m/s, of torque 6.7277e-5 N m, of pressure rise 7.9327e-3 Pa
+F879 H_dt: FIRST RUN, no committed record to compare with
+test f879_h_dt_record ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 5 filtered out; finished in 7878.24s
+

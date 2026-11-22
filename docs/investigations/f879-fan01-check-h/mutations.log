@@ -1,0 +1,109 @@
+=== M0: exit 101
+test f879_class_from_the_committed_records ... FAILED
+test f879_h_dt2_record ... ignored, heavy record, ADR 0766: check H(dt/2) on B2 (13 627 cells, 10 996 steps of 5 outer iterations, hours): cargo test --release -p rcfd-api --test f879_fan01_check_h f879_h_dt2_record -- --ignored --nocapture
+test f879_h_dt_record ... ignored, heavy record, ADR 0766: check H(dt) on B2 (13 627 cells, 5 498 steps of 5 outer iterations, hours): cargo test --release -p rcfd-api --test f879_fan01_check_h f879_h_dt_record -- --ignored --nocapture
+test f879_measures_and_classes_on_known_signals ... C3: Meas { mean: 3.010398966221013, amp: 0.3699869245720744, crossings: 10, freq: 122.99999999999999, dft: 117.14285714285714 }
+ok
+test f879_short_run_holds_the_state ... F879 short step 1: t 4.60500e-5 s, res_u 1.000e0, continuity 9.482e-10, outer ratio 7.943e-3 (first 4.153e3), site speeds [29.9757, 20.1973, 19.4455, 20.2770, 33.0663, 33.5366], torque 41.240411 N m, dp_ts -682.2608 Pa, 
+S1: after 20 steps: largest site speed 13.824327 m/s, torque 2.607352 N m, dp_ts 110.1842 Pa, outer ratio 2.889e-3
+ok
+test f879_site_cells_are_at_the_hub_trailing_edge ... C1 c7: r 0.124280343942 m, z 0.171963158688 m
+ok
+test result: FAILED. 3 passed; 1 failed; 2 ignored; 0 measured; 0 filtered out; finished in 74.58s
+thread 'f879_class_from_the_committed_records' (55176) panicked at crates\rcfd-api\tests\f879_fan01_check_h.rs:522:65:
+error: test failed, to rerun pass `-p rcfd-api --test f879_fan01_check_h`
+=== M3: exit 101
+test f879_class_from_the_committed_records ... FAILED
+test f879_h_dt2_record ... ignored, heavy record, ADR 0766: check H(dt/2) on B2 (13 627 cells, 10 996 steps of 5 outer iterations, hours): cargo test --release -p rcfd-api --test f879_fan01_check_h f879_h_dt2_record -- --ignored --nocapture
+test f879_h_dt_record ... ignored, heavy record, ADR 0766: check H(dt) on B2 (13 627 cells, 5 498 steps of 5 outer iterations, hours): cargo test --release -p rcfd-api --test f879_fan01_check_h f879_h_dt_record -- --ignored --nocapture
+test f879_measures_and_classes_on_known_signals ... C3: Meas { mean: 3.010398966221013, amp: 0.3699869245720744, crossings: 10, freq: 122.99999999999999, dft: 117.14285714285714 }
+FAILED
+test f879_short_run_holds_the_state ... F879 short step 1: t 4.60500e-5 s, res_u 1.000e0, continuity 9.482e-10, outer ratio 7.943e-3 (first 4.153e3), site speeds [29.9757, 20.1973, 19.4455, 20.2770, 33.0663, 33.5366], torque 41.240411 N m, dp_ts -682.2608 Pa, 
+S1: after 20 steps: largest site speed 13.824327 m/s, torque 2.607352 N m, dp_ts 110.1842 Pa, outer ratio 2.889e-3
+ok
+test f879_site_cells_are_at_the_hub_trailing_edge ... C1 c7: r 0.124280343942 m, z 0.171963158688 m
+ok
+test result: FAILED. 2 passed; 2 failed; 2 ignored; 0 measured; 0 filtered out; finished in 61.57s
+thread 'f879_class_from_the_committed_records' (33596) panicked at crates\rcfd-api\tests\f879_fan01_check_h.rs:522:65:
+thread 'f879_measures_and_classes_on_known_signals' (39836) panicked at crates\rcfd-api\tests\f879_fan01_check_h.rs:800:9:
+assertion `left == right` failed: the same oscillation at both steps
+error: test failed, to rerun pass `-p rcfd-api --test f879_fan01_check_h`
+=== M4: exit 101
+test f879_class_from_the_committed_records ... FAILED
+test f879_h_dt2_record ... ignored, heavy record, ADR 0766: check H(dt/2) on B2 (13 627 cells, 10 996 steps of 5 outer iterations, hours): cargo test --release -p rcfd-api --test f879_fan01_check_h f879_h_dt2_record -- --ignored --nocapture
+test f879_h_dt_record ... ignored, heavy record, ADR 0766: check H(dt) on B2 (13 627 cells, 5 498 steps of 5 outer iterations, hours): cargo test --release -p rcfd-api --test f879_fan01_check_h f879_h_dt_record -- --ignored --nocapture
+test f879_measures_and_classes_on_known_signals ... C3: Meas { mean: 3.010398966221013, amp: 0.3699869245720744, crossings: 10, freq: 122.99999999999999, dft: 117.14285714285714 }
+ok
+test f879_short_run_holds_the_state ... F879 short step 1: t 4.60500e-5 s, res_u 1.000e0, continuity 9.482e-10, outer ratio 7.943e-3 (first 4.153e3), site speeds [29.9757, 20.1973, 19.4455, 20.2770, 33.0663, 40.1583], torque 41.240411 N m, dp_ts -682.2608 Pa, 
+S1: after 20 steps: largest site speed 40.421936 m/s, torque 2.607352 N m, dp_ts 110.1842 Pa, outer ratio 2.889e-3
+FAILED
+test f879_site_cells_are_at_the_hub_trailing_edge ... C1 c7: r 0.124280343942 m, z 0.171963158688 m
+FAILED
+test result: FAILED. 1 passed; 3 failed; 2 ignored; 0 measured; 0 filtered out; finished in 77.44s
+thread 'f879_class_from_the_committed_records' (28252) panicked at crates\rcfd-api\tests\f879_fan01_check_h.rs:522:65:
+thread 'f879_short_run_holds_the_state' (4928) panicked at crates\rcfd-api\tests\f879_fan01_check_h.rs:872:5:
+the state moved: site speed 40.42193621968551 against 13.824327, torque 2.6073524704300954 against 2.607352, dp_ts 110.18416985134192 against 110.1842
+thread 'f879_site_cells_are_at_the_hub_trailing_edge' (60276) panicked at crates\rcfd-api\tests\f879_fan01_check_h.rs:834:9:
+error: test failed, to rerun pass `-p rcfd-api --test f879_fan01_check_h`
+=== M5: exit 101
+test f879_class_from_the_committed_records ... FAILED
+test f879_h_dt2_record ... ignored, heavy record, ADR 0766: check H(dt/2) on B2 (13 627 cells, 10 996 steps of 5 outer iterations, hours): cargo test --release -p rcfd-api --test f879_fan01_check_h f879_h_dt2_record -- --ignored --nocapture
+test f879_h_dt_record ... ignored, heavy record, ADR 0766: check H(dt) on B2 (13 627 cells, 5 498 steps of 5 outer iterations, hours): cargo test --release -p rcfd-api --test f879_fan01_check_h f879_h_dt_record -- --ignored --nocapture
+test f879_measures_and_classes_on_known_signals ... C3: Meas { mean: 3.010398966221013, amp: 0.3699869245720744, crossings: 10, freq: 122.99999999999999, dft: 117.14285714285714 }
+FAILED
+test f879_short_run_holds_the_state ... F879 short step 1: t 4.60500e-5 s, res_u 1.000e0, continuity 9.482e-10, outer ratio 7.943e-3 (first 4.153e3), site speeds [29.9757, 20.1973, 19.4455, 20.2770, 33.0663, 33.5366], torque 41.240411 N m, dp_ts -682.2608 Pa, 
+S1: after 20 steps: largest site speed 13.824327 m/s, torque 2.607352 N m, dp_ts 110.1842 Pa, outer ratio 2.889e-3
+ok
+test f879_site_cells_are_at_the_hub_trailing_edge ... C1 c7: r 0.124280343942 m, z 0.171963158688 m
+ok
+test result: FAILED. 2 passed; 2 failed; 2 ignored; 0 measured; 0 filtered out; finished in 105.33s
+thread 'f879_class_from_the_committed_records' (34472) panicked at crates\rcfd-api\tests\f879_fan01_check_h.rs:522:65:
+thread 'f879_measures_and_classes_on_known_signals' (63336) panicked at crates\rcfd-api\tests\f879_fan01_check_h.rs:800:9:
+assertion `left == right` failed: the frequency doubles with the halved step
+error: test failed, to rerun pass `-p rcfd-api --test f879_fan01_check_h`
+=== M7: exit 101
+test f879_class_from_the_committed_records ... FAILED
+test f879_h_dt2_record ... ignored, heavy record, ADR 0766: check H(dt/2) on B2 (13 627 cells, 10 996 steps of 5 outer iterations, hours): cargo test --release -p rcfd-api --test f879_fan01_check_h f879_h_dt2_record -- --ignored --nocapture
+test f879_h_dt_record ... ignored, heavy record, ADR 0766: check H(dt) on B2 (13 627 cells, 5 498 steps of 5 outer iterations, hours): cargo test --release -p rcfd-api --test f879_fan01_check_h f879_h_dt_record -- --ignored --nocapture
+test f879_measures_and_classes_on_known_signals ... C3: Meas { mean: 3.010398966221013, amp: 0.3699869245720744, crossings: 10, freq: 122.99999999999999, dft: 117.14285714285714 }
+FAILED
+test f879_short_run_holds_the_state ... F879 short step 1: t 4.60500e-5 s, res_u 1.000e0, continuity 9.482e-10, outer ratio 7.943e-3 (first 4.153e3), site speeds [29.9757, 20.1973, 19.4455, 20.2770, 33.0663, 33.5366], torque 41.240411 N m, dp_ts -682.2608 Pa, 
+S1: after 20 steps: largest site speed 13.824327 m/s, torque 2.607352 N m, dp_ts 110.1842 Pa, outer ratio 2.889e-3
+ok
+test f879_site_cells_are_at_the_hub_trailing_edge ... C1 c7: r 0.124280343942 m, z 0.171963158688 m
+ok
+test result: FAILED. 2 passed; 2 failed; 2 ignored; 0 measured; 0 filtered out; finished in 82.69s
+thread 'f879_class_from_the_committed_records' (33256) panicked at crates\rcfd-api\tests\f879_fan01_check_h.rs:522:65:
+thread 'f879_measures_and_classes_on_known_signals' (50576) panicked at crates\rcfd-api\tests\f879_fan01_check_h.rs:800:9:
+assertion `left == right` failed: an oscillation that decays across the window
+error: test failed, to rerun pass `-p rcfd-api --test f879_fan01_check_h`
+=== M2: exit 101
+test f879_class_from_the_committed_records ... FAILED
+test f879_h_dt2_record ... ignored, heavy record, ADR 0766: check H(dt/2) on B2 (13 627 cells, 10 996 steps of 5 outer iterations, hours): cargo test --release -p rcfd-api --test f879_fan01_check_h f879_h_dt2_record -- --ignored --nocapture
+test f879_h_dt_record ... ignored, heavy record, ADR 0766: check H(dt) on B2 (13 627 cells, 5 498 steps of 5 outer iterations, hours): cargo test --release -p rcfd-api --test f879_fan01_check_h f879_h_dt_record -- --ignored --nocapture
+test f879_measures_and_classes_on_known_signals ... C3: Meas { mean: 3.010398966221013, amp: 0.3699869245720744, crossings: 10, freq: 122.99999999999999, dft: 117.14285714285714 }
+FAILED
+test f879_short_run_holds_the_state ... F879 short step 1: t 4.70000e-5 s, res_u 1.000e0, continuity 9.703e-10, outer ratio 8.154e-3 (first 4.074e3), site speeds [29.9183, 20.1543, 19.3741, 20.2074, 33.0125, 33.4747], torque 40.446284 N m, dp_ts -664.2694 Pa, 
+FAILED
+test f879_site_cells_are_at_the_hub_trailing_edge ... C1 c7: r 0.124280343942 m, z 0.171963158688 m
+ok
+test result: FAILED. 1 passed; 3 failed; 2 ignored; 0 measured; 0 filtered out; finished in 44.28s
+thread 'f879_class_from_the_committed_records' (62644) panicked at crates\rcfd-api\tests\f879_fan01_check_h.rs:522:65:
+thread 'f879_measures_and_classes_on_known_signals' (64424) panicked at crates\rcfd-api\tests\f879_fan01_check_h.rs:738:9:
+assertion `left == right` failed
+thread 'f879_short_run_holds_the_state' (63196) panicked at crates\rcfd-api\tests\f879_fan01_check_h.rs:847:5:
+error: test failed, to rerun pass `-p rcfd-api --test f879_fan01_check_h`
+=== M1: exit 101
+test f879_class_from_the_committed_records ... FAILED
+test f879_h_dt2_record ... ignored, heavy record, ADR 0766: check H(dt/2) on B2 (13 627 cells, 10 996 steps of 5 outer iterations, hours): cargo test --release -p rcfd-api --test f879_fan01_check_h f879_h_dt2_record -- --ignored --nocapture
+test f879_h_dt_record ... ignored, heavy record, ADR 0766: check H(dt) on B2 (13 627 cells, 5 498 steps of 5 outer iterations, hours): cargo test --release -p rcfd-api --test f879_fan01_check_h f879_h_dt_record -- --ignored --nocapture
+test f879_measures_and_classes_on_known_signals ... C3: Meas { mean: 3.010398966221013, amp: 0.3699869245720744, crossings: 10, freq: 122.99999999999999, dft: 117.14285714285714 }
+ok
+test f879_short_run_holds_the_state ... F879 short step 1: t 4.60500e-5 s, res_u 1.000e0, continuity 9.335e-10, outer ratio 7.872e-3 (first 4.190e3), site speeds [29.9654, 20.1874, 19.4409, 20.2747, 33.0589, 33.5280], torque 41.234555 N m, dp_ts -681.3574 Pa, 
+S1: after 20 steps: largest site speed 13.820946 m/s, torque 2.610286 N m, dp_ts 109.5689 Pa, outer ratio 3.036e-3
+ok
+test f879_site_cells_are_at_the_hub_trailing_edge ... C1 c7: r 0.124280343942 m, z 0.171963158688 m
+ok
+test result: FAILED. 3 passed; 1 failed; 2 ignored; 0 measured; 0 filtered out; finished in 81.47s
+thread 'f879_class_from_the_committed_records' (53444) panicked at crates\rcfd-api\tests\f879_fan01_check_h.rs:522:65:
+error: test failed, to rerun pass `-p rcfd-api --test f879_fan01_check_h`

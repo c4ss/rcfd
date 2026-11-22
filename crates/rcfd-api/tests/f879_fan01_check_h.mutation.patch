@@ -1,0 +1,14 @@
+# expect-fail: cargo test -p rcfd-api --release --test f879_fan01_check_h f879_measures_and_classes_on_known_signals
+diff --git a/crates/rcfd-api/tests/f879_fan01_check_h.rs b/crates/rcfd-api/tests/f879_fan01_check_h.rs
+index eea6b313..a0d8d841 100644
+--- a/crates/rcfd-api/tests/f879_fan01_check_h.rs
++++ b/crates/rcfd-api/tests/f879_fan01_check_h.rs
+@@ -28,7 +28,7 @@ const WINDOW_START: f64 = 0.1266;
+ /// The B2 site cells of ADR 0180 / ADR 0181 (the first wake column behind the hub trailing edge).
+ const SITE: [usize; 6] = [7, 57, 107, 157, 621, 1235];
+ /// ADR 0183, check H: the STEADY threshold `0.01 Omega r_hub` as printed there [m/s].
+-const A_STEADY: f64 = 0.193;
++const A_STEADY: f64 = 0.5;
+ /// ADR 0183, check H: the bands of PHYSICAL and NUMERICAL.
+ const F_BAND: (f64, f64) = (0.9, 1.1);
+ const A_BAND: (f64, f64) = (0.75, 1.33);

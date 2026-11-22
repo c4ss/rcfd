@@ -528,7 +528,7 @@ One row per record of this folder, grouped by the roadmap category of the item i
 | [0739](0739-f848-proposal-run-sites-a-remote-simulation-service-for-the-studio-cli-and-mcp.md) | F-848 proposal: run sites, a remote simulation service for the Studio, the CLI and the MCP server | ACCEPTED | 2026-11-17 | 0 | F-848 | todo |
 | [0742](0742-f262-diagnosis-the-terminal-status-of-a-run-is-written-before-its-last-state-event.md) | F-262 diagnosis: the terminal status of a run is written before its last state event and before its request files are removed (S7 of ADR 0123 fails intermittently on the held run) | REGISTERED | 2026-11-19 | 1 | F-262 | partial |
 
-## Quality, docs and validation (42)
+## Quality, docs and validation (43)
 
 | ADR | Title | Status word | Date | Addenda | Item | Item status |
 |---|---|---|---|---|---|---|
@@ -574,6 +574,7 @@ One row per record of this folder, grouped by the roadmap category of the item i
 | [0763](0763-f869-registration-the-mesh-converged-mean-drag-of-the-cylinder-at-re-100.md) | F-869 registration: the mesh-converged mean drag of the cylinder at Re 100 | REGISTERED | 2026-11-22 | 1 | F-869 | done |
 | [0764](0764-f868-registration-naca0012-17-degrees-by-an-unsteady-arm.md) | F-868 registration: the NACA 0012 at 17 degrees by an unsteady arm | REGISTERED | 2026-11-22 | 1 | F-868 | partial |
 | [0765](0765-f878-registration-fan01-lda-profiles-euler-work-and-the-division-of-the-missing-pressure-rise.md) | F-878 registration: the FAN-01 rotor against the measured LDA profiles, the Euler work and the division of the missing pressure rise | REGISTERED | 2026-11-22 | 1 | F-878 | partial |
+| [0766](0766-f879-registration-fan01-check-h-the-hub-pocket-in-time.md) | F-879 registration: FAN-01, check H of ADR 0183, the hub trailing-edge pocket in time | REGISTERED | 2026-11-22 | 1 | F-879 | todo |
 
 ## Records with no item in the file name (259)
 

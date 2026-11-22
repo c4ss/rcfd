@@ -1,0 +1,20 @@
+{
+  "form": 1,
+  "adr": "0766",
+  "item": "F-879",
+  "base": "2bab1863bd5fa845a818667a227fb6770cefa933",
+  "status": "partial",
+  "note": "ADR 0766, 2026-11-22, partial: check H of ADR 0183 was run on B2 (13 627 cells, SST, pimple with 5 outer iterations, BDF2, seam diffusivity pair, uniform start) as H(dt) with 4.605e-5 s and H(dt/2), 0.2532 s or 6.27 revolutions each, and by the registered rule the run does not decide: the outer-iteration rule, read on the recorded pressure ratio because the solver keeps no velocity change of an outer iteration, is met by 43.8 % of the window's steps of H(dt) against 99 % (100 % in H(dt/2)), so the class is NOT EVALUABLE. Observed, not a class: the oscillation at the six site cells decays in both runs (amplitude over the window 0.0054 and 0.0065 m/s against the threshold 0.193 m/s; below 1e-4 m/s in the last flow-through time), with no reversed axial flow there after the first flow-through time; window means 2.0071 and 2.0102 N m (312.3 and 312.8 W) and 69.62 and 70.07 Pa, against 2.0287 N m and 64.23 Pa of the steady B2 run of ADR 0762 and the measured 333.30 W and 126.46 Pa. The result is held by crates/rcfd-api/tests/f879_fan01_check_h.rs (four gate tests, two heavy records) and the records under docs/investigations/f879-fan01-check-h; six of seven mutations caught.",
+  "gap": "Missing for done: a class by the registered rule. H(dt) fails the outer-iteration rule as ADR 0766 registered it (a pressure ratio that does not measure time accuracy on a steady state). ADR 0183's own rule needs the velocity change of each outer iteration, a record the transient solver does not keep, and the two runs made again (about six hours); or the maintainer's reading of the rule for a state that has become steady. Both records show the site oscillation decaying below 1e-4 m/s.",
+  "follow_ups": [
+    {
+      "title": "Transient solver: a read-only record of the velocity change of each outer iteration, and check H of ADR 0183 read by its own outer-iteration rule",
+      "deps": [
+        "F-879",
+        "F-286"
+      ],
+      "acceptance": "Every limit not stated here is registered in the ADR before the run. The pimple step keeps, opt-in and with defaults unchanged bit for bit (baseline hashes unchanged), the largest velocity change of each outer iteration of a step; a closed-form or two-route check registered in the ADR shows the recorded values are the changes of the iterations. Check H of ADR 0183 is then run as registered there and in ADR 0766, with the outer-iteration rule of ADR 0183 as written (the velocity change of the 5th outer iteration at most 1e-2 of the 1st in at least 99 % of the window's steps), and classes the hub pocket as steady, physical or numerical, or is recorded as not deciding.",
+      "key": "check-h-outer-record"
+    }
+  ]
+}
