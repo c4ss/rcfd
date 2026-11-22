@@ -1,0 +1,14 @@
+# expect-fail: cargo test -p rcfd-api --release --test naca0012_17_degrees_steady_f884
+diff --git a/docs/investigations/f884-naca0012-17-steady/cases/KT-a17.toml b/docs/investigations/f884-naca0012-17-steady/cases/KT-a17.toml
+index a9753f21..59b8a115 100644
+--- a/docs/investigations/f884-naca0012-17-steady/cases/KT-a17.toml
++++ b/docs/investigations/f884-naca0012-17-steady/cases/KT-a17.toml
+@@ -42,7 +42,7 @@ component = "total"   # ADR 0167: the molecular wall shear (today's default), wr
+ 
+ [turbulence]
+ model = "spalart_allmaras"
+-relax_nut = 1.0   # ADR 0770 KT: the eddy viscosity not relaxed
++relax_nut = 0.5   # ADR 0770 KT: the eddy viscosity not relaxed
+ 
+ [solver]
+ algorithm = "simplec"

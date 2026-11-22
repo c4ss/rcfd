@@ -1,0 +1,18 @@
+{
+  "form": 1,
+  "adr": "0770",
+  "item": "F-884",
+  "base": "21054b68cf6797d8c1fc21ed6064ffa0b33393b1",
+  "status": "done",
+  "note": "ADR 0770, 2026-11-22, done by its registered rule: on M1w-far500 with ADR 0760's set-up the steady SIMPLEC solve at 17 degrees with the one opt-in setting turbulence.relax_nut = 1.0 ends steady by ADR 0167's window rule at cl 1.5514, 0.0002 from the time-accurate 1.5516 (control at 15 degrees 1.493201 against 1.4932034), and with a global pseudo step (pseudo_mode physical, dt 0.02) at 1.5660; alpha_u 0.7 converges but 0.025 high, the potential start and a non-orthogonal corrector do not converge; the unchanged case reproduces ADR 0760 bit for bit; no solver source changed; the gate holds the record, four negative controls and five coarse runs (crates/rcfd-api/tests/naca0012_17_degrees_steady_f884.rs).",
+  "follow_ups": [
+    {
+      "title": "Steady Spalart-Allmaras without eddy-viscosity relaxation over the NACA 0012 lift curve",
+      "deps": [
+        "F-884"
+      ],
+      "acceptance": "Every limit not stated here is registered in the ADR before the run. ADR 0760's twelve steady cases from 0 to 17 degrees with turbulence.relax_nut = 1.0 added each end steady by ADR 0167's window rule with cl within 0.018 of ADR 0760's steady values at 0 to 16 degrees and of ADR 0764's 1.5516 at 17 degrees, or each angle that does not is recorded with its number; the result informs whether relax_nut = 1.0 can become the default of steady Spalart-Allmaras.",
+      "key": "naca0012-sa-relax-nut-sweep"
+    }
+  ]
+}
