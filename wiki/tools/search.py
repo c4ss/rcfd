@@ -29,7 +29,13 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 CACHE = ROOT / ".handoff" / "embeddings.json"
 REPORT = ROOT / "analyses" / "related-candidates.md"
-HOST = os.environ.get("OLLAMA_HOST", "http://localhost:11434").rstrip("/")
+# 127.0.0.1, not localhost: on Windows, Python tries IPv6 ::1 first and Ollama listens on IPv4 only,
+# which cost ~21 s per request (measured 2026-11-22: 21.1 s vs 0.06 s).
+HOST = os.environ.get("OLLAMA_HOST", "http://127.0.0.1:11434").rstrip("/")
+if not HOST.startswith("http"):
+    HOST = "http://" + HOST  # OLLAMA_HOST is often set as host:port for the server itself
+HOST = HOST.replace("//localhost", "//127.0.0.1").replace("//0.0.0.0", "//127.0.0.1")
+KEEP_ALIVE = os.environ.get("WIKI_EMBED_KEEP_ALIVE", "30m")  # keep the model loaded between queries
 MODEL = os.environ.get("WIKI_EMBED_MODEL", "qwen3-embedding:0.6b")
 DIRS = ["sources", "entities", "concepts", "analyses"]
 TOP = ["overview.md", "ingest-plan.md"]
@@ -107,7 +113,7 @@ def embed(texts):
     out = []
     for i in range(0, len(texts), 32):
         req = urllib.request.Request(f"{HOST}/api/embed", method="POST",
-                                     data=json.dumps({"model": MODEL, "input": texts[i:i + 32]}).encode(),
+                                     data=json.dumps({"model": MODEL, "input": texts[i:i + 32], "keep_alive": KEEP_ALIVE}).encode(),
                                      headers={"Content-Type": "application/json"})
         try:
             with urllib.request.urlopen(req, timeout=600) as r:
@@ -153,8 +159,10 @@ def index(data, quiet=False):
         CACHE.write_text(json.dumps(cache), encoding="utf-8")
         if not quiet:
             print(f"  {min(i + step, len(todo))}/{len(todo)}", file=sys.stderr, flush=True)
+    before = len(cache["chunks"])
     cache["chunks"] = {k: v for k, v in cache["chunks"].items() if k in want}  # drop stale
-    CACHE.write_text(json.dumps(cache), encoding="utf-8")
+    if todo or len(cache["chunks"]) != before:  # don't rewrite 45 MB when nothing changed
+        CACHE.write_text(json.dumps(cache), encoding="utf-8")
     for page in data.values():
         page["vecs"] = [cache["chunks"][h(c)] for c in page["chunks"]]
         mean = [sum(col) / len(page["vecs"]) for col in zip(*page["vecs"])]
