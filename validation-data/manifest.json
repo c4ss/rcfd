@@ -857,6 +857,13 @@
           "source_url": "https://doi.org/10.5281/zenodo.20037409 (cad_model.zip / cad_model.igs), derived",
           "sha256": "389cfbd6c3bf9ee15df3a1d21f47e86dd7b2d2400a1ffa1268306cceb00cc973",
           "bytes": 2098
+        },
+        {
+          "local": "docs/investigations/f883-fan01-wall-pressure/kulite_means.csv",
+          "retrieved": "2026-11-22",
+          "source_url": "https://doi.org/10.5281/zenodo.23943494 (v6, mic_kulite.tar / mic_kulite_n1ug_1_4.mat), time means derived by ADR 0769 (F-883)",
+          "sha256": "06b92eb5f44bcebf5e448903a52fae4dab5b996971576dcf51f84fda6bcaf593",
+          "bytes": 6609
         }
       ]
     },

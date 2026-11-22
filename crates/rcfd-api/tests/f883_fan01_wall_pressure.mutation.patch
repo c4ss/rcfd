@@ -1,0 +1,14 @@
+# expect-fail: cargo test -p rcfd-api --release --test f883_fan01_wall_pressure f883_reading_and_share
+diff --git a/crates/rcfd-api/tests/f883_fan01_wall_pressure.rs b/crates/rcfd-api/tests/f883_fan01_wall_pressure.rs
+index 45638cef..9443d252 100644
+--- a/crates/rcfd-api/tests/f883_fan01_wall_pressure.rs
++++ b/crates/rcfd-api/tests/f883_fan01_wall_pressure.rs
+@@ -237,7 +237,7 @@ fn f883_reading_and_share() {
+     // K3: referred to the chamber, not to the ambient
+     assert!(mean(1) > -P_TS, "K3: {}", mean(1));
+     // the station x = 90 mm between rows 12 (87 mm) and 13 (97 mm)
+-    let pw = 0.7 * mean(12) + 0.3 * mean(13);
++    let pw = 0.3 * mean(12) + 0.7 * mean(13);
+     let comb: Vec<f64> = (0..30).map(|k| 0.7 * B12[k] + 0.3 * B13[k]).collect();
+     let u_stat = two_se(&comb);
+     let u_x = 0.13 * (mean(13) - mean(12)).abs();

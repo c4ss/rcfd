@@ -118,6 +118,12 @@ passage). The compressible solver is explicit Euler without rotation, viscosity 
   behind the trailing edge at r = 133 mm and 27.2 mm at r = 246 mm. No uncertainty of the LDA is stated. The profiles are
   transcribed in `docs/investigations/f878-fan01-lda-profiles/lda_profiles.csv`; see
   [reference data](reference-data.md), section F-878.
+- Re-read on 2026-11-22 for F-883 (ADR 0769): `mic_kulite.tar` of v6 (MD5 1002be297aa2ac2123f3928bf7f5d905, equal to the
+  record's), `mic_kulite_n1ug_1_4.mat` READ. Its `kulite_pressure_in_Pa` holds 14 casing transducers at x = -23 to 107 mm
+  "differential to the chamber pressure, mean value included", at the design point, with no stated uncertainty. The time
+  mean at the casing at x = 90 mm is 113.90 Pa against the chamber; over the measured span, by the radial equilibrium of
+  the LDA profiles, 93.96 Pa +- 7.50 Pa. The means are transcribed in
+  `docs/investigations/f883-fan01-wall-pressure/kulite_means.csv`; see [reference data](reference-data.md), section F-883.
 - Representable: the rotor, hub cylinder and duct are; the bellmouth, the finite blunt hub, the 3 mm root fillet,
   struts, motor and diffuser are not; the measured pressure rise includes them.
 - Status after ADR 0075: see the addendum there (the registered attempt was NOT RUNNABLE). Diagnosis of the attempt-3

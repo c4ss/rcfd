@@ -1,0 +1,27 @@
+ADR 0769 (F-883): wall pressure of the FAN-01 record and the identity of ADR 0765
+Means of kulite_pressure_in_Pa (against the chamber), Pa:
+  row  0 x =     - mm: mean     0.0038  2 s.e. 0.0002  std    0.1589  rms    0.1590
+  row  1 x =   -23 mm: mean   -49.8253  2 s.e. 0.4506  std   11.1295  rms   51.0532
+  row  2 x =   -13 mm: mean   -47.7964  2 s.e. 0.3744  std   15.5811  rms   50.2719
+  row  3 x =    -3 mm: mean   -44.8199  2 s.e. 0.3576  std   22.5318  rms   50.1648
+  row  4 x =     7 mm: mean   -42.5804  2 s.e. 0.3582  std   33.0732  rms   53.9159
+  row  5 x =    17 mm: mean   -39.4928  2 s.e. 0.3421  std   47.1896  rms   61.5349
+  row  6 x =    27 mm: mean   -42.0471  2 s.e. 0.5170  std   76.4522  rms   87.2519
+  row  7 x =    37 mm: mean   -53.2221  2 s.e. 0.9101  std  125.6134  rms  136.4233
+  row  8 x =    47 mm: mean   -68.1463  2 s.e. 0.7829  std  184.0675  rms  196.2773
+  row  9 x =    57 mm: mean    26.4953  2 s.e. 1.2908  std   77.5697  rms   81.9698
+  row 10 x =    67 mm: mean    92.8241  2 s.e. 0.8031  std   39.5496  rms  100.8984
+  row 11 x =    77 mm: mean   104.8130  2 s.e. 0.6920  std   27.8833  rms  108.4584
+  row 12 x =    87 mm: mean   112.7655  2 s.e. 0.6054  std   19.9095  rms  114.5096
+  row 13 x =    97 mm: mean   116.5353  2 s.e. 0.5253  std   14.3887  rms  117.4202
+  row 14 x =   107 mm: mean   117.2989  2 s.e. 0.5177  std   11.5014  rms  117.8614
+K1: row 0 mean 0.0038, std 0.1589, rms 0.1590; rows 1-14 std 11.13..184.07, rms 50.16..196.28; met True (reading: std about the mean)
+K2: rows 1-5 means [-49.825, -47.796, -44.82, -42.58, -39.493]; each <= u_stat: True
+K3: row 1 mean -49.8253 > -126.46: True
+p_w(90) = 113.8964 Pa, u_stat 0.5674, u_x 0.4901
+  reported, not banded: row n at x = 10 n - 23 mm (rows 11 and 12 enclose x = 90): 107.1987 Pa
+  reported, not banded: row n at x = 10 n - 43 mm (rows 13 and 14 enclose x = 90): 116.7644 Pa
+Gbar 19.9318 Pa (means alone 14.1979), u_gap 0.7124, u_read 5.7339, u_meas 0 (not stated)
+Pi_m = 93.9646 Pa, U_m = 7.5038 Pa
+R = 32.2556 Pa, I = 20.2144 Pa, U = 29.1868 Pa; R - U 3.0688, R + U 61.4424 against D/2 26.2350: verdict CannotBeTold
+L_m = 26.8544 Pa, Rec_m = 32.4954 Pa; B1 (27.264 - U_m <= Pi_m <= 120.819 + U_m): True
