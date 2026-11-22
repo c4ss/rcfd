@@ -1,0 +1,14 @@
+# expect-fail: cargo test -p rcfd-api --release --test naca0012_17_degrees_unsteady_f868
+diff --git a/docs/investigations/f868-naca0012-17-degrees-unsteady/cases/U-a17.toml b/docs/investigations/f868-naca0012-17-degrees-unsteady/cases/U-a17.toml
+index ad3aaadb..f34528d7 100644
+--- a/docs/investigations/f868-naca0012-17-degrees-unsteady/cases/U-a17.toml
++++ b/docs/investigations/f868-naca0012-17-degrees-unsteady/cases/U-a17.toml
+@@ -6,7 +6,7 @@ source = "file"
+ file = "../meshes/M1w-far500"
+ 
+ [mesh.transform]
+-rotate_z_deg = -17   # angle of attack 17 deg: the aerofoil turns by -alpha about the quarter chord (ADR 0155)
++rotate_z_deg = -16   # angle of attack 17 deg: the aerofoil turns by -alpha about the quarter chord (ADR 0155)
+ rotate_origin = [0.25, 0.0, 0.0]
+ 
+ [physics]
