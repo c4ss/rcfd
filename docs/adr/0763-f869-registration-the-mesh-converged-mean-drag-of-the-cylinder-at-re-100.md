@@ -420,3 +420,18 @@ to the lead (rule 9). No reference fragment was added, so `docs/reference-data.m
 note + 549 characters", exit 0. `python scripts/process_report.py --check`: 1 failure, "generated file is not current:
 docs/adr/index.md"; no failure of the registration. The page is left to the lead (rule 7, rule 9).
 `cargo test -p rcfd-cli --release --test docs_site` on the tree with this addendum: 2 passed.
+
+## The lead's reading (2026-11-22), at the merge
+
+Merged at cc4a9c74 and pushed at 99b7daf1 (the report read at 11:50 UTC, 4 minutes of reading, proposed partial, written
+partial). Checked by the lead before the merge: the registration is the first commit and alone; amendment 1 is
+committed before the change of the test file it allows; the branch touches only the test file, its mutation patch, this
+ADR and the proposal file; the three heavy tests are ignored with the reason and the command in the attribute, one of
+them the known miss W3 (b). The push script ran the committed mutation and it failed as expected.
+
+Status: **partial**, as proposed, applied from `docs/roadmap/proposals/0763-F-869.json` as the agent wrote it. The lead
+reads the result as the agent does: the fine value and the extrapolated value at every order from 1 to 2.5 lie in the
+band, and the order of 1.39 is the same on two sequences that differ in step, far field and mesh, so the time step was
+not what held it down. The lead's recommendation on question 1 is (c), with the agent's reason: the acceptance of F-869
+is the drag against the band, and the order is a finding about the discretisation. Question 1 is put to the maintainer
+because it changes how a registered rule of a headline item is read and adds an item.
