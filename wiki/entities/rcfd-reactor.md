@@ -3,6 +3,7 @@ type: entity
 tags: [crate]
 sources: [doc-architecture, doc-reactor-and-acoustics, adr-thread-early-physics-models, adr-thread-founding-decisions]
 created: 2026-11-22
+builds_on: [chemical-kinetics-arrhenius]
 updated: 2026-11-22
 status: draft
 ---
@@ -26,6 +27,10 @@ status: draft
 - Integrator: in-repo extrapolated linearly implicit Euler (order 6 columns, forward-difference Jacobian, dense LU), about 80 right-hand-side evaluations per step; adequate for tens of species ([[doc-reactor-and-acoustics]]).
 - **Limits:** ideal gas only; plug flow constant-area constant-pressure without pressure drop; no heat exchange model, no surface chemistry, no 1D flame speed ("so F-112 stays partial"), no sensitivity analysis ([[doc-reactor-and-acoustics]]).
 - **Created by ADR 0013 (added by p3-records-a):** "New crate `crates/rcfd-reactor` (std only plus serde_json for case files)" for the 0D reactor toolkit (F-112), with the CHEMKIN reader F-112 needs; F-112 "stays `partial` at best" because 1D flame speed is out of scope and no GRI-based ignition delay could be verified; the GRI-Mech 3.0 NASA continuity miss (5.1e-3 in h) is "a property of the data file, not of the reader" ([[adr-thread-early-physics-models]]).
+
+## Builds on
+
+- [[chemical-kinetics-arrhenius]]: the foundation node for reaction rate constants (Arrhenius law).
 
 ## Open questions
 

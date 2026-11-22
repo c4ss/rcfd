@@ -16,7 +16,7 @@ Instead of copying the upwind cell value to the face (first-order upwind), extra
 
 ## Explanation
 
-**Face value.** A piecewise-linear reconstruction in cell `i` is `U_i(x) = u_i + phi_i grad u_i . (x - x_i)` with a limiter factor `phi_i` (1 means unlimited) ([[ref-berger-aftosmis-murman-2005-slope-limiters]] II.B, Eqn. 4). Evaluating it at the face centre `x_f` of the upwind cell `C` gives the linear-upwind face value `phi_f = phi_C + (grad phi)_C . (x_f - x_C)` (own evaluation of Eqn. 4; the gradient comes from [[gradient-reconstruction]]). This is the reconstruction step of van Leer's MUSCL schemes on unstructured grids ([[ref-venkatakrishnan-1995-icase-95-3]] 3).
+**Face value.** A piecewise-linear reconstruction in cell $i$ is $U_i(x) = u_i + \phi_i\, \nabla u_i \cdot (x - x_i)$ with a limiter factor $\phi_i$ (1 means unlimited) ([[ref-berger-aftosmis-murman-2005-slope-limiters]] II.B, Eqn. 4). Evaluating it at the face centre $x_f$ of the upwind cell $C$ gives the linear-upwind face value $\phi_f = \phi_C + (\nabla \phi)_C \cdot (x_f - x_C)$ (own evaluation of Eqn. 4; the gradient comes from [[gradient-reconstruction]]). This is the reconstruction step of van Leer's MUSCL schemes on unstructured grids ([[ref-venkatakrishnan-1995-icase-95-3]] 3).
 
 **Accuracy.** Exact for linear data when the gradient is (least squares is exact for linear data even on distorted meshes), so "first-order slope estimates ... are sufficient for second-order accuracy overall" ([[ref-berger-aftosmis-murman-2005-slope-limiters]] III.B).
 
@@ -39,4 +39,4 @@ Instead of copying the upwind cell value to the face (first-order upwind), extra
 - `solver.linear_upwind_limiter` (`none` default, `barth_jespersen`) limits `linear_upwind` for `simple`/`simplec` (ADR 0081) and `piso`/`pimple` including the moving-mesh step (ADR 0183); it applies a Barth-Jespersen factor per velocity component before the face extrapolation; turbulence, scalar and energy equations are not limited ([[doc-case-schema-linear-upwind-limiter]]).
 - Measured (ADR 0081): with the limiter the FAN-01 sector mesh is stable where the unlimited scheme diverges at iteration 7; forced on in all 542 steady `linear_upwind` runs of the test suite with no new divergence-guard trip; Kovasznay L2 order 2.17 ([[doc-case-schema-linear-upwind-limiter]]).
 - Setup rule SV302 warns about `linear_upwind` without limiter on wall cells whose aspect ratio times tan(non-orthogonality) is 3000 or more (ADR 0172) ([[setup-rules]]).
-- For the SST model `linearUpwind` for k/omega "diverged in tests" ([[k-omega-sst]]).
+- For the SST model `linearUpwind` for $k$/$\omega$ "diverged in tests" ([[k-omega-sst]]).

@@ -44,5 +44,5 @@ $T_{eddy}$ is the Lagrangian integral time scale of the turbulence; $T_{cross}$ 
 
 ## How rcfd uses it
 
-- Particle dispersion is a discrete random walk; `k`, `epsilon` come from k-epsilon or SST (`epsilon = beta* k omega`, `beta* = 0.09`) since F-255 (ADR 0208); other turbulence models are refused ([[lagrangian-particles]], [[doc-case-schema-particles]]).
+- Particle dispersion is a discrete random walk; $k$ and $\epsilon$ come from k-epsilon or SST ($\epsilon = eta^*k\omega$, $eta^* = 0.09$) since F-255 (ADR 0208); other turbulence models are refused ([[lagrangian-particles]], [[doc-case-schema-particles]]).
 - F-255 checks the walk against a derived mean-square displacement for an exponential velocity autocorrelation, whose long-time diffusivity $\sigma^2T$ is independent of the response time; nothing is compared with measured data ([[doc-reference-data-f255-particle-dispersion]]).

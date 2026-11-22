@@ -2,7 +2,7 @@
 type: concept
 tags: [foundation, heat-transfer]
 sources: [ref-lienhard-ahtt-6e, ref-openstax-college-physics-ch14]
-builds_on: []
+builds_on: [divergence-theorem]
 created: 2026-11-22
 updated: 2026-11-22
 status: draft
@@ -40,7 +40,8 @@ with $\mathrm{erfc} = 1 - \mathrm{erf}$; the disturbance has reached 99 % depth 
 
 ## Builds on
 
-- Floor: heat and temperature, energy conservation (first-year physics); the divergence theorem ([[divergence-theorem]]).
+- Floor: heat and temperature, energy conservation (first-year physics).
+- [[divergence-theorem]]: turns the surface heat flow of a control volume into a volume integral, giving the local equation (Lienhard eq. 2.8). Added to the map's "floor" because the source derivation uses it.
 
 ## Leads to
 

@@ -16,14 +16,14 @@ A rigid body can translate in three directions and rotate about three axes: six 
 
 ## Explanation
 
-- **Translation.** In an inertial frame `F = m a` for the centre of mass ([[ref-cline-variational-mechanics]], eq. 12.27).
-- **Angular momentum and the inertia tensor.** `L = {I} . omega` (eq. 13.55), with the 3 x 3 inertia tensor `{I}`; `L` and `omega` are "not necessarily colinear" and align only when `omega` lies along a principal axis, where the tensor is diagonal ([[ref-cline-variational-mechanics]], sec. 13.11). Principal axes, diagonalisation and the parallel-axis theorem are secs. 13.6-13.8.
-- **Euler's equations.** In the inertial (space) frame the torque is `N = (dL/dt)_space`; transforming the derivative to the rotating body frame with the rule of [[rotating-reference-frame]] gives `N = (dL/dt)_body + omega x L`; in principal axes `N_1 = I_1 dw_1/dt - (I_2 - I_3) w_2 w_3` and cyclically ([[ref-cline-variational-mechanics]], sec. 13.17). The body frame is used because the inertia tensor is constant there; the torques must then be expressed in body axes, so the body's orientation must be tracked alongside (same section).
+- **Translation.** In an inertial frame $F = m a$ for the centre of mass ([[ref-cline-variational-mechanics]], eq. 12.27).
+- **Angular momentum and the inertia tensor.** $L = \{I\} \cdot \omega$ (eq. 13.55), with the $3 \times 3$ inertia tensor $\{I\}$; $L$ and $\omega$ are "not necessarily colinear" and align only when $\omega$ lies along a principal axis, where the tensor is diagonal ([[ref-cline-variational-mechanics]], sec. 13.11). Principal axes, diagonalisation and the parallel-axis theorem are secs. 13.6-13.8.
+- **Euler's equations.** In the inertial (space) frame the torque is $N = (dL/dt)_\text{space}$; transforming the derivative to the rotating body frame with the rule of [[rotating-reference-frame]] gives $N = (dL/dt)_\text{body} + \omega \times L$; in principal axes $N_1 = I_1\, d\omega_1/dt - (I_2 - I_3)\, \omega_2 \omega_3$ and cyclically ([[ref-cline-variational-mechanics]], sec. 13.17). The body frame is used because the inertia tensor is constant there; the torques must then be expressed in body axes, so the body's orientation must be tracked alongside (same section).
 - **Orientation.** Orientation can be described by Euler angles (sec. 13.13) and the angular velocity expressed in body or space axes (sec. 13.14). Quaternion orientation, springs and dampers are in the map's scope for this node but were not covered by the source read.
 
 ## Builds on
 
-- [[rotating-reference-frame]]: the rule `(dG/dt)_fix = (dG/dt)_rot + omega x G` that turns `dL/dt` into Euler's equations.
+- [[rotating-reference-frame]]: the rule $(dG/dt)_\text{fix} = (dG/dt)_\text{rot} + \omega \times G$ that turns $dL/dt$ into Euler's equations.
 - Floor: Newton's laws.
 
 ## Leads to

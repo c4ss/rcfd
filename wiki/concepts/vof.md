@@ -3,6 +3,7 @@ type: concept
 tags: [multiphase, free-surface, vof]
 sources: [adr-thread-vof-multiphase-particles]
 created: 2026-11-22
+builds_on: [volume-fraction-transport, interface-compression, surface-tension-and-curvature]
 updated: 2026-11-22
 status: draft
 ---
@@ -18,6 +19,12 @@ An interface-capturing method for two immiscible fluids: one transported volume 
 - The VOF host also carries mass transfer, wave generation and absorption (ADR 0052) and the mixture / Schnerr-Sauer cavitation models (ADR 0056); it has no energy equation ([[adr-thread-vof-multiphase-particles]]).
 - **Hysing rising bubble.** Under refinement the default algebraic VOF converged to a bubble about 10 % too slow (ADR 0100). The main cause was the component-averaged momentum diagonal, which makes a `Symmetry` plane act mostly like a no-slip wall (ADR 0103); the other suspect was the CSF curvature with a fixed number of smoothing passes, replaced by an opt-in height-function curvature (ADR 0106) with a CSF fallback (ADR 0108) ([[adr-thread-vof-multiphase-particles]]). See [[component-diagonal]].
 - **Defaults since ADR 0114:** component diagonal, full viscous stress and height-function curvature with the CSF fallback are the library defaults, with `multiphase` keys for opt-out; the user lifted the bit-identical rule for this one change. F-055 stays partial: the reworded bubble clause misses on 160 x 320 by 0.0004 in y_c(3) and 0.0001 in V_c,max ([[adr-thread-vof-multiphase-particles]]). See [[bit-identical]], [[known-miss]].
+
+## Builds on
+
+- [[volume-fraction-transport]]: the transported volume fraction and its bounded advection.
+- [[interface-compression]]: the artificial compression flux that keeps the interface sharp.
+- [[surface-tension-and-curvature]]: Young-Laplace, CSF and curvature from the volume fraction.
 
 ## Related
 

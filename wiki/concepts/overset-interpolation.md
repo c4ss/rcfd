@@ -36,5 +36,5 @@ Instead of one mesh that fits everything, overlapping meshes are used: a body-fi
 
 - **Connectivity:** each step `Overset::connectivity` sorts cells into calculated, fringe and hole (user hole function); fringe rows of momentum and pressure are the interpolations, one system for both meshes; weights reproduce linear fields ([[overset-mesh]]).
 - **Donor search** on warped and non-convex cells: every one of 100000 random points in exactly one cell (F-352, F-356) ([[overset-mesh]]).
-- **Mass:** `MassMode::Conservative` offsets the background fringe pressures so the net flux into the hole region is zero; `MassMode::Interpolated` loses `2.7e-3` of `U D L` on the cylinder case ([[overset-mesh]]).
+- **Mass:** `MassMode::Conservative` offsets the background fringe pressures so the net flux into the hole region is zero; `MassMode::Interpolated` loses $2.7 \times 10^{-3}$ of $U D L$ on the cylinder case ([[overset-mesh]]).
 - **Order:** the interpolated-cell order 1.62 (registered 1.7) is the truncation of the linear donor interpolation at one fringe cell; `DonorInterpolation::Quadratic` restores about 2 (F-336) ([[overset-mesh]], [[adr-thread-overset]]).

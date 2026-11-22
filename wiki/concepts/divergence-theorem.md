@@ -16,21 +16,21 @@ The divergence theorem says that what flows out through the closed surface of a 
 
 ## Explanation
 
-**The operators.** For a vector field `F = <P, Q, R>` ([[ref-openstax-calculus]] Vol. 3 sec. 6.5):
-- divergence `div F = dP/dx + dQ/dy + dR/dz` (Eq. 6.16), a scalar: positive at a source (net outflow), negative at a sink;
-- curl `curl F = (R_y - Q_z) i + (P_z - R_x) j + (Q_x - P_y) k` (Eq. 6.17), a vector whose direction is the local axis of rotation and whose size is the rotation rate;
-- gradient `grad f` of a scalar; the identities `div(curl F) = 0` (Theorem 6.16) and `curl(grad f) = 0`;
-- the Laplacian `laplacian f = div(grad f) = f_xx + f_yy + f_zz`.
+**The operators.** For a vector field $F = \langle P, Q, R \rangle$ ([[ref-openstax-calculus]] Vol. 3 sec. 6.5):
+- divergence $\nabla \cdot F = \partial P/\partial x + \partial Q/\partial y + \partial R/\partial z$ (Eq. 6.16), a scalar: positive at a source (net outflow), negative at a sink;
+- curl $\nabla \times F = (R_y - Q_z)\, i + (P_z - R_x)\, j + (Q_x - P_y)\, k$ (Eq. 6.17), a vector whose direction is the local axis of rotation and whose size is the rotation rate;
+- gradient $\nabla f$ of a scalar; the identities $\nabla \cdot (\nabla \times F) = 0$ (Theorem 6.16) and $\nabla \times (\nabla f) = 0$;
+- the Laplacian $\nabla^2 f = \nabla \cdot (\nabla f) = f_{xx} + f_{yy} + f_{zz}$.
 
-**The theorem.** For a solid `E` with piecewise smooth closed boundary `S`, normal pointing outward (Theorem 6.20, Eq. 6.24):
+**The theorem.** For a solid $E$ with piecewise smooth closed boundary $S$, normal pointing outward (Theorem 6.20, Eq. 6.24):
 
-`triple integral over E of (div F) dV = surface integral over S of F . dS`
+$$\iiint_E (\nabla \cdot F)\, dV = \iint_S F \cdot dS$$
 
 The left side adds up sources inside; the right side is the net outflow through the boundary. It is Green's theorem in flux form "in one higher dimension" ([[ref-openstax-calculus]] Vol. 3 sec. 6.8).
 
-**Divergence as flux per volume.** Shrinking a small ball `B_r` around a point `P` gives `div F(P) = lim_(r->0) (1/V(B_r)) surface integral of F . dS`: divergence is "the net rate of outward flux of the fluid per unit volume" ([[ref-openstax-calculus]] Vol. 3 sec. 6.8). If `F = v` is a fluid velocity, the surface integral of `v . dS` is the volume flow rate across the surface (Example 6.79).
+**Divergence as flux per volume.** Shrinking a small ball $B_r$ around a point $P$ gives $\nabla \cdot F(P) = \lim_{r \to 0} \dfrac{1}{V(B_r)} \iint F \cdot dS$: divergence is "the net rate of outward flux of the fluid per unit volume" ([[ref-openstax-calculus]] Vol. 3 sec. 6.8). If $F = v$ is a fluid velocity, the surface integral of $v \cdot dS$ is the volume flow rate across the surface (Example 6.79).
 
-**What it adds.** First-year calculus integrates along a line; this theorem links a volume integral to a boundary integral in 3D. It is what lets a conservation law be written either for a finite volume (fluxes through faces) or at a point (a divergence): Bar-Meir uses it to go from the control-volume mass balance to `d rho/dt + div(rho U) = 0` ([[ref-bar-meir-fluid-mechanics]] sec. 8.2, book Appendix A.1.2).
+**What it adds.** First-year calculus integrates along a line; this theorem links a volume integral to a boundary integral in 3D. It is what lets a conservation law be written either for a finite volume (fluxes through faces) or at a point (a divergence): Bar-Meir uses it to go from the control-volume mass balance to $\partial \rho/\partial t + \nabla \cdot (\rho U) = 0$ ([[ref-bar-meir-fluid-mechanics]] sec. 8.2, book Appendix A.1.2).
 
 ## Builds on
 

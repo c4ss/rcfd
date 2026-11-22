@@ -18,7 +18,7 @@ In incompressible flow there are equations for the velocity (momentum) and a con
 
 **No pressure equation.** The incompressible Navier-Stokes equations have no independent equation for pressure; continuity becomes a kinematic constraint on the velocity, and pressure acts so that the constraint holds ([[ref-mit-ocw-2-29-numerics]] L18 s.4). Taking the divergence of the momentum equation and using continuity gives an elliptic Poisson equation for the pressure; to keep the discrete velocity divergence free its Laplacian must be built from the discrete divergence of continuity and the discrete gradient of momentum, so it is "Best to derive pressure equation from discretized momentum/continuity equations" ([[ref-mit-ocw-2-29-numerics]] L18 s.5).
 
-**Saddle-point structure.** After linearisation (Picard) and finite-volume discretisation the system is `[Q G; D C] [u; p] = [f; g]`: `Q` is the convection-diffusion operator of momentum, `G` the discrete pressure gradient, `D` the discrete divergence, `C` a stabilisation block that is zero without it ([[ref-klaij-vuik-2013-simple-preconditioners]] Eqs. 1, 12). The zero (or small) pressure-pressure block is what makes the system hard for standard iterative solvers.
+**Saddle-point structure.** After linearisation (Picard) and finite-volume discretisation the system is $\begin{bmatrix} Q & G \ D & C \end{bmatrix} \begin{bmatrix} u \ p \end{bmatrix} = \begin{bmatrix} f \ g \end{bmatrix}$: $Q$ is the convection-diffusion operator of momentum, $G$ the discrete pressure gradient, $D$ the discrete divergence, $C$ a stabilisation block that is zero without it ([[ref-klaij-vuik-2013-simple-preconditioners]] Eqs. 1, 12). The zero (or small) pressure-pressure block is what makes the system hard for standard iterative solvers.
 
 **Explicit time stepping.** With forward Euler, requiring the velocity at the new step to be discretely divergence free gives a Poisson equation for the current pressure; the momentum update then satisfies continuity ([[ref-mit-ocw-2-29-numerics]] L18 s.7-9).
 
@@ -39,5 +39,5 @@ In incompressible flow there are equations for the velocity (momentum) and a con
 ## How rcfd uses it
 
 - Segregated: `SimpleSolver` (SIMPLE/SIMPLEC, steady) and `PimpleSolver` (PISO/PIMPLE, transient), collocated with Rhie-Chow ([[simple]]; [[piso]]).
-- Coupled: `solver.algorithm = "coupled"` solves `(u, v[, w], p)` in one linear system per Picard iteration, steady only ([[doc-case-schema-coupled]]); see [[block-coupled-solver]].
+- Coupled: `solver.algorithm = "coupled"` solves $(u, v[, w], p)$ in one linear system per Picard iteration, steady only ([[doc-case-schema-coupled]]); see [[block-coupled-solver]].
 - Transient projection: `time_advance = "fractional_step"` is a recommended remedy for the cylinder wall-pressure spokes ([[doc-investigation-job48t-cylinder-spokes]]); see [[projection-method]].

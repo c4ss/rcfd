@@ -3,6 +3,7 @@ type: entity
 tags: [validation, benchmark, natural-convection, heat-transfer]
 sources: [doc-reference-data-heated-cavity, doc-reference-data-variable-density, doc-reference-data-wave31a-solver-defects, doc-validation-data, doc-example-projects]
 created: 2026-11-22
+builds_on: [boussinesq-buoyancy-approximation, energy-equation, convective-heat-transfer]
 updated: 2026-11-22
 status: draft
 ---
@@ -22,6 +23,12 @@ status: draft
 - First verified from secondary copies; wave 30C (ADR 0061) read the primary Table V from a page scan, so the values are now primary ([[doc-reference-data-heated-cavity]], [[doc-reference-data-wave31a-solver-defects]]).
 - Wave 31A diagnosis (rcfd result, not literature): converged 32 x 32 Ra 1e6 value v_max 220.48, Nu 8.873 at alpha_u 0.5 ([[doc-reference-data-wave31a-solver-defects]]).
 - Variable-density variant (wave 10, ADR 0005): Le Quere et al. (2005) values, e.g. case T1 at Ra 1e6 with constant properties Nu 8.85978, P/P0 0.856338 ([[doc-reference-data-variable-density]]).
+
+## Builds on
+
+- [[boussinesq-buoyancy-approximation]]: the buoyancy force and the Rayleigh number that defines the benchmark cases.
+- [[energy-equation]]: the temperature equation coupled to the flow.
+- [[convective-heat-transfer]]: the Nusselt number the benchmark reports.
 
 ## Related
 

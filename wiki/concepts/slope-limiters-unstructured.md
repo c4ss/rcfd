@@ -16,7 +16,7 @@ On an unstructured mesh there is no "previous" and "next" cell along a line, so 
 
 ## Explanation
 
-**Slope limiting.** Limiting the flux is equivalent to limiting the slope (Spekreijse), the natural form for finite volumes: reconstruct `U_i(x) = u_i + phi_i grad u_i . (x - x_i)` with a factor `0 <= phi_i <= 1`, evolve, project back to cell averages ([[ref-berger-aftosmis-murman-2005-slope-limiters]] II.B, Eqns. 4-8).
+**Slope limiting.** Limiting the flux is equivalent to limiting the slope (Spekreijse), the natural form for finite volumes: reconstruct $U_i(x) = u_i + \phi_i\, \nabla u_i \cdot (x - x_i)$ with a factor $0 \le \phi_i \le 1$, evolve, project back to cell averages ([[ref-berger-aftosmis-murman-2005-slope-limiters]] II.B, Eqns. 4-8).
 
 **Barth-Jespersen.** Barth and Jespersen required "that the reconstructed distribution in the control volume be bounded everywhere by the values of the neighbors" and built "a truly multi-dimensional limiter" from that monotonicity principle ([[ref-venkatakrishnan-1995-icase-95-3]] 3). Geometrically: at an extremum the gradient is set to zero; otherwise the reconstruction at each face must not pass the adjacent neighbour's value. On uniform 1D grids this is the algebraic Barth-Jespersen limiter, first proposed by van Leer and known elsewhere as monotonized central differences ([[ref-berger-aftosmis-murman-2005-slope-limiters]] III.A). It preserves linear data on stretched 1D meshes where van Leer, van Albada and min limiters activate (at stretching 1.2 they give 0.99, 0.98 and 0.90 instead of 1) ([[ref-berger-aftosmis-murman-2005-slope-limiters]] III.C).
 
@@ -39,7 +39,7 @@ On an unstructured mesh there is no "previous" and "next" cell along a line, so 
 
 ## How rcfd uses it
 
-- `solver.linear_upwind_limiter = "barth_jespersen"` applies a Barth-Jespersen factor per velocity component before the linear-upwind extrapolation; it made the FAN-01 sector mesh stable where the unlimited scheme diverged at iteration 7 and was forced on in 542 steady runs without a new divergence-guard trip ([[doc-case-schema-linear-upwind-limiter]]; [[divergence-guard]]); it removes the NACA 0012 trailing-edge divergence at y+ 2 ([[doc-case-schema-linear-upwind-limiter]]).
+- `solver.linear_upwind_limiter = "barth_jespersen"` applies a Barth-Jespersen factor per velocity component before the linear-upwind extrapolation; it made the FAN-01 sector mesh stable where the unlimited scheme diverged at iteration 7 and was forced on in 542 steady runs without a new divergence-guard trip ([[doc-case-schema-linear-upwind-limiter]]; [[divergence-guard]]); it removes the NACA 0012 trailing-edge divergence at $y^+$ 2 ([[doc-case-schema-linear-upwind-limiter]]).
 - **FAN-01 limit cycle:** the steady FAN-01 run stalls in a limiter cycle (ADRs 0110, 0111) ([[mrf]]); the wave-49 diagnosis found the Barth-Jespersen limit cycle on B3 driven by the convection deferred correction at two sites, and no automatic first-order fallback, bounded second-order scheme or hub mesh change converged it ([[fan-01]]). This is the stall behaviour the sources above describe for Barth-Jespersen ([[ref-berger-aftosmis-murman-2005-slope-limiters]] V).
 - The gradient options offer `barth_jespersen` or `venkatakrishnan` as a secondary limiter with `gradient_limiter_k = 5.0`, "ADR 0016's C2 value"; "no other value was ever checked" ([[doc-case-schema-gradient-options]]; [[adr-thread-gradient-options]]).
 

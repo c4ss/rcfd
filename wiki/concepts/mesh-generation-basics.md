@@ -12,7 +12,7 @@ status: draft
 
 ## In short
 
-Before any finite-volume solve, the flow domain has to be cut into cells. Structured meshes arrange cells along grid lines that can be numbered `(i, j, k)`; unstructured meshes allow any arrangement and number cells one by one. Structured meshes are efficient and accurate but hard to fit to complex shapes; unstructured meshes (triangles, tetrahedra, general polyhedra) fit anything and are easier to automate ([[ref-venkatakrishnan-1995-icase-95-3]] 1; [[ref-mit-ocw-2-29-numerics]] L15 s.12).
+Before any finite-volume solve, the flow domain has to be cut into cells. Structured meshes arrange cells along grid lines that can be numbered $(i, j, k)$; unstructured meshes allow any arrangement and number cells one by one. Structured meshes are efficient and accurate but hard to fit to complex shapes; unstructured meshes (triangles, tetrahedra, general polyhedra) fit anything and are easier to automate ([[ref-venkatakrishnan-1995-icase-95-3]] 1; [[ref-mit-ocw-2-29-numerics]] L15 s.12).
 
 ## Explanation
 
