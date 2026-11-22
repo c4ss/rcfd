@@ -291,3 +291,24 @@ its limit and its number.
 - The Strouhal number as a check (F-029's acceptance, and the known miss K1, which stays).
 - A finer mesh than 128 x 100, a far field beyond 30 D, three-dimensional effects, another Reynolds number.
 - The case-file path (`Simulation`, the example project): the test drives `PimpleSolver` directly, as K1 to K4 do.
+
+## Amendment 1 (2026-11-22): the missed V2 (b) becomes a known miss; written before the change of the test file
+
+Written after the gate-side tests, the heavy record, R3, M1 and M2 were each run once, and before any change of the test
+file. No limit, band, mesh, step or run changes. The heavy record ran its five solves and failed on one check: V2 (b),
+the Richardson value of the three meshes, 1.37479 against [1.314, 1.370]; every other check of it passed (the numbers
+are in addendum 1).
+
+By rule 2 the missed limit becomes an ignored test named `*_known_miss` with the limit intact. The change of
+`crates/rcfd-api/tests/f869_cylinder_re100_mean_drag.rs`, and nothing else:
+
+- the five runs of the heavy record move, unchanged and in the same order, into one function behind a `OnceLock`
+  (`record()`), as `sequence()` in `validation_cylinder_re100.rs`;
+- `h1_fine_mesh_mean_drag_in_the_published_band_heavy_record` keeps K4h, V1, V2 (a), S1, S2 and the printed rows, and
+  no longer asserts V2 (b);
+- a new ignored test `v2b_richardson_value_of_the_mesh_sequence_in_the_band_known_miss` asserts V2 (b) with the same
+  expression and the same band, and records the measured 1.37479 in its comment;
+- the gate-side tests `g1_...` and `g3_...` and the functions `setup`, `force`, `mean_drag` and `run` are not touched.
+
+The heavy runs are not made a second time (rule 2, "each registered run is made once"): the two ignored tests after the
+change are built, formatted and linted, and not run. That is said in the addendum under "what was not run".
