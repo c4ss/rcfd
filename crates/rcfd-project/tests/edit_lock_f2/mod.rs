@@ -275,7 +275,7 @@ pub fn lines(rec: &Record) -> Vec<String> {
         .map(|b| {
             format!(
                 "F2 busy call={} class={} wait_s={:.3} p0={:.3} claim={} lock_who={:?} lock_age_s={:.3?} \
-                 journal_lock_age_s={:.3?} journal_lock_before_lock={} racer_calls_ended_in_wait={} spanning_racer_call={:.3?}",
+                 journal_lock_age_s={:.3?} journal_lock_before_lock={} racer_calls_ended_in_wait={} spanning_racer_call={:?}",
                 b.call,
                 class(b, &rec.racer),
                 b.p1 - b.p0,
@@ -286,7 +286,7 @@ pub fn lines(rec: &Record) -> Vec<String> {
                 b.journal_lock_age_s,
                 b.journal_lock_before_lock,
                 rec.racer.iter().filter(|c| c.1 > b.p0 && c.1 <= b.p1).count(),
-                spanning(b, &rec.racer)
+                spanning(b, &rec.racer).map(|(s, e, ok)| format!("{s:.3} to {e:.3} ok={ok}"))
             )
         })
         .collect();
