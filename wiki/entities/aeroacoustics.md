@@ -2,6 +2,7 @@
 type: entity
 tags: [acoustics, noise, fan, compressible]
 sources: [doc-acoustics, doc-reactor-and-acoustics, doc-structural-solver, adr-thread-compressible-acoustic-boundaries, adr-thread-acoustic-wave-solver]
+builds_on: [fw-h, rotor-tone-noise, sound-levels-and-metrics, duct-acoustic-modes, non-reflecting-boundaries-and-sponge-layers, acoustic-wave-equation]
 created: 2026-11-22
 updated: 2026-11-22
 status: draft
@@ -36,6 +37,18 @@ status: draft
 - The structural solver's radiation impedance of a baffled plane is in `rcfd-post` (F-579) ([[doc-structural-solver]]).
 - **Compressible acoustic boundaries (P3 ADR thread):** impedance boundary, plain and matched sponge layers (with memory decay, corners, moving meshes) and a mass-spring-damper wall on `CompressibleSolver`, all library only until the wiring item F-330 ([[adr-thread-compressible-acoustic-boundaries]]).
 - **Linear acoustic wave solver** (`AcousticWaveSolver`, F-333) with duct modal export in `rcfd-post`, an O-grid circular duct (F-453), and a drive from sampled CFD surfaces (F-452, F-478) ([[adr-thread-acoustic-wave-solver]]).
+
+## Builds on
+
+Foundation pages for each part of the chain (added by p6-compressible-acoustics, 2026-11-22):
+
+- [[fw-h]]: the surface integral that turns sampled blade pressures into far-field sound.
+- [[rotor-tone-noise]]: blade-passing frequency, its harmonics and Gutin's tone formula, which the Gutin-type check reproduces.
+- [[sound-levels-and-metrics]]: SPL, OASPL, A-weighting and bands of the `rcfd-spectrum` output.
+- [[duct-acoustic-modes]]: spinning and radial modes and cut-off, for the duct modal export.
+- [[non-reflecting-boundaries-and-sponge-layers]]: impedance, quiet boundaries and sponges of `CompressibleSolver`.
+- [[acoustic-wave-equation]]: the linear acoustic equations of `AcousticWaveSolver`.
+- Further down: [[lighthill-acoustic-analogy]], [[acoustic-source-types]], [[greens-function-and-retarded-time]], [[speed-of-sound-and-mach-number]], [[euler-equations]].
 
 ## Related
 

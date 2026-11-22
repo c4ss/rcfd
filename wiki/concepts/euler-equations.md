@@ -16,25 +16,29 @@ The Euler equations are the conservation laws of mass, momentum and energy for a
 
 ## Explanation
 
-**One dimension, conservation form.** In 1D the system is
+**One dimension, conservation form.** In 1D the system is ([[ref-van-leer-1992-icase-92-43]] sec. 2.1):
 
-`U_t + F(U)_x = 0`, with `U = (rho, rho u, rho E)^T` and `F(U) = (rho u, rho u^2 + p, rho u H)^T`
+$$U_t + F(U)_x = 0, \qquad U = \begin{pmatrix}\rho \\ \rho u \\ \rho E\end{pmatrix}, \quad F(U) = \begin{pmatrix}\rho u \\ \rho u^2 + p \\ \rho u H\end{pmatrix}$$ (van Leer 1992, eq. 4)
 
-([[ref-van-leer-1992-icase-92-43]] sec. 2.1, Eq. 4). `U` holds the conserved quantities: density, momentum per unit volume and total energy per unit volume (`E` total energy per unit mass, `H = E + p/rho` total enthalpy). `F` holds their fluxes: mass flux, momentum flux plus pressure, and energy flux. "Any local imbalance of the fluxes causes the local solution to change in time" ([[ref-van-leer-1992-icase-92-43]] sec. 2.1).
+$U$ holds the conserved quantities: density, momentum per unit volume and total energy per unit volume ($E$ total energy per unit mass, $H = E + p/\rho$ total enthalpy). $F$ holds their fluxes: mass flux, momentum flux plus pressure, and energy flux. "Any local imbalance of the fluxes causes the local solution to change in time" ([[ref-van-leer-1992-icase-92-43]] sec. 2.1).
 
-**Closure.** Three equations have four unknowns (`rho, u, p, E`), so a state equation is needed: for a perfect gas `p = rho R T` and `e = c_v T`, giving `p = (gamma - 1) rho (E - u^2/2)` from the relations of [[ideal-gas-and-thermodynamics-basics]] ([[ref-naca-1953-report-1135]] pp. 614-615, Eqs. 2, 9, 17).
+**Closure.** Three equations have four unknowns ($\rho, u, p, E$), so a state equation is needed: for a perfect gas $p = \rho R T$ and $e = c_v T$ with $c_v = R/(\gamma-1)$ ([[ref-naca-1953-report-1135]] pp. 614-615, eqs. 2, 9, 17), which together give $p = (\gamma - 1)\rho\,(E - u^2/2)$ (see [[ideal-gas-and-thermodynamics-basics]]).
 
-**Several dimensions, primitive form.** Eversman's duct chapter starts from the same inviscid, non-heat-conducting perfect gas: continuity `drho/dt + div(rho V) = 0`, momentum `dV/dt + (V . grad) V = -(1/rho) grad p`, an isentropic equation of state `p = rho^gamma/gamma` (nondimensional), and an energy equation `dp/dt + V . grad p + gamma p div V = 0` ([[ref-hubbard-1991-nasa-rp-1258-vol2]] ch. 13, pp. 103-104, Eqs. 1-4).
+**Several dimensions, primitive form.** Eversman's duct chapter starts from the same inviscid, non-heat-conducting perfect gas, nondimensional ([[ref-hubbard-1991-nasa-rp-1258-vol2]] ch. 13, pp. 103-104):
+
+$$\frac{\partial \rho}{\partial t} + \nabla\cdot(\rho \mathbf{V}) = 0, \qquad \frac{\partial \mathbf{V}}{\partial t} + (\mathbf{V}\cdot\nabla)\mathbf{V} = -\frac{1}{\rho}\nabla p$$ (Eversman, eqs. 1-2)
+
+$$p = \frac{1}{\gamma}\rho^{\gamma}, \qquad \frac{\partial p}{\partial t} + \mathbf{V}\cdot\nabla p + \gamma p\, \nabla\cdot\mathbf{V} = 0$$ (Eversman, eqs. 3-4)
 
 **Relation to Navier-Stokes.** NASA Glenn describes the Euler equations as the Navier-Stokes equations without the viscous terms; they cannot model boundary layers ([[ref-nasa-glenn-beginners-guide]] "Navier-Stokes Equations"). At high Reynolds number the viscous forces are small away from walls and the Euler equations can model the flow ([[ref-nasa-glenn-beginners-guide]] "Reynolds Number").
 
-**Waves.** The Jacobian `A(U) = dF/dU` has real eigenvalues `lambda_k` (wave speeds) and eigenvectors `R_k`; a jump between two states splits into waves of strength `alpha_k`, `Delta U = sum_k alpha_k R_k` ([[ref-van-leer-1992-icase-92-43]] sec. 2.1, Eqs. 5-11). Linearised about a uniform mean flow, the equations carry acoustic waves at the speed of sound relative to the flow, and vorticity and entropy waves that move with the flow ([[ref-hu-1995-icase-95-70]] sec. 1). This wave structure is the subject of [[characteristics-and-hyperbolic-systems]].
+**Waves.** The Jacobian $A(U) = \partial F/\partial U$ has real eigenvalues $\lambda_k$ (wave speeds) and eigenvectors $R_k$; a jump between two states splits into waves of strength $\alpha_k$, $\Delta U = \sum_k \alpha_k R_k$ ([[ref-van-leer-1992-icase-92-43]] sec. 2.1, eqs. 5-11). Linearised about a uniform mean flow, the equations carry acoustic waves at the speed of sound relative to the flow, and vorticity and entropy waves that move with the flow ([[ref-hu-1995-icase-95-70]] sec. 1). This wave structure is the subject of [[characteristics-and-hyperbolic-systems]].
 
-**Discontinuities.** Because the equations are in conservation form they still make sense when the solution jumps: integrated across a jump they give the shock relations of [[shock-waves]] (mass, momentum and energy fluxes equal on both sides) ([[ref-naca-1953-report-1135]] pp. 618-619, Eqs. 84-86).
+**Discontinuities.** Because the equations are in conservation form they still make sense when the solution jumps: integrated across a jump they give the shock relations of [[shock-waves]] (mass, momentum and energy fluxes equal on both sides) ([[ref-naca-1953-report-1135]] pp. 618-619, eqs. 84-86).
 
-**Convective and pressure parts.** The flux can be split into a convective part, a mass flux carrying `(1, u, v, w, H)`, and a pressure part `(0, p n, 0)`; carrying `H` guarantees conservation of total enthalpy. This split is the starting point of the AUSM schemes ([[ref-liou-2001-nasa-tm-210977]] Eqs. 3-4).
+**Convective and pressure parts.** The flux can be split into a convective part, a mass flux $\dot m$ carrying $\psi = (1, u, v, w, H)^T$, and a pressure part $P = (0, p n_x, p n_y, p n_z, 0)^T$; carrying $H$ guarantees conservation of total enthalpy. This split is the starting point of the AUSM schemes ([[ref-liou-2001-nasa-tm-210977]] eqs. 3-4).
 
-**What it adds.** A [[conservation-law]] says a quantity changes only by its flux; the Euler equations are three (in 1D) coupled conservation laws whose fluxes depend on the state through the gas model. The coupling through pressure makes the system hyperbolic, with finite wave speeds, and allows shocks.
+**What it adds.** A [[conservation-law]] says a quantity changes only by its flux; the Euler equations are three (in 1D) coupled conservation laws whose fluxes depend on the state through the gas model. The coupling through pressure gives finite wave speeds and allows shocks.
 
 ## Builds on
 

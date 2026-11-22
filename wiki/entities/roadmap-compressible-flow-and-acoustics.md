@@ -2,6 +2,7 @@
 type: entity
 tags: [roadmap, area]
 sources: [doc-roadmap-json, doc-roadmap-overview, adr-thread-compressible-acoustic-boundaries, adr-thread-acoustic-wave-solver, adr-thread-wet-steam]
+builds_on: [euler-equations, approximate-riemann-solvers, characteristics-and-hyperbolic-systems, non-reflecting-boundaries-and-sponge-layers, acoustic-wave-equation, duct-acoustic-modes, fw-h]
 created: 2026-11-22
 updated: 2026-11-22
 status: draft
@@ -21,6 +22,10 @@ The base solvers (F-060 density-based, F-061 pressure-based with EOS, F-136 FW-H
 - **Wet steam** (F-221): the nozzle comparison is met, inviscid with a perfect-gas vapour; the roadmap keeps it todo although ADR 0226 recommends partial; case keys, real-gas vapour, viscous terms and polydispersion are todo items F-316 to F-319 ([[adr-thread-wet-steam]]).
 - 9 of 26 items are not started; most are the wiring and follow-ups above ([[doc-roadmap-json]]). See [[aeroacoustics]].
 - **Early waves (added by p3-records-a).** The pressure-based variable-density kernel (ADRs 0005, 0007 real gas, 0009 transient) and the characteristic boundaries of the density-based Euler solver (ADR 0006, NACA 0012 Cp "not attempted") predate the P3 acoustics work; FW-H came with the reactor toolkit (ADR 0013), the fan-noise chain and `rcfd fwh` in ADR 0066 (F-243 partial, W5a / W5b known misses), and F-136 was set done by an independent retarded-time check of a rotating point force (ADR 0097) ([[adr-thread-early-physics-models]]).
+
+## Builds on
+
+Foundation pages for this area (added by p6-compressible-acoustics, 2026-11-22): [[ideal-gas-and-thermodynamics-basics]], [[speed-of-sound-and-mach-number]], [[euler-equations]], [[characteristics-and-hyperbolic-systems]], [[shock-waves]], [[riemann-problem-and-godunov-method]], [[approximate-riemann-solvers]] (density-based solver and its boundaries); [[acoustic-wave-equation]], [[non-reflecting-boundaries-and-sponge-layers]], [[duct-acoustic-modes]] (acoustic boundaries, sponges, wave solver); [[fw-h]], [[lighthill-acoustic-analogy]], [[rotor-tone-noise]], [[sound-levels-and-metrics]] (fan-noise chain, see [[aeroacoustics]]).
 
 ## ADR threads
 
