@@ -342,6 +342,25 @@ fn f884_nc1_d5_rejects_the_steady_arm_at_17_degrees() {
     assert!(rcl > 2.0 && !steady(rcl, rcd), "range {rcl}, {rcd}");
 }
 
+/// NC1b (ADR 0770 amendment 3): each limit of D5 alone rejects a window: the cl_eff range of ADR 0760's run at 17
+/// degrees with the cd_eff range of KT-a17, and the cl_eff range of KT-a17 with the cd_eff range of ADR 0760's run.
+#[test]
+fn f884_nc1b_each_limit_of_d5_rejects_alone() {
+    let old: Value = serde_json::from_str(&read(
+        &repo().join("docs/investigations/f868-naca0012-lift-curve/results.json"),
+    ))
+    .unwrap();
+    let o = &old["runs"]["SA-a17"];
+    let (ocl, ocd) = (
+        f(&o["cl_eff"]["max"]) - f(&o["cl_eff"]["min"]),
+        f(&o["cd_eff"]["max"]) - f(&o["cd_eff"]["min"]),
+    );
+    let (kcl, kcd, kst, _) = d5(&run("KT-a17"));
+    assert!(kst, "KT-a17 is the steady window of this control");
+    assert!(!steady(ocl, kcd), "cl_eff range {ocl} with cd_eff range {kcd}");
+    assert!(!steady(kcl, ocd), "cl_eff range {kcl} with cd_eff range {ocd}");
+}
+
 /// NC2: the target rejects ADR 0760's steady value at 15 degrees and its iteration mean at 17 degrees.
 #[test]
 fn f884_nc2_the_target_rejects_15_degrees_and_the_iteration_mean() {
