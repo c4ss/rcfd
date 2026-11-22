@@ -94,6 +94,42 @@ inside Newmark and generalised-alpha) and the energy-momentum step, and locking-
 - ADR 0499 Q1: a case-file key for a quasi-static time study, options (a) none yet, (b) `{ times, loads = [...] }`.
 - F-537, F-542, F-560, F-582: "The maintainer decides done" (roadmap gaps).
 
+## Second half of the category: driver records, residual references and the energy-momentum step (ADRs 0521 to 0625, job p3-structural-b)
+
+The other second-half nonlinear ADRs have their own pages: [[adr-thread-structural-hyperelastic-and-follower]] (hyperelastic materials, follower loads, flutter), [[adr-thread-structural-incompatible-hex8-rule-l]] (finite-strain incompatible-modes Hex8, rule L, the punch path, the indefinite-tangent and retry opt-ins) and [[adr-thread-structural-creep-and-temperature]] (F-bar creep drift, temperature on the nonlinear paths).
+
+### Current state (second half)
+
+- **Active-set record** of the Newton driver (ADR 0515) checked against a count made independently from the states on the J2 load and unload sphere (F-606, ADR 0521, done); it catches MR4 of F-560.
+- **Energy-momentum step for hyperelastic materials.** `NlTransientOptions::algorithmic_stress` with `AlgorithmicStress { Auto, DiscreteGradient, Average }`, the discrete gradient of Gonzalez (F-607, ADR 0523: done by its rule, proposed partial because a library defect was corrected by amendment 2; the roadmap lists F-607 partial). `AlgorithmicStress::MaterialDiscreteGradient` takes F-425's neo-Hookean and Mooney-Rivlin materials (F-611, ADR 0544, done).
+- **Residual references.** An opt-in `ResidualReference::InertiaTerms` for the nonlinear transient in free vibration (no external load) (F-631, ADR 0603, done) and on the energy-momentum step (F-681, ADR 0609, partial: its negative control NZ converged); a negative control off rest closes that gap (F-691, ADR 0625, done) and ADR 0625 recommends that the lead move F-681 to done, the maintainer's call.
+- **Rounding floor under large translation and rotation** (F-571, ADR 0604, done): the floor is not in the total Lagrangian internal force; it comes from representing the total displacement through the step tangent `K_eff = K_T + M/(beta h^2)`, so the residual of the nearest float vector reaches `(eps/2)|(|K_eff| |u|)|` while the reference `max(|f_int|, |g|)` passes through zero every half period.
+- **Stagnation acceptance** at that rounding bound, opt-in `NewtonOptions::stagnation` (F-690, ADR 0619): done as an opt-in. **The default flip was held by the maintainer on 2026-11-18**: "it moves existing results, and it waits until the fan path needs it. Not to be issued" (ADR 0619 answers; F-694 todo).
+
+### ADRs (second half)
+
+| ADR | Date | Kind | Item | Question | Outcome | Superseded by / followed by |
+|---|---|---|---|---|---|---|
+| [ADR 0521](../../docs/adr/0521-f606-registration-active-set-record-on-a-load-and-unload-solve.md) | 2026-11-14 | registration | F-606 (done) | Active-set record of the Newton driver on a J2 load/unload solve vs an independent count | done; MR4 of F-560 caught | — |
+| [ADR 0523](../../docs/adr/0523-f607-registration-energy-momentum-step-for-hyperelastic-materials.md) | 2026-11-14 | registration | F-607 (partial) | Energy-momentum step for hyperelastic materials (Gonzalez discrete gradient) | done by rule, proposed partial (library defect fixed by amendment 2) | ADR 0544 |
+| [ADR 0544](../../docs/adr/0544-f611-registration-energy-momentum-step-with-f425-hyperelastic-materials.md) | 2026-11-15 | registration | F-425 (partial), F-611 (done) | Energy-momentum step with F-425's hyperelastic materials | done | — |
+| [ADR 0603](../../docs/adr/0603-f631-registration-residual-reference-of-the-newton-driver-in-free-vibration.md) | 2026-11-15 | registration | F-631 (done) | Residual reference of the Newton driver in free vibration (inertia-term reference) | done (opt-in) | ADR 0609 |
+| [ADR 0604](../../docs/adr/0604-f571-registration-rounding-floor-of-the-newton-residual-under-translation-and-rotation.md) | 2026-11-15 | registration | F-571 (done) | Rounding floor of the TL Newton residual under large translation/rotation | done (diagnosis: floor from K_eff representation) | ADR 0619 |
+| [ADR 0609](../../docs/adr/0609-f681-registration-the-inertia-term-residual-reference-on-the-energy-momentum-step.md) | 2026-11-12 | registration | F-681 (partial) | Inertia-term residual reference on the energy-momentum step | partial: NZ converged | ADR 0625 |
+| [ADR 0619](../../docs/adr/0619-f690-registration-early-acceptance-at-the-rounding-bound-a-stagnation-test.md) | 2026-11-15 | registration | F-690 (partial) | Early acceptance at the rounding bound (stagnation test) | done (opt-in); default flip held 2026-11-18 | — |
+| [ADR 0625](../../docs/adr/0625-f691-registration-a-negative-control-of-the-energy-momentum-inertia-term-reference-off-rest.md) | 2026-11-15 | registration | F-691 (done) | Negative control of the energy-momentum inertia-term reference off rest | done | — |
+
+### Key numbers and limits (second half)
+
+- Rounding of the total Lagrangian internal force under translation: `3e-11` to `1.1e-8 N` on S3; the residual reaches `0.03` to `0.58` of `(eps/2)|(|K_eff| |u|)|` over 60 steps (ADR 0604).
+- Negative control off rest: one step centred on a zero crossing at `h = T_1/2621440` (ADR 0625).
+
+### Open questions (second half)
+
+- A rounding bound on the energy-momentum step (ADR 0609 Q2) and `InertiaTerms` as the default (ADR 0609 Q3): open, the maintainer's decision; ADR 0625 Q3 says both are unchanged.
+- Whether F-681 moves to done on the strength of F-691 (ADR 0625 Q2): the maintainer's call.
+- The bitwise chatter at iteration 0 of the active-set record (ADR 0521 Q1): recommendation keep the definition.
+
 ## Related
 
 - [[rcfd-fem]], [[structural-solver]], [[roadmap-structural-solver]]

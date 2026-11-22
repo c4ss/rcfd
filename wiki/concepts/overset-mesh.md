@@ -1,7 +1,7 @@
 ---
 type: concept
 tags: [mesh, moving-mesh, overset, chimera]
-sources: [doc-dynamic-mesh, doc-readme]
+sources: [doc-dynamic-mesh, doc-readme, adr-thread-overset]
 created: 2026-11-22
 updated: 2026-11-22
 status: draft
@@ -22,8 +22,16 @@ A component mesh moving over a background mesh, the two coupled through interpol
 - **BDF2 remainder:** time error does not fall with the square of the step (ratio 2.46 vs 5); the same on a single mesh (ratio 2.30) ([[doc-dynamic-mesh]]).
 - **Not available:** a second component, moving background, hole cutting from wall geometry, non-orthogonal correctors, linear-upwind convection, turbulence, energy, the case tree ([[doc-dynamic-mesh]]).
 
+### From the ADR thread (P3)
+
+- **Why the order checks miss:** the Taylor-Green order (`0.747`) and fine-level ratio (`3.31`) are "a first-order time error of the library's moving-mesh PISO step (the lagged convecting flux ...), not of the overset coupling"; T1c (`1.618`) is the truncation of the linear donor interpolation at one fringe cell (ADR 0232); the soft imposition of the fringe velocity, `dJ = -(16 nu / (3 h)) D`, keeps the response below second order (ADR 0340) ([[adr-thread-overset]]).
+- **Opt-ins that restore order:** `DonorInterpolation::Quadratic` (F-336: `1.993`, `2.000`), `Continuous` (F-468), `set_fringe_flux(PrescribedOwnGradient)` with `set_second_order_ring_gradient` (F-479, F-503: within `0.25` percent of the default coupling), `set_consistent_geometry_corrections` on warped 3-D meshes (F-487: `1.21`, `1.41` against 2) ([[adr-thread-overset]]).
+- **Defaults:** every switch of a default (quadratic donors, outer iterations, BDF2, geometry corrections, continuous donors) is open for the maintainer; the ADRs recommend keeping `Linear` ([[adr-thread-overset]]).
+- **Next items:** F-312 (overset in the case tree), F-313 (several components, moving background, hole cutting) and F-369 are todo ([[roadmap-moving-meshes-rotors-and-coupling]]).
+
 ## Related
 
+- [[adr-thread-overset]], [[immersed-solid]]
 - [[dynamic-mesh]]
 - [[sliding-mesh]]
 - [[rcfd-fv]]

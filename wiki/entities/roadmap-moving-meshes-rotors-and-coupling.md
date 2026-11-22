@@ -1,7 +1,7 @@
 ---
 type: entity
 tags: [roadmap, area]
-sources: [doc-roadmap-json, doc-roadmap-overview]
+sources: [doc-roadmap-json, doc-roadmap-overview, adr-thread-sliding-mesh-rotor-stator, adr-thread-coupled-periodic-faces, adr-thread-overset, adr-thread-immersed-solid, adr-thread-six-dof-fsi-cosimulation, adr-thread-layering-remeshing-ale, adr-thread-fan01-rotating-solve]
 created: 2026-11-22
 updated: 2026-11-22
 status: draft
@@ -14,11 +14,26 @@ status: draft
 
 ## Synthesis
 
-_Current state of this line of work, written from the ADR threads (P3)._
+- **Shape of the work.** 96 items (42 done, 40 partial, 14 not started). Nearly every item since 2026-11-07 is a library opt-in with its defaults bit-identical, checked against a closed form or a body-fitted / full-annulus twin, and followed by a diagnosis item when a number misses. Partial usually means a registered check missed or met only after an amendment, not missing code ([[adr-thread-sliding-mesh-rotor-stator]], [[adr-thread-overset]], [[adr-thread-immersed-solid]]).
+- **Sliding mesh (rotor-stator) runs from a case file.** Full annulus (F-303, ADR 0637, partial by one control threshold) and sector (F-711, ADR 0646, done) through `[mesh.sliding]`, laminar constant-property piso / pimple, Euler, no restart, no turbulence, on bladeless cylindrical-interface generators; planar sliding is library only (F-729 todo). The roadmap overview's "not available" is stale ([[adr-thread-sliding-mesh-rotor-stator]]; see the callout on [[sliding-mesh]]).
+- **Sector against full annulus** is now a matter of how coupled periodic faces are treated: opt-ins for the implicit rotated partner, the non-orthogonal and ddt corrections bring the sector within `1.104e-4` of the annulus with one outer iteration; none is the default ([[adr-thread-coupled-periodic-faces]]).
+- **Overset** (F-134) is library only and partial: the acceptance (mass, drag within `6.25e-3`) is met; the order misses are explained (moving-mesh PISO time error, linear donor truncation, soft fringe imposition) and opt-ins restore second order; tree wiring (F-312) and several components (F-313) are todo ([[adr-thread-overset]]).
+- **Immersed solid** (F-219) is first order (`1.023` against `1.5`) but meets the DFG numbers; the second-order forcing runs only in its bounded, opt-in form; moving immersed shapes match body-fitted runs except at lock-in ([[adr-thread-immersed-solid]]).
+- **Bodies and coupling:** six-DOF validation done; strong coupling (F-251) is in the tree as `[dynamic_mesh.six_dof.coupling] scheme = "strong"` (F-350 partial by one mutation, closed by F-437); the co-simulation protocol runs in process, over the service and from a `[cosim]` case served by `rcfd serve --cosim` (F-444 partial: schema approval) ([[adr-thread-six-dof-fsi-cosimulation]]).
+- **Layering and ALE:** library done; tree wiring complete by its checks, F-259 waits on the maintainer ([[adr-thread-layering-remeshing-ale]]).
+- **FAN-01 / F-126** (partial) is still the steady rotating-frame problem; no ADR of this area takes the sliding path to the bladed passage ([[adr-thread-fan01-rotating-solve]]).
+- **Defaults held.** On 2026-11-18 the maintainer held five default changes of this area "until the fan path needs it": coupled periodic sliding (F-721, F-724), the bounded immersed constructor (F-364), the mesh-speed compressible step (F-365), the fractional-step coupled-face opt-ins (F-775) ([[adr-thread-fan01-rotating-solve]]).
 
 ## ADR threads
 
-_Thread pages in `sources/adr-thread-*` that cover this area (P3)._
+- [[adr-thread-sliding-mesh-rotor-stator]] — F-250, F-303, F-304, F-704, F-710, F-711, F-712, F-720, F-721, F-724, F-725, F-730 (12 ADRs).
+- [[adr-thread-coupled-periodic-faces]] — F-743, F-744, F-752, F-753, F-754, F-757, F-771 (7 ADRs).
+- [[adr-thread-overset]] — F-134 and its follow-ups F-314 to F-503 (21 ADRs).
+- [[adr-thread-immersed-solid]] — F-219, force, second-order forcing, moving immersed shapes (17 ADRs).
+- [[adr-thread-six-dof-fsi-cosimulation]] — F-244, F-251, F-350, F-351, F-358, F-437, F-440, F-139, F-360, F-361, F-362, F-444, F-481, F-237 (14 ADRs).
+- [[adr-thread-layering-remeshing-ale]] — F-259, F-290, F-258, F-257, F-247 (6 ADRs).
+- [[adr-thread-fan01-rotating-solve]] — F-126 / FAN-01 (stub; the wave ADRs are added by the records job).
+- Structural side of the coupling: [[adr-thread-structural-fsi-coupling]].
 
 ## Items
 

@@ -73,6 +73,43 @@ Structural elements of [[rcfd-fem]] with six unknowns per node: the shear-flexib
 - F-512, F-513, F-557: "The maintainer decides done" (roadmap gaps).
 - ADR 0437 Q1: close F-521 on N6b (the item is done in the roadmap).
 
+## Second half of the category: shells (ADRs 0522 to 0716, job p3-structural-b)
+
+The warping Beam2 chain (F-598 onward) is on its own page, [[adr-thread-structural-beam-warping]]; shells and beams in the cyclic constraint are added to [[adr-thread-structural-modal-buckling-cyclic]]; shell whirl to [[adr-thread-structural-rotordynamics]]; through-thickness temperature gradients (F-527, F-687) to [[adr-thread-structural-creep-and-temperature]]; the thin-plate multigrid (F-629, F-641, F-659) to [[adr-thread-structural-linear-solvers]].
+
+### Current state (second half)
+
+- **Corotated shells in arc length and the nonlinear transient** (F-585, ADR 0522, partial): `arclength::trace`, `solve_from` and the nonlinear transient take Shell4 and Shell3, with a constant consistent shell mass including the rotary inertia `rho t^3/12`; the hinged roof missed A1 (`2.53e-2`) and A1p (`2.61e-2`) against a solid reference with a singular hinge. The published reference closed it: Shell4 `1.8e-3` and Shell3 `2.3e-3` below the limit load of Sze, Liu and Lo (2004), Table 9a, `2226.3 N` (F-610, ADR 0716, done; "the paper itself read"). ADR 0716 Q2 leaves to the lead whether F-585 moves to done; the roadmap lists F-585 partial at the snapshot.
+- **Shell3 on the remaining paths** (F-541, ADR 0545, partial): no path takes Shell4 and refuses Shell3; three rows (multigrid, `check_supported()`, cyclic) stayed refused for both, then opened by F-629/F-641 (multigrid) and F-628 (cyclic).
+- **Warped Shell3 meshes:** an opt-in model check of the constant-strain Shell3 membrane (largest angle between facet normals, threshold `0.4` degrees, the message names the ANDES membrane of ADR 0466) (F-574, ADR 0537, done).
+- **Shell pressure on curved unstructured meshes.** The angle-weighted pressure on an unstructured sphere octant converges at order `2.07`, `2.06` with radial error `8.0e-3` at `n = 128` (F-546, ADR 0550, done); the error is `~ c h^2/(R t)`, a bending response to the nodal unevenness of the load, documented in `docs/structural-solver.md` (F-634, ADR 0562, done). An opt-in `Load::shell_pressure_curvature` (Shell3, quadric fit on each node's k-ring) is exact for the uniform membrane state (F-633, ADR 0567, partial: S1 met only after amendment 1), and a boundary jet estimator `CurvatureBoundary::Jet` extends it to a non-quadric torus segment (F-656, ADR 0579, partial: the diff-scope check B4 missed as worded).
+
+### ADRs (second half)
+
+| ADR | Date | Kind | Item | Question | Outcome | Superseded by / followed by |
+|---|---|---|---|---|---|---|
+| [ADR 0522](../../docs/adr/0522-f585-registration-corotated-shells-in-arc-length-and-nonlinear-transient.md) | 2026-11-14 | registration | F-585 (partial) | Corotated shells in arc-length and the nonlinear transient | partial: roof A1 `2.53e-2`, A1p `2.61e-2` vs 2 % | ADR 0716 (published roof reference) |
+| [ADR 0537](../../docs/adr/0537-f574-registration-warning-for-the-constant-strain-shell3-membrane-on-warped-meshes.md) | 2026-11-14 | registration | F-574 (done) | Opt-in model check for the constant-strain Shell3 membrane on warped meshes | done (threshold 0.4 degrees) | — |
+| [ADR 0545](../../docs/adr/0545-f541-registration-shell3-on-the-remaining-paths.md) | 2026-11-15 | registration | F-541 (partial) | Shell3 on the remaining paths (N2 refusals of ADR 0454) | partial: KM1 (three rows wait for Shell4) | ADR 0552, ADR 0556, ADR 0603 |
+| [ADR 0550](../../docs/adr/0550-f546-registration-angle-weighted-shell-pressure-on-an-unstructured-sphere-octant.md) | 2026-11-15 | registration | F-546 (done) | Angle-weighted shell pressure on an unstructured sphere octant | done: `8.0e-3` at n = 128, order 2.07 | ADR 0562, ADR 0567 |
+| [ADR 0562](../../docs/adr/0562-f634-registration-shell-documentation-note-on-pressure-loaded-thin-curved-shells.md) | 2026-11-15 | registration | F-634 (done) | Docs note on pressure-loaded thin curved shells on unstructured meshes | done (`docs/structural-solver.md`) | — |
+| [ADR 0567](../../docs/adr/0567-f633-registration-shell3-pressure-load-exact-for-the-uniform-membrane-state.md) | 2026-11-15 | registration | F-633 (partial) | Shell3 pressure from a local curvature estimate, exact for uniform membrane state | partial: S1 met only after amendment 1 | ADR 0579 |
+| [ADR 0579](../../docs/adr/0579-f656-registration-curvature-shell-pressure-on-a-non-quadric-shell.md) | 2026-11-15 | registration | F-656 (partial) | Curvature shell pressure on a non-quadric shell (torus segment), boundary estimator | partial | — |
+| [ADR 0716](../../docs/adr/0716-f610-registration-hinged-cylindrical-roof-limit-load-against-a-published-reference.md) | 2026-11-17 | registration | F-610 (done) | Hinged cylindrical roof limit load against Sze, Liu and Lo (2004) | done: Shell4 `1.8e-3`, Shell3 `2.3e-3` below 2226.3 N | — |
+
+### Key numbers and limits (second half)
+
+- Hinged cylindrical roof (`R 2540`, edges `508`, `0.1 rad`, `t 12.7`, `E 3102.75`, `nu 0.3`): published limit load `2226.3 N`; Shell4 `1.8e-3`, Shell3 `2.3e-3` below it at `16 x 16`, within `3.3e-3` at `8 x 8`; the Hex20 sequence `-2.64e-2` at `n = 16` (ADR 0716).
+- Sphere octant (`R = 1`, `t = 0.01`): errors `1.40e-1`, `3.33e-2`, `7.99e-3` at `n = 32, 64, 128`; 2 % needs `n = 128` at `t/R = 0.01` (ADR 0550, ADR 0562).
+- Curvature pressure: A1 `3.0e-14`, A2 `7.8e-14`, A3 `2.0e-10` (ADR 0567); torus segment `4.1e-4` and `5.3e-4` (orders `2.5`, `1.8`) with the boundary estimator, `3.7e-3` and `2.1e-3` with the ADR 0567 load (ADR 0579).
+
+### Open questions (second half)
+
+- The thin roof `t = 6.35` with snap-back against the paper's table (ADR 0716 Q1): recommended as a follow-up.
+- Whether F-585 moves to done on the strength of ADR 0716 (ADR 0716 Q2): the lead's call.
+- Shell case-file key for corotated shells (ADR 0522 Q3) and for the Shell3 warp check (ADR 0537 Q1): open, schema golden.
+- The `0.4` degree threshold rests on one geometry; a second family is recommended before wider use (ADR 0537 Q2).
+
 ## Related
 
 - [[rcfd-fem]], [[structural-solver]], [[roadmap-structural-solver]], [[mpc-transformation]]

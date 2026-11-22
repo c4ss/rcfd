@@ -1,7 +1,7 @@
 ---
 type: entity
 tags: [mesh, fan, rotating]
-sources: [doc-meshing, doc-structural-solver]
+sources: [doc-meshing, doc-structural-solver, adr-thread-sliding-mesh-rotor-stator]
 created: 2026-11-22
 updated: 2026-11-22
 status: draft
@@ -44,9 +44,11 @@ status: draft
 - **Defaults:** "The default stays the 33A construction"; S to S'''' are library only with no case value ([[doc-meshing]]).
 - **FAN-01:** at the hub (chord 99 mm, stagger 44 deg, pitch 87 mm) `pursuit` and `smoothed` refuse it; `camber_seam` builds it; the laminar smoke solve on H oscillates without converging (continuity up to 7.46e-3) and the oscillation sits away from the poor faces ([[doc-meshing]]).
 - The S constructions target `ComputerFan::rom_reference()` (stagger 69.8 to 77.6 deg), the reduced-order reference of the 120 mm computer fan ([[doc-meshing]]). The structural solver's blade mesher is a separate structured Tet4/Tet10 split of the same `AxialFan` geometry ([[doc-structural-solver]]).
+- The sliding-interface generators of the case tree are different meshes: `annulus_3d_cylindrical_interface` (full annulus) and `annulus_3d_sector_cylindrical_interface` (sector below 180 deg, rotor and stator of one pitch, cell zone `rotor`, the 70 deg pre-flight), with no blade (F-303, ADR 0637; F-711, ADR 0646) ([[adr-thread-sliding-mesh-rotor-stator]]).
 
 ## Related
 
+- [[sliding-mesh]], [[adr-thread-fan01-rotating-solve]]
 - [[fan-01]]
 - [[mesh-quality]]
 - [[mesh-generators]]

@@ -1,7 +1,7 @@
 ---
 type: entity
 tags: [crate]
-sources: [doc-architecture, doc-roadmap-overview, doc-structural-solver, doc-solid-case-file]
+sources: [doc-architecture, doc-roadmap-overview, doc-structural-solver, doc-solid-case-file, adr-thread-structural-linear-solvers, adr-thread-structural-case-file-and-fan-blade, adr-thread-structural-modal-buckling-cyclic]
 created: 2026-11-22
 updated: 2026-11-22
 status: draft
@@ -30,3 +30,10 @@ status: draft
 ## Open questions
 
 _Filled in by P1-P3 ingests._
+- Many structural items in ADR 0354 to 0518 are partial only because "The maintainer decides done" (a mutation that was not caught, or an amendment made after a run). The list is on [[roadmap-structural-solver]] ([[adr-thread-structural-modal-buckling-cyclic]]).
+- F-405 (CLI subcommand and MCP tools) is still open. ADR 0438 Q3 leaves it to the maintainer because each changes a golden file ([[adr-thread-structural-case-file-and-fan-blade]]).
+
+## ADR threads
+
+- Modules named in the threads: `cyclic`, `mpc`, `transient`, `harmonic`, `rotor`, `fatigue`, `random`, `estimate`, `follower`, `contact.rs`, `laminate.rs`, `mat_j2.rs`, `mat_visco.rs`, `mat_creep.rs`, `hex8x`, `builders`, plus `rcfd_api::solid_case` and `rcfd_api::solid_parallel` ([[adr-thread-structural-case-file-and-fan-blade]], [[adr-thread-structural-linear-solvers]]).
+- Thread pages: [[adr-thread-structural-verification-elements]], [[adr-thread-structural-linear-solvers]], [[adr-thread-structural-modal-buckling-cyclic]], [[adr-thread-structural-rotordynamics]], [[adr-thread-structural-dynamics-harmonic]], [[adr-thread-structural-fatigue-and-radiated-sound]], [[adr-thread-structural-beams-shells]], [[adr-thread-structural-materials-nonlinear]], [[adr-thread-structural-contact]], [[adr-thread-structural-fsi-coupling]], [[adr-thread-structural-case-file-and-fan-blade]].

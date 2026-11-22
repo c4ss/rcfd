@@ -57,6 +57,34 @@ Linear dynamics of [[rcfd-fem]]: Newmark and generalised-alpha time integration 
 - F-559: "restate the clauses or take F-603" (roadmap gap, maintainer).
 - F-548: "The maintainer decides done".
 
+## Second half of the category (ADRs 0520 to 0565, job p3-structural-b)
+
+The mutual radiation impedance (F-579, ADR 0538) is added to [[adr-thread-structural-fatigue-and-radiated-sound]]; the warping-beam harmonic and transient paths to [[adr-thread-structural-beam-warping]]; buckling and harmonic response about a nonlinear state to [[adr-thread-structural-hyperelastic-and-follower]].
+
+### Current state (second half)
+
+- **Viscoelastic damped modes at each root's own frequency** (F-586, ADR 0520, partial): `DampedOptions::viscoelastic_own_frequency(OwnFrequency::new(roots))`, update `w <- Im lambda` of the nearest root, converged at `|dw| <= 1e-12 w`, refused after 50 iterations; rod A's first root equals the chain root within `1.1e-13` (limit `1e-8`). Pseudo-modes in that iteration are skipped by the opt-in `OwnFrequency::skip_pseudo` (F-609, ADR 0529, done).
+- **Craig-Bampton interface enrichment** by Krylov blocks started from the constraint modes (F-603, ADR 0532, done): default 0 blocks (bit-identical); one block (the residual flexibility of the constraint modes) gave `3e-6` frequencies and `1e-3` response to half the lowest omitted frequency on the bar, two blocks `1e-10` and `3e-5`.
+- **Reduced parts as superelements** in an ordinary model (F-553, ADR 0536, done). The case-file keys `superelements` and `interface_enrichment` were **approved** on 2026-11-18 under the additive-golden-edit class rule (ADR 0536 answers); F-616 is todo at the snapshot.
+- **Direct harmonic on the transformation path** (constraints, rigid sets, elastic supports, `x = T q` of ADR 0296) and with a pre-stress (F-528, ADR 0543, partial by the rule, recommended to accept as done): bar on a tip spring within `3.9e-13` of the 1-D chain (limit `1e-8`). Base motion and the six complex reference unknowns of each rigid set by `response_with_references` (F-619, ADR 0565, done).
+
+### ADRs (second half)
+
+| ADR | Date | Kind | Item | Question | Outcome | Superseded by / followed by |
+|---|---|---|---|---|---|---|
+| [ADR 0520](../../docs/adr/0520-f586-registration-viscoelastic-damped-modes-at-each-roots-own-frequency.md) | 2026-11-14 | registration | F-586 (partial) | Viscoelastic damped modes, each root iterated to its own frequency | partial (known misses RV1) | ADR 0529 (pseudo-modes) |
+| [ADR 0529](../../docs/adr/0529-f609-registration-pseudo-modes-in-the-viscoelastic-own-frequency-iteration.md) | 2026-11-14 | registration | F-609 (done) | Pseudo-modes in the viscoelastic own-frequency iteration | done (`OwnFrequency::skip_pseudo`, opt-in) | — |
+| [ADR 0532](../../docs/adr/0532-f603-registration-craig-bampton-interface-enrichment.md) | 2026-11-14 | registration | F-603 (done) | Craig-Bampton interface enrichment by Krylov blocks from the constraint modes | done | — |
+| [ADR 0536](../../docs/adr/0536-f553-registration-reduced-parts-as-superelements.md) | 2026-11-14 | registration | F-553 (done) | Reduced parts as superelements in an ordinary model | done; case-file keys approved 2026-11-18 | — |
+| [ADR 0543](../../docs/adr/0543-f528-registration-direct-harmonic-solve-on-the-transformation-path-and-with-pre-stress.md) | 2026-11-15 | registration | F-528 (partial) | Direct harmonic solve on the transformation path and with pre-stress | partial by rule (recommended done) | ADR 0565 |
+| [ADR 0565](../../docs/adr/0565-f619-registration-direct-harmonic-base-motion-and-reference-response-on-the-transformation-path.md) | 2026-11-15 | registration | F-619 (done) | Direct harmonic base motion and reference response on the transformation path | done | — |
+
+### Open questions (second half)
+
+- Default number of enrichment blocks (ADR 0532 Q2): recommendation keep 0; large interfaces may need an interface reduction first (Q3).
+- Harmonic damping of superelements beyond loss factors, and a solid part at shell or beam host nodes (ADR 0536 Q2, Q3).
+- Whether F-528 is accepted as done (ADR 0543 remaining question 1); the roadmap lists it partial.
+
 ## Related
 
 - [[rcfd-fem]], [[structural-solver]], [[roadmap-structural-solver]]

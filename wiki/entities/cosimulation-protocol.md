@@ -1,7 +1,7 @@
 ---
 type: entity
 tags: [coupling, fsi, protocol, service]
-sources: [doc-cosimulation-protocol, doc-dynamic-mesh, doc-structural-solver]
+sources: [doc-cosimulation-protocol, doc-dynamic-mesh, doc-structural-solver, adr-thread-structural-fsi-coupling, adr-thread-six-dof-fsi-cosimulation]
 created: 2026-11-22
 updated: 2026-11-22
 status: draft
@@ -25,15 +25,20 @@ status: draft
 - **Flow-coupled check** (F-401, ADR 0434): elastic bar closing a channel; Aitken and least-squares converge to `1e-6` in 3 iterations on the matching wall; least-squares better on a 3:2 non-matching wall ([[doc-cosimulation-protocol]]). The structural roadmap still lists two-way coupling (F-401) as partial with missed estimates ([[doc-structural-solver]]).
 - **Limits:** one coupler per participant, no authentication or encryption, one wall, map built once, no heat transfer ([[doc-cosimulation-protocol]]).
 - **Versioning:** incompatible change -> `rcfd-cosim/2`; added methods or reply members do not change the id ([[doc-cosimulation-protocol]]).
+- **Flow-side ADR statuses:** F-139 done (ADR 0256: "an in-process library interface, a mock structure and the protocol page. No transport and no real structural solver"); F-361 done (Aitken stays the default, ADR 0261 Q1); F-362 roadmap done, ADR 0263 partial by its rule (E1 missed on the registered code, E1b met after amendment 1); F-360 done (protocol version 1.1, `rcfd-service/1` kept, ADR 0345 Q1); F-444 partial (the `cosim` schema property and the `--cosim` help line await the maintainer's approval, ADR 0380 Q1); F-481 done ([[adr-thread-six-dof-fsi-cosimulation]]).
+- **Mapping scale:** the brute-force search and dense radial-basis rows limit the builders "to a few thousand nodes" (ADR 0263 Q3) ([[adr-thread-six-dof-fsi-cosimulation]]).
 
 ## Related
 
 - [[structural-solver]]
+- [[strong-fsi-coupling]], [[adr-thread-six-dof-fsi-cosimulation]] (flow-side ADRs)
 - [[dynamic-mesh]]
 - [[rcfd-fv]]
 - [[rcfd-api]]
 - [[rcfd-post]]
+- [[adr-thread-structural-fsi-coupling]]: structural-side ADRs. They cover failing participants in a later iteration (F-463, F-465, F-469), the dynamic solid participant and its coupled frequency on non-matching maps (F-400 partial, c7 6.3e-3 against 1e-3; F-502), the bilinear quad projection (F-504), the flow-coupled bar (F-401 partial) and aerodynamic damping (F-421 partial) ([[adr-thread-structural-fsi-coupling]]).
 
 ## Open questions
 
-- Tree wiring of strong coupling and the participant interface is F-350 ([[doc-dynamic-mesh]]).
+- Tree wiring of strong coupling and the participant interface is F-350 ([[doc-dynamic-mesh]]). ADR 0266 delivered the strong-coupling table (F-350 partial by one mutation; ADR 0349 Q1 recommends done), and F-444 the `[cosim]` participant table ([[adr-thread-six-dof-fsi-cosimulation]]).
+- ADR 0380 Q1 to Q4 (approval of the schema and CLI additions, the participant's name, MU5, a structure from a case) ([[adr-thread-six-dof-fsi-cosimulation]]).

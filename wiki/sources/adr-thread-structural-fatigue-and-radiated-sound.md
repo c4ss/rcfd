@@ -45,6 +45,25 @@ Two post-processing families on top of the dynamic results of [[rcfd-fem]]: `rcf
 - F-566: "The ADR proposes done; the maintainer's call".
 - F-551: sources cited from memory, not re-read (a clean-room evidence point; see [[sources-read-addendum]]).
 
+## Second half of the category (ADRs 0524 and 0538, job p3-structural-b)
+
+### Current state (second half)
+
+- **Benasciutti-Tovo** broadband damage rate of a Gaussian stationary stress from `m0, m1, m2, m4` as a second method beside Dirlik (F-590, ADR 0524, partial: C1 and C1b recorded as ignored known-miss tests). The roadmap note records the paper as "D. Benasciutti and R. Tovo, Int. J. Fatigue 27 (2005), cited from memory, the fitted weight b unverified".
+- **Mutual radiation impedance** matrix of a baffled plane and the light-fluid added mass, damping and frequency shift of structural modes (F-579, ADR 0538, done: every check met in the single registered run, no amendment; Y1 and Y2 at `8.8e-16` against `1e-10`).
+- Fracture parameters (J-integral, stress intensity, crack-growth life) are on [[adr-thread-structural-fracture]].
+
+### ADRs (second half)
+
+| ADR | Date | Kind | Item | Question | Outcome | Superseded by / followed by |
+|---|---|---|---|---|---|---|
+| [ADR 0524](../../docs/adr/0524-f590-registration-benasciutti-tovo-broadband-damage-rate.md) | 2026-11-14 | registration | F-590 (partial) | Benasciutti-Tovo broadband fatigue damage rate as a second method | partial: C1, C1b known misses | — |
+| [ADR 0538](../../docs/adr/0538-f579-registration-mutual-radiation-impedance-and-light-fluid-modes.md) | 2026-11-14 | registration | F-579 (done) | Mutual radiation impedance of a baffled plane; light-fluid added mass, damping, frequency shift | done | — |
+
+### Open questions (second half)
+
+- The Benasciutti-Tovo citation "from memory" with an unverified fitted weight (ADR 0524 roadmap note): to be checked against the paper.
+
 ## Related
 
 - [[aeroacoustics]], [[rcfd-post]], [[rcfd-fem]], [[structural-solver]], [[roadmap-structural-solver]]

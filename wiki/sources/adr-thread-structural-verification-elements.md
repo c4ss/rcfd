@@ -55,6 +55,24 @@ Follow-ups of the basic tier (plan ADR 0270) and the intermediate tier (plan ADR
 - ADR 0383: the old test `si_hex20::l1_to_l3_face_loads_and_uniaxial_tension` (ADR 0292) now fails on L3, outside the standing permission to edit scaffold tests; left to the maintainer.
 - F-461, F-508: "the maintainer decides done" by the roadmap gaps.
 
+## Second half of the category (ADRs 0525 to 0627, job p3-structural-b)
+
+The finite-strain incompatible-modes Hex8 and its stabilisation are on [[adr-thread-structural-incompatible-hex8-rule-l]].
+
+### Current state (second half)
+
+- **Hex8 formulations on the remaining linear paths** (F-588, ADR 0525, partial: ES3b known miss, MU12 not caught): the refusals of ADR 0493 D5 lifted in `rcfd_fem::hex8x`; free thermal expansion of the distorted patch stress-free to `1e-10` for BBar and Incompatible (`7.4e-11` worst at `nu 0.4999`), Euler buckling of a one-layer Incompatible strip within `5.1e-4` (Full control `1.5`). The ES3b miss is explained by F-614 (ADR 0530, done): with the centroid rule of Hex8 the enhanced strain is zero at the sample, so no field can separate Incompatible from the compatible strain at `element_samples`.
+- **Error density** (F-568, ADR 0616, partial): `EnergyError` gives element volumes, densities `eta_e/|K|^{1/2}` and a ranking by density; the effectivity clause is met, P3 (the hole criterion) is not. On a plate graded uniformly along the hole the tenth of largest densities holds 28 of the 48 hole-edge elements, a miss (F-695, ADR 0627, partial).
+
+### ADRs (second half)
+
+| ADR | Date | Kind | Item | Question | Outcome | Superseded by / followed by |
+|---|---|---|---|---|---|---|
+| [ADR 0525](../../docs/adr/0525-f588-registration-hex8-formulations-on-the-remaining-linear-paths.md) | 2026-11-14 | registration | F-588 (partial) | B-bar and incompatible-modes Hex8 on the remaining linear paths | partial: ES3b known miss, MU12 not caught | ADR 0530 |
+| [ADR 0530](../../docs/adr/0530-f614-registration-non-equilibrium-quadratic-displacement-test-for-the-estimate-samples.md) | 2026-11-14 | registration | F-614 (done) | Non-equilibrium quadratic field for the error-estimate samples of an opted Hex8 | done; explains ES3b of ADR 0525 (enhanced strain zero at the centroid sample) | — |
+| [ADR 0616](../../docs/adr/0616-f568-registration-error-density-and-the-effectivity-criterion-near-one.md) | 2026-11-15 | registration | F-568 (partial) | Error indicator per unit volume, effectivity criterion near one | partial: P3 hole criterion | ADR 0627 |
+| [ADR 0627](../../docs/adr/0627-f695-registration-hole-criterion-on-a-uniformly-graded-plate.md) | 2026-11-15 | registration | F-695 (partial) | Hole criterion of the error density on a uniformly graded plate | partial: 28 of 48 hole-edge elements | — |
+
 ## Related
 
 - [[structural-solver]], [[rcfd-fem]], [[roadmap-structural-solver]]

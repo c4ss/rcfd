@@ -1,7 +1,7 @@
 ---
 type: entity
 tags: [roadmap, validation]
-sources: [doc-roadmap-overview, doc-milestones-json, doc-reference-data-f868-ladson-naca0012, doc-reference-data-f869-cylinder-mean-drag, doc-reference-data-f870-fan01-design-point]
+sources: [doc-roadmap-overview, doc-milestones-json, doc-reference-data-f868-ladson-naca0012, doc-reference-data-f869-cylinder-mean-drag, doc-reference-data-f870-fan01-design-point, adr-thread-fan01-rotating-solve]
 created: 2026-11-22
 updated: 2026-11-22
 status: draft
@@ -24,6 +24,7 @@ status: draft
 - Cylinder: the drag band [1.314, 1.370] (width 0.056, half-width 2.09 % of the middle 1.342) was registered in ADR 0761 before any run. "All are computations, none is a measurement" ([[doc-reference-data-f869-cylinder-mean-drag]]). See [[cylinder-re100]].
 - NACA 0012: the Ladson 120-grit maximum is (17.24, 1.6347) and the 180-grit maximum (17.13, 1.6219). The scatter taken across the three grit zones is 0.018 (ADR 0760) ([[doc-reference-data-f868-ladson-naca0012]]). See [[naca0012]].
 - Fan: the design point is 1.4032 m^3/s, 126.46 Pa, 333.30 W. The band's numerical half is 29.75 Pa, and the measurement uncertainty is not stated in any source read ([[doc-reference-data-f870-fan01-design-point]]). See [[fan-01]].
+- Fan milestone, moving-meshes side: F-126 (rotating interfaces) and F-218 (actuator disk) carry the `fan` milestone in [[roadmap-moving-meshes-rotors-and-coupling]], both partial; the thread is [[adr-thread-fan01-rotating-solve]].
 
 ## Related
 

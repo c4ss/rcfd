@@ -1,7 +1,7 @@
 ---
 type: entity
 tags: [roadmap, area]
-sources: [doc-roadmap-json, doc-roadmap-overview]
+sources: [doc-roadmap-json, doc-roadmap-overview, doc-product, doc-structural-solver, adr-thread-structural-verification-elements, adr-thread-structural-linear-solvers, adr-thread-structural-modal-buckling-cyclic, adr-thread-structural-rotordynamics, adr-thread-structural-dynamics-harmonic, adr-thread-structural-fatigue-and-radiated-sound, adr-thread-structural-beams-shells, adr-thread-structural-materials-nonlinear, adr-thread-structural-contact, adr-thread-structural-fsi-coupling, adr-thread-structural-case-file-and-fan-blade, adr-thread-structural-incompatible-hex8-rule-l, adr-thread-structural-hyperelastic-and-follower, adr-thread-structural-creep-and-temperature, adr-thread-structural-beam-warping, adr-thread-structural-fracture]
 created: 2026-11-22
 updated: 2026-11-22
 status: draft
@@ -14,11 +14,79 @@ status: draft
 
 ## Synthesis
 
-_Current state of this line of work, written from the ADR threads (P3)._
+Written from the first 133 ADRs of the category (ADR 0354 to 0518, 2026-11-12 to 2026-11-14; job p3-structural-a). The other
+133 (ADR 0519 onward) may extend this section.
+
+- **A large library exists and runs, all of it in `crates/rcfd-fem`.** Between 2026-11-12 and 2026-11-14 the intermediate tier
+  (plan ADR 0290) and much of the advanced tier (plan ADR 0310) were registered and built item by item. That covers Beam2,
+  Shell4, Shell3 and laminates ([[adr-thread-structural-beams-shells]]), cyclic symmetry, buckling and the transformation path
+  ([[adr-thread-structural-modal-buckling-cyclic]]), rotor dynamics with Coriolis, whirl, Campbell tables and bearings
+  ([[adr-thread-structural-rotordynamics]]), transient, harmonic, random and Craig-Bampton dynamics
+  ([[adr-thread-structural-dynamics-harmonic]]), Newton, J2, creep, viscoelastic and orthotropic materials
+  ([[adr-thread-structural-materials-nonlinear]]), contact ([[adr-thread-structural-contact]]), fatigue and radiated sound
+  ([[adr-thread-structural-fatigue-and-radiated-sound]]), and sparse direct, multigrid, rank and CUDA solves
+  ([[adr-thread-structural-linear-solvers]]).
+- **The checks are verification, not validation.** The registered checks are closed forms, manufactured solutions, observed
+  orders, patch tests, bit-identities and mutation catches ([[adr-thread-structural-verification-elements]]). No ADR in this half
+  compares against a measured structure.
+- **Many items are partial without a numeric miss.** Often every acceptance clause is met, but a planned mutation was not
+  caught or a check was met only after an amendment written after its run. The roadmap gap then reads "The maintainer decides
+  done" (for example F-461, F-470, F-500, F-505, F-512, F-513, F-529, F-537, F-542, F-548, F-555, F-557, F-594; see
+  [[mutation-testing]]). The numeric known misses that remain are listed on the thread pages. Examples: F-395's buckling factor
+  2.0135e-2 against 2e-2, F-396's flap-lag 1.9e-3 against 1e-4 Omega^2, F-422's residual hoop stress 2.6 percent against 2
+  percent, F-558's I-section LTB -19.2 percent.
+- **Reach from outside Rust:** the [[solid-case-file]] runs static and modal analyses through
+  `rcfd_api::solid_case::run_solid_case_file`. No CLI subcommand and no MCP tool exist: F-405 is todo, and ADR 0438 left them to
+  the maintainer because each changes a golden file ([[adr-thread-structural-case-file-and-fan-blade]]). The fan-blade
+  demonstration is done (F-387). The fan-blade case-file keys were approved on 2026-11-18 (ADR 0505 answers) but were not built
+  at the snapshot.
+- **Coupling with the flow** is shown only by library checks: the elastic bar with the PISO solver (F-401, partial) and the
+  dynamic solid as a co-simulation participant (F-400, partial). F-404 (a `[solid]` table in the flow case), F-406 and F-436 (fan
+  demonstrations) and F-434 (public coupled benchmark) are todo ([[adr-thread-structural-fsi-coupling]]).
+
+> [!warning] Contradiction — does a structural solver exist?
+> `PRODUCT.md` ([[doc-product]]) says stress and strain colouring "needs a structural solver, which does not exist". The ADRs of
+> this area show that a structural solver library exists. It has static, modal, buckling, dynamic and nonlinear analyses, writes
+> stresses to `.vtu` (F-377, F-512, F-521), and has a solid case file (F-386, ADR 0438) and a fan-blade demonstration (F-387, ADR
+> 0500). What does not exist is any route from the Studio or the tools to that library: no CLI subcommand, no MCP tool (F-405
+> todo, ADR 0438 Q3) and no `[solid]` table in the flow case (F-404 todo). So the PRODUCT.md sentence is false about the solver
+> and true about what the Studio can reach today ([[adr-thread-structural-case-file-and-fan-blade]],
+> [[doc-structural-solver]]). This is a contradiction within the repo docs.
+
+### Second half (ADR 0519 to 0746, 2026-11-14 to 2026-11-19; job p3-structural-b)
+
+- **The advanced tier deepened rather than widened.** The second 132 ADRs mostly take existing capabilities to more elements and paths: shells and beams into the cyclic constraint, whirl and the full rotor ([[adr-thread-structural-modal-buckling-cyclic]], [[adr-thread-structural-rotordynamics]]); hyperelastic materials onto every linear path and the structural elements ([[adr-thread-structural-hyperelastic-and-follower]]); a 14-unknown warping Beam2 on every path with load height ([[adr-thread-structural-beam-warping]]); temperature fields and Arrhenius creep on the nonlinear paths ([[adr-thread-structural-creep-and-temperature]]); quadratic and mortar contact ([[adr-thread-structural-contact]]); fracture parameters ([[adr-thread-structural-fracture]]); supernodal factors and structural smoothed aggregation ([[adr-thread-structural-linear-solvers]]).
+- **One long diagnostic chain.** 28 ADRs (2026-11-15 to 2026-11-17) follow the finite-strain incompatible-modes Hex8 from a spurious hourglass zero in compression, through the stabilisation "rule L", to a confined `16^3` punch that rule L could not solve; the cause turns out to be a subcritical bifurcation of the global path plus a breakdown of one element's local mode iteration, and the chain ends with the warm-started local update measured as the candidate default ([[adr-thread-structural-incompatible-hex8-rule-l]]).
+- **Default changes were approved and made.** On 2026-11-18 the maintainer approved Beam2 in the cyclic constraint by default (made by ADR 0744) and hyperelastic materials on structural elements by default (made by ADR 0746); on 2026-11-21 lifting the remaining beam-sector opt-ins (whirl paths, `full_rotor`), not made at the snapshot ([[adr-thread-structural-modal-buckling-cyclic]], [[adr-thread-structural-hyperelastic-and-follower]]). The stagnation acceptance as a default was held ("it waits until the fan path needs it", ADR 0619) ([[adr-thread-structural-materials-nonlinear]]). The warm-start default of the incompatible Hex8 is open ([[adr-thread-structural-incompatible-hex8-rule-l]]).
+- **Case-file keys approved but not built.** Under the class rule for additive golden edits (2026-11-18) the maintainer approved keys for superelements and interface enrichment (F-616), hyperelastic materials (F-621), the warping unknown (F-625), the inertia and retry of the driver in the solid case's output (F-842) and an opt-in `J`-based creep variant; all are todo at the snapshot ([[adr-thread-structural-dynamics-harmonic]], [[adr-thread-structural-hyperelastic-and-follower]], [[adr-thread-structural-beam-warping]], [[adr-thread-structural-incompatible-hex8-rule-l]], [[adr-thread-structural-creep-and-temperature]]). Follower, flutter, contact, temperature, creep and shell-gradient keys are recommended and not yet approved.
+- **One check against a published reference:** the hinged cylindrical roof limit load against Sze, Liu and Lo (2004), `2226.3 N`, Shell4 `1.8e-3` and Shell3 `2.3e-3` below it (ADR 0716). Every other check in this half is a closed form, a derived semi-analytical reference, a twin model or a bit record; none compares against a measured structure ([[adr-thread-structural-beams-shells]]).
+- **The PRODUCT.md question, from this half.** The second half confirms the contradiction above: it adds a whole nonlinear, contact, fracture and rotor library and names "the solid case's output" as an approved target (F-842, ADR 0719). What stays true is the Studio side: the Studio's capability inventory ([apps/studio-web/capabilities/inventory.json](../../apps/studio-web/capabilities/inventory.json)) lists only flow-case keys, none of the solid case, and the Studio sources under `apps/` have no stress or strain view, so the Studio has no stress or strain colouring at the snapshot (checked by text search in the snapshot for this ingest, not stated by an ADR).
 
 ## ADR threads
 
-_Thread pages in `sources/adr-thread-*` that cover this area (P3)._
+
+
+- [[adr-thread-structural-verification-elements]]: element verification, Hex20, curved meshes, B-bar Hex8, error estimate (12 ADRs)
+- [[adr-thread-structural-linear-solvers]]: IC fill, elasticity multigrid, ranks and CUDA, sparse and supernodal `L D L^T` (7)
+- [[adr-thread-structural-modal-buckling-cyclic]]: modes, buckling, transformation path, cyclic symmetry (12)
+- [[adr-thread-structural-rotordynamics]]: stress stiffening, Coriolis, whirl, Campbell, rotor on bearings (20)
+- [[adr-thread-structural-dynamics-harmonic]]: transient, harmonic, damped modes, random vibration, Craig-Bampton (14)
+- [[adr-thread-structural-fatigue-and-radiated-sound]]: fatigue, rainflow, Dirlik, ERP and Rayleigh integral (6)
+- [[adr-thread-structural-beams-shells]]: Beam2, Shell4, Shell3, laminates, ties and joints (25)
+- [[adr-thread-structural-materials-nonlinear]]: Newton driver, orthotropy, J2, viscoelasticity, creep, nonlinear transient (20)
+- [[adr-thread-structural-contact]]: frictionless contact, interference and press fits (3)
+- [[adr-thread-structural-fsi-coupling]]: failing participants, dynamic solid, one-way loads, flow-coupled bar, aero damping (10)
+- [[adr-thread-structural-case-file-and-fan-blade]]: solid case file, fan-blade demonstration and mesher (4)
+
+Second half (job p3-structural-b), new pages:
+
+- [[adr-thread-structural-incompatible-hex8-rule-l]]: finite-strain incompatible-modes Hex8, stabilisation rule L, the `16^3` punch path, the warm-start default question (28)
+- [[adr-thread-structural-hyperelastic-and-follower]]: hyperelastic materials on every path and by default, follower loads, flutter, linear paths about a nonlinear state (17)
+- [[adr-thread-structural-creep-and-temperature]]: F-bar creep drift at finite strain, temperature histories and fields, Arrhenius creep, shell temperature gradients (11)
+- [[adr-thread-structural-beam-warping]]: the 14-unknown warping Beam2, lateral-torsional buckling, load height (11)
+- [[adr-thread-structural-fracture]]: J-integral, interaction integral, curved and closed crack fronts (4)
+
+Second half added as a section to existing pages: [[adr-thread-structural-modal-buckling-cyclic]] (+12), [[adr-thread-structural-beams-shells]] (+8, shells), [[adr-thread-structural-materials-nonlinear]] (+8, driver records and residual references), [[adr-thread-structural-contact]] (+7), [[adr-thread-structural-rotordynamics]] (+7), [[adr-thread-structural-linear-solvers]] (+7), [[adr-thread-structural-dynamics-harmonic]] (+6), [[adr-thread-structural-verification-elements]] (+4), [[adr-thread-structural-fatigue-and-radiated-sound]] (+2).
 
 ## Items
 
@@ -86,7 +154,7 @@ Generated from `docs/roadmap.json` and `scripts/roadmap_progress.py` at snapshot
 | F-424 | Follower pressure, arc-length continuation, and modes about a nonlinear equilibrium | done | 0480 |  |  |
 | F-425 | Hyperelastic materials (neo-Hookean, Mooney-Rivlin) with a mean-dilatation element for near incompressibility | partial | 0541 |  | The small-strain clause is a known miss: 4.7e-6 (neo-Hookean) and 4.9e-6 (Mooney-Rivlin) against 1e-6. The note says the locking control with the full Hex8 was later measured by F-622 (15.6 at l_a = 1.10). Citations from memory are still to be checked. Follow-ups F-620 and F-621 are open. |
 | F-426 | Tied non-matching meshes, shell and beam joints to solids, non-matching cyclic boundaries and nodes on the axis | partial | 0456 |  | The note says the joint clauses are met by F-543's consistent and rigid couplings. The registered unit-weight couplings still miss: beam continuing a solid bar 2.25 percent (limit 1), shell continuing a solid plate 2.36 percent (limit 2). The node-to-surface tie's local stress error (0.149) does not fall; only the mortar tie meets the 3 percent clause. |
-| F-427 | Frictionless contact: node-to-surface with an augmented Lagrangian, rigid and deformable targets, interference fits | partial | 0507 |  | Uniform shaft stress in the interference fit missed (7.0e-3 against 1e-6); the note says F-599 explains and re-registers it as met. The total Lagrangian punch residual order missed (least 0.17 against 1.8); F-600 reads it as a bound, met. No [[contact]] case-file table exists, and the maintainer must decide on it. Follow-up F-601 is open. |
+| F-427 | Frictionless contact: node-to-surface with an augmented Lagrangian, rigid and deformable targets, interference fits | partial | 0507 |  | Uniform shaft stress in the interference fit missed (7.0e-3 against 1e-6); the note says F-599 explains and re-registers it as met. The total Lagrangian punch residual order missed (least 0.17 against 1.8); F-600 reads it as a bound, met. No \[\[contact\]\] case-file table exists, and the maintainer must decide on it. Follow-up F-601 is open. |
 | F-428 | Laminated shell: layup stiffness, ply stresses and failure indices | done | 0496 |  |  |
 | F-429 | Fracture parameters: J-integral by the domain form, stress intensity factor, crack-growth life | partial | 0547 |  | Mutation M12 (inner rings left out of the integral) was caught by no registered check (11 of 12 caught). The note says a later check (EU2, ADR 0605) catches it on the circular path and recommends status done. No case-file key is added. The maintainer decides. |
 | F-430 | Substructuring: static condensation and fixed-interface component mode synthesis (Craig-Bampton) | partial | 0469 |  | Harmonic check H1 missed, as predicted: 0.997 against 1 percent limit at 8241 rad/s, with no axial mode kept and no residual flexibility of the interior load. Residual vectors with modes by cutoff, and reduced parts in an ordinary model, are follow-ups F-552 and F-553. |

@@ -1,7 +1,7 @@
 ---
 type: entity
 tags: [structural, fem, solver]
-sources: [doc-structural-solver, doc-cosimulation-protocol, doc-acoustics, doc-product, doc-roadmap-overview]
+sources: [doc-structural-solver, doc-cosimulation-protocol, doc-acoustics, doc-product, doc-roadmap-overview, adr-thread-structural-case-file-and-fan-blade]
 created: 2026-11-22
 updated: 2026-11-22
 status: draft
@@ -26,6 +26,14 @@ status: draft
 
 > [!warning] Contradiction — structural solver exists?
 > [[doc-product]] says a structural solver "does not exist"; [[doc-structural-solver]] documents a large library with 150+ done items (already flagged on [[overview]]).
+>
+> **Settled as far as ADR 0354 to 0518 allow (p3-structural-a, 2026-11-22):** the solver exists as a library (`rcfd-fem` plus `rcfd_api::solid_case`). It has static, modal, buckling, transient, harmonic, rotating and nonlinear analyses, `.vtu` stress output and a solid case file ([[adr-thread-structural-case-file-and-fan-blade]]). It is not reachable from the CLI, MCP or the flow case (F-405 and F-404 todo; ADR 0438 Q3). So the PRODUCT.md sentence is wrong about the solver but right that the Studio cannot reach stress results today. The full callout is on [[roadmap-structural-solver]].
+
+## ADR threads (2026-11-12 to 2026-11-14)
+
+- [[adr-thread-structural-verification-elements]], [[adr-thread-structural-linear-solvers]], [[adr-thread-structural-modal-buckling-cyclic]], [[adr-thread-structural-rotordynamics]], [[adr-thread-structural-dynamics-harmonic]], [[adr-thread-structural-fatigue-and-radiated-sound]], [[adr-thread-structural-beams-shells]], [[adr-thread-structural-materials-nonlinear]], [[adr-thread-structural-contact]], [[adr-thread-structural-fsi-coupling]], [[adr-thread-structural-case-file-and-fan-blade]].
+- Concepts: [[cyclic-symmetry]], [[campbell-diagram]], [[mpc-transformation]], [[mutation-testing]].
+- Most items in these threads are partial without a numeric miss. The usual cause is a mutation that was not caught, or a check met only after an amendment, and the gap reads "The maintainer decides done" ([[roadmap-structural-solver]]).
 
 ## Related
 
@@ -37,5 +45,6 @@ status: draft
 
 ## Open questions
 
-- Case-file keys for the fan blade and centrifugal load are proposed in ADR 0505 and "wait for the maintainer" ([[doc-structural-solver]]).
+- ~~Case-file keys for the fan blade and centrifugal load are proposed in ADR 0505 and "wait for the maintainer" ([[doc-structural-solver]]).~~ Approved by the maintainer on 2026-11-18 under the additive-golden-edit class rule, "The item may be issued" (ADR 0505 answers). They are not built at snapshot 2e94e5ef ([[adr-thread-structural-case-file-and-fan-blade]]).
+- CLI subcommand and MCP tool for the solid file (F-405; ADR 0438 Q3) are still the maintainer's step ([[adr-thread-structural-case-file-and-fan-blade]]).
 - No fan-rotor demonstration (F-406, F-436) and no public coupled benchmark (F-434) ([[doc-structural-solver]]).

@@ -48,6 +48,33 @@ The linear-algebra route of [[rcfd-fem]]: the incomplete Cholesky preconditioner
 - F-470, F-529, F-594: done is "the maintainer's call" (accept the equivalent mutation, or L4 (b) as the check of the `tau` term) (ADR 0503 Q1, ADR 0509 Q1).
 - F-431: "Done is the maintainer's call" (roadmap gap).
 
+## Second half of the category (ADRs 0531 to 0577, job p3-structural-b)
+
+### Current state (second half)
+
+- **Coordinate nested dissection in the eigensolvers** (F-595, ADR 0531, done): `SubspaceOptions::points`, `BucklingEigenOptions::points` and `ModalOptions::coordinate_order` feed node coordinates to the supernodal factor's dissection; on a clamped cube of 104 544 unknowns `nnz(L)` falls to `0.838` of the level-structure order (limit `0.85`), frequencies within `1.4e-14`, 98 s against 127 s per modal analysis.
+- **Supernodal factor in the contact and Newton drivers.** `ContactOptions::factor` with `SupernodalNestedDissection` in the linear contact driver: the hub fit of ADR 0517 (96 046 free unknowns) in 82.0 s against 1456.6 s, ratio `5.6e-2` (limit 1/3) (F-615, ADR 0533, done). `NewtonOptions::factor` for the total Lagrangian contact body (F-618, ADR 0542, partial: T1 `0.355` against `< 1/3`, M3 survived); caching the dissection order and symbolic analysis by pattern (`SupernodalAnalysis`, `FactorReuse`) brings T1 to `0.254` (F-624, ADR 0566, partial: the timed run Q had other builds on the machine).
+- **Smoothed aggregation for structural elements.** `CgPreconditioner::SmoothedAggregationStructural` (solver name `cg-amg-rbm-structural`) with six rigid fields so rotation unknowns of Beam2, Shell4 and Shell3 nodes enter the near-null space (F-629, ADR 0552, done); the thin Shell4 plate's count is caused by the smoother, cured by a vertex-patch smoother (F-641, ADR 0572, done), robust over 34 thin-plate cases from `t/a = 0.1` to `0.001` (F-659, ADR 0577, done).
+- Defaults are unchanged throughout (the default factor stays `SparseMinimumDegree` / `Envelope`); the case-file key and default factor of ADR 0542 open questions 1 to 3 are not taken (ADR 0566 Q3).
+
+### ADRs (second half)
+
+| ADR | Date | Kind | Item | Question | Outcome | Superseded by / followed by |
+|---|---|---|---|---|---|---|
+| [ADR 0531](../../docs/adr/0531-f595-registration-coordinate-nested-dissection-in-the-eigensolvers.md) | 2026-11-14 | registration | F-595 (done) | Coordinate nested dissection in the eigensolvers | done | — |
+| [ADR 0533](../../docs/adr/0533-f615-registration-supernodal-factorisation-in-the-linear-contact-driver.md) | 2026-11-14 | registration | F-615 (done) | Supernodal factorisation in the linear contact driver | done | — |
+| [ADR 0542](../../docs/adr/0542-f618-registration-supernodal-factor-in-the-newton-driver-for-the-total-lagrangian-contact-body.md) | 2026-11-15 | registration | F-618 (partial) | Supernodal factor in the Newton driver for the TL contact body | partial: T1 0.355 vs < 1/3, M3 survived | ADR 0566 |
+| [ADR 0552](../../docs/adr/0552-f629-registration-six-unknown-nodes-in-the-smoothed-aggregation-cg.md) | 2026-11-15 | registration | F-629 (done) | Six-unknown nodes in smoothed-aggregation CG | done | ADR 0572 |
+| [ADR 0566](../../docs/adr/0566-f624-registration-cached-dissection-order-and-symbolic-analysis-of-the-newton-supernodal-factor.md) | 2026-11-15 | registration | F-624 (partial) | Cached dissection order and symbolic analysis of the Newton supernodal factor | partial: T1 0.254 met, Q (a4) not met under load | — |
+| [ADR 0572](../../docs/adr/0572-f641-registration-smoothed-aggregation-for-thin-plates-and-shells.md) | 2026-11-15 | registration | F-641 (done) | Smoothed aggregation for thin plates and shells: cause and vertex-patch smoother | done: cause is the smoother | ADR 0577 |
+| [ADR 0577](../../docs/adr/0577-f659-registration-vertex-patch-smoother-on-a-mesh-sequence-of-thin-plates.md) | 2026-11-15 | registration | F-659 (done) | Vertex-patch smoother on a thin-plate mesh sequence | done (34 cases) | — |
+
+### Open questions (second half)
+
+- Rerun the heavy timing record of F-624 when no agent is building (ADR 0566 Q1): recommendation (a), then done if T1 holds.
+- Case-file key, default factor, `SparseMinimumDegree` (ADR 0542 Q3, ADR 0566 Q3): open.
+- A convex switch for ADR 0517's interference with the total Lagrangian body (ADR 0542 Q4): needs the maintainer.
+
 ## Related
 
 - [[rcfd-fem]], [[rcfd-dist]], [[rcfd-gpu]], [[rcfd-linalg]], [[structural-solver]], [[roadmap-structural-solver]]

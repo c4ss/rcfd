@@ -53,6 +53,47 @@ Modal analysis and linear buckling of [[rcfd-fem]] beyond the basic tier: the co
 - ADR 0386 Q1 was taken on the standing instruction of 2026-11-11 (option (a): `modal_analysis` of a cyclic model gives `k = 0`, documented); Q2 became F-489.
 - F-486: "The maintainer decides done" (roadmap gap).
 
+## Second half of the category (ADRs 0556 to 0744, job p3-structural-b)
+
+Shell and beam whirl on a cyclic sector are added to [[adr-thread-structural-rotordynamics]]; hyperelastic structural elements on the cyclic path to [[adr-thread-structural-hyperelastic-and-follower]].
+
+### Current state (second half)
+
+- **Buckling eigensolver** (`rcfd-linalg` `lowest_buckling_factors`): a Sturm count just above the wanted set when the subspace holds no further positive Ritz value (F-642, ADR 0559, done) and one restart sized by Sturm counts when it holds too few (F-650, ADR 0564, done). Only inputs that were refused can change.
+- **Shells in the cyclic constraint**, opt-in `CyclicOptions::shells`: the rotation unknowns of Shell4 and Shell3 nodes rotated by the same `R` as the translations (F-628, ADR 0556, done); interpolated boundaries and axis nodes with `CyclicOptions::shell_extensions` (F-648, ADR 0575, partial: the one-sided 2:3 boundary I2b `4.17e-2` against `2e-2`); two-sided shell edge ties for non-matching boundaries remove that soft line (F-662, ADR 0583, done).
+- **Beam2 in the cyclic constraint**, first opt-in `CyclicOptions::beams` (F-672, ADR 0595), `full_rotor` and expansion with the qualifier `full_rotor_beams` (F-674, ADR 0601, done). **Default changed:** the maintainer approved on 2026-11-18 "accepting Beam2 elements in the cyclic constraint by default"; ADR 0744 (2026-11-19, done) made it: a cyclic constraint with the shells option takes Beam2 without `beams`, the full ring within `8.3e-13` (limit `1e-10`), every model accepted before keeps its bits, NC3 of ADR 0556, A-B of ADR 0593 and NC3 of ADR 0595 retired as ignored records with restated copies. On 2026-11-21 the maintainer approved lifting the two remaining opt-ins (whirl paths and `full_rotor`) in one further registration (ADR 0744 answers); F-672 stays partial until that is made.
+- **Free-sector centrifugal pre-stress.** The cyclic constraint leaves two rigid motions at index 0 (axial translation and rotation about the axis); two reaction-free gauge constraints at one interior node give the free stress (F-680, ADR 0606, partial: M9 not caught); on solid and shell sectors (F-683, ADR 0611, partial) and on Tet10, layered-shell and orthotropic sectors (F-686, ADR 0633, done). ADR 0633 found that the layup centrifugal load of ADR 0502 drops the force term `m1 Omega^2 r_perp(e_3)`: a spurious torque of relative size `~ m1 / (m0 rho)` on a layup with a first mass moment; an opt-in `SolidModel::set_layup_first_moment_force` adds it (F-709, ADR 0635, done). A fan wheel is mounted, so the free-sector opt-in is "not urgent" (ADR 0602 Q1, ADR 0606 Q2).
+
+### ADRs (second half)
+
+| ADR | Date | Kind | Item | Question | Outcome | Superseded by / followed by |
+|---|---|---|---|---|---|---|
+| [ADR 0556](../../docs/adr/0556-f628-registration-shells-in-the-cyclic-constraint.md) | 2026-11-15 | registration | F-628 (done) | Shells in the cyclic constraint (rotation unknowns rotated) | done (`CyclicOptions::shells`) | ADR 0561, ADR 0575 |
+| [ADR 0559](../../docs/adr/0559-f642-registration-buckling-eigensolver-on-sign-asymmetric-spectra.md) | 2026-11-15 | registration | F-642 (done) | Buckling eigensolver on sign-asymmetric spectra (Sturm count above the wanted set) | done: `1.2e-15` vs `1e-9` | ADR 0564 |
+| [ADR 0564](../../docs/adr/0564-f650-registration-buckling-eigensolver-restart-when-the-subspace-holds-too-few-positive-ritz-values.md) | 2026-11-15 | registration | F-650 (done) | Buckling eigensolver restart when too few positive Ritz values | done | — |
+| [ADR 0575](../../docs/adr/0575-f648-registration-shells-with-interpolated-cyclic-boundaries-and-axis-nodes.md) | 2026-11-15 | registration | F-648 (partial) | Shells with interpolated cyclic boundaries and axis nodes | partial: I2b `4.17e-2` vs `2e-2` | ADR 0583 |
+| [ADR 0583](../../docs/adr/0583-f662-registration-two-sided-shell-edge-ties-for-non-matching-cyclic-boundaries.md) | 2026-11-15 | registration | F-662 (done) | Two-sided shell edge ties for non-matching cyclic boundaries | done | — |
+| [ADR 0595](../../docs/adr/0595-f672-registration-beam2-elements-in-the-cyclic-constraint.md) | 2026-11-15 | registration | F-672 (partial) | Beam2 elements in the cyclic constraint (opt-in `beams`) | done; default lift approved 2026-11-18 | ADR 0744 |
+| [ADR 0601](../../docs/adr/0601-f674-registration-full-rotor-and-expansion-of-a-cyclic-sector-with-beam2.md) | 2026-11-15 | registration | F-674 (done) | `full_rotor` and expansion of a cyclic sector with Beam2 | done (qualifier `full_rotor_beams`) | ADR 0744 |
+| [ADR 0606](../../docs/adr/0606-f680-registration-the-centrifugal-pre-stress-of-a-free-cyclic-sector.md) | 2026-11-15 | registration | F-680 (partial) | Centrifugal pre-stress of a free cyclic sector (reaction-free gauge) | partial: M9 not caught | ADR 0611 |
+| [ADR 0611](../../docs/adr/0611-f683-registration-the-free-sector-prestress-on-solid-and-shell-sectors.md) | 2026-11-15 | registration | F-683 (partial) | Free-sector pre-stress on solid and shell sectors | partial (amendment) | ADR 0633 |
+| [ADR 0633](../../docs/adr/0633-f686-registration-the-free-sector-prestress-on-tetrahedral-layered-shell-and-orthotropic-sectors.md) | 2026-11-16 | registration | F-686 (done) | Free-sector pre-stress on Tet, layered-shell and orthotropic sectors | done; layup load finding | ADR 0635 |
+| [ADR 0635](../../docs/adr/0635-f709-registration-the-torque-free-centrifugal-load-of-a-layup-with-a-first-mass-moment.md) | 2026-11-16 | registration | F-709 (done) | Torque-free centrifugal load of a layup with a first mass moment | done (opt-in) | — |
+| [ADR 0744](../../docs/adr/0744-f672-registration-beam2-in-the-cyclic-constraint-by-default.md) | 2026-11-19 | amendment (default change) | F-672 (partial) | Beam2 in the cyclic constraint by default | done: full ring within `8.3e-13`; further lift approved 2026-11-21 | — |
+
+### Key numbers and limits (second half)
+
+- Monosymmetric I buckling under `-M_ref` with default options: `178.684212800573` at 16 elements, `1.2e-15` from the amended run of ADR 0553 (ADR 0559); at `L = 1.5`: `610.71097991747`, `2333.79172623103`, `5256.57773727524` (ADR 0564).
+- Beam2 wheel sector with shells alone: `6.6e-13` (static `k = 0`), `6.1e-13` (harmonic static), `8.3e-13` (eigenvalues of `k = 0..3`), limit `1e-10` (ADR 0744).
+- Layup spurious torque: about `7e-3` of the force times the radius for `m1 = 4e-3 m`, `m0 rho ~ 0.6 m` (ADR 0633).
+
+### Open questions (second half)
+
+- The default for the torque-free layup load (ADR 0635 Q1): recommendation flip after the maintainer's approval, since it changes centrifugal results of every layup with `m1 != 0`; not taken.
+- Supported or constrained sectors with the free-sector opt-in (ADR 0606 Q2): keep the refusal.
+- Non-nested non-matching boundaries (ADR 0583 Q3): follow-up only when one appears; docs keep recommending the finer side as the high side.
+- `mp = 0` in the buckling restart (ADR 0564 Q1): leave refused.
+
 ## Related
 
 - [[cyclic-symmetry]], [[mpc-transformation]], [[rcfd-fem]], [[structural-solver]], [[roadmap-structural-solver]]

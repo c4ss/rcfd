@@ -1,7 +1,7 @@
 ---
 type: entity
 tags: [fan, validation, rotating]
-sources: [doc-glossary, doc-readme, doc-roadmap-overview, doc-meshing, doc-validation-data, doc-milestone-fan, doc-reference-data-f870-fan01-design-point, doc-designs-exp-rot, doc-designs-m-fan-b, doc-changelog, doc-milestones-json]
+sources: [doc-glossary, doc-readme, doc-roadmap-overview, doc-meshing, doc-validation-data, doc-milestone-fan, doc-reference-data-f870-fan01-design-point, doc-designs-exp-rot, doc-designs-m-fan-b, doc-changelog, doc-milestones-json, adr-thread-fan01-rotating-solve, adr-thread-sliding-mesh-rotor-stator]
 created: 2026-11-22
 updated: 2026-11-22
 status: draft
@@ -36,6 +36,12 @@ status: draft
 - Release status: "The FAN-01 reference fan does not reach its operating point ... the cause has not been found" ([[doc-changelog]]). It is the reference of the `fan` milestone ([[doc-milestones-json]]).
 - FAN-01 is not the computer-fan target, which has different physics ([[computer-fan-target]]).
 
+### Rotating-solve thread (P3, moving meshes)
+
+- The ADR chain of the rotating solve is collected on [[adr-thread-fan01-rotating-solve]] (F-126 partial; the wave ADRs are added by the records job).
+- The transient rotor-stator path exists from a case file only on bladeless cylindrical-interface annuli and sectors, laminar, Euler, no restart (F-303, F-711); no ADR of the moving-meshes list runs it on the FAN-01 passage ([[adr-thread-sliding-mesh-rotor-stator]]).
+- On 2026-11-18 the maintainer held several solver default changes "until the fan path needs it" (F-721, F-724, F-364, F-365, F-775) ([[adr-thread-fan01-rotating-solve]]).
+
 ## Related
 
 - [[simulation-milestones]]
@@ -43,6 +49,7 @@ status: draft
 - [[known-miss]]
 - [[computer-fan-target]], [[gci-richardson]], [[design-loop]], [[validation-data-pack]]
 - [[doc-milestone-fan]], [[doc-designs-exp-rot]], [[doc-designs-m-fan-b]]
+- [[adr-thread-fan01-rotating-solve]], [[sliding-mesh]]
 
 ## Open questions
 

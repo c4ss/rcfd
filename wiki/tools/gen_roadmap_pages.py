@@ -45,7 +45,8 @@ def adr_counts():
 
 
 def cell(s):
-    return (s or "").replace("|", "\\|").replace("\n", " ").strip()
+    s = (s or "").replace("|", "\\|").replace("\n", " ").strip()
+    return s.replace("[[", "\\[\\[").replace("]]", "\\]\\]")  # roadmap text is not a wikilink
 
 
 def main():

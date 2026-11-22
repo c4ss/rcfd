@@ -67,6 +67,40 @@ Modes of a rotating part in [[rcfd-fem]]: stress stiffening by the centrifugal p
 - ADR 0424 Q1: a negative support as a model support (e.g. a magnetic bearing's negative axial stiffness in a case file).
 - F-500, F-505, F-555: "The maintainer decides done" (roadmap gaps).
 
+## Second half of the category (ADRs 0527 to 0602, job p3-structural-b)
+
+The cyclic constraint with shells and beams, `full_rotor` and the free-sector centrifugal pre-stress are added to [[adr-thread-structural-modal-buckling-cyclic]].
+
+### Current state (second half)
+
+- **Split-mode Schur error.** Opt-in `RotatingOptions::corrected_frequency` and `SplitSchur::Perturbation` (one complement solve per split mode, second-order Rayleigh-Schroedinger sum) (F-584, ADR 0527, partial: G1, G2, G4 missed, a3 `0.38` against `0.01`); `SplitSchur::PerturbationChecked` with the series ratio `|delta_2/delta_1|` and a dense fallback above `0.08` (F-612, ADR 0535, partial: the cost clause b4 `0.83` against `0.5`).
+- **Shell whirl.** With `CyclicOptions::shells` the rotating sector's modes, pre-stressed and spin-softened modes and Campbell table take Shell4 and Shell3; the whirl paths take them through a new Coriolis matrix of the shell director (`coriolis_matrix_with_shells`, `RotatingOptions::shells`) (F-647, ADR 0561, partial: CO1 missed in run 1, a library defect). Independent references: the free thin ring as a cylindrical band against the closed form of the extensible thin ring in the rotating frame (F-654, ADR 0569, partial: a sign in the reference and a negative control's rounding limit); the spinning annular disc of shells, the first independent reference of the rotary block `m2 W^T [a x] W` (F-657, ADR 0573, done).
+- **Beam whirl.** A Coriolis matrix of the Beam2 section kinematics `u + theta x s` for the whirl paths on a cyclic beam sector (F-675, ADR 0598, partial by an amended check); an independent reference, the free spinning Beam2 ring at nodal diameters 2 and 3 against the exact rotating-frame solution (F-679, ADR 0602, done).
+- **Latest decision:** the whirl paths and `full_rotor` take a beam sector without `CyclicOptions::beams` and `full_rotor_beams`; approved by the maintainer on 2026-11-21 ("Yes, both", ADR 0744 answers), to be made "in one further registration under F-672"; not made at the snapshot.
+
+### ADRs (second half)
+
+| ADR | Date | Kind | Item | Question | Outcome | Superseded by / followed by |
+|---|---|---|---|---|---|---|
+| [ADR 0527](../../docs/adr/0527-f584-registration-corrected-frequency-and-perturbation-schur-error.md) | 2026-11-14 | registration | F-584 (partial) | Corrected frequency and second-order perturbation Schur Ritz error of split modes | partial: G1, G2, G4 missed (a3 0.38 vs 0.01) | ADR 0535 |
+| [ADR 0535](../../docs/adr/0535-f612-registration-accuracy-indicator-and-dense-fallback-of-the-perturbation-schur-error.md) | 2026-11-14 | registration | F-612 (partial) | Series-ratio indicator of the perturbation Schur error and dense fallback | partial: J6 cost 0.83 vs 0.5 | — |
+| [ADR 0561](../../docs/adr/0561-f647-registration-shells-on-the-rotating-cyclic-paths-and-the-full-rotor.md) | 2026-11-15 | registration | F-647 (partial) | Shells on rotating cyclic paths and full rotor (shell-director Coriolis) | partial: CO1 missed run 1 (library defect) | ADR 0569 |
+| [ADR 0569](../../docs/adr/0569-f654-registration-independent-whirl-reference-for-spinning-shells.md) | 2026-11-15 | registration | F-654 (partial) | Independent whirl reference for spinning shells (free thin ring) | partial: KA sign in reference, NC1 rounding | ADR 0573 |
+| [ADR 0573](../../docs/adr/0573-f657-registration-whirl-of-a-spinning-annular-disc-of-shells.md) | 2026-11-15 | registration | F-657 (done) | Whirl of a spinning annular disc of shells (rotary block of shell Coriolis) | done | — |
+| [ADR 0598](../../docs/adr/0598-f675-registration-rotating-paths-on-a-cyclic-sector-of-beams.md) | 2026-11-15 | registration | F-675 (partial) | Rotating paths on a cyclic sector of beams (Beam2 Coriolis) | partial | ADR 0602 |
+| [ADR 0602](../../docs/adr/0602-f679-registration-an-independent-whirl-reference-for-spinning-beams.md) | 2026-11-15 | registration | F-679 (done) | Independent whirl reference for spinning beams (free Beam2 ring) | done | ADR 0606 |
+
+### Key numbers and limits (second half)
+
+- Perturbation threshold of `PerturbationChecked`: `0.08` (the truncation miss is about the square of the ratio, so 1 percent is crossed at `0.1`); b3 `6.3e-3` against `1e-2` (ADR 0535).
+- Free thin ring (`R = 0.1 m`, `t = 0.5 mm`, `L = 5 mm`, `nu = 0`, 32 sectors): frequencies within `0.25 (k Delta)^2` (Shell4) and `0.5 (k Delta)^2` (Shell3) of the closed form; inextensional split `4 n Omega / (n^2 + 1)` (ADR 0569).
+
+### Open questions (second half)
+
+- The public `coriolis_matrix` and `gyro::gyroscopic_matrix` stay solid-only (ADR 0561 Q2, ADR 0598 Q2): recommendation leave.
+- Rotary spin softening and `t^2/12` shell geometric terms are below the resolution of the checks (ADR 0573 Q2): recommendation leave.
+- `SplitSchur::Perturbation` cost (ADR 0535 Q1): recommendation keep as built.
+
 ## Related
 
 - [[campbell-diagram]], [[cyclic-symmetry]], [[rcfd-fem]], [[structural-solver]], [[roadmap-structural-solver]]
