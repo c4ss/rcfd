@@ -992,7 +992,7 @@ exist, and Phase 9 items are stretch. Phase numbers 5 and 6 may run in parallel 
 
 ## Phase 9 - Advanced physics and scale (stretch)
 
-590 items: 260 done, 235 partly done, 95 not started.
+591 items: 260 done, 235 partly done, 96 not started.
 
 - [~] **F-055** Volume-of-fluid free-surface multiphase (interface compression) and surface tension
   - depends on: F-029, F-125
@@ -3642,3 +3642,7 @@ exist, and Phase 9 items are stretch. Phase numbers 5 and 6 may run in parallel 
   - depends on: F-879, F-286
   - acceptance: Every limit not stated here is registered in the ADR before the run. The pimple step keeps, opt-in and with defaults unchanged bit for bit (baseline hashes unchanged), the largest velocity change of each outer iteration of a step; a closed-form or two-route check registered in the ADR shows the recorded values are the changes of the iterations. Check H of ADR 0183 is then run as registered there and in ADR 0766, with the outer-iteration rule of ADR 0183 as written (the velocity change of the 5th outer iteration at most 1e-2 of the 1st in at least 99 % of the window's steps), and classes the hub pocket as steady, physical or numerical, or is recorded as not deciding.
   - note: Lead (2026-11-22): entered on the maintainer's answer of that day ("Yes, all six") to question 1 of ADR 0766, with the title, dependencies and acceptance of the agent's proposal file docs/roadmap/proposals/0766-F-879.json as written. Not issued yet.
+- [ ] **F-886** Sources read for three formulas recorded from memory: the Schnerr-Sauer model (ADR 0056), the effectiveness-NTU relations (ADR 0039) and the GCI of F-870 (ADR 0762)
+  - depends on: none
+  - acceptance: Every limit not stated here is registered in the ADR before any change. For each of the three records, the open source named here is read and cited with its locator in an addendum of the ADR (ADRs stay append-only) and in the item's reference-data fragment: Folden and Aschmoneit (2023, CC BY 4.0), eqs. 43 and 45, for the Schnerr-Sauer model and the Rayleigh growth rate of ADR 0056 (reference data: 'unverified'); Lienhard, A Heat Transfer Textbook, eqs. 3.17, 3.20 and 3.21, for the effectiveness and NTU relations of ADR 0039 (reference data: 'formula from memory ... the book was not accessed'); Celik et al. (2008), Eq. 7, for the GCI of ADR 0762 ('Citation from memory'). Each addendum states, term by term, whether the implemented form agrees with the source, and records a difference as a finding, not a fix. The superseded 'unverified' or 'from memory' marks are struck through with the source cited, not deleted. No code, default or test changes (baseline hashes unchanged).
+  - note: Lead (2026-11-22): entered on the maintainer's answer of that day ("Register a docs item") to the wiki's question on repo citations. The matches were found by the wiki's foundations pass and are recorded on wiki/concepts/cavitation-and-mass-transfer-models.md, wiki/concepts/heat-exchanger-effectiveness-ntu.md and wiki/concepts/gci-richardson.md, with the sources' pages under wiki/sources/ref-*. Whether the ASME-hosted copy of Celik et al. read there may be cited is for the registration to state from that copy's own terms. Not issued yet.
