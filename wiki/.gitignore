@@ -1,0 +1,6 @@
+# Obsidian per-user state; app.json, core-plugins.json, templates.json are shared vault config
+.obsidian/workspace*.json
+.obsidian/cache
+.obsidian/plugins/
+.obsidian/themes/
+.trash/

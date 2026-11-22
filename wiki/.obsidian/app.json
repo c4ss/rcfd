@@ -1,0 +1,9 @@
+{
+  "attachmentFolderPath": "raw/assets",
+  "newFileLocation": "folder",
+  "newFileFolderPath": "sources",
+  "newLinkFormat": "shortest",
+  "useMarkdownLinks": false,
+  "alwaysUpdateLinks": true,
+  "userIgnoreFilters": ["tools/"]
+}
