@@ -151,7 +151,10 @@ fn f885_record_two_routes() {
                 cumulative_differs = true;
             }
         }
-        assert!(cumulative_differs, "T4: the cumulative change is told apart at step {n}");
+        assert!(
+            cumulative_differs,
+            "T4: the cumulative change is told apart at step {n}"
+        );
     }
     assert_eq!(sol.outer_velocity.len(), 3);
 
@@ -183,7 +186,10 @@ fn f885_record_two_routes() {
         on.step(dt);
         off.step(dt);
     }
-    assert!(off.outer_velocity.is_empty(), "T5: nothing is kept with the setting off");
+    assert!(
+        off.outer_velocity.is_empty(),
+        "T5: nothing is kept with the setting off"
+    );
     let ub = |s: &PimpleSolver| -> Vec<u64> { s.u.values.iter().flat_map(|v| v.map(f64::to_bits)).collect() };
     let fb = |x: &[f64]| -> Vec<u64> { x.iter().map(|v| v.to_bits()).collect() };
     assert_eq!(ub(&on), ub(&off), "T5: u");
@@ -787,7 +793,11 @@ fn read_f879(path: &Path, dt: f64, steps: usize) -> Series {
 fn read_merged(site: &Path, outer: &Path, dt: f64, steps: usize) -> Series {
     let mut s = read_f879(site, dt, steps);
     let o = data_lines(outer);
-    assert_eq!(o.len(), s.rows.len(), "the outer record and the site record have the same steps");
+    assert_eq!(
+        o.len(),
+        s.rows.len(),
+        "the outer record and the site record have the same steps"
+    );
     for (r, c) in s.rows.iter_mut().zip(&o) {
         assert_eq!(c.len(), 7, "{c:?}");
         assert_eq!(c[0].parse::<usize>().unwrap(), r.step);
@@ -1019,7 +1029,8 @@ fn f885_rule_and_classes_on_known_signals() {
     let pair = |ga: &dyn Fn(f64) -> f64, gb: &dyn Fn(f64) -> f64, qa: f64, qb: f64| {
         pair_p(ga, gb, &|_| outer(qa), &|_| outer(qb), pgood)
     };
-    let cases: Vec<(&str, Outcome, Outcome)> = vec![
+    let cases: Vec<(&str, Outcome, Outcome)> =
+        vec![
         (
             "small oscillation in both",
             pair(&sine(0.05, 100.0), &sine(0.05, 100.0), good, good),
@@ -1085,7 +1096,13 @@ fn f885_rule_and_classes_on_known_signals() {
     cut.rows.truncate(4000);
     let (a, b) = (
         summarise(&cut),
-        summarise(&synthetic(0.5 * H_DT, 2 * H_STEPS, sine(0.05, 100.0), |_| outer(good), pgood)),
+        summarise(&synthetic(
+            0.5 * H_DT,
+            2 * H_STEPS,
+            sine(0.05, 100.0),
+            |_| outer(good),
+            pgood,
+        )),
     );
     assert_eq!(verdict(&a, &b), (Class::NotEvaluable, Verdict::DoesNotDecide));
 
@@ -1094,7 +1111,13 @@ fn f885_rule_and_classes_on_known_signals() {
     let bad_first = |n: usize, d: [f64; 5]| move |k: usize| if (2750..2750 + n).contains(&k) { d } else { outer(good) };
     let steady = |da: &dyn Fn(usize) -> [f64; 5]| {
         let a = summarise(&synthetic(H_DT, H_STEPS, sine(0.05, 100.0), da, pgood));
-        let b = summarise(&synthetic(0.5 * H_DT, 2 * H_STEPS, sine(0.05, 100.0), |_| outer(good), pgood));
+        let b = summarise(&synthetic(
+            0.5 * H_DT,
+            2 * H_STEPS,
+            sine(0.05, 100.0),
+            |_| outer(good),
+            pgood,
+        ));
         (a.share_rule, verdict(&a, &b))
     };
     let meets = (Class::Steady, Verdict::Steady);
@@ -1102,8 +1125,16 @@ fn f885_rule_and_classes_on_known_signals() {
     let c5: Vec<(&str, (f64, Outcome), Outcome)> = vec![
         ("d5/d1 = 1e-3 everywhere", steady(&|_| outer(1e-3)), meets),
         ("d5/d1 = 0.05 everywhere", steady(&|_| outer(0.05)), fails),
-        ("d5/d1 = 0.05 in 2 % of the window", steady(&bad_first(55, outer(0.05))), fails),
-        ("d5/d1 = 0.05 in 0.5 % of the window", steady(&bad_first(14, outer(0.05))), meets),
+        (
+            "d5/d1 = 0.05 in 2 % of the window",
+            steady(&bad_first(55, outer(0.05))),
+            fails,
+        ),
+        (
+            "d5/d1 = 0.05 in 0.5 % of the window",
+            steady(&bad_first(14, outer(0.05))),
+            meets,
+        ),
         (
             "d4/d1 = 0.5 with d5/d1 = 1e-3: the 5th is read",
             steady(&|_| [1.0, 0.8, 0.6, 0.5, 1e-3]),
@@ -1131,12 +1162,19 @@ fn f885_short_run_holds_the_state() {
     assert_eq!(a.rows.len(), SHORT);
     let last = a.rows[SHORT - 1];
     assert!(
-        a.rows.iter().all(|r| r.dv.iter().all(|d| d.is_finite()) && r.dv[0] > 0.0),
+        a.rows
+            .iter()
+            .all(|r| r.dv.iter().all(|d| d.is_finite()) && r.dv[0] > 0.0),
         "S2: the velocity record"
     );
     let w_max = last.w.iter().fold(0.0f64, |m, &v| m.max(v));
     for r in &a.rows {
-        println!("S2 step {}: d1..d5 {}, d5/d1 {:.4e}", r.step, sci(&r.dv), r.dv[4] / r.dv[0]);
+        println!(
+            "S2 step {}: d1..d5 {}, d5/d1 {:.4e}",
+            r.step,
+            sci(&r.dv),
+            r.dv[4] / r.dv[0]
+        );
     }
     println!(
         "S1: after {SHORT} steps: largest site speed {w_max:.6} m/s, torque {:.6} N m, dp_ts {:.4} Pa",
@@ -1253,8 +1291,14 @@ fn heavy(name: &str, dt: f64, steps: usize) {
             }
         }
     }
-    println!("F885 {name} R0: {misses} values beyond {R0_TOL:e}; largest relative difference {:.3e} ({})", worst.0, worst.1);
-    assert_eq!(misses, 0, "R0: the run does not reproduce the committed ADR 0766 record");
+    println!(
+        "F885 {name} R0: {misses} values beyond {R0_TOL:e}; largest relative difference {:.3e} ({})",
+        worst.0, worst.1
+    );
+    assert_eq!(
+        misses, 0,
+        "R0: the run does not reproduce the committed ADR 0766 record"
+    );
 }
 
 /// H(dt) of ADR 0183 D5: 5 498 steps of 4.605e-5 s.
