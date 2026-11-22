@@ -559,3 +559,22 @@ needs a person: the thesis has to be opened in a browser and the uncertainty and
 Read with the result, for the next reader: that 63 per cent of the missing pressure rise is the outlet dynamic pressure
 of a rotor-only passage is the agent's inference from the numbers and from ADR 0086's extrapolation; no run of this work
 shows it. The comparison with the measured profiles behind the rotor is the run that would.
+
+## Answers of the maintainer (2026-11-22)
+
+The lead put the open questions of ADR 0760, 0761 and 0762 to the maintainer on 2026-11-22 as seven questions, each with the
+agent's recommendation, which the lead shares, and asked whether to take all seven. The maintainer answered:
+"Yes, all seven".
+
+For this ADR:
+
+1. Option (a): a person opens the thesis of the measurement and the SAE paper in a browser and records the stated
+   uncertainty, with the page. Roadmap item F-877. It is not issued to an agent: the site of the thesis refuses automated
+   access, and the reading waits for the maintainer or a person he names.
+2. Option (a): the air density is read with it (F-877).
+3. The four follow-ups are entered in the recommended order: F-877 (the reading), F-878 (the measured profiles behind
+   the rotor against the solve), F-879 (check H of ADR 0183), F-880 (the outlet as on the rig). F-878 and F-879 are
+   issued, as ADR 0765 and ADR 0766. F-880 is entered and not issued: it is issued only if F-878 shows that the missing
+   pressure rise is the installation's.
+4. Neither the compared quantity nor the convergence rule of F-870 is decided now; both are put again when F-878 and
+   F-879 have reported.

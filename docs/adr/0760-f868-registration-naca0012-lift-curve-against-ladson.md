@@ -484,3 +484,12 @@ less than the differences themselves, which are at most 0.0143.
 
 Not read by the agent and to be closed by a citation batch: NASA TM 4074 itself (the data file was fetched and its
 checksum compared).
+
+## Answers of the maintainer (2026-11-22)
+
+The lead put the open questions of ADR 0760, 0761 and 0762 to the maintainer on 2026-11-22 as seven questions, each with the
+agent's recommendation, which the lead shares, and asked whether to take all seven. The maintainer answered:
+"Yes, all seven".
+
+For this ADR: question 1, option (a): F-868 stays partial, and an unsteady arm at 17 degrees is registered under F-868.
+It is issued as ADR 0764. Question 2 was the lead's and is answered above.

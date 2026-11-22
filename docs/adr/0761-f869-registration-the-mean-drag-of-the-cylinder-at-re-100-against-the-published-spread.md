@@ -475,3 +475,15 @@ Read with the result, for the next reader: the band was registered with the earl
 discloses; nine of the eleven published values are quotations in the two papers that were read; and the comparison uses
 the second-order time step, which is an option. The two questions are the maintainer's and are put with the agent's
 recommendations.
+
+## Answers of the maintainer (2026-11-22)
+
+The lead put the open questions of ADR 0760, 0761 and 0762 to the maintainer on 2026-11-22 as seven questions, each with the
+agent's recommendation, which the lead shares, and asked whether to take all seven. The maintainer answered:
+"Yes, all seven".
+
+For this ADR: question 1, option (a): F-869 stays partial, and a follow-up registration under F-869 runs the mesh
+sequence at dt 0.025 with the far field at 30 D or more, with the same band; done when its fine value and its Richardson
+value are in the band. It is issued as ADR 0763. Question 2, option (a): F-869 is accepted as shown with the option
+`time_scheme = Bdf2`, and the roadmap note says so; the default of the transient solver is not changed and no item is
+entered for it.
