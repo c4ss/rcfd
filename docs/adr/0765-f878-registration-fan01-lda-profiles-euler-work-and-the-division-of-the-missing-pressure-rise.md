@@ -410,3 +410,300 @@ limit is changed by this amendment, and none of those numbers is recorded.
 M6 of the table of mutations cannot be applied as written: a point is turned by all nine multiples of the pitch, so
 there is no sign of a rotation to change. It is replaced by: the sign of the circumferential unit vector in the
 decomposition of a cell's velocity, caught by `f878_sampler_closed_forms`.
+
+## Addendum 1: results
+
+Written 2026-11-22, after the runs. Commits on the branch, from main 2bab1863: 2d5f94d9 (this registration, alone),
+2a008ec9 (amendment 1, before any registered run and before the commit of the test file), 6f7bb332 (the test file, the
+transcription of the record and its scripts), 8a2ea1f7 (the mutation patch, the reference-data fragment, the paragraph
+of `docs/validation-data.md`), 3f458137 (the recorded state, the logs of the three runs and the analysis), and the
+commit of this addendum with the proposal file, the acceptance test kept as a known miss and the log of the fourth run.
+The three registered solves were made from 6f7bb332; their logs are `B1.log`, `B2.log` and `B3.log` in
+`docs/investigations/f878-fan01-lda-profiles/`, with `analyse.py`, which forms every number below from them, and its
+output `analysis.txt`. The test file forms the verdicts a second time, in Rust, from the recorded constants; the two
+agree.
+
+### The sentence this work was to deliver
+
+**Of the missing 52.47 Pa it cannot be told from the measured velocity profiles what part is the rotor's and what part
+the installation's.** By the registered rule the rotor's share lies between -34.4 Pa and +59.1 Pa (bands 23.8 and 25.0
+Pa), and the installation's between -6.6 Pa and +86.9 Pa; neither end is on one side of half the missing pressure. The
+reason is the one the registration named: an LDA measures no pressure, so the loss of the measured rotor is not known.
+
+What the profiles do show, with numbers: the simulated rotor does the work of the measured one and leaves the same
+kinetic energy behind. Over the measured span its Euler head is 226.86 Pa against 220.02 Pa measured, and the kinetic
+energy that leaves it 102.28 Pa against 99.20 Pa. So **if the measured rotor loses what the simulated one does, the
+rotor's share is -3.8 Pa and the installation's 56.2 Pa, +-31.1 Pa**: the missing pressure is not in the work of the
+rotor or in its outflow velocity. It is in what the registration called `Rec - L`, recovery behind the plane less loss
+before it: +5.6 Pa on the rig, -50.6 Pa in the solve (12.3 Pa recovered, 62.9 Pa lost). Whether the rig recovers more
+or its rotor loses less, the velocities cannot say.
+
+### The comparison at each radius (C1, C2)
+
+FAN-01 design point, B1 (38 184 cells) at 8000 iterations, x = 90 mm; velocities in m/s. The band is `U_num + S + T` as
+registered; `u_meas` is zero because no source states one.
+
+| r / 250 mm | `c_x` LDA | B1 | B2 | B3 | band | B1 - LDA | | `c_t` LDA | B1 | B2 | B3 | band | B1 - LDA | |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| 0.532 | 10.11 | 11.269 | 10.981 | 10.754 | 0.890 | +1.159 | **MISS** | 9.77 | 8.156 | 8.226 | 9.028 | 0.251 | -1.614 | **MISS** |
+| 0.552 | 10.66 | 11.345 | 11.065 | 10.880 | 0.924 | +0.685 | within | 8.91 | 7.810 | 8.023 | 8.824 | 0.737 | -1.100 | **MISS** |
+| 0.572 | 10.88 | 11.446 | 11.212 | 10.842 | 0.718 | +0.566 | within | 8.56 | 7.669 | 7.825 | 8.743 | 0.478 | -0.891 | **MISS** |
+| 0.592 | 10.91 | 11.407 | 10.986 | 10.801 | 1.329 | +0.497 | within | 8.25 | 7.657 | 7.445 | 8.764 | 0.672 | -0.593 | within |
+| 0.612 | 10.98 | 11.232 | 11.038 | 10.891 | 0.604 | +0.252 | within | 7.94 | 7.433 | 7.387 | 8.826 | 0.152 | -0.507 | **MISS** |
+| 0.632 | 11.13 | 11.246 | 11.083 | 10.672 | 0.509 | +0.116 | within | 7.60 | 7.409 | 7.378 | 6.898 | 0.119 | -0.191 | **MISS** |
+| 0.652 | 11.23 | 10.885 | 10.534 | 10.692 | 1.075 | -0.345 | within | 7.31 | 7.269 | 7.236 | 6.906 | 0.122 | -0.041 | within |
+| 0.672 | 11.25 | 10.924 | 10.549 | 10.716 | 1.151 | -0.326 | within | 7.13 | 7.224 | 7.243 | 6.914 | 0.076 | +0.094 | **MISS** |
+| 0.692 | 11.36 | 10.558 | 10.545 | 10.732 | 0.063 | -0.802 | **MISS** | 6.76 | 7.124 | 7.236 | 6.944 | 0.362 | +0.364 | **MISS** |
+| 0.712 | 11.47 | 10.588 | 10.481 | 10.739 | 0.340 | -0.882 | **MISS** | 6.48 | 7.074 | 6.598 | 6.949 | 1.467 | +0.594 | within |
+| 0.732 | 11.56 | 10.535 | 10.481 | 10.742 | 0.170 | -1.025 | **MISS** | 6.21 | 6.661 | 6.590 | 6.949 | 0.238 | +0.451 | **MISS** |
+| 0.752 | 11.62 | 10.551 | 10.487 | 10.670 | 0.198 | -1.069 | **MISS** | 5.94 | 6.643 | 6.580 | 6.080 | 0.200 | +0.703 | **MISS** |
+| 0.772 | 11.72 | 10.744 | 10.488 | 10.673 | 0.791 | -0.976 | **MISS** | 5.64 | 6.048 | 6.569 | 6.074 | 1.594 | +0.408 | within |
+| 0.792 | 11.83 | 10.755 | 11.013 | 10.679 | 0.798 | -1.075 | **MISS** | 5.31 | 6.028 | 5.603 | 6.067 | 1.307 | +0.718 | within |
+| 0.812 | 11.96 | 11.179 | 11.013 | 10.696 | 0.523 | -0.781 | **MISS** | 4.99 | 5.432 | 5.586 | 6.058 | 0.473 | +0.442 | within |
+| 0.832 | 12.02 | 11.159 | 11.009 | 10.691 | 0.470 | -0.861 | **MISS** | 4.70 | 5.429 | 5.598 | 6.049 | 0.524 | +0.729 | **MISS** |
+| 0.852 | 11.94 | 11.607 | 11.257 | 10.703 | 1.102 | -0.333 | within | 4.55 | 5.109 | 5.202 | 6.044 | 0.299 | +0.559 | **MISS** |
+| 0.872 | 11.54 | 11.583 | 11.248 | 8.440 | 1.044 | +0.043 | within | 4.52 | 5.110 | 5.223 | 6.490 | 0.351 | +0.590 | **MISS** |
+| 0.892 | 10.37 | 11.579 | 11.257 | 8.484 | 0.998 | +1.209 | **MISS** | 5.02 | 5.099 | 5.236 | 6.503 | 0.417 | +0.079 | within |
+| 0.912 | 8.42 | 11.203 | 8.542 | 8.519 | 8.157 | +2.783 | within | 5.93 | 6.158 | 7.665 | 6.502 | 4.621 | +0.228 | within |
+| 0.932 | 5.97 | 11.193 | 8.523 | 8.569 | 8.176 | +5.223 | within | 6.96 | 6.205 | 7.676 | 6.500 | 4.504 | -0.755 | within |
+| 0.952 | 4.43 | 6.818 | 8.501 | 8.626 | 5.187 | +2.388 | within | 7.99 | 9.802 | 7.689 | 6.489 | 6.475 | +1.812 | within |
+| 0.960 | 4.06 | 6.813 | 8.490 | 8.662 | 5.167 | +2.753 | within | 8.27 | 9.810 | 7.702 | 6.493 | 6.456 | +1.540 | within |
+| 0.968 | 3.88 | 1.659 | 0.874 | 8.688 | 2.405 | -2.221 | within | 8.64 | 10.547 | 9.191 | 6.484 | 4.191 | +1.907 | within |
+| 0.976 | 3.87 | -0.254 | 0.794 | 8.710 | 3.232 | -4.124 | **MISS** | 8.78 | 10.133 | 9.177 | 6.477 | 2.982 | +1.353 | within |
+| 0.984 | 3.57 | -0.975 | -0.659 | 3.199 | 1.003 | -4.545 | **MISS** | 8.43 | 9.797 | 8.563 | 6.913 | 3.821 | +1.367 | within |
+
+`c_x`: **14 of 26 radii within the band, 12 miss**; largest distance 5.22 m/s (r / 250 mm = 0.932, inside its band of
+8.18 m/s), largest excess over the band 3.54 m/s (0.984). `c_t`: **14 of 26 within, 12 miss**; largest distance 1.91 m/s
+(0.968, inside its band), largest excess over the band 1.36 m/s (0.532). No point of the 360 on any measured ring at x =
+90 mm lies outside the fluid on B1 and B2.
+
+How to read the band, which stands as registered. The value at a point is the mean of its cell, and the cells of B1
+are thicker in the radial direction than the 5 mm between measured radii, so the simulated profile is a staircase:
+neighbouring radii often carry the same value. Where a step of B1 and a step of B2 fall between the same two radii,
+`U_num` is a few hundredths of a m/s and a difference of 0.2 m/s is a miss; where they do not, `U_num` is 4 to 8 m/s and
+"within" says little (r / 250 mm from 0.912 to 0.968). The count of 14 is therefore a weak number in both directions.
+What does not depend on it: between r / 250 mm = 0.69 and 0.83 the solve is 0.8 to 1.1 m/s low in `c_x`; at the hub
+(0.532) it is 1.2 m/s high in `c_x` and 1.6 m/s low in `c_t`; and outside 0.97 it has no through-flow (`c_x` -0.25 and
+-0.98 m/s at 0.976 and 0.984) where 3.9 and 3.6 m/s were measured, with 1.4 m/s more swirl. The measured fall of `c_x`
+toward the casing starts at 0.87; in the solve it starts at 0.95 and is steeper.
+
+### The Euler work (C3)
+
+Over the measured span (133 to 246 mm), rho = 1.2 kg/m^3 assumed; "profile" is the product of the means, "pointwise" the
+mean of the products (for the measurement: over the 180 bins).
+
+| | volume flow through the span [m^3/s] | Euler work, profile / pointwise [W] | Euler head `e` [Pa] | kinetic energy `q` [Pa] | static pressure at the plane `Pi_s` [Pa] | loss `L_s` [Pa] | `Rec_s` [Pa] |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| measured | 1.3525 / 1.3529 | **299.20 / 297.66** | 221.22 / 220.02 | 97.13 / 99.20 | not measured | not measured | not measured |
+| B1 | 1.3754 | **318.72 / 312.03** | 231.73 / 226.86 | 98.99 / 102.28 | 61.71 | 62.87 | 12.28 |
+| B2 | 1.3314 | 312.96 / 308.25 | 235.06 / 231.53 | 94.50 / 98.04 | 54.73 | 78.75 | 9.50 |
+| B3 | 1.3395 | 324.30 / 321.81 | 242.10 / 240.24 | 91.42 / 96.55 | 39.35 | 104.34 | 7.43 |
+
+Beside them: the measured shaft power, **333.30 W** (237.53 Pa per design volume flow), and the torque of B1 times
+omega, 326.50 W. The measured Euler work over 91 per cent of the annulus is 89 to 90 per cent of the measured shaft
+power; the simulated one over the same span is 96 to 98 per cent of the simulated shaft power.
+
+The same integral at x = 20 mm, which should be zero: measured -36.22 / -33.55 W, B1 +3.38 W. The measured profile
+there carries a swirl against the rotation that grows to -2.05 m/s at the casing; the solve has none (0.0 to 0.15 m/s).
+Not registered, my arithmetic after the run from the same files: the kinetic energy at x = 90 mm splits into 71.3 Pa
+axial and 25.6 Pa swirl in the measurement and 72.1 and 26.7 Pa on B1 (profile reading).
+
+### The division (C4)
+
+`D` = 52.47 Pa, `D / 2` = 26.24 Pa. From B1: `Pi_s` = 61.71 Pa, `e_s - q_s` = 124.58 Pa.
+
+| | value [Pa] | band [Pa] | of which `U_num`, `S`, `T`, `u_cov`, `u_data` [Pa] |
+| --- | --- | --- | --- |
+| `R_lo` (the measured rotor loses all it can) | -34.45 | 23.75 | 21.28, 0.0008, 0.008, 0.39, 2.07 |
+| `R_hi` (the measured rotor loses nothing) | 59.11 | 24.95 | 21.28, 0.0008, 0.008, 0.39, 3.27 |
+| `R_eq` (conditional: `L_m = L_s`) | -3.76 | 31.10 | 27.17, 0.0005, 0.33, 0.33, 3.27 |
+
+`R_hi + U` = 84.06 Pa is not below 26.24 Pa and `R_lo - U` = -58.20 Pa is not above it: **the verdict is "it cannot be
+told"**, as expected in the registration. The installation's share `I = D - R` is between -6.64 and 86.92 Pa without
+the band (-31.59 and 110.67 Pa with it); its upper end is the registered bound `q_m - Rec_s`, the most an outlet model
+could add. Conditional: `I_eq` = 56.23 Pa.
+
+The terms the solve gives and the rig does not: the simulated rotor loses 62.87 Pa of total pressure before the plane,
+27.7 per cent of its Euler head, and the annulus behind it recovers 12.28 Pa. On the rig `Rec_m - L_m` = 126.46 -
+(220.02 - 99.20) = +5.64 Pa. If the measured rotor lost the 62.87 Pa of the simulated one, the rig would have to recover
+68.5 Pa behind the plane, 69 per cent of all the kinetic energy that leaves the rotor, swirl included; if the rig
+recovered only the 12.28 Pa of the solve, its rotor would lose 6.6 Pa. The truth is between, and no number here places
+it.
+
+### What the limit cycle and the meshes do to it (R2, task 4)
+
+* **The limit cycle does nothing that can be seen at the plane.** Over the iterations 7000 to 8000 the profile values
+  move by at most 0.0006 m/s (`S`), `Pi_s` by 0.0008 Pa and `e_s - q_s` by 0.0005 Pa. The cycle that keeps `res_u` at
+  1.2e-3 is not in these quantities.
+* **The place of the plane is a small term**: +-1.3 mm moves a profile value by at most 0.085 m/s, `Pi_s` by 0.008 Pa
+  and `e_s - q_s` by 0.33 Pa.
+* **The mesh is the whole band, and the solve is not mesh-converged in the terms that matter.** `Pi_s` is 39.35, 54.73
+  and 61.71 Pa on B3, B2 and B1; the loss 104.34, 78.75 and 62.87 Pa; the Euler head 240.24, 231.53 and 226.86 Pa,
+  falling toward the measured 220.02 Pa. Each refinement removes loss and excess work. The conditional share `R_eq` is
+  -22.87, -12.67 and -3.76 Pa on the three meshes.
+* **The verdict survives.** It is "cannot be told" with the band and without it, and with B2 in the place of B1
+  (`R_lo` -27.47, `R_hi` 66.09 Pa). The conditional division does not survive as a number: +-31 Pa on 52 Pa, 27 Pa of it
+  the mesh term.
+* **The missed mesh gates.** The faces that miss them are at the lower seam corner of the tip layers (ADR 0762). The
+  outermost radii are where the profiles are furthest from the measurement, but the tip gap is also where the model is
+  coarsest (wall functions, the casing boundary layer of the rig not in the inlet), and nothing here separates the two.
+
+### Every check
+
+| Id | Measured | Met |
+| --- | --- | --- |
+| C1 | `c_x`: 14 of 26 radii within the band; 12 miss, largest excess 3.54 m/s | **no, a miss** |
+| C2 | `c_t`: 14 of 26 radii within the band; 12 miss, largest excess 1.36 m/s | **no, a miss** |
+| C3 | Euler work 299.20 / 297.66 W measured and 318.72 / 312.03 W simulated over the measured span, beside 333.30 W of measured shaft power | reported |
+| C4 | verdict "cannot be told": `R` between -34.45 and 59.11 Pa, bands 23.75 and 24.95 Pa; conditional `R_eq` -3.76 Pa, `I_eq` 56.23 Pa, band 31.10 Pa | the rule returns "cannot be told": **no division** |
+| C5 | the acceptance test ran once (the fourth run) and failed on its three clauses with the radii and the division printed; it is kept as `f878_b1_profiles_acceptance_known_miss`, ignored, with the numbers in its reason and its limits unchanged. The state record asserts the per-radius verdicts and the verdict of the division, and passed in the same run | yes |
+| R1 | B1 2.098164 N m and 73.9881 Pa, B2 2.028692 and 64.2329, B3 1.918189 and 46.7776: equal to ADR 0762 to the printed digits | yes |
+| R2 | above | reported |
+| R3 | x = 20 mm: `c_x` within the band at 6 of 26 radii (the solve is flat at 10 m/s, the measurement falls from 11.95 at the hub to 6.53 m/s at the casing), `c_t` at 8 of 26 (the measured swirl against the rotation is not in the solve). `c_r` at x = 90 mm: measured +0.2 to +1.6 m/s outward of 0.57, solve -0.5 to -0.7 m/s up to 0.93 | reported |
+| V1 | constants equal to the CSV; 299.196, 297.657 W; 221.218, 220.015, 97.129, 99.196 Pa; flows 1.35249, 1.35289, 1.32210, 1.30055 m^3/s | yes |
+| V2 | largest relative error 9.1e-15 (as amendment 1 has the check) | yes |
+| V3 | 0 points outside the fluid at x = 20 mm at every measured radius on B3, B2 and B1 (after the correction of the candidate list, amendment 1) | yes |
+| V4 | 326.6175764075039 W against the same closed form | yes |
+| V5 | B1, whole annulus at x = 90 mm: volume flow 1.4144 m^3/s, 0.80 % above 1.4032; Euler work 331.62 W (profile) and 323.85 W (pointwise) against 326.50 W of torque times omega, +1.6 % and -0.8 %. B2: +0.34 %, +4.7 % and +2.9 %. B3: +1.18 %, +15.3 % and +14.1 %. At x = 20 mm the flow is 2.4 % high on B1. The least share of fluid points on a ring is 0.989 (the blade root) | reported; inside my estimates on B1 |
+| S1 | B3 at iteration 300: `e_s` 240.0486 Pa, `q_s` 96.4801 Pa, `Pi_s` 39.3569 Pa, `Q_c` 1.339620 m^3/s, equal in every run on the unmutated tree | yes |
+| S2 | the verdicts formed in Rust from the recorded constants equal the recorded ones, and the six numbers of the division equal those of `analyse.py` to 0.005 Pa | yes |
+| D1 | `git diff --name-only 2bab1863` names no file under `crates/*/src` and not `f870_fan01_design_point.rs` | yes |
+| P | see "The checks of rule 7" below | see below |
+
+### What is a gate test and what is a heavy record
+
+All in `crates/rcfd-api/tests/f878_fan01_lda_profiles.rs`.
+
+* Run with every `cargo test` (about 20 s together in release): `f878_lda_reference_and_measured_integrals` (the
+  constants against the transcription, the measured integrals), `f878_sampler_closed_forms` (the circumferential mean
+  and the trapezoid rule against closed forms, on the B3 mesh), `f878_recorded_verdicts_follow_from_the_recorded_profiles`
+  (bands, per-radius verdicts and the division from the recorded profiles), `f878_b3_short_run_holds_the_profiles` (the
+  case text and the code path of the heavy record on B3 for 300 iterations, four scalars within 1 %, either way).
+* Ignored, heavy, run by name: `f878_b1_profiles_state_record` (about 1 h; fails if the solve is not the state of ADR
+  0762, if a scalar or one of the 52 profile values moves by more than the tolerance either way, or if a verdict
+  changes, so an improvement fails it too); `f878_b1_profiles_acceptance_known_miss` (the acceptance as a test; it fails
+  today and its ignore reason carries the numbers); `f878_family_run` (B1, B2, B3 with all profiles printed).
+
+### Mutations and negative controls
+
+On a copy of the tree in the scratch folder with its own target folder. All six were caught by the test the
+registration (M6: amendment 1) names.
+
+| Id | What happened |
+| --- | --- |
+| M1 | Coriolis factor -2.0 to -1.9: B3 at iteration 300 gives `e_s` 235.45 Pa against 240.05 (-1.9 %) and `q_s` 94.49 against 96.48 (-2.1 %); `Pi_s` (-0.9 %) and `Q_c` (-0.08 %) stay inside. Caught. Committed as the mutation patch |
+| M2 | `c_t = w_t`: the closed form fails with a relative error of 16.6. Caught |
+| M3 | 12.02 to 12.20: the constant no longer equals the CSV. Caught |
+| M4 | ring weight `2 pi`: the free-vortex closed form fails. Caught |
+| M5 | factor of safety 10: every radius but one of `c_x` comes within the band, the recorded misses no longer hold. Caught |
+| M6 | sign of the circumferential unit vector: the closed form fails with a relative error of 35.2. Caught |
+| K1 | the B3 short run gave the same four values to the printed digits in each of its runs |
+
+M1 shows the same weakness ADR 0762 found: at 1 % a 5 % error of the Coriolis term is caught by two of the four
+scalars, by a factor of two, not by all.
+
+### Deviations
+
+1. Amendment 1: the registered value at a point (the relative circumferential velocity of the cell plus `omega r` of
+   the point) put a sawtooth on the profile. Corrected to the cell's absolute velocity, committed before any registered
+   run. I had seen B3 numbers at 300 iterations with the defective sampling; they are named in the amendment.
+2. An error of my code in the list of candidate cells of the locator, found by V3 on its first run and corrected before
+   the test file was committed; the registered method did not change.
+3. M6 could not be applied as registered and was replaced (amendment 1).
+4. The fourth heavy run ran the state record and the acceptance test in one process, on one solve. The acceptance test
+   had its one run there.
+5. To make the mutation patch with `git diff`, `crates/rcfd-fv/src/sources.rs` was changed in the worktree and restored
+   in the same command; no solver source is changed in any commit.
+6. The logs of the three runs are committed with every sampled ring (about 100 kB each), because the fields are not
+   kept and the logs are the record the numbers are formed from.
+7. The mutations were applied and run by hand on the scratch copy; the repository's mutation runner was not used.
+8. The figures of the description were not read, only its text, tables and captions.
+
+The fourth run (the test binary built from 3f458137, B1, 8000 iterations, 59.5 min; log `B1_confirm.log` in the investigation folder):
+`f878_b1_profiles_state_record` passed, so the solve repeats the recorded state, the four scalars, the 52 profile
+values and the verdicts within the tolerances; `f878_b1_profiles_acceptance` failed, as it must: `c_x` outside its band
+at r / 250 mm = 0.532, 0.692 to 0.832 (eight radii), 0.892, 0.976 and 0.984; `c_t` at 0.532, 0.552, 0.572, 0.612, 0.632,
+0.672, 0.692, 0.732, 0.752, 0.832, 0.852 and 0.872; the division "cannot be told". After that run the test was renamed
+to the known miss and given its ignore reason, and the result was put in the sentence of the file header; nothing else
+of the test file changed, and the renamed test was not run again.
+
+### What was not run
+
+* Nothing with a measurement uncertainty: none is stated for the LDA.
+* No finer mesh than B1, no outlet model, no transient run, no solve on another set-up.
+* The phase-resolved comparison and the turbulent part of the fluxes: not in the record in a usable form.
+* The wall-pressure data of the record (`mic_kulite.tar`, 0.46 GB: 14 transducers in the casing from x = -23 to 107 mm)
+  were not fetched. The description presents them as fluctuations; whether their mean is a calibrated static pressure
+  it does not say. A static pressure behind the rotor is the one measurement that would close the division.
+* The full workspace test run and the heavy tests of other files. Of the workspace only the new file's tests,
+  `docs_site`, fmt and clippy of `rcfd-api` were run.
+* Kromer's thesis and the SAE paper were not read (F-877).
+
+### The checks of rule 7
+
+On the final tree, with the target folder in the scratch folder:
+
+* `cargo test -p rcfd-api --release --test f878_fan01_lda_profiles`: 4 passed, 0 failed, 3 ignored (the heavy record,
+  the known miss, the family run), 18 s.
+* `cargo fmt -p rcfd-api --check`: clean.
+* `cargo clippy -p rcfd-api --all-targets -- -D warnings`: clean.
+* `cargo test -p rcfd-cli --release --test docs_site`: passed (2 tests), with this addendum in the tree.
+* `python scripts/roadmap_proposals.py check docs/roadmap/proposals/0765-F-878.json`: passes (F-878 todo to partial, gap
+  set, one new item).
+* `python scripts/process_report.py --check`: 2 failures, both "generated file is not current" (`docs/adr/index.md`,
+  `docs/reference-data.md`), which rule 9 leaves to the lead; no other failure.
+* The mutation patch was applied by hand on the scratch copy and its named test failed there (M1 above); the
+  repository's runner was not run on it.
+
+### Size
+
+Size (agent): partial; 0; 4; 2; 450000
+
+The bytes read are an estimate.
+
+### Decision by the registered rule
+
+**Partial.** The comparison is made at every measured radius; the division cannot be given by the registered rule (C4),
+and radii miss their bands (C1: 12, C2: 12). The measured profiles are traced to a source that was read, so the third
+case does not apply.
+
+## Open questions for the maintainer
+
+1. **What this means for the compared quantity of F-870.** The result: the missing pressure rise is not in the work of
+   the rotor or in its outflow velocity (the conditional share is -3.8 Pa +-31.1); it is in loss and recovery, which
+   the record does not measure apart. Options: (a) keep the total-to-static pressure rise of the installation as the
+   compared quantity; it then needs the outlet as on the rig and a rotor loss that is believed, and cannot be met by
+   the rotor-only passage. (b) Add the rotor quantities that the record does measure, the Euler head and the kinetic
+   energy over the measured span (220.02 and 99.20 Pa) and the profiles, as compared quantities of F-870 beside the
+   pressure rise, each with its own band; the solve is 6.8 Pa and 3.1 Pa from them today, inside its mesh term, while
+   12 of 26 radii miss the profile band. (c) Replace the pressure rise by them. I recommend (b): it keeps the headline
+   honest (the pressure rise stays a miss until the outlet is modelled) and gives the rotor a measured quantity that
+   does not depend on the rig. It is a change of the acceptance, so it is the maintainer's.
+2. **F-880, the outlet as on the rig.** It was to be issued only if this work showed the missing pressure to be the
+   installation's. By the rule it shows neither. Options: (a) issue F-880 now: with the outlet modelled, `Rec` is
+   computed for the rig's geometry and the identity of this ADR then leaves the rotor's loss as the remainder, so it
+   would close the division from the other side; it is a medium to large piece of mesher work with F-133 open. (b)
+   First the cheaper piece proposed below: where the 62.87 Pa of simulated loss arise and what a finer mesh makes of
+   them (the loss fell by 25.6 and 15.9 Pa in the last two refinements). (c) First have the wall-pressure data of the
+   record looked at for a mean static pressure behind the rotor. I recommend (b), with (c) beside it as a short
+   reading, and F-880 after: the installation can add at most 86.9 Pa and would have to recover 65 per cent of all
+   kinetic energy behind the rotor to close the gap alone, while a loss that still falls with the mesh is the nearer
+   unknown. This is an inference from the numbers above, not a result.
+
+## For the lead: roadmap entries
+
+> Status proposed for F-878: partial.
+
+> Note entry: ADR 0765, 2026-11-22, partial: the measured LDA profiles are traced (Zenodo doi:10.5281/zenodo.23943494, lda_data.zip, checksums in docs/reference-data.d/0765-F-878.part) and their datum is settled (x = 90 mm from the upstream hub face). On B1 at x = 90 mm c_x is within its registered band at 14 of 26 radii and c_t at 14 of 26 (largest excess over the band 3.54 and 1.36 m/s). Over the measured span the Euler work is 297.66 W measured and 312.03 W simulated (shaft power 333.30 W), the Euler head 220.02 against 226.86 Pa, the kinetic energy leaving the rotor 99.20 against 102.28 Pa. By the registered rule the missing 52.47 Pa cannot be divided: the rotor's share lies between -34.4 and 59.1 Pa (bands 23.8 and 25.0 Pa), because the loss of the measured rotor is not measured; at equal rotor loss it would be -3.8 Pa and the installation's 56.2 Pa, +-31.1 Pa. Held by crates/rcfd-api/tests/f878_fan01_lda_profiles.rs: four gate tests and a heavy record of B1; six mutations caught.
+
+> Gap entry: Missing for done: the division of the missing 52.47 Pa. Velocity profiles do not fix the loss of the measured rotor, so the rotor's share is only bounded (-34.4 to 59.1 Pa, bands 24 to 25 Pa); needed is a measured static pressure behind the rotor or the outlet as on the rig (F-880). And c_x misses its band at 12 of 26 radii, c_t at 12 (worst at the hub and the tip; the radial layers of B1 are coarser than the measured spacing).
+
+> Follow-up (proposed, open question 2; it diagnoses the miss, so by rule 13 it may instead be a registration under F-878): "FAN-01 rotor: the loss of total pressure of the simulated rotor up to the measured plane, where it arises and what a finer mesh makes of it", deps F-878; acceptance: Every limit not stated here is registered in the ADR before the run. The loss of total pressure of the FAN-01 design-point solve between the inlet and the measured plane of ADR 0765 (62.87 Pa on B1, 78.75 Pa on B2, 104.34 Pa on B3) is divided, by a rule registered before the run, into the parts that arise at the blade surfaces, at the hub and casing, in the tip gap and in the interior of the passage, and is recomputed on one mesh finer than B1 that also refines the wall-normal direction; the report states the loss the family extrapolates to with its band and what that leaves of the missing pressure rise of F-870 for the installation by the identity of ADR 0765. A run that does not decide is recorded as not deciding.
+
+The same entries are in `docs/roadmap/proposals/0765-F-878.json` (form 1 of ADR 0755, base 2bab1863), checked with
+`python scripts/roadmap_proposals.py check`.
+
+Generated pages not current on this work, left to the lead (rule 9): `docs/adr/index.md` (ADR 0765 is new) and
+`docs/reference-data.md` (the fragment `docs/reference-data.d/0765-F-878.part` is new). `validation-data/manifest.json`
+does not list the transcription `docs/investigations/f878-fan01-lda-profiles/lda_profiles.csv`; whether it becomes a
+file of the data pack is the lead's.

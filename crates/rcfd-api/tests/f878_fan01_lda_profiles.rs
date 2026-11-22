@@ -3,8 +3,9 @@
 //! are those of `lda_data.zip` of the Zenodo record doi:10.5281/zenodo.23943494 (v6, CC BY 4.0), transcribed in
 //! `docs/investigations/f878-fan01-lda-profiles/lda_profiles.csv` and recorded in `docs/reference-data.d/0765-F-878.part`. The planes, the
 //! circumferential average, the band at each radius, the Euler work integral and the rule of division were registered in ADR 0765 before
-//! any run. The case text is that of `f870_fan01_design_point.rs` (ADR 0762), copied without a change of value. The result is in
-//! ADR 0765, addendum 1.
+//! any run. The case text is that of `f870_fan01_design_point.rs` (ADR 0762), copied without a change of value. The result
+//! (ADR 0765, addendum 1): 12 of 26 radii miss the band of `c_x` and 12 that of `c_t`, and by the registered rule the missing pressure
+//! rise cannot be divided; the acceptance is kept as the known miss `f878_b1_profiles_acceptance_known_miss`.
 
 #![allow(clippy::neg_cmp_op_on_partial_ord)] // a NaN must fail the checks
 
@@ -1119,8 +1120,8 @@ fn f878_b1_profiles_state_record() {
 /// The acceptance of F-878 as ADR 0765 registered it: every measured radius within its band for `c_x` and for `c_t`, and the division
 /// of the missing pressure rise given by the registered rule.
 #[test]
-#[ignore = "heavy, ADR 0765: the acceptance of F-878 on the B1 solve; shares the solve of the state record"]
-fn f878_b1_profiles_acceptance() {
+#[ignore = "known miss, ADR 0765 addendum 1 (B1, 8000 iterations): c_x outside its band at 12 of 26 radii (largest excess 3.54 m/s), c_t at 12 of 26 (1.36 m/s), and the division cannot be told (rotor's share between -34.4 and 59.1 Pa of 52.47 Pa); heavy, shares the solve of the state record"]
+fn f878_b1_profiles_acceptance_known_miss() {
     let o = b1_outcome();
     let s = o.samples.last().unwrap().scalars(X_DOWN);
     let (cx, ct) = b1_profiles(o);
