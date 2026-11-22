@@ -1,0 +1,14 @@
+# expect-fail: cargo test -p rcfd-api --release --test naca0012_lift_curve_f868
+diff --git a/docs/investigations/f868-naca0012-lift-curve/cases/SA-a04.toml b/docs/investigations/f868-naca0012-lift-curve/cases/SA-a04.toml
+index b8ded4de..5a5e9ba8 100644
+--- a/docs/investigations/f868-naca0012-lift-curve/cases/SA-a04.toml
++++ b/docs/investigations/f868-naca0012-lift-curve/cases/SA-a04.toml
+@@ -6,7 +6,7 @@ source = "file"
+ file = "../meshes/M1w-far500"
+ 
+ [mesh.transform]
+-rotate_z_deg = -4   # angle of attack 4 deg: the aerofoil turns by -alpha about the quarter chord (ADR 0155)
++rotate_z_deg = -5   # angle of attack 4 deg: the aerofoil turns by -alpha about the quarter chord (ADR 0155)
+ rotate_origin = [0.25, 0.0, 0.0]
+ 
+ [physics]
