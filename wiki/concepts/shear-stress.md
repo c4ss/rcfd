@@ -1,8 +1,16 @@
 ---
 type: concept
-tags: [foundation, shared-roots, mechanics]
-sources: [ref-openstax-university-physics-1, ref-bar-meir-fluid-mechanics, ref-wikipedia-shared-roots]
-builds_on: [stress, viscosity]
+tags:
+  - foundation
+  - shared-roots
+  - mechanics
+sources:
+  - ref-openstax-university-physics-1
+  - ref-bar-meir-fluid-mechanics
+  - ref-wikipedia-shared-roots
+builds_on:
+  - stress
+  - viscosity
 created: 2026-11-22
 updated: 2026-11-22
 status: draft

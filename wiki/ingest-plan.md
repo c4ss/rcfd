@@ -103,6 +103,12 @@ Steps:
 - [ ] Write foundation pages branch by branch (subagents, max 4), merging shared nodes.
 - [ ] Lint: every concept page reachable from a foundation root; no foundation page without a cited `ref-*` source.
 
+### P7 — Equations to LaTeX (maintainer decision 2026-11-22)
+
+Obsidian renders LaTeX with MathJax; the pages wrote math as ASCII in backticks, which shows as code. Rule now in `CLAUDE.md`: inline `$...$`, display `$$...$$` on its own line, source equation number beside it; case keys, code, file names and literal repo values stay in backticks.
+- [ ] Conversion pass after P6: subagents (max 4), split by folder/branch, rewrite every equation and math symbol to LaTeX without changing its meaning, numbers or locator. Additive rule relaxed for this pass only: the ASCII form is replaced, not struck through.
+- [ ] `tools/lint.py` section "Possible math in backticks" goes to (near) zero; remaining hits checked by hand.
+
 ## Steady state (after P5)
 
 Every new ADR / F-item / doc change merged to `main` gets ingested into its thread or source page in the same session that merges it, and logged. Lint weekly.
@@ -116,6 +122,8 @@ Every new ADR / F-item / doc change merged to `main` gets ingested into its thre
 
 5. **Foundations pass (P6):** cited open sources only; scope is all rcfd concept pages (both 2026-11-22).
 6. **P6 licences (2026-11-22):** non-commercial material (CC BY-NC-SA: MIT OCW, LibreTexts/OpenStax NC books) is cite-only, never copied into `raw/`. Wikipedia is a cited secondary source for elementary concepts only, never the sole source of a model-level claim, never copied.
+
+7. **Equations (P7):** LaTeX for all math, with a conversion pass after P6 (2026-11-22).
 
 ## Ingest backlog
 

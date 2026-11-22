@@ -45,6 +45,7 @@ Start every page from the matching file in `templates/`.
 - Superseded claims: strike through (`~~old~~`) with the newer source cited, don't just delete.
 - Keep pages focused. Split when a page passes ~400 lines or covers two concepts.
 - No hard wraps: one line per paragraph, list item or callout line (Obsidian renders every newline as a line break). Fix with `python tools/unwrap.py` (idempotent; `--check` reports).
+- Equations in LaTeX, which Obsidian renders with MathJax: inline `$...$`, display `$$...$$` on its own line (one line, no wrap). Symbols and variables in running text too (`$\omega$`, `$y^+$`). Code, case keys, file names and literal values from the repo stay in backticks (`solver.tolerance_u`, `k_omega_sst`). Keep the source's equation number next to the equation, e.g. `$$\tau = \rho a_1 k$$ (Menter 1992, eq. 15)`. (Maintainer decision 2026-11-22.)
 - Dates are absolute ISO (`2026-11-22`), never "yesterday".
 - No invented decisions: the wiki records what sources say. Open questions go in an `## Open questions` section, not into the text as if decided.
 

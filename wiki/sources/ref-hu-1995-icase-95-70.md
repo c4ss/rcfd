@@ -12,7 +12,7 @@ status: draft
 
 # Hu (1995), On absorbing boundary conditions for linearized Euler equations by a perfectly matched layer, ICASE 95-70
 
-**Origin:** F. Q. Hu, "On absorbing boundary conditions for linearized Euler equations by a perfectly matched layer", ICASE Report 95-70, NASA CR-198224, October 1995 (preprint later published in J. Comput. Phys.). NTRS 19960007445. PDF: https://ntrs.nasa.gov/api/citations/19960007445/downloads/19960007445.pdf
+**Origin:** F. Q. Hu, "On absorbing boundary conditions for linearized Euler equations by a perfectly matched layer", ICASE Report 95-70, NASA CR-198224, October 1995 (NTRS lists it as a preprint sent to a journal). NTRS 19960007445. PDF: https://ntrs.nasa.gov/api/citations/19960007445/downloads/19960007445.pdf
 **Kind:** ICASE report (NASA contractor report), 27 pages.
 **Licence:** US Government work, public use permitted; full copy in [raw/hu-1995-icase-95-70.pdf](../raw/hu-1995-icase-95-70.pdf).
 **Read:** 2026-11-22 by job p6-compressible-acoustics: abstract, sections 1-4 and 6, section 5 (numerical examples) skimmed. Equations partly garbled in the text layer. Locators are section and equation numbers.

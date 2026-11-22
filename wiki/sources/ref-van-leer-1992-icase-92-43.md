@@ -29,6 +29,12 @@ Reviews a decade of work on upwind schemes for the Euler equations in more than 
 - **Robustness (1, 3):** upwind schemes are "computationally intensive but unsurpassed in their combination of accuracy and robustness"; in 1D they capture sonic points and shocks crisply and converge without trouble.
 - **Multidimensional weakness (abstract, 1):** the usual extension assumes waves travel normal to the cell faces, which "leads to smearing of shock and shear waves when these are not grid-aligned".
 
+### Added by job p6-compressible-acoustics (2026-11-22, section 2 re-read)
+
+- **1D Euler equations (2.1, Eq. 4):** `U_t + F(U)_x = 0` with conserved state `U = (rho, rho u, rho E)^T` and flux `F(U) = (rho u, rho u^2 + p, rho u H)^T`; any local imbalance of fluxes (a "fluctuation", Roe) changes the local solution in time.
+- **Flux Jacobian and waves (2.1, Eqs. 5-12):** `dF = A(U) dU`; Roe's mean matrix `A_tilde` satisfies `Delta F = A_tilde Delta U` exactly for any two states (Eq. 6), obtained for a calorically perfect gas by averaging the parameter vector `w = sqrt(rho) (1, u, H)^T`. Splitting `A_tilde = A_tilde^+ + A_tilde^-` (Eq. 7) separates forward- and backward-moving disturbances: `Delta U = sum_k alpha_k R_k` and `Delta F = sum_k lambda_k alpha_k R_k` (Eqs. 10-11), `lambda_k` the eigenvalues (wave speeds), `R_k` eigenvectors, `alpha_k` wave strengths; waves with `lambda_k > 0` update the right node, those with `lambda_k < 0` the left (Eq. 12). The name "flux-difference splitting" is common; "fluctuation splitting" includes source terms.
+- **Godunov and Roe flux (2.2, Eqs. 13-21):** Godunov's interface flux is the solution at `t > 0` of Riemann's initial-value problem with the two states `U_L` and `U_R` (Eqs. 14-15); exact solutions are often unnecessary, hence "approximate Riemann solvers"; Roe's solution is the exact solution of the locally linearised `U_t + A_tilde U_x = 0` (Eq. 16), giving `F = F_L + A_tilde^- Delta U = F_R - A_tilde^+ Delta U = (1/2)(F_L + F_R) - (1/2)|A_tilde| Delta U` with `|A_tilde| = A_tilde^+ - A_tilde^-` (Eqs. 17-20), expanded as `(1/2)(F_L + F_R) - (1/2) sum_k |lambda_k| alpha_k R_k` (Eq. 21). In the finite-volume form `|A|` may come from any average without losing conservation; the flux formula (19), due to van Leer, preceded Roe's fluctuation approach "by a decade".
+
 ## Contradictions with the wiki
 
 None found.
@@ -36,3 +42,4 @@ None found.
 ## Pages this source informs
 
 - [[upwind-and-central-differencing]], [[finite-volume-method]], [[tvd-schemes-and-flux-limiters]]
+- [[euler-equations]], [[characteristics-and-hyperbolic-systems]], [[riemann-problem-and-godunov-method]], [[approximate-riemann-solvers]] (added by p6-compressible-acoustics)

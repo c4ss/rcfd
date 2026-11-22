@@ -18,6 +18,9 @@ SPECIAL = {"index", "log", "overview", "ingest-plan"}
 TYPES = {"source", "entity", "concept", "analysis", "overview", "plan"}
 REQUIRED = ["type", "created", "updated", "status"]
 STALE_DAYS = 180
+MATHY = re.compile(r"`([^`\n]{3,})`")
+MATH_HINT = re.compile(r"(\^|_[a-zA-Z0-9]|\b(sqrt|max|min|exp|log|sin|cos|nabla|partial|rho|nu|mu|omega|tau|epsilon|beta|alpha|sigma|kappa|phi|delta|Delta)\b|[a-zA-Z]\s*[=<>]\s*[-a-zA-Z0-9(])")
+CODE_HINT = re.compile(r"(\.toml|\.rs|\.md|\.json|/|\\|::|\"|\[[a-z_]+\]|^[a-z_]+\.[a-z_]+|--)")
 LINK = re.compile(r"\[\[([^\]|#^]+)(?:[#^][^\]|]*)?(?:\|[^\]]*)?\]\]")
 
 
@@ -56,11 +59,17 @@ def main():
     all_pages = pages()
     names = set(all_pages)
     inbound = {n: set() for n in names}
-    broken, fm_issues, stale = [], [], []
+    broken, fm_issues, stale, mathy = [], [], [], []
     today = dt.date.today()
 
     for name, path in all_pages.items():
         text = path.read_text(encoding="utf-8")
+        if name not in {"index", "log"}:
+            for span in MATHY.findall(re.sub(r"```.*?```", "", text, flags=re.S)):
+                if re.fullmatch(r"[A-Za-z0-9_.\-]+", span):
+                    continue  # a bare identifier (case key, crate, file stem), not math
+                if MATH_HINT.search(span) and not CODE_HINT.search(span):
+                    mathy.append((path.relative_to(ROOT), span[:60]))
         for target in LINK.findall(strip_code(text)):
             t = Path(target.strip()).stem
             if t in names:
@@ -103,6 +112,11 @@ def main():
     section("Orphans (no inbound links besides index/log)", orphans)
     section("Frontmatter", fm_issues)
     section(f"Stale (updated > {STALE_DAYS} days ago)", stale)
+    files = sorted({str(p) for p, _ in mathy})
+    print()
+    print(f"## Possible math in backticks (warning only): {len(mathy)} spans in {len(files)} pages")
+    for f in files[:15]:
+        print("- " + f)
     return 1 if broken or not_indexed else 0
 
 

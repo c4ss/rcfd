@@ -11,6 +11,7 @@ Read `wiki/tools/ingest-agent-brief.md` first; everything there applies. Then re
 - **Non-commercial material** (MIT OCW, LibreTexts/OpenStax NC books): read and cite, never copy.
 - **Never** vendor documentation (ANSYS, Fluent, CFX, STAR-CCM+, COMSOL, Siemens, Autodesk, MSC, Abaqus, etc.). That is the clean-room rule.
 - Our own words. Quote only short phrases. Equations may be written out with the source's equation number.
+- **Equations in LaTeX** (Obsidian renders MathJax): inline `$...$`, display `$$...$$` on one line of its own, e.g. `$$\nu_t = \frac{a_1 k}{\max(a_1 \omega,\, S F_2)}$$ (eq. 15)`. Symbols in running text too (`$\omega$`, `$y^+$`). Case keys, code, file names and literal repo values stay in backticks. Never write math as ASCII in backticks.
 
 ## Page form
 
