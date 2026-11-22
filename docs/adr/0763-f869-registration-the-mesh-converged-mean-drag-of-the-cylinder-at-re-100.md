@@ -252,3 +252,26 @@ miss V2b of ADR 0761 stays as it is.
 - The Strouhal number and the lift as checks: they are reported (R1). The Strouhal number is F-029's acceptance.
 - The nine originals behind the quoted values of the band, and any measured drag (as ADR 0761 says).
 - The case-file path (`Simulation`): the test drives `PimpleSolver` directly, as ADR 0761 does.
+
+## Amendment 1 (2026-11-22): the missed W3 (b) becomes a known miss; written before the change of the test file
+
+Written after the gate-side tests, the heavy record and M1, M2 and M3 were each run once, and before any change of the
+test file. No limit, band, order range, mesh, step, window or run changes. The heavy record ran its three solves. Its
+test `h1_...` passed (K4w, W1, S1). Its test `w2_...` failed on one check: W3 (b), the observed order of the three
+meshes, 1.387 against [1.5, 2.5]. W3 (a), W3 (c) and the comparison of W2 passed (the numbers are in addendum 1).
+
+By rule 2 the missed limit becomes an ignored test named `*_known_miss` with the limit intact. The change of
+`crates/rcfd-api/tests/f869_cylinder_mesh_converged_drag.rs`, and nothing else:
+
+- `w2_richardson_value_of_the_mesh_sequence_valid_and_in_the_band_heavy_record` keeps W3 (a), W3 (c) and W2 and no
+  longer asserts W3 (b); its comment says that the value it compares is not a valid extrapolation by the registration;
+- a new ignored test `w3b_observed_order_of_the_mesh_sequence_in_the_registered_range_known_miss` asserts W3 (b) with
+  the same expression and the same range, and records the measured 1.387 in its comment;
+- the comment of `h1_...` and the head of the file record the measured numbers;
+- the gate-side tests, the functions `richardson`, `verdict`, `halves_hold`, `setup`, `advance`, `force`,
+  `statistics`, `run`, `record` and `extrapolation`, and the constants are not touched. The function `verdict` still
+  returns "partial, the order" for these numbers.
+
+The heavy runs are not made a second time (rule 2, "each registered run is made once"): the three ignored tests after
+the change are built, formatted and linted, and not run. The gate-side tests are run again after the change, because
+the file they are in was changed; their code is the same.
