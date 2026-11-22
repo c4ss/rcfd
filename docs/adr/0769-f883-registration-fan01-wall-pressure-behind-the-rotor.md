@@ -273,3 +273,160 @@ M1 is committed as `crates/rcfd-api/tests/f883_fan01_wall_pressure.mutation.patc
   another agent's.
 
 Every link of this file was checked with `cargo test -p rcfd-cli --release --test docs_site` before its commit.
+
+## Addendum 1: results
+
+Written 2026-11-22, after the reading. Commits on the branch, from main 21054b68: d1d7e788 (this registration, alone,
+before the data were fetched), 4d9f92ec (the test file, the transcription `kulite_means.csv` with `kulite_means.py`,
+the script `wall_pressure_share.py` and its output `analysis.txt` in `docs/investigations/f883-fan01-wall-pressure/`,
+the reference fragment, the manifest entry, the paragraph of `docs/validation-data.md`), cff4b861 (the mutation
+patch), and the commit of this addendum with the proposal file. No amendment was needed.
+
+### The sentence this work was to deliver
+
+**The record gives a time-mean static pressure behind the rotor at the design point**: on the casing, against the
+chamber, 112.77 Pa at x = 87 mm and 116.54 Pa at x = 97 mm (transducers 12 and 13 of `kulite_pressure_in_Pa` in
+`mic_kulite/mic_kulite_n1ug_1_4.mat`), so 113.90 Pa at the LDA plane x = 90 mm; the record states no uncertainty for
+it. Carried over the measured span by the radial equilibrium of the measured profiles, `Pi_m` = 93.96 Pa +- 7.50 Pa.
+**With it the rotor's share of the missing 52.47 Pa is 32.26 Pa, band 29.19 Pa, and the installation's 20.21 Pa**: by
+the rule of ADR 0765 it cannot be told which is the larger (`R - U` = 3.07 Pa is not above 26.24 Pa, `R + U` = 61.44
+Pa is not below it). Of the band, 21.68 Pa is the solve's (its mesh term alone 21.28 Pa), 7.50 Pa the measurement's.
+
+What the measured pressure does decide: the interval of ADR 0765 for the rotor's share (-34.4 to 59.1 Pa) closes to
+32.3 +- 29.2 Pa, and the rig's terms are now measured: `L_m` = 26.85 Pa of rotor and inlet loss against 62.87 Pa in
+the solve, and `Rec_m` = 32.50 Pa recovered behind the plane against 12.28 Pa in the solve. Both differ in the
+direction that makes the missing pressure rise: the simulated rotor loses 36 Pa more and its annulus recovers 20 Pa
+less.
+
+### The reading (A1, A2, K1 to K3)
+
+`mic_kulite.tar`: 460 728 320 bytes, MD5 1002be297aa2ac2123f3928bf7f5d905 (equal to the record's), SHA-256
+ce02ca09c4c2ec84da54a09ccb271b3012e190110ff95c9b44c412a7a7032862. It holds `mic_kulite_n1ug_1_4.mat` (MAT level 5;
+SHA-256 79a2025fcacec78cf7d0a2942c128ec1f9e82b103bafb7f4d880580ed1507b1c) and the `.h5` copy (SHA-256
+0e330c8a4874065b4a9b59e699b9f5955394e8f5421ab073a702ab1351028aca; not read: no HDF5 reader). The `.mat` holds
+`time_in_s` (1 464 320 x 1), `mic_pressure_in_Pa` (x 7), `kulite_pressure_in_Pa` (x 15) and `sample_freq_in_Hz`
+(48000), all doubles; it carries no unit, description or uncertainty beyond the names.
+
+| row | x [mm] | mean [Pa] | 2 s.e. [Pa] | std [Pa] |
+| --- | --- | --- | --- | --- |
+| 0 | - | 0.0038 | | 0.159 |
+| 1 to 5 | -23 to 17 | -49.83, -47.80, -44.82, -42.58, -39.49 | 0.48 to 0.60 | 11.1 to 47.2 |
+| 6 to 8 | 27 to 47 | -42.05, -53.22, -68.15 | | 76.5 to 184.1 |
+| 9 | 57 | 26.50 | | 77.6 |
+| 10 to 14 | 67 to 107 | 92.82, 104.81, 112.77, 116.54, 117.30 | 0.52 to 0.69 | 39.5 to 11.5 |
+
+(every row in `analysis.txt`). K1 met under the reading "standard deviation about the mean": row 0 0.159 Pa, mean
+0.004 Pa; rows 1 to 14 from 11.13 to 184.07 Pa (the root mean square gives 50.16 to 196.28 Pa and does not). K2 met:
+rows 1 to 5 are -49.8 to -39.5 Pa. K3 met: row 1 is -49.83 Pa, above -126.46 Pa, so the reference is the chamber, as
+the record states. On the casing the pressure rises through the blade row from -68 Pa at x = 47 mm to +93 Pa at 67 mm,
+just behind the tip trailing edge (62.8 mm), and goes on rising slowly to 117 Pa at 107 mm.
+
+### The identity (A3, B1)
+
+| | value [Pa] | band terms [Pa] |
+| --- | --- | --- |
+| `p_w(90) = 0.7 p_12 + 0.3 p_13` | 113.8964 | `u_stat` 0.5674, `u_x` 0.4901 |
+| `Gbar` (casing minus span mean) | 19.9318 | `u_gap` 0.7124, `u_read` 5.7339 (`Gbar_0` 14.1979), `u_meas` 0 (not stated) |
+| `Pi_m` | 93.9646 | `U_m` 7.5038 |
+| `R = Pi_m - Pi_s` (61.709) | 32.2556 | `U` = 7.5038 + 21.683 = 29.1868 |
+| `I = D - R` | 20.2144 | the same |
+| `L_m = 120.819 - Pi_m` | 26.8544 | |
+| `Rec_m = 126.46 - Pi_m` | 32.4954 | |
+
+Verdict: **cannot be told**. B1: `Pi_m` = 93.96 Pa lies inside 19.76 to 128.32 Pa: **met**; the reading agrees with
+the energy balance of the LDA profiles (`L_m >= 0`, `Rec_m <= q_m`).
+
+Reported, not banded (the inferred mapping): with every row moved by one transducer the value at x = 90 mm would be
+107.20 Pa (rows 11 and 12) or 116.76 Pa (rows 13 and 14), `R` 25.6 or 35.1 Pa; the verdict is the same in both.
+
+### Every check
+
+| Id | Measured | Met |
+| --- | --- | --- |
+| A1 | MD5 equal to the record's; SHA-256 of the tar and of both files inside recorded | yes |
+| A2 | casing, x = 87 and 97 mm (and 67 to 107 mm), the design point; 113.90 Pa at x = 90 mm against the chamber; uncertainty not stated by the record; file `mic_kulite_n1ug_1_4.mat`, variable `kulite_pressure_in_Pa`, rows 12 and 13 | yes |
+| A3 | `R` 32.26 Pa, `I` 20.21 Pa, `U` 29.19 Pa; verdict "cannot be told" | stated |
+| B1 | 93.96 Pa in [19.76, 128.32] Pa | yes |
+| K1 | as above | yes |
+| K2 | -49.83 to -39.49 Pa, each at most its `u_stat` | yes |
+| K3 | -49.83 Pa > -126.46 Pa | yes |
+| V1 | `f883_transcription_constants` | yes |
+| V2 | `f883_radial_equilibrium_closed_form`, relative error at most 1e-9 | yes |
+| V3 | `f883_reading_and_share`: every value within 0.005 Pa of the Python value (equal at the printed digits), verdict equal | yes |
+| D1 | no file under `crates/*/src` in `git diff --name-only 21054b68`; no solve | yes |
+| P | below | below |
+
+### What is a gate test and what is a heavy record
+
+All three tests of `crates/rcfd-api/tests/f883_fan01_wall_pressure.rs` run with every `cargo test` (under 1 s); none
+is ignored and there is no heavy record. The 460 MB archive is not committed; the transcription (6 609 bytes) is, with
+an entry in `validation-data/manifest.json` whose checksum the test `datapack` checks.
+
+### Mutations and negative controls
+
+On a copy of the tree in the scratch folder (`git archive` plus the new files, its own target folder), by a script.
+
+| Id | Caught by |
+| --- | --- |
+| M1 weights swapped | `f883_reading_and_share`; committed as the mutation patch |
+| M2 row 12 mean +1 Pa | `f883_transcription_constants` (and `f883_reading_and_share`) |
+| M3 `1 / r` left out | `f883_radial_equilibrium_closed_form` (and `f883_reading_and_share`) |
+| M4 `rho <c_r^2>(r)` left out | `f883_radial_equilibrium_closed_form` (and `f883_reading_and_share`) |
+| M5 sign of the correction | `f883_reading_and_share` |
+| K0 | `kulite_means.py` run twice: the same SHA-256, 06b92eb5f44bcebf5e448903a52fae4dab5b996971576dcf51f84fda6bcaf593 |
+
+### Deviations
+
+1. The reader uses the standard library only (`array`, `math.fsum`), not numpy: the registration allowed both, and
+   `python -I` does not see the numpy of the user site. The method is unchanged.
+2. The mutations were run by a script on the scratch copy; the repository's mutation runner was not used.
+
+### What was not run
+
+* The `.h5` copy of the data (no HDF5 reader); the description says it holds the same values.
+* Anything for the term `d<c_x c_r>/dx` of the radial equilibrium; its size is not known and it is not in the band.
+* No solve; nothing of F-882.
+
+### The checks of rule 7
+
+* `cargo test -p rcfd-api --release --test f883_fan01_wall_pressure`: 3 passed, 0 failed, 0 ignored.
+* `cargo test -p rcfd-io --release --test datapack`: 4 passed (the manifest entry and its checksum).
+* `cargo fmt -p rcfd-api --check`: clean. `cargo clippy -p rcfd-api --all-targets -- -D warnings`: clean.
+* `cargo test -p rcfd-cli --release --test docs_site`: passed, with this addendum in the tree.
+* `python scripts/roadmap_proposals.py check docs/roadmap/proposals/0769-F-883.json`: passes (F-883 todo to done).
+* `python scripts/process_report.py --check`: run last; its result is in the report to the lead.
+
+### Size
+
+Size (agent): done; 0; 0; 1; 260000
+
+One question for the maintainer arose (below). The bytes read are an estimate.
+
+### Decision by the registered rule
+
+**Done**, by case (a): A1 met; A2 met (a time-mean static pressure on the casing behind the rotor at the design
+point, with its station, the record's silence on its uncertainty, and its file and place); K1 to K3 hold; `Pi_m` is
+formed with `U_m`; A3 states `R`, `I` and `U` with the verdict; B1 is met. The verdict "cannot be told" is a result,
+not a miss: the rule of done does not depend on which part is the larger.
+
+## Open questions for the maintainer
+
+1. **A measured pressure behind the rotor as a compared quantity of F-870.** The record gives one that the solve can
+   be compared with directly, without the radial-equilibrium correction: the casing pressure against the inlet total
+   pressure at x = 67 to 107 mm (92.8 to 117.3 Pa; 113.90 Pa at x = 90 mm). Options: (a) add the casing pressure at
+   x = 90 mm (or at the five stations behind the tips) as a compared quantity of F-870 beside the Euler head and the
+   kinetic energy, with a band registered before its run; (b) keep it as reference data only, used through `Pi_m` by
+   F-882 and F-880. I recommend (a): it is a rotor-local measured pressure and tests the simulated loss directly; the
+   solve would have to be sampled at the casing, which the tests of F-878 do not do yet. It changes an acceptance, so
+   it is the maintainer's.
+
+## For the lead: roadmap entries
+
+> Status proposed for F-883: done.
+
+> Note entry: ADR 0769, 2026-11-22, done: the record's wall pressure (mic_kulite.tar, MD5 equal to the record's, checksums in docs/reference-data.d/0769-F-883.part) gives a time-mean casing pressure against the chamber of 113.90 Pa at x = 90 mm (no stated uncertainty), 93.96 Pa +-7.50 Pa over the measured span by the radial equilibrium of the LDA profiles; with it the rotor's share of the missing 52.47 Pa is 32.26 Pa +-29.19 Pa (rig rotor loss 26.85 Pa against 62.87 Pa simulated), so by the rule of ADR 0765 it cannot be told which part is larger; held by crates/rcfd-api/tests/f883_fan01_wall_pressure.rs, three gate tests, five mutations caught.
+
+The same entry is in `docs/roadmap/proposals/0769-F-883.json` (form 1 of ADR 0755, base 21054b68), checked with
+`python scripts/roadmap_proposals.py check`. No follow-up is proposed; question 1 would extend the acceptance of
+F-870. Generated pages not current on this work, left to the lead (rule 9): `docs/adr/index.md` (ADR 0769 is new) and
+`docs/reference-data.md` (the fragment `docs/reference-data.d/0769-F-883.part` is new).
