@@ -44,17 +44,17 @@ A practitioner's account of CFD error sources, the verification and validation a
 - Residuals should drop and level off, typically "reduced a certain number (usually 3-4) of orders of magnitude"; also monitor engineering quantities (lift, drag, recovery) until they stop changing; time-accurate runs need convergence within every step.
 
 ### `spatconv.html` "Examining Spatial (Grid) Convergence"
-- Based on Richardson extrapolation as presented in Roache's book. Error model `E = C h^p`; the observed order is often below the theoretical one (boundary conditions, grid quality, shocks, turbulence models, non-linearities).
-- Three grids at constant ratio `r`: `p = ln((f3 - f2)/(f2 - f1)) / ln(r)`. Richardson: `f_exact ~ f1 + (f1 - f2)/(r^p - 1)`, generally `p + 1` order accurate; invalid in discontinuity regions but applicable to integrated functionals.
-- Fractional error `E1 = eps / (r^p - 1)`; the plain relative difference alone should not be used, since `r` near 1 makes it artificially small.
-- GCI (Roache) `GCI_fine = Fs |eps| / (r^p - 1)`, as a percentage, "a measure of uncertainty of the grid convergence"; `Fs = 3.0` for two-grid comparisons, `1.25` for three or more grids.
-- Asymptotic range: `GCI_23 ~ r^p GCI_12`, ratio about 1.0.
-- Grid generation: nested grids via `N = 2^n m + 1`; non-integer ratios allowed by regenerating with scaled spacings; recommended `r >= 1.1` to separate discretisation error from iterative and round-off error; an effective ratio from total point counts and dimension for unstructured grids (formula shown only as an image, not read); per-direction GCIs summed when ratios differ.
-- Worked example (supersonic inlet pressure recovery, grids at spacing 1, 2, 4): 0.97050, 0.96854, 0.96178; `p ~ 1.786170` (theory 2.0); `Pr(h=0) ~ 0.97130`; GCI_12 = 0.103 %, GCI_23 = 0.356 %; asymptotic ratio 1.002019 (the VERIFY program prints 0.997980); reported `Pr = 0.97130` with a 0.103 % band.
+- Based on Richardson extrapolation as presented in Roache's book. Error model $E = C h^p$; the observed order is often below the theoretical one (boundary conditions, grid quality, shocks, turbulence models, non-linearities).
+- Three grids at constant ratio $r$: $p = \ln\left(\dfrac{f_3 - f_2}{f_2 - f_1}\right) / \ln(r)$. Richardson: $f_\text{exact} \approx f_1 + (f_1 - f_2)/(r^p - 1)$, generally $p + 1$ order accurate; invalid in discontinuity regions but applicable to integrated functionals.
+- Fractional error $E_1 = \varepsilon / (r^p - 1)$; the plain relative difference alone should not be used, since $r$ near 1 makes it artificially small.
+- GCI (Roache) $GCI_\text{fine} = F_s \lvert \varepsilon \rvert / (r^p - 1)$, as a percentage, "a measure of uncertainty of the grid convergence"; $F_s = 3.0$ for two-grid comparisons, $1.25$ for three or more grids.
+- Asymptotic range: $GCI_{23} \approx r^p\, GCI_{12}$, ratio about 1.0.
+- Grid generation: nested grids via $N = 2^n m + 1$; non-integer ratios allowed by regenerating with scaled spacings; recommended $r \ge 1.1$ to separate discretisation error from iterative and round-off error; an effective ratio from total point counts and dimension for unstructured grids (formula shown only as an image, not read); per-direction GCIs summed when ratios differ.
+- Worked example (supersonic inlet pressure recovery, grids at spacing 1, 2, 4): 0.97050, 0.96854, 0.96178; $p \approx 1.786170$ (theory 2.0); $Pr(h=0) \approx 0.97130$; $GCI_{12} = 0.103$ %, $GCI_{23} = 0.356$ %; asymptotic ratio 1.002019 (the VERIFY program prints 0.997980); reported $Pr = 0.97130$ with a 0.103 % band.
 
 ## Contradictions with the wiki
 
-None with rcfd pages. Between references: this page recommends `r >= 1.1`; Celik et al. say it is "desirable" that `r` be greater than 1.3 ([[ref-celik-2008-jfe-discretisation-uncertainty]]). See [[solution-verification]].
+None with rcfd pages. Between references: this page recommends $r \ge 1.1$; Celik et al. say it is "desirable" that $r$ be greater than 1.3 ([[ref-celik-2008-jfe-discretisation-uncertainty]]). See [[solution-verification]].
 
 ## Pages this source informs
 

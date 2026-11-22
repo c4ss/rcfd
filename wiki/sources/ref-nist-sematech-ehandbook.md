@@ -24,30 +24,30 @@ Sample statistics (mean, median, variance, standard deviation, robust scale meas
 ## Key points by section
 
 ### 1.3.5.1 "Measures of Location"
-- Mean `Ybar = sum Y_i / N`; median the middle sorted value (average of the two middle values for even `N`); mode the most frequent value.
+- Mean $\bar{Y} = \sum Y_i / N$; median the middle sorted value (average of the two middle values for even $N$); mode the most frequent value.
 - The mean is optimal for normal data but pulled by skewness and long tails; the median is rank based and robust.
 
 ### 1.3.5.6 "Measures of Scale"
-- Variance `s^2 = sum (Y_i - Ybar)^2 / (N - 1)`; standard deviation `s` its square root; range; average absolute deviation; median absolute deviation (MAD); interquartile range.
+- Variance $s^2 = \sum (Y_i - \bar{Y})^2 / (N - 1)$; standard deviation $s$ its square root; range; average absolute deviation; median absolute deviation (MAD); interquartile range.
 - For 10 000 samples: normal SD 0.997, MAD 0.681; Cauchy SD 998.389, MAD 1.16. The SD is best for normal data and not robust for long-tailed data.
 
 ### 1.3.5.2 "Confidence Limits for the Mean"
-- `Ybar +- t_(1-alpha/2, N-1) s / sqrt(N)`; the interval narrows as `N` grows.
+- $\bar{Y} \pm t_{1-\alpha/2,\, N-1}\, s / \sqrt{N}$; the interval narrows as $N$ grows.
 - The 95 % describes the method: about 95 % of intervals from repeated samples contain the true mean; "a 95 % confidence interval does not mean that there is a 95 % probability that the interval contains the true mean".
-- Example ZARR13.DAT: `N = 195`, mean 9.261460, `s = 0.022789`, 95 % interval (9.258242, 9.264679).
+- Example ZARR13.DAT: $N = 195$, mean 9.261460, $s = 0.022789$, 95 % interval (9.258242, 9.264679).
 
 ### 1.3.6.6.1 "Normal Distribution"
-- `f(x) = exp(-(x - mu)^2 / (2 sigma^2)) / (sigma sqrt(2 pi))`; standard normal `mu = 0`, `sigma = 1`; estimated by the sample mean and standard deviation.
-- Central limit theorem: as `N` grows the sample mean becomes approximately normal whatever the variable's distribution, centred on `mu` with standard deviation approaching `sigma / sqrt(N)`.
+- $f(x) = \dfrac{e^{-(x - \mu)^2 / (2 \sigma^2)}}{\sigma \sqrt{2 \pi}}$; standard normal $\mu = 0$, $\sigma = 1$; estimated by the sample mean and standard deviation.
+- Central limit theorem: as $N$ grows the sample mean becomes approximately normal whatever the variable's distribution, centred on $\mu$ with standard deviation approaching $\sigma / \sqrt{N}$.
 - Many classical tests and regression models assume normal errors; the assumption should be tested.
 
 ### 1.3.3.27 "Spectral Plot"
 - "a smoothed Fourier transform of the autocovariance function": smoothed variance (power) against frequency in cycles per observation, 0 to 0.5 for equally spaced data (0.5 is a two-point cycle). Answers how many cyclic components there are and which frequency dominates; trends should be removed first.
 
 ### 4.4.3.1 "Least Squares"
-- Criterion `Q = sum [y_i - f(x_i; beta)]^2`, minimised over the parameter estimates.
+- Criterion $Q = \sum [y_i - f(x_i; \beta)]^2$, minimised over the parameter estimates.
 - For linear models the minimisation is done analytically (partial derivatives set to zero); nonlinear models need iterative algorithms.
-- Straight line `y = beta0 + beta1 x + eps`: `beta1 = sum (x_i - xbar)(y_i - ybar) / sum (x_i - xbar)^2`, `beta0 = ybar - beta1 xbar`; residual standard deviation `sigma = sqrt(Q / (n - p))` with `p` parameters. The page does not use the word "residual" or "normal equations".
+- Straight line $y = \beta_0 + \beta_1 x + \varepsilon$: $\beta_1 = \dfrac{\sum (x_i - \bar{x})(y_i - \bar{y})}{\sum (x_i - \bar{x})^2}$, $\beta_0 = \bar{y} - \beta_1 \bar{x}$; residual standard deviation $\sigma = \sqrt{Q / (n - p)}$ with $p$ parameters. The page does not use the word "residual" or "normal equations".
 
 ## Contradictions with the wiki
 
