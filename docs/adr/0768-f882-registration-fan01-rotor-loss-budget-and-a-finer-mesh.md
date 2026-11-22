@@ -373,3 +373,141 @@ constants `B0_STATE` and `B0_S_T`, and with them S2 and the extrapolation, take 
 cell count is the same, 106 692. Everything else of the registration stands: the regions, the budget, the extrapolation
 and its validity, the share of the installation, the tolerances and the decision rule; "B0" in them is the corrected
 mesh. The corrected run is made once.
+
+## Addendum 1 (2026-11-22): results
+
+Everything below was run after the registration (d27d8e9f) and amendment 1 (52b00c39), with the code of 1723e46d and
+a0a46e78. Runs made: the registered B0 once (diverged; amendment 1); the corrected B0 (B0c below, 106 692 cells) once,
+166 min; B3, B2, B1 once each in a second process (9.4, 26.1 and 75.0 min). The full logs are in the scratch folder;
+the summary table is `docs/investigations/f882-fan01-rotor-loss/summary.txt`, made from them by
+`docs/investigations/f882-fan01-rotor-loss/analyse.py`.
+
+### The loss and its division
+
+The loss up to x = 90 mm at 8000 iterations, `delta` 2.5 mm, in Pa (the whole `L_V` of the budget, its four parts, and
+the sampled `L_s` over the measured span and `L_ann` over the annulus):
+
+| Mesh | Cells | `L_s` | `L_ann` | `L_V` | blade | hub and casing | tip gap | interior | of it, inlet duct (z < 0.1 m) |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| B3 | 4 920 | 104.342 | 102.083 | 86.642 | 20.097 | 2.825 | 1.918 | 61.802 | 7.309 |
+| B2 | 13 627 | 78.755 | 75.954 | 69.355 | 19.515 | 2.894 | 1.721 | 45.224 | 5.106 |
+| B1 | 38 184 | 62.872 | 63.600 | 58.025 | 19.482 | 3.498 | 1.581 | 33.465 | 3.081 |
+| B0c | 106 692 | 56.781 | 55.341 | 52.361 | 16.877 | 3.460 | 1.615 | 30.408 | 7.289 |
+
+The interior of the passage carries most of the loss on every mesh and most of its fall with the mesh (61.8 to 30.4
+Pa). The blade part is near 19.5 Pa on B3, B2 and B1 and falls to 16.9 Pa on B0c, the first mesh with a third cell in
+the wall stack. The tip gap is 1.6 to 1.9 Pa, hub and casing 2.8 to 3.5 Pa. The inlet duct is not monotone (7.3, 5.1,
+3.1, 7.3 Pa); I have not found why, and it is reported, not explained. At `delta` 1.25 and 5 mm the blade part on B0c
+is 14.48 and 19.44 Pa and hub and casing 1.96 and 5.90 Pa; the whole does not change with `delta`. The convective share
+of the blade part on B0c is 15.73 Pa of 16.88 (the rest the stress work across the region's faces); the seam defect is
+below 4e-17 on every mesh.
+
+### Every check
+
+| Id | Result | Against the limit |
+| --- | --- | --- |
+| A1 | divided on all four meshes; route A minus route B is 0 at the ten printed digits on every mesh, plane, `delta` and sampled iteration | met |
+| A2 | B0c reached 8000 iterations, no stop (torque 2.145170 N m, pressure rise 82.656 Pa); the registered B0 stopped at iteration 106 (`velocity_runaway`) | met on B0c (amendment 1) |
+| A3 | (a) monotone, with a root; (b) observed order **2.786**, outside [1.5, 2.5] | **MISS of (b)**: not valid |
+| A4 | not shown, by the rule. Printed, not results: `L_0` 52.965 Pa at the observed order, 41.869 at order 1, 50.589 at order 2; `U_L` 8.503 Pa; `Rec_m` 58.606 Pa; `I_0` 46.327 +- 12.176 Pa (35.231 at order 1, 43.951 at order 2) | not given |
+| A5 | `f882_b0c_acceptance` failed on A3 (b) and is kept as `f882_b0c_acceptance_known_miss` with the numbers in its ignore reason | met |
+| B1 | as A1, every sampled iteration of the four runs | met |
+| B2 | `L_V` against `L_ann`: 15.44, 6.60, 5.57, 2.98 Pa on B3, B2, B1, B0c | report (estimate on B1 within 5 Pa: not met) |
+| G1 | B0c: 83.687 deg, 2.5641, 428.08 against 70 deg, 2.0, 300 (registered B0: 88.074, 14.594, 323.08) | all three missed (estimate: two) |
+| R1 | B3 1.918189 N m, 46.7776 Pa, 104.342 Pa; B2 2.028692, 64.2329, 78.755; B1 2.098164, 73.9881, 62.872: equal to the records of ADR 0762 and ADR 0765 at the printed digits | met |
+| R2 | the table above and summary.txt. `S`, `T` of `L_s`: B3 0.071, 1.798; B2 0.0001, 1.068; B1 0.0012, 0.342; B0c 0.0078, 0.756 Pa. Beside, no rule: over B2, B1, B0c `L_ann` has order 1.166 (38.52 Pa), `L_V` 2.013 (46.65 Pa), the interior 3.919 (29.33 Pa); the blade, hub-and-casing and gap parts are not monotone. Over B3, B2, B1: `L_s` 1.430 (37.83 Pa), as the arithmetic beforehand gave | report |
+| V1 to V4 | `f882_rules_closed_forms` passes | met |
+| S1 | passes; the values of its first run again (K1: equal to the last printed digit) | met |
+| S2 | passes with the values of B0c recorded | met |
+| S3 | `f882_b0_mesh_gates_as_recorded` and `f882_b0c_mesh_gates_as_recorded` pass | met |
+| D1 | `git diff 21054b68 -- crates/*/src` and the two named test files: 0 files | met |
+| P | below | see "The process check" |
+
+Mutations, each against the gate on a scratch copy: M1 (Coriolis -1.9), M2 (no centrifugal term), M3 (sign of the
+stress work) caught by `f882_b3_short_run_holds_the_budget`; M4 (a gap cell also in the blade region) and M5 (`r21`,
+`r32` exchanged) caught by `f882_rules_closed_forms`. M6 as registered (the range widened to [0.5, 2.5], because the
+verdict is "not valid") is **not caught**: the recorded order 2.786 misses the range at its upper end, so widening the
+lower end does not change the verdict. The registration chose the form of M6 on the expectation of a low order. Not
+registered, and disclosed: M6w, the range widened to [1.5, 3.0], is caught by S2. Five of six registered mutations are
+caught. M2 is committed as `crates/rcfd-api/tests/f882_fan01_rotor_loss.mutation.patch`.
+
+### What the gate runs and what is a heavy record
+
+Gate: `f882_rules_closed_forms` (under a second), `f882_b0_mesh_gates_as_recorded` and
+`f882_b0c_mesh_gates_as_recorded` (about two minutes each), `f882_b3_short_run_holds_the_budget` (about 30 s),
+`f882_recorded_family_gives_the_recorded_verdicts` (no solve). Heavy, ignored: `f882_b0c_loss_state_record` (its
+recorded values are those of its one run; not run again) and `f882_b0c_acceptance_known_miss`, sharing one solve of about three hours; `f882_family_run`
+(B1, B2, B3 by `F882_RUN`); and the registered `f882_b0_loss_state_record` and `f882_acceptance`, kept unchanged as the
+ignored record of the diverged run (rule 2; amendment 1).
+
+### Deviations
+
+* The registered B0 diverged; amendment 1 corrected it before its run (y+ 30 in place of 21.277). The first cell is not
+  refined, so the step from B1 to B0c refines the wall-normal direction in its cells only.
+* `f882_b0_mesh_gates_as_recorded` now calls a helper shared with the new B0c test; what it checks and its numbers are
+  unchanged.
+* M6 was not caught as registered; M6w was added (above).
+* Five heavy solves in place of four (the diverged B0 is the fifth).
+
+### What was not run
+
+The rotor's share with `D` and `Pi_s` of B0c in the place of B1's (the solve does not print `e` and `q` of B0c; the
+reading beside was registered, it is not made). A refinement of the first cell. A mesh beyond B0c. The registered B0
+was not run again.
+
+### Reading of the miss
+
+The order 2.786 comes from a step B1 to B0c that is smaller than the step B2 to B1 (6.09 Pa against 15.88 Pa) on ratios
+1.40981 and 1.40848; it is above the range, the opposite of what the registration expected. B0c is not of the same kind
+as the other steps (the first cell is kept, a third wall cell added, the blade part falls only there), so the order is
+not a property of a systematic family; that is said in "What is not covered" and the miss is consistent with it. Every
+value the formula gives for an order from 1 to 2.786 is between 41.9 and 53.0 Pa, so `I_0` between 35.2 and 46.3 Pa of
+the 52.47 Pa missing (ADR 0765), under the condition `L_m = L_0`; none of these is a result.
+
+### Size
+
+Size (agent, actual): partial; 0; 5; 1; 450000
+
+### Decision by the registered rule
+
+**Partial.** The loss is divided by the registered rule on all four meshes with B1 met (A1, B1), and B0 is run on its
+corrected form (A2). The extrapolation of `L_s` over B2, B1, B0c is not valid: monotone, but the observed order 2.786 is
+outside [1.5, 2.5] (known miss A3 (b)). The loss at mesh convergence and the installation's share are therefore not
+shown. What it would take: a family that is systematic in all directions, including the first cell, which the wall
+treatment of ADR 0762 limits, or the maintainer's reading of the order range for this family.
+
+## Open questions for the maintainer
+
+1. **Is F-880 (the outlet as on the rig) now issued?** The run does not decide by its rule, but every reading of it puts
+   most of the missing pressure rise behind the measured plane: the loss falls from 62.87 to 56.78 Pa from B1 to B0c,
+   and the values the formula gives for orders 1 to 2.79 leave 35 to 46 Pa of the 52.47 Pa to the installation (if the
+   measured rotor loses what the simulated one does). Options: (a) issue F-880 now, F-882 stays partial with its known
+   miss; (b) first a further registration under F-882 with a mesh beyond B0c that also refines the first cell, before
+   F-880 (several hours of solve on 300 000 cells, and a first cell below y+ 30 leaves the range of the wall functions);
+   (c) neither: FAN-01 is held where it is. Recommendation: (a). The question F-880 answers, whether the installation
+   recovers the pressure that the rotor-only passage does not give, is not changed by any value in the printed range,
+   and (b) cannot be systematic at the wall with the present wall treatment. Not taken on the standing instruction:
+   issuing an item is the maintainer's (rule 6).
+
+## For the lead: roadmap entries
+
+Status proposed: partial.
+
+> ADR 0768, 2026-11-22, partial: the loss of total pressure of the FAN-01 design-point solve up to x = 90 mm is divided by a rothalpy budget that closes by two routes on B3, B2, B1 and a finer mesh B0c (106 692 cells; amendment 1: the registered B0 diverged at iteration 106): whole 86.6, 69.4, 58.0, 52.4 Pa, of which the passage interior 61.8, 45.2, 33.5, 30.4 Pa, the blade surfaces 20.1, 19.5, 19.5, 16.9, hub and casing 2.8 to 3.5, the tip gap 1.6 to 1.9; L_s 104.34, 78.75, 62.87, 56.78 Pa. The extrapolation over B2, B1, B0c is monotone with observed order 2.786, outside the registered [1.5, 2.5], so it is not valid and the loss at mesh convergence is not shown (known miss, f882_b0c_acceptance_known_miss); the formula gives 41.9 to 53.0 Pa for orders 1 to 2.79, which would leave 35 to 46 Pa of the missing 52.47 Pa to the installation. B0c misses all three mesh gates.
+
+> Missing for done: a valid extrapolation of the loss. The step B1 to B0c keeps the first cell (y+ 30) and is not of the kind of the other steps; a family refined at the wall too is limited by the wall functions. Whether F-880 is issued on this result is question 1 of ADR 0768.
+
+No follow-up item is proposed; F-880 is in the roadmap already. The same entries are in
+`docs/roadmap/proposals/0768-F-882.json`.
+
+For the lead, not roadmap: `docs/adr/index.md` is generated and is left to the lead (rule 9). No reference fragment
+was added.
+
+### The process check (row P)
+
+`cargo fmt -p rcfd-api --check`: clean. `cargo clippy -p rcfd-api --all-targets -- -D warnings`: no warning. The gate
+tests of the file: 5 passed, 5 ignored. `python scripts/roadmap_proposals.py check
+docs/roadmap/proposals/0768-F-882.json`: "F-882: todo -> partial; gap set; note + 879 characters". `cargo test -p
+rcfd-cli --release --test docs_site` on the tree with this addendum: 2 passed. `python scripts/process_report.py
+--check`: 1 failure, "generated file is not current: docs/adr/index.md"; no failure of the registration. The page is
+left to the lead (rule 9).

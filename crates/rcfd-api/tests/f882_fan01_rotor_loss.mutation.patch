@@ -1,0 +1,14 @@
+# expect-fail: cargo test -p rcfd-api --release --test f882_fan01_rotor_loss f882_b3_short_run_holds_the_budget
+diff --git a/crates/rcfd-api/tests/f882_fan01_rotor_loss.rs b/crates/rcfd-api/tests/f882_fan01_rotor_loss.rs
+index 344967de..36b89f6f 100644
+--- a/crates/rcfd-api/tests/f882_fan01_rotor_loss.rs
++++ b/crates/rcfd-api/tests/f882_fan01_rotor_loss.rs
+@@ -668,7 +668,7 @@ struct Budget {
+ 
+ fn rothalpy(p: f64, w: Vec3, x: Vec3, p0: f64) -> f64 {
+     let r2 = x[0] * x[0] + x[1] * x[1];
+-    p + 0.5 * dot(w, w) - 0.5 * omega() * omega() * r2 - p0
++    p + 0.5 * dot(w, w) - 0.0 * r2 - p0
+ }
+ 
+ fn budget(g: &FvGeometry, bg: &BudgetGeo, in_v: &[bool], regions: &[Vec<usize>; 4], s: &State) -> Budget {

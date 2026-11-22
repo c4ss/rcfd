@@ -1063,11 +1063,13 @@ const B0_QUALITY_RECORD: [f64; 3] = [88.074, 14.5937, 323.08];
 /// The corrected B0 (amendment 1): non-orthogonality [deg], skewness, aspect ratio; its cell count is `B0_CELLS`.
 const B0C_QUALITY_RECORD: [f64; 3] = [83.687, 2.5641, 428.08];
 /// The corrected B0 at 8000 iterations: torque [N m], pressure rise, `L_s`, the whole and the four parts [Pa]; and `S`, `T` of `L_s`.
-const B0_STATE: [f64; 8] = [f64::NAN; 8];
-const B0_S_T: [f64; 2] = [f64::NAN; 2];
+const B0_STATE: [f64; 8] = [
+    2.145170, 82.655991, 56.780989, 52.360688, 16.877113, 3.460321, 1.615084, 30.408170,
+];
+const B0_S_T: [f64; 2] = [0.007815, 0.755584];
 /// The recorded extrapolation: validity, and p, L_0, U_L, I_0, U_I.
 const EXTRAPOLATION_VALID_RECORD: bool = false;
-const EXTRAPOLATION_RECORD: [f64; 5] = [f64::NAN; 5];
+const EXTRAPOLATION_RECORD: [f64; 5] = [2.785548, 52.965004, 8.502893, 46.327300, 12.175882];
 
 fn extrapolation_of(l_b0: f64, cells_b0: f64, s: f64, t: f64) -> Extrapolation {
     extrapolate(
@@ -1347,8 +1349,8 @@ fn f882_b0c_loss_state_record() {
 
 /// The acceptance of F-882 on the corrected B0 (ADR 0768, amendment 1), in the form of `f882_acceptance`.
 #[test]
-#[ignore = "heavy, ADR 0768 amendment 1: shares the corrected B0 solve of the state record"]
-fn f882_b0c_acceptance() {
+#[ignore = "KNOWN MISS, ADR 0768 addendum 1: the extrapolation of L_s over B2, B1, B0 is not valid, the observed order 2.786 is outside [1.5, 2.5] (L_0 52.965 Pa not shown); heavy, shares the corrected B0 solve of the state record"]
+fn f882_b0c_acceptance_known_miss() {
     let o = b0c_outcome();
     assert_eq!(o.iterations, CAP, "{:?}", o.stop);
     let (s, t) = spread(o);
