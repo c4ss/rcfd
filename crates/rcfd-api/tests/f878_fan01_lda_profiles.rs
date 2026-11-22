@@ -784,27 +784,65 @@ fn holds_profile(a: f64, b: f64) -> bool {
 /// B3 at iteration 300, x = 90 mm: (`e_s` [Pa], `q_s` [Pa], `Pi_s` [Pa], `Q_c` [m^3/s]) of the first run (S1).
 const B3_SHORT_RECORD: [f64; 4] = [240.0486, 96.4801, 39.3569, 1.339620];
 /// B1 and B2 at 8000 iterations, x = 90 mm, the measured span, pointwise reading: (`e_s`, `q_s`, `Pi_s`, `Q_c`).
-const B1_SCALARS: [f64; 4] = [f64::NAN; 4];
-const B2_SCALARS: [f64; 4] = [f64::NAN; 4];
+const B1_SCALARS: [f64; 4] = [226.861468, 102.279724, 61.709396, 1.375399];
+const B2_SCALARS: [f64; 4] = [231.526440, 98.038657, 54.732823, 1.331399];
 /// The band terms of the solve for `Pi_s` and for `e_s - q_s` [Pa]: the spread over the cycle `S`, the place of the plane `T`, the
 /// coverage `u_cov` (`U_num` is formed from the two lines above).
-const S_T_COV_PI: [f64; 3] = [f64::NAN; 3];
-const S_T_COV_EQ: [f64; 3] = [f64::NAN; 3];
+const S_T_COV_PI: [f64; 3] = [0.000804, 0.008265, 0.393920];
+const S_T_COV_EQ: [f64; 3] = [0.000497, 0.333469, 0.333564];
 /// Circumferential means at x = 90 mm at the 26 measured radii [m/s]: B1 and B2 at 8000 iterations, and for B1 the spread over the
 /// cycle `S` and over the place of the plane `T`.
-const B1_CX: [f64; 26] = [f64::NAN; 26];
-const B1_CT: [f64; 26] = [f64::NAN; 26];
-const B2_CX: [f64; 26] = [f64::NAN; 26];
-const B2_CT: [f64; 26] = [f64::NAN; 26];
-const S_CX: [f64; 26] = [f64::NAN; 26];
-const S_CT: [f64; 26] = [f64::NAN; 26];
-const T_CX: [f64; 26] = [f64::NAN; 26];
-const T_CT: [f64; 26] = [f64::NAN; 26];
+const B1_CX: [f64; 26] = [
+    11.268921, 11.344717, 11.445796, 11.407395, 11.231501, 11.245872, 10.885398, 10.923642, 10.558101, 10.588224,
+    10.534551, 10.550688, 10.743585, 10.754598, 11.178851, 11.159286, 11.607318, 11.582900, 11.579082, 11.203062,
+    11.192518, 6.818270, 6.813046, 1.659118, -0.253715, -0.974646,
+];
+const B1_CT: [f64; 26] = [
+    8.156290, 7.809535, 7.669032, 7.656802, 7.433324, 7.409061, 7.268605, 7.224084, 7.124392, 7.073785, 6.660781,
+    6.643203, 6.048415, 6.028036, 5.432015, 5.429048, 5.109094, 5.110004, 5.099351, 6.157801, 6.205307, 9.801844,
+    9.810213, 10.546999, 10.133139, 9.796893,
+];
+const B2_CX: [f64; 26] = [
+    10.981366, 11.064599, 11.212121, 10.985807, 11.037878, 11.082727, 10.534027, 10.548728, 10.545481, 10.480534,
+    10.480756, 10.487291, 10.487554, 11.013072, 11.013243, 11.008779, 11.257023, 11.248147, 11.257063, 8.542032,
+    8.522548, 8.501312, 8.489585, 0.874061, 0.794386, -0.659122,
+];
+const B2_CT: [f64; 26] = [
+    8.225801, 8.023227, 7.824771, 7.445350, 7.387242, 7.378331, 7.235809, 7.243009, 7.236244, 6.597825, 6.590446,
+    6.580419, 6.568562, 5.603203, 5.585844, 5.598429, 5.201541, 5.223102, 5.235716, 7.664718, 7.675708, 7.689141,
+    7.701790, 9.190983, 9.177147, 8.563246,
+];
+const S_CX: [f64; 26] = [
+    0.000260, 0.000441, 0.000447, 0.000301, 0.000349, 0.000328, 0.000084, 0.000081, 0.000101, 0.000099, 0.000109,
+    0.000107, 0.000066, 0.000066, 0.000035, 0.000035, 0.000024, 0.000024, 0.000025, 0.000020, 0.000021, 0.000017,
+    0.000017, 0.000013, 0.000010, 0.000010,
+];
+const S_CT: [f64; 26] = [
+    0.000632, 0.000311, 0.000240, 0.000119, 0.000122, 0.000122, 0.000038, 0.000033, 0.000032, 0.000019, 0.000020,
+    0.000025, 0.000024, 0.000025, 0.000011, 0.000011, 0.000008, 0.000008, 0.000007, 0.000009, 0.000010, 0.000011,
+    0.000011, 0.000010, 0.000006, 0.000003,
+];
+const T_CX: [f64; 26] = [
+    0.012319, 0.068944, 0.004574, 0.043061, 0.013354, 0.010657, 0.003460, 0.006947, 0.023922, 0.011055, 0.005921,
+    0.004477, 0.010273, 0.009798, 0.017845, 0.010722, 0.033866, 0.022769, 0.016185, 0.039948, 0.031800, 0.053509,
+    0.052819, 0.010349, 0.034829, 0.040874,
+];
+const T_CT: [f64; 26] = [
+    0.038076, 0.084563, 0.002270, 0.026815, 0.011328, 0.025445, 0.022151, 0.018605, 0.021014, 0.015559, 0.023281,
+    0.008007, 0.007412, 0.011639, 0.003317, 0.007399, 0.016849, 0.005743, 0.001260, 0.024639, 0.018848, 0.030435,
+    0.025353, 0.054723, 0.066271, 0.058132,
+];
 /// The recorded verdicts: per radius within the band, and the division (`R_lo`, `R_hi`, `U_lo`, `U_hi`, `R_eq`, `U_eq` in Pa).
-const WITHIN_CX_RECORD: [bool; 26] = [false; 26];
-const WITHIN_CT_RECORD: [bool; 26] = [false; 26];
+const WITHIN_CX_RECORD: [bool; 26] = [
+    false, true, true, true, true, true, true, true, false, false, false, false, false, false, false, false, true,
+    true, false, true, true, true, true, true, false, false,
+];
+const WITHIN_CT_RECORD: [bool; 26] = [
+    false, false, false, true, false, false, true, false, false, true, false, false, true, true, true, false, false,
+    false, true, true, true, true, true, true, true, true,
+];
 const VERDICT_RECORD: Verdict = Verdict::CannotBeTold;
-const DIVISION_RECORD: [f64; 6] = [f64::NAN; 6];
+const DIVISION_RECORD: [f64; 6] = [-34.45, 59.11, 23.75, 24.95, -3.76, 31.10];
 
 /// The band of ADR 0765 at each measured radius, from the recorded profiles: `U_num + S + T` (`u_meas` is zero: not stated in a source).
 fn bands() -> ([f64; 26], [f64; 26]) {
