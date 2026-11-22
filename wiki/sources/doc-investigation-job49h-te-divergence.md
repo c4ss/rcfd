@@ -37,3 +37,4 @@ None.
 ## Pages this source informs
 
 - [[naca0012]], [[divergence-guard]], [[known-miss]], [[doc-case-schema-linear-upwind-limiter]]
+- [[adr-thread-naca0012-sa-drag]] (the ADR thread of the NACA 0012 SA chain)

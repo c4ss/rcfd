@@ -45,3 +45,4 @@ None found. The numbers agree with [[adr-thread-simulation-milestones-validation
 - [[naca0012]], [[spalart-allmaras]], [[simulation-milestones]], [[known-miss]]
 - [[adr-thread-simulation-milestones-validation]], [[doc-reference-data-f868-ladson-naca0012]]
 - [[doc-investigation-job49d-aoa-sweep-fixed]] (the sweep it reproduces)
+- [[adr-thread-naca0012-sa-drag]] (the ADR thread of the NACA 0012 SA chain)

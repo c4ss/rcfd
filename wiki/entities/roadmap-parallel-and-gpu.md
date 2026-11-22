@@ -14,11 +14,15 @@ status: draft
 
 ## Synthesis
 
-_Current state of this line of work, written from the ADR threads (P3)._
+- **Shared memory first, by the founding decision.** ADR 0003: `rayon` with deterministic chunking and "a fixed chunking and fixed combine order so results are bit-reproducible for a given thread count and chunk size"; distributed memory (F-100) on top of the partitioning of F-016; GPU (F-101) "only linear solves and flux assembly behind a trait" ([[adr-thread-founding-decisions]]).
+- **GPU is a first slice (F-101 partial).** `rcfd-gpu` (ADR 0038, wave 22): CUDA device solvers for the pressure Poisson equation behind the off-by-default feature `cuda`; 9.7x (benchmark) and 15.2x (ignored test) against one CPU thread at 171^3, 0.22x at 4096 unknowns; no device-resident assembly, no AMG / ILU / GMRES on the device, no multi-GPU ([[adr-thread-founding-decisions]], [[rcfd-gpu]]).
+- **Distributed memory is a library (F-100 todo for the cluster feature).** `rcfd-dist` (ADR 0058, wave 29D): point-to-point communicator trait, halo exchange, distributed CSR, `cg` and `bicgstab`, with only `SerialComm` and the in-process `ThreadComm`; `rcfd run` not wired; strong scaling 0.56, 0.38, 0.20 at P = 2, 4, 8 reported, not asserted ([[adr-thread-founding-decisions]], [[rcfd-dist]]).
+- **Partitioning and reordering** (F-236) exist as library functions and reach the case tree, CLI and service as `decomposition`, but the solver "runs in one process and ignores `decomposition` for its numerics" (ADRs 0020, 0021) ([[adr-thread-early-meshing]], [[adr-thread-early-workflow-and-partials]]).
 
 ## ADR threads
 
-_Thread pages in `sources/adr-thread-*` that cover this area (P3)._
+- [[adr-thread-founding-decisions]] — ADRs 0001 to 0004, 0038 (F-101), 0058 (F-100), and the crates created by ADRs 0001 to 0129.
+- Related: [[adr-thread-early-meshing]] (ADR 0020, F-236 partitioning), [[adr-thread-early-workflow-and-partials]] (ADR 0021 wiring).
 
 ## Items
 

@@ -20,6 +20,11 @@ A steady solve in which a rotating zone is computed in its own rotating frame (A
 - F-126 (frozen-rotor and stage interfaces with sector periodicity) is partial; its gap names "MRF on the bladed FAN-01 passage (blade wall refused by the revolution check)" and "transient and coupled solvers" among what is missing ([[adr-thread-fan01-rotating-solve]]).
 - The transient alternative, a sliding rotor-stator interface, runs from a case file on the bladeless cylindrical-interface annulus and sector (F-303, F-711), laminar only ([[adr-thread-sliding-mesh-rotor-stator]]). See [[sliding-mesh]].
 
+- **Formulation (ADR 0008, added by p3-records-a):** an MRF zone in the steady `simple` / `simplec` kernel "solves for the absolute velocity `u`, with the relative flux `phi_rel` in momentum convection only and a lagged `Omega x u` source"; the checks are analytic flows (solid body, Taylor-Couette, axial through-flow), "no pump or turbine benchmark is claimed"; the registered torque limits of M2 to M4 stay missed (-3.41 %, -3.41 %, -4.12 % against 3 %) ([[adr-thread-fan01-rotating-solve]]).
+- **Rotating frame without a fan (ADR 0071):** the solver is second order in the `rotating_frame` and `mrf` formulations; a seam imbalance was a defect of `SimpleSolver::iterate`, fixed opt-in by `coupled_body_pair_mean` ([[adr-thread-fan01-rotating-solve]]).
+- **Cyclic seams (ADR 0113):** `sources.<name>.cyclic_seams` (default `false`) "gives the frame flux to both faces of a seam pair when both owner cells are in the zone", with the solver flag `coupled_offdiag_in_h1`; verified at library level only ([[adr-thread-fan01-rotating-solve]]).
+- **On FAN-01:** the steady relative-frame solve with first-order upwind manufactures swirl that the walls do not supply (ADRs 0078, 0082), and the steady run stalls in a limiter cycle (ADRs 0110, 0111) ([[adr-thread-fan01-rotating-solve]]). Hub item: [[f-126]].
+
 ## Related
 
 - [[adr-thread-fan01-rotating-solve]]

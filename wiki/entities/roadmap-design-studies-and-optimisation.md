@@ -22,6 +22,7 @@ The design loop is a full library stack on the reduced-order fan, and none of it
 - **Hypotheses.** The [[hypothesis-record]] (F-701, partial) and six follow-ups make design claims registered, family-wise-level tested and re-checkable by a verifier's own draw ([[adr-thread-design-hypothesis-record]]).
 - **Reference fan and mesh.** The schema default fan stalls in the reduced-order model, so `ComputerFan::rom_reference()` was added beside it (F-722). Five successive opt-in C-grid constructions mesh it and a second strongly staggered blade within 84.5 deg / 4.0 / 1000 (F-791 done). No case value exists for them yet (F-778 todo) ([[adr-thread-rom-reference-fan-and-c-grid]]).
 - **Exposure.** Every part is library only until F-702 (MCP tools, with F-339), by decision D1 of 2026-11-15. Both items may be issued under the additive-golden class rule ([[adr-thread-design-optimisers-and-ledger]]).
+- **Early waves (added by p3-records-a).** The first design-loop wave (ADR 0067: divergence guard, operating maps, DOE, optimisation, assistant tools; "the real fan is not part of this wave"), the first sweep (ADR 0034, F-095 done by ADR 0099) and the small discrete adjoint of a laminar duct (ADR 0091, F-137 done by the registered rule; "Turbulent gradients are refused") are on [[adr-thread-early-workflow-and-partials]]. The wave-46 fan foundations were added to the existing threads: `ComputerFan` and its checker (ADR 0118, [[adr-thread-rom-reference-fan-and-c-grid]]), the reduced-order tier (ADR 0119, [[adr-thread-design-surrogate-and-fidelity]]), the ledger and tolerance driver (ADR 0121, [[adr-thread-design-optimisers-and-ledger]]) and the rigid-rotor dynamics (ADR 0120, [[adr-thread-structural-rotordynamics]]).
 
 ## ADR threads
 
@@ -29,6 +30,7 @@ The design loop is a full library stack on the reduced-order fan, and none of it
 - [[adr-thread-design-surrogate-and-fidelity]]: F-697, F-698, F-699, F-715 to F-718, F-733 to F-735, F-758, F-766, F-770 (13 ADRs)
 - [[adr-thread-design-hypothesis-record]]: F-701, F-727, F-728, F-745, F-749, F-776, F-781 (7 ADRs)
 - [[adr-thread-rom-reference-fan-and-c-grid]]: F-713, F-722, F-726, F-777, F-782, F-784, F-791 (7 ADRs)
+- [[adr-thread-early-workflow-and-partials]] — F-095, F-137 (ADRs 0034, 0067, 0091, 0099)
 
 ## Items
 

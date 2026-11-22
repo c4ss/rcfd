@@ -19,6 +19,7 @@ status: draft
 - **Engine first.** Every Studio item that needed a number, a write or a check got an engine entry point through its own ADR, accepted and built on 2026-11-17: the opt-in `rcfd serve --ui` family (schema metadata, help, error catalogue, `mesh.preview`, `case.facts`, `mesh.refine`, `case.save`), `rcfd project init`, launch records and rerun, session journals on disk, a project trash, compare-and-set, derived pictures, and `set_runner_config` ([[adr-thread-studio-engine-entry-points]], [[adr-thread-runner-records-and-run-sites]]). The rule behind it is G2 and G16 of the [[studio-guardrails]].
 - **Claude Code outside the Studio.** The embedded Claude Code panel was removed on 2026-11-17 (ADR 0801 Addendum 23): the Studio registers the engine's project server with Claude Code for the folder, opens Claude Code in a terminal, and follows its changes through the [[project-journal]]'s feed; F-814 is still partial for a test with a real Claude Code session and the maintainer's view-and-report ([[adr-thread-studio-electron]]).
 - **Next lines.** F-848 (run sites; phase 1 built by ADR 0739, the roadmap still says `todo`) ([[run-site]]), F-852 (an end-to-end test that times out on Windows in CI), F-151 (3D viewport of the old plan), F-266 (egui shell, todo), F-262 (the runner: socket control and runs started from the application; S5 an ignored known miss; the order of its final writes fixed by ADR 0742) ([[adr-thread-runner-records-and-run-sites]]).
+- **The headless layers came first (added by p3-records-a).** Wave 47 (2026-10-26) built L1 `rcfd-project`, L2 `rcfd-runner`, L3 `rcfd-tsstore`, L4 `rcfd-render` and L6 `rcfd-claude` as separate crates before any UI (ADRs 0122 to 0126), and ADR 0128 fixed sixteen audit findings across them; the first three remain, the last two were removed later. Before that, the egui GUI and assistant of ADR 0004 had only headless checks (ADR 0025) ([[adr-thread-studio-foundation-crates]], [[adr-thread-founding-decisions]]).
 
 ## ADR threads
 
@@ -27,6 +28,8 @@ status: draft
 - [[adr-thread-runner-records-and-run-sites]] — ADRs 0733, 0734, 0739, 0742: runner budgets, launch records, run sites, final writes (F-837, F-828, F-848, F-262).
 - [[adr-thread-workspace-layer]] — ADR 0173 and its amendments (F-270 to F-275), which the Studio and the MCP server share.
 - [[adr-thread-mcp-tools]] — the tool list and allow-list changes these ADRs made.
+- [[adr-thread-studio-foundation-crates]] — ADRs 0025, 0122 to 0126, 0128 (F-143, F-144, F-261 to F-265, F-866)
+- [[adr-thread-founding-decisions]] — ADR 0004 (F-140, the egui app and assistant crates and their MSRV)
 
 ## Items
 

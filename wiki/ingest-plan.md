@@ -86,6 +86,23 @@ Sets the taxonomy every later phase hangs on.
 - [ ] Rewrite [[overview]] from the finished wiki.
 - [ ] Record the steady-state rule (below) in `CLAUDE.md`.
 
+### P6 — Foundations (concept ladders under every rcfd concept)
+
+Goal: every rcfd concept page (e.g. [[k-omega-sst]], [[piso]], [[amg]], [[mrf]], [[fw-h]], [[gci-richardson]], the FEM element pages) gets the chain of more basic concepts it builds on, down to the level rcfd needs. Example: k-omega SST ← k-omega (Wilcox), k-epsilon, blending functions, SST limiter (Bradshaw assumption) ← eddy viscosity / Boussinesq hypothesis ← Reynolds stress ← Reynolds averaging (RANS) ← turbulence ← shear stress ← stress, shear (velocity gradient), viscosity; side chains boundary layer, y+, wall functions.
+
+Rules (maintainer decisions 2026-11-22):
+- **Sources: cited open references only.** Every foundation claim cites a source page made from an open reference that was actually read: public-domain or openly licensed texts (e.g. the NASA Turbulence Modeling Resource, NASA technical reports, open textbooks and lecture notes), plus the papers the ADRs and `docs/reference-data.md` already cite where an open copy exists. No vendor documentation (clean-room rule). No claims from memory.
+- **Copyright:** a full copy goes in `raw/` only when its licence allows redistribution in a public repo; otherwise the source page holds a citation, locator (section, equation, page) and our own summary, never copied text.
+- **Scope: all rcfd concept pages**, with shared foundations merged (one `shear-stress` page serves turbulence, FEM and wall treatment).
+- **Page form:** `type: concept`, `tags: [foundation, ...]`, frontmatter `builds_on: [..]` (Dataview/graph), sections `## In short`, `## Explanation`, `## Builds on`, `## Leads to`, `## How rcfd uses it` (links up to the rcfd concept, ADR threads and roadmap areas). Existing rcfd concept pages get `builds_on:` and a `## Builds on` section added (additive).
+- **Depth stop:** stop descending where a reader with first-year calculus and physics would follow; don't write a textbook.
+
+Steps:
+- [ ] Map: from every concept page, draft the prerequisite graph (`analyses/foundations-map.md`, a to-do list, not claims).
+- [ ] Sources: find and fetch open references per branch (turbulence, pressure-velocity coupling, linear solvers, rotating frames and moving meshes, acoustics, structural mechanics, verification); make source pages `ref-<short-name>`.
+- [ ] Write foundation pages branch by branch (subagents, max 4), merging shared nodes.
+- [ ] Lint: every concept page reachable from a foundation root; no foundation page without a cited `ref-*` source.
+
 ## Steady state (after P5)
 
 Every new ADR / F-item / doc change merged to `main` gets ingested into its thread or source page in the same session that merges it, and logged. Lint weekly.
@@ -96,6 +113,8 @@ Every new ADR / F-item / doc change merged to `main` gets ingested into its thre
 2. **Supervision:** P0-P1 supervised, P2-P3 batched with up to 4 subagents.
 3. **Committing:** the wiki is public. Commit `wiki/` to `main` at the end of each phase.
 4. **Steady state:** every roadmap/studio loop merge also ingests its new or changed docs into the wiki (rule in `CLAUDE.md` > Steady-state ingest).
+
+5. **Foundations pass (P6):** cited open sources only; scope is all rcfd concept pages (both 2026-11-22).
 
 ## Ingest backlog
 

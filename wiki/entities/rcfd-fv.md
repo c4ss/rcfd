@@ -1,7 +1,7 @@
 ---
 type: entity
 tags: [crate]
-sources: [doc-architecture, doc-dynamic-mesh, doc-cosimulation-protocol, doc-acoustics, doc-bfs-convergence-findings, doc-component-diagonal-default, doc-meshing, adr-thread-piso-stability-consistent-correctors, adr-thread-bdf2-step-consistent-face-flux, adr-thread-steady-kernel-warped-mesh, adr-thread-gradient-options, adr-thread-compressible-acoustic-boundaries, adr-thread-acoustic-wave-solver]
+sources: [doc-architecture, doc-dynamic-mesh, doc-cosimulation-protocol, doc-acoustics, doc-bfs-convergence-findings, doc-component-diagonal-default, doc-meshing, adr-thread-piso-stability-consistent-correctors, adr-thread-bdf2-step-consistent-face-flux, adr-thread-steady-kernel-warped-mesh, adr-thread-gradient-options, adr-thread-compressible-acoustic-boundaries, adr-thread-acoustic-wave-solver, adr-thread-founding-decisions, adr-thread-early-physics-models, adr-thread-early-numerics-transient-accuracy, adr-thread-steady-solver-robustness]
 created: 2026-11-22
 updated: 2026-11-22
 status: draft
@@ -25,6 +25,7 @@ status: draft
 - **Compressible solver and acoustics:** `compressible.rs`, `compressible_bc.rs` (impedance, quiet, `MsdWall`), `sponge.rs`, `acoustic_wave.rs` ([[doc-acoustics]]); see [[aeroacoustics]].
 - **Adaptive SIMPLE loops:** `rcfd_fv::adaptive` (`axis_variations`, `directional_axes`, `run_adaptive_simple_directional*`) ([[doc-meshing]]); see [[mesh-adaptation]].
 - **P3 ADR threads touching this crate:** PISO/PIMPLE consistent correctors and outer criteria in `pimple.rs` ([[adr-thread-piso-stability-consistent-correctors]]); the step-consistent face flux ([[adr-thread-bdf2-step-consistent-face-flux]]); `implicit_non_orth_pressure` in `simple.rs` ([[adr-thread-steady-kernel-warped-mesh]]); `GradientOptions` helpers in `diffusion.rs`, `cht.rs`, `electric.rs` ([[adr-thread-gradient-options]]); the sponge and acoustic boundaries of `CompressibleSolver` ([[adr-thread-compressible-acoustic-boundaries]]); `acoustic_wave.rs` ([[adr-thread-acoustic-wave-solver]]).
+- **Early ADRs (added by p3-records-a):** fields follow the flat structure-of-arrays layout of ADR 0002 and the deterministic `rayon` chunking of ADR 0003 ([[adr-thread-founding-decisions]]). Variable density is its own module `rcfd-fv::varden` (ADRs 0005, 0007, 0009), so "every existing case keeps its floating-point operation order" ([[adr-thread-early-physics-models]]). The component-consistent diagonal is an option, not the default (ADR 0010); adaptive stepping is `rcfd_fv::stepctl` (ADR 0050) ([[adr-thread-early-numerics-transient-accuracy]]). The steady divergence guard, the `barth_jespersen` limiter and the SIMPLEC opt-ins come from ADRs 0077, 0081, 0084, 0102 ([[adr-thread-steady-solver-robustness]]).
 
 ## Open questions
 

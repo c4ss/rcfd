@@ -15,10 +15,12 @@ status: draft
 ## Synthesis
 
 Most of this area (energy, CHT, radiation, species, combustion, reactors, properties) predates the P3 ADRs and is read from the generated table: 13 done, 11 partial, 1 todo; the partials are catalogue extensions (combustion, radiation, chemistry formats, reactor networks, per-region model sets, solidification) ([[doc-roadmap-json]]). Only two P3 ADRs fall here, both done: the conjugate `heat_flow` report (F-289) and the electric current and Joule heat (F-298) follow the solver when the gradient options are on, checked by a heat balance and by the Joule heat equalling the boundary power. The one todo, F-311, is the lift of the bit-identical rule for the default Joule heat and the fixed-pressure flux correction, which ADR 0221 left on "leave and document" ([[adr-thread-gradient-options]]).
+- **Early waves (ADRs 0005 to 0053, added by p3-records-a).** Variable density is its own `varden` module (ADRs 0005, 0007, 0009); lumped zones and Rosseland / P1 radiation (ADR 0012); the 0D reactor crate (ADR 0013); conjugate heat transfer first with frozen flow (ADR 0024), then solved flow with the coupled algorithm (ADR 0029); combustion closures on constant-density species (ADR 0027) and their acceleration and libraries (ADR 0053); interface layers, Joule heating, melting (ADR 0035); tables and per-region models (ADR 0036); MHD and heat exchangers (ADRs 0039, 0044). Almost every item ends partial because no published flame, melt or heat-exchanger experiment was compared ([[adr-thread-early-physics-models]]).
 
 ## ADR threads
 
 - [[adr-thread-gradient-options]] — F-289, F-298 (ADRs 0202, 0221), with F-256 and F-291 of numerics
+- [[adr-thread-early-physics-models]] — F-050, F-051, F-052, F-054, F-112, F-113, F-129, F-130, F-212 to F-217, F-220, F-223 (with the compressible and acoustics items F-061, F-062, F-136, F-243) (18 ADRs, 0005 to 0097)
 
 ## Items
 

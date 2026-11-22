@@ -1,7 +1,7 @@
 ---
 type: source
 tags: [adr-thread, runner, run-records, run-sites, remote, provenance, studio, mcp]
-sources: [doc-run-control, doc-mcp-tools, doc-service-protocol]
+sources: [doc-run-control, doc-mcp-tools, doc-service-protocol, adr-thread-wave48-egui-studio]
 origin: docs/adr/ (ADR list below)
 origin_commit: 2e94e5ef
 created: 2026-11-22
@@ -50,8 +50,26 @@ status: draft
 - ADR 0739 S1: whether the cause is (a) or (b) is not known; "item 4 is what will show it at the next failure".
 - ADR 0742 gap: "Non-terminal state changes (paused, resumed) still write status.json before their state event, and a runner killed inside the final writes leaves a second terminal state event after adoption."
 
+## Records without an item: the run-record contract, how the runner is started, and its liveness (ADRs 0130, 0143, 0146, 0229; added by job p3-records-b)
+
+Before the Electron Studio, wave 48 and one later fix shaped how a client starts the runner and how the runner knows what is alive. ADR 0130 (48A) gave the runner, `rcfd-project` and the Studio one run-record contract (the runner on `rcfd-project` types, tolerant readers, `--store-dir`, opt-in `--status-monitors`); the rest of that ADR is the wave-48 overview on [[adr-thread-wave48-egui-studio]].
+
+- **Started natively** (ADR 0143, 48I): every client starts `rcfd-runner` directly ("the PowerShell launcher is removed"), reaps the runners a process started, and treats process state Z as dead. N1 "measures 0.389 s against the 1.5 s limit (5.341 s on the code before the change)"; Z1 on Linux 0.0025 s against 2.0 s ("before the change, the killed runner still read as alive after 10.011 s"). "every start hands the runner its starter's inheritable handles, so S5 stays an ignored known miss". C3 and P1 became Linux known misses with their limits intact (from ADR 0137, on [[adr-thread-daily-gate-and-edit-lock]]).
+- **Output and early exits** (ADR 0146, 48L): a started runner's stdout and stderr go to `<project>/.rcfd/runner.log` by default, with `--log-file`, `--stdout` (alias `--foreground`) and `--quiet`; an early exit is reported at once with its exit code: "0.042 s on Windows and 0.021 s on Linux against 2.0 s, where the code before the change took 10.072 s and 10.015 s". On Windows C1 and C2 (a capturing caller released within 3.0 s) are known misses: "a std-spawned runner holds the caller's pipes whatever its standard handles are, and that only turning inheritance off releases the caller, which also drops the standard handles given to the runner". Question 1 recommends (a), accept and document.
+- **Liveness, retries and the shutdown race** (ADR 0229, 2026-11-11, "ACCEPTED 2026-11-11 by the maintainer, in the session that wrote it"): four ways in which what the runner writes could disagree with what happened, each fixed and checked: the lock probe that "collides with itself" (`share_mode(0)`, two probes in the same instant), a shutting-down runner that "still looks alive", an adopted solver "known by its pid and its executable name only" (now identified by a held file), and failed `status.json` writes and stream appends that "are only logged" (now retried; cursors move after the appends). Addendum 1: P1 to W3 all met; runner crate 56 passed, 0 failed, 5 ignored. "No mutation runs were made." The second gate of main 49fbf1a3: "release tests 3548 passed, 0 failed, 1023 ignored (2 h 28 min)"; "The Ubuntu gate has not run."
+
+| ADR | Date | Kind | Item | Question | Outcome | Superseded by |
+|---|---|---|---|---|---|---|
+| [0130](../../docs/adr/0130-wave48a-overview-and-run-record-contract.md) | 2026-10-28 | plan + registration | F-274, F-287 | One run-record contract for runner, Studio and plugin | accepted; A1 to A8 passed; `serve --project <relative path>` defect not fixed | |
+| [0143](../../docs/adr/0143-job48i-native-runner-start-unix-zombies-linux-known-misses.md) | 2026-10-28 | registration | | Native runner start, dead Unix runners read as dead, two Linux known misses | N1, Z1, S4L met; S5 stays a known miss on Windows | 0146 (Q6, Q1) |
+| [0146](../../docs/adr/0146-job48l-runner-output-early-exit-windows-inherited-handles.md) | 2026-10-28 | registration + investigation | | Runner output handled explicitly, early exits at once, the capturing caller on Windows | early-exit limits met on both platforms; C1, C2 known misses on Windows; no safe route in product code | |
+| [0229](../../docs/adr/0229-runner-liveness-identity-status-and-append-retries-and-the-shutdown-start-race.md) | 2026-11-11 | registration (accepted) | | Solver identity by a held file, retried writes, the shutdown-start race | every check met; Windows debug profile only; gates of f88a18cd (2 timing failures) and 49fbf1a3 (clean) | 0742 (order of the final writes) |
+
+Open from this section: ADR 0146 Q1 (Windows inherited handles: accept and document); ADR 0229 notes that the Studio suite in the debug profile "fails 91 tests on this branch, each with egui's debug-only assertion" (not compared with main), and S2 was narrowed to Windows.
+
 ## Related
 
+- Predecessors (added by p3-records-a): `rcfd-runner` was created by ADR 0123 (wave 47B, files in the project folder as queue and transport, no socket) and fixed by the audit of ADR 0128; see [[adr-thread-studio-foundation-crates]].
 - [[rcfd-runner]], [[run]], [[run-site]], [[provenance]], [[rcfd-mcp]], [[rcfd-service-protocol]], [[studio]], [[studio-guardrails]] (G7, G10)
 - Threads: [[adr-thread-studio-engine-entry-points]], [[adr-thread-workspace-layer]], [[adr-thread-mcp-tools]], [[adr-thread-studio-electron]]
 - Areas: [[roadmap-studio-desktop-app]], [[roadmap-claude-and-the-mcp-server]]

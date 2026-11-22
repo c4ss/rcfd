@@ -27,6 +27,7 @@ ADR 0620 found that `ComputerFan::default()` stalls in the reduced-order model. 
 
 | ADR | Date | Kind | Item | Question | Outcome | Superseded by |
 |---|---|---|---|---|---|---|
+| [0118](../../docs/adr/0118-wave46a-computer-fan-schema-checker-perturbations.md) | 2026-10-26 | registration + results (added by p3-records-a) | F-268, F-713, F-726, F-777, F-782, F-784, F-791 | Computer-fan parameter schema `ComputerFan`, pre-meshing checker, manufacturing perturbations and static unbalance | every check met in its one run, no known miss; checker thresholds are "a **process input**, not physics"; S4 checks no mesh quality limit | 0639 |
 | [0639](../../docs/adr/0639-f713-registration-schema-default-fan-in-the-reduced-order-model.md) | 2026-11-16 | diagnosis | F-713 | Why the schema default fan stalls in the ROM, and what a usable default costs | partial; default unchanged; two known-miss records | 0643 |
 | [0643](../../docs/adr/0643-f722-registration-reduced-order-reference-fan-in-the-schema.md) | 2026-11-16 | registration | F-722 | A named reduced-order reference fan beside the default | partial; C-grid clause missed (fold at outer staggers 75 to 78 deg) | 0692 |
 | [0692](../../docs/adr/0692-f726-registration-camber-seam-c-grid-on-strongly-staggered-blades.md) | 2026-11-17 | registration | F-726 | Construction S, opt-in beside `camber_seam_h` | partial; 86.97 deg against 85, skewness 7.43 against 4.0 | 0696 |
@@ -55,3 +56,4 @@ ADR 0620 found that `ComputerFan::default()` stalls in the reduced-order model. 
 - [[fan-passage-mesh]], [[computer-fan-target]], [[mesh-quality]], [[design-loop]], [[fan-01]]
 - [[adr-thread-design-surrogate-and-fidelity]], [[adr-thread-fan01-design-point]]
 - [[roadmap-design-studies-and-optimisation]], [[roadmap-meshing-and-mesh-formats]]
+- Earlier history (added by p3-records-a): ADR 0118 created `rcfd_mesh::fan_design::ComputerFan`, `ComputerFan::check`, `ComputerFan::ensemble` and `ComputerFan::static_unbalance` for parts A1, A2 and A5 of `docs/fan-project-breakdown.md`. "The tests show that the checker applies the thresholds and locates the violation. They do not show that the thresholds are right for any real mould or fan." S4 "reports that c_grid `pursuit` rejects the default"; the sector generators do not realise per-blade deviations or eccentricity, and "the case tree does not read `ComputerFan` and does not call the checker". The FAN-01 C-grid constructions before F-722 (`smoothed`, `camber_seam`, `camber_seam_h`, ADRs 0072, 0079, 0083, 0087) are on [[adr-thread-fan01-rotating-solve]].

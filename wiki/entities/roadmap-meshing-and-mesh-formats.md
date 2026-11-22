@@ -18,11 +18,13 @@ The data structure, readers, writers, generators and quality metrics (F-010 to F
 
 - **Tetrahedral mesher robustness:** the neighbour-link panic on a thin box is fixed (F-306), and an output validity check (positive cells, cell volume equal to the enclosed volume) runs inside `tetrahedralize` (F-324) and on the remesher's outputs (F-327), all done with unchanged outputs; Linux fingerprint records (F-325) are todo ([[adr-thread-tet-mesher-output-checks]]).
 - **Adaptive refinement in the solver loop:** a loop hook and the adapted cavity (F-102), new criteria and a suction layer where adaptation pays (F-343), the case key `[mesh.adapt]` (F-342), a directional lattice with per-axis levels (F-348) with box coarsening (F-439, F-441). Acceptance numbers are met; F-343 and F-348 are partial on scope and on supporting checks; the directional lattice has no case key yet (F-438, todo) ([[adr-thread-mesh-adaptation]], [[mesh-adaptation]]).
+- **Early waves (ADRs 0011 to 0107, added by p3-records-a).** Formats from public specifications with HDF5 out of scope (ADR 0011); six quality measures and a separate warning list (ADR 0018); partitioning and inflation (ADR 0020); the Delaunay tet mesher (ADR 0030) and hex meshing (ADR 0047); adaptation as a library (ADR 0054). The tet mesher's slivers come from the remesher's dependence on vertex numbering; the opt-in `quality_sweeps` pass fixes them (ADR 0104, F-131 done with the pass on), but making it the default failed the registered rule, so the default stays `quality_sweeps = 0` (ADR 0107) ([[adr-thread-early-meshing]]).
 
 ## ADR threads
 
 - [[adr-thread-tet-mesher-output-checks]] — F-306, F-324, F-327 (ADRs 0228, 0231, 0236)
 - [[adr-thread-mesh-adaptation]] — F-102, F-343, F-342, F-348, F-439, F-441 (ADRs 0242, 0247, 0262, 0267, 0341, 0343), with F-476 of post-processing (ADR 0373)
+- [[adr-thread-early-meshing]] — F-102, F-108, F-119, F-131, F-132, F-133, F-231, F-232, F-233, F-234, F-235 (10 ADRs, 0011 to 0107); the fan-passage meshes are on [[adr-thread-fan01-rotating-solve]]
 
 ## Items
 

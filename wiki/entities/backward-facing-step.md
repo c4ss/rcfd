@@ -1,7 +1,7 @@
 ---
 type: entity
 tags: [validation, benchmark, turbulence, laminar]
-sources: [doc-reference-data-backward-step, doc-reference-data-laminar-step, doc-reference-data-known-misses, doc-reference-data-turbulence-constants, doc-reference-data-turbulence-finishing, doc-reference-data-wave30b-incompressible-validation, doc-reference-data-wave31c-reference-reading, doc-verification-report, doc-validation-data]
+sources: [doc-reference-data-backward-step, doc-reference-data-laminar-step, doc-reference-data-known-misses, doc-reference-data-turbulence-constants, doc-reference-data-turbulence-finishing, doc-reference-data-wave30b-incompressible-validation, doc-reference-data-wave31c-reference-reading, doc-verification-report, doc-validation-data, doc-example-projects]
 created: 2026-11-22
 updated: 2026-11-22
 status: draft
@@ -32,6 +32,7 @@ Laminar step, expansion ratio 2 (tests use Re_h = U_mean h / nu; literature Re =
 ## Related
 
 [[known-miss]], [[flat-plate]], [[doc-reference-data]], [[validation-data-pack]]
+- [[example-project-wind-tunnel]] (laminar expansion-ratio-2 step at Re 800 and 400, 200 x 40, outlet at 15 H)
 
 ## Open questions
 

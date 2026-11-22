@@ -44,5 +44,6 @@ status: draft
 
 ## Related
 
+- Predecessors (added by p3-records-a): the Delaunay tetrahedral mesher of ADR 0030 (wave 19B), its numbering dependence and the opt-in `quality_sweeps` pass (ADR 0104), and the failed default evaluation of that pass (ADR 0107, default stays `quality_sweeps = 0`); see [[adr-thread-early-meshing]].
 - [[mesh-generators]], [[mesh-quality]], [[located-error]], [[rcfd-mesh]], [[doc-meshing]], [[doc-reference-data-f306-tet-mesher]]
 - [[adr-thread-layering-remeshing-ale]], [[roadmap-meshing-and-mesh-formats]]

@@ -43,3 +43,4 @@ None with the wiki. The SA drag and the late stall are superseded: [[doc-investi
 ## Pages this source informs
 
 - [[naca0012]], [[spalart-allmaras]], [[k-omega-sst]]
+- [[adr-thread-naca0012-sa-drag]] (the ADR thread of the NACA 0012 SA chain)

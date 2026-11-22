@@ -27,6 +27,7 @@ status: draft
 - [[adr-thread-runner-records-and-run-sites]] — `set_runner_config`, `hash_project_file`, `start_run {from_run, site}` (ADRs 0733, 0734, 0739).
 - [[adr-thread-studio-engine-entry-points]] — `create_project`, the trash tools, `case_facts`, `refine_case_mesh`, `derive_picture` (ADRs 0731, 0736, 0737, 0738).
 - [[adr-thread-studio-electron]] — the removal of the assistant, `rcfd-claude` and the Claude Code panel (ADR 0800 §10, ADR 0801 Addendum 23).
+- [[adr-thread-studio-foundation-crates]] — ADR 0126 (F-265, the `rcfd-claude` bridge library: `--permission-mode dontAsk`, a typed allow-list as "a floor that the app controls, not the whole gate") and the audit ADR 0128 (added by p3-records-a)
 
 ## Items
 

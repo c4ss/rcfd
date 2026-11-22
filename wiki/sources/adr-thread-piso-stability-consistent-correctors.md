@@ -1,7 +1,7 @@
 ---
 type: source
 tags: [adr-thread, numerics, piso, pimple, consistent-correctors, diffusion-number, component-diagonal]
-sources: []
+sources: [adr-thread-setup-warnings-and-time-step]
 origin: docs/adr/ (ADR list below)
 origin_commit: 2e94e5ef
 created: 2026-11-22
@@ -58,8 +58,26 @@ The falling block of F-244 (ADR 0211) diverged in the thin lubrication gap. F-29
 - ADR 0223 Q2: case-level wiring for moving meshes (lift ADR 0156's refusal of `corrector_control = "adaptive"` with `dynamic_mesh`; needs the edit of test A9b).
 - ADR 0258 Q1 / ADR 0360 Q1: fold the older fields and `consistent_periodic_extensions` into the one value.
 
+## Before F-299: the cylinder spokes and the adaptive correctors of wave 48 (ADRs 0154 to 0162; added by job p3-records-b)
+
+The same mechanism was first met on the refined cylinder of the Studio's wind-tunnel example, 10 days before ADR 0214. After the user refined `cases/cylinder-re100.toml` to 256 x 256, the pressure showed "radial spokes of alternating sign at the wall". ADR 0154 (job 48T) found answer (b), "a numerical artefact of the solver": the default `piso` (n_outer 1, `n_correctors` 2) "does not converge the pressure-velocity coupling in the thin wall cells once the wall diffusion number nu dt / dr1^2 exceeds an onset between 6.5 and 11.4"; the refinement raised it "from 3.35 to 22.7, because the grading put the added radial cells at the wall". It rejected the display artefact and the physical-transient reading, and the registered workaround rule recommended W3, `solver.time_advance = "fractional_step"`; PIMPLE (W1, W2) diverged. ADR 0156 (48V) then added the opt-in **adaptive pressure correctors** (`solver.corrector_control`; "the correctors are counted up until the estimate is at most 0.5, with a cap of 10") chosen by the pressure-lag estimate, and the pre-run coupling warning **SV301** ("fires when the estimate is at least 1.3"). ADR 0158 (48X) made the egui Studio's Run add `solver.corrector_control=adaptive` to every transient iterative piso/pimple case that does not choose the key, and ADR 0162 (48AB) made the count follow the time step. The library default stays `fixed`; ADR 0156 refuses `adaptive` with `dynamic_mesh` (the refusal ADR 0223 Q2 asks to lift). SV301's later wiring and its settled-step form are on [[adr-thread-setup-warnings-and-time-step]].
+
+| ADR | Date | Kind | Item | Question | Outcome | Superseded by |
+|---|---|---|---|---|---|---|
+| [0154](../../docs/adr/0154-job48t-cylinder-ogrid-pressure-spokes.md) | 2026-10-28 | diagnosis | F-301 | Pressure spokes at the wall of the refined cylinder O-grid | (b) numerical artefact; W3 `fractional_step` recommended; DG1 rejects the ADR 0073 lag mechanism in its strict form; K1, K2 known misses | 0156 |
+| [0156](../../docs/adr/0156-job48v-adaptive-pressure-correctors.md) | 2026-10-28 | registration (opt-in) | F-301, F-321 | Adaptive PISO/PIMPLE correctors by the pressure-lag estimate; pre-run SV301 | every limit met except A9 (set-up defect, corrected by A9b); every refined run clean at every stored time; defaults unchanged | (ADR 0223 DC6 reruns ADR 0154's K1, K2 with the consistent correctors) |
+| [0158](../../docs/adr/0158-job48x-studio-run-plan-adaptive-pressure-correctors.md) | 2026-10-29 | registration | | The Studio's Run makes the correctors adaptive | every limit met but X2 (set-up defect, X2b met); at the automatic step the opt-in chose 2 correctors and "did nothing on 256 x 256 for the first 1000 steps" | 0162 |
+| [0162](../../docs/adr/0162-job48ab-adaptive-correctors-follow-the-time-step.md) | 2026-10-29 | registration | | Re-estimate the count when dt changes by a factor 1.5 (the dt trigger) | every limit met except N3, N6 as worded (`case_hashes_w48u` fails identically at 444255c); control clean too (class B-iii) | |
+
+- **ADR 0154:** "G256s has rho 1.17 / 1.07 with a clean twin; rho separates the classes at a threshold between 1.17 and 1.68, not at 1"; "every workaround ran to t = 10 only, short of the shedding phase".
+- **ADR 0156 cost:** "on the user's mesh the opt-in costs 1.36 x the three-corrector workaround and 2.3 x the fractional step per step"; SV301 "would fire on nine existing test set-ups if they were run through `rcfd check` or `rcfd run` (four unstable when perturbed, five undetermined), and it can miss cases whose viscosity comes from a law (a false negative)". Q3: SV301 costs "one step plus 60 lag-map applications" per check (20 to 30 s on 65 536 cells on the loaded machine).
+- **ADR 0158:** Studio run at dt 1/64 clean (M_hf 2.7e-7 / 9.1e-8 at t = 1 / 3, 5 correctors, no SV301); switched off it reproduces 48T's spokes (M_hf 42.6 / 48.3) and SV301 at 2.42; cost "1.0 (count 2) to about 1.6 per step". Finding: "the count is chosen at the automatic step's first dt".
+- **ADR 0162:** on 256 x 256 under the Studio's plan the trigger "fired at step 4, which took the count from 2 to 3, and at step 14, which kept 3; the run stayed clean to t = 10"; extra estimates cost "3.3 % of the steps' wall time to t = 3 and 1.1 % to t = 10"; "what the trigger buys here is the registered margin (from about 1.0 to about 0.4) for the first 1000 steps, not the removal of a visible defect".
+- **Open (ADR 0156 questions, with recommendations):** Q1 the opt-in on by default in the Studio's plan (done by ADR 0158), library default `fixed` "until a registered benchmark of a default flip"; Q2 keep the target 0.5; Q3 keep 60 lag-map iterations; Q4 an explicit `"fixed"` treated by ADR 0152's rule; Q5 wire SV301 into the run service, MCP and chain driver (done in part by ADRs 0160, 0172); Q6 the corrector count in `residuals.jsonl` (done by ADR 0160); Q7 the first-step viscosity (done by ADR 0160); Q8 accept SV301 on the nine test set-ups. ADR 0158 Q2 and ADR 0162 Q1, Q2: keep the trigger at 1.5 and keep it although the caveat "was not reproduced as an instability".
+
 ## Related
 
 - [[piso]], [[simple]], [[component-diagonal]], [[dynamic-mesh]], [[divergence-guard]], [[setup-rules]]
 - [[doc-case-schema-consistent-correctors]], [[doc-dynamic-mesh]], [[doc-component-diagonal-default]]
 - [[roadmap-numerics-and-solvers]]
+- [[doc-investigation-job48t-cylinder-spokes]] (the results folder of ADR 0154, whose K1 and K2 DC6 reuses)

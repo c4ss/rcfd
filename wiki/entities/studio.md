@@ -1,7 +1,7 @@
 ---
 type: entity
 tags: [studio, app]
-sources: [doc-glossary, doc-product, doc-readme, doc-architecture, doc-ui-restart-plan, doc-studio-guardrails, doc-studio-coverage, doc-design, doc-design-themes-proposal, doc-impeccable-surfaces, doc-security, doc-process-documentation-review, adr-thread-studio-electron, adr-thread-studio-engine-entry-points, adr-thread-runner-records-and-run-sites, adr-thread-workspace-layer]
+sources: [doc-glossary, doc-product, doc-readme, doc-architecture, doc-ui-restart-plan, doc-studio-guardrails, doc-studio-coverage, doc-design, doc-design-themes-proposal, doc-impeccable-surfaces, doc-security, doc-process-documentation-review, adr-thread-studio-electron, adr-thread-studio-engine-entry-points, adr-thread-runner-records-and-run-sites, adr-thread-workspace-layer, doc-example-projects, adr-thread-wave48-egui-studio]
 created: 2026-11-22
 updated: 2026-11-22
 status: draft
@@ -41,6 +41,8 @@ status: draft
 - Engine entry points made for Studio items, all built 2026-11-17: `rcfd serve --ui` (schema labels and help, glossary, error catalogue, `mesh.preview`, `case.facts`, `mesh.refine`, `case.save`), `rcfd project init`, session journals under `--journal-dir`, the project trash and compare-and-set, derived pictures from the engine ([[adr-thread-studio-engine-entry-points]]); launch records and rerun, runner budgets written by the runner, remote [[run-site]]s ([[adr-thread-runner-records-and-run-sites]]).
 - The Studio saves a project case through `edit_case` (changed lines only, comments kept) and journals as actor `studio` through `rcfd-mcp --client studio` ([[adr-thread-workspace-layer]], [[adr-thread-studio-electron]]).
 - Performance: the idle baseline of 2026-11-17 met every G9 limit (P10 median 320 ms; P2 p99 0.64 ms; P7 44.7 ms; P8 240 frames per s); under full load P10's median ranged "from 1.2 s to 40.3 s", cause not diagnosed (F-817 partial) ([[adr-thread-studio-electron]]).
+- Finished example projects open straight to a picture: [[example-project-wind-tunnel]], [[example-project-quick-start]] (2D, drawn face-on) and [[example-project-axial-fan]] (3D, turnable), in `example-projects/` with a Linux-built twin tree `example-projects-linux/` ([[doc-example-projects]]).
+- **The first window, wave 48 (2026-10-28 to 2026-10-29):** the egui Studio `rcfd-studio` (eframe/egui 0.36.2) with a viewport on the wgpu render core, run control through `rcfd-runner`, a Claude Code sidebar and the plugin's project tools; then a job per report of the maintainer at the window: mesh preview, case starter, fields stored by default, one-click Run, Mesh / Run toggle, linked selection, the time step at run start, Stop in Run's place. Every addendum lists "a person at the real window" as not run. Both egui apps were deleted on 2026-11-16 ([[adr-thread-wave48-egui-studio]]).
 
 ## Contradictions
 
@@ -69,3 +71,4 @@ status: draft
 - [[work-streams]]
 - [[run-site]]
 - [[roadmap-studio-desktop-app]]
+- [[doc-example-projects]], [[example-project-wind-tunnel]], [[example-project-quick-start]], [[example-project-axial-fan]]

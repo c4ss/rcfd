@@ -1,7 +1,7 @@
 ---
 type: concept
 tags: [numerics, pressure-velocity, transient]
-sources: [doc-dynamic-mesh, doc-component-diagonal-default, doc-cosimulation-protocol, adr-thread-piso-stability-consistent-correctors, adr-thread-bdf2-step-consistent-face-flux, adr-thread-transient-rans]
+sources: [doc-dynamic-mesh, doc-component-diagonal-default, doc-cosimulation-protocol, adr-thread-piso-stability-consistent-correctors, adr-thread-bdf2-step-consistent-face-flux, adr-thread-transient-rans, doc-investigation-job48t-cylinder-spokes]
 created: 2026-11-22
 updated: 2026-11-22
 status: draft
@@ -23,6 +23,8 @@ The transient segregated pressure-velocity coupling: per time step a momentum pr
 - **ADR thread:** the full chain from F-299 to F-550, with the benchmark set of ADR 0223 (cavity 88 of 88 stable with the option, default 84 of 88) and the maintainer's "Held" of 2026-11-18 on the default flip, is in [[adr-thread-piso-stability-consistent-correctors]].
 - **Step-consistent face flux:** the opt-in `PimpleSettings::rhie_chow_step_consistent` / `[solver.rhie_chow] step_consistent` removes the step-size dependence of the Rhie-Chow face flux on internal faces (F-344, F-443); BDF2 then meets its order at rest but not on the moving overset TG_2 (`2.454` against 4) ([[adr-thread-bdf2-step-consistent-face-flux]]).
 - **Transient RANS:** SST, k-epsilon and SA without DES update once per outer iteration of `pimple`; `piso` is refused for them ([[adr-thread-transient-rans]]).
+- Job 48T (ADR 0154): on a cylinder O-grid with thin wall cells the default PISO (one outer iteration, two correctors) amplifies its leftover pressure error from step to step once nu dt / dr1^2 passes an onset between 6.5 and 11.4, giving wall pressure spokes; three correctors, `fractional_step` or a smaller dt remove them ([[doc-investigation-job48t-cylinder-spokes]]).
+- **Adaptive correctors (opt-in, ADR 0156):** `solver.corrector_control = "adaptive"` counts the PISO/PIMPLE correctors up until the pressure-lag estimate is at most 0.5, with a cap of 10, and re-estimates when dt changes by a factor 1.5 (ADR 0162); SV301 warns before a run when the estimate is at least 1.3. The library default stays `fixed`; `adaptive` is refused with `dynamic_mesh` ([[adr-thread-piso-stability-consistent-correctors]]).
 
 ## Related
 
@@ -31,6 +33,7 @@ The transient segregated pressure-velocity coupling: per time step a momentum pr
 - [[sliding-mesh]]
 - [[component-diagonal]]
 - [[rcfd-fv]]
+- [[doc-investigation-job48t-cylinder-spokes]]
 
 ## Open questions
 

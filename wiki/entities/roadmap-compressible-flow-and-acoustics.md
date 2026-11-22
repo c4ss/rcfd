@@ -20,12 +20,14 @@ The base solvers (F-060 density-based, F-061 pressure-based with EOS, F-136 FW-H
 - **Linear acoustic wave solver** (F-333) with duct modal export, an O-grid circular duct, and a drive from a sampled CFD surface (the FW-H `rcfd-surface-series` files) with the split of returning waves: done except F-453's counter-rotating content; `rcfd duct-modes` (F-451) and an axial-velocity series (F-480) are approved todo ([[adr-thread-acoustic-wave-solver]]).
 - **Wet steam** (F-221): the nozzle comparison is met, inviscid with a perfect-gas vapour; the roadmap keeps it todo although ADR 0226 recommends partial; case keys, real-gas vapour, viscous terms and polydispersion are todo items F-316 to F-319 ([[adr-thread-wet-steam]]).
 - 9 of 26 items are not started; most are the wiring and follow-ups above ([[doc-roadmap-json]]). See [[aeroacoustics]].
+- **Early waves (added by p3-records-a).** The pressure-based variable-density kernel (ADRs 0005, 0007 real gas, 0009 transient) and the characteristic boundaries of the density-based Euler solver (ADR 0006, NACA 0012 Cp "not attempted") predate the P3 acoustics work; FW-H came with the reactor toolkit (ADR 0013), the fan-noise chain and `rcfd fwh` in ADR 0066 (F-243 partial, W5a / W5b known misses), and F-136 was set done by an independent retarded-time check of a rotating point force (ADR 0097) ([[adr-thread-early-physics-models]]).
 
 ## ADR threads
 
 - [[adr-thread-compressible-acoustic-boundaries]] — F-243, F-331, F-332, F-340, F-341, F-407 (ADRs 0233, 0237, 0243, 0248, 0265, 0344)
 - [[adr-thread-acoustic-wave-solver]] — F-333, F-453, F-473, F-452, F-478 (ADRs 0351, 0366, 0371, 0372, 0378)
 - [[adr-thread-wet-steam]] — F-221, F-320 (ADRs 0217, 0226)
+- [[adr-thread-early-physics-models]] — F-061, F-062, F-136, F-243 among its 18 ADRs (0005, 0006, 0007, 0009, 0013, 0066, 0097)
 
 ## Items
 

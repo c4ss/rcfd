@@ -1,7 +1,7 @@
 ---
 type: entity
 tags: [crate]
-sources: [doc-architecture, doc-roadmap-overview, doc-structural-solver, doc-solid-case-file, adr-thread-structural-linear-solvers, adr-thread-structural-case-file-and-fan-blade, adr-thread-structural-modal-buckling-cyclic, adr-thread-structural-incompatible-hex8-rule-l, adr-thread-structural-hyperelastic-and-follower, adr-thread-structural-beam-warping, adr-thread-structural-fracture, adr-thread-structural-creep-and-temperature]
+sources: [doc-architecture, doc-roadmap-overview, doc-structural-solver, doc-solid-case-file, adr-thread-structural-linear-solvers, adr-thread-structural-case-file-and-fan-blade, adr-thread-structural-modal-buckling-cyclic, adr-thread-structural-incompatible-hex8-rule-l, adr-thread-structural-hyperelastic-and-follower, adr-thread-structural-beam-warping, adr-thread-structural-fracture, adr-thread-structural-creep-and-temperature, adr-thread-structural-plan]
 created: 2026-11-22
 updated: 2026-11-22
 status: draft
@@ -26,6 +26,7 @@ status: draft
 - Modules named: `builders` (`upgrade_to_tet10`, `fan_blade_tet4`, `fan_blade_tet10`, `computer_fan_blade_tet10`, ADR 0505), `transient`, `harmonic` ([[doc-structural-solver]]). Agents start with `crates/rcfd-fem/src/lib.rs` (the module list) ([[doc-structural-solver]]).
 - Static solves also run on ranks of [[rcfd-dist]] and on a CUDA device (F-433: Jacobi CG on 304 842 unknowns in 0.60 s, 4.50 s on 16 threads) ([[doc-structural-solver]]).
 - The [[solid-case-file]] (F-386, ADR 0438) is read by `rcfd_api::solid_case::run_solid_case_file`; static or modal, `direct` or `cg` (default preconditioner `ic_fill`, ADR 0357), report format `rcfd-solid-report/1` ([[doc-solid-case-file]]).
+- **How it was planned** ([[adr-thread-structural-plan]]): three plan ADRs of 2026-11-12 (0270 basic, 0290 intermediate, 0310 advanced) reserved 66 work packages, F-370 to F-436; the maintainer named the crate `rcfd-fem` in layer 2 (ADR 0270 M2, proposed as `rcfd-solid`). The basic tier's registrations kept the plan's numbers (ADRs 0271 to 0286, [[adr-thread-structural-basic-tier]]); later packages were registered under new numbers.
 
 ## Open questions
 

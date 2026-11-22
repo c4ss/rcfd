@@ -1,7 +1,7 @@
 ---
 type: entity
 tags: [fan, validation, rotating]
-sources: [doc-glossary, doc-readme, doc-roadmap-overview, doc-meshing, doc-validation-data, doc-milestone-fan, doc-reference-data-f870-fan01-design-point, doc-designs-exp-rot, doc-designs-m-fan-b, doc-changelog, doc-milestones-json, adr-thread-fan01-rotating-solve, adr-thread-sliding-mesh-rotor-stator, adr-thread-fan01-design-point]
+sources: [doc-glossary, doc-readme, doc-roadmap-overview, doc-meshing, doc-validation-data, doc-milestone-fan, doc-reference-data-f870-fan01-design-point, doc-designs-exp-rot, doc-designs-m-fan-b, doc-changelog, doc-milestones-json, adr-thread-fan01-rotating-solve, adr-thread-sliding-mesh-rotor-stator, adr-thread-fan01-design-point, doc-example-projects, adr-thread-design-surrogate-and-fidelity]
 created: 2026-11-22
 updated: 2026-11-22
 status: draft
@@ -39,6 +39,9 @@ status: draft
 ### Rotating-solve thread (P3, moving meshes)
 
 - The ADR chain of the rotating solve is collected on [[adr-thread-fan01-rotating-solve]] (F-126 partial; the wave ADRs are added by the records job).
+- **Wave ADRs 0065 to 0117 (added by p3-records-a):** geometry and the first passage meshes (ADRs 0065, 0068, 0072, 0079, 0083, 0087), the F-126 attempt (ADR 0075, every limit missed), the deficit diagnosis (ADRs 0078, 0082, 0085), the first solution verification (ADR 0086), the stall diagnosis (ADRs 0110, 0111, 0115: a limit cycle of the Barth-Jespersen-limited `linear_upwind`, "The bladed stall has no attributed mechanism"), and the geometry an MRF zone can take (ADRs 0109, 0112, 0113, 0116, 0117: "the blade blocks MRF whatever the hub and shroud are") ([[adr-thread-fan01-rotating-solve]]). The hub item is [[f-126]].
+- Off-design point of ADR 0075 attempt 3 (Q = 1.8039 m^3/s): Delta p_ts -84.4 Pa against 63.9 Pa measured, torque 1.010 N m against 1.882 N m ([[adr-thread-fan01-rotating-solve]]).
+- The reduced-order tier of ADR 0119 gives FAN-01 dp_s 45.7 Pa (-64 %) at the design point with 33 of 40 strips stalled, and "does not bound FAN-01 below 1.6 m^3/s" ([[adr-thread-design-surrogate-and-fidelity]]).
 - The transient rotor-stator path exists from a case file only on bladeless cylindrical-interface annuli and sectors, laminar, Euler, no restart (F-303, F-711); no ADR of the moving-meshes list runs it on the FAN-01 passage ([[adr-thread-sliding-mesh-rotor-stator]]).
 - On 2026-11-18 the maintainer held several solver default changes "until the fan path needs it" (F-721, F-724, F-364, F-365, F-775) ([[adr-thread-fan01-rotating-solve]]).
 
@@ -46,6 +49,8 @@ status: draft
 - The ranked gap puts the compared quantity first: a rotor-only passage is compared with an installation value. Next come the missing converged second-order solution and then the mesh gates. By the agent's arithmetic, "The miss of 52.5 Pa is 63 % of the 83.3 Pa that the rotor-only definition discards"; the lead notes that no run shows this ([[adr-thread-fan01-design-point]]).
 - The maintainer's answers of 2026-11-22 entered four follow-ups. F-877: a person reads the thesis for the uncertainty and the density. F-878: the LDA profiles, ADR 0765. F-879: check H, ADR 0766. F-880: the outlet as on the rig, not issued ([[adr-thread-fan01-design-point]]).
 - The FAN-01 version-6 record says that the bearing friction "was measured with the fan removed and subtracted" ([[adr-thread-fan01-design-point]]). See also [[adr-thread-fan01-rotating-solve]].
+- A Studio example shows one FAN-01 passage in 3D (4 920-cell F3 mesh, first-order `upwind`, torque 1.40 N m, 35 % below the measured 2.142 N m): [[example-project-axial-fan]], "not a validated fan prediction" ([[doc-example-projects]]).
+- **Wave 49 stall diagnosis** (ADRs 0174 to 0181, 2026-10-30 to 2026-10-31, [[adr-thread-fan01-rotating-solve]]): the Barth-Jespersen limit cycle on B3 is not the NACA 0012 trailing-edge mechanism (ADR 0174); it is driven by the convection deferred correction at two sites, the blade-root leading edge and the hub trailing edge (ADRs 0175, 0177, 0178; the hub site is "a near-stagnant corner pocket", ADR 0181). No automatic first-order fallback (ADR 0179), bounded second-order scheme (ADR 0180) or mesh change at the hub (ADR 0181) converged it; torque and Delta p_ts stay the ADR 0086 cycle means with a band "until a converged second-order state exists".
 
 ## Related
 
@@ -55,6 +60,7 @@ status: draft
 - [[computer-fan-target]], [[gci-richardson]], [[design-loop]], [[validation-data-pack]]
 - [[doc-milestone-fan]], [[doc-designs-exp-rot]], [[doc-designs-m-fan-b]]
 - [[adr-thread-fan01-rotating-solve]], [[sliding-mesh]]
+- [[example-project-axial-fan]]
 
 ## Open questions
 

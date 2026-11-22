@@ -28,6 +28,9 @@ Topology-changing moving meshes and the compressible ALE path: the tree wiring o
 
 | ADR | Date | Kind | Item | Question | Outcome | Superseded by |
 |---|---|---|---|---|---|---|
+| [0033](../../docs/adr/0033-wave20b-dynamic-mesh.md) | | registration + results (added by p3-records-a) | F-063, F-229, F-244, F-247, F-251, F-257, F-290, F-345 | Dynamic mesh (ALE with a discrete GCL, displacement-diffusion smoothing) and six-DOF bodies, loose coupling | every row met, several after corrections; the piston cell-velocity lag 2.9e-4 misses G5 (iii) and T2; F-230 not attempted | 0090 |
+| [0090](../../docs/adr/0090-wave38c-dynamic-mesh-layering.md) | | registration + results (added by p3-records-a) | F-230, F-247, F-257, F-259, F-290 | Layer addition and removal at a piston, compressible ALE, inverse-volume stiffness | every check met (A1 1.53e-5, A2 3.42e-5 against 2 %); F-230 partial by the rule (remeshing, tree wiring missing) | 0191 |
+| [0098](../../docs/adr/0098-wave40b-taylor-couette-converged-stretched-third-level-fast-piston.md) | | partials close-out (added by p3-records-a) | F-204, F-208, F-246, F-247 | A Mach 0.2 piston run for F-230 (optional check) | A1 / A2 2.935e-4 / 4.345e-4 against 2e-2; F-230 status unchanged | |
 | [0191](../../docs/adr/0191-f259-registration-case-tree-and-cli-wiring-of-layering-and-compressible-ale.md) | 2026-11-05 | registration | F-259 | Tree and CLI wiring of layering and compressible ALE | partial; decision record 2026-11-06 (Q2 answered: F-290; Q3: F-259 stays partial; Q4: `box_3d` in the Studio with F-293) | 0257 |
 | [0203](../../docs/adr/0203-f290-registration-inverse-volume-mesh-smoothing-in-the-case-tree.md) | 2026-11-06 | registration | F-290 | Inverse-volume mesh smoothing in the case tree | done | |
 | [0207](../../docs/adr/0207-f258-registration-compressible-ale-boundaries-and-mesh-speed-time-step.md) | 2026-11-07 | registration | F-258 | Compressible ALE boundaries and the mesh-speed time step | done in the library; S1 far-field outlet `4.56e-4` (limit `1e-2`); Q2 (mesh-speed default) open | 0257 |
@@ -53,3 +56,4 @@ Topology-changing moving meshes and the compressible ALE path: the tree wiring o
 - [[dynamic-mesh]], [[mesh-adaptation]]
 - [[roadmap-moving-meshes-rotors-and-coupling]]
 - [[doc-dynamic-mesh]], [[doc-case-schema-dynamic-mesh]]
+- Earlier history (added by p3-records-a): ADR 0033 (wave 20B) built the ALE step "with a discrete geometric conservation law, mesh smoothing by displacement diffusion, and a loose, explicit coupling of the body to the flow", inert unless `dynamic_mesh` enables it; ADR 0090 (wave 38C) added layering at a piston and compressible ALE, and notes that at peak piston Mach 0.05 "the case is nearly quasi-static ... It is not a sensitive test of numerical entropy production"; ADR 0098 repeated the piston at Mach 0.2. See [[adr-thread-early-numerics-transient-accuracy]], [[adr-thread-six-dof-fsi-cosimulation]].

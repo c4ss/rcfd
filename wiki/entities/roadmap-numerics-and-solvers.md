@@ -21,6 +21,8 @@ The P3 ADRs of this area (24, 2026-11-05 to 2026-11-20) are almost all diagnoses
 - **Linear solver.** The one default change: the corrected order of the coarsest dense LU of the scalar AMG (F-471, ADR 0743), after AMG-CG lost definiteness on an immersed run (F-474); every moved fingerprint was approved one by one ([[adr-thread-amg-coarse-lu]], [[amg]]). The F-474 gap still reads as if the default were not switched (contradiction noted on the thread page).
 - **Non-orthogonal meshes.** The gradient options reach every equation through `solver.gradient_*` and `[solver.gradient_equations]` with no accuracy benefit claimed ([[adr-thread-gradient-options]]); the steady kernel's divergence on the warped mesh W is fixed by the opt-in `implicit_non_orth_pressure` (F-285), while the pressure-interpolation variants of F-246 stay partial ([[adr-thread-steady-kernel-warped-mesh]]).
 - **Pattern.** Most partials are partial by the registered rule (a mutation caught only after an amendment, a supporting check missed) rather than by a missed acceptance; the open decisions are defaults that would move existing results ([[adr-thread-piso-stability-consistent-correctors]], [[adr-thread-bdf2-step-consistent-face-flux]]).
+- **Early waves (ADRs 0010 to 0105, added by p3-records-a).** The component-consistent diagonal became an option, not the default, because it moves the `packed_bed` hash (ADR 0010). Residual floors were "a normalisation artefact" with `residual_norm` as the remedy (ADR 0023). The Taylor-Green BDF2 floor on the iterative path is the commutator of the variable `rAU` with the face interpolation (ADR 0073), and the fixes of waves 34B to 36A stayed library opt-ins or were removed (ADRs 0069, 0073, 0076, 0080). F-209 adaptive stepping stays partial through four close-outs (ADRs 0050, 0094, 0101, 0105) ([[adr-thread-early-numerics-transient-accuracy]]).
+- **Steady robustness (added by p3-records-a).** A diverging steady run now stops (ADR 0077); the opt-ins `linear_upwind_limiter = "barth_jespersen"` (ADR 0081), `velocity_correction = "face_flux"` (ADR 0084) and `simplec_boundary_compensation` (ADR 0102, F-248 done) each answer one located divergence ([[adr-thread-steady-solver-robustness]]).
 
 ## ADR threads
 
@@ -30,6 +32,8 @@ The P3 ADRs of this area (24, 2026-11-05 to 2026-11-20) are almost all diagnoses
 - [[adr-thread-gradient-options]] — F-256, F-291 (and F-289, F-298 of heat) (ADRs 0190, 0204, 0202, 0221)
 - [[adr-thread-steady-kernel-warped-mesh]] — F-246, F-285 (ADRs 0193, 0196, 0198)
 - [[adr-thread-immersed-solid]] — F-309 (ADR 0234) added to the moving-meshes thread
+- [[adr-thread-early-numerics-transient-accuracy]] — F-106, F-200, F-201, F-202, F-204, F-205, F-208, F-209, F-210, F-211, F-301, F-344 (18 ADRs, 0010 to 0105)
+- [[adr-thread-steady-solver-robustness]] — F-248 and the unnumbered robustness waves (ADRs 0042, 0062, 0077, 0081, 0084, 0095, 0102, 0105)
 
 ## Items
 

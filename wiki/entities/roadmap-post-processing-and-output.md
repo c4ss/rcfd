@@ -15,10 +15,12 @@ status: draft
 ## Synthesis
 
 A largely finished area: 10 of 12 items done (VTK, probes and integrals, derived fields, the headless renderer, monitors, report definitions and stopping criteria, run-time statistics, registers, the report catalogue); glTF export (F-117) and turbomachinery post-processing (F-123) are partial ([[doc-roadmap-json]]). The one P3 ADR, ADR 0373 (F-476, done), makes the field store of a run with `[mesh.adapt]` write the adapted mesh; the gap was found by gate 4 of the adaptive case key (F-342) ([[adr-thread-mesh-adaptation]], [[field-store]]).
+- **Early waves (added by p3-records-a).** Derived fields and sampling began as library functions with CSV output (ADR 0020) and reached the case tree, CLI and service in ADR 0021; the report / surface / post-object catalogue and the EnSight Gold writer came in ADR 0048, checked only by readers "written by the same author"; F-073 (a timed CLI render of a 1M-cell mesh, 1.555 s against 2 s) and F-124 (field-threshold registers) were closed by ADRs 0092 and 0095 ([[adr-thread-early-workflow-and-partials]], [[adr-thread-steady-solver-robustness]]).
 
 ## ADR threads
 
 - [[adr-thread-mesh-adaptation]] — F-476 (ADR 0373)
+- [[adr-thread-early-workflow-and-partials]] — F-072, F-073, F-103, F-238 (ADRs 0021, 0048, 0092); F-117, F-124 in [[adr-thread-early-meshing]] (ADR 0011) and ADR 0095
 
 ## Items
 

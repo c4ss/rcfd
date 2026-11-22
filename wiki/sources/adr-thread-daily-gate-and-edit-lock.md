@@ -29,6 +29,8 @@ ADR 0653 put the full [[gate]] into GitHub Actions as a daily run whose failed t
 
 | ADR | Date | Kind | Item | Question | Outcome | Superseded by |
 |---|---|---|---|---|---|---|
+| [0127](../../docs/adr/0127-test-gate-efficiency.md) | 2026-10-26 | registration + results (added by p3-records-a) | | A faster release test stage with the same tests (`scripts/gate_test.py`, one process per test, one pool) | G1, G2, G5 met; G3 (66.8 min against at most 51) and G4 (peak 2184 MB against 1.5 GB) missed, goals not moved | 0129 |
+| [0129](../../docs/adr/0129-test-time-limit-jobs5-measurement-limit-audit.md) | 2026-10-27 | registration + results (added by p3-records-a) | | Per-test time limit, `--jobs 5` measurement, audit of tests that cannot fail | T1 to T4 met; `--jobs 5` 13.2 % faster, not the required 25 %, default stays 3; audit 80 hits, 2 real weaknesses, A4 mutation spot-check 10 of 12 | 0740 (per-test limits) |
 | [0653](../../docs/adr/0653-f723-registration-daily-full-gate-with-failures-attributed-to-adrs.md) | 2026-11-16 | registration (hub), 4 amendments | F-723 | Daily full gate in CI with failures attributed to ADRs | done; fmt fix (os error 206), decide job, attribution, index; shards default 4 from 2026-11-21 | |
 | [0669](../../docs/adr/0669-f751-registration-the-two-failures-of-the-first-daily-gate.md) | 2026-11-16 | registration (diagnosis + fix) | F-751 | The two failures of the first daily gate (run 43919555816) | partial; second resolve under the lock and a claim file; 200 of 200 after (59 failures before); M1 survived | 0676 |
 | [0676](../../docs/adr/0676-f755-registration-a-forced-control-of-the-edit-locks-starvation-and-of-a-lock-left-behind.md) | 2026-11-17 | registration | F-755 | Forced control of the lock's starvation and of a lock left behind | done; old acquire starves 10 of 10, claim accepted 10 of 10 within 177 ms; drop retries (527 ms) | |
@@ -59,8 +61,20 @@ ADR 0653 put the full [[gate]] into GitHub Actions as a daily run whose failed t
 - Still to be seen on a hosted runner: the amended F2 (F-855), the feature-gated step (F-764), the first daily runs of ADR 0653's paths (F-736).
 - The registration of ADR 0653 says "Not yet accepted by the maintainer" (as do ADRs 0669, 0676, 0681, 0740).
 
+## Before the daily gate: the first Linux full gate (ADR 0137; added by job p3-records-b)
+
+[ADR 0137](../../docs/adr/0137-linux-gate-platform-values.md) (registered 2026-10-28; index item F-866) answered the first `Full gate` run on `ubuntu-latest`, which "failed 16 tests". Every expected value had been recorded on Windows, "and libm's last bits differ between the Microsoft CRT and glibc". Rule: a test that asserts bit identity gets an x86_64 Linux expected value next to the Windows one "only if, in one Linux container, that value comes out at the test's reference commit and at HEAD and, where the CI log prints it, equals the CI value". By an amendment for the maintainer to confirm, "the L1 negative control applies the registered rule of ADR 0128 finding 12 on every run": the same L1 of `listing_budget` whose control F-866 (ADR 0759, above) later made decide and assert on the ten listings.
+
+| ADR | Date | Kind | Item | Question | Outcome | Superseded by |
+|---|---|---|---|---|---|---|
+| [0137](../../docs/adr/0137-linux-gate-platform-values.md) | 2026-10-28 | registration | F-866 | Per-platform expected values, the L1 control rule per run, reported defects | in Docker 12 of 16 pass; S4a, S4b (a Unix production defect), C3 (1 ulp) and P1 (unregistered check) reported; on Windows the 14 changed tests pass with the registered values; no production code changed | 0143 (S4a, S4b fixed; C3, P1 Linux known misses), 0759 (L1 control) |
+
+- L1 in Docker printed "`10 w = 90.9 ms <= budget: the budget catches a listing 55x slower than measured`"; on Windows "worst listing 80.6 ms, the listing 10 times 844 ms > 500 ms".
+- "The next `Full gate` run on `ubuntu-latest` is the real check: the container is Debian bookworm (glibc 2.36), the CI image Ubuntu 24.04 (glibc 2.39)". The example-project stores that failed the same gate got a Linux-built tree instead ([[adr-thread-example-projects-and-linux-values]]); the runner follow-up is on [[adr-thread-runner-records-and-run-sites]].
+
 ## Related
 
 - [[gate]], [[edit-lock]], [[test-to-adr-index]], [[process-ledger]], [[push-main]], [[known-miss]], [[rcfd-project]]
 - [[adr-thread-test-to-adr-attribution]], [[adr-thread-process-measures-and-roadmap-form]]
 - [[roadmap-quality-docs-and-validation]]
+- Earlier history (added by p3-records-a): the gate's test runner `scripts/gate_test.py` comes from ADR 0127, which found that "Running the test binaries takes 92 % to 95 % of the gate's test stage" and runs "each non-ignored test as its own process, from one pool of `--jobs` processes. No test is skipped and no result is cached, and the original `cargo test` remains the reference." ADR 0129 added the per-test time limit after "A hung test held a gate slot for about 3.5 h on 2026-10-26"; its two mutation-check misses (ADR 0123 S7 and ADR 0119 R3) "are reported as findings with nothing changed". See [[mutation-testing]], [[doc-test-process]].

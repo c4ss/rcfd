@@ -51,5 +51,6 @@ The lattice `rcfd_mesh::adapt` (`AmrMesh`, ADR 0054) had refinement and criteria
 
 ## Related
 
+- Predecessor (added by p3-records-a): the library adaptation criteria, hanging-node refinement and polyhedral dual of F-102 come from ADR 0054 (wave 28C), with "Nothing ... added to the case-tree schema" there; see [[adr-thread-early-meshing]].
 - [[mesh-adaptation]], [[lid-driven-cavity]], [[field-store]], [[rcfd-mesh]], [[doc-meshing]]
 - [[roadmap-meshing-and-mesh-formats]], [[roadmap-post-processing-and-output]]

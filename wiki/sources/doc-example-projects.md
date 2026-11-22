@@ -41,3 +41,4 @@ status: draft
 - [[example-project-wind-tunnel]], [[example-project-quick-start]], [[example-project-axial-fan]]
 - [[studio]], [[rcfd-project]], [[run]], [[design-ledger]], [[field-store]]
 - [[cylinder-re100]], [[naca0012]], [[backward-facing-step]], [[lid-driven-cavity]], [[differentially-heated-cavity]], [[fan-01]]
+- [[adr-thread-example-projects-and-linux-values]] (ADRs 0142, 0150, 0155, 0157, 0176)

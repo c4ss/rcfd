@@ -42,3 +42,4 @@ None. [[doc-case-schema-turbulence]] lists `auto_sa_law` as opt-in (ADR 0168), c
 
 - [[spalart-allmaras]], [[flat-plate]], [[naca0012]], [[doc-case-schema-turbulence]]
 - [[doc-investigation-job49a-sa-drag]] (which found the y+ 5 excess)
+- [[adr-thread-naca0012-sa-drag]] (the ADR thread of the NACA 0012 SA chain)

@@ -1,7 +1,7 @@
 ---
 type: entity
 tags: [validation, benchmark, vortex-shedding, milestone]
-sources: [doc-reference-data-cylinder-wake, doc-reference-data-f869-cylinder-mean-drag, doc-reference-data-wave30b-incompressible-validation, doc-reference-data-wave31c-reference-reading, doc-reference-data-wave31a-solver-defects, doc-milestones-json, adr-thread-simulation-milestones-validation]
+sources: [doc-reference-data-cylinder-wake, doc-reference-data-f869-cylinder-mean-drag, doc-reference-data-wave30b-incompressible-validation, doc-reference-data-wave31c-reference-reading, doc-reference-data-wave31a-solver-defects, doc-milestones-json, adr-thread-simulation-milestones-validation, doc-investigation-job48t-cylinder-spokes, doc-example-projects, adr-thread-piso-stability-consistent-correctors]
 created: 2026-11-22
 updated: 2026-11-22
 status: draft
@@ -26,10 +26,14 @@ status: draft
 - **F-869 first sequence (ADR 0761, partial; BDF2, far field 20 D):** the drag is 1.35247 on 128 x 100 at dt 0.05 (V1, in the band) and 1.34511 at dt 0.025. The Richardson value is 1.37479, 0.0048 above the band (known miss V2b). The default first-order step gives 1.30996, outside the band ([[adr-thread-simulation-milestones-validation]]).
 - **F-869 second sequence (ADR 0763, partial; BDF2, dt 0.025, far field 30 D):** the drag is 1.32259, 1.33285 and 1.33900 on 90 x 70, 128 x 100 and 181 x 141 (St 0.16169, 0.16395, 0.16486; GCI_fine 0.935 %). The observed order is 1.387, outside the registered [1.5, 2.5] (known miss W3b), so the mesh-converged drag "is not shown". The extrapolation gives 1.343 to 1.354 for every order from 1 to 2.5 ([[adr-thread-simulation-milestones-validation]]).
 - The comparison uses the option `time_scheme = Bdf2`. The default step stays unchanged, by the maintainer's answer to ADR 0761 Q2 (a) ([[adr-thread-simulation-milestones-validation]]).
+- **Pressure spokes on a refined O-grid (job 48T, ADR 0154):** a 256 x 256 run with `grading = 100` shows grid-scale wall pressure spokes because the default PISO (two correctors) loses its pressure-velocity coupling when nu dt / dr1^2 is large (clean up to 6.5, spoky from 11.4; 22.7 on the user's run); `time_advance = "fractional_step"` is the registered workaround, clean to t = 10 only ([[doc-investigation-job48t-cylinder-spokes]]).
+- The Studio example [[example-project-wind-tunnel]] runs Re 100 and Re 200 on a 64 x 48 O-grid (3072 cells) to 80 D/U: St 0.1517 and cd_mean 1.323 at Re 100, "not a validation" ([[doc-example-projects]]).
+- **Refined to 256 x 256 in the Studio** (wave 48, [[adr-thread-piso-stability-consistent-correctors]]): radial pressure spokes at the wall, "a numerical artefact of the solver" once the wall diffusion number exceeds an onset between 6.5 and 11.4 (ADR 0154); the opt-in adaptive correctors (`solver.corrector_control = "adaptive"`, ADR 0156) keep every refined run clean, and the egui Studio's Run turned them on (ADR 0158). Through Run on the automatic step the 256 x 256 case ran 40 s within every limit: "10,742 steps in 1.31 h, Courant at most 0.4501, St 0.1663" (ADR 0153, [[adr-thread-setup-warnings-and-time-step]]).
 
 ## Related
 
 [[simulation-milestones]], [[dfg-cylinder-benchmark]], [[verification-vs-validation]], [[doc-reference-data]]
+- [[doc-investigation-job48t-cylinder-spokes]], [[example-project-wind-tunnel]]
 
 ## Open questions
 

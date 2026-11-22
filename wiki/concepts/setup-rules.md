@@ -1,7 +1,7 @@
 ---
 type: concept
 tags: [interface, case, validation]
-sources: [doc-case-schema-restart-chain-setup-rules, doc-run-control, doc-tutorial-gallery, doc-case-schema-mesh-generators, doc-case-schema-periodic-gradient]
+sources: [doc-case-schema-restart-chain-setup-rules, doc-run-control, doc-tutorial-gallery, doc-case-schema-mesh-generators, doc-case-schema-periodic-gradient, adr-thread-setup-warnings-and-time-step]
 created: 2026-11-22
 updated: 2026-11-22
 status: draft
@@ -19,6 +19,7 @@ Data-driven checks of a resolved case and its mesh quality, evaluated by `rcfd c
 - Computed rules needing a built simulation: SV301 (pre-run pressure-lag estimate, warn at 1.3 or more per step, fix `solver.corrector_control = "adaptive"`, ADR 0156, ADR 0172) and SV302 (`linear_upwind` without limiter on wall cells with aspect ratio x tan(non-orthogonality) of 3000 or more, ADR 0172) ([[doc-case-schema-restart-chain-setup-rules]]).
 - Example: `axial_fan_cgrid.toml` triggers SV101 (maximum non-orthogonality over 70 degrees) ([[doc-tutorial-gallery]]).
 - A related warning id outside the SV series: `MT101` for settings left in world coordinates under `[mesh.transform]` ([[doc-case-schema-mesh-generators]]).
+- **SV301, SV302, SV202 and `short_last_step`** ([[adr-thread-setup-warnings-and-time-step]]): SV301 (pressure-velocity coupling likely unstable, estimate at least 1.3) at a run's start in every entry and at the settled step (ADRs 0156, 0160, 0172); SV302, a static risk notice for unlimited linear-upwind on thin skewed wall cells at level 3000 with a registered false positive (ADR 0172); SV202's fuller text on what a case without boundary conditions does (F-328, ADR 0235); the `short_last_step` warning for a last step shorter than 5 % of the step proposed for it (ADR 0145).
 
 ## Related
 

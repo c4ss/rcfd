@@ -1,7 +1,7 @@
 ---
 type: entity
 tags: [crate]
-sources: [doc-architecture, doc-gpu, doc-structural-solver]
+sources: [doc-architecture, doc-gpu, doc-structural-solver, adr-thread-founding-decisions]
 created: 2026-11-22
 updated: 2026-11-22
 status: draft
@@ -28,6 +28,7 @@ status: draft
 - **Not delivered:** multi-GPU, device-resident FV assembly, AMG / ILU / GMRES on the device, other vendors, coupled / compressible / variable-density cases, device decision in the run header ([[doc-gpu]]).
 - The structural solver's static solves also run on a CUDA device (F-433) ([[doc-structural-solver]]).
 - Default build, default setting and every baseline hash are unchanged by the GPU path ([[doc-gpu]]); see [[bit-identical]].
+- **Created by ADR 0038 (wave 22, added by p3-records-a):** "The user decided: CUDA through the `cudarc` crate, linear solvers first"; it carries out the GPU step that ADR 0003 limited to "only linear solves and flux assembly behind a trait"; the workspace keeps `unsafe_code = "forbid"` for every other crate ([[adr-thread-founding-decisions]]).
 
 ## Open questions
 

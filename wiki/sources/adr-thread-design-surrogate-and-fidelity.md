@@ -29,6 +29,7 @@ Parts H1, H3 and H7 of `docs/fan-project-breakdown.md`: a fan objective over imp
 
 | ADR | Date | Kind | Item | Question | Outcome | Superseded by |
 |---|---|---|---|---|---|---|
+| [0119](../../docs/adr/0119-wave46b-reduced-order-axial-fan-tier.md) | 2026-10-26 | registration + results (added by p3-records-a) | F-697 | Reduced-order axial-fan tier (strip theory, losses, fan curve, operating point, fan laws, steady-loading tones) | all met except Z1 (set-up defect, corrected Z1'); FAN-01 V1 reported, no limit: dp_s 45.7 Pa (-64 %) at the design point, 33 of 40 strips stalled | 0620 |
 | [0620](../../docs/adr/0620-f697-registration-fan-objective-over-impedances-and-tolerances.md) | 2026-11-16 | registration (hub; maintainer decisions D1 to D6, B1 to B4) | F-697 | A fan objective over impedance points and tolerances (H1) | done (reduced-order tier only) | |
 | [0621](../../docs/adr/0621-f698-surrogate-model-gaussian-process-and-expected-improvement.md) | 2026-11-15 | registration (status word DRAFT) | F-698 | GP surrogate over the ledger and EI proposal (H3) | partial; 11 of 12 mutations (imputation sign survived) | 0651, 0645 |
 | [0622](../../docs/adr/0622-f699-fidelity-management-screen-confirm-correct.md) | 2026-11-16 | proposal then registration | F-699 | Screen with the ROM, confirm with a higher tier, correct (H7) | partial; every check met, mutation M5 survived | 0642 |
@@ -61,8 +62,21 @@ Parts H1, H3 and H7 of `docs/fan-project-breakdown.md`: a fan objective over imp
 - ADR 0620 remaining questions 1 and 3 (aggregates repeated in point entries; other aggregation order and a chance constraint) carry recommendations (a).
 - Any CFD evaluator behind the objective, any measured source, and the MCP tools (F-702, F-714) are not built.
 
+## Before F-699: the fidelity-tier proposal (ADR 0136; added by job p3-records-b)
+
+[ADR 0136](../../docs/adr/0136-fidelity-tiers-xhigh-to-xlow.md) (PROPOSED 2026-10-28, "scoping only; nothing implemented or run"; index item F-286) answers the maintainer's framing "build the foundation for an extra high precision simulation, and lower tiers that deliver a stated percentage accuracy for a multiplier speedup". It proposes five tiers, xhigh, high, medium, low and xlow: "one `fidelity` setting expanded into explicit knobs, error budgets against an xhigh reference, and target speedups". "Without `--fidelity`, the solver gets today's input." Its decision ids F-1 to F-13 "are not roadmap items"; only F-13 was decided by the maintainer (2026-10-28: "the tier is reachable through the MCP project tools (D9)"); F-1 to F-12 remain proposals. "Every accuracy and speedup number in this ADR is a TARGET or an ESTIMATE ... **Every number for the computer-fan class is an estimate, because no fan reference at any fidelity exists in the repository.**" Stage T5, the computer-fan class F, is blocked.
+
+| ADR | Date | Kind | Item | Question | Outcome | Superseded by |
+|---|---|---|---|---|---|---|
+| [0136](../../docs/adr/0136-fidelity-tiers-xhigh-to-xlow.md) | 2026-10-28 | proposal (scoping) | F-286 | Fidelity tiers xhigh to xlow: knobs, budgets, validation plan, staged plan T1 to T6 | proposed; D9 (F-13) decided; nothing built | ADR 0622 / F-699 for T6 (amendment 2026-11-15) |
+
+- **Tier matrix (D2, Table B1, class S):** medium is "the case as written"; xhigh h/2 and dt/2, high h/sqrt 2 and dt/sqrt 2, low sqrt 2 h and sqrt 2 dt; "Schemes stay as written at every tier ... Medium, high and xhigh therefore differ in h and dt only, and form a refinement family". xlow "is not a run": an evaluator (strip theory, lumped network, correlation) through the design loop or the MCP tool `evaluate_xlow`, "offered only where such a model exists".
+- **Amendment 2026-11-15 (maintainer decision):** "The cross-tier ledger rule and multi-fidelity correction proposed here (T6, the `cross_tier_check` record) are superseded by the fidelity pair and discrepancy record of ADR 0622 (roadmap F-699, with the ledger fields in F-700). This ADR keeps the tiers themselves".
+- Proposed roadmap items (no ids assigned in the ADR): the fidelity setting and the MCP tier tools (T1), validation of class S (T2), mixed-precision solves (T3, T4), the cross-tier rule (T6). Open: D1 to D8 and the open decisions of the ADR's last section.
+
 ## Related
 
 - [[gaussian-process-surrogate]], [[fidelity-management]], [[design-loop]], [[design-ledger]], [[computer-fan-target]], [[known-miss]]
 - [[adr-thread-design-optimisers-and-ledger]], [[adr-thread-design-hypothesis-record]], [[adr-thread-rom-reference-fan-and-c-grid]]
 - [[roadmap-design-studies-and-optimisation]]
+- Earlier history (added by p3-records-a): the ROM tier lives in `crates/rcfd-post/src/fan_rom.rs` (ADR 0119). "The tier is not validated against any measured fan, and a design ranking from it is a hypothesis for CFD or test." Against FAN-01 "over all 20 points the rms dp_s difference is 104 Pa and the rms power difference is 24 %". "An efficiency objective on this tier drives a design to the stall edge, so a design loop needs a stall-margin constraint (not provided here)." The steady-loading tone "(1.25e-9 Pa at 1 m for set-up C) is a lower bound of the tonal level, not a prediction of it."

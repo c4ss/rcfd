@@ -19,11 +19,13 @@ The model catalogue (F-040 to F-046, F-203, F-206, F-207) predates the P3 ADRs; 
 - **Transient RANS on PIMPLE.** SST (F-286, done), k-epsilon and Spalart-Allmaras without DES (F-294) run on the outer iterations of `pimple` on a static mesh, with `piso` refused. SST reaches second order with BDF2 from a start that meets the walls; the k-epsilon BDF2 order is still a known miss with no cause found (F-300) ([[adr-thread-transient-rans]], [[k-omega-sst]], [[k-epsilon]], [[spalart-allmaras]]).
 - **Periodic seams.** `turbulence.periodic_seam.diffusivity = "pair"` gives both faces of a seam pair one diffusivity for every model and the property and user-function viscosities (F-295, F-296, F-302, all done); the global k and omega budgets then close to `1e-14`. This serves FAN-01's periodic passage, which runs SST ([[adr-thread-periodic-seam-diffusivity]]).
 - ADR 0707 records after the fact the limits of the F-040 wall-function channel test, which predates the ADR process ([[adr-thread-transient-rans]]).
+- **Early waves (ADRs 0014 to 0074, added by p3-records-a).** The catalogue came in ADRs 0014 (SA, model interface), 0015 (k-epsilon family, SST / BSL, near-wall catalogue), 0017 (Realizable A0 kept at 4.04), 0026 (Smagorinsky, WALE, mixing length) and 0032 (DES / DDES, RSM, full viscous stress). The SST flat-plate deficit found by the wave 30C validation was diagnosed three times with no defect found (ADRs 0063, 0070, 0074): on the NASA TMR nested grids rcfd converges with order 1.07 but lies 0.82 to 0.87 percent below the mean of three incompressible codes, which stays open ([[adr-thread-early-turbulence]], [[k-omega-sst]]).
 
 ## ADR threads
 
 - [[adr-thread-transient-rans]] — F-286, F-294, F-300, F-040 (ADRs 0199, 0210, 0225, 0707)
 - [[adr-thread-periodic-seam-diffusivity]] — F-295, F-296, F-302 (ADRs 0205, 0212, 0227)
+- [[adr-thread-early-turbulence]] — F-041 to F-046, F-203, F-206, F-207 (ADRs 0014, 0015, 0017, 0026, 0032, 0061, 0063, 0070, 0074)
 
 ## Items
 

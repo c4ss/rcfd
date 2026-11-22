@@ -32,7 +32,7 @@ status: draft
 - [[adr-thread-immersed-solid]] — F-219, force, second-order forcing, moving immersed shapes (17 ADRs).
 - [[adr-thread-six-dof-fsi-cosimulation]] — F-244, F-251, F-350, F-351, F-358, F-437, F-440, F-139, F-360, F-361, F-362, F-444, F-481, F-237 (14 ADRs).
 - [[adr-thread-layering-remeshing-ale]] — F-259, F-290, F-258, F-257, F-247 (6 ADRs).
-- [[adr-thread-fan01-rotating-solve]] — F-126 / FAN-01 (stub; the wave ADRs are added by the records job).
+- [[adr-thread-fan01-rotating-solve]] — F-126 / FAN-01 ~~(stub; the wave ADRs are added by the records job)~~; 24 wave ADRs 0008 to 0117 added by p3-records-a (MRF, interfaces, mixing plane, the F-126 attempt, deficit and stall diagnoses, cyclic seams, revolution sector). Hub item: [[f-126]].
 - Structural side of the coupling: [[adr-thread-structural-fsi-coupling]].
 
 ## Items

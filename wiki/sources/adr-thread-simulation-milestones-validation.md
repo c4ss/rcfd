@@ -58,3 +58,4 @@ How the roadmap came to measure "per cent complete" per named simulation (F-865,
 - [[simulation-milestones]], [[naca0012]], [[cylinder-re100]], [[fan-01]], [[gci-richardson]], [[verification-vs-validation]], [[known-miss]]
 - [[adr-thread-fan01-design-point]], [[adr-thread-process-measures-and-roadmap-form]]
 - [[roadmap-quality-docs-and-validation]]
+- [[doc-investigation-f868-naca0012-lift-curve]] (results folder of ADR 0760), [[doc-investigation-job49d-aoa-sweep-fixed]] (results folder of ADR 0167, whose SA arm ADR 0760 reproduces), and the earlier NACA 0012 chain [[doc-investigation-job48y-aoa-sweep]], [[doc-investigation-job49a-sa-drag]], [[doc-investigation-job49e-sa-wall]], [[doc-investigation-job49h-te-divergence]]

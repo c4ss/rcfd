@@ -1,7 +1,7 @@
 ---
 type: entity
 tags: [structural, fem, solver]
-sources: [doc-structural-solver, doc-cosimulation-protocol, doc-acoustics, doc-product, doc-roadmap-overview, adr-thread-structural-case-file-and-fan-blade, adr-thread-structural-incompatible-hex8-rule-l, adr-thread-structural-hyperelastic-and-follower]
+sources: [doc-structural-solver, doc-cosimulation-protocol, doc-acoustics, doc-product, doc-roadmap-overview, adr-thread-structural-case-file-and-fan-blade, adr-thread-structural-incompatible-hex8-rule-l, adr-thread-structural-hyperelastic-and-follower, adr-thread-structural-plan]
 created: 2026-11-22
 updated: 2026-11-22
 status: draft
@@ -36,6 +36,7 @@ status: draft
 - [[adr-thread-structural-verification-elements]], [[adr-thread-structural-linear-solvers]], [[adr-thread-structural-modal-buckling-cyclic]], [[adr-thread-structural-rotordynamics]], [[adr-thread-structural-dynamics-harmonic]], [[adr-thread-structural-fatigue-and-radiated-sound]], [[adr-thread-structural-beams-shells]], [[adr-thread-structural-materials-nonlinear]], [[adr-thread-structural-contact]], [[adr-thread-structural-fsi-coupling]], [[adr-thread-structural-case-file-and-fan-blade]].
 - Concepts: [[cyclic-symmetry]], [[campbell-diagram]], [[mpc-transformation]], [[mutation-testing]].
 - Most items in these threads are partial without a numeric miss. The usual cause is a mutation that was not caught, or a check met only after an amendment, and the gap reads "The maintainer decides done" ([[roadmap-structural-solver]]).
+- **The plan and the basic tier** (job p3-records-b): [[adr-thread-structural-plan]] (ADRs 0270, 0290, 0310 and the 49 stubs that stayed PLANNED, each mapped to its item and registration) and [[adr-thread-structural-basic-tier]] (the 17 registrations under the plan's own numbers: crate, elements, direct solver, assembly, loads, recovery, output, orders, thermal strain, CG, eigensolver, modal, static participant, scaffold, Hex20, MPCs, elasticity AMG).
 
 ## Related
 

@@ -43,3 +43,4 @@ None. Agrees with the F-868 rows on [[naca0012]].
 
 - [[naca0012]], [[spalart-allmaras]], [[k-omega-sst]], [[known-miss]]
 - [[adr-thread-simulation-milestones-validation]] (ADR 0760 takes its SA arm and its 5 % cl band from ADR 0167)
+- [[adr-thread-naca0012-sa-drag]] (the ADR thread of the NACA 0012 SA chain)

@@ -1,7 +1,7 @@
 ---
 type: entity
 tags: [crate]
-sources: [doc-architecture, doc-ui-restart-plan, doc-studio-guardrails, doc-security, doc-studio-coverage, doc-run-control, doc-mcp-tools, doc-tutorial-desktop-assistant, adr-thread-runner-records-and-run-sites, adr-thread-workspace-layer]
+sources: [doc-architecture, doc-ui-restart-plan, doc-studio-guardrails, doc-security, doc-studio-coverage, doc-run-control, doc-mcp-tools, doc-tutorial-desktop-assistant, adr-thread-runner-records-and-run-sites, adr-thread-workspace-layer, adr-thread-studio-foundation-crates]
 created: 2026-11-22
 updated: 2026-11-22
 status: stub
@@ -38,6 +38,8 @@ status: stub
 - Remote runs (ADR 0739): a run whose `run.json` has `site` is handed to `site::remote::RemoteRuns`, one worker thread per site; "Local runs never use the seam" ([[adr-thread-runner-records-and-run-sites]], [[run-site]]).
 - The order of the final writes (ADR 0742, 2026-11-19): a new `set_terminal` writes the state event, removes the request files, writes the status, removes the request files again; "the terminal status is now the last write of a run" ([[adr-thread-runner-records-and-run-sites]]).
 - Runs continued from another (`continue_from`, `max_steps`, ADR 0200) and runs of design studies tagged `study`, `variant`, `condition` (ADR 0189) are run settings and record fields approved on 2026-11-18 and 2026-11-06 ([[adr-thread-workspace-layer]]).
+- **Created by ADR 0123 (wave 47B, 2026-10-26, added by p3-records-a):** one `rcfd-runner serve` per project, each run an `rcfd run` child, plain files in the project folder "as queue and transport, with no socket and no network port", pause through `rcfd run --pause-file f`, adoption of running solvers without relaunch. S5 stays an ignored known miss ("on Windows the runner inherits the client's inheritable handles"); the PowerShell start route was called "a defect of the product" and later replaced by ADR 0143 ([[adr-thread-studio-foundation-crates]]).
+- **How clients start it, and how it knows what is alive** (ADRs 0143, 0146, 0229, [[adr-thread-runner-records-and-run-sites]]): started directly from every client since 48I (the PowerShell launcher removed; N1 0.389 s against 1.5 s); its output goes to `<project>/.rcfd/runner.log` and an early exit is reported at once (0.042 s on Windows, 0.021 s on Linux, against 2.0 s); on Windows a std-spawned runner still holds a capturing caller's pipes (known misses C1, C2). ADR 0229 (accepted 2026-11-11) identifies an adopted solver by a held file, retries failed status and stream writes, and closes the shutdown-start race.
 
 ## Open questions
 

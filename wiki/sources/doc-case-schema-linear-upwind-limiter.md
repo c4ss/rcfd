@@ -31,3 +31,4 @@ _None found at ingest._
 ## Pages this source informs
 
 - [[fan-01]], [[divergence-guard]]
+- [[doc-investigation-job49h-te-divergence]] (`barth_jespersen` removes the NACA 0012 trailing-edge divergence at y+ 2)

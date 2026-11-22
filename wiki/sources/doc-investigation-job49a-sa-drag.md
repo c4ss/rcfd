@@ -44,3 +44,4 @@ None. The README calls both fixes opt-in; they became defaults afterwards: ADR 0
 
 - [[naca0012]], [[spalart-allmaras]], [[flat-plate]], [[doc-case-schema-turbulence]]
 - [[doc-investigation-job48y-aoa-sweep]] (the drag it explains), [[doc-investigation-job49d-aoa-sweep-fixed]] (the sweep with the fixes)
+- [[adr-thread-naca0012-sa-drag]] (the ADR thread of the NACA 0012 SA chain)

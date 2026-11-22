@@ -1,7 +1,7 @@
 ---
 type: entity
 tags: [validation, benchmark, incompressible, laminar]
-sources: [doc-reference-data-lid-driven-cavity, doc-reference-data-wave30b-incompressible-validation, doc-reference-data-wave31c-reference-reading, doc-validation-data, doc-design-loop]
+sources: [doc-reference-data-lid-driven-cavity, doc-reference-data-wave30b-incompressible-validation, doc-reference-data-wave31c-reference-reading, doc-validation-data, doc-design-loop, doc-example-projects]
 created: 2026-11-22
 updated: 2026-11-22
 status: draft
@@ -24,6 +24,7 @@ status: draft
 ## Related
 
 [[validation-data-pack]], [[verification-vs-validation]], [[doc-reference-data]], [[benchmark-descriptor]]
+- [[example-project-quick-start]] (32 x 32 Studio example, Re 100 and 400)
 
 ## Open questions
 

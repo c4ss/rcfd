@@ -1,7 +1,7 @@
 ---
 type: concept
 tags: [design-loop, ledger, provenance, fan]
-sources: [doc-design-loop, doc-fan-project-breakdown, doc-fan-measurement-protocol, doc-changelog, doc-test-process, adr-thread-design-optimisers-and-ledger, adr-thread-design-hypothesis-record]
+sources: [doc-design-loop, doc-fan-project-breakdown, doc-fan-measurement-protocol, doc-changelog, doc-test-process, adr-thread-design-optimisers-and-ledger, adr-thread-design-hypothesis-record, doc-example-projects]
 created: 2026-11-22
 updated: 2026-11-22
 status: draft
@@ -31,6 +31,7 @@ The design ledger (`design::ledger`, ADR 0121) is one JSON-lines file that keeps
 ## Related
 
 [[design-loop]], [[computer-fan-target]], [[provenance]], [[bit-identical]]
+- Example ledgers: `designs/variants.ledger.jsonl` in [[example-project-wind-tunnel]] (8 lines), [[example-project-quick-start]] (4), [[example-project-axial-fan]] (1)
 
 ## Open questions
 

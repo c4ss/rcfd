@@ -44,3 +44,4 @@ The folder holds only the README. Runs, dumps, metrics and figures are in the wo
 
 - [[cylinder-re100]], [[piso]], [[divergence-guard]], [[known-miss]], [[studio]]
 - [[adr-thread-piso-stability-consistent-correctors]] (ADR 0223's DC6 reuses ADR 0154's K1, K2)
+- [[adr-thread-naca0012-sa-drag]] (the ADR thread of the NACA 0012 SA chain)

@@ -51,5 +51,6 @@ F-243's acceptance asked for an impedance boundary of `CompressibleSolver`; its 
 
 ## Related
 
+- Predecessor (added by p3-records-a): the first characteristic boundaries of the density-based Euler solver (`TotalInlet`, `PressureOutlet`, `NonReflecting`, `FarField`) are ADR 0006 (F-062), where "Only normally incident waves are treated as non-reflecting; oblique incidence reflects"; see [[adr-thread-early-physics-models]].
 - [[aeroacoustics]], [[doc-acoustics]], [[doc-case-schema-compressible]], [[doc-reference-data-compressible-bcs]], [[dynamic-mesh]]
 - [[adr-thread-acoustic-wave-solver]], [[adr-thread-wet-steam]], [[roadmap-compressible-flow-and-acoustics]]

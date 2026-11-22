@@ -64,9 +64,22 @@ The flow side of fluid-structure coupling: a rigid body on a moving mesh validat
 - ADR 0244 questions 1 to 4: vendor heat-flux card (F-347), default mapping (conservative recommended), case-tree wiring, the `nastran_deck` conformance case.
 - ADR 0252 Q3: an audit of other walls with the same mismatch (rest walls, rotating walls of the sliding step).
 
+## The default flip of the two wall-pressure keys (ADR 0346; added by job p3-records-b)
+
+[ADR 0346](../../docs/adr/0346-defaults-registration-wall-pressure-flip.md) (registered 2026-11-12, F-358, F-440) applies what the maintainer approved "in person, on 2026-11-12 (commit 9872a218 records it in the roadmap notes of F-358 and F-440)": ADR 0269 Q1 (b), `wall_pressure` of `[dynamic_mesh.six_dof.coupling]` defaults to `"prescribed_gradient"` instead of `"extrapolated"` in the loose and the strong scheme; and ADR 0342 Q1 (b), `wall_pressure` of `[dynamic_mesh.force_reports]` defaults to `"prescribed_gradient"` instead of `"boundary_value"`. "The library defaults (`fsi::strong_step`, `sixdof::patch_force_moment`) are not changed". The corrected wall pressure is ADR 0252's, unchanged; the flip lives in the schema default (T1), not a third value.
+
+| ADR | Date | Kind | Item | Question | Outcome | Superseded by |
+|---|---|---|---|---|---|---|
+| [0346](../../docs/adr/0346-defaults-registration-wall-pressure-flip.md) | 2026-11-12 | default change (registration) | F-358, F-440 | Flip both wall-pressure defaults to `prescribed_gradient` | **done** by its rule (H, K, E, D0, X1, Y, P1 to P6, R met; every mutation caught, MU6 only through ADR 0266 E1); no registered hash moved | |
+
+- Measured moves (proposed F-358 note): "SP 1.001307 -> 1.000264, ADR 0266's strong piston 1.005081 -> 1.000042 (turning 0.92469), T4 x 0.506503 at 92 steps, ADR 0266 L stop 34 -> 35"; F-440: "the column's fp deficit 2.5004597e-2 -> 4.597e-6", except with layering or the compressible solver, "which keep the stored values silently (only a written table is refused there)".
+- An explicit old value gives the old bits ("digests equal to the old tree's"); a written coupling or force-report table without the key now writes `wall_pressure = "prescribed_gradient"` and has another settings hash (ADR 0266's strong table T0 "with" hash now `9afbea20cf9d3338`).
+- Open: Q1, a written table without the key in a refused context is now refused (recommendation (a) keep); Q2, the library defaults (recommendation (a) leave "until a caller outside the case driver needs it").
+
 ## Related
 
 - [[strong-fsi-coupling]], [[cosimulation-protocol]], [[dynamic-mesh]], [[structural-solver]]
 - [[adr-thread-structural-fsi-coupling]]
 - [[roadmap-moving-meshes-rotors-and-coupling]], [[roadmap-structural-solver]]
 - [[doc-cosimulation-protocol]], [[doc-case-schema]]
+- Earlier history (added by p3-records-a): six-DOF rigid-body dynamics first came in wave 20B, [ADR 0033](../../docs/adr/0033-wave20b-dynamic-mesh.md) (F-229 partial), as "a loose, explicit coupling of the body to the flow"; "the flow-coupled spring-mounted-body frequency check named in the F-229 acceptance (2 percent) is not delivered" there. See [[adr-thread-layering-remeshing-ale]].

@@ -18,7 +18,7 @@ Wave 48 built the window layer L5 of the Studio plan ([[doc-ui-restart-plan]]) o
 
 ## Current state
 
-- **The egui Studio is gone.** `crates/rcfd-studio` and `crates/rcfd-gui` were deleted on 2026-11-16 (ADR 0800 §10, F-449 done ahead of F-448), and later the wgpu render core `rcfd-render` and `rcfd-claude` were removed (F-838) ([[adr-thread-studio-electron]]). The crate list at 2e94e5ef has neither. What this thread built that outlives the window: the run-record contract of 48A (the runner on `rcfd-project` types, `--store-dir`, `--status-monitors`), the opt-in case key `output.store_precision` (48D amendment 1), the `--project` project tools and the plugin in `clients/claude-plugin/` (48F), the store-key rule of 48R and the example projects of 48H ([[example-projects]], [[adr-thread-example-projects-and-linux-values]]).
+- **The egui Studio is gone.** `crates/rcfd-studio` and `crates/rcfd-gui` were deleted on 2026-11-16 (ADR 0800 §10, F-449 done ahead of F-448), and later the wgpu render core `rcfd-render` and `rcfd-claude` were removed (F-838) ([[adr-thread-studio-electron]]). The crate list at 2e94e5ef has neither. What this thread built that outlives the window: the run-record contract of 48A (the runner on `rcfd-project` types, `--store-dir`, `--status-monitors`), the opt-in case key `output.store_precision` (48D amendment 1), the `--project` project tools and the plugin in `clients/claude-plugin/` (48F), the store-key rule of 48R and the example projects of 48H ([[doc-example-projects]], [[adr-thread-example-projects-and-linux-values]]).
 - **Every ADR after 0135 is "not yet accepted by the maintainer"** in its status line (registered or proposed). Several questions were answered in later ADRs: ADR 0138 Q1 to Q8 (ADR 0144 and its amendment 3), ADR 0144's questions (ADR 0147), ADR 0147 Q2 to Q4 (b) (ADR 0148), ADR 0148's questions (ADR 0149), ADR 0149 Q9 (ADR 0152).
 - **Known misses carried by the Studio suite** at the end of the wave: ADR 0131 B9, ADR 0133 R6, ADR 0141 G1, ADR 0144 J3b ("the same four known misses", ADR 0147), plus ADR 0161 AA1 and AA2; under ADR 0169 the aerofoil parts of ADR 0142 G1 and ADR 0148 N9 became ignored known misses because the regenerated runs converge.
 - **What never ran in this wave:** "a person at the real window", Linux for most new process tests, the workspace gate, workspace-wide clippy and `cargo deny` are in the not-run list of nearly every addendum.
@@ -74,6 +74,7 @@ The runner-side jobs of the wave (48I, 48L) are on [[adr-thread-runner-records-a
 
 ## Related
 
-- [[studio]], [[rcfd-runner]], [[rcfd-project]], [[rcfd-tsstore]], [[rcfd-mcp]], [[claude-plugin]], [[field-store]], [[example-projects]], [[known-miss]], [[registration]]
+- Predecessors (added by p3-records-a): the layers L1 to L4 and L6 that wave 48 put into a window are the wave-47 crates of ADRs 0122 to 0126 and the audit of ADR 0128; see [[adr-thread-studio-foundation-crates]].
+- [[studio]], [[rcfd-runner]], [[rcfd-project]], [[rcfd-tsstore]], [[rcfd-mcp]], [[claude-plugin]], [[field-store]], [[doc-example-projects]], [[known-miss]], [[registration]]
 - Threads: [[adr-thread-studio-foundation-crates]] (wave 47), [[adr-thread-studio-electron]] (the successor), [[adr-thread-workspace-layer]], [[adr-thread-runner-records-and-run-sites]], [[adr-thread-example-projects-and-linux-values]], [[adr-thread-setup-warnings-and-time-step]]
 - Areas: [[roadmap-studio-desktop-app]], [[roadmap-claude-and-the-mcp-server]]

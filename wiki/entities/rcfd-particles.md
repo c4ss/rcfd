@@ -1,7 +1,7 @@
 ---
 type: entity
 tags: [crate]
-sources: [doc-architecture, doc-particles, adr-thread-particle-wall-and-droplets]
+sources: [doc-architecture, doc-particles, adr-thread-particle-wall-and-droplets, adr-thread-vof-multiphase-particles, adr-thread-founding-decisions]
 created: 2026-11-22
 updated: 2026-11-22
 status: draft
@@ -29,6 +29,7 @@ status: draft
 > [!warning] Contradiction — layer number
 > [[doc-particles]] calls the crate "layer 2: depends on `rcfd-core` and `rcfd-mesh` only"; [[doc-architecture]] puts it in layer 3 (io / fv / particles). The dependencies agree; only the layer number differs (between repo docs).
 - **P3 ADR thread:** wall film, erosion preset, dispersion from turbulence fields, droplet evaporation and breakup, `Tracker::enable_droplet_exchange()` ([[adr-thread-particle-wall-and-droplets]]).
+- **Created by ADR 0028 (wave 18C, added by p3-records-a):** one-way coupled point-particle tracking (drag, gravity, wall reflection / trapping), layer 2, depending on `rcfd-core` and `rcfd-mesh` only; "The flow solver is never changed by particles"; the hook started as a library function pair (`track_frozen`, `track_transient`). Wired into `rcfd run` by ADR 0037; two-way exchange, random-walk dispersion and injection options by ADR 0057; two-way coupling in the solver loops by ADR 0059 ([[adr-thread-vof-multiphase-particles]], [[adr-thread-founding-decisions]]).
 
 ## Open questions
 

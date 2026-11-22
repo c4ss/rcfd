@@ -52,5 +52,6 @@ Two lines extend the Lagrangian particle library ([[lagrangian-particles]], [[rc
 
 ## Related
 
+- Predecessors (added by p3-records-a): one-way tracking in the new crate `rcfd-particles` (ADR 0028), the two-way exchange library, discrete random walk and injection options (ADR 0057), and the two-way coupling in the solver loops (ADR 0059); see [[adr-thread-vof-multiphase-particles]].
 - [[lagrangian-particles]], [[rcfd-particles]], [[doc-particles]], [[doc-case-schema-particles]], [[k-epsilon]], [[k-omega-sst]]
 - [[roadmap-multiphase-and-particles]]

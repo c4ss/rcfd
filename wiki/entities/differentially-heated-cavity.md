@@ -1,7 +1,7 @@
 ---
 type: entity
 tags: [validation, benchmark, natural-convection, heat-transfer]
-sources: [doc-reference-data-heated-cavity, doc-reference-data-variable-density, doc-reference-data-wave31a-solver-defects, doc-validation-data]
+sources: [doc-reference-data-heated-cavity, doc-reference-data-variable-density, doc-reference-data-wave31a-solver-defects, doc-validation-data, doc-example-projects]
 created: 2026-11-22
 updated: 2026-11-22
 status: draft
@@ -26,6 +26,7 @@ status: draft
 ## Related
 
 [[lid-driven-cavity]], [[validation-data-pack]], [[doc-reference-data]]
+- [[example-project-quick-start]] (40 x 40 Studio example, Ra 1e3 and 1e4: nu_hot 1.119 and 2.257)
 
 ## Open questions
 

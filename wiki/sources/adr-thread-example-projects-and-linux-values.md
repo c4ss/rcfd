@@ -14,7 +14,7 @@ status: draft
 **Origin:** the ADRs in the table below, `docs/adr/` at `origin/main` 2e94e5ef.
 **Kind:** ADR thread (registrations with result addenda), 6 ADRs, 2026-10-28 to 2026-10-30; none has an item in its file name.
 
-The Studio showed nothing on first open, "because a new project is empty". ADR 0142 (48H) added two finished example projects, `wind-tunnel` and `quick-start`, under `example-projects/`, with committed runs, a regeneration script and a staleness test. The first Linux gate then failed on them, because the cylinder generator's last bits differ per platform: the maintainer chose "ship Linux-built stores too, not a tolerance and not a known miss" (ADR 0150), a second tree `example-projects-linux/` built by the same script in Docker. ADR 0155 (48U) added `[mesh.transform]` and two rotated NACA 0012 cases, ADR 0157 (48W) merged them into both trees, and ADR 0176 (49M) added the 3D project `axial-fan`. The Linux expected values of the gate itself are ADR 0137 (on [[adr-thread-daily-gate-and-edit-lock]]). See [[example-projects]].
+The Studio showed nothing on first open, "because a new project is empty". ADR 0142 (48H) added two finished example projects, `wind-tunnel` and `quick-start`, under `example-projects/`, with committed runs, a regeneration script and a staleness test. The first Linux gate then failed on them, because the cylinder generator's last bits differ per platform: the maintainer chose "ship Linux-built stores too, not a tolerance and not a known miss" (ADR 0150), a second tree `example-projects-linux/` built by the same script in Docker. ADR 0155 (48U) added `[mesh.transform]` and two rotated NACA 0012 cases, ADR 0157 (48W) merged them into both trees, and ADR 0176 (49M) added the 3D project `axial-fan`. The Linux expected values of the gate itself are ADR 0137 (on [[adr-thread-daily-gate-and-edit-lock]]). See [[doc-example-projects]].
 
 ## Current state
 
@@ -54,6 +54,7 @@ The Studio showed nothing on first open, "because a new project is empty". ADR 0
 
 ## Related
 
-- [[example-projects]], [[studio]], [[naca0012]], [[cylinder-re100]], [[fan-01]], [[known-miss]], [[bit-identical]]
+- [[doc-example-projects]], [[studio]], [[naca0012]], [[cylinder-re100]], [[fan-01]], [[known-miss]], [[bit-identical]]
 - Threads: [[adr-thread-wave48-egui-studio]], [[adr-thread-naca0012-sa-drag]], [[adr-thread-daily-gate-and-edit-lock]] (ADR 0137, the Linux expected values), [[adr-thread-fan01-rotating-solve]]
 - Areas: [[roadmap-studio-desktop-app]], [[roadmap-quality-docs-and-validation]]
+- Project notes and pages: [[doc-example-projects]], [[example-project-wind-tunnel]], [[example-project-quick-start]], [[example-project-axial-fan]]

@@ -20,6 +20,7 @@ Three kinds of work share this line: validation headlines, the reliability of th
 - **Gate reliability.** The daily full gate runs in CI with failures attributed to ADRs (F-723, ADR 0653), and scheduled runs have used four shards since 2026-11-21. The failures it found were fixed one item at a time: per-test time limits (F-849), wall-clock limits on a loaded runner (F-854), a shared temporary folder (F-853) and a negative control (F-866). The [[edit-lock]] needed four items (F-751, F-755, F-761, F-855), and F-855 stays partial until a hosted gate shows F2 passing or failing with a printed class ([[adr-thread-daily-gate-and-edit-lock]]). The [[test-to-adr-index]] that the attribution reads went through 19 ADRs of rules and readings. Coverage is near complete, but the agreement between readers of the primary-ADR samples is what most often missed its limits ([[adr-thread-test-to-adr-attribution]]).
 - **Lead tooling.** The push script after its first real runs (F-851), process measures and four stop conditions in force from 2026-11-21 (F-863), and agent-written [[roadmap-proposal]] files (F-864, partial) ([[adr-thread-process-measures-and-roadmap-form]]).
 - **Not started:** hosted CI for F-001 and F-002, F-736, F-764, F-858 to F-861, F-871 (six further milestones), F-872 to F-880 (the fan headlines and the follow-ups of F-870).
+- **Early waves (added by p3-records-a).** The first validation against read benchmark data is wave 30 (ADRs 0060, 0061; the backward step met all its limits; cavity Re 1000 GCI, the channel, the cylinder Strouhal number and the SST plate missed), followed by a reference-reading wave that verified some citations and changed no value (ADR 0064) ([[adr-thread-early-validation-benchmarks]]). The gate's test runner `scripts/gate_test.py` (one process per test, one pool) and its per-test time limit come from ADRs 0127 and 0129 ([[adr-thread-daily-gate-and-edit-lock]]). The docs site and executed tutorials (F-096) are ADR 0089 ([[adr-thread-early-workflow-and-partials]]).
 
 ## ADR threads
 
@@ -28,6 +29,8 @@ Three kinds of work share this line: validation headlines, the reliability of th
 - [[adr-thread-daily-gate-and-edit-lock]]: F-723, F-751, F-755, F-761, F-849, F-853, F-854, F-855, F-866 (11 ADRs)
 - [[adr-thread-test-to-adr-attribution]]: F-737 to F-795, F-839 (19 ADRs)
 - [[adr-thread-process-measures-and-roadmap-form]]: F-851, F-863, F-864 (ADRs 0752, 0754, 0755)
+- [[adr-thread-early-validation-benchmarks]]: F-006, F-125 (ADRs 0060, 0061, 0064)
+- [[adr-thread-early-workflow-and-partials]]: F-096 (ADR 0089); ADRs 0127, 0129 added to [[adr-thread-daily-gate-and-edit-lock]]
 
 ## Items
 

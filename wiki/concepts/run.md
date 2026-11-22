@@ -1,7 +1,7 @@
 ---
 type: concept
 tags: [run, studio]
-sources: [doc-glossary, doc-product, doc-run-control, doc-service-protocol, doc-mcp-tools, doc-tutorial-desktop-assistant]
+sources: [doc-glossary, doc-product, doc-run-control, doc-service-protocol, doc-mcp-tools, doc-tutorial-desktop-assistant, doc-example-projects]
 created: 2026-11-22
 updated: 2026-11-22
 status: draft
@@ -20,6 +20,7 @@ One solve of a case by the project's runner, kept in `runs/<run id>/` with setti
 - A service session has the states `defined` -> `ready` -> `running` <-> `paused` -> `finished` | `stopped` | `failed` ([[doc-service-protocol]]).
 - A project run of the run service is an `rcfd run` child process on `runs/<id>/case.snapshot` with `--case-dir`, `--store-dir`, `--status-monitors` and a pause file ([[doc-run-control]]); run ids look like `r-<yyyymmddThhmmss>-<4 hex>` and `runs/<id>/` holds `run.json`, `launch.json`, `residuals.jsonl`, `output/`, `fields/` ([[doc-mcp-tools]]).
 - "The run is the runner's, not the window's: closing the Studio leaves it going" ([[doc-tutorial-desktop-assistant]]).
+- Committed example runs (made by the real solver through the run service with `scripts/make_example_projects.py`) live under `example-projects/*/runs/` and, built on Linux, `example-projects-linux/*/runs/` ([[doc-example-projects]]).
 
 ## Related
 
@@ -32,3 +33,4 @@ One solve of a case by the project's runner, kept in `runs/<run id>/` with setti
 - [[checkpoint]]
 - [[stop-file]]
 - [[divergence-guard]]
+- [[example-project-wind-tunnel]], [[example-project-quick-start]], [[example-project-axial-fan]]

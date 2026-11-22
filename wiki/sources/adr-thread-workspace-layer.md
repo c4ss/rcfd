@@ -66,6 +66,7 @@ ADR 0173 (2026-11-04) answers three requirements of the maintainer: "R1 The MCP 
 
 ## Related
 
+- Predecessor (added by p3-records-a): the project folder library `rcfd-project` is ADR 0122 (wave 47A, layer L1); see [[adr-thread-studio-foundation-crates]].
 - [[rcfd-workspace]], [[rcfd-mcp]], [[rcfd-project]], [[rcfd-runner]], [[project-journal]], [[field-store]], [[mcp]], [[mcp-access-class]], [[claude-plugin]], [[design-loop]], [[studio]]
 - Threads: [[adr-thread-mcp-tools]] (the tool list over time), [[adr-thread-studio-engine-entry-points]], [[adr-thread-runner-records-and-run-sites]], [[adr-thread-studio-electron]]
 - Areas: [[roadmap-claude-and-the-mcp-server]], [[roadmap-studio-desktop-app]]

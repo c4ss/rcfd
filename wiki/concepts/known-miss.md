@@ -32,3 +32,4 @@ A registered limit the current code does not meet; its test is kept, `#[ignore]`
 - [[roadmap-status]]
 - [[simulation-milestones]]
 - [[doc-reference-data-known-misses]], [[verification-vs-validation]]
+- Investigation folders with known misses: [[doc-investigation-job48t-cylinder-spokes]] (K1, K2), [[doc-investigation-job49d-aoa-sweep-fixed]] (LT15, LD), [[doc-investigation-f868-naca0012-lift-curve]] (17 degrees), [[doc-investigation-job49h-te-divergence]]

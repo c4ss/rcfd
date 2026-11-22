@@ -1,7 +1,7 @@
 ---
 type: entity
 tags: [validation, benchmark, turbulence, boundary-layer]
-sources: [doc-reference-data-flat-plate, doc-reference-data-sst-wall, doc-reference-data-spalart-allmaras, doc-reference-data-known-misses, doc-reference-data-wave30b-incompressible-validation, doc-reference-data-wave31b-turbulence-wall, doc-validation-data]
+sources: [doc-reference-data-flat-plate, doc-reference-data-sst-wall, doc-reference-data-spalart-allmaras, doc-reference-data-known-misses, doc-reference-data-wave30b-incompressible-validation, doc-reference-data-wave31b-turbulence-wall, doc-validation-data, doc-investigation-job49a-sa-drag, doc-investigation-job49e-sa-wall]
 created: 2026-11-22
 updated: 2026-11-22
 status: draft
@@ -20,10 +20,12 @@ status: draft
 - TMR grid convergence: GCI 0.28 %, p = 1.21; "rcfd's Richardson-extrapolated Cf(0.97) is +2.6 ... +3.6 % above it; not resolved (virtual origin untested)" ([[doc-reference-data-wave31b-turbulence-wall]]).
 - Spalart-Allmaras: TMR Cf(0.97) 2.70565e-3 (CFL3D SA) ([[doc-reference-data-spalart-allmaras]]).
 - Known miss F-043: SST vs White 0.002663 vs 0.002875 (-7.36 %) against a 5 % criterion; met: SST vs the TMR page value (-0.7 %) and file value (-1.0 %) ([[doc-reference-data-known-misses]]).
+- SA plate Cf(0.97) against TMR 2.70565e-3 by wall y+ (jobs 49A, 49E): default `auto` +3.1 % at y+ 0.99, +19.9 % at 5.31, +4.3 % at 39.6; opt-in `auto_sa_law` (amendment 1) +2.3 % to +4.4 % at every y+ from 1 to 60 ([[doc-investigation-job49a-sa-drag]], [[doc-investigation-job49e-sa-wall]]).
 
 ## Related
 
 [[gci-richardson]], [[backward-facing-step]], [[known-miss]], [[doc-reference-data]], [[simulation-milestones]]
+- [[doc-investigation-job49a-sa-drag]], [[doc-investigation-job49e-sa-wall]]
 
 ## Open questions
 

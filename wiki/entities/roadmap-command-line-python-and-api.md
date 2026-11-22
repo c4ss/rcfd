@@ -21,10 +21,13 @@ No ADR of the P3 lists is filed under this area; this synthesis is written from 
 - **Python is a driver, not a binding.** F-083 is partial: "there is no PyO3 extension, no pip-installable wheel, no numpy field access without a VTU round trip"; the pure-Python package in `python/rcfd/` drives `run`, `check` and `study` through the CLI, because "the workspace forbids `unsafe_code` and PyO3's macros expand to unsafe code" (ADR 0034 D5) ([[rcfd-python]], [[doc-python]]).
 - **User-function hooks are partly delivered.** F-239 partial: turbulence source, species source, adjust, a separate exit hook, reaction rate, dynamic-zone motion, specific heat and density hooks are not delivered, and no hook runs in the compressible, variable-density or VOF solvers ([[doc-roadmap-json]], [[udf-sandbox]], [[doc-udf-abi]]).
 - **Not started:** F-307, an optional `immersed_solids` table in the case tree ([[doc-roadmap-json]], [[immersed-solid]]).
+- **Early waves (added by p3-records-a).** ~~No ADR of the P3 lists is filed under this area~~ The records job files the early wave ADRs of this area on [[adr-thread-early-workflow-and-partials]]: restart, chained runs, run-control additions and the 21-rule setup checker (ADR 0031; "through the binary an error-level case exits 3 from the loader before the rules run"), studies and the pure-Python package (ADR 0034), the UDF hook catalogue v2 (ADR 0088, F-239 partial), and the close-outs that set F-240 (ADR 0092) and F-241 (ADR 0097) done. The settings tree itself is ADR 0001 ([[adr-thread-founding-decisions]]).
 
 ## ADR threads
 
 - None of the P3 thread pages is filed under this area. Related: [[adr-thread-studio-engine-entry-points]] and [[adr-thread-runner-records-and-run-sites]] (the CLI twins of Studio capabilities), [[adr-thread-workspace-layer]] (`rcfd-cli` depends on `rcfd-workspace` since ADR 0731).
+- [[adr-thread-early-workflow-and-partials]] — F-083, F-115, F-121, F-239, F-240, F-241 (ADRs 0021, 0031, 0034, 0088, 0092, 0099; F-241 also ADR 0097 on [[adr-thread-early-physics-models]])
+- [[adr-thread-founding-decisions]] — ADR 0001 (settings tree, F-005)
 
 ## Items
 

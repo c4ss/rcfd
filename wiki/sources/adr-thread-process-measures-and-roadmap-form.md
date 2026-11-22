@@ -44,6 +44,19 @@ Three items that changed how the [[lead]] merges and records: the push script af
 - None of this thread is open with the maintainer. The cutover (ADR 0755 Q2) "is decided on the differences of the proposals in use".
 - ADR 0754: "The optional follow-up (a file that records a report's arrival ...) is not entered" (the lead).
 
+## The weekly citation audit (ADR 0745; added by job p3-records-b)
+
+[ADR 0745](../../docs/adr/0745-citations-2026-w47-audit-five-citations-drawn-by-seed.md) (registered 2026-11-19; index item F-851) is the lead's weekly citation item of `docs/process/lead-process.md` ("Citations from memory: the Sources read addendum"), done by one agent with no code and no cargo command. The population is every ADR whose text contains "from memory" and has no `## Sources read (20YY-MM-DD)` line: "**305** of 736 ADR files" on b52b882a. Five were drawn by `random.Random(20261119).sample(population, 5)` (ADRs 0588, 0624, 0344, 0028, 0379), and for each the first citation in file order was looked up in public literature and an addendum appended. See [[sources-read-addendum]].
+
+| ADR | Date | Kind | Item | Question | Outcome | Superseded by |
+|---|---|---|---|---|---|---|
+| [0745](../../docs/adr/0745-citations-2026-w47-audit-five-citations-drawn-by-seed.md) | 2026-11-19 | audit (registered, addendum) | F-851 | Five citations from memory drawn by seed, re-read against their sources | "done in every clause but one": `--check` fails only on the generated `docs/adr/index.md`, which an agent may not write; open count 305 to 300 | |
+
+- Result: "1 read in the source itself, 3 not obtainable with second sources read, 1 not a source"; "No number used by the code was shown wrong".
+- Differences for the lead: the Schiller-Naumann switch at `Re = 1000` and the constant `0.44` in `crates/rcfd-particles/src/drag.rs` "have no read source; one second source uses the correlation only up to `Re = 700`" (ADR 0028, which had marked the limit UNVERIFIED); ADR 0028 D2 prints `0.437` where "the formula gives `0.4383`"; the attribution of the growing modes to Hu 2001 (ADR 0344) "is not confirmed; no code depends on it".
+- Rules followed: "Vendor documentation is not opened and is not a source. A publisher's page that refuses the fetch is `not obtainable` with the addresses tried; no retry under another client name, no sign-in" ([[clean-room]]).
+- Open: lowering `docs/process/exceptions/from-memory-count.txt` to 300 and the line for `docs/process/citation-batches.md` are the lead's.
+
 ## Related
 
 - [[lead]], [[push-main]], [[process-ledger]], [[process-report]], [[roadmap-proposal]], [[roadmap]], [[maintainer-questions]]
