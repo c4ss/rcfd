@@ -9801,11 +9801,11 @@
     "deps": [
       "F-884"
     ],
-    "status": "todo",
+    "status": "done",
     "acceptance": "Every limit not stated here is registered in the ADR before the run. ADR 0760's twelve steady cases from 0 to 17 degrees with turbulence.relax_nut = 1.0 added each end steady by ADR 0167's window rule with cl within 0.018 of ADR 0760's steady values at 0 to 16 degrees and of ADR 0764's 1.5516 at 17 degrees, or each angle that does not is recorded with its number; the result informs whether relax_nut = 1.0 can become the default of steady Spalart-Allmaras.",
-    "note": "Lead (2026-11-22): entered on the maintainer's answer of that day (\"Yes, option (a)\") to the open question of ADR 0770, with the title, dependencies and acceptance of the agent's proposal file docs/roadmap/proposals/0770-F-884.json as written (it names the item F-886, a number already used on the maintainer's checkout). Not issued yet. Lead (2026-11-22): issued by docs/adr/briefs/f887-naca0012-lift-curve-relax-nut.md (ADR 0772).",
     "milestones": [
       "aerofoil-lift"
-    ]
+    ],
+    "note": "Lead (2026-11-22): entered on the maintainer's answer of that day (\"Yes, option (a)\") to the open question of ADR 0770, with the title, dependencies and acceptance of the agent's proposal file docs/roadmap/proposals/0770-F-884.json as written (it names the item F-886, a number already used on the maintainer's checkout). Not issued yet. Lead (2026-11-22): issued by docs/adr/briefs/f887-naca0012-lift-curve-relax-nut.md (ADR 0772). ADR 0772, 2026-11-23, done by its registered rule: ADR 0760's twelve steady SA cases on M1w-far500 with turbulence.relax_nut = 1.0 added all end steady by ADR 0167's window rule, within 0.018 of ADR 0760's steady values at 0 to 16 degrees (largest 0.0015 at 16) and of ADR 0764's 1.5516 at 17 (1.5514), and within ADR 0760's band of Ladson at all twelve angles (17 degrees -0.054, outside the scatter 0.018, a known miss); 13 and 16 degrees no longer meet the residual targets and run to the cap; no default changed; the gate holds the record, three negative controls and two coarse runs (crates/rcfd-api/tests/naca0012_lift_curve_relax_nut_f887.rs). Lead (2026-11-23): merged at c0b2f06e and pushed at 9fca63df; done as proposed. Whether relax_nut 1.0 becomes the default is the maintainer's (ADR 0772, open question)."
   }
 ]

@@ -414,3 +414,16 @@ Status proposed: done.
 
 No follow-up item is proposed here: the follow-up of question 1 (b) depends on the maintainer's answer. The same entry is
 in `docs/roadmap/proposals/0772-F-887.json`. `docs/adr/index.md` is not current and is left to the lead.
+
+## The lead's reading (2026-11-23), at the merge
+
+Merged at c0b2f06e and pushed at 9fca63df (the report read at 01:20 UTC, 8 minutes of reading, proposed done, written
+done). Checked by the lead before the merge: the registration is the first commit and alone, and the driver, the twelve
+case texts and the test file with its recorded fast-test value are each committed before the record they hold; no
+source of a crate is changed and no default moves; the 17-degree case is the one known miss, outside the scatter of
+the reference, and stays as an ignored record test with its limit, as ADR 0764 kept it. The push script ran this ADR's
+committed mutation and ADR 0764's, and both failed as expected; 137 binaries were left out for a left-out run.
+
+Status: **done**, as proposed. That 13 and 16 degrees no longer meet the residual targets and run to the cap is noted
+for the question of the default, which is put to the maintainer with the agent's recommendation (b), which the lead
+shares.
