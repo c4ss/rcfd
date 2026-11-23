@@ -451,3 +451,172 @@ done needs C1 by D6 (the task of the item made in the Studio's own flow and its 
 same on a machine whose load has fallen), with C2, C3, T1, T1m, N1, N2 and K1 as registered. If only D7 shows the
 mechanism, the fix and the test are still written and checked, and the status proposed is partial with the gap
 "the run with the task of 400 ms was not made again".
+
+## Addendum 1: results (2026-11-23)
+
+All runs were made on the lead's Windows machine (AMD Ryzen 7 9800X3D, 16 logical processors), in the packaged Studio,
+with the engine and the bench of this work's own release build in the scratch target folder (from c4bd79f3), while
+other agents' builds kept the machine 0.89 to 1.00 busy in every record. The back end was "Drawn by WebGPU" throughout.
+Logs, traces and the scripts that read them are in the scratch folder; the names in brackets are its files.
+
+### The cause
+
+**What is shown.** The first time the page draws into a 2D canvas, Chromium creates the renderer's shared GPU context
+by a synchronous call to the GPU process (`GpuChannelHost::CreateViewCommandBuffer`, then
+`GpuChannel::CreateCommandBuffer`) on the renderer's main thread. The GPU process answers it when the task its main
+thread is running has ended, and not before. In the Studio that first canvas is the field legend's bar: the effect of
+`src/renderer/field/Legend.tsx` (lines 18 to 23: `getContext('2d')`, `putImageData`), which runs when the field's
+values first arrive, while the GPU process's main thread is making the devices and the first pipelines of the field
+view and the plots (WebGPU tasks of 86 to 245 ms each, about 0.9 s of the first second after the mount). The main
+thread waits for the rest of the one task the call falls into. The wait has no thread time, names no script that takes
+time, and ends just before the frame is rendered, which is the picture of the item's task.
+
+| Record | State | Launches | Largest task of `workspace.tab` | The legend's synchronous wait (traced launches) | The GPU task it waited for |
+|---|---|---|---|---|---|
+| D0, the unchanged test [d0-*.log] | as it is | 3 runs, 6 passes | 55 to 70 ms; 3 passes failed on a held frame of 157 to 184 ms | not traced | |
+| D2 (c), default folder [rec-d2c.log] | as it is | 3 | none, 65 ms, none | not traced | |
+| D2 (a), fresh folder each [rec-d2a.log] | as it is | 3 | none, 69 ms, 89 ms | not traced | |
+| D1 [rec/d1t-*] | as it is | 3 traced | 79 to 83 ms (a shader built by the plots' frame callback) | 32.5, 32.8, 19.4 ms (thread 0.1 to 0.6 ms) | the first device, 151 ms |
+| D3 [rec/d3t-*] | data delayed 1 s | 3 and 3 traced | 51 to 65 ms; traced 77 to 97 ms | 0.4 ms, 5 s after the mount | none running |
+| D4 [rec/d4t-*] | hold queued when the legend's canvas is added | 3 and 3 traced | none, 67 ms, 73 ms; traced 82 to 94 ms | 44.9, 56.0, 60.6 ms | one of the Studio's own, 88 to 91 ms; the hold (315 to 320 ms) ran after the answer |
+| D6 [rec/d6t-*] | the Studio's processes at High priority | 3 and 3 traced | 57 to 81 ms; traced 81 to 85 ms | 84.3, 48.6, 33.0 ms | the first device, 153 to 172 ms |
+| D7 [rec/d7t-*] | hold of at least 2 s running when the legend arrives | 3 and 3 traced | **3400, 3456, 3474 ms; traced 3307, 3482, 3428 ms** | 3306.4, 3480.8, 3426.6 ms (thread 35.5 to 45.1 ms) | the hold, 3667 to 3844 ms |
+
+- **D7 shows the mechanism as amendment 3 read it.** In each launch without the trace one `longtask` of 3400 to
+  3474 ms began 2 ms after the legend's canvas was added and ended 8 to 12 ms before the hold's end. In each traced
+  launch more than 99.9 % of the task was the one event `GpuChannel::CreateCommandBuffer` (thread time 1.0 to 1.4 % of
+  its wall-clock time) while the GPU process's main thread ran the hold; every sample of the processor profile in it
+  that is not idle is at line 4779, column 73515 of the bundle `index-BVC_CEU6.js`, the body of the legend's effect.
+  The legend's canvas was added 0.47 to 0.54 s after the hold started, inside the hold, in all six launches.
+- **In the Studio's own flow the wait is there in nine traces of nine** where the legend arrives while the GPU process
+  works (D1, D4, D6): 19 to 84 ms, each time the rest of one WebGPU task of the Studio's own, and the only event of the
+  phase whose wall-clock time is not thread time. In D6's first traced launch that wait alone made a task of 85 ms.
+- **D6 did not make the order of 10:20.** With the Studio's processes at High priority the legend arrived earlier
+  inside the first device's creation and the wait grew (33 to 84 ms against 19 to 33 ms in D1), but no task passed
+  100 ms. **The run with the task of 400 ms was not made again,** and D5 was not made: the machine's load did not fall
+  under 0.75 at any time during this work.
+- **What the task of 10:20 to 11:20 was** therefore rests on agreement, not on a record of it: the wait above is the
+  only main-thread event of the mount that is not the thread's own work; the Studio queues enough WebGPU work for it
+  (single tasks to 245 ms on the busy machine today; a fresh folder had one frame of 415 ms waiting for the GPU);
+  F-888's records have one task with no script and the frame's rendering at its end, on a machine 0.28 to 0.72 busy,
+  where every record of a machine over 0.85 busy has tasks of 50 to 97 ms (but for two passes of the lead's log, amendment 1); and the wait grows when the Studio gets
+  more processor time (D6). What one GPU task was 400 ms long that hour was not found. A reading that fits (several
+  devices created in one flush when the page is quick) was not tested and is not claimed.
+- **Excluded:** the state of the user data folder (D2), H4 with it; H3 as the cause of the wait (the thread is not
+  descheduled: it sleeps in one named call); H1 for the wait (the phase's script work is nine or ten tasks of at most
+  97 ms, about 0.3 s in all).
+
+**Deviations of the diagnosis,** each registered by an amendment before the next record: D3's order was the wrong one
+(amendment 2), D4's instrument was defective (amendment 3). The trace was taken through the DevTools protocol's
+`Tracing` domain with the processor profile in it; Electron's `contentTracing` wrote a binary format the scratch
+script did not read, and its three files were discarded. D2 (b) was not made (amendment 1).
+
+### The fix
+
+`apps/studio-web/src/renderer/ui/canvasContext.ts` (new): `createCanvasContextWhenIdle` makes the synchronous call
+once, at the page's first idle moment after its first view (no later than 500 ms after), by writing one pixel into a
+2D canvas of one pixel that is never added to the document. `src/renderer/main.tsx` calls it after the first render
+(four lines). The Studio has sent the GPU process no WebGPU work at that moment, and the legend's bar and every later
+2D canvas find the context there. Nothing drawn changes: `Legend.tsx` and the canvases are untouched, and
+`field.spec.ts`'s test of the bar's pixels passed in every whole run. The creation of the WebGPU context (the page's
+other synchronous call, 0.8 to 8.5 ms in the traces) is left as it is. No file of F-832's limits or of
+`responsiveness.spec.ts` is changed. `apps/studio-web/README.md` has a paragraph on it.
+
+The test: `tests/e2e/workspace-first-open.spec.ts` with `tests/support/gpu-hold.ts` (both new; the helper is used by
+no other spec), as amendment 3 registered T1. No shared helper was changed.
+
+### Checks
+
+| Check | Limit | Measured | Met |
+|---|---|---|---|
+| C1 (as amendment 3 words it): the cause shown by a record | the item's task made again in the Studio's own flow (D6 or D5) | the mechanism shown by D7 (3 of 3, and 3 of 3 traced) and present in 9 traces of 9 of the Studio's own flow at 19 to 84 ms; D6 gave no task over 100 ms; D5 not made | **no**: shown by D7 only |
+| C2: before the fix, the largest `longtask` of `workspace.tab` in the state named (D7) | over 100 ms in 3 of 3 | 3400, 3456, 3474 ms | yes |
+| T1: `workspace-first-open.spec.ts` on the fixed tree | pass | passed 3 of 3 alone [t1-*.log] and in 3 of 3 whole runs | yes |
+| T1m: the committed mutation makes T1 fail with a task over the limit in `workspace.tab` | fail | failed, one task of 3393 ms [m1-1.log] | yes |
+| C3: after the fix, the largest task of `workspace.tab` in the state of C2, 3 runs | at most 100 ms in 3 of 3 | 66 ms, 56 ms, none over 50 ms, with the GPU process held 4000, 4120 and 3859 ms and the legend's bar added inside the hold | yes |
+| N1: runs of `responsiveness.spec.ts` alone, line 260 passing | 10 of 10 | 10 of 10, each on its first pass [n1-*.log] | yes |
+| N2: whole runs of `npm test`, line 260 passing | 3 of 3 | 3 of 3, each on its first pass [n2-*.log] | yes |
+| K1: lines of `src/shared/work.ts`, `responsiveness.spec.ts`, `playwright.config.ts` changed | 0 | 0 (`git diff c4bd79f3` of the three files is empty) | yes |
+| G1: `npm run typecheck`; the whole `npm test` | exit 0 | type check exit 0; `npm test` exit 1, 0, 1, each failure one test outside this item (below) | **no** for two of the three runs |
+| G2: `docs_site`; `process_report.py --check` | pass | at the end of this addendum | see there |
+
+**N1** (the fixed tree, machine 0.79 to 1.00 busy). In the ten runs the largest task of `workspace.tab` was 0 to 61 ms
+(limit 100) and the largest held frame of the test's phases 97 to 141 ms (limit 150); frames that are not held
+(blocking duration 0) were 154 to 291 ms and are not counted by F-832's rule. In D0, before the fix and at the same
+load, 3 passes of 6 failed on a held frame of 157 to 184 ms and each run needed up to three passes; after it, 13 runs
+of 13 passed on the first pass. That difference is reported, not claimed as an effect of the fix: no check was
+registered on it.
+
+**N2.** Run 1 (21:02 to 21:18): 852 passed, 1 failed, 2 did not run. Run 2 (21:18 to 21:34): 855 passed, exit 0.
+Run 3 (21:35 to 21:50): 850 passed, 1 failed, 4 did not run. `responsiveness.spec.ts:260`,
+`workspace-first-open.spec.ts:59` and `field.spec.ts:241` (the legend bar's pixels) passed in all three. No process of
+the runs was left after any of them.
+
+**Mutations (rule 16).** M1, committed as `tests/e2e/workspace-first-open.spec.mutation.patch` (the call and its import
+removed from `main.tsx`): applied, built, packaged, T1 failed with `longtask 3393 ms` in `workspace.tab`; removed and
+rebuilt. M2 (a busy loop of 150 ms in an effect of `RunWorkspace`'s first mount, not committed): `responsiveness.spec.ts:260`
+failed in each of its three passes with tasks of 165 to 167 ms and T1 failed with a task of 166 ms; removed and rebuilt.
+The negative control is C2.
+
+### Other tests that failed (not changed, rule 2)
+
+- `tests/e2e/undo.spec.ts:268` in run 1 of N2: `TimeoutError` of 30 s in the spec's `openSolver` (line 66), waiting for
+  the option `/^solver\b/` of the listbox "Sections of the case". Passed in runs 2 and 3.
+- `tests/e2e/run-control.spec.ts:320` ("pause and resume by keyboard") in run 3 of N2: at line 329 the row's
+  `.rc-pending` with "Pause requested from the Studio" or "acted" was not found within 5 s. Passed in runs 1 and 2.
+
+Each failed once in three runs on a machine 0.8 to 1.0 busy, and
+neither was looked into further. Whether they fail on the tree before this work was not run.
+
+### Deviations and what was not run
+
+- The diagnosis's deviations are listed under "The cause" (amendments 1 to 3).
+- D5 (the unchanged test on a machine under 0.75 busy) and D2 (b) were not made.
+- The registration said the wall-clock time of the call made ahead would be read from a trace of the start and
+  reported without a limit. It was not read: no trace of the start was taken. What is known of it is the same call's
+  time with the GPU process idle, 0.4 ms (D3).
+- The run of T1 on the unfixed tree outside the mutation (D7) used the scratch copy of the spec, before the committed
+  one existed; the committed spec's failure is M1's.
+- `cargo fmt`, `cargo clippy` and the baseline hashes were not run: no crate and no solver output is touched.
+- G1's `npm test` did not exit 0 in two of three runs, by the two tests above.
+
+### Size
+
+Size (agent), actual: partial; 0 further registrations (three amendments); 3 heavy runs (the whole `npm test` of N2, 16 minutes each); 0 questions; about 600000 bytes read.
+
+Registered: done; 0; 4; 0; 150000. The outcome is lower and the reading four times the estimate: the traces and three
+rounds of the diagnosis were not foreseen.
+
+### Decision
+
+By the rule as amendment 3 made it precise: **partial.** The mechanism is shown by a recorded run (D7, C2) and found in
+every trace of the Studio's own flow, the fix removes it (C3), the test catches its removal (T1, T1m), and line 260
+passed 10 of 10 runs alone and 3 of 3 whole runs with F-832's limits and test unchanged (N1, N2, K1). The clause not
+met: the run with the task of 400 to 440 ms was not made again in the Studio's own flow (D6 gave none, D5 was not
+made), so that this mechanism was the task of 2026-11-23 10:20 is inferred, not recorded. G1 is not met by two tests
+outside the item.
+
+## Open questions for the maintainer
+
+None. (For the lead, not a question of scope: the missing record is a run of the unchanged test on the tree before the
+fix and on the tree after it when the machine is under 0.75 busy; the lead's own push runs after the merge give the
+second half.)
+
+## For the lead: roadmap entries
+
+> Status of F-890: partial.
+
+> Note of F-890: ADR 0787, 2026-11-23, partial: the first draw into a 2D canvas (the field legend's bar) makes Chromium create the renderer's GPU context by a synchronous call that waits on the main thread for the task the GPU process is running, shown at 3400 to 3474 ms behind a held GPU task (3 of 3) and at 19 to 84 ms in 9 traces of 9 of the Studio's own flow; the context is now created when the page is first idle, a new test with a committed mutation holds it, and responsiveness.spec.ts:260 passed 10 of 10 runs alone and 3 of 3 whole runs of npm test with the limits of F-832 unchanged, but the task of 400 to 440 ms itself was not made again (machine 0.79 to 1.00 busy throughout).
+
+> Gap of F-890: The cause is shown as a mechanism and fixed, and responsiveness.spec.ts:260 passed 10 of 10 runs alone and 3 of 3 whole runs. Missing: a record that this mechanism was the task of 400 to 440 ms. It needs the machine under 0.75 busy: the unchanged test on the tree before ADR 0787's fix must show the task again, and on the tree with it must pass. In the whole runs undo.spec.ts:268 and run-control.spec.ts:320 each failed once in three, outside this item.
+
+> Follow-up items: none.
+
+## End checks (G2, 2026-11-23)
+
+- `cargo test -p rcfd-cli --release --test docs_site`: 2 passed, 0 failed, with this addendum in the tree.
+- `python scripts/roadmap_proposals.py check docs/roadmap/proposals/0787-F-890.json`: "F-890: todo -> partial; gap set;
+  note + 676 characters".
+- `python scripts/process_report.py --check`: 1 failure, "generated file is not current: docs/adr/index.md". It is the
+  generated index, which rule 9 leaves to the lead; nothing else failed.
+- `npm run typecheck` in `apps/studio-web`: exit 0.

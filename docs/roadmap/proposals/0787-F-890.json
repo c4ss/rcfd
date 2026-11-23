@@ -1,0 +1,10 @@
+{
+  "form": 1,
+  "adr": "0787",
+  "item": "F-890",
+  "base": "c4bd79f3ca84eba120fb7727d197e1af6acb3e59",
+  "status": "partial",
+  "note": "ADR 0787, 2026-11-23, partial: the first draw into a 2D canvas (the field legend's bar) makes Chromium create the renderer's GPU context by a synchronous call that waits on the main thread for the task the GPU process is running, shown at 3400 to 3474 ms behind a held GPU task (3 of 3) and at 19 to 84 ms in 9 traces of 9 of the Studio's own flow; the context is now created when the page is first idle, a new test with a committed mutation holds it, and responsiveness.spec.ts:260 passed 10 of 10 runs alone and 3 of 3 whole runs of npm test with the limits of F-832 unchanged, but the task of 400 to 440 ms itself was not made again (machine 0.79 to 1.00 busy throughout).",
+  "gap": "The cause is shown as a mechanism and fixed, and responsiveness.spec.ts:260 passed 10 of 10 runs alone and 3 of 3 whole runs. Missing: a record that this mechanism was the task of 400 to 440 ms. It needs the machine under 0.75 busy: the unchanged test on the tree before ADR 0787's fix must show the task again, and on the tree with it must pass. In the whole runs undo.spec.ts:268 and run-control.spec.ts:320 each failed once in three, outside this item.",
+  "follow_ups": []
+}
