@@ -306,3 +306,81 @@ limits, N1, N2 and the decision rule are unchanged.
 
 **Picture (b),** the held frame of 157 to 184 ms that fails single passes on the busy machine, is not the task of the
 item. Whether the fix changes it is recorded by N1 and N2 and reported; no fix for it is registered here.
+
+## Amendment 2 (2026-11-23): D3 did not show H6 as worded; what it gave, the record D4, the fix and the test as now registered; written before D4 and before any code of the fix
+
+Written after D3 was made as amendment 1 registered it and before anything else. No Studio source and no test of
+F-890 is written yet.
+
+**D3 gave no task over the limit:** tasks 51 to 65 ms without the trace and 77 to 97 ms with it, three launches each,
+machine 0.96 to 1.00 busy. By amendment 1's reading H6 is not shown by D3, and C2 is not met in D3's state. The traces
+of D1 and D3 say why the delay did not make the wait, and correct amendment 1 in two places (scratch `ccb.py`):
+
+1. The page makes **two** synchronous creations of a GPU command buffer, not one. (A) The first WebGPU call of the
+   page (in a microtask of the renderer's initialisation; 1.2 ms in D1, 8.5 ms in D3), before any WebGPU work is
+   queued. (B) The first use of a 2D canvas, which is the field legend's bar (`src/renderer/field/Legend.tsx`, the
+   effect that calls `getContext('2d')` and `putImageData`): `GpuChannelHost::CreateViewCommandBuffer`, 19.4 to 32.8 ms
+   in D1's three traces, the whole of it waiting while the GPU process's main thread finished a WebGPU flush of 151 to
+   156 ms (the first device); 0.4 ms in D3, where the delay moved the legend to 5 s after the mount, when the GPU
+   process was idle.
+2. The legend's effect runs before the field's first draw, not after it. With the values late, as in D3, (B) falls
+   where nothing is queued. So the order of amendment 1 ("the values arrive when the renderer is initialised") does not
+   make the wait; what makes it is the legend arriving while the GPU process's main thread is inside one of the
+   Studio's own WebGPU tasks (in D1: 151, 86, 45, 98, 192, 82, 47 and 66 ms, 0.9 s of the first second after the mount).
+   The wait is the rest of the task the call falls into, plus what is queued before it.
+
+**H6 as now worded.** The task of the item is the wait (B): the legend's first use of a 2D canvas makes a synchronous
+call to the GPU process from a React effect on the main thread, and it lasts as long as the GPU process's main thread
+is held by the WebGPU work the Studio has just sent. On the busy machine of today it falls at the end of the first
+device's creation (19 to 33 ms). The order that made 400 ms on the machine with free processors of 10:20 to 11:20
+cannot be made on this machine today (three other agents hold every processor, and amendment 1's delay moves the
+legend the wrong way), and this work does not claim to have made that run again.
+
+**D4, the record that must show it,** in the unchanged packaged Studio, with the scratch spec of D1 and one
+instrument: the test holds the GPU process's main thread for a known time from the moment the legend's canvas enters
+the document. In the page, before the Workspace tab is clicked, the test makes a WebGPU device of its own and
+calibrates a compute shader (a chain of arithmetic statements with a fresh random constant, so no cache holds it),
+doubling its length until the GPU process takes at least 300 ms to make its pipeline (from the call to the queue's
+`onSubmittedWorkDone`); a `MutationObserver` then makes one such pipeline, with a new constant, in the microtask in
+which `canvas[data-legend-bar]` is added. The instrument stands in for the Studio's own WebGPU tasks at the moment
+the legend arrives; it changes no source and no environment of the Studio. Three launches with the trace and three
+without; the time L the instrument's pipeline took is recorded for each. 300 ms: three times `LONG_TASK_LIMIT_MS`, and
+inside the range the item names.
+
+- **H6 is shown** if in each of the three launches without the trace `workspace.tab` has a `longtask` over
+  `LONG_TASK_LIMIT_MS` (C2) whose length is within L plus or minus 100 ms, and in each of the three traced launches
+  that task holds one event `GpuChannel::CreateCommandBuffer` of the main thread with wall-clock time at least half of
+  the task and thread time under a tenth of its wall-clock time, during which the GPU process's main thread runs
+  WebGPU work, and the profile's leaf in the task is the legend's effect (the addendum gives the position in the bundle
+  and the source line it maps to).
+- That the task of 10:20 to 11:20 was this wait then rests on: the wait measured in the Studio's own mount in D1 (3 of
+  3 traces), its being the only event of the phase whose wall-clock time is not thread time, the 0.9 s of WebGPU tasks
+  the Studio itself queues in that second, the agreement of the picture (one task, the frame's rendering at its end,
+  no other task over 100 ms) with F-888's `long-tasks.json`, and the machine's load in every record (amendment 1). The
+  addendum says so in those words and says that the run of 10:20 itself was not made again.
+- If D4 has no such task, or one of another composition, H6 is not shown and the result is partial.
+- **D5, without a limit:** if the machine's load falls under 0.75 while this work runs, D0 and one traced launch of D1
+  are repeated once on the unchanged Studio (a scratch copy of the tree at c4bd79f3 if the fix is already written),
+  and what they show is reported. If the load does not fall, D5 is reported as not made.
+
+**The fix, if H6 is shown** (it replaces the fix of amendment 1, which would have paid the call lazily and so behind
+whatever was queued): the renderer creates the 2D canvas's GPU context ahead, once, when the page has shown its first
+view and is idle (a small module under `apps/studio-web/src/renderer/`, called from the page's entry; the smallest use
+of a 2D canvas, one pixel, never added to the document). The synchronous call is then made when the Studio has sent
+the GPU process no WebGPU work, and the legend's bar and every later 2D canvas find the context there. Nothing drawn
+changes (G3): the legend's bar is written as before, and `field.spec.ts`'s test of its pixels is untouched. The
+creation (A) is left as it is: it precedes all WebGPU work by construction. The wall-clock time of the call at the
+start is read from a trace and reported, without a limit.
+
+**T1 as now registered** (it replaces T1's set-up of amendment 1; the file's name and the rest are as registered):
+`workspace-first-open.spec.ts` launches the packaged Studio as `responsiveness.spec.ts` does, with the bench project
+and the recorder with its probe, and uses D4's instrument (calibrated in the test, at least 300 ms, started when the
+legend's canvas enters the document). It asserts that the instrument worked (L at least 300 ms, and the pipeline was
+started before the small run was drawn), and that `workspace.tab` has no `longtask` over `LONG_TASK_LIMIT_MS`. It
+holds the task limit only: while the test itself keeps the GPU process busy, frames wait for the GPU by the test's
+doing, so `LONG_FRAME_LIMIT_MS` is not held in this state (it stays held by `responsiveness.spec.ts`, unchanged). One
+pass, since the state is made by the test and does not depend on the machine's load; no retry. C2 (before the fix)
+and C3 (after it) are read in D4's state; T1m, M1 and M2 as registered, M2's deliberate wait being caught by T1 as a
+task over the limit.
+
+The checks' limits, N1, N2, K1 and the decision rule are unchanged. Picture (b) as in amendment 1.
