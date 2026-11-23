@@ -1,0 +1,28 @@
+{
+  "form": 1,
+  "adr": "0775",
+  "item": "F-871",
+  "base": "ece2e34db5efebbbb0a2eeefffef4914ea7fa1e1",
+  "status": "done",
+  "note": "ADR 0775, 2026-11-23, done: six milestones defined in docs/adr/0775-f871-milestones.json (lid-driven cavity F-028, turbulent step F-042 and F-043, turbulent flat plate F-041, F-043 and F-203, heated cavity F-050, shock tube and wedge F-060, packed bed F-031) with 81 memberships of 24 items in docs/adr/0775-f871-mapping.tsv (12, 16, 18, 13, 8 and 14 members; 96, 88, 86, 96, 94 and 100 per cent; four met, the step and the plate not met); sample of 40 pairs read a second time with 0 disagreements; the command of addendum 1 leaves the three existing milestones byte for byte, shown on a copy of main ece2e34d.",
+  "follow_ups": [
+    {
+      "key": "laminar-step-re800",
+      "title": "Laminar backward-facing step at Re_D 800: the reattachment length against the published values",
+      "deps": [
+        "F-028",
+        "F-006"
+      ],
+      "acceptance": "Every limit not stated here is registered in the ADR before the run. The reattachment length of the step of expansion ratio 2 at Re_D 800 lies within the published values 11.48 to 12.20 recorded in docs/reference-data.md (section \"Wave 30B: incompressible validation data actually read\"), by the checks S1 to S3 of ADR 0060 or their registered successors, on current main, in tests the gate runs. Milestone backward-facing-step, headline."
+    },
+    {
+      "key": "blasius-plate",
+      "title": "Laminar flat plate: the skin friction and the velocity profile against the Blasius solution",
+      "deps": [
+        "F-028",
+        "F-006"
+      ],
+      "acceptance": "Every limit not stated here is registered in the ADR before the run. The laminar plate reproduces the Blasius values of arXiv:2204.02215 recorded in docs/reference-data.md (section \"Wave 30B: incompressible validation data actually read\"), by the checks B1 to B4 of ADR 0060 or their registered successors, on current main, in tests the gate runs. Milestone flat-plate, headline."
+    }
+  ]
+}

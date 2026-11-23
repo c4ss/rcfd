@@ -1,0 +1,85 @@
+# ADR 0775 (F-871): the members of the six further simulation milestones (first reading, with the corrections of the sample check, ADR 0775 addendum 1).
+# One line per membership: <item id> tab <milestone id> tab <reason>. An item that is not listed for a milestone is not
+# a member of it. M1 headline, M2 used, M3 data, M4 trust: the membership rule of ADR 0756 as ADR 0775 reads it.
+# Applied by: python scripts/roadmap_milestones.py --apply docs/adr/0775-f871-mapping.tsv --definitions docs/adr/0775-f871-milestones.json
+F-005	shock-tube-and-wedge	M2 used: physics_schema.rs runs the Sod tube and the wedge as settings trees
+F-005	packed-bed	M2 used: the bed is a settings tree parsed by Case and run by Simulation
+F-006	lid-driven-cavity	M3 data: cases/cavity holds the case definition and the Ghia tables that cavity.rs reads
+F-006	backward-facing-step	M3 data: cases/backward_step holds the case definition and the reattachment length 6.26 +/- 0.10
+F-006	flat-plate	M3 data: cases/flat_plate holds the case definition and the correlations
+F-006	heated-cavity	M3 data: cases/heated_cavity holds the case definition and the de Vahl Davis tables the runs read
+F-010	lid-driven-cavity	M2 used: the mesh structure and the cell and face geometry (FvGeometry) the solver reads
+F-010	backward-facing-step	M2 used: the mesh structure and the cell and face geometry (FvGeometry) the solver reads
+F-010	flat-plate	M2 used: the mesh structure and the cell and face geometry (FvGeometry) the solver reads
+F-010	heated-cavity	M2 used: the mesh structure and the cell and face geometry (FvGeometry) the solver reads
+F-010	shock-tube-and-wedge	M2 used: the mesh structure and the cell and face geometry the compressible solver reads
+F-010	packed-bed	M2 used: the mesh structure and the cell and face geometry (FvGeometry) the solver reads
+F-012	lid-driven-cavity	M2 used: the generator cavity_2d builds the mesh of every run
+F-012	backward-facing-step	M2 used: the generator backward_step_graded builds the step mesh of every run
+F-012	flat-plate	M2 used: the generator box_2d_graded builds the plate meshes
+F-012	heated-cavity	M2 used: the generator box_2d_graded builds the graded cavity meshes
+F-012	shock-tube-and-wedge	M2 used: the generators box_2d and warp (and wedge_2d through the case) build the tube and the ramp
+F-012	packed-bed	M2 used: the generator channel_2d builds the bed channel
+F-020	lid-driven-cavity	M2 used: the fields and the fixed-value, zero-gradient and wall conditions of the run
+F-020	backward-facing-step	M2 used: the fields, the wall conditions and the measured inlet profile set per face
+F-020	flat-plate	M2 used: the fields and the wall, inlet, symmetry and outlet conditions of the plate
+F-020	heated-cavity	M2 used: the fields and the fixed-value, zero-gradient and wall conditions of the run
+F-020	packed-bed	M2 used: the fixed inlet, zero-gradient outlet and symmetry walls of the bed
+F-021	lid-driven-cavity	M2 used: the gradients of the Rhie-Chow pressure step and of the higher-order convection
+F-021	backward-facing-step	M2 used: the gradients of the Rhie-Chow pressure step and of the higher-order convection
+F-021	flat-plate	M2 used: the gradients of the Rhie-Chow pressure step and of the higher-order convection
+F-021	heated-cavity	M2 used: the gradients of the Rhie-Chow pressure step and of the higher-order convection
+F-021	packed-bed	M2 used: the gradients of the Rhie-Chow pressure step and of the higher-order convection
+F-022	lid-driven-cavity	M2 used: the convection schemes (linear upwind, TVD limiters) the runs set
+F-022	backward-facing-step	M2 used: the convection schemes (linear upwind, TVD limiters) the runs set
+F-022	flat-plate	M2 used: the convection schemes (linear upwind, TVD limiters) the runs set
+F-022	heated-cavity	M2 used: the convection schemes (linear upwind, TVD limiters) the runs set
+F-022	shock-tube-and-wedge	M2 used: the TVD limiters (TvdLimiter) of the MUSCL reconstruction
+F-022	packed-bed	M2 used: convection upwind of the case
+F-023	lid-driven-cavity	M2 used: the viscous term and the pressure Laplacian
+F-023	backward-facing-step	M2 used: the viscous term and the pressure Laplacian
+F-023	flat-plate	M2 used: the viscous term and the pressure Laplacian
+F-023	heated-cavity	M2 used: the viscous term and the pressure Laplacian
+F-023	packed-bed	M2 used: the viscous term and the pressure Laplacian
+F-025	lid-driven-cavity	M2 used: the matrices of the momentum and pressure equations
+F-025	backward-facing-step	M2 used: the matrices of the momentum and pressure equations
+F-025	flat-plate	M2 used: the matrices of the momentum and pressure equations
+F-025	heated-cavity	M2 used: the matrices of the momentum and pressure equations
+F-025	packed-bed	M2 used: the matrices of the momentum and pressure equations
+F-026	lid-driven-cavity	M2 used: the linear solvers of the momentum and pressure equations
+F-026	backward-facing-step	M2 used: the linear solvers of the momentum and pressure equations
+F-026	flat-plate	M2 used: the linear solvers of the momentum and pressure equations
+F-026	heated-cavity	M2 used: the linear solvers of the momentum and pressure equations
+F-026	packed-bed	M2 used: the linear solvers of the momentum and pressure equations
+F-028	lid-driven-cavity	M1 headline: its acceptance is the cavity at Re 100, 400 and 1000 against the Ghia centreline profiles within 2 percent
+F-028	backward-facing-step	M2 used: SimpleSolver with SIMPLE or SIMPLEC, the steady solve of every run
+F-028	flat-plate	M2 used: SimpleSolver with SIMPLE or SIMPLEC, the steady solve of every run
+F-028	heated-cavity	M2 used: BuoyantSimple couples the energy equation to the SIMPLEC solve
+F-028	packed-bed	M2 used: algorithm simplec of the case
+F-030	lid-driven-cavity	M2 used: the under-relaxation factors of SimpleSettings and the residual history the runs stop on
+F-030	backward-facing-step	M2 used: the under-relaxation factors of SimpleSettings and the residual history the runs stop on
+F-030	flat-plate	M2 used: the under-relaxation factors of SimpleSettings and the residual history the runs stop on
+F-030	heated-cavity	M2 used: the under-relaxation factors of SimpleSettings and the residual history the runs stop on
+F-030	packed-bed	M2 used: the iteration cap and residual tolerances of the case and the relaxation of the steady loop
+F-031	packed-bed	M1 headline: its acceptance holds the packed-bed Ergun pressure drop; sources.rs is the run
+F-040	backward-facing-step	M2 used: the wall distance and the standard wall functions of the k-epsilon and SST runs
+F-040	flat-plate	M2 used: the wall distance and the wall functions of the turbulence models on the plate
+F-041	flat-plate	M1 headline: its acceptance is the flat-plate Cf within 5 percent of correlation (Spalart-Allmaras)
+F-042	backward-facing-step	M1 headline: its acceptance holds the step reattachment within literature scatter; the k-epsilon arms of the runs
+F-042	flat-plate	M2 used: the k-epsilon arms of validation_flat_plate_wall_law.rs and near_wall_catalogue.rs
+F-043	backward-facing-step	M1 headline: its acceptance holds the BFS validation; step_sst.rs runs SST and BSL on the corrected step
+F-043	flat-plate	M1 headline: its acceptance holds the flat-plate validation of k-omega SST
+F-050	heated-cavity	M1 headline: its acceptance is the de Vahl Davis Nusselt number for Ra 1e4 to 1e6 within 2 percent
+F-060	shock-tube-and-wedge	M1 headline: its acceptance is the Sod L1 error against the exact solution and the oblique-shock angle within 1 percent
+F-080	shock-tube-and-wedge	M2 used: cases/sod/sod.toml and cases/wedge/wedge.toml are case-file texts and physics_schema.rs parses its runs from TOML
+F-080	packed-bed	M2 used: the bed is a case-file text (sources.rs and cases/packed_bed/packed_bed.toml)
+F-082	shock-tube-and-wedge	M2 used: physics_schema.rs builds the Sod and wedge cases and steps them with Simulation from Rust
+F-082	packed-bed	M2 used: sources.rs builds the case with Case::parse_toml and steps it with Simulation from Rust
+F-108	backward-facing-step	M2 used: the wall-layer grading (Grading::WallLayers) of the wall-resolved step meshes
+F-108	flat-plate	M2 used: the first-cell height from a target y+ and the wall-layer grading of every plate mesh
+F-125	lid-driven-cavity	M3 data: the datasets cavity-ghia1982 and lidcavity-re1000-ghia-botella hold the tables validation_cavity_ghia.rs reads
+F-125	backward-facing-step	M3 data: the dataset backward-step-tmr holds the measured inlet profile that common/step.rs reads
+F-125	flat-plate	M3 data: the TMR flat-plate datasets (tmr-2dzp-coles, w33c-tmr-sst-flatplate) hold the files the plate runs read
+F-125	heated-cavity	M3 data: the datasets heated-cavity-devahldavis1983 and dvd1983-tablev-natural-convection hold the Table V values
+F-125	shock-tube-and-wedge	M3 data: the dataset sod-exact-marzouk2020 holds the star state validation_sod.rs reads
+F-203	flat-plate	M1 headline: its acceptance is the flat-plate skin friction against Prandtl-Schlichting and the rough-wall correlation

@@ -1,0 +1,161 @@
+{
+  "milestones": [
+    {
+      "id": "vortex-shedding",
+      "title": "Vortex shedding behind a cylinder",
+      "result": "Laminar flow past a circular cylinder at Re 100 on a body-fitted O-grid: the Strouhal number and the mean drag coefficient against the published values.",
+      "cases": [
+        "crates/rcfd-fv/tests/cylinder.rs",
+        "crates/rcfd-api/tests/validation_cylinder_re100.rs",
+        "crates/rcfd-api/tests/validation_cylinder_re100_w31.rs",
+        "crates/rcfd-api/tests/validation_cylinder_re100_w33b.rs",
+        "crates/rcfd-api/tests/w48t_cylinder_spokes.rs"
+      ],
+      "reference": "St 0.164 to 0.167 and C_D 1.314 to 1.370 at Re 100 (arXiv:2303.09262 Table 1 and arXiv:1401.6513 Table 3, read as quotations) and Williamson, J. Fluid Mech. 206 (1989), eq. (6), St(100) = 0.164335, as recorded in docs/reference-data.md, section \"Cylinder wake\" and the rows \"Cylinder Re 100\"",
+      "headline": [
+        "F-029",
+        "F-869"
+      ]
+    },
+    {
+      "id": "fan",
+      "title": "Assistant-driven fan design",
+      "result": "Claude, through the assistant tool layer, iterates on fan shape and size, sets up and runs the test cases, reads the results, and converges on designs that keep noise low while flow is high across a range of operating conditions.",
+      "cases": [
+        "crates/rcfd-api/tests/fan01_validation.rs",
+        "crates/rcfd-api/tests/fan01_diagnosis_w35c.rs",
+        "crates/rcfd-api/tests/fan01_gci_w37c.rs",
+        "crates/rcfd-api/tests/fan01_stall_w43c.rs",
+        "crates/rcfd-api/tests/fan01_second_order_w49q.rs",
+        "cases/axial_fan_sector",
+        "crates/rcfd-api/tests/fan_sector.rs",
+        "crates/rcfd-post/tests/fan_rom_w46b.rs",
+        "crates/rcfd-api/tests/design_opmap_w32c.rs",
+        "crates/rcfd-api/tests/design_e2e_w32c.rs",
+        "crates/rcfd-api/tests/f697_fan_objective.rs"
+      ],
+      "reference": "for the fan solve, the measured characteristic of the FAN 01 benchmark, Zenodo doi:10.5281/zenodo.20037409 (v5), file characteristic_n1ug.mat, design point 1.4032 m^3/s, 126.46 Pa, 333.30 W, as recorded in docs/validation-data.md, \"1. FAN-01\" (the primary rig paper, SAE 2016-01-1805, is recorded there as not read); for the noise, no measured fan noise is recorded (docs/fan-project-breakdown.md, part D5: missing, needs data)",
+      "headline": [
+        "F-870",
+        "F-872",
+        "F-873",
+        "F-260",
+        "F-702",
+        "F-874"
+      ],
+      "page": "docs/milestone-fan.md"
+    },
+    {
+      "id": "aerofoil-lift",
+      "title": "Aerofoil lift (NACA 0012)",
+      "result": "The NACA 0012 at Re 6e6 in incompressible steady RANS on an O-grid: the lift curve up to maximum lift against the measured lift.",
+      "cases": [
+        "cases/naca0012/case.json",
+        "scripts/w48y_aoa_sweep.py",
+        "scripts/w49d_aoa_sweep_fixed.py",
+        "crates/rcfd-api/tests/aoa_sweep_w48y.rs",
+        "crates/rcfd-api/tests/aoa_sweep_w49d.rs"
+      ],
+      "reference": "Ladson, NASA TM 4074 (1988), tripped, M 0.15, Re 6e6, as the file CLCD_Ladson_expdata.dat of the NASA turbulence modeling resource page naca0012_val, as recorded in docs/reference-data.md, row \"NACA 0012 force and Cp data\" (the report itself is not recorded as read)",
+      "headline": [
+        "F-043",
+        "F-868"
+      ]
+    },
+    {
+      "id": "lid-driven-cavity",
+      "title": "Lid-driven cavity",
+      "result": "Steady laminar flow in a square cavity driven by its lid at Re 100, 400 and 1000, SIMPLE or SIMPLEC on uniform meshes: the centreline velocity profiles against the published tables.",
+      "cases": [
+        "crates/rcfd-fv/tests/cavity.rs",
+        "crates/rcfd-api/tests/validation_cavity_ghia.rs",
+        "cases/cavity/case.json"
+      ],
+      "reference": "Ghia, Ghia and Shin, J. Comput. Phys. 48 (1982) 387-411, the u and v centreline tables, as recorded in docs/reference-data.md, section \"Lid-driven cavity\" (verified against secondary copies; the printed original is recorded as not read), and for Re 1000 Botella and Peyret (1998) next to Ghia in arXiv:1807.04896 Table A-1, as recorded in the section \"Wave 30B: incompressible validation data actually read\"",
+      "headline": [
+        "F-028"
+      ]
+    },
+    {
+      "id": "backward-facing-step",
+      "title": "Turbulent backward-facing step",
+      "result": "Turbulent flow over a backward-facing step of expansion ratio 1.125 (the Driver and Seegmiller geometry, Re_h about 36000) in steady RANS with k-epsilon and k-omega SST: the reattachment length against the measured value.",
+      "cases": [
+        "crates/rcfd-turb/tests/step_kepsilon.rs",
+        "crates/rcfd-turb/tests/step_kepsilon_corrected.rs",
+        "crates/rcfd-turb/tests/step_realizable_a0.rs",
+        "crates/rcfd-turb/tests/step_sst.rs",
+        "cases/backward_step/case.json"
+      ],
+      "reference": "x_r/h = 6.26 +/- 0.10, Driver and Seegmiller, AIAA J. 23 (1985) 163, as recorded in docs/reference-data.md, section \"Backward-facing step\" (from the NASA TMR backstep validation page, verified), and in cases/backward_step/case.json; the measured inlet profile is the TMR file profiles.exp.dat of the dataset backward-step-tmr of docs/validation-data.md",
+      "headline": [
+        "F-042",
+        "F-043"
+      ]
+    },
+    {
+      "id": "flat-plate",
+      "title": "Turbulent flat plate skin friction",
+      "result": "The zero-pressure-gradient turbulent flat plate of the NASA TMR (Re 5e6 per unit length) in steady RANS with Spalart-Allmaras, k-omega SST and k-epsilon: the skin friction against the correlations and the TMR data.",
+      "cases": [
+        "crates/rcfd-turb/tests/flat_plate_sa.rs",
+        "crates/rcfd-turb/tests/flat_plate_sst.rs",
+        "crates/rcfd-turb/tests/flat_plate_bsl_sst.rs",
+        "crates/rcfd-turb/tests/near_wall_catalogue.rs",
+        "crates/rcfd-turb/tests/validation_flat_plate_wall_law.rs",
+        "crates/rcfd-turb/tests/validation_w33c_sst_plate.rs",
+        "cases/flat_plate/case.json"
+      ],
+      "reference": "the correlations of docs/reference-data.md, section \"Flat plate\" (power law 0.0576 Re_x^-0.2, White 0.455/ln^2(0.06 Re_x)); the TMR CFL3D values Cf(0.97) = 0.00268299 (SST, section \"k-omega SST and wall treatment\") and 2.70565e-3 (SA, section \"Spalart-Allmaras (F-041, ADR 0014)\"); Karman-Schoenherr and the Coles law from the TMR flat-plate validation page (the wave 30C table of section \"Differentially heated cavity\"); the TMR files of the dataset flat-plate-tmr of docs/validation-data.md",
+      "headline": [
+        "F-041",
+        "F-043",
+        "F-203"
+      ]
+    },
+    {
+      "id": "heated-cavity",
+      "title": "Differentially heated cavity",
+      "result": "Steady natural convection in a square cavity with a hot and a cold side wall (Boussinesq, Pr 0.71) at Ra 1e3 to 1e6: the average Nusselt number and the velocity maxima against the benchmark solution.",
+      "cases": [
+        "crates/rcfd-fv/tests/natural_convection.rs",
+        "crates/rcfd-fv/tests/validation_natural_convection.rs",
+        "cases/heated_cavity/case.json"
+      ],
+      "reference": "de Vahl Davis, Int. J. Numer. Meth. Fluids 3 (1983) 249-264, Table V, read as a page scan (Nu_avg 1.118, 2.243, 4.519, 8.800), as recorded in docs/reference-data.md, section \"Differentially heated cavity\" (wave 30C: verified, primary)",
+      "headline": [
+        "F-050"
+      ]
+    },
+    {
+      "id": "shock-tube-and-wedge",
+      "title": "Shock tube and wedge",
+      "result": "Inviscid compressible flow with the density-based solver: the Sod shock tube against the exact Riemann solution (L1 error) and the Mach 2 flow over a 10 degree wedge against the oblique-shock angle.",
+      "cases": [
+        "crates/rcfd-fv/tests/validation_sod.rs",
+        "crates/rcfd-fv/src/compressible.rs",
+        "crates/rcfd-fv/src/riemann.rs",
+        "crates/rcfd-api/tests/physics_schema.rs",
+        "cases/sod/sod.toml",
+        "cases/wedge/wedge.toml"
+      ],
+      "reference": "the exact solution of the Riemann problem (p* 0.30313, u* 0.92745; arXiv:2108.01709, and Marzouk, Sci. Afr. 10 (2020) e00573, Table 2, read) and the theta-beta-M relation (weak beta 39.31 degrees at M 2 and 10 degrees, solved independently), as recorded in docs/reference-data.md, section \"Exact Riemann solver, Sod problem and oblique shock\" and the wave 30C table of section \"Differentially heated cavity\"; Sod (1978) is recorded there as not obtained",
+      "headline": [
+        "F-060"
+      ]
+    },
+    {
+      "id": "packed-bed",
+      "title": "Packed bed pressure drop",
+      "result": "Steady laminar flow of air through a packed bed of 5 mm spheres (porosity 0.4) as a porous zone in the superficial-velocity form: the pressure gradient against the Ergun equation.",
+      "cases": [
+        "crates/rcfd-api/tests/sources.rs",
+        "cases/packed_bed/packed_bed.toml"
+      ],
+      "reference": "the Ergun equation with the constants 150 and 1.75, as recorded in docs/case-schema.md (source type porous, model ergun) and docs/audit/partials-group-6.md (section F-031: the constants checked only against a secondary source; Ergun (1952) recorded as not read)",
+      "headline": [
+        "F-031"
+      ]
+    }
+  ]
+}
