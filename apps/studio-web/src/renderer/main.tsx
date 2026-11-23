@@ -23,6 +23,8 @@ import { PaletteHost } from './commands/PaletteHost';
 import { CloseGuardHost } from './case/closeGuard';
 // F-818: the theme setting, drawn as soon as the main process answers (tokens.css follows the system until then)
 import { initTheme } from './theme/theme';
+// F-890 (G21): the GPU context of 2D canvases, created when the page is first idle and not when the legend first draws
+import { createCanvasContextWhenIdle } from './ui/canvasContext';
 
 initTheme();
 
@@ -116,3 +118,5 @@ createRoot(root).render(
     <CloseGuardHost />
   </StrictMode>,
 );
+
+createCanvasContextWhenIdle();

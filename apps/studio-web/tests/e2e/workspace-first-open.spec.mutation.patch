@@ -1,0 +1,18 @@
+# expect-fail: cd apps/studio-web && npm run build && npm run package:dir && npx playwright test tests/e2e/workspace-first-open.spec.ts --project=electron
+diff --git a/apps/studio-web/src/renderer/main.tsx b/apps/studio-web/src/renderer/main.tsx
+index 2100e4ae..1a52978e 100644
+--- a/apps/studio-web/src/renderer/main.tsx
++++ b/apps/studio-web/src/renderer/main.tsx
+@@ -24,7 +24,6 @@ import { CloseGuardHost } from './case/closeGuard';
+ // F-818: the theme setting, drawn as soon as the main process answers (tokens.css follows the system until then)
+ import { initTheme } from './theme/theme';
+ // F-890 (G21): the GPU context of 2D canvases, created when the page is first idle and not when the legend first draws
+-import { createCanvasContextWhenIdle } from './ui/canvasContext';
+ 
+ initTheme();
+ 
+@@ -119,4 +118,3 @@ createRoot(root).render(
+   </StrictMode>,
+ );
+ 
+-createCanvasContextWhenIdle();

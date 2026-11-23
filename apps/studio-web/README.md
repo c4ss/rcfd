@@ -1204,6 +1204,19 @@ It makes up to three passes, each in a fresh window, and passes on the first cle
 code makes recurs in every pass. A stall caused by the machine's other load does not. The entries, their phases and
 the machine's load go to `test-results-visual/f832/long-tasks.json`.
 
+### The first canvas and the GPU process (F-890)
+
+The first time a page draws into a 2D canvas, Chromium creates the renderer's shared GPU context by a synchronous call
+to the GPU process, on the main thread, and the GPU process answers only when the task its main thread is running has
+ended. The Studio's first 2D canvas was the field legend's bar, which arrives while the GPU process makes the devices
+and pipelines of the field view and the plots, so the main thread waited for the rest of one of those tasks (ADR 0787).
+`src/renderer/ui/canvasContext.ts` now makes that call once, when the page is first idle after its first view, before
+the Studio has sent any WebGPU work. `tests/e2e/workspace-first-open.spec.ts` keeps it so: it holds the GPU process's
+main thread for at least 2 s with a pipeline of its own (`tests/support/gpu-hold.ts`), started in the task that opens
+the Workspace tab, checks that the legend's bar arrived during the hold, and fails on any task over
+`LONG_TASK_LIMIT_MS`. A new 2D canvas elsewhere needs nothing; a new kind of GPU context (WebGL, for example) would make
+a call of its own and needs the same care.
+
 ### The tests' delay
 
 `RCFD_STUDIO_TEST_DELAY` is a JSON object such as `{"data": 4000, "projectOpen": 4000, "caseCheck": 4000, "caseSave": 4000}`.

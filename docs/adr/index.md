@@ -512,7 +512,7 @@ One row per record of this folder, grouped by the roadmap category of the item i
 | [0741](0741-f271-registration-the-field-store-plan-as-the-default-of-start-run.md) | F-271 registration: the field-store plan as the default of start_run | REGISTERED | 2026-11-19 | 1 | F-271 | done |
 | [0774](0774-f862-registration-the-description-of-start-run-store-argument.md) | F-862 registration: the description of start_run's store argument says what the default is | REGISTERED | 2026-11-22 | 1 | F-862 | done |
 
-## Studio desktop app (16)
+## Studio desktop app (19)
 
 | ADR | Title | Status word | Date | Addenda | Item | Item status |
 |---|---|---|---|---|---|---|
@@ -532,6 +532,9 @@ One row per record of this folder, grouped by the roadmap category of the item i
 | [0739](0739-f848-proposal-run-sites-a-remote-simulation-service-for-the-studio-cli-and-mcp.md) | F-848 proposal: run sites, a remote simulation service for the Studio, the CLI and the MCP server | ACCEPTED | 2026-11-17 | 0 | F-848 | todo |
 | [0742](0742-f262-diagnosis-the-terminal-status-of-a-run-is-written-before-its-last-state-event.md) | F-262 diagnosis: the terminal status of a run is written before its last state event and before its request files are removed (S7 of ADR 0123 fails intermittently on the held run) | REGISTERED | 2026-11-19 | 1 | F-262 | partial |
 | [0786](0786-f888-registration-quick-run-by-keyboard-focus.md) | F-888 registration: the Studio's end-to-end test of the quick run by keyboard that receives "inactive" on the Run button (the hypotheses of the cause, the runs that tell them apart, the test that must fail without the fix, the consecutive runs and the count of processes) | REGISTERED | 2026-11-23 | 1 | F-888 | done |
+| [0787](0787-f890-registration-workspace-tab-long-task.md) | F-890 registration: the long task when the workspace tab opens that fails the Studio's responsiveness test on the lead's machine (the hypotheses of the cause, the recorded run that tells them apart, the test that must fail without the fix, the consecutive runs) | REGISTERED | 2026-11-23 | 1 | F-890 | todo |
+| [0788](0788-f891-registration-runner-budgets-alert-and-the-feed.md) | F-891 registration: the runner-budgets test of f837.spec.ts:198 that fails at two lines (the hypotheses of the cause, the records that tell them apart, the tests that must fail without the fix, the consecutive runs) | REGISTERED | 2026-11-23 | 1 | F-891 | todo |
+| [0789](0789-f892-registration-serve-left-behind.md) | F-892 registration: the path that leaves an rcfd serve process running after npm test on Windows (the hypotheses, the recorded runs that tell them apart, the fix in the Studio's quit and in the harness, the whole runs after it, and the mutation) | REGISTERED | 2026-11-23 | 1 | F-892 | todo |
 
 ## Quality, docs and validation (54)
 
