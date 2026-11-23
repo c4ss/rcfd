@@ -416,3 +416,15 @@ Follow-ups, for the lead to decide:
 - `python scripts/roadmap_proposals.py check docs/roadmap/proposals/0789-F-892.json`: accepted (F-892 todo to done, two new items).
 - `python scripts/process_report.py --check`: exit 1 with 1 failure, "generated file is not current: docs/adr/index.md", which rule 7 leaves to the lead; nothing else.
 - No Rust crate was touched: `cargo fmt` and `cargo clippy` do not apply.
+
+## The lead's reading (2026-11-23), at the merge
+
+Merged with F-890, F-891 and F-892 as one joint check (`push_main.py --base`; merges 998fc7f6, 3e86bfb8 and 9ce7ee53) and
+pushed at eca03964 (the first of the three reports read at 21:55 UTC, 15 minutes of reading for the three, proposed and
+written done). Checked by the lead before the merge: the registration is the first commit and alone, the amendments
+come before their records and any code, and no golden, hash table or dependency is changed. In the push run `npm test`
+failed once, on `run-control.spec.ts:320` alone, and passed all 873 tests in the second run; no `rcfd` process was left
+after the run, and the committed mutations of the three items were caught.
+
+Status: **done**, as proposed. Its two follow-ups are questions of scope for the maintainer and are not entered; the data
+tests the first names did not fail in the lead's push run.

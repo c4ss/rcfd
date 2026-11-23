@@ -461,3 +461,14 @@ Follow-up 1 (key `budgets-second-write-after-refusal`), deps F-837:
   new item).
 - `python scripts/process_report.py --check`: exit 1 with 1 failure, a generated file that is only not current,
   `docs/adr/index.md`. It is left to the lead (rules 7 and 9).
+
+## The lead's reading (2026-11-23), at the merge
+
+Merged with F-890, F-891 and F-892 as one joint check (`push_main.py --base`; merges 998fc7f6, 3e86bfb8 and 9ce7ee53) and
+pushed at eca03964 (the first of the three reports read at 21:55 UTC, 15 minutes of reading for the three, proposed and
+written done). Checked by the lead before the merge: the registration is the first commit and alone, the amendments
+come before their records and any code, and no golden, hash table or dependency is changed. In the push run `npm test`
+failed once, on `run-control.spec.ts:320` alone, and passed all 873 tests in the second run; no `rcfd` process was left
+after the run, and the committed mutations of the three items were caught.
+
+Status: **done**, as proposed. Its follow-up is a question of scope for the maintainer and is not entered.

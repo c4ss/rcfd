@@ -620,3 +620,15 @@ second half.)
 - `python scripts/process_report.py --check`: 1 failure, "generated file is not current: docs/adr/index.md". It is the
   generated index, which rule 9 leaves to the lead; nothing else failed.
 - `npm run typecheck` in `apps/studio-web`: exit 0.
+
+## The lead's reading (2026-11-23), at the merge
+
+Merged with F-890, F-891 and F-892 as one joint check (`push_main.py --base`; merges 998fc7f6, 3e86bfb8 and 9ce7ee53) and
+pushed at eca03964 (the first of the three reports read at 21:55 UTC, 15 minutes of reading for the three, proposed and
+written partial). Checked by the lead before the merge: the registration is the first commit and alone, the amendments
+come before their records and any code, and no golden, hash table or dependency is changed. In the push run `npm test`
+failed once, on `run-control.spec.ts:320` alone, and passed all 873 tests in the second run; no `rcfd` process was left
+after the run, and the committed mutations of the three items were caught.
+
+Status: **partial**, as proposed. `responsiveness.spec.ts:260` passed in both whole runs of the push; the record that the
+mechanism was the task of 400 to 440 ms is still missing.
