@@ -3,7 +3,7 @@ type: source
 tags: [roadmap]
 sources: []
 origin: docs/roadmap.json
-origin_commit: 8732f2ae
+origin_commit: 930153a4
 created: 2026-11-22
 updated: 2026-11-23
 status: stable
@@ -16,7 +16,7 @@ status: stable
 
 ## Summary
 
-A JSON list of ~~786~~ ~~791 (at 5b96a1f8)~~ ~~792 (at 8ee32b1c)~~ ~~794 (at 09647baa; 795 on the merged tree d0fb2b2e, see below)~~ 795 (at 8732f2ae, F-886 on main with the wiki) [[f-item]]s, each with `id`, `title`, `phase`, `deps`, `status` (`done` / `partial` / `todo`), `acceptance`, `gap`, `note` and `milestones`. `docs/ROADMAP.md` and the counts in `docs/roadmap-overview.md` are generated from it ([[doc-roadmap-overview]]). The file holds phases only; the 15 lines of work (categories) are an id list in `scripts/roadmap_progress.py`, in 4 families (Solver, Data, Use, Project). An item in no category, or in two, makes that script exit with an error.
+A JSON list of ~~786~~ ~~791 (at 5b96a1f8)~~ ~~792 (at 8ee32b1c)~~ ~~794 (at 09647baa; 795 on the merged tree d0fb2b2e, see below)~~ 795 (at 8732f2ae, F-886 on main with the wiki; at 930153a4 F-888 done, 404 / 299 / 92) [[f-item]]s, each with `id`, `title`, `phase`, `deps`, `status` (`done` / `partial` / `todo`), `acceptance`, `gap`, `note` and `milestones`. `docs/ROADMAP.md` and the counts in `docs/roadmap-overview.md` are generated from it ([[doc-roadmap-overview]]). The file holds phases only; the 15 lines of work (categories) are an id list in `scripts/roadmap_progress.py`, in 4 families (Solver, Data, Use, Project). An item in no category, or in two, makes that script exit with an error.
 
 ## Key points
 

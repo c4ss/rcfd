@@ -9,7 +9,7 @@ updated: 2026-11-23
 status: draft
 ---
 
-# ADR thread: the Electron Studio, from the performance spike to the roadmap and its addenda (F-447, F-448, F-449, F-456, F-800 to F-838)
+# ADR thread: the Electron Studio, from the performance spike to the roadmap and its addenda (F-447, F-448, F-449, F-456, F-800 to F-838, F-888)
 
 **Origin:** the ADRs in the table below, `docs/adr/` at `origin/main` 2e94e5ef.
 **Kind:** ADR thread: one measurement spike with a decision rule (ADR 0350), its follow-up registration (ADR 0353), the roadmap ADR of the Electron Studio (ADR 0800) and the dependencies ADR that carries the per-item addenda (ADR 0801, 25 addenda); 4 ADRs, 2026-11-12 to 2026-11-17. ADRs 0350, 0800 and 0801 are in the list of job p3-records-b, which may add to this page; ADR 0353 is this job's.
@@ -27,6 +27,7 @@ On 2026-11-12 the maintainer asked for "an ADR to test the performance of electr
 - **Runner closes with the Studio** (unnumbered addendum, 2026-11-17, amends G7): the Studio owns only a runner that came up while it had the project open; an idle owned runner is shut down on close; with active runs the close guard asks (Stop runs and close / Keep them running and close / Cancel, the default).
 - **Performance bench** (ADR 0800 §9, F-817 partial): every limit met on the idle baseline of 2026-11-17 (P10 median 320 ms against 2500; P2 p99 0.64 ms against 20; P4 R2 13.8 / 20.6 ms against 30 / 60; P5 63.9 per s; P7 44.7 ms; P8 240 per s). Under full load P10 "ranged from 1.2 s to 40.3 s across four runs within 75 minutes ... Its cause was not diagnosed." The bench stays out of CI (Q3).
 - Two Studio end-to-end test items on 2026-11-23, neither with a registration on main at 09647baa ([[doc-roadmap-json]]): F-852 (the test "Close session cannot be undone" times out on Windows in CI) was issued by the brief `docs/adr/briefs/f852-studio-close-session-timeout.md` (ADR 0781); F-888 (the quick run by keyboard fails on the lead's Windows machine where the Studio window lacks the system's focus, `toBeFocused` receives "inactive" on the Run button, while it passes on CI) was entered on the maintainer's answer "Yes, one over" and issued by `docs/adr/briefs/f888-studio-quick-run-focus.md` (ADR 0786), because that test "holds the merges of F-861, F-852, F-451 and F-339". Its acceptance also counts the `rcfd serve` processes that the end-to-end tests leave running after `npm test` on Windows.
+- **F-888 done** (ADR 0786, merged at 8119447a, pushed at 0898008a, status at 930153a4): the cause was in the test, not the window's focus. After a choice in the select, react-aria gives the focus back to the select one animation frame later, and the test's Tab was sent before that frame, from the body; "inactive" is Playwright's word for any element not focused. With frames delayed by 300 ms the unchanged test failed 5 of 5; the fix waits for the focus to return, and the tab order and focus ring checks are kept. A second test, the gallery's select in `run-bar-keyboard.spec.ts`, needs no engine and runs on CI; it passed on windows-latest and ubuntu-24.04 (run 45224116370). The maintainer answered Q1 with (a): CI stays as it is, and the Studio's engine tests (275 of 852 on windows-latest) run only in the lead's push runs. Proposed partial (rule 8), done by the lead's reading ([[doc-roadmap-json]]).
 
 ## ADRs
 
@@ -34,6 +35,7 @@ On 2026-11-12 the maintainer asked for "an ADR to test the performance of electr
 |---|---|---|---|---|---|---|
 | [0350](../../docs/adr/0350-electron-studio-performance-spike-and-rcfd-studio-retirement.md) | 2026-11-12 | plan + registration (spike), addendum 1 results | F-447, F-448, F-449 | Can Electron over the rcfd APIs control, follow, scrub and draw as well as `rcfd-studio`? | every check but P3 met by both routes; P3 127 ms against 100; no outcome under the rule, maintainer's call | 0800 (phase 2 plan) |
 | [0353](../../docs/adr/0353-f456-registration-monitors-get-builds-only-what-is-asked.md) | 2026-11-12 | registration, amendments 2 to 4 (2026-11-20) | F-456 | `monitors.get {names, since}` builds only what is asked for | done: P3 median 82.6 ms <= 100, I1 0.30 ms <= 2, I2 1.17 ms <= 2; I2 re-defined 2026-11-20 (ADR 0750) | |
+| [0786](../../docs/adr/0786-f888-registration-quick-run-by-keyboard-focus.md) | 2026-11-23 | registration, amendment 1, addendum 1 results, the maintainer's answer, the lead's reading | F-888 | Why does the quick run by keyboard fail on the lead's machine, and is it the window's focus? | done: a one-frame race with react-aria's return of the focus, in the test; CI stays as it is (Q1 (a)) | |
 | [0800](../../docs/adr/0800-electron-studio-roadmap.md) | 2026-11-16 | plan (hub), answers, changes, bench results | F-448, F-449, F-800 to F-838 | The Electron Studio roadmap from guardrails, `PRODUCT.md` and `DESIGN.md` | accepted 2026-11-16; egui apps deleted; idle baseline met | |
 | [0801](../../docs/adr/0801-studio-web-dependencies-and-layout.md) | 2026-11-16 | decision + 25 addenda (per-item records) | F-800 and most F-80x / F-81x / F-83x | Dependencies, layout, pin and update policy of `apps/studio-web` | accepted 2026-11-16; addenda to 2026-11-17 | Addendum 23 supersedes the panel parts of Addenda 18 and 20 |
 
@@ -49,6 +51,8 @@ Addenda of ADR 0801 (headings): 1 F-801 dependencies; 2 F-803 the service client
 - **Claude Code registration** (Addendum 23): checked against "the real CLI (Claude Code 2.1.326) in a scratch folder"; `get` "takes about 1.6 s because it starts the server to check it"; the project home's feed poll is 400 ms.
 
 ## Open questions
+
+- ADR 0786 follow-ups, not entered (scope, the maintainer's): responsiveness-long-task (`responsiveness.spec.ts:260` fails on the lead's machine with one task of 400 to 440 ms when the workspace tab opens), runner-budgets-alert (`f837.spec.ts:198` fails in 2 of 6 whole runs), serve-left-behind (name the test that leaves an `rcfd serve` process running after `npm test` on Windows). On 2026-11-23 the push runs of F-888 and F-861 failed `npm test` on a different set of these and other Studio tests in each run (`project.spec.ts:245`, `run-control.spec.ts:264` and `:320`), and each run left one `rcfd serve` process.
 
 - F-447: viability under ADR 0350 §4 and QA1 to QA5 are "the maintainer's call" (roadmap gap). QA1 was answered in effect by F-456.
 - F-817: P10 under load not diagnosed; P5 missed twice under load (roadmap gap).

@@ -301,3 +301,10 @@ Append-only. Newest at the bottom. Entry header: `## [YYYY-MM-DD] <op> | <title>
 - Sources re-read: [[doc-process-lead-process]] (the lead runs `/wiki-ingest` after each merge, the maintainer's option (a)), [[doc-changelog]], [[doc-roadmap-json]], [[doc-roadmap-overview]] (795 items, 403/299/93, 69 %), origin_commit 8732f2ae.
 - Updated: [[lead]], [[overview]].
 - Contradiction: the schema's "Steady-state ingest" lets loop subagents draft wiki edits; the lead process of 2026-11-23 says agents do not edit the wiki (noted on [[doc-process-lead-process]]; the schema is the maintainer's to align).
+
+## [2026-11-23] ingest | F-888, ADR 0786 (loop merge)
+
+- Thread: [[adr-thread-studio-electron]] (ADR 0786 row, current state, the three follow-ups under open questions).
+- Roadmap area pages regenerated at 930153a4 ([[roadmap-studio-desktop-app]]: F-888 done, 41 / 12 / 6).
+- Sources re-read: [[doc-changelog]], [[doc-roadmap-json]], [[doc-roadmap-overview]] (795 items, 404 / 299 / 92, 70 %), origin_commit 930153a4; [[overview]] revised.
+- Not ingested: F-861 (ADR 0777), merge parked, `npm test` failed in each of three push runs on Studio tests outside it.
