@@ -43,6 +43,8 @@ export interface ServiceClientOptions {
   readonly pollLimit?: number;
   /** Retry delay after `attempt` failures in a row. */
   readonly backoff?: (attempt: number) => number;
+  /** What starts the service in spawn mode (spawn.ts startService; the unit tests give a stand-in command). */
+  readonly startService?: typeof startService;
 }
 
 const INITIAL: ServiceState = {
@@ -73,6 +75,8 @@ export class ServiceClient {
   private started = false;
   private retryTimer: NodeJS.Timeout | null = null;
   private child: ChildProcess | null = null;
+  /** F-892: the child that was spawned and has not yet reported its address (spawn.ts startProcess, onSpawned). */
+  private starting: ChildProcess | null = null;
   private target: { host: string; port: number } | null = null;
   private everConnected = false;
   private lastPid: number | null = null;
@@ -84,6 +88,7 @@ export class ServiceClient {
   private readonly pollTimeoutMs: number;
   private readonly pollLimit: number;
   private readonly backoff: (attempt: number) => number;
+  private readonly startFn: typeof startService;
 
   constructor(
     private readonly config: ServiceConfig,
@@ -93,6 +98,7 @@ export class ServiceClient {
     this.pollTimeoutMs = options.pollTimeoutMs ?? 15_000;
     this.pollLimit = options.pollLimit ?? 500;
     this.backoff = options.backoff ?? backoffMs;
+    this.startFn = options.startService ?? startService;
     const mode = config.mode === 'attach' || config.mode === 'spawn' ? config.mode : 'off';
     this.st = {
       ...INITIAL,
@@ -161,18 +167,36 @@ export class ServiceClient {
    * itself (`running` or `paused`, `run.start` on a session): the project's runs are the runner's, and the case
    * editor's sessions end with the Studio. A service found running (adopted) keeps the rule above: the Studio never
    * stops a service it did not start while it holds someone's session.
+   *
+   * F-892 (ADR 0789): a service this start is still starting is never left. A child that has not reported its address
+   * yet is ended here, and nothing is spawned once the shutdown has begun (`cancelled`, spawn.ts); a child of this start
+   * the client was never connected to is ended in both modes: no session was made through it. Before, a Studio that
+   * quit in those two windows left its service running, detached, and on Windows whoever waited for the Studio's pipes
+   * to close waited for ever.
    */
   async shutdown(opts: { readonly keepWithSessions?: boolean } = {}): Promise<{ leftRunning: boolean }> {
     this.stopped = true;
     if (this.retryTimer) clearTimeout(this.retryTimer);
     this.retryTimer = null;
     let leftRunning = false;
+    const starting = this.starting;
+    this.starting = null;
+    if (starting) {
+      try {
+        starting.kill();
+      } catch {
+        // already gone
+      }
+    }
     const pid = this.st.pid;
     if (this.config.mode === 'spawn' && pid !== null && processAlive(pid)) {
       let keep = true;
       const link = this.link;
       const owned = opts.keepWithSessions === false && !this.st.adopted;
-      if (link && this.st.status === 'connected') {
+      // this start's own child, never connected to: it holds nothing
+      const neverUsed = !this.everConnected && !this.st.adopted && this.child !== null && this.child.pid === pid;
+      if (neverUsed) keep = false;
+      else if (link && this.st.status === 'connected') {
         try {
           const r = (await link.control.request('session.list', {}, 1500)) as { sessions?: unknown };
           keep = owned ? keptForSolves(r.sessions) : !Array.isArray(r.sessions) || r.sessions.length > 0;
@@ -266,7 +290,10 @@ export class ServiceClient {
       if (rec) await removeRecord(cfg.stateDir);
     }
     this.setState({ status: 'starting', pid: null, adopted: false, retryInMs: null });
-    const s = await startService(cfg.rcfd, cfg.root, cfg.stateDir);
+    const s = await this.startFn(cfg.rcfd, cfg.root, cfg.stateDir, undefined, {
+      cancelled: () => this.stopped,
+      onSpawned: (child) => (this.starting = child),
+    }).finally(() => (this.starting = null));
     if (this.stopped) {
       // the Studio began to quit while the service started: it holds nothing yet
       s.child.kill();
@@ -280,6 +307,8 @@ export class ServiceClient {
     this.target = { host: s.host, port: s.port };
     this.setState({ pid: s.pid });
     await writeRecord(cfg.stateDir, { host: s.host, port: s.port, pid: s.pid, rcfd: cfg.rcfd, startedAt: new Date().toISOString() });
+    // a shutdown that ended this child while its record was being written removed the record too early
+    if (this.stopped && !processAlive(s.pid)) await removeRecord(cfg.stateDir).catch(() => undefined);
     return this.target;
   }
 

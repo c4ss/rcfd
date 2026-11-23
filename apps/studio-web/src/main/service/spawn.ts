@@ -92,32 +92,58 @@ export async function removeRecord(stateDir: string): Promise<void> {
 }
 
 /**
+ * What the starter of a process is told while it starts (F-892, ADR 0789). The Studio's quit must never leave a service
+ * that is being started: between "the quit has begun" and "the child is known" there is no await.
+ */
+export interface StartHooks {
+  /** Asked just before the spawn, in the same turn: true (the Studio is quitting) spawns nothing, and the start rejects. */
+  readonly cancelled?: () => boolean;
+  /** Called with the child in the turn of the spawn, before its address is waited for. */
+  readonly onSpawned?: (child: ChildProcess) => void;
+}
+
+/** The message of a start that `cancelled` stopped before the spawn. */
+export const START_CANCELLED = 'the start was cancelled before the service was spawned';
+
+/**
  * Starts `<rcfd> serve --addr 127.0.0.1:0 --ui [--root <root>] [--journal-dir <dir>]` (the dir of `journalDirFor`)
  * and resolves once it listens. Rejects if it exits first or
  * prints no address within `timeoutMs`.
  */
-export async function startService(rcfd: string, root: string | null, stateDir: string, timeoutMs = 20_000): Promise<StartedService> {
+export function startService(rcfd: string, root: string | null, stateDir: string, timeoutMs = 20_000, hooks: StartHooks = {}): Promise<StartedService> {
+  // ADR 0730 P4: --ui switches on the engine's UI metadata and help (settings.schema {ui: true}, help.*)
+  const journals = journalDirFor(stateDir, root);
+  const args = ['serve', '--addr', '127.0.0.1:0', '--ui', ...(root ? ['--root', root] : []), ...(journals ? ['--journal-dir', journals] : [])];
+  return startProcess(rcfd, args, stateDir, timeoutMs, hooks);
+}
+
+/**
+ * Spawns `<file> <args>` detached, its output appended to `<stateDir>/service.log`, and resolves once it has printed
+ * the line of a listening service. `startService` is this with the arguments of `rcfd serve`; the unit tests give it
+ * a stand-in command.
+ */
+export async function startProcess(file: string, args: readonly string[], stateDir: string, timeoutMs = 20_000, hooks: StartHooks = {}): Promise<StartedService> {
   await mkdir(stateDir, { recursive: true });
   const log = path.join(stateDir, 'service.log');
   // Appended to, so an earlier service that still runs keeps its own lines; this start reads from here on.
   const from = await stat(log).then((s) => s.size, () => 0);
   const fd = openSync(log, 'a');
-  // ADR 0730 P4: --ui switches on the engine's UI metadata and help (settings.schema {ui: true}, help.*)
-  const journals = journalDirFor(stateDir, root);
-  const args = ['serve', '--addr', '127.0.0.1:0', '--ui', ...(root ? ['--root', root] : []), ...(journals ? ['--journal-dir', journals] : [])];
   let child: ChildProcess;
   try {
-    child = spawn(rcfd, args, { detached: true, windowsHide: true, stdio: ['ignore', fd, fd] });
+    // no await from this question to onSpawned: a quit sees either no child, or a child it can end
+    if (hooks.cancelled?.()) throw new Error(START_CANCELLED);
+    child = spawn(file, [...args], { detached: true, windowsHide: true, stdio: ['ignore', fd, fd] });
   } finally {
     closeSync(fd);
   }
   child.unref();
   const exited = new Promise<string>((resolve) => {
-    child.once('error', (e) => resolve(`cannot start ${rcfd}: ${e.message}`));
-    child.once('exit', (code, signal) => resolve(`${rcfd} serve ended (${signal ?? `exit code ${code}`}) before it listened`));
+    child.once('error', (e) => resolve(`cannot start ${file}: ${e.message}`));
+    child.once('exit', (code, signal) => resolve(`${file} serve ended (${signal ?? `exit code ${code}`}) before it listened`));
   });
   let ended: string | null = null;
   void exited.then((r) => (ended = r));
+  hooks.onSpawned?.(child);
   const deadline = Date.now() + timeoutMs;
   for (;;) {
     const text = await readFrom(log, from);
@@ -126,7 +152,7 @@ export async function startService(rcfd: string, root: string | null, stateDir: 
     if (ended !== null) throw new Error(`${ended}${tail(text)}`);
     if (Date.now() > deadline) {
       child.kill();
-      throw new Error(`${rcfd} serve printed no address within ${timeoutMs} ms${tail(text)}`);
+      throw new Error(`${file} serve printed no address within ${timeoutMs} ms${tail(text)}`);
     }
     await new Promise((r) => setTimeout(r, 20));
   }

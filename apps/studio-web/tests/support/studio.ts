@@ -1,12 +1,13 @@
 // Starting the packaged Studio (out/packaged, scripts/package-dir.mjs) for the service tests, with the service chosen by
 // environment variables (src/main/service/config.ts), and reading its service state from the page.
-import { _electron as electron, type ElectronApplication, type Page } from '@playwright/test';
+import { _electron as electron, test, type ElectronApplication, type Page } from '@playwright/test';
 import { mkdtempSync, readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import type { ServiceState } from '../../src/shared/service.js';
 import { until } from './fake-service.js';
 import { launchArgs } from './launch.js';
+import { noteLaunch } from './leftovers.js';
 import { appRoot } from './rcfd.js';
 
 export interface Studio {
@@ -24,6 +25,9 @@ export interface Studio {
  * whole --user-data-dir), that service's record goes to a fresh temporary folder, never to the user data folder the
  * packaged copy shares with an installed Studio. Unless the test names one, RCFD_STUDIO_CLAUDE names a file that is not
  * there, so no test runs the claude of the machine.
+ *
+ * F-892 (ADR 0789): the folder that holds this Studio's service record, and then the pid Playwright has for it, go to
+ * the run's registry (leftovers.ts), so that the global teardown can end a service this Studio leaves behind.
  */
 export async function launchStudio(serviceEnv: Record<string, string>, args: readonly string[] = []): Promise<Studio> {
   const { executable } = JSON.parse(readFileSync(path.join(appRoot, 'out', 'packaged.json'), 'utf8')) as { executable: string };
@@ -35,10 +39,26 @@ export async function launchStudio(serviceEnv: Record<string, string>, args: rea
   // ADR 0801 Addendum 23: a test never reaches the real claude in the installer's folder; one that needs claude names the
   // fake (tests/support/fake-claude-mcp.mjs) itself
   if (!serviceEnv['RCFD_STUDIO_CLAUDE']) own['RCFD_STUDIO_CLAUDE'] = path.join(tmpdir(), 'rcfd-studio-no-claude', 'claude.exe');
-  const app = await electron.launch({ executablePath: executable, ...launchArgs(args), env: { ...env, ...own, ...serviceEnv } });
+  const all = { ...env, ...own, ...serviceEnv };
+  const userData = args.find((a) => a.startsWith('--user-data-dir='))?.slice('--user-data-dir='.length);
+  const dir = all['RCFD_STUDIO_STATE_DIR'] || userData || '';
+  const spec = currentSpec();
+  if (dir) noteLaunch({ dir, ...(spec ? { spec } : {}) });
+  const app = await electron.launch({ executablePath: executable, ...launchArgs(args), env: all });
+  const pid = app.process().pid;
+  if (dir && pid !== undefined) noteLaunch({ dir, studioPid: pid, ...(spec ? { spec } : {}) });
   const page = await app.firstWindow();
   await page.waitForFunction(() => document.querySelector('h1')?.textContent === 'No project open');
   return { app, page };
+}
+
+/** The spec file of the test or hook that is running, for the registry; null outside one. */
+function currentSpec(): string | null {
+  try {
+    return path.basename(test.info().file);
+  } catch {
+    return null;
+  }
 }
 
 /** out/packaged's engine folder: resources/bin beside the executable (Contents/Resources/bin of the macOS bundle). */
