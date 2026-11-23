@@ -383,3 +383,13 @@ Status: **done**, as proposed, reading the bar of ADR 0536 as its static solve a
 recommendation (a), which the lead shares; answer (b) would make this result partial. The proposed follow-up, keys for
 the cutoff, the load's residual vector and the load patterns of the reduction, is also the maintainer's to enter; not
 entered.
+
+## The maintainer's answer (2026-11-23)
+
+To the lead's question with the two open points of this ADR, the maintainer answered "Yes to both F-616 questions":
+
+1. Open question 1: **(a)**. The bar of ADR 0536 from a case file is its static solve and modal analysis; the harmonic
+   solve of a combined model from a case file belongs to the item that gives the solid case file a harmonic analysis.
+   F-616 stays **done**.
+2. The proposed follow-up, keys of `[reduction]` for the cutoff, the load's residual vector and the load patterns, is
+   entered as F-889 with the title, dependencies and acceptance of the proposal file as written.
