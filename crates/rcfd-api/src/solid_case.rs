@@ -12,12 +12,19 @@
 //!
 //! Named tables (`[constraints.<name>]`, ...) are processed in ascending order of their names. The format is documented in
 //! `docs/solid-case-file.md`.
+//!
+//! Two opt-in tables of F-616 (ADR 0785), run by [`run_solid_case_any`]: `[superelements.<name>]` attaches reduced part
+//! files of ADR 0469 to the model at node sets (`rcfd_fem::cms::superelement`, ADR 0536) for the static solve and the modal
+//! analysis; `[reduction]` reduces the model to a part file instead of solving it, with the interface enrichment of ADR
+//! 0532 by its key `interface_enrichment`. A case without them takes the paths it took before, bit for bit.
 
 use crate::case::{collect_errors, locate_line, Diagnostic};
 use rcfd_core::settings::{Schema, SettingsTree};
 use rcfd_core::units::Dimension;
 use rcfd_core::vec3::Vec3;
 use rcfd_fem::builders::{hex_box, tet_box, upgrade_to_tet10};
+use rcfd_fem::cms::superelement::{SuperModes, SuperStatic, SuperelementModel};
+use rcfd_fem::cms::{reduce, CmsOptions, ReducedPart, MATCH_TOLERANCE};
 use rcfd_fem::modal::{modal_analysis, ModalOptions, ModalResult};
 use rcfd_fem::recover::von_mises;
 use rcfd_fem::solve::{solve_static_report, CgPreconditioner, IcOrdering, SolveReport, StaticOptions, StaticSolver};
@@ -212,6 +219,36 @@ pub fn schema() -> Schema {
             "report",
             Schema::string("report.json").doc("The JSON report (empty: none)"),
         );
+    let superelement = Schema::object()
+        .doc("A reduced part of ADR 0469 attached to the model at a node set (ADR 0536)")
+        .field(
+            "file",
+            Schema::string("").doc("The part file (required), relative to the case file"),
+        )
+        .field(
+            "set",
+            Schema::string("").doc("The node set of the model the part attaches to (required)"),
+        );
+    let reduction = Schema::object()
+        .doc("Reduce the model to a part file instead of solving it (ADRs 0469 and 0532)")
+        .field("interface", Schema::string("").doc("The interface node set (required)"))
+        .field(
+            "modes",
+            Schema::int(0)
+                .range(0.0, 1.0e4)
+                .doc("Fixed-interface modes kept (0: static condensation)"),
+        )
+        .field(
+            "interface_enrichment",
+            Schema::int(0)
+                .range(0.0, 1.0e4)
+                .doc("Krylov blocks of the interface enrichment of ADR 0532 (0: none)"),
+        )
+        .field(
+            "file",
+            Schema::string("part.cms").doc("The part file written, in the output directory"),
+        )
+        .optional();
     Schema::object()
         .doc("A solid case file (F-386, ADR 0438)")
         .field("title", Schema::string("").doc("Title"))
@@ -223,6 +260,11 @@ pub fn schema() -> Schema {
         .field("analysis", analysis)
         .field("solver", solver)
         .field("output", output)
+        .field(
+            "superelements",
+            Schema::named(superelement).doc("Reduced parts attached to the model (ADR 0785)"),
+        )
+        .field("reduction", reduction)
 }
 
 /// A parsed solid case file: the checked settings, the text (for the lines of later diagnostics) and the directory relative
@@ -262,7 +304,87 @@ pub struct SolidSetup {
     pub vtu: String,
     /// `output.report` as given.
     pub report: String,
+    /// The reduced parts to attach, in ascending order of their names (ADR 0785); empty without the key.
+    pub superelements: Vec<SuperelementEntry>,
+    /// The reduction asked instead of an analysis (ADR 0785); `None` without the table.
+    pub reduction: Option<ReductionSetup>,
     text: String,
+}
+
+/// One table `[superelements.<name>]`: a reduced part and the node set of the host it attaches to (ADR 0785).
+#[derive(Debug, Clone)]
+pub struct SuperelementEntry {
+    /// The name of the table.
+    pub name: String,
+    /// `file` as given.
+    pub file: String,
+    /// The part file read.
+    pub path: PathBuf,
+    /// The node set of the host.
+    pub set: String,
+    /// The part.
+    pub part: ReducedPart,
+}
+
+/// The table `[reduction]` (ADR 0785).
+#[derive(Debug, Clone)]
+pub struct ReductionSetup {
+    /// The interface node set.
+    pub interface: String,
+    /// The options of `rcfd_fem::cms::reduce`: the mode count and the blocks of interface enrichment.
+    pub options: CmsOptions,
+    /// `reduction.file` as given.
+    pub file: String,
+}
+
+/// The outcome of a run with superelements.
+#[derive(Debug, Clone)]
+pub enum SuperOutcome {
+    /// The static solution of the combined model.
+    Static(SuperStatic),
+    /// The lowest modes of the combined model.
+    Modal(SuperModes),
+}
+
+/// A run with superelements: the setup (its model is the host), the combined model, its outcome, the report and the files
+/// written.
+#[derive(Debug, Clone)]
+pub struct SuperRun {
+    /// The setup.
+    pub setup: SolidSetup,
+    /// The host with the parts attached, in the order of `setup.superelements`.
+    pub model: SuperelementModel,
+    /// The outcome.
+    pub outcome: SuperOutcome,
+    /// The JSON report.
+    pub report: Value,
+    /// The files written.
+    pub written: Vec<PathBuf>,
+}
+
+/// A reduction: the setup, the part, the report and the files written.
+#[derive(Debug, Clone)]
+pub struct ReductionRun {
+    /// The setup.
+    pub setup: SolidSetup,
+    /// The reduced part.
+    pub part: ReducedPart,
+    /// The JSON report.
+    pub report: Value,
+    /// The files written.
+    pub written: Vec<PathBuf>,
+}
+
+/// What [`run_solid_case_any`] ran.
+#[derive(Debug, Clone)]
+#[non_exhaustive]
+pub enum CaseRun {
+    /// A case without the tables of ADR 0785.
+    Solid(Box<SolidRun>),
+    /// A case with `[superelements.<name>]`.
+    Superelements(Box<SuperRun>),
+    /// A case with `[reduction]`.
+    Reduction(Box<ReductionRun>),
 }
 
 /// The outcome of a run.
@@ -533,6 +655,46 @@ impl SolidCase {
                 }
             }
         }
+        // ADR 0785: the tables `superelements` and `reduction`.
+        let parts = sorted_names(&d["superelements"]);
+        for name in &parts {
+            need(&mut out, &format!("superelements.{name}.file"), "the part file");
+            need(
+                &mut out,
+                &format!("superelements.{name}.set"),
+                "the node set of the model the part attaches to",
+            );
+        }
+        let reduction = self.given("reduction");
+        if !parts.is_empty() && !reduction && !modal && method != "direct" {
+            out.push(diag(
+                t,
+                "solver.method",
+                "with superelements the static solve is direct (the envelope factorisation)",
+            ));
+        }
+        if reduction {
+            need(&mut out, "reduction.interface", "the interface node set");
+            for k in ["analysis", "solver"] {
+                if self.given(k) {
+                    out.push(diag(t, k, "does not apply to a reduction (nothing is solved)"));
+                }
+            }
+            if let Some(first) = parts.first() {
+                out.push(Diagnostic {
+                    path: "superelements".to_string(),
+                    line: line_of(t, &format!("superelements.{first}")),
+                    message: "does not apply to a reduction (nothing is solved)".to_string(),
+                });
+            }
+            if self.given("output.vtu") {
+                out.push(diag(
+                    t,
+                    "output.vtu",
+                    "does not apply to a reduction (no .vtu is written)",
+                ));
+            }
+        }
         out
     }
 
@@ -735,6 +897,101 @@ impl SolidCase {
                 errs.push(diag(t, &path, e.to_string()));
             }
         }
+        // ADR 0785 D1, D3: the part files and the node sets they attach to, in ascending order of the names.
+        let mut superelements = Vec::new();
+        let names = sorted_names(&d["superelements"]);
+        if !names.is_empty() {
+            let mesh = model.mesh();
+            let nodes = mesh.nodes();
+            let tol = match_tolerance(mesh);
+            let near = |p: &Vec3, h: usize| (0..3).all(|c| (nodes[h][c] - p[c]).abs() <= tol);
+            for name in names {
+                let v = &d["superelements"][&name];
+                let path = format!("superelements.{name}");
+                let (file, set) = (str_at(v, "file"), str_at(v, "set"));
+                let file_path = self.base_dir.join(file);
+                let part = match ReducedPart::read(&file_path) {
+                    Ok(p) => Some(p),
+                    Err(e) => {
+                        errs.push(diag(
+                            t,
+                            &format!("{path}.file"),
+                            format!("{}: {e}", file_path.display()),
+                        ));
+                        None
+                    }
+                };
+                let Some(set_nodes) = mesh.node_set(set) else {
+                    let known = list(mesh.node_set_names().collect());
+                    errs.push(diag(
+                        t,
+                        &format!("{path}.set"),
+                        format!("node set '{set}' does not exist (node sets: {known})"),
+                    ));
+                    continue;
+                };
+                let Some(part) = part else { continue };
+                let boundary = part.boundary();
+                if let Some(b) = boundary
+                    .iter()
+                    .find(|b| !set_nodes.iter().any(|&h| near(&b.position, h)))
+                {
+                    errs.push(diag(
+                        t,
+                        &format!("{path}.set"),
+                        format!(
+                            "the part's boundary node {} at {:?} has no node of the set '{set}' within {tol:e}",
+                            b.node, b.position
+                        ),
+                    ));
+                    continue;
+                }
+                let loose = set_nodes
+                    .iter()
+                    .filter(|&&h| !boundary.iter().any(|b| near(&b.position, h)))
+                    .count();
+                if loose > 0 {
+                    errs.push(diag(
+                        t,
+                        &format!("{path}.set"),
+                        format!(
+                            "{loose} of the {} nodes of the set '{set}' are at no boundary node of the part: the part \
+                             does not hold them",
+                            set_nodes.len()
+                        ),
+                    ));
+                    continue;
+                }
+                superelements.push(SuperelementEntry {
+                    name,
+                    file: file.to_string(),
+                    path: file_path,
+                    set: set.to_string(),
+                    part,
+                });
+            }
+        }
+        // ADR 0785 D2: the reduction asked instead of an analysis.
+        let reduction = if self.given("reduction") {
+            let r = &d["reduction"];
+            let interface = str_at(r, "interface");
+            if model.mesh().node_set(interface).is_none() {
+                let known = list(model.mesh().node_set_names().collect());
+                errs.push(diag(
+                    t,
+                    "reduction.interface",
+                    format!("node set '{interface}' does not exist (node sets: {known})"),
+                ));
+            }
+            Some(ReductionSetup {
+                interface: interface.to_string(),
+                options: CmsOptions::new(r["modes"].as_i64().unwrap_or(0) as usize)
+                    .interface_enrichment(r["interface_enrichment"].as_i64().unwrap_or(0) as usize),
+                file: str_at(r, "file").to_string(),
+            })
+        } else {
+            None
+        };
         if !errs.is_empty() {
             return Err(errs);
         }
@@ -746,13 +1003,177 @@ impl SolidCase {
             title: str_at(&d, "title").to_string(),
             vtu: str_at(o, "vtu").to_string(),
             report: str_at(o, "report").to_string(),
+            superelements,
+            reduction,
             text: self.text.clone(),
         })
     }
 }
 
-/// Runs a built case (no file written).
+/// The tolerance of the attachment of a part: `MATCH_TOLERANCE` of the largest extent of the host mesh (1 for a mesh
+/// without extent), as `SuperelementModel::new` takes it (ADR 0536).
+fn match_tolerance(mesh: &SolidMesh) -> f64 {
+    let nodes = mesh.nodes();
+    let mut extent = 0.0f64;
+    for axis in 0..3 {
+        let lo = nodes.iter().fold(f64::INFINITY, |a, p| a.min(p[axis]));
+        let hi = nodes.iter().fold(f64::NEG_INFINITY, |a, p| a.max(p[axis]));
+        if hi >= lo {
+            extent = extent.max(hi - lo);
+        }
+    }
+    MATCH_TOLERANCE * if extent > 0.0 { extent } else { 1.0 }
+}
+
+/// A problem at the key `superelements`, on the line of its first table.
+fn superelements_diag(setup: &SolidSetup, message: String) -> Diagnostic {
+    let first = setup.superelements.first().map_or("", |e| e.name.as_str());
+    Diagnostic {
+        path: "superelements".to_string(),
+        line: line_of(&setup.text, &format!("superelements.{first}")),
+        message,
+    }
+}
+
+/// The refusal of a case with a table of ADR 0785 by an entry whose result cannot hold its outcome.
+fn other_entry(setup: &SolidSetup) -> Option<Diagnostic> {
+    let message =
+        "this case is run by run_solid_case_any (the result of this entry holds a static or a modal outcome of \
+                   the model alone)";
+    if setup.reduction.is_some() {
+        Some(diag(&setup.text, "reduction", message))
+    } else if !setup.superelements.is_empty() {
+        Some(superelements_diag(setup, message.to_string()))
+    } else {
+        None
+    }
+}
+
+/// Runs a built case with superelements (no file written): the parts attached in their order, then the static solve or
+/// the modal analysis of the combined model (ADR 0785 D4).
+pub fn run_superelements(setup: SolidSetup) -> Result<SuperRun, Vec<Diagnostic>> {
+    let mut model =
+        SuperelementModel::new(setup.model.clone()).map_err(|e| vec![superelements_diag(&setup, e.to_string())])?;
+    for entry in &setup.superelements {
+        model.add_part(entry.part.clone()).map_err(|e| {
+            vec![diag(
+                &setup.text,
+                &format!("superelements.{}", entry.name),
+                e.to_string(),
+            )]
+        })?;
+    }
+    let outcome = match &setup.analysis {
+        SolidAnalysis::Static(_) => SuperOutcome::Static(
+            model
+                .solve_static(None)
+                .map_err(|e| vec![diag(&setup.text, "solver", e.to_string())])?,
+        ),
+        SolidAnalysis::Modal(o) => SuperOutcome::Modal(
+            model
+                .modal_analysis(o)
+                .map_err(|e| vec![diag(&setup.text, "analysis", e.to_string())])?,
+        ),
+    };
+    let report = super_report_json(&setup, &model, &outcome);
+    Ok(SuperRun {
+        setup,
+        model,
+        outcome,
+        report,
+        written: Vec::new(),
+    })
+}
+
+/// The JSON report of a run with superelements (ADR 0785 D6).
+fn super_report_json(setup: &SolidSetup, model: &SuperelementModel, outcome: &SuperOutcome) -> Value {
+    let mesh = setup.model.mesh();
+    let mut r = Map::new();
+    r.insert("format".into(), json!(REPORT_FORMAT));
+    r.insert("title".into(), json!(setup.title));
+    r.insert(
+        "mesh".into(),
+        json!({"nodes": mesh.nodes().len(), "elements": mesh.n_elements()}),
+    );
+    let parts: Vec<Value> = setup
+        .superelements
+        .iter()
+        .enumerate()
+        .map(|(p, e)| {
+            json!({"name": e.name, "file": e.file, "set": e.set,
+                   "boundary_unknowns": e.part.n_boundary(),
+                   "generalised_coordinates": e.part.n_reduced() - e.part.n_boundary(),
+                   "offset": model.part_offset(p)})
+        })
+        .collect();
+    match outcome {
+        SuperOutcome::Static(s) => {
+            r.insert("analysis".into(), json!("static"));
+            let dofs = setup.model.dof_map();
+            let n = mesh.nodes().len();
+            let at = |node: usize, c: usize| dofs.equation(node, c).map_or(0.0, |e| s.host_displacement[e]);
+            let (mut lo, mut hi) = ([f64::INFINITY; 3], [f64::NEG_INFINITY; 3]);
+            for node in 0..n {
+                for c in 0..3 {
+                    lo[c] = lo[c].min(at(node, c));
+                    hi[c] = hi[c].max(at(node, c));
+                }
+            }
+            let (mag, mag_node) =
+                max_by_index((0..n).map(|node| (0..3).map(|c| at(node, c).powi(2)).sum::<f64>().sqrt()));
+            r.insert(
+                "displacement".into(),
+                json!({"max_magnitude": mag, "max_magnitude_node": mag_node, "min": lo, "max": hi}),
+            );
+            r.insert("solver".into(), json!({"name": "skyline-ldlt"}));
+        }
+        SuperOutcome::Modal(m) => {
+            r.insert("analysis".into(), json!("modal"));
+            let frequencies: Vec<f64> = m
+                .eigenvalues
+                .iter()
+                .map(|l| l.max(0.0).sqrt() / (2.0 * std::f64::consts::PI))
+                .collect();
+            r.insert("frequencies".into(), json!(frequencies));
+            r.insert("eigenvalues".into(), json!(m.eigenvalues));
+            r.insert("solver".into(), json!({"name": "subspace"}));
+        }
+    }
+    r.insert("superelements".into(), Value::Array(parts));
+    r.insert("unknowns".into(), json!(model.n_unknowns()));
+    Value::Object(r)
+}
+
+/// The `.vtu` text of a run with superelements: the host mesh with the point array `displacement` (static) or one array
+/// `mode_<k>` per mode, the host's part of it (ADR 0785 D6).
+pub fn super_vtu_string(run: &SuperRun) -> rcfd_core::Result<String> {
+    let model = &run.setup.model;
+    let dofs = model.dof_map();
+    let n = model.mesh().nodes().len();
+    let per_node = |x: &[f64]| -> Vec<f64> {
+        (0..n)
+            .flat_map(|node| (0..3).map(move |c| (node, c)))
+            .map(|(node, c)| dofs.equation(node, c).map_or(0.0, |e| x[e]))
+            .collect()
+    };
+    let (names, values): (Vec<String>, Vec<Vec<f64>>) = match &run.outcome {
+        SuperOutcome::Static(s) => (vec!["displacement".to_string()], vec![per_node(&s.host_displacement)]),
+        SuperOutcome::Modal(m) => (
+            (1..=m.vectors.len()).map(|k| format!("mode_{k}")).collect(),
+            m.vectors
+                .iter()
+                .map(|z| per_node(&run.model.host_displacement(z)))
+                .collect(),
+        ),
+    };
+    point_arrays_vtu(model, &names, &values)
+}
+
+/// Runs a built case (no file written). A case with a table of ADR 0785 is refused: [`run_solid_case_any`] runs it.
 pub fn run(setup: SolidSetup) -> Result<SolidRun, Vec<Diagnostic>> {
+    if let Some(d) = other_entry(&setup) {
+        return Err(vec![d]);
+    }
     let outcome = match &setup.analysis {
         SolidAnalysis::Static(o) => {
             let (result, report) = solve_static_report(&setup.model, &[], &[], o)
@@ -870,6 +1291,24 @@ fn report_json(setup: &SolidSetup, outcome: &SolidOutcome) -> Result<Value, Stri
 
 /// The `.vtu` text of a modal result: the mesh with one point array `mode_<k>` (3 per node) per mode (ADR 0438 D6).
 pub fn modal_vtu_string(model: &SolidModel, modal: &ModalResult) -> rcfd_core::Result<String> {
+    let dofs = modal.dofs();
+    let n = model.mesh().nodes().len();
+    let names: Vec<String> = (1..=modal.modes.len()).map(|k| format!("mode_{k}")).collect();
+    let values: Vec<Vec<f64>> = modal
+        .modes
+        .iter()
+        .map(|phi| {
+            (0..n)
+                .flat_map(|node| (0..3).map(move |c| (node, c)))
+                .map(|(node, c)| dofs.equation(node, c).map_or(0.0, |e| phi[e]))
+                .collect()
+        })
+        .collect();
+    point_arrays_vtu(model, &names, &values)
+}
+
+/// The `.vtu` text of the mesh of `model` with the named point arrays, three values per node.
+fn point_arrays_vtu(model: &SolidModel, names: &[String], values: &[Vec<f64>]) -> rcfd_core::Result<String> {
     use rcfd_io::vtk::{fe_vtu_string, FeArray, FeCellBlock};
     let mesh = model.mesh();
     let mut conns: Vec<(u8, Vec<usize>)> = Vec::with_capacity(mesh.blocks().len());
@@ -889,22 +1328,9 @@ pub fn modal_vtu_string(model: &SolidModel, modal: &ModalResult) -> rcfd_core::R
             connectivity: c,
         })
         .collect();
-    let dofs = modal.dofs();
-    let n = mesh.nodes().len();
-    let names: Vec<String> = (1..=modal.modes.len()).map(|k| format!("mode_{k}")).collect();
-    let values: Vec<Vec<f64>> = modal
-        .modes
-        .iter()
-        .map(|phi| {
-            (0..n)
-                .flat_map(|node| (0..3).map(move |c| (node, c)))
-                .map(|(node, c)| dofs.equation(node, c).map_or(0.0, |e| phi[e]))
-                .collect()
-        })
-        .collect();
     let point: Vec<FeArray> = names
         .iter()
-        .zip(&values)
+        .zip(values)
         .map(|(name, v)| FeArray {
             name,
             components: 3,
@@ -951,4 +1377,93 @@ pub fn run_solid_case_file(path: impl AsRef<Path>, out_dir: Option<&Path>) -> Re
         m.insert("outputs".into(), Value::Object(outputs));
     }
     Ok(run)
+}
+
+/// The report of a reduction (ADR 0785 D6).
+fn reduction_report_json(setup: &SolidSetup, reduction: &ReductionSetup, part: &ReducedPart) -> Value {
+    let mesh = setup.model.mesh();
+    json!({
+        "format": REPORT_FORMAT,
+        "title": setup.title,
+        "mesh": {"nodes": mesh.nodes().len(), "elements": mesh.n_elements()},
+        "analysis": "reduction",
+        "reduction": {
+            "interface": reduction.interface,
+            "modes": part.modes(),
+            "interface_enrichment": reduction.options.interface_blocks,
+            "boundary_unknowns": part.n_boundary(),
+            "interior_unknowns": part.n_interior(),
+            "residual_vectors": part.residual_vectors(),
+            "reduced_unknowns": part.n_reduced(),
+        },
+    })
+}
+
+/// Writes the report of a run of ADR 0785 with its `outputs`, when the case asks for a report.
+fn write_report_any(
+    report: &mut Value,
+    mut outputs: Map<String, Value>,
+    name: &str,
+    dir: &Path,
+    text: &str,
+    written: &mut Vec<PathBuf>,
+) -> Result<(), Vec<Diagnostic>> {
+    let path = (!name.is_empty()).then(|| out_path(dir, name));
+    if let Some(p) = &path {
+        outputs.insert("report".into(), json!(p.to_string_lossy()));
+    }
+    if let Value::Object(m) = report {
+        m.insert("outputs".into(), Value::Object(outputs));
+    }
+    if let Some(p) = path {
+        let json = serde_json::to_string_pretty(report).expect("a JSON value serialises");
+        std::fs::write(&p, json).map_err(|e| vec![diag(text, "output.report", format!("{}: {e}", p.display()))])?;
+        written.push(p);
+    }
+    Ok(())
+}
+
+/// Reads, builds and runs any solid case file (ADR 0785 D5) and writes its files into `out_dir` when given, else into the
+/// case file's directory: a case with `[reduction]` is reduced to its part file (and the report); a case with
+/// `[superelements.<name>]` is solved with the parts attached (the `.vtu` of the host and the report); any other case is
+/// run as [`run_solid_case_file`] runs it.
+pub fn run_solid_case_any(path: impl AsRef<Path>, out_dir: Option<&Path>) -> Result<CaseRun, Vec<Diagnostic>> {
+    let case = SolidCase::load(path.as_ref())?;
+    let setup = case.build()?;
+    let dir = out_dir.map(Path::to_path_buf).unwrap_or_else(|| case.base_dir.clone());
+    let t = case.text.as_str();
+    if let Some(reduction) = setup.reduction.clone() {
+        let part = reduce(&setup.model, &reduction.interface, &reduction.options)
+            .map_err(|e| vec![diag(t, "reduction", e.to_string())])?;
+        let mut report = reduction_report_json(&setup, &reduction, &part);
+        let mut written = Vec::new();
+        let mut outputs = Map::new();
+        let p = out_path(&dir, &reduction.file);
+        part.write(&p)
+            .map_err(|e| vec![diag(t, "reduction.file", e.to_string())])?;
+        outputs.insert("part".into(), json!(p.to_string_lossy()));
+        written.push(p);
+        write_report_any(&mut report, outputs, &setup.report, &dir, t, &mut written)?;
+        return Ok(CaseRun::Reduction(Box::new(ReductionRun {
+            setup,
+            part,
+            report,
+            written,
+        })));
+    }
+    if !setup.superelements.is_empty() {
+        let mut run = run_superelements(setup)?;
+        let mut outputs = Map::new();
+        if !run.setup.vtu.is_empty() {
+            let p = out_path(&dir, &run.setup.vtu);
+            let text = super_vtu_string(&run).map_err(|e| vec![diag(t, "output.vtu", e.to_string())])?;
+            std::fs::write(&p, text).map_err(|e| vec![diag(t, "output.vtu", format!("{}: {e}", p.display()))])?;
+            outputs.insert("vtu".into(), json!(p.to_string_lossy()));
+            run.written.push(p);
+        }
+        let name = run.setup.report.clone();
+        write_report_any(&mut run.report, outputs, &name, &dir, t, &mut run.written)?;
+        return Ok(CaseRun::Superelements(Box::new(run)));
+    }
+    run_solid_case_file(path, out_dir).map(|r| CaseRun::Solid(Box::new(r)))
 }

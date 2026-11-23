@@ -163,7 +163,7 @@ One row per record of this folder, grouped by the roadmap category of the item i
 | [0687](0687-f757-registration-rhie-chow-ddt-correction-on-coupled-faces-in-the-fractional-step-and-with-bdf2.md) | F-757 registration: Rhie-Chow ddt correction on coupled faces in the fractional step and with BDF2 | REGISTERED | 2026-11-17 | 1 | F-757 | partial |
 | [0691](0691-f771-registration-body-force-in-the-fractional-step.md) | F-771 registration: body force in the fractional step | REGISTERED | 2026-11-17 | 1 | F-771 | partial |
 
-## Structural solver (268)
+## Structural solver (269)
 
 | ADR | Title | Status word | Date | Addenda | Item | Item status |
 |---|---|---|---|---|---|---|
@@ -435,6 +435,7 @@ One row per record of this folder, grouped by the roadmap category of the item i
 | [0746](0746-f666-registration-hyperelastic-structural-elements-by-default.md) | F-666 registration: hyperelastic materials on structural elements by default | REGISTERED | 2026-11-19 | 2 | F-666 | partial |
 | [0778](0778-f850-registration-four-supporting-checks-of-reader-trial-1.md) | F-850 registration: four supporting checks that reader trial 1 found weaker than their record says | REGISTERED | 2026-11-23 | 1 | F-850 | done |
 | [0780](0780-f842-registration-inertia-and-retry-in-the-solid-case-output.md) | F-842 registration: the inertia and the retry of the nonlinear driver in the solid case's output (what the acceptance presupposes, what the solid case file and the CLI have today, the output registered for the opt-in, and one question of scope that is not taken) | REGISTERED | 2026-11-23 | 1 | F-842 | todo |
+| [0785](0785-f616-registration-case-file-keys-for-superelements-and-interface-enrichment.md) | F-616 registration: case-file keys for superelements and interface enrichment | REGISTERED | 2026-11-23 | 1 | F-616 | todo |
 
 ## Meshing and mesh formats (9)
 

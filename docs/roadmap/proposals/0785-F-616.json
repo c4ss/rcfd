@@ -1,0 +1,18 @@
+{
+  "form": 1,
+  "adr": "0785",
+  "item": "F-616",
+  "base": "fcc84a84b9795ae2f7adc4927ed49d4a90a9c805",
+  "status": "done",
+  "note": "ADR 0785, 2026-11-23, done: a solid case file attaches reduced part files to node sets of its model by [superelements.<name>] (file, set; parts in name order, each checked to lie exactly on its set) and reduces its model to a part file by [reduction] (interface, modes, interface_enrichment, file), run by rcfd_api::solid_case::run_solid_case_any; the solid bar of ADR 0536 from case files equals the library in bits in the static solve and the modal analysis for both arrangements (248 and 221 unknowns), for two parts on one host (253) and with one block of enrichment (27 vectors, 275), and the part files equal the library's byte for byte; 18 refusals located by key and line; a case without the tables is unchanged (16 digests of six case files, baseline_hashes, the case hash tables); no golden holds the solid schema, whose own diff is 66 added lines and none removed; 8 of 8 mutations caught. Not covered: the harmonic solve (the case file has none; open question 1 of the ADR), beams and shells, the cutoff and residual vectors of the reduction, stresses of a combined run.",
+  "follow_ups": [
+    {
+      "key": "reduction-keys",
+      "title": "Case-file keys for the cutoff, the load's residual vector and the load patterns of the reduction",
+      "deps": [
+        "F-616"
+      ],
+      "acceptance": "Every limit not stated here is registered in the ADR before the run. The table [reduction] of the solid case file gains keys for the cutoff and the residual vector of the interior load of ADR 0474 and for load patterns of ADR 0511 named by entries of the case's loads; a part file made from a case file with each key equals the library's byte for byte, the configuration E1 of ADR 0532 (cutoff 32964 rad/s, the load's vector, one block of enrichment) is made from a case file and gives the library's frequencies in bits, and a case without the keys gives every result bit-identical."
+    }
+  ]
+}
