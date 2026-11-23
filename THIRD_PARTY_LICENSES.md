@@ -98,7 +98,7 @@ For the npm packages of the Electron Studio (`apps/studio-web/`):
 | serde_core | 1.0.229 | `MIT OR Apache-2.0` |
 | serde_derive | 1.0.229 | `MIT OR Apache-2.0` |
 | serde_json | 1.0.154 | `MIT OR Apache-2.0` |
-| serde_spanned | 1.1.2 | `MIT OR Apache-2.0` |
+| serde_spanned | 1.1.3 | `MIT OR Apache-2.0` |
 | simd-adler32 | 0.3.10 | `MIT` |
 | smallvec | 1.16.3 | `MIT OR Apache-2.0` |
 | spin | 0.9.9 | `MIT` |
@@ -106,20 +106,20 @@ For the npm packages of the Electron Studio (`apps/studio-web/`):
 | syn | 3.0.9 | `MIT OR Apache-2.0` |
 | thiserror | 1.0.69 | `MIT OR Apache-2.0` |
 | thiserror-impl | 1.0.69 | `MIT OR Apache-2.0` |
-| toml | 1.1.8+spec-1.1.0 | `MIT OR Apache-2.0` |
-| toml_datetime | 1.1.2+spec-1.1.0 | `MIT OR Apache-2.0` |
+| toml | 1.2.1+spec-1.1.0 | `MIT OR Apache-2.0` |
+| toml_datetime | 1.1.3+spec-1.1.0 | `MIT OR Apache-2.0` |
 | toml_parser | 1.1.5+spec-1.1.0 | `MIT OR Apache-2.0` |
-| toml_writer | 1.1.3+spec-1.1.0 | `MIT OR Apache-2.0` |
+| toml_writer | 1.2.0+spec-1.1.0 | `MIT OR Apache-2.0` |
 | unicode-ident | 1.0.27 | `(MIT OR Apache-2.0) AND Unicode-3.0` |
 | unicode-width | 0.2.2 | `MIT OR Apache-2.0` |
-| wasm-encoder | 0.262.0 | `Apache-2.0 WITH LLVM-exception OR Apache-2.0 OR MIT` |
+| wasm-encoder | 0.263.0 | `Apache-2.0 WITH LLVM-exception OR Apache-2.0 OR MIT` |
 | wasmi | 0.31.2 | `MIT/Apache-2.0` |
 | wasmi_arena | 0.4.1 | `MIT/Apache-2.0` |
 | wasmi_core | 0.13.0 | `MIT/Apache-2.0` |
-| wasmparser | 0.262.0 | `Apache-2.0 WITH LLVM-exception OR Apache-2.0 OR MIT` |
+| wasmparser | 0.263.0 | `Apache-2.0 WITH LLVM-exception OR Apache-2.0 OR MIT` |
 | wasmparser-nostd | 0.100.2 | `Apache-2.0 WITH LLVM-exception` |
-| wast | 262.0.0 | `Apache-2.0 WITH LLVM-exception OR Apache-2.0 OR MIT` |
-| wat | 1.262.0 | `Apache-2.0 WITH LLVM-exception OR Apache-2.0 OR MIT` |
+| wast | 263.0.0 | `Apache-2.0 WITH LLVM-exception OR Apache-2.0 OR MIT` |
+| wat | 1.263.0 | `Apache-2.0 WITH LLVM-exception OR Apache-2.0 OR MIT` |
 | winnow | 1.0.4 | `MIT` |
 | zlib-rs | 0.6.8 | `Zlib` |
 | zmij | 1.0.23 | `MIT` |
