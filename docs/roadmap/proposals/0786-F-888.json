@@ -1,0 +1,29 @@
+{
+  "form": 1,
+  "adr": "0786",
+  "item": "F-888",
+  "base": "a4d32bff224f98b426b6c3fe9ce3932792a83c76",
+  "status": "partial",
+  "note": "ADR 0786, 2026-11-23, partial: the cause is in the test and not in the window's focus: after the case is chosen in the select, the closed listbox gives the focus back to the select one animation frame later (react-aria), and the Tab of run-control.spec.ts was sent before that frame, from the body; \"inactive\" is Playwright's word for any element not focused, and the document has the focus whatever window has the system's (focus emulation). Shown by records: with the frames delayed by 300 ms the unchanged test failed 5 of 5 with the lead's error text, with and without the system's focus, and passed 5 of 5 once it waited for the focus on the select; without the delay it passed 20 of 20 here, the focus back 5 to 7 ms and the Tab 11 to 17 ms after the choice. Fix in the test (a shared step that waits for the focus on the select; tab order and focus ring kept, three mutations caught); the test passed 5 consecutive whole npm test runs with other programs in front and 5 runs with the window focused; 0 processes left by any run, the cause of the three found not reproduced. Not met: on CI the test is skipped (the job has no engine), so only the new engine-free test runs there.",
+  "gap": "Missing for done: the CI run of the merge read for run-bar-keyboard.spec.ts (the gallery test, the only part of this work CI runs), and the maintainer's answer to Q1 of ADR 0786 (whether CI builds the engine for the Studio's tests; until then run-control.spec.ts is skipped on CI and the clause \"and on CI\" cannot be met for it). Also open on the lead's machine: npm test ends with exit 1 by responsiveness.spec.ts:260 and at times f837.spec.ts:198, outside this item.",
+  "follow_ups": [
+    {
+      "key": "responsiveness-long-task",
+      "title": "Studio: responsiveness.spec.ts:260 fails on the lead's machine with one task of 400 to 440 ms when the workspace tab opens",
+      "deps": ["F-832"],
+      "acceptance": "Every limit not stated here is registered in the ADR before the run. The cause of the task of 400 to 440 ms in workspace.tab that apps/studio-web/tests/e2e/responsiveness.spec.ts:260 reports in each of its three passes (5 of 5 whole runs of npm test and 5 runs alone on 2026-11-23 after 10:20, ADR 0786 addendum 1, where the same tree passed at 09:39 with 53 ms) is found and shown by a recorded run; the test then passes a registered number of consecutive runs on that machine. The limits of F-832 are not raised and the test is not skipped or retried."
+    },
+    {
+      "key": "runner-budgets-alert",
+      "title": "Studio: f837.spec.ts:198 fails in 2 of 6 whole runs, at two different lines",
+      "deps": ["F-837"],
+      "acceptance": "Every limit not stated here is registered in the ADR before the run. The cause of the two failures of apps/studio-web/tests/e2e/f837.spec.ts:198 recorded in ADR 0786 addendum 1 (the alert \"was changed by another writer\" not found; two alerts where one is expected) is found and shown by a test that fails without the fix; the test then passes a registered number of consecutive runs on Windows. The test is not skipped, retried or given a longer limit to make it pass."
+    },
+    {
+      "key": "serve-left-behind",
+      "title": "Studio: name the test that leaves an rcfd serve process running after npm test on Windows",
+      "deps": ["F-888"],
+      "acceptance": "Every limit not stated here is registered in the ADR before the run. The end-to-end test or the path of the harness that left the rcfd serve processes found on 2026-11-23 (started with --ui and a journal folder under a temporary rcfd-studio-state folder, from a target/release folder; none was left by any run of ADR 0786, a time-out of a test is the candidate not reproduced there) is shown by a recorded run that leaves one, and after the fix a registered number of whole runs of npm test, among them runs with a test made to time out, leave none."
+    }
+  ]
+}

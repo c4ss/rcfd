@@ -512,7 +512,7 @@ One row per record of this folder, grouped by the roadmap category of the item i
 | [0741](0741-f271-registration-the-field-store-plan-as-the-default-of-start-run.md) | F-271 registration: the field-store plan as the default of start_run | REGISTERED | 2026-11-19 | 1 | F-271 | done |
 | [0774](0774-f862-registration-the-description-of-start-run-store-argument.md) | F-862 registration: the description of start_run's store argument says what the default is | REGISTERED | 2026-11-22 | 1 | F-862 | done |
 
-## Studio desktop app (15)
+## Studio desktop app (16)
 
 | ADR | Title | Status word | Date | Addenda | Item | Item status |
 |---|---|---|---|---|---|---|
@@ -531,6 +531,7 @@ One row per record of this folder, grouped by the roadmap category of the item i
 | [0738](0738-f809-proposal-derived-pictures-of-a-stored-field-iso-surfaces-streamlines-slices-and-the-length-unit.md) | F-809 proposal: derived pictures of a stored field: iso-surfaces, streamlines, slices, the Studio's cut from the CLI, and the length unit | ACCEPTED | 2026-11-17 | 0 | F-809 | done |
 | [0739](0739-f848-proposal-run-sites-a-remote-simulation-service-for-the-studio-cli-and-mcp.md) | F-848 proposal: run sites, a remote simulation service for the Studio, the CLI and the MCP server | ACCEPTED | 2026-11-17 | 0 | F-848 | todo |
 | [0742](0742-f262-diagnosis-the-terminal-status-of-a-run-is-written-before-its-last-state-event.md) | F-262 diagnosis: the terminal status of a run is written before its last state event and before its request files are removed (S7 of ADR 0123 fails intermittently on the held run) | REGISTERED | 2026-11-19 | 1 | F-262 | partial |
+| [0786](0786-f888-registration-quick-run-by-keyboard-focus.md) | F-888 registration: the Studio's end-to-end test of the quick run by keyboard that receives "inactive" on the Run button (the hypotheses of the cause, the runs that tell them apart, the test that must fail without the fix, the consecutive runs and the count of processes) | REGISTERED | 2026-11-23 | 1 | F-888 | todo |
 
 ## Quality, docs and validation (54)
 
