@@ -7,6 +7,7 @@
 //! reached (see docs/run-control.md).
 
 mod cmd_derive;
+mod cmd_duct_modes;
 mod cmd_fwh;
 mod cmd_gapc;
 mod cmd_map;
@@ -166,6 +167,12 @@ COMMANDS:
                                FW-H far field of an impermeable moving surface from a pressure time series on
                                surface faces (rcfd-surface-series format, docs/acoustics.md), uniform mean flow,
                                SPL/OASPL/dB(A) and 1/3-octave spectra
+    duct-modes <series.json> [<series.json> ...] --duct <shape> --frequency <hz> [--k-max <k>] [--x-ref <x>]
+        [--origin y,z] [--out <file.json>]
+                               modal amplitudes of a hard-walled duct at one frequency from pressure time series
+                               on duct sections (rcfd-surface-series, one file per section; <shape> is rect:a,b
+                               or circ:r): one section gives the amplitudes, two or more the waves towards +x
+                               and -x with their powers (rcfd-duct-modes format, docs/acoustics.md)
     cases [list] [--dir <cases-dir>]
                                list benchmark/validation cases
     help [glossary | errors]   print this help; glossary: the terms of docs/glossary.md as JSON; errors: every
@@ -272,6 +279,7 @@ fn dispatch(args: &[String]) -> u8 {
         "reactor" => cmd_gapc::cmd_reactor(rest),
         "acoustics" => cmd_gapc::cmd_acoustics(rest),
         "fwh" => cmd_fwh::cmd_fwh(rest),
+        "duct-modes" => cmd_duct_modes::cmd_duct_modes(rest),
         "site" => cmd_site(rest),
         other => usage_error(&format!("unknown command '{other}'")),
     }
