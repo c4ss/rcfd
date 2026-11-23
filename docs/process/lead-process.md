@@ -66,6 +66,11 @@ generated files with the ledger line, pushes, and starts the selected tests that
   adds what he knows (the merge, the push run, a decision, a different status with its reason) as an entry of his own
   after it; he does not reword the agent's entry (the maintainer, 2026-11-21). A proposal the script refuses is applied
   by hand and the refusal noted in the item.
+- The wiki (`wiki/`, once it is on main): after the roadmap commit of a merge, the lead runs `/wiki-ingest` for what the
+  merge added or changed (its ADR on the thread page, the item's row, the changed docs, the pages whose claims changed),
+  as `wiki/CLAUDE.md`, "Steady-state ingest", says, and commits the wiki's changes with a log entry
+  `## [date] ingest | <ADR/F/doc id> (loop merge)`. Agents do not edit the wiki; their ADRs are its sources. The
+  maintainer's answer of 2026-11-23, option (a).
 
 ## Shared files and their one writer
 
@@ -172,6 +177,8 @@ of agents is put to the maintainer again after four weeks of the measures.
 
 ## Changes
 
+- 2026-11-23: "Merging and pushing" gains the wiki ingest after each merge, by the lead, on the maintainer's answer of
+  that day (option (a): the lead ingests; agents do not edit the wiki).
 - 2026-11-21: the stop conditions of "When no further agent is started" are in force (the maintainer's answer in ADR
   0754); "Merging and pushing" says that an agent's roadmap entry stands and the lead adds his own after it (the
   maintainer's answer in ADR 0755).
