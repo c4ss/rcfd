@@ -238,3 +238,14 @@ The same entries are in `docs/roadmap/proposals/0776-F-860.json` (`roadmap_propo
 
 `python scripts/process_report.py --check` on the tree of this addendum: 2 failures, both "generated file is not
 current" (`docs/adr/index.md` and `CHANGELOG.md`, which a new ADR changes); left to the lead by rule 7. No other failure.
+
+## The lead's reading (2026-11-23), at the merge
+
+Merged at 0e1d714d and pushed at 1ba0d38a (the report read at 01:46 UTC, 7 minutes of reading, proposed done, written
+done). Checked by the lead before the merge: the registration is the first commit and alone; the change is confined to
+`scripts/push_main.py` and its tests, as the brief allowed; the left-out line adds its checkout entries after the two it
+wrote before, so the existing lines and a merge line are unchanged in form. The push script ran every script test and
+the committed mutation, which failed as expected. At the merge the lead brought `docs/test-process.md` section 7.4, item
+7, up to date with the three changes.
+
+Status: **done**, as proposed. The next left-out run is the first that records its commits.
