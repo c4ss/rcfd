@@ -355,3 +355,20 @@ the left-out run met it.
 > Follow-up: "adopt_f288 under a load of new files: a run's status.json read as missing and an adopted run counted failed while queued"; deps: F-876; acceptance: "Every limit not stated here is registered in the ADR before the run. For the failures of ADR 0773 addendum 1 (R1b run 4: a read of status.json failed with os error 2; R1b run 6 and R1 run 1: an adopted run reported queued and counted failed, records ok false in adopt_f288 A-R and A-N), the cause is shown by a registered control with a registered number of runs under ADR 0773's load LF, and the code or the test is changed under the registration so that the registered runs pass."
 
 > Follow-up: "adopt_f288 A-N ends when it adopts a paused decoy"; deps: F-876; acceptance: "Every limit not stated here is registered in the ADR before the run. A mutation that drops one item of RunKey::matches (ADR 0773 M1) makes adopt_f288 A-N fail at an assertion instead of waiting without end, shown by a committed mutation patch, and A-N passes a registered number of runs."
+
+## The lead's reading (2026-11-23), at the merge
+
+Merged at ecdfe05f and pushed at c967573b (the report read at 02:34 UTC, 9 minutes of reading, proposed done, written
+done). Checked by the lead before the merge: the registration is the first commit and alone, and amendments 1 and 2 are
+each committed before what they allow; the branch changes only `crates/rcfd-mcp/tests/adopt_f288.rs` and adds its
+mutation patch, the ADR and the proposal; `atomic.rs` and `project.rs` are untouched. The earlier making of decoy (h)
+is kept as the ignored record `a_n_record_before_adr0773`, with the test the gate runs named in its reason; it is the
+record of the cause, not a test switched off to make a run pass. The push script ran the committed mutation and it
+failed as expected; no binary was left out.
+
+Status: **done**, as proposed. The cause is a kernel-mode handle on a newly written file; which driver holds it is not
+shown, since that would need a change of the machine's settings, which the brief excluded. The agent stopped mutation
+M1 after 81 minutes because it waits without end; the lead notes that the agent ran M1 and M3 in its worktree and
+reverted them. The agent of this item ran on Claude Opus 5.5, not on the model its brief names; the lead records it
+here. The two follow-ups are scope and are put to the maintainer with the agent's recommendation (a), which the lead
+shares.
