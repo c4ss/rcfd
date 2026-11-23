@@ -409,3 +409,10 @@ Follow-ups, for the lead to decide:
 > Studio: data.open gives no length unit where data-routes.spec.ts:94 and data.spec.ts:73 expect "m". Deps: F-892. Acceptance: Every limit not stated here is registered in the ADR before the run. The cause of the two failures recorded in ADR 0789 addendum 1 (null where the length unit "m" is expected, on main at c4bd79f3 with the engine built from it, in every run) is found and shown by a recorded run, and the two tests then pass without being skipped or changed in what they check.
 
 > Studio: run-control.spec.ts:320 does not find the pause request within 5 s in some whole runs. Deps: F-892. Acceptance: Every limit not stated here is registered in the ADR before the run. The cause of the failure of apps/studio-web/tests/e2e/run-control.spec.ts:320 recorded in ADR 0789 addendum 1 and in the lead's push run of F-861 on 2026-11-23 is found and shown by a test that fails without the fix; the test then passes a registered number of consecutive runs on Windows, not skipped, retried or given a longer limit.
+
+### Checks at the end (G2)
+
+- `cargo test -p rcfd-cli --release --test docs_site`: 2 passed, 0 failed.
+- `python scripts/roadmap_proposals.py check docs/roadmap/proposals/0789-F-892.json`: accepted (F-892 todo to done, two new items).
+- `python scripts/process_report.py --check`: exit 1 with 1 failure, "generated file is not current: docs/adr/index.md", which rule 7 leaves to the lead; nothing else.
+- No Rust crate was touched: `cargo fmt` and `cargo clippy` do not apply.
