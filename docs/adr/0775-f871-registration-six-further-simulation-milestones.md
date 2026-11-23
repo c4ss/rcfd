@@ -271,3 +271,103 @@ built from `docs/milestones.json` of main ece2e34d; if main's file changes befor
 (the addendum gives the way). The notes of the items are read only around keyword matches and for the items named
 above. The second reading is of 40 pairs. The published references are named from the pages of the repository; no paper
 was read for this work, and no new reference value is entered. No cargo command but `docs_site`; no solve.
+
+## Addendum 1: results (2026-11-23)
+
+Commits: 67e1c319 (this registration, alone, on main ece2e34d), 5392fa4a (the definitions and the mapping, first
+reading), and the commit of this addendum with the proposal file. No amendment was needed and no correction of the
+mapping was taken.
+
+| Id | Measured | Met |
+| --- | --- | --- |
+| C1 | 6 of 6 defined as registered, each with a headline item the roadmap holds and a reference that names its page and section; none left out | yes |
+| C2 | 792 of 792 items read for the six (308 structural by title); 81 memberships of 24 items, each with a reason that starts M1, M2 or M3 (the build script asserts M1 to M4); no M4 membership: the defects the runs met (the Ra 1e6 stall, the Van Albada overflow, the Re 1000 GCI miss, the plate and step misses) are recorded in the notes and gaps of F-006, F-042, F-043, F-050 and F-060, not as items of their own | yes |
+| C3 | 40 pairs by seed 871775 (from 81 member pairs, 4671 non-member pairs, 1687 of them in the doubtful lines), second reading by a fresh agent: 0 disagreements of 20 member pairs, 0 of 10 uniform, 0 of 10 doubtful | yes |
+| C4 | on a copy of `docs/` and `scripts/` of main ece2e34d (`proof.py`, scratch): `--apply` exit 0, 81 memberships written; the three existing definitions equal in bytes and the file outside the six new objects equal; 0 of 792 items with a changed list of the three; 0 items outside the mapping changed; the 24 mapped items differ by the key alone; the table rows and headline lines of the three in the block equal; a second `--apply` writes nothing; `roadmap_milestones.py --check` 0; `render_roadmap.py --check` 0 after a render, and `roadmap_milestones.py --check` 0 after it. K1 (one character of the title of `vortex-shedding`): both comparisons of the definitions report a difference. K2 (the 20 present members of `vortex-shedding` and F-001 added to the mapping): exactly F-001 reported as changed in its list of the three. C2 control: the assertion of `build.py` rejects a reason that does not start M1 to M4 | yes |
+| C5 | validation clean on the copy (no line printed; every headline item an item and a member) | yes |
+| C6 | below | yes |
+| P | `python scripts/roadmap_proposals.py check docs/roadmap/proposals/0775-F-871.json` passes; `cargo test -p rcfd-cli --release --test docs_site` 2 passed; `python scripts/process_report.py --check`: in the report to the lead (run after this commit) | yes |
+
+**Figures** on a copy of main ece2e34d after the command (the whole roadmap: 792 items, 393 done, 298 partly done, 101
+not started, 68 %; the rows of the three existing milestones unchanged).
+
+| Milestone | Headline | Members | Done | Partly done | Not started | Per cent | Headline result |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| `lid-driven-cavity` | F-028 (done) | 12 | 11 | 1 | 0 | 96 % | met |
+| `backward-facing-step` | F-042, F-043 (partial) | 16 | 12 | 4 | 0 | 88 % | not met |
+| `flat-plate` | F-041, F-043 (partial), F-203 (done) | 18 | 13 | 5 | 0 | 86 % | not met |
+| `heated-cavity` | F-050 (done) | 13 | 12 | 1 | 0 | 96 % | met |
+| `shock-tube-and-wedge` | F-060 (done) | 8 | 7 | 1 | 0 | 94 % | met |
+| `packed-bed` | F-031 (done) | 14 | 14 | 0 | 0 | 100 % | met |
+
+By class: M1 9 (six items), M2 63, M3 9 (F-006 for the cavity, the step, the plate and the heated cavity; F-125 for
+those four and the shock tube). The open members are F-125 (five milestones), F-108 (step, plate), F-042 and F-043
+(step, plate) and F-041 (plate). The per cents are high for the reason ADR 0756 gave: the members are mostly foundation
+items done long ago. Four of the six read "met" because their headline items are done; the step and the plate read
+"not met" through F-042, F-043 and F-041, whose gaps also name the channel and NACA 0012 clauses (registered, not
+changed).
+
+The non-member candidates (a keyword match or the closure of a headline item: 159 pairs, `nonmembers.tsv` in scratch)
+by class: N3 F-001, F-003, F-871 and the process, Studio and assistant items; N1 the items that try something else on
+the cavity or the plate (F-032, F-102, F-115, F-143, F-205, F-209, F-210, F-234, F-241, F-342, F-343, F-454 and the
+like); N4 F-005 for the library-level runs, F-046, F-062, F-106, F-107, F-738; N5 the rest, among them the structural
+items that match "Rayleigh" or "flat plate" and, for the shock tube, F-020, F-021 and F-024 (the compressible solver has
+its own boundary states, gradients and explicit stepping). Borderline and left out: F-044 (the turbulence-model
+interface, left out as ADR 0756 left it out), F-104 (the expression check that `Case` always runs; the second reader
+named it as hard and read it as not used), F-240 (the setup rules on the case path). F-082 is a member of the packed bed
+and the shock tube: their runs build and step the case with `Case::parse_toml` and `Simulation` from Rust.
+
+**The sample check.** The reader was given `rule.md` (the sections "The definitions" and "The membership rule" of this
+ADR), the definitions file and the sheet in a folder of its own; it reports that it opened none of the files it was told
+not to open and consulted the `use` lines of the runs of record, the packed-bed case file, `common/step.rs` and
+`case.rs`. Hard pairs it named: F-104 and the packed bed, the M2 members by closure that it could not check against
+`docs/roadmap.json`, F-006 for the plate, F-754 and F-132 for the cavity (N5 against N4 and N1). It found the rule
+unclear on a code path passed without use, on the depth of the closure for foundation items, and on N4 against N5 for
+an opt-in on a feature the run lacks. What the check shows: on these milestones the rule is sharp because the runs of
+record are library-level tests whose `use` lines say what they use; a uniform draw of non-members is mostly structural
+and unrelated items, so the 0 disagreements say little about the borderline items named above.
+
+**The command the lead runs on main**, then the usual regeneration (`python scripts/render_roadmap.py`; the block of the
+overview is written by the command itself):
+
+`python scripts/roadmap_milestones.py --apply docs/adr/0775-f871-mapping.tsv --definitions docs/adr/0775-f871-milestones.json`
+
+The definitions file is `docs/milestones.json` of main ece2e34d with the six objects appended and every other byte
+kept. If main's file changes before the command is run (F-875 would add a milestone), the file is rebuilt the same way:
+the six objects after `aerofoil-lift` in `docs/adr/0775-f871-milestones.json` appended to main's list and written with
+`json.dumps(..., indent=2, ensure_ascii=False)` and one newline. No `--install` is needed.
+
+**Deviations.** (1) The registration estimated 10 to 25 members a milestone; the shock tube has 8 (an estimate, not a
+limit). (2) F-082 was added to the packed bed and the shock tube before the mapping's commit, when the non-member
+candidates were read: their runs use the Rust API by name. (3) The C2 control was shown on the assertion of `build.py`
+alone, not by a full build. (4) `validation-data/data/backward-step-tmr/profiles.exp.dat` is fetched by the pack and not
+committed; it is named as the file the run reads. Not run: any cargo command but `docs_site`; any solve.
+
+Actual size: done; 0; 0; 2; about 330000.
+
+Decision by the registered rule: **done**. Every milestone has a headline item the roadmap holds and is defined and
+mapped with reasons; the sample check was made (0 disagreements of 40); the command leaves the three existing
+milestones byte for byte on a copy of main, with validation and both checks clean.
+
+## Open questions for the maintainer
+
+1. **The laminar backward-facing step.** The step of expansion ratio 2 at Re_D 800 is compared and passes (ADR 0060,
+   S1 to S3, x_r/h 11.80 against 11.48 to 12.20), but no item's acceptance holds it, so it is not in the milestone.
+   Options: (a) leave the milestone turbulent; (b) enter the first follow-up below as a second headline item of
+   `backward-facing-step`, with the two laminar files as runs of record. Recommendation: (b): it puts a passing,
+   registered comparison under the milestone, as F-869 did for the cylinder's drag.
+2. **The Blasius plate.** The laminar plate is compared (ADR 0060, B1 to B4, passing with a corrected set-up) under no
+   item. Options: (a) leave the milestone turbulent; (b) enter the second follow-up below as a headline of `flat-plate`.
+   Recommendation: (b), with question 1.
+
+## For the lead: roadmap entries
+
+> Status proposed for F-871: done.
+
+> Note entry: ADR 0775, 2026-11-23, done: six milestones defined in docs/adr/0775-f871-milestones.json (lid-driven cavity F-028, turbulent step F-042 and F-043, turbulent flat plate F-041, F-043 and F-203, heated cavity F-050, shock tube and wedge F-060, packed bed F-031) with 81 memberships of 24 items in docs/adr/0775-f871-mapping.tsv (12, 16, 18, 13, 8 and 14 members; 96, 88, 86, 96, 94 and 100 per cent; four met, the step and the plate not met); sample of 40 pairs read a second time with 0 disagreements; the command of addendum 1 leaves the three existing milestones byte for byte, shown on a copy of main ece2e34d.
+
+> Follow-up (proposed, open question 1): "Laminar backward-facing step at Re_D 800: the reattachment length against the published values", deps F-028, F-006; acceptance: Every limit not stated here is registered in the ADR before the run. The reattachment length of the step of expansion ratio 2 at Re_D 800 lies within the published values 11.48 to 12.20 recorded in docs/reference-data.md (section "Wave 30B: incompressible validation data actually read"), by the checks S1 to S3 of ADR 0060 or their registered successors, on current main, in tests the gate runs. Milestone backward-facing-step, headline.
+
+> Follow-up (proposed, open question 2): "Laminar flat plate: the skin friction and the velocity profile against the Blasius solution", deps F-028, F-006; acceptance: Every limit not stated here is registered in the ADR before the run. The laminar plate reproduces the Blasius values of arXiv:2204.02215 recorded in docs/reference-data.md (section "Wave 30B: incompressible validation data actually read"), by the checks B1 to B4 of ADR 0060 or their registered successors, on current main, in tests the gate runs. Milestone flat-plate, headline.
+
+The same entries are in `docs/roadmap/proposals/0775-F-871.json` (form 1 of ADR 0755, base ece2e34d).
