@@ -1,3 +1,4 @@
+// ADR 0027: the record of this file, the primary ADR of its tests by scripts/adr_test_index.py (evidence E2).
 //! Passive scalars and species through the settings tree (F-053).
 //!
 //! Checks fixed before running (flow solved by SIMPLEC on a 2-D channel with slip walls, so the

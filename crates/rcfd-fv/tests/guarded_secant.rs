@@ -1,3 +1,4 @@
+// ADR 0055: the record of this file, the primary ADR of its tests by scripts/adr_test_index.py (evidence E0).
 //! G2 of docs/adr/0055-wave29a-rotor-interfaces-bcs.md: the guarded secant update of the target-mass-flow outlet.
 
 use rcfd_fv::outlets::{PressureUpdate, PressureUpdater};

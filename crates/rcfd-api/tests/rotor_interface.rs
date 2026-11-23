@@ -1,3 +1,4 @@
+// ADR 0055: the record of this file, the primary ADR of its tests by scripts/adr_test_index.py (evidence E0).
 //! Frozen-rotor interface checks R4 and R5 of docs/adr/0055-wave29a-rotor-interfaces-bcs.md (F-126). The limits were
 //! registered in the ADR before any run and are repeated next to each assertion. A criterion that misses moves
 //! unchanged into an ignored `*_known_miss` test.

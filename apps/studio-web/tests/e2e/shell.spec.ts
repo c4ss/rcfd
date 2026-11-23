@@ -1,3 +1,4 @@
+// F-801: the item of this spec, by the commit that added it (245c9965, 2026-11-16).
 // The hardened shell (docs/studio-guardrails.md G10), asserted on the packaged app (out/packaged, built by
 // scripts/package-dir.mjs) driven by Playwright's _electron.launch. One app for the file; every test leaves it on the
 // empty project view.

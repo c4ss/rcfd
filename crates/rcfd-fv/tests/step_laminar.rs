@@ -1,3 +1,4 @@
+// ADR 0704, F-786: the record of this file, the primary ADR of its tests by scripts/adr_test_index.py (evidence E2).
 //! Laminar backward-facing step (F-106, F-042 prerequisites): second-order convergence study and
 //! reattachment length against Armaly et al. (1983) / Gartling (1990) as quoted in the roadmap
 //! notes. Expansion ratio 2 (inlet channel height = step height), parabolic inlet with mean

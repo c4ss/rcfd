@@ -1,3 +1,4 @@
+// ADR 0031: the record of this file, the primary ADR of its tests by scripts/adr_test_index.py (evidence E2).
 //! F-115 building blocks: the gradient-corrected nearest-cell transfer reproduces a linear field
 //! exactly inside the source cell-centre hull (check fixed up front: 1e-12), never creates new
 //! extrema, and the conservative mode matches the volume average.

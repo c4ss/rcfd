@@ -1,3 +1,4 @@
+// ADR 0060: the record of this file, the primary ADR of its tests by scripts/adr_test_index.py (evidence E2).
 //! `rcfd data` (F-125): offline listing, verification and provenance of the public data pack.
 
 use std::process::Command;

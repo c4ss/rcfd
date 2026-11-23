@@ -1,3 +1,4 @@
+// ADR 0024: the record of this file, the primary ADR of its tests by scripts/adr_test_index.py (evidence E2).
 //! Non-conformal interface (F-114): two blocks with different cell counts along the interface, joined by
 //! `rcfd_mesh::non_conformal::join_non_conformal`, give the Poiseuille channel solution of a conformal block.
 //!

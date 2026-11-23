@@ -1,3 +1,4 @@
+// ADR 0704, F-786: the record of this file, the primary ADR of its tests by scripts/adr_test_index.py (evidence E2).
 //! Lid-driven cavity validation against Ghia, Ghia & Shin (1982).
 //!
 //! Acceptance (F-028): absolute error of the centreline velocity at the

@@ -1,3 +1,4 @@
+// ADR 0006: the record of this file, the primary ADR of its tests by scripts/adr_test_index.py (evidence E0).
 //! F-062 validation (checks registered in docs/adr/0006-compressible-boundary-conditions.md
 //! before any run): A5 free-stream preservation, B no spurious reflection, C total-pressure inlet
 //! nozzle versus the isentropic relations, D airfoil placeholder.

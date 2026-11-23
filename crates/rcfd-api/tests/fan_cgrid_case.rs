@@ -1,3 +1,4 @@
+// ADR 0068: the record of this file, the primary ADR of its tests by scripts/adr_test_index.py (evidence E0).
 //! C-grid axial-fan passage through the case tree (`mesh.fan.topology = "c_grid"`): checks Q6(d), R1, S1' and S3' of
 //! docs/adr/0068-wave33a-mesh-quality-foundation.md. The criteria were registered before this code ran; a miss becomes an
 //! ignored `*_known_miss` test. The solves are smoke tests of the mesh and the boundary-condition plumbing, NOT a fan

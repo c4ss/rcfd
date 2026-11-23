@@ -1,3 +1,4 @@
+// ADR 0031: the record of this file, the primary ADR of its tests by scripts/adr_test_index.py (evidence E2).
 //! Run-control contract (F-121): checkpoint round trip, drive outcomes and exit codes, check-only,
 //! journal playback and the status-stream summary.
 //!

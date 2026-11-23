@@ -1,3 +1,4 @@
+// F-802: the item of this spec, by the commit that added it (d52d689f, 2026-11-16).
 // The pictogram grid of DESIGN.md (Shapes): every state pictogram and icon on a 14-unit square, with strokes only at
 // 0, 45 and 90 degrees between whole grid points; the queued ring is the one circle. The state shapes are the ones
 // recorded in .impeccable/design.json.

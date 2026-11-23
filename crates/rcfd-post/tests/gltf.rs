@@ -1,3 +1,4 @@
+// ADR 0011: the record of this file, the primary ADR of its tests by scripts/adr_test_index.py (evidence E2).
 //! F-117: GLB export of boundary surfaces with scalar colouring.
 //! Checks fixed in advance: container validity (structural self-check), outward winding,
 //! colours equal the viridis map of the normalised value, and size linear in the face count.

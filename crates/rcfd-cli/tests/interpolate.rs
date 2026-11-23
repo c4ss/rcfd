@@ -1,3 +1,4 @@
+// ADR 0031: the record of this file, the primary ADR of its tests by scripts/adr_test_index.py (evidence E2).
 //! `rcfd run --interpolate-*` (F-115): start a fine-mesh case from a coarse-mesh checkpoint.
 //! Criteria fixed up front: exit 0 and the first iteration event of the interpolated run has a
 //! lower momentum residual than the uniform start; incomplete or conflicting flags are exit 2;

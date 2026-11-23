@@ -1,3 +1,4 @@
+// ADR 0801: the record of this spec, by the commit that added it (1b22c503, 2026-11-17).
 // G7 as amended 2026-11-17 (the maintainer: "the runner should close with studio by default if no external (existing)
 // runner env var is specified"; for active runs: ask), in the packaged Studio against the real engine (rcfd-mcp,
 // rcfd-runner, rcfd). Each test has its own copy of the quick-start project, and long runs (never converging) so a run

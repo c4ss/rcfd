@@ -1,3 +1,4 @@
+// F-819: the item of this spec, by the commit that added it (3dea64ae, 2026-11-17).
 // F-819b: the two FNV-1a 64 loops of src/main/data/fnv.ts give the same value. The WebAssembly loop (eight bytes per
 // load, copied into the module's memory 1 MiB at a time) is compared with the reference loop of two 32-bit halves on
 // every length from 0 to 80 bytes past the size where it takes over, on unaligned views, across the 1 MiB copy, and

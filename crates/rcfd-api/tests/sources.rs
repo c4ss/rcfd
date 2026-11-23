@@ -1,3 +1,4 @@
+// ADR 0008: the record of this file, the primary ADR of its tests by scripts/adr_test_index.py (evidence E2).
 //! Porous media and rotating-frame sources (F-031) through the settings tree.
 //!
 //! Checks fixed before running:

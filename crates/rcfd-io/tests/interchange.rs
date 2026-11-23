@@ -1,3 +1,4 @@
+// ADR 0011: the record of this file, the primary ADR of its tests by scripts/adr_test_index.py (evidence E0).
 //! Interchange formats (F-119): checks registered in docs/adr/0011-formats-and-registers.md before this file was run.
 
 use rcfd_core::vec3::{dot, norm, sub, Vec3};

@@ -1,3 +1,4 @@
+// ADR 0705, F-769: the record of this file, the primary ADR of its tests by scripts/adr_test_index.py (evidence E2).
 //! Profile and table inputs (F-105): a parabolic inlet read from a CSV profile reproduces the
 //! analytic plane Poiseuille flow, tables are callable from expressions and bad data is reported.
 //!

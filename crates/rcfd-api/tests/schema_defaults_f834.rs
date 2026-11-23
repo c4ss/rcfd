@@ -1,3 +1,4 @@
+// ADR 0800: the record of this file, the primary ADR of its tests by scripts/adr_test_index.py (evidence E1).
 //! F-834: every leaf of the case schema the service publishes (`settings.schema`) has a default that is a valid value of
 //! its own kind. The check of the frozen GUI's and the egui Studio's case editors (both removed by F-449), without their
 //! settings-tree model: the walk, the kinds and the input rule of `rcfd-gui/src/schema_model.rs` restated here over the

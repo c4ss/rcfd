@@ -1,3 +1,4 @@
+// F-804: the item of this spec, by the commit that added it (ba7e7de8, 2026-11-16).
 // Unit tests of the data port's checks (src/main/data/bridge.ts), the data roots (roots.ts) and the cancellable queue
 // (queue.ts), with Node's MessageChannel standing in for Electron's and a scripted backend standing in for the readers.
 // The readers themselves are tested against the Rust reader in data-routes.spec.ts.

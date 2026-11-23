@@ -1,3 +1,4 @@
+// ADR 0008: the record of this file, the primary ADR of its tests by scripts/adr_test_index.py (evidence E0).
 //! Multiple-reference-frame (frozen rotor) zones, `sources.<name>.type = "mrf"` (F-031, F-114): the checks M1-M7 of
 //! docs/adr/0008-mrf.md. The criteria and limits were fixed in that ADR before any MRF code ran; they are repeated
 //! next to each assertion. A criterion that misses is moved unchanged into an ignored `*_known_miss` test.
