@@ -31,8 +31,7 @@ use crate::case::{Case, Diagnostic};
 use rcfd_core::vec3::{self, Vec3};
 use rcfd_fv::{FvGeometry, PeriodicPair};
 use std::collections::BTreeMap;
-use wasmi::core::F64;
-use wasmi::{Config, Engine, Linker, Module, Store, StoreLimits, StoreLimitsBuilder, TypedFunc};
+use wasmi::{CompilationMode, Config, Engine, Linker, Module, Store, StoreLimits, StoreLimitsBuilder, TypedFunc};
 
 /// The ABI version this build speaks.
 pub const ABI_VERSION: i32 = 1;
@@ -43,20 +42,19 @@ pub const MAX_MEMORY_BYTES: usize = 16 << 20;
 /// Default instruction budget of one call.
 pub const DEFAULT_FUEL: u64 = 1_000_000;
 
-type MomentumFn = TypedFunc<(F64, F64, F64, F64, F64, F64, F64, i32), F64>;
-type ProfileFn = TypedFunc<(F64, F64, F64, F64, i32), F64>;
-type ViscosityFn = TypedFunc<(F64, F64, F64, F64, F64, F64), F64>;
-type MonitorFn = TypedFunc<(F64, F64, F64, F64, F64, F64, F64, F64, F64), F64>;
-type Fn4 = TypedFunc<(F64, F64, F64, F64), F64>;
-type Fn5 = TypedFunc<(F64, F64, F64, F64, F64), F64>;
-type InitFn = TypedFunc<(F64, F64, F64, i32), F64>;
+type MomentumFn = TypedFunc<(f64, f64, f64, f64, f64, f64, f64, i32), f64>;
+type ProfileFn = TypedFunc<(f64, f64, f64, f64, i32), f64>;
+type ViscosityFn = TypedFunc<(f64, f64, f64, f64, f64, f64), f64>;
+type MonitorFn = TypedFunc<(f64, f64, f64, f64, f64, f64, f64, f64, f64), f64>;
+type Fn4 = TypedFunc<(f64, f64, f64, f64), f64>;
+type Fn5 = TypedFunc<(f64, f64, f64, f64, f64), f64>;
+type InitFn = TypedFunc<(f64, f64, f64, i32), f64>;
 
 /// An instantiated user-function module.
 pub struct Udf {
     name: String,
     store: Store<StoreLimits>,
     fuel_cap: u64,
-    fuel_added: u64,
     momentum: Option<MomentumFn>,
     profile: Option<ProfileFn>,
     viscosity: Option<ViscosityFn>,
@@ -72,12 +70,7 @@ pub struct Udf {
     pub max_fuel_per_call: u64,
 }
 
-fn w(x: f64) -> F64 {
-    F64::from_float(x)
-}
-
-fn finite(name: &str, what: &str, v: F64) -> Result<f64, String> {
-    let v = v.to_float();
+fn finite(name: &str, what: &str, v: f64) -> Result<f64, String> {
     if v.is_finite() {
         Ok(v)
     } else {
@@ -95,8 +88,16 @@ impl Udf {
         if fuel_per_call == 0 {
             return Err(err("fuel_per_call must be positive".into()));
         }
+        // ADR 0782 (F-856), wasmi 1.x. D2: the proposals that wasmi 0.31 did not accept stay off, so the set of accepted
+        // modules is the one of ABI 1 before. D3: the whole module is translated at load, so no call pays for translation.
         let mut config = Config::default();
-        config.consume_fuel(true);
+        config
+            .consume_fuel(true)
+            .compilation_mode(CompilationMode::Eager)
+            .wasm_multi_memory(false)
+            .wasm_memory64(false)
+            .wasm_tail_call(false)
+            .wasm_extended_const(false);
         let engine = Engine::new(&config);
         let module = Module::new(&engine, bytes).map_err(|e| err(format!("not a valid WebAssembly module: {e}")))?;
         if let Some(i) = module.imports().next() {
@@ -120,7 +121,6 @@ impl Udf {
             name: name.to_string(),
             store,
             fuel_cap: fuel_per_call,
-            fuel_added: 0,
             momentum: None,
             profile: None,
             viscosity: None,
@@ -137,8 +137,7 @@ impl Udf {
         u.refuel();
         let linker: Linker<StoreLimits> = Linker::new(&engine);
         let instance = linker
-            .instantiate(&mut u.store, &module)
-            .and_then(|pre| pre.start(&mut u.store))
+            .instantiate_and_start(&mut u.store, &module)
             .map_err(|e| err(format!("cannot instantiate: {e}")))?;
         let version = instance
             .get_typed_func::<(), i32>(&u.store, "rcfd_abi_version")
@@ -155,7 +154,7 @@ impl Udf {
                 if instance.get_export(&u.store, $name).is_some() {
                     u.$field = Some(
                         instance
-                            .get_typed_func::<_, F64>(&u.store, $name)
+                            .get_typed_func::<_, f64>(&u.store, $name)
                             .map_err(|e| err(format!("export '{}' has the wrong signature: {e}", $name)))?,
                     );
                 }
@@ -203,37 +202,32 @@ impl Udf {
     /// One call of a single-result export: fuel renewed, cost recorded, result finite.
     fn call1<P: wasmi::WasmParams>(
         &mut self,
-        f: Option<TypedFunc<P, F64>>,
+        f: Option<TypedFunc<P, f64>>,
         what: &str,
         args: P,
     ) -> Result<f64, String> {
         let f = f.ok_or_else(|| format!("'{}' has no {what}", self.name))?;
         self.refuel();
-        let before = self.store.fuel_consumed().unwrap_or(0);
         let v = f
             .call(&mut self.store, args)
             .map_err(|e| format!("user function '{}': {what} failed: {e}", self.name))?;
-        self.account(before);
+        self.account();
         finite(&self.name, what, v)
     }
 
     /// Boundary temperature (K) at a face centre.
     pub fn temperature_profile(&mut self, x: Vec3, t: f64) -> Result<f64, String> {
-        self.call1(
-            self.temperature_profile,
-            "temperature_profile",
-            (w(x[0]), w(x[1]), w(x[2]), w(t)),
-        )
+        self.call1(self.temperature_profile, "temperature_profile", (x[0], x[1], x[2], t))
     }
 
     /// Wall heat flux into the domain (W/m^2) at a face centre.
     pub fn wall_heat_flux(&mut self, x: Vec3, t: f64) -> Result<f64, String> {
-        self.call1(self.wall_heat_flux, "wall_heat_flux", (w(x[0]), w(x[1]), w(x[2]), w(t)))
+        self.call1(self.wall_heat_flux, "wall_heat_flux", (x[0], x[1], x[2], t))
     }
 
     /// Thermal conductivity (W/(m K)) at a face centre; it must be positive.
     pub fn thermal_conductivity(&mut self, x: Vec3, t: f64, temperature: f64) -> Result<f64, String> {
-        let args = (w(x[0]), w(x[1]), w(x[2]), w(t), w(temperature));
+        let args = (x[0], x[1], x[2], t, temperature);
         let v = self.call1(self.conductivity, "thermal_conductivity", args)?;
         if v <= 0.0 {
             return Err(format!(
@@ -246,52 +240,36 @@ impl Udf {
 
     /// Volumetric heat source (W/m^3) at a cell centre.
     pub fn energy_source(&mut self, x: Vec3, t: f64, temperature: f64) -> Result<f64, String> {
-        let args = (w(x[0]), w(x[1]), w(x[2]), w(t), w(temperature));
+        let args = (x[0], x[1], x[2], t, temperature);
         self.call1(self.energy_source, "energy_source", args)
     }
 
     /// Source of a passive scalar (value per second) at a cell centre.
     pub fn scalar_source(&mut self, x: Vec3, t: f64, value: f64) -> Result<f64, String> {
-        self.call1(
-            self.scalar_source,
-            "scalar_source",
-            (w(x[0]), w(x[1]), w(x[2]), w(t), w(value)),
-        )
+        self.call1(self.scalar_source, "scalar_source", (x[0], x[1], x[2], t, value))
     }
 
     /// Initial value of field component `comp` (0..2 velocity, 3 kinematic pressure, 4 temperature) at a cell centre.
     pub fn initial_value(&mut self, x: Vec3, comp: i32) -> Result<f64, String> {
-        self.call1(self.initial_value, "initial_value", (w(x[0]), w(x[1]), w(x[2]), comp))
+        self.call1(self.initial_value, "initial_value", (x[0], x[1], x[2], comp))
     }
 
     /// End-of-run integrand of one cell (the `monitor` signature).
     pub fn execute_at_end(&mut self, x: Vec3, volume: f64, u: Vec3, p: f64, temperature: f64) -> Result<f64, String> {
-        let args = (
-            w(x[0]),
-            w(x[1]),
-            w(x[2]),
-            w(volume),
-            w(u[0]),
-            w(u[1]),
-            w(u[2]),
-            w(p),
-            w(temperature),
-        );
+        let args = (x[0], x[1], x[2], volume, u[0], u[1], u[2], p, temperature);
         self.call1(self.at_end, "execute_at_end", args)
     }
 
+    /// The remaining fuel is the budget of one call again (ADR 0782 D4).
     fn refuel(&mut self) {
-        let used = self.store.fuel_consumed().unwrap_or(0);
-        let left = self.fuel_added.saturating_sub(used);
-        if left < self.fuel_cap {
-            let d = self.fuel_cap - left;
-            let _ = self.store.add_fuel(d);
-            self.fuel_added += d;
-        }
+        let _ = self.store.set_fuel(self.fuel_cap);
     }
 
-    fn account(&mut self, before: u64) {
-        let used = self.store.fuel_consumed().unwrap_or(0).saturating_sub(before);
+    /// Records the fuel used since the last `refuel`.
+    fn account(&mut self) {
+        let used = self
+            .fuel_cap
+            .saturating_sub(self.store.get_fuel().unwrap_or(self.fuel_cap));
         self.max_fuel_per_call = self.max_fuel_per_call.max(used);
     }
 
@@ -301,18 +279,14 @@ impl Udf {
             .momentum
             .ok_or_else(|| format!("'{}' has no momentum_source", self.name))?;
         self.refuel();
-        let before = self.store.fuel_consumed().unwrap_or(0);
         let mut out = [0.0; 3];
         for (k, o) in out.iter_mut().enumerate() {
             let v = f
-                .call(
-                    &mut self.store,
-                    (w(x[0]), w(x[1]), w(x[2]), w(t), w(u[0]), w(u[1]), w(u[2]), k as i32),
-                )
+                .call(&mut self.store, (x[0], x[1], x[2], t, u[0], u[1], u[2], k as i32))
                 .map_err(|e| format!("user function '{}': momentum_source failed: {e}", self.name))?;
             *o = finite(&self.name, "momentum_source", v)?;
         }
-        self.account(before);
+        self.account();
         Ok(out)
     }
 
@@ -322,15 +296,14 @@ impl Udf {
             .profile
             .ok_or_else(|| format!("'{}' has no velocity_profile", self.name))?;
         self.refuel();
-        let before = self.store.fuel_consumed().unwrap_or(0);
         let mut out = [0.0; 3];
         for (k, o) in out.iter_mut().enumerate() {
             let v = f
-                .call(&mut self.store, (w(x[0]), w(x[1]), w(x[2]), w(t), k as i32))
+                .call(&mut self.store, (x[0], x[1], x[2], t, k as i32))
                 .map_err(|e| format!("user function '{}': velocity_profile failed: {e}", self.name))?;
             *o = finite(&self.name, "velocity_profile", v)?;
         }
-        self.account(before);
+        self.account();
         Ok(out)
     }
 
@@ -340,14 +313,10 @@ impl Udf {
             .viscosity
             .ok_or_else(|| format!("'{}' has no kinematic_viscosity", self.name))?;
         self.refuel();
-        let before = self.store.fuel_consumed().unwrap_or(0);
         let v = f
-            .call(
-                &mut self.store,
-                (w(x[0]), w(x[1]), w(x[2]), w(t), w(temperature), w(speed)),
-            )
+            .call(&mut self.store, (x[0], x[1], x[2], t, temperature, speed))
             .map_err(|e| format!("user function '{}': kinematic_viscosity failed: {e}", self.name))?;
-        self.account(before);
+        self.account();
         let v = finite(&self.name, "kinematic_viscosity", v)?;
         if v <= 0.0 {
             return Err(format!(
@@ -362,24 +331,13 @@ impl Udf {
     pub fn monitor(&mut self, x: Vec3, volume: f64, u: Vec3, p: f64, temperature: f64) -> Result<f64, String> {
         let f = self.monitor.ok_or_else(|| format!("'{}' has no monitor", self.name))?;
         self.refuel();
-        let before = self.store.fuel_consumed().unwrap_or(0);
         let v = f
             .call(
                 &mut self.store,
-                (
-                    w(x[0]),
-                    w(x[1]),
-                    w(x[2]),
-                    w(volume),
-                    w(u[0]),
-                    w(u[1]),
-                    w(u[2]),
-                    w(p),
-                    w(temperature),
-                ),
+                (x[0], x[1], x[2], volume, u[0], u[1], u[2], p, temperature),
             )
             .map_err(|e| format!("user function '{}': monitor failed: {e}", self.name))?;
-        self.account(before);
+        self.account();
         finite(&self.name, "monitor", v)
     }
 }
