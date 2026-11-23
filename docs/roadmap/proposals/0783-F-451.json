@@ -1,0 +1,8 @@
+{
+  "form": 1,
+  "adr": "0783",
+  "item": "F-451",
+  "base": "fcc84a84b9795ae2f7adc4927ed49d4a90a9c805",
+  "status": "done",
+  "note": "ADR 0783, 2026-11-23, done: rcfd duct-modes reads one rcfd-surface-series file per duct section and writes the rcfd-duct-modes export (one section: kind section; two or more: the axial split into the waves towards +x and -x); on the seven sections of the ADR 0351 X1 field the export equals the library's text with 0 differing bytes of 3337 as a file, 0 of 3338 on standard output and 0 of 3336 with the reference position 0.1, and one section gives the library's section export with 0 of 2091; a face moved outside the duct and a series cut to 127 or 96 of its 128 samples are refused with exit 3, the file, the JSON path and the registered texts; 5 of 5 mutations caught; baseline hashes pass; no library or solver source changed; the help gains six lines and the Studio capability inventory seven entries (one command, six options), none removed or changed, which the lead re-records with a coverage entry (rule 3, additive golden edit)."
+}

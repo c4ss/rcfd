@@ -198,3 +198,98 @@ a closed-form field.
 ## Open questions for the maintainer
 
 None.
+
+## Addendum 1: results (2026-11-23; the registered text above is unchanged)
+
+### What was built
+
+`crates/rcfd-cli/src/cmd_duct_modes.rs` (new, the command of D1 to D3); `crates/rcfd-cli/src/main.rs` (eight added
+lines: `mod cmd_duct_modes;`, the table line and the six help lines of D4); `crates/rcfd-cli/tests/duct_modes_f451.rs`
+(new, five tests) with `duct_modes_f451.mutation.patch` (MU1); the section "The `rcfd duct-modes` command" in
+[docs/acoustics.md](../acoustics.md). No file of `rcfd-post`, no solver source, no golden and no hash table was
+changed. The registered tests were run once, in the release profile, after the code
+(`cargo test -p rcfd-cli --release --test duct_modes_f451`); all five passed.
+
+### Checks
+
+| Id | Limit | Measured | Met |
+| --- | --- | --- | --- |
+| A1 | no differing byte | 0 of 3337 bytes | yes |
+| A1s | no differing byte | 0 of 3338 bytes | yes |
+| A1x | no differing byte | 0 of 3336 bytes (the two references differ from each other) | yes |
+| A2 | no differing byte | 0 of 2091 bytes | yes |
+| E1 | exit 3, T1 with face 5, no output file | exit 3; `<path>: invalid value at '$.faces[5].x': section point (0.0025, 0.09) lies outside the duct`; no file | yes |
+| E1c | exit 3, T1 with the first face outside the circle | exit 3; T1 with face 12, `section point (0.0025, 0.0625)`; no file | yes |
+| E2 | exit 3, T2, no output file (127 and 96 samples) | exit 3 each; `127 samples of dt = 0.000004812488746307894 s cover 1.9843749999999998 periods of 3246.760839074665 Hz, not a whole number of periods`, and the same with `96` and `1.4999999999999998`; no file | yes |
+| E2n | exit 0, a readable export | exit 0; eight modes read back | yes |
+| U1 | exit 2 each | exit 2 in the six cases | yes |
+| H1 | both usage lines in the help | both present | yes |
+| H2 | no removed line of `main.rs` | 8 lines added, 0 removed | yes |
+| B1 | pass unedited | `baseline_hashes` 3 passed (1 ignored, as on main); `cli` 8 passed; `fwh_cli` 2 passed; `docs_site` 2 passed | yes |
+
+Also run: `cargo test -p rcfd-cli --release --bins` (no unit test in the crate); `cargo fmt -p rcfd-cli --check`
+clean; `cargo clippy -p rcfd-cli --all-targets -- -D warnings` clean.
+
+### Mutations (scratch copy `mut/` of the tree at the code commit, its own target folder, each once)
+
+| Id | Caught by | Numbers |
+| --- | --- | --- |
+| MU1 (committed) | A1, A1s, A1x, A2, E2n | 1197, 1198, 1198 and 1033 differing bytes; E2n reads 5 modes, not 8 |
+| MU2 | A1, A1s, A1x, A2 | 1977, 1978, 2028 and 793 differing bytes |
+| MU3 | E1 | exit 0 and a file written; E1c stands after E1 in the same test and was not reached |
+| MU4 | E2 | the 127-sample file accepted (exit 0); the 96-sample case stands after it and was not reached |
+| MU5 | A1, A1s | 2370 and 2371 differing bytes; A1x 0, as expected (it gives `--x-ref`) |
+
+Five of five caught. MU1 is also caught by A2 and E2n, which the registration did not list (both pass `--k-max 80`).
+
+### The additive golden edit (rule 3; not made here, for the lead to re-record)
+
+The help gains the six lines of D4 and loses or changes none (H2). By the repository's own parser
+(`helpCapabilities` of `apps/studio-web/tests/support/capabilities.ts`, run on the new `rcfd --help` from a scratch
+script and compared with the committed `apps/studio-web/capabilities/inventory.json`): 210 entries of `rcfd --help`
+before, 217 now; 7 added, 0 removed, 0 changed. The added entries:
+
+    {"id":"cli:rcfd duct-modes","kind":"cli_command","source":"help","usage":"duct-modes <series.json> [<series.json> ...] --duct <shape> --frequency <hz> [--k-max <k>] [--x-ref <x>]"}
+    {"id":"cli:rcfd duct-modes --duct","kind":"cli_option","source":"help","parent":"cli:rcfd duct-modes"}
+    {"id":"cli:rcfd duct-modes --frequency","kind":"cli_option","source":"help","parent":"cli:rcfd duct-modes"}
+    {"id":"cli:rcfd duct-modes --k-max","kind":"cli_option","source":"help","parent":"cli:rcfd duct-modes"}
+    {"id":"cli:rcfd duct-modes --origin","kind":"cli_option","source":"help","parent":"cli:rcfd duct-modes"}
+    {"id":"cli:rcfd duct-modes --out","kind":"cli_option","source":"help","parent":"cli:rcfd duct-modes"}
+    {"id":"cli:rcfd duct-modes --x-ref","kind":"cli_option","source":"help","parent":"cli:rcfd duct-modes"}
+
+With them the totals in the `counts` member of the inventory rise (commands by 1, options by 6). The hand-kept map
+`apps/studio-web/capabilities/coverage.json` needs an entry for the id `cli:rcfd duct-modes` and one for the prefix
+`cli:rcfd duct-modes --` (as `cli:rcfd fwh` has), and `docs/studio-coverage.md` is regenerated from both
+(`npm run capabilities`). Until then `tests/unit/capabilities.spec.ts` of the Studio differs from the engine.
+
+### Deviations and disclosures
+
+- The registration's finding 5 stands: the "CLI help golden" of the acceptance is the Studio capability inventory;
+  there is no help text file under `crates/rcfd-cli/tests`.
+- Before the registered run the code was compiled and linted (`cargo clippy --release`), which runs no test.
+- E1c and the 96-sample case of E2 share a test with E1 and the 127-sample case, so a mutation that fails the first
+  does not reach the second (MU3, MU4).
+
+### Not run
+
+`npm test` in `apps/studio-web` (no file of it was touched; its capability test is expected to fail until the
+inventory is re-recorded); `npm run capabilities` (it writes the inventory, which is not edited here); the workspace
+suite and the other integration tests of `rcfd-cli` (rule 7). No heavy record exists: the five tests take about one
+second together.
+
+Size (agent), actual: done; 0; 0; 0; 180000
+
+### Decision by the registered rule
+
+A1, A1s, A1x and A2 show no differing byte; E1, E1c and E2 give exit 3 with the registered texts; E2n, U1, H1, H2 and
+B1 hold; every mutation is caught. **done**, with clause c5 completed by the lead's re-recording of the inventory at
+the merge.
+
+## For the lead: roadmap entries
+
+**F-451, proposed status: `done`.** The note entry (also in `docs/roadmap/proposals/0783-F-451.json`, checked with
+`python scripts/roadmap_proposals.py check`):
+
+> ADR 0783, 2026-11-23, done: rcfd duct-modes reads one rcfd-surface-series file per duct section and writes the rcfd-duct-modes export (one section: kind section; two or more: the axial split into the waves towards +x and -x); on the seven sections of the ADR 0351 X1 field the export equals the library's text with 0 differing bytes of 3337 as a file, 0 of 3338 on standard output and 0 of 3336 with the reference position 0.1, and one section gives the library's section export with 0 of 2091; a face moved outside the duct and a series cut to 127 or 96 of its 128 samples are refused with exit 3, the file, the JSON path and the registered texts; 5 of 5 mutations caught; baseline hashes pass; no library or solver source changed; the help gains six lines and the Studio capability inventory seven entries (one command, six options), none removed or changed, which the lead re-records with a coverage entry (rule 3, additive golden edit).
+
+No follow-up item is proposed.
