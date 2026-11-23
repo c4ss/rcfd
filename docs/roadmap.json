@@ -8918,7 +8918,7 @@
     ],
     "status": "todo",
     "acceptance": "Every limit not stated here is registered in the ADR before the run. With the solid case's opt-in for NewtonOptions::indefinite_retry, the inertia and the retry flag of every accepted increment written where the case reports its increments and shown by the CLI summary, with a warning when an accepted state has nu > 0; the 16^3 block of ADR 0694 run through the case file reports nu = 1 at full load; off by default, the default bits, the schema golden and the hash tables unchanged.",
-    "note": "Follow-up of F-780 (ADR 0719, 2026-11-16). NEEDS USER (2026-11-17): adds the inertia to the case output and CLI, which changes output goldens and schema. Maintainer (2026-11-18): the golden, schema or hash-table edit this item needs is approved under the class rule of agent rules version 2, rule 3: a change that only adds entries is re-recorded by the lead, with the diff in the ledger. The item may be issued."
+    "note": "Follow-up of F-780 (ADR 0719, 2026-11-16). NEEDS USER (2026-11-17): adds the inertia to the case output and CLI, which changes output goldens and schema. Maintainer (2026-11-18): the golden, schema or hash-table edit this item needs is approved under the class rule of agent rules version 2, rule 3: a change that only adds entries is re-recorded by the lead, with the diff in the ledger. The item may be issued. Lead (2026-11-23): issued by docs/adr/briefs/f842-solid-inertia-in-output.md (ADR 0780)."
   },
   {
     "id": "F-843",
