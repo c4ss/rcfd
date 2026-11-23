@@ -425,8 +425,49 @@ What was checked (a 2-D channel of height 0.12 m, 32 cells across, mode 1 at `co
   two modes outside the fitted basis comes back within `1.3e-4`.
 
 Limits: no mean flow, linear only, no impedance wall; the solver checks are two-dimensional channels (the `(m, 0)`
-modes of a rectangular duct); circular ducts are checked in the modal analysis only; one planar layer, no corner; not
-reachable from a case file or the CLI.
+modes of a rectangular duct); circular ducts are checked in the modal analysis only; one planar layer, no corner; the
+wave solver is not reachable from a case file or the CLI. The modal analysis of saved sections is, by the command below.
+
+### The `rcfd duct-modes` command (F-451, ADR 0783)
+
+`rcfd duct-modes` does the modal analysis above on saved pressure series and writes the `rcfd-duct-modes` export:
+
+```text
+rcfd duct-modes s0.json [s1.json ...] --duct rect:a,b|circ:radius --frequency hz
+         [--k-max k] [--x-ref x] [--origin y,z] [--out modes.json]
+```
+
+* Each file is an `rcfd-surface-series` document (section "Surface-series input" below) of one duct section: per face
+  its area, its position, its normal and the pressure series, inline (`pressure_csv` is not read). The duct axis is
+  `+x` and every face normal must be along it. The section coordinates of a face are `(y, z)` of its position less
+  `--origin` (default `0,0`): the corner of a rectangular duct `0 <= y <= a`, `0 <= z <= b`, the axis of a circular one.
+* `--frequency` is the one frequency analysed. Each series must cover a whole number of its periods (the sum that
+  takes the amplitude is exact only then). `rho0` and `c0` are read from the first file; the others must agree.
+* The modes fitted are all those with a cut-off wavenumber up to `--k-max` [1/m]; without it, up to `k = 2 pi f/c0`,
+  the propagating modes. A section needs at least as many faces as modes.
+* One file gives the amplitude of every mode on that section (`"kind": "section"`). Two or more files, at different
+  `x`, give per mode the wave towards `+x` and the wave towards `-x` at `--x-ref` (default: the first file's `x`)
+  and their powers (`"kind": "axial"`), with the closed-form axial wavenumber. `residual` is the largest section
+  residual: it says how much of the sampled field the fitted modes do not represent, in pascals.
+* The export goes to `--out`, or to standard output. Exit codes: 0 success, 1 I/O, 2 usage, 3 invalid input.
+
+A file that cannot be analysed is refused with its name, the JSON path and the reason, and nothing is written:
+
+```text
+s0.json: invalid value at '$.faces[5].x': section point (0.0025, 0.09) lies outside the duct
+s0.json: invalid value at '$.faces[0].p': 96 samples of dt = 0.000004812488746307894 s cover 1.4999999999999998 periods of 3246.760839074665 Hz, not a whole number of periods
+```
+
+A face counts as outside beyond `1e-6` of the duct size, the periods as not whole beyond `1e-6` of their number. Also
+refused: a uniform flow, a rotating surface, a face normal off the axis, faces of one file not on one plane, more modes
+than faces.
+
+Checked ([ADR 0783](adr/0783-f451-registration-the-rcfd-duct-modes-command.md)): on the synthetic rectangular field of
+the list above (seven sections, eight modes) the command's export equals the library's byte for byte, as a file, on
+standard output and with another reference position; one section gives the library's section export byte for byte;
+a face moved outside the duct and a series cut to 127 or 96 of its 128 samples are refused with the lines above.
+
+Limits: the axis is `+x` only; one frequency per run; the axial wavenumber is the closed form, not fitted; no flow.
 
 ### Circular ducts through the wave solver (F-453, ADR 0366; library only)
 
@@ -561,6 +602,7 @@ the inscribed polygon of the disk mesh). The piston impedance `rho c S (1 - J1(2
 | Proxies (Proudman, Curle, trailing edge) | `crates/rcfd-post/src/noise_proxies.rs` |
 | Surface-series reader, builder, adapter from `surfaces::Surface` | `crates/rcfd-post/src/surface_series.rs` |
 | CLI | `rcfd fwh` (`crates/rcfd-cli/src/cmd_fwh.rs`) |
+| CLI of the duct modes | `rcfd duct-modes` (`crates/rcfd-cli/src/cmd_duct_modes.rs`) |
 | Impedance and quiet boundaries of the compressible solver | `crates/rcfd-fv/src/compressible_bc.rs` (`impedance_wall`), `CompBc::Impedance` |
 | Mass-spring-damper wall of the compressible solver | `crates/rcfd-fv/src/compressible_bc.rs` (`MsdWall`, `piston_face`), `CompressibleSolver::set_msd_wall`, `msd_wall_state`, `set_msd_wall_state`, `msd_dt_limit` |
 | Sponge layer of the compressible solver | `crates/rcfd-fv/src/sponge.rs` (`Sponge`, `SpongeForm`, `SpongeLayer`, `rate_max_for_reflection`), `CompressibleSolver::set_sponge`, `set_sponge_memory`, `sponge_memories`, `set_sponge_memories`; the shifted form: `MatchedOptions`, `Sponge::planar_shifted`, `Sponge::corner` |
@@ -599,6 +641,8 @@ Output CSV: `observer,t,p_thickness,p_loading,p_total`. Exit codes: 0 success, 1
 The default time grid is the full valid window at the file sampling step. A `.json` spectrum target writes an
 `rcfd-spectra` v1 document (one `rcfd-spectrum` report per observer), anything else writes the 1/3-octave band CSV.
 The command prints the OASPL and dB(A) per observer to stderr.
+
+`rcfd duct-modes` is described in the section "The `rcfd duct-modes` command" above.
 
 ## Where to go next
 
