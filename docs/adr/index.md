@@ -494,7 +494,7 @@ One row per record of this folder, grouped by the roadmap category of the item i
 | [0702](0702-f784-registration-ramp-length-of-the-wake-stack-remap-from-the-wake-line-spacing.md) | F-784 registration: ramp length of the S'' wake-stack remap from the wake line spacing | REGISTERED | 2026-11-17 | 1 | F-784 | partial |
 | [0713](0713-f791-registration-one-growth-ratio-of-the-free-rows-across-the-span-layers.md) | F-791 registration: one growth ratio of the free rows of every C line across the span layers (construction S'''') | REGISTERED | 2026-11-17 | 1 | F-791 | done |
 
-## Claude and the MCP server (9)
+## Claude and the MCP server (10)
 
 | ADR | Title | Status word | Date | Addenda | Item | Item status |
 |---|---|---|---|---|---|---|
@@ -507,6 +507,7 @@ One row per record of this folder, grouped by the roadmap category of the item i
 | [0200](0200-f287-registration-runner-runs-that-continue-from-a-previous-run-with-a-step-cap.md) | F-287 registration: runner runs that continue from a previous run, with a step cap | REGISTERED | 2026-11-06 | 1 | F-287 | partial |
 | [0201](0201-f288-registration-adopt-matching-runs-after-an-mcp-server-restart.md) | F-288 registration: adopt matching runs after an MCP server restart | REGISTERED | 2026-11-06 | 1 | F-288 | partial |
 | [0741](0741-f271-registration-the-field-store-plan-as-the-default-of-start-run.md) | F-271 registration: the field-store plan as the default of start_run | REGISTERED | 2026-11-19 | 1 | F-271 | done |
+| [0774](0774-f862-registration-the-description-of-start-run-store-argument.md) | F-862 registration: the description of start_run's store argument says what the default is | REGISTERED | 2026-11-22 | 1 | F-862 | todo |
 
 ## Studio desktop app (15)
 

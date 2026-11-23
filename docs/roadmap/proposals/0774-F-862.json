@@ -1,0 +1,8 @@
+{
+  "form": 1,
+  "adr": "0774",
+  "item": "F-862",
+  "base": "d6e44b2759f0f0e46eae3a1c3537b0591c7768c6",
+  "status": "done",
+  "note": "ADR 0774, 2026-11-22, done: the description of start_run's store argument now ends \"Default plan; none is the way back to a run that stores only what its case asks for\" (ADR 0741 question 1, option (a)), held by a test that reads the live tools list; the whole list before and after is byte-equal with the old text put back, no golden, argument or default changed and no Studio call changed."
+}
