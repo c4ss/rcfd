@@ -391,3 +391,12 @@ The same entries are in `docs/roadmap/proposals/0771-F-881.json`.
 
 For the lead, not roadmap: `docs/adr/index.md` is generated and not current after this work; it is left to the lead
 (rule 9). No reference fragment was added.
+
+### The process check (row P)
+
+`python scripts/roadmap_proposals.py check docs/roadmap/proposals/0771-F-881.json`: "F-881: todo -> done; note + 522
+characters" and "F-888: new, todo, phase 9, deps F-881" (the follow-up), exit 0. `python scripts/process_report.py
+--check` on the commit of addendum 1: 2 failures, "generated file is not current" for `docs/adr/index.md` (this ADR)
+and for `CHANGELOG.md`; the second fails in the same way on an export of main d6e44b27, so it is not of this work. Both
+are left to the lead (rules 7 and 9). `cargo test -p rcfd-cli --release --test docs_site` on the tree with addendum 1: 2
+passed.
