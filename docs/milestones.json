@@ -156,6 +156,22 @@
       "headline": [
         "F-031"
       ]
+    },
+    {
+      "id": "fan-structure",
+      "title": "Structure and vibration of a fan rotor",
+      "result": "The rotor of the parametric 120 mm fan as an elastic solid: one blade clamped at the hub under the centrifugal and a pressure load with its modes at rest, its Campbell table at speed, the bladed hub by cyclic symmetry against the full rotor, the response to blade-passing forcing, and a polymer blade (orthotropy, temperature, creep, fatigue at a Campbell crossing) with the radiated power of the frame: demonstrations checked against closed forms, identities and mesh change, not against a measured blade.",
+      "cases": [
+        "crates/rcfd-fem/tests/sb_fan_blade.rs",
+        "crates/rcfd-fem/tests/sb_fan_blade_builder.rs"
+      ],
+      "reference": "no measured or published datum of this blade, rotor or frame is recorded (docs/structural-solver.md, head and section \"Limits\": not validated; docs/fan-project-breakdown.md, part G; docs/reference-data.md, section \"Wave 32A: fan geometry and sector mesh (ADR 0065)\", row \"Published fan or blade data\": none read); the comparisons are closed forms and identities: for the blade at rest the centrifugal resultant rho omega^2 V r_c, the pressure force, the strain energy as half the work of the loads, and the first bending frequency of the flat plate between the Euler-Bernoulli beam value 142.9 Hz and the wide-plate value 154.5 Hz, as recorded in docs/structural-solver.md, section \"The fan-blade demonstration\" (derived in ADR 0500); for the rotor at speed, the sector and the polymer blade, the comparisons named in the acceptance of F-406 and F-436, not yet run",
+      "headline": [
+        "F-387",
+        "F-406",
+        "F-436"
+      ],
+      "page": "docs/structural-solver.md"
     }
   ]
 }

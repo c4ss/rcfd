@@ -53,6 +53,7 @@ A simulation milestone is a named simulation with a stated result. Its per cent 
 | Differentially heated cavity | 13 | 12 | 1 | 0 | 96% | met |
 | Shock tube and wedge | 8 | 7 | 1 | 0 | 94% | met |
 | Packed bed pressure drop | 14 | 14 | 0 | 0 | 100% | met |
+| Structure and vibration of a fan rotor | 39 | 21 | 14 | 4 | 72% | not met |
 
 The headline items of each milestone:
 
@@ -84,6 +85,10 @@ The headline items of each milestone:
   - F-060, Density-based compressible solver (HLLC/Roe/AUSM, MUSCL, explicit RK plus implicit option): met.
 - **Packed bed pressure drop** (`packed-bed`): Steady laminar flow of air through a packed bed of 5 mm spheres (porosity 0.4) as a porous zone in the superficial-velocity form: the pressure gradient against the Ergun equation. Cases: `crates/rcfd-api/tests/sources.rs`, `cases/packed_bed/packed_bed.toml`. Reference: the Ergun equation with the constants 150 and 1.75, as recorded in docs/case-schema.md (source type porous, model ergun) and docs/audit/partials-group-6.md (section F-031: the constants checked only against a secondary source; Ergun (1952) recorded as not read).
   - F-031, Porous media, momentum sources, MRF (rotating frame) source terms: met.
+- **Structure and vibration of a fan rotor** (`fan-structure`): The rotor of the parametric 120 mm fan as an elastic solid: one blade clamped at the hub under the centrifugal and a pressure load with its modes at rest, its Campbell table at speed, the bladed hub by cyclic symmetry against the full rotor, the response to blade-passing forcing, and a polymer blade (orthotropy, temperature, creep, fatigue at a Campbell crossing) with the radiated power of the frame: demonstrations checked against closed forms, identities and mesh change, not against a measured blade. Cases: `crates/rcfd-fem/tests/sb_fan_blade.rs`, `crates/rcfd-fem/tests/sb_fan_blade_builder.rs`. Reference: no measured or published datum of this blade, rotor or frame is recorded (docs/structural-solver.md, head and section "Limits": not validated; docs/fan-project-breakdown.md, part G; docs/reference-data.md, section "Wave 32A: fan geometry and sector mesh (ADR 0065)", row "Published fan or blade data": none read); the comparisons are closed forms and identities: for the blade at rest the centrifugal resultant rho omega^2 V r_c, the pressure force, the strain energy as half the work of the loads, and the first bending frequency of the flat plate between the Euler-Bernoulli beam value 142.9 Hz and the wide-plate value 154.5 Hz, as recorded in docs/structural-solver.md, section "The fan-blade demonstration" (derived in ADR 0500); for the rotor at speed, the sector and the polymer blade, the comparisons named in the acceptance of F-406 and F-436, not yet run. See [structural-solver.md](structural-solver.md).
+  - F-387, Demonstration on a fan blade: static response to centrifugal and pressure load, and the modes at rest; user page: met.
+  - F-406, Demonstration on the fan rotor: Campbell diagram of the blade, the bladed disc by cyclic symmetry, response to blade-passing forcing: not started.
+  - F-436, Demonstration on the 120 mm fan: a polymer blade (orthotropy, temperature, creep, fatigue at a Campbell crossing) and the radiated power of the frame: not started.
 <!-- roadmap-milestones end -->
 
 ## What works today

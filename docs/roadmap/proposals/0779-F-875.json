@@ -1,0 +1,30 @@
+{
+  "form": 1,
+  "adr": "0779",
+  "item": "F-875",
+  "base": "d10ea0bd7fda1c7d067e3abe8ed67e36db66b102",
+  "status": "done",
+  "note": "ADR 0779, 2026-11-23, done: the milestone fan-structure (\"Structure and vibration of a fan rotor\") defined in docs/adr/0779-f875-milestones.json with the headline F-387, F-406 and F-436 and 39 memberships with reasons in docs/adr/0779-f875-mapping.tsv (21 done, 14 partly done, 4 not started, 72 per cent, not met); its reference is closed forms and identities, no measured or published blade being recorded; the five fan-titled structural items and the 24 cyclic titles placed (F-394 and F-406 members, 22 listed, F-604 listed); sample of 40 items read a second time with 0 disagreements; the command of addendum 1 leaves the nine existing milestones byte for byte, shown on a copy of main d10ea0bd.",
+  "follow_ups": [
+    {
+      "key": "fan-structure-published-reference",
+      "title": "Structural fan rotor: a published rotating blade or bladed disc read, recorded and compared",
+      "deps": [
+        "F-387",
+        "F-394",
+        "F-396"
+      ],
+      "acceptance": "Every limit not stated here is registered in the ADR before the run. A published case of a rotating blade or a bladed disc with its natural frequencies (measured, or a benchmark solution) is read, and its geometry, material and values are recorded with their place in the source as a fragment under docs/reference-data.d; the solid solver reproduces those frequencies at rest and at speed within a band registered before the run from the stated uncertainty of the source; a source that cannot be obtained is recorded as not obtained and the item stays partial. Milestone fan-structure, headline."
+    },
+    {
+      "key": "fan-sector-at-speed",
+      "title": "Fan rotor at speed by a cyclic sector: the Campbell table of the bladed hub against the full rotor",
+      "deps": [
+        "F-406",
+        "F-500",
+        "F-499"
+      ],
+      "acceptance": "Every limit not stated here is registered in the ADR before the run. One sector of the bladed hub of F-406 at registered speeds from rest to the registered maximum, with stress stiffening and spin softening and, as a second table, with the Coriolis term: for every harmonic index 0 to Z/2 the sector frequencies equal those of the full rotor on the coarse mesh within 1e-6 (heavy record), at rest they have the bits of the sector of F-406, and every crossing of the engine orders is listed with its nodal diameter. Milestone fan-structure, headline."
+    }
+  ]
+}
