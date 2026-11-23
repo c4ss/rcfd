@@ -1,0 +1,16 @@
+{
+  "form": 1,
+  "adr": "0781",
+  "item": "F-852",
+  "base": "e2fe571b2374400f97ee598252a87207cc146912",
+  "status": "done",
+  "note": "ADR 0781, 2026-11-23, done: the cause is a lost event: the settings page learned of the session Redo makes only from the service's event `created` and replaced its events listener when the session shown changed, so a batch already posted to the old subscription was dropped and the page stayed on \"Session … is not on the service\" while undo.spec.ts:268 waited 30 s for the section list; shown by the new spec undo-session-events.spec.ts, which delays the events by 300 ms in the main process and failed on the unfixed source at the registered line (the state asserted by a control: no session.list after session.create, unchanged after 2 s; the same hook without delay passed); fixed by one subscription per connection in SettingsPage.tsx; the new spec 30 of 30 and undo.spec.ts unedited 30 of 30 on Windows under load, no skip, retry or longer limit; the fix reverted is caught (committed mutation); without the delay the time-out did not occur in 30 runs on the unfixed source; npm test 812 passed, 4 failed outside the settings page and undo (two from a stale f447_bench of the main checkout, two with no cause established).",
+  "follow_ups": [
+    {
+      "key": "undo-key-while-busy",
+      "title": "Studio: undo.spec.ts:139 fails under load, a Ctrl+Z pressed before the redo before it has finished is dropped",
+      "deps": ["F-829"],
+      "acceptance": "Every limit not stated here is registered in the ADR before the run. The cause of the failure of apps/studio-web/tests/e2e/undo.spec.ts:139 (after Ctrl+Shift+Z and Ctrl+Z the value stays 700; 1 of 30 runs under load, ADR 0781 addendum 1) is found and shown by a test that fails without the fix; the test at line 128 then passes a registered number of consecutive runs on Windows. The test is not skipped, retried or given a longer limit to make it pass."
+    }
+  ]
+}

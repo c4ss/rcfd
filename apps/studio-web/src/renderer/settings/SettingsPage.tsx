@@ -6,7 +6,7 @@
 // which cannot be undone, asks first in words that name what is lost. F-837 (the maintainer, 2026-11-17): when the
 // session holds case-editor changes not saved, Close session asks with the shared save-or-discard prompt
 // (../case/closeGuard.tsx: Save and close, Close and lose them, Keep editing) instead of that question.
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { ServiceState } from '../../shared/service.js';
 import { dispatch, history, watchEvents, watchServiceState } from '../actions/index.js';
 import { NO_INVERSE, statusFacts } from '../../shared/actions/loss.js';
@@ -88,7 +88,13 @@ export default function SettingsPage() {
     };
   }, [connected, instance, listSessions]);
 
-  // the service's events: settings changes of the session in use (from anyone), run states, sessions made and closed
+  // the service's events: settings changes of the session in use (from anyone), run states, sessions made and closed.
+  // One subscription per connection and service instance, whatever session is shown (F-852, ADR 0781): the listener
+  // reads the session through a reference. Subscribing again at each change of session left an interval in which a
+  // batch the main process had already posted to the old subscription found no listener here and was lost, and with it
+  // the `created` of the session Redo had just made, so the page kept saying that session was not on the service.
+  const shown = useRef(session);
+  shown.current = session;
   useEffect(() => {
     if (!connected) return;
     let stop: (() => void) | null = null;
@@ -99,7 +105,7 @@ export default function SettingsPage() {
       let list = batch.missed > 0;
       for (const e of batch.events) {
         if (e.kind === 'created' || e.kind === 'closed') list = true;
-        if (e.session !== session) continue;
+        if (e.session !== shown.current) continue;
         if (e.kind === 'setting_changed') settings = true;
         if (STATE_KINDS.has(e.kind)) state = true;
       }
@@ -115,7 +121,7 @@ export default function SettingsPage() {
       live = false;
       stop?.();
     };
-  }, [connected, instance, session, listSessions]);
+  }, [connected, instance, listSessions]);
 
   const choose = (id: string) => {
     location.hash = `${SETTINGS_HASH}/${encodeURIComponent(id)}`;
