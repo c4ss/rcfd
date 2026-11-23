@@ -307,8 +307,8 @@ export class ServiceClient {
     this.target = { host: s.host, port: s.port };
     this.setState({ pid: s.pid });
     await writeRecord(cfg.stateDir, { host: s.host, port: s.port, pid: s.pid, rcfd: cfg.rcfd, startedAt: new Date().toISOString() });
-    // a shutdown that ended this child while its record was being written removed the record too early
-    if (this.stopped && !processAlive(s.pid)) await removeRecord(cfg.stateDir).catch(() => undefined);
+    // a shutdown that came while the record was being written ended this child and removed the record too early
+    if (this.stopped) await removeRecord(cfg.stateDir).catch(() => undefined);
     return this.target;
   }
 
