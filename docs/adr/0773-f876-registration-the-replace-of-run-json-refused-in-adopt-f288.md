@@ -228,3 +228,20 @@ Why LF and not LC: the probe series did not name LC as lengthening the hold (H3:
 P0's 1323.0 ms, a factor 1.39, under the factor 2 of the rule, and no would-fail iteration), and LC is the part of L1
 that slowed the test eighty times beside the other agent's solves. The choice is taken after these results and is
 recorded as such; it does not change what is counted or what passes.
+
+## Amendment 2 (2026-11-23, after R1b, change T and the run of M1; before M2, M3, A0 and A1)
+
+M1 (no comparison of `solver_version` in `RunKey::matches`) does not fail A-N: the server adopts decoy (h), which A-N
+holds paused, and waits for its end without a limit (`wait_end`, "no time limit, as in process"), so the test does not
+end. Observed: no new run folder (the ten decoys only), (h) with `solver_version` `unknown` paused, the test running
+for 81 minutes; then stopped by this work. That is a test that does not pass, not a failing test, and the lead's push
+script cannot run it as a committed mutation. M2 would meet the same wait (its decoy (h) is paused as well) and is not
+run. The set-up of the mutations is corrected as follows:
+
+* **M1** is recorded as run: not passing, by a wait without end (above), not as a failure.
+* **M3**, the committed mutation instead of M1 (`crates/rcfd-mcp/tests/adopt_f288.mutation.patch`, the same first
+  line): `choose` in `crates/rcfd-workspace/src/design.rs` no longer leaves out `failed` and `cancelled` runs. Decoys
+  (i) and (j) carry the full key, and (j), the newest, has ended, so the server adopts it and A-N must fail at its
+  assertion `runs_adopted == 0`. Expected: A-N fails.
+* Row a5 and the decision rule read M3 for M1 and M2. That A-N catches an adopted paused decoy only by not ending is
+  reported under "Open questions for the maintainer"; it is not changed here.
