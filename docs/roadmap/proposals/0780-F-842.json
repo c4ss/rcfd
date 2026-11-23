@@ -1,0 +1,8 @@
+{
+  "form": 1,
+  "adr": "0780",
+  "item": "F-842",
+  "base": "19debd2d5d83f850e366d1f01182c46781842859",
+  "status": "todo",
+  "note": "ADR 0780, 2026-11-23, todo: registered and stopped before code, because the acceptance presupposes a nonlinear static analysis in the solid case file (the file has static and modal only, reports no increments and has no key for the hyperelastic material or the incompatible-mode formulation of the 16^3 block) and a CLI subcommand for solid cases (F-405, todo); the inertia is already returned by the library (LoadStep::inertia, LoadStep::retried); the opt-in key, the report keys, the warning's text and the checks are registered for the next issue; where the analysis and the subcommand are built is open question 1 of the ADR (recommended: a new item for the analysis, the CLI summary moved to F-405)."
+}
