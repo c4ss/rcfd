@@ -272,3 +272,192 @@ by itself make the item partial; it is reported, as ADR 0786 did.
 ## Open questions for the maintainer
 
 None at registration.
+
+## Addendum 1: results (2026-11-23)
+
+All runs were made on the lead's Windows machine, with the engine of this work's own release build (scratch target
+folder, from c4bd79f3), in the packaged Studio, while other agents ran on the machine. Logs and records are in the
+scratch folder; the names in brackets are their files. Line numbers of `f837.spec.ts` are those of main c4bd79f3
+(the test at 198) unless "now" is said; after the fix the test is at line 200.
+
+### The cause
+
+**H1 is shown for both failures, as the reading registered it; H2 and H3 are excluded.** Both failures are a feed
+entry of this window's own earlier write reaching the panel at a time the test does not control (the feed is asked
+every 400 ms).
+
+- **The first failure (line 223, the alert not found): the cause is the order of the test's steps.** The entry of
+  the Write of line 207 arrives after the other writer's `writeFile` of line 219 and before the typed value is
+  committed. The panel, with nothing typed, reads the file again, shows `max_runs` 3 and holds the other writer's
+  hash; the Write of line 222 is then written, the status "Written to …" stays, and no alert comes.
+- **The second failure (line 242, two alerts): the cause is in the Studio.** The entry of "Undo anyway" reaches the
+  panel reopened on the refused file. The panel took any entry as another writer's change, and for a refused file it
+  counted values as typed when none was; it said "was changed by another writer; the values typed here are kept",
+  which was untrue in each part.
+
+| Record | Runs | Failed at 223 (alert not found) | Failed at 242 (two alerts) | What the record shows |
+|---|---|---|---|---|
+| B0, whole `npm test`, unchanged tree [b0.log] | 1 | 0 | 1 | the second failure, in a whole run |
+| D1, unchanged test alone [d1-*.log] | 10 | 0 | 2 | |
+| D2, instrumented [d2-*.json] | 20 | 0 | 2 | in 3 more runs the conflict note appeared about 50 to 60 ms after the assertion of line 242 had passed (5 of 20 with the note under the reopened panel) |
+| D3 (a), the other writer before the entry [d3a-*] | 10 | 8 of the 8 whose premise held | 0 | in the 8: `max_runs` showed 3 before the Write (49 to 56 ms after the entry was received), the status "Written to" stayed; the 2 without the premise passed |
+| D3 (b), the entry before the other writer [d3b-*] | 5 | 0 | 0 | 5 of 5 passed |
+| D3 (c), the undo's entry after the reopened panel [d3c-*] | 10 | 0 | 8 | see the deviations: 8 of the 8 runs in which the entry was received after the refused file showed |
+| D3 (d), the undo's entry before the panel is closed [d3d-*] | 5 | 0 | 0 | 5 of 5 passed |
+
+- **The error texts are the recorded ones.** (a): `getByRole('region', { name: 'Runner budgets' }).getByRole('alert')`,
+  "Expected substring: was changed by another writer since it was read: nothing was written", "element(s) not found",
+  as in `push-f888-2.log` lines 1174 to 1183. (c), D1, D2 and B0: "strict mode violation … resolved to 2 elements", the
+  second `<p role="alert" tabindex="-1" data-note="conflict" …>`, as in `n1-5.log` of ADR 0786.
+- **H2 is excluded.** In every record with two alerts the panel was absent from the page between the Escape and the
+  reopening, the reopened panel first showed no note, and the conflict note came 27 to 47 ms after the main process
+  received the undo's entry (in D3 (c) 228 to 329 ms after the panel was reopened, the refused file's alert alone
+  before it). Nothing was left from an earlier step.
+- **H3 is excluded.** In the failures of (a) a note was there throughout (the status of a write), the form had shown
+  the other writer's value before the Write, and whether the test failed followed the time of the entry in 10 of 10
+  runs of (a) and 5 of 5 of (b).
+- **The first failure did not show without forcing** (0 of 30 in D1 and D2, 0 of 1 in B0). In D2 the other writer
+  wrote 73 to 153 ms after the status of line 208 and the value was committed 41 to 58 ms later; the entry of the
+  first Write was received either 109 ms before to 57 ms after that status or 361 to 403 ms after it, in no run inside
+  the window. Run alone, the test's steps and the poll keep nearly the same phase. With a window of 41 to 58 ms and
+  a poll of 400 ms the arithmetic of the registration gives 10 % to 15 % for a run whose phase is not fixed. That the
+  lead's two failures and P1 of ADR 0786 were this cause rests on D3 (a) and on the agreement of its error text and
+  line with those logs.
+
+### Deviations
+
+- **D3 (a):** the registration put the other writer's write "directly after the status of line 208". The file reads
+  of lines 209 to 216 stayed before it (line 209 reads the file the write would change); only the screenshot of line
+  217 was left out. 10 runs were made, not "up to 10 for 5": all 8 with the premise are counted. The same holds for
+  D3 (c), N3 and M4.
+- **D3 (c): the premise flag of the instrument was wrong in 5 runs.** It compared the number of entries with the
+  number before "Undo anyway"; where the entry of the first Write arrived between the two readings the flag said the
+  premise did not hold, and the wait that followed ended at once. The reading above uses the times in the records
+  instead: the undo's entry was received 188 to 287 ms after the refused file's alert showed in 8 runs (two alerts in
+  all 8) and before the panel was reopened in 2 (both passed). By the flag as registered it is 3 of 3.
+- **D2 (runs 3 and 11):** the main process received the undo's entry 9 ms before the reopened panel was in the page,
+  and the note came with the refused file's alert 46 to 47 ms after that. The registration's wording for H1
+  ("received after the reopened panel has read the file") holds for the main process's time in the other records; in
+  these two the entry reached the page after the panel was mounted, which is the same path.
+- **M1, twice an invalid run.** The mutation as first written (the line removed) does not compile (`read` unused), so
+  the packaged Studio was the unmutated one and E1 passed 4 of 4, twice (the second time because a scratch script did
+  not apply the correction) [m1-e1-invalid-build-failed*.log]. The mutation was written again with the line replaced
+  by `void read;`; that run is the one in the table. U1 failed under both forms.
+- **The edit of an existing test in place** (`f837.spec.ts`), on the brief's instruction, as registered.
+- `apps/studio-web/README.md` was not updated.
+
+### The fix
+
+As registered, both parts, commit f91de001.
+
+- `src/renderer/runs/budgetsFeed.ts` (new): `feedStep` (the same hash: nothing; another hash: the values with
+  nothing typed, the note with values typed) and `typedIn` (a field differs from the value read).
+- `src/renderer/runs/RunExtras.tsx`, `BudgetsPanel`: on a new feed entry the panel reads the file and asks
+  `feedStep`; `data-file-change` on the region is the entry it has finished with. Beyond the registered text: the
+  look waits while a write of this window is on its way and is made after it (an answer read before the write would
+  otherwise be compared after it), and what the panel holds is kept in a ref as well as in state, so that an answer
+  arriving before the next render is compared with the present file.
+- `tests/e2e/f837.spec.ts`: the value is typed and committed before the other writer writes; after the reopening the
+  test waits for the panel to have finished with the entries of its two writes. The diff adds 9 lines of code and
+  comment, moves one (`writeFile`), and removes no assertion.
+- New tests: `tests/unit/f891.spec.ts` (U1, 3 tests), `tests/e2e/f891.spec.ts` (E1, 4 tests).
+
+### Checks
+
+| Check | Limit | Measured | Met |
+|---|---|---|---|
+| C1 | one hypothesis shown | H1 for both failures, by D3 (a) to (d), D1, D2 and B0 | yes |
+| U1 | pass | 3 of 3 passed at the first run and in each run of N2 | yes |
+| E1 | pass | 4 of 4 passed at the first run and in each run of N2 | yes |
+| M1 (committed) | U1 and E1 (a) fail | U1: 1 failed ("nothing" expected, "take" received); E1 (a): failed, 1 alert where none is expected [m1c-*.log] | yes |
+| N1 | 20 of 20 | 20 of 20 [n1-*.log] | yes |
+| N2 | 5 of 5 | 5 of 5: `f837.spec.ts:200` (now), U1 and E1 passed in each of five consecutive whole runs of `npm test` [n2-*.log] | yes |
+| N3 | 5 of 5 | 6 of the 6 runs whose premise held passed (10 runs made, all 10 passed) [n3-*] | yes |
+| K1 | 0 | 0: no assertion removed, no retry, skip, fixme, slow or time-out; `playwright.config.ts` untouched (`retries: 0`) | yes |
+| G1 | exit 0 | `npm run typecheck`: exit 0 in each run. `npm test`: exit 1 in each of the five runs of N2, by tests outside this item (below) | no |
+| G2 | pass | see the end of this addendum | see the end |
+
+| Run of N2 | Start to end | `f837.spec.ts:200`, U1, E1 | Whole run | Other failures | `rcfd` processes of this work left |
+|---|---|---|---|---|---|
+| 1 | 21:03 to 21:18 | pass | 860 passed, 1 failed | `responsiveness.spec.ts:260` | 0 |
+| 2 | 21:18 to 21:37 | pass | 857 passed, 2 failed, 2 did not run | `project.spec.ts:245`, `responsiveness.spec.ts:260` | 1 (`rcfd serve`, started 21:29:15) |
+| 3 | 21:37 to 21:52 | pass | 860 passed, 1 failed | `responsiveness.spec.ts:260` | 0 new |
+| 4 | 21:53 to 22:06 | pass | 860 passed, 1 failed | `responsiveness.spec.ts:260` | 0 new |
+| 5 | 22:07 to 22:20 | pass | 860 passed, 1 failed | `responsiveness.spec.ts:260` | 0 new |
+
+**Mutations (rule 16),** each applied to the worktree, built, packaged, run and removed:
+
+| Mutation | Run | Result |
+|---|---|---|
+| M1 (committed, `tests/unit/f891.spec.mutation.patch`): the same hash no longer means "nothing" | U1, E1 | U1 failed (1 of 3); E1 (a) failed, the conflict note where no alert is expected |
+| M2: "typed" true for every refused file | U1, E1 | U1 failed (1 of 3); E1 (c) failed, 2 alerts where 1 is expected; E1 (a) and (b) passed |
+| M3: a conflict answered to a Write shown as a written status | `f837.spec.ts` (the test alone) | failed at the alert of the refusal (line 228 now) |
+| M4: the fixed test with the old order of the steps, under the forced order | 8 runs | 6 of the 6 whose premise held failed at the alert of the refusal with "element(s) not found"; the 2 without it passed |
+| M5: the forced undo sends the hash the last write left | `f837.spec.ts` (the test alone) | failed at the status "is as it was" (line 239 now) |
+
+D3 (a) and (c) are the negative controls: the unfixed sequences under the forced order, 8 of 8 failures each.
+
+### Other tests that failed in the runs
+
+None was changed, retried or skipped.
+
+- `responsiveness.spec.ts:260` (F-832): failed in all five runs of N2 (in run 1 one task of 355 to 442 ms in
+  `workspace.tab` in each pass); passed in B0 (20:22 to 20:39). The subject of F-890.
+- `project.spec.ts:245` (close: back to no project open): the test's time-out of 60 s in B0 and in run 2 of N2;
+  passed in the other four.
+- `undo.spec.ts:268` (Close session cannot be undone): in B0 only, a click that waited 30 s for the option "solver"
+  of the list "Sections of the case" (`undo.spec.ts:66`); the two tests after it did not run.
+- **Processes.** One `rcfd serve` of this work's target folder was left after B0 (pid 14984, started 20:32:03) and
+  one after run 2 of N2 (pid 13936, started 21:29:15): the two whole runs in which `project.spec.ts:245` timed out,
+  and no other run. Both were started with `--ui --journal-dir <tmp>/rcfd-studio-state-…/journals`. This work ended
+  both after counting them (they were its own) and ended no other process. This is the subject of F-892 and is
+  reported for it, not examined here.
+
+### What was not run
+
+- CI: no run (the work is not pushed). On CI only U1 runs; the lead's push reads it.
+- `cargo fmt` and `cargo clippy`: no crate was touched. `baseline_hashes`: no solver file was touched.
+- No shared helper under `tests/support/` was changed.
+
+Size (agent), actual: done; 0; 6 (one whole `npm test` before the fix, five after); 0; about 210000 (the registered reading, and the feed and journal sources of the engine, the lead's two logs and the records of the runs)
+
+### Decision
+
+By the registered rule: **done.** The cause is shown by tests that fail without the fix (C1 with H1 for both
+failures; U1 and E1 pass and fail under M1; N3 passes and M4 fails), the test passes 20 of 20 runs alone and 5 of 5
+whole runs of `npm test`, and keeps its checks (K1, M3, M5). G1 is not met, by `responsiveness.spec.ts:260` in every
+run and `project.spec.ts:245` in one, outside this item's files; by the registered rule that does not make the item
+partial. The status proposed is done.
+
+### Open questions for the maintainer
+
+None.
+
+One thing was read and not run, and is proposed as a follow-up for the lead to place: after a refused Write the
+panel holds the other writer's file while the form still shows the values of before it, so a second press of Write
+would send those older values as changes, on the new hash, and the engine would write them over the other writer's
+values without a further question (`RunExtras.tsx`, `outcome` and `changes`).
+
+## For the lead: roadmap entries
+
+The same entries are in `docs/roadmap/proposals/0788-F-891.json`.
+
+Status proposed for F-891:
+
+> done
+
+Note entry:
+
+> ADR 0788, 2026-11-23, done: both failures are a change-feed entry of the window's own earlier write reaching the runner-budgets panel at a time the test does not control (the feed is asked every 400 ms; the feed does not watch .rcfd/, so the entries are the journal lines of set_runner_config). At line 223 the entry of the first Write arrived after the other writer's write and before the value was typed, the panel read the file again and the Write had nothing to refuse: the cause is the test's order (forced, 8 of 8 failed with the lead's error text; the entry first, 5 of 5 passed). At line 242 the entry of the undo reached the panel reopened on a refused file, and the panel called it another writer's change with typed values: the cause is in the Studio (forced, 8 of 8 with two alerts; 5 of 31 unforced runs). Fix: the panel reads the file on an entry and acts only on another hash, and calls values typed only when a field differs; the test types before the other writer writes and waits for the panel by data-file-change. The test passed 20 of 20 runs alone and 5 of 5 whole npm test runs; five mutations caught, one committed against the new unit test. npm test still ends with exit 1 by responsiveness.spec.ts:260 and at times project.spec.ts:245.
+
+Follow-up 1 (key `budgets-second-write-after-refusal`), deps F-837:
+
+> Studio: after a refused Write of the runner's budgets, a second Write sends the form's older values over the other writer's. Acceptance: Every limit not stated here is registered in the ADR before the run. Whether a second press of Write after the refusal "was changed by another writer since it was read: nothing was written" writes values the user did not type over the other writer's values (read in apps/studio-web/src/renderer/runs/RunExtras.tsx at ADR 0788, 2026-11-23, not run) is shown by a test in the packaged Studio; if it does, the panel then writes only the keys the user typed or asks first (G18), and that test passes.
+
+### Checks at the end (G2)
+
+- `cargo test -p rcfd-cli --release --test docs_site`, with this file as it stands: 2 passed.
+- `python scripts/roadmap_proposals.py check docs/roadmap/proposals/0788-F-891.json`: exit 0 (F-891 todo to done, one
+  new item).
+- `python scripts/process_report.py --check`: exit 1 with 1 failure, a generated file that is only not current,
+  `docs/adr/index.md`. It is left to the lead (rules 7 and 9).

@@ -1,0 +1,16 @@
+{
+  "form": 1,
+  "adr": "0788",
+  "item": "F-891",
+  "base": "c4bd79f3ca84eba120fb7727d197e1af6acb3e59",
+  "status": "done",
+  "note": "ADR 0788, 2026-11-23, done: both failures are a change-feed entry of the window's own earlier write reaching the runner-budgets panel at a time the test does not control (the feed is asked every 400 ms; the feed does not watch .rcfd/, so the entries are the journal lines of set_runner_config). At line 223 the entry of the first Write arrived after the other writer's write and before the value was typed, the panel read the file again and the Write had nothing to refuse: the cause is the test's order (forced, 8 of 8 failed with the lead's error text; the entry first, 5 of 5 passed). At line 242 the entry of the undo reached the panel reopened on a refused file, and the panel called it another writer's change with typed values: the cause is in the Studio (forced, 8 of 8 with two alerts; 5 of 31 unforced runs). Fix: the panel reads the file on an entry and acts only on another hash, and calls values typed only when a field differs; the test types before the other writer writes and waits for the panel by data-file-change. The test passed 20 of 20 runs alone and 5 of 5 whole npm test runs; five mutations caught, one committed against the new unit test. npm test still ends with exit 1 by responsiveness.spec.ts:260 and at times project.spec.ts:245.",
+  "follow_ups": [
+    {
+      "key": "budgets-second-write-after-refusal",
+      "title": "Studio: after a refused Write of the runner's budgets, a second Write sends the form's older values over the other writer's",
+      "deps": ["F-837"],
+      "acceptance": "Every limit not stated here is registered in the ADR before the run. Whether a second press of Write after the refusal \"was changed by another writer since it was read: nothing was written\" writes values the user did not type over the other writer's values (read in apps/studio-web/src/renderer/runs/RunExtras.tsx at ADR 0788, 2026-11-23, not run) is shown by a test in the packaged Studio; if it does, the panel then writes only the keys the user typed or asks first (G18), and that test passes."
+    }
+  ]
+}
