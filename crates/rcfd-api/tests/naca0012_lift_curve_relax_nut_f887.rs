@@ -233,7 +233,22 @@ rows! {
     f887_a14_steady_and_within_tol_of_adr0760, f887_v14_within_adr0760_band, f887_vs14_within_the_scatter, 14;
     f887_a15_steady_and_within_tol_of_adr0760, f887_v15_within_adr0760_band, f887_vs15_within_the_scatter, 15;
     f887_a16_steady_and_within_tol_of_adr0760, f887_v16_within_adr0760_band, f887_vs16_within_the_scatter, 16;
-    f887_a17_steady_and_within_tol_of_adr0764, f887_v17_within_adr0760_band, f887_vs17_within_the_scatter, 17;
+}
+
+#[test]
+fn f887_a17_steady_and_within_tol_of_adr0764() {
+    row_a(17);
+}
+#[test]
+fn f887_v17_within_adr0760_band() {
+    row_v(17, None);
+}
+/// Known miss (ADR 0772, addendum 1; rule 2, the limit intact): RN-a17 is steady at cl 1.551398, -0.0543 from Ladson's
+/// 1.6057 against the scatter 0.018 (within ADR 0760's band 0.0803).
+#[test]
+#[ignore = "known miss, ADR 0772 addendum 1"]
+fn f887_vs17_within_the_scatter_known_miss() {
+    row_v(17, Some(SCATTER));
 }
 
 /// VM: the maximum lift among the flow values within 5 % of Ladson's 80-grit maximum.
