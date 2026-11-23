@@ -245,3 +245,113 @@ run. The set-up of the mutations is corrected as follows:
   assertion `runs_adopted == 0`. Expected: A-N fails.
 * Row a5 and the decision rule read M3 for M1 and M2. That A-N catches an adopted paused decoy only by not ending is
   reported under "Open questions for the maintainer"; it is not changed here.
+
+## Addendum 1: results (2026-11-23)
+
+Commits: 44827995 (this registration, alone), 6fe84518 (amendment 1), 2b82e89c (change T), 9f3e97da (amendment 2),
+e8d15386 (the committed mutation M3), then this addendum and the proposal file. Release builds, `CARGO_TARGET_DIR` in
+the scratch folder. The full records (`PCs.tsv`, `P0.tsv`, `P0a.tsv`, `PLC.tsv`, `PLF.tsv`, `PLFa.tsv`, `series-*.log`,
+`M1.log`, `M3.log`) and the scripts (`probe/`, `loads.py`, `series.sh`, `summary.py`, `make_change_t.py`) are in the
+scratch folder; the tables below are their summary.
+
+### The checks
+
+| Id | Measured | Limit met |
+|---|---|---|
+| PC1 | 10 of 10: the rename refused with code 5 for the whole hold (5 to 7 attempts, 1018 to 1185 ms), the probe's own pid named at every refused attempt; `atomic_write` under the same hold returned `Retry` with 12 attempts and `Os { code: 5, PermissionDenied }` after 540 to 550 ms, 10 of 10 | yes |
+| PC2 | 10 of 10 replaced at the first attempt (0.7 to 1.3 ms); `atomic_write` 10 of 10 `Ok` | yes |
+| PC3 | 10 of 10 refused for the hold with code 32 (not 5), own pid named on the source | yes |
+| a2 | the table below: refused attempts in all three fresh series, none in the two aged ones; every refused attempt (40) names pid 4, the System process, on the target and nothing on the source | yes: one class, H2 |
+| H3 | longest refusal PLC 1842.5 ms, PLF 1246.2 ms, against P0 1323.0 ms (factors 1.39 and 0.94); no would-fail iteration in any series | the load is not named as lengthening the hold |
+| a3-R | R0 20 of 20 pass (9.89 to 37.38 s); R1 1 run made (amendment 1): A-N passed, A-R failed (another failure, below); R1b 18 of 20 pass, 2 failed (another failure, below); no `Retry` in any run | reported; the F-876 failure not reproduced in 41 runs |
+| a4 | A0 20 of 20 pass (6.06 to 9.29 s); A1 (LF) 20 of 20 pass (10.37 to 53.75 s) | yes |
+| a5 | M3 caught: A-N failed at `runs_adopted` (0 expected, 1 found: the failed decoy (j) adopted), 1.17 s. M1: A-N does not end (amendment 2), stopped after 81 minutes. M2 not run (amendment 2) | yes, by M3 |
+| a6 | A-N runs in the default build under its old name; the record `a_n_record_before_adr0773` is ignored; no retry of a test; `git diff main -- crates/rcfd-project/src/atomic.rs` empty | yes |
+| E | `cargo test -p rcfd-mcp --release --lib`: 18 passed, 1 ignored (an existing ignore) | yes |
+| P | `cargo fmt -p rcfd-mcp --check` and `cargo clippy -p rcfd-mcp --all-targets -- -D warnings` clean; `docs_site`, `roadmap_proposals.py check` and `process_report.py --check` as the report of this work states | see the report |
+
+The probe series:
+
+| Series | Load | Mode | n | Refused iterations | Would-fail | Longest refusal | Holders at refused attempts |
+|---|---|---|---|---|---|---|---|
+| P0 | L0 | fresh | 300 | 6 | 0 | 1323.0 ms | System (pid 4), 19 of 19 attempts, code 5 |
+| P0a | L0 | aged | 100 | 0 | 0 | none | none |
+| PLC | LC | fresh | 300 | 6 | 0 | 1842.5 ms | System (pid 4), 12 of 12, code 5 |
+| PLF | LF | fresh | 300 | 9 | 0 | 1246.2 ms | System (pid 4), 9 of 9, code 5 |
+| PLFa | LF | aged | 100 | 0 | 0 | none | none |
+
+### What the measurements say
+
+* The signature of the failure (`Retry`, 12 attempts, code 5 on the target) is what a handle on run.json without
+  delete sharing gives (PC1), and not what a handle with every sharing mode gives (PC2, the way the test, the server
+  and the runner read the file); a handle on the source gives code 32 (PC3), which the failure did not show.
+* In the test's own sequence, without any runner or server (`runner.lock` absent at the end of every series), 21 of 900
+  fresh replaces of a run.json made a moment earlier were refused with code 5, and at every one of the 40 refused
+  attempts the only holder of run.json was pid 4, the System process: a handle opened in kernel mode, not by a process
+  of the test. None of 200 replaces of a run.json 3 s or more old was refused. The cause shown is therefore H2: **a
+  kernel-mode handle on a newly written file, held for up to 1.84 s, which refuses its replace.** Which driver opens it
+  is not shown: pid 4 is where a file system filter's open is counted, and the machine's real-time scanner (on) and
+  indexer (running) both act on new files; the probe cannot tell them apart without a change of the machine's
+  settings, which this work does not make. H1 is excluded by the same naming. H3 (the load) is not shown to lengthen
+  the hold.
+* A refused attempt is itself slow (about 190 ms each in P0, up to 1.2 s in PLF), so 12 refused attempts take about
+  2.9 s or more; no iteration needed more than 7 attempts, so the full failure was not reproduced; the holds observed
+  (up to 1.84 s) are of the same kind. That the left-out run of d08569e7 met this holder is not shown by any record of
+  that run.
+* Change T removes the only replace of a new file from A-N; A0 and A1 pass, and the decoy still differs in
+  `solver_version` alone (`unknown` against the key's `rcfd 0.1.0`, asserted in the test).
+
+### Other failures seen (not of F-876, not diagnosed here)
+
+* R1 run 1 (L1, 1249.78 s): A-R failed at `adopt_f288.rs:215`, "A-R (i) record 1 against the uninterrupted study",
+  `ok` false.
+* R1b run 4 (LF): A-N failed at line 215, its new run's record `ok` false with the message that the read of the run's
+  `status.json` found no file (os error 2), and A-R failed the same way at record 0; run 6: A-R failed at record 1, an
+  adopted run reported `queued` and counted failed. These are reads and waits of the product (rcfd-workspace,
+  rcfd-runner) under a load of new files, of the binary before change T; change T does not touch them, and A0 and A1
+  did not meet them in 40 runs. They are proposed as a follow-up below.
+
+### Deviations
+
+* Amendment 1: R1 stopped after 1 run; R1b and A1 under LF instead of L1.
+* Amendment 2: M1 does not fail but waits without end; M2 not run; M3 committed instead.
+* The probe depends on `rcfd-workspace` for the case text (`templates::LID_DRIVEN_CAVITY`, the text `rcfd-mcp`
+  re-exports), not on `rcfd-mcp`. The `tasklist` calls inside the series failed (an argument converted by the shell),
+  so pid 4 was named by `tasklist` and `Get-Process` afterwards (pid 4 is the System process by its fixed id).
+* M1 and M3 were run on the worktree itself and reverted with `git checkout`, not on a scratch copy (a second copy
+  would have rebuilt the whole tree on the shared machine); the tree was clean after each.
+* The load LF and the probe left their folders under the temporary folder (`rcfd-f876-*`), and the stopped runs left
+  their test folders; nothing outside the scratch folder was deleted by this work, except the files LF itself wrote.
+
+### What was not run
+
+* M2 (amendment 2). R1 beyond its first run (amendment 1). The full workspace suite (rule 7).
+
+### Actual size
+
+Size (agent): done; 0; 11; 1; 230000
+
+### Decision by the registered rule
+
+**done.** PC1 and PC2 are met; a2 names one class of holder (H2, a kernel-mode handle of the System process on a new
+file) at every refused attempt, absent on aged files; change T is made; A0 and A1 pass 20 of 20 each; the committed
+mutation M3 is caught (M1 and M2 replaced by amendment 2); a6 and E hold. Not shown: the driver behind pid 4, and that
+the left-out run met it.
+
+## Open questions for the maintainer
+
+1. A-N catches an adopted decoy that is paused only by not ending (amendment 2: `wait_end` has no time limit), so a
+   mutation of the key cannot be a committed mutation, and a regression of the key would hang the gate rather than fail
+   it. Options: (a) a follow-up item that lets A-N end on such an adoption (for example decoys left queued with the
+   runner stopped, so that an adopted one runs, ends and fails the assertion), registered with its own mutation of the
+   key; (b) leave A-N as it is. Recommendation: (a), proposed below.
+
+## For the lead: roadmap entries
+
+> Status: done.
+
+> Note: ADR 0773, 2026-11-23, done: the refused replace in adopt_f288 A-N is shown to be a kernel-mode handle (the System process, pid 4) that holds a newly written run.json for up to 1.84 s (21 of 900 fresh replaces refused with code 5, 0 of 200 replaces of files 3 s old, no process of the test holding it; a handle without delete sharing reproduces the exact error), so decoy (h) is now written once with solver_version unknown instead of by a replace of a new run.json; A-N passes 20 of 20 without load and 20 of 20 under a load of new files, the committed mutation (failed and cancelled runs adopted) is caught, atomic.rs and its 12 attempts unchanged.
+
+> Follow-up: "adopt_f288 under a load of new files: a run's status.json read as missing and an adopted run counted failed while queued"; deps: F-876; acceptance: "Every limit not stated here is registered in the ADR before the run. For the failures of ADR 0773 addendum 1 (R1b run 4: a read of status.json failed with os error 2; R1b run 6 and R1 run 1: an adopted run reported queued and counted failed, records ok false in adopt_f288 A-R and A-N), the cause is shown by a registered control with a registered number of runs under ADR 0773's load LF, and the code or the test is changed under the registration so that the registered runs pass."
+
+> Follow-up: "adopt_f288 A-N ends when it adopts a paused decoy"; deps: F-876; acceptance: "Every limit not stated here is registered in the ADR before the run. A mutation that drops one item of RunKey::matches (ADR 0773 M1) makes adopt_f288 A-N fail at an assertion instead of waiting without end, shown by a committed mutation patch, and A-N passes a registered number of runs."
