@@ -586,7 +586,7 @@ One row per record of this folder, grouped by the roadmap category of the item i
 | [0773](0773-f876-registration-the-replace-of-run-json-refused-in-adopt-f288.md) | F-876 registration: the replace of run.json refused with access denied in adopt_f288 | REGISTERED | 2026-11-22 | 1 | F-876 | done |
 | [0775](0775-f871-registration-six-further-simulation-milestones.md) | F-871 registration: six further simulation milestones | REGISTERED | 2026-11-23 | 1 | F-871 | done |
 | [0776](0776-f860-registration-push-main-left-out-commits-and-the-budget.md) | F-860 registration: push_main.py, the left-out run names its commits, the ADR's tests count in the budget, changed-file binaries first | REGISTERED | 2026-11-23 | 1 | F-860 | done |
-| [0779](0779-f875-registration-a-simulation-milestone-for-the-structure-and-vibration-of-a-fan-rotor.md) | F-875 registration: a simulation milestone for the structure and vibration of a fan rotor | REGISTERED | 2026-11-23 | 1 | F-875 | todo |
+| [0779](0779-f875-registration-a-simulation-milestone-for-the-structure-and-vibration-of-a-fan-rotor.md) | F-875 registration: a simulation milestone for the structure and vibration of a fan rotor | REGISTERED | 2026-11-23 | 1 | F-875 | done |
 
 ## Records with no item in the file name (259)
 

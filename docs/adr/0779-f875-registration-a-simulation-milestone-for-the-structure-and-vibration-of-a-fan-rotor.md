@@ -374,3 +374,16 @@ byte for byte on a copy of main, with validation and both checks clean.
 > Follow-up (proposed, open question 2): "Fan rotor at speed by a cyclic sector: the Campbell table of the bladed hub against the full rotor", deps F-406, F-500, F-499; acceptance: Every limit not stated here is registered in the ADR before the run. One sector of the bladed hub of F-406 at registered speeds from rest to the registered maximum, with stress stiffening and spin softening and, as a second table, with the Coriolis term: for every harmonic index 0 to Z/2 the sector frequencies equal those of the full rotor on the coarse mesh within 1e-6 (heavy record), at rest they have the bits of the sector of F-406, and every crossing of the engine orders is listed with its nodal diameter. Milestone fan-structure, headline.
 
 The same entries are in `docs/roadmap/proposals/0779-F-875.json` (form 1 of ADR 0755, base d10ea0bd).
+
+## The lead's reading (2026-11-23), at the merge
+
+Merged at 1e02b485 and pushed at 039ab372 (the report read at 03:39 UTC, 6 minutes of reading, proposed done, written
+done). Checked by the lead before the merge: the registration is the first commit and alone, the definition and the
+mapping follow it, and the branch adds only the files under `docs/adr/` this ADR names and its proposal file. At the
+merge the lead ran `python scripts/roadmap_milestones.py --apply docs/adr/0779-f875-mapping.tsv --definitions
+docs/adr/0779-f875-milestones.json` on main: it wrote the 39 memberships, the milestone fan-structure follows the nine
+that stood, each of those nine compares equal to its value before the command, and `--check` passes.
+
+Status: **done**, as proposed. The milestone reads 72 per cent and not met. That it could read met with no comparison
+against a published blade, and that the rotating sector items sit under no headline, are scope; both are put to the
+maintainer with the agent's recommendation (b), which the lead shares.
