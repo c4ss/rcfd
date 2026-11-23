@@ -384,3 +384,70 @@ and C3 (after it) are read in D4's state; T1m, M1 and M2 as registered, M2's del
 task over the limit.
 
 The checks' limits, N1, N2, K1 and the decision rule are unchanged. Picture (b) as in amendment 1.
+
+## Amendment 3 (2026-11-23): D4's instrument was defective; what D4 gave, and the records D6 and D7 registered before they are made; no code of the fix yet
+
+Written after D4 was made as amendment 2 registered it (three launches without the trace, three with) and before
+anything else. No Studio source and no test of F-890 is written yet.
+
+**D4 gave no task over the limit,** so by amendment 2's reading H6 is not shown by D4. Without the trace: the hold ran
+(a shader of 500 statements, 354 to 399 ms, started when the legend's canvas was added) and the tasks of
+`workspace.tab` were 62 to 73 ms. The three traces say why, and they are the same in each: the legend's effect made
+its synchronous call (`GpuChannelHost::CreateViewCommandBuffer`, 44.9, 56.0 and 60.6 ms of wall-clock time with 0.6 to
+1.0 ms of thread time) while the GPU process's main thread was inside one of the Studio's own WebGPU tasks (88 to
+91 ms), the GPU process answered the call as soon as that task ended, and only then ran the instrument's pipeline (315
+to 320 ms). **The synchronous call does not wait for what is queued; it waits for the rest of the one task the GPU
+process's main thread is running when the call arrives.** Amendment 2's instrument queued its work behind that task
+and could not lengthen the wait: a defective set-up (rule 2), corrected below; D4 stays as the record it is. Amendment
+2's sentence "plus what is queued before it" is wrong and is withdrawn.
+
+What D1 and D4 have shown so far, in six traces of six, in the Studio's own unchanged mount: one synchronous wait on
+the GPU process per page, made by the legend's first use of a 2D canvas, 19 to 61 ms long, each time the rest of a
+WebGPU task of the Studio's own (88 to 156 ms long). For the wait to be 400 ms the GPU process needs one task of
+more than 400 ms with the legend arriving near its start. No task of that length was recorded today in the default
+folder (the longest: 198 ms, the first pipelines); a fresh folder had one frame of 415 ms that waited for the GPU
+(D2 (a), launch 1).
+
+**D6, the order of a machine with free processors, made by priority.** The scratch spec of D1, unchanged Studio, no
+delay and no hold, with one instrument outside the Studio: as soon as the window is up and before the project is
+opened, a scratch script raises the priority class of this launch's own Studio processes (those whose executable is
+this worktree's `out/packaged/rcfd-studio.exe`, found by path; no other process is touched) to High, so that the
+other agents' builds at normal priority no longer take the processors from them. Three launches without the trace
+and three with. Reading:
+
+- **H6 is shown for the Studio's own flow, and with it the task of the item,** if each of the three launches without
+  the trace has a `longtask` over `LONG_TASK_LIMIT_MS` in `workspace.tab` (C2), and in each traced launch at least half
+  of the largest task of the phase is one event `GpuChannel::CreateCommandBuffer` of the main thread (thread time
+  under a tenth of its wall-clock time) made from the legend's effect while the GPU process's main thread runs a
+  WebGPU task. The addendum then gives the length and the content of that GPU task.
+- If D6 has a task over the limit of another composition, that composition is the finding: it is reported, H6 is
+  not shown for the item's task, and an amendment registers what follows before it is done.
+- If D6 has no task over the limit, the order of 10:20 was not made. C1 then is not met for the task of the item
+  (its cause is the one the records are consistent with, not one shown), and the status proposed is partial, whatever
+  D7 gives.
+
+**D7, the corrected instrument** (it replaces D4's): the hold is started before the Workspace tab is clicked, so
+that it is the task the GPU process's main thread is running when the legend arrives, and it is long enough to
+cover the arrival: the shader is calibrated by doubling until the GPU process takes at least 2000 ms for it, one such
+pipeline is started (a new random constant), and the tab is clicked at once. The Studio's own WebGPU work then queues
+behind the hold, while the store, the surface and the field come through the main process and do not wait for the
+GPU, so the legend arrives while the hold runs. The record is valid only if the legend's canvas was added while the
+hold was running (both times are recorded); a launch where it was not is recorded as not deciding. Three launches
+without the trace and three with. 2000 ms: the legend arrived 0.55 to 0.77 s after the click in the six traces at a
+machine fully busy, a factor of 2.6 inside it. Reading: the mechanism is shown if each launch without the trace has
+a `longtask` over `LONG_TASK_LIMIT_MS` in `workspace.tab` that ends within 100 ms of the hold's end, and in each
+traced launch at least nine tenths of that task is the event `GpuChannel::CreateCommandBuffer` from the legend's
+effect. C2 and C3 are read in D7's state.
+
+**The fix** is as amendment 2 registered it (the 2D canvas's GPU context created ahead, at the page's first idle
+moment), and is written if D6 or D7 shows the wait as read above. **T1** is as amendment 2 registered it with D7's
+instrument in place of D4's: the hold of at least 2000 ms started before the click; the test asserts that the
+legend's canvas was added while the hold ran (else it fails: it must not pass by the hold missing the legend) and
+that `workspace.tab` has no `longtask` over `LONG_TASK_LIMIT_MS`; the task limit only, one pass, no retry. M1 and M2
+as registered.
+
+**The decision rule, made precise for these records** (it adds no way to done that the registration did not have):
+done needs C1 by D6 (the task of the item made in the Studio's own flow and its composition recorded) or by D5 (the
+same on a machine whose load has fallen), with C2, C3, T1, T1m, N1, N2 and K1 as registered. If only D7 shows the
+mechanism, the fix and the test are still written and checked, and the status proposed is partial with the gap
+"the run with the task of 400 ms was not made again".
