@@ -1,0 +1,9 @@
+{
+  "form": 1,
+  "adr": "0767",
+  "item": "F-885",
+  "base": "21054b68cf6797d8c1fc21ed6064ffa0b33393b1",
+  "status": "partial",
+  "note": "ADR 0767, 2026-11-22, partial: the pimple step keeps, opt-in (PimpleSettings::outer_velocity_record, defaults bit-identical, baseline hashes unchanged), the largest velocity change of each outer iteration, shown equal to the changes of the iterates by a second route on a cavity; check H was run again on B2 (both time steps, reproducing the ADR 0766 records to 5e-10 at every step) with ADR 0183's outer rule as written, and no window step of either run meets it (d5/d1 0.93 and 0.96 against 1e-2), because the unrelaxed 5th outer iteration moves the velocity about 1 m/s from the relaxed ones in every step, so the class is NOT EVALUABLE and the run does not decide; held by crates/rcfd-api/tests/f885_check_h_outer_record.rs and docs/investigations/f885-check-h-outer-record, six of six mutations caught.",
+  "gap": "Missing for done: a class by ADR 0183's rule. The record is in and correct, but in every step the unrelaxed final outer iteration changes the velocity about as much as the first (d5/d1 0.93 at dt, 0.96 at dt/2; the same pattern on a cavity), so the relaxed and unrelaxed iterations do not share a fixed point and the rule cannot be met by any state. Needs a diagnosis of the outer loop (proposed under F-885), or a run without relaxation, or the maintainer's reading of the rule."
+}
