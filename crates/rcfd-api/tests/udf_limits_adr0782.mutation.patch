@@ -1,0 +1,13 @@
+# expect-fail: cargo test --release -p rcfd-api --test udf_limits_adr0782 m1_
+diff --git a/crates/rcfd-api/src/udf.rs b/crates/rcfd-api/src/udf.rs
+index 3aff1797..92dcb88a 100644
+--- a/crates/rcfd-api/src/udf.rs
++++ b/crates/rcfd-api/src/udf.rs
+@@ -108,7 +108,6 @@ impl Udf {
+             )));
+         }
+         let limits = StoreLimitsBuilder::new()
+-            .memory_size(MAX_MEMORY_BYTES)
+             .instances(1)
+             .memories(1)
+             .tables(1)
