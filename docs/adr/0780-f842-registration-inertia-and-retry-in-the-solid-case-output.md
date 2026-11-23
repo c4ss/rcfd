@@ -180,3 +180,16 @@ Status proposed: todo (unchanged).
 
 No follow-up item is proposed in the file: which items are needed depends on the answer to question 1 (the item of
 options (a) and (c) is described there).
+
+## The lead's reading (2026-11-23), at the merge
+
+Merged at c557e935 and pushed at 857bcff1 (the report read at 03:31 UTC, 5 minutes of reading, proposed todo, written
+todo). Checked by the lead before the merge: the branch adds the registration, alone in its commit, the addendum and
+the proposal file, and changes no source. The lead confirmed the finding on main: the analysis type of the solid case
+file is `static` or `modal` (`crates/rcfd-api/src/solid_case.rs`), and no crate of the API, the CLI or the MCP server
+names `NewtonOptions`. The brief was issued against an acceptance that presupposes what does not exist; the agent was
+right to stop before code. The third outcome of the decision rule (todo) is accepted as registered.
+
+Status: **todo**, as proposed; the brief is closed. Open question 1 is put to the maintainer with the agent's
+recommendation (c), which the lead shares. The outputs registered here (the opt-in key, the report keys, the warnings
+and the checks) stand for the next issue.
