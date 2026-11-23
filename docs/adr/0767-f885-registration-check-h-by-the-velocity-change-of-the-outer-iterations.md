@@ -464,3 +464,19 @@ outside"; limit "relative difference `<= 1e-12`"; source "Same discrete problem 
 kind **code verification**. T3 was run as meant and met (addendum 1). The table cannot be edited (rule 18), so the
 process report keeps naming the row; the lead's list `docs/process/exceptions/registration-kind.txt` is where such a row
 is passed over, and that is left to the lead.
+
+## The lead's reading (2026-11-23), at the merge
+
+Merged at d6cb8993 and pushed at 56867f5f (the report read at 22:58 UTC on 2026-11-22, 6 minutes of reading, proposed
+partial, written partial). The merge was made in a second checkout of main, because the left-out run of the merge before
+it was still building from the first. Checked by the lead before the merge: the registration is the first commit and
+alone; the only source change is the opt-in record in `crates/rcfd-fv/src/pimple.rs`, with the baseline hashes run and
+unchanged and the record on and off equal in bits; `sim.rs`, `schema.rs` and `simple.rs` are untouched. Row T3 of the
+table of checks holds the table's cell separator inside a code span; addendum 2 records it as meant (code verification)
+and the lead has entered it in `docs/process/exceptions/registration-kind.txt`. The push script ran the committed
+mutation and it failed as expected.
+
+Status: **partial**, as proposed. The record is shown correct, and it shows why check H cannot decide by ADR 0183's rule:
+in every step the fifth outer iteration, which is not relaxed, moves the velocity about as far as the first, while the
+relaxed second to fourth contract. The cavity shows the same, so it is a property of the relaxed outer loop and not of
+the fan. Questions 1 and 2 are put to the maintainer with the agent's recommendations, which the lead shares.
