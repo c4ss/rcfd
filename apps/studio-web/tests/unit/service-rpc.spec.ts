@@ -1,3 +1,4 @@
+// F-803: the item of this spec, by the commit that added it (afee363a, 2026-11-16).
 // Unit tests of the rcfd-service/1 framing and request layer (src/main/service/rpc.ts), against a fake service in this
 // process and a fake stdio service in a child Node process. No Electron, no rcfd binary.
 import { expect, test } from '@playwright/test';

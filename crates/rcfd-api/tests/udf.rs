@@ -1,3 +1,4 @@
+// ADR 0088: the record of this file, the primary ADR of its tests by scripts/adr_test_index.py (evidence E2).
 //! Sandboxed user functions (F-122): WebAssembly modules supply a momentum source, a velocity
 //! profile, a kinematic viscosity and a monitor; hostile modules are contained.
 //!

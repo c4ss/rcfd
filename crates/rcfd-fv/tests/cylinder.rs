@@ -1,3 +1,4 @@
+// ADR 0704, F-786: the record of this file, the primary ADR of its tests by scripts/adr_test_index.py (evidence E2).
 //! Laminar vortex shedding behind a circular cylinder at Re = 100 (F-029).
 //!
 //! Acceptance: the Strouhal number `St = f D / U` is within 5 percent of the

@@ -1,3 +1,4 @@
+// ADR 0123: the record of this file, the primary ADR of its tests by scripts/adr_test_index.py (evidence E2).
 //! Task-based workflow engine and headless run methods of the service (F-120, F-121).
 
 use rcfd_api::service::{Service, ServiceConfig};

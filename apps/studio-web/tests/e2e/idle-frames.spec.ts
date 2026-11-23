@@ -1,3 +1,4 @@
+// F-817: the item of this spec, by the commit that added it (853ebddd, 2026-11-17).
 // F-817b (G9, power): the Studio draws on demand. At rest (after a key, a scrub, data or an animation has settled) the
 // page asks for no animation frames, or only a few; while the user interacts, frames are drawn as before (P7 and P8
 // are the bench's, scripts/measure-field.mjs).

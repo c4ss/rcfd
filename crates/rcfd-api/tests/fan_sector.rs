@@ -1,3 +1,4 @@
+// ADR 0065: the record of this file, the primary ADR of its tests by scripts/adr_test_index.py (evidence E0).
 //! Axial-fan periodic-sector mesh through the case tree (`mesh.generator = "axial_fan_sector"`): the solver checks M3 (the
 //! existing periodic machinery accepts the rotational pair), S1-S4 of docs/adr/0065-wave32a-fan-geometry-mesh.md.
 //! The criteria were registered in the ADR before any of this code ran; a miss becomes an ignored `*_known_miss` test.

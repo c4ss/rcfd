@@ -1,3 +1,4 @@
+// ADR 0801: the record of this spec, by the commit that added it (1b22c503, 2026-11-17).
 // G7 as amended 2026-11-17 (the maintainer: "the runner should close with studio by default if no external (existing)
 // runner env var is specified"): the ownership and close rules of src/shared/runner-lifetime.ts as pure functions, the
 // main process's watch of the project's runner (src/main/project/runner-lifetime.ts) with a fake engine, the runner

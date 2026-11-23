@@ -1,3 +1,4 @@
+// F-817: the item of this spec, by the commit that added it (853ebddd, 2026-11-17).
 // Unit tests of F-817b's on-demand drawing (src/renderer/ui/onDemand.ts) against three.js's own frame loop
 // (three/src/renderers/common/Animation.js, the class WebGPURenderer uses), driven by a frame clock of the test:
 // - without it, one draw leaves three's loop asking for a frame every frame for ever (what the workspace did at rest);

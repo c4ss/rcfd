@@ -1,3 +1,4 @@
+// ADR 0024: the record of this file, the primary ADR of its tests by scripts/adr_test_index.py (evidence E2).
 //! The `channel_2d_interface` generator through the settings tree (F-114): a non-conformal 20|27 channel carries the
 //! Poiseuille flow and balances mass through the interface.
 //!

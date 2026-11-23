@@ -1,3 +1,4 @@
+// ADR 0027: the record of this file, the primary ADR of its tests by scripts/adr_test_index.py (evidence E2).
 //! Multicomponent species transport in a mixing layer (F-053).
 //!
 //! Checks fixed before running: two streams (upper half and lower half of a 2-D channel) meet at

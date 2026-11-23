@@ -1,58 +1,55 @@
 # Rust test root files whose leading comment named no ADR when the rule started.
-# Written by scripts/process_report.py --seed-exceptions on 2026-11-18. This list only shrinks.
+# Written by scripts/process_report.py --seed-exceptions on 2026-11-18 with 56 entries. This list only shrinks.
+# 2026-11-23 (ADR 0777, F-861): 31 files got their record as a header by rule H of that ADR. The 25 below have none
+# that the test index (scripts/adr_test_index.py, --primary git, on main d10ea0bd) gives; the line above each says why.
+# The script holds 25 as the largest number of entries (LIST_MAX).
+# its tests have no primary ADR; ADRs the index links to it: 0740; first added by c4432b3d (2026-11-18): Process framework, second part: roadmap generator (not yet adopted), lints for registratio
 crates/rcfd-api/tests/case_schema_page.rs
+# its tests have no primary ADR; ADRs the index links to it: 0029; first added by cf2dedbf (2026-10-13): F-032: block-coupled pressure-velocity solver (partial)
 crates/rcfd-api/tests/coupled.rs
-crates/rcfd-api/tests/fan_cgrid_case.rs
-crates/rcfd-api/tests/fan_sector.rs
+# its tests have no primary ADR; ADRs the index links to it: 0031, 0099, 0684, 0690, 0701; first added by b22ae2b4 (2026-10-13): rcfd: restart from a previous solution on a new mesh (F-115)
 crates/rcfd-api/tests/interpolate.rs
+# its tests have no primary ADR; ADRs the index links to it: 0014, 0679, 0684; first added by f71f6e2c (2026-10-13): Initial import of rcfd: clean-room Rust CFD suite
 crates/rcfd-api/tests/library_api.rs
-crates/rcfd-api/tests/mesh_params.rs
-crates/rcfd-api/tests/mrf.rs
-crates/rcfd-api/tests/non_conformal_case.rs
+# its tests have no primary ADR; ADRs the index links to it: 0014, 0015, 0017, 0063, 0775; first added by f71f6e2c (2026-10-13): Initial import of rcfd: clean-room Rust CFD suite
 crates/rcfd-api/tests/physics_schema.rs
+# its tests have no primary ADR; ADRs the index links to it: 0679, 0684; first added by f71f6e2c (2026-10-13): Initial import of rcfd: clean-room Rust CFD suite
 crates/rcfd-api/tests/physics_service.rs
-crates/rcfd-api/tests/properties.rs
+# its tests have no primary ADR; ADRs the index links to it: 0021, 0034, 0690; first added by bdf70ebf (2026-10-15): api: heat_flow report conductivity falls back to physics.conductivity
 crates/rcfd-api/tests/report_conductivity.rs
+# its tests have no primary ADR; ADRs the index links to it: 0077, 0156, 0160; first added by 534924f5 (2026-10-13): F-110: non-Newtonian viscosity laws and temperature shifts
 crates/rcfd-api/tests/rheology.rs
-crates/rcfd-api/tests/rotor_interface.rs
-crates/rcfd-api/tests/runctl.rs
-crates/rcfd-api/tests/scalars.rs
-crates/rcfd-api/tests/schema_defaults_f834.rs
+# its tests have no primary ADR; ADRs the index links to it: 0345, 0735; first added by f71f6e2c (2026-10-13): Initial import of rcfd: clean-room Rust CFD suite
 crates/rcfd-api/tests/service_tcp.rs
-crates/rcfd-api/tests/sources.rs
+# its tests have no primary ADR; ADRs the index links to it: 0014, 0015, 0020, 0021, 0061, 0063 and 2 more; first added by 75bb73f1 (2026-10-13): api: wire k_omega_sst, wall_treatment and mesh wall layers
 crates/rcfd-api/tests/sst_schema.rs
+# its tests have no primary ADR; ADRs the index links to it: 0166, 0169, 0684, 0690; first added by 08678adf (2026-10-13): F-116: run-time statistics and numbered snapshots
 crates/rcfd-api/tests/statistics.rs
-crates/rcfd-api/tests/tables.rs
+# its tests have no primary ADR; ADRs the index links to it: 0160, 0679, 0684; first added by 1359ad15 (2026-10-13): F-050: transient energy and buoyancy with PISO/PIMPLE
 crates/rcfd-api/tests/transient_energy.rs
-crates/rcfd-api/tests/udf.rs
-crates/rcfd-api/tests/workflow.rs
+# its tests have no primary ADR; ADRs the index links to it: 0018, 0235, 0290, 0308, 0345, 0380 and 2 more; first added by f71f6e2c (2026-10-13): Initial import of rcfd: clean-room Rust CFD suite
 crates/rcfd-cli/tests/cli.rs
-crates/rcfd-cli/tests/data.rs
+# its tests have no primary ADR; ADRs the index links to it: 0187; first added by 2971cbc8 (2026-10-13): rcfd-io: Fluent .msh/.cas import for 2D and 3D (F-118)
 crates/rcfd-cli/tests/fluent.rs
-crates/rcfd-cli/tests/interpolate.rs
-crates/rcfd-cli/tests/physics_cases.rs
-crates/rcfd-cli/tests/run_control.rs
+# its tests have no primary ADR; ADRs the index links to it: 0028, 0038, 0058, 0122, 0123, 0124 and 38 more; first added by f71f6e2c (2026-10-13): Initial import of rcfd: clean-room Rust CFD suite
 crates/rcfd-cli/tests/workspace_graph.rs
-crates/rcfd-core/tests/table_expr.rs
-crates/rcfd-fv/tests/cavity.rs
-crates/rcfd-fv/tests/compressible_bc.rs
+# its tests have no primary ADR; ADRs the index links to it: 0029; first added by cf2dedbf (2026-10-13): F-032: block-coupled pressure-velocity solver (partial)
 crates/rcfd-fv/tests/coupled.rs
-crates/rcfd-fv/tests/cylinder.rs
-crates/rcfd-fv/tests/guarded_secant.rs
+# its tests have no primary ADR; ADRs the index links to it: 0005, 0009, 0010, 0029, 0061, 0679 and 4 more; first added by f71f6e2c (2026-10-13): Initial import of rcfd: clean-room Rust CFD suite
 crates/rcfd-fv/tests/natural_convection.rs
-crates/rcfd-fv/tests/non_conformal.rs
+# its tests have no primary ADR; ADRs the index links to it: 0046, 0071, 0690; first added by f71f6e2c (2026-10-13): Initial import of rcfd: clean-room Rust CFD suite
 crates/rcfd-fv/tests/periodic.rs
+# its tests have no primary ADR; ADRs the index links to it: 0023; first added by f71f6e2c (2026-10-13): Initial import of rcfd: clean-room Rust CFD suite
 crates/rcfd-fv/tests/pseudo.rs
-crates/rcfd-fv/tests/species.rs
-crates/rcfd-fv/tests/step_laminar.rs
+# its tests have no primary ADR; ADRs the index links to it: 0352, 0679, 0684, 0690; first added by 1359ad15 (2026-10-13): F-050: transient energy and buoyancy with PISO/PIMPLE
 crates/rcfd-fv/tests/transient_buoyancy.rs
-crates/rcfd-io/tests/datapack.rs
+# its tests have no primary ADR; ADRs the index links to it: 0173, 0187; first added by 2971cbc8 (2026-10-13): rcfd-io: Fluent .msh/.cas import for 2D and 3D (F-118)
 crates/rcfd-io/tests/fluent_public.rs
+# its tests have no primary ADR; ADRs the index links to it: 0173, 0187, 0438, 0684, 0690; first added by f71f6e2c (2026-10-13): Initial import of rcfd: clean-room Rust CFD suite
 crates/rcfd-io/tests/gmsh_samples.rs
-crates/rcfd-io/tests/interchange.rs
-crates/rcfd-post/tests/gltf.rs
-crates/rcfd-post/tests/interpolate.rs
+# its tests have no primary ADR; ADRs the index links to it: 0015, 0017, 0063, 0701; first added by f71f6e2c (2026-10-13): Initial import of rcfd: clean-room Rust CFD suite
 crates/rcfd-turb/tests/channel_kepsilon.rs
+# its tests have no primary ADR; ADRs the index links to it: 0014, 0015, 0061, 0063, 0070, 0684 and 2 more; first added by 6c059b02 (2026-10-13): rcfd-turb: k-omega SST (Menter 2003) (F-043)
 crates/rcfd-turb/tests/channel_sst.rs
-crates/rcfd-turb/tests/channel_wall_function.rs
+# its tests have no primary ADR; ADRs the index links to it: 0015, 0017, 0063, 0701, 0775; first added by f71f6e2c (2026-10-13): Initial import of rcfd: clean-room Rust CFD suite
 crates/rcfd-turb/tests/step_kepsilon.rs

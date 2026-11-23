@@ -1,3 +1,4 @@
+// ADR 0060: the record of this file, the primary ADR of its tests by scripts/adr_test_index.py (evidence E2).
 //! Validation-data pack manifest (F-125): offline checks only. The test never reads the network,
 //! never needs the downloaded `validation-data/data/` files and never touches a proprietary file.
 

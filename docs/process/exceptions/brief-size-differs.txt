@@ -1,0 +1,16 @@
+# Entries of a brief's reading list whose stated size was not the size of the file in the commit that first added the
+# brief, when the check started, as "<brief file>: <path>". Read by scripts/process_report.py --check --history.
+# Written on 2026-11-23 (ADR 0777, F-861). This list only shrinks; the script holds 6 as its largest number of entries
+# (LIST_MAX). A brief is a record and is not corrected.
+# listed 10938, the file had 11003 bytes
+claude-documentation-process-framework-3f9271.md: docs/process/agent-rules.md
+# listed 80222, the file had 83734 bytes
+claude-documentation-process-framework-3f9271.md: docs/process/documentation-process-review.md
+# listed 29849, the file had 29453 bytes
+f471-fp4-move.md: crates/rcfd-linalg/src/amg.rs
+# listed 42957; the commit that added the brief did not hold the file (the registration was on its branch)
+f471-fp4-move.md: docs/adr/0743-f471-registration-the-corrected-order-of-the-coarsest-dense-lu-as-the-default.md
+# listed 11360, the file had 11365 bytes
+f865-simulation-milestones.md: scripts/roadmap_progress.py
+# listed 31712, the file had 32121 bytes
+f867-fan-milestone-design-goal.md: docs/adr/0756-f865-registration-per-cent-complete-for-the-roadmap-and-for-each-simulation-milestone.md

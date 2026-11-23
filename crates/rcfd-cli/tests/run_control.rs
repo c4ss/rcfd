@@ -1,3 +1,4 @@
+// ADR 0704, F-786: the record of this file, the primary ADR of its tests by scripts/adr_test_index.py (evidence E2).
 //! Headless launch and run-control contract of `rcfd run` and `rcfd workflow` (F-120, F-121).
 //!
 //! Pass/fail criteria were fixed before running: documented exit codes (0 ok, 2 usage, 3 invalid,

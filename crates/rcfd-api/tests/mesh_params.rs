@@ -1,3 +1,4 @@
+// ADR 0685, F-760: the record of this file, the primary ADR of its tests by scripts/adr_test_index.py (evidence E2).
 //! Wave-11 bug: mesh generators silently ignored documented parameters (`cavity_2d` ignored `mesh.ny`
 //! and `mesh.ly`). Documented meaning (docs/case-schema.md, schema docs): `nx`/`ny` are the cells in
 //! x/y and `lx`/`ly` the lengths, so a cavity is an `nx` x `ny` grid on `lx` x `ly`; parameters a

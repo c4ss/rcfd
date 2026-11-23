@@ -1,3 +1,4 @@
+// F-803: the item of this spec, by the commit that added it (afee363a, 2026-11-16).
 // Unit tests of the service client (src/main/service/client.ts, config.ts, spawn.ts) against the fake service: the
 // connection state, the events.poll loop, and reconnection after a dropped connection and after a restart.
 import { expect, test } from '@playwright/test';

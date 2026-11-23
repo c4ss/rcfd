@@ -1,3 +1,4 @@
+// F-801: the item of this spec, by the commit that added it (245c9965, 2026-11-16).
 // Unit tests of the shell's security policy (src/main/security.ts), without Electron.
 import { expect, test } from '@playwright/test';
 import { readFileSync } from 'node:fs';

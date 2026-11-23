@@ -1,3 +1,4 @@
+// ADR 0685, F-760: the record of this file, the primary ADR of its tests by scripts/adr_test_index.py (evidence E2).
 //! F-040: wall distance and standard wall functions on a periodic channel.
 //!
 //! Fully developed channel flow at friction Reynolds number Re_tau = u_tau h / nu = 395

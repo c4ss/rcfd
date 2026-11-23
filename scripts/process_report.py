@@ -7,8 +7,8 @@ Usage (from the repository root, Python 3.9 standard library):
     python scripts/process_report.py              print every section that needs no git history
     python scripts/process_report.py --weekly     print the weekly list for the maintainer (sections j and m)
     python scripts/process_report.py --write      regenerate docs/adr/index.md and the generated blocks of the pages
-    python scripts/process_report.py --check      exit 1 if a generated file differs or a lint of sections a, b, e, k, l fails
-    python scripts/process_report.py --history    also run section c, which reads git history (the daily gate runs it)
+    python scripts/process_report.py --check      exit 1 if a generated file differs or a lint of sections a, b, e, k, l, n, r, s, u fails
+    python scripts/process_report.py --history    also run section c and the sizes of section u, which read git history (the daily gate runs it)
     python scripts/process_report.py --sections a,d   only these sections
     python scripts/process_report.py --list-generated   the paths --write keeps current (the push script commits them)
     python scripts/process_report.py --seed-exceptions   write today's findings to docs/process/exceptions/ (once, by the lead)
@@ -17,10 +17,15 @@ Sections: a roadmap checks, b ADR index, c registration lint (history), d open q
 g dispatch, h the lead's state, i area pages, j weekly list, k merge hygiene, l test headers, m process measures (with the
 four of ADR 0754 over the last 28 days: queue age, review minutes, status written against proposed, escaped defects),
 r registrations written under docs/process/agent-rules.md (brief, size, the kind, margin and source columns), and with
---history t, the tests without a primary ADR.
+--history t, the tests without a primary ADR. From ADR 0777 (F-861): n the note entries of the roadmap dated 2026-11-24 or
+later (one line in the form of agent rules, rule 9), s the places of the citations in ADRs registered from that date
+(rule 4), u the reading list of each brief (its sum, its stated total, the reading limit and, with --history, the size of
+each file in the commit that added the brief).
 
 Exceptions files (docs/process/exceptions/*.txt, one entry per line, `#` comments) hold the findings that existed when a rule
-started. They may only shrink: an entry that no longer applies is reported so that it can be removed.
+started. They may only shrink: an entry that no longer applies is reported so that it can be removed. The lists named
+in LIST_MAX have a registered largest number of entries (ADR 0777), above which --check fails, and an absent file of
+theirs is an empty list.
 """
 import argparse
 import ast
@@ -62,6 +67,29 @@ CHANGELOG_COUNT = re.compile(r"Of the \d+ roadmap items, \d+ are done, \d+ partl
 RULES = "docs/process/agent-rules.md"
 KINDS = ("unchanged default output", "code verification", "solution verification", "validation")
 MARGIN_MAX = 3.0
+
+# ADR 0777 (F-861): four rules that rested on convention. The values are registered there and are changed by the
+# maintainer's answer only.
+CONV_DATE = "2026-11-24"  # sections n and s read a note entry or an ADR dated this day or later
+LAST_ITEM_BEFORE = 887  # an item numbered above it was entered after the registration: all of its note is new
+LAST_ADR_BEFORE = 779  # an ADR without a date in its status line is read by section s when its number is above it
+NOTE_ENTRY_MAX = 1200  # characters of one note entry, head included
+READING_LIMIT = 194023  # bytes of the reading list of one brief (the 90th percentile of the 41 briefs to 2026-11-23)
+LIST_MAX = {"test-root-without-adr": 25, "studio-spec-without-record": 0, "brief-over-reading-limit": 4, "brief-size-differs": 6}
+NOTE_HEAD = re.compile(r"(?:^|(?<= ))(?:ADR \d{4}, (\d{4}-\d{2}-\d{2}), |(?:Lead|Maintainer) \((\d{4}-\d{2}-\d{2})\): )")
+OUTCOME = re.compile(r"(?:done|partial|todo)\b")
+_NAME = r"[A-Z][A-Za-z\u00c0-\u024f'\u2019-]{2,}"
+_YEAR = r"(?:1[5-9]\d\d|20\d\d)[a-z]?"
+_MORE = rf"(?:,? et al\.?| (?:and|&) {_NAME})?"
+CITE_NAME_YEAR = re.compile(rf"\b({_NAME}){_MORE},? \(({_YEAR})\)")  # Surname (year), with "et al." or a second surname
+CITE_IN_BRACKETS = re.compile(rf"\(({_NAME}){_MORE},? ({_YEAR})(?=[),;])")  # (Surname year), (Surname, year)
+CITE_ARXIV = re.compile(r"\barXiv:\s?(\d{4}\.\d{4,5})")
+NOT_SURNAMES = {"January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November",
+                "December", "Lead", "Maintainer", "Version", "Addendum", "Amendment", "Table", "Figure", "Section", "Equation",
+                "Chapter", "Appendix", "Rule", "Wave", "Phase"}
+PLACE = re.compile(r"(?:(?i:\b(?:equations?|eqs?\.|eqns?\.|tables?|tab\.|pages?|pp?\.|figures?|figs?\.|sections?|sec\.|chapters?|appendix))|\u00a7)"
+                   r"\s*\(?\s*(?:\d|[A-Z](?![a-z]))|(?i:\bdoi\b)|\b10\.\d{4,9}/")
+NOT_READ = re.compile(r"from memory|not read|not obtained|not fetched|could not be (?:read|obtained|fetched)", re.I)
 
 # (i) the page that summarises each roadmap_progress.py category; None prints "no page".
 AREA_PAGES = {
@@ -107,6 +135,23 @@ def less_exceptions(root, name, found):
         return [], []
     found = set(found)
     return sorted(found - exc), sorted(exc - found)
+
+
+def less_list(root, name, found):
+    """(new findings, stale exceptions) for a list of LIST_MAX: an absent file is an empty list, the rule has started."""
+    exc = exceptions(root, name) or set()
+    found = set(found)
+    return sorted(found - exc), sorted(exc - found)
+
+
+def list_number(root, name, key):
+    """(failures, report lines) of the registered largest number of entries of a list that only shrinks (ADR 0777)."""
+    n, cap = len(exceptions(root, name) or ()), LIST_MAX[name]
+    if n > cap:
+        return [f"{key}: exceptions list {name}.txt has {n} entries, above its registered {cap} (ADR 0777: the list only shrinks)"], []
+    if n < cap:
+        return [], [f"{name}.txt has {n} entries, below its registered {cap}: lower LIST_MAX in scripts/process_report.py"]
+    return [], []
 
 
 # ------------------------------------------------------------------ inputs
@@ -732,8 +777,9 @@ def sec_l(root, items, adrs):
         ok = any(n in known for n in re.findall(r"\bADR (\d{4})\b", head)) or any(i in ids for i in re.findall(r"\bF-\d{3}\b", head))
         if not ok:
             specs.append(p)
-    n1, s1 = less_exceptions(root, "test-root-without-adr", rust)
-    n2, s2 = less_exceptions(root, "studio-spec-without-record", specs)
+    # ADR 0777: the rule started on 2026-11-18 and does not stop when a list file is absent
+    n1, s1 = less_list(root, "test-root-without-adr", rust)
+    n2, s2 = less_list(root, "studio-spec-without-record", specs)
     rep.append(f"Rust test root files whose leading comment names no existing ADR: {len(rust)}")
     rep.append(f"Studio spec files whose leading comment names no item and no ADR: {len(specs)}")
     fail += [f"l: test file names no ADR in its leading comment, {x}" for x in n1]
@@ -741,7 +787,185 @@ def sec_l(root, items, adrs):
     for name, s in (("test-root-without-adr", s1), ("studio-spec-without-record", s2)):
         if s:
             rep.append(f"exceptions that no longer apply in {name}.txt (remove them): {len(s)}")
+        f, r = list_number(root, name, "l")
+        fail += f
+        rep += r
     return rep, fail, rust, specs
+
+
+def sec_n(items):
+    """Note entries of the roadmap (ADR 0777, agent rules, rule 9). An entry begins at a head, `ADR NNNN, <date>, ` of an
+    agent or `Lead (<date>): `, `Maintainer (<date>): `, at the start of the note or after a space, and ends before the
+    next head. One dated CONV_DATE or later has the outcome word after an agent's head, at most NOTE_ENTRY_MAX
+    characters and no line break. The note of an item entered after the registration is empty or begins with a head."""
+    rep, fail, read_n = [], [], 0
+    for i in items:
+        note = i.get("note") or ""
+        num = re.fullmatch(r"F-(\d+)", i["id"])
+        if num and int(num.group(1)) > LAST_ITEM_BEFORE and note.strip() and not NOTE_HEAD.match(note):
+            fail.append(f"n: note of an item entered after the registration of ADR 0777 does not begin with an entry head, {i['id']}")
+        heads = list(NOTE_HEAD.finditer(note))
+        for k, m in enumerate(heads):
+            if (m.group(1) or m.group(2)) < CONV_DATE:
+                continue
+            read_n += 1
+            text = note[m.start():heads[k + 1].start() if k + 1 < len(heads) else len(note)]
+            where = f"{i['id']}: {m.group(0).rstrip(' ,:')}"
+            if m.group(1) and not OUTCOME.match(text[len(m.group(0)):]):
+                fail.append(f"n: note entry without an outcome word (done, partial, todo) after its head, {where}")
+            if len(text.strip()) > NOTE_ENTRY_MAX:
+                fail.append(f"n: note entry of {len(text.strip())} characters, above {NOTE_ENTRY_MAX}, {where}")
+            if "\n" in text or "\r" in text:
+                fail.append(f"n: note entry with a line break, {where}")
+    rep.append(f"note entries dated {CONV_DATE} or later: {read_n}; failures of the form of rule 9: {len(fail)}")
+    return rep, fail
+
+
+def blocks(text):
+    """The text cut into blocks: paragraphs at blank lines, every table row, list item and heading a block of its own."""
+    out, cur = [], []
+
+    def flush():
+        if cur:
+            out.append(" ".join(cur))
+            cur.clear()
+
+    for ln in text.splitlines():
+        st = ln.strip()
+        if not st:
+            flush()
+        elif st.startswith("|"):
+            flush()
+            out.append(st)
+        else:
+            if re.match(r"(?:[-*+]|\d+\.)\s", st) or st.startswith("#"):
+                flush()
+            cur.append(st)
+    flush()
+    return out
+
+
+def sources(block):
+    """The sources a block names, in the forms section s recognises: `Surname year` and `arXiv:number`."""
+    out = [f"{m.group(1)} {m.group(2)}" for rx in (CITE_NAME_YEAR, CITE_IN_BRACKETS) for m in rx.finditer(block)
+           if m.group(1) not in NOT_SURNAMES]
+    return out + [f"arXiv:{m.group(1)}" for m in CITE_ARXIV.finditer(block)]
+
+
+def sec_s(adrs):
+    """Places of citations (ADR 0777, agent rules, rule 4), in the ADRs registered on CONV_DATE or later (or, with no
+    date in the status line, numbered above LAST_ADR_BEFORE): each source named has, in one block that names it, a place
+    in it (equation, table, page, figure, section, chapter, appendix, or a DOI) or the words that it was not read."""
+    rep, fail, read_n, named_n = [], [], 0, 0
+    for a in adrs:
+        if not (a["date"] >= CONV_DATE if a["date"] else int(a["n"]) > LAST_ADR_BEFORE):
+            continue
+        read_n += 1
+        named, placed = set(), set()
+        for b in blocks(a["text"]):
+            found = sources(b)
+            named.update(found)
+            if found and (PLACE.search(b) or NOT_READ.search(b)):
+                placed.update(found)
+        named_n += len(named)
+        fail += [f"s: citation without a place in the source, {a['file']}: {k}" for k in sorted(named - placed)]
+    rep.append(f"ADRs registered on {CONV_DATE} or later: {read_n}; sources they name: {named_n}; without a place: {len(fail)}")
+    return rep, fail
+
+
+def brief_reading(text):
+    """(entries, stated total) of a brief: the lines `- <path> <bytes>` of `## Reading list` as (path, bytes), bytes None
+    where the line states none; the fifth value of `Size (lead):`, None where it is no whole number."""
+    m = re.search(r"^## Reading list[^\n]*\n(.*?)(?=^## |\Z)", text, re.M | re.S)
+    entries = []
+    for ln in (m.group(1) if m else "").splitlines():
+        if ln.startswith("- "):
+            em = re.match(r"- (\S+) (\d+)(?!\S)", ln)
+            entries.append((em.group(1), int(em.group(2))) if em else ((ln[2:].split() or [""])[0], None))
+    sm = re.search(r"^Size \(lead\):(.*)$", text, re.M)
+    parts = [p.strip() for p in sm.group(1).split(";")] if sm else []
+    return entries, int(parts[4]) if len(parts) >= 5 and parts[4].isdigit() else None
+
+
+def sizes_at_issue(root, wanted):
+    """{(brief file, path): size or None} of each listed file in the commit that first added its brief; None for the whole
+    when the history is not there to ask (a shallow clone, no git)."""
+    try:
+        if git(root, "rev-parse", "--is-shallow-repository").strip() == "true":
+            return None
+        log = git(root, "log", "--diff-filter=A", "--name-only", "--format=@%H", "--", BRIEFS)
+    except (subprocess.CalledProcessError, OSError):
+        return None
+    added, sha = {}, None
+    for ln in log.splitlines():  # newest first: the last commit seen for a file is the one that first added it
+        if ln.startswith("@"):
+            sha = ln[1:]
+        elif ln.strip():
+            added[os.path.basename(ln.strip())] = sha
+    keys = [(fn, p) for fn, p in wanted if fn in added]
+    if not keys:
+        return {}
+    r = subprocess.run(["git", "-C", root, "cat-file", "--batch-check"], input="".join(f"{added[fn]}:{p}\n" for fn, p in keys),
+                       capture_output=True, text=True, encoding="utf-8", errors="replace")
+    lines = r.stdout.splitlines()
+    if r.returncode or len(lines) != len(keys):
+        return None
+    out = {}
+    for key, ln in zip(keys, lines):
+        parts = ln.split()
+        out[key] = int(parts[2]) if len(parts) == 3 and parts[1] == "blob" else None
+    return out
+
+
+def sec_u(root, history=False):
+    """The reading of a brief (ADR 0777; docs/adr/briefs/README.md): every brief has entries `- <path> <bytes>`, its
+    stated total is their sum, and the sum is at most READING_LIMIT. With `history`, each listed size is the size of the
+    file in the commit that first added the brief."""
+    rep, fail, sums, listed = [], [], {}, {}
+    d = os.path.join(root, BRIEFS)
+    for fn in sorted(os.listdir(d)) if os.path.isdir(d) else []:
+        if not fn.endswith(".md") or fn == "README.md":
+            continue
+        entries, total = brief_reading(read(root, f"{BRIEFS}/{fn}"))
+        if not entries:
+            fail.append(f"u: brief has no reading list entry (a line \"- <path> <bytes>\" under \"## Reading list\"), {fn}")
+            continue
+        bare = [p for p, n in entries if n is None]
+        if bare:
+            fail.append(f"u: reading list entry without its size in bytes, {fn}: {bare[0]}")
+            continue
+        sums[fn] = sum(n for _, n in entries)
+        listed.update({(fn, p): n for p, n in entries})
+        if total is None:
+            fail.append(f"u: brief states no total of bytes to read (the fifth value of \"Size (lead):\"), {fn}")
+        elif total != sums[fn]:
+            fail.append(f"u: stated total {total} is not the sum {sums[fn]} of the reading list, {fn}")
+    over = [fn for fn, n in sums.items() if n > READING_LIMIT]
+    new, stale = less_list(root, "brief-over-reading-limit", over)
+    fail += [f"u: reading list of {sums[fn]} bytes, above the reading limit of {READING_LIMIT}, {fn}" for fn in new]
+    rep.append(f"briefs read: {len(sums)}; reading list above the limit of {READING_LIMIT} bytes: {len(over)}")
+    stale_all = [("brief-over-reading-limit", stale)]
+    if history:
+        at = sizes_at_issue(root, listed)
+        if at is None:
+            rep.append("sizes of the listed files in the commit that added the brief: not compared (no full git history here)")
+        else:
+            differ = {f"{fn}: {p}": (listed[fn, p], size) for (fn, p), size in at.items() if size != listed[fn, p]}
+            new_d, stale_d = less_list(root, "brief-size-differs", differ)
+            rep.append(f"listed sizes compared with the commit that added the brief: {len(at)}; they differ: {len(differ)}")
+            for k in new_d:
+                n, size = differ[k]
+                fail.append(f"u: listed size {n} is not the size of the file in the commit that added the brief "
+                            f"({'no such file' if size is None else size}), {k}")
+            stale_all.append(("brief-size-differs", stale_d))
+    for name, s in stale_all:
+        if s:
+            rep.append(f"exceptions that no longer apply in {name}.txt (remove them): {len(s)}")
+    for name in ("brief-over-reading-limit", "brief-size-differs"):
+        f, r = list_number(root, name, "u")
+        fail += f
+        rep += r
+    return rep, fail
 
 
 def since_green(root):
@@ -971,6 +1195,9 @@ def main(argv=None):
     show("i", "area pages", sec_i(root, items, cats))
     rep, f = sec_k(root); fails += f; show("k", "merge hygiene", rep)
     rep, f, rust, specs = sec_l(root, items, adrs); fails += f; show("l", "test headers", rep)
+    rep, f = sec_n(items); fails += f; show("n", "note entries of the roadmap (ADR 0777)", rep)
+    rep, f = sec_s(adrs); fails += f; show("s", "places of citations (ADR 0777)", rep)
+    rep, f = sec_u(root, a.history); fails += f; show("u", "the reading of the briefs (ADR 0777)", rep)
     if a.history:
         r = subprocess.run([sys.executable, os.path.join(root, "scripts", "adr_test_index.py"), "--root", root, "--report"],
                            capture_output=True, text=True, encoding="utf-8", errors="replace")

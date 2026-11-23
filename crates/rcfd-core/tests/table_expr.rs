@@ -1,3 +1,4 @@
+// ADR 0685, F-760: the record of this file, the primary ADR of its tests by scripts/adr_test_index.py (evidence E2).
 //! Tables called from expressions (F-105).
 
 use rcfd_core::expr::{Context, Expr};

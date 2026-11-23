@@ -1,3 +1,4 @@
+// ADR 0036: the record of this file, the primary ADR of its tests by scripts/adr_test_index.py (evidence E2).
 //! Temperature-dependent properties (F-053) through the settings tree.
 //!
 //! Checks fixed before running:

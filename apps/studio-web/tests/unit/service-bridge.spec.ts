@@ -1,3 +1,4 @@
+// F-803: the item of this spec, by the commit that added it (afee363a, 2026-11-16).
 // Unit tests of the service port's checks (src/main/service/bridge.ts) and of the allow-list (src/shared/service.ts),
 // with Node's MessageChannel standing in for Electron's and a recording client standing in for the service.
 import { expect, test } from '@playwright/test';
