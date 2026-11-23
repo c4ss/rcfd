@@ -406,8 +406,10 @@ For each metric it reports:
 
 SRC sees linear effects only: an R^2 well below 1 means the ranking misses interactions or non-monotone effects. Every sample and
 a summary are written to the ledger. The same seed gives a byte-identical ledger for any worker count (with a fixed clock). It is
-verified on analytic functions (closed-form means, variances, quantiles and SRC); no fan evaluator is attached yet and there is no
-MCP tool for it.
+verified on analytic functions (closed-form means, variances, quantiles and SRC).
+
+The MCP tool `design_uq` (ADR 0784) runs this function on the named evaluator `rcfd.fan_rom` (the reduced-order fan) with a
+ledger inside the sandbox; see [MCP tools](mcp-tools.md#tolerance-and-sobol-study-tools).
 
 ## Sobol sensitivity indices (ADR 0240, library only)
 
@@ -417,7 +419,10 @@ and, for each input `i`, `A` with column `i` from `B`: `N (d + 2)` evaluations. 
 Saltelli et al. (2010), the total estimator Jansen's (1999); each comes with a delta-method standard error. Unlike SRC it sees
 interactions (`ST_i - S_i`) and non-monotone effects; an input the model does not read gets exactly zero. A row with a failed
 evaluation is dropped as a whole. Every evaluation and a `sobol_summary` entry can be written to the ledger; the result does not
-depend on the worker count. It is opt-in, verified on the Ishigami function and a linear function, and has no MCP tool.
+depend on the worker count. It is opt-in and verified on the Ishigami function and a linear function.
+
+The MCP tool `design_sobol` (ADR 0784) runs this function on the named evaluator `rcfd.fan_rom` with a ledger inside the
+sandbox; see [MCP tools](mcp-tools.md#tolerance-and-sobol-study-tools).
 
 ## Fan objective over impedance points and tolerances (ADR 0620, library only)
 

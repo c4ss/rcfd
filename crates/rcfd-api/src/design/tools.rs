@@ -1707,3 +1707,419 @@ fn ledger_rerun_check(svc: &Service, p: &Value) -> Rpc {
 }
 
 // ---------------------------------------------------------------- end wave 46D
+
+// ---------------------------------------------------------------- F-339 (ADR 0784): studies of a named evaluator
+//
+// `uq_study` and `sobol_study` are the handlers of the MCP tools `design_uq` and `design_sobol`. They are not `design.*`
+// service methods ([`call`] and the service's method list are unchanged): the MCP server calls them directly. Each parses
+// its arguments into the evaluator and the driver's spec, runs `uq::run` or `sensitivity::run` with the ledger, and
+// returns the driver's own `result_json`.
+
+use super::fan_rom_eval::{FanRomModel, RomCondition, FAN_ROM_MODEL_ID, FAN_ROM_PARAMS};
+use super::ledger::Model as _;
+use super::sensitivity::{self, SobolSpec};
+use super::uq::{self, Dist, Requirement, Sampler, StopRule, UncertainParam, UqSpec};
+use rcfd_mesh::fan::SectionFamily;
+use rcfd_post::fan_rom::{FanRom, Operating, RomFan, RomModel, RomSection, SystemCurve};
+
+/// The evaluator names `design_uq` and `design_sobol` accept: the reduced-order fan of [`FanRomModel`].
+pub const STUDY_EVALUATORS: [&str; 1] = [FAN_ROM_MODEL_ID];
+
+/// The members of the object at `at`; a value that is not an object and a key outside `allowed` are refused with the place.
+fn object_at<'a>(v: Option<&'a Value>, at: &str, allowed: &[&str]) -> Rpc<&'a Map<String, Value>> {
+    let o = v
+        .and_then(Value::as_object)
+        .ok_or_else(|| bad(format!("{at}: expected an object")))?;
+    if let Some(k) = o.keys().find(|k| !allowed.contains(&k.as_str())) {
+        return Err(bad(format!("{at}.{k}: unknown key ({})", allowed.join(", "))));
+    }
+    Ok(o)
+}
+
+fn number_at(o: &Map<String, Value>, key: &str, at: &str) -> Rpc<f64> {
+    f64_of(o.get(key).unwrap_or(&Value::Null), &format!("{at}.{key}"))
+}
+
+fn count_at(o: &Map<String, Value>, key: &str, at: &str, min: usize) -> Rpc<usize> {
+    o.get(key)
+        .and_then(Value::as_u64)
+        .map(|x| x as usize)
+        .filter(|x| *x >= min)
+        .ok_or_else(|| bad(format!("{at}.{key}: expected an integer >= {min}")))
+}
+
+/// A truncation bound of a normal distribution: absent, `null` or the strings `-inf` / `inf` (as `Dist::to_json` writes
+/// an infinite bound) give `open`.
+fn bound_at(o: &Map<String, Value>, key: &str, at: &str, open: f64) -> Rpc<f64> {
+    match o.get(key) {
+        None | Some(Value::Null) => Ok(open),
+        Some(Value::String(s)) if s == "-inf" => Ok(f64::NEG_INFINITY),
+        Some(Value::String(s)) if s == "inf" => Ok(f64::INFINITY),
+        Some(v) => f64_of(v, &format!("{at}.{key}")),
+    }
+}
+
+/// The reduced-order fan evaluator from `evaluator_settings`: `fan` ([`RomFan`]), `model` (optional; absent keys keep
+/// [`RomModel::default`]) and `condition` ([`RomCondition`]), every number in the unit of the Rust field of its name.
+fn fan_rom_model(v: Option<&Value>) -> Rpc<FanRomModel> {
+    let at = "evaluator_settings";
+    let s = object_at(v, at, &["fan", "model", "condition"])?;
+    let fat = format!("{at}.fan");
+    let f = object_at(
+        s.get("fan"),
+        &fat,
+        &["n_blades", "r_hub", "r_tip", "tip_gap", "family", "sections"],
+    )?;
+    let family = match f.get("family").and_then(Value::as_str) {
+        Some("naca4") => SectionFamily::Naca4,
+        Some("circular_arc") => SectionFamily::CircularArc,
+        _ => return Err(bad(format!("{fat}.family: expected naca4 or circular_arc"))),
+    };
+    let list = f
+        .get("sections")
+        .and_then(Value::as_array)
+        .ok_or_else(|| bad(format!("{fat}.sections: expected a list of sections")))?;
+    let mut sections = Vec::with_capacity(list.len());
+    for (i, sv) in list.iter().enumerate() {
+        let sat = format!("{fat}.sections[{i}]");
+        let o = object_at(Some(sv), &sat, &["radius", "chord", "stagger", "camber", "camber_pos"])?;
+        sections.push(RomSection {
+            radius: number_at(o, "radius", &sat)?,
+            chord: number_at(o, "chord", &sat)?,
+            stagger: number_at(o, "stagger", &sat)?,
+            camber: number_at(o, "camber", &sat)?,
+            camber_pos: number_at(o, "camber_pos", &sat)?,
+        });
+    }
+    let fan = RomFan {
+        n_blades: count_at(f, "n_blades", &fat, 1)?,
+        r_hub: number_at(f, "r_hub", &fat)?,
+        r_tip: number_at(f, "r_tip", &fat)?,
+        tip_gap: number_at(f, "tip_gap", &fat)?,
+        family,
+        sections,
+    };
+    fan.validate().map_err(|e| bad(format!("{fat}.{e}")))?;
+    let mat = format!("{at}.model");
+    let mut model = RomModel::default();
+    if let Some(mv) = s.get("model").filter(|m| !m.is_null()) {
+        let m = object_at(
+            Some(mv),
+            &mat,
+            &[
+                "n_strips",
+                "cl_max",
+                "cd_normal",
+                "friction",
+                "annulus_drag",
+                "secondary_drag",
+                "tip_cd",
+            ],
+        )?;
+        if m.contains_key("n_strips") {
+            model.n_strips = count_at(m, "n_strips", &mat, 1)?;
+        }
+        if let Some(b) = m.get("friction") {
+            model.friction = b
+                .as_bool()
+                .ok_or_else(|| bad(format!("{mat}.friction: expected true or false")))?;
+        }
+        for (key, slot) in [
+            ("cl_max", &mut model.cl_max),
+            ("cd_normal", &mut model.cd_normal),
+            ("annulus_drag", &mut model.annulus_drag),
+            ("secondary_drag", &mut model.secondary_drag),
+            ("tip_cd", &mut model.tip_cd),
+        ] {
+            if m.contains_key(key) {
+                *slot = number_at(m, key, &mat)?;
+            }
+        }
+    }
+    FanRom::new(fan.clone(), model).map_err(|e| bad(format!("{mat}.{e}")))?;
+    let cat = format!("{at}.condition");
+    let c = object_at(
+        s.get("condition"),
+        &cat,
+        &[
+            "rpm",
+            "rho",
+            "nu",
+            "system_k",
+            "system_l",
+            "c0",
+            "observer_r",
+            "observer_theta",
+            "n_scan",
+        ],
+    )?;
+    let cond = RomCondition {
+        op: Operating {
+            rpm: number_at(c, "rpm", &cat)?,
+            rho: number_at(c, "rho", &cat)?,
+            nu: number_at(c, "nu", &cat)?,
+        },
+        system: SystemCurve {
+            k: number_at(c, "system_k", &cat)?,
+            l: number_at(c, "system_l", &cat)?,
+        },
+        c0: number_at(c, "c0", &cat)?,
+        observer_r: number_at(c, "observer_r", &cat)?,
+        observer_theta: number_at(c, "observer_theta", &cat)?,
+        n_scan: count_at(c, "n_scan", &cat, 1)?,
+    };
+    Ok(FanRomModel { fan, model, cond })
+}
+
+/// The uncertain inputs `params`: `{name, unit, dist}` with `dist` in the form `Dist::to_json` writes. Each name and unit
+/// must be a parameter of the evaluator (`known`), which would otherwise refuse every sample.
+fn study_params(p: &Value, known: &[(&str, &str)], evaluator: &str) -> Rpc<Vec<UncertainParam>> {
+    let list = p
+        .get("params")
+        .and_then(Value::as_array)
+        .ok_or_else(|| bad("params: expected a list of {name, unit, dist}"))?;
+    let mut out = Vec::with_capacity(list.len());
+    for (i, v) in list.iter().enumerate() {
+        let at = format!("params[{i}]");
+        let o = object_at(Some(v), &at, &["name", "unit", "dist"])?;
+        let text = |key: &str| -> Rpc<&str> {
+            o.get(key)
+                .and_then(Value::as_str)
+                .ok_or_else(|| bad(format!("{at}.{key}: missing")))
+        };
+        let (name, unit) = (text("name")?, text("unit")?);
+        match known.iter().find(|(n, _)| *n == name) {
+            None => {
+                return Err(bad(format!(
+                    "{at}.name: '{name}' is not a parameter of {evaluator} ({})",
+                    known.iter().map(|(n, _)| *n).collect::<Vec<_>>().join(", ")
+                )))
+            }
+            Some((_, u)) if *u != unit => {
+                return Err(bad(format!(
+                    "{at}.unit: the parameter '{name}' of {evaluator} has the unit '{u}' (got '{unit}')"
+                )))
+            }
+            Some(_) => {}
+        }
+        let dat = format!("{at}.dist");
+        let d = object_at(o.get("dist"), &dat, &["type", "lo", "hi", "mean", "sd", "a", "b"])?;
+        let dist = match d.get("type").and_then(Value::as_str) {
+            Some("uniform") => Dist::Uniform {
+                lo: number_at(d, "lo", &dat)?,
+                hi: number_at(d, "hi", &dat)?,
+            },
+            Some("normal") => Dist::Normal {
+                mean: number_at(d, "mean", &dat)?,
+                sd: number_at(d, "sd", &dat)?,
+                lo: bound_at(d, "lo", &dat, f64::NEG_INFINITY)?,
+                hi: bound_at(d, "hi", &dat, f64::INFINITY)?,
+            },
+            Some("beta") => Dist::Beta {
+                a: number_at(d, "a", &dat)?,
+                b: number_at(d, "b", &dat)?,
+                lo: number_at(d, "lo", &dat)?,
+                hi: number_at(d, "hi", &dat)?,
+            },
+            _ => return Err(bad(format!("{dat}.type: expected uniform, normal or beta"))),
+        };
+        out.push(UncertainParam {
+            name: name.to_string(),
+            unit: unit.to_string(),
+            dist,
+        });
+    }
+    Ok(out)
+}
+
+/// What `design_uq` and `design_sobol` share: the ledger inside the sandbox, the study name, the evaluator and its
+/// uncertain inputs, the seed and the worker count.
+struct StudyCall {
+    ledger: ledger::Ledger,
+    name: String,
+    model: FanRomModel,
+    params: Vec<UncertainParam>,
+    seed: u64,
+    workers: usize,
+}
+
+fn study_call(svc: &Service, p: &Value) -> Rpc<StudyCall> {
+    let ledger = ledger_at(svc, p)?;
+    let name = str_arg(p, "name")?;
+    check_name("name", name)?;
+    let evaluator = str_arg(p, "evaluator")?;
+    if !STUDY_EVALUATORS.contains(&evaluator) {
+        return Err(bad(format!(
+            "evaluator: '{evaluator}' is not a named evaluator of these studies ({})",
+            STUDY_EVALUATORS.join(", ")
+        )));
+    }
+    let model = fan_rom_model(p.get("evaluator_settings"))?;
+    let params = study_params(p, &FAN_ROM_PARAMS, evaluator)?;
+    let seed = match p.get("seed") {
+        None | Some(Value::Null) => 1,
+        Some(v) => v.as_u64().ok_or_else(|| bad("seed: expected a non-negative integer"))?,
+    };
+    Ok(StudyCall {
+        ledger,
+        name: name.to_string(),
+        model,
+        params,
+        seed,
+        workers: opt_usize(p, "workers")?.unwrap_or(1),
+    })
+}
+
+/// The two refusals before a study runs: more evaluations than the service allows one design call, and a ledger that
+/// already holds entries of the study `name` (the drivers find their entries by that name).
+fn study_guard(svc: &Service, l: &ledger::Ledger, name: &str, evaluations: usize) -> Rpc<()> {
+    let cap = svc.config().max_design_evaluations;
+    if evaluations > cap {
+        return Err(limit(format!(
+            "the study asks for {evaluations} evaluations, the limit max_design_evaluations is {cap}"
+        )));
+    }
+    let held = l.read().map_err(|e| RpcError::new(code::INTERNAL, e))?;
+    if held.entries.iter().any(|e| e.study == name) {
+        return Err(bad(format!(
+            "name: the ledger {} already holds entries of the study '{name}'; give another name or another ledger",
+            l.path().display()
+        )));
+    }
+    Ok(())
+}
+
+fn study_reply(l: &ledger::Ledger, model: &FanRomModel, entries: usize, result: Value) -> Value {
+    json!({
+        "ledger": l.path().display().to_string(), "evaluator": model.id(), "evaluator_version": model.version(),
+        "fidelity": model.fidelity().as_str(), "entries_appended": entries, "result": result,
+    })
+}
+
+/// Handler of the MCP tool `design_uq` (ADR 0784): [`uq::run`] on a named evaluator with the ledger. The reply's `result`
+/// is [`uq::result_json`] of the run, unchanged.
+pub fn uq_study(svc: &Service, p: &Value) -> Rpc {
+    let c = study_call(svc, p)?;
+    let sampler = match opt_str(p, "sampler")?.unwrap_or("monte_carlo") {
+        "monte_carlo" => Sampler::MonteCarlo,
+        "lhs" => Sampler::Lhs,
+        other => return Err(bad(format!("sampler: '{other}' is not monte_carlo or lhs"))),
+    };
+    let s = object_at(
+        p.get("stop"),
+        "stop",
+        &["batch", "min_batches", "max_samples", "se_abs", "se_rel", "metrics"],
+    )?;
+    let target = |key: &str| -> Rpc<f64> {
+        match s.get(key) {
+            None | Some(Value::Null) => Ok(0.0),
+            Some(v) => f64_of(v, &format!("stop.{key}")),
+        }
+    };
+    let stop = StopRule {
+        batch: count_at(s, "batch", "stop", 0)?,
+        min_batches: match s.get("min_batches") {
+            None | Some(Value::Null) if sampler == Sampler::Lhs => 2,
+            None | Some(Value::Null) => 1,
+            Some(_) => count_at(s, "min_batches", "stop", 0)?,
+        },
+        max_samples: count_at(s, "max_samples", "stop", 0)?,
+        se_abs: target("se_abs")?,
+        se_rel: target("se_rel")?,
+        metrics: match s.get("metrics") {
+            None | Some(Value::Null) => Vec::new(),
+            Some(v) => v
+                .as_array()
+                .ok_or_else(|| bad("stop.metrics: expected a list of metric names"))?
+                .iter()
+                .enumerate()
+                .map(|(i, m)| {
+                    m.as_str()
+                        .map(str::to_string)
+                        .ok_or_else(|| bad(format!("stop.metrics[{i}]: expected a metric name")))
+                })
+                .collect::<Rpc<_>>()?,
+        },
+    };
+    let quantiles = match p.get("quantiles") {
+        None | Some(Value::Null) => vec![0.05, 0.5, 0.95],
+        Some(v) => v
+            .as_array()
+            .ok_or_else(|| bad("quantiles: expected a list of probabilities"))?
+            .iter()
+            .enumerate()
+            .map(|(i, q)| f64_of(q, &format!("quantiles[{i}]")))
+            .collect::<Rpc<_>>()?,
+    };
+    let confidence = match p.get("confidence") {
+        None | Some(Value::Null) => 0.95,
+        Some(v) => f64_of(v, "confidence")?,
+    };
+    let mut requirements = Vec::new();
+    if let Some(v) = p.get("requirements").filter(|v| !v.is_null()) {
+        let list = v
+            .as_array()
+            .ok_or_else(|| bad("requirements: expected a list of {metric, cmp, limit}"))?;
+        for (i, r) in list.iter().enumerate() {
+            let at = format!("requirements[{i}]");
+            let o = object_at(Some(r), &at, &["metric", "cmp", "limit"])?;
+            requirements.push(Requirement {
+                metric: o
+                    .get("metric")
+                    .and_then(Value::as_str)
+                    .ok_or_else(|| bad(format!("{at}.metric: missing")))?
+                    .to_string(),
+                cmp: match o.get("cmp").and_then(Value::as_str) {
+                    Some("<=") => Cmp::Le,
+                    Some(">=") => Cmp::Ge,
+                    _ => return Err(bad(format!("{at}.cmp: expected <= or >="))),
+                },
+                limit: number_at(o, "limit", &at)?,
+            });
+        }
+    }
+    let spec = UqSpec {
+        name: c.name,
+        params: c.params,
+        sampler,
+        seed: c.seed,
+        stop,
+        quantiles,
+        confidence,
+        requirements,
+        workers: c.workers,
+    };
+    spec.validate().map_err(bad)?;
+    study_guard(svc, &c.ledger, &spec.name, spec.stop.max_samples)?;
+    let res = uq::run(&spec, &c.model, Some(&c.ledger)).map_err(|e| RpcError::new(code::INTERNAL, e))?;
+    Ok(study_reply(
+        &c.ledger,
+        &c.model,
+        res.n_samples + 1,
+        uq::result_json(&spec, &res),
+    ))
+}
+
+/// Handler of the MCP tool `design_sobol` (ADR 0784): [`sensitivity::run`] on a named evaluator with the ledger. The
+/// reply's `result` is [`sensitivity::result_json`] of the run, unchanged.
+pub fn sobol_study(svc: &Service, p: &Value) -> Rpc {
+    let c = study_call(svc, p)?;
+    let n = opt_usize(p, "n")?.ok_or_else(|| bad("n: missing (the rows of the matrices A and B)"))?;
+    let spec = SobolSpec {
+        name: c.name,
+        params: c.params,
+        n,
+        seed: c.seed,
+        workers: c.workers,
+    };
+    spec.validate().map_err(bad)?;
+    // `validate` has refused a product that overflows
+    study_guard(svc, &c.ledger, &spec.name, spec.n * (spec.params.len() + 2))?;
+    let res = sensitivity::run(&spec, &c.model, Some(&c.ledger)).map_err(|e| RpcError::new(code::INTERNAL, e))?;
+    Ok(study_reply(
+        &c.ledger,
+        &c.model,
+        res.n_evaluations + 1,
+        sensitivity::result_json(&spec, &res),
+    ))
+}

@@ -505,6 +505,52 @@ fn tools() -> Vec<Tool> {
             },
         },
         // ---- end wave 46D
+        // ---- F-339 (ADR 0784): tolerance and Sobol studies of a named evaluator
+        Tool {
+            name: "design_uq",
+            description: "Run a tolerance study (the library's uq::run) of a named evaluator, now rcfd.fan_rom (the reduced-order axial fan), and record it in a design ledger inside the sandbox: uncertain inputs with uniform, truncated normal or beta distributions, Monte Carlo or replicated Latin hypercube sampling with a stopping rule on the standard error, then per metric the mean, sd, SE, quantiles with intervals and standardised regression coefficients, and the probability of violating each requirement. Every sample is a ledger entry and one uq_summary closes the study. Bounded by max_design_evaluations; a study name the ledger already holds is refused.",
+            access: Access::WriteFiles,
+            schema: || {
+                obj(
+                    json!({
+                        "ledger": {"type": "string", "description": "ledger file inside the sandbox, e.g. fan/ledger.jsonl"},
+                        "name": {"type": "string", "description": "study name (the study of the ledger entries); must be new in the ledger"},
+                        "evaluator": {"type": "string", "description": "rcfd.fan_rom"},
+                        "evaluator_settings": {"type": "object", "description": "for rcfd.fan_rom: {fan: {n_blades, r_hub, r_tip, tip_gap, family: naca4|circular_arc, sections: [{radius, chord, stagger (rad), camber, camber_pos}]}, model?: {n_strips, cl_max, cd_normal, friction, annulus_drag, secondary_drag, tip_cd}, condition: {rpm, rho, nu, system_k, system_l, c0, observer_r, observer_theta (rad), n_scan}} in SI units"},
+                        "params": {"type": "array", "items": {"type": "object"}, "description": "[{name, unit, dist}]; for rcfd.fan_rom the names stagger_common_deg (deg), chord_rel (1), tip_gap_delta (m); dist is {type: uniform, lo, hi}, {type: normal, mean, sd, lo?, hi?} or {type: beta, a, b, lo, hi}"},
+                        "sampler": {"type": "string", "enum": ["monte_carlo", "lhs"], "description": "default monte_carlo"},
+                        "seed": {"type": "integer", "minimum": 0, "description": "default 1"},
+                        "stop": {"type": "object", "description": "{batch, max_samples, min_batches?, se_abs?, se_rel?, metrics?}: batches until the SE of the mean of every controlled metric is at most max(se_abs, se_rel |mean|), or max_samples"},
+                        "quantiles": {"type": "array", "items": {"type": "number"}, "description": "probabilities in (0, 1); default [0.05, 0.5, 0.95]"},
+                        "confidence": {"type": "number", "description": "confidence of the intervals, default 0.95"},
+                        "requirements": {"type": "array", "items": {"type": "object"}, "description": "[{metric, cmp: <=|>=, limit}]"},
+                        "workers": {"type": "integer", "minimum": 1, "description": "concurrent evaluations (the result does not depend on it); default 1"}
+                    }),
+                    &["ledger", "name", "evaluator", "evaluator_settings", "params", "stop"],
+                )
+            },
+        },
+        Tool {
+            name: "design_sobol",
+            description: "Estimate first-order and total Sobol sensitivity indices (the library's sensitivity::run) of a named evaluator, now rcfd.fan_rom (the reduced-order axial fan), and record the study in a design ledger inside the sandbox: independent uncertain inputs, the Monte Carlo design A, B, A_B^(i) at n (d + 2) evaluations, per metric the indices S and ST of every input with standard errors. Every evaluation is a ledger entry and one sobol_summary closes the study. Bounded by max_design_evaluations; a study name the ledger already holds is refused.",
+            access: Access::WriteFiles,
+            schema: || {
+                obj(
+                    json!({
+                        "ledger": {"type": "string", "description": "ledger file inside the sandbox, e.g. fan/ledger.jsonl"},
+                        "name": {"type": "string", "description": "study name (the study of the ledger entries); must be new in the ledger"},
+                        "evaluator": {"type": "string", "description": "rcfd.fan_rom"},
+                        "evaluator_settings": {"type": "object", "description": "for rcfd.fan_rom: {fan: {n_blades, r_hub, r_tip, tip_gap, family: naca4|circular_arc, sections: [{radius, chord, stagger (rad), camber, camber_pos}]}, model?: {n_strips, cl_max, cd_normal, friction, annulus_drag, secondary_drag, tip_cd}, condition: {rpm, rho, nu, system_k, system_l, c0, observer_r, observer_theta (rad), n_scan}} in SI units"},
+                        "params": {"type": "array", "items": {"type": "object"}, "description": "[{name, unit, dist}]; for rcfd.fan_rom the names stagger_common_deg (deg), chord_rel (1), tip_gap_delta (m); dist is {type: uniform, lo, hi}, {type: normal, mean, sd, lo?, hi?} or {type: beta, a, b, lo, hi}"},
+                        "n": {"type": "integer", "minimum": 0, "description": "rows of each of the matrices A and B (at least 2); the study makes n (d + 2) evaluations for d inputs"},
+                        "seed": {"type": "integer", "minimum": 0, "description": "default 1"},
+                        "workers": {"type": "integer", "minimum": 1, "description": "concurrent evaluations (the result does not depend on it); default 1"}
+                    }),
+                    &["ledger", "name", "evaluator", "evaluator_settings", "params", "n"],
+                )
+            },
+        },
+        // ---- end F-339
         Tool {
             name: "render_image",
             description: "Render a field as a PNG image (optionally with velocity vectors) and return it as an image content block.",
@@ -984,6 +1030,9 @@ impl McpServer {
                 }
                 Ok(ok_result(svc.call(method, &p)?))
             }
+            // F-339 (ADR 0784): the two studies of a named evaluator are functions of the design tools, not service methods
+            "design_uq" => Ok(ok_result(rcfd_api::design::tools::uq_study(svc, args)?)),
+            "design_sobol" => Ok(ok_result(rcfd_api::design::tools::sobol_study(svc, args)?)),
             "create_project" => {
                 let dir = svc.sandbox_path(args["path"].as_str().unwrap_or_default())?;
                 let name = args.get("name").and_then(Value::as_str);
