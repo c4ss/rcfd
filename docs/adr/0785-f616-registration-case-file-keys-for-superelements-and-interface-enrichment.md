@@ -253,3 +253,16 @@ of D1 and S1 exists. Nothing was run. Two corrections of the set-up; no limit ch
    out of the settings tree of a case that does not give it, and out of `required`. The collection `superelements`
    cannot be optional (the option is for objects) and is in the tree as an empty table. So the tree of a case without
    the keys gains `superelements` (empty) only, not `reduction` as D8 said.
+
+## Amendment 2 (2026-11-23, before any library line and before the run of D1)
+
+The test file of D1 and S1 was written and run once on the code of main fcc84a84 to print the digests it records (log
+`d1-record-1.log` in the scratch folder). One of the six case files does not give a result on main:
+`cantilever_tet10_amg.toml` is refused by `run_solid_case_file` with one problem at `solver` (the CG solver with the
+`amg_quadratic` preconditioner does not converge to 1e-10; the existing known miss of the rows of ADR 0438's A14). The
+set-up of D1 is corrected, with no change of a limit: for a case file that `run_solid_case_file` refuses, D1 records one
+digest, of its problems as text (key, line and message of each, in order), in the place of the three digests; that is
+what a case without the keys gives for this file, and it must be the same after the change. The other five files and S1
+are as registered. The print of that first run gave digests for `bar_hex8`, `cantilever_hex8` and `cantilever_tet10`
+and for S1, and stopped at the refused file; the recording run is made again with the corrected file and its digests
+are committed with it, before any library line.
