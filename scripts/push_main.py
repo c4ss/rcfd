@@ -26,6 +26,11 @@ The plan, in order:
     scripts/gate_test.py --tsv writes (binary, test, outcome, seconds, MB), summed over the non-ignored tests of a binary; a binary
     with no record counts --default-seconds (60). Selection stops at the first binary that does not fit; the rest is left out,
     counted in the ledger line, and runs in CI on main. No test is switched off.
+    ADR 0776 (F-860): the tests the index maps to the merge's ADRs (in group 1 above) are charged to the budget first, by the
+    same rule of cost per command, and are never cut; the plan prints their recorded minutes. In the group of the touched
+    crates, the binaries named after a changed source file come first: a `.rs` file under `<crate>/src/` gives its stem (the
+    file name, or the folder of a `mod.rs`; none for `lib.rs` and `main.rs`), and a test binary of the same crate whose name
+    is the stem or begins with the stem and `_` is named after it.
  3. mutation patches: every `*.mutation.patch` the merge adds or changes, and the one beside each test file of the merge's ADRs
     (crates/<crate>/tests/<test>.mutation.patch for <test>.rs). Its first line is `# expect-fail: <command>`. The patch is applied
     with git apply, the command must FAIL, and the patch is removed again whatever happens.
@@ -51,6 +56,8 @@ The ledger, docs/process/ledger.tsv, is changed only on main. Columns: date, kin
 branch, items, adrs, result, minutes, left_out, left_out_minutes, detail. A gate line's detail is
 `passed=N;failed=N;ignored=N[;skipped=N];fails=binary::test=ADR/F-item,...[;times=PATH][;escaped=...]`; `skipped` is the number of passed tests that
 reported a skip (the closing line of `scripts/gate_test.py --skip-pattern`). A green gate line moves the local tag `verified`.
+A left-out line's detail is `ran=N;failed=N;checkout_start=SHA;checkout_end=SHA[;checkout_moved=yes][;fails=...;cmds=...]`:
+the commit of the checkout before the first command and after the last; `checkout_moved=yes` when they differ (ADR 0776).
 
 Process measures (ADR 0754, F-863). Four options of --run put entries into the detail of the merge line, after `joint=` and
 before `cmds=`; an option that is not given writes no entry, and a run without them writes the line it wrote before.
@@ -252,9 +259,56 @@ def binary_units(idx, crates_wanted, times, default_s, build_s=0.0):
     return units
 
 
-def order_group(units, failed_binaries):
-    """Recently failed first, then by cost ascending, then by name."""
-    return sorted(units, key=lambda u: (u["binary"] not in failed_binaries, u["cost"], u["crate"], u["target"]))
+def order_group(units, failed_binaries, named=()):
+    """The binaries named after a changed source file first (`named`: (crate, target) pairs; ADR 0776), then recently
+    failed first, then by cost ascending, then by name."""
+    return sorted(units, key=lambda u: ((u["crate"], u["target"]) not in named, u["binary"] not in failed_binaries, u["cost"],
+                                        u["crate"], u["target"]))
+
+
+def source_stems(files, crates):
+    """(crate, stem) of each changed source file (ADR 0776): a `.rs` file under `<crate dir>/src/` of the crate that owns it
+    by the longest prefix; the stem is the file name without `.rs`, for `mod.rs` the name of its folder; `lib.rs` and
+    `main.rs` give none."""
+    out = set()
+    for f in files:
+        owner = touched_crates([f], crates) if f.endswith(".rs") else []
+        if not owner:
+            continue
+        src = crates[owner[0]]["dir"].rstrip("/") + "/src/"
+        parts = f[len(src):].split("/") if f.startswith(src) else []
+        if not parts:
+            continue
+        stem = parts[-1][:-len(".rs")]
+        if stem == "mod":
+            stem = parts[-2] if len(parts) > 1 else ""
+        if stem and stem not in ("lib", "main"):
+            out.add((owner[0], stem))
+    return out
+
+
+def named_after(crate, target, stems):
+    """True when the test binary `target` of `crate` is named after a changed source file of the same crate: its name is the
+    stem or begins with the stem and `_` (ADR 0776)."""
+    return any(c == crate and (target == s or target.startswith(s + "_")) for c, s in stems)
+
+
+def adr_units(idx, cmds, times, default_s, build_s=0.0):
+    """The cost of each command the index maps to the merge's ADRs (ADR 0776): the recorded seconds of the non-ignored tests
+    it runs (crate, kind, target and, with `-- --exact NAME`, that name), or the default when none has a record, plus
+    `build_s` once per command."""
+    out = []
+    for cmd in cmds:
+        crate = re.search(r"-p (\S+)", cmd).group(1)
+        m = re.search(r"--(test|bin) (\S+)", cmd)
+        kind, target = (m.group(1), m.group(2)) if m else ("lib", None)
+        ex = re.search(r"--exact (\S+)", cmd)
+        ts = [t for t in idx["tests"] if t["crate"] == crate and t["kind"] == kind and not t["ignored"]
+              and (target is None or t["target"] == target) and (ex is None or t["name"] == ex.group(1))]
+        rec = [times[(t["binary"], t["name"])] for t in ts if (t["binary"], t["name"]) in times]
+        secs = sum(rec) if rec else None
+        out.append({"cmd": cmd, "seconds": secs, "cost": (secs if secs is not None else float(default_s)) + float(build_s)})
+    return out
 
 
 def cut(groups, budget_s, skip_cmds=()):
@@ -672,8 +726,11 @@ def make_plan(root, info, idx, times, rows, budget_min, default_s, build_s=BUILD
     if touched:
         always.append("cargo clippy " + " ".join(f"-p {c}" for c in touched) + " --all-targets -- -D warnings")
     import adr_test_index
+    adr_cmds = []
     for a in info["adrs"]:
         for cmd in adr_test_index.adr_commands(idx, a):
+            if cmd not in adr_cmds:
+                adr_cmds.append(cmd)
             if cmd not in always:
                 always.append(cmd)
     has_lib = {t["crate"] for t in idx["tests"] if t["kind"] == "lib"}
@@ -684,15 +741,26 @@ def make_plan(root, info, idx, times, rows, budget_min, default_s, build_s=BUILD
     always.append("python scripts/process_report.py --check")
     always = list(dict.fromkeys(always))
     failed = recent_failed_binaries(rows)
-    g1 = order_group(binary_units(idx, set(touched), times, default_s, build_s), failed)
+    # ADR 0776: the ADR's tests are charged to the budget first and never cut; the binaries named after a changed source
+    # file come first in the group of the touched crates
+    adr = adr_units(idx, adr_cmds, times, default_s, build_s)
+    adr_s = sum(u["cost"] for u in adr)
+    stems = source_stems(info["files"], crates)
+    units1 = binary_units(idx, set(touched), times, default_s, build_s)
+    named = {(u["crate"], u["target"]) for u in units1 if named_after(u["crate"], u["target"], stems)}
+    g1 = order_group(units1, failed, named)
     g2 = order_group(binary_units(idx, set(dependents(crates, touched)), times, default_s, build_s), failed)
-    taken, left, used = cut([g1, g2], budget_min * 60.0, set(always))
+    taken, left, used = cut([g1, g2], budget_min * 60.0 - adr_s, set(always))
+    named_cut = [u for u in units1 if (u["crate"], u["target"]) in named and u["cmd"] not in always]
+    left_cmds = {u["cmd"] for u in left}
     adr_tests = sorted({t["file"] for t in idx["tests"] if set(t["adrs"]) & set(info["adrs"]) and t["kind"] == "test"})
     patches = patch_paths(info["files"], adr_tests, lambda p: os.path.isfile(os.path.join(root, p)))
     studio = any(f.startswith("apps/studio-web/") for f in info["files"])
     return {"touched": touched, "always": always, "selected": taken, "left": left, "selected_minutes": used / 60.0,
             "left_minutes": sum(u["cost"] for u in left) / 60.0, "patches": patches, "studio": studio, "build_s": float(build_s),
-            "no_patch": unpatched_adrs(idx["tests"], info["adrs"], patches)}
+            "no_patch": unpatched_adrs(idx["tests"], info["adrs"], patches), "budget_minutes": float(budget_min),
+            "adr_units": adr, "adr_minutes": adr_s / 60.0, "named": sorted((u["crate"], u["target"]) for u in named_cut),
+            "named_left": sum(1 for u in named_cut if u["cmd"] in left_cmds)}
 
 
 def print_plan(info, plan, base, n, times_note=""):
@@ -707,6 +775,14 @@ def print_plan(info, plan, base, n, times_note=""):
     print("always:")
     for c in plan["always"]:
         print("  " + c)
+    if plan.get("adr_units"):
+        budget = plan.get("budget_minutes", 0.0)
+        print(f"ADR tests (charged to the budget first, never cut): {len(plan['adr_units'])} commands, "
+              f"{plan['adr_minutes']:.1f} recorded minutes, with {plan.get('build_s', 0.0):g} s of build counted per command; "
+              f"{max(budget - plan['adr_minutes'], 0.0):.1f} of the {budget:.1f} budget minutes left for the diff-selected binaries")
+    if plan.get("named"):
+        print(f"named after a changed source file: {len(plan['named'])} binaries, first in their crate's group; "
+              f"{plan['named_left']} of them left out by the budget")
     build = f", with {plan['build_s']:g} s of build counted per binary" if plan.get("build_s") else ""
     print(f"diff-selected ({len(plan['selected'])} binaries, {plan['selected_minutes']:.1f} recorded minutes{build}):")
     for u in plan["selected"]:
@@ -880,17 +956,31 @@ def do_run(root, a, info, plan, run=sh):
     return 0
 
 
-def do_left_out(root, path):
+def checkout_commit(root):
+    """The commit of the checkout, 10 characters, or `unknown` when git cannot say."""
+    code, out = git_try(root, "rev-parse", "HEAD")
+    return out.strip()[:10] if code == 0 and out.strip() else "unknown"
+
+
+def do_left_out(root, path, run=sh, head=None):
     """Run every left-out command (no stop on a failure) and append one `leftout` line to the working-tree ledger; the lead's
-    next push commits it."""
+    next push commits it. The line records the checkout's commit before the first command and after the last, and says
+    when they differ (ADR 0776). `run(cmd, cwd, capture)` runs one command (sh; the tests give a recorder)."""
+    head = head or (lambda: checkout_commit(root))
     job = json.load(open(path, encoding="utf-8"))
     failed, minutes = [], 0.0
+    start = head()
     for cmd in job["cmds"]:
-        code, m, _ = sh(cmd, root)
+        code, m, _ = run(cmd, root, False)
         minutes += m
         if code:
             failed.append(cmd)
-    detail = f"ran={len(job['cmds'])};failed={len(failed)}"
+    end = head()
+    detail = f"ran={len(job['cmds'])};failed={len(failed)};checkout_start={start};checkout_end={end}"
+    if start != end:
+        detail += ";checkout_moved=yes"
+        print(f"push_main: the checkout moved during the left-out run, from {start} to {end}; a binary built after the move "
+              f"was built from {end}")
     if failed:
         bins = [re.search(r"--test (\S+)", c).group(1) + "::*=none/none" for c in failed if "--test " in c]
         detail += ";fails=" + ",".join(bins) + ";cmds=" + " | ".join(failed)
