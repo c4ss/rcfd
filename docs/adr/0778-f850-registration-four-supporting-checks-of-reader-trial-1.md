@@ -246,3 +246,109 @@ the committed patch M1. HS20m-M' and HS10m-M' are heavy records, ignored, run on
 - The other points of the four addenda of 2026-11-19 (wording, counts, the pair M5b of ADR 0453) are records and need
   no check.
 - No limit of the four ADRs changes, and their ignored records are not run again.
+
+## Addendum 1: results (2026-11-23)
+
+Written after the runs. Nothing above is changed. The registration is commit 47f0b1f7, alone; the four test files are
+commit a3edba10, made after a build without a run (`cargo test --no-run`) and
+the format check and before any run; the patch is commit 7828c817. Each registered run was made once, in release, with
+the target folder under the scratch folder. Logs in the scratch folder: `run_sa_*.log` (the gate tests), `run_heavy.log`,
+`mutations.log` and `mut_M*.log`, `clippy.log`, `lib.log`, `docs_site_*.log`. No limit changed and there is no
+amendment.
+
+### Every check
+
+| Id | Limit | Measured | Met |
+| --- | --- | --- | --- |
+| A1'' | each `<= 2e-2` | `1.2869e-3` against the closed form of the test and against the digits of ADR 0553 (`1.78684213e5` against `1.78454564e5`) | yes |
+| A2'' | each `<= 2e-2` | `3.8913e-4` against both (`5.39797922e4` against `5.39587954e4`) | yes |
+| A3'' | holds | flange-1 strains `+1.3343e-5` and `-1.3343e-5`; the compressed case has the larger moment | yes |
+| HB- | `<= 1e-10` | `0` (bending `0`, largest twist `1.746249e-1`) | yes |
+| HS20m-M' | succeeds; `<= 0.08` | succeeds (10 augmentations, 54.3 s); `a_M` 0.0992334 against `a_H` 0.1005939: `1.352480e-2` | yes |
+| HS10m-M' | succeeds; `<= 0.08` | succeeds (14 augmentations, 83.7 s); `a_M` 0.0972811 against `a_H` 0.1007068: `3.401690e-2` | yes |
+| NC | each `> 0.08` (refused) | HS20 `1.301493e-1`, HS10 `1.387743e-1`: both refused by 0.08; both would pass the 0.15 of ADR 0570 | yes |
+| HZ | each `<= 0.08` | HS20 `1.340286e-2`, HS10 `2.302823e-2` | yes |
+| G2= | `==` | the three reasons equal the formatted and the literal text; key `"mean stress"` | yes |
+
+The 16-element factors are `178.68421280057328` and `53.97979218576993`, the bits ADR 0553 addendum 1 records. The moment
+radii are the values of ADR 0570 addendum 1 (`1.35e-2`, `3.40e-2`), with the same `F_fe` (`1.4915e-3`, `1.4965e-3`).
+Every measured value agrees with its estimate to the digits the estimate has. In NC and HZ the sum of the nodal forces
+agrees with the exact integral of the pressure to `6e-5` at worst.
+
+### Negative control and mutations
+
+NC is the negative control of the acceptance: refused on both meshes (row above).
+
+The mutations, on the `git archive` copy of commit a3edba10 in the scratch folder, each alone, the command run once:
+
+| Id | Result | What caught it |
+| --- | --- | --- |
+| M1 | caught | HB- at its assertion: `8.990816e-1` against `1e-10` (bending `1.19e-3`, twist `1.32e-3`); estimated near 1.5 |
+| M2 | caught | HB- at its assertion: `1.807143e-1`; estimated near 0.17 |
+| M3 | caught | G2=, the equality with the formatted text (the reason ends in a full stop). The existing `sa_fatigue_f534` passed with M3, as expected: its containment does not see the change |
+| M4 | caught | A1'' and A2'' against the digits of ADR 0553: `3.3044e-1` and `4.9602e-1` |
+
+Four of four caught. M1 is committed as `crates/rcfd-fem/tests/sa_beam_warping_hb_f850.mutation.patch`, by the rule of
+the design (it fails at the HB- assertion, not by a refusal); `git apply --check` accepts it from the root of the
+workspace.
+
+One thing M4 shows: under M4 the comparison with the closed form the test computes itself still passes (`1.0e-3`,
+`6.8e-4`), because `closed` takes `beta_x` from the mutated function. Only the comparison with the digits of ADR 0553
+catches it, which is why the registration compared with both.
+
+### What the gate runs and what is a heavy record
+
+The gate runs A1'', A2'', A3'', HB-, NC, HZ and G2= (four binaries, each under a second of test time) and the patch
+M1. HS20m-M' and HS10m-M' are ignored heavy records, run once here: 54.3 s and 83.7 s, 138 s together, while the
+mutation builds ran on the same machine. Both took less than the two minutes of rule 7; they were registered as heavy
+before the run on the times of ADR 0551 and stay ignored.
+
+### Other runs (rule 7)
+
+- `python scripts/fmt_check.py rcfd-fem` (what the push script runs; `cargo fmt -p rcfd-fem` itself fails on this machine
+  with os error 206, the command line being too long): clean.
+- `cargo clippy -p rcfd-fem --all-targets -- -D warnings`: clean.
+- `cargo test -p rcfd-fem --release --lib`: 15 passed.
+- `cargo test -p rcfd-cli --release --test docs_site`: 2 passed, before the commit of the registration and again on
+  this addendum.
+- `baseline_hashes` was not run: no library file changed.
+
+### Deviations
+
+- The mutation script stopped at its first start on a Python keyword this interpreter does not have, before it changed
+  a file or ran a command; it was corrected and started again. No mutation command ran twice.
+- Nothing else. No existing test, record or library line changed (`git diff d10ea0bd --stat` names this ADR, the four
+  test files, the patch and the proposal file only).
+
+### What was not run
+
+The whole suite of `rcfd-fem` and the other crates (rule 7 leaves them to the lead). The second class of mutation the
+acceptance names (`K_sigma` indexed into the bending equations) was not run; the acceptance asks for one of the two.
+The ignored records of the four ADRs were not run.
+
+### Size
+
+Size (agent, actual): done; 0; 2; 0; 260000
+
+### Decision by the registered rule
+
+**Done.** A1'', A2'', A3'', HB-, HS20m-M', HS10m-M', HZ and G2= meet their limits, NC is refused on both meshes, and the
+committed mutation M1 is caught by HB- at its assertion. Each of the four records now has a check that holds it as it
+says, and the mutation of check (2) is caught.
+
+## Open questions for the maintainer
+
+None.
+
+## For the lead: roadmap entries
+
+Status proposed: done.
+
+> ADR 0778, 2026-11-23, done: the four supporting checks run in new test files, test-only: the 16-element moments of ADR 0553 A1' and A2' are 1.29e-3 and 3.9e-4 from the closed form (limit 2e-2), also against the digits ADR 0553 prints; HB- of ADR 0585 is 0 and catches the committed mutation (the axial force in the slot of M_y: 0.899 against the limit 1e-10); the moment radii of ADR 0570 are 1.35e-2 and 3.40e-2 against the limit 0.08 (heavy records), and a uniform pressure on the Hertz disc is refused at 0.130 and 0.139 (continuum 0.118); the three Gerber texts of ADR 0453 G2 are equal; 4 of 4 mutations caught.
+
+No follow-up item is proposed. The same entry is in `docs/roadmap/proposals/0778-F-850.json`
+(`python scripts/roadmap_proposals.py check`: "F-850: todo -> done; note + 617 characters", exit 0).
+
+For the lead, not roadmap: `docs/adr/index.md` is generated and not current after this work; it is left to the lead
+(rule 9). No reference fragment was added. The two heavy records took 54 s and 84 s; if the lead wants them in the
+gate, that is a new test file of a later item, since a committed test is not edited.
