@@ -154,3 +154,84 @@ wasmi 2.x. Any change of ABI 1 or of the hook catalogue. The fixes of translatio
 for the port and are not re-tested here. A comparison of run time between the two interpreters. The files outside this
 work's ownership that the new version touches (`crates/rcfd-api/Cargo.toml` `rust-version`, the README's range of
 minimums, the generated `THIRD_PARTY_LICENSES.md`): reported to the lead, not edited.
+
+## Addendum 1: results (2026-11-23)
+
+Commits: the registration 608ec768 alone; the port and the new test file bcb0d2a7; the mutation patch, this addendum,
+the proposal file and the topic page after them. Checks in the release profile (clippy in the dev profile), Rust 1.99.0,
+Windows, target folder under the scratch folder. Each registered run was made once; after `rustfmt` had rewrapped lines
+of `udf.rs` (the first `cargo fmt --check` found five places, none a change of code), the three UDF test files, clippy
+and the format check were run again and passed.
+
+| Id | Limit | Measured | Met |
+| --- | --- | --- | --- |
+| V1 | wasmi 1.1.0 and no wasmi 0.31 in `Cargo.lock` | wasmi, wasmi_core, wasmi_collections, wasmi_ir 1.1.0; wasmi 0.31.2, wasmi_arena and wasmparser-nostd gone | yes |
+| Q1 | clippy with `-D warnings` and the format check: no finding | clippy none; format none after the rewrap | yes |
+| Q2 | the type-check with Rust 1.90 passes | not run: the toolchain 1.90.0 is not installed, and none was installed | not decided |
+| Q3 | the unit tests of rcfd-api pass | 159 passed, 0 failed, 4 ignored (as before) | yes |
+| E1 | the three existing files pass unedited | `udf` 8 of 8; `udf_hooks_w38a` 9 passed, 1 ignored (its record of before); `check_inputs_adr0739` 3 of 3 | yes |
+| B1 | `baseline_hashes` passes unedited | 3 passed, 1 ignored (as before) | yes |
+| L1 | succeeds; fails; succeeds; fails | as registered | yes |
+| L2 | positive, larger after 100 turns, at most the fuel per call | 47 after 10 turns, 407 after 100, of 1 000 000 | yes |
+| L3 | refused with "cannot instantiate" | refused | yes |
+| M1 | 256 pages returned; the call with one page more fails | as registered | yes |
+| M2 | 256 pages load; 257 refused | as registered | yes |
+| I1 | four kinds of import refused with the name | as registered | yes |
+| A1 | four proposals refused as not valid | as registered | yes |
+| A2 | the text format refused as not valid | as registered | yes |
+| D1 | `cargo deny check` passes | "advisories ok, bans ok, licenses ok, sources ok" (cargo-deny 0.22.0); the subset of the CI job also | yes |
+
+F1 (no limit): `max_fuel_per_call` for 10 and 100 turns of the loop was 105 and 915 on wasmi 0.31.2 and is 47 and 407 on
+1.1.0. The same budget buys about 2.2 times as many turns of that loop; other code was not measured. A budget that was
+enough for a module stays enough as far as this sample shows; the time until a runaway module is stopped grows.
+
+The control: the new test file on the unported tree (wasmi 0.31.2), before the port: 8 of 8 passed. So the behaviour
+the new tests fix is the behaviour of before.
+
+Mutations, on a scratch copy of bcb0d2a7 (`udf_limits_adr0782` and `udf` run on each; the unmutated copy passed both):
+
+| Id | Mutation | Caught by | Not caught by |
+| --- | --- | --- | --- |
+| MU1 (committed) | the store limits without `memory_size` | M1 and M2 | all 8 tests of `udf`: the existing test of the memory cap passes without the cap, as the registration expected |
+| MU2 | no renewal of the fuel in `kinematic_viscosity` | L1; `runaway_modules_are_stopped` | |
+| MU3 | the refusal of imports removed | I1; `module_isolation_and_abi_checks` | |
+| MU4 | the four switches of D2 removed | A1 | `udf` |
+| MU5 | wasmi with its default features | A2 | `udf` |
+
+Deviations: none from the design. cargo-deny was not installed on the machine; it was built into the scratch folder
+(`cargo install --root`), nothing outside it was changed. The gate runs the eight new tests (0.02 s) with the existing
+files; there is no heavy record.
+
+Not run: Q2. The whole workspace suite and the other integration tests of rcfd-api (rule 7). `npm test` (not touched).
+
+Size (agent), actual: partial; 0; 0; 1; 130000
+
+### Decision
+
+By the registered rule: **partial**. Every check that was run holds with wasmi 1.1.0; Q2 could not be run for want of
+the toolchain. If the lead's run of `cargo check --workspace --all-targets --locked` with Rust 1.90 passes (the CI job
+`min-toolchain`), the rule gives done.
+
+### For the lead, outside the files of this work
+
+* `crates/rcfd-api/Cargo.toml` states `rust-version = "1.85"`; its closure now needs 1.86 (wasmi 1.1.0). The README's
+  sentence on the crates' own minimums ("1.75 to 1.85") changes with it. Neither file was edited.
+* `python scripts/third_party_licenses.py --check` fails after the port (the wasmi packages changed). It also fails on
+  main e2fe571b, where the list still names wat 1.262.0 and `Cargo.lock` has 1.263.0. The list was not regenerated.
+* `python scripts/process_report.py --check`: one failure, "generated file is not current: docs/adr/index.md".
+
+### Open questions for the maintainer
+
+1. wasmi 2.0.2 was published on 2026-11-19 (2.0.0 and 2.0.1 are yanked), with the same minimum Rust. Options: (a) stay
+   on 1.1.0 until a fix or a need names 2.x; (b) a new item for 2.x now. Recommendation: (a); the item named 1.x, the
+   2.x line is four days old with two yanked releases, and the tests of this ADR make a later move cheap to check.
+
+## For the lead: roadmap entries
+
+Status proposed: partial.
+
+> ADR 0782, 2026-11-23, partial: the workspace uses wasmi 1.1.0 (the newest 1.x; minimum Rust 1.86, below the README's 1.90) without its default feature wat, and udf.rs is ported with the accepted set of modules, the eager translation and the limits of before; clippy with warnings as errors, the 159 unit tests, udf, udf_hooks_w38a, check_inputs_adr0739 and baseline_hashes pass unedited, cargo deny check passes, and eight new tests of the fuel, the 16 MiB cap one page apart and the refusals pass on wasmi 0.31.2 and on 1.1.0 alike, each of five mutations caught; the type-check with Rust 1.90 was not run because that toolchain is not installed on the machine.
+
+> Missing for done: cargo check --workspace --all-targets --locked with Rust 1.90 (not installed where the work was done; the CI job min-toolchain runs it). For the lead outside the item's files: rust-version of crates/rcfd-api/Cargo.toml and the README's range (1.85 to 1.86), and THIRD_PARTY_LICENSES.md regenerated.
+
+No follow-up item. The same entries are in `docs/roadmap/proposals/0782-F-856.json`.

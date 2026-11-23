@@ -70,6 +70,9 @@ cell momentum balance together with `physics.body_force` and buoyancy. Results m
 
 * The module must import nothing; a module with any import is refused at load time (message names the import).
 * Fuel (instructions) per call is `fuel_per_call` and is renewed before every call; running out traps.
+  The unit of fuel is the interpreter's own count of executed instructions. The interpreter is wasmi 1.1.0 since
+  ADR 0782 (F-856); a loop of 100 turns that cost 915 units under wasmi 0.31 costs 407 now, so the same budget
+  buys about 2.2 times as many turns of that loop. Other code was not measured.
 * Linear memory is capped at 16 MiB (growth beyond it traps), at most one memory, one table of 10 000 entries,
   module size at most 4 MiB.
 * A trap, exhausted fuel, a non-finite result or a non-positive viscosity stops the run with the reason in
@@ -135,6 +138,10 @@ F-122 tests in `crates/rcfd-api/tests/udf.rs` (modules written in WAT):
 * Imports, wrong ABI, wrong signature, missing ABI export, infinite loop, memory growth, NaN, negative viscosity are
   rejected or stop the run.
 * Budget renewal: 20 000 calls of a 1000-fuel budget succeed.
+* The limits in `crates/rcfd-api/tests/udf_limits_adr0782.rs` (ADR 0782): growth to exactly 16 MiB succeeds and one
+  page more fails the call; a declared memory of 257 pages, a start function that never ends, an import of a
+  function, a memory, a global or a table, a second memory, a 64-bit memory, a tail call, an extended constant
+  expression and a module in the text format are refused at load.
 * The sandbox keeps module files inside the root.
 
 ## Where to go next
