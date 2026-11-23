@@ -1,0 +1,19 @@
+# expect-fail: cd apps/studio-web && npx playwright test tests/unit/service-quit.spec.ts --project=unit
+diff --git a/apps/studio-web/src/main/service/client.ts b/apps/studio-web/src/main/service/client.ts
+index 59e4c4cf..942765d6 100644
+--- a/apps/studio-web/src/main/service/client.ts
++++ b/apps/studio-web/src/main/service/client.ts
+@@ -181,13 +181,6 @@ export class ServiceClient {
+     let leftRunning = false;
+     const starting = this.starting;
+     this.starting = null;
+-    if (starting) {
+-      try {
+-        starting.kill();
+-      } catch {
+-        // already gone
+-      }
+-    }
+     const pid = this.st.pid;
+     if (this.config.mode === 'spawn' && pid !== null && processAlive(pid)) {
+       let keep = true;
