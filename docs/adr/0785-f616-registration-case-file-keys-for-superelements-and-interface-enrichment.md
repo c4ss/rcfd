@@ -369,3 +369,17 @@ Status proposed: done.
 Follow-up proposed (number left to the lead), title "Case-file keys for the cutoff, the load's residual vector and the load patterns of the reduction", deps F-616:
 
 > Every limit not stated here is registered in the ADR before the run. The table [reduction] of the solid case file gains keys for the cutoff and the residual vector of the interior load of ADR 0474 and for load patterns of ADR 0511 named by entries of the case's loads; a part file made from a case file with each key equals the library's byte for byte, the configuration E1 of ADR 0532 (cutoff 32964 rad/s, the load's vector, one block of enrichment) is made from a case file and gives the library's frequencies in bits, and a case without the keys gives every result bit-identical.
+
+## The lead's reading (2026-11-23), at the merge
+
+Merged at e3d7fd0b and pushed at c33115a6 (the report read at 04:35 UTC, 6 minutes of reading, proposed done, written
+done). Checked by the lead before the merge: the registration is the first commit and alone, the two amendments and the
+digest tests of main come before any library line, the branch changes only `solid_case.rs`, new test files, the page,
+the ADR and the proposal, and no golden or hash table is edited (no golden holds the solid schema). 144 binaries were
+left out for a left-out run.
+
+Status: **done**, as proposed, reading the bar of ADR 0536 as its static solve and modal analysis. Open question 1
+(whether the harmonic solve is part of it) changes the item's scope and is put to the maintainer with the agent's
+recommendation (a), which the lead shares; answer (b) would make this result partial. The proposed follow-up, keys for
+the cutoff, the load's residual vector and the load patterns of the reduction, is also the maintainer's to enter; not
+entered.

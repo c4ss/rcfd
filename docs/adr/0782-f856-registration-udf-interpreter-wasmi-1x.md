@@ -235,3 +235,18 @@ Status proposed: partial.
 > Missing for done: cargo check --workspace --all-targets --locked with Rust 1.90 (not installed where the work was done; the CI job min-toolchain runs it). For the lead outside the item's files: rust-version of crates/rcfd-api/Cargo.toml and the README's range (1.85 to 1.86), and THIRD_PARTY_LICENSES.md regenerated.
 
 No follow-up item. The same entries are in `docs/roadmap/proposals/0782-F-856.json`.
+
+## The lead's reading (2026-11-23), at the merge
+
+Merged at 695a6892 and pushed at 47ade6bf (the report read at 04:20 UTC, 8 minutes of reading, proposed partial,
+written partial). Checked by the lead before the merge: the registration is the first commit and alone, the new tests
+are committed before the port, and every existing UDF test passes unedited. At the merge the lead regenerated
+`THIRD_PARTY_LICENSES.md` for wasmi 1.1.0. The first push run stopped on access denied to `target/release/rcfd.exe`,
+held by `rcfd serve` processes left behind by Studio end-to-end tests; the run was repeated in a separate target
+folder and passed.
+
+Status: **done** by the lead's reading. The one check missing for done, `cargo check --workspace --all-targets --locked`
+with Rust 1.90, passed in CI on main at 47ade6bf (run 45131392392, job "Type-checks with Rust 1.90"). wasmi stays at
+1.1.0; a move to 2.x is not taken. The `rust-version` fields of the crates already lagged their dependency closure
+before this item (1.88 is needed by rcfd-api, rcfd-cli, rcfd-mcp and rcfd-workspace), so the lead did not change them
+here; the README's minimum of 1.90 is the one the CI job holds.

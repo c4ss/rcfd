@@ -435,7 +435,7 @@ One row per record of this folder, grouped by the roadmap category of the item i
 | [0746](0746-f666-registration-hyperelastic-structural-elements-by-default.md) | F-666 registration: hyperelastic materials on structural elements by default | REGISTERED | 2026-11-19 | 2 | F-666 | partial |
 | [0778](0778-f850-registration-four-supporting-checks-of-reader-trial-1.md) | F-850 registration: four supporting checks that reader trial 1 found weaker than their record says | REGISTERED | 2026-11-23 | 1 | F-850 | done |
 | [0780](0780-f842-registration-inertia-and-retry-in-the-solid-case-output.md) | F-842 registration: the inertia and the retry of the nonlinear driver in the solid case's output (what the acceptance presupposes, what the solid case file and the CLI have today, the output registered for the opt-in, and one question of scope that is not taken) | REGISTERED | 2026-11-23 | 1 | F-842 | todo |
-| [0785](0785-f616-registration-case-file-keys-for-superelements-and-interface-enrichment.md) | F-616 registration: case-file keys for superelements and interface enrichment | REGISTERED | 2026-11-23 | 1 | F-616 | todo |
+| [0785](0785-f616-registration-case-file-keys-for-superelements-and-interface-enrichment.md) | F-616 registration: case-file keys for superelements and interface enrichment | REGISTERED | 2026-11-23 | 1 | F-616 | done |
 
 ## Meshing and mesh formats (9)
 
@@ -589,7 +589,7 @@ One row per record of this folder, grouped by the roadmap category of the item i
 | [0775](0775-f871-registration-six-further-simulation-milestones.md) | F-871 registration: six further simulation milestones | REGISTERED | 2026-11-23 | 1 | F-871 | done |
 | [0776](0776-f860-registration-push-main-left-out-commits-and-the-budget.md) | F-860 registration: push_main.py, the left-out run names its commits, the ADR's tests count in the budget, changed-file binaries first | REGISTERED | 2026-11-23 | 1 | F-860 | done |
 | [0779](0779-f875-registration-a-simulation-milestone-for-the-structure-and-vibration-of-a-fan-rotor.md) | F-875 registration: a simulation milestone for the structure and vibration of a fan rotor | REGISTERED | 2026-11-23 | 1 | F-875 | done |
-| [0782](0782-f856-registration-udf-interpreter-wasmi-1x.md) | F-856 registration: the UDF interpreter from wasmi 0.31 to wasmi 1.1.0 (the minimum Rust read first, the port of `udf.rs`, and the checks of the fuel limit, the memory limit and the refusal of imports) | REGISTERED | 2026-11-23 | 1 | F-856 | todo |
+| [0782](0782-f856-registration-udf-interpreter-wasmi-1x.md) | F-856 registration: the UDF interpreter from wasmi 0.31 to wasmi 1.1.0 (the minimum Rust read first, the port of `udf.rs`, and the checks of the fuel limit, the memory limit and the refusal of imports) | REGISTERED | 2026-11-23 | 1 | F-856 | done |
 
 ## Records with no item in the file name (259)
 
