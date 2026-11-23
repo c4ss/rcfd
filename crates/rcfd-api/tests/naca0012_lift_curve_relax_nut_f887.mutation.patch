@@ -1,0 +1,14 @@
+# expect-fail: cargo test -p rcfd-api --release --test naca0012_lift_curve_relax_nut_f887
+diff --git a/docs/investigations/f887-naca0012-lift-curve-relax-nut/cases/RN-a04.toml b/docs/investigations/f887-naca0012-lift-curve-relax-nut/cases/RN-a04.toml
+index 892db84f..fa47dc9f 100644
+--- a/docs/investigations/f887-naca0012-lift-curve-relax-nut/cases/RN-a04.toml
++++ b/docs/investigations/f887-naca0012-lift-curve-relax-nut/cases/RN-a04.toml
+@@ -42,7 +42,7 @@ component = "total"   # ADR 0167: the molecular wall shear (today's default), wr
+ 
+ [turbulence]
+ model = "spalart_allmaras"
+-relax_nut = 1.0   # ADR 0772 RN: the eddy viscosity not relaxed (ADR 0770 KT)
++relax_nut = 0.5   # ADR 0772 RN: the eddy viscosity not relaxed (ADR 0770 KT)
+ 
+ [solver]
+ algorithm = "simplec"
