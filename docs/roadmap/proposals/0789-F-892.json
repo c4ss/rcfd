@@ -1,0 +1,22 @@
+{
+  "form": 1,
+  "adr": "0789",
+  "item": "F-892",
+  "base": "c4bd79f3ca84eba120fb7727d197e1af6acb3e59",
+  "status": "done",
+  "note": "ADR 0789, 2026-11-23, done: the path is in the Studio's quit: a Studio that quits while the rcfd serve it has just started is not yet connected (spawned and not yet listening, or listening and not yet connected) left it running, detached; on Windows Playwright's close() then waits for ever on the pipes the service inherited, the test times out, the worker's teardown times out, and the forced end finds no parent to walk. Shown by records: 9 of 20 quits with the real engine left one, 6 of 6 with a stand-in engine, and one run printed the lead's two time-out lines and left one; project.spec.ts:245 takes this path but was not itself caught. Fix: nothing is spawned once the quit has begun, the child is known from the spawn on and ended by the quit, a child never connected to is ended; the tests' global teardown ends and prints what a run leaves. After it 0 of 26 quits left one, and 0 processes after each of 5 whole runs of npm test, 2 with a test made to time out; 6 mutations caught, one committed.",
+  "follow_ups": [
+    {
+      "key": "data-open-length-unit",
+      "title": "Studio: data.open gives no length unit where data-routes.spec.ts:94 and data.spec.ts:73 expect \"m\"",
+      "deps": ["F-892"],
+      "acceptance": "Every limit not stated here is registered in the ADR before the run. The cause of the two failures recorded in ADR 0789 addendum 1 (null where the length unit \"m\" is expected, on main at c4bd79f3 with the engine built from it, in every run) is found and shown by a recorded run, and the two tests then pass without being skipped or changed in what they check."
+    },
+    {
+      "key": "run-control-pause-request",
+      "title": "Studio: run-control.spec.ts:320 does not find the pause request within 5 s in some whole runs",
+      "deps": ["F-892"],
+      "acceptance": "Every limit not stated here is registered in the ADR before the run. The cause of the failure of apps/studio-web/tests/e2e/run-control.spec.ts:320 recorded in ADR 0789 addendum 1 and in the lead's push run of F-861 on 2026-11-23 is found and shown by a test that fails without the fix; the test then passes a registered number of consecutive runs on Windows, not skipped, retried or given a longer limit."
+    }
+  ]
+}

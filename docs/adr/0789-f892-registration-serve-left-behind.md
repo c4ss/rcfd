@@ -268,3 +268,144 @@ cover, if a run of A2 leaves a process, or if the records give H4. **Todo** if n
 ## Open questions for the maintainer
 
 None at registration.
+
+## Addendum 1: results (2026-11-23)
+
+Written after the runs. Records are in the scratch folder under `records/` (`diag-before`, `d1`, `diag-after`, `a2`,
+`mutation-*.log`); the tables below are their summary. All runs on Windows 11, the engine built from this branch into
+the scratch target folder, two other agents running Studio tests on the machine at the same time.
+
+### The cause
+
+**H1, both windows.** A Studio that quits while the `rcfd serve` it has just started is not yet connected leaves it
+running: detached, with no living parent, and in W1 with no record of its pid anywhere. `close()` then never settles,
+the test that awaits it runs into its time-out, the worker into its teardown time-out, and the process stays.
+
+| Run, unchanged tree | Repetitions | Left an `rcfd serve` | `close()` settled in 20 s | `service.json` |
+|---|---|---|---|---|
+| D2 (a), stand-in, quit in the state `starting` (W1) | 3 | 3 of 3 | 0 of 3 | absent in 3 |
+| D2 (b), stand-in, quit with a pid in the state `connecting` (W2) | 3 | 3 of 3 | 0 of 3 | present in 3, the pid of the process left |
+| D3, the real engine, quit as soon as the first window exists | 20 | 9 of 20 | 11 of 20 (the 11 that left none) | absent in 5 of the 9 (W1), present in 4 (W2) |
+| D2 (c), stand-in, the test awaits `close()` | 1 | 1 | no | absent |
+| D4, `project.spec.ts:245` made to wait for ever, service connected | 1 | 0 | not applicable | not applicable |
+| D1, each of the 42 spec files alone and the unit project | 43 steps | 0 in each | not applicable | not applicable |
+
+D2 (c) printed the two lines of the lead's logs, in their order: the test "(1.0m)" with "Test timeout of 60000ms
+exceeded", then "Worker teardown timeout of 60000ms exceeded." and "1 error was not a part of any test"; one process
+left, `…\standin\release\rcfd.exe serve --addr 127.0.0.1:0 --ui --journal-dir <tmp>\rcfd-studio-state-f892c-mczCKD\journals`,
+pid 54764, parent id 58096 (a process that no longer existed). The 9 of D3 are the real `rcfd.exe` of the scratch
+target folder with `--ui --journal-dir <tmp>\rcfd-studio-state-f892r-…\journals`, each with a parent id that no longer
+existed (pids and parent ids per repetition in `diag-before/rows.jsonl`). That is the command line of the processes
+found on 2026-11-23, from a target folder, one per time-out.
+
+H2 and H3 are not shown: D4 left none, and no file of D1 left one, the four that end a Studio by its pid among them.
+H4 was not seen and was not forced.
+
+**C1 is met with the real engine (D3) and with the stand-in (D2).** The test itself, `project.spec.ts:245`, was not
+caught leaving one: it passed in D1 and in the plain whole runs. What is shown is its path, a quit just after the
+service was started, taken by the real Studio and the real engine in 9 of 20 quits on this machine, and the lead's two
+lines reproduced from that path.
+
+**One detail of finding 5 corrected.** The pid Playwright has for the Studio on Windows is that of the `cmd.exe` it
+launches the Studio through, the Studio's parent; `taskkill /T` on it finds nothing once the Studio and its shell have
+ended, as finding 5 says of the Studio. The registry's pid is therefore used only to name the spec file.
+
+**Seen and not explained:** in D2 (b) before the fix the Studio's process was still alive 20 s after `close()` in 2 of
+the 3 repetitions (it ended when the stand-in was ended). After the fix it ended in 3 of 3.
+
+### The fix
+
+As registered. `spawn.ts`: `startProcess` (the spawn and the wait for the address) with the hooks `cancelled` and
+`onSpawned`; `startService` builds the arguments and calls it. `client.ts`: the child is known from the spawn on;
+`shutdown()` ends a child that has not reported its address, ends a child of this start it was never connected to (in
+both modes), and nothing is spawned once it has begun; the option `startService` for the unit tests. Harness:
+`tests/support/leftovers.ts` and `global-teardown.ts`, the registry written by `launchStudio`, the variable and the
+teardown named in `playwright.config.ts`. No existing spec file is changed; no golden, protocol, default or dependency.
+`studio.ts` is a shared helper of the Studio's tests: `launchStudio` gained the registry lines and nothing else.
+
+### Checks
+
+| Check | Limit | Measured | Met |
+|---|---|---|---|
+| C1 | at least 1 left, recorded | D3: 9 of 20; D2 (a) (b): 6 of 6; D2 (c): 1 | yes |
+| D1, D2, D3, D4 before the fix | counted | the table above | made |
+| T1 | pass | 5 of 5 tests, alone and in the unit project | yes, after one correction of the test (below) |
+| T1m | fail | M1: T1 (a) fails ("the stand-in to be gone", 5.1 s), 1 failed, 4 passed | yes |
+| T2 | pass | 6 of 6, (b) with the real `rcfd` | yes |
+| A1 | 0 left and `close()` settled in each | D2 (a) 3, D2 (b) 3, D3 20: 0 left and settled in 26 of 26; D2 (c): the test passes in 2.5 s, 0 left | yes |
+| A2 | 0 `rcfd serve` of mine after each of 4 | 0 after each of 5 whole runs (table below); 0 of any of the four names | yes |
+| K1 | 0 such lines | 0: no existing spec file in the diff; `retries: 0`, `workers: 1`, `timeout: 60_000` kept | yes |
+| G1 | exit 0 | `npm run typecheck` exit 0; `service-client.spec.ts` 30 of 30; the whole `npm test` exit 1 in every run, on tests outside this item (below) | no for the whole run |
+| G2 | pass | see the end | see the end |
+
+| Whole run of `npm test` | Tree | Passed, failed, did not run | `rcfd serve` left | Other rcfd processes left | Ended by the teardown |
+|---|---|---|---|---|---|
+| A2-1 | 957f9d60 | 834, 3, 28 | 0 | 0 | 0 |
+| A2-2 | the same | 833, 4, 28 | 0 | 0 | 0 |
+| A2-3, `project.spec.ts:245` made to time out | the same | 830, 5, 30 | 0 | 0 | 0 |
+| A2-4 as first run: its scratch patch did not apply, so a third plain run | the same | 820, 6, 39 | 0 | 0 | 0 |
+| A2-4, `service.spec.ts:145` made to time out | 1d3a9a58 | 833, 4, 28 | 0 | 0 | 0 |
+
+The teardown printed no line in any run: nothing was left for it to end, with or without a time-out. Its sweep is
+therefore shown only by T2 (b), not by a process it had to end in a whole run.
+
+**Mutations.** M1 (committed): T1 (a) fails. M2: T1 (b) fails in both modes. M3: T1 (c) fails. M4: T1 (d) fails. M5:
+T2 (b) fails and two cases of T2 (a). M6: the case "never a process of another name" of T2 (a) fails. Each was applied
+to the worktree, run and removed by `git checkout`; M1 and M4 were run again after the correction of T1 (d).
+
+### Deviations and what was not run
+
+- **T1 (d) had a defect of its own, found by the first whole run.** Its state listener called `shutdown()`, which
+  changes the state in the same turn, so the listener was entered again without end; alone the test passed because the
+  client swallows a listener's exception, in the whole unit project the worker ended with "Maximum call stack size
+  exceeded" and the test was reported failed in A2-1 to A2-3 and the first A2-4. Corrected in the test (a flag set
+  before the call, 1d3a9a58); no limit and no product code changed. The unit project then passed it (546 passed, 1
+  failed, the failure being `data-routes.spec.ts:94`), and so did the second A2-4.
+- **A2-4 was made twice.** The scratch patch for `service.spec.ts` matched two places and was not applied, so the
+  first A2-4 was a plain run; it is kept in the table. The patch was corrected and the registered run made once.
+- **The packaged-copy rules of the teardown are narrower than registered:** rules 1 and 2c apply only when the run's
+  registry has a launch, so that a run of the unit tests alone never ends a Studio someone has open from
+  `out/packaged`; of a Studio only the main process is ended. The registry variable is `RCFD_TEST_LAUNCH_REGISTRY`.
+- **One line beyond the registration in `client.ts`:** the record of a child that was ended while its record was being
+  written is removed (seen in A1 as a `service.json` naming a process that no longer existed, 3 of 20).
+- An assertion on the client's state in T1 (c), not registered, was written and taken out before the first commit:
+  the state says `starting` after a shutdown in the same turn, which this work did not change.
+- Not run: CI, Linux, macOS; H4.
+
+### Other tests that failed in these runs (reported, not fixed)
+
+- `tests/unit/data-routes.spec.ts:94` and `tests/e2e/data.spec.ts:73`: in D1 on the unchanged tree and in every whole
+  run. `data.open` gives `null` where the tests expect the length unit `"m"`. Not touched by this work.
+- `tests/e2e/responsiveness.spec.ts:260`: A2-2, A2-3 and both A2-4 (the subject of F-890).
+- `tests/e2e/f837.spec.ts:198`: D1 and the first A2-4 (the subject of F-891).
+- `tests/e2e/run-control.spec.ts:320` ("Pause requested from the Studio|acted" not found in 5 s): D1 and the first A2-4.
+- The tests the two scratch patches made to time out, in their runs, as intended.
+
+### Size
+
+Size (agent), actual: done; 0; 6; 0; about 270000
+
+Six heavy runs against five registered: D1 and five whole runs, the fifth being the repeated A2-4.
+
+### Decision
+
+By the registered rule: **done.** The cause is shown by recorded runs that leave a process (C1: 9 of 20 with the real
+engine, and the lead's two lines with one process left); the registered whole runs after the fix leave none, two of
+them with a test made to time out (A1, A2, K1); the committed mutation is caught (T1m). G1 is not met for the whole
+`npm test`, on tests outside this item, as the registration expected. No record has shown a second path.
+
+### Open questions for the maintainer
+
+None.
+
+## For the lead: roadmap entries
+
+Status proposed: **done**.
+
+> ADR 0789, 2026-11-23, done: the path is in the Studio's quit: a Studio that quits while the rcfd serve it has just started is not yet connected (spawned and not yet listening, or listening and not yet connected) left it running, detached; on Windows Playwright's close() then waits for ever on the pipes the service inherited, the test times out, the worker's teardown times out, and the forced end finds no parent to walk. Shown by records: 9 of 20 quits with the real engine left one, 6 of 6 with a stand-in engine, and one run printed the lead's two time-out lines and left one; project.spec.ts:245 takes this path but was not itself caught. Fix: nothing is spawned once the quit has begun, the child is known from the spawn on and ended by the quit, a child never connected to is ended; the tests' global teardown ends and prints what a run leaves. After it 0 of 26 quits left one, and 0 processes after each of 5 whole runs of npm test, 2 with a test made to time out; 6 mutations caught, one committed.
+
+Follow-ups, for the lead to decide:
+
+> Studio: data.open gives no length unit where data-routes.spec.ts:94 and data.spec.ts:73 expect "m". Deps: F-892. Acceptance: Every limit not stated here is registered in the ADR before the run. The cause of the two failures recorded in ADR 0789 addendum 1 (null where the length unit "m" is expected, on main at c4bd79f3 with the engine built from it, in every run) is found and shown by a recorded run, and the two tests then pass without being skipped or changed in what they check.
+
+> Studio: run-control.spec.ts:320 does not find the pause request within 5 s in some whole runs. Deps: F-892. Acceptance: Every limit not stated here is registered in the ADR before the run. The cause of the failure of apps/studio-web/tests/e2e/run-control.spec.ts:320 recorded in ADR 0789 addendum 1 and in the lead's push run of F-861 on 2026-11-23 is found and shown by a test that fails without the fix; the test then passes a registered number of consecutive runs on Windows, not skipped, retried or given a longer limit.
