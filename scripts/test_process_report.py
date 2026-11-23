@@ -350,6 +350,152 @@ class NewRules(Repo):
         self.assertEqual([i for i, _ in pr.roadmap_md(self.root)], [])
 
 
+class Convention(Repo):
+    """ADR 0777 (F-861): four rules that rested on convention, each through `--check`. The registered values are written
+    out here: the date 2026-11-24, 1200 characters, 194023 bytes, the last item 887 and the last ADR 0779 before the date,
+    and 25 entries as the largest number of the list of Rust test files."""
+
+    BRIEF = ("Branch: b\nItems: F-003\nADR: 0002\nRules version: 5\nModel: m\nIssued: 2026-11-24\n"
+             "Size (lead): done; 0; 0; 0; {total}\n\n## Reading list\n\n{entries}\n"
+             "Also in the repository, as needed: `docs/x.md` (its first section).\n\n## Task\n\nDo it.\n")
+    ADR = "# ADR {n}: F-004 registration: sst\n\nStatus: **REGISTERED {date}, before any code.**\n\n{body}\n"
+
+    def check(self, *more):
+        """Commit the tree, regenerate, and return (exit status, the failures `--check` names)."""
+        for args in (["init", "-q"], ["add", "-A"], ["-c", "user.name=t", "-c", "user.email=t@example.invalid",
+                                                      "-c", "commit.gpgsign=false", "commit", "-q", "--allow-empty", "-m", "next"]):
+            subprocess.run(["git", "-C", self.root, *args], check=True, capture_output=True)
+        self.run_main("--write")
+        code, out = self.run_main("--check", *more)
+        return code, [ln[5:] for ln in out.splitlines() if ln.startswith("FAIL ")]
+
+    def one_failure(self, *words, more=()):
+        code, fail = self.check(*more)
+        self.assertEqual((code, len(fail)), (1, 1), fail)
+        for w in words:
+            self.assertIn(w, fail[0])
+
+    def note(self, n, text):
+        self.items[n]["note"] = text
+        self.save()
+
+    def test_a_note_entry_from_the_date_is_one_line_in_the_form(self):
+        good = "ADR 0002, 2026-11-24, done: the plates pass."
+        lead = "Lead (2026-11-24): "
+        self.note(0, "Lead (2026-11-20): entered. " + good)
+        self.note(1, lead + "x" * (1200 - len(lead)) + " " + good)
+        self.note(2, "ADR 0003, 2026-11-23, merged and " + "x" * 3000)
+        self.assertEqual(self.check(), (0, []))
+        self.note(3, "ADR 0002, 2026-11-24, merged and fine.")
+        self.one_failure("n: ", "F-004", "outcome", "ADR 0002, 2026-11-24")
+        head = "ADR 0002, 2026-11-24, partial: "
+        self.note(3, good + " " + head + "x" * (1200 - len(head)))
+        self.assertEqual(self.check(), (0, []))
+        self.note(3, good + " " + head + "x" * (1201 - len(head)))
+        self.one_failure("n: ", "F-004", "1201")
+        self.note(3, lead + "x" * (1201 - len(lead)))
+        self.one_failure("n: ", "F-004", "1201", "Lead (2026-11-24)")
+        self.note(3, "ADR 0002, 2026-11-24, done: the plates\npass.")
+        self.one_failure("n: ", "F-004", "line break")
+        self.note(3, "")
+        self.items.append(item(888, "todo", note="entered for the shells, without a head"))
+        self.save()
+        self.one_failure("n: ", "F-888", "head")
+        self.note(4, "Lead (2026-11-25): entered for the shells.")
+        self.assertEqual(self.check(), (0, []))
+        self.note(4, "")
+        self.assertEqual(self.check(), (0, []))
+
+    def test_a_citation_from_the_date_names_a_place(self):
+        new = "docs/adr/0006-f004-registration-sst.md"
+
+        def adr(body, date="2026-11-24", rel=new, n="0006"):
+            self.put(rel, self.ADR.format(n=n, date=date, body=body))
+
+        adr("The model is that of Menter (1994), Table 2, and of (Wilcox et al., 2008, p. 12).")
+        self.assertEqual(self.check(), (0, []))
+        adr("Menter (1994) gives the constants.")
+        self.one_failure("s: ", "0006-f004-registration-sst.md", "Menter 1994")
+        adr("Menter (1994) gives the constants.\n\n## Addendum 2\n\n- Menter (1994): the constants are in equation (A1).")
+        self.assertEqual(self.check(), (0, []))
+        adr("Menter (1994) was not read; the constants are derived below.")
+        self.assertEqual(self.check(), (0, []))
+        adr("The limiter of Spalart and Allmaras (1992) is used.\n\nTable 3 of this ADR lists the runs.")
+        self.one_failure("s: ", "Spalart 1992")
+        adr("The constants are the usual ones (Menter, 1994).")
+        self.one_failure("s: ", "Menter 1994")
+        adr("The drag is that of arXiv:2303.09262v1 for the cylinder.")
+        self.one_failure("s: ", "arXiv:2303.09262")
+        adr("| drag 1.359 | arXiv:2303.09262v1, Table 1 |\n| lift | the same |")
+        self.assertEqual(self.check(), (0, []))
+        adr("Lead (2026) and March (2023) and Version (2024) name no source; nor does Lead (2026-11-24).")
+        self.assertEqual(self.check(), (0, []))
+        adr("Menter (1994) gives the constants.", date="2026-11-23")
+        self.assertEqual(self.check(), (0, []))
+        os.remove(os.path.join(self.root, new))
+        self.put("docs/adr/0779-f004-registration-sst.md", "# ADR 0779: x\n\nStatus: registered.\n\nMenter (1994) gives it.\n")
+        self.assertEqual(self.check(), (0, []))
+        self.put("docs/adr/0780-f004-registration-sst.md", "# ADR 0780: x\n\nStatus: registered.\n\nMenter (1994) gives it.\n")
+        self.one_failure("s: ", "0780-f004-registration-sst.md", "Menter 1994")
+
+    def test_a_brief_reading_list_has_its_sum_and_its_limit(self):
+        three = "- docs/a.md 100000 (whole)\n- scripts/b.py 94000\n- docs/c.md {}\n"
+
+        def brief(total, entries, name="b"):
+            self.put(f"{pr.BRIEFS}/{name}.md", self.BRIEF.format(total=total, entries=entries))
+
+        brief(194023, three.format(23))
+        self.assertEqual(self.check(), (0, []))
+        brief(194022, three.format(23))
+        self.one_failure("u: ", "b.md", "194022", "194023")
+        brief(194024, three.format(24))
+        self.one_failure("u: ", "b.md", "194024", "limit")
+        self.put(f"{pr.EXC_DIR}/brief-over-reading-limit.txt", "# above the limit when the check started\nb.md\n")
+        self.assertEqual(self.check(), (0, []))
+        os.remove(os.path.join(self.root, pr.EXC_DIR, "brief-over-reading-limit.txt"))
+        brief(194023, three.format(23).replace("scripts/b.py 94000", "scripts/b.py"))
+        self.one_failure("u: ", "b.md", "scripts/b.py", "size")
+        brief(0, "")
+        self.one_failure("u: ", "b.md", "no reading list entry")
+        brief("many", three.format(23))
+        self.one_failure("u: ", "b.md", "total")
+
+    def test_a_listed_size_is_the_size_of_the_file_at_issue(self):
+        self.put("docs/a.md", "ten bytes\n")
+        self.put(f"{pr.BRIEFS}/b.md", self.BRIEF.format(total=10, entries="- docs/a.md 10\n"))
+        self.put(f"{pr.BRIEFS}/c.md", self.BRIEF.format(total=12, entries="- docs/a.md 12\n"))
+        self.assertEqual(self.check(), (0, []))  # the sum and the total agree; the files are read only with --history
+        self.one_failure("u: ", "c.md", "docs/a.md", "12", "10", more=("--history",))
+        self.put("docs/a.md", "now it is longer than at issue\n")
+        self.put(f"{pr.BRIEFS}/c.md", self.BRIEF.format(total=10, entries="- docs/a.md 10\n- docs/none.md 0\n"))
+        self.one_failure("u: ", "c.md", "docs/none.md", more=("--history",))
+        self.put(f"{pr.EXC_DIR}/brief-size-differs.txt", "# differed when the check started\nc.md: docs/none.md\n")
+        self.assertEqual(self.check("--history"), (0, []))
+
+    def test_a_test_file_without_its_record_fails_without_a_list_and_a_list_cannot_grow(self):
+        rust, spec = "crates/a/tests/u.rs", "apps/studio-web/tests/unit/x.spec.ts"
+        self.assertEqual(self.check(), (0, []))
+        self.put(rust, "// no record named here\n#[test]\nfn u() {}\n")
+        self.one_failure("l: ", rust)
+        self.put(rust, "// ADR 0002: plates.\n#[test]\nfn u() {}\n")
+        self.put(spec, "// Unit tests of nothing named.\nimport { test } from '@playwright/test';\n")
+        self.one_failure("l: ", spec)
+        self.put(spec, "// F-999: an item that does not exist.\nimport { test } from '@playwright/test';\n")
+        self.one_failure("l: ", spec)
+        self.put(spec, "// F-003: the item of this spec.\nimport { test } from '@playwright/test';\n")
+        self.assertEqual(self.check(), (0, []))
+        files = [f"crates/a/tests/v{n:02d}.rs" for n in range(26)]
+        for f in files:
+            self.put(f, "// no record named here\n")
+        self.put(f"{pr.EXC_DIR}/test-root-without-adr.txt", "# without a record when the rule started\n" + "\n".join(files[:25]) + "\n")
+        self.one_failure("l: ", files[25])
+        self.put(f"{pr.EXC_DIR}/test-root-without-adr.txt", "# without a record when the rule started\n" + "\n".join(files) + "\n")
+        self.one_failure("l: ", "test-root-without-adr.txt", "26", "25")
+        os.remove(os.path.join(self.root, files[25]))
+        self.put(f"{pr.EXC_DIR}/test-root-without-adr.txt", "# without a record when the rule started\n" + "\n".join(files[:25]) + "\n")
+        self.assertEqual(self.check(), (0, []))
+
+
 import datetime  # noqa: E402
 
 import push_main as pm  # noqa: E402
