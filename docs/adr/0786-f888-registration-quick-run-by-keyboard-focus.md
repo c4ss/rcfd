@@ -266,3 +266,227 @@ and is now an open question.
 
 **Open question for the maintainer, added (Q1).** It is put with options and a recommendation in Addendum 1; this
 work does not decide it, because it changes what CI builds and how long the job takes (rule 6).
+
+## Addendum 1: results (2026-11-23)
+
+All runs were made on the lead's Windows machine, in the release profile of the engine (this work's own build in the
+scratch target folder, from a4d32bff), in the packaged Studio, while three other agents ran on the machine. Logs and
+records are in the scratch folder; the names in brackets are their files.
+
+### The cause
+
+**H3 is shown, as the reading registered it; H1 and H2 are excluded.** The Tab at line 207 of
+`run-control.spec.ts` is sent while the document's active element is the body: the listbox has closed, and the focus
+goes back to the select only in the next animation frame (react-aria's `useRestoreFocus`). A Tab from the body lands on
+the first control of the page (an unnamed `ui-button`), the frame that follows finds the focus elsewhere and restores
+nothing, and `toBeFocused` on Run reports "inactive", which is the word Playwright gives for every element that is not
+the focused one.
+
+| Record | Runs | Failed at the `toBeFocused` on Run | Active element at the Tab's keydown | `hasFocus()` | Window had the system's focus | Enter to focus back on the select | Enter to Tab |
+|---|---|---|---|---|---|---|---|
+| D1, unchanged test [d1-*.log] | 10 | 0 | not recorded | not recorded | not recorded | not recorded | not recorded |
+| D2, instrumented [d2/] | 10 | 0 | the case select, 10 of 10 | true | no | 4.7 to 7.0 ms | 11.1 to 16.7 ms |
+| D3 (a), frames delayed 300 ms [d3a/] | 5 | 5 | the body, 5 of 5 | true | no | never | 8.7 to 15.2 ms |
+| D3 (b), delayed, wait for the select [d3b/] | 5 | 0 | the case select, 5 of 5 | true | no | 307 to 310 ms | 314 to 331 ms |
+| D3 (c), delayed, window focused [d3c/] | 5 | 5 | the body, 5 of 5 | true | yes | never | 9.5 to 12.6 ms |
+| D3 (d), no delay, window focused [d3d/] | 5 | 0 | the case select, 5 of 5 | true | yes | 4.7 to 5.8 ms | 11.8 to 13.6 ms |
+
+Times are from the `keydown` of the Enter that chooses the option (the choice is made on the key's way down, not on
+`keyup` as the registration's wording of D2 assumed; the script `read_recs.py` measures from the `keydown`).
+
+- **The registered reading of H3 holds in every part:** (a) failed 5 of 5 with the body active at the Tab and
+  `hasFocus()` true; (b) passed 5 of 5; (c) failed 5 of 5.
+- **H1 is excluded.** `document.hasFocus()` was true in all 30 records while `BrowserWindow.isFocused()` was false in 20
+  of them (finding 2: Playwright's focus emulation reaches the Studio's page). The test passed without the system's
+  focus (D1, D2) and failed with it (c). Whether the window has the system's focus changes nothing.
+- **H2 is excluded.** In every passing record the Tab went from the case select to Run; in the failing ones the select
+  never had the focus at the Tab.
+- **The error is the lead's.** The failures of (a) have the text of the lead's log word for word: `Received: inactive`,
+  `14 × locator resolved to <button … aria-label="Run cavity-re100.toml" class="ui-button ui-button--primary">`, at the
+  same assertion [d3a-1.log; `push-f861c.log` lines 1867 to 1878].
+- **What was not shown.** The failure did not show on this machine today without the delay (0 of 20 in D1 and D2), so
+  no record was made of the lead's three failures themselves. That they were this cause rests on the agreement of (a)'s
+  error text and line with the lead's log, as the registration said it would in this case. Today the margin was small:
+  the focus was back 4.7 to 7.0 ms after the choice and the Tab came at 11.1 to 16.7 ms, with an animation frame every
+  2.6 to 4.7 ms (the median of each record; a display at about 240 Hz). At 60 frames a second a frame comes every
+  16.7 ms, later than every Tab recorded. Why the frames were slower in the lead's runs between 04:15 and 05:53 (a
+  display asleep, a locked session or the load are candidates) was not measured and is not claimed.
+- **CI.** Amendment 1: the test is skipped on CI, so CI never showed it passing.
+
+### The fix
+
+In the test, as registered for H3. `tests/support/keyboard.ts` (new): `chooseByKeyboard(select, option)` makes the
+choice and returns once the select shows it and has the focus again; `delayFrames` and `restoreFrames` delay the page's
+animation frames for a test. `run-control.spec.ts` (the test is now at line 193, one import line above it): the four
+lines of the choice are replaced by the call of the shared step; the `toContainText` after it, the four Tab checks and
+the focus-ring check are unchanged. This is an edit of an existing test in place, on the brief's instruction (the
+registration, "Design registered"). `run-bar-keyboard.spec.ts` (new) holds T1 and T2. No Studio source is changed.
+
+**Other specs with the same sequence** (read: every `toBeFocused`, every Tab and every Escape or option choice by
+keyboard of `tests/e2e`, by search and the lines around each hit, not every file line by line). Exposed in the same way
+(a key that relies on the focus a closing overlay returns, with nothing awaited between): only
+`run-control.spec.ts:207`. The same choice in a select by keyboard, not exposed: `compare.spec.ts:392` (already waits
+for the focus on the select, with a comment saying why), `provenance.spec.ts:112` (the next step focuses its target
+itself), `a11y.spec.ts:361` (the next step presses Tab until its target has the focus) and `runs.spec.ts:158` (a click
+follows). A dialog closed with Escape and a key after it: `close-guard.spec.ts:113` and `:145` and
+`run-control.spec.ts:372` wait for the focus on the opener first; the others are followed by a click, an explicit focus
+or the end of the test. None of these was changed.
+
+### Checks
+
+| Check | Limit | Measured | Met |
+|---|---|---|---|
+| C1 | one hypothesis shown | H3, by D2 and D3 (a), (b), (c) as registered | yes |
+| T1, the run bar under delayed frames | pass | pass, in the run of the two specs after the fix [t-fixed-1.log] and each of the five runs of N1 | yes |
+| T2 (amendment 1), the gallery under delayed frames | pass | pass, in the same runs | yes |
+| T1m and T2 under M1 | fail, "inactive" | both failed with `Received: inactive` at the `toBeFocused` after the Tab [m1-1.log] | yes |
+| N1 | 5 of 5 | 5 of 5: `run-control.spec.ts:193` passed in each of five consecutive whole runs of `npm test` [n1-*.log] | yes |
+| N2 | 5 of 5 | 5 of 5; `isFocused()` true in 4, false in 1 (Windows did not give it the focus) [n2-*.log] | yes |
+| K1 | 0 | 0: the diff of `run-control.spec.ts` is one import and four lines of key presses replaced by the shared step and a comment; no assertion removed, no retry, skip or time-out; `playwright.config.ts` untouched (`retries: 0`) | yes |
+| P3 | 0 in each | 0 after each of the five runs of N1; 0 after the forced path (the five runs of N2) | yes |
+| P1, P2 | counted | 0 left after the whole `npm test` before the fix; 0 after each of the four spec files alone; 0 after the forced path (the 10 runs of D1) and after the 10 failing runs of D3 | counted |
+| G1 | exit 0 | `npm run typecheck` exit 0 (inside every `npm test`); `npm test`: exit 1 in each of the five runs, by failures of two other tests (below) | no |
+| G2 | pass | `docs_site`: 2 passed; `process_report.py --check`: see the end of this addendum | see the end |
+
+**N1 in detail.** Each run is the whole `npm test` (type checks, build, packaging, every Playwright test) on the fixed
+tree at 85d138d6. The window with the system's focus was another program's at the start and at the end of each run, and
+the new spec logged `isFocused()` false for the Studio in each.
+
+| Run | Start to end | Foreground window at start, at end | Line 193 | T1, T2 | Whole run | Processes left |
+|---|---|---|---|---|---|---|
+| 1 | 10:20 to 10:31 | firefox, firefox | pass | pass | 853 passed, 1 failed | 0 |
+| 2 | 10:31 to 10:42 | firefox, WindowsTerminal | pass | pass | 853 passed, 1 failed | 0 |
+| 3 | 10:43 to 10:54 | WindowsTerminal, Spotify | pass | pass | 853 passed, 1 failed | 0 |
+| 4 | 10:54 to 11:05 | Spotify, Spotify | pass | pass | 853 passed, 1 failed | 0 |
+| 5 | 11:05 to 11:15 | Spotify, WorkSpacesPersonal | pass | pass | 845 passed, 2 failed, 7 did not run | 0 |
+
+**Mutations (rule 16),** each applied to the worktree, run and removed:
+
+| Mutation | Run | Result |
+|---|---|---|
+| M1 (committed, `run-bar-keyboard.spec.mutation.patch`): the shared step without its wait | `run-bar-keyboard.spec.ts` | 2 of 2 tests failed, `Received: inactive` |
+| M2: Run and Queue… exchanged in `RunBar` | both specs, the three tests | `run-control.spec.ts:193` and T1 failed at the `toBeFocused` on Run; T2 (the gallery) passed, as it must |
+| M3: `.ui-button { outline: none !important }` | the same | `run-control.spec.ts:193` and T1 failed at the check of the outline; T2 passed |
+
+D3 (a) is the negative control: the unfixed sequence under the delay, 5 failures of 5.
+
+### The processes
+
+Counted by the scratch script `procs.ps1` (processes named `rcfd.exe`, `rcfd-mcp.exe`, `rcfd-runner.exe`,
+`rcfd-studio.exe`), before and 15 s after each run [procs-*.tsv].
+
+| When | Run | Processes before | After | Left by the run |
+|---|---|---|---|---|
+| Before the fix | D1: the forced path, 10 runs | 3 | 3 | 0 |
+| Before the fix | D2 and D3: 30 runs, 10 of them failing at the Run button | 3 | 3 | 0 |
+| Before the fix | P2: `run-control.spec.ts`, `runs.spec.ts`, `first-path.spec.ts`, `runner-lifetime.spec.ts`, each alone | 3 | 3 | 0 each |
+| Before the fix | P1: the whole `npm test` (814 passed, 3 failed, 35 did not run; line 192 passed) | 3 | 3 | 0 |
+| After the fix | N2: the forced path with the window focused, 5 runs | 3 | 3 | 0 |
+| After the fix | N1: the whole `npm test`, 5 runs | 3 | 3 | 0 in each |
+
+The 3 are the `rcfd serve` processes of finding 7 (pids 61492, 62008 and 9196), alive before this work and left alive;
+this work started none that stayed and ended none. **This work could not make the end-to-end tests leave a process:**
+not by a whole run, not by a failure of line 192 (10 failing runs), not by the `afterAll` path with the Studio open.
+A Studio ended by its pid takes its service with it here. The cause of the three processes found is therefore not
+shown. What is known of them: each was started in the same second as its state folder
+(`<tmp>/rcfd-studio-state-…`), from a `target/release` folder and not from `out/packaged/resources/bin`, so by a
+Studio that a test launched with `RCFD_STUDIO_MCP` or `RCFD_STUDIO_RCFD`; one belongs to the runs of ADR 0781 (04:15),
+two to the lead's runs (05:25 and 05:53). The lead's second run also had `project.spec.ts:245` time out after 60 s,
+which no run here did; a test that times out is a candidate this work did not reproduce. A follow-up is proposed.
+
+### Deviations and what was not run
+
+- **P2's expectation was wrong.** The registration expected the forced path (`afterAll` with the Studio open) to leave
+  one `rcfd serve`. It leaves none: 0 after 10 such runs before the fix. Finding 7's reading of the harness is therefore
+  not the cause of the processes found, no fix of the harness was made, and the cause is reported as not found.
+- **The first whole run before the fix (P1) had three failures that were this work's set-up, not the tree's:**
+  `data-routes.spec.ts:94` and `data.spec.ts:73` took the example `f447_bench` from the main checkout's older
+  `target/release/examples`, because this work's target folder did not have it; after
+  `cargo build --release -p rcfd-api --example f447_bench` into the scratch target they passed in every later run. The
+  third, `f837.spec.ts:198`, is named below.
+- **Other tests that failed in the runs,** none of them changed, retried or skipped: 
+  - `responsiveness.spec.ts:260` (F-832: no task over 100 ms while a run opens): passed in P1 at 09:39 (longest task
+    53 ms) and failed in all five runs of N1 with one task of 400 to 440 ms in `workspace.tab` in each of its three
+    passes. It imports nothing this work changed and the Studio's source is unchanged. Run alone afterwards it failed in
+    the same way with three builds of `f447_bench` (this work's, the main checkout's of 2026-11-16 that P1 used, the
+    lead's of today), with the Studio built again from the unchanged source, and with a fresh user-data folder
+    [resp-*.log]. So it is the state of the machine after about 10:20 and not the tree; what changed was not found. It
+    passed in the lead's three runs of this morning. A follow-up is proposed.
+  - `f837.spec.ts:198` (the runner's budgets): failed in P1 (the alert "was changed by another writer" not found) and
+    in run 5 of N1 (two alerts where one is expected), passed in the other four. 2 of 6 whole runs, at two different
+    lines; before and after the fix alike. A follow-up is proposed.
+  - Because of these, every whole `npm test` of this work ended with exit 1, so G1 is not met, for reasons outside the
+    files of this item. Line 193, T1 and T2 passed in all five.
+- **c3 was not run:** see amendment 1 and Q1.
+- `cargo fmt` and `cargo clippy`: no crate was touched. `baseline_hashes`: no solver file was touched.
+- The instrumented runs with `BrowserWindow.focus()` (D3 (c), (d) and N2, 15 runs) took the system's focus from the
+  window in front for about a second each.
+
+Size (agent), actual: done by the registered rule, partial proposed (rule 8); 0; 6 (one whole `npm test` before the fix, five after); 1 (Q1); about 190000 (the registered reading, and the two libraries, the lead's log, the CI workflow and one CI log, which the estimate left out)
+
+### Decision
+
+By the registered rule: **done.** The cause is shown by runs that fail without the fix (C1; T1 and T2 fail under the
+committed mutation, which is the fix removed), the test passes five consecutive whole runs with the system's focus on
+other programs and five with the window focused, keeps its checks (K1, M2, M3), and the processes are counted before
+and after (P1 to P3).
+
+Two things stand beside that, and the proposal file carries them: clause c3 (CI) was not run and, for line 193 itself,
+cannot be met while CI skips the engine tests (amendment 1, Q1); and G1 is not met because two other tests fail on
+this machine today. Rule 8 says to propose partial where a clause of the acceptance was not run. **The status proposed
+is therefore partial,** with a gap the lead can close by reading T2 in the CI run of the merge and by the maintainer's
+answer to Q1.
+
+### Open questions for the maintainer
+
+**Q1. `run-control.spec.ts` and every other test that needs the engine are skipped on CI (275 of 852 tests in the job
+on windows-latest at cda8e88e). Should CI run them?**
+
+- (a) Leave CI as it is. The engine tests of the Studio run only in the lead's push runs on this machine. The clause
+  "and on CI" of F-888 is then met only by T2, which needs no engine.
+- (b) Build `rcfd-cli`, `rcfd-mcp` and `rcfd-runner` in the job studio-web (or take them from a job that has built
+  them) and package with the engine, on one system or both. The job grows from minutes by the time of a release build
+  of three crates, and tests that hold timing limits measured on the maintainer's machine (P2, the frame limits) would
+  run on shared runners.
+- (c) As (b), in a separate job that is not required for a merge, weekly or on demand.
+
+Recommendation: (c). It shows whether the engine tests hold anywhere else than on one machine without making every pull
+request wait for a release build or fail on a runner's timing. It changes what CI builds, so it is not taken here.
+
+## For the lead: roadmap entries
+
+The same entries are in `docs/roadmap/proposals/0786-F-888.json`.
+
+Status proposed for F-888:
+
+> partial
+
+Note entry:
+
+> ADR 0786, 2026-11-23, partial: the cause is in the test and not in the window's focus: after the case is chosen in the select, the closed listbox gives the focus back to the select one animation frame later (react-aria), and the Tab of run-control.spec.ts was sent before that frame, from the body; "inactive" is Playwright's word for any element not focused, and the document has the focus whatever window has the system's (focus emulation). Shown by records: with the frames delayed by 300 ms the unchanged test failed 5 of 5 with the lead's error text, with and without the system's focus, and passed 5 of 5 once it waited for the focus on the select; without the delay it passed 20 of 20 here, the focus back 5 to 7 ms and the Tab 11 to 17 ms after the choice. Fix in the test (a shared step that waits for the focus on the select; tab order and focus ring kept, three mutations caught); the test passed 5 consecutive whole npm test runs with other programs in front and 5 runs with the window focused; 0 processes left by any run, the cause of the three found not reproduced. Not met: on CI the test is skipped (the job has no engine), so only the new engine-free test runs there.
+
+Gap:
+
+> Missing for done: the CI run of the merge read for run-bar-keyboard.spec.ts (the gallery test, the only part of this work CI runs), and the maintainer's answer to Q1 of ADR 0786 (whether CI builds the engine for the Studio's tests; until then run-control.spec.ts is skipped on CI and the clause "and on CI" cannot be met for it). Also open on the lead's machine: npm test ends with exit 1 by responsiveness.spec.ts:260 and at times f837.spec.ts:198, outside this item.
+
+Follow-up 1 (key `responsiveness-long-task`), deps F-832:
+
+> Studio: responsiveness.spec.ts:260 fails on the lead's machine with one task of 400 to 440 ms when the workspace tab opens. Acceptance: Every limit not stated here is registered in the ADR before the run. The cause of the task of 400 to 440 ms in workspace.tab that apps/studio-web/tests/e2e/responsiveness.spec.ts:260 reports in each of its three passes (5 of 5 whole runs of npm test and 5 runs alone on 2026-11-23 after 10:20, ADR 0786 addendum 1, where the same tree passed at 09:39 with 53 ms) is found and shown by a recorded run; the test then passes a registered number of consecutive runs on that machine. The limits of F-832 are not raised and the test is not skipped or retried.
+
+Follow-up 2 (key `runner-budgets-alert`), deps F-837:
+
+> Studio: f837.spec.ts:198 fails in 2 of 6 whole runs, at two different lines. Acceptance: Every limit not stated here is registered in the ADR before the run. The cause of the two failures of apps/studio-web/tests/e2e/f837.spec.ts:198 recorded in ADR 0786 addendum 1 (the alert "was changed by another writer" not found; two alerts where one is expected) is found and shown by a test that fails without the fix; the test then passes a registered number of consecutive runs on Windows. The test is not skipped, retried or given a longer limit to make it pass.
+
+Follow-up 3 (key `serve-left-behind`), deps F-888:
+
+> Studio: name the test that leaves an rcfd serve process running after npm test on Windows. Acceptance: Every limit not stated here is registered in the ADR before the run. The end-to-end test or the path of the harness that left the rcfd serve processes found on 2026-11-23 (started with --ui and a journal folder under a temporary rcfd-studio-state folder, from a target/release folder; none was left by any run of ADR 0786, a time-out of a test is the candidate not reproduced there) is shown by a recorded run that leaves one, and after the fix a registered number of whole runs of npm test, among them runs with a test made to time out, leave none.
+
+### Checks at the end (G2)
+
+- `cargo test -p rcfd-cli --release --test docs_site`, with this file as it stands: 2 passed.
+- `python scripts/roadmap_proposals.py check docs/roadmap/proposals/0786-F-888.json`: exit 0 (F-888 todo to partial, gap
+  set, three new items).
+- `python scripts/process_report.py --check`: exit 1 with 4 failures, none of them this work's to correct (rule 7 and
+  rule 9): section k, "not in a category (add to CATEGORIES): F-888", a line of `scripts/roadmap_progress.py`, which is
+  the lead's file and which main has had since 3ba05c7d, after this branch was made; and three generated files that are
+  only not current, `docs/adr/index.md`, `docs/roadmap-overview.md` and `CHANGELOG.md`. They are left to the lead.
