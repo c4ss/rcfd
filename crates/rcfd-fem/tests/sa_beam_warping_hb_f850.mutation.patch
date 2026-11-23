@@ -1,0 +1,14 @@
+# expect-fail: cargo test --release -p rcfd-fem --test sa_beam_warping_hb_f850
+diff --git a/crates/rcfd-fem/src/beam_warping.rs b/crates/rcfd-fem/src/beam_warping.rs
+index 5709e455..0a747683 100644
+--- a/crates/rcfd-fem/src/beam_warping.rs
++++ b/crates/rcfd-fem/src/beam_warping.rs
+@@ -545,7 +545,7 @@ pub fn local_geometric_stiffness(
+         let wl = 0.5 * w * l;
+         let (th, thp, sl) = rows14(l, section, material, xi);
+         let m = |c: usize| (1.0 - xi) * r0[c] + xi * r1[c];
+-        let (vy, vz, t, my, mz) = (m(1), m(2), m(3), m(4), m(5));
++        let (vy, vz, t, my, mz) = (m(1), m(2), m(3), m(0), m(5));
+         let (ph, ty, tz) = (&th[0], &th[1], &th[2]);
+         let (php, typ, tzp) = (&thp[0], &thp[1], &thp[2]);
+         let (up, vp, wp) = (&sl[0], &sl[1], &sl[2]);

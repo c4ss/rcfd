@@ -1,0 +1,8 @@
+{
+  "form": 1,
+  "adr": "0778",
+  "item": "F-850",
+  "base": "d10ea0bd7fda1c7d067e3abe8ed67e36db66b102",
+  "status": "done",
+  "note": "ADR 0778, 2026-11-23, done: the four supporting checks run in new test files, test-only: the 16-element moments of ADR 0553 A1' and A2' are 1.29e-3 and 3.9e-4 from the closed form (limit 2e-2), also against the digits ADR 0553 prints; HB- of ADR 0585 is 0 and catches the committed mutation (the axial force in the slot of M_y: 0.899 against the limit 1e-10); the moment radii of ADR 0570 are 1.35e-2 and 3.40e-2 against the limit 0.08 (heavy records), and a uniform pressure on the Hertz disc is refused at 0.130 and 0.139 (continuum 0.118); the three Gerber texts of ADR 0453 G2 are equal; 4 of 4 mutations caught."
+}
