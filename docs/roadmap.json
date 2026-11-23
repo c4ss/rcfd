@@ -3260,7 +3260,7 @@
     ],
     "status": "todo",
     "acceptance": "design_uq and design_sobol tools run uq::run and sensitivity::run on a named evaluator (the reduced-order fan evaluator first) inside the sandbox, with the ledger, and the MCP tools-list goldens are updated by a registered edit.",
-    "note": "From ADR 0240 question 2, recommendation taken on the maintainer's standing instruction of 2026-11-11. NEEDS THE USER before merge: it edits the MCP tools-list goldens. Maintainer (2026-11-18): the golden, schema or hash-table edit this item needs is approved under the class rule of agent rules version 2, rule 3: a change that only adds entries is re-recorded by the lead, with the diff in the ledger. The item may be issued.",
+    "note": "From ADR 0240 question 2, recommendation taken on the maintainer's standing instruction of 2026-11-11. NEEDS THE USER before merge: it edits the MCP tools-list goldens. Maintainer (2026-11-18): the golden, schema or hash-table edit this item needs is approved under the class rule of agent rules version 2, rule 3: a change that only adds entries is re-recorded by the lead, with the diff in the ledger. The item may be issued. Lead (2026-11-23): issued by docs/adr/briefs/f339-mcp-uq-sobol-tools.md (ADR 0784).",
     "milestones": [
       "fan"
     ]
@@ -4841,7 +4841,7 @@
     ],
     "status": "todo",
     "acceptance": "rcfd duct-modes reads a saved pressure time series on a duct section and writes the rcfd-duct-modes export; on the ADR 0351 X1 field it reproduces the library's export bit for bit; located errors for a section outside the duct and a non-integer number of periods; the CLI help golden updated with the maintainer's approval.",
-    "note": "From ADR 0351 question 1. NEEDS THE USER: the command's help text changes the CLI golden. Maintainer (2026-11-18): the golden, schema or hash-table edit this item needs is approved under the class rule of agent rules version 2, rule 3: a change that only adds entries is re-recorded by the lead, with the diff in the ledger. The item may be issued."
+    "note": "From ADR 0351 question 1. NEEDS THE USER: the command's help text changes the CLI golden. Maintainer (2026-11-18): the golden, schema or hash-table edit this item needs is approved under the class rule of agent rules version 2, rule 3: a change that only adds entries is re-recorded by the lead, with the diff in the ledger. The item may be issued. Lead (2026-11-23): issued by docs/adr/briefs/f451-duct-modes-command.md (ADR 0783)."
   },
   {
     "id": "F-452",
@@ -6768,7 +6768,7 @@
     ],
     "status": "todo",
     "acceptance": "Every limit not stated here is registered in the ADR before the run. A case file names reduced part files of ADR 0469 and the host node sets they attach to (key superelements) and the interface enrichment of ADR 0532 (key interface_enrichment); the bar of ADR 0536 run from a case file gives the library's results in bits; the schema golden re-recorded with the maintainer's approval; a case without the keys gives every result bit-identical.",
-    "note": "Structural solver, advanced tier. Follow-up of F-553 (ADR 0536, 2026-11-14). NEEDS THE USER: the schema golden is re-recorded only with the maintainer's approval. Maintainer (2026-11-18): the golden, schema or hash-table edit this item needs is approved under the class rule of agent rules version 2, rule 3: a change that only adds entries is re-recorded by the lead, with the diff in the ledger. The item may be issued."
+    "note": "Structural solver, advanced tier. Follow-up of F-553 (ADR 0536, 2026-11-14). NEEDS THE USER: the schema golden is re-recorded only with the maintainer's approval. Maintainer (2026-11-18): the golden, schema or hash-table edit this item needs is approved under the class rule of agent rules version 2, rule 3: a change that only adds entries is re-recorded by the lead, with the diff in the ledger. The item may be issued. Lead (2026-11-23): issued by docs/adr/briefs/f616-superelement-case-keys.md (ADR 0785)."
   },
   {
     "id": "F-617",
