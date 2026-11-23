@@ -1,0 +1,10 @@
+{
+  "form": 1,
+  "adr": "0782",
+  "item": "F-856",
+  "base": "e2fe571b2374400f97ee598252a87207cc146912",
+  "status": "partial",
+  "note": "ADR 0782, 2026-11-23, partial: the workspace uses wasmi 1.1.0 (the newest 1.x; minimum Rust 1.86, below the README's 1.90) without its default feature wat, and udf.rs is ported with the accepted set of modules, the eager translation and the limits of before; clippy with warnings as errors, the 159 unit tests, udf, udf_hooks_w38a, check_inputs_adr0739 and baseline_hashes pass unedited, cargo deny check passes, and eight new tests of the fuel, the 16 MiB cap one page apart and the refusals pass on wasmi 0.31.2 and on 1.1.0 alike, each of five mutations caught; the type-check with Rust 1.90 was not run because that toolchain is not installed on the machine.",
+  "gap": "Missing for done: cargo check --workspace --all-targets --locked with Rust 1.90 (not installed where the work was done; the CI job min-toolchain runs it). For the lead outside the item's files: rust-version of crates/rcfd-api/Cargo.toml and the README's range (1.85 to 1.86), and THIRD_PARTY_LICENSES.md regenerated.",
+  "follow_ups": []
+}

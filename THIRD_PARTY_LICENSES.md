@@ -42,29 +42,26 @@ For the npm packages of the Electron Studio (`apps/studio-web/`):
   distribution. Of the installed packages (Windows x64) only `typescript` ships a `NOTICE.txt`, and it is a build tool.
 * MIT, ISC, BSD-3-Clause, 0BSD and BlueOak-1.0.0 packages: keep their copyright and licence texts in distributions.
 
-## Licence summary (60 packages)
+## Licence summary (58 packages)
 
 | Licence (as declared) | Packages |
 |---|---|
-| `MIT OR Apache-2.0` | 36 |
+| `MIT OR Apache-2.0` | 34 |
+| `Apache-2.0 WITH LLVM-exception OR Apache-2.0 OR MIT` | 5 |
 | `MIT` | 5 |
-| `Apache-2.0 WITH LLVM-exception OR Apache-2.0 OR MIT` | 4 |
-| `MIT/Apache-2.0` | 4 |
-| `Apache-2.0 OR MIT` | 3 |
+| `MIT/Apache-2.0` | 5 |
+| `Apache-2.0 OR MIT` | 2 |
 | `MIT OR Zlib OR Apache-2.0` | 2 |
+| `Zlib` | 2 |
 | `(MIT OR Apache-2.0) AND Unicode-3.0` | 1 |
 | `0BSD OR MIT OR Apache-2.0` | 1 |
-| `Apache-2.0` | 1 |
-| `Apache-2.0 WITH LLVM-exception` | 1 |
 | `Unlicense OR MIT` | 1 |
-| `Zlib` | 1 |
 
 ## Packages
 
 | Package | Version | Licence (as declared) |
 |---|---|---|
 | adler2 | 2.0.1 | `0BSD OR MIT OR Apache-2.0` |
-| autocfg | 1.5.1 | `Apache-2.0 OR MIT` |
 | bitflags | 2.13.2 | `MIT OR Apache-2.0` |
 | bumpalo | 3.20.3 | `MIT OR Apache-2.0` |
 | cfg-if | 1.0.5 | `MIT OR Apache-2.0` |
@@ -72,22 +69,20 @@ For the npm packages of the Electron Studio (`apps/studio-web/`):
 | crossbeam-deque | 0.8.8 | `MIT OR Apache-2.0` |
 | crossbeam-epoch | 0.9.21 | `MIT OR Apache-2.0` |
 | crossbeam-utils | 0.8.23 | `MIT OR Apache-2.0` |
-| downcast-rs | 1.2.1 | `MIT/Apache-2.0` |
 | either | 1.19.0 | `MIT OR Apache-2.0` |
 | equivalent | 1.0.2 | `Apache-2.0 OR MIT` |
 | fdeflate | 0.3.7 | `MIT OR Apache-2.0` |
 | flate2 | 1.1.10 | `MIT OR Apache-2.0` |
+| foldhash | 0.1.5 | `Zlib` |
+| hashbrown | 0.15.5 | `MIT OR Apache-2.0` |
 | hashbrown | 0.17.1 | `MIT OR Apache-2.0` |
 | indexmap | 2.14.2 | `Apache-2.0 OR MIT` |
-| indexmap-nostd | 0.4.0 | `Apache-2.0` |
 | itoa | 1.0.18 | `MIT OR Apache-2.0` |
 | leb128fmt | 0.1.0 | `MIT OR Apache-2.0` |
 | libm | 0.2.16 | `MIT` |
 | memchr | 2.8.3 | `Unlicense OR MIT` |
 | miniz_oxide | 0.8.9 | `MIT OR Zlib OR Apache-2.0` |
 | miniz_oxide | 0.9.1 | `MIT OR Zlib OR Apache-2.0` |
-| num-traits | 0.2.19 | `MIT OR Apache-2.0` |
-| paste | 1.0.15 | `MIT OR Apache-2.0` |
 | png | 0.18.1 | `MIT OR Apache-2.0` |
 | proc-macro2 | 1.0.107 | `MIT OR Apache-2.0` |
 | quote | 1.0.47 | `MIT OR Apache-2.0` |
@@ -100,8 +95,8 @@ For the npm packages of the Electron Studio (`apps/studio-web/`):
 | serde_json | 1.0.154 | `MIT OR Apache-2.0` |
 | serde_spanned | 1.1.3 | `MIT OR Apache-2.0` |
 | simd-adler32 | 0.3.10 | `MIT` |
-| smallvec | 1.16.3 | `MIT OR Apache-2.0` |
 | spin | 0.9.9 | `MIT` |
+| string-interner | 0.19.0 | `MIT/Apache-2.0` |
 | syn | 2.0.119 | `MIT OR Apache-2.0` |
 | syn | 3.0.9 | `MIT OR Apache-2.0` |
 | thiserror | 1.0.69 | `MIT OR Apache-2.0` |
@@ -113,11 +108,12 @@ For the npm packages of the Electron Studio (`apps/studio-web/`):
 | unicode-ident | 1.0.27 | `(MIT OR Apache-2.0) AND Unicode-3.0` |
 | unicode-width | 0.2.2 | `MIT OR Apache-2.0` |
 | wasm-encoder | 0.263.0 | `Apache-2.0 WITH LLVM-exception OR Apache-2.0 OR MIT` |
-| wasmi | 0.31.2 | `MIT/Apache-2.0` |
-| wasmi_arena | 0.4.1 | `MIT/Apache-2.0` |
-| wasmi_core | 0.13.0 | `MIT/Apache-2.0` |
+| wasmi | 1.1.0 | `MIT/Apache-2.0` |
+| wasmi_collections | 1.1.0 | `MIT/Apache-2.0` |
+| wasmi_core | 1.1.0 | `MIT/Apache-2.0` |
+| wasmi_ir | 1.1.0 | `MIT/Apache-2.0` |
+| wasmparser | 0.239.0 | `Apache-2.0 WITH LLVM-exception OR Apache-2.0 OR MIT` |
 | wasmparser | 0.263.0 | `Apache-2.0 WITH LLVM-exception OR Apache-2.0 OR MIT` |
-| wasmparser-nostd | 0.100.2 | `Apache-2.0 WITH LLVM-exception` |
 | wast | 263.0.0 | `Apache-2.0 WITH LLVM-exception OR Apache-2.0 OR MIT` |
 | wat | 1.263.0 | `Apache-2.0 WITH LLVM-exception OR Apache-2.0 OR MIT` |
 | winnow | 1.0.4 | `MIT` |

@@ -531,7 +531,7 @@ One row per record of this folder, grouped by the roadmap category of the item i
 | [0739](0739-f848-proposal-run-sites-a-remote-simulation-service-for-the-studio-cli-and-mcp.md) | F-848 proposal: run sites, a remote simulation service for the Studio, the CLI and the MCP server | ACCEPTED | 2026-11-17 | 0 | F-848 | todo |
 | [0742](0742-f262-diagnosis-the-terminal-status-of-a-run-is-written-before-its-last-state-event.md) | F-262 diagnosis: the terminal status of a run is written before its last state event and before its request files are removed (S7 of ADR 0123 fails intermittently on the held run) | REGISTERED | 2026-11-19 | 1 | F-262 | partial |
 
-## Quality, docs and validation (53)
+## Quality, docs and validation (54)
 
 | ADR | Title | Status word | Date | Addenda | Item | Item status |
 |---|---|---|---|---|---|---|
@@ -588,6 +588,7 @@ One row per record of this folder, grouped by the roadmap category of the item i
 | [0775](0775-f871-registration-six-further-simulation-milestones.md) | F-871 registration: six further simulation milestones | REGISTERED | 2026-11-23 | 1 | F-871 | done |
 | [0776](0776-f860-registration-push-main-left-out-commits-and-the-budget.md) | F-860 registration: push_main.py, the left-out run names its commits, the ADR's tests count in the budget, changed-file binaries first | REGISTERED | 2026-11-23 | 1 | F-860 | done |
 | [0779](0779-f875-registration-a-simulation-milestone-for-the-structure-and-vibration-of-a-fan-rotor.md) | F-875 registration: a simulation milestone for the structure and vibration of a fan rotor | REGISTERED | 2026-11-23 | 1 | F-875 | done |
+| [0782](0782-f856-registration-udf-interpreter-wasmi-1x.md) | F-856 registration: the UDF interpreter from wasmi 0.31 to wasmi 1.1.0 (the minimum Rust read first, the port of `udf.rs`, and the checks of the fuel limit, the memory limit and the refusal of imports) | REGISTERED | 2026-11-23 | 1 | F-856 | todo |
 
 ## Records with no item in the file name (259)
 
