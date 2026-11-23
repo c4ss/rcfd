@@ -1,0 +1,45 @@
+# ADR 0779 (F-875): the members of the simulation milestone fan-structure, the structure and vibration of a fan rotor.
+# One line per membership: <item id> tab <milestone id> tab <reason>. An item that is not listed is not a member.
+# M1 headline, M2 used, M3 data, M4 trust: the membership rule of ADR 0756 as ADR 0779 reads it. M2 (a): a run of record
+# (sb_fan_blade.rs, sb_fan_blade_builder.rs) uses it. M2 (b1): a direct dependency of a demonstration that is not yet run
+# (F-406, F-436). M2 (b2): deeper in that closure, and a member is built on what it delivered.
+# Applied by: python scripts/roadmap_milestones.py --apply docs/adr/0779-f875-mapping.tsv --definitions docs/adr/0779-f875-milestones.json
+F-025	fan-structure	M2 used (a): sb_fan_blade.rs takes the stiffness and mass as rcfd_linalg::CsrMatrix
+F-132	fan-structure	M2 used (a): route D of sb_fan_blade.rs meshes the blade surface with rcfd_mesh::tetmesh::tetrahedralize
+F-133	fan-structure	M2 used (a): the blade is an AxialFan of rcfd_mesh::fan, the parametric fan geometry its note records (ADR 0065)
+F-232	fan-structure	M2 used (a): the triangulated surface type of rcfd_mesh::surface carries the blade surface to the mesher on route D
+F-370	fan-structure	M2 used (a): the solid data model and the builders tet_box and upgrade_to_tet10 of the runs
+F-371	fan-structure	M2 used (a): from_tet_mesh turns the tetrahedral mesher's output into the solid mesh of route D, with its patches as sets
+F-372	fan-structure	M2 used (a): the quadratic tetrahedron Tet10 is the element of every blade mesh
+F-373	fan-structure	M2 used (a): the runs solve with StaticSolver::Direct, the envelope L D L^T
+F-374	fan-structure	M2 used (a): the assembly, the clamp at the hub, the reactions and solve_static
+F-375	fan-structure	M2 used (a): the centrifugal load at 2000 rpm and the uniform pressure as consistent nodal loads
+F-376	fan-structure	M2 used (a): the integration-point recovery and the strain energy that is compared with half the work
+F-377	fan-structure	M2 used (b2): the solid result written as a .vtu by the case file, to which F-436 says the safety-factor field is written
+F-380	fan-structure	M2 used (b2): the nodal temperature field of a model, at which F-436 evaluates the tabulated modulus of F-409
+F-382	fan-structure	M2 used (a): the subspace eigensolver behind modal_analysis, with its Sturm count
+F-383	fan-structure	M2 used (a): the consistent mass matrix and modal_analysis give the four lowest modes at rest
+F-386	fan-structure	M2 used (b2): the solid case file from which F-406 and F-436 say the tables are written
+F-387	fan-structure	M1 headline: its acceptance is the blade under the centrifugal and pressure load and its modes at rest; the demonstration that is run
+F-388	fan-structure	M2 used (b2): the scaffold of the intermediate tier, on whose constraint data and extension points F-393, F-394, F-396 and F-399 are built
+F-393	fan-structure	M2 used (b2): the constraint transformation by which the cyclic sector of F-394 is imposed
+F-394	fan-structure	M2 used (b1): direct dependency of F-406; the bladed hub by a cyclic sector for harmonic indices 0 to Z/2
+F-395	fan-structure	M2 used (b2): the geometric stiffness K_sigma of the centrifugal pre-stress, on which the rotating modes of F-396 are built
+F-396	fan-structure	M2 used (b1): direct dependency of F-406; stress stiffening, spin softening and the Campbell table of the blade
+F-397	fan-structure	M2 used (b2): the Newton driver with load steps, on which the creep law of F-411 is integrated
+F-399	fan-structure	M2 used (b1): direct dependency of F-406; the blade-passing response by mode superposition with modal damping
+F-403	fan-structure	M2 used (b1): direct dependency of F-406; the Campbell table and the cyclic and harmonic analyses from a solid case file
+F-406	fan-structure	M1 headline: its acceptance is the Campbell table of the blade, the bladed hub by cyclic symmetry and the blade-passing response
+F-408	fan-structure	M2 used (b2): the scaffold of the advanced tier, on whose material variants and driver extension points F-409 to F-418 are built
+F-409	fan-structure	M2 used (b1): direct dependency of F-436; the orthotropic blade and the modulus from a temperature table
+F-411	fan-structure	M2 used (b1): direct dependency of F-436; the creep growth of the tip at the maximum speed
+F-412	fan-structure	M2 used (b1): direct dependency of F-436; the direct harmonic solve of the advanced tier
+F-413	fan-structure	M2 used (b1): direct dependency of F-436; the fatigue safety factor with the Goodman correction at a Campbell crossing
+F-414	fan-structure	M2 used (b2): the quadratic eigenproblem on a modal subspace, on which the Coriolis term of F-415 is solved
+F-415	fan-structure	M2 used (b1): direct dependency of F-436; the Campbell table with the Coriolis term
+F-418	fan-structure	M2 used (b1): direct dependency of F-436; the equivalent radiated power of the frame
+F-435	fan-structure	M2 used (b1): direct dependency of F-436; the advanced materials, analyses and results from solid case files
+F-436	fan-structure	M1 headline: its acceptance is the polymer blade (orthotropy, temperature, creep, fatigue) and the radiated power of the frame
+F-455	fan-structure	M2 used (a): the runs set StaticOptions::refinement(1), the iterative refinement of the direct solve
+F-457	fan-structure	M2 used (a): the modal analyses set ResidualTest::Backward, the scale-aware convergence test
+F-593	fan-structure	M2 used (a): sb_fan_blade_builder.rs runs the blade through the library mesher fan_blade_tet10 and computer_fan_blade_tet10
