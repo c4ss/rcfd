@@ -9830,12 +9830,12 @@
     "deps": [
       "F-869"
     ],
-    "status": "todo",
+    "status": "done",
     "acceptance": "Every limit not stated here is registered in the ADR before the run. The observed order of the mean drag of the cylinder at Re 100 (1.38 on the sequence of ADR 0761, 1.387 on that of ADR 0763) is explained by a cause that a registered run shows: candidates named before the run (among them the grading of the O-grid, the wall force integral, the far-field condition), each tested by a run that changes it alone, with the order it gives; a cause is named only if its run moves the order by more than a registered amount, and none is named otherwise. No solver change is made by this item; a fix, if one is found, is a proposal for a further item.",
-    "note": "Lead (2026-11-22): entered on the maintainer's answer of that day (\"Yes, option (c)\") to question 1 of ADR 0763. A member of the milestone vortex-shedding: it reads the convergence of the headline case. Not issued yet. Lead (2026-11-22): issued by docs/adr/briefs/f881-cylinder-drag-order.md (ADR 0771).",
     "milestones": [
       "vortex-shedding"
-    ]
+    ],
+    "note": "Lead (2026-11-22): entered on the maintainer's answer of that day (\"Yes, option (c)\") to question 1 of ADR 0763. A member of the milestone vortex-shedding: it reads the convergence of the headline case. Not issued yet. Lead (2026-11-22): issued by docs/adr/briefs/f881-cylinder-drag-order.md (ADR 0771). ADR 0771, 2026-11-23, done: the observed order 1.387 of the cylinder drag on the sequence of ADR 0763 is held down by the first-order wall terms of the wall force integral: replaced alone by second-order ones on the same fields the order is 1.777 (in [1.5, 2.5]); the grading Expansion(50) raises it to 2.906 through the same wall term (a cancellation), and the velocity fixed on the far field leaves it at 1.305 (within 0.1); B0 reproduced ADR 0763 to every printed digit; ADR 0761's 1.38 is 1.51 by the same ratio form. Lead (2026-11-23): merged at e70dbf7a and pushed at 6ee94143; done as proposed. The proposed item of a second-order wall force in rcfd-post is the maintainer's to enter (ADR 0771, open question); not entered."
   },
   {
     "id": "F-882",

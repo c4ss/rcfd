@@ -400,3 +400,17 @@ characters" and "F-888: new, todo, phase 9, deps F-881" (the follow-up), exit 0.
 and for `CHANGELOG.md`; the second fails in the same way on an export of main d6e44b27, so it is not of this work. Both
 are left to the lead (rules 7 and 9). `cargo test -p rcfd-cli --release --test docs_site` on the tree with addendum 1: 2
 passed.
+
+## The lead's reading (2026-11-23), at the merge
+
+Merged at e70dbf7a and pushed at 6ee94143 (the report read at 01:58 UTC, 7 minutes of reading, proposed done, written
+done). Checked by the lead before the merge: the registration is the first commit and alone, and amendment 1 (the far
+field fixed in velocity on the whole boundary, with gate check G4b) is committed before the candidate it corrects was
+run; the branch adds one test file, its mutation patch, the ADR and the proposal, and changes no source of a crate. The
+push script ran this ADR's committed mutation and those of ADR 0761 and ADR 0763, and all three failed as expected; 143
+binaries were left out for a left-out run.
+
+Status: **done**, as proposed. The order of the drag is explained: the first-order wall terms of the force integral
+hold it at 1.387, second-order terms alone on the same fields give 1.777, and the grading and the far-field condition
+are not the cause. The second-order wall force as an option of rcfd-post is scope and is put to the maintainer with the
+agent's recommendation (a), which the lead shares; it is not entered until the maintainer answers.
