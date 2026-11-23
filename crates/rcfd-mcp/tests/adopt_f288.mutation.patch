@@ -1,0 +1,14 @@
+# expect-fail: cargo test --release -p rcfd-mcp --test adopt_f288
+diff --git a/crates/rcfd-workspace/src/design.rs b/crates/rcfd-workspace/src/design.rs
+index 8f10efeb..6044e275 100644
+--- a/crates/rcfd-workspace/src/design.rs
++++ b/crates/rcfd-workspace/src/design.rs
+@@ -245,7 +245,7 @@ impl RunKey {
+ pub fn choose<'a>(key: &RunKey, runs: &'a [(RunRecord, RunStatus)]) -> Option<&'a RunRecord> {
+     let live = || {
+         runs.iter()
+-            .filter(|(rec, st)| !matches!(st.state, RunState::Failed | RunState::Cancelled) && key.matches(rec))
++            .filter(|(rec, _st)| key.matches(rec))
+     };
+     live()
+         .filter(|(_, st)| st.state == RunState::Finished)

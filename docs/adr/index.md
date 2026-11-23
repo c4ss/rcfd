@@ -529,7 +529,7 @@ One row per record of this folder, grouped by the roadmap category of the item i
 | [0739](0739-f848-proposal-run-sites-a-remote-simulation-service-for-the-studio-cli-and-mcp.md) | F-848 proposal: run sites, a remote simulation service for the Studio, the CLI and the MCP server | ACCEPTED | 2026-11-17 | 0 | F-848 | todo |
 | [0742](0742-f262-diagnosis-the-terminal-status-of-a-run-is-written-before-its-last-state-event.md) | F-262 diagnosis: the terminal status of a run is written before its last state event and before its request files are removed (S7 of ADR 0123 fails intermittently on the held run) | REGISTERED | 2026-11-19 | 1 | F-262 | partial |
 
-## Quality, docs and validation (51)
+## Quality, docs and validation (52)
 
 | ADR | Title | Status word | Date | Addenda | Item | Item status |
 |---|---|---|---|---|---|---|
@@ -582,6 +582,7 @@ One row per record of this folder, grouped by the roadmap category of the item i
 | [0770](0770-f884-registration-naca0012-17-degrees-steady-iteration-diagnosis.md) | F-884 registration: why the steady iteration does not reach the attached NACA 0012 state at 17 degrees | REGISTERED | 2026-11-22 | 1 | F-884 | done |
 | [0771](0771-f881-registration-why-the-mean-drag-of-the-cylinder-converges-at-an-order-near-1-4.md) | F-881 registration: why the mean drag of the cylinder at Re 100 converges at an order near 1.4 | REGISTERED | 2026-11-22 | 1 | F-881 | done |
 | [0772](0772-f887-registration-naca0012-lift-curve-without-eddy-viscosity-relaxation.md) | F-887 registration: steady Spalart-Allmaras without eddy-viscosity relaxation over the NACA 0012 lift curve | REGISTERED | 2026-11-22 | 1 | F-887 | done |
+| [0773](0773-f876-registration-the-replace-of-run-json-refused-in-adopt-f288.md) | F-876 registration: the replace of run.json refused with access denied in adopt_f288 | REGISTERED | 2026-11-22 | 1 | F-876 | todo |
 | [0775](0775-f871-registration-six-further-simulation-milestones.md) | F-871 registration: six further simulation milestones | REGISTERED | 2026-11-23 | 1 | F-871 | done |
 | [0776](0776-f860-registration-push-main-left-out-commits-and-the-budget.md) | F-860 registration: push_main.py, the left-out run names its commits, the ADR's tests count in the budget, changed-file binaries first | REGISTERED | 2026-11-23 | 1 | F-860 | done |
 

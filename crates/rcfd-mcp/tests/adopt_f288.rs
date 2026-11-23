@@ -3,6 +3,11 @@
 //! during a study and started again submits no second run for a candidate that has one, and its records equal those of a
 //! study that was not interrupted; a run that differs in one item of the key, or that failed or was cancelled, is not
 //! adopted. Needs `rcfd` and `rcfd-runner` next to `rcfd-mcp` (one cargo build profile).
+//!
+//! ADR 0773 (F-876): decoy (h) of A-N, the run that differs in `solver_version` alone, is written once (submitted by a
+//! run service whose runner has no `rcfd` beside it, so its run.json says `unknown`) and no longer made by a replace of
+//! the run.json just created, which the operating system refused once (a handle of the System process holds a new file
+//! for up to seconds); the earlier making is kept as the ignored record `a_n_record_before_adr0773`.
 
 mod common;
 
@@ -404,10 +409,35 @@ fn a_r_a_server_stopped_during_a_study_adopts_its_runs() {
     eprintln!("A-R: largest relative difference {worst:e} (limit {REL_EXACT:e})");
 }
 
+/// How A-N makes decoy (h), the run that differs from the key in `solver_version` alone.
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum DecoyH {
+    /// ADR 0201: submitted, then its run.json replaced with `solver_version: "rcfd 0.0.0-decoy"`.
+    Replaced,
+    /// ADR 0773: submitted by a run service whose runner has no `rcfd` beside it, so the store writes run.json once
+    /// with `solver_version: "unknown"`.
+    WrittenOnce,
+}
+
 #[test]
 fn a_n_a_run_that_differs_in_one_item_is_not_adopted() {
+    a_n(DecoyH::WrittenOnce);
+}
+
+/// ADR 0773: A-N as ADR 0201 made it, decoy (h) by a replace of the run.json just created (refused once by the
+/// operating system, F-876). Kept as a record; the gate runs `a_n_a_run_that_differs_in_one_item_is_not_adopted`.
+#[test]
+#[ignore = "record of ADR 0773: decoy (h) made by a replace of a new run.json; the gate runs a_n_a_run_that_differs_in_one_item_is_not_adopted"]
+fn a_n_record_before_adr0773() {
+    a_n(DecoyH::Replaced);
+}
+
+fn a_n(how: DecoyH) {
     binaries();
-    let root = scratch("f288-an");
+    let root = scratch(match how {
+        DecoyH::WrittenOnce => "f288-an",
+        DecoyH::Replaced => "f288-an-record",
+    });
     let dir = new_project(&root, 2);
     std::fs::copy(dir.join("cases/cavity.toml"), dir.join("cases/copy.toml")).unwrap();
     let _runner = Runner(dir.clone());
@@ -443,6 +473,8 @@ fn a_n_a_run_that_differs_in_one_item_is_not_adopted() {
     ok(&call(&s, "design_create_study", nu1_args("designs/nu1")));
     ok(&call(&s, "design_create_study", nu1_args("designs/pos")));
     let rs = RunService::new(&dir, runner_exe());
+    // ADR 0773: no `rcfd` beside this runner path, so a run it submits records `solver_version: "unknown"`
+    let rs_unknown = RunService::new(&dir, root.join("no-rcfd").join(runner_exe().file_name().unwrap()));
     let case = dir.join("cases/cavity.toml");
     let full = RunTags {
         study: Some("designs/nu1".into()),
@@ -465,11 +497,16 @@ fn a_n_a_run_that_differs_in_one_item_is_not_adopted() {
     };
     let mut decoys: Vec<(&str, String)> = Vec::new();
     let mut submit = |what: &'static str, case: &Path, s: &RunSettings, l: &LaunchSettings, t: &RunTags| -> String {
-        let id = rs.submit_with(case, s, l, t).unwrap();
+        let by = if what.starts_with("(h)") && how == DecoyH::WrittenOnce {
+            &rs_unknown
+        } else {
+            &rs
+        };
+        let id = by.submit_with(case, s, l, t).unwrap();
         decoys.push((what, id.clone()));
         id
     };
-    submit(
+    let a = submit(
         "(a) variant",
         &case,
         &set(&[]),
@@ -504,8 +541,22 @@ fn a_n_a_run_that_differs_in_one_item_is_not_adopted() {
     let h = submit("(h) solver_version", &case, &set(&[]), &none, &full);
     let hp = dir.join("runs").join(&h).join("run.json");
     let mut hr = read_json(&hp);
-    hr["solver_version"] = json!("rcfd 0.0.0-decoy");
-    rcfd_project::atomic::atomic_write(&hp, serde_json::to_string_pretty(&hr).unwrap().as_bytes()).unwrap();
+    match how {
+        DecoyH::Replaced => {
+            hr["solver_version"] = json!("rcfd 0.0.0-decoy");
+            rcfd_project::atomic::atomic_write(&hp, serde_json::to_string_pretty(&hr).unwrap().as_bytes()).unwrap();
+        }
+        DecoyH::WrittenOnce => {
+            assert_eq!(
+                hr["solver_version"],
+                json!(rcfd_project::records::UNKNOWN_SOLVER_VERSION),
+                "{hr}"
+            );
+            // (a), submitted by `rs`, records the version the key has
+            let key_version = read_json(&dir.join("runs").join(&a).join("run.json"))["solver_version"].clone();
+            assert!(key_version.as_str().unwrap().starts_with("rcfd "), "{key_version}");
+        }
+    }
     let i = submit("(i) cancelled", &case, &set(&[]), &none, &full);
     let big = RunSettings {
         mem_mb: Some(10_000_000),

@@ -1,0 +1,22 @@
+{
+  "form": 1,
+  "adr": "0773",
+  "item": "F-876",
+  "base": "d6e44b2759f0f0e46eae3a1c3537b0591c7768c6",
+  "status": "done",
+  "note": "ADR 0773, 2026-11-23, done: the refused replace in adopt_f288 A-N is shown to be a kernel-mode handle (the System process, pid 4) that holds a newly written run.json for up to 1.84 s (21 of 900 fresh replaces refused with code 5, 0 of 200 replaces of files 3 s old, no process of the test holding it; a handle without delete sharing reproduces the exact error), so decoy (h) is now written once with solver_version unknown instead of by a replace of a new run.json; A-N passes 20 of 20 without load and 20 of 20 under a load of new files, the committed mutation (failed and cancelled runs adopted) is caught, atomic.rs and its 12 attempts unchanged.",
+  "follow_ups": [
+    {
+      "title": "adopt_f288 under a load of new files: a run's status.json read as missing and an adopted run counted failed while queued",
+      "deps": ["F-876"],
+      "acceptance": "Every limit not stated here is registered in the ADR before the run. For the failures of ADR 0773 addendum 1 (R1b run 4: a read of status.json failed with os error 2; R1b run 6 and R1 run 1: an adopted run reported queued and counted failed, records ok false in adopt_f288 A-R and A-N), the cause is shown by a registered control with a registered number of runs under ADR 0773's load LF, and the code or the test is changed under the registration so that the registered runs pass.",
+      "key": "adopt-f288-status-read-under-file-load"
+    },
+    {
+      "title": "adopt_f288 A-N ends when it adopts a paused decoy",
+      "deps": ["F-876"],
+      "acceptance": "Every limit not stated here is registered in the ADR before the run. A mutation that drops one item of RunKey::matches (ADR 0773 M1) makes adopt_f288 A-N fail at an assertion instead of waiting without end, shown by a committed mutation patch, and A-N passes a registered number of runs.",
+      "key": "adopt-f288-an-ends-on-paused-adoption"
+    }
+  ]
+}
