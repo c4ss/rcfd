@@ -9614,7 +9614,7 @@
     ],
     "status": "todo",
     "acceptance": "Every limit not stated here is registered in the ADR before the run. The cause of the time-out of apps/studio-web/tests/e2e/undo.spec.ts:268 (a click that waits 30 s on windows-latest) is found and shown by a test that fails without the fix; the test then passes a registered number of consecutive runs on Windows. The test is not skipped, retried or given a longer limit to make it pass.",
-    "note": "Lead (2026-11-19): entered after two occurrences on main in one day, CI runs on 33125336 and 3dba04a3, both in the job studio-web on windows-latest: 'TimeoutError: locator.click: Timeout 30000ms exceeded' in test 834; the Ubuntu job and the runs of the commits before and after were green. Neither commit changed the Studio. Follow-up of F-829 (ADR of that item). Not issued."
+    "note": "Lead (2026-11-19): entered after two occurrences on main in one day, CI runs on 33125336 and 3dba04a3, both in the job studio-web on windows-latest: 'TimeoutError: locator.click: Timeout 30000ms exceeded' in test 834; the Ubuntu job and the runs of the commits before and after were green. Neither commit changed the Studio. Follow-up of F-829 (ADR of that item). Not issued. Lead (2026-11-23): issued by docs/adr/briefs/f852-studio-close-session-timeout.md (ADR 0781)."
   },
   {
     "id": "F-853",
@@ -9651,7 +9651,7 @@
     "deps": [],
     "status": "todo",
     "acceptance": "Every limit not stated here is registered in the ADR before the run. The workspace depends on wasmi 1.x (the newest 1.x release at the time of the registration) and crates/rcfd-api/src/udf.rs is ported to its interface; cargo clippy --all-targets with warnings as errors, the type-check with the README's minimum Rust and the unit tests pass; every existing UDF test of rcfd-api (udf, udf_hooks_w38a) and rcfd-cli check_inputs_adr0739 passes unedited, and baseline_hashes is unchanged; the fuel or step limit, the memory limit and the refusal of a module that imports anything not offered behave as before, each shown by an existing or a new test; cargo deny passes. If the minimum Rust of wasmi 1.x is above the README's minimum, that is reported to the lead before any code and not decided by the agent.",
-    "note": "Lead (2026-11-21): entered on the maintainer's decision (\"3. Yes as recommended\") from pull request 31 (dependabot, wasmi 0.31.2 to 1.1.0, Cargo.toml and Cargo.lock only), which fails clippy, the type-check with Rust 1.90, the unit tests and the Ubuntu studio-web job because udf.rs uses the 0.31 interface. The pull request is closed until this item is done. wasmi is used in crates/rcfd-api/src/udf.rs alone. The releases between hold fixes of wrong translation (1.0.5 to 1.0.9), which is the reason to do it. Not issued yet."
+    "note": "Lead (2026-11-21): entered on the maintainer's decision (\"3. Yes as recommended\") from pull request 31 (dependabot, wasmi 0.31.2 to 1.1.0, Cargo.toml and Cargo.lock only), which fails clippy, the type-check with Rust 1.90, the unit tests and the Ubuntu studio-web job because udf.rs uses the 0.31 interface. The pull request is closed until this item is done. wasmi is used in crates/rcfd-api/src/udf.rs alone. The releases between hold fixes of wrong translation (1.0.5 to 1.0.9), which is the reason to do it. Not issued yet. Lead (2026-11-23): issued by docs/adr/briefs/f856-wasmi-1x.md (ADR 0782)."
   },
   {
     "id": "F-857",
