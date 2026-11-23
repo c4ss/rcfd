@@ -490,3 +490,23 @@ Follow-up 3 (key `serve-left-behind`), deps F-888:
   rule 9): section k, "not in a category (add to CATEGORIES): F-888", a line of `scripts/roadmap_progress.py`, which is
   the lead's file and which main has had since 3ba05c7d, after this branch was made; and three generated files that are
   only not current, `docs/adr/index.md`, `docs/roadmap-overview.md` and `CHANGELOG.md`. They are left to the lead.
+
+## The maintainer's answer (2026-11-23)
+
+To Q1, the maintainer answered **(a)**: CI stays as it is. The Studio's tests that need the engine run only in the
+lead's push runs; the clause "and on CI" of F-888 is met by the gallery test of `run-bar-keyboard.spec.ts`.
+
+## The lead's reading (2026-11-23), at the merge
+
+The first merge (3fbf5e7e) failed `npm test` in each of three push runs on tests outside this item while `rcfd serve`
+processes left behind by earlier runs were alive; it was parked, and after those processes were ended it was merged
+again on main at 8119447a and pushed at 0898008a (the report read at 11:23 UTC, 6 minutes of reading, proposed partial,
+written partial). In that push run `npm test` failed once (`f837.spec.ts:198`, `project.spec.ts:245`,
+`responsiveness.spec.ts:260`) and passed in the second run; both tests of `run-bar-keyboard.spec.ts` and
+`run-control.spec.ts:193` passed in both runs, and the committed mutation was caught. One `rcfd serve` process was left
+running after the run, as the follow-up serve-left-behind describes; the lead ended it.
+
+Status: **done** by the lead's reading. The gallery test of `run-bar-keyboard.spec.ts` passed in CI on main at 0898008a
+on windows-latest and ubuntu-24.04 (run 45224116370; the run-bar test is skipped there, as amendment 1 says), and Q1 is
+answered (a). G1 stays unmet on this machine for tests outside this item. The three follow-ups of the proposal are
+questions of scope for the maintainer and are not entered.
