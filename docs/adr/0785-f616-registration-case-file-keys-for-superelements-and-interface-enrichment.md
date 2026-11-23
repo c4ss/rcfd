@@ -266,3 +266,106 @@ what a case without the keys gives for this file, and it must be the same after 
 are as registered. The print of that first run gave digests for `bar_hex8`, `cantilever_hex8` and `cantilever_tet10`
 and for S1, and stopped at the refused file; the recording run is made again with the corrected file and its digests
 are committed with it, before any library line.
+
+## Addendum 1: results (2026-11-23)
+
+Commits on `f616-superelement-case-keys`: 07331090 (this registration, alone), 7a61ccee (amendment 1), 7f483a94
+(amendment 2), 02d907d7 (the test file of D1 and S1 with the digests of main fcc84a84, before any library line),
+8ae821ef (`solid_case.rs`, the checks `f616_superelement_case.rs`, the page), then the mutation patch, this addendum and
+the proposal file. Each registered check was run once after 8ae821ef, release profile, in the scratch folder's own
+target (script `run1.sh`, logs `run1-*.log`, summary `run1-summary.log`). No amendment was made after a run.
+
+| Id | Limit | Measured | Met |
+|---|---|---|---|
+| K1 | equal bytes | the part of the part case and the part of the host's setup equal the library part's text; one entry `half`, `a.cms`, `xmin` | yes |
+| K2 | each refused with its key and line | ten of ten refused at the registered key and line (the control case runs) | yes |
+| K3 | refused, names `run_solid_case_any` | both refused (`superelements` line 21, `reduction` line 20); no part file written | yes |
+| B1 | equal in bits | 248 coordinates and 243 host displacements, 0 differ | yes |
+| B2 | equal in bits | 221 coordinates and 243 host displacements, 0 differ | yes |
+| B3 | equal in bits | I: 8 eigenvalues and 1984 vector entries, 0 differ; II: 8 and 1768, 0 differ | yes |
+| B4 | equal in bits | 253 coordinates and 243 host displacements, 0 differ; parts in the order `a_root`, `b_tip` (part 1 from unknown 248) | yes |
+| B5 | `<= 1e-10` | 6.353e-13 over 81 nodes | yes |
+| B6 | equal | `unknowns` 248; entry 27, 5, 243; `.vtu` with `displacement` (static) and `mode_8` (modal); eight eigenvalues of the report equal in bits | yes |
+| R1 | equal bytes | the file equals the library part's text (314745 bytes); 27 residual vectors in the run and in the library | yes |
+| R2 | equal bytes; R1's differs | without the key and with 0: both equal the library's text without the option (143980 bytes); R1's file differs | yes |
+| R3 | equal in bits | 275 coordinates, 8 eigenvalues, 2200 vector entries, 0 differ | yes |
+| R4 | each refused with its key and line | eight of eight refused at the registered key and line (the control case writes `part.cms`) | yes |
+| D1 | equal | six of six files: 16 digests equal (five files with three each; `cantilever_tet10_amg` refused with the same problem, amendment 2) | yes |
+| S1 | equal | digest 0xc611735ab88857f7 (7712 bytes) before and after | yes |
+| D2 | pass | `sb_solid_case` 8 passed, 4 ignored; `sb_solid_case_iterative` 3 passed, 1 ignored; neither edited | yes |
+| D3 | pass | `baseline_hashes` 3 passed, 1 ignored; `case_hashes_w48u` 1 passed; `w48v_case_hashes` has one test, ignored (a print): run with `--ignored` here and on a copy of main fcc84a84, 43 lines, identical | yes |
+
+Records: combined models of 248 (I), 221 (II), 253 (two parts) and 275 (I with the enriched part: 27 residual vectors)
+unknowns. B5 equals ST1 of ADR 0536 (6.35e-13).
+
+**Golden files.** No golden file holds the solid case's schema, so there is no "additive golden edit" for the lead to
+re-record, and no golden or hash table was edited. The diff of the schema itself (`solid_case::schema()` as JSON,
+pretty-printed, main fcc84a84 against 8ae821ef; files `schema-main.json`, `schema-branch.json`, `schema.diff` in the
+scratch folder) is additive: 66 lines added, none removed, and one line changed only by its closing comma (`"output"`
+becomes `"output",` in the top-level `required`, before the new `"superelements"`). Added: the property `reduction`
+(an optional object with `file`, `interface`, `interface_enrichment`, `modes`), the property `superelements` (named
+objects with `file`, `set`) and the name `superelements` in `required`.
+
+Mutations (scratch copy `mut` of 8ae821ef with its own target, script `mutate.py`, logs `mutations.log`,
+`mut-M*.log`), all eight caught:
+
+| Id | Caught by |
+|---|---|
+| M1 | R1 (the file, the residual vectors, the report), R2 (R1's file no longer differs), R3 |
+| M2 | B1, B2, B3, B4, B6, K1, R1, R2, R3, R4 (`modes = 500` no longer refused) |
+| M3 | the tests of B1 to B6 and R3 fail without a printed limit: the combined model is the unsupported host alone and the run refuses or stops; K2's control fails |
+| M4 | B4 |
+| M5 | K2 (the set `xmax`) |
+| M6 | K2 (the set `all`) |
+| M7 | K3 (both) |
+| M8 | B3, B6, R3 |
+
+Committed: M1 as `crates/rcfd-api/tests/f616_superelement_case.mutation.patch` (its command runs the test
+`r1_r2_r3_interface_enrichment`; `git apply --check` passes on 8ae821ef).
+
+Also run: `cargo test -p rcfd-api --release --lib` (159 passed, 4 ignored); `cargo test -p rcfd-cli --release --test
+docs_site` (2 passed); `cargo fmt -p rcfd-api --check` clean; `cargo clippy -p rcfd-api --all-targets --release -- -D
+warnings` clean. No file of `rcfd-fem` was changed.
+
+### Deviations
+
+1. Two amendments, both before any library line and before the run of the check they correct (S1's `required` list and
+   the optional `[reduction]` table; D1's refused case file).
+2. The test file of D1 and S1 was run on the code of main three times before its commit, to print and confirm the
+   digests (the first stopped at the refused file, the next two gave the same digests); its registered run is the one
+   after the change.
+3. The variants of `CaseRun` hold their runs in a `Box` (clippy's `large_enum_variant`); a `SuperelementEntry` has
+   `file` (as given) and `path` (the file read). D5 named neither detail.
+4. M3 is caught through a refusal and a stopped test, with no printed limit reached.
+5. K2's row "a host constraint value" and R4's row "modes above the range" check the key and the line, not a text of
+   the message.
+6. D3: the third file runs nothing by default; it was run with `--ignored` on both codes and compared by hand.
+
+Not run: the workspace suite and the integration tests of `rcfd-fem` (no file of it changed); nothing of the harmonic
+solve (open question 1).
+
+Size (agent), actual: done; 0; 0; 1; 200000
+
+### Decision
+
+**done** by the registered rule: B1 to B4 and R3 equal the library's in bits, D1 to D3 and S1 are met, every other
+check is met, all eight mutations are caught, and no amendment was made after a run. The rule reads "the bar of ADR
+0536" as its static solve and modal analysis; open question 1 stands and its answer (b) would read this result as
+partial.
+
+### Open questions for the maintainer
+
+1. Unchanged from the registration: whether "the bar of ADR 0536 run from a case file" includes its direct harmonic
+   solve, which no solid case file can ask. Options (a) the bar from a case file is the static solve and the modal
+   analysis, and the harmonic solve of a combined model comes with the item that gives the solid case file a harmonic
+   analysis; (b) F-616 is partial until then. Recommendation: (a).
+
+## For the lead: roadmap entries
+
+Status proposed: done.
+
+> ADR 0785, 2026-11-23, done: a solid case file attaches reduced part files to node sets of its model by [superelements.<name>] (file, set; parts in name order, each checked to lie exactly on its set) and reduces its model to a part file by [reduction] (interface, modes, interface_enrichment, file), run by rcfd_api::solid_case::run_solid_case_any; the solid bar of ADR 0536 from case files equals the library in bits in the static solve and the modal analysis for both arrangements (248 and 221 unknowns), for two parts on one host (253) and with one block of enrichment (27 vectors, 275), and the part files equal the library's byte for byte; 18 refusals located by key and line; a case without the tables is unchanged (16 digests of six case files, baseline_hashes, the case hash tables); no golden holds the solid schema, whose own diff is 66 added lines and none removed; 8 of 8 mutations caught. Not covered: the harmonic solve (the case file has none; open question 1 of the ADR), beams and shells, the cutoff and residual vectors of the reduction, stresses of a combined run.
+
+Follow-up proposed (number left to the lead), title "Case-file keys for the cutoff, the load's residual vector and the load patterns of the reduction", deps F-616:
+
+> Every limit not stated here is registered in the ADR before the run. The table [reduction] of the solid case file gains keys for the cutoff and the residual vector of the interior load of ADR 0474 and for load patterns of ADR 0511 named by entries of the case's loads; a part file made from a case file with each key equals the library's byte for byte, the configuration E1 of ADR 0532 (cutoff 32964 rad/s, the load's vector, one block of enrichment) is made from a case file and gives the library's frequencies in bits, and a case without the keys gives every result bit-identical.
