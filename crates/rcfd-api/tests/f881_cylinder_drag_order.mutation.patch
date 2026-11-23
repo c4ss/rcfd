@@ -1,0 +1,14 @@
+# expect-fail: cargo test --release -p rcfd-api --test f881_cylinder_drag_order g1_
+diff --git a/crates/rcfd-api/tests/f881_cylinder_drag_order.rs b/crates/rcfd-api/tests/f881_cylinder_drag_order.rs
+index 829d806..bb8535b 100644
+--- a/crates/rcfd-api/tests/f881_cylinder_drag_order.rs
++++ b/crates/rcfd-api/tests/f881_cylinder_drag_order.rs
+@@ -178,7 +178,7 @@ struct WallTerms {
+ 
+ /// du/ds at s = 0 of the quadratic through (0, 0), (s_p, u_p), (s_q, u_q).
+ fn wall_derivative(u_p: f64, u_q: f64, s_p: f64, s_q: f64) -> f64 {
+-    (u_p * s_q * s_q - u_q * s_p * s_p) / (s_p * s_q * (s_q - s_p))
++    u_p / s_p + 0.0 * (u_q * s_q)
+ }
+ 
+ /// p at s = 0 of the line through (s_p, p_p), (s_q, p_q).
