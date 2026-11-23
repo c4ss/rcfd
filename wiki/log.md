@@ -294,3 +294,10 @@ Append-only. Newest at the bottom. Entry header: `## [YYYY-MM-DD] <op> | <title>
 - Contradictions: ADR 0768 against ADR 0769 on which side of the measured plane holds the missing pressure rise; ADR 0771's proposal names its follow-up F-888, a number `docs/roadmap.json` gives to the Studio quick-run item (the follow-up is not entered; its number is assigned when the maintainer answers).
 - Not ingested: the registrations of F-861, F-852, F-451 and F-339 (not on main); `docs/process/lead-process.md` at 18475a78.
 - Catch-up done by a subagent on the lead's instruction; index, log and overview by the lead (schema, "Steady-state ingest").
+
+## [2026-11-23] ingest | lead-process 18475a78 and the wiki merge 8732f2ae (loop merge)
+
+- The wiki reached main at 8732f2ae (merge 7dbf459a of `wiki-ingest-1123`; the 14 raw PDFs uploaded to Git LFS after the maintainer raised the budget).
+- Sources re-read: [[doc-process-lead-process]] (the lead runs `/wiki-ingest` after each merge, the maintainer's option (a)), [[doc-changelog]], [[doc-roadmap-json]], [[doc-roadmap-overview]] (795 items, 403/299/93, 69 %), origin_commit 8732f2ae.
+- Updated: [[lead]], [[overview]].
+- Contradiction: the schema's "Steady-state ingest" lets loop subagents draft wiki edits; the lead process of 2026-11-23 says agents do not edit the wiki (noted on [[doc-process-lead-process]]; the schema is the maintainer's to align).

@@ -3,7 +3,7 @@ type: entity
 tags: [process, role]
 sources: [doc-process-lead-process, doc-process-documentation-review, doc-process-framework-reconciliation, doc-process-handover-2026-11-19, doc-adr-briefs-readme, doc-process-agent-rules, adr-thread-process-measures-and-roadmap-form, adr-thread-daily-gate-and-edit-lock]
 created: 2026-11-22
-updated: 2026-11-22
+updated: 2026-11-23
 status: draft
 ---
 
@@ -20,6 +20,7 @@ status: draft
 - **Decides "done"** by the rule the registration fixed, including items that passed only after an amendment made under rule 2 (the maintainer, 2026-11-18) ([[doc-process-lead-process]], [[roadmap-status]]).
 - **Questions:** puts a question to the maintainer only if it is about scope or priority, or rule 6 forbids taking it; decides the rest and records it in the ADR; writes "Answers of the maintainer" on main ([[maintainer-questions]]).
 - **Sole writer of** `docs/roadmap.json`, the head of `docs/ROADMAP.md`, `docs/roadmap-overview.md`, `scripts/roadmap_progress.py` categories, briefs, the answers sections, and (on the maintainer's word) agent-rules.md, lead-process.md and tolerances.md ([[doc-process-lead-process]]).
+- **Wiki ingest after each merge** (from 2026-11-23, the maintainer's option (a)): after the roadmap commit of a merge, runs `/wiki-ingest` for what the merge added or changed and commits the wiki's changes with a `(loop merge)` log entry; agents do not edit the wiki ([[doc-process-lead-process]]).
 - **Weekly:** prints `process_report.py --weekly`; issues one audit item and one citation item; runs `push_main.py --mutants --run` on one merge; issues distillation items ([[doc-process-lead-process]]).
 - **Stop conditions** (in force 2026-11-21, ADR 0754): no further agent while 3+ reports wait unread, while escaped defects exceed 2 commits and 1 in 10 merges over 28 days, while the newest gate line is red (except the fix), or beyond 4 agents at once ([[doc-process-lead-process]]).
 - **Golden files:** re-records an "additive golden edit" on main after checking the diff only adds; any other golden change and every `baseline_hashes.rs` change needs the maintainer's word ([[doc-process-lead-process]]).
