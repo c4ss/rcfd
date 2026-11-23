@@ -1,0 +1,8 @@
+{
+  "form": 1,
+  "adr": "0772",
+  "item": "F-887",
+  "base": "d6e44b2759f0f0e46eae3a1c3537b0591c7768c6",
+  "status": "done",
+  "note": "ADR 0772, 2026-11-23, done by its registered rule: ADR 0760's twelve steady SA cases on M1w-far500 with turbulence.relax_nut = 1.0 added all end steady by ADR 0167's window rule, within 0.018 of ADR 0760's steady values at 0 to 16 degrees (largest 0.0015 at 16) and of ADR 0764's 1.5516 at 17 (1.5514), and within ADR 0760's band of Ladson at all twelve angles (17 degrees -0.054, outside the scatter 0.018, a known miss); 13 and 16 degrees no longer meet the residual targets and run to the cap; no default changed; the gate holds the record, three negative controls and two coarse runs (crates/rcfd-api/tests/naca0012_lift_curve_relax_nut_f887.rs)."
+}

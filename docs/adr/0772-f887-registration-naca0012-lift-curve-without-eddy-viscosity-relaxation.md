@@ -253,3 +253,164 @@ change every steady SA result and the baseline hashes). What this record can say
 
 1. Whether `relax_nut = 1.0` becomes the default of the steady Spalart-Allmaras route. Written out with options and a
    recommendation in the addendum, under the fixed heading, once the result is known.
+
+## Addendum 1: results (2026-11-23)
+
+Commits: e393996e (this registration, alone), e314fb2f (the driver and the twelve case texts; before any run), 7f16397d
+(the test file with the recorded fast-test value; before the record), 700757bc (the record; VS17 as an ignored known-miss
+record), 3fcd9c9d (the committed mutation), and the commit of this addendum with the proposal file. Machine: the
+maintainer's Windows machine, shared with three other agents. Binary: `rcfd-cli`, release, built from main d6e44b27 (no
+crate source differs on this branch), sha256 `6be42efdecd953b8208bf438ac0a02d52a0ab7f964067196f0d6a472f20a15bb`. Mesh
+M1w-far500 built by ADR 0167's driver. Twelve runs, each made once, one thread each, three at a time, from 23:22 on
+2026-11-22 to 01:10 local time: 90 s to 3953 s a run. Record: `docs/investigations/f887-naca0012-lift-curve-relax-nut/`
+(README, `results.json`, `cases/`, 123 563 bytes); status streams in the scratch folder.
+
+### The twelve angles
+
+The difference of A is to the reference of A (ADR 0760's steady value, ADR 0764's 1.5516 at 17); that of V and VS to
+Ladson's 80-grit `cl_L`. ADR 0760's run with the default `relax_nut = 0.5` is beside it.
+
+| alpha | iterations (exit) | window range cl_eff / cd_eff | cl (D5 = D7) | A: difference (limit 0.018) | V: cl - cl_L (band) | VS (0.018) | default: iterations (exit), cl |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| 0 | 244 (0) | 2.3e-4 / 1.1e-7 | -0.0000015 | -0.0000001, **met** | +0.0072 (0.0180), **met** | met | 254 (0), -0.0000014 |
+| 2 | 298 (0) | 7.3e-4 / 1.6e-5 | 0.220164 | -0.0000001, **met** | +0.0130 (0.0180), **met** | met | 299 (0), 0.220164 |
+| 4 | 331 (0) | 1.0e-3 / 4.4e-5 | 0.438753 | -0.0000001, **met** | +0.0116 (0.0214), **met** | met | 332 (0), 0.438753 |
+| 6 | 378 (0) | 1.2e-3 / 7.3e-5 | 0.653988 | +0.0000000, **met** | +0.0092 (0.0322), **met** | met | 380 (0), 0.653988 |
+| 8 | 452 (0) | 1.3e-3 / 9.4e-5 | 0.863827 | -0.0000001, **met** | +0.0081 (0.0428), **met** | met | 459 (0), 0.863827 |
+| 10 | 536 (0) | 2.5e-3 / 1.5e-4 | 1.065594 | +0.0000002, **met** | +0.0070 (0.0529), **met** | met | 533 (0), 1.065594 |
+| 12 | 645 (0) | 4.1e-3 / 4.3e-4 | 1.255160 | -0.0000002, **met** | +0.0058 (0.0625), **met** | met | 648 (0), 1.255161 |
+| 13 | 8000 (5) | 9.1e-7 / 3.5e-7 | 1.342886 | +0.000576, **met** | +0.0045 (0.0669), **met** | met | 777 (0), 1.342311 (not steady) |
+| 14 | 8000 (5) | 3.0e-6 / 1.3e-6 | 1.423469 | -0.0000006, **met** | +0.0045 (0.0709), **met** | met | 8000 (5), 1.423470 |
+| 15 | 8000 (5) | 4.2e-6 / 2.2e-6 | 1.493201 | -0.0000023, **met** | -0.0006 (0.0747), **met** | met | 8000 (5), 1.493203 |
+| 16 | 8000 (5) | 4.5e-6 / 2.7e-6 | 1.543568 | +0.001528, **met** | -0.0127 (0.0778), **met** | met | 2008 (0), 1.542041 (not steady) |
+| 17 | 8000 (5) | 3.1e-6 / 2.2e-6 | 1.551398 | -0.000202, **met** | -0.0543 (0.0803), **met** | **miss** | 8000 (5), 1.047622 (not steady) |
+
+**The sentence of the brief: with relax_nut 1.0 the twelve angles end steady by ADR 0167's window rule and within the
+band of ADR 0760; all twelve also meet the acceptance's 0.018 about ADR 0760's steady values and ADR 0764's 1.5516.** The
+one miss is VS17: at 17 degrees the steady lift 1.5514 is 0.0543 under Ladson's 1.6057, outside the measured scatter
+0.018 and inside ADR 0760's band (0.0803); it is the ignored record `f887_vs17_within_the_scatter_known_miss`, which
+fails when run.
+
+What the runs show beside the limits:
+
+- **0 to 12 degrees: the same fixed point, the same iteration counts.** The lift equals the default's to six digits and
+  the counts differ by at most 10 (254 against 244 at 0). Arithmetic 1 holds: the setting does not move the fixed point.
+- **13 and 16 degrees: steady, but no longer converged by the residual targets.** The default met the targets at 777 and
+  2008 iterations (and was then not steady by D5, its window holding the start-up); with the setting the residuals stall
+  and both run to the cap, steady by D5 with window ranges of 1e-6. Their lift is that of the default's final iterate
+  (1.3429 and 1.5436, ADR 0167's table), so the differences of A (+0.0006, +0.0015) are those of the default's window
+  means, not a shift of the state. Why the residuals stall was not examined (not covered).
+- **14 and 15 degrees** run to the cap as with the default and agree to 2e-6; at 15 and 17 degrees the runs equal ADR
+  0770's KT-a15 and KT-a17 bit for bit (D15, D17).
+- **17 degrees: the attached state** (cd_eff 0.04352 against the default's iteration mean 0.29972). The maximum lift is
+  now 1.5514 at 17 degrees, 3.7 % under Ladson's 1.6116 (default: 1.5420 at 16, 4.3 % under).
+- **Cost:** angles 13 and 16 took 41 and 42 minutes against 3.5 and 9 minutes with the default (ADR 0760's record); the
+  others about the same.
+
+### The other checks
+
+| Id | Limit | Measured | Met |
+| --- | --- | --- | --- |
+| VM | abs(cl_max / 1.6116 - 1) <= 0.05 | 1.5514 at 17 degrees, -3.74 % | **yes** |
+| L2 | 0.90 to 1.05 | 0.98552 | **yes** |
+| L4 | abs(cl(0)) <= 0.005 | -1.5e-6 | **yes** |
+| R1 | 12 of 12 | 12, each with a finish record: exit 0 at 0 to 12, exit 5 at 13 to 17 | **yes** |
+| D15, D17 | equal bits | iterations, exit code and the window mean, minimum, maximum and final iterate of cl_eff and cd_eff all equal to KT-a15 and KT-a17 | **yes** |
+| P2 | equal | `59e707a8...3a70c889` (M1w also equal) | **yes** |
+| T1 | all twelve | all twelve | **yes** |
+| T2 | all twelve | all twelve | **yes** |
+| FT0n | abs(cl_eff) <= 0.005 | 5.9e-9; the run met the residual targets after 202 steps | **yes** |
+| FT4n | abs(cl_eff - R4n) <= 0.018 | R4n = 0.3293069785, recorded from the first run (600 steps, targets not met), equal to ten digits on every later run; ADR 0760's R4 with the default 0.3292877732, +1.9e-5 | **yes** |
+| FT4nu | 0 < cl_eff <= 0.4606 | 0.3293 | **yes** |
+| NC1 | >= 10 of 11 rejected | 10 of 11 (16 and 17 not, 0.0096) | **yes** |
+| NC2 | both not steady | both | **yes** |
+| NC3 | >= 8 of 11 rejected | 10 of 11 | **yes** |
+| B1 | <= 200 000 bytes | 123 563 bytes | **yes** |
+| E | none | `git diff --stat d6e44b27`: this ADR, the driver, the record folder, the test file and its mutation patch, the proposal file | **yes** |
+
+Test file, release: 49 passed, 1 ignored (VS17), about 20 s; with `--ignored` the known miss fails with "cl 1.55140,
+-0.05430 from Ladson's 1.6057 (limit 0.0180)".
+
+### Mutations (scratch copy of the tree at 700757bc, its own target folder, release, each run once)
+
+| Id | Mutation | What failed |
+| --- | --- | --- |
+| M1 (committed patch) | `relax_nut = 1.0` to `0.5` in `RN-a04.toml` | T1. FT4n did not fail: at 4 degrees on the coarse mesh the two settings give the same lift to 2e-5 (arithmetic 1), so FT4n cannot see the setting |
+| M2 | RN-a10's cl_eff final, mean, minimum and maximum raised by 0.02 in `results.json` | A-10 (+0.0200 against 0.018), VS-10 and T2 |
+| M3 | D5's cl_eff range 0.005 multiplied by 1000 in the test | NC2 |
+| M4 | the tolerance 0.018 of row A multiplied by ten in the test | NC1 (6 of 11 rejected) |
+
+All four are caught. `git apply --check` accepts the committed patch on the tip.
+
+### What the gate runs and what is a heavy record
+
+- **In the gate** (`crates/rcfd-api/tests/naca0012_lift_curve_relax_nut_f887.rs`, 49 tests): rows A, V and VS at the
+  twelve angles and VM, L2, L4, R1, D15, D17, P2, T1, T2 on the committed record; three negative controls; and two solver
+  runs of the committed cases at 0 and 4 degrees on the 6144-cell example mesh (FT0n, FT4n), with the setting in force.
+- **Heavy record, not a cargo test:** the twelve runs on 32 768 cells, made by the driver on demand (commands in the
+  folder's README). The gate sees a change of the coarse lift at 4 degrees above 0.018, or any edit of the record or of
+  the cases; as M1 shows, it does not see the setting itself in the fast runs, only in T1.
+
+### Deviations and disclosures
+
+- The binary was built before the commit of the registration, from the same tree (said in its status lines).
+- The first fast-test run (constant unset, failing by construction) used the name filter `ft`, which also ran L2 and VM;
+  they failed there because the record did not exist yet.
+- `cargo fmt -p rcfd-api --check` could not run: on this machine it stops with "The filename or extension is too long
+  (os error 206)", from the crate folder too. `rustfmt --check --edition 2021` on the new test file, with the workspace's
+  `rustfmt.toml`, is clean; no other Rust file was changed.
+- The status streams were read while the runs went, to see progress; no limit or run depended on it. A preliminary
+  `collect` into the scratch folder was made when ten runs had finished.
+- `RAYON_NUM_THREADS=2` was set for the test runs (the shared machine).
+- ADR 0167 and ADR 0764 were not read whole (said in the registration).
+
+### The house checks (F, P)
+
+- `cargo test -p rcfd-api --release --test naca0012_lift_curve_relax_nut_f887`: 49 passed, 1 ignored.
+- `cargo test -p rcfd-api --release --lib`: 159 passed, 4 ignored.
+- `cargo clippy -p rcfd-api --all-targets -- -D warnings`: clean. fmt: see deviations.
+- `python scripts/f887_naca0012_lift_curve_relax_nut.py selftest` and `python scripts/w49d_aoa_sweep_fixed.py selftest`:
+  pass. `cargo test -p rcfd-cli --release --test docs_site` and `python scripts/process_report.py --check` on the last
+  tree: given in the report.
+- `python scripts/roadmap_proposals.py check docs/roadmap/proposals/0772-F-887.json`: accepted (F-887: todo to done).
+
+### Not run
+
+The angles 18 to 24 and negative angles; any other value of `relax_nut` or a combination with other settings; another
+mesh or model; Linux; `baseline_hashes` (no file under `crates/*/src/` changed); the whole integration tests of `rcfd-api`
+and the workspace suite (rule 7).
+
+### Size
+
+Actual: done (registered: done); 0 further registrations, no amendment; 1 heavy batch (twelve runs, 1 h 48 min of wall
+time, with one release build of `rcfd-cli`, the test-file builds and one build of a scratch copy for the mutations); 1
+question; about 200 000 bytes read.
+
+### Decision by the registered rule
+
+All twelve angles are run as registered (R1, P2, T1) and reported against A, V and VS with their numbers: A met at all
+twelve, V met at all twelve, VS missed at 17 degrees (recorded as a known miss, limit intact). T2, D15, D17, FT0n, FT4n,
+FT4nu, NC1 to NC3, L4, M1 to M4 and E hold; F as stated (fmt by rustfmt on the one file). By the clause "done": **done**.
+
+### Open questions for the maintainer
+
+1. **Does `relax_nut = 1.0` become the default of the steady Spalart-Allmaras route?** By the registered reading: every
+   A-alpha is met and no angle that the default reaches is lost, which is the case "for" a default change; against it
+   stand the two angles (13 and 16) that now run to the cap without meeting the residual targets, ten times the wall
+   time there, and that the evidence is one mesh and one case. Options: (a) make it the default now, which changes every
+   steady SA result and needs the baseline hashes and any SA goldens re-recorded by the maintainer; (b) keep the default
+   and name the setting in the aerofoil example cases and the topic page, with a follow-up that runs it on a second SA
+   case set (for example ADR 0159's mesh M2w or another steady SA validation case of the repository) and diagnoses the
+   stalled residuals at 13 and 16 degrees, before (a) is asked again; (c) keep the default and do nothing more.
+   **Recommendation (b)**: the fixed point is unchanged (arithmetic 1, shown at ten angles to six digits), so a default
+   change would cost only robustness and run time, but the stalled residuals are a change of behaviour not yet
+   understood, and one case is too narrow for a default of every steady SA run.
+
+### For the lead: roadmap entries
+
+Status proposed: done.
+
+> ADR 0772, 2026-11-23, done by its registered rule: ADR 0760's twelve steady SA cases on M1w-far500 with turbulence.relax_nut = 1.0 added all end steady by ADR 0167's window rule, within 0.018 of ADR 0760's steady values at 0 to 16 degrees (largest 0.0015 at 16) and of ADR 0764's 1.5516 at 17 (1.5514), and within ADR 0760's band of Ladson at all twelve angles (17 degrees -0.054, outside the scatter 0.018, a known miss); 13 and 16 degrees no longer meet the residual targets and run to the cap; no default changed; the gate holds the record, three negative controls and two coarse runs (crates/rcfd-api/tests/naca0012_lift_curve_relax_nut_f887.rs).
+
+No follow-up item is proposed here: the follow-up of question 1 (b) depends on the maintainer's answer. The same entry is
+in `docs/roadmap/proposals/0772-F-887.json`. `docs/adr/index.md` is not current and is left to the lead.
