@@ -1,0 +1,14 @@
+# expect-fail: cargo test --release -p rcfd-api --test f616_superelement_case r1_r2_r3_
+diff --git a/crates/rcfd-api/src/solid_case.rs b/crates/rcfd-api/src/solid_case.rs
+index da3bce2d..0d8c201a 100644
+--- a/crates/rcfd-api/src/solid_case.rs
++++ b/crates/rcfd-api/src/solid_case.rs
+@@ -986,7 +986,7 @@ impl SolidCase {
+             Some(ReductionSetup {
+                 interface: interface.to_string(),
+                 options: CmsOptions::new(r["modes"].as_i64().unwrap_or(0) as usize)
+-                    .interface_enrichment(r["interface_enrichment"].as_i64().unwrap_or(0) as usize),
++                    .interface_enrichment(0),
+                 file: str_at(r, "file").to_string(),
+             })
+         } else {
