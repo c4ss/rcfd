@@ -167,3 +167,74 @@ Rows D, L, P and M are reported; a failure of one of them is corrected before th
   (b) of ADR 0752 (the index of ADRs whose tests live in the changed file) is not done.
 * `docs/test-process.md` section 7.4 describes the plan; it is not a file of this work. Where it now disagrees, the report
   says so for the lead.
+
+## Addendum 1: results (2026-11-23)
+
+Commits: 4e6040c1 (this registration, alone), 0d4399dc (`scripts/push_main.py`, `scripts/test_push_main.py`), e956004f
+(the committed mutation patch). The tests were written first; the new test file was run against the unchanged script
+before any line of the script was changed. Logs are in the scratch folder (`fails-before.log`, `after.log`,
+`all-scripts.log`, `mutations.log`, `dry-before-*.txt`, `dry-after-*.txt`).
+
+### Checks
+
+| Id | Measured | Limit met |
+|---|---|---|
+| T1 | before: the 3 tests of `LeftOutCommits` error (`do_left_out` takes no `run`); after: 3 pass. A move gives `checkout_moved=yes` and the printed line; no move gives two equal commits; `fails=` is read after the new fields | yes |
+| T2 | before: the 4 tests of `AdrBudget` fail or error; after: 4 pass. Costs 4.8, 12.8, 61.8, 7.8 s; budget 120 s selects `fast` alone (two before); budget 60 s selects none and keeps the ADR command | yes |
+| T3 | before: the 3 tests of `NamedAfterSource` fail or error; after: 3 pass. `slow.rs` gives `slow` then `fast`, `norec` left out (before: `fast`, `norec`) | yes |
+| U | `UnchangedOutput` (2 tests) passes before and after; the diff of this work does not touch `docs/process/ledger.tsv`; the existing tests `Build`, `Selection`, `FirstAttempt` pass unedited | yes |
+| E | `python -m unittest discover -s scripts -p "test_*.py"`: 377 tests, OK (5 skipped, as on main); `scripts/test_push_main.py` 89 tests, the 77 existing ones unedited | yes |
+| D | dry run `--merge 1b939c19`: exit 0, ADR tests 56 commands, 3.6 minutes, 26.4 left; 204 binaries selected (208 before), 136 left out (132 before). `--merge 9a0afcec`: exit 0, ADR tests 52 commands, 26.7 minutes, 3.3 left; 12 binaries named after `overset.rs`, 6 of them left out; 6 binaries selected, all named (154 before, 5 of them overset), 606 left out | yes |
+| L | `docs_site` on the registration's tree: 2 passed (release profile) | yes |
+| P | `process_report.py --check`: see "Closing checks" | see below |
+| M | 7 of 7 caught (below) | yes |
+
+The estimate for 1b939c19 (some 20 fewer binaries) was off: 4 fewer, because the binaries the smaller budget loses are
+the longest of the selection. It is an estimate of scale, not a limit.
+
+### Mutations
+
+On a scratch copy (`mutate.py`), each made `python scripts/test_push_main.py` fail: M1 and M1b by
+`test_a_checkout_that_moves_during_the_run_is_named`; M2 by the two budget tests of `AdrBudget`; M2b by
+`test_the_cost_of_an_adr_command`; M3 by `test_the_plan_selects_them_first_and_says_so`; M3b and M3c by
+`test_the_rule_of_naming`. M1 is committed as `scripts/test_push_main.leftout.mutation.patch`; applied in the worktree it
+made the test file exit 1, and `git apply -R` restored the script.
+
+### Deviations and things to know
+
+* A named binary that is also an ADR command (in the always group) is not counted on the named line: it runs anyway.
+* `docs/test-process.md` section 7.4 (item 2 and 7) now says less than the script: the ADR's tests are charged to the
+  budget, and the order inside the touched crates starts with the named binaries. It is not a file of this work; for the
+  lead.
+* The committed patch is a third file beside the two the brief names; rule 16 asks for it.
+* No real left-out run was made, so whether the checkout moves in practice is not known; the first `leftout` line the lead
+  writes with the changed script will say.
+
+### What was not run
+
+`--run`, `--push`, `--run-left-out`, `--gate-line` (forbidden by the brief). No cargo fmt or clippy: no crate touched.
+
+### Size
+
+Size (agent, actual): done; 0; 0; 0; 210000
+
+### Decision
+
+By the registered rule: **done**. T1, T2 and T3 fail before the change and pass after it; row U holds, with E.
+
+### Open questions for the maintainer
+
+None.
+
+### For the lead: roadmap entries
+
+> Status of F-860: done.
+
+> ADR 0776, 2026-11-23, done: scripts/push_main.py writes checkout_start, checkout_end and, when they differ, checkout_moved=yes in a left-out line; charges the tests the index maps to the merge's ADRs to the budget first, never cuts them and prints their recorded minutes (26.7 of 30 on the merge of ADR 0748); and puts the binaries named after a changed source file (stem, or stem and _) first in their crate's group; the 10 new unit tests of the three points fail before and pass after, the 77 existing ones pass unedited, 7 of 7 mutations caught.
+
+The same entries are in `docs/roadmap/proposals/0776-F-860.json` (`roadmap_proposals.py check`: F-860 todo to done, exit 0).
+
+### Closing checks
+
+`python scripts/process_report.py --check` on the tree of this addendum: 2 failures, both "generated file is not
+current" (`docs/adr/index.md` and `CHANGELOG.md`, which a new ADR changes); left to the lead by rule 7. No other failure.
