@@ -141,3 +141,42 @@ the retry becomes a default (ADR 0719, question 1, open there).
    Recommendation: **(c)**. The analysis is the larger part and deserves its own acceptance (bit-equality with library
    calls, located errors); the subcommand is already an item with its own approval pending, and its summary can show
    what the report holds once both exist.
+
+## Addendum 1: results (2026-11-23)
+
+No code of F-842 was written and no registered check was run: every check of the table needs the nonlinear static
+analysis of the solid case file or the CLI subcommand, and where those are built is question 1, which rule 6 does not
+let the agent take.
+
+| Id | Limit | Measured | Met |
+|---|---|---|---|
+| K1, K2, R1, R2, W1, C1, H16 | as registered | not run (nothing to run them on) | not decided |
+| B1 | pass unedited | not run: no source file was changed, so the default bits, the schema golden and the hash tables are those of main 19debd2d | not decided |
+
+What was run: `cargo test -p rcfd-cli --release --test docs_site` (2 passed: the links of this ADR) and
+`python scripts/process_report.py --check` (one failure: the generated `docs/adr/index.md` is not current, left to the
+lead by rule 7). No mutation was run or committed: there is no test of F-842 for a patch to fail (rule 16 is not met and
+cannot be before the code). No golden, schema golden or hash table needs an edit by this work; no additive diff to
+report. No amendment. Deviations: the decision rule has a third outcome (registered above); the registration stops
+before code.
+
+Size (agent), actual: todo; 1; 0; 1; 95000
+
+### Decision
+
+**todo** by the registered rule: no clause of the acceptance could be built because question 1 is open. The findings
+(the solid case file has no nonlinear analysis and reports no increments; the block's material and formulation have no
+key; there is no CLI summary of a solid case) and the output design D1 to D4 stand for the next issue of the item.
+
+### Open questions for the maintainer
+
+Question 1 above, unchanged: options (a), (b), (c); recommendation (c).
+
+## For the lead: roadmap entries
+
+Status proposed: todo (unchanged).
+
+> ADR 0780, 2026-11-23, todo: registered and stopped before code, because the acceptance presupposes a nonlinear static analysis in the solid case file (the file has static and modal only, reports no increments and has no key for the hyperelastic material or the incompatible-mode formulation of the 16^3 block) and a CLI subcommand for solid cases (F-405, todo); the inertia is already returned by the library (LoadStep::inertia, LoadStep::retried); the opt-in key, the report keys, the warning's text and the checks are registered for the next issue; where the analysis and the subcommand are built is open question 1 of the ADR (recommended: a new item for the analysis, the CLI summary moved to F-405).
+
+No follow-up item is proposed in the file: which items are needed depends on the answer to question 1 (the item of
+options (a) and (c) is described there).
