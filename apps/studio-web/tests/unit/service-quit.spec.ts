@@ -101,9 +101,12 @@ test('(d) G7 kept: a service found running that the client is not yet connected 
     const client = new ServiceClient(cfg, { ...fast, startService: () => Promise.reject(new Error('nothing is started in this test')) });
     let left: Promise<{ leftRunning: boolean }> | null = null;
     let statusThen = '';
-    // in the turn the client adopts it, before its connections are made
+    let asked = false;
+    // in the turn the client adopts it, before its connections are made (shutdown changes the state in this same turn,
+    // so the listener is entered again before `left` is set: `asked` stops that)
     client.onState((s) => {
-      if (left === null && s.adopted && s.pid === holder.pid) {
+      if (!asked && s.adopted && s.pid === holder.pid) {
+        asked = true;
         statusThen = s.status;
         left = client.shutdown({ keepWithSessions: false });
       }
