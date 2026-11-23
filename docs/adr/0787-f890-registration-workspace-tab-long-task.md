@@ -232,3 +232,77 @@ of N1 or N2 fails at line 260, or if T1m does not fail. **Todo** if no record co
 ## Open questions for the maintainer
 
 None at registration.
+
+## Amendment 1 (2026-11-23): what D0, D1 and D2 gave, a hypothesis H6 that they point to, and the record D3 that must show it; written before D3 and before any code of the fix
+
+Written after D0, D1 and D2 were made as registered and before anything else. No Studio source and no test of F-890
+is written yet. Records are in the scratch folder (`d0-*.log`, `rec/`, `read_trace.py`, `tasks.py`, `gpuwait.py`).
+
+**What the records gave** (machine 0.92 to 1.00 busy throughout: other agents' builds).
+
+- D0: the unchanged test passed 3 of 3 (on its first, second and third pass). Largest task of `workspace.tab` 55 to
+  70 ms; held frames of 157 to 184 ms (blocking 8 to 22 ms) failed three of its six passes. This is picture (b). The
+  task of 400 ms did not show.
+- D2: no launch had a task over 100 ms. Default folder, 3 launches: tasks none, 65 ms, none. A fresh folder each, 3
+  launches: none, 69 ms, 89 ms. So the state of the user data folder does not produce the task; D2 (b) was not made,
+  since (a) already says so. H4 and the folder's part of H2 are excluded as the state.
+- D1 (trace through the DevTools protocol's `Tracing` domain, with the processor profile in it; three launches with
+  it, tasks 79 to 83 ms): the phase holds about 320 ms of main-thread work in nine or ten tasks, none over 85 ms. The
+  largest is an animation-frame callback of the plots' chunk (`PlotFrame`) in which three's node builder makes a
+  shader (H1's kind of work, 65 to 68 ms, under the limit). **One task in each of the three traces is not work at
+  all:** a React effect in which the main thread waits 19.4 to 32.8 ms inside `GpuChannel::CreateCommandBuffer` with 0.1
+  to 0.6 ms of thread time, while the GPU process's main thread runs one flush of WebGPU commands (`WebGPU`,
+  `CommandBufferStub::OnAsyncFlush`) for the whole of the wait. The same GPU thread has WebGPU flushes of 151, 86, 98
+  and 192 ms in the phase (trace 1), which are the Studio's own: the devices and pipelines of the field canvas and of
+  the plots.
+- F-888's own log of the run that passed at 09:39 says the machine was 0.97 busy; its failing runs from 10:20 to 11:20
+  say 0.28 to 0.72. Every record with the task of about 400 ms is of a machine less than 0.75 busy, and every record of
+  a machine over 0.85 busy has tasks of 50 to 92 ms (but for two passes of the lead's log, 508 and 572 ms).
+
+**H6 (a form of H2 that the registration did not word).** The first use of a canvas in the page makes Chromium create
+the renderer's shared GPU context by a synchronous call to the GPU process (`GpuChannel::CreateCommandBuffer`), on the
+main thread. The call is answered only when the GPU process's main thread is free, and at that moment the Studio has
+just sent it WebGPU work (device creation, the first pipelines). The length of the task is therefore the length of
+the GPU process's queue when the call is made, which depends on the order in which the workspace's parts arrive: on a
+busy machine the call falls at the tail of the device creation (20 to 33 ms today); on a machine with free processors
+the field's values arrive when the renderer is already initialised, the first draw sends the pipelines, and the call
+falls behind them. That order is what the record of 10:20 to 11:20 would then be, and "the state of the machine after
+10:20" would be that the other agents' builds had ended.
+
+**D3, the record that must show it.** The scratch spec of D1 with one change of the environment only:
+`RCFD_STUDIO_TEST_DELAY={"data":1000}` (the tests' own delay of F-832, `src/main/work/delay.ts`: every request of the
+data door waits 1000 ms in the main process before the engine is asked). The field viewport asks for the store, the
+surface and the field in turn, so the field's values reach the page 2 to 3 s after the canvas is mounted, when its
+renderer is initialised whatever the machine's load: the order of a machine with free processors, made on a busy one.
+1000 ms: the renderer's initialisation ended within 0.5 s of the mount in the three traces at a machine fully busy, a
+factor of 4 or more inside the 2 s. Three launches with the trace and three without. The reading:
+
+- **H6 is shown** if, in each of the three traced launches, the largest task of the phase holds one synchronous wait
+  on the GPU process (an event of the main thread with wall-clock time at least half of the task and thread time under
+  a tenth of its wall-clock time) during which the GPU process's main thread runs WebGPU work, and the three launches
+  without the trace each have a `longtask` over `LONG_TASK_LIMIT_MS` (C2, as registered). The profile's leaf in that
+  task names the call of the Studio's bundle that made the wait, and the addendum gives its source line.
+- That this is the task of the item then rests on its phase, its kind (one task, no further one over 100 ms, the
+  frame's rendering at its end) and its length within a factor of 2 of 400 ms; the addendum says so in those words,
+  and says that the record of 10:20 itself was not made again (the load of that hour cannot be made here).
+- If D3 has no task over the limit, or one of another composition, H6 is not shown; the result is then partial unless
+  a further amendment registers another record first.
+
+**The fix, if H6 is shown** (it replaces the line "If H2" of the design, which assumed the wait was inside a pipeline's
+creation): the synchronous call is made once, at a moment the Studio chooses, before it sends any WebGPU work: a
+module of the renderer (`apps/studio-web/src/renderer/`) that creates the shared GPU context ahead by the smallest use
+of a canvas, called by every place that starts a WebGPU renderer (the field canvas and the plots) before it starts
+it, and by the legend before its own canvas. Whichever comes first then pays the call while the GPU process has none
+of the Studio's WebGPU work queued, and no later canvas use waits. Nothing drawn changes (G3): no pixel of the field,
+the plots or the legend's bar is made differently. If D3's profile shows the wait is made by a call that this cannot
+precede, an amendment registers the other fix before it is written.
+
+**T1 as now registered** (it replaces the folder's state of the registration, which D2 excluded): the new spec
+launches the packaged Studio with `RCFD_STUDIO_TEST_DELAY={"data":1000}`, the default user data folder as
+`responsiveness.spec.ts`, and is otherwise as registered: the bench project, the recorder with its probe, the click on
+the Workspace tab, the small run drawn, the two limits of F-832 held in `workspace.tab` by the rule of
+`responsiveness.spec.ts` with up to three passes. C2, C3, T1m, M1 and M2 are read in this state. The checks, their
+limits, N1, N2 and the decision rule are unchanged.
+
+**Picture (b),** the held frame of 157 to 184 ms that fails single passes on the busy machine, is not the task of the
+item. Whether the fix changes it is recorded by N1 and N2 and reported; no fix for it is registered here.
