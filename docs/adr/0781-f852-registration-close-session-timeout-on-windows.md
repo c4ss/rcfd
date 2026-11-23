@@ -167,3 +167,28 @@ operating system refused, is reported and does not change the outcome; one insid
 ## Open questions for the maintainer
 
 None at registration.
+
+## Amendment 1 (2026-11-23): the delay hook passed a transfer list the port refuses; corrected before the corrected run
+
+Written and committed before the runs it allows (rule 2). Runs made before it: R0 (its numbers go in addendum 1) and R1,
+once, in the form first written.
+
+**What R1 gave.** The test failed, but not where it was registered to fail: at the line before, "the fake service holds
+one session after Redo" (0 after 5 s). Redo made no session at all. The page snapshot shows the Redo button still
+offering "Redo: new session s1". This is not the state of any candidate: the set-up was defective.
+
+**The defect.** The wrapper called the port's `postMessage` with two arguments, the second `undefined` when the caller
+gave none. A scratch probe (`variants/zz-f852-probe.spec.ts` in the scratch folder: a wrapper that delays nothing, then
+one `service.info` from the page) gave, for that form, `TypeError: transferables must be an array of MessagePorts` on the
+first message and no answer to the call; the Studio's bridge closes its port when a post throws
+(`PortBridge.post`). With the arguments passed on as they came, the same probe got its answer. The probe touches
+nothing of the candidates: no session, no event, no redo.
+
+**The correction.** The wrapper passes its arguments on unchanged. Nothing else of the test, of D = 300 ms, of the
+checks, of their limits or of the decision rule changes. The first form is kept in the scratch folder as
+`variants/r1-defective-hook.spec.ts.txt`; it was never committed, and it is not kept in the repository as a skipped
+spec, because it can only break the bridge.
+
+**The corrected runs.** R1 is run once more in the corrected form, as **R1b**, with R1's limit (fails at the expectation
+of the heading "Set in this case"). R2 and R3 were not run before this amendment and use the corrected wrapper. R1's
+first run stays in the record as a failure of the set-up; it shows nothing for or against H1.
