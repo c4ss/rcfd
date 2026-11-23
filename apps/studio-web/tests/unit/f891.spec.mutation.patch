@@ -1,0 +1,13 @@
+# expect-fail: cd apps/studio-web && npx playwright test tests/unit/f891.spec.ts --project=unit
+diff --git a/apps/studio-web/src/renderer/runs/budgetsFeed.ts b/apps/studio-web/src/renderer/runs/budgetsFeed.ts
+index 973a7a47..8ca7b49c 100644
+--- a/apps/studio-web/src/renderer/runs/budgetsFeed.ts
++++ b/apps/studio-web/src/renderer/runs/budgetsFeed.ts
+@@ -33,6 +33,6 @@ export type FeedStep = 'nothing' | 'take' | 'say';
+ /** What to do with the file as read after a feed entry about it: `held` is what the panel holds (null: nothing yet). */
+ export function feedStep(held: RunnerBudgets | null, read: RunnerBudgets, typed: boolean): FeedStep {
+   if (held === null) return 'take';
+-  if (held.hash === read.hash) return 'nothing';
++  void read;
+   return typed ? 'say' : 'take';
+ }

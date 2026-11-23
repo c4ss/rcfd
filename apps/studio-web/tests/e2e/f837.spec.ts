@@ -39,6 +39,8 @@ let rerun: string | null = null;
 
 const shot = (name: string) => page.screenshot({ path: path.join(SHOTS, `${name}.png`), scale: 'css' });
 const aside = () => page.locator(`aside.rv-run[data-run="${RE100}"]`);
+/** F-891: the change feed's entries about the runner's budgets file, as the Studio has received them (newest first). */
+const budgetsEntries = async () => ((await projectState(page)).project?.changes ?? []).filter((c) => c.path === '.rcfd/runner-config.json');
 
 async function toRuns(): Promise<void> {
   await page.getByRole('tab', { name: 'Runs' }).click();
@@ -215,10 +217,13 @@ test('the runner’s budgets: read and written by the runner (ADR 0733), refused
     .filter((l) => l['path'] === '.rcfd/runner-config.json');
   expect(edits.map((l) => l['who'])).toEqual(['set_runner_config']);
   await shot('05-runner-budgets-written');
-  // another writer since: the Studio does not write over it
-  await writeFile(file, '{"max_runs": 3}\n');
+  // another writer since: the Studio does not write over it. The value is typed first (F-891, ADR 0788): the feed's
+  // entry of the Write above reaches the panel up to a feed poll later, and a panel with nothing typed then reads the
+  // file again, the other writer's change with it, which leaves nothing to refuse
   await panel.getByRole('textbox', { name: 'cpu_threads' }).fill('2');
   await panel.getByRole('textbox', { name: 'cpu_threads' }).press('Tab');
+  await expect(panel.getByRole('button', { name: 'Write', exact: true })).toBeEnabled();
+  await writeFile(file, '{"max_runs": 3}\n');
   await panel.getByRole('button', { name: 'Write', exact: true }).click();
   await expect(panel.getByRole('alert')).toContainText('was changed by another writer since it was read: nothing was written');
   expect(await readFile(file, 'utf8')).toBe('{"max_runs": 3}\n');
@@ -239,6 +244,10 @@ test('the runner’s budgets: read and written by the runner (ADR 0733), refused
   // a file the runner cannot read (ADR 0733 Q4): refused as it is, replaced whole on purpose
   await writeFile(file, '{"gpu": 1}\n');
   await page.getByRole('button', { name: 'Runner budgets (.rcfd/runner-config.json)' }).click();
+  // F-891: the feed's entries of this window's two writes (the Write and the undo) have reached the reopened panel, the
+  // undo's perhaps after it read the file; they are not another writer's change, and the refused file's alert is the only one
+  await expect.poll(async () => (await budgetsEntries()).length).toBe(2);
+  await expect(panel).toHaveAttribute('data-file-change', String((await budgetsEntries())[0]!.n));
   await expect(panel.getByRole('alert')).toContainText('The runner would refuse this file: unknown field `gpu`');
   await panel.getByRole('textbox', { name: 'max_runs' }).fill('2');
   await panel.getByRole('textbox', { name: 'max_runs' }).press('Tab');
