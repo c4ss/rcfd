@@ -581,7 +581,7 @@ One row per record of this folder, grouped by the roadmap category of the item i
 | [0769](0769-f883-registration-fan01-wall-pressure-behind-the-rotor.md) | F-883 registration: FAN-01, a mean static pressure behind the rotor from the wall-pressure data of the record | REGISTERED | 2026-11-22 | 1 | F-883 | done |
 | [0770](0770-f884-registration-naca0012-17-degrees-steady-iteration-diagnosis.md) | F-884 registration: why the steady iteration does not reach the attached NACA 0012 state at 17 degrees | REGISTERED | 2026-11-22 | 1 | F-884 | done |
 | [0772](0772-f887-registration-naca0012-lift-curve-without-eddy-viscosity-relaxation.md) | F-887 registration: steady Spalart-Allmaras without eddy-viscosity relaxation over the NACA 0012 lift curve | REGISTERED | 2026-11-22 | 1 | F-887 | done |
-| [0775](0775-f871-registration-six-further-simulation-milestones.md) | F-871 registration: six further simulation milestones | REGISTERED | 2026-11-23 | 1 | F-871 | todo |
+| [0775](0775-f871-registration-six-further-simulation-milestones.md) | F-871 registration: six further simulation milestones | REGISTERED | 2026-11-23 | 1 | F-871 | done |
 | [0776](0776-f860-registration-push-main-left-out-commits-and-the-budget.md) | F-860 registration: push_main.py, the left-out run names its commits, the ADR's tests count in the budget, changed-file binaries first | REGISTERED | 2026-11-23 | 1 | F-860 | done |
 
 ## Records with no item in the file name (259)

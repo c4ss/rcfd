@@ -371,3 +371,16 @@ milestones byte for byte on a copy of main, with validation and both checks clea
 > Follow-up (proposed, open question 2): "Laminar flat plate: the skin friction and the velocity profile against the Blasius solution", deps F-028, F-006; acceptance: Every limit not stated here is registered in the ADR before the run. The laminar plate reproduces the Blasius values of arXiv:2204.02215 recorded in docs/reference-data.md (section "Wave 30B: incompressible validation data actually read"), by the checks B1 to B4 of ADR 0060 or their registered successors, on current main, in tests the gate runs. Milestone flat-plate, headline.
 
 The same entries are in `docs/roadmap/proposals/0775-F-871.json` (form 1 of ADR 0755, base ece2e34d).
+
+## The lead's reading (2026-11-23), at the merge
+
+Merged at 75cecac0 and pushed at 5921c2a8 (the report read at 01:38 UTC, 8 minutes of reading, proposed done, written
+done). Checked by the lead before the merge: the registration is the first commit and alone, and the definitions and
+the mapping come after it; the branch adds only the files under `docs/adr/` that this ADR names and its proposal file.
+At the merge the lead ran `python scripts/roadmap_milestones.py --apply docs/adr/0775-f871-mapping.tsv --definitions
+docs/adr/0775-f871-milestones.json` on main: it wrote the 81 memberships, the six milestones follow the three that
+stood, each of those three compares equal to its value before the command, and `--check` passes.
+
+Status: **done**, as proposed. The two headline items the agent proposes for the backward-facing step and the flat
+plate are scope, and are put to the maintainer with the agent's recommendation (b) for both, which the lead shares;
+they are not entered until the maintainer answers.
