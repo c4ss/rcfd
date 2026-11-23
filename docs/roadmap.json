@@ -9507,9 +9507,9 @@
     "deps": [
       "F-271"
     ],
-    "status": "todo",
+    "status": "done",
     "acceptance": "Every limit not stated here is registered in the ADR before the run. The description of the store argument of start_run in the project-mode tools list no longer says \"none with case\": it says that plan is the default and that none is the way back to a run that stores only what its case asks for, shown by a test that reads the live tools list; no other text of the tools list, no argument, no default and no golden changes, and the Studio's calls are unchanged.",
-    "note": "Lead (2026-11-21): entered on the maintainer's answer of that day to ADR 0741 question 1 (option a). The text is in crates/rcfd-mcp/src/project.rs. Not an additive edit, which is why it was a question. Not issued yet. Lead (2026-11-22): issued by docs/adr/briefs/f862-start-run-store-description.md (ADR 0774)."
+    "note": "Lead (2026-11-21): entered on the maintainer's answer of that day to ADR 0741 question 1 (option a). The text is in crates/rcfd-mcp/src/project.rs. Not an additive edit, which is why it was a question. Not issued yet. Lead (2026-11-22): issued by docs/adr/briefs/f862-start-run-store-description.md (ADR 0774). ADR 0774, 2026-11-22, done: the description of start_run's store argument now ends \"Default plan; none is the way back to a run that stores only what its case asks for\" (ADR 0741 question 1, option (a)), held by a test that reads the live tools list; the whole list before and after is byte-equal with the old text put back, no golden, argument or default changed and no Studio call changed. Lead (2026-11-23): merged at 77e54786 and pushed at a34656fd; done as proposed."
   },
   {
     "id": "F-863",

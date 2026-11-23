@@ -194,3 +194,14 @@ None.
 Status proposed for F-862: done.
 
 > ADR 0774, 2026-11-22, done: the description of start_run's store argument now ends "Default plan; none is the way back to a run that stores only what its case asks for" (ADR 0741 question 1, option (a)), held by a test that reads the live tools list; the whole list before and after is byte-equal with the old text put back, no golden, argument or default changed and no Studio call changed.
+
+## The lead's reading (2026-11-23), at the merge
+
+Merged at 77e54786 and pushed at a34656fd (the report read at 23:24 UTC on 2026-11-22, 6 minutes of reading, proposed
+done, written done). Checked by the lead before the merge: the registration is the first commit and alone; the only
+source change is the one description string in `crates/rcfd-mcp/src/project.rs`, and the text is the one the
+maintainer approved (ADR 0741, question 1, option (a)). The push script ran both committed mutations, this ADR's and
+ADR 0741's, and both failed as expected; no binary was left out. At the merge the lead removed the clause of
+`docs/mcp-tools.md` that said the tool's own description still named the earlier default.
+
+Status: **done**, as proposed.
