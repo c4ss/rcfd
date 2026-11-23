@@ -24,6 +24,7 @@ import { alive, appRoot, killPid } from '../support/rcfd.js';
 import { copyExample, findMcp, mcpPids, NO_MCP, projectState, stubDialog } from '../support/project.js';
 import { findRunner, NO_RUNNER, Runner } from '../support/runner.js';
 import { until } from '../support/fake-service.js';
+import { chooseByKeyboard } from '../support/keyboard.js';
 
 const SHOTS = path.join(appRoot, 'test-results-visual', 'f807');
 const mcp = findMcp();
@@ -199,10 +200,9 @@ test('quick run from the Runs view, by keyboard: the run shows at once, then que
   await expect(bar).toBeVisible();
   // Tab order: the case, Run, Queue…, Start the runner, then the filter of F-806
   const caseSelect = bar.getByRole('button', { name: /Case to run/ });
-  await caseSelect.focus();
-  await page.keyboard.press('Enter');
-  await page.getByRole('option', { name: 'cavity-re100.toml' }).focus();
-  await page.keyboard.press('Enter');
+  // F-888 (ADR 0786): the closed listbox gives the focus back to the select in the next animation frame; the shared step
+  // returns once the select has it, so the Tab below starts from the select and not from the body
+  await chooseByKeyboard(caseSelect, 'cavity-re100.toml');
   await expect(caseSelect).toContainText('cavity-re100.toml');
   await page.keyboard.press('Tab');
   const run = bar.getByRole('button', { name: 'Run cavity-re100.toml' });
