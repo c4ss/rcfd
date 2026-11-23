@@ -248,3 +248,129 @@ addendum gives the way). The notes of the items are read only around keyword mat
 items outside the closures and the patterns is not read. The second reading is of 40 items. No paper was read for this
 work and no new reference value is entered; the references are named from the pages of the repository. The topic page
 `docs/structural-solver.md` is not edited. No cargo command but `docs_site`; no solve.
+
+## Addendum 1: results (2026-11-23)
+
+Commits: e3caa284 (this registration, alone, on main d10ea0bd), bff7716a (the definition and the mapping, first
+reading), and the commit of this addendum with the proposal file. No amendment was needed and no correction of the
+mapping was taken.
+
+| Id | Measured | Met |
+| --- | --- | --- |
+| C1 | defined as registered: the two case files and the page exist (asserted by `build.py`), the reference names three pages with their sections and ADR 0500, the three headline items are items of the roadmap; nothing left out | yes |
+| C2 | 792 of 792 items read as the rule says (by title; by acceptance where in a closure, in a pattern or a candidate of M2 (a)); 39 memberships, each with a reason that starts M1 or M2 (the build script asserts M1 to M4); no M3 and no M4 membership | yes |
+| C3 | fan-titled: 5 of 5 placed (F-387, F-406, F-436, F-593 members; F-604 listed). Cyclic pattern: 24 titles, 24 placed (F-394 and F-406 members; 22 listed below). Control: with F-500 taken from the list `build.py` names F-500 and exits 1 | yes |
+| C4 | 40 items by seed 875779 (from 39 members, 753 non-members, 196 doubtful ones not yet drawn), second reading by a fresh agent: 0 disagreements of 20 members, 0 of 10 uniform, 0 of 10 doubtful | yes |
+| C5 | on a copy of `docs/` and `scripts/` of main d10ea0bd made by `git archive` (`proof.py`, scratch): `--apply` exit 0, 39 memberships written; the nine existing definitions equal and the file outside the new object equal in bytes; 0 of 792 items with a changed list of the nine; 0 items outside the mapping changed; the 39 mapped items differ by the key alone; no line of the old block missing, five lines added (one table row, the milestone's line and its three headline lines), the old lines in their order and the page outside the block equal; a second `--apply` writes nothing; `roadmap_milestones.py --check` 0; `render_roadmap.py --check` 0 after a render and `roadmap_milestones.py --check` 0 after it. The same on the lead's main at 19debd2d: 0 differences. K1 (one character of the title of `packed-bed`): `packed-bed` reported as differing and the file outside the new object as not equal. K2 (the present members of `packed-bed` and F-001 added to the mapping): exactly F-001 reported. C2 control: `build.py` refuses a reason that does not start M1 to M4 | yes |
+| C6 | validation clean on the copy (no line printed; every headline item an item and a member) | yes |
+| C7 | below | yes |
+| P | `python scripts/roadmap_proposals.py check docs/roadmap/proposals/0779-F-875.json` passes (F-875 to done, two new items); `cargo test -p rcfd-cli --release --test docs_site` 2 passed; `python scripts/process_report.py --check`: in the report to the lead (run after this commit) | yes |
+
+**Figures** on a copy of main d10ea0bd after the command (the whole roadmap: 792 items, 398 done, 299 partly done, 95
+not started, 69 %; the rows of the nine existing milestones unchanged).
+
+| Milestone | Headline | Members | Done | Partly done | Not started | Per cent | Headline result |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| `fan-structure` | F-387 (done), F-406 and F-436 (not started) | 39 | 21 | 14 | 4 | 72 % | not met |
+
+By class: M1 3; M2 (a) 16 (F-025, F-132, F-133, F-232, F-370 to F-376, F-382, F-383, F-455, F-457, F-593); M2 (b1) 11
+(F-394, F-396, F-399, F-403 for F-406; F-409, F-411, F-412, F-413, F-415, F-418, F-435 for F-436); M2 (b2) 9 (F-377,
+F-380, F-386, F-388, F-393, F-395, F-397, F-408, F-414). The four members not started are F-403, F-406, F-435 and F-436:
+the two demonstrations and the two case-file items they are written from. By line of work: 35 structural, three of
+the meshing line (F-132, F-133, F-232) and F-025 of numerics. The estimate of the registration was about 80 per cent.
+
+**The two lists.** Fan-titled: F-387, F-406, F-436 M1; F-593 M2 (a); F-604 not a member, N4: a press fit of a hub on a
+shaft with a bore-cell rule for the fan hub, which no run of record and no demonstration's acceptance or dependency
+list uses (the hub of the demonstrations is a rigid clamp). It is the nearest of the five to a member and is named as
+the borderline. The cyclic rotor: F-394 (M2 (b1)) and F-406 (M1) are members; the other 22 are N4, each for one of
+four reasons:
+
+| Reason (N4) | Items |
+| --- | --- |
+| the rotating, whirl or free-sector path of a sector: the sector clause of F-406 names no speed and no dependency list names the item | F-500, F-507, F-511, F-680, F-683, F-686 |
+| the Coriolis split of a sector and its follow-ups: the Coriolis clause of F-436 is on the single blade | F-555, F-569, F-575, F-584, F-612 |
+| shells or beams in the cyclic constraint: the demonstrations are solid Tet10 | F-628, F-647, F-648, F-662, F-672, F-674, F-675 |
+| another load, boundary or material on a sector that no demonstration names | F-426, F-489, F-544, F-547 |
+
+So the cyclic rotor is in this milestone through the at-rest clause of F-406 and through F-394 alone; 11 of the 22
+listed items are about a sector at speed or with the Coriolis term (open question 2).
+
+**Other non-members that were candidates.** In a closure and left out, as registered: F-381 (the iterative solver),
+F-398 (transient), F-410 (viscoelastic), F-417 (random vibration), F-136 (the far-field integral, a dependency of
+F-418 that the equivalent radiated power does not use), F-013, F-080, F-005, F-015, F-070 (the solid case file has a
+schema of its own), F-010, F-012 (the runs use the builders of `rcfd-fem`), F-026, and the flow solver's items; F-001
+and F-003 are N3. Structure and vibration beyond the demonstrations, N4: the rotor on bearings (F-416, F-562 to
+F-564), the load export and the coupling (F-237, F-384, F-385, F-400, F-401, F-421, F-434), the unbalance term of the
+fan objective (F-697, a member of `fan`). Borderline and left out: F-306 and F-324, repairs inside `tetrahedralize`,
+which route D of the run calls: read by the registered M4 sentence (their text does not name this blade) and by the
+practice of ADR 0756, which did not take a repair of a used module as a member; the letter of M2 (a) ("the item's own
+text names the function the run calls") could be read to take F-324. F-131 (no run names its module), F-462 and F-498
+(a default and a restated check of members, used by no run).
+
+**The sample check.** The reader was given `rule.md` (the sections "The definition" and "The membership rule" of this
+ADR) and the sheet in a folder of its own; it reports that it opened none of the files it was told not to open, and
+consulted the two test files, `gyro.rs` and the stubs ADR 0339 and ADR 0310 for the dependencies of F-436, which the
+sheet did not list for it. Its classes agree with the first reading on all 40, the subclasses of M2 included. Hard
+items it named: F-455 (a member by one option call, partly done with a known miss), F-132 (the M4 sentence against the
+`use` line), F-386 (a dependency of F-387 that its run does not use, a member only through F-406), F-414 ("the
+eigensolver" of (b2) does not say which), F-534 and F-498. It found the rule unclear in these places: M2 (a) has no
+closure condition; it does not say whether use through a member counts (F-025, F-373); a direct dependency of the run
+headline that the run does not use has no class; a defect of a package under a demonstration that is not run cannot be
+M4 and falls to N4, whose words do not describe a repair; N1 against N5 for flow-side items. What the check shows: 0
+of 40 says the rule is applied as written; it does not test the judgements named above (F-604, and F-306 with F-324),
+none of which was drawn, and half the non-member draw is far from the milestone.
+
+**What the figure will and will not say** (for the maintainer). The 72 per cent counts what the three demonstrations
+are built from: 21 of 39 done. The word is "not met" and stays so until F-406 and F-436 are done. When it reads "met"
+it will mean that the demonstrations pass closed forms, identities and mesh change; nothing in this milestone compares
+with a measured or published blade (open question 1).
+
+**The command the lead runs on main**, then the usual regeneration (`python scripts/render_roadmap.py`; the block of the
+overview is written by the command itself):
+
+`python scripts/roadmap_milestones.py --apply docs/adr/0779-f875-mapping.tsv --definitions docs/adr/0779-f875-milestones.json`
+
+The definitions file is `docs/milestones.json` of main d10ea0bd with the object `fan-structure` appended and every
+other byte kept. If main's file changes before the command is run, the file is rebuilt the same way: the last object
+of `docs/adr/0779-f875-milestones.json` appended to main's list and written with `json.dumps(..., indent=2,
+ensure_ascii=False)` and one newline. No `--install` is needed.
+
+**Deviations.** (1) The registration writes the cyclic pattern in the section of the two lists as three words; the
+scripts use them as the alternatives of one regular expression, as meant. (2) The doubtful draw was from 196 items,
+the 235 of the registration less the members and the uniform draw. (3) The second reader looked up the dependencies of
+F-436 in ADR 0339 and ADR 0310, because the sheet gave the deps of each drawn item but not those of the headline
+items. (4) The command was also shown on the lead's main at 19debd2d, which the registration did not ask. (5) The per
+cent is 72 against an estimate of about 80 (an estimate, not a limit). Not run: any cargo command but `docs_site`; any
+solve. No mutation patch (registered).
+
+Actual size: done; 0; 0; 2; about 420000.
+
+Decision by the registered rule: **done**. The milestone is defined as registered and mapped with reasons; the two
+lists are placed; the sample check was made (0 disagreements of 40); the command leaves the nine existing milestones
+byte for byte on a copy of main, with validation and both checks clean.
+
+## Open questions for the maintainer
+
+1. **A headline item against a published reference.** The three headline items compare with closed forms and
+   identities; the repository records no measured or published blade, rotor or frame, so this milestone can read "met"
+   without a validation. Options: (a) leave it: the `result` and the `reference` say in words that the demonstrations
+   are not validated; (b) enter the first follow-up below as a fourth headline item: a published rotating blade or
+   bladed disc is read and recorded and the solver is compared with it; the milestone then cannot read "met" before
+   that comparison passes. Recommendation: (b), as the fan milestone was given F-870 and F-873.
+2. **The cyclic rotor at speed.** The sector clause of F-406 is at rest, so of the 24 cyclic titles only F-394 and
+   F-406 are members, and the rotating and Coriolis sector work (F-500, F-507, F-511, F-555 and their follow-ups, 11
+   items) is under no headline item. Options: (a) leave it; (b) enter the second follow-up below as a headline item,
+   which would bring F-500 and F-499 in as direct dependencies. Recommendation: (b): the maintainer's answer names the
+   cyclic rotor as part of this milestone, and at speed it has no item that says so.
+
+## For the lead: roadmap entries
+
+> Status proposed for F-875: done.
+
+> Note entry: ADR 0779, 2026-11-23, done: the milestone fan-structure ("Structure and vibration of a fan rotor") defined in docs/adr/0779-f875-milestones.json with the headline F-387, F-406 and F-436 and 39 memberships with reasons in docs/adr/0779-f875-mapping.tsv (21 done, 14 partly done, 4 not started, 72 per cent, not met); its reference is closed forms and identities, no measured or published blade being recorded; the five fan-titled structural items and the 24 cyclic titles placed (F-394 and F-406 members, 22 listed, F-604 listed); sample of 40 items read a second time with 0 disagreements; the command of addendum 1 leaves the nine existing milestones byte for byte, shown on a copy of main d10ea0bd.
+
+> Follow-up (proposed, open question 1): "Structural fan rotor: a published rotating blade or bladed disc read, recorded and compared", deps F-387, F-394, F-396; acceptance: Every limit not stated here is registered in the ADR before the run. A published case of a rotating blade or a bladed disc with its natural frequencies (measured, or a benchmark solution) is read, and its geometry, material and values are recorded with their place in the source as a fragment under docs/reference-data.d; the solid solver reproduces those frequencies at rest and at speed within a band registered before the run from the stated uncertainty of the source; a source that cannot be obtained is recorded as not obtained and the item stays partial. Milestone fan-structure, headline.
+
+> Follow-up (proposed, open question 2): "Fan rotor at speed by a cyclic sector: the Campbell table of the bladed hub against the full rotor", deps F-406, F-500, F-499; acceptance: Every limit not stated here is registered in the ADR before the run. One sector of the bladed hub of F-406 at registered speeds from rest to the registered maximum, with stress stiffening and spin softening and, as a second table, with the Coriolis term: for every harmonic index 0 to Z/2 the sector frequencies equal those of the full rotor on the coarse mesh within 1e-6 (heavy record), at rest they have the bits of the sector of F-406, and every crossing of the engine orders is listed with its nodal diameter. Milestone fan-structure, headline.
+
+The same entries are in `docs/roadmap/proposals/0779-F-875.json` (form 1 of ADR 0755, base d10ea0bd).
