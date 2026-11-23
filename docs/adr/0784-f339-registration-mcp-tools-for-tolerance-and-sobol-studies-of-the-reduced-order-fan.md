@@ -284,3 +284,132 @@ That number was written without reading the constant: the service's internal err
 (`ledger_append`, `read_ledger`). The two tools use `code::INTERNAL`, so the row reads -32000. No check is changed:
 E1 leaves that row out, because neither case can be provoked inside the sandbox without a fault of the file system.
 Nothing else of the registration changes.
+
+## Addendum 1: results (2026-11-23)
+
+Code at commit c7443193 (after the registration 6a139451 and amendment 1, 8261f2e1). The registered run was made once:
+`cargo test -p rcfd-mcp --release --test design_uq_sobol_f339 -- --nocapture --test-threads 1`, 11 passed, 0 failed,
+229.18 s in series (about 105 s with the default threads).
+
+| Id | Limit | Measured | Met |
+|---|---|---|---|
+| U1 | the bytes of the library's result | equal; 256 samples, all ok; 7228 bytes of result; evaluator, version and tier the model's | yes |
+| U2 | the same equality | equal; 2 replicates of 32, converged, the requirement's probability 0.5 (32 of 64) | yes |
+| S1 | the bytes of the library's result | equal; 320 evaluations, 64 of 64 rows used | yes |
+| L1 | 257 lines, equal but for the stamp | 257 and 257, equal line by line; stamps above 0; last entry `uq_summary` | yes |
+| L2 | 321 lines, equal in the same way | 321 and 321, equal; last entry `sobol_summary` | yes |
+| L3 | query total 257; repeat refused; another study appends | total 257, one summary; the repeat -32602 naming `name`, bytes kept; the Sobol study appended (268 lines), earlier bytes a prefix | yes |
+| B1 | 1004 for paths, -32602 for names, nothing written | 6 paths 1004, 2 names -32602, no file | yes |
+| B2 | above the limit 1004, at it accepted | 101 samples and 105 evaluations refused with 1004 at the limit 100; 100 and 100 accepted, 101 entries each | yes |
+| B3 | denied by a read-only server; class and schema as designed | as registered | yes |
+| P1 | descriptors byte-identical; the call accepted, 11 entries | identical; 10 evaluations, 11 entries, the library's bytes | yes |
+| E1 | registered code and key, no file | 21 handler refusals with -32602 and their key, 3 schema refusals, nothing written; a control call accepted | yes |
+| G1 | the golden, byte for byte, the two after `design_ledger_rerun_check` | 36 live tools: the 33 of the golden byte-identical and in order, `design_uq`, `design_sobol`, `create_project` | yes |
+| G2 | the two byte-identical, the kept session tools the golden's | 55 tools with a project: 17 kept session tools as the golden, the two new ones, 36 project tools | yes |
+| G3 | the three list tests pass with the edit; the script finds the edit additive | they pass, with the wider edit of the next sections; each golden: every earlier entry byte-identical and in order, 2 added, 0 changed, 0 removed (33 to 35 and 50 to 52 entries) | yes, with more count edits than registered |
+| X1 | pass | `tool_list_adr0730` 2 passed; `rcfd-api --lib` 159 passed, 4 ignored; `rcfd-mcp --lib` 17 passed, **1 failed** | **no** |
+
+Negative controls: NC1, NC2 and NC3 hold (inside U1, B2 and L1).
+
+### X1 and the count pins the registration did not find
+
+`tests::stdio_loop_handles_a_scripted_session` (`crates/rcfd-mcp/src/tests.rs`, line 295) holds the length of the list
+without a project at 34 and found 36. Finding 4 named three tests; a search for the counts and one run of every other
+test file of `rcfd-mcp` (unedited) found seven tests in six files that hold a count of the tool list:
+
+| File | Test | Count held, found |
+|---|---|---|
+| `tests/default_f1.rs` | `f1_tools_list_without_project_is_the_golden_plus_create_project` | 34, 36 |
+| `tests/tool_list_f275.rs` | `c5l_project_list_has_no_session_only_tool` | 53, 55 |
+| `tests/project_list_f270.rs` | `a2_tools_list_with_project_is_the_golden_with_the_f271_changes` | 40, 42 |
+| `tests/project_runs_w48f.rs` | `f3_f11_project_tools_on_runner_made_runs`, `f13_server_start` | 53, 55 |
+| `tests/project_w48f.rs` | `f3_access_classes_read_only_and_schema` | 53, 55 |
+| `src/tests.rs` | `stdio_loop_handles_a_scripted_session` | 34, 36 |
+
+Each fails on its length assertion only. Every other test of the 31 other test files of `rcfd-mcp` passes (the first
+run of twelve of them stopped on the missing binaries `rcfd` and `rcfd-runner` in the scratch target; they were built
+and those twelve files run again). None of these tests was edited, ignored or skipped.
+
+### The additive golden edit, for the lead (rule 3)
+
+Kind: additive golden edit. In `crates/rcfd-mcp/tests/golden/tools_list_default.json` and
+`tools_list_project_f270.json` the two entries `design_uq` (2779 bytes) and `design_sobol` (2210 bytes), as the server
+prints them, go right after `design_ledger_rerun_check`; nothing else of either file changes (27188 to 32179 bytes and
+38978 to 43969 bytes). With them, sixteen count literals rise by two: `default_f1.rs` 33, 34, the text "the 33 tools"
+and `live[33]`; `tool_list_f275.rs` `kept.len()` 17 (line 128), 53 and `live[17..]`; `project_list_f270.rs` 50, 40, 33,
+56, 55; `project_runs_w48f.rs` 53 twice; `project_w48f.rs` `17 + 36`; `src/tests.rs` 34. The hand list of `c5s` in
+`tool_list_f275.rs` (17 kept tools called with arguments, line 262) does not read the list and passes unchanged; it does
+not call the two new tools.
+
+G3 was run on a scratch copy of c7443193 with exactly this edit, made by a script from the binary's own `tools/list`:
+`--lib` (18 passed), `default_f1` (2), `tool_list_f275` (8), `project_list_f270` (1), `project_runs_w48f` (3),
+`project_w48f` (10), `tool_list_adr0730` (2) and the new file (11) all pass. A first G3 run was void: the copy's two
+source files had been restored with an older file time after mutation M8, the build did not see them, and the new file
+failed as under M8; after the times were set and the copy rebuilt, the run above was made. The edit as a patch that
+applies to c7443193 is in the scratch folder, `g3_additive_edit.patch` (not in the repository; it holds the goldens).
+
+The Studio's capability files also need two rows each (finding 5): `apps/studio-web/capabilities/inventory.json` gains
+`mcp:design_uq` and `mcp:design_sobol`, kind `mcp_tool`, access `write_files` in both modes (regenerated by
+`npm run capabilities`), and `coverage.json` two rows; proposed: the exemption of the other design tools (item F-807,
+unplanned). Those files were not touched and the Studio's tests were not run.
+
+### Mutations
+
+Each on the scratch copy, the new test file run once, the file restored.
+
+| Id | Registered to fail | Failed |
+|---|---|---|
+| M1 | L1, L3, B2 | `u1_l1_l3`, `b2`, and `u2` (it reads its ledger) |
+| M2 | U1, U2, S1, P1 | `u1_l1_l3`, `u2`, `s1_l2`, `p1`, and the extra test |
+| M3 | U1, S1 | `u1_l1_l3`, `s1_l2`, `p1`, and the extra test |
+| M4 | B2 | `b2` |
+| M5 | B1 | `b1`, and `b2`, `p1`, `u1_l1_l3`, `u2`, `s1_l2` (their ledgers left the root) |
+| M6 | L3 | `u1_l1_l3` |
+| M7 | B3 | `b3` |
+| M8 | S1, L2, P1 | `s1_l2`, `p1` |
+
+All eight were caught by the registered checks. M1 is committed as
+`crates/rcfd-mcp/tests/design_uq_sobol_f339.mutation.patch`.
+
+### Other runs, deviations, what was not run
+
+- `cargo clippy -p rcfd-api -p rcfd-mcp --all-targets -- -D warnings`: clean. Format: `cargo fmt -p rcfd-mcp -- --check`
+  clean; `cargo fmt -p rcfd-api` fails on this machine with "The filename or extension is too long (os error 206)", so
+  `rustfmt --edition 2021 --check crates/rcfd-api/src/design/tools.rs` was run in its place: clean.
+- `cargo test -p rcfd-cli --release --test docs_site`: 2 passed. `python scripts/process_report.py --check`: in the
+  agent's report (the generated `docs/adr/index.md` is the lead's).
+- Deviations: (1) X1 as above; (2) the new file holds one test that was not registered,
+  `extra_model_and_quantiles_reach_the_library` (the optional `model` keys, `quantiles`, `confidence` and string bounds
+  against the library, the same equality); it passed and decides nothing; (3) the first G3 run was void, as above;
+  (4) amendment 1.
+- The gate runs the new test file (about 105 s for its eleven tests with the default threads, 229 s in series). No
+  heavy record. Not run: the Studio's tests; the whole workspace; any crate but `rcfd-api`, `rcfd-mcp` and the link
+  test of `rcfd-cli`.
+
+Size (agent), actual: partial; 0; 0; 1; 600000
+
+### Decision
+
+**partial** by the registered rule, and the check that missed is X1: one existing library test of `rcfd-mcp` holds the
+length of the tool list and fails until it is raised by two. Every other registered check holds, the eight mutations
+are caught and the committed one fails its test. The miss is a further place of the registered edit itself (a count of
+the list), not a behaviour: with the edit of the section above, X1 passes on the scratch copy (18 passed). The rule's
+exception names "the three pinned list tests", so the agent does not extend it; whether the item reads done once the
+lead has re-recorded is the lead's reading.
+
+## Open questions for the maintainer
+
+1. **Should the two studies also be service methods (`design.uq`, `design.sobol`)?** Not taken (finding 3: it changes
+   the pinned method list of the service, 69, and the Studio's inventory, and `service.rs` is not a file of the item).
+   Options: (a) MCP tools only, as built; (b) add the two methods in a new item, with the method list, its test and the
+   Studio's inventory re-recorded, and the MCP tools then call them through the service; (c) as (b) and a CLI command.
+   Recommendation: **(a)** until a second caller exists; the handlers are public functions of `design/tools.rs`, so (b)
+   is a small item when it is wanted.
+
+## For the lead: roadmap entries
+
+Status proposed: partial.
+
+> ADR 0784, 2026-11-23, partial: the MCP tools design_uq and design_sobol run uq::run and sensitivity::run on the named evaluator rcfd.fan_rom with the ledger, inside the sandbox and under the limit max_design_evaluations (class write_files, also in project mode); the replies equal the library's result bit for bit (256 Monte Carlo samples, a Latin hypercube study with a stopping rule, 320 Sobol evaluations) and the ledger files equal the drivers' but for the stamp; all registered checks hold but X1: seven existing tests in six files hold a count of the tool list and fail until the additive golden edit is made (two entries added to each of the two tools-list goldens, sixteen count literals raised by two), with which they pass on a scratch copy; the edit and the Studio's two inventory and coverage rows are the lead's; eight mutations caught; service methods for the two studies are open question 1 (recommended: tools only).
+
+No follow-up item is proposed in the file.

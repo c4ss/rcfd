@@ -1,0 +1,8 @@
+{
+  "form": 1,
+  "adr": "0784",
+  "item": "F-339",
+  "base": "fcc84a84b9795ae2f7adc4927ed49d4a90a9c805",
+  "status": "partial",
+  "note": "ADR 0784, 2026-11-23, partial: the MCP tools design_uq and design_sobol run uq::run and sensitivity::run on the named evaluator rcfd.fan_rom with the ledger, inside the sandbox and under the limit max_design_evaluations (class write_files, also in project mode); the replies equal the library's result bit for bit (256 Monte Carlo samples, a Latin hypercube study with a stopping rule, 320 Sobol evaluations) and the ledger files equal the drivers' but for the stamp; all registered checks hold but X1: seven existing tests in six files hold a count of the tool list and fail until the additive golden edit is made (two entries added to each of the two tools-list goldens, sixteen count literals raised by two), with which they pass on a scratch copy; the edit and the Studio's two inventory and coverage rows are the lead's; eight mutations caught; service methods for the two studies are open question 1 (recommended: tools only)."
+}
