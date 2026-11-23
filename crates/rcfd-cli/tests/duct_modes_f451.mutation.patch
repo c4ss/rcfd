@@ -1,0 +1,14 @@
+# expect-fail: cargo test -p rcfd-cli --release --test duct_modes_f451
+diff --git a/crates/rcfd-cli/src/cmd_duct_modes.rs b/crates/rcfd-cli/src/cmd_duct_modes.rs
+index 8d32e153..214e220e 100644
+--- a/crates/rcfd-cli/src/cmd_duct_modes.rs
++++ b/crates/rcfd-cli/src/cmd_duct_modes.rs
+@@ -272,7 +272,7 @@ fn export(o: &Options) -> Result<String, Stop> {
+     let first = read_series(o.files[0])?;
+     let (rho0, c0) = (first.rho0, first.c0);
+     let k = 2.0 * PI * o.frequency / c0;
+-    let basis = ModeBasis::below(o.shape, o.k_max.unwrap_or(k)).map_err(lib)?;
++    let basis = ModeBasis::below(o.shape, k).map_err(lib)?;
+     let mut sections = Vec::with_capacity(o.files.len());
+     for (i, path) in o.files.iter().enumerate() {
+         let spec = if i == 0 { first.clone() } else { read_series(path)? };

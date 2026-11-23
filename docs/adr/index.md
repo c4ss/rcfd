@@ -50,7 +50,7 @@ One row per record of this folder, grouped by the roadmap category of the item i
 | [0202](0202-f289-registration-conjugate-heat-flow-report-with-the-gradient-options.md) | F-289 registration: the conjugate heat_flow report with the gradient options, checked by a heat balance | REGISTERED | 2026-11-06 | 1 | F-289 | done |
 | [0221](0221-f298-registration-electric-current-and-joule-heat-with-the-gradient-options-and-the-fixed-pressure-flux-correction.md) | F-298 registration: the electric current and the Joule heat with the gradient options, and the flux correction on fixed-pressure faces | REGISTERED | 2026-11-07 | 1 | F-298 | done |
 
-## Compressible flow and acoustics (13)
+## Compressible flow and acoustics (14)
 
 | ADR | Title | Status word | Date | Addenda | Item | Item status |
 |---|---|---|---|---|---|---|
@@ -67,6 +67,7 @@ One row per record of this folder, grouped by the roadmap category of the item i
 | [0371](0371-f473-registration-wave-solver-conservation-with-a-non-zero-boundary-mean.md) | F-473 registration: conservation of the integral of p in the wave solver with an initial field of non-zero boundary mean | REGISTERED | 2026-11-12 | 1 | F-473 | done |
 | [0372](0372-f452-registration-wave-solver-driven-by-a-sampled-cfd-surface.md) | F-452 registration: the acoustic wave solver driven by a sampled CFD surface (an rcfd-surface-series file) | REGISTERED | 2026-11-12 | 1 | F-452 | done |
 | [0378](0378-f478-registration-wave-drive-with-returning-waves-at-the-sampled-section.md) | F-478 registration: the wave-solver drive with returning waves at the sampled section (two or more sampled sections, the two-wave split before the drive) | REGISTERED | 2026-11-12 | 1 | F-478 | done |
+| [0783](0783-f451-registration-the-rcfd-duct-modes-command.md) | F-451 registration: the `rcfd duct-modes` command (its arguments and output, the bit-for-bit check against the library on the X1 field of ADR 0351, the two located errors with their texts, the mutations) | REGISTERED | 2026-11-23 | 1 | F-451 | todo |
 
 ## Multiphase and particles (8)
 
@@ -512,7 +513,7 @@ One row per record of this folder, grouped by the roadmap category of the item i
 | [0741](0741-f271-registration-the-field-store-plan-as-the-default-of-start-run.md) | F-271 registration: the field-store plan as the default of start_run | REGISTERED | 2026-11-19 | 1 | F-271 | done |
 | [0774](0774-f862-registration-the-description-of-start-run-store-argument.md) | F-862 registration: the description of start_run's store argument says what the default is | REGISTERED | 2026-11-22 | 1 | F-862 | done |
 
-## Studio desktop app (19)
+## Studio desktop app (20)
 
 | ADR | Title | Status word | Date | Addenda | Item | Item status |
 |---|---|---|---|---|---|---|
@@ -531,6 +532,7 @@ One row per record of this folder, grouped by the roadmap category of the item i
 | [0738](0738-f809-proposal-derived-pictures-of-a-stored-field-iso-surfaces-streamlines-slices-and-the-length-unit.md) | F-809 proposal: derived pictures of a stored field: iso-surfaces, streamlines, slices, the Studio's cut from the CLI, and the length unit | ACCEPTED | 2026-11-17 | 0 | F-809 | done |
 | [0739](0739-f848-proposal-run-sites-a-remote-simulation-service-for-the-studio-cli-and-mcp.md) | F-848 proposal: run sites, a remote simulation service for the Studio, the CLI and the MCP server | ACCEPTED | 2026-11-17 | 0 | F-848 | todo |
 | [0742](0742-f262-diagnosis-the-terminal-status-of-a-run-is-written-before-its-last-state-event.md) | F-262 diagnosis: the terminal status of a run is written before its last state event and before its request files are removed (S7 of ADR 0123 fails intermittently on the held run) | REGISTERED | 2026-11-19 | 1 | F-262 | partial |
+| [0781](0781-f852-registration-close-session-timeout-on-windows.md) | F-852 registration: the time-out of the Studio test "Close session cannot be undone" on Windows (the candidate causes, the control for each, the test that must fail without the fix, and the number of consecutive runs) | REGISTERED | 2026-11-23 | 1 | F-852 | todo |
 | [0786](0786-f888-registration-quick-run-by-keyboard-focus.md) | F-888 registration: the Studio's end-to-end test of the quick run by keyboard that receives "inactive" on the Run button (the hypotheses of the cause, the runs that tell them apart, the test that must fail without the fix, the consecutive runs and the count of processes) | REGISTERED | 2026-11-23 | 1 | F-888 | done |
 | [0787](0787-f890-registration-workspace-tab-long-task.md) | F-890 registration: the long task when the workspace tab opens that fails the Studio's responsiveness test on the lead's machine (the hypotheses of the cause, the recorded run that tells them apart, the test that must fail without the fix, the consecutive runs) | REGISTERED | 2026-11-23 | 1 | F-890 | partial |
 | [0788](0788-f891-registration-runner-budgets-alert-and-the-feed.md) | F-891 registration: the runner-budgets test of f837.spec.ts:198 that fails at two lines (the hypotheses of the cause, the records that tell them apart, the tests that must fail without the fix, the consecutive runs) | REGISTERED | 2026-11-23 | 1 | F-891 | done |

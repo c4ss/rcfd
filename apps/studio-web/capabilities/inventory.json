@@ -18,11 +18,11 @@
   "counts": {
     "service_method": 69,
     "mcp_tool": 70,
-    "cli_command": 53,
-    "cli_option": 214,
+    "cli_command": 54,
+    "cli_option": 220,
     "case_key": 951,
     "monitor_format_key": 6,
-    "total": 1363
+    "total": 1370
   },
   "capabilities": [
     {"id":"service:cosim.advance","kind":"service_method","source":"service.info"},
@@ -173,6 +173,7 @@
     {"id":"cli:rcfd data list","kind":"cli_command","source":"help","usage":"data list|verify|provenance [--manifest <file>] [--data <dir>] [--json]"},
     {"id":"cli:rcfd data provenance","kind":"cli_command","source":"help","usage":"data list|verify|provenance [--manifest <file>] [--data <dir>] [--json]"},
     {"id":"cli:rcfd data verify","kind":"cli_command","source":"help","usage":"data list|verify|provenance [--manifest <file>] [--data <dir>] [--json]"},
+    {"id":"cli:rcfd duct-modes","kind":"cli_command","source":"help","usage":"duct-modes <series.json> [<series.json> ...] --duct <shape> --frequency <hz> [--k-max <k>] [--x-ref <x>]"},
     {"id":"cli:rcfd fwh","kind":"cli_command","source":"help","usage":"fwh <series.json> --observer x,y,z [--observer ...] [--flow ux,uy,uz] [--times t0:t1:n] [--out <file.csv>]"},
     {"id":"cli:rcfd help","kind":"cli_command","source":"help","usage":"help [glossary | errors]"},
     {"id":"cli:rcfd inflate","kind":"cli_command","source":"help","usage":"inflate <case|mesh> --patch p --layers n (--first h | --y-plus y --u-tau u --nu nu | --uniform total |"},
@@ -243,6 +244,12 @@
     {"id":"cli:rcfd data verify --data","kind":"cli_option","source":"help","parent":"cli:rcfd data verify"},
     {"id":"cli:rcfd data verify --json","kind":"cli_option","source":"help","parent":"cli:rcfd data verify"},
     {"id":"cli:rcfd data verify --manifest","kind":"cli_option","source":"help","parent":"cli:rcfd data verify"},
+    {"id":"cli:rcfd duct-modes --duct","kind":"cli_option","source":"help","parent":"cli:rcfd duct-modes"},
+    {"id":"cli:rcfd duct-modes --frequency","kind":"cli_option","source":"help","parent":"cli:rcfd duct-modes"},
+    {"id":"cli:rcfd duct-modes --k-max","kind":"cli_option","source":"help","parent":"cli:rcfd duct-modes"},
+    {"id":"cli:rcfd duct-modes --origin","kind":"cli_option","source":"help","parent":"cli:rcfd duct-modes"},
+    {"id":"cli:rcfd duct-modes --out","kind":"cli_option","source":"help","parent":"cli:rcfd duct-modes"},
+    {"id":"cli:rcfd duct-modes --x-ref","kind":"cli_option","source":"help","parent":"cli:rcfd duct-modes"},
     {"id":"cli:rcfd fwh --flow","kind":"cli_option","source":"help","parent":"cli:rcfd fwh"},
     {"id":"cli:rcfd fwh --fmax","kind":"cli_option","source":"help","parent":"cli:rcfd fwh"},
     {"id":"cli:rcfd fwh --fmin","kind":"cli_option","source":"help","parent":"cli:rcfd fwh"},

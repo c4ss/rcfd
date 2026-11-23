@@ -21,11 +21,11 @@ Engine read: rcfd 0.1.0, service protocol rcfd-service/1 version 1.1, MCP server
 |---|---|---|---|---|
 | Service methods | 69 | 20 | 49 | 40 |
 | MCP tools | 70 | 35 | 35 | 26 |
-| CLI commands | 53 | 23 | 30 | 23 |
-| CLI options | 214 | 35 | 179 | 126 |
+| CLI commands | 54 | 23 | 31 | 24 |
+| CLI options | 220 | 35 | 185 | 132 |
 | Case schema keys | 951 | 951 | 0 | 0 |
 | Monitor format keys | 6 | 6 | 0 | 0 |
-| **All** | **1363** | **1070** (78.5 %) | **293** | **215** |
+| **All** | **1370** | **1070** (78.1 %) | **300** | **222** |
 
 A case key stands for every value of its enumeration (the solver options of that key, listed in the inventory): the
 schema-driven surface of F-825 offers them all. A CLI option is mapped with its command. "Item does not name it" marks an
@@ -59,13 +59,13 @@ new item (see the last sections).
 | F-813 a learner's first path | 1 | `list_cases` |
 | F-815 compare two runs | 5 | `design_compare_variants` (not named), `design_get_metrics` (not named), `design_ledger_query` (not named), `design_ledger_rerun_check` (not named), `design_list_study` (not named) |
 
-### CLI commands (30 without a UI path)
+### CLI commands (31 without a UI path)
 
 | Item | Count | Capabilities |
 |---|---|---|
 | F-805 project home and the live project folder | 2 | `rcfd convert` (not named), `rcfd serve` (not named) |
 | F-807 run control (quick run, stop, pause, queue) | 11 | `rcfd map` (not named), `rcfd reactor` (not named), `rcfd restart` (not named), `rcfd run`, `rcfd study` (not named), `rcfd workflow run` (not named), `rcfd workflow show` (not named), `rcfd workflow templates` (not named), `rcfd-runner serve` (not named), `rcfd-runner shutdown` (not named), `rcfd-runner wait` (not named) |
-| F-809 derived pictures (iso-surfaces, streamlines, cut planes, vectors) | 3 | `rcfd acoustics` (not named), `rcfd fwh` (not named), `rcfd sample` (not named) |
+| F-809 derived pictures (iso-surfaces, streamlines, cut planes, vectors) | 4 | `rcfd acoustics` (not named), `rcfd duct-modes` (not named), `rcfd fwh` (not named), `rcfd sample` (not named) |
 | F-811 residual and monitor plots | 1 | `rcfd post` (not named) |
 | F-812 case editor validated by the engine's schema | 4 | `rcfd check`, `rcfd check-mesh`, `rcfd inflate` (not named), `rcfd partition` (not named) |
 | F-813 a learner's first path | 1 | `rcfd cases` |
@@ -74,13 +74,13 @@ new item (see the last sections).
 | F-828 provenance inspector and reproduce-from-CLI | 5 | `rcfd data list` (not named), `rcfd data provenance` (not named), `rcfd data verify` (not named), `rcfd project hash`, `rcfd version` |
 | F-848 Runs on a remote site: a remote simulation service for the Studio, the CLI and the MCP server | 1 | `rcfd-runner site` (not named) |
 
-### CLI options (179 without a UI path)
+### CLI options (185 without a UI path)
 
 | Item | Count | Capabilities |
 |---|---|---|
 | F-805 project home and the live project folder | 10 | `rcfd convert` (3), `rcfd serve` (7) |
 | F-807 run control (quick run, stop, pause, queue) | 69 | `rcfd map` (10), `rcfd reactor` (1), `rcfd restart` (4), `rcfd run` (28), `rcfd study` (8), `rcfd workflow run` (6), `rcfd workflow show` (2), `rcfd-runner ensure` (4), `rcfd-runner start` (5), `rcfd-runner wait` (1) |
-| F-809 derived pictures (iso-surfaces, streamlines, cut planes, vectors) | 26 | `rcfd acoustics` (3), `rcfd fwh` (9), `rcfd post derive` (7), `rcfd sample` (7) |
+| F-809 derived pictures (iso-surfaces, streamlines, cut planes, vectors) | 32 | `rcfd acoustics` (3), `rcfd duct-modes` (6), `rcfd fwh` (9), `rcfd post derive` (7), `rcfd sample` (7) |
 | F-811 residual and monitor plots | 2 | `rcfd post` (2) |
 | F-812 case editor validated by the engine's schema | 34 | `rcfd check` (6), `rcfd check-mesh` (1), `rcfd inflate` (12), `rcfd partition` (15) |
 | F-813 a learner's first path | 1 | `rcfd cases` (1) |
@@ -100,6 +100,7 @@ a clause added to that item, a new item, or a decision that the Studio leaves it
 holds the other way round). The reasons are in `coverage.json`.
 
 - Acoustics and 0D reactor tools (acoustics, fwh, reactor): no Studio item covers them; nearest homes derived pictures (F-809) and run control (F-807). (F-807, F-809): `rcfd acoustics`, `rcfd fwh`, `rcfd reactor`, `rcfd acoustics --*`, `rcfd fwh --*`, `rcfd reactor --*`.
+- Acoustics tools (acoustics, fwh, duct-modes of F-451): no Studio item covers them; nearest home derived pictures (F-809). (F-809): `rcfd duct-modes`, `rcfd duct-modes --*`.
 - Calling any service method by name (rcfd call): no item names a generic call; nearest home the action layer (F-827). (F-827): `rcfd call`, `rcfd call --*`.
 - Choosing or starting the solver service from the window: the service client (F-803) starts rcfd serve from the environment and no item gives it a UI; nearest home project home (F-805). (F-805): `rcfd serve`, `rcfd serve --*`.
 - Co-simulation (the cosim methods): no Studio item covers it; nearest home run control (F-807). (F-807): `cosim.advance`, `cosim.checkpoint`, `cosim.describe`, `cosim.forces`, `cosim.list`, `cosim.open`, `cosim.restore`, `cosim.time`.
