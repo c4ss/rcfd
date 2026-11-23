@@ -208,3 +208,23 @@ Release builds, `CARGO_TARGET_DIR=<scratch>/target`. "The acceptance" is that of
   names a holder of new files outside the test's processes, the product meets it too; that is reported in the addendum
   as a follow-up, not changed here.
 * Linux and macOS: an open file there does not refuse a rename; only Windows 11 is measured.
+
+## Amendment 1 (2026-11-23, after PCs, P0, P0a, PLC, PLF, PLFa, R0 and the first run of R1; before change T and before any run of A0 or A1)
+
+The first run of R1 (the whole binary under L1, beside three solves of another agent on the machine) took 1249.78 s
+against 9.89 to 37.38 s for the twenty runs of R0; in it A-N passed and A-R failed at `adopt_f288.rs:215` ("A-R (i)
+record 1 against the uninterrupted study": `ok` false against true), a failure of another test and another kind than
+F-876, reported in the addendum and not diagnosed here. At that rate R1 and A1 would hold sixteen processes of load on
+the shared machine for about fourteen hours. R1 was stopped after its first run (its processes ended by this work; none
+of another agent was touched), and the set-up is corrected as follows, before any further run:
+
+* **R1** is recorded as made with 1 run of 20. **R1b**: 20 runs of the binary before change T under **LF** (the load of
+  new files, the kind of file the probe's holder acts on), made before change T.
+* **A1** is made under LF instead of L1, 20 runs; A0 is unchanged (20 runs under L0).
+* The rows a3-R and a4 and the decision rule read R1b for R1 and LF for L1 in A1. Nothing else changes: no limit, no
+  count, no other series.
+
+Why LF and not LC: the probe series did not name LC as lengthening the hold (H3: PLC's longest refusal 1842.5 ms against
+P0's 1323.0 ms, a factor 1.39, under the factor 2 of the rule, and no would-fail iteration), and LC is the part of L1
+that slowed the test eighty times beside the other agent's solves. The choice is taken after these results and is
+recorded as such; it does not change what is counted or what passes.
