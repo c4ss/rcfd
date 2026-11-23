@@ -510,3 +510,10 @@ Status: **done** by the lead's reading. The gallery test of `run-bar-keyboard.sp
 on windows-latest and ubuntu-24.04 (run 45224116370; the run-bar test is skipped there, as amendment 1 says), and Q1 is
 answered (a). G1 stays unmet on this machine for tests outside this item. The three follow-ups of the proposal are
 questions of scope for the maintainer and are not entered.
+
+## The maintainer's answer on the follow-ups (2026-11-23)
+
+To the lead's question whether to enter and issue the three follow-ups of the proposal ahead of other work, the
+maintainer answered "Yes, issue all three". They are entered as F-890 (responsiveness-long-task), F-891
+(runner-budgets-alert) and F-892 (serve-left-behind), with the titles, dependencies and acceptance of the proposal file
+as written.
