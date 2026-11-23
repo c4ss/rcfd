@@ -1,0 +1,115 @@
+---
+type: entity
+tags: [roadmap, area]
+sources: [doc-roadmap-json, doc-roadmap-overview, doc-reference-data-f878-fan01-lda-profiles, adr-thread-simulation-milestones-validation, adr-thread-fan01-design-point, adr-thread-daily-gate-and-edit-lock, adr-thread-test-to-adr-attribution, adr-thread-process-measures-and-roadmap-form]
+created: 2026-11-22
+updated: 2026-11-22
+status: draft
+---
+
+# Roadmap area: Quality, docs and validation
+
+**What it is:** the 'Quality, docs and validation' line of work (Project family) of the [[roadmap]], with every [[f-item]] in it ([[doc-roadmap-json]]).
+**Where:** `docs/roadmap.json` (source of truth), categories in `scripts/roadmap_progress.py`.
+
+## Synthesis
+
+Three kinds of work share this line: validation headlines, the reliability of the full gate, and the lead's tooling.
+
+- **Validation headlines.** F-865 (ADR 0756) made per cent complete per simulation milestone; its own reading is that the per cents run high and "The column 'Headline result' is the one to read". The maintainer's answers of 2026-11-21 created three headline items. F-868 (NACA 0012 lift, ADR 0760) ~~is partial~~: the lift is within max(5 %, 0.018) of Ladson from 0 to 16 degrees, and 17 degrees is a known miss. An unsteady arm was approved and issued as ADR 0764 ([[adr-thread-simulation-milestones-validation]]). Since 5b96a1f8 F-868 is **done**: the time-accurate arm of ADR 0764 settles at 17 degrees to a steady attached flow with $c_l$ 1.5516, within the band 0.0803 of Ladson's 1.6057, and the maintainer read it as meeting the acceptance (option (a)); the steady route at 17 degrees is the new F-884 ([[doc-roadmap-json]]). F-869 (cylinder drag, ADRs 0761, 0763) ~~is partial~~: the fine-mesh drag 1.33900 is in [1.314, 1.370], but the observed order 1.387 is outside [1.5, 2.5]; ~~ADR 0763 question 1 is with the maintainer~~ ([[adr-thread-simulation-milestones-validation]]). Since 5b96a1f8 F-869 is **done** "as it stands, the order miss kept as a known miss" (maintainer, option (c)); the diagnosis of the order is F-881, and the vortex-shedding headline reads "met" ([[doc-roadmap-json]], [[doc-roadmap-overview]]). F-870 (FAN-01 design point, ADR 0762) is partial: the pressure rise is 73.99 Pa against 126.46 Pa and the shaft power is within 2.0 %. The band cannot be completed without the measurement's uncertainty, which is follow-up F-877 and needs a person to read it ([[adr-thread-fan01-design-point]]). F-867 (ADR 0757) made the fan milestone the whole design goal ([[adr-thread-simulation-milestones-validation]]). At 5b96a1f8 the F-870 acceptance also compares the Euler head, the kinetic energy leaving the rotor and the circumferential-mean $c_x$, $c_t$ profiles at the measured plane (ADR 0765, question 1), and its convergence rule waits on F-885 ([[doc-roadmap-json]]).
+- **Gate reliability.** The daily full gate runs in CI with failures attributed to ADRs (F-723, ADR 0653), and scheduled runs have used four shards since 2026-11-21. The failures it found were fixed one item at a time: per-test time limits (F-849), wall-clock limits on a loaded runner (F-854), a shared temporary folder (F-853) and a negative control (F-866). The [[edit-lock]] needed four items (F-751, F-755, F-761, F-855), and F-855 stays partial until a hosted gate shows F2 passing or failing with a printed class ([[adr-thread-daily-gate-and-edit-lock]]). The [[test-to-adr-index]] that the attribution reads went through 19 ADRs of rules and readings. Coverage is near complete, but the agreement between readers of the primary-ADR samples is what most often missed its limits ([[adr-thread-test-to-adr-attribution]]).
+- **Lead tooling.** The push script after its first real runs (F-851), process measures and four stop conditions in force from 2026-11-21 (F-863), and agent-written [[roadmap-proposal]] files (F-864, partial) ([[adr-thread-process-measures-and-roadmap-form]]).
+- **Not started:** hosted CI for F-001 and F-002, F-736, F-764, F-858 to F-861, F-871 (six further milestones), F-872 to F-880 (the fan headlines and the follow-ups of F-870). ~~F-878, F-879 not started~~: since 5b96a1f8 both are partial. F-878 (ADR 0765): the measured LDA profiles are traced and $c_x$, $c_t$ each miss their band at 12 of 26 radii; the missing 52.47 Pa cannot be divided between rotor and installation ([[doc-reference-data-f878-fan01-lda-profiles]]). F-879 (ADR 0766): check H was run and "the class is NOT EVALUABLE" by the registered outer-iteration rule ([[doc-roadmap-json]]). Newly entered and not started at 5b96a1f8: F-881 (cylinder drag order near 1.4), F-882 and F-883 (FAN-01 rotor loss budget and a measured static pressure behind the rotor, both before F-880), F-884 (NACA 0012 steady route at 17 degrees), F-885 (outer-iteration record of the transient solver and check H by ADR 0183's own rule). Counts of the line: 20 done, 20 partial, 25 not started ([[doc-roadmap-overview]]).
+- **Early waves (added by p3-records-a).** The first validation against read benchmark data is wave 30 (ADRs 0060, 0061; the backward step met all its limits; cavity Re 1000 GCI, the channel, the cylinder Strouhal number and the SST plate missed), followed by a reference-reading wave that verified some citations and changed no value (ADR 0064) ([[adr-thread-early-validation-benchmarks]]). The gate's test runner `scripts/gate_test.py` (one process per test, one pool) and its per-test time limit come from ADRs 0127 and 0129 ([[adr-thread-daily-gate-and-edit-lock]]). The docs site and executed tutorials (F-096) are ADR 0089 ([[adr-thread-early-workflow-and-partials]]).
+
+## ADR threads
+
+- [[adr-thread-simulation-milestones-validation]]: F-865, F-867, F-868, F-869 (ADRs 0756, 0757, 0760, 0761, 0763)
+- [[adr-thread-fan01-design-point]]: F-870 (ADR 0762); see also [[adr-thread-fan01-rotating-solve]]
+- [[adr-thread-daily-gate-and-edit-lock]]: F-723, F-751, F-755, F-761, F-849, F-853, F-854, F-855, F-866 (11 ADRs)
+- [[adr-thread-test-to-adr-attribution]]: F-737 to F-795, F-839 (19 ADRs)
+- [[adr-thread-process-measures-and-roadmap-form]]: F-851, F-863, F-864 (ADRs 0752, 0754, 0755)
+- [[adr-thread-early-validation-benchmarks]]: F-006, F-125 (ADRs 0060, 0061, 0064)
+- [[adr-thread-early-workflow-and-partials]]: F-096 (ADR 0089); ADRs 0127, 0129 added to [[adr-thread-daily-gate-and-edit-lock]]
+- Added by p3-records-b: ADR 0137 (the first Linux full gate, F-866) to [[adr-thread-daily-gate-and-edit-lock]]; ADR 0745 (weekly citation audit) to [[adr-thread-process-measures-and-roadmap-form]]; the example-project stores on [[adr-thread-example-projects-and-linux-values]]
+
+## Items
+
+<!-- generated by tools/gen_roadmap_pages.py: begin (do not edit inside) -->
+
+Generated from `docs/roadmap.json` and `scripts/roadmap_progress.py` at main 8ee32b1c on 2026-11-22.
+
+**66 items:** 20 done, 20 partial, 26 not started.
+
+**Hub items** (5+ ADRs name them in their file name): F-769 (6 ADRs)
+
+| Item | Title | Status | ADRs | Milestones | Gap (what is missing now) |
+|---|---|---|---|---|---|
+| F-001 | Cargo workspace layout (crates: rcfd-core, -mesh, -linalg, -fv, -turb, -io, -post, -cli, -api, -mcp) | partial |  |  | A hosted CI run of cargo build and cargo test on both Windows and Linux is missing; the workflow is written but has never run on a CI host, so only local Windows and WSL Linux runs back the criterion. |
+| F-002 | CI, lint, formatting, license (AGPL-3.0) and clean-room policy doc | partial |  |  | No hosted CI run exists: ci.yml (fmt, clippy -D warnings, tests) has never been executed on a CI host, only the same commands locally. |
+| F-004 | Architecture decision records: state-tree model, field storage, parallel strategy (rayon now, MPI later) | partial |  |  | The human review of the ADRs is still pending; the ADRs are written but not reviewed. |
+| F-006 | Benchmark and validation case registry (cavity, backward step, channel, flat plate, NACA0012, heated cavity) | done |  | aerofoil-lift |  |
+| F-096 | Documentation, tutorials and example gallery for the desktop app, the assistant sidebar and MCP usage | partial |  |  | Tutorials are executed by cargo test on the development machine only (Windows), not in CI, since the GitHub workflow has never run. GUI and assistant-sidebar steps are not executed or checked against the running app. No search or navigation tree in the site. |
+| F-125 | Public-data validation pack: fetch scripts and manifests for open benchmark data (cavity, step, flat plate, NACA 0012, damBreak, GRI-Mech, NASA Rotor 37, Hannover compressor) | partial |  | vortex-shedding, fan, aerofoil-lift | Hannover compressor data is unresolved (no open upstream found) and Rotor 37 numbers are not transcribed. NACA 0012 and compressor data are not compared. Not obtained: tube local-Nu table, Moody table, AGARD NACA 0012, Armaly numbers. |
+| F-269 | Test gate speed and strictness | partial |  |  | Open: an environment switch that makes the 12 data-gated tests fail rather than skip, limit headroom on one stage, a test for the R3 limit, a re-measurement at 5 jobs, scanning of inline test modules, and a slot queue in place of the directory locks. |
+| F-723 | Daily full gate in CI with failures attributed to ADRs | done | 0653 |  |  |
+| F-736 | First GitHub runs of the daily gate (ADR 0653 checks on the runner) | todo |  |  |  |
+| F-737 | Wave-tag mapping and a primary ADR in the test-to-ADR index | partial | 0679 |  | Missed: tests that gained an ADR are 15.8 percent (limit 12), and the evidence of a binary named in an ADR is not a registering ADR (1 of 4). 25 integration binaries stay unmapped (F-760); a primary ADR only from registering evidence is F-759. |
+| F-751 | The two failures of the first daily gate (2026-11-16, run 43919555816) | partial | 0669 |  | Mutation M1 (no claim file) survived both forced-contention controls, so the claim's share of the fix rests on the repeated-run statistics alone. A lock left behind by a failed removal is not excluded as a cause of the LockBusy failure. |
+| F-755 | A forced control of the edit lock's starvation and of a lock left behind | done | 0676 |  |  |
+| F-759 | Primary ADR only from registering evidence in the test-to-ADR index | partial | 0684 |  | The file-citation-only sample agreed on 3 of 20 files against a limit of 16, because most of those files come from the initial import and the earliest ADR naming one only edits it. The three E2-only files of ADR 0679 sample A' keep their primary and are still not the registering ADR. |
+| F-760 | ADR text for the 25 integration-test binaries still unmapped in the test-to-ADR index | done | 0685 |  |  |
+| F-761 | The daily gate runs the feature-gated edit-lock controls | done | 0681 |  |  |
+| F-764 | Check the first real run of the feature-gated gate step | todo |  |  |  |
+| F-768 | Primary ADR of file-citation-only tests from the commit that adds the file | partial | 0690 |  | The fresh sample of 25 files agreed on 16 against a limit of 20, and the registered limit on tests with an ADR and no primary was missed (456 counted, with the population grown from 413 to 522 tests). The rule is silent for 514 of 522 file-citation-only tests. |
+| F-769 | ADRs for the five feature groups that no ADR describes (the assistant setup helpers and workflow engine, the F-040 wall-function channel, the shipped turbulence and compressible examples through the binary, the mesh generator parameters, tables called from expressions) | partial | 0705, 0706, 0707 … (+3) |  | The limit that at most 10 tests outside the eight files gain an ADR was missed: 32 gain one (19 from sim.rs, 8 from table.rs, 5 from tables.rs). The primary ADR of the 35 tests is unchanged, which is a finding for the script. A second reader and a run of the files are not done. |
+| F-772 | Retro-registration ADRs and ADR paths in file headers as primary evidence for file-citation-only tests | partial | 0701 |  | The 45 files read in ADR 0690 gave 12 with a primary and 9 agreeing (75 per cent) against the limit of 80. All readings were by one reader. Whether rule H3, which agreed on only 1 of 5, is removed or restricted is still open. |
+| F-773 | A git commit that names an ADR or an item as evidence of the files it adds | partial | 0720 |  | The sample of at least 20 files with an E8 primary cannot be drawn: the population is 2 files, both read only by the implementing agent with no second reader. The maintainer's question on F-787 and F-793 is open, and the second reader is not done. |
+| F-785 | Restrict or remove rule H3 of the retro-registration rule | partial | 0703 |  | No clause is stated as unmet. Mutations M2 and M5 survived the registered run and were caught only after tests A6 and A7 were added, the 20-file sample was read by the rule's author alone, and the item waits for the maintainer to call it done. |
+| F-786 | A second reader for the primary-ADR samples of the test-to-ADR index | partial | 0704 |  | The two readings agree on 21 of 28 files (75.0 per cent) against the limit of 85. Open: what the primary of a file with no registering ADR is (the maintainer's decision), ADR 0685 as a source, and the two Test files notes of ADRs 0067 and 0123. |
+| F-787 | A retro-registration unit that says no ADR describes the file gives no primary | todo |  |  |  |
+| F-788 | A third reading of the primary-ADR samples against one written criterion | todo |  |  |  |
+| F-790 | Delete the dormant rule H3 code and its record tests after the second reading | done | 0712 |  |  |
+| F-792 | A test of the per-file tier list of the retro counts for rules H1 and H2 | done | 0714 |  |  |
+| F-793 | Primary ADR of the files that a retro-registration ADR describes (group ADRs 0706 to 0710 outranking the list notes of ADRs 0067, 0123 and 0685) | todo |  |  |  |
+| F-794 | A second reader for the limit rows of ADRs 0706 to 0710 | done | 0715 |  |  |
+| F-795 | Correct rows H22 and W1 and read the 18 unread limit rows of ADRs 0706 to 0710 | done | 0717 |  |  |
+| F-839 | A second reader for the E8-primary files and the supplementary sample of ADR 0720 | done | 0721 |  |  |
+| F-840 | Items named in a commit subject whose ADRs are named only in the roadmap note as evidence of the files the commit adds | todo |  |  |  |
+| F-849 | Full gate: two immersed-solid tests run within a factor of 1.2 of the 3600 s per-test limit | done | 0740 |  |  |
+| F-851 | push_main.py after its first real run: what it does not do yet | done | 0752 |  |  |
+| F-853 | restart_w19c: three tests share one temporary folder and fail when run in parallel | done | 0753 |  |  |
+| F-854 | Two wall-clock limits fail once on a loaded runner: A4 of vof_dambreak_amg and I2 of monitors_filtered_f456 | done | 0749, 0750 |  |  |
+| F-855 | The edit lock's F2 failed once in a full gate: 4 of 10000 probe calls ended in LockBusy | partial | 0751, 0758 |  | Which cause the gates of e9378ecb and f6e68b4a met is not shown: every trial of ADR 0758 ran on the agent's machine. Done when full gates show F2 passing, or failing with a printed class that is then read. M2 and M6 of ADR 0669 are no longer caught by F2 (F-859); the controls of ADR 0751 and ADR 0758 are not run by the gate (F-858). |
+| F-856 | UDF interpreter: wasmi 0.31 to 1.x | todo |  |  |  |
+| F-857 | Linux values of w49r_default_meshes_are_bit_identical, rebuilt on current main from the draft of pull request 19 | todo |  |  |  |
+| F-858 | The gate runs the edit-lock controls of ADR 0751 and keeps the project folder of a failed edit-lock test | todo |  |  |  |
+| F-859 | A forced control of the second resolve under the edit lock (ADR 0669 D1) | todo |  |  |  |
+| F-860 | push_main.py: the left-out run names its commits, the ADR's tests count in the budget, binaries of a changed source file come first | todo |  |  |  |
+| F-861 | The process report checks the rules that rest on convention: one-line note entries, citation locators, the reading limit, test headers | todo |  |  |  |
+| F-863 | Process measures and stop conditions before more workers: review minutes, escaped defects, queue age | done | 0754 |  |  |
+| F-864 | The roadmap as one file per item, in shadow mode: two independent item changes reach one candidate without re-entry by the lead | partial | 0755 |  | Decided by the maintainer on 2026-11-21: the agent's entry stands and the lead adds his own after it (agent rules 5, rule 9); no cutover now. Missing: the stale check refuses an item to which the lead only added a note, a gap cannot name a follow-up without an id, and the form has not been used on a live merge. |
+| F-865 | Per cent complete for the whole roadmap and for each simulation milestone (vortex shedding, the fan case, aerofoil lift and further cases) | done | 0756, 0756, 0756 |  |  |
+| F-866 | listing_budget L1: the negative control fails when ten listings take just under the budget | done | 0759 |  |  |
+| F-867 | The fan milestone is the whole fan design goal: its headline items, its members and its figure | done | 0757, 0757, 0757 |  |  |
+| F-868 | NACA 0012 lift curve against the measured lift at Re 6e6 | done | 0760, 0764 | aerofoil-lift |  |
+| F-869 | Cylinder at Re 100: the mean drag coefficient against the published values | done | 0761, 0763 | vortex-shedding |  |
+| F-870 | FAN-01 at its design point: pressure rise and shaft power against the measured characteristic | partial | 0762 | fan | Missing for done: the stated uncertainty and density of the measurement (not traced; no full band can be registered); the pressure rise (73.99 Pa against 126.46 Pa, band 29.75 Pa), where a rotor-only passage is compared with an installation value; the mesh gates of B1 (83.37 deg, skewness 3.765), with F-133; a converged solve (limit cycle, res_u 1.2e-3). Shaft power is within 2.0 %. |
+| F-871 | Six further simulation milestones: lid-driven cavity, backward-facing step, flat plate, heated cavity, shock tube and wedge, packed bed | todo |  |  |  |
+| F-872 | FAN-01 characteristic curve: pressure rise and efficiency over the measured flow range by an operating map | todo |  | fan |  |
+| F-873 | Fan noise estimate on the operating curve: blade-passing tones and a stated broadband proxy | todo |  | fan |  |
+| F-874 | One assistant-driven design iteration on a fan through the MCP tools, with its measured limitations | todo |  | fan |  |
+| F-875 | A simulation milestone for the structure and vibration of a fan rotor, with the cyclic rotor | todo |  |  |  |
+| F-876 | rcfd-mcp adopt_f288: the replace of run.json was refused with access denied after 12 attempts in a left-out run | todo |  |  |  |
+| F-877 | FAN-01 measurement: its stated uncertainty and air density, read from the thesis of the measurement and recorded | todo |  |  |  |
+| F-878 | FAN-01 rotor alone: the solved field against the measured LDA profiles behind the trailing edge and the Euler work from them | partial | 0765 |  | Missing for done: the division of the missing 52.47 Pa. Velocity profiles do not fix the loss of the measured rotor, so the rotor's share is only bounded (-34.4 to 59.1 Pa, bands 24 to 25 Pa); needed is a measured static pressure behind the rotor or the outlet as on the rig (F-880). And c_x misses its band at 12 of 26 radii, c_t at 12 (worst at the hub and the tip; the radial layers of B1 are coarser than the measured spacing). |
+| F-879 | FAN-01 hub pocket: check H of ADR 0183, a time-accurate SST run that classes it as steady, physical or numerical | partial | 0766 |  | Missing for done: a class by the registered rule. H(dt) fails the outer-iteration rule as ADR 0766 registered it (a pressure ratio that does not measure time accuracy on a steady state). ADR 0183's own rule needs the velocity change of each outer iteration, a record the transient solver does not keep, and the two runs made again (about six hours); or the maintainer's reading of the rule for a state that has become steady. Both records show the site oscillation decaying below 1e-4 m/s. |
+| F-880 | FAN-01 outlet as on the rig: a hub that ends and the diffuser contour in the passage generator, the pressure rise taken as measured | todo |  |  |  |
+| F-881 | Why the mean drag of the cylinder at Re 100 converges at an order near 1.4 | todo |  | vortex-shedding |  |
+| F-882 | FAN-01 rotor: the loss of total pressure of the simulated rotor up to the measured plane, where it arises and what a finer mesh makes of it | todo |  |  |  |
+| F-883 | FAN-01: a mean static pressure behind the rotor read from the wall-pressure data of the record | todo |  |  |  |
+| F-884 | NACA 0012 at 17 degrees: the steady solver reaches the attached state that the time-accurate run finds | todo |  | aerofoil-lift |  |
+| F-885 | Transient solver: a read-only record of the velocity change of each outer iteration, and check H of ADR 0183 read by its own outer-iteration rule | todo |  |  |  |
+| F-886 | Sources read for three formulas recorded from memory: the Schnerr-Sauer model (ADR 0056), the effectiveness-NTU relations (ADR 0039) and the GCI of F-870 (ADR 0762) | todo |  |  |  |
+
+<!-- generated by tools/gen_roadmap_pages.py: end -->
