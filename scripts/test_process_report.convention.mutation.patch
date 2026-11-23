@@ -1,0 +1,14 @@
+# expect-fail: python scripts/test_process_report.py
+diff --git a/scripts/process_report.py b/scripts/process_report.py
+index 15ec2821..452a651a 100644
+--- a/scripts/process_report.py
++++ b/scripts/process_report.py
+@@ -813,7 +813,7 @@ def sec_n(items):
+             where = f"{i['id']}: {m.group(0).rstrip(' ,:')}"
+             if m.group(1) and not OUTCOME.match(text[len(m.group(0)):]):
+                 fail.append(f"n: note entry without an outcome word (done, partial, todo) after its head, {where}")
+-            if len(text.strip()) > NOTE_ENTRY_MAX:
++            if False:
+                 fail.append(f"n: note entry of {len(text.strip())} characters, above {NOTE_ENTRY_MAX}, {where}")
+             if "\n" in text or "\r" in text:
+                 fail.append(f"n: note entry with a line break, {where}")

@@ -1,0 +1,8 @@
+{
+  "form": 1,
+  "adr": "0777",
+  "item": "F-861",
+  "base": "d10ea0bd7fda1c7d067e3abe8ed67e36db66b102",
+  "status": "done",
+  "note": "ADR 0777, 2026-11-23, done: `process_report.py --check` now fails, each shown by a unit test that fails on the script of main d10ea0bd, on a note entry dated 2026-11-24 or later that lacks the outcome word, exceeds 1200 characters or holds a line break (section n), on a source named as Surname (year) or by its arXiv number without a place in an ADR registered from that day (section s), on a brief whose stated total is not the sum of its reading list or whose list exceeds 194023 bytes, the 90th percentile of the 41 briefs so far, and with --history on a listed size that is not the file's size at issue (section u), and on a test file without its record even with no list file, the lists being held to 25, 0, 4 and 6 entries; 31 Rust files and 12 Studio specs got their record as one comment line, 25 Rust files stay listed with the reason; 9 of 9 mutations caught; four forms are open for the maintainer."
+}

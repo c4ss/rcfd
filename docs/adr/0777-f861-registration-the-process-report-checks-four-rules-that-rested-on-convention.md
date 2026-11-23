@@ -249,3 +249,109 @@ of the script, not its design.
 4. Rule 12's item for a Rust test file. Options: (a) leave unchecked (registered); (b) a further check with its own
    list of the 31 files that miss it today. Recommendation: (a) until the headers are used for something that needs the
    item.
+
+## Addendum 1: results (2026-11-23)
+
+Commits on the branch, after the registration 5f47774d: 4cf6b4f6 (the unit tests, alone, so that the history holds the
+state in which they fail), 90f92513 (the 43 headers and the two lists of section l), ad37c250 (the script and the two
+lists of section u), and the commit of this addendum with the committed mutation and the proposal file. Python checks
+with the system's Python 3; cargo in the release profile with a target folder of its own under the scratch folder.
+
+### Checks
+
+| Id | Measured | Limit met |
+|---|---|---|
+| T1 | on the script of main d10ea0bd: fails by assertion (`(0, 0) != (1, 1)`: `--check` named no failure for an entry without an outcome word); on the changed script: passes | yes |
+| T2 | before: fails by assertion (no failure named for "Menter (1994) gives the constants"); after: passes | yes |
+| T3 | before: fails by assertion (no failure named for a total one byte off); after: passes. The half with `--history` is a test of its own, `test_a_listed_size_is_the_size_of_the_file_at_issue`: before, fails by assertion; after, passes | yes |
+| T4 | before: fails by assertion (no failure named for a Rust test root without a record and without a list); after: passes | yes |
+| X | at the tip, `--check`: no failure of sections n, s, u, l. `--check --history`: none of those sections either; 207 listed sizes compared, 6 differ, all listed. Lists: `brief-over-reading-limit.txt` 4, `brief-size-differs.txt` 6, `test-root-without-adr.txt` 25, `studio-spec-without-record.txt` 0, each dated in its head | yes: 0; 4, 6, 25, 0 |
+| H | 31 Rust files with a header (evidence E0 7, E1 1, E2 23; nine of them name the item of the ADR's file name), 12 Studio specs (ten by an item, two by ADR 0801); 25 Rust files listed, each under a line with the reason | yes: 31, 12, 25 |
+| U | `check_u.py` on the tip against d10ea0bd: 43 files under `crates/` or `apps/` (31 Rust, 12 Studio), each the old file with one `//` line put first, 0 otherwise; no file under a `src` folder, no golden, no hash table. The other files of the diff: this ADR, the four lists, the script, its test file, the mutation patch, the proposal file | yes: 43, 1, 0, 0 |
+| C | `cargo test --release --no-run` for the 31 targets in seven crates: 31 executables, every exit 0, no warning; `rustfmt --check --edition 2021` of the 31 files: no difference | yes |
+| E | `python -m unittest discover -s scripts -p "test_*.py"`: 382 tests, OK (5 skipped, as on main); `scripts/test_process_report.py` 44 tests, the 39 existing ones unedited | yes |
+| L | `docs_site` before the registration's commit: 2 passed; at the tip: see "Closing checks" | yes |
+| P | see "Closing checks" | see below |
+| M | negative control as predicted; 9 of 9 mutations caught (below) | yes |
+
+### Negative control and mutations
+
+N: the changed script with the lists and files as on main d10ea0bd gave, with `--check`, exactly: the two lists of section
+l above their numbers (56 above 25, 12 above 0) and the 4 briefs above the limit (473792, 280627, 214687, 346865); with
+`--history` also the 6 sizes (5 that differ, 1 file the commit does not hold). As predicted.
+
+Mutations on a scratch copy of `scripts/` (`mutate.py`), the five tests of the class `Convention` run against each; the
+unmutated copy passes; no other test of the file fails under any of them:
+
+| Id | Caught by |
+|---|---|
+| M1 | T1 |
+| M2 | T1 (committed: `scripts/test_process_report.convention.mutation.patch`; applied with `git apply`, `python scripts/test_process_report.py` fails 1 of 44, removed with `git apply -R`) |
+| M3 | T1 |
+| M4 | T2 |
+| M5 | T2 |
+| M6 | T3 |
+| M7 | T3 |
+| M8 | T4 |
+| M9 | T4 |
+
+### Deviations and things to know
+
+* T3 is two test functions, not one: the half that needs a commit history is separate. Five tests were written for four
+  rows; all five fail before the change.
+* The place of a citation, as built: the words of the registration, their plurals, the short forms only with their
+  point (`eq.`, `fig.`, `sec.`, `tab.`, `p.`, `pp.`), then a digit or a capital letter that does not begin a lower-case
+  word. That takes "Table A1", "equation (A1)" and "Table IV" and leaves "Table Of" out; a Roman numeral in lower case
+  is not taken. A heading line is a block of its own, as a list item is.
+* The checks of sections n and s find nothing today: no entry and no ADR is dated 2026-11-24 or later. They first act on
+  what is written from that day. An agent briefed before this merge has not been told of the 1200 characters or of the
+  outcome word; a proposal of such an agent that the lead applies from 2026-11-24 can fail `--check` on main, and is then
+  shortened by the lead in the note (the ADR keeps the long text).
+* The lead's own entries are held to 1200 characters from that day (two of the 108 since 2026-11-18 were longer).
+* `--check --history` names 16 failures of section c ("registration after code" 14, "not committed alone" 2) on this
+  branch; the unchanged script of main names the same 16 on the same tree. They are not of this work and not touched.
+* `LIST_MAX` in the script holds 25, 0, 4 and 6. When a list shrinks the report says so and the lead lowers the number;
+  until then the list could grow back to it.
+* The headers change what the test index reads: the first `ADR NNNN` of a leading comment is its evidence E0, so the
+  31 files now have that ADR by E0 where 24 had it by E1 or E2. The ADR is the same one in every file.
+* `--seed-exceptions` would overwrite `test-root-without-adr.txt` and lose the reasons; it was not run and should not
+  be for these lists.
+
+### What was not run
+
+`npm test` and the type check of `apps/studio-web` (its packages are not installed in the worktree; the 12 specs each
+gained one comment line). Clippy. No Rust test was executed: the 31 targets were compiled. No whole-crate or workspace
+run. No solve.
+
+### Size
+
+Size (agent, actual): done; 0; 0; 4; 200000
+
+### Decision
+
+**Done** by the registered rule: T1 to T4 fail before the change and pass after it; X, H and U hold with their numbers
+(0 failures; 4, 6, 25, 0; 31, 12, 25; 43, 1, 0, 0); C, E, L, P and M hold.
+
+### Open questions for the maintainer
+
+The four of the registration stand as written there, each with its options and recommendation: (1) the length of a note
+entry (1200 registered; 500 as for a `gap`; none) and whether the lead's entries are held to it; (2) the places a
+citation may give (rule 4's four; with figure, section, chapter, appendix, registered; an arXiv number as a place);
+(3) the reading limit (194023 from six days of briefs, registered; the percentile again after two weeks; a round
+figure); (4) rule 12's item for a Rust test file (unchecked, registered; a further check with a list of 31). An answer
+changes a constant at the head of `scripts/process_report.py`.
+
+### For the lead: roadmap entries
+
+Status proposed for F-861: done.
+
+> ADR 0777, 2026-11-23, done: `process_report.py --check` now fails, each shown by a unit test that fails on the script of main d10ea0bd, on a note entry dated 2026-11-24 or later that lacks the outcome word, exceeds 1200 characters or holds a line break (section n), on a source named as Surname (year) or by its arXiv number without a place in an ADR registered from that day (section s), on a brief whose stated total is not the sum of its reading list or whose list exceeds 194023 bytes, the 90th percentile of the 41 briefs so far, and with --history on a listed size that is not the file's size at issue (section u), and on a test file without its record even with no list file, the lists being held to 25, 0, 4 and 6 entries; 31 Rust files and 12 Studio specs got their record as one comment line, 25 Rust files stay listed with the reason; 9 of 9 mutations caught; four forms are open for the maintainer.
+
+No follow-up item is proposed. The same entries are in `docs/roadmap/proposals/0777-F-861.json`.
+
+### Closing checks
+
+On the tree of this addendum's commit: `cargo test -p rcfd-cli --release --test docs_site`, 2 passed;
+`python scripts/roadmap_proposals.py check docs/roadmap/proposals/0777-F-861.json`, exit 0 ("F-861: todo -> done; note +
+911 characters"); `python scripts/process_report.py --check`, 1 failure, the generated file `docs/adr/index.md` that is
+only not current (it lacks the row of this ADR) and is left to the lead by rule 7. No other failure.
