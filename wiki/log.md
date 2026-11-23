@@ -284,3 +284,13 @@ Append-only. Newest at the bottom. Entry header: `## [YYYY-MM-DD] <op> | <title>
 
 - Roadmap item F-886 (sources read for the Schnerr-Sauer model of ADR 0056, the effectiveness-NTU relations of ADR 0039 and the GCI of ADR 0762) entered on main (8ee32b1c) on the maintainer's answer to the wiki's citation question.
 - Updated [[doc-roadmap-json]], [[doc-roadmap-overview]], [[doc-changelog]] (origin_commit 8ee32b1c); roadmap area pages regenerated ([[roadmap-quality-docs-and-validation]] 66 items).
+
+## [2026-11-23] ingest | ADRs 0767 to 0785 and 11 changed docs at 09647baa (stale)
+
+- Created: [[doc-reference-data-f883-fan01-wall-pressure]].
+- Sources re-read: [[doc-changelog]], [[doc-mcp-tools]], [[doc-milestones-json]], [[doc-reference-data]], [[doc-roadmap-json]], [[doc-roadmap-overview]], [[doc-solid-case-file]], [[doc-structural-solver]], [[doc-test-process]], [[doc-udf-abi]], [[doc-validation-data]] (origin_commit 09647baa).
+- Threads: [[adr-thread-fan01-design-point]] (0767 to 0769), [[adr-thread-simulation-milestones-validation]] (0770 to 0772, 0775, 0779), [[adr-thread-daily-gate-and-edit-lock]] (0773), [[adr-thread-mcp-tools]] (0774), [[adr-thread-process-measures-and-roadmap-form]] (0776), [[adr-thread-structural-beam-warping]] (0778), [[adr-thread-structural-case-file-and-fan-blade]] (0780, 0785), [[adr-thread-early-workflow-and-partials]] (0782).
+- Roadmap area pages regenerated; 29 entity and concept pages updated; [[overview]] revised (counts, ten milestones, NACA 0012, cylinder, FAN-01, structural).
+- Contradictions: ADR 0768 against ADR 0769 on which side of the measured plane holds the missing pressure rise; ADR 0771's proposal names its follow-up F-888, a number `docs/roadmap.json` gives to the Studio quick-run item (the follow-up is not entered; its number is assigned when the maintainer answers).
+- Not ingested: the registrations of F-861, F-852, F-451 and F-339 (not on main); `docs/process/lead-process.md` at 18475a78.
+- Catch-up done by a subagent on the lead's instruction; index, log and overview by the lead (schema, "Steady-state ingest").
