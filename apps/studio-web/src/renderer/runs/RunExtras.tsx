@@ -17,6 +17,7 @@ import { Button, IconButton, NumberField, Quiet, StateMark } from '../ui/index.j
 import { IconToggle } from '../ui/IconToggle.js';
 import { useCommandHandlers } from '../commands/host.js';
 import { openRunReport, runLog, runnerBudgets, setRunnerBudgets, undoRunnerBudgets } from '../workspace/door.js';
+import { draftOf, feedStep, typedIn, type Draft } from './budgetsFeed.js';
 import { clock } from './model.js';
 import type { RunRow } from './model.js';
 
@@ -199,9 +200,6 @@ const kindWords: Readonly<Record<(typeof BUDGET_KIND)[BudgetKey], string>> = {
   real: 'a number from 0',
 };
 
-type Draft = Readonly<Record<BudgetKey, number>>;
-const draftOf = (b: RunnerBudgets): Draft => Object.fromEntries(BUDGET_KEYS.map((k) => [k, b.values[k] ?? Number.NaN])) as Draft;
-
 export function BudgetsButton({ open, onChange }: { open: boolean; onChange: (v: boolean) => void }) {
   useCommandHandlers({ 'runs.budgets': { unavailable: () => null, run: () => onChange(!open) } });
   return <IconToggle icon="budgets" label="Runner budgets (.rcfd/runner-config.json)" isSelected={open} onChange={onChange} className="rv-budgets-toggle" />;
@@ -212,12 +210,24 @@ export const BUDGETS_FILE = '.rcfd/runner-config.json';
 
 /**
  * The runner's budgets. `fileChange` (ADR 0801 Addendum 23): the number of the change feed's latest entry about the
- * budgets file; when it moves on while the panel is open, the file is read again (with nothing typed), or the panel says
- * another writer changed it (with values typed, which are kept).
+ * budgets file. When it moves on while the panel is open, the file is read again and compared with the file the panel
+ * holds (F-891, ADR 0788; ./budgetsFeed.ts): the same file, nothing (the entry was this window's own write, or a change
+ * already read); another file, its values are shown (with nothing typed), or the panel says another writer changed it
+ * (with values typed, which are kept). `data-file-change` is the number of the entry the panel has finished with.
  */
 export function BudgetsPanel({ onClose, fileChange = 0 }: { onClose: () => void; fileChange?: number }) {
-  const [b, setB] = useState<RunnerBudgets | null>(null);
-  const [draft, setDraft] = useState<Draft | null>(null);
+  const [b, setBState] = useState<RunnerBudgets | null>(null);
+  const [draft, setDraftState] = useState<Draft | null>(null);
+  // what the panel holds, readable at once by an answer that comes back before the next render
+  const held = useRef<{ b: RunnerBudgets | null; draft: Draft | null }>({ b: null, draft: null });
+  const setB = useCallback((v: RunnerBudgets) => {
+    held.current = { ...held.current, b: v };
+    setBState(v);
+  }, []);
+  const setDraft = useCallback((v: Draft) => {
+    held.current = { ...held.current, draft: v };
+    setDraftState(v);
+  }, []);
   const [note, setNote] = useState<{ kind: 'done' | 'conflict' | 'refused' | 'undo-conflict'; text: string } | null>(null);
   const [busy, setBusy] = useState(false);
   const panelRef = useRef<HTMLElement>(null);
@@ -236,19 +246,34 @@ export function BudgetsPanel({ onClose, fileChange = 0 }: { onClose: () => void;
     }
     setB(r.result);
     setDraft(draftOf(r.result));
-  }, []);
+  }, [setB, setDraft]);
   useEffect(() => {
     void load();
   }, [load]);
-  // a change of the file by another writer: read it again, or say so when values are typed here
-  const seenChange = useRef(fileChange);
-  const typedRef = useRef(false);
+  // a feed entry about the file: look at the file, and act only if it is not the file held (F-891). Not while a write of
+  // this window is on its way: its answer brings the file, and the entry is looked at after it.
+  const [handled, setHandled] = useState(fileChange);
   useEffect(() => {
-    if (fileChange === seenChange.current) return;
-    seenChange.current = fileChange;
-    if (!typedRef.current) void load();
-    else setNote({ kind: 'conflict', text: `${BUDGETS_FILE} was changed by another writer; the values typed here are kept. Read it again to see its values.` });
-  }, [fileChange, load]);
+    if (busy || fileChange === handled) return;
+    let stale = false;
+    void runnerBudgets().then((r) => {
+      if (stale) return;
+      if (!r.ok) setNote({ kind: 'refused', text: r.error.message });
+      else {
+        const step = feedStep(held.current.b, r.result, typedIn(held.current.draft, held.current.b));
+        if (step === 'take') {
+          setB(r.result);
+          setDraft(draftOf(r.result));
+        } else if (step === 'say') {
+          setNote({ kind: 'conflict', text: `${BUDGETS_FILE} was changed by another writer; the values typed here are kept. Read it again to see its values.` });
+        }
+      }
+      setHandled(fileChange);
+    });
+    return () => {
+      stale = true;
+    };
+  }, [fileChange, handled, busy, setB, setDraft]);
   const outcome = (o: BudgetsOutcome, undo: boolean) => {
     if (o.kind === 'written') {
       setB(o.budgets);
@@ -296,12 +321,12 @@ export function BudgetsPanel({ onClose, fileChange = 0 }: { onClose: () => void;
     else outcome(r.result, true);
   };
   const changed = Object.keys(changes()).length > 0;
-  typedRef.current = changed;
   const differs = b?.inUse ? BUDGET_KEYS.filter((k) => b.values[k] !== undefined && b.inUse!.values[k] !== b.values[k]) : [];
   return (
     <section
       className="rv-budgets"
       aria-label="Runner budgets"
+      data-file-change={handled}
       ref={panelRef}
       tabIndex={-1}
       onKeyDown={(e) => {
