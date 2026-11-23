@@ -1,9 +1,9 @@
 ---
 type: entity
 tags: [validation, benchmark, turbulence, laminar]
-sources: [doc-reference-data-backward-step, doc-reference-data-laminar-step, doc-reference-data-known-misses, doc-reference-data-turbulence-constants, doc-reference-data-turbulence-finishing, doc-reference-data-wave30b-incompressible-validation, doc-reference-data-wave31c-reference-reading, doc-verification-report, doc-validation-data, doc-example-projects]
+sources: [doc-reference-data-backward-step, doc-reference-data-laminar-step, doc-reference-data-known-misses, doc-reference-data-turbulence-constants, doc-reference-data-turbulence-finishing, doc-reference-data-wave30b-incompressible-validation, doc-reference-data-wave31c-reference-reading, doc-verification-report, doc-validation-data, doc-example-projects, doc-milestones-json]
 created: 2026-11-22
-updated: 2026-11-22
+updated: 2026-11-23
 status: draft
 ---
 
@@ -28,6 +28,7 @@ Laminar step, expansion ratio 2 (tests use Re_h = U_mean h / nu; literature Re =
 
 > [!warning] Contradiction
 > Gartling (1990) at Re 800: 12.20 / 9.70 / 20.96 step heights (MFIX-Exa quoting Gartling; arXiv:2507.16509) against 11.9 / 9.5 / 20.6 in a row labelled Gartling by Teruel and Fogliatto (AMCA 2013): "unresolved". The in-repo 12.20 agrees with two of three secondary sources ([[doc-reference-data-wave31c-reference-reading]]).
+- Since 2026-11-23 the turbulent step is a simulation milestone, `backward-facing-step` (ADR 0775): headline F-042 and F-043 (both partial), 16 member items, 88 %, headline not met. The laminar step at $Re_D$ 800 passes its comparison (ADR 0060) but is under no item; a headline item for it is proposed and with the maintainer ([[doc-milestones-json]], [[simulation-milestones]]).
 
 ## Related
 

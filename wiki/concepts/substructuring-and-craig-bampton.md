@@ -1,10 +1,10 @@
 ---
 type: concept
 tags: [foundation, structural, dynamics, reduction]
-sources: [ref-felippa-ifem, ref-linder-2025-arxiv-2501-12833, ref-nasa-sp-8050-structural-vibration-prediction, adr-thread-structural-dynamics-harmonic, doc-reference-data-f430-substructuring]
+sources: [ref-felippa-ifem, ref-linder-2025-arxiv-2501-12833, ref-nasa-sp-8050-structural-vibration-prediction, adr-thread-structural-dynamics-harmonic, doc-reference-data-f430-substructuring, adr-thread-structural-case-file-and-fan-blade]
 builds_on: [modal-analysis, multi-point-constraints]
 created: 2026-11-22
-updated: 2026-11-22
+updated: 2026-11-23
 status: draft
 ---
 
@@ -42,3 +42,4 @@ Projecting gives a reduced model whose stiffness is block diagonal, $\tilde{\mat
 
 - Static condensation and fixed-interface component mode synthesis (F-430, ADR 0469, partial: H1 missed as predicted); reference data on [[doc-reference-data-f430-substructuring]] ([[adr-thread-structural-dynamics-harmonic]]).
 - Residual vectors of interior loads with modes chosen by cutoff (F-552, ADR 0474, partial) and of caller load patterns (F-559, ADR 0511, partial; two clauses hold only with the interface enrichment of F-603) ([[adr-thread-structural-dynamics-harmonic]]).
+- **From a case file (F-616, ADR 0785, 2026-11-23):** `[reduction]` of the solid case file reduces a model to a node set `interface` with `modes` fixed-interface modes (default 0, static condensation) and `interface_enrichment` Krylov blocks of ADR 0532, writing a part file; `[superelements.<name>]` attaches part files to a host model. The solid bar of ADR 0536 run from case files equals the library in bits in the static solve and the modal analysis (248, 221, 253 and 275 unknowns), and the part files equal the library's byte for byte. The harmonic solve of a combined model is not reachable from a case file ([[adr-thread-structural-case-file-and-fan-blade]], [[solid-case-file]]).

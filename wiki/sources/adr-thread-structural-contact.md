@@ -5,7 +5,7 @@ sources: []
 origin: docs/adr/ (ADR list below)
 origin_commit: 2e94e5ef
 created: 2026-11-22
-updated: 2026-11-22
+updated: 2026-11-23
 status: draft
 ---
 
@@ -34,6 +34,7 @@ Frictionless contact in [[rcfd-fem]]: node-to-surface contact with an augmented 
 
 - F-427 gap: "Uniform shaft stress in the interference fit missed (7.0e-3 against 1e-6); the note says F-599 explains and re-registers it as met. The total Lagrangian punch residual order missed (least 0.17 against 1.8); F-600 reads it as a bound, met" ([[roadmap-structural-solver]]).
 - F-604 gap: "The plane-strain clause misses at 8.6e-2 against 2e-2, as derived before the run: the hub and shaft each have zero axial resultant, so the mid-length pressure follows the free-ended closed form (2.1e-3)".
+- ADR 0778 (F-850, done 2026-11-23) holds the moment-radius readings HS20m-M and HS10m-M of ADR 0570 against a limit of 0.08 (1.35e-2 and 3.40e-2) with a uniform pressure on the Hertz disc as a negative control that the limit refuses (0.130 and 0.139; continuum 0.118); the 0.15 of ADR 0570 would have passed it. Recorded on [[adr-thread-structural-beam-warping]].
 
 ## Open questions
 

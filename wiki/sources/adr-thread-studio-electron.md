@@ -5,7 +5,7 @@ sources: [doc-studio-guardrails, doc-product, doc-design, doc-ui-restart-plan]
 origin: docs/adr/ (ADR list below)
 origin_commit: 2e94e5ef
 created: 2026-11-22
-updated: 2026-11-22
+updated: 2026-11-23
 status: draft
 ---
 
@@ -26,6 +26,7 @@ On 2026-11-12 the maintainer asked for "an ADR to test the performance of electr
 - **Engine found without setup** (Addendum 21): every launch finds `rcfd`, `rcfd-mcp` and `rcfd-runner` from one folder with nothing set (`--no-engine`, `--engine-dir`, the `RCFD_STUDIO_*` variables, else `<resources>/bin` or `target/release`); "Nothing is ever looked for on PATH". Attaching to another service is `--service <host:port>` or `RCFD_STUDIO_SERVICE`, loopback only today.
 - **Runner closes with the Studio** (unnumbered addendum, 2026-11-17, amends G7): the Studio owns only a runner that came up while it had the project open; an idle owned runner is shut down on close; with active runs the close guard asks (Stop runs and close / Keep them running and close / Cancel, the default).
 - **Performance bench** (ADR 0800 §9, F-817 partial): every limit met on the idle baseline of 2026-11-17 (P10 median 320 ms against 2500; P2 p99 0.64 ms against 20; P4 R2 13.8 / 20.6 ms against 30 / 60; P5 63.9 per s; P7 44.7 ms; P8 240 per s). Under full load P10 "ranged from 1.2 s to 40.3 s across four runs within 75 minutes ... Its cause was not diagnosed." The bench stays out of CI (Q3).
+- Two Studio end-to-end test items on 2026-11-23, neither with a registration on main at 09647baa ([[doc-roadmap-json]]): F-852 (the test "Close session cannot be undone" times out on Windows in CI) was issued by the brief `docs/adr/briefs/f852-studio-close-session-timeout.md` (ADR 0781); F-888 (the quick run by keyboard fails on the lead's Windows machine where the Studio window lacks the system's focus, `toBeFocused` receives "inactive" on the Run button, while it passes on CI) was entered on the maintainer's answer "Yes, one over" and issued by `docs/adr/briefs/f888-studio-quick-run-focus.md` (ADR 0786), because that test "holds the merges of F-861, F-852, F-451 and F-339". Its acceptance also counts the `rcfd serve` processes that the end-to-end tests leave running after `npm test` on Windows.
 
 ## ADRs
 

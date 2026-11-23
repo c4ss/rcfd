@@ -3,15 +3,15 @@ type: source
 tags: [adr-thread, workflow, wiring, restart, chain, setup-rules, study, python, post, ensight, design-loop, udf, docs-site, adjoint, partials]
 sources: [doc-run-control, doc-studies, doc-python, doc-udf-abi, doc-tutorial-gallery, doc-partials-audit]
 origin: docs/adr/ (ADR list below)
-origin_commit: 2e94e5ef
+origin_commit: 09647baa
 created: 2026-11-22
-updated: 2026-11-22
+updated: 2026-11-23
 status: draft
 ---
 
 # ADR thread: wiring and workflow features of the early waves (case tree and CLI wiring, restart and chains, studies and Python, post catalogue, design loop, UDF hooks, docs site, adjoint) and their partials close-outs
 
-**Origin:** the ADRs in the table below, `docs/adr/` at `origin/main` 2e94e5ef.
+**Origin:** the ADRs in the table below, `docs/adr/` at `origin/main` 09647baa (first written at 2e94e5ef; ADR 0782 added at 09647baa, the earlier ADRs unchanged since).
 **Kind:** ADR thread (registrations with results, partials close-outs), 10 ADRs, wave 16W to wave 40C.
 
 These ADRs move library features to the user: the case tree, the CLI and the JSON-RPC service (ADR 0021), restart and chained runs with a 21-rule setup checker (ADR 0031), parametric studies and a pure-Python package (ADR 0034), a post catalogue and an EnSight Gold writer (ADR 0048), the design-loop infrastructure (ADR 0067), user-function hooks (ADR 0088), a docs site and executed tutorials (ADR 0089) and a small discrete adjoint (ADR 0091). Waves 39A and 40C close partials with tests only (ADRs 0092, 0099). See [[setup-rules]], [[parametric-study]], [[udf-sandbox]], [[executable-tutorials]], [[design-loop]].
@@ -53,6 +53,16 @@ These ADRs move library features to the user: the case tree, the CLI and the JSO
 - ADR 0092: the registered reading of F-240's "published validation cases" is "for the lead to accept or reject"; review found two statements of it wrong, and the FAN-01 case of `fan01_validation.rs` is not covered.
 - ADR 0089: F-096 `done` is for the lead.
 - ADR 0099: the likely cause of the F1 miss ("the face flux rebuilt from the interpolated velocity") "was not tested".
+
+## The UDF interpreter: wasmi 0.31 to 1.1.0 (ADR 0782, F-856; added 2026-11-23)
+
+[ADR 0782](../../docs/adr/0782-f856-registration-udf-interpreter-wasmi-1x.md) (registered and run 2026-11-23, merged 695a6892) is filed here beside the UDF hook catalogue of ADR 0088; it is the only later ADR whose subject is the UDF sandbox itself ([[udf-sandbox]], [[doc-udf-abi]]).
+
+- **Result:** "the workspace uses wasmi 1.1.0 (the newest 1.x; minimum Rust 1.86, below the README's 1.90) without its default feature wat, and `udf.rs` is ported with the accepted set of modules, the eager translation and the limits of before". Clippy with warnings as errors, the 159 unit tests of `rcfd-api`, `udf` (8 of 8), `udf_hooks_w38a` (9 passed, 1 ignored), `check_inputs_adr0739` (3 of 3) and `baseline_hashes` pass unedited; `cargo deny check` passes; "eight new tests of the fuel, the 16 MiB cap one page apart and the refusals pass on wasmi 0.31.2 and on 1.1.0 alike, each of five mutations caught" (`crates/rcfd-api/tests/udf_limits_adr0782.rs`).
+- **Fuel changes meaning, not limit** (F1, reported without a limit): `max_fuel_per_call` for 10 and 100 turns of the test loop "was 105 and 915 on wasmi 0.31.2 and is 47 and 407 on 1.1.0. The same budget buys about 2.2 times as many turns of that loop; other code was not measured."
+- **Status:** the agent proposed partial because the type-check with Rust 1.90 (check Q2) "was not run because that toolchain is not installed on the machine"; written partial at the merge and **done by the lead's reading**: `cargo check --workspace --all-targets --locked` with Rust 1.90 "passed in CI on main at 47ade6bf (run 45131392392, job 'Type-checks with Rust 1.90')".
+- **Decided by the lead in the reading:** "wasmi stays at 1.1.0; a move to 2.x is not taken" (wasmi 2.0.2 was published on 2026-11-19, with 2.0.0 and 2.0.1 yanked; the agent recommended staying). The `rust-version` fields of the crates "already lagged their dependency closure before this item (1.88 is needed by rcfd-api, rcfd-cli, rcfd-mcp and rcfd-workspace), so the lead did not change them here; the README's minimum of 1.90 is the one the CI job holds". The lead regenerated `THIRD_PARTY_LICENSES.md` at the merge.
+- **At the merge:** "the first push run stopped on access denied to `target/release/rcfd.exe`, held by `rcfd serve` processes left behind by Studio end-to-end tests; the run was repeated in a separate target folder and passed." Counting those processes is part of the acceptance of F-888 ([[roadmap-studio-desktop-app]]).
 
 ## Related
 

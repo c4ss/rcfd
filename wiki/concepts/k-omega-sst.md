@@ -4,7 +4,7 @@ tags: [turbulence, rans, two-equation]
 sources: [doc-case-schema-turbulence, doc-reference-data-sst-wall, adr-thread-transient-rans, adr-thread-periodic-seam-diffusivity, adr-thread-particle-wall-and-droplets, doc-roadmap-json, adr-thread-early-turbulence, adr-thread-fan01-rotating-solve, ref-menter-1992-nasa-tm-103975, ref-nasa-tmr, ref-davidson-turbulence-notes, adr-thread-fan01-design-point]
 builds_on: [k-omega-wilcox, k-epsilon, sst-blending-functions, bradshaw-assumption-and-sst-limiter, wall-distance]
 created: 2026-11-22
-updated: 2026-11-22
+updated: 2026-11-23
 status: draft
 ---
 
@@ -41,6 +41,7 @@ Menter's shear-stress-transport two-equation RANS model: k-omega near walls blen
 - **Particles:** particle dispersion may read the k-epsilon or SST fields (`particles.dispersion_fields = "turbulence_model"`, F-255) ([[adr-thread-particle-wall-and-droplets]]).
 - **Early checks and the flat-plate diagnosis (added by p3-records-a):** SST and BSL were checked against the CFL3D flat-plate reference in ADR 0015 (B1, B3 met; B2 White curves, B4 y+~1 stability, B5 wall-resolved step missed). After the wave 30C validation missed D1, D3 and the D2 log-law fit, three diagnoses followed: ADR 0063 (no defect; a first-order sensitivity to the published wall-face omega factor 10), ADR 0070 (term-by-term audit of `sst.rs` against TMR, no defect; observed order 0.66) and ADR 0074 (on the TMR nested grids rcfd converges with order 1.07, but lies 0.82 to 0.87 percent below the mean of three incompressible codes, still open) ([[adr-thread-early-turbulence]]).
 - **On the rotating FAN-01 passage (added by p3-records-a):** ADR 0075 fixed the SST relative wall velocity (Galilean-invariance error from 2.88e-1 to 3.65e-10 of U_cl at y+ 30) and ADR 0078 let `k_omega_sst` accept a `moving_wall`; the F-126 attempt 3 ran SST with `upwind`; ADR 0111 found the SST change criterion of the stop rule "NOT A DEFECT" ([[adr-thread-fan01-rotating-solve]]).
+- **Check H again (ADR 0767, 2026-11-22):** the same two runs repeated with the outer-iteration velocity record reproduce ADR 0766 to 5e-10 and do not decide either; in every step the unrelaxed 5th outer iteration moves the velocity about as far as the 1st, a property of the relaxed outer loop that a laminar cavity shows too ([[adr-thread-fan01-design-point]]).
 - **Transient SST on the bladed FAN-01 passage (ADR 0766, check H):** SST on `pimple` with 5 outer iterations and BDF2 on B2 ran 5 498 and 10 996 steps (1.43 and 1.26 s per step) without a failure or guard trip; the hub-pocket oscillation decays, but the run does not decide by the registered outer-iteration rule. F-885 adds a record of the velocity change of each outer iteration ([[adr-thread-fan01-design-point]]).
 
 ## Related

@@ -3,15 +3,15 @@ type: source
 tags: [interface, mcp, assistant]
 sources: []
 origin: docs/mcp-tools.md
-origin_commit: 2e94e5ef
+origin_commit: 09647baa
 created: 2026-11-22
-updated: 2026-11-22
+updated: 2026-11-23
 status: draft
 ---
 
 # MCP and API tools
 
-**Origin:** [docs/mcp-tools.md](../../docs/mcp-tools.md) at `origin/main` 2e94e5ef
+**Origin:** [docs/mcp-tools.md](../../docs/mcp-tools.md) at `origin/main` 09647baa (first read at 2e94e5ef; one clause changed)
 **Kind:** reference page
 
 ## Summary
@@ -29,7 +29,7 @@ Every tool of the MCP server `rcfd-mcp`: access class, service method and purpos
 - Project tools: `project_info`, `list_runs`, `run_status`, `read_metrics`, `read_residuals`, `field_summary`, `render_field`, `derive_picture` (ADR 0738), `compare_runs`, `list_changes`, `read_feed`, `read_project_file`, `hash_project_file` (ADR 0734), `edit_case`, `write_note`, `new_case`, `check_case_mesh`, `preview_mesh`, `import_mesh`, `list_meshes`, `runner_config` / `set_runner_config` (ADR 0733), `case_facts`, `refine_case_mesh` (ADR 0737), `list_sites` (ADR 0739), `start_run`, `pause_run`, `resume_run`, `cancel_run`, the trash tools, `wait_run`. Every result stays under 36 000 bytes.
 - Project errors: 1200 file changed since its hash was read; 1201 edit lock held 2 s; 1202 no such run/file/field/snapshot.
 - Edits are compare-and-replace under a cooperative lock (`replace_if_hash`, `.rcfd/locks/`); writers that skip the lock show up in the feed as `external`. Project journal `.rcfd/edits.jsonl` (ADR 0188), one line per accepted write, with `seq` and `actor`.
-- `start_run` applies the field-store plan by default (ADR 0741); "the tool's own description of `store` still names the earlier default until its change is approved".
+- `start_run` applies the field-store plan by default (ADR 0741); ~~"the tool's own description of `store` still names the earlier default until its change is approved"~~ (2e94e5ef). At 09647baa the tool's own description "says so since ADR 0774": the lead removed the clause at the merge of F-862 ([[adr-thread-mcp-tools]]).
 - The plugin's edit hook (`rcfd-mcp --edit-hook`, ADR 0195 P6) refuses Claude Code writes under `cases/`, `runs/`, `designs/` (exit 2); it fails open; checked on Claude Code 2.1.319, "behaviour under `bypassPermissions` is not verified".
 
 ## Contradictions with the wiki

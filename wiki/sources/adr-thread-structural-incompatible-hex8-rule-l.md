@@ -5,7 +5,7 @@ sources: []
 origin: docs/adr/ (ADR list below)
 origin_commit: 2e94e5ef
 created: 2026-11-22
-updated: 2026-11-22
+updated: 2026-11-23
 status: draft
 ---
 
@@ -82,6 +82,7 @@ The longest single chain of the structural category: the [[incompatible-modes-he
 - **Whether the J2 tolerance of ADR 0683 re-judges ADR 0666 JB1, JB2** (ADR 0683 Q2): open.
 - **Which published stabilisation** (ADR 0614 Q1): the repository's derived penalty vs a paper's form (Wall, Bischoff and Ramm 2000; Korelc, Solinc and Wriggers 2010; Reese and Wriggers 2000); recommendation keep the derived form.
 - **The fallback of the warm start** (ADR 0725 Q2): a failed warm iteration falls back to the plain iteration from 0, the one that fails at element 3720.
+- F-842 (the inertia and the retry flag of ADR 0694's $16^3$ block in the solid case's output) was registered and stopped before code by ADR 0780 on 2026-11-23: the solid case file has no nonlinear static analysis; question 1 of that ADR is open. See [[adr-thread-structural-case-file-and-fan-blade]].
 
 ## Related
 

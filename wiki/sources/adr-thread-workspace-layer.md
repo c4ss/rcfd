@@ -5,7 +5,7 @@ sources: [doc-mcp-tools, doc-run-control, doc-architecture]
 origin: docs/adr/ (ADR list below)
 origin_commit: 2e94e5ef
 created: 2026-11-22
-updated: 2026-11-22
+updated: 2026-11-23
 status: draft
 ---
 
@@ -40,7 +40,7 @@ ADR 0173 (2026-11-04) answers three requirements of the maintainer: "R1 The MCP 
 | [0195](../../docs/adr/0195-adr-0173-amendment-6-f275-registration-project-mode-tool-list-and-plugin-edit-hook.md) | 2026-11-06 | amendment 6, registration | F-275 | Hide session tools in project mode; plugin `PreToolUse` edit hook | built P1 to P11; 40 tools with `--project`; gate 2918 / 0 / 821 | |
 | [0200](../../docs/adr/0200-f287-registration-runner-runs-that-continue-from-a-previous-run-with-a-step-cap.md) | 2026-11-06 | registration | F-287 | `rcfd run --continue-from` and a step cap as runner run settings | met: a run continued after 25 steps ends where a 50-step run does, bit for bit; chain agrees to 6.7e-10 relative (limit 1e-4) | |
 | [0201](../../docs/adr/0201-f288-registration-adopt-matching-runs-after-an-mcp-server-restart.md) | 2026-11-06 | registration | F-288 | Adopt a run with the same tags, snapshot hash and entries after a restart | met: no new run, three adopted, records bit for bit those of an uninterrupted study | |
-| [0741](../../docs/adr/0741-f271-registration-the-field-store-plan-as-the-default-of-start-run.md) | 2026-11-19 | registration (rule 13, approved default change) | F-271 | The field-store plan as the default of every `start_run` | done by its rule, rows 1 to 12 met; one additive golden edit for the lead | F-862 (description of `store`) |
+| [0741](../../docs/adr/0741-f271-registration-the-field-store-plan-as-the-default-of-start-run.md) | 2026-11-19 | registration (rule 13, approved default change) | F-271 | The field-store plan as the default of every `start_run` | done by its rule, rows 1 to 12 met; one additive golden edit for the lead | F-862 (description of `store`), done by ADR 0774 on 2026-11-23 ([[adr-thread-mcp-tools]]) |
 
 ## Key numbers and limits
 
@@ -63,6 +63,7 @@ ADR 0173 (2026-11-04) answers three requirements of the maintainer: "R1 The MCP 
 - F-275: the hook under `bypassPermissions` and `--dangerously-skip-permissions` is NOT VERIFIED; the plugin installed from the marketplace and `NotebookEdit` / `MultiEdit` in a real session are known misses that "were not asked and stand as recorded" (ADR 0195).
 - ADR 0186's question found while building: `start_run` keeps class `execute` but can create a case file through `new_case`; "the other half of option (b), `start_run` with `new_case` also checked as `write_files`, was not part of the answer" (ADR 0195 decision record item 9).
 - F-862: correcting the description of `start_run`'s `store` argument (approved 2026-11-21, todo).
+- F-288's test `adopt_f288` A-N failed once in a left-out run (a replace of a new `run.json` refused with access denied); diagnosed and fixed in the test by ADR 0773 (F-876, done 2026-11-23): [[adr-thread-daily-gate-and-edit-lock]]. Two follow-ups on `adopt_f288` are proposed and not entered.
 
 ## Related
 

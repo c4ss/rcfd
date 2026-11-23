@@ -1,10 +1,10 @@
 ---
 type: entity
 tags: [validation, benchmark, turbulence, boundary-layer]
-sources: [doc-reference-data-flat-plate, doc-reference-data-sst-wall, doc-reference-data-spalart-allmaras, doc-reference-data-known-misses, doc-reference-data-wave30b-incompressible-validation, doc-reference-data-wave31b-turbulence-wall, doc-validation-data, doc-investigation-job49a-sa-drag, doc-investigation-job49e-sa-wall, ref-nasa-tmr]
+sources: [doc-reference-data-flat-plate, doc-reference-data-sst-wall, doc-reference-data-spalart-allmaras, doc-reference-data-known-misses, doc-reference-data-wave30b-incompressible-validation, doc-reference-data-wave31b-turbulence-wall, doc-validation-data, doc-investigation-job49a-sa-drag, doc-investigation-job49e-sa-wall, ref-nasa-tmr, doc-milestones-json]
 builds_on: [boundary-layer, blasius-solution, skin-friction-coefficient, friction-velocity-and-y-plus, law-of-the-wall, k-omega-sst, spalart-allmaras]
 created: 2026-11-22
-updated: 2026-11-22
+updated: 2026-11-23
 status: draft
 ---
 
@@ -22,6 +22,7 @@ status: draft
 - Spalart-Allmaras: TMR Cf(0.97) 2.70565e-3 (CFL3D SA) ([[doc-reference-data-spalart-allmaras]]).
 - Known miss F-043: SST vs White 0.002663 vs 0.002875 (-7.36 %) against a 5 % criterion; met: SST vs the TMR page value (-0.7 %) and file value (-1.0 %) ([[doc-reference-data-known-misses]]).
 - SA plate Cf(0.97) against TMR 2.70565e-3 by wall y+ (jobs 49A, 49E): default `auto` +3.1 % at y+ 0.99, +19.9 % at 5.31, +4.3 % at 39.6; opt-in `auto_sa_law` (amendment 1) +2.3 % to +4.4 % at every y+ from 1 to 60 ([[doc-investigation-job49a-sa-drag]], [[doc-investigation-job49e-sa-wall]]).
+- Since 2026-11-23 the turbulent plate is a simulation milestone, `flat-plate` (ADR 0775): headline F-041, F-043 (both partial) and F-203 (done), 18 member items, 86 %, headline not met. The Blasius plate passes its comparison (ADR 0060) under no item; a headline item for it is proposed and with the maintainer ([[doc-milestones-json]], [[simulation-milestones]]).
 
 ## Related
 

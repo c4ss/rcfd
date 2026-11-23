@@ -1,9 +1,9 @@
 ---
 type: entity
 tags: [process, script, testing]
-sources: [doc-process-lead-process, doc-process-documentation-review, doc-process-handover-2026-11-19, adr-thread-process-measures-and-roadmap-form, adr-thread-daily-gate-and-edit-lock]
+sources: [doc-process-lead-process, doc-process-documentation-review, doc-process-handover-2026-11-19, adr-thread-process-measures-and-roadmap-form, adr-thread-daily-gate-and-edit-lock, doc-test-process]
 created: 2026-11-22
-updated: 2026-11-22
+updated: 2026-11-23
 status: draft
 ---
 
@@ -23,6 +23,7 @@ status: draft
 
 - **F-851 (ADR 0752, done):** a failed check is run two further times, and a test that then passes is named as flaky in the ledger line. A stopped run resumes. Build time is counted at 1.8 s per selected binary. `--base` takes several merges as one diff, and `--gate-times` reads the newest gate times. The change was merged "by the changed script itself, its first real run". F-860 (todo) carries three further changes: commits named in the left-out run, the ADR's tests charged to the budget, and selection by changed file ([[adr-thread-process-measures-and-roadmap-form]]).
 - A finding from ADR 0751: the ledger's item field read "F-002" out of the branch name `...-f2-...`; it was corrected to F-855 ([[adr-thread-daily-gate-and-edit-lock]]).
+- **F-860 (ADR 0776, done 2026-11-23):** a left-out line records `checkout_start` and `checkout_end` and, when they differ, `checkout_moved=yes`; the tests the index maps to the merge's ADRs are charged to the budget first, never cut, and the dry run prints their recorded minutes (26.7 of 30 on the merge of ADR 0748); inside a touched crate the binaries named after a changed source file (the stem, or the stem and `_`) are selected first. 10 new unit tests fail before and pass after; the 77 existing ones pass unedited ([[adr-thread-process-measures-and-roadmap-form]], [[doc-test-process]]).
 
 ## Related
 

@@ -1,9 +1,9 @@
 ---
 type: entity
 tags: [crate]
-sources: [doc-architecture, doc-mcp-tools, doc-tutorial-mcp-design-loop, doc-tutorial-desktop-assistant, doc-run-control, adr-thread-workspace-layer, adr-thread-mcp-tools, adr-thread-studio-engine-entry-points, adr-thread-runner-records-and-run-sites]
+sources: [doc-architecture, doc-mcp-tools, doc-tutorial-mcp-design-loop, doc-tutorial-desktop-assistant, doc-run-control, adr-thread-workspace-layer, adr-thread-mcp-tools, adr-thread-studio-engine-entry-points, adr-thread-runner-records-and-run-sites, adr-thread-daily-gate-and-edit-lock]
 created: 2026-11-22
-updated: 2026-11-22
+updated: 2026-11-23
 status: stub
 ---
 
@@ -39,6 +39,7 @@ status: stub
 - `--client <name>` (1 to 32 of `a-z0-9_-`, default `mcp`) was added for the Studio's activity line (ADR 0801 Addendum 23, A23-D1 (a)) ([[adr-thread-studio-electron]]).
 - After a restart the server adopts runs of a design study with the same tags, case snapshot hash and entries instead of submitting them again (F-288, ADR 0201) ([[adr-thread-workspace-layer]]).
 - The allow-list support module `crates/rcfd-mcp/tests/claude_allow/` (moved from `rcfd-claude` on 2026-11-17) was removed with the Studio panel the same day ([[adr-thread-studio-electron]]).
+- **2026-11-23:** the description of `start_run`'s `store` argument now says that `plan` is the default and `none` the way back (F-862, ADR 0774; one string, no golden changed) ([[adr-thread-mcp-tools]]). The test `adopt_f288` A-N, which failed once when the replace of a newly written `run.json` was refused, was diagnosed (a kernel-mode handle of the System process on a new file, held up to 1.84 s) and changed in the test alone; `atomic.rs` and its 12 attempts are unchanged (F-876, ADR 0773) ([[adr-thread-daily-gate-and-edit-lock]]).
 
 ## Related
 

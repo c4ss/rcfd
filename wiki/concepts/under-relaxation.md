@@ -1,10 +1,10 @@
 ---
 type: concept
 tags: [foundation, pressure-velocity, iteration]
-sources: [ref-jasak-1996-phd-thesis, ref-klaij-vuik-2013-simple-preconditioners]
+sources: [ref-jasak-1996-phd-thesis, ref-klaij-vuik-2013-simple-preconditioners, adr-thread-simulation-milestones-validation, adr-thread-fan01-design-point]
 builds_on: [stationary-iterative-methods]
 created: 2026-11-22
-updated: 2026-11-22
+updated: 2026-11-23
 status: draft
 ---
 
@@ -39,3 +39,6 @@ In a steady segregated solver each outer iteration would, left alone, jump too f
 - SIMPLE 0.7/0.3 ($\alpha_u$/$\alpha_p$) and plain SIMPLEC with $\alpha_u$ 0.95 on the lid-driven cavity Re 1000 (660 and 442 iterations); at $Re_h = 400$ on the backward-facing step vanLeer with SIMPLE 0.7/0.3 limit-cycles and "the working recipe is vanLeer + SIMPLEC alpha_u 0.9" ([[simple]]).
 - The block-coupled solver uses `solver.alpha_u` as implicit momentum relaxation (0.95 to 0.98 on the cavity) and no pressure relaxation ([[doc-case-schema-coupled]]).
 - In relaxed PIMPLE the averaged component-diagonal error "can have either sign and depends on `alpha_u`, the time step and the flow-direction spacing" ([[component-diagonal]]); on the cylinder O-grid PIMPLE `n_outer = 2` or `4` with $\alpha$ 0.9 diverged ([[doc-investigation-job48t-cylinder-spokes]]).
+- **Velocity under-relaxation can move the converged state (ADR 0770, 2026-11-22):** on the NACA 0012 with steady SIMPLEC, `alpha_u = 0.7` converges at 17 degrees 0.0252 above the target and at 15 degrees 0.0082 above the steady value of the default: "`alpha_u` moves the converged fixed point (... the relaxation enters the face-flux interpolation through `a_P`)" ([[adr-thread-simulation-milestones-validation]]). See [[rhie-chow-interpolation]].
+- **Relaxed and unrelaxed outer iterations of `pimple` (ADR 0767, 2026-11-22):** with `alpha_u = 0.9` in the 1st to 4th outer iteration and no relaxation in the 5th, the 5th moves the velocity about as far as the 1st in every step ($d_5/d_1$ 0.93 and 0.96 on FAN-01, the same pattern on a cavity): "the relaxed and the unrelaxed outer iterations do not share a fixed point". The candidate cause, read from the code and not shown by a run, is that the relaxed diagonal enters the correctors' `rAU` and the face interpolation built on it ([[adr-thread-fan01-design-point]], [[piso]]).
+- **Relaxing the eddy viscosity (ADRs 0770, 0772):** see [[spalart-allmaras]].

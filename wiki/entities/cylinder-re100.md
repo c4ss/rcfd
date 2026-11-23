@@ -1,9 +1,9 @@
 ---
 type: entity
 tags: [validation, benchmark, vortex-shedding, milestone]
-sources: [doc-reference-data-cylinder-wake, doc-reference-data-f869-cylinder-mean-drag, doc-reference-data-wave30b-incompressible-validation, doc-reference-data-wave31c-reference-reading, doc-reference-data-wave31a-solver-defects, doc-milestones-json, adr-thread-simulation-milestones-validation, doc-investigation-job48t-cylinder-spokes, doc-example-projects, adr-thread-piso-stability-consistent-correctors]
+sources: [doc-reference-data-cylinder-wake, doc-reference-data-f869-cylinder-mean-drag, doc-reference-data-wave30b-incompressible-validation, doc-reference-data-wave31c-reference-reading, doc-reference-data-wave31a-solver-defects, doc-milestones-json, adr-thread-simulation-milestones-validation, doc-investigation-job48t-cylinder-spokes, doc-example-projects, adr-thread-piso-stability-consistent-correctors, doc-roadmap-overview]
 created: 2026-11-22
-updated: 2026-11-22
+updated: 2026-11-23
 status: draft
 ---
 
@@ -30,6 +30,8 @@ status: draft
 - **Pressure spokes on a refined O-grid (job 48T, ADR 0154):** a 256 x 256 run with `grading = 100` shows grid-scale wall pressure spokes because the default PISO (two correctors) loses its pressure-velocity coupling when nu dt / dr1^2 is large (clean up to 6.5, spoky from 11.4; 22.7 on the user's run); `time_advance = "fractional_step"` is the registered workaround, clean to t = 10 only ([[doc-investigation-job48t-cylinder-spokes]]).
 - The Studio example [[example-project-wind-tunnel]] runs Re 100 and Re 200 on a 64 x 48 O-grid (3072 cells) to 80 D/U: St 0.1517 and cd_mean 1.323 at Re 100, "not a validation" ([[doc-example-projects]]).
 - **Refined to 256 x 256 in the Studio** (wave 48, [[adr-thread-piso-stability-consistent-correctors]]): radial pressure spokes at the wall, "a numerical artefact of the solver" once the wall diffusion number exceeds an onset between 6.5 and 11.4 (ADR 0154); the opt-in adaptive correctors (`solver.corrector_control = "adaptive"`, ADR 0156) keep every refined run clean, and the egui Studio's Run turned them on (ADR 0158). Through Run on the automatic step the 256 x 256 case ran 40 s within every limit: "10,742 steps in 1.31 h, Courant at most 0.4501, St 0.1663" (ADR 0153, [[adr-thread-setup-warnings-and-time-step]]).
+- **Why the drag converges at an order near 1.4 (ADR 0771, F-881 done, 2026-11-23):** on the sequence of ADR 0763 (reproduced to every printed digit, order 1.387) the wall force integral is replaced alone, on the same fields, by one with the pressure extrapolated linearly to the wall and the wall-normal velocity derivative from the wall and the first two cells: the order becomes 1.777, inside [1.5, 2.5] (fine value 1.34586, Richardson 1.35014). Each term alone gives 1.549 (pressure) and 1.525 (velocity). The grading `Expansion(50)` raises the order to 2.906 "through the same wall term (a cancellation)"; the velocity fixed on the whole far field leaves it at 1.305. "The first-order wall terms bias the wall force of the code by about 1 % of C_D on these meshes." F-869's conclusion holds by either integral; no source of a crate changed ([[adr-thread-simulation-milestones-validation]], [[rcfd-post]]).
+- The `vortex-shedding` milestone at 09647baa: 20 items, 17 done, 3 partly done, 92 %, headline met ([[doc-roadmap-overview]]).
 
 ## Related
 
@@ -40,4 +42,5 @@ status: draft
 
 - No measured mean drag at Re 100 was obtained; the originals of the nine quoted values were not read ([[doc-reference-data-f869-cylinder-mean-drag]]).
 - ~~ADR 0763 question 1 (open): is F-869 done when the fine value and every extrapolated value are in the band but the observed order is 1.39? The recommendation is (c): done, with a new item to diagnose the order ([[adr-thread-simulation-milestones-validation]]).~~ Answered (c) on 2026-11-22; F-881 entered ([[adr-thread-simulation-milestones-validation]]).
-- Why the order is near 1.4 is open (F-881, not issued) ([[adr-thread-simulation-milestones-validation]]).
+- ~~Why the order is near 1.4 is open (F-881, not issued) ([[adr-thread-simulation-milestones-validation]]).~~ Answered by ADR 0771 (F-881 done, 2026-11-23): the first-order wall terms of the wall force integral ([[adr-thread-simulation-milestones-validation]]).
+- Open with the maintainer at 09647baa (ADR 0771 Q1): a second-order wall force integral as an opt-in of `rcfd-post`; recommended by the agent and the lead, not entered ([[adr-thread-simulation-milestones-validation]]).

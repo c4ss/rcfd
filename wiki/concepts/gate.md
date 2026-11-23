@@ -3,7 +3,7 @@ type: concept
 tags: [process, testing]
 sources: [doc-glossary, doc-readme, doc-contributing, doc-process-lead-process, doc-process-documentation-review, doc-process-handover-2026-11-19, doc-audit-report, doc-test-process, doc-releasing, doc-changelog, adr-thread-daily-gate-and-edit-lock, adr-thread-test-to-adr-attribution]
 created: 2026-11-22
-updated: 2026-11-22
+updated: 2026-11-23
 status: draft
 ---
 
@@ -33,7 +33,7 @@ status: draft
   - fmt runs per package, because `cargo fmt --all` exceeds the Windows command-line limit (os error 206).
   - Failures are attributed to ADRs by `gate_attribute.py`.
   - `adr_test_index.py` maps 93.5 % of tests.
-- Per-merge checks are the nine-item list of `scripts/push_main.py --run`, with a 30-minute diff-selected budget, committed mutation patches and retry-twice flaky detection (ADR 0752) ([[doc-test-process]]).
+- Per-merge checks are the nine-item list of `scripts/push_main.py --run`, with a 30-minute diff-selected budget, committed mutation patches and retry-twice flaky detection (ADR 0752) ([[doc-test-process]]). Since ADR 0776 (F-860, 2026-11-23) the tests the index maps to the merge's ADRs are charged to that budget first and never cut, and a left-out run's ledger line records the checkout's commit at its start and end ([[doc-test-process]], [[push-main]]).
 - Releases: a release tag goes only on a `main` commit on which the full gate passed, "A gate on any other commit does not count" ([[doc-releasing]]). The gate does not run the about 660 `#[ignore]` tests ([[doc-releasing]]).
 - The 0.1.0 changelog repeats that the gate "runs on `main` in CI on Windows, not before each merge" ([[doc-changelog]]).
 

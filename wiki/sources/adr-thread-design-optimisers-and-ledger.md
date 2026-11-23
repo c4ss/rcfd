@@ -5,7 +5,7 @@ sources: [doc-design-loop, doc-reference-data-f249-nsga2-nelder-mead, doc-refere
 origin: docs/adr/ (ADR list below)
 origin_commit: 2e94e5ef
 created: 2026-11-22
-updated: 2026-11-22
+updated: 2026-11-23
 status: draft
 ---
 
@@ -26,6 +26,7 @@ The study methods of the [[design-loop]] beyond the wave-32C set (ADR 0067): NSG
 - **F-705 done** (ADR 0644), **F-706 done** (ADR 0647).
 - **Exposure:** all library only until F-702 (decision D1 of 2026-11-15). F-339 (MCP tools for tolerance and Sobol studies) "may be issued" under the class rule for additive golden edits (answer of 2026-11-18 in ADR 0240), together with F-702; neither was issued in week 47 because the line "is over its weekly budget" (ADR 0620, answers).
 - **How the old questions were closed:** for ADRs 0209, 0220 and 0222 the maintainer decided on 2026-11-18 that the standing instruction applies: "the lead closes each on its written recommendation, except a question that would change a default result, a golden or a hash table, or that needs a source the repository lacks; those stay open and are named in the item's roadmap note."
+- F-339 (MCP tools `design_uq` and `design_sobol`) was issued on 2026-11-23 by the brief `docs/adr/briefs/f339-mcp-uq-sobol-tools.md` (ADR 0784); its registration is not on main at 09647baa and the item is todo ([[doc-roadmap-json]]).
 
 ## ADRs
 

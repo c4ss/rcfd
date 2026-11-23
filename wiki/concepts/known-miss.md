@@ -1,9 +1,9 @@
 ---
 type: concept
 tags: [process, evidence]
-sources: [doc-glossary, doc-process-agent-rules, doc-reference-data-known-misses, doc-reference-data-turbulence-finishing, doc-design-loop, doc-test-process, doc-releasing]
+sources: [doc-glossary, doc-process-agent-rules, doc-reference-data-known-misses, doc-reference-data-turbulence-finishing, doc-design-loop, doc-test-process, doc-releasing, adr-thread-fan01-design-point, adr-thread-simulation-milestones-validation]
 created: 2026-11-22
-updated: 2026-11-22
+updated: 2026-11-23
 status: draft
 ---
 
@@ -25,6 +25,7 @@ A registered limit the current code does not meet; its test is kept, `#[ignore]`
 - ADR 0015 added misses "limits as registered, never widened", e.g. F-042 BFS-C Standard 5.350 and Realizable 6.413 against 6.16 to 6.36 ([[doc-reference-data-turbulence-finishing]]).
 - Design-loop known misses: Nelder-Mead tool-loop T3 (3.1e-3 against 1e-3 after 120 candidates); NSGA-II ZDT1 with SBX (ADR 0209 MO1z); seed 16 of ADR 0209 N3 ([[doc-design-loop]]).
 - `#[ignore]`d known misses are among the about 660 ignored tests the gate does not run ([[doc-releasing]]). The gate's mutation spot-check concerns non-ignored registered limits ([[doc-test-process]]).
+- Known misses recorded on 2026-11-22 and 2026-11-23, each an ignored test with its limit intact: `f882_b0c_acceptance_known_miss` (the FAN-01 loss extrapolation, observed order 2.786 outside [1.5, 2.5], ADR 0768) ([[adr-thread-fan01-design-point]]); `f887_vs17_within_the_scatter_known_miss` (NACA 0012 at 17 degrees, 0.0543 under Ladson against the scatter 0.018, ADR 0772) and the five misses of ADR 0770's diagnosis runs ([[adr-thread-simulation-milestones-validation]]).
 
 ## Related
 

@@ -1,10 +1,10 @@
 ---
 type: concept
 tags: [numerics, pressure-velocity, transient]
-sources: [doc-dynamic-mesh, doc-component-diagonal-default, doc-cosimulation-protocol, adr-thread-piso-stability-consistent-correctors, adr-thread-bdf2-step-consistent-face-flux, adr-thread-transient-rans, doc-investigation-job48t-cylinder-spokes, ref-jasak-1996-phd-thesis]
+sources: [doc-dynamic-mesh, doc-component-diagonal-default, doc-cosimulation-protocol, adr-thread-piso-stability-consistent-correctors, adr-thread-bdf2-step-consistent-face-flux, adr-thread-transient-rans, doc-investigation-job48t-cylinder-spokes, ref-jasak-1996-phd-thesis, adr-thread-fan01-design-point]
 created: 2026-11-22
 builds_on: [simple, implicit-time-integration, stability-and-cfl]
-updated: 2026-11-22
+updated: 2026-11-23
 status: draft
 ---
 
@@ -26,6 +26,7 @@ The transient segregated pressure-velocity coupling: per time step a momentum pr
 - **Transient RANS:** SST, k-epsilon and SA without DES update once per outer iteration of `pimple`; `piso` is refused for them ([[adr-thread-transient-rans]]).
 - Job 48T (ADR 0154): on a cylinder O-grid with thin wall cells the default PISO (one outer iteration, two correctors) amplifies its leftover pressure error from step to step once nu dt / dr1^2 passes an onset between 6.5 and 11.4, giving wall pressure spokes; three correctors, `fractional_step` or a smaller dt remove them ([[doc-investigation-job48t-cylinder-spokes]]).
 - **Adaptive correctors (opt-in, ADR 0156):** `solver.corrector_control = "adaptive"` counts the PISO/PIMPLE correctors up until the pressure-lag estimate is at most 0.5, with a cap of 10, and re-estimates when dt changes by a factor 1.5 (ADR 0162); SV301 warns before a run when the estimate is at least 1.3. The library default stays `fixed`; `adaptive` is refused with `dynamic_mesh` ([[adr-thread-piso-stability-consistent-correctors]]).
+- **A record of the outer iterations (ADR 0767, F-885 partial, 2026-11-22):** `PimpleSettings::outer_velocity_record` (opt-in, defaults bit-identical) keeps the largest velocity change $d_k$ of each outer iteration of a step; it is shown equal to the changes of the iterates by a second route on a cavity. On FAN-01 (5 outer iterations, `alpha_u = 0.9` in the first four, the 5th unrelaxed) $d_5/d_1$ is 0.93 and 0.96 at the two time steps while $d_4/d_1$ is about 0.12; on the cavity $d_5$ is 4 to 15 times $d_4$. "On this set-up ADR 0183's rule cannot be met by any state, steady or not, because the quantity it reads is dominated by the switch from relaxed to unrelaxed iterations." The agent's recommendation, a diagnosis "that finds where and why the relaxed and the unrelaxed iterations have different fixed points", is with the maintainer; it "bears on every pimple result with `n_outer > 1` and relaxation" ([[adr-thread-fan01-design-point]], [[under-relaxation]]).
 
 ## Builds on
 

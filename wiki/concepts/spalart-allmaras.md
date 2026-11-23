@@ -4,7 +4,7 @@ tags: [turbulence, rans, one-equation, des]
 sources: [doc-case-schema-turbulence, doc-reference-data-spalart-allmaras, adr-thread-transient-rans, adr-thread-periodic-seam-diffusivity, doc-roadmap-json, doc-investigation-job49a-sa-drag, doc-investigation-job49e-sa-wall, doc-investigation-job49d-aoa-sweep-fixed, adr-thread-naca0012-sa-drag, ref-nasa-tmr, ref-menter-1992-nasa-tm-103975, ref-davidson-turbulence-notes, adr-thread-simulation-milestones-validation]
 builds_on: [boussinesq-eddy-viscosity, wall-distance, convection-diffusion-equation, les-and-des]
 created: 2026-11-22
-updated: 2026-11-22
+updated: 2026-11-23
 status: draft
 ---
 
@@ -31,6 +31,7 @@ The one-equation RANS model transporting a modified eddy viscosity `nuTilda`. rc
 - **Defaults since 2026-10-29** ([[adr-thread-naca0012-sa-drag]]): force and force-coefficient reports with `total` or `viscous` take the momentum equation's face viscosity under a turbulence model (old values `total_molecular`, `viscous_molecular`; ADR 0166), moment reports follow (ADR 0170), and a `velocity = "freestream"` patch gets the `freestream` turbulence role under `turbulence = "auto"` (SA in ADR 0166, SST and k-epsilon in ADR 0169).
 - **Buffer layer:** with the wall cell at y+ 5 the default `auto` wall mode over-predicts plate friction by +19.9 % against TMR, because `effective_viscosity` interpolates nut linearly across the buffer layer; the opt-in `turbulence.sa.wall_mode = "auto_sa_law"` meets every limit after amendment 1 (plate +2.3 % to +4.4 % at all 10 y+), and the default stays `auto` pending one more job (ADR 0168, [[adr-thread-naca0012-sa-drag]]).
 - **Spalart-Allmaras without DES on `pimple` (ADR 0764):** the first time-accurate SA run without DES on the NACA 0012 (BDF2, dt 0.02 c/U, two correctors at every step, no `corrector_cap` warning) settles at 17 degrees to a steady attached flow with $c_l$ 1.5516, where the steady SIMPLEC iteration of the same model and mesh swings between -0.07 and 1.95; "the state exists and the steady iteration did not find it" ([[adr-thread-simulation-milestones-validation]]).
+- **The eddy-viscosity relaxation and the steady route near stall (ADRs 0770 and 0772, 2026-11-22 and 2026-11-23):** the default `turbulence.relax_nut = 0.5` "lets the eddy viscosity of the boundary layer lag the momentum"; on the NACA 0012 at 17 degrees the default steady iteration does not leave the separated states in 8000 iterations, and with `relax_nut = 1.0` alone it reaches the attached state ($c_l$ 1.5514 against the time-accurate 1.5516). Over ADR 0760's twelve angles the setting does not move the fixed point (0 to 12 degrees equal to six digits) but 13 and 16 degrees then stall above the residual targets and run to the cap. No default is changed (maintainer, 2026-11-22); whether it becomes the default is open again after ADR 0772 ([[adr-thread-simulation-milestones-validation]], [[naca0012]]).
 
 ## Related
 

@@ -5,7 +5,7 @@ sources: []
 origin: docs/adr/ (ADR list below)
 origin_commit: 2e94e5ef
 created: 2026-11-22
-updated: 2026-11-22
+updated: 2026-11-23
 status: draft
 ---
 
@@ -38,6 +38,7 @@ Two post-processing families on top of the dynamic results of [[rcfd-fem]]: `rcf
 - F-418 gap: "Check E1 at k a = 10 met its 1e-12 limit but not the registered one-ulp probe condition (limit 751, not 1000, times the one-ulp change; rounding of a 14400-term sum)" ([[roadmap-structural-solver]]).
 - F-551 (ADR 0488): "a2 by Z1 and Z2, largest 3.2e-3 against 1e-2; a3 by Z3, 8.0e-14 against 1e-6; a4 by M1, 5.0e-3 against 2e-2".
 - F-566 (ADR 0497): the recalled form of the Dirlik coefficients is corroborated; "counted damage within 6.2 percent of a" synthetic record.
+- ADR 0778 (F-850, done 2026-11-23) asserts the Gerber message of ADR 0453 G2 by equality (the three reasons equal the formatted and the literal text). Recorded on [[adr-thread-structural-beam-warping]].
 
 ## Open questions
 

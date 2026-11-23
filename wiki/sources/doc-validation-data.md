@@ -3,15 +3,15 @@ type: source
 tags: [validation, data, fan]
 sources: []
 origin: docs/validation-data.md
-origin_commit: 5b96a1f8
+origin_commit: 09647baa
 created: 2026-11-22
-updated: 2026-11-22
+updated: 2026-11-23
 status: draft
 ---
 
 # Public validation-data pack (F-125)
 
-**Origin:** [docs/validation-data.md](../../docs/validation-data.md) at origin/main 5b96a1f8 (first read at 2e94e5ef)
+**Origin:** [docs/validation-data.md](../../docs/validation-data.md) at origin/main 09647baa (first read at 2e94e5ef; re-read at 5b96a1f8)
 **Kind:** repo doc: dataset catalogue, licence and checksum record, and two fan-data surveys (wave 34D, wave 46E).
 
 ## Summary
@@ -25,6 +25,7 @@ Describes the `validation-data/` pack of F-125: a `manifest.json`, a `fetch.py` 
 - Rotating-machinery survey (wave 34D, ADR 0075), five candidates:
   1. FAN-01 (FAU/EAA), Zenodo 10.5281/zenodo.20037409 v5, CC BY 4.0: 9 blades, tip radius 247.5 mm, duct 250 mm (gap 2.5 mm), hub 124 mm, "NACA 4510" sections, chord 99 to 55 mm, stagger 43.6 to 69.6 deg; 1486 rpm, design 1.4 m^3/s, 20 measured points 0.20 to 2.08 m^3/s, stall about 1.1 m^3/s. Zenodo v6 (10.5281/zenodo.23943494, 2026-11-04) changes no value. Diagnosis in ADR 0078. ~~LDA profiles 20 mm and 90 (or 110) mm from a datum that the sources read do not settle~~ (2e94e5ef); at 5b96a1f8 the doc says the sources read on 2026-10-19 did not settle the datum and "the v6 description settles it".
      - Re-read on 2026-11-22 for F-878 (ADR 0765), added at 5b96a1f8: `lda_data.zip` of v6 (MD5 4cafb1602e81dc18f1681e6facd495a0, equal to the record's) and the description, READ. The LDA data are two radial lines at the design point, x = 20 mm and x = 90 mm from the upstream face of the hub (the errata of Appendix C list the "110 mm behind the hub" of the scripts of v2 to v5 as an error), 26 radii from 133 to 246 mm, three components, time-averaged and in 180 bins of the rotor angle. The 90 mm line is 2.2 mm behind the trailing edge at r = 133 mm and 27.2 mm at r = 246 mm. "No uncertainty of the LDA is stated." The profiles are transcribed in `docs/investigations/f878-fan01-lda-profiles/lda_profiles.csv` ([[doc-reference-data-f878-fan01-lda-profiles]]).
+     - Re-read on 2026-11-22 for F-883 (ADR 0769), added at 09647baa: `mic_kulite.tar` of v6 (MD5 1002be297aa2ac2123f3928bf7f5d905, equal to the record's), `mic_kulite_n1ug_1_4.mat` READ. Its `kulite_pressure_in_Pa` holds 14 casing transducers at x = -23 to 107 mm "differential to the chamber pressure, mean value included", at the design point, "with no stated uncertainty". The time mean at the casing at x = 90 mm is 113.90 Pa against the chamber; over the measured span, by the radial equilibrium of the LDA profiles, 93.96 Pa +- 7.50 Pa. Transcribed in `docs/investigations/f883-fan01-wall-pressure/kulite_means.csv` ([[doc-reference-data-f883-fan01-wall-pressure]]).
   2. LSAC (not runnable), 3. DTMB 4119, 4. NASA Rotor 37 (17188.7 rpm, pressure ratio 2.106), 5. Rotor 67.
 - Main findings stated at the top: "The registered FAN-01 attempt was NOT RUNNABLE, and ADR 0078 diagnoses the attempt-3 miss as mainly numerical"; the pinned TMR skin-friction file gives Cf(x = 0.97) of about 2.691e-3 (2.6909e-3 interpolated) while `tests/flat_plate_sst.rs` quotes 0.00268299; rcfd 0.002663 is -0.7 % against the page value and -1.0 % against the file; "The test and its 5 % tolerance are unchanged."
 - Survey labels: READ, seen, NOT read, UNVERIFIED.

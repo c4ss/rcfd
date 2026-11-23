@@ -5,7 +5,7 @@ sources: [doc-reference-data-f414-eigensolver]
 origin: docs/adr/ (ADR list below)
 origin_commit: 2e94e5ef
 created: 2026-11-22
-updated: 2026-11-22
+updated: 2026-11-23
 status: draft
 ---
 
@@ -56,6 +56,7 @@ Linear dynamics of [[rcfd-fem]]: Newmark and generalised-alpha time integration 
 - ADR 0389 Q1: re-word A8 to the closed-form spectral radius (maintainer).
 - F-559: "restate the clauses or take F-603" (roadmap gap, maintainer).
 - F-548: "The maintainer decides done".
+- The reduction of ADR 0469, the interface enrichment of ADR 0532 and the superelements of ADR 0536 are reachable from a solid case file since ADR 0785 (F-616, done 2026-11-23): static solve and modal analysis only; "the harmonic solve of a combined model from a case file belongs to the item that gives the solid case file a harmonic analysis" (maintainer, 2026-11-23). See [[adr-thread-structural-case-file-and-fan-blade]].
 
 ## Second half of the category (ADRs 0520 to 0565, job p3-structural-b)
 

@@ -4,7 +4,7 @@ tags: [verification, numerics, mesh-convergence]
 sources: [doc-milestone-fan, doc-reference-data-f870-fan01-design-point, doc-reference-data-wave31b-turbulence-wall, doc-reference-data-wave31a-solver-defects, doc-designs-exp-rot, adr-thread-simulation-milestones-validation, adr-thread-fan01-design-point, ref-celik-2008-jfe-discretisation-uncertainty, ref-nparc-vv-tutorial]
 builds_on: [solution-verification, truncation-error-and-order-of-accuracy]
 created: 2026-11-22
-updated: 2026-11-22
+updated: 2026-11-23
 status: draft
 ---
 
@@ -24,6 +24,7 @@ Richardson extrapolation estimates the mesh-converged value of a quantity from s
 - **F-870 band form (ADR 0762):** $U_{num} = 1.25\,\lvert f_2 - f_1\rvert / (r_{21}^{p_{band}} - 1)$, $p_{band} = \min(p, 1)$, $r_{21} = 1.40981$. It is added, not combined in quadrature, to the measurement uncertainty, which is not registered ([[adr-thread-fan01-design-point]]).
 - **The order miss does not hold the item (2026-11-22):** the maintainer answered ADR 0763 Q1 with option (c): F-869 is done because the fine value and the Richardson value at every order from 1 to 2.5 are in the band; the miss of the validity condition (order 1.387 against [1.5, 2.5]) stays a known miss, and F-881 diagnoses the order ([[adr-thread-simulation-milestones-validation]]).
 - **The mesh term dominates the FAN-01 LDA bands (ADR 0765):** the band of each profile value and of each share of the missing pressure rise is $U = U_{num} + S + T (+ u_{cov} + u_{data})$, with $U_{num}$ formed from B1 and B2 as for F-870; for the conditional rotor share 27.17 of 31.10 Pa is the mesh term. Where the staircase steps of B1 and B2 fall between different measured radii, $U_{num}$ is 4 to 8 m/s and "within" says little ([[adr-thread-fan01-design-point]]).
+- **Two observed orders explained or left unexplained (2026-11-22 and 2026-11-23):** the cylinder's 1.387 is a property of the force integral, not of the solution: second-order wall terms on the same fields give 1.777 (ADR 0771, F-881) ([[adr-thread-simulation-milestones-validation]]). On FAN-01 the loss of total pressure over B2, B1 and the finer B0c has an observed order of 2.786, above the registered [1.5, 2.5], because the step to B0c keeps the first cell and "is not of the same kind as the other steps"; the extrapolation is recorded as not valid and "every value the formula gives for an order from 1 to 2.786 is between 41.9 and 53.0 Pa ... none of these is a result" (ADR 0768, F-882) ([[adr-thread-fan01-design-point]]).
 
 ## The procedure in the open sources (P6)
 

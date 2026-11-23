@@ -3,20 +3,24 @@ type: source
 tags: [adr-thread, process, push-main, roadmap, lead, stop-conditions]
 sources: [doc-process-lead-process, doc-process-agent-rules, doc-test-process]
 origin: docs/adr/ (ADR list below)
-origin_commit: 2e94e5ef
+origin_commit: 09647baa
 created: 2026-11-22
-updated: 2026-11-22
+updated: 2026-11-23
 status: draft
 ---
 
-# ADR thread: the lead's tooling and measures (push script, process measures and stop conditions, roadmap proposal files; F-851, F-863, F-864)
+# ADR thread: the lead's tooling and measures (push script, process measures and stop conditions, roadmap proposal files; F-851, F-860, F-863, F-864)
 
-**Origin:** the ADRs in the table below, `docs/adr/` at `origin/main` 2e94e5ef.
+**Origin:** the ADRs in the table below, `docs/adr/` at `origin/main` 09647baa (first written at 2e94e5ef; ADR 0776 added at 09647baa, the earlier ADRs unchanged since).
 **Kind:** ADR thread (registrations with result addenda, the lead's answers, the maintainer's answers), 3 ADRs, all 2026-11-21.
 
 Three items that changed how the [[lead]] merges and records: the push script after its first real runs (F-851, ADR 0752), measured process quantities and the stop conditions that limit how many agents run (F-863, ADR 0754), and the roadmap proposal file an agent writes beside its addendum (F-864, ADR 0755). The maintainer answered ADRs 0754, 0755 and 0756 together on 2026-11-21: "Yes, all four".
 
 ## Current state
+
+- **Push script, three further points** (F-860 done, ADR 0776, merged 0e1d714d on 2026-11-23): `scripts/push_main.py` "writes checkout_start, checkout_end and, when they differ, checkout_moved=yes in a left-out line; charges the tests the index maps to the merge's ADRs to the budget first, never cuts them and prints their recorded minutes (26.7 of 30 on the merge of ADR 0748); and puts the binaries named after a changed source file (stem, or stem and _) first in their crate's group". The three points are the lead's answers 2 to 4 to ADR 0752 (findings 10, 11 and 16 of F-851). "The 10 new unit tests of the three points fail before and pass after, the 77 existing ones pass unedited, 7 of 7 mutations caught." The ledger's columns, every existing line and what a first-attempt pass writes are unchanged. At the merge the lead brought `docs/test-process.md` section 7.4, item 7, up to date ([[doc-test-process]]); "the next left-out run is the first that records its commits".
+- **The limit of four agents was exceeded once, by the maintainer's answer** (2026-11-23, "Yes, one over"): one agent beyond the limit of 4 at once, for F-888 alone (the Studio end-to-end test that "holds the merges of F-861, F-852, F-451 and F-339"); "the exception is for this item alone and is recorded in its ADR" (ADR 0786, not on main at 09647baa; the note of F-888 in `docs/roadmap.json`, [[doc-roadmap-json]]).
+- **Issued, not on main at 09647baa:** F-861 (the process report checks the rules that rest on convention: one-line note entries, citation locators, the reading limit of a brief, test headers), issued on 2026-11-23 by the brief `docs/adr/briefs/f861-process-report-convention-checks.md` (ADR 0777); the item is todo ([[roadmap-quality-docs-and-validation]]).
 
 - **Push script** (F-851 done, ADR 0752): [[push-main]] runs a failed check two further times and names a flaky test in the ledger line, resumes a stopped run, counts 1.8 s of build per selected binary, takes several merges as one diff (`--base`), takes its times from the newest gate line (`--gate-times`), names an ADR without a mutation patch, regenerates before the checks and runs the script tests. Merged "by the changed script itself, its first real run (4.2 minutes ...)". Follow-up F-860 (todo) carries the lead's answers to findings 10, 11 and 16.
 - **Rule 7 change** (maintainer, 2026-11-21, ADR 0752 question 5): "Yes, add it". Agents run `python scripts/process_report.py --check` before their report from version 4 of `docs/process/agent-rules.md`; a generated file that is only not current is named and left to the lead.
@@ -32,6 +36,7 @@ Three items that changed how the [[lead]] merges and records: the push script af
 | [0752](../../docs/adr/0752-f851-registration-push-main-after-its-first-real-runs.md) | 2026-11-21 | registration | F-851 | `scripts/push_main.py` after its first real runs: eight points plus findings | done; 62 unit tests, 13 of 13 mutations caught; F-860 follow-up | F-860 (todo) |
 | [0754](../../docs/adr/0754-f863-registration-process-measures-and-stop-conditions-before-more-workers.md) | 2026-11-21 | registration | F-863 | Process measures and stop conditions before more workers | done by its rule; written partial at the merge, done when the maintainer's numbers were written | |
 | [0755](../../docs/adr/0755-f864-registration-a-roadmap-proposal-as-a-file-validated-applied-and-replayed.md) | 2026-11-21 | registration | F-864 | A roadmap proposal as a file, validated, applied and replayed on six merged ADRs | proposed done, written partial (the lead's wording replaced the agent's in 6 of 6 notes, 4 of 4 gaps) | |
+| [0776](../../docs/adr/0776-f860-registration-push-main-left-out-commits-and-the-budget.md) | 2026-11-23 | registration | F-860 | `push_main.py`: a left-out line names its commits, the ADR's tests count in the budget, binaries of a changed source file come first | done; T1, T2, T3 fail before and pass after; no open question | |
 
 ## Key numbers and limits
 
@@ -60,5 +65,5 @@ Three items that changed how the [[lead]] merges and records: the push script af
 ## Related
 
 - [[lead]], [[push-main]], [[process-ledger]], [[process-report]], [[roadmap-proposal]], [[roadmap]], [[maintainer-questions]]
-- [[adr-thread-daily-gate-and-edit-lock]], [[adr-thread-simulation-milestones-validation]]
+- [[adr-thread-daily-gate-and-edit-lock]] (ADR 0773, a failure first seen in a left-out run), [[adr-thread-simulation-milestones-validation]]
 - [[roadmap-quality-docs-and-validation]]

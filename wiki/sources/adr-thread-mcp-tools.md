@@ -3,15 +3,15 @@ type: source
 tags: [adr-thread, mcp, tool-list, access-class, allow-list, claude-code]
 sources: [doc-mcp-tools, doc-claude-plugin-skills]
 origin: docs/adr/ (ADR list below)
-origin_commit: 2e94e5ef
+origin_commit: 09647baa
 created: 2026-11-22
-updated: 2026-11-22
+updated: 2026-11-23
 status: draft
 ---
 
 # ADR thread: the MCP tool list, its access classes and the Claude Code allow-list
 
-**Origin:** the ADRs in the table below, `docs/adr/` at `origin/main` 2e94e5ef.
+**Origin:** the ADRs in the table below, `docs/adr/` at `origin/main` 09647baa (first written at 2e94e5ef; ADR 0774 added at 09647baa, the earlier ADRs unchanged since).
 **Kind:** ADR thread, cross-cutting: the ADRs that changed what `rcfd-mcp` lists, how a tool is classed, or which tools Claude Code may call without asking. Most rows have their main record on another thread (column "Main thread"); this page follows the tool list through them. 12 ADRs of job p3-studio-mcp, 2026-11-05 to 2026-11-21. The origin of the project tools and the plugin (ADR 0135, wave 48F) and the solid-solver tools (ADR 0308) are in the list of job p3-records-b, which may add them here.
 
 The rule every row keeps: an MCP tool list is a golden that is never re-recorded. A new tool is checked by restating the list tests ("the golden plus exactly this tool"), and without `--project` the list stays byte-identical (`default_f1.rs`, the ADR 0135 golden).
@@ -23,7 +23,8 @@ The rule every row keeps: an MCP tool list is a golden that is never re-recorded
 - **Access classes**: `read`, `mutate`, `execute`, `write_files`, and since ADR 0736 `delete`, held by `empty_trash` alone ([[mcp-access-class]]). `design_run_study` and `design_evaluate` became `execute` under `--project` on the maintainer's answer to ADR 0195 Q6 (2026-11-06). `start_run` stays `execute` although it can create a case through `new_case`.
 - **The allow-list**: the Studio's first allow-list `PROJECT_READ_TOOLS` grew from 15 tools (the egui Studio) to "16 tools" (ADR 0733, `runner_config`) and "17 tools" (ADR 0734, `hash_project_file`); `list_trash`, `derive_picture` and `list_sites` were left off. ADR 0801 Addendum 23 (2026-11-17) removed the Studio's panel, its allow-list writing and the Rust twin; tests C5-A, F2 and A "are restated on the engine's own access classes and annotations (the 17 read-class tools, read-only hints, and the delete class being `empty_trash` alone)". In the Studio flow Claude Code's own permission prompts govern.
 - **The plugin edit hook** (ADR 0195): refuses Edit and Write under `cases/`, `runs/` and `designs/`; fails open; not verified under the bypass modes.
-- **Open**: F-862 (todo), the description of `start_run`'s `store` argument, approved for correction on 2026-11-21 (ADR 0741).
+- ~~**Open**: F-862 (todo), the description of `start_run`'s `store` argument, approved for correction on 2026-11-21 (ADR 0741).~~ **F-862 done** (ADR 0774, merged 77e54786 on 2026-11-23): the description of `start_run`'s `store` argument "now ends 'Default plan; none is the way back to a run that stores only what its case asks for'" (ADR 0741 question 1, option (a)), "held by a test that reads the live tools list; the whole list before and after is byte-equal with the old text put back, no golden, argument or default changed and no Studio call changed". The only source change is that one string in `crates/rcfd-mcp/src/project.rs`; at the merge the lead removed the clause of `docs/mcp-tools.md` that said the description still named the earlier default ([[doc-mcp-tools]]).
+- **Issued, not on main at 09647baa:** F-339 (`design_uq` and `design_sobol` tools on a named evaluator, with a registered edit of the tools-list goldens), issued on 2026-11-23 by the brief `docs/adr/briefs/f339-mcp-uq-sobol-tools.md` (ADR 0784); the item is todo ([[roadmap-design-studies-and-optimisation]]).
 
 ## ADRs
 
@@ -41,6 +42,7 @@ The rule every row keeps: an MCP tool list is a golden that is never re-recorded
 | [0738](../../docs/adr/0738-f809-proposal-derived-pictures-of-a-stored-field-iso-surfaces-streamlines-slices-and-the-length-unit.md) | 2026-11-17 | proposal, built | F-809 | `derive_picture` (read, after `render_field`) | "27 project tools, 44 with `--project`" | [[adr-thread-studio-engine-entry-points]] |
 | [0739](../../docs/adr/0739-f848-proposal-run-sites-a-remote-simulation-service-for-the-studio-cli-and-mcp.md) | 2026-11-17 | proposal, phase 1 built | F-848 | `list_sites` (read, after `refine_case_mesh`); `start_run {site}` gated on `assistant = true` | restated, not stated | [[adr-thread-runner-records-and-run-sites]] |
 | [0741](../../docs/adr/0741-f271-registration-the-field-store-plan-as-the-default-of-start-run.md) | 2026-11-19 | registration | F-271 | `start_run` reply gains `store` (one additive golden edit) | "18 of 19 result shapes equal the golden" until re-recorded | [[adr-thread-workspace-layer]] |
+| [0774](../../docs/adr/0774-f862-registration-the-description-of-start-run-store-argument.md) | 2026-11-22 | registration (rule 3 lifted for one string by the maintainer's answer in ADR 0741) | F-862 | The text of `start_run`'s `store` description (no tool, argument, default or golden changes) | rows 1 to 7 met, M1 caught; done | this page |
 
 ## Key numbers and limits
 
@@ -54,7 +56,7 @@ The rule every row keeps: an MCP tool list is a golden that is never re-recorded
 
 ## Open questions
 
-- F-862: the corrected text of `start_run`'s `store` description, "a change of the text of an existing tool, so it is made by a registration of its own" (ADR 0741, 2026-11-21).
+- ~~F-862: the corrected text of `start_run`'s `store` description, "a change of the text of an existing tool, so it is made by a registration of its own" (ADR 0741, 2026-11-21).~~ Closed by ADR 0774 on 2026-11-23; its open questions for the maintainer: "None."
 - Whether `start_run {new_case}` should also need `write_files` was never answered (ADR 0195 decision record item 9).
 - `derive_picture` "is class `read` but is not added to the first allow-list ... that list is the maintainer's and was not asked about" (ADR 0738); `list_sites` "is not on the first Claude allow-list, because no answer adds it" (ADR 0739). Both lapsed as allow-list questions when the Studio's allow-list went (Addendum 23).
 

@@ -5,7 +5,7 @@ sources: []
 origin: docs/adr/ (ADR list below)
 origin_commit: 2e94e5ef
 created: 2026-11-22
-updated: 2026-11-22
+updated: 2026-11-23
 status: draft
 ---
 
@@ -22,6 +22,7 @@ F-333 (ADR 0351) built `AcousticWaveSolver` in `rcfd-fv/src/acoustic_wave.rs`: t
 - **CFD coupling:** the wave solver can be driven by an `rcfd-surface-series` file, the format of the FW-H chain (F-452), and with two or more sampled sections the entering and returning waves are split before the drive (F-478, separation threshold `0.05`). See [[fw-h]].
 - **Approved follow-ups (2026-11-18, additive golden edits):** the command `rcfd duct-modes` (F-451, ADR 0351 Q1 option (b)); an optional axial-velocity series in the `rcfd-surface-series` format (F-480, ADR 0378 Q1 option (b)).
 - **Not wired:** no case section `[acoustics.wave]` (ADR 0351 Q1 (a), "when a fan case needs it"; ADR 0372 Q3).
+- F-451 (`rcfd duct-modes`) was issued on 2026-11-23 by the brief `docs/adr/briefs/f451-duct-modes-command.md` (ADR 0783); its registration is not on main at 09647baa and the item is todo ([[doc-roadmap-json]]).
 
 ## ADRs
 

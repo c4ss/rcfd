@@ -4,7 +4,7 @@ tags: [fan, computer-fan, target, plan]
 sources: [doc-fan-project-breakdown, doc-fan-measurement-protocol, doc-validation-data, doc-design-loop, doc-changelog, doc-milestone-fan, adr-thread-rom-reference-fan-and-c-grid, adr-thread-design-surrogate-and-fidelity, adr-thread-design-hypothesis-record, ref-martins-ning-2021-engineering-design-optimization, ref-frazier-2018-bayesian-optimization, adr-thread-fan01-design-point]
 builds_on: [optimisation-basics, multi-fidelity-modelling]
 created: 2026-11-22
-updated: 2026-11-22
+updated: 2026-11-23
 status: draft
 ---
 
@@ -26,7 +26,7 @@ status: draft
 - The schema default `ComputerFan::default()` stalls in the reduced-order model; a usable default "needs a hub zero-lift angle of about 58 deg or more" (ADR 0639). Beside it, `ComputerFan::rom_reference()` (ADR 0643) is a 120 mm 7-blade fan that runs unstalled on [0.4, 1] q_f at 3000 rpm ([[adr-thread-rom-reference-fan-and-c-grid]]).
 - Five opt-in C-grid constructions (S to S'''') mesh the reference and a second strongly staggered blade within 84.5 deg / 4.0 / 1000 (F-791 done). No case value exists yet (F-778) ([[adr-thread-rom-reference-fan-and-c-grid]]).
 - The surrogate, the fidelity driver and the hypothesis record run on the reduced-order fan. GP/EI finds the grid optimum within 1 percent in 10 of 10 runs, and "+1 mm tip gap lowers eta_s by 7.39e-3 (confirmed, 'Not tested at cfd')" ([[adr-thread-design-surrogate-and-fidelity]], [[adr-thread-design-hypothesis-record]]).
-- **State of the reference rotor solve (2026-11-22):** on FAN-01, the public stand-in for the target fan, the solve does the measured rotor's work (Euler head 226.86 against 220.02 Pa over the measured span) and still misses the measured pressure rise by 52.47 Pa; whether the miss is the rotor's loss or the installation's recovery cannot be told from the LDA profiles, and F-882 and F-883 are entered to decide it (ADR 0765) ([[adr-thread-fan01-design-point]]).
+- **State of the reference rotor solve (2026-11-22):** on FAN-01, the public stand-in for the target fan, the solve does the measured rotor's work (Euler head 226.86 against 220.02 Pa over the measured span) and still misses the measured pressure rise by 52.47 Pa; whether the miss is the rotor's loss or the installation's recovery cannot be told from the LDA profiles, and F-882 and F-883 are entered to decide it (ADR 0765) ([[adr-thread-fan01-design-point]]). **At 2026-11-23 it is still not decided:** the measured casing pressure of F-883 puts the rotor's share at 32.26 Pa with a band of 29.19 Pa (ADR 0769), and the finer-mesh loss of F-882 extrapolates at an order outside its registered range (ADR 0768); the rig's rotor and inlet lose 26.85 Pa where the solve loses 62.87 Pa ([[adr-thread-fan01-design-point]]).
 
 ## Builds on
 

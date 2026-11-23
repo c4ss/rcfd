@@ -1,9 +1,9 @@
 ---
 type: entity
 tags: [validation, data, provenance]
-sources: [doc-validation-data, doc-reference-data-validation-pack, doc-test-process, doc-changelog, doc-fan-measurement-protocol, doc-reference-data-f878-fan01-lda-profiles, adr-thread-fan01-design-point]
+sources: [doc-validation-data, doc-reference-data-validation-pack, doc-test-process, doc-changelog, doc-fan-measurement-protocol, doc-reference-data-f878-fan01-lda-profiles, adr-thread-fan01-design-point, doc-reference-data-f883-fan01-wall-pressure]
 created: 2026-11-22
-updated: 2026-11-22
+updated: 2026-11-23
 status: draft
 ---
 
@@ -20,6 +20,7 @@ status: draft
 - Because the gate runs on a `git archive` copy without `validation-data/data`, 12 non-ignored data-gated tests always skip and count as passed ([[doc-test-process]]).
 - The 0.1.0 changelog lists "a validation data pack with fetch scripts and checksums" ([[doc-changelog]]).
 - Measured computer-fan data, under the protocol, "stay outside the repository" unless a licence is stated ([[doc-fan-measurement-protocol]]).
+- The FAN-01 record's wall-pressure data (`mic_kulite.tar`, 460 728 320 bytes, checksummed) were read on 2026-11-22 for ADR 0769; the archive is not committed, only the transcription of the time means `docs/investigations/f883-fan01-wall-pressure/kulite_means.csv`. No uncertainty of the wall pressure is stated in the record ([[doc-reference-data-f883-fan01-wall-pressure]], [[doc-validation-data]]).
 
 ## Related
 

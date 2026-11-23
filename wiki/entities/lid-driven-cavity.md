@@ -1,9 +1,9 @@
 ---
 type: entity
 tags: [validation, benchmark, incompressible, laminar]
-sources: [doc-reference-data-lid-driven-cavity, doc-reference-data-wave30b-incompressible-validation, doc-reference-data-wave31c-reference-reading, doc-validation-data, doc-design-loop, doc-example-projects]
+sources: [doc-reference-data-lid-driven-cavity, doc-reference-data-wave30b-incompressible-validation, doc-reference-data-wave31c-reference-reading, doc-validation-data, doc-design-loop, doc-example-projects, doc-milestones-json]
 created: 2026-11-22
-updated: 2026-11-22
+updated: 2026-11-23
 status: draft
 ---
 
@@ -20,6 +20,7 @@ status: draft
 - Wave 30B: Re 1000 u along x = 0.5, 15 rows, Ghia next to Botella and Peyret spectral values, "largest difference 0.0063" ([[doc-reference-data-wave30b-incompressible-validation]]).
 - Wave 31C stored the Re 400 and 1000 v tables from three copies and listed two cell disagreements (Re 400 x = 0.5: 0.05186 vs 0.05188; Re 1000 x = 0.9063: -0.5155 vs -0.51500); no rcfd test uses them ([[doc-reference-data-wave31c-reference-reading]]).
 - Also used as a cheap evaluation case: the design-loop runner check ran the 32 x 32 cavity at three viscosities and runner records equalled in-process ones bit for bit ([[doc-design-loop]]).
+- Since 2026-11-23 the case is a simulation milestone of its own, `lid-driven-cavity` (ADR 0775): headline F-028 (done), 12 member items, 96 %, headline met ([[doc-milestones-json]], [[simulation-milestones]]).
 
 ## Related
 

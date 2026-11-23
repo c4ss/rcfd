@@ -3,20 +3,20 @@ type: source
 tags: [release, changelog, status]
 sources: []
 origin: CHANGELOG.md
-origin_commit: 8ee32b1c
+origin_commit: 09647baa
 created: 2026-11-22
-updated: 2026-11-22
+updated: 2026-11-23
 status: draft
 ---
 
 # Changelog (0.1.0, not yet released)
 
-**Origin:** [CHANGELOG.md](../../CHANGELOG.md) at origin/main 5b96a1f8 (first read at 2e94e5ef)
+**Origin:** [CHANGELOG.md](../../CHANGELOG.md) at origin/main 09647baa (first read at 2e94e5ef)
 **Kind:** repo doc (root): user-facing release notes; `Unreleased` says "Nothing yet".
 
 ## Summary
 
-The prepared first release, 0.1.0, is "not yet released". It describes rcfd as "early-stage software. It has not been validated for engineering decisions, must not be used for safety-critical work, and comes with no warranty." It states roadmap counts: ~~"Of the 786 roadmap items, 389 are done, 297 partly done and 100 not started"~~ (at 2e94e5ef); ~~at 5b96a1f8 "Of the 791 roadmap items, 391 are done, 297 partly done and 103 not started"~~; at 8ee32b1c "Of the 792 roadmap items, 391 are done, 297 partly done and 104 not started" ([[doc-roadmap-json]]). The counts line is the only change between the two commits. Before 1.0 a minor version may break CLI options, case files, MCP tools, the service protocol, the UDF ABI, Python functions, output formats or default numerical results; a patch version does not.
+The prepared first release, 0.1.0, is "not yet released". It describes rcfd as "early-stage software. It has not been validated for engineering decisions, must not be used for safety-critical work, and comes with no warranty." It states roadmap counts: ~~"Of the 786 roadmap items, 389 are done, 297 partly done and 100 not started"~~ (at 2e94e5ef); ~~at 5b96a1f8 "Of the 791 roadmap items, 391 are done, 297 partly done and 103 not started"~~; ~~at 8ee32b1c "Of the 792 roadmap items, 391 are done, 297 partly done and 104 not started"~~; at 09647baa "Of the 794 roadmap items, 403 are done, 299 partly done and 92 not started" (the lead's main, which does not hold F-886; on the tree that merges the two lines, d0fb2b2e, the sentence reads 795, 403, 299 and 93) ([[doc-roadmap-json]]). The counts line is the only change at each of these commits. Before 1.0 a minor version may break CLI options, case files, MCP tools, the service protocol, the UDF ABI, Python functions, output formats or default numerical results; a patch version does not.
 
 ## Key points
 

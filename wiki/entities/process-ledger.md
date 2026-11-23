@@ -1,9 +1,9 @@
 ---
 type: entity
 tags: [process, ledger]
-sources: [doc-process-lead-process, doc-process-documentation-review, doc-process-handover-2026-11-19, doc-adr-briefs-readme]
+sources: [doc-process-lead-process, doc-process-documentation-review, doc-process-handover-2026-11-19, doc-adr-briefs-readme, adr-thread-process-measures-and-roadmap-form]
 created: 2026-11-22
-updated: 2026-11-22
+updated: 2026-11-23
 status: draft
 ---
 
@@ -22,6 +22,7 @@ status: draft
 - A brief whose branch no ledger line names, and that carries no "Closed without merge" line, is work issued and not merged ([[doc-adr-briefs-readme]]).
 - Early lines: green local gate at 49fbf1a3 (2026-11-12); red gate at `205889bf` and green at `39269587` (2026-11-18, added by PR 27) ([[doc-process-handover-2026-11-19]]); the snapshot's first merge line is 2026-11-19, `f848-site-record-final`, F-848, ADR 0739 (read from the file at 2e94e5ef).
 - The lines it appends during a left-out run do not make the tree unclean for the next push ([[doc-process-lead-process]]).
+- Since ADR 0776 (F-860, 2026-11-23) a `leftout` line also records the checkout's commit at the start and at the end of the left-out run, with `checkout_moved=yes` when they differ; the columns, every existing line and a merge line are unchanged in form ([[adr-thread-process-measures-and-roadmap-form]]).
 
 ## Related
 

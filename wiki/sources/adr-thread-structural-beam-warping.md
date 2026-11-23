@@ -3,15 +3,15 @@ type: source
 tags: [adr-thread, structural, fem, beams, warping, lateral-torsional-buckling, thin-walled]
 sources: []
 origin: docs/adr/ (ADR list below)
-origin_commit: 2e94e5ef
+origin_commit: 09647baa
 created: 2026-11-22
-updated: 2026-11-22
+updated: 2026-11-23
 status: draft
 ---
 
 # ADR thread: structural solver, the warping Beam2 (14 unknowns), lateral-torsional buckling and load height
 
-**Origin:** the ADRs in the table below, `docs/adr/` at `origin/main` 2e94e5ef.
+**Origin:** the ADRs in the table below, `docs/adr/` at `origin/main` 09647baa (first written at 2e94e5ef; ADR 0778 added at 09647baa, the earlier ADRs unchanged since).
 **Kind:** ADR thread (registrations with result addenda), 11 ADRs, all 2026-11-15. Job p3-structural-b. The six-unknown Beam2 (F-391) and the earlier I-section lateral-torsional buckling without warping (F-558, -19.2 percent) are on [[adr-thread-structural-beams-shells]].
 
 [[beam-warping]] in [[rcfd-fem]]: an opt-in warping unknown for Beam2 (the 14-unknown element, module `rcfd_fem::beam_warping`), first on buckling (F-598), then on the static solve, modes and pre-stressed modes (F-626), monosymmetric sections (F-627), the harmonic and transient paths (F-635), the pre-stress on those paths (F-661, F-667), a negative-pivot count (F-668), and the height at which a load acts (F-643, F-663, F-670, F-673).
@@ -54,6 +54,21 @@ status: draft
 - The element moment under a line load (ADR 0588 Q2): the parabolic moment would change existing results, left open for the maintainer; recommendation keep the linear $L^2$ projection.
 - Tie the entry's force to the pre-stress (ADR 0594 Q1): restated now, read from the static model's line load with a case-file key (F-625).
 - The transient path with a load height (ADR 0594): a small extension of F-667 if a case needs it.
+
+## Four supporting checks of reader trial 1 (ADR 0778, F-850; added 2026-11-23)
+
+[ADR 0778](../../docs/adr/0778-f850-registration-four-supporting-checks-of-reader-trial-1.md) (registered and run 2026-11-23, merged 10fea82e, **done**) is filed here because two of its four clauses hold records of this thread (ADRs 0553 and 0585); the other two hold ADR 0570 ([[adr-thread-structural-contact]]) and ADR 0453 ([[adr-thread-structural-fatigue-and-radiated-sound]]). Its source is "the check of the 16 agreed findings" of reader trial 1 (`docs/process/trials/reader-trial-1/registration.md`); "none changes a result or a status". Test-only, in new test files: "no existing test or record is edited, no library line changes".
+
+| Clause | Record held | Limit | Measured |
+|---|---|---|---|
+| (1) A1'', A2'' | the 16-element factors of ADR 0553 A1' and A2' against the closed form | each $\le 2\times10^{-2}$ | 1.2869e-3 and 3.8913e-4 (factors 1.78684213e5 against 1.78454564e5; 5.39797922e4 against 5.39587954e4) |
+| (2) HB- | the check HB- of ADR 0585 must catch a mutation of the warping geometric stiffness | $\le 10^{-10}$ | 0 unmutated; the committed mutation (the axial force in the slot of $M_y$) gives 0.899 and is caught |
+| (3) HS20m-M', HS10m-M' | the moment-radius readings of ADR 0570 | 0.08 | 1.352480e-2 and 3.401690e-2 (heavy records, 54.3 s and 83.7 s) |
+| (3) NC | a uniform pressure on the Hertz disc, which the limit must refuse | each > 0.08 | 0.1301 and 0.1388 (continuum 0.118): refused by 0.08, "both would pass the 0.15 of ADR 0570" |
+| (4) G2= | the Gerber message of ADR 0453 G2 | equality | the three reasons equal the formatted and the literal text |
+
+- 4 of 4 mutations caught. The lead notes that mutation M4 "is caught only by the comparison with ADR 0553's printed digits, because the test's own closed form shares the mutated function".
+- The two moment-radius readings are ignored heavy records; "if the lead wants them in the gate, that is a new test file of a later item, since a committed test is not edited". No open question for the maintainer. See [[beam-warping]], [[contact-mechanics]], [[fatigue]], [[mutation-testing]].
 
 ## Related
 
