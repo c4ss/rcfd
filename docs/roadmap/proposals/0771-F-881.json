@@ -1,0 +1,18 @@
+{
+  "form": 1,
+  "adr": "0771",
+  "item": "F-881",
+  "base": "d6e44b2759f0f0e46eae3a1c3537b0591c7768c6",
+  "status": "done",
+  "note": "ADR 0771, 2026-11-23, done: the observed order 1.387 of the cylinder drag on the sequence of ADR 0763 is held down by the first-order wall terms of the wall force integral: replaced alone by second-order ones on the same fields the order is 1.777 (in [1.5, 2.5]); the grading Expansion(50) raises it to 2.906 through the same wall term (a cancellation), and the velocity fixed on the far field leaves it at 1.305 (within 0.1); B0 reproduced ADR 0763 to every printed digit; ADR 0761's 1.38 is 1.51 by the same ratio form.",
+  "follow_ups": [
+    {
+      "key": "wall-force-second-order",
+      "title": "Second-order wall force integral as an option of rcfd-post",
+      "deps": [
+        "F-881"
+      ],
+      "acceptance": "Every limit not stated here is registered in the ADR before the run. An opt-in wall force in rcfd-post with the pressure extrapolated linearly to the wall and the wall-normal velocity derivative from the wall and the first two cells (ADR 0771, C1), every default bit-identical, exact on a quadratic wall profile to a relative error of at most 1e-9, gives on the mesh sequence of ADR 0763 an observed order of the mean drag in [1.5, 2.5] (1.777 recorded by ADR 0771)."
+    }
+  ]
+}

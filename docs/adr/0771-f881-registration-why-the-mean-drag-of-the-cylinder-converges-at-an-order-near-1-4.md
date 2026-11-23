@@ -266,3 +266,128 @@ as that table's last paragraph says. It is the check whose absence let the defec
 
 **Deviation recorded now.** The test file was written in the worktree before the registration was committed; it was not
 built or run before that commit (ad4b1967), and its first build is the gate run above.
+
+## Addendum 1: results (2026-11-23)
+
+All runs in the release profile, `CARGO_TARGET_DIR` under the scratch folder, beside the solves of other agents. The gate
+tests and the heavy record at 63880397 (the test file as committed after amendment 1). The heavy record was one process,
+`-- --ignored --nocapture --test-threads=1`, each of the nine solves made once, 8634 s together (B0 about 6150 s while
+the machine was most loaded; C2 and C3 about 1250 s each). Logs in the scratch folder: `gate_run1.log` (before amendment
+1), `gate_run2.log`, `heavy_record.log`, `m1_run.log`, `m2_run.log`, `m3_run.log`, `lib_run.log`. No limit, amount or
+range was changed.
+
+### The three sequences (mean C_D over W; W1 and W2 agree with W to 1e-5 in every row)
+
+| Set-up and integral | 90 x 70 | 128 x 100 | 181 x 141 | Order on W (W1, W2) | Richardson value |
+| --- | --- | --- | --- | --- | --- |
+| B0, standard | 1.32259 | 1.33285 | 1.33900 | **1.387** (1.388, 1.387) | 1.34901 |
+| B0, C1 (both wall terms) | 1.33528 | 1.34223 | 1.34586 | **1.777** (1.778, 1.776) | 1.35014 |
+| B0, C1p (pressure term only) | 1.32623 | 1.33589 | 1.34136 | 1.549 | 1.34911 |
+| B0, C1v (velocity term only) | 1.33165 | 1.33919 | 1.34349 | 1.525 | 1.34971 |
+| B0, pressure part (standard) | 0.98294 | 0.99128 | 0.99646 | 1.286 | 1.00572 |
+| B0, viscous part (standard) | 0.33965 | 0.34157 | 0.34255 | 1.873 | 0.34362 |
+| C2 (`Expansion(50)`), standard | 1.33667 | 1.33957 | 1.34059 | **2.906** (2.910, 2.901) | 1.34118 |
+| C2, C1 | 1.36121 | 1.35946 | 1.35590 | not monotone | |
+| C3 (velocity fixed on the far field), standard | 1.32431 | 1.33517 | 1.34187 | **1.305** (1.303, 1.307) | 1.35366 |
+| C3, C1 | 1.33701 | 1.34456 | 1.34874 | 1.611 | 1.35437 |
+
+St on the fine mesh: B0 0.16486, C2 0.16509, C3 0.16517; C_L rms 0.2412, 0.2369, 0.2417; crossings 17, 16, 16 in every
+set-up. The other reported orders (C2: C1p 3.998, C1v and the pressure part not monotone, the viscous part 3.825; C3:
+C1p 1.447, C1v 1.400, the pressure part 1.214, the viscous part 1.733) are in `heavy_record.log`.
+
+### Every check
+
+| Id | Limit | Measured | Met |
+| --- | --- | --- | --- |
+| R0a | each C_D within 1e-5 of 1.32259, 1.33285, 1.33900 | equal to all printed digits (differences print as 0.00000) | yes |
+| R0b | B0's order under 1.5 on W, W1, W2 | 1.3874, 1.3881, 1.3867 | yes |
+| C1 | decided | **raises the order into the range**: 1.387 to 1.777 (+0.390), the same class on W1 (1.778) and W2 (1.776) | yes |
+| C2 | decided | **raises the order** (beyond the range): 1.387 to 2.906 (+1.519), W1 2.910, W2 2.901 | yes |
+| C3 | decided | **does not move the order**: 1.387 to 1.305 (-0.082, within 0.1), W1 1.303, W2 1.307 | yes |
+| K4w | more than 9 crossings, all nine runs | 17, 16, 16 in each set-up | yes |
+| D | named, or none raises | named: C1 and C2 | yes |
+| G1 | relative error at most 1e-9 | all four print as 0.00000 | yes |
+| G2 | 1e-9; the record's order within 0.005 of 1.385 | 0.00000; 1.3849 (0.00013 off) | yes |
+| N1 | every class and decision as stated | as stated (with one further case: a candidate that lowers gives "none raises") | yes |
+| G4 | 40 samples, finite, the guard silent | yes for B0, C2 and C3 | yes |
+| G4b | C2 and C3 differ from B0 by at least 1e-8 after 40 steps | 0.00657 and 0.00046 | yes |
+| M1 | `g1_` fails | failed: second-order derivative off by 0.16235 relative | caught |
+| M2 | `n1_` fails | failed: pc 1.45 gave "Raises" | caught |
+| M3 | `g1_` fails | failed: extrapolated pressure off by 0.09045 relative | caught |
+| E | only this work's files | `git diff --stat d6e44b27`: this ADR, the test file, its patch, and the proposal file added with this addendum | yes |
+| F | fmt, clippy, `--lib`, docs_site | fmt clean; clippy clean; `--lib` 159 passed, 4 ignored; docs_site below | yes |
+| P | process check, proposal check | below | see there |
+
+### Reading
+
+The sentence the brief asks for: **the order of the mean drag on the sequence of ADR 0763 is held down by the wall force
+integral.** Its two first-order wall terms (the wall-cell pressure taken as the wall pressure, and the wall-normal
+derivative `u_P / d`), replaced alone by second-order ones on the same fields, raise the order from 1.387 to 1.777, into
+[1.5, 2.5]; each term alone raises it to about 1.53 to 1.55, so both contribute. The difference of the two integrals is
+0.01269, 0.00938, 0.00686 on the three meshes, falling by 1.35 and 1.37 per step against the ratios 1.43 and 1.41, that
+is at an order near 0.9: the first-order term of the Taylor estimate of the registration, about twice its estimated size.
+This does not show the solver's field to be second order: the order with C1, 1.777, is still under 2, and what holds it
+there is not found here.
+
+The grading also moves the order (C2), upward past the range, and the reading is that it does so through the same wall
+term: with `Expansion(50)` the wall cell is 2.4 times larger, the first-order wall term doubles (C1 less standard 0.0245,
+0.0199, 0.0153) and, being of the opposite sign to the remaining error, nearly cancels it in the standard integral (the
+differences 0.0029 and 0.0010 give the order 2.9); with the second-order terms the C2 sequence falls with refinement and
+is not monotone. So C2 is named as the registered rule names it, as contributing, and its order of 2.9 is a
+cancellation, not a cleaner convergence. The far-field condition (C3) moves the order by -0.08, less than the amount; with
+C1 its order is 1.611, so the wall term acts the same way there.
+
+A consequence for F-869, reported and not a check: the Richardson value with C1 on B0 is 1.35014 at the order 1.777
+(inside the range), against 1.34901 at 1.387 by the standard integral; both are in the band [1.314, 1.370]. The
+fine-mesh value by C1 is 1.34586.
+
+No defect of the solver appeared and no solver source was changed. The fix indicated is in post-processing: a second-order
+wall force integral, opt-in, beside `wall_force_and_moment`.
+
+### Deviations
+
+- Amendment 1: C3 as first registered was overridden by `pressure_bc` and was corrected before any heavy run; G4b added.
+- The test file was written before the registration was committed (built and run only after it; amendment 1 says so).
+- M1 was made as `u_p / s_p + 0.0 * (u_q * s_q)` so that the mutated file builds without unused-argument warnings.
+- One build of `docs_site` was started without `CARGO_TARGET_DIR`, into the worktree's own `target`; it was stopped, that
+  folder (made by it alone) deleted, and the check rerun into the scratch target.
+- N1 holds one case more than the registration lists (a lowering candidate gives "none raises").
+
+### What was not run
+
+The whole workspace suite and the other integration tests of `rcfd-api` (no solver file was touched, so not
+`baseline_hashes`); the lead's application of the committed patch (checked with `git apply --check`); a fourth mesh,
+other gradings or far fields; the cheap sequence of ADR 0761 (not used, see the registration).
+
+### Size
+
+Size (agent, actual): done; 0; 1; 1; 130000
+
+### Decision by the registered rule
+
+**Done.** R0b holds (B0 reproduces the record to every printed digit and its order, 1.387, is under 1.5); C1 raises the
+order into the range and is named; C2 raises it beyond the range and is named as contributing, through the size of the
+same wall term; C3 does not move it; every gate check passes, M1 to M3 are caught, E and F hold.
+
+## Open questions for the maintainer
+
+1. **Is the fix issued: a second-order wall force integral as an option of `rcfd-post`?** Options: (a) a new item adds an
+   opt-in function (the two wall terms of C1, every default bit-identical) with its exactness check and, as acceptance,
+   the order of ADR 0763's sequence by it; (b) as (a), and a later registration also makes it the force of the cylinder's
+   validation tests; (c) no item: the finding stays a record, and F-869's conclusion, which holds by either integral, is
+   unchanged. Recommendation: (a). The first-order wall terms bias the wall force of the code by about 1 % of C_D on these
+   meshes; the remedy is small, outside the solver and opt-in, and C1's test code is its reference. Not taken on the
+   standing instruction because it adds an item (rule 6).
+
+## For the lead: roadmap entries
+
+Status proposed: done.
+
+> ADR 0771, 2026-11-23, done: the observed order 1.387 of the cylinder drag on the sequence of ADR 0763 is held down by the first-order wall terms of the wall force integral: replaced alone by second-order ones on the same fields the order is 1.777 (in [1.5, 2.5]); the grading Expansion(50) raises it to 2.906 through the same wall term (a cancellation), and the velocity fixed on the far field leaves it at 1.305 (within 0.1); B0 reproduced ADR 0763 to every printed digit; ADR 0761's 1.38 is 1.51 by the same ratio form.
+
+> Follow-up (proposed; the maintainer decides by question 1 of ADR 0771): "Second-order wall force integral as an option of rcfd-post", deps F-881; acceptance: "Every limit not stated here is registered in the ADR before the run. An opt-in wall force in rcfd-post with the pressure extrapolated linearly to the wall and the wall-normal velocity derivative from the wall and the first two cells (ADR 0771, C1), every default bit-identical, exact on a quadratic wall profile to a relative error of at most 1e-9, gives on the mesh sequence of ADR 0763 an observed order of the mean drag in [1.5, 2.5] (1.777 recorded by ADR 0771)."
+
+The same entries are in `docs/roadmap/proposals/0771-F-881.json`.
+
+For the lead, not roadmap: `docs/adr/index.md` is generated and not current after this work; it is left to the lead
+(rule 9). No reference fragment was added.
