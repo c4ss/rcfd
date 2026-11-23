@@ -239,3 +239,17 @@ question 1, and its answer may read the same result as partial.
    built in a follow-up of F-616 (a table for the frequencies, the loss factors and the harmonic load, for combined
    models only). Recommendation: **(a)**. A harmonic analysis of the case file is a line of work of its own (loads with
    phase, damping, the response outputs) and should not exist for combined models alone.
+
+## Amendment 1 (2026-11-23, before any code and before any run)
+
+Written after reading `crates/rcfd-core/src/settings.rs` (`Schema::optional`, `to_json_schema`) and before the test file
+of D1 and S1 exists. Nothing was run. Two corrections of the set-up; no limit changes.
+
+1. **S1.** The JSON schema of an object lists every field that is not optional in its `required` array, so a new
+   top-level table also adds its name there. S1 removes the names `superelements` and `reduction` from the top-level
+   `required` array as well as from the top-level `properties` (both removals do nothing on main). The diff reported is
+   then: the added properties, and the added names of `required`.
+2. **D2 and D8.** The table `[reduction]` is an optional object of the schema (`Schema::optional`, ADR 0155): it stays
+   out of the settings tree of a case that does not give it, and out of `required`. The collection `superelements`
+   cannot be optional (the option is for objects) and is in the tree as an empty table. So the tree of a case without
+   the keys gains `superelements` (empty) only, not `reduction` as D8 said.
