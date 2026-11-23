@@ -1,0 +1,44 @@
+---
+type: source
+tags: [reference, foundation, structural, mechanics, non-commercial]
+sources: []
+origin: https://ocw.mit.edu/courses/3-11-mechanics-of-materials-fall-1999/pages/modules/
+licence: CC BY-NC-SA 4.0 (MIT OCW course page footer link, verified 2026-11-22). Non-commercial, so cite only (maintainer decision 6).
+read: 2026-11-22
+created: 2026-11-22
+updated: 2026-11-22
+status: draft
+---
+
+# Roylance, Mechanics of Materials modules (MIT OCW 3.11, Fall 1999)
+
+**Origin:** David Roylance, *Mechanics of Materials* course modules, MIT 3.11, Fall 1999, MIT OpenCourseWare (module PDFs dated 2000-2001). Each module is a separate PDF linked from the modules page above.
+**Kind:** open course notes (PDF), undergraduate level. Locators are the module title and the module's own equation numbers.
+**Licence:** CC BY-NC-SA 4.0; cite only, never copied into `raw/`.
+**Read:** 2026-11-22 by job p6-structural: modules "The Kinematic Equations", "The Equilibrium Equations", "Constitutive Equations", "Stresses in Beams", "Finite Element Analysis", "Linear Viscoelasticity", "Yield and Plastic Flow", "The Dislocation Basis of Yield and Creep" (creep section), "Introduction to Fracture Mechanics", "Fatigue". Downloaded but not read: "Beam Displacements", "Shear and Torsion", "Laminated Composite Plates". The PDF text extraction loses most Greek letters; equations below are read from the surrounding text and the module's numbering.
+
+## Summary
+
+A compact undergraduate route through solid mechanics: kinematics (strain from displacement), equilibrium (stress and its divergence), constitutive laws (isotropic and anisotropic Hooke's law), beams, an introduction to the finite element method, and the inelastic and failure topics (viscoelasticity, yield, creep, fracture, fatigue).
+
+## Key points
+
+- **Kinematics, eqs. (1)-(4):** strain is a displacement gradient, $\epsilon_x = \partial u/\partial x$ (1); engineering shear strain $\gamma_{xy} = \partial v/\partial x + \partial u/\partial y$ (3); the tensor form $\epsilon_{ij} = \tfrac12 (u_{i,j} + u_{j,i})$ (4) is symmetric (six independent components) and its shear components are half the engineering ones, $\epsilon_{12} = \gamma_{xy}/2$. In pseudovector form $\boldsymbol\epsilon = \mathbf L \mathbf u$ with a matrix of derivative operators (eqs. 6-8). Volumetric strain is the trace, $\Delta V/V = \epsilon_{kk}$ (10), neglecting products of strains. Rigid motion (constant $\mathbf u$) gives no strain.
+- **Kinematics, finite strain, eqs. (11)-(13):** the Lagrangian strain keeps the quadratic terms, $\epsilon_x = \partial u/\partial x + \tfrac12[(\partial u/\partial x)^2 + (\partial v/\partial x)^2]$ (11), in index form $\epsilon_{ij} = \tfrac12(u_{i,j} + u_{j,i} + u_{r,i} u_{r,j})$; for a bar stretched to 100 percent conventional strain the two measures differ by 50 percent (Example 2).
+- **Equilibrium, eqs. (1)-(9):** traction $\mathbf T$ is force per area on a plane; Cauchy's relation $[\boldsymbol\sigma]\hat{\mathbf n} = \mathbf T$ (3); moment equilibrium makes $\boldsymbol\sigma$ symmetric; integrating the traction over a closed surface and applying the divergence theorem gives $\nabla\cdot\boldsymbol\sigma = 0$ (5), $\sigma_{ij,j} = 0$ (7), without body forces; in pseudovector form $\mathbf L^T\boldsymbol\sigma = 0$ (9), the transpose of the kinematic operator.
+- **Constitutive, eqs. (1)-(12):** a general linear law $\epsilon_{ij} = S_{ijkl}\sigma_{kl}$ has 81 coefficients, 36 after the symmetry of stress and strain, 21 after the symmetry of the compliance matrix (eq. 1); isotropy leaves two. Isotropic compliance (3), index form $\epsilon_{ij} = \frac{1+\nu}{E}\sigma_{ij} - \frac{\nu}{E}\delta_{ij}\sigma_{kk}$ (4), $G = E/2(1+\nu)$; plane-stress stiffness $\boldsymbol\sigma = \mathbf D\boldsymbol\epsilon$, $\mathbf D = \mathbf S^{-1}$ (5)-(6). Split into hydrostatic and deviatoric parts (7); $\sigma_{kk}/3 = K\epsilon_{kk}$ (8) with $K = E/3(1-2\nu)$, and $\sigma'_{ij} = 2G e_{ij}$ (9). Plastic and viscous flow are driven mainly by the deviatoric part, the hydrostatic part causes only elastic deformation. Steel example: $E = 207$ GPa, $\nu = 0.3$, $K = 173$ GPa, $G = 79.6$ GPa (Example 2). Transversely isotropic / orthotropic compliance (11) with $\nu_{21}/E_2 = \nu_{12}/E_1$; off-axis plies via the transformed compliance $\bar{\mathbf S}$ (12) couple normal stress and shear strain (Example 3: Kevlar-epoxy at 30 degrees, apparent $E_x = 11.33$ GPa). Problem 1 adds thermal strain $\alpha\Delta T\delta_{ij}$. Finite strain needs the Lagrangian strain with the second Piola-Kirchhoff stress (sec. "Finite strain model").
+- **Stresses in Beams, eqs. (1)-(7):** plane transverse sections remain plane and rotate about the neutral axis; $\epsilon_x = -y\,v_{,xx}$, where $v_{,xx}$ is the curvature; Hooke's law gives a stress linear in $y$; zero axial force puts the neutral axis at the centroid; moment balance gives $M = E v_{,xx}\int y^2\,dA = EI\,v_{,xx}$ (4) and $\sigma_x = -My/I$ (7). Shear stresses are often negligible for large length-to-height ratio (introduction).
+- **Finite Element Analysis:** pre-processing, analysis, post-processing; matrix truss analysis: element stiffness from Hooke's law, assembly by adding each element matrix into the global positions given by a local-to-global table, $f_i = K_{ij} u_j$, the global matrix sparse; worked two-bar truss $u_4 = -0.01155$ in. Displacement formulation for the continuum: interpolation $\tilde u = \sum_j N_j u_j$ with $N_j = 1$ at node $j$ and 0 at the others; $\boldsymbol\epsilon = \mathbf B_j\mathbf u_j$ with $\mathbf B_j = \mathbf L N_j$; a virtual-work argument gives $k_{ij} = \int_V \mathbf B_i^T\mathbf D\mathbf B_j\,dV$ (12); the integral is evaluated by Gauss-Legendre quadrature, $\int f\,dA \approx \sum_l f(x_l, y_l) w_l$ (13), on a mapped element whose mapping uses the same functions $N_j$ ("numerically integrated isoparametric elements"). Plate with a hole: integration-point stress 3.26 against the Kirsch value 3.00 (9 percent high); the post-processor's least-squares plane through the four integration points of an element gives 3.593 at the node, so smoothed contours can exaggerate.
+- **Linear Viscoelasticity:** creep compliance and relaxation modulus $E_{rel}(t) = \sigma(t)/\epsilon_0$; Maxwell spring and dashpot in series (eq. 22), relaxation time $\tau = \eta/k$, $E_{rel}(t) = k\,e^{-t/\tau}$; the standard linear solid adds a parallel spring $k_e$; the Wiechert model has as many Maxwell arms as needed, so the relaxation modulus is $k_e$ plus a sum of decaying exponentials (a distribution of relaxation times); Boltzmann superposition (the response at time $t$ is the sum of the responses to all earlier excitations); thermorheologically simple materials shift along log time with temperature, $\log a_T = \log\tau(T) - \log\tau(T_{ref})$ (47).
+- **Yield and Plastic Flow:** Tresca $\tau_{max} = k$, $k = Y/2$; von Mises stress $\sigma_M = \sqrt{\tfrac12[(\sigma_1-\sigma_2)^2 + (\sigma_1-\sigma_3)^2 + (\sigma_2-\sigma_3)^2]}$, written through the second invariant of the deviatoric stress, equal to $Y$ at yield in tension, shear yield $k = Y/\sqrt3$; sec. "Continuum plasticity": elastic-perfectly plastic idealisation, unloading parallel to the elastic line, residual plastic strain and residual stresses.
+- **Dislocation Basis of Yield and Creep, sec. "Kinetics of creep":** primary, secondary (steady-state) and tertiary creep; secondary rate $\dot\epsilon_{II} = A\sigma^m\exp(-E_c/RT)$ (8), the Weertman-Dorn equation.
+- **Fracture Mechanics:** Griffith energy balance (strain energy released against surface energy), critical crack length; Irwin and Orowan replace surface energy by a critical strain energy release rate $G_c$; modes I, II, III; near-tip stresses scale as $K_I/\sqrt{2\pi r}$ with $K_I = \sigma\sqrt{\pi a}$ for a central crack (1.12 times that for an edge crack); fracture when $K_I$ reaches the toughness $K_{Ic}$; $G = K^2/E$ in plane stress and $G = K^2(1-\nu^2)/E$ in plane strain; plastic zone at the tip.
+- **Fatigue:** S-N curve at constant amplitude, log cycles; endurance limit for ferrous alloys, none for aluminium; stress ratio $R = \sigma_{min}/\sigma_{max}$ ($R = -1$ fully reversed); Goodman diagram: straight line from the endurance limit to the ultimate tensile stress in the mean-alternating plane; Miner's law $\sum n_i/N_i = 1$, to be "viewed skeptically"; Paris law $da/dN = A\,\Delta K^m$ for crack growth.
+
+## Contradictions with the wiki
+
+_None found at ingest._
+
+## Pages this source informs
+
+- [[linear-elasticity]], [[equilibrium-equations]], [[strain-and-strain-rate]], [[finite-element-method-basics]], [[beam-theory]], [[finite-strain-kinematics]], [[plasticity-j2]], [[viscoelasticity-and-creep]], [[fracture-mechanics]], [[fatigue]], [[stress-recovery]]

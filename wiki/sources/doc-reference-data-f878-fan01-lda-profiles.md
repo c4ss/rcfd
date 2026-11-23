@@ -1,0 +1,77 @@
+---
+type: source
+tags: [reference-data, fan-and-validation, fan-01, lda]
+sources: []
+origin: docs/reference-data.md
+origin_commit: 5b96a1f8
+created: 2026-11-22
+updated: 2026-11-22
+status: draft
+---
+
+# Reference data: F-878 the FAN-01 LDA profiles: the published record, what it holds, and the integrals of ADR 0765
+
+**Origin:** [docs/reference-data.md](../../docs/reference-data.md), section "F-878 the FAN-01 LDA profiles: the published record, what it holds, and the integrals of ADR 0765" (lines 2461-2507) at origin/main 5b96a1f8. The doc is generated from `docs/reference-data.d/*.part` (this section from `docs/reference-data.d/0765-F-878.part`).
+**Kind:** repo doc section (reference-value audit record). Part of the hub [[doc-reference-data]].
+
+## Summary
+
+The FAN-01 LDA record (Zenodo v6, doi:10.5281/zenodo.23943494, CC BY 4.0) as fetched and read for ADR 0765 on 2026-11-22: what the LDA data hold (two radial lines at x = 20 mm and x = 90 mm from the upstream face of the hub, 26 radii, three components, time-averaged and in 180 phase bins), the datum of x now settled (the "110 mm behind the hub" of v2 to v5 is an erratum), no stated LDA uncertainty, the offset between the record's frame and the mesh frame (45.15 mm +-1.3 mm), the integrals over the measured span computed in the repository (Euler head 221.22 / 220.02 Pa, kinetic energy 97.13 / 99.20 Pa) and the 26-radius time-averaged profiles. The comparison itself is on [[adr-thread-fan01-design-point]].
+
+## Key points
+
+The section text follows verbatim so that every value, citation and verification label is quoted exactly. Headings are demoted and relative links rebased to the repo.
+
+Recorded 2026-11-22 for ADR 0765. The record was fetched that day from zenodo.org and read; nothing here is from memory. The transcription is `docs/investigations/f878-fan01-lda-profiles/lda_profiles.csv`, written by `lda_measured.py` beside it; the test `f878_lda_reference_and_measured_integrals` of `crates/rcfd-api/tests/f878_fan01_lda_profiles.rs` holds its constants against that file. The page that records the case is [validation-data.md](../../docs/validation-data.md), section "Rotating machinery sources".
+
+| Quantity | Source | Value and use |
+|---|---|---|
+| The record | "FAN-01 Benchmark: Low-pressure axial fan in a short duct", v6, Kroemer, Junger, Czwielong, Heidegger, Kaltenbacher, Schoder, Becker, Zenodo, doi:10.5281/zenodo.23943494 (concept doi:10.5281/zenodo.8418340), published 2026-11-04, CC BY 4.0 | `lda_data.zip`, 750 500 bytes, MD5 4cafb1602e81dc18f1681e6facd495a0 (equal to the record's), SHA-256 3c527f49b02e9e1b80718915a79468381e927dfb8239ba68f7a33d575df4f707; the description `LA_Case4_AxialFan_measurements.pdf`, MD5 056fc203852d6186a583f3ade8f2603b, SHA-256 547d17de2d3c8ab025624e17d3d61abd8253fedacd77cf079cd1805c8a76e8a6 (read as text, 19 pages) |
+| What the LDA data are | description, Table 2, Table 4, Appendix A.4; the four `.mat` files (read) | two-component LDA, 12 minutes or 2.5e6 samples per position; one operating point, 1.4 m^3/s; two radial lines, x = 20 mm and x = 90 mm; 26 radii, r / 250 mm = 0.532 to 0.984 (133 to 246 mm); three components (`ux` axial, called meridional; `uphi` circumferential; `ur` radial), mean and rms, stored to 0.01 m/s; time-averaged, and ensemble-averaged in 180 bins of 2 degrees of the rotor angle (the phase between bin and rotor is not in the record) |
+| The datum of x | description, section on the coordinate system, Table 4 and the table of errata (Appendix C) (read) | the upstream face of the hub, x in flow direction. The "110 mm behind the hub" of the scripts of v2 to v5 is listed there as an error; the plane behind the rotor is at x = 90 mm, 2.2 mm behind the trailing edge at r = 133 mm and 27.2 mm at r = 246 mm. This settles what `validation-data.md` called unsettled |
+| Uncertainty of the LDA | description, README, the files (read) | **not stated**: no accuracy of the velocity, no statement on bias correction or weighting. The band of ADR 0765 has no measurement part |
+| The plane in the mesh of the FAN-01 tests | description, Table 3 (blade edges in the record's frame, "CAD": leading edge 24.0 and 41.5 mm, trailing edge 89.3 and 62.8 mm at r = 130 and 245 mm) against `validation-data/reference/w34d_fan01_cad_sections.csv`; arithmetic of ADR 0765 | offset 45.15 mm +-1.3 mm between the two frames; `z_mesh = 0.1 m + (x - 21.45 mm)` |
+| Integrals over the measured span at x = 90 mm (trapezoid rule on the 26 radii, rho = 1.2 kg/m^3 assumed, 1486 per minute), computed in this repository from the record, not published values | `lda_measured.py`; ADR 0765 | volume flow 1.3525 m^3/s; angular-momentum flux times omega 299.20 W from the time-averaged file and 297.66 W from the bin means of the products of the ensemble file (measured shaft power: 333.30 W); Euler head 221.22 and 220.02 Pa; kinetic-energy flux per volume flow 97.13 and 99.20 Pa. At x = 20 mm: 1.3221 m^3/s and -36.22 W (-33.55 W) |
+
+The time-averaged profiles as stored in the record (m/s); r / 250 mm in the first column.
+
+| r / 250 mm | `ux` x = 20 | `uphi` x = 20 | `ur` x = 20 | `ux` x = 90 | `uphi` x = 90 | `ur` x = 90 |
+|---|---|---|---|---|---|---|
+| 0.532 | 11.95 | 0.39 | -0.23 | 10.11 | 9.77 | -0.47 |
+| 0.552 | 11.62 | 0.36 | 0.06 | 10.66 | 8.91 | -0.54 |
+| 0.572 | 11.30 | 0.28 | 0.69 | 10.88 | 8.56 | 0.22 |
+| 0.592 | 11.11 | 0.23 | 0.85 | 10.91 | 8.25 | 0.20 |
+| 0.612 | 10.90 | 0.14 | 0.81 | 10.98 | 7.94 | 0.21 |
+| 0.632 | 10.76 | 0.10 | 0.77 | 11.13 | 7.60 | 0.24 |
+| 0.652 | 10.64 | 0.04 | 0.69 | 11.23 | 7.31 | 0.35 |
+| 0.672 | 10.52 | -0.08 | 0.60 | 11.25 | 7.13 | 0.35 |
+| 0.692 | 10.46 | -0.18 | 0.49 | 11.36 | 6.76 | 0.37 |
+| 0.712 | 10.39 | -0.29 | 0.37 | 11.47 | 6.48 | 0.42 |
+| 0.732 | 10.31 | -0.36 | 0.24 | 11.56 | 6.21 | 0.43 |
+| 0.752 | 10.25 | -0.44 | 0.11 | 11.62 | 5.94 | 0.44 |
+| 0.772 | 10.16 | -0.52 | -0.02 | 11.72 | 5.64 | 0.43 |
+| 0.792 | 10.09 | -0.64 | -0.21 | 11.83 | 5.31 | 0.41 |
+| 0.812 | 9.97 | -0.76 | -0.35 | 11.96 | 4.99 | 0.45 |
+| 0.832 | 9.82 | -0.87 | -0.50 | 12.02 | 4.70 | 0.47 |
+| 0.852 | 9.66 | -1.03 | -0.65 | 11.94 | 4.55 | 0.49 |
+| 0.872 | 9.44 | -1.14 | -0.79 | 11.54 | 4.52 | 0.62 |
+| 0.892 | 9.19 | -1.33 | -0.92 | 10.37 | 5.02 | 0.92 |
+| 0.912 | 8.85 | -1.50 | -1.04 | 8.42 | 5.93 | 1.26 |
+| 0.932 | 8.50 | -1.71 | -1.11 | 5.97 | 6.96 | 1.58 |
+| 0.952 | 8.16 | -1.87 | -1.05 | 4.43 | 7.99 | 1.56 |
+| 0.960 | 7.96 | -1.99 | -0.95 | 4.06 | 8.27 | 1.41 |
+| 0.968 | 7.67 | -2.02 | -0.86 | 3.88 | 8.64 | 1.28 |
+| 0.976 | 7.25 | -2.05 | -0.76 | 3.87 | 8.78 | 1.07 |
+| 0.984 | 6.53 | -2.04 | -0.59 | 3.57 | 8.43 | 0.82 |
+
+## Contradictions with the wiki
+
+- The section settles the datum of the LDA planes (x = 90 mm from the upstream face of the hub; "110 mm behind the hub" of the scripts of v2 to v5 is listed in the errata of Appendix C as an error). Earlier wiki text that quoted `docs/validation-data.md` ("LDA profiles 20 mm and 90 (or 110) mm from a datum that the sources read do not settle") is superseded; `docs/validation-data.md` at 5b96a1f8 now says the v6 description settles it. Not a contradiction between sources: a newer reading.
+
+## Pages this source informs
+
+- [[doc-reference-data]] (hub)
+- [[adr-thread-fan01-design-point]] (ADR 0765, F-878)
+- [[fan-01]]
+- [[validation-data-pack]]
+- [[doc-reference-data-f870-fan01-design-point]] (the design-point measurement of the same record)
