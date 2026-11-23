@@ -236,3 +236,33 @@ record could be made.
 ## Open questions for the maintainer
 
 None at registration.
+
+## Amendment 1 (2026-11-23): the test does not run on CI, and a second test that does; written before any code of the fix
+
+Written after the records D1, D2 and D3 and the attribution runs P2 were made (their numbers are in Addendum 1) and
+before any line of the fix, of the helper or of the new spec. It changes no limit and removes no check; it adds one test
+and one open question.
+
+**What was read.** `.github/workflows/ci.yml`, the job studio-web: it builds no Rust and packages with
+`npm run package:dir -- --no-engine`, and its comment says "The tests that need the engine are skipped with the reason".
+`run-control.spec.ts` begins with `test.skip(!mcp, NO_MCP)`. The log of the job on windows-latest of the newest green
+run on main (run 45134411685, job 137559834451, commit cda8e88e, fetched with `gh run view --log`; a copy is in the
+scratch folder under `ci/`) lists test 728, `run-control.spec.ts:192`, with the mark of a skipped test, and ends with
+"275 skipped, 577 passed". So the sentence of the brief and of the acceptance "the test passes on CI's windows-latest"
+does not hold as written: on CI the test is skipped, on both systems, and CI says nothing about it. The difference
+between the lead's machine and CI is first of all that only the lead's machine runs the test.
+
+**Consequence for T1.** T1 as registered opens a project and so needs the engine; on CI it would be skipped like
+line 192. It stays as registered.
+
+**T2, added.** A second test in the same new spec, `run-bar-keyboard.spec.ts`, that needs no engine and therefore runs
+on CI: the packaged Studio's primitives gallery (`#/dev/primitives`, the page `primitives.spec.ts` drives), the select
+"Sample state filter". It first notes which control a Tab from that select reaches when no listbox was opened; then,
+with every `requestAnimationFrame` callback delayed by 300 ms, it chooses the option "Running" with the shared helper
+and presses Tab, and the same control must have the focus. Limit: pass on the fixed tree; with the committed mutation M1
+it must fail, as T1. Source of the limit: the acceptance of F-888 (c1 and c3). Estimate: pass, and fail under M1. Kind:
+code verification. T2 is the part of this work that CI runs; c3 for line 192 itself stays as "What is not covered" says,
+and is now an open question.
+
+**Open question for the maintainer, added (Q1).** It is put with options and a recommendation in Addendum 1; this
+work does not decide it, because it changes what CI builds and how long the job takes (rule 6).
