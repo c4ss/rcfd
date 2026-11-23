@@ -355,3 +355,14 @@ On the tree of this addendum's commit: `cargo test -p rcfd-cli --release --test 
 `python scripts/roadmap_proposals.py check docs/roadmap/proposals/0777-F-861.json`, exit 0 ("F-861: todo -> done; note +
 911 characters"); `python scripts/process_report.py --check`, 1 failure, the generated file `docs/adr/index.md` that is
 only not current (it lacks the row of this ADR) and is left to the lead by rule 7. No other failure.
+
+## The lead's reading (2026-11-23), at the merge
+
+The first merge (4e3922cd) failed `npm test` in each of three push runs on Studio tests outside this item (this item
+adds one header line to each of 12 Studio test files and changes nothing they run), and in a fourth run after the
+leftover `rcfd serve` processes were ended. It was parked until the fixes of F-890 to F-892 were on main, merged again
+at f8e433bb and pushed at 1e6dcaa0 (the report read at 03:58 UTC, 8 minutes of reading, proposed done, written done);
+`npm test` passed all 873 tests in the first run. 734 binaries were left out for a left-out run.
+
+Status: **done**, as proposed. The four open questions were taken on their recommendations under the maintainer's
+standing instruction of 2026-11-11, as the ADR says; each changes a constant of the script, not its design.

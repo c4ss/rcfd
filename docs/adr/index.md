@@ -592,7 +592,7 @@ One row per record of this folder, grouped by the roadmap category of the item i
 | [0773](0773-f876-registration-the-replace-of-run-json-refused-in-adopt-f288.md) | F-876 registration: the replace of run.json refused with access denied in adopt_f288 | REGISTERED | 2026-11-22 | 1 | F-876 | done |
 | [0775](0775-f871-registration-six-further-simulation-milestones.md) | F-871 registration: six further simulation milestones | REGISTERED | 2026-11-23 | 1 | F-871 | done |
 | [0776](0776-f860-registration-push-main-left-out-commits-and-the-budget.md) | F-860 registration: push_main.py, the left-out run names its commits, the ADR's tests count in the budget, changed-file binaries first | REGISTERED | 2026-11-23 | 1 | F-860 | done |
-| [0777](0777-f861-registration-the-process-report-checks-four-rules-that-rested-on-convention.md) | F-861 registration: the process report checks four rules that rested on convention | REGISTERED | 2026-11-23 | 1 | F-861 | todo |
+| [0777](0777-f861-registration-the-process-report-checks-four-rules-that-rested-on-convention.md) | F-861 registration: the process report checks four rules that rested on convention | REGISTERED | 2026-11-23 | 1 | F-861 | done |
 | [0779](0779-f875-registration-a-simulation-milestone-for-the-structure-and-vibration-of-a-fan-rotor.md) | F-875 registration: a simulation milestone for the structure and vibration of a fan rotor | REGISTERED | 2026-11-23 | 1 | F-875 | done |
 | [0782](0782-f856-registration-udf-interpreter-wasmi-1x.md) | F-856 registration: the UDF interpreter from wasmi 0.31 to wasmi 1.1.0 (the minimum Rust read first, the port of `udf.rs`, and the checks of the fuel limit, the memory limit and the refusal of imports) | REGISTERED | 2026-11-23 | 1 | F-856 | done |
 
