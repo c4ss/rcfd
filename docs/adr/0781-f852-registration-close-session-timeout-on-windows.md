@@ -192,3 +192,99 @@ spec, because it can only break the bridge.
 **The corrected runs.** R1 is run once more in the corrected form, as **R1b**, with R1's limit (fails at the expectation
 of the heading "Set in this case"). R2 and R3 were not run before this amendment and use the corrected wrapper. R1's
 first run stays in the record as a failure of the set-up; it shows nothing for or against H1.
+
+## Addendum 1: results (2026-11-23)
+
+All runs on this machine (Windows 11), release engine, the packaged Studio, one worker, `retries: 0`, while the other
+agents' builds ran. The full logs are in the scratch folder under `runs/`; the commits are the registration 7b1ee2eb,
+amendment 1 bd7a4fdb, the fix with its test fe10eeb0, then this addendum with the mutation patch and the proposal file.
+
+**The cause.** H1, as registered. The settings page learned of the session Redo makes only from the service's event
+`created`, and it replaced its events listener whenever the session shown changed. The batch the main process had posted
+to the old subscription arrived after the page had dropped that listener, was discarded by the preload script, and the
+page stayed on "Session … is not on the service"; the next test then waited 30 s for a section list that the page never
+drew. The fix: one subscription per connection and service instance, the session read through a reference
+(`src/renderer/settings/SettingsPage.tsx`, 10 lines added, 4 removed).
+
+| Id | Limit | Measured | Met |
+|---|---|---|---|
+| R0 | none; failures at line 66 are counted | 0 of 30 at line 66. 29 runs passed all 8 tests; run 21 failed in another test, at line 139 (see below). Load 100 % at the start, 77 % at the end; 4 cargo, 6 rustc, 5 node processes at the start | decides nothing, as registered |
+| R1 | fails at the heading "Set in this case" | failed one line earlier (no session made): the set-up was defective, amendment 1 | not decided |
+| R1b | fails at the heading "Set in this case" | failed there (`undo-session-events.spec.ts:88`, heading not found in 5 s). Load 80 % | yes |
+| R2 | passes | passed: the heading "Session s2 is not on the service", 0 calls of any kind after `session.create`, both unchanged after 2 s. Load 63 % | yes |
+| R3 | passes | passed, 0 messages delayed. Load 71 % | yes |
+| R4 | 30 of 30 | 30 of 30. Load 79 % to 91 % | yes |
+| R5 | 30 of 30, every test of the file | 30 of 30, 8 of 8 tests each, the test at line 268 passed 30 times; 5.6 to 7.7 s a run. Load 90 % to 60 %; 3 cargo, 5 node processes | yes |
+| R6 | the specs of the settings page and of undo pass; other failures reported | 853 tests in 15.8 minutes: 812 passed, 4 failed, 37 did not run. Every test of the settings and undo specs that ran passed (51 lines), `undo.spec.ts:268` and the new spec among them; none of them failed or was left out. The four failures are below | yes |
+| R7 | no difference; none found | `playwright.config.ts` and `undo.spec.ts` are byte for byte those of main e2fe571b; the new spec has no skip, fixme, retry or limit (its one `setTimeout` is the delay D) | yes |
+
+**H2, H3, H4.** R2 excludes them for the state the delay produces: no `session.list` followed the `session.create`
+(against H2), the page showed the "not on the service" heading and no surface (against H3), and nothing moved in 2 s
+(against H4). What R2 does not show is that the two CI failures were this state: their page snapshots were not read.
+The CI logs fit it (the option was never in the page; the tests before passed in under 1.4 s), and no other candidate
+produced the time-out here.
+
+**Not reproduced without the delay.** R0 gave no failure at line 66 in 30 runs under load. The time-out was reproduced
+only with the registered delay; the natural rate on this machine is below what 30 runs can see.
+
+**Mutations.** M1 (the fix reverted, committed as `undo-session-events.spec.mutation.patch`), run as the push script
+runs it (applied, the command of its first line, removed): the command failed at the heading "Set in this case", line
+88; the patch was removed cleanly. M2 was not run on its own: M1 fails at the heading, which stands before the
+expectation of `session.list`, so removing that expectation changes nothing of M1's failure. Negative control: R3 on
+the unfixed source and once more on the fixed source, both passed.
+
+**The four failures of R6**, none in the settings page or undo, none retried:
+
+- `tests/unit/data-routes.spec.ts:94` and `tests/e2e/data.spec.ts:73`: the service route gave no length unit (`null`
+  for "m"). Cause: the example `f447_bench` was not built in the scratch target folder, so the tests' search went up the
+  folders and took `target/release/examples/f447_bench.exe` of the main checkout, built on 2026-11-16, before the length
+  unit of ADR 0738. Tests of the first file did not run after it. A stale binary of the set-up, not of this change.
+- `tests/e2e/project.spec.ts:245`: the test's limit of 60 s. Cause not established.
+- `tests/e2e/run-control.spec.ts:192`: after Tab the button "Run cavity-re100.toml" was found and not focused. Cause not
+  established. The suite's own load line beside it reads "load 1.00, 18 build, node and electron processes".
+
+**A second flake in the same file, found by R0.** Run 21 of R0 failed at `undo.spec.ts:139`: after Ctrl+Shift+Z and
+then Ctrl+Z the value stayed 700. By reading, not by a control: the test presses Ctrl+Z as soon as the fake service
+holds 700, which is before the reply of the redo has reached the page; `History.move` then answers `busy` and
+`UndoControls` drops the key without a word. It is another cause than this item's, it is in an existing test (which is
+not edited) or in what the Studio does with a key pressed while a step is under way, and it did not occur in R5. A
+follow-up is proposed below.
+
+**Read after the fix, not changed.** `CaseEditorPage.tsx` subscribes with the session among its dependencies as the
+settings page did, filtered to that session; no test shows a loss there. `useRunFeed.ts` subscribes first and reads
+afterwards. The settings page still reads its first `session.list` before its first subscription is in place at
+connection; an event in between would be lost in the same way, and was not observed.
+
+**Deviations.** R1's first run was a failure of the set-up (amendment 1), so R1 has two runs in the record. The scratch
+variants of R2 and R3 were copied into `tests/e2e` for their run and removed after it, because the Playwright project
+reads that folder only; their copies are in the scratch folder under `variants/`. M2 was not run separately. The
+engine and the link test were built in the scratch target folder.
+
+**Not run.** The CI job on windows-latest. `cargo fmt` and `cargo clippy`: no crate was touched. The example
+`f447_bench` was not built.
+
+**What the gate runs and what is a heavy record.** The new spec is part of `npm test` (about 1 s after the launch); the
+push script also runs the mutation patch, which builds and packages the Studio once more. No heavy record is added. R0,
+R4 and R5 (90 runs, 3 to 5 minutes each series) and the `npm test` of R6 were made once and are not repeated by the
+gate.
+
+Size (agent), actual: done; 0; 1; 0; 135000
+
+### Decision
+
+**done** by the registered rule: R1b fails on the unfixed source at the registered line, R2 and R3 pass, R4 passes 30 of
+30, M1 is caught, R5 passes 30 of 30 and R7 is clean. The failures of R6 lie outside the settings page and undo.
+
+### Open questions for the maintainer
+
+None. The second flake is proposed as a follow-up item; whether it is issued is the lead's decision.
+
+## For the lead: roadmap entries
+
+Status proposed: done.
+
+> ADR 0781, 2026-11-23, done: the cause is a lost event: the settings page learned of the session Redo makes only from the service's event `created` and replaced its events listener when the session shown changed, so a batch already posted to the old subscription was dropped and the page stayed on "Session … is not on the service" while undo.spec.ts:268 waited 30 s for the section list; shown by the new spec undo-session-events.spec.ts, which delays the events by 300 ms in the main process and failed on the unfixed source at the registered line (the state asserted by a control: no session.list after session.create, unchanged after 2 s; the same hook without delay passed); fixed by one subscription per connection in SettingsPage.tsx; the new spec 30 of 30 and undo.spec.ts unedited 30 of 30 on Windows under load, no skip, retry or longer limit; the fix reverted is caught (committed mutation); without the delay the time-out did not occur in 30 runs on the unfixed source; npm test 812 passed, 4 failed outside the settings page and undo (two from a stale f447_bench of the main checkout, two with no cause established).
+
+Follow-up proposed:
+
+> Title: Studio: undo.spec.ts:139 fails under load, a Ctrl+Z pressed before the redo before it has finished is dropped. Deps: F-829. Acceptance: Every limit not stated here is registered in the ADR before the run. The cause of the failure of apps/studio-web/tests/e2e/undo.spec.ts:139 (after Ctrl+Shift+Z and Ctrl+Z the value stays 700; 1 of 30 runs under load, ADR 0781 addendum 1) is found and shown by a test that fails without the fix; the test at line 128 then passes a registered number of consecutive runs on Windows. The test is not skipped, retried or given a longer limit to make it pass.
