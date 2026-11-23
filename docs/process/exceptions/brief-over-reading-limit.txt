@@ -1,0 +1,11 @@
+# Briefs whose reading list was above the reading limit of 194023 bytes when the check started.
+# Written on 2026-11-23 (ADR 0777, F-861). This list only shrinks; the script holds 4 as its largest number of entries
+# (LIST_MAX). The limit is the 90th percentile of the stated totals of the 41 briefs issued from 2026-11-18 to 2026-11-23.
+# 473792 bytes, issued 2026-11-20
+f471-overset-fingerprints.md
+# 280627 bytes, issued 2026-11-19
+f849-gate-test-time-limit.md
+# 214687 bytes, issued 2026-11-22
+f884-naca0012-17-steady.md
+# 346865 bytes, issued 2026-11-22
+f885-check-h-outer-record.md
