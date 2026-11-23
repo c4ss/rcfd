@@ -275,3 +275,12 @@ do not make the outcome partial, provided G3 shows that they pass with it.
   no agreement with a measured case).
 - The run through the `rcfd-mcp` binary on stdio is not a check of its own: the three pinned list tests run the binary,
   and G3 runs them with the edit.
+
+## Amendment 1 (2026-11-23, before any code and before any run)
+
+The table of errors gives -32603 for a ledger that cannot be read or written and for a driver error after validation.
+That number was written without reading the constant: the service's internal error is `code::INTERNAL` of
+`crates/rcfd-api/src/service.rs`, which is -32000, and the design tools use it for exactly these cases
+(`ledger_append`, `read_ledger`). The two tools use `code::INTERNAL`, so the row reads -32000. No check is changed:
+E1 leaves that row out, because neither case can be provoked inside the sandbox without a fault of the file system.
+Nothing else of the registration changes.
