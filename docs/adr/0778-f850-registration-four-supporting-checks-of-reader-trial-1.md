@@ -352,3 +352,16 @@ No follow-up item is proposed. The same entry is in `docs/roadmap/proposals/0778
 For the lead, not roadmap: `docs/adr/index.md` is generated and not current after this work; it is left to the lead
 (rule 9). No reference fragment was added. The two heavy records took 54 s and 84 s; if the lead wants them in the
 gate, that is a new test file of a later item, since a committed test is not edited.
+
+## The lead's reading (2026-11-23), at the merge
+
+Merged at 10fea82e and pushed at 99a4e0d0 (the report read at 03:45 UTC, 5 minutes of reading, proposed done, written
+done). Checked by the lead before the merge: the registration is the first commit and alone, and the four test files are
+committed before any run; the branch adds only new test files, the mutation patch, the ADR and the proposal, and no
+existing test, record or library line changes. The push script ran the committed mutation and it failed as expected;
+451 binaries were left out for a left-out run.
+
+Status: **done**, as proposed. The two moment-radius readings of ADR 0570 are held as ignored heavy records (54 s and
+84 s); the agent's size named two heavy runs where the lead's named none, which the lead notes. Mutation M4 is caught
+only by the comparison with ADR 0553's printed digits, because the test's own closed form shares the mutated function;
+the comparison with the printed digits is the check that holds it.
