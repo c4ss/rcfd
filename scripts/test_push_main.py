@@ -971,5 +971,170 @@ class StopConditions(unittest.TestCase):
             self.assertIn(option, pm.__doc__)
 
 
+# ---------------------------------------------------------------- ADR 0776 (F-860): the left-out run names its commits, the
+# ADR's tests count in the budget, the binaries named after a changed source file come first
+
+
+class LeftOutCommits(TempRepo):
+    """ADR 0776, point 1 (row T1): a left-out line records the checkout's commit at the start and at the end of the run."""
+
+    def job(self, cmds):
+        sha = self.merge("f001-work", ["crates/a/src/one.rs"])
+        p = os.path.join(self.d, "target", "push_main", f"leftout-{sha[:8]}.json")
+        os.makedirs(os.path.dirname(p), exist_ok=True)
+        with open(p, "w", encoding="utf-8") as fh:
+            json.dump({"commit": sha, "branch": "f001-work", "items": ["F-001"], "adrs": ["0900"], "cmds": cmds}, fh)
+        return sha, p
+
+    def left_out(self, path, runner):
+        buf = io.StringIO()
+        with contextlib.redirect_stdout(buf):
+            code = pm.do_left_out(self.d, path, run=runner)
+        return code, buf.getvalue()
+
+    def test_a_checkout_that_moves_during_the_run_is_named(self):
+        sha, p = self.job([FAST, SLOW])
+        moved = []
+
+        def runner(cmd, cwd, capture=False):
+            if cmd == SLOW:  # the lead's next merge lands in the checkout while the left-out tests run
+                self.commit("docs/notes.md", "the lead's next merge")
+                moved.append(self.g("rev-parse", "HEAD"))
+            return 0, 0.5, ""
+        code, out = self.left_out(p, runner)
+        self.assertEqual(code, 0, out)
+        row = self.rows()[-1]
+        self.assertEqual(row["detail"],
+                         f"ran=2;failed=0;checkout_start={sha[:10]};checkout_end={moved[0][:10]};checkout_moved=yes")
+        self.assertEqual((row["kind"], row["commit"], row["result"], row["minutes"]), ("leftout", sha[:10], "green", "1.0"))
+        self.assertIn(f"push_main: the checkout moved during the left-out run, from {sha[:10]} to {moved[0][:10]}", out)
+
+    def test_a_checkout_that_stays_gives_two_equal_commits_and_no_move(self):
+        sha, p = self.job([FAST, SLOW])
+        r = Runner()
+        code, out = self.left_out(p, r)
+        self.assertEqual((code, r.calls), (0, [FAST, SLOW]))
+        self.assertEqual(self.rows()[-1]["detail"], f"ran=2;failed=0;checkout_start={sha[:10]};checkout_end={sha[:10]}")
+        self.assertNotIn("moved", out)
+
+    def test_a_failed_binary_is_still_read_after_the_new_fields(self):
+        sha, p = self.job([FAST, SLOW])
+        code, _ = self.left_out(p, Runner({SLOW: [(101, CARGO_FAILED)]}))
+        rows = self.rows()
+        self.assertEqual((code, rows[-1]["result"]), (1, "red"))
+        self.assertEqual(rows[-1]["detail"], f"ran=2;failed=1;checkout_start={sha[:10]};checkout_end={sha[:10]};"
+                                             f"fails=slow::*=none/none;cmds={SLOW}")
+        self.assertEqual(pm.recent_failed_binaries(rows), {"slow"})
+
+
+TIMES_LIB = {**TIMES, ("a", "unit"): 3.0}
+
+
+def adr_index(*pairs):
+    """IDX with the tests of the binaries `pairs` ((crate, target), ...) registered to ADR 0900."""
+    tests = [dict(x, adrs=["0900"] if (x["crate"], x["target"]) in pairs else []) for x in IDX["tests"]]
+    return {"crates": CRATES, "tests": tests}
+
+
+def printed(info, plan):
+    buf = io.StringIO()
+    with contextlib.redirect_stdout(buf):
+        pm.print_plan(info, plan, "2" * 40, 0)
+    return buf.getvalue()
+
+
+class AdrBudget(unittest.TestCase):
+    """ADR 0776, point 2 (row T2): the tests the index maps to the merge's ADRs are charged to the budget, never cut."""
+
+    INFO = {"sha": "0" * 40, "first": "1" * 40, "branch": "f001-work", "items": ["F-001"], "adrs": ["0900"],
+            "files": ["crates/a/src/lib.rs"]}
+    DT = "cargo test -p d --release --test dt"
+
+    def test_the_cost_of_an_adr_command(self):
+        cmds = ["cargo test -p a --release --lib -- --exact unit", "cargo test -p a --release --test fast", self.DT,
+                "cargo test -p a --release --test fast -- --exact two"]
+        got = pm.adr_units(IDX, cmds, TIMES_LIB, 60, 1.8)
+        self.assertEqual([u["cmd"] for u in got], cmds)
+        self.assertEqual([u["seconds"] for u in got], [3.0, 11.0, None, 6.0])
+        for u, want in zip(got, [4.8, 12.8, 61.8, 7.8]):
+            self.assertAlmostEqual(u["cost"], want)
+
+    def test_the_adr_tests_are_charged_first_and_fewer_binaries_fit(self):
+        with tempfile.TemporaryDirectory() as d:
+            plan = pm.make_plan(d, self.INFO, adr_index(("d", "dt")), TIMES, [], 120.0 / 60.0, 60)
+            alone = pm.make_plan(d, dict(self.INFO, adrs=[]), IDX, TIMES, [], 120.0 / 60.0, 60)
+        self.assertIn(self.DT, plan["always"])
+        self.assertAlmostEqual(plan["adr_minutes"], 61.8 / 60.0)
+        self.assertEqual([u["target"] for u in plan["selected"]], ["fast"])
+        self.assertEqual([u["target"] for u in alone["selected"]], ["fast", "norec"])  # the same budget without the ADR's tests
+
+    def test_an_adr_cost_above_the_budget_leaves_every_binary_out_and_cuts_no_adr_test(self):
+        with tempfile.TemporaryDirectory() as d:
+            plan = pm.make_plan(d, self.INFO, adr_index(("d", "dt")), TIMES, [], 1.0, 60)
+        self.assertEqual(plan["selected"], [])
+        self.assertEqual([u["target"] for u in plan["left"]], ["fast", "norec", "slow", "ct", "bt"])
+        self.assertIn(self.DT, plan["always"])
+
+    def test_the_dry_run_prints_their_recorded_minutes(self):
+        with tempfile.TemporaryDirectory() as d:
+            plan = pm.make_plan(d, self.INFO, adr_index(("d", "dt")), TIMES, [], 120.0 / 60.0, 60)
+            alone = pm.make_plan(d, dict(self.INFO, adrs=[]), IDX, TIMES, [], 120.0 / 60.0, 60)
+        self.assertIn("ADR tests (charged to the budget first, never cut): 1 commands, 1.0 recorded minutes, with 1.8 s of "
+                      "build counted per command; 1.0 of the 2.0 budget minutes left for the diff-selected binaries",
+                      printed(self.INFO, plan))
+        self.assertNotIn("ADR tests", printed(dict(self.INFO, adrs=[]), alone))
+
+
+class NamedAfterSource(unittest.TestCase):
+    """ADR 0776, point 3 (row T3): inside a touched crate the binaries named after a changed source file come first."""
+
+    INFO = {"sha": "0" * 40, "first": "1" * 40, "branch": "f001-work", "items": [], "adrs": [], "files": ["crates/a/src/slow.rs"]}
+
+    def test_the_rule_of_naming(self):
+        files = ["crates/a/src/slow.rs", "crates/a/src/lib.rs", "crates/a/x/src/main.rs", "crates/b/src/grid/mod.rs",
+                 "crates/a/tests/fast.rs", "crates/d/src/notes.md", "docs/x.rs", "crates/c/src/bin/tool.rs"]
+        stems = pm.source_stems(files, CRATES)
+        self.assertEqual(stems, {("a", "slow"), ("b", "grid"), ("c", "tool")})
+        for crate, target, want in (("a", "slow", True), ("a", "slow_f1", True), ("a", "slow_f1_records", True),
+                                    ("a", "slowly", False), ("a", "fast", False), ("b", "slow", False), ("b", "grid_x", True),
+                                    ("a-x", "slow", False)):
+            self.assertEqual(pm.named_after(crate, target, stems), want, (crate, target))
+
+    def test_the_named_binaries_come_first_in_their_group(self):
+        units = pm.binary_units(IDX, {"a"}, TIMES, 60)
+        self.assertEqual([u["target"] for u in pm.order_group(units, {"fast"}, {("a", "slow")})], ["slow", "fast", "norec"])
+        self.assertEqual([u["target"] for u in pm.order_group(units, {"fast"})], ["fast", "norec", "slow"])
+
+    def test_the_plan_selects_them_first_and_says_so(self):
+        with tempfile.TemporaryDirectory() as d:
+            plan = pm.make_plan(d, self.INFO, IDX, TIMES, [], 575.0 / 60.0, 60)
+            short = pm.make_plan(d, self.INFO, IDX, TIMES, [], 100.0 / 60.0, 60)
+        self.assertEqual([u["target"] for u in plan["selected"]], ["slow", "fast"])  # the unchanged plan selected fast, norec
+        self.assertEqual([u["target"] for u in plan["left"]], ["norec", "ct", "bt"])
+        self.assertIn("named after a changed source file: 1 binaries, first in their crate's group; 0 of them left out by the "
+                      "budget", printed(self.INFO, plan))
+        self.assertIn("named after a changed source file: 1 binaries, first in their crate's group; 1 of them left out by the "
+                      "budget", printed(self.INFO, short))
+
+
+class UnchangedOutput(TempRepo):
+    """ADR 0776, row U: the ledger's columns and the merge line of a run that passes at the first attempt are unchanged."""
+
+    def test_the_columns(self):
+        self.assertEqual(pm.COLUMNS, ["date", "kind", "commit", "branch", "items", "adrs", "result", "minutes", "left_out",
+                                      "left_out_minutes", "detail"])
+
+    def test_the_new_keys_of_a_plan_add_nothing_to_the_merge_line(self):
+        sha = self.merge("f001-work", ["crates/a/src/slow.rs"])
+        plan = self.plan(CHECK, SLOW, adr_units=[{"cmd": SLOW, "seconds": 500.0, "cost": 501.8}], adr_minutes=501.8 / 60.0,
+                         named=[("a", "slow")], named_left=0)
+        code, out = self.run_plan(plan, Runner())
+        self.assertEqual(code, 0, out)
+        (row,) = self.rows()
+        self.assertEqual(row, {"date": pm.today(), "kind": "merge", "commit": sha[:10], "branch": "f001-work", "items": "F-001",
+                               "adrs": "", "result": "pass", "minutes": "1.0", "left_out": "0", "left_out_minutes": "0.0",
+                               "detail": f"exit=0;mutations=0;cmds={CHECK} | {SLOW}"})
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -1,0 +1,14 @@
+# expect-fail: python scripts/test_push_main.py
+diff --git a/scripts/push_main.py b/scripts/push_main.py
+index a57b6186..962b89fa 100644
+--- a/scripts/push_main.py
++++ b/scripts/push_main.py
+@@ -975,7 +975,7 @@ def do_left_out(root, path, run=sh, head=None):
+         minutes += m
+         if code:
+             failed.append(cmd)
+-    end = head()
++    end = start
+     detail = f"ran={len(job['cmds'])};failed={len(failed)};checkout_start={start};checkout_end={end}"
+     if start != end:
+         detail += ";checkout_moved=yes"

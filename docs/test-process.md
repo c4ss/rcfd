@@ -570,8 +570,12 @@ Then, in this order:
    failed in a recent gate line of the ledger come first, then the others by recorded time, shortest first. Recorded times come
    from `--times`, a TSV written by `scripts/gate_test.py --tsv` or a folder of them (default: the newest path a gate line names),
    with 1.8 s of build counted per binary; a binary with no record counts 60 s (`--default-seconds`).
+   The tests the index maps to the merge's ADRs (check 2) are charged to the budget first and never cut, and the plan prints
+   their recorded minutes; inside the group of the touched crates, the binaries named after a changed source file (a binary
+   whose name is the file's stem, or begins with the stem and `_`) come first ([ADR 0776](adr/0776-f860-registration-push-main-left-out-commits-and-the-budget.md)).
    Selection stops at the first binary that does not fit. What is left out is not run before the push: it runs in CI on `main`,
-   and `--left-out-run` starts it in the background for this one merge. No test is switched off to make a run pass.
+   and `--left-out-run` starts it in the background for this one merge; its `leftout` line records the checkout's commit at the
+   start and at the end, with `checkout_moved=yes` when they differ. No test is switched off to make a run pass.
 8. Mutation patches. A registration commits one of its planned mutations as `crates/<crate>/tests/<test>.mutation.patch` beside
    `<test>.rs` (a Studio spec likewise beside the spec file). Its first line is `# expect-fail: <command>`, the command that runs
    the test that must catch the mutation; the rest is a patch `git apply` accepts from the workspace root. The script applies it,

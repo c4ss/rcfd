@@ -1,0 +1,8 @@
+{
+  "form": 1,
+  "adr": "0776",
+  "item": "F-860",
+  "base": "a3d29affaaf76897a8947321b3447f0092e1bf8e",
+  "status": "done",
+  "note": "ADR 0776, 2026-11-23, done: scripts/push_main.py writes checkout_start, checkout_end and, when they differ, checkout_moved=yes in a left-out line; charges the tests the index maps to the merge's ADRs to the budget first, never cuts them and prints their recorded minutes (26.7 of 30 on the merge of ADR 0748); and puts the binaries named after a changed source file (stem, or stem and _) first in their crate's group; the 10 new unit tests of the three points fail before and pass after, the 77 existing ones pass unedited, 7 of 7 mutations caught."
+}
