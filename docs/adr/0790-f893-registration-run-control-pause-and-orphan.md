@@ -423,3 +423,14 @@ The same entry as `docs/roadmap/proposals/0790-F-893.json`. No follow-up is prop
 - `python scripts/process_report.py --check`: 1 failure, "generated file is not current: docs/adr/index.md", which rule 7
   leaves to the lead; nothing else.
 - No Rust crate was touched: `cargo fmt` and `cargo clippy` do not apply.
+
+## The lead's reading (2026-11-24), at the merge
+
+Merged at e474897d and pushed at 812556b8 (the report read at 12:27 UTC, 10 minutes of reading, proposed done, written
+done). Checked by the lead before the merge: the registration is the first commit and alone, amendment 1 comes before the
+corrected run, and only test and harness files change; no golden, default result, hash table or dependency is changed,
+so no reader was issued. In the push run `npm test` passed all 880 tests in its first run, the committed mutation was
+caught, and no binary was left out. `data-routes.spec.ts:94` and `data.spec.ts:73`, which the report names as failing in
+its runs, did not fail in the lead's push run.
+
+Status: **done**, as proposed.
