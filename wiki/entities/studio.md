@@ -3,7 +3,7 @@ type: entity
 tags: [studio, app]
 sources: [doc-glossary, doc-product, doc-readme, doc-architecture, doc-ui-restart-plan, doc-studio-guardrails, doc-studio-coverage, doc-design, doc-design-themes-proposal, doc-impeccable-surfaces, doc-security, doc-process-documentation-review, adr-thread-studio-electron, adr-thread-studio-engine-entry-points, adr-thread-runner-records-and-run-sites, adr-thread-workspace-layer, doc-example-projects, adr-thread-wave48-egui-studio]
 created: 2026-11-22
-updated: 2026-11-22
+updated: 2026-11-24
 status: draft
 ---
 
@@ -26,7 +26,9 @@ status: draft
 - Origin: the user's plan of 2026-10-26 to restart the UI (wgpu, egui shell, seven layers L1-L7, a Claude Code chat and plugin); overtaken on 2026-11-16 by the Electron app (ADR 0800) and the deletion of the egui apps before parity ([[doc-ui-restart-plan]]). Its lasting part is the project folder contract (§8), binding under G12 ([[rcfd-project]]).
 - Bound by 22 guardrails, G1-G22, approved 2026-11-16 ([[studio-guardrails]], [[doc-studio-guardrails]]).
 - Visual system: "The Wayfinding Program" in `DESIGN.md`, with Light, Dark and High contrast themes ([[studio-design-system]], [[doc-design]], [[doc-design-themes-proposal]]); seven surfaces briefed ([[doc-impeccable-surfaces]]).
-- Capability coverage (G15) at the snapshot: 1070 of 1363 engine capabilities (78.5 %) have a UI path; all 951 case schema keys are covered through the schema-driven settings surface (F-825) ([[doc-studio-coverage]]).
+- Capability coverage (G15) ~~at the snapshot: 1070 of 1363 engine capabilities (78.5 %)~~ at 709e302e: 1070 of 1370 engine capabilities (78.1 %) have a UI path, after `rcfd duct-modes` and its six options joined the inventory without one; all 951 case schema keys are covered through the schema-driven settings surface (F-825) ([[doc-studio-coverage]]).
+- Quitting and the service it started (F-892, ADR 0789, 2026-11-23): a Studio that quit while the `rcfd serve` it had just started was not yet connected left it running, detached; now nothing is spawned once the quit has begun, the child is known from the spawn on and ended by the quit, and a child never connected to is ended ([[adr-thread-studio-electron]]).
+- Fixes found through failing end-to-end tests on Windows, 2026-11-23 and 2026-11-24 ([[adr-thread-studio-electron]]): the settings page keeps one events subscription per connection, so a session made by Redo is not lost (F-852, ADR 0781); the GPU context of 2D canvases is created when the page is first idle, so the field legend's first draw does not wait on the main thread for the GPU process (F-890, ADR 0787, partial); the runner-budgets panel reads the file on a change-feed entry and reports another writer only when the hash differs (F-891, ADR 0788).
 - Closing the Studio: it owns only a runner it started (`started_by: "studio"`), shuts an idle one down, and asks about active runs (G7 amendment, 2026-11-17) ([[doc-studio-guardrails]]).
 - Claude Code: the Studio drives the user's own `claude` CLI; one writer per session, open sessions mirrored read-only, conservative allow-list (G11); it registers `rcfd-project` with `claude mcp add ... --scope local` and gives Claude Code no permissions of its own ([[doc-security]], [[claude-plugin]]).
 - Platforms: Windows 11 measured; Linux recorded as "WebGL 2 on software rendering" (ADR 0801 Addendum 19); installers built in CI, signing waits for the maintainer's certificate ([[doc-studio-guardrails]]).

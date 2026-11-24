@@ -1,10 +1,10 @@
 ---
 type: concept
 tags: [foundation, acoustics, duct-modes, fan-noise]
-sources: [ref-hubbard-1991-nasa-rp-1258-vol2, ref-hubbard-1991-nasa-rp-1258-vol1, doc-roadmap-json]
+sources: [ref-hubbard-1991-nasa-rp-1258-vol2, ref-hubbard-1991-nasa-rp-1258-vol1, doc-roadmap-json, adr-thread-acoustic-wave-solver, doc-acoustics]
 builds_on: [acoustic-wave-equation]
 created: 2026-11-22
-updated: 2026-11-23
+updated: 2026-11-24
 status: draft
 ---
 
@@ -58,4 +58,4 @@ $$P(x, \mathbf{r}) = \sum_q \Lambda_q S_0\, f_q\, G_q\, \psi_q(\mathbf{r})\, e^{
 
 - The modal decomposition and export of hard-walled duct fields is in `rcfd-post` (`duct_modes.rs`), with the linear acoustic wave solver (F-333, ADR 0351) ([[adr-thread-acoustic-wave-solver]]).
 - Circular ducts on an O-grid (F-453, ADR 0366): spinning and radial modes with a matched layer; the counter-rotating `(-1, 0)` content missed ("1.2e-5 against 1e-6"), kept as a known miss ([[adr-thread-acoustic-wave-solver]]).
-- The command `rcfd duct-modes` (F-451) is an approved follow-up ([[adr-thread-acoustic-wave-solver]]); issued on 2026-11-23 (ADR 0783), not on main at 09647baa ([[doc-roadmap-json]]).
+- ~~The command `rcfd duct-modes` (F-451) is an approved follow-up; issued on 2026-11-23 (ADR 0783), not on main at 09647baa~~ ([[doc-roadmap-json]]). Since 709e302e the command exists (F-451 done, ADR 0783): `rcfd duct-modes` reads one saved pressure series (`rcfd-surface-series`) per duct section and writes the `rcfd-duct-modes` export; one section gives the amplitude of every fitted mode, two or more sections the waves towards `+x` and `-x` per mode and their powers. By default it fits the propagating modes, those with a cut-off wavenumber up to $k = 2\pi f/c_0$. Rectangular (`rect:a,b`) and circular (`circ:radius`) hard-walled ducts, no mean flow, one frequency per run, the closed-form axial wavenumber ([[doc-acoustics]], [[adr-thread-acoustic-wave-solver]]).

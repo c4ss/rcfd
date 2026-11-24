@@ -3,20 +3,20 @@ type: source
 tags: [roadmap]
 sources: []
 origin: docs/roadmap.json
-origin_commit: 930153a4
+origin_commit: 709e302e
 created: 2026-11-22
-updated: 2026-11-23
+updated: 2026-11-24
 status: stable
 ---
 
 # docs/roadmap.json (+ categories in scripts/roadmap_progress.py)
 
-**Origin:** [docs/roadmap.json](../../docs/roadmap.json) and [scripts/roadmap_progress.py](../../scripts/roadmap_progress.py) at `origin/main` 09647baa (first read at snapshot `2e94e5ef`; re-read at 5b96a1f8 and 8ee32b1c)
+**Origin:** [docs/roadmap.json](../../docs/roadmap.json) and [scripts/roadmap_progress.py](../../scripts/roadmap_progress.py) at `origin/main` 709e302e (first read at snapshot `2e94e5ef`; re-read at 5b96a1f8, 8ee32b1c, 09647baa and 930153a4)
 **Kind:** machine-readable source of truth for the roadmap (about 1.9 MB)
 
 ## Summary
 
-A JSON list of ~~786~~ ~~791 (at 5b96a1f8)~~ ~~792 (at 8ee32b1c)~~ ~~794 (at 09647baa; 795 on the merged tree d0fb2b2e, see below)~~ 795 (at 8732f2ae, F-886 on main with the wiki; at 930153a4 F-888 done, 404 / 299 / 92) [[f-item]]s, each with `id`, `title`, `phase`, `deps`, `status` (`done` / `partial` / `todo`), `acceptance`, `gap`, `note` and `milestones`. `docs/ROADMAP.md` and the counts in `docs/roadmap-overview.md` are generated from it ([[doc-roadmap-overview]]). The file holds phases only; the 15 lines of work (categories) are an id list in `scripts/roadmap_progress.py`, in 4 families (Solver, Data, Use, Project). An item in no category, or in two, makes that script exit with an error.
+A JSON list of ~~786~~ ~~791 (at 5b96a1f8)~~ ~~792 (at 8ee32b1c)~~ ~~794 (at 09647baa; 795 on the merged tree d0fb2b2e, see below)~~ ~~795 (at 8732f2ae, F-886 on main with the wiki; at 930153a4 F-888 done, 404 / 299 / 92)~~ 798 (at 709e302e: 409 done, 300 partial, 89 todo) [[f-item]]s, each with `id`, `title`, `phase`, `deps`, `status` (`done` / `partial` / `todo`), `acceptance`, `gap`, `note` and `milestones`. `docs/ROADMAP.md` and the counts in `docs/roadmap-overview.md` are generated from it ([[doc-roadmap-overview]]). The file holds phases only; the 15 lines of work (categories) are an id list in `scripts/roadmap_progress.py`, in 4 families (Solver, Data, Use, Project). An item in no category, or in two, makes that script exit with an error.
 
 ## Key points
 
@@ -46,9 +46,21 @@ From the merges of 2026-11-22 and 2026-11-23 (ADRs 0767 to 0785) and the maintai
 - **Partial:** F-885 (ADR 0767), F-882 (ADR 0768). **Unchanged todo:** F-842 (ADR 0780, registered and stopped before code).
 - **F-870** stays partial; its acceptance gains the casing pressure behind the rotor as a compared quantity ("Maintainer (2026-11-22): the casing pressure behind the rotor is a compared quantity (ADR 0769)").
 - **New items, all todo:** **F-887** "Steady Spalart-Allmaras without eddy-viscosity relaxation over the NACA 0012 lift curve" (deps F-884, milestone `aerofoil-lift`; entered 2026-11-22 on the maintainer's answer to ADR 0770, done the next day by ADR 0772); **F-888** "Studio: the end-to-end test of the quick run by keyboard fails where the Studio window lacks the system's focus" (deps F-807; entered 2026-11-23 on the maintainer's answer "Yes, one over", one agent beyond the limit of 4 for this item alone, issued by the brief `f888-studio-quick-run-focus.md`, ADR 0786); **F-889** "Case-file keys for the cutoff, the load's residual vector and the load patterns of the reduction" (deps F-616; entered 2026-11-23 on the maintainer's answer "Yes to both F-616 questions", not issued).
+- At 709e302e three of the four items of the next bullet are merged and done (F-861, F-852, F-451; see the section below); F-339 (ADR 0784) is still todo, and a reader was briefed for it before its merge, "the item changing two goldens by an additive edit" (commit 709e302e).
 - **Issued on 2026-11-23, registrations not on main at 09647baa:** F-861 (process-report convention checks, brief `f861-process-report-convention-checks.md`, ADR 0777), F-852 (Studio "Close session cannot be undone" time-out, brief `f852-studio-close-session-timeout.md`, ADR 0781), F-451 (`rcfd duct-modes`, brief `f451-duct-modes-command.md`, ADR 0783), F-339 (MCP tools for tolerance and Sobol studies, brief `f339-mcp-uq-sobol-tools.md`, ADR 0784). All four are todo; the note of F-888 says its test "holds the merges of F-861, F-852, F-451 and F-339".
 - **Milestone memberships:** 81 memberships of 24 items written for the six milestones of ADR 0775 and 39 for `fan-structure` of ADR 0779 ([[doc-milestones-json]]); F-881, F-884 and F-887 carry `vortex-shedding` and `aerofoil-lift`.
 - F-880 (FAN-01 outlet as on the rig) is still todo and not issued at 09647baa; whether it is issued is question 1 of ADR 0768 ([[adr-thread-fan01-design-point]]).
+
+## Changes from 930153a4 to 709e302e
+
+From the merges of 2026-11-23 and 2026-11-24 (ADRs 0777, 0781, 0783, 0787, 0788, 0789; `git log 930153a4..709e302e`). Counts at 709e302e: 798 items, 409 done, 300 partial, 89 todo, 70 % counting a partial item as half ([[doc-roadmap-overview]]). Seven items changed and nothing else.
+
+- **New items, entered 2026-11-23** "on the maintainer's answer of that day (\"Yes, issue all three\") with the title, dependencies and acceptance" of the follow-ups of `docs/roadmap/proposals/0786-F-888.json` "as written", and issued the same day: **F-890** "Studio: responsiveness.spec.ts:260 fails on the lead's machine with one task of 400 to 440 ms when the workspace tab opens" (deps F-832; ADR 0787; **partial**), **F-891** "Studio: f837.spec.ts:198 fails in 2 of 6 whole runs, at two different lines" (deps F-837; ADR 0788; **done**), **F-892** "Studio: name the test that leaves an rcfd serve process running after npm test on Windows" (deps F-888; ADR 0789; **done**). The note of F-888 gains the entry that names them. See [[adr-thread-studio-electron]].
+- **F-890's gap:** "The cause is shown as a mechanism and fixed, and responsiveness.spec.ts:260 passed 10 of 10 runs alone and 3 of 3 whole runs. Missing: a record that this mechanism was the task of 400 to 440 ms. It needs the machine under 0.75 busy: the unchanged test on the tree before ADR 0787's fix must show the task again, and on the tree with it must pass. In the whole runs undo.spec.ts:268 and run-control.spec.ts:320 each failed once in three, outside this item."
+- **F-861** (the process report checks the rules that rest on convention; ADR 0777): todo to **done**. "Lead (2026-11-23): merged again on main at f8e433bb after the Studio fixes of F-890 to F-892 and pushed at 1e6dcaa0; npm test passed all 873 tests in the first run (the three earlier push runs of the first merge had failed on Studio tests outside this item). Done as proposed. 734 binaries left out for a left-out run." See [[adr-thread-process-measures-and-roadmap-form]].
+- **F-852** (Studio: "Close session cannot be undone" times out on Windows in CI; ADR 0781) and **F-451** (`rcfd duct-modes`; ADR 0783): todo to **done**, merged "as one joint check (merges 4255f915, 01726464) and pushed at 9c1d3817, after the Studio fixes of F-890 to F-892; the merge also regenerates the Studio's capability inventory for rcfd duct-modes and maps it in coverage.json as the other acoustics tools (F-809, unplanned)". See [[adr-thread-acoustic-wave-solver]].
+- **Follow-ups proposed and not entered**, each the maintainer's (scope): the undo key pressed while a step is busy (F-852), a second Write after a refusal (F-891), `data.open`'s length unit and `run-control.spec.ts:320` (F-892).
+- Lines of work that changed: Studio desktop app 44 / 13 / 5 (was 41 / 12 / 6), Quality, docs and validation 30 / 22 / 15 (was 29 / 22 / 16), Compressible flow and acoustics 10 / 8 / 8 (was 9 / 8 / 9) ([[doc-roadmap-overview]]).
 
 ## Contradictions with the wiki
 

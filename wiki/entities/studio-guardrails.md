@@ -3,7 +3,7 @@ type: entity
 tags: [studio, guardrails, process]
 sources: [doc-studio-guardrails, doc-ui-restart-plan, doc-studio-coverage, doc-design, doc-impeccable-surfaces, adr-thread-studio-electron, adr-thread-studio-engine-entry-points, adr-thread-runner-records-and-run-sites]
 created: 2026-11-22
-updated: 2026-11-22
+updated: 2026-11-24
 status: draft
 ---
 
@@ -39,7 +39,7 @@ status: draft
 | G21 | Never block | Engine work never on the renderer's main thread; long operations show progress and can be cancelled. |
 | G22 | Implicit by default, explicit on exception | Normal state carried by pictogram, position and layout; visible words only for exceptions; per-surface budget of visible chrome words at rest, counted from the DOM by a test; raising it needs the maintainer. DESIGN.md calls it the Quiet Rule ([[doc-design]], [[studio-design-system]]). |
 
-- Coverage status at the snapshot: 1070 of 1363 capabilities (78.5 %) have a UI path; 293 have exemptions, 215 of them pointing at an item whose acceptance does not cover them ([[doc-studio-coverage]]).
+- Coverage status: ~~at the snapshot 1070 of 1363 capabilities (78.5 %) have a UI path; 293 have exemptions, 215 of them pointing at an item whose acceptance does not cover them~~; at 709e302e 1070 of 1370 (78.1 %) have a UI path, 300 have exemptions, 222 of them pointing at an item whose acceptance does not cover them (the seven added are `rcfd duct-modes` and its options) ([[doc-studio-coverage]]).
 - Open for the maintainer: the UI framework and component approach; macOS (not asked); certificate type for signing ([[doc-studio-guardrails]]).
 
 ### How the guardrails were applied (P3, 2026-11-22)

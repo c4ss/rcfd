@@ -4,14 +4,14 @@ tags: [acoustics, noise, fan, compressible]
 sources: [doc-acoustics, doc-reactor-and-acoustics, doc-structural-solver, adr-thread-compressible-acoustic-boundaries, adr-thread-acoustic-wave-solver]
 builds_on: [fw-h, rotor-tone-noise, sound-levels-and-metrics, duct-acoustic-modes, non-reflecting-boundaries-and-sponge-layers, acoustic-wave-equation]
 created: 2026-11-22
-updated: 2026-11-22
+updated: 2026-11-24
 status: draft
 ---
 
 # Aeroacoustics chain (fan noise)
 
 **What it is:** rcfd's library chain from a CFD run to a fan-noise estimate, plus the acoustic boundaries, sponge layers, linear wave solver, duct modes and structural radiation added around it (wave 32B, ADR 0066 and later) ([[doc-acoustics]]).
-**Where:** `crates/rcfd-post/src/` (`fwh.rs`, `acoustics.rs`, `rotor.rs`, `noise_proxies.rs`, `surface_series.rs`, `duct_modes.rs`, `wave_drive.rs`, `solid_acoustic.rs`), `crates/rcfd-fv/src/` (`compressible_bc.rs`, `sponge.rs`, `acoustic_wave.rs`); CLI `rcfd fwh`, `rcfd acoustics`.
+**Where:** `crates/rcfd-post/src/` (`fwh.rs`, `acoustics.rs`, `rotor.rs`, `noise_proxies.rs`, `surface_series.rs`, `duct_modes.rs`, `wave_drive.rs`, `solid_acoustic.rs`), `crates/rcfd-fv/src/` (`compressible_bc.rs`, `sponge.rs`, `acoustic_wave.rs`); CLI `rcfd fwh`, `rcfd acoustics`, `rcfd duct-modes` (`crates/rcfd-cli/src/cmd_duct_modes.rs`, since F-451).
 
 ## Details
 
@@ -25,8 +25,9 @@ status: draft
 | Impedance and quiet boundaries (F-243, ADR 0233) | library only; quiet only near normal incidence | [[doc-acoustics]] |
 | Mass-spring-damper wall (F-332, ADR 0243) | library only; normal incidence checked | [[doc-acoustics]] |
 | Sponge layers (F-331, F-340, F-341, F-407) | library only; matched forms reference at rest | [[doc-acoustics]] |
-| Linear acoustic wave solver + duct modes (F-333, ADR 0351) | library only, not coupled to a CFD run | [[doc-acoustics]] |
+| Linear acoustic wave solver + duct modes (F-333, ADR 0351) | ~~library only~~ the wave solver library only, not coupled to a CFD run; the modal analysis also from the CLI (next row but one) | [[doc-acoustics]] |
 | Circular ducts (F-453), surface drive (F-452), returning waves (F-478) | library only | [[doc-acoustics]] |
+| Modal analysis of saved duct sections, `rcfd duct-modes` (F-451, ADR 0783) | CLI command; export equal to the library's byte for byte on a synthetic field; no flow, axis `+x`, one frequency per run | [[doc-acoustics]], [[adr-thread-acoustic-wave-solver]] |
 | Radiated sound of a vibrating structure (F-418, F-551, F-579) | baffled plane and ERP only | [[doc-acoustics]] |
 
 - **Chain limits:** subsonic surfaces, no quadrupole, no refraction or scattering, uniform mean flow only, no installation effects; "A steady RANS run gives no tonal pressure history" ([[doc-acoustics]]).

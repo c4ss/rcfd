@@ -3,7 +3,7 @@ type: entity
 tags: [process, script]
 sources: [doc-process-documentation-review, doc-process-lead-process, doc-adr-briefs-readme, doc-process-agent-rules, adr-thread-process-measures-and-roadmap-form, adr-thread-simulation-milestones-validation]
 created: 2026-11-22
-updated: 2026-11-22
+updated: 2026-11-24
 status: draft
 ---
 
@@ -23,6 +23,7 @@ status: draft
 
 - From version 4 of the agent rules (2026-11-21), rule 7 asks agents to run `python scripts/process_report.py --check` before their report. This follows the maintainer's answer to ADR 0752 question 5 ("Yes, add it") ([[adr-thread-process-measures-and-roadmap-form]]).
 - `--weekly` prints the four process measures of F-863: queue age, the lead's review minutes, proposed against written status, and escaped defects (ADR 0754) ([[adr-thread-process-measures-and-roadmap-form]]).
+- **Four convention checks from 2026-11-24** (F-861, ADR 0777): `--check` also fails on a roadmap note entry without its outcome word, longer than 1200 characters or with a line break (section n); on a source named as `Surname (year)` or by an arXiv number without a place in it, in an ADR registered from that day (section s); on a brief whose stated total is not the sum of its reading list or whose list exceeds 194023 bytes (section u; with `--history` also a listed size that is not the file's size at issue); and section l now holds each exceptions list to a registered largest number of entries (`test-root-without-adr` 25, `studio-spec-without-record` 0, `brief-over-reading-limit` 4, `brief-size-differs` 6), an absent list file counting as empty. The lists "only shrink"; when one has fewer entries than its number "the report says so and the lead lowers the number". Nothing dated before 2026-11-24 is read by sections n and s. The four constants were taken on the registered recommendations; no answer of the maintainer is recorded ([[adr-thread-process-measures-and-roadmap-form]]).
 - A typical agent result on 2026-11-22: the only failures are "generated file is not current" (`docs/adr/index.md`, `docs/reference-data.md`), which rule 9 leaves to the lead ([[adr-thread-simulation-milestones-validation]]).
 
 ## Related

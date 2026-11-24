@@ -1,9 +1,9 @@
 ---
 type: entity
 tags: [process, script, gate, testing, attribution]
-sources: [adr-thread-test-to-adr-attribution, adr-thread-daily-gate-and-edit-lock]
+sources: [adr-thread-test-to-adr-attribution, adr-thread-daily-gate-and-edit-lock, adr-thread-process-measures-and-roadmap-form]
 created: 2026-11-22
-updated: 2026-11-22
+updated: 2026-11-24
 status: draft
 ---
 
@@ -17,6 +17,7 @@ status: draft
 - Built with the daily gate (F-723, ADR 0653): 501 of 501 binaries found; 1053 of 1134 integration-test binaries (92.9 %) and 6986 of 7472 tests (93.5 %) mapped at that time ([[adr-thread-daily-gate-and-edit-lock]]).
 - Mapping evidence: file-name item, ADR and roadmap citations, wave tags (`w34a`, `wave17a`; bare `w31` ambiguous, F-737), the first `ADR NNNN` of a file's header, "Test files" notes appended to old ADRs (F-760); after F-760 no integration binary with tests is unmapped ([[adr-thread-test-to-adr-attribution]]).
 - Primary tiers: E0 (header ADR, or an ADR path in the leading comment, ADR 0701) > E1 > E6 > E8 (ADR or item named by the commit that first adds the file, ADR 0720) > E2 (file citation, resolved by the first commit that adds the file, `--primary git`, ADR 0690). Retro-registration units H1 and H2 give a primary to file-citation-only tests; H3 was removed (ADR 0703) and its code deleted (ADR 0712) ([[adr-thread-test-to-adr-attribution]]).
+- F-861 (ADR 0777, 2026-11-23) wrote the record as a first comment line into 31 Rust test root files (the `primary_adr` the index gave their tests on main d10ea0bd) and 12 Studio specs (the item or ADR of the commit that added the file). The 31 files now have their ADR by E0 "where 24 had it by E1 or E2. The ADR is the same one in every file"; 25 Rust files whose tests have no primary ADR stay on the exceptions list with the reason ([[adr-thread-process-measures-and-roadmap-form]]).
 - On a shallow clone or a `git archive` copy the git-based primaries are null (history `shallow` or `none` in `coverage.primary.git`) ([[adr-thread-test-to-adr-attribution]]).
 - Definition (maintainer, 2026-11-18, ADR 0704 Q1 (a)): "The primary is the ADR that decided the file's checks, and where there is none the file has no primary" ([[adr-thread-test-to-adr-attribution]]).
 - Reading agreement: second reader 21 of 28 (75.0 %, limit 85, F-786); later readings against a written criterion 19 of 20, 18 of 18, 22 of 22 ([[adr-thread-test-to-adr-attribution]]).

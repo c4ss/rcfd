@@ -3,7 +3,7 @@ type: overview
 tags: [overview]
 sources: [doc-readme, doc-product, doc-index, doc-roadmap-overview, doc-architecture, doc-glossary, doc-contributing, doc-process-agent-rules, doc-roadmap-json, doc-dynamic-mesh, doc-structural-solver, doc-validation-data, doc-reference-data, doc-milestone-fan, doc-fan-project-breakdown, doc-design-loop, doc-mcp-tools, doc-run-control, doc-service-protocol, doc-studio-guardrails, doc-process-lead-process, adr-thread-fan01-rotating-solve, adr-thread-sliding-mesh-rotor-stator, adr-thread-structural-plan, adr-thread-studio-electron, adr-thread-workspace-layer, adr-thread-simulation-milestones-validation, adr-thread-founding-decisions]
 created: 2026-11-22
-updated: 2026-11-23
+updated: 2026-11-24
 status: draft
 ---
 
@@ -42,9 +42,9 @@ The process is evidence-first and agent-driven, with written roles ([[lead]], [[
 - **Stop conditions on new agents (since 2026-11-21):** three unread reports, the escaped-defect rate, a red gate, or more than 4 agents ([[adr-thread-process-measures-and-roadmap-form]]).
 - **Defaults on hold:** the maintainer's answers of 2026-11-18 hold every result-moving default change in the numerics and moving-mesh areas "until the fan path needs it". New keys are approved as additive golden edits.
 
-## Where it stands (origin/main 930153a4, 2026-11-23)
+## Where it stands (origin/main 709e302e, 2026-11-24)
 
-- **Roadmap:** 795 items (F-886 on main with the wiki from 8732f2ae), with ~~403~~ 404 done, 299 partial and ~~93~~ 92 not started (~70 %, F-888 done at 930153a4; ~~791, 391/297/103~~ on 2026-11-22; at the snapshot ~~786, 389/297/100~~) ([[doc-roadmap-json]], [[doc-changelog]]). That counts landed work, not accuracy. The structural line alone has 309 items ([[roadmap-structural-solver]]).
+- **Roadmap:** ~~795~~ 798 items (F-886 on main with the wiki from 8732f2ae; F-890 to F-892 entered 2026-11-23), with ~~404~~ 409 done, ~~299~~ 300 partial and ~~92~~ 89 not started (~70 % at 709e302e; F-861, F-852, F-451, F-891, F-892 done, F-890 partial, the Studio's end-to-end tests no longer failing at random on the lead's machine after F-890 to F-892; ~~791, 391/297/103~~ on 2026-11-22; at the snapshot ~~786, 389/297/100~~) ([[doc-roadmap-json]], [[doc-changelog]]). That counts landed work, not accuracy. The structural line alone has 309 items ([[roadmap-structural-solver]]).
 - **Validation milestones:** ten since F-871 (ADR 0775, six added) and F-875 (ADR 0779, fan-structure) ([[simulation-milestones]], [[adr-thread-simulation-milestones-validation]]):
   - **NACA 0012 lift** is met from 0 to 16 degrees and at maximum lift. ~~17 degrees is a known miss with steady SA.~~ F-868 is done: at 17 degrees a time-accurate run (ADR 0764, answering ADR 0760 Q1 option (a)) settles to the attached state with $c_l$ 1.5516 inside the band; the steady route at 17 degrees is F-884, done (ADR 0770): attached with `relax_nut = 1.0` or a global pseudo step; F-887 (ADR 0772) ran the whole lift curve steady with `relax_nut = 1.0`, all twelve angles within the band, and no default changed. The milestone headline is still not met because F-043 (SST) is partial (87 %). The path ran through five investigations that found report and boundary-condition defects, not model defects ([[naca0012]], [[adr-thread-naca0012-sa-drag]]).
   - **Cylinder at Re 100: the first milestone headline met** (vortex shedding, ~~88 %~~ 92 %). The drag is in the band; the observed order 1.387 misses the registered [1.5, 2.5] and is kept as a known miss; ADR 0763 answer (c) made F-869 done, and F-881 (ADR 0771, done) found the order held down by the first-order wall terms of the force integral (1.387 to 1.777) ([[cylinder-re100]], [[adr-thread-simulation-milestones-validation]]).

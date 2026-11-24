@@ -308,3 +308,12 @@ Append-only. Newest at the bottom. Entry header: `## [YYYY-MM-DD] <op> | <title>
 - Roadmap area pages regenerated at 930153a4 ([[roadmap-studio-desktop-app]]: F-888 done, 41 / 12 / 6).
 - Sources re-read: [[doc-changelog]], [[doc-roadmap-json]], [[doc-roadmap-overview]] (795 items, 404 / 299 / 92, 70 %), origin_commit 930153a4; [[overview]] revised.
 - Not ingested: F-861 (ADR 0777), merge parked, `npm test` failed in each of three push runs on Studio tests outside it.
+
+## [2026-11-24] ingest | F-861, F-852, F-451, F-890, F-891, F-892 (ADRs 0777, 0781, 0783, 0787, 0788, 0789) (loop merge)
+
+- Threads: [[adr-thread-studio-electron]] (0781, 0787, 0788, 0789), [[adr-thread-process-measures-and-roadmap-form]] (0777), [[adr-thread-acoustic-wave-solver]] (0783).
+- Sources re-read at 709e302e: [[doc-acoustics]], [[doc-changelog]], [[doc-roadmap-json]], [[doc-roadmap-overview]], [[doc-studio-coverage]]; the 15 roadmap area pages regenerated.
+- Updated: [[aeroacoustics]], [[rcfd-cli]], [[duct-acoustic-modes]], [[process-report]], [[test-to-adr-index]], [[studio]], [[studio-guardrails]], [[roadmap]], [[f-item]], [[lead]], [[overview]] (798 items, 409 / 300 / 89, 70 %).
+- Contradiction: ADR 0781 traces the failures of `data-routes.spec.ts:94` and `data.spec.ts:73` to a stale `f447_bench` binary; ADR 0789 reports them in every run without a cause (callout on [[adr-thread-studio-electron]]).
+- Not ingested: F-339 (ADR 0784), not on main; the registration bodies of the six ADRs were read by their headers, designs, decision rules, results and the lead's readings, not line by line.
+- Done by a subagent on the lead's instruction; index, log and overview by the lead.
