@@ -293,3 +293,16 @@ the merge.
 > ADR 0783, 2026-11-23, done: rcfd duct-modes reads one rcfd-surface-series file per duct section and writes the rcfd-duct-modes export (one section: kind section; two or more: the axial split into the waves towards +x and -x); on the seven sections of the ADR 0351 X1 field the export equals the library's text with 0 differing bytes of 3337 as a file, 0 of 3338 on standard output and 0 of 3336 with the reference position 0.1, and one section gives the library's section export with 0 of 2091; a face moved outside the duct and a series cut to 127 or 96 of its 128 samples are refused with exit 3, the file, the JSON path and the registered texts; 5 of 5 mutations caught; baseline hashes pass; no library or solver source changed; the help gains six lines and the Studio capability inventory seven entries (one command, six options), none removed or changed, which the lead re-records with a coverage entry (rule 3, additive golden edit).
 
 No follow-up item is proposed.
+
+## The lead's reading (2026-11-24), at the merge
+
+Merged with F-852 and F-451 as one joint check (`push_main.py --base`; merges 4255f915 and 01726464) and pushed at
+9c1d3817, once the Studio fixes of F-890 to F-892 were on main (the reports read at 04:27 UTC on 2026-11-23, 10 minutes
+of reading for the two, proposed done, written done). The first run of the joint check failed `npm test` in each of
+three runs on `capabilities.spec.ts:210`: F-451's new command was not yet in the Studio's capability inventory. The lead
+regenerated the inventory (`npm run capabilities`) and mapped `rcfd duct-modes` and its options in `coverage.json` as the
+other acoustics tools (F-809, unplanned), in the merge commit. A second run stopped on `target/release/rcfd.exe` held by
+an `rcfd run` solver left by a run-control test of the first run, its parent gone; the lead ended it (outside F-892,
+which covers `rcfd serve`). The third run passed, `npm test` in its first run, and the committed mutations were caught.
+
+Status: **done**, as proposed.

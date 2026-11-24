@@ -288,3 +288,16 @@ Status proposed: done.
 Follow-up proposed:
 
 > Title: Studio: undo.spec.ts:139 fails under load, a Ctrl+Z pressed before the redo before it has finished is dropped. Deps: F-829. Acceptance: Every limit not stated here is registered in the ADR before the run. The cause of the failure of apps/studio-web/tests/e2e/undo.spec.ts:139 (after Ctrl+Shift+Z and Ctrl+Z the value stays 700; 1 of 30 runs under load, ADR 0781 addendum 1) is found and shown by a test that fails without the fix; the test at line 128 then passes a registered number of consecutive runs on Windows. The test is not skipped, retried or given a longer limit to make it pass.
+
+## The lead's reading (2026-11-24), at the merge
+
+Merged with F-852 and F-451 as one joint check (`push_main.py --base`; merges 4255f915 and 01726464) and pushed at
+9c1d3817, once the Studio fixes of F-890 to F-892 were on main (the reports read at 04:27 UTC on 2026-11-23, 10 minutes
+of reading for the two, proposed done, written done). The first run of the joint check failed `npm test` in each of
+three runs on `capabilities.spec.ts:210`: F-451's new command was not yet in the Studio's capability inventory. The lead
+regenerated the inventory (`npm run capabilities`) and mapped `rcfd duct-modes` and its options in `coverage.json` as the
+other acoustics tools (F-809, unplanned), in the merge commit. A second run stopped on `target/release/rcfd.exe` held by
+an `rcfd run` solver left by a run-control test of the first run, its parent gone; the lead ended it (outside F-892,
+which covers `rcfd serve`). The third run passed, `npm test` in its first run, and the committed mutations were caught.
+
+Status: **done**, as proposed. Its follow-up is a question of scope for the maintainer and is not entered.
