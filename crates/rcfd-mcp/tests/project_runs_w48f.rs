@@ -100,7 +100,7 @@ fn f3_f11_project_tools_on_runner_made_runs() {
     // 40, ADR 0733's two budgets tools, ADR 0734's hash_project_file, ADR 0736's six trash tools, ADR 0737's
     // case_facts and refine_case_mesh and ADR 0738's derive_picture
     // and ADR 0739's list_sites
-    assert_eq!(list["result"]["tools"].as_array().unwrap().len(), 53);
+    assert_eq!(list["result"]["tools"].as_array().unwrap().len(), 55);
 
     // F11 part 1: start_run then wait_run reaches finished on a 30-step cavity
     let r = m.call("start_run", json!({"case": "cases/cavity.toml"}));
@@ -355,6 +355,6 @@ fn f13_server_start() {
             .as_array()
             .unwrap()
             .len(),
-        53
+        55
     );
 }

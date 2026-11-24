@@ -1,0 +1,14 @@
+# expect-fail: cargo test --release -p rcfd-mcp --test design_uq_sobol_f339
+diff --git a/crates/rcfd-api/src/design/tools.rs b/crates/rcfd-api/src/design/tools.rs
+index 22af6983..81f55acf 100644
+--- a/crates/rcfd-api/src/design/tools.rs
++++ b/crates/rcfd-api/src/design/tools.rs
+@@ -2091,7 +2091,7 @@ pub fn uq_study(svc: &Service, p: &Value) -> Rpc {
+     };
+     spec.validate().map_err(bad)?;
+     study_guard(svc, &c.ledger, &spec.name, spec.stop.max_samples)?;
+-    let res = uq::run(&spec, &c.model, Some(&c.ledger)).map_err(|e| RpcError::new(code::INTERNAL, e))?;
++    let res = uq::run(&spec, &c.model, None).map_err(|e| RpcError::new(code::INTERNAL, e))?;
+     Ok(study_reply(
+         &c.ledger,
+         &c.model,

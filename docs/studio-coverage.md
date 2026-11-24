@@ -20,12 +20,12 @@ Engine read: rcfd 0.1.0, service protocol rcfd-service/1 version 1.1, MCP server
 | Kind | Capabilities | UI path | Exemption | Exemption whose item does not name it |
 |---|---|---|---|---|
 | Service methods | 69 | 20 | 49 | 40 |
-| MCP tools | 70 | 35 | 35 | 26 |
+| MCP tools | 72 | 35 | 37 | 28 |
 | CLI commands | 54 | 23 | 31 | 24 |
 | CLI options | 220 | 35 | 185 | 132 |
 | Case schema keys | 951 | 951 | 0 | 0 |
 | Monitor format keys | 6 | 6 | 0 | 0 |
-| **All** | **1370** | **1070** (78.1 %) | **300** | **222** |
+| **All** | **1372** | **1070** (78.0 %) | **302** | **224** |
 
 A case key stands for every value of its enumeration (the solver options of that key, listed in the inventory): the
 schema-driven surface of F-825 offers them all. A CLI option is mapped with its command. "Item does not name it" marks an
@@ -47,12 +47,12 @@ new item (see the last sections).
 | F-815 compare two runs | 5 | `design.compare` (not named), `design.get_metrics` (not named), `design.ledger_query` (not named), `design.ledger_rerun_check` (not named), `design.list_study` (not named) |
 | F-828 provenance inspector and reproduce-from-CLI | 1 | `journal.replay` |
 
-### MCP tools (35 without a UI path)
+### MCP tools (37 without a UI path)
 
 | Item | Count | Capabilities |
 |---|---|---|
 | F-805 project home and the live project folder | 3 | `import_mesh` (not named), `list_changes`, `write_note` (not named) |
-| F-807 run control (quick run, stop, pause, queue) | 18 | `create_workflow` (not named), `design_create_study` (not named), `design_create_variant` (not named), `design_evaluate` (not named), `design_ledger_append` (not named), `design_ledger_export` (not named), `design_propose` (not named), `design_record` (not named), `design_run_operating_map` (not named), `design_run_study` (not named), `edit_workflow` (not named), `list_workflow_tasks` (not named), `read_status_stream` (not named), `run` (not named), `run_headless` (not named), `run_workflow_task` (not named), `status` (not named), `wait_run` (not named) |
+| F-807 run control (quick run, stop, pause, queue) | 20 | `create_workflow` (not named), `design_create_study` (not named), `design_create_variant` (not named), `design_evaluate` (not named), `design_ledger_append` (not named), `design_ledger_export` (not named), `design_propose` (not named), `design_record` (not named), `design_run_operating_map` (not named), `design_run_study` (not named), `design_sobol` (not named), `design_uq` (not named), `edit_workflow` (not named), `list_workflow_tasks` (not named), `read_status_stream` (not named), `run` (not named), `run_headless` (not named), `run_workflow_task` (not named), `status` (not named), `wait_run` (not named) |
 | F-808 field viewport on three.js WebGPU | 5 | `export_vtk` (not named), `field_summary`, `get_field_stats`, `render_field`, `render_image` |
 | F-809 derived pictures (iso-surfaces, streamlines, cut planes, vectors) | 1 | `derive_picture` |
 | F-811 residual and monitor plots | 2 | `get_residuals`, `read_metrics` |
@@ -104,7 +104,7 @@ holds the other way round). The reasons are in `coverage.json`.
 - Calling any service method by name (rcfd call): no item names a generic call; nearest home the action layer (F-827). (F-827): `rcfd call`, `rcfd call --*`.
 - Choosing or starting the solver service from the window: the service client (F-803) starts rcfd serve from the environment and no item gives it a UI; nearest home project home (F-805). (F-805): `rcfd serve`, `rcfd serve --*`.
 - Co-simulation (the cosim methods): no Studio item covers it; nearest home run control (F-807). (F-807): `cosim.advance`, `cosim.checkpoint`, `cosim.describe`, `cosim.forces`, `cosim.list`, `cosim.open`, `cosim.restore`, `cosim.time`.
-- Design studies, operating maps and the design ledger: no Studio item covers them; nearest homes run control (F-807) for running and compare (F-815) for results. (F-807, F-815): `design.compare`, `design.create_study`, `design.create_variant`, `design.evaluate`, `design.get_metrics`, `design.ledger_append`, `design.ledger_export`, `design.ledger_query`, `design.ledger_rerun_check`, `design.list_study`, `design.propose`, `design.record`, `design.run_map`, `design.run_study`, `design_compare_variants`, `design_create_study`, `design_create_variant`, `design_evaluate`, `design_get_metrics`, `design_ledger_append`, `design_ledger_export`, `design_ledger_query`, `design_ledger_rerun_check`, `design_list_study`, `design_propose`, `design_record`, `design_run_operating_map`, `design_run_study`, `rcfd map`, `rcfd study`, `rcfd map --*`, `rcfd study --*`.
+- Design studies, operating maps and the design ledger: no Studio item covers them; nearest homes run control (F-807) for running and compare (F-815) for results. (F-807, F-815): `design.compare`, `design.create_study`, `design.create_variant`, `design.evaluate`, `design.get_metrics`, `design.ledger_append`, `design.ledger_export`, `design.ledger_query`, `design.ledger_rerun_check`, `design.list_study`, `design.propose`, `design.record`, `design.run_map`, `design.run_study`, `design_compare_variants`, `design_create_study`, `design_create_variant`, `design_evaluate`, `design_get_metrics`, `design_ledger_append`, `design_ledger_export`, `design_ledger_query`, `design_ledger_rerun_check`, `design_list_study`, `design_propose`, `design_record`, `design_run_operating_map`, `design_run_study`, `design_sobol`, `design_uq`, `rcfd map`, `rcfd study`, `rcfd map --*`, `rcfd study --*`.
 - Events of the service's in-memory sessions: the runs table (F-806) follows the runner's runs through the project server; a run of a service session (quick run) would report through it; nearest home run control (F-807). (F-807): `events.poll`.
 - Exports to files (VTK, report files): no Studio item names them; nearest home the surface that shows the data. (F-808, F-811): `field.export_vtk`, `report.export`, `export_vtk`.
 - How the started runner logs and whether it stays attached (--foreground, --log-file, --quiet, --stdout): the Studio starts it detached with its defaults (F-807, Start the runner). (F-807): `rcfd-runner ensure --*`.

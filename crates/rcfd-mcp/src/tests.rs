@@ -292,7 +292,7 @@ fn stdio_loop_handles_a_scripted_session() {
     assert_eq!(lines.len(), 3);
     assert_eq!(lines[0]["result"]["protocolVersion"], "2025-03-26");
     // 29 + 4 design ledger tools (wave 46D, ADR 0121) + create_project (ADR 0731 P3)
-    assert_eq!(lines[1]["result"]["tools"].as_array().unwrap().len(), 34);
+    assert_eq!(lines[1]["result"]["tools"].as_array().unwrap().len(), 36);
     assert_eq!(lines[2]["error"]["code"], -32700);
 }
 

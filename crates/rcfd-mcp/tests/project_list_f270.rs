@@ -313,13 +313,13 @@ fn a2_tools_list_with_project_is_the_golden_with_the_f271_changes() {
         gold.len(),
         GOLDEN.len()
     );
-    assert_eq!(gold.len(), 50, "the golden: 33 session tools and 17 project tools");
+    assert_eq!(gold.len(), 52, "the golden: 33 session tools and 17 project tools");
     // ADR 0195 C5-L: 17 session tools and 23 project tools; the 16 hidden ones put back from the list without --project
     // at their places give the F-273 list
-    assert_eq!(live_f275.len(), 40, "17 session tools and 23 project tools");
+    assert_eq!(live_f275.len(), 42, "17 session tools and 23 project tools");
     let default: Value = serde_json::from_str(DEFAULT).unwrap();
     let session = default["tools"].as_array().unwrap();
-    assert_eq!(session.len(), 33);
+    assert_eq!(session.len(), 35);
     for t in live_f275 {
         assert!(
             !HIDDEN.contains(&t["name"].as_str().unwrap()),
@@ -358,7 +358,7 @@ fn a2_tools_list_with_project_is_the_golden_with_the_f271_changes() {
         t["_meta"]["rcfd/access"] = json!("write_files");
     }
     let live_f273 = &live_f273;
-    assert_eq!(live_f273.len(), 56, "33 session tools and 23 project tools");
+    assert_eq!(live_f273.len(), 58, "33 session tools and 23 project tools");
     // ADR 0188 C-L: read_feed right after list_changes, a read tool with no required argument
     let fp = live_f273
         .iter()
@@ -389,7 +389,7 @@ fn a2_tools_list_with_project_is_the_golden_with_the_f271_changes() {
         f272.push(t);
     }
     let live = &f272;
-    assert_eq!(live.len(), 55, "the F-272 list: 33 session tools and 22 project tools");
+    assert_eq!(live.len(), 57, "the F-272 list: 33 session tools and 22 project tools");
     let name = |t: &Value| t["name"].as_str().unwrap().to_string();
     // new_case: right after write_note, writes files
     let at = live

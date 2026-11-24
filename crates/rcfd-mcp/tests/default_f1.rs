@@ -43,7 +43,7 @@ fn f1_tools_list_without_project_is_the_golden_plus_create_project() {
     // the golden's text is the serialisation of its value, so equal values are equal bytes
     assert_eq!(serde_json::to_string(&gold).unwrap(), GOLDEN);
     let gold = gold["tools"].as_array().unwrap();
-    assert_eq!(gold.len(), 33);
+    assert_eq!(gold.len(), 35);
     for args in [&[][..], &["--root", "."][..], &["--read-only"][..]] {
         let lines = exchange(args, &[req]);
         assert_eq!(lines.len(), 1, "{args:?}");
@@ -53,11 +53,11 @@ fn f1_tools_list_without_project_is_the_golden_plus_create_project() {
         let live = live["tools"].as_array().unwrap();
         assert_eq!(
             live.len(),
-            34,
-            "{args:?}: the 33 tools of the golden and create_project"
+            36,
+            "{args:?}: the 35 tools of the golden and create_project"
         );
         // ADR 0731 P3: create_project last, writes files, takes path and an optional name
-        let cp = &live[33];
+        let cp = &live[35];
         assert_eq!(cp["name"], "create_project");
         assert_eq!(cp["_meta"]["rcfd/access"], "write_files");
         assert_eq!(cp["_meta"]["rcfd/needsApproval"], true);

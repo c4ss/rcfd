@@ -17,12 +17,12 @@
   },
   "counts": {
     "service_method": 69,
-    "mcp_tool": 70,
+    "mcp_tool": 72,
     "cli_command": 54,
     "cli_option": 220,
     "case_key": 951,
     "monitor_format_key": 6,
-    "total": 1370
+    "total": 1372
   },
   "capabilities": [
     {"id":"service:cosim.advance","kind":"service_method","source":"service.info"},
@@ -118,6 +118,8 @@
     {"id":"mcp:design_record","kind":"mcp_tool","source":"tools/list","access":{"default":"write_files","project":"write_files"}},
     {"id":"mcp:design_run_operating_map","kind":"mcp_tool","source":"tools/list","access":{"default":"write_files","project":"execute"}},
     {"id":"mcp:design_run_study","kind":"mcp_tool","source":"tools/list","access":{"default":"write_files","project":"execute"}},
+    {"id":"mcp:design_sobol","kind":"mcp_tool","source":"tools/list","access":{"default":"write_files","project":"write_files"}},
+    {"id":"mcp:design_uq","kind":"mcp_tool","source":"tools/list","access":{"default":"write_files","project":"write_files"}},
     {"id":"mcp:edit_case","kind":"mcp_tool","source":"tools/list","access":{"project":"write_files"}},
     {"id":"mcp:edit_workflow","kind":"mcp_tool","source":"tools/list","access":{"default":"mutate"}},
     {"id":"mcp:empty_trash","kind":"mcp_tool","source":"tools/list","access":{"project":"delete"}},

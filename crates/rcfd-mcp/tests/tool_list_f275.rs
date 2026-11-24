@@ -125,10 +125,10 @@ fn c5l_project_list_has_no_session_only_tool() {
         .iter()
         .filter(|t| !hidden.contains(&t["name"].as_str().unwrap()))
         .collect();
-    assert_eq!(kept.len(), 17);
+    assert_eq!(kept.len(), 19);
     assert_eq!(
         live.len(),
-        53,
+        55,
         "17 session tools and 36 project tools (ADR 0733: two budgets tools; ADR 0734: hash_project_file; ADR 0736: six trash tools; ADR 0737: case_facts, refine_case_mesh; ADR 0738: derive_picture; ADR 0739: list_sites)"
     );
     let mut execute = 0;
@@ -149,7 +149,7 @@ fn c5l_project_list_has_no_session_only_tool() {
         );
     }
     assert_eq!(execute, EXECUTE.len());
-    let names: Vec<&str> = live[17..].iter().map(|t| t["name"].as_str().unwrap()).collect();
+    let names: Vec<&str> = live[19..].iter().map(|t| t["name"].as_str().unwrap()).collect();
     assert_eq!(names, PROJECT_TOOLS);
     for t in live {
         assert!(!hidden.contains(&t["name"].as_str().unwrap()), "{} listed", t["name"]);

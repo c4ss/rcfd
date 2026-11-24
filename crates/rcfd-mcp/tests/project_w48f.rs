@@ -132,7 +132,7 @@ fn f3_access_classes_read_only_and_schema() {
     let list = s.tool_list();
     // ADR 0733: and the two budgets tools; ADR 0734: and hash_project_file; ADR 0736: and the six trash tools; ADR 0737:
     // and case_facts, refine_case_mesh; ADR 0738: and derive_picture; ADR 0739: and list_sites
-    assert_eq!(names(&list).len(), 17 + 36);
+    assert_eq!(names(&list).len(), 19 + 36);
     for (name, access) in PROJECT_TOOLS {
         let t = list["tools"]
             .as_array()

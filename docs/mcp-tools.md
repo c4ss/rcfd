@@ -60,12 +60,14 @@ F-147, F-148):
 | `design_ledger_query` | read | `design.ledger_query` | filter the ledger; Pareto set, best so far, parameter history |
 | `design_ledger_export` | write_files | `design.ledger_export` | ledger entries to a CSV or JSON file |
 | `design_ledger_rerun_check` | read | `design.ledger_rerun_check` | compare a re-run's metrics with a ledger entry |
+| `design_uq` | write_files | (library, `design::uq::run`) | tolerance study of a named evaluator, recorded in a design ledger |
+| `design_sobol` | write_files | (library, `design::sensitivity::run`) | Sobol sensitivity indices of a named evaluator, recorded in a design ledger |
 | `render_image` | read | `render.png` | PNG image of a field |
 | `create_project` | write_files | (local, `rcfd_workspace::create_project`) | make a project folder; only without `--project` |
 
 With `--project` the 16 tools above that need a session of the server's memory, or make one, are not offered (see
 [Project mode](#project-mode-the-session-tools-that-are-not-offered)), nor is `create_project` (the server already has a
-project); the other 17 are.
+project); the other 19 are.
 
 `create_project {path, name?}` (ADR 0731) makes a project folder with `rcfd_project::Project::create`, as
 `rcfd project init <dir> [--name <name>]` does: `rcfd-project.json` and the folders `cases`, `meshes`, `runs`, `designs`,
@@ -127,6 +129,47 @@ next entry.
   by `evaluator` and `fidelity` first.
 - `design_ledger_export` writes CSV or JSON.
 - `design_ledger_rerun_check` compares the metrics of a re-run with an entry (tolerances default to 0, bit-identical).
+
+## Tolerance and Sobol study tools
+
+`design_uq` and `design_sobol`
+([ADR 0784](adr/0784-f339-registration-mcp-tools-for-tolerance-and-sobol-studies-of-the-reduced-order-fan.md)) run the two
+study drivers of the library, `design::uq::run` and `design::sensitivity::run` (`docs/design-loop.md`), on a named evaluator
+and record the study in a design ledger. They add nothing of their own to the numbers: the reply's `result` is the
+driver's result, bit for bit. They are not service methods; the server calls the library.
+
+The one named evaluator is `rcfd.fan_rom`, the reduced-order axial fan (ADR 0119, ADR 0623) with three inputs:
+`stagger_common_deg` (unit `deg`, added to every section's stagger), `chord_rel` (unit `1`, every chord times
+`1 + chord_rel`) and `tip_gap_delta` (unit `m`, added to the tip gap). Its metrics are `q`, `dp_s`, `dp_t`, `power`,
+`torque`, `eta_s`, `eta_t` and `tone1_pa` at the operating point on the system curve.
+
+Arguments of both tools:
+
+- `ledger`: the ledger file inside the sandbox; `name`: the study name, which must be new in that ledger.
+- `evaluator`: `rcfd.fan_rom`. `evaluator_settings`: `fan` `{n_blades, r_hub, r_tip, tip_gap, family, sections}` with
+  `family` `naca4` or `circular_arc` and each section `{radius, chord, stagger, camber, camber_pos}` (metres, stagger in
+  radians from the axis); `condition` `{rpm, rho, nu, system_k, system_l, c0, observer_r, observer_theta, n_scan}` (all
+  nine, SI units, the angle in radians); and optionally `model` with any of `n_strips`, `cl_max`, `cd_normal`,
+  `friction`, `annulus_drag`, `secondary_drag`, `tip_cd` (absent keys keep the registered values of ADR 0119).
+- `params`: the uncertain inputs, each `{name, unit, dist}` with `dist` one of `{type: "uniform", lo, hi}`,
+  `{type: "normal", mean, sd, lo, hi}` (`lo` and `hi` optional: no truncation on that side) and
+  `{type: "beta", a, b, lo, hi}`.
+- `seed` (default 1) and `workers` (default 1; the result does not depend on it).
+
+`design_uq` also takes `sampler` (`monte_carlo`, the default, or `lhs`), `stop` `{batch, max_samples, min_batches,
+se_abs, se_rel, metrics}` (the first two required), `quantiles` (default 0.05, 0.5, 0.95), `confidence` (default 0.95)
+and `requirements` (a list of `{metric, cmp, limit}` with `cmp` either `<=` or `>=`). `design_sobol` takes `n`, the rows
+of each of its two sample matrices; it makes `n (d + 2)` evaluations for `d` inputs.
+
+Both return `{ledger, evaluator, evaluator_version, fidelity, entries_appended, result}`. Every sample or evaluation is a
+ledger entry of kind `evaluation`, and one entry of kind `uq_summary` or `sobol_summary` closes the study, so
+`design_ledger_query` reads the study afterwards.
+
+Limits and errors: one call makes at most `--max-design-evaluations` evaluations (`stop.max_samples`, or `n (d + 2)`),
+otherwise 1004; a ledger path outside the sandbox is 1004; an unknown evaluator, a setting, parameter or distribution
+that is missing, unknown or invalid, and a study name the ledger already holds are -32602 with the key named. A refused
+call writes nothing. Neither tool is idempotent: a repeated call needs a new name. With `--project` both stay, with the
+class `write_files`; they run in the server process and start no run of the project's runner.
 
 ## Project tools (`--project`)
 
@@ -243,7 +286,7 @@ checked (ADR 0188 Q4).
 With `--project`, a session tool whose every use needs a session of the server's memory, or makes one, is neither listed nor
 callable (a call is the JSON-RPC error -32602 `unknown tool`), because in project mode cases, meshes and runs live in the
 project folder ([ADR 0195](adr/0195-adr-0173-amendment-6-f275-registration-project-mode-tool-list-and-plugin-edit-hook.md) P1).
-The 17 others (`list_cases`, `check_case_headless`, `read_status_stream` and the design and ledger tools) stay, with the same
+The 19 others (`list_cases`, `check_case_headless`, `read_status_stream` and the design, ledger and study tools) stay, with the same
 descriptors except the access class `execute` of `design_run_study`, `design_evaluate` and `design_run_operating_map` (ADR 0196
 B, ADR 0200 S9); their `session`
 arguments cannot be used there. `initialize`'s first sentence then names no session tool.
