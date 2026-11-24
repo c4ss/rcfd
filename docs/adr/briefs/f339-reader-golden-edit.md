@@ -53,3 +53,5 @@ patch alone. Running the item's tests in your scratch folder (a copy, `CARGO_TAR
 A report: for each finding, the file and line or the ADR's section, the kind (1, 2, 3, golden, other), what is wrong and
 why, and how sure you are; then "no finding" for each kind you looked for and did not find. Whether the patch is
 additive, with your script's output. No status: the lead decides it. Keep the report under 1500 words.
+
+Closed without merge (2026-11-24): a reader, no branch; its report is in ADR 0784, "A reader's report".

@@ -413,3 +413,33 @@ Status proposed: partial.
 > ADR 0784, 2026-11-23, partial: the MCP tools design_uq and design_sobol run uq::run and sensitivity::run on the named evaluator rcfd.fan_rom with the ledger, inside the sandbox and under the limit max_design_evaluations (class write_files, also in project mode); the replies equal the library's result bit for bit (256 Monte Carlo samples, a Latin hypercube study with a stopping rule, 320 Sobol evaluations) and the ledger files equal the drivers' but for the stamp; all registered checks hold but X1: seven existing tests in six files hold a count of the tool list and fail until the additive golden edit is made (two entries added to each of the two tools-list goldens, sixteen count literals raised by two), with which they pass on a scratch copy; the edit and the Studio's two inventory and coverage rows are the lead's; eight mutations caught; service methods for the two studies are open question 1 (recommended: tools only).
 
 No follow-up item is proposed in the file.
+
+## A reader's report (2026-11-24), before the merge
+
+The item changes two goldens, so a reader read the work afresh before the merge (brief
+`docs/adr/briefs/f339-reader-golden-edit.md`; it read and ran in its own scratch folder and changed nothing). In short:
+
+- **The golden edit is additive.** In both goldens every earlier entry is byte-identical and in order, `design_uq` (2779
+  bytes) and `design_sobol` (2210 bytes) are added right after `design_ledger_rerun_check` and equal what the server
+  prints, nothing is changed or removed (33 to 35 and 50 to 52 entries; 27188 to 32179 and 38978 to 43969 bytes). The
+  sixteen count literals are all and only the ones that hold the list's length; with the edit the eight list and design
+  test files pass. The patch applied to main unchanged.
+- **Finding 1-1** (a stated result that does not follow): deviation 2 of addendum 1 says the extra test covers the
+  string bounds; no test sends `"-inf"`, `"inf"` or `null` as a bound, so those branches of `bound_at` are not run.
+- **Finding 2-1** (equality that cannot fail for some errors): the reference inputs take values at which a swapped Beta
+  `a` and `b` (2, 2), a dropped `mean` or `system_l` (0) or the default `seed` give the same bytes; `circular_arc`,
+  `cmp "<="` and a non-zero `se_abs` are never sent.
+- Lower: 2-2 (no number crosses the stdio text in these tests, as the registration says), 2-3 (G2 reads two lists from the
+  library, held elsewhere by `tool_list_f275.rs`), 3-1 (two set-up guards, `n_ok >= 1` and `n_rows_used >= 2`, far from
+  the recorded 256 and 64), G-1 (six failure messages still name the old counts), O-1 to O-3.
+
+## The lead's reading (2026-11-24), at the merge
+
+Merged at 05175113 and pushed at 9c0aa461 (the report read at 05:11 UTC on 2026-11-23, 12 minutes of reading, proposed
+partial, written partial). In the merge commit the lead made the additive golden edit as addendum 1 gives it (the
+reader's check above; the ledger line names the two files, +4991 bytes and two entries each) and the Studio's two
+inventory rows (regenerated) and two coverage rows, exempt under F-807 (unplanned) as the other design tools. `npm test`
+passed in its first run; the committed mutation was caught; 119 binaries were left out for a left-out run.
+
+Status: **partial**, as proposed. X1 was missed under the registered rule, and findings 1-1 and 2-1 of the reader name
+inputs the tests do not reach; both are in the gap. Open question 1 (service methods) is the maintainer's.

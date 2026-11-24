@@ -497,7 +497,7 @@ One row per record of this folder, grouped by the roadmap category of the item i
 | [0699](0699-f782-registration-wake-stacks-of-construction-s-prime-at-the-thin-end-wall-layers.md) | F-782 registration: wake stacks of construction S' at the thin end-wall layers | REGISTERED | 2026-11-17 | 1 | F-782 | done |
 | [0702](0702-f784-registration-ramp-length-of-the-wake-stack-remap-from-the-wake-line-spacing.md) | F-784 registration: ramp length of the S'' wake-stack remap from the wake line spacing | REGISTERED | 2026-11-17 | 1 | F-784 | partial |
 | [0713](0713-f791-registration-one-growth-ratio-of-the-free-rows-across-the-span-layers.md) | F-791 registration: one growth ratio of the free rows of every C line across the span layers (construction S'''') | REGISTERED | 2026-11-17 | 1 | F-791 | done |
-| [0784](0784-f339-registration-mcp-tools-for-tolerance-and-sobol-studies-of-the-reduced-order-fan.md) | F-339 registration: the MCP tools `design_uq` and `design_sobol` for tolerance and Sobol studies of a named evaluator, the reduced-order fan first | REGISTERED | 2026-11-23 | 1 | F-339 | todo |
+| [0784](0784-f339-registration-mcp-tools-for-tolerance-and-sobol-studies-of-the-reduced-order-fan.md) | F-339 registration: the MCP tools `design_uq` and `design_sobol` for tolerance and Sobol studies of a named evaluator, the reduced-order fan first | REGISTERED | 2026-11-23 | 1 | F-339 | partial |
 
 ## Claude and the MCP server (10)
 
