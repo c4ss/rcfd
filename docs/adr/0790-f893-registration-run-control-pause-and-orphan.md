@@ -278,3 +278,17 @@ an `rcfd run` process. **Todo** if no record could be made.
 ## Open questions for the maintainer
 
 None at registration.
+
+## Amendment 1 (2026-11-24): the place of the time-out of SD3 and W4; written before the corrected run and before any code of the fix
+
+Made so far, on the unchanged tree, each once: PD2 (which is also SD2, as registered: the same patch, one run), SD1 and
+SD3. SD3's patch put the wait without end after line 331 (`status.json` says `paused`); in its run :320 failed first at
+line 329 with "element(s) not found" (5.2 s), so the wait was never reached and the test did not time out. That run does
+not decide SD3; it is kept as a record (a failure of :320 on the unchanged tree without the recording patch).
+
+The set-up was defective: a time-out placed after line 329 depends on the race that line 329 loses. Corrected: the wait
+without end is placed right after `await measured(page, 'project.pause_run');` (line 328), before line 329, the same
+line on the unchanged and on the fixed tree. The pause has been accepted by the engine there, and the runner acts on it
+within the 120 s the test then runs into. **SD3** is made once more with this patch on the unchanged tree, and **W4**
+(A2) uses it on the fixed tree. Expected and limits as registered: SD3 counted (expected 0 left), W4 0 left. Nothing
+else changes.
