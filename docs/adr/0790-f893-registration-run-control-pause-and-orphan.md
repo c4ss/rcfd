@@ -292,3 +292,134 @@ line on the unchanged and on the fixed tree. The pause has been accepted by the 
 within the 120 s the test then runs into. **SD3** is made once more with this patch on the unchanged tree, and **W4**
 (A2) uses it on the fixed tree. Expected and limits as registered: SD3 counted (expected 0 left), W4 0 left. Nothing
 else changes.
+
+## Addendum 1: results (2026-11-24)
+
+Written after the runs. Records are in the scratch folder under `records/` (one folder per run: the log, the process
+lists before and 15 s after, the per-file lists of the counting reporter, what was left); the tables below are their
+summary. All runs on Windows 11, the engine built from this branch into the scratch target folder, other agents running
+on the machine at the same time. Commits: 70f42cd4 (this registration, alone), 1f45969a (amendment 1), c7f0b918 (the
+fix and T1), 80699f8d (the committed mutation), then this addendum and the proposal file.
+
+### The cause of the :320 failure: P4, the runner acts before the test looks
+
+| Run, unchanged tree | :320 | Record |
+|---|---|---|
+| PD2 (the wait for the runner's acting before line 329) | failed at line 329, "element(s) not found", 5.3 s | the error of finding 1, the same line |
+| SD3 as first registered (its wait after line 331, never reached) | failed at line 329, "element(s) not found", 5.2 s | a natural failure, no recording patch |
+| PD1, 10 runs with the recording patch | ran in 9 (in pd1-02 :264 failed first, below), passed in 9 | at line 329: the note there with "Pause requested from the Studio …; waiting for the runner to hold it", 26 to 96 ms after its commit; the request not yet settled and the list's state `running` in 9 of 9, while `status.json` already said `paused` in 6 of 9 |
+| B0, whole run | passed | |
+
+C1 is met: PD2 fails at line 329 with the error the lead's three logs show. PD1 tells the hypotheses apart: the runner
+has the solver held within about 50 ms of the engine's answer (`status.json` `paused` when line 329 starts, in 6 of 9),
+so P1 is not shown (the pause is acted on every time and line 330 passed in every run); P2 is not shown as a loss (the
+run list follows `status.json` within the 15 s of line 330 every time); P3 is not shown (the note appears 15 to 24 ms
+after the answer). What decides line 329 is only whether the feed brings the settled list to the window before the test,
+26 to 96 ms after the note's commit, looks at the row; when it does, the note is gone. The 1 natural failure in 11 runs of
+the file without a wait before line 329 (SD3) fits that margin.
+
+### The path that leaves the solver: S1a, then S2 and S3
+
+| Run, unchanged tree | `rcfd run` of mine left | Record |
+|---|---|---|
+| SD1, the queue test made to fail after line 279 | 1 | pid 32472, parent 51536 no longer alive: the test's `rcfd-runner serve --project <tmp>\rcfd-f807-WsN0Ew\quick-start`, shut down and killed by `cleanUp`; command line `…\target\release\rcfd.exe run <tmp>\rcfd-f807-WsN0Ew\quick-start\runs\r-20261124T104814-0b60\case.snapshot --case-dir …\cases --set solver.max_iterations=1000000 --set solver.tolerance_u=1e-14 --set solver.tolerance_p=1e-14 … --stop-file …\cancel --pause-file …\pause …`; its run folder still there |
+| PD2 = SD2, :320 failed at line 329, the run paused and in `started` | 0 | |
+| SD3 (amendment 1), :320 timed out after 2.0 min, the run paused and in `started` | 0 | |
+| PD1, 10 runs (pd1-02: :264 failed at its cancel's P2 check, line 312, after the long run was in `started`) | 0 in each | |
+| B0, whole run: before and after each of 97 spec-file steps | 0 after every file, 0 after the run | |
+
+C3 is met. SD1 leaves the process the lead found, with its command line, from the run's own target folder, its parent
+gone: the run is never in `started` (S1a), the teardown asks the runner to shut down, which leaves its solvers by
+design (S2), and kills the runner by its pid, which does not end its child (S3). S1b and S1c are not shown: a run in
+`started` was ended by the old teardown whether paused, failed at, or timed out in (SD2, SD3, pd1-02).
+`push-f852-451.log`, which failed at line 279 in each of its three runs, is that path.
+
+### The fix
+
+As registered (c7f0b918), test and harness only: `run-control.spec.ts` (the words of the note as it appeared, the panel's
+settle, the row without its note; the `afterAll` calls `endAll()`), `tests/support/runner.ts` (`endAll()`, the project
+noted in the registry), `tests/support/leftovers.ts` (the third rule and the `project` lines). No Studio source, runner,
+`rcfd run`, golden, protocol, default or dependency changed; no Rust crate touched.
+
+### Checks
+
+| Check | Limit | Measured | Met |
+|---|---|---|---|
+| C1 | fail at line 329, "element(s) not found" | PD2: so, 5.3 s | yes |
+| PD1 | counted | 0 failures of :320 in 9 runs where it ran; the timings above | made |
+| C3 | at least 1 left, recorded | SD1: 1 (above) | yes |
+| B0, SD2, SD3 | counted | 0 each | made |
+| T1 | pass | 6 of 6 (with `leftover-sweep.spec.ts`, 12 of 12) | yes |
+| T1m | fail | M1: T1 (a) twice and (b) fail, 3 failed, 3 passed | yes |
+| A1 | :320 passes 10 of 10 consecutive | 15 of 15 runs of the file, :320 passed in each, every test of the file passed in each, 0 processes left after each | yes |
+| A3 | pass | the settle wait is part of T0, so A3 is every run of A1 (15 of 15); PD2's patch no longer applies, as expected | yes |
+| A2 | 0 `rcfd run` of mine after each of 4 | W1 0, W2 0, W3 0, W4 0; 0 after every spec file of each; the teardown ended none in any | yes |
+| K1 | 0 | no skip, fixme, slow, retry or longer time-out; config unchanged; T0's 15 s is line 330's | yes |
+| G1 | exit 0 | `npm run typecheck` exit 0; the whole `npm test` exit 1 in every run, on tests outside this item (below) | no for the whole run |
+| G2 | pass | see the end | see the end |
+
+| Whole run of `npm test` | Tree | Passed, failed, did not run | `rcfd run` left | Other processes of mine left | Ended by the teardown |
+|---|---|---|---|---|---|
+| B0 | 1f45969a, unchanged | 844, 2, 28 | 0 | 0 | 0 |
+| W1 | 80699f8d | 850, 2, 28 | 0 | 0 | 0 |
+| W2 | the same | 850, 2, 28 | 0 | 0 | 0 |
+| W3, the queue test made to fail with the long run not in `started` | the same | 844, 3, 33 | 0 | 0 | 0 |
+| W4, :320 made to time out (2.0 min) with the long run paused | the same | 845, 3, 32 | 0 | 0 | 0 |
+
+In W3 and W4 `endAll()` ended the long run through its cancel (it printed no solver ended by its pid), so the teardown's
+third rule had nothing to end; that rule is shown by T1 (b) and its mutation, not by a process it had to end in a whole
+run. In W1 and W2 :320 passed.
+
+**Mutations.** M1 (committed): T1 (a) and (b) fail. M2: T1 (c) fails. M3: T1 (c) fails. M4: T1 (a), "never a runner …",
+fails. M5: :320 fails at the restored line with "element(s) not found" (5.4 s). Each was applied to the worktree, run
+and removed.
+
+### Deviations and what was not run
+
+- SD3 was made twice, the second time by amendment 1, before the corrected run: its first patch sat after the line that
+  loses the race.
+- PD2 and SD2 are one run, as registered (the same patch).
+- A1 ran 15 runs, not stopping at the tenth pass: the script's count of passes did not match the reporter's line, so the
+  series ran to its registered bound of 15. All 15 passed; the first 10 decide.
+- A3 was not made as a separate run: the wait it adds is in T0 itself.
+- Not run: CI, Linux, macOS; `npm test` beyond the five whole runs.
+
+### Other tests that failed in these runs (reported, not fixed)
+
+- `tests/unit/data-routes.spec.ts:94` and `tests/e2e/data.spec.ts:73`: in B0 and in W1 to W4 (as in ADR 0789).
+- `tests/e2e/run-control.spec.ts:264`, the P2 check of `project.cancel_run` (33.6 ms against 20): pd1-02.
+- The tests the scratch patches made to fail or time out, in their runs, as intended.
+
+### Size
+
+Size (agent), actual: done; 0; 7; 0; about 200000
+
+Seven heavy runs as registered: B0, the four whole runs, and the two series (PD1, A1).
+
+### Decision
+
+By the registered rule: **done.** Each cause is shown by a recorded run before the fix (C1: PD2 fails at line 329 with
+the logged error, and one natural failure; C3: SD1 leaves the lead's process); :320 then passed 15 of 15 consecutive
+runs of its file with its checks kept and no limit longer (A1, A3, K1); the four whole runs, two with a run-control test
+made to fail or time out, left no `rcfd run` process (A2); the committed mutation is caught (T1m). G1 is not met for the
+whole `npm test`, on the two data tests outside this item.
+
+### Open questions for the maintainer
+
+None.
+
+## For the lead: roadmap entries
+
+Status proposed: **done**.
+
+> ADR 0790, 2026-11-24, done: run-control.spec.ts:320 lost a race: the run list's note of a request goes once the runner has acted on it, and the runner held the solver within about 50 ms, so when the feed brought the settled list before the test looked at the row (26 to 96 ms after the note appeared) line 329 found no note; a test that lets the runner act first fails there every time. The solver was left by the queue test failing between the long run's start and its entry in the clean-up's list (as in the F-852 push run): the runner's shutdown leaves its solvers and its kill does not end its child. Fix, in the tests only: :320 reads the note's words as they appeared and the acting from the panel; the clean-up ends every run of the project; the global teardown ends an rcfd run under a test's project. After it :320 passed 15 of 15 runs of its file and 4 whole runs of npm test, two with a run-control test made to fail or time out, left no rcfd run; 5 mutations caught, one committed.
+
+The same entry as `docs/roadmap/proposals/0790-F-893.json`. No follow-up is proposed.
+
+### Checks at the end (G2)
+
+- `cargo test -p rcfd-cli --release --test docs_site`: 2 passed, 0 failed.
+- `python scripts/roadmap_proposals.py check docs/roadmap/proposals/0790-F-893.json`: accepted (F-893 todo to done).
+- `python scripts/process_report.py --check`: 1 failure, "generated file is not current: docs/adr/index.md", which rule 7
+  leaves to the lead; nothing else.
+- No Rust crate was touched: `cargo fmt` and `cargo clippy` do not apply.

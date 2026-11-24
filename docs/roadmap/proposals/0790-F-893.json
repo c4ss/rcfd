@@ -1,0 +1,9 @@
+{
+  "form": 1,
+  "adr": "0790",
+  "item": "F-893",
+  "base": "0a268fea265e7065f101498a4bf9d95b6cefc61a",
+  "status": "done",
+  "note": "ADR 0790, 2026-11-24, done: run-control.spec.ts:320 lost a race: the run list's note of a request goes once the runner has acted on it, and the runner held the solver within about 50 ms, so when the feed brought the settled list before the test looked at the row (26 to 96 ms after the note appeared) line 329 found no note; a test that lets the runner act first fails there every time. The solver was left by the queue test failing between the long run's start and its entry in the clean-up's list (as in the F-852 push run): the runner's shutdown leaves its solvers and its kill does not end its child. Fix, in the tests only: :320 reads the note's words as they appeared and the acting from the panel; the clean-up ends every run of the project; the global teardown ends an rcfd run under a test's project. After it :320 passed 15 of 15 runs of its file and 4 whole runs of npm test, two with a run-control test made to fail or time out, left no rcfd run; 5 mutations caught, one committed.",
+  "follow_ups": []
+}
