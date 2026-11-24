@@ -3,7 +3,7 @@ type: source
 tags: [studio, coverage, generated]
 sources: []
 origin: docs/studio-coverage.md
-origin_commit: 709e302e
+origin_commit: 975beadb
 created: 2026-11-22
 updated: 2026-11-24
 status: stable
@@ -34,6 +34,10 @@ Lists what the rcfd engine can do and whether the Electron Studio can reach it, 
 
 - The page does not mention structural or solid capabilities at all, so it does not settle whether a structural solver exists (see [[studio]]).
 - It counts 951 case schema keys; the settings surface brief in [[doc-impeccable-surfaces]] says "948 leaf keys" in "today's schema". Likely different dates; both within the repo docs.
+
+## Changes at 975beadb (F-339)
+
+Capabilities ~~1370~~ 1372 (MCP tools ~~70~~ 72), 1070 covered (78.0 %), exemptions ~~300~~ 302; `mcp:design_uq` and `mcp:design_sobol` exempt under F-807 (unplanned) as the other design tools.
 
 ## Pages this source informs
 

@@ -3,9 +3,9 @@ type: source
 tags: [design-loop, optimisation, mcp, fan]
 sources: []
 origin: docs/design-loop.md
-origin_commit: 2e94e5ef
+origin_commit: 975beadb
 created: 2026-11-22
-updated: 2026-11-22
+updated: 2026-11-24
 status: draft
 ---
 
@@ -36,6 +36,10 @@ Explains how rcfd runs a case over many operating points or design candidates wi
 ## Contradictions with the wiki
 
 Contradicts the capability table of [[doc-milestone-fan]] (see the callout there).
+
+## Changes at 975beadb (F-339)
+
+The tolerance (`uq::run`) and Sobol (`sensitivity::run`) drivers are now reached from MCP by `design_uq` and `design_sobol` on `rcfd.fan_rom`, with a ledger inside the sandbox (ADR 0784) ([[doc-mcp-tools]]).
 
 ## Pages this source informs
 

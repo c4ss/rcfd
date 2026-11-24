@@ -3,9 +3,9 @@ type: source
 tags: [interface, mcp, assistant]
 sources: []
 origin: docs/mcp-tools.md
-origin_commit: 09647baa
+origin_commit: 975beadb
 created: 2026-11-22
-updated: 2026-11-23
+updated: 2026-11-24
 status: draft
 ---
 
@@ -35,6 +35,10 @@ Every tool of the MCP server `rcfd-mcp`: access class, service method and purpos
 ## Contradictions with the wiki
 
 _None found at ingest._ (Counted: the tool table has 34 rows; 16 session tools plus `create_project` are dropped with `--project`, 17 stay, plus 25 project tools = 42, as the doc says.)
+
+## Changes at 975beadb (F-339)
+
+Two session tools, `design_uq` (tolerance study) and `design_sobol` (Sobol indices), class `write_files`, run the library's `design::uq::run` and `design::sensitivity::run` on the named evaluator `rcfd.fan_rom` and record the study in a design ledger; "They add nothing of their own to the numbers", and "They are not service methods; the server calls the library." The kept session tools of project mode rise from 17 to 19 (ADR 0784) ([[adr-thread-mcp-tools]]).
 
 ## Pages this source informs
 

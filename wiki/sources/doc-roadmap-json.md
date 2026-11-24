@@ -3,7 +3,7 @@ type: source
 tags: [roadmap]
 sources: []
 origin: docs/roadmap.json
-origin_commit: 709e302e
+origin_commit: 975beadb
 created: 2026-11-22
 updated: 2026-11-24
 status: stable
@@ -65,6 +65,10 @@ From the merges of 2026-11-23 and 2026-11-24 (ADRs 0777, 0781, 0783, 0787, 0788,
 ## Contradictions with the wiki
 
 _None found at ingest._ None at the 5b96a1f8 update either. At 09647baa: the item counts of the two lines (792 at 8ee32b1c with F-886, 794 at 09647baa without it) are two branches, not a conflict; the merged tree has 795.
+
+## Changes at 975beadb (F-339)
+
+F-339 todo to partial: 798 items, 409 done, 301 partial, 88 not started, about 70 %; Design studies and optimisation 20 / 17 / 7; the milestone Assistant-driven fan design 92 items, 49 / 32 / 11, 71 %, not met.
 
 ## Pages this source informs
 

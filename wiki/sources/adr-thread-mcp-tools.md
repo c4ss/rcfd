@@ -3,9 +3,9 @@ type: source
 tags: [adr-thread, mcp, tool-list, access-class, allow-list, claude-code]
 sources: [doc-mcp-tools, doc-claude-plugin-skills]
 origin: docs/adr/ (ADR list below)
-origin_commit: 09647baa
+origin_commit: 975beadb
 created: 2026-11-22
-updated: 2026-11-23
+updated: 2026-11-24
 status: draft
 ---
 
@@ -24,7 +24,7 @@ The rule every row keeps: an MCP tool list is a golden that is never re-recorded
 - **The allow-list**: the Studio's first allow-list `PROJECT_READ_TOOLS` grew from 15 tools (the egui Studio) to "16 tools" (ADR 0733, `runner_config`) and "17 tools" (ADR 0734, `hash_project_file`); `list_trash`, `derive_picture` and `list_sites` were left off. ADR 0801 Addendum 23 (2026-11-17) removed the Studio's panel, its allow-list writing and the Rust twin; tests C5-A, F2 and A "are restated on the engine's own access classes and annotations (the 17 read-class tools, read-only hints, and the delete class being `empty_trash` alone)". In the Studio flow Claude Code's own permission prompts govern.
 - **The plugin edit hook** (ADR 0195): refuses Edit and Write under `cases/`, `runs/` and `designs/`; fails open; not verified under the bypass modes.
 - ~~**Open**: F-862 (todo), the description of `start_run`'s `store` argument, approved for correction on 2026-11-21 (ADR 0741).~~ **F-862 done** (ADR 0774, merged 77e54786 on 2026-11-23): the description of `start_run`'s `store` argument "now ends 'Default plan; none is the way back to a run that stores only what its case asks for'" (ADR 0741 question 1, option (a)), "held by a test that reads the live tools list; the whole list before and after is byte-equal with the old text put back, no golden, argument or default changed and no Studio call changed". The only source change is that one string in `crates/rcfd-mcp/src/project.rs`; at the merge the lead removed the clause of `docs/mcp-tools.md` that said the description still named the earlier default ([[doc-mcp-tools]]).
-- **Issued, not on main at 09647baa:** F-339 (`design_uq` and `design_sobol` tools on a named evaluator, with a registered edit of the tools-list goldens), issued on 2026-11-23 by the brief `docs/adr/briefs/f339-mcp-uq-sobol-tools.md` (ADR 0784); the item is todo ([[roadmap-design-studies-and-optimisation]]).
+- ~~**Issued, not on main at 09647baa:** F-339 (`design_uq` and `design_sobol` tools on a named evaluator, with a registered edit of the tools-list goldens), issued on 2026-11-23 by the brief `docs/adr/briefs/f339-mcp-uq-sobol-tools.md` (ADR 0784); the item is todo ([[roadmap-design-studies-and-optimisation]]).~~ **F-339 partial** (ADR 0784, merged at 05175113, pushed at 9c0aa461): the MCP tools `design_uq` and `design_sobol` run `uq::run` and `sensitivity::run` on the named evaluator `rcfd.fan_rom` (the reduced-order fan, inputs `stagger_common_deg`, `chord_rel`, `tip_gap_delta`) with a design ledger, inside the sandbox and under `max_design_evaluations`, class `write_files`; the reply's `result` is the library's bit for bit (256 Monte Carlo samples, a Latin hypercube study with a stopping rule, 320 Sobol evaluations). They are not service methods. The lead made the additive golden edit (both tools-list goldens gain the two entries, 33 to 35 and 50 to 52; sixteen count literals raised by two) after a reader confirmed it additive. Partial: X1 (a fourth count of the list) missed by the registered rule, and the reader's findings 1-1 (no test sends the string or null bounds) and 2-1 (reference inputs that cannot tell a swapped or dropped parameter) ([[doc-mcp-tools]], [[doc-roadmap-json]]).
 
 ## ADRs
 
@@ -43,6 +43,7 @@ The rule every row keeps: an MCP tool list is a golden that is never re-recorded
 | [0739](../../docs/adr/0739-f848-proposal-run-sites-a-remote-simulation-service-for-the-studio-cli-and-mcp.md) | 2026-11-17 | proposal, phase 1 built | F-848 | `list_sites` (read, after `refine_case_mesh`); `start_run {site}` gated on `assistant = true` | restated, not stated | [[adr-thread-runner-records-and-run-sites]] |
 | [0741](../../docs/adr/0741-f271-registration-the-field-store-plan-as-the-default-of-start-run.md) | 2026-11-19 | registration | F-271 | `start_run` reply gains `store` (one additive golden edit) | "18 of 19 result shapes equal the golden" until re-recorded | [[adr-thread-workspace-layer]] |
 | [0774](../../docs/adr/0774-f862-registration-the-description-of-start-run-store-argument.md) | 2026-11-22 | registration (rule 3 lifted for one string by the maintainer's answer in ADR 0741) | F-862 | The text of `start_run`'s `store` description (no tool, argument, default or golden changes) | rows 1 to 7 met, M1 caught; done | this page |
+| [0784](../../docs/adr/0784-f339-registration-mcp-tools-for-tolerance-and-sobol-studies-of-the-reduced-order-fan.md) | 2026-11-23 | registration, amendment 1, addendum 1, a reader's report, the lead's reading | F-339 | MCP tools for tolerance and Sobol studies of a named evaluator | partial: the tools equal the library bit for bit; X1 missed; reader findings 1-1 and 2-1 | |
 
 ## Key numbers and limits
 
@@ -55,6 +56,8 @@ The rule every row keeps: an MCP tool list is a golden that is never re-recorded
 > `docs/mcp-tools.md` says `rcfd-mcp --project <dir>` "adds 25 tools" ([[doc-mcp-tools]]), the count of ADR 0733's build ("42 tools, 25 project tools"). The same page's project-tool table names 36 tools in 34 rows (counted on this page, 2026-11-22: `pause_run`, `resume_run`, `cancel_run` share a row), and ADR 0738 already stated "27 project tools, 44 with `--project`" before the six trash tools and `list_sites` were counted. The wiki's [[mcp]] and [[rcfd-mcp]] pages repeat the 25 / 42.
 
 ## Open questions
+
+- ADR 0784, open question 1 (the maintainer's): whether `design_uq` and `design_sobol` also become service methods (`design.uq`, `design.sobol`); recommended (a), MCP tools only until a second caller exists.
 
 - ~~F-862: the corrected text of `start_run`'s `store` description, "a change of the text of an existing tool, so it is made by a registration of its own" (ADR 0741, 2026-11-21).~~ Closed by ADR 0774 on 2026-11-23; its open questions for the maintainer: "None."
 - Whether `start_run {new_case}` should also need `write_files` was never answered (ADR 0195 decision record item 9).

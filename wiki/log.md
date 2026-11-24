@@ -317,3 +317,9 @@ Append-only. Newest at the bottom. Entry header: `## [YYYY-MM-DD] <op> | <title>
 - Contradiction: ADR 0781 traces the failures of `data-routes.spec.ts:94` and `data.spec.ts:73` to a stale `f447_bench` binary; ADR 0789 reports them in every run without a cause (callout on [[adr-thread-studio-electron]]).
 - Not ingested: F-339 (ADR 0784), not on main; the registration bodies of the six ADRs were read by their headers, designs, decision rules, results and the lead's readings, not line by line.
 - Done by a subagent on the lead's instruction; index, log and overview by the lead.
+
+## [2026-11-24] ingest | F-339, ADR 0784 (loop merge)
+
+- Thread: [[adr-thread-mcp-tools]] (ADR 0784 row, current state, open question 1).
+- Sources re-read at 975beadb: [[doc-mcp-tools]], [[doc-design-loop]], [[doc-studio-coverage]], [[doc-changelog]], [[doc-roadmap-json]], [[doc-roadmap-overview]]; roadmap area pages regenerated; [[overview]] revised (798 items, 409 / 301 / 88).
+- The first additive golden edit by the lead, after a reader's report (ADR 0784).
