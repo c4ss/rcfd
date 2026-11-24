@@ -78,3 +78,5 @@ The registration's commit and the others; what was registered before the run; th
 was registered; what the gate runs and what is a heavy record; mutations or negative controls; deviations; what was not
 run; open questions with options and a recommendation; the result of `python scripts/process_report.py --check`; your
 verdict by the registered rule.
+
+Model changed (2026-11-24): Claude Opus 5.5, on the maintainer's answer "Issue on Opus now"; the agent first issued on Claude Fable 5.2 stopped at the model's usage limit before any work.
