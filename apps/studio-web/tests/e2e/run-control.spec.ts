@@ -14,6 +14,8 @@
 //   lets the runner act on it.
 // - G7: a run started from the Studio goes on when the Studio is closed, and the next start shows it.
 // Screenshots at 1440 by 900 go to test-results-visual/f807/; the P2 numbers to test-results-visual/f807/p2.json.
+// F-893 (ADR 0790): the pause test reads the run list's note as it appeared and the runner's acting from the panel; the
+// clean-up ends every run of the project, not only the ones a test noted.
 import { expect, test, type Locator, type Page } from '@playwright/test';
 import { copyFile, mkdir, mkdtemp, rm, unlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
@@ -44,7 +46,7 @@ let quick = '';
 let recentFile = '';
 let runner: Runner | null = null;
 let studio: Studio | null = null;
-/** Runs the tests started, for the clean-up. */
+/** Runs the tests started (the clean-up ends every run of the project that is not over, F-893). */
 const started: string[] = [];
 /** Engine answer to run list, ms, per action (P2). */
 const p2: { action: string; receivedMs: number | null; commitMs: number; frameMs: number }[] = [];
@@ -79,11 +81,13 @@ const aside = (page: Page) => page.locator('aside.rv-run');
 
 /**
  * In the page: from now on, note when (ms since the epoch, fractional) an element matching `selector` first appears in
- * the document, and when the frame after it starts (the DOM commit and the paint that shows it).
+ * the document, and when the frame after it starts (the DOM commit and the paint that shows it); and its words then
+ * (F-893, ADR 0790: the run list's note of a request goes once the runner has acted on it, which can be before the test
+ * looks).
  */
 async function watchFor(page: Page, selector: string): Promise<void> {
   await page.evaluate((sel) => {
-    const w = window as unknown as { __seen?: { commit: number; frame: number } | null; __obs?: MutationObserver; __recv?: number | null; __recvId?: number };
+    const w = window as unknown as { __seen?: { commit: number; frame: number; words: string } | null; __obs?: MutationObserver; __recv?: number | null; __recvId?: number };
     w.__obs?.disconnect();
     w.__seen = null;
     const now = () => performance.timeOrigin + performance.now();
@@ -97,7 +101,7 @@ async function watchFor(page: Page, selector: string): Promise<void> {
     const check = () => {
       if (w.__seen || !document.querySelector(sel)) return;
       const commit = now();
-      w.__seen = { commit, frame: 0 };
+      w.__seen = { commit, frame: 0, words: document.querySelector(sel)!.textContent ?? '' };
       requestAnimationFrame(() => {
         w.__seen!.frame = now();
       });
@@ -131,6 +135,10 @@ async function measured(page: Page, action: string): Promise<void> {
   expect(entry.receivedMs!, `${action}: engine answer to the renderer, ms`).toBeLessThanOrEqual(P2_MS);
   expect(entry.commitMs, `${action}: engine answer to the run list in the DOM, ms`).toBeLessThanOrEqual(SHOWN_MS);
 }
+
+/** The words of the element `watchFor` waited for, as they were when it first appeared (F-893). */
+const seenWords = (page: Page): Promise<string | null> =>
+  page.evaluate(() => (window as unknown as { __seen?: { words: string } | null }).__seen?.words ?? null);
 
 /** Waits in the page for the run list's note of the next request (the one the next action makes). */
 async function watchNext(page: Page): Promise<void> {
@@ -175,15 +183,11 @@ test.afterAll(async () => {
     await killStudio(studio).catch(() => undefined);
     studio = null;
   }
-  for (const id of started) {
-    try {
-      const st = runner!.status(id);
-      if (!['finished', 'failed', 'cancelled'].includes(st.state)) runner!.cli('cancel', id);
-    } catch {
-      // gone
-    }
-  }
-  await runner?.cleanUp(started.at(-1) ?? null);
+  // F-893 (ADR 0790): every run of the project that is not over, the ones a test failed before noting in `started`
+  // among them, is cancelled and waited for, and a solver still alive is ended by its pid; then the runner is shut down
+  // (a runner's shutdown leaves its solvers running, G7)
+  const killed = (await runner?.endAll()) ?? [];
+  if (killed.length) console.log(`F-893: solver ended by its pid after its cancel: ${killed.join(', ')}`);
   for (const p of mcpPids(quick)) killPid(p);
   if (p2.length) await writeFile(path.join(SHOTS, 'p2.json'), JSON.stringify(p2, null, 2) + '\n').catch(() => undefined);
   console.log('F-807 P2 (engine answer to run list, ms):', JSON.stringify(p2));
@@ -326,7 +330,17 @@ test('pause and resume by keyboard: the request shows within P2, then the runner
   await watchNext(page);
   await press(controls.getByRole('button', { name: 'Pause' }));
   await measured(page, 'project.pause_run');
-  await expect(rowOf(page, longRun).locator('.rc-pending')).toContainText(/Pause requested from the Studio|acted/);
+  // F-893 (ADR 0790): the row shows a request only until the runner has acted on it (pendingByRun), and the runner can act
+  // before the test looks. The row's words are read as they were when the note appeared; that the runner acted is read
+  // from the panel's status line, which keeps the request, and then the row has no note left.
+  expect(await seenWords(page)).toMatch(/^Pause requested from the Studio/);
+  const pauseSeq = (await projectState(page)).project!.runRequests![0]!.seq;
+  const status = aside(page).locator('.rc-status');
+  await expect(status).toHaveAttribute('data-request-seq', String(pauseSeq));
+  await expect(status).toHaveAttribute('data-settled', 'true', { timeout: 15_000 });
+  await expect(status).toContainText('Pause requested from the Studio');
+  await expect(status).toContainText('the runner has acted on it');
+  await expect(rowOf(page, longRun).locator('.rc-pending')).toHaveCount(0);
   await expect.poll(() => shownState(page, longRun), { timeout: 15_000 }).toBe('paused');
   expect(runner!.status(longRun).state).toBe('paused');
   await expect(controls.getByRole('button', { name: 'Resume' })).toBeVisible();
