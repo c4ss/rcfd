@@ -428,3 +428,9 @@ after the run, and the committed mutations of the three items were caught.
 
 Status: **done**, as proposed. Its two follow-ups are questions of scope for the maintainer and are not entered; the data
 tests the first names did not fail in the lead's push run.
+
+## The maintainer's answer on a follow-up (2026-11-24)
+
+To the lead's question whether to enter the follow-up run-control-pause-request together with the orphaned `rcfd run`
+solver left by a run-control test, as one item, and issue it, the maintainer answered "Yes, issue it". It is entered as
+F-893. The follow-up data-open-length-unit is not entered.
