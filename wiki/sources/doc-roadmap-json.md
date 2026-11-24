@@ -3,7 +3,7 @@ type: source
 tags: [roadmap]
 sources: []
 origin: docs/roadmap.json
-origin_commit: 975beadb
+origin_commit: 2514444c
 created: 2026-11-22
 updated: 2026-11-24
 status: stable
@@ -69,6 +69,10 @@ _None found at ingest._ None at the 5b96a1f8 update either. At 09647baa: the ite
 ## Changes at 975beadb (F-339)
 
 F-339 todo to partial: 798 items, 409 done, 301 partial, 88 not started, about 70 %; Design studies and optimisation 20 / 17 / 7; the milestone Assistant-driven fan design 92 items, 49 / 32 / 11, 71 %, not met.
+
+## Changes at 2514444c (F-893)
+
+F-893 entered (2026-11-24, the maintainer's answer) and done: 799 items, 410 done, 301 partial, 88 not started, about 70 % ([[adr-thread-studio-electron]]).
 
 ## Pages this source informs
 

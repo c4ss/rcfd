@@ -323,3 +323,8 @@ Append-only. Newest at the bottom. Entry header: `## [YYYY-MM-DD] <op> | <title>
 - Thread: [[adr-thread-mcp-tools]] (ADR 0784 row, current state, open question 1).
 - Sources re-read at 975beadb: [[doc-mcp-tools]], [[doc-design-loop]], [[doc-studio-coverage]], [[doc-changelog]], [[doc-roadmap-json]], [[doc-roadmap-overview]]; roadmap area pages regenerated; [[overview]] revised (798 items, 409 / 301 / 88).
 - The first additive golden edit by the lead, after a reader's report (ADR 0784).
+
+## [2026-11-24] ingest | F-893, ADR 0790 (loop merge)
+
+- Thread: [[adr-thread-studio-electron]] (ADR 0790 row, current state, key numbers; two open items struck as covered).
+- Sources re-read at 2514444c: [[doc-roadmap-json]], [[doc-roadmap-overview]]; roadmap area pages regenerated; [[overview]] revised (799 items, 410 / 301 / 88).

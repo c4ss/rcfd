@@ -3,7 +3,7 @@ type: source
 tags: [roadmap, status]
 sources: []
 origin: docs/roadmap-overview.md
-origin_commit: 975beadb
+origin_commit: 2514444c
 created: 2026-11-22
 updated: 2026-11-24
 status: stable
@@ -64,6 +64,10 @@ Again only the generated blocks changed. The milestone table, with the whole-roa
 ## Changes at 975beadb (F-339)
 
 F-339 todo to partial: 798 items, 409 done, 301 partial, 88 not started, about 70 %; Design studies and optimisation 20 / 17 / 7; the milestone Assistant-driven fan design 92 items, 49 / 32 / 11, 71 %, not met.
+
+## Changes at 2514444c (F-893)
+
+F-893 entered (2026-11-24, the maintainer's answer) and done: 799 items, 410 done, 301 partial, 88 not started, about 70 % ([[adr-thread-studio-electron]]).
 
 ## Pages this source informs
 
