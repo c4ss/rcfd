@@ -1,0 +1,15 @@
+# expect-fail: cd apps/studio-web && npx playwright test tests/unit/run-leftovers.spec.ts --project=unit
+diff --git a/apps/studio-web/tests/support/leftovers.ts b/apps/studio-web/tests/support/leftovers.ts
+index 708b2777..7a5e717a 100644
+--- a/apps/studio-web/tests/support/leftovers.ts
++++ b/apps/studio-web/tests/support/leftovers.ts
+@@ -119,7 +119,8 @@ export function chooseLeftovers(procs: readonly ProcessRow[], ctx: SweepContext)
+     if (baseName(p.name, platform) !== 'rcfd' || !RUN_COMMAND.test(p.cmd)) continue;
+     const cmd = norm(p.cmd, platform);
+     const project = projects.find((l) => cmd.includes(norm(l.dir, platform) + sep));
+-    if (project) out.push({ pid: p.pid, kind: 'solver', cmd: p.cmd, rule: 'project-folder', spec: project.spec ?? null });
++    // M1 (F-893): the sweep no longer chooses an rcfd run by its project folder
++    void project;
+   }
+   return out;
+ }
