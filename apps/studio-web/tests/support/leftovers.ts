@@ -1,4 +1,4 @@
-// What a run of the tests left behind, and its end (F-892, ADR 0789).
+// What a run of the tests left behind, and its end (F-892, ADR 0789; the solvers, F-893, ADR 0790).
 //
 // A Studio that quits while the `rcfd serve` it started still runs leaves that service: it is detached, Playwright's
 // forced end (`taskkill /pid <Studio> /T /F`) finds no Studio any more whose children it could walk, and nothing else
@@ -12,9 +12,13 @@
 //      b. whose pid is in the service.json of such a folder, or
 //      c. whose executable is in this checkout's packaged engine folder.
 //
+//   3. then processes named rcfd whose command is `run` and whose command line names a registered project folder
+//      (F-893, ADR 0790: a test's runner notes its temporary project; a solver that outlives the test's own clean-up, its
+//      runner shut down or killed, is the test's).
+//
 // Rules 1 and 2c apply only when the registry has a launch (a run of the unit tests alone touches no packaged copy).
-// A process of another name is never chosen (a pid can be reused), and neither is rcfd-runner or rcfd-mcp: the runner
-// has a life of its own (G7).
+// A project line takes no part in rules 1 and 2. A process of another name is never chosen (a pid can be reused), and
+// neither is rcfd-runner or rcfd-mcp: the runner has a life of its own (G7).
 import { execFileSync } from 'node:child_process';
 import { appendFileSync, existsSync, readFileSync, readlinkSync } from 'node:fs';
 import path from 'node:path';
@@ -40,6 +44,8 @@ export interface Launch {
   readonly studioPid?: number;
   /** The spec file that launched it. */
   readonly spec?: string;
+  /** F-893: the line is a test's project folder (tests/support/runner.ts), not a Studio's launch. */
+  readonly project?: true;
 }
 
 export interface SweepContext {
@@ -55,9 +61,9 @@ export interface SweepContext {
 
 export interface Leftover {
   readonly pid: number;
-  readonly kind: 'studio' | 'service';
+  readonly kind: 'studio' | 'service' | 'solver';
   readonly cmd: string;
-  /** Which rule chose it: `packaged-studio`, `state-folder`, `service-record`, `packaged-engine`. */
+  /** Which rule chose it: `packaged-studio`, `state-folder`, `service-record`, `packaged-engine`, `project-folder`. */
   readonly rule: string;
   readonly spec: string | null;
 }
@@ -72,12 +78,17 @@ const within = (file: string, dir: string, platform: NodeJS.Platform): boolean =
   return norm(file, platform).startsWith(norm(dir, platform) + sep);
 };
 
-/** The choice of what to end: pure, the Studios first. */
+/** `run` as the command: the first word after the executable (quoted or not). */
+const RUN_COMMAND = /^\s*(?:"[^"]*"|\S+)\s+run(\s|$)/;
+
+/** The choice of what to end: pure, the Studios first, then the services, then the solvers. */
 export function chooseLeftovers(procs: readonly ProcessRow[], ctx: SweepContext): Leftover[] {
   const platform = ctx.platform ?? process.platform;
   const out: Leftover[] = [];
+  const launches = ctx.launches.filter((l) => !l.project);
+  const projects = ctx.launches.filter((l) => l.project && l.dir !== '');
   const specOfPid = new Map<number, string>();
-  for (const l of ctx.launches) if (l.studioPid !== undefined && l.spec) specOfPid.set(l.studioPid, l.spec);
+  for (const l of launches) if (l.studioPid !== undefined && l.spec) specOfPid.set(l.studioPid, l.spec);
   if (ctx.studioExe) {
     const exe = norm(ctx.studioExe, platform);
     for (const p of procs) {
@@ -89,7 +100,7 @@ export function chooseLeftovers(procs: readonly ProcessRow[], ctx: SweepContext)
   for (const p of procs) {
     if (baseName(p.name, platform) !== 'rcfd' || !/\sserve(\s|$)/.test(p.cmd)) continue;
     const cmd = norm(p.cmd, platform);
-    const byFolder = ctx.launches.find((l) => l.dir !== '' && cmd.includes(norm(l.dir, platform)));
+    const byFolder = launches.find((l) => l.dir !== '' && cmd.includes(norm(l.dir, platform)));
     const recordDir = ctx.recordPids.get(p.pid);
     let rule: string | null = null;
     let spec: string | null = null;
@@ -98,9 +109,17 @@ export function chooseLeftovers(procs: readonly ProcessRow[], ctx: SweepContext)
       spec = byFolder.spec ?? null;
     } else if (recordDir !== undefined) {
       rule = 'service-record';
-      spec = ctx.launches.find((l) => norm(l.dir, platform) === norm(recordDir, platform))?.spec ?? null;
+      spec = launches.find((l) => norm(l.dir, platform) === norm(recordDir, platform))?.spec ?? null;
     } else if (ctx.packagedBin && p.exe !== '' && within(p.exe, ctx.packagedBin, platform)) rule = 'packaged-engine';
     if (rule) out.push({ pid: p.pid, kind: 'service', cmd: p.cmd, rule, spec });
+  }
+  // F-893 (ADR 0790): a solver under a test's project folder (its --case-dir, --pause-file and --stop-file are there)
+  const sep = platform === 'win32' ? '\\' : '/';
+  for (const p of procs) {
+    if (baseName(p.name, platform) !== 'rcfd' || !RUN_COMMAND.test(p.cmd)) continue;
+    const cmd = norm(p.cmd, platform);
+    const project = projects.find((l) => cmd.includes(norm(l.dir, platform) + sep));
+    if (project) out.push({ pid: p.pid, kind: 'solver', cmd: p.cmd, rule: 'project-folder', spec: project.spec ?? null });
   }
   return out;
 }
@@ -149,6 +168,11 @@ export function noteLaunch(launch: Launch, file: string | undefined = process.en
   }
 }
 
+/** F-893: notes a test's project folder in the run's registry (rule 3); `spec` is the spec file that uses it. */
+export function noteProject(dir: string, spec: string | null, file: string | undefined = process.env[REGISTRY_VARIABLE]): void {
+  noteLaunch({ dir, project: true, ...(spec ? { spec } : {}) }, file);
+}
+
 export function readRegistry(file: string | undefined): Launch[] {
   if (!file || !existsSync(file)) return [];
   const out: Launch[] = [];
@@ -157,7 +181,12 @@ export function readRegistry(file: string | undefined): Launch[] {
     try {
       const l = JSON.parse(line) as Partial<Launch>;
       if (typeof l.dir !== 'string') continue;
-      out.push({ dir: l.dir, ...(typeof l.studioPid === 'number' ? { studioPid: l.studioPid } : {}), ...(typeof l.spec === 'string' ? { spec: l.spec } : {}) });
+      out.push({
+        dir: l.dir,
+        ...(typeof l.studioPid === 'number' ? { studioPid: l.studioPid } : {}),
+        ...(typeof l.spec === 'string' ? { spec: l.spec } : {}),
+        ...(l.project === true ? { project: true as const } : {}),
+      });
     } catch {
       // a line cut short by a killed worker
     }
@@ -188,15 +217,18 @@ export interface SweepOptions {
   readonly log?: (line: string) => void;
 }
 
-/** Ends what the run left (the Studios, then the services) and returns it; each one is printed. */
+const ENDED_WORDS: Record<Leftover['kind'], string> = { studio: 'Studio', service: 'rcfd serve', solver: 'rcfd run' };
+
+/** Ends what the run left (the Studios, then the services, then the solvers) and returns it; each one is printed. */
 export function sweepLeftovers(o: SweepOptions): Leftover[] {
   const launches = readRegistry(o.registryFile);
+  const studios = launches.filter((l) => !l.project);
   const ended: Leftover[] = [];
   // the packaged copy is this run's only if the run launched a Studio: a run of the unit tests alone ends nothing of it
-  const ran = launches.length > 0;
-  // two passes: a service is listed again once the Studios are gone, so one a Studio started meanwhile is seen too
-  for (const kind of ['studio', 'service'] as const) {
-    const ctx: SweepContext = { studioExe: ran ? o.studioExe : null, packagedBin: ran ? o.packagedBin : null, launches, recordPids: recordPids(launches) };
+  const ran = studios.length > 0;
+  // one pass per kind: a process is listed again once the kinds before it are gone, so one started meanwhile is seen too
+  for (const kind of ['studio', 'service', 'solver'] as const) {
+    const ctx: SweepContext = { studioExe: ran ? o.studioExe : null, packagedBin: ran ? o.packagedBin : null, launches, recordPids: recordPids(studios) };
     for (const l of chooseLeftovers(listProcesses(), ctx)) {
       if (l.kind !== kind) continue;
       try {
@@ -206,7 +238,7 @@ export function sweepLeftovers(o: SweepOptions): Leftover[] {
       }
       ended.push(l);
       (o.log ?? console.log)(
-        `leftover ${l.kind === 'studio' ? 'Studio' : 'rcfd serve'} ended after the run: pid ${l.pid} (${l.rule}${l.spec ? `, launched by ${l.spec}` : ''}): ${l.cmd}`,
+        `leftover ${ENDED_WORDS[l.kind]} ended after the run: pid ${l.pid} (${l.rule}${l.spec ? `, launched by ${l.spec}` : ''}): ${l.cmd}`,
       );
     }
   }
