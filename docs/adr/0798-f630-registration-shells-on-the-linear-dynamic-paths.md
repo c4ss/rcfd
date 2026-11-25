@@ -296,3 +296,22 @@ row, control or mutation changes.
 6. **Q, the format check on Windows.** `cargo fmt -p rcfd-fem -- --check` cannot start on this Windows machine ("The filename or extension
    is too long", os error 206: the crate's file list exceeds the command line), as ADR 0793 records. The same command is run in
    the Linux container of B1 on an export of the code commit; both outputs are reported.
+
+## Amendment 2 (2026-11-25): a defective set-up in X3
+
+Written after the registered run of `sa_shells_linear_dynamics_f630` at 6c2e3cf9 (20 of 21 tests passed; every row of them met) and
+before the corrected run.
+
+1. **X3 stopped in its own set-up.** `x3_refusals_with_the_option` panicked while building the model for "a cyclic constraint without its
+   option": `UnknownSet { kind: Surface, name: "low" }`. Without its shells option the constraint needs surface sets, which a shell sector
+   does not have (ADR 0556, NC1), so the frustum cannot carry it. The rows before that point had all been met (beam, node of a
+   solid, warp, Shell3 layup, viscoelastic, table on a layup); the rows after it (cyclic, random response, stress of a response) were not
+   reached. No library call under test had failed.
+2. **The corrected test.** `x3_refusals_with_the_option_corrected` has the same rows; only the model of the cyclic constraint
+   without its option changes: the set-up of ADR 0556, NC2 (a Hex8 box with the constraint on `ymin`/`ymax`, sector count 4, default options,
+   and a disjoint shell element, of each kind). The old test stays as an ignored record of the defective set-up (rule 2). All rows of X3 are
+   read from the corrected test; it is run once.
+3. **A format change.** `rustfmt` is not stable on one new `return Err(invalid(...))` of `harmonic_direct.rs` (it formats its own output again),
+   found by the per-file check before Q was run. The message is bound to a name first; the text and the behaviour are the same. The unchanged
+   copy of the mutation runs, taken from the commit that has both changes, runs every row again and is recorded as such, not as a
+   second registered run.
