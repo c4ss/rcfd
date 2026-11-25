@@ -511,13 +511,13 @@ One row per record of this folder, grouped by the roadmap category of the item i
 | [0186](0186-adr-0173-amendment-2-f271-registration-new-simulations-from-the-mcp-server.md) | ADR 0173 amendment 2, F-271 registration: new simulations from the MCP server in project mode | REGISTERED | 2026-11-05 | 1 | F-271 | done |
 | [0187](0187-adr-0173-amendment-3-f272-registration-mesh-set-up-from-the-mcp-server.md) | ADR 0173 amendment 3, F-272 registration: mesh set-up from the MCP server in project mode | REGISTERED | 2026-11-05 | 1 | F-272 | done |
 | [0188](0188-adr-0173-amendment-4-f273-registration-project-journal-and-change-feed.md) | ADR 0173 amendment 4, F-273 registration: the project journal and the change feed | REGISTERED | 2026-11-05 | 2 | F-273 | partial |
-| [0189](0189-adr-0173-amendment-5-f274-registration-design-study-evaluations-on-the-runner.md) | ADR 0173 amendment 5, F-274 registration: design study evaluations on the runner in project mode | REGISTERED | 2026-11-05 | 1 | F-274 | partial |
+| [0189](0189-adr-0173-amendment-5-f274-registration-design-study-evaluations-on-the-runner.md) | ADR 0173 amendment 5, F-274 registration: design study evaluations on the runner in project mode | REGISTERED | 2026-11-05 | 1 | F-274 | done |
 | [0195](0195-adr-0173-amendment-6-f275-registration-project-mode-tool-list-and-plugin-edit-hook.md) | ADR 0173 amendment 6, F-275 registration: the project-mode tool list and the plugin edit hook | REGISTERED | 2026-11-06 | 1 | F-275 | done |
 | [0200](0200-f287-registration-runner-runs-that-continue-from-a-previous-run-with-a-step-cap.md) | F-287 registration: runner runs that continue from a previous run, with a step cap | REGISTERED | 2026-11-06 | 1 | F-287 | done |
 | [0201](0201-f288-registration-adopt-matching-runs-after-an-mcp-server-restart.md) | F-288 registration: adopt matching runs after an MCP server restart | REGISTERED | 2026-11-06 | 1 | F-288 | done |
 | [0741](0741-f271-registration-the-field-store-plan-as-the-default-of-start-run.md) | F-271 registration: the field-store plan as the default of start_run | REGISTERED | 2026-11-19 | 1 | F-271 | done |
 | [0774](0774-f862-registration-the-description-of-start-run-store-argument.md) | F-862 registration: the description of start_run's store argument says what the default is | REGISTERED | 2026-11-22 | 1 | F-862 | done |
-| [0794](0794-f274-registration-journal-lines-of-design-runs-and-records.md) | F-274 registration: journal lines of design runs and of stored design records | REGISTERED | 2026-11-25 | 1 | F-274 | partial |
+| [0794](0794-f274-registration-journal-lines-of-design-runs-and-records.md) | F-274 registration: journal lines of design runs and of stored design records | REGISTERED | 2026-11-25 | 1 | F-274 | done |
 
 ## Studio desktop app (21)
 

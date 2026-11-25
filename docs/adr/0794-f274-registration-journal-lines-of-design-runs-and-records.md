@@ -328,3 +328,19 @@ Status proposed: done. One follow-up is proposed, the journal lines of the desig
 > ADR 0794, 2026-11-25, done: with --project each run a design tool submits writes the run_submitted line of ADR 0188 with study, variant and condition (a map's run untagged), and each evaluation or map point the store gains writes one design_recorded line with the hash of the stored bytes up to it, after the store holds it (written at the start of the next evaluation and after the call, also a failed one); design_create_study and design_create_variant write one design_created line. An adopted run, a cached evaluation and a refused submission write none. The files under designs/ are in the feed as the workspace's own, each line once with tool and actor, and an outside write is external. Two servers in one project gave 14 lines, each numbered once. Records, tables, run records, metrics, replies and the tool list are the bytes of main (49 items, 0 differ), and without --project nothing is written. Fifteen registered mutations are each caught by their rows (M8 after its set-up was corrected by amendment 2), two are committed. The design ledger tools write no line.
 
 The same entry as `docs/roadmap/proposals/0794-F-274.json`.
+
+## The lead's reading (2026-11-25), at the merge
+
+Merged at 37f301af and pushed at 3fcdaf0a (the report read at 20:40 UTC, 10 minutes of reading, proposed done, written done).
+Checked by the lead before the merge: the registration is the first commit and alone; amendment 1 comes before any library code
+and the record of main for row B is made on the unchanged library; the change is to `rcfd-workspace` (`design.rs`, `feed.rs`,
+`runs.rs`) and one line of `rcfd-mcp` (`ON_RUNNER` becomes `JOURNALED`), with two new test files and the tool page; no golden
+and no existing test is edited. Amendment 2 comes after the registered run and the mutations, and it changes no row, limit or code:
+M8's first copy took the actor out of the recorder's origin, so it stopped at `design_created` and did not show the row it was
+registered for; the corrected copy was run once with that row. The lead counts M8 as caught by the corrected run, since the
+defect was in the mutation's set-up and not in a test. Deviation 2 (row B's record is a third call of its test, writing in
+place of comparing) is a set-up of the record and not a second registered run. The lead did not repeat the runs beyond the
+push run, which ran the tests the index maps to the ADR and the committed mutations, and they were caught.
+
+Status: **done**, as proposed. The follow-up (journal lines of the design ledger tools) is applied without; it is the
+maintainer's to enter.
