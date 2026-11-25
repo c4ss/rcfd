@@ -174,7 +174,7 @@ One row per record of this folder, grouped by the roadmap category of the item i
 | [0358](0358-f461-registration-hex8-patch-test-on-moved-mesh.md) | F-461 registration: the constant-strain patch test of Hex8 on a moved mesh | REGISTERED | 2026-11-12 | 1 | F-461 | partial |
 | [0361](0361-f463-registration-failing-solve-in-a-later-iteration.md) | F-463 registration: the failing static solve in iteration 2 and in iteration 3 of a coupled step | REGISTERED | 2026-11-12 | 1 | F-463 | done |
 | [0362](0362-f464-registration-moved-mesh-stored-check.md) | F-464 registration: the moved-mesh check of the Hex8 patch test measures the stored mesh | REGISTERED | 2026-11-12 | 1 | F-464 | done |
-| [0364](0364-f465-registration-failing-fluid-in-a-later-iteration.md) | F-465 registration: a failing fluid in iteration 2 and in iteration 3 of a coupled step | REGISTERED | 2026-11-12 | 1 | F-465 | partial |
+| [0364](0364-f465-registration-failing-fluid-in-a-later-iteration.md) | F-465 registration: a failing fluid in iteration 2 and in iteration 3 of a coupled step | REGISTERED | 2026-11-12 | 1 | F-465 | done |
 | [0365](0365-f458-registration-tet4-traction-case-order-16-to-32.md) | F-458 registration: the Tet4 traction-case L2 order on the pair 16 -> 32 as a registered check | REGISTERED | 2026-11-12 | 1 | F-458 | done |
 | [0370](0370-f470-registration-tet10-aggregation-like-hex8.md) | F-470 registration: an opt-in geometric aggregation that coarsens Tet10 like Hex8 in the elasticity multigrid | REGISTERED | 2026-11-13 | 1 | F-470 | partial |
 | [0375](0375-f477-registration-tet10-smoother.md) | F-477 registration: two block Gauss-Seidel sweeps per side for the elasticity multigrid on quadratic elements, and a graded Tet10 box on which pass 2's restriction is observable | REGISTERED | 2026-11-13 | 1 | F-477 | done |
@@ -506,14 +506,14 @@ One row per record of this folder, grouped by the roadmap category of the item i
 
 | ADR | Title | Status word | Date | Addenda | Item | Item status |
 |---|---|---|---|---|---|---|
-| [0185](0185-adr-0173-amendment-1-f270-registration-the-rcfd-workspace-crate.md) | ADR 0173 amendment 1, F-270 registration: the rcfd-workspace crate, with the MCP server and the Studio moved onto it | REGISTERED | 2026-11-05 | 1 | F-270 | partial |
+| [0185](0185-adr-0173-amendment-1-f270-registration-the-rcfd-workspace-crate.md) | ADR 0173 amendment 1, F-270 registration: the rcfd-workspace crate, with the MCP server and the Studio moved onto it | REGISTERED | 2026-11-05 | 1 | F-270 | done |
 | [0186](0186-adr-0173-amendment-2-f271-registration-new-simulations-from-the-mcp-server.md) | ADR 0173 amendment 2, F-271 registration: new simulations from the MCP server in project mode | REGISTERED | 2026-11-05 | 1 | F-271 | done |
-| [0187](0187-adr-0173-amendment-3-f272-registration-mesh-set-up-from-the-mcp-server.md) | ADR 0173 amendment 3, F-272 registration: mesh set-up from the MCP server in project mode | REGISTERED | 2026-11-05 | 1 | F-272 | partial |
+| [0187](0187-adr-0173-amendment-3-f272-registration-mesh-set-up-from-the-mcp-server.md) | ADR 0173 amendment 3, F-272 registration: mesh set-up from the MCP server in project mode | REGISTERED | 2026-11-05 | 1 | F-272 | done |
 | [0188](0188-adr-0173-amendment-4-f273-registration-project-journal-and-change-feed.md) | ADR 0173 amendment 4, F-273 registration: the project journal and the change feed | REGISTERED | 2026-11-05 | 2 | F-273 | partial |
 | [0189](0189-adr-0173-amendment-5-f274-registration-design-study-evaluations-on-the-runner.md) | ADR 0173 amendment 5, F-274 registration: design study evaluations on the runner in project mode | REGISTERED | 2026-11-05 | 1 | F-274 | partial |
-| [0195](0195-adr-0173-amendment-6-f275-registration-project-mode-tool-list-and-plugin-edit-hook.md) | ADR 0173 amendment 6, F-275 registration: the project-mode tool list and the plugin edit hook | REGISTERED | 2026-11-06 | 1 | F-275 | partial |
-| [0200](0200-f287-registration-runner-runs-that-continue-from-a-previous-run-with-a-step-cap.md) | F-287 registration: runner runs that continue from a previous run, with a step cap | REGISTERED | 2026-11-06 | 1 | F-287 | partial |
-| [0201](0201-f288-registration-adopt-matching-runs-after-an-mcp-server-restart.md) | F-288 registration: adopt matching runs after an MCP server restart | REGISTERED | 2026-11-06 | 1 | F-288 | partial |
+| [0195](0195-adr-0173-amendment-6-f275-registration-project-mode-tool-list-and-plugin-edit-hook.md) | ADR 0173 amendment 6, F-275 registration: the project-mode tool list and the plugin edit hook | REGISTERED | 2026-11-06 | 1 | F-275 | done |
+| [0200](0200-f287-registration-runner-runs-that-continue-from-a-previous-run-with-a-step-cap.md) | F-287 registration: runner runs that continue from a previous run, with a step cap | REGISTERED | 2026-11-06 | 1 | F-287 | done |
+| [0201](0201-f288-registration-adopt-matching-runs-after-an-mcp-server-restart.md) | F-288 registration: adopt matching runs after an MCP server restart | REGISTERED | 2026-11-06 | 1 | F-288 | done |
 | [0741](0741-f271-registration-the-field-store-plan-as-the-default-of-start-run.md) | F-271 registration: the field-store plan as the default of start_run | REGISTERED | 2026-11-19 | 1 | F-271 | done |
 | [0774](0774-f862-registration-the-description-of-start-run-store-argument.md) | F-862 registration: the description of start_run's store argument says what the default is | REGISTERED | 2026-11-22 | 1 | F-862 | done |
 

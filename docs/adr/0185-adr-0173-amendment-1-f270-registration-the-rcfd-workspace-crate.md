@@ -259,3 +259,7 @@ Five decisions on the priority items F-270 to F-275 were put to the maintainer o
 
 - Q1 is closed as overtaken. The egui Studio it asks about was removed on 2026-11-16 (F-449). The Electron Studio (apps/studio-web) saves a project case through `edit_case`, which writes the changed lines and keeps comments. The acceptance of F-270 is re-scoped to the Electron Studio; its clause on the dependencies of `rcfd-studio` lapsed with that crate. Not yet shown by a test: a comment line surviving a save from the Electron Studio. The lead names or adds that test and then decides the status by the registered rule.
 - Q2 and Q3 stand as built, on the written recommendations.
+
+## The lead's reading (2026-11-25)
+
+F-270 is **done**: the acceptance as amended on 2026-11-18 is met: apps/studio-web/tests/e2e/case-editor.spec.ts (the changed line only, its comment kept, the journal naming edit_case; a conflict that overwrites nothing) passed with the engine in the whole Studio run of F-893's push (2026-11-24, 880 tests passed on the first run). Nothing was run for this reading; the test files of the item are among the binaries of the full run c76b2d81 (2026-11-22, green) except the Electron specs, which that run does not hold.

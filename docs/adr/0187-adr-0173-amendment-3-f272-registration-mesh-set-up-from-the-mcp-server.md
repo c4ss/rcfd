@@ -334,3 +334,7 @@ Five decisions on the priority items F-270 to F-275 were put to the maintainer o
 - The answer of 2026-11-06 to Q3 (the Studio's size limits, after the maintainer's Studio worktree, F-293) is withdrawn: F-293 is retired and the worktree `studio-case-lineage` is abandoned, because both target the egui Studio removed on 2026-11-16. Q3 is now option (a): no size limit on a mesh build, as built, until a large mesh is seen to block the server.
 - Q2 is accepted as built by the maintainer himself: an edit whose mesh builds but fails the quality check is written with `mesh.ok` false, and `rcfd run` still refuses such a mesh.
 - Q1, Q4 and Q5 stand as built, on the written recommendations. Q6 was settled by F-275.
+
+## The lead's reading (2026-11-25)
+
+F-272 is **done**: every registered check (C8-I, C8-C, C8-P, C8-E, C8-L, C-M, C-L, C-1) is met in addendum 1 and both mutations were caught; the maintainer's answers of 2026-11-18 leave nothing to wait for, and the mesh recipe format is outside the acceptance. Nothing was run for this reading; the test files of the item are among the binaries of the full run c76b2d81 (2026-11-22, green).

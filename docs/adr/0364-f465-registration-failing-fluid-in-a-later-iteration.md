@@ -261,3 +261,7 @@ Follow-up item (id by the lead):
 1. Title: "Coupled step: failing-participant checks with a start state that does not use the restores at the start of an iteration". Deps: F-465.
 
 > Every limit not stated here is registered in the ADR before the run. With the StaticSolid and the mock fluid of ADR 0286, a start state reached without any coupler iteration beyond the first (a loose-coupling first step, then F0 doubled), registered with its arithmetic, a mock fluid failing in iteration 2 and in iteration 3 stops the step with the fluid's name, the iteration number and its message and both participants bit-equal to the start; mutations that skip the coupler's restore of the fluid or of the structure at the start of iteration 2 or of iteration 3 (ADR 0364 M16 to M19) and the mock's restore of the time (M25) are each caught by a failing-step or control check, not by a panic in the set-up.
+
+## The lead's reading (2026-11-25)
+
+F-465 is **done**: the missing check is the one of F-469 (ADR 0444, done on 2026-11-14): from a start that uses no restore, M16 to M19 and M25 are each caught by registered failing-step and control checks and none by a panic in the set-up, with M9, M11 and M24 still caught; so every clause of the acceptance is held by registered checks. Nothing was run for this reading; the test files of the item are among the binaries of the full run c76b2d81 (2026-11-22, green).

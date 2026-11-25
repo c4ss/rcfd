@@ -412,3 +412,11 @@ Five decisions on the priority items F-270 to F-275 were put to the maintainer o
 
 - The answers of 2026-11-06 to Q3 and Q5 pointed at F-293, which is retired with the worktree `studio-case-lineage` (both target the egui Studio removed on 2026-11-16). The lead checks which of the deferred pieces the Electron Studio already has (its actor on run starts and controls, a feed panel, a notes list) and issues what is missing as Studio items. The run worker of Q5 belonged to the egui Studio and lapses.
 - Q1 and Q2 stand as built, on the written recommendations. Q4 stays (c). Q7 was settled by F-275 (`read_feed` with `from_seq`).
+
+## The lead's reading (2026-11-25)
+
+F-273 stays **partial**. Confirmed with the Studio's tests of 2026-11-24 (F-893's push, 880 passed): what an MCP client does
+shows in the open Studio at once and the activity line names it, and the Studio's own writes carry its actor and a reason.
+Missing: the acceptance asks that the Studio shows who changed what and why, and no view of the Electron Studio shows the
+reason of a feed entry (search of `apps/studio-web/src` for the feed's `reason`: none in a view). It is Studio work, issued
+when no other agent owns those files.

@@ -377,3 +377,7 @@ Five decisions on the priority items F-270 to F-275 were put to the maintainer o
 - Q1: the run-record fields `continue_from` and `max_steps` are approved as built, in a type beside `RunSettings` (the approval ADR 0130 asks for). Folding them into `RunSettings` is open to the lead as a later tidy-up; the reason against it, the egui Studio's struct literal, went with that Studio.
 - Q2 to Q7 stand as built, on the written recommendations (option (a) of each).
 - The lead decides the status of F-287 by the registered rule. F-274 no longer waits on this approval.
+
+## The lead's reading (2026-11-25)
+
+F-287 is **done**: every registered check (R-1c, R-2, C-CH, C-MS, C-MAP, C-U, C-1) is met in addendum 1 and the mutations were caught; the fields are approved (Q1, 2026-11-18) and Q2 to Q7 stand as built. Nothing was run for this reading; the test files of the item are among the binaries of the full run c76b2d81 (2026-11-22, green).

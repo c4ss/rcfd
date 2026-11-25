@@ -504,3 +504,7 @@ Five decisions on the priority items F-270 to F-275 were put to the maintainer o
 - Q2 is accepted by the maintainer himself: the four workflow tools and the restart, interpolation and checkpoint options of `run_headless` are not offered in project mode until project equivalents exist. F-287 gives the restart path.
 - The hook under the bypass-permissions modes stays untested, as accepted on 2026-11-06. That it is untested is to be stated in the plugin's documentation; the lead issues that.
 - The other items of "Decisions needed" that were not asked on 2026-11-06 (Q1, Q3, Q4, Q8) stand as built, on the written recommendations.
+
+## The lead's reading (2026-11-25)
+
+F-275 is **done**: every registered check (C5-L to C5-R) is met in addendum 1 and four mutations were caught; the session tools kept in the project list are the ones the maintainer accepted on 2026-11-18 (Q2) until equivalents exist, and the bypass modes stay untested by the same answer, which docs/mcp-tools.md says. Nothing was run for this reading; the test files of the item are among the binaries of the full run c76b2d81 (2026-11-22, green).

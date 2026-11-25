@@ -193,3 +193,7 @@ Five decisions on the priority items F-270 to F-275 were put to the maintainer o
 
 - Q1 to Q5 stand as built, on the written recommendations (option (a) of each).
 - The lead decides the status of F-288 by the registered rule.
+
+## The lead's reading (2026-11-25)
+
+F-288 is **done**: every registered check (A-R, A-N, A-U) is met in addendum 1 and the mutations were caught; Q1 to Q5 stand as built (2026-11-18). Nothing was run for this reading; the test files of the item are among the binaries of the full run c76b2d81 (2026-11-22, green).
