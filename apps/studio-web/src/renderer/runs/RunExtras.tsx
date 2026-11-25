@@ -16,6 +16,7 @@ import { BUDGET_KEYS, BUDGET_KIND, type BudgetKey, type BudgetsOutcome, type Run
 import { Button, IconButton, NumberField, Quiet, StateMark } from '../ui/index.js';
 import { IconToggle } from '../ui/IconToggle.js';
 import { useCommandHandlers } from '../commands/host.js';
+import { Traced, budgetInUse, budgetValue, openMember, residualValue } from '../provenance/index.js';
 import { openRunReport, runLog, runnerBudgets, setRunnerBudgets, undoRunnerBudgets } from '../workspace/door.js';
 import { draftOf, feedStep, typedIn, type Draft } from './budgetsFeed.js';
 import { clock } from './model.js';
@@ -39,7 +40,8 @@ export function ResidualValue({ row, equation }: { row: RunRow; equation: string
   if (v === undefined) return <span className="rv-res rv-res--none" aria-label={`No residual of ${equation} yet`} />;
   return (
     <span className="rv-res" data-words="data" data-residual={equation} data-value={v} title={`${equation}: ${v} (the last line of runs/${row.id}/residuals.jsonl)`}>
-      {residualText(v)}
+      {/* ADR 0795: no tab stop; the cell (or the row) opens it by Ctrl+I, a click selects the row */}
+      <Traced subject={() => ({ kind: 'number', source: residualValue({ run: row.id, equation, shown: residualText(v), value: v }) })}>{residualText(v)}</Traced>
     </span>
   );
 }
@@ -215,7 +217,8 @@ export const BUDGETS_FILE = '.rcfd/runner-config.json';
  * already read); another file, its values are shown (with nothing typed), or the panel says another writer changed it
  * (with values typed, which are kept). `data-file-change` is the number of the entry the panel has finished with.
  */
-export function BudgetsPanel({ onClose, fileChange = 0 }: { onClose: () => void; fileChange?: number }) {
+export function BudgetsPanel({ onClose, fileChange = 0, project }: { onClose: () => void; fileChange?: number; project: { readonly folder: string; readonly engine: { readonly name: string; readonly version: string } } }) {
+  const { folder, engine } = project;
   const [b, setBState] = useState<RunnerBudgets | null>(null);
   const [draft, setDraftState] = useState<Draft | null>(null);
   // what the panel holds, readable at once by an answer that comes back before the next render
@@ -329,6 +332,7 @@ export function BudgetsPanel({ onClose, fileChange = 0 }: { onClose: () => void;
       data-file-change={handled}
       ref={panelRef}
       tabIndex={-1}
+      onClick={openMember}
       onKeyDown={(e) => {
         if (e.key === 'Escape') {
           e.stopPropagation();
@@ -356,7 +360,15 @@ export function BudgetsPanel({ onClose, fileChange = 0 }: { onClose: () => void;
           {BUDGET_KEYS.map((k) => (
             <NumberField
               key={k}
-              label={<span data-words="data">{k}</span>}
+              // ADR 0795: the key's name opens its number's provenance, the field by Ctrl+I (the number in use after it)
+              data-provenance={`budget:${k} budget-in-use:${k}`}
+              label={
+                <span data-words="data">
+                  <Traced pkey={`budget:${k}`} subject={() => ({ kind: 'project', source: budgetValue({ folder, engine, key: k, path: b.path, hash: b.hash, exists: b.exists, inFile: b.values[k], typed: draft[k] }) })}>
+                    {k}
+                  </Traced>
+                </span>
+              }
               aria-label={k}
               value={draft[k]}
               onChange={(v) => setDraft({ ...draft, [k]: v })}
@@ -369,7 +381,14 @@ export function BudgetsPanel({ onClose, fileChange = 0 }: { onClose: () => void;
                   {b.inUse?.values[k] !== undefined && (
                     <>
                       {'; in use '}
-                      <span data-words="data">{b.inUse.values[k]}</span>
+                      <span data-words="data">
+                        <Traced
+                          pkey={`budget-in-use:${k}`}
+                          subject={() => ({ kind: 'project', source: budgetInUse({ folder, engine, key: k, value: b.inUse!.values[k]!, source: b.inUse!.source, started: b.inUse!.started }) })}
+                        >
+                          {b.inUse.values[k]}
+                        </Traced>
+                      </span>
                     </>
                   )}
                   {'; empty: the runner’s default'}

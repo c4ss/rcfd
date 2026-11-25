@@ -27,15 +27,15 @@ import { IconToggle } from '../ui/IconToggle.js';
 import { useCommandHandlers } from '../commands/host.js';
 import { savePagePng } from '../workspace/door.js';
 import { rangeOf, shownRange } from './surface.js';
-import { AXIS, cellsOutside, cellsOutsideOf, domainText, fixedRange, lengthText, lengthUnitOf, pngName, scaleBar, type RangeMode } from './viewExtras.js';
+import { AXIS, cellsOutside, cellsOutsideOf, domainExtents, domainText, fixedRange, lengthText, lengthUnitOf, pngName, scaleBar, type RangeMode } from './viewExtras.js';
 import { colourRange, f32Text, lutBytes, type ColourRange } from './colormap.js';
 import { FieldCanvas, type Backend, type FieldCanvasApi, type Pick } from './FieldCanvas.js';
 import { CutPanel, DerivedControls, IsoPanel, StreamPanel, pictureKey, useDerived } from './DerivedControls.js';
 import { availability, middleCut, rakeEnds, startRake, type Cut, type Rake } from './derived.js';
 import { cutOf, isoOf, linesOf } from './glb.js';
 import type { DeriveArgs } from '../../shared/data.js';
-import { Legend } from './Legend.js';
-import { Provenance, cellValue, snapshotFactValue } from '../provenance/index.js';
+import { Legend, tickKeys, type Tick } from './Legend.js';
+import { Provenance, Traced, cellValue, domainValue, legendTick, openMember, scaleBarValue, snapshotFactValue, type LegendRange, type ProvenanceSubject } from '../provenance/index.js';
 import { FieldPrep, type PreparedSurface } from './prepare.js';
 import { beginWork } from '../work/work.js';
 import { WorkProgress } from '../work/WorkProgress.js';
@@ -67,6 +67,10 @@ export interface FieldViewportProps {
   /** F-815: the quantity's name and the caption's name when the values are not one run's stored field. */
   readonly quantity?: string;
   readonly title?: string;
+  /** ADR 0795: the run the values are of and the baseline, when they are a difference (its legend's provenance). */
+  readonly difference?: { readonly run: string; readonly snapshot: number; readonly of: number; readonly baseline: string };
+  /** ADR 0795: keys of numbers outside the view that Ctrl+I opens from it after its own (a comparison's one legend). */
+  readonly names?: string;
   /** F-815: the derived-picture controls (default on). */
   readonly derived?: boolean;
   /**
@@ -129,6 +133,8 @@ export function FieldViewport({
   loadKey = '',
   quantity: quantityProp,
   title,
+  difference,
+  names,
   derived = true,
   onCancelled,
   learner,
@@ -642,6 +648,36 @@ export function FieldViewport({
     ranged && rangeMode === 'fixed' && shown && !('problem' in fixed)
       ? (shown.per === 'triangle' ? cellsOutsideOf : cellsOutside)(shown.surface.cells, shown.values, fixed.lo, fixed.hi)
       : null;
+  // ADR 0795: the provenance of the legend's ticks, the domain and the scale bar; the view names them, after its readout
+  const legendFact = (t: Tick): ProvenanceSubject | null => {
+    if (!shown) return null;
+    const range: LegendRange = difference
+      ? { kind: 'difference', baseline: difference.baseline, snapshot: shown.snapshot, of: shown.info.snapshots.length }
+      : modeRange && rangeMode === 'run' && runRange
+        ? { kind: 'run', snapshots: runRange.snapshots }
+        : modeRange && rangeMode === 'fixed'
+          ? { kind: 'fixed' }
+          : { kind: 'snapshot' };
+    return {
+      kind: 'number',
+      source: legendTick({
+        ...t,
+        run: difference?.run ?? runName(shown.info.path),
+        quantity,
+        unit,
+        range,
+        snapshot: difference?.snapshot ?? shown.snapshot,
+        of: difference?.of ?? shown.info.snapshots.length,
+        step: snap?.step ?? null,
+        time: snap?.time ?? null,
+      }),
+    };
+  };
+  const domainFact = (): ProvenanceSubject | null => {
+    if (!shown || !layers) return null;
+    const { axes, extents } = domainExtents(layers);
+    return { kind: 'number', source: domainValue({ run: runName(shown.info.path), shown: domainText(layers), unit: length, extents, axes: axes.map((k) => AXIS[k]!), twoD: layers.twoD }) };
+  };
   const bar = twoD && layers && scale && scale.axis === layers.thin ? scaleBar(scale.perPixel, scale.widthPx) : null;
   const rangeWords = rangeProp
     ? 'viridis, one range for both runs'
@@ -656,7 +692,7 @@ export function FieldViewport({
         : 'viridis, range of the shown values';
 
   return (
-    <section className="fv" aria-label={`Field view: ${quantity}`} ref={sectionRef} data-range-mode={ranged ? rangeMode : 'shared'}>
+    <section className="fv" onClick={openMember} aria-label={`Field view: ${quantity}`} ref={sectionRef} data-range-mode={ranged ? rangeMode : 'shared'}>
       <div className="fv-tools">
         <Toggle isSelected={grid} onChange={setGrid} isDisabled={!shown}>
           Mesh grid
@@ -737,7 +773,7 @@ export function FieldViewport({
         data-streamlines={streamlines && engineLines && current(streamPic, streamArgs) && drawnNow ? engineLines.lines : undefined}
         data-range={drawnRange ? `${drawnRange.lo} ${drawnRange.hi}` : undefined}
         data-scale={bar ? bar.length : undefined}
-        data-provenance="fv-readout"
+        data-provenance={`${tagBase}-readout ${tagBase}-domain ${tagBase}-scalebar ${legend ? tickKeys(tagBase) : ''}${names ? ` ${names}` : ''}`}
       >
         <FieldCanvas
           ref={api}
@@ -787,7 +823,14 @@ export function FieldViewport({
           // F-837: the scale bar of a face-on 2D view (the egui Studio's rule), in the picture Save PNG writes
           <div className="fv-scalebar" data-length={bar.length} data-length-unit={length.from} title={length.why}>
             <span className="fv-scalebar-bar" style={{ width: `${bar.px}px` }} aria-hidden="true" />
-            <span data-words="data">{`${lengthText(bar.length)} ${length.unit}`}</span>
+            <span data-words="data">
+              <Traced
+                pkey={`${tagBase}-scalebar`}
+                subject={() => (opened ? { kind: 'number', source: scaleBarValue({ run: runName(opened.info.path), shown: lengthText(bar.length), value: bar.length, unit: length }) } : null)}
+              >
+                {`${lengthText(bar.length)} ${length.unit}`}
+              </Traced>
+            </span>
           </div>
         )}
         <WorkProgress scope={tagBase} />
@@ -806,7 +849,7 @@ export function FieldViewport({
       <div className="fv-info">
         {shown && (
           <>
-            {legend && drawnRange && <Legend lut={lut} quantity={word} unit={unit} lo={drawnRange.lo} hi={drawnRange.hi} />}
+            {legend && drawnRange && <Legend lut={lut} quantity={word} unit={unit} lo={drawnRange.lo} hi={drawnRange.hi} provenance={{ prefix: tagBase, of: legendFact }} />}
             {learner ? (
               // F-813: the learner's caption, plain at rest; the precise terms are said to readers and behind Explain
               <p className="fv-caption" data-caption="learner">
@@ -858,7 +901,10 @@ export function FieldViewport({
                 // F-837: the domain's size (the egui Studio's "domain 2 x 1 m"): the stored mesh's extents in the unit
                 // the engine names for them (ADR 0738 P5), where it comes from said in the tooltip
                 <span className="fv-domain" data-words="data" data-domain={domainText(layers)} data-length-unit={length.from} title={`Domain${layers.twoD ? ' (2D: the two in-plane extents)' : ''}. ${length.why}`}>
-                  {` · ${domainText(layers)} ${length.unit}`}
+                  {' · '}
+                  <Traced pkey={`${tagBase}-domain`} subject={domainFact}>
+                    {`${domainText(layers)} ${length.unit}`}
+                  </Traced>
                 </span>
               )}
               {outside && outside.outside > 0 && (
@@ -883,7 +929,8 @@ export function FieldViewport({
                     data-point={hover.pick.point ? hover.pick.point.join(' ') : undefined}
                   >
                     <Provenance
-                      pkey="fv-readout"
+                      // ADR 0795: a key of this view's own (two views of a comparison have a readout each)
+                      pkey={`${tagBase}-readout`}
                       onOpenChange={(o) => (pinned.current = o)}
                       subject={{
                         kind: 'number',

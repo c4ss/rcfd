@@ -14,7 +14,8 @@ import type { RunComparison } from '../../shared/run.js';
 import { loadDifference } from '../data/door.js';
 import { colourRange, lutBytes } from '../field/colormap.js';
 import { FieldViewport, type FieldLoad } from '../field/FieldViewport.js';
-import { Legend } from '../field/Legend.js';
+import { Legend, tickKeys, type Tick } from '../field/Legend.js';
+import { legendTick, openMember, type ProvenanceSubject } from '../provenance/index.js';
 import { fmt } from '../plots/parts.js';
 import { caseName, type RunRow } from '../runs/model.js';
 import { Select, StatePictogram, Tooltip } from '../ui/index.js';
@@ -192,6 +193,26 @@ export function CompareFields({ mode, a, b, field, snapshot, reopenA, reopenB, o
     }
   }, [bShown, bWords, bKey, report]);
 
+  // ADR 0795: the one legend's ticks, named by both views
+  const legendFact = (t: Tick): ProvenanceSubject | null => {
+    const at = a.info.snapshots[snapshot];
+    if (!at) return null;
+    const of = a.info.snapshots.length;
+    return {
+      kind: 'number',
+      source: legendTick({
+        ...t,
+        run: a.row.id,
+        quantity: field,
+        unit,
+        range: bShown && b.info && bSnapshot !== null ? { kind: 'shared', other: b.row.id, snapshot: bSnapshot, of: b.info.snapshots.length } : { kind: 'snapshot' },
+        snapshot,
+        of,
+        step: at.step,
+        time: at.time ?? null,
+      }),
+    };
+  };
   const aTitle = a.row.id;
   if (mode === 'difference') {
     const mesh = b.info ? meshMatch(a.info, b.info) : null;
@@ -203,7 +224,7 @@ export function CompareFields({ mode, a, b, field, snapshot, reopenA, reopenB, o
         {refusal !== null ? (
           <Refusal words={refusal} view="difference" />
         ) : b.ref && bSnapshot !== null ? (
-          <DifferenceView a={a} bRef={b.ref} bRow={b.row} bSnapshot={bSnapshot} field={field} snapshot={snapshot} reopen={reopenA} onDrawn={onDrawn} />
+          <DifferenceView a={a} bRef={b.ref} bRow={b.row} bSnapshot={bSnapshot} bOf={b.info?.snapshots.length ?? 0} field={field} snapshot={snapshot} reopen={reopenA} onDrawn={onDrawn} />
         ) : (
           <p className="cmp-reading" role="status">
             Reading the stored fields of {b.row.id}…
@@ -213,7 +234,7 @@ export function CompareFields({ mode, a, b, field, snapshot, reopenA, reopenB, o
     );
   }
   return (
-    <div className="cmp cmp--side" data-mode="side" data-a-snapshot={snapshot} data-b-snapshot={bSnapshot ?? undefined} data-range={range ? `${range.lo} ${range.hi}` : undefined}>
+    <div className="cmp cmp--side" onClick={openMember} data-mode="side" data-a-snapshot={snapshot} data-b-snapshot={bSnapshot ?? undefined} data-range={range ? `${range.lo} ${range.hi}` : undefined}>
       <div className="cmp-views">
         <div className="cmp-view" data-view="a" data-run={a.row.id}>
           <FieldViewport
@@ -224,6 +245,7 @@ export function CompareFields({ mode, a, b, field, snapshot, reopenA, reopenB, o
             legend={false}
             range={range}
             onShown={onShownA}
+            names={tickKeys('cmp')}
             title={aTitle}
             onDrawn={(s) => {
               drawn.current.a = s;
@@ -242,6 +264,7 @@ export function CompareFields({ mode, a, b, field, snapshot, reopenA, reopenB, o
               legend={false}
               range={range}
               onShown={onShownB}
+              names={tickKeys('cmp')}
               title={b.row.id}
               onDrawn={(s) => {
                 drawn.current.b = `${b.row.id}/${s}`;
@@ -257,7 +280,7 @@ export function CompareFields({ mode, a, b, field, snapshot, reopenA, reopenB, o
           )}
         </div>
       </div>
-      <div className="cmp-legend">{range && <Legend lut={lut} quantity={field} unit={unit} lo={range.lo} hi={range.hi} />}</div>
+      <div className="cmp-legend">{range && <Legend lut={lut} quantity={field} unit={unit} lo={range.lo} hi={range.hi} provenance={{ prefix: 'cmp', of: legendFact }} />}</div>
     </div>
   );
 }
@@ -268,6 +291,7 @@ function DifferenceView({
   bRef,
   bRow,
   bSnapshot,
+  bOf,
   field,
   snapshot,
   reopen,
@@ -277,6 +301,7 @@ function DifferenceView({
   bRef: StoreRef;
   bRow: RunRow;
   bSnapshot: number;
+  bOf: number;
   field: string;
   snapshot: number;
   reopen: number;
@@ -301,6 +326,7 @@ function DifferenceView({
         loadKey={`${bRow.id}/${bSnapshot}`}
         quantity={`Δ${field}`}
         title={`${bRow.id} − ${a.row.id}`}
+        difference={{ run: bRow.id, snapshot: bSnapshot, of: bOf, baseline: a.row.id }}
         derived={false}
         onDrawn={onDrawn}
       />

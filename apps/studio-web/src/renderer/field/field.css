@@ -257,6 +257,11 @@
   font-size: var(--type-label-size);
   pointer-events: none;
 }
+/* ADR 0795: the length opens its provenance on a click; the rest of the bar stays the orbit's */
+.fv-scalebar .pv-num {
+  pointer-events: auto;
+}
+
 .fv-scalebar-bar {
   display: block;
   height: 6px;

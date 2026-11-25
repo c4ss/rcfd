@@ -18,7 +18,7 @@ import type {
   RunActionResult,
 } from '../../shared/project.js';
 import { Button, Dash, EmptyMark, IconButton, Quiet, SegmentedToggle, StateMark, StatePictogram, Tabs, TextField, Unavailable } from '../ui/index.js';
-import { baseName, clock, dateTime, inFolder, kilobytes, plural, sourceWord } from './format.js';
+import { baseName, clock, dateTime, inFolder, kilobytes, sourceWord } from './format.js';
 import { RunsView } from '../runs/RunsView.js';
 import { runRows, shownState, timeIsQuiet, timeNote, timeText, unknownWord, type RunRow } from '../runs/model.js';
 import { cancelOpening, projectActions, watchProjectState } from './door.js';
@@ -33,6 +33,8 @@ import { DataFiles, DesignsGroup, UnsavedMark, isCaseFile, useUnsavedCases } fro
 import { STUDIO_SETTINGS_HASH } from '../studio-settings/hash.js';
 import { UndoControls } from '../history/UndoControls.js';
 import { isTerminalState } from '../../shared/actions/runs.js';
+import { ALL_KEYS, AllCount, Count, EngineCount, FirstOf, ISSUES_READ, KindCount, MoreCount, ShownCount, countKeys, filesKey, runsKey } from './HomeCounts.js';
+import { openMember } from '../provenance/index.js';
 import { TrashButton, TrashGroup, caseTarget, resultsTarget, runTarget, trashScope } from './Trash.js';
 import './project.css';
 
@@ -461,8 +463,10 @@ function HomeBody({
     (!shown('runs') || runs.length === 0) &&
     (!shown('notes') || notes.length === 0);
   const total = view.cases.total + view.meshes.total + view.runs.total + view.notes.total;
+  // ADR 0795: the counts' provenance: a segment names those of its kind, a click opens one outside a button
+  const counted = (k: Exclude<Kind, 'all'>) => ({ count: view[k].total, counted: <KindCount view={view} kind={k} pkey={`home:seg:${k}`} value={view[k].total} />, provenance: countKeys(view, k) });
   return (
-    <div className="ph-home">
+    <div className="ph-home" onClick={openMember}>
       <section className="ph-strip" aria-labelledby="ph-name">
         <h1 id="ph-name" className="ph-name" data-words="data">
           {info?.name ?? baseName(view.folder)}
@@ -521,11 +525,11 @@ function HomeBody({
         <SegmentedToggle
           aria-label="Show"
           options={[
-            { id: 'all', label: 'All', count: total },
-            { id: 'cases', label: 'Cases', count: view.cases.total },
-            { id: 'meshes', label: 'Meshes', count: view.meshes.total },
-            { id: 'runs', label: 'Runs', count: view.runs.total },
-            { id: 'notes', label: 'Notes', count: view.notes.total },
+            { id: 'all', label: 'All', count: total, counted: <AllCount view={view} value={total} />, provenance: ALL_KEYS },
+            { id: 'cases', label: 'Cases', ...counted('cases') },
+            { id: 'meshes', label: 'Meshes', ...counted('meshes') },
+            { id: 'runs', label: 'Runs', ...counted('runs') },
+            { id: 'notes', label: 'Notes', ...counted('notes') },
           ]}
           selected={kind}
           onChange={(k) => setKind(k as Kind)}
@@ -547,7 +551,7 @@ function HomeBody({
       </div>
       <div className="ph-work">
         <div className="ph-index" role="region" aria-label="What the project folder holds">
-          {info && info.issues_total > 0 && <Issues info={info} />}
+          {info && info.issues_total > 0 && <Issues info={info} view={view} />}
           {nothing && (
             <div className="ph-nomatch" data-words="exception">
               <p>No entry matches “{filter.trim()}”.</p>
@@ -557,7 +561,7 @@ function HomeBody({
             </div>
           )}
           {shown('cases') && (
-            <Group id="cases" title="Cases" listing={view.cases} engineCount={info?.counts.cases} shown={cases.length} filtered={q !== ''}>
+            <Group id="cases" title="Cases" view={view} listing={view.cases} engineCount={info?.counts.cases} shown={cases.length} filter={q}>
               {caseFiles.length > 0 && <CasesTable cases={caseFiles} changed={changed} view={view} onRunResult={onRunResult} unsaved={unsaved} />}
               <DataFiles files={dataFiles} changed={changed} />
               {view.cases.total === 0 && !view.cases.error && (
@@ -566,15 +570,15 @@ function HomeBody({
             </Group>
           )}
           {shown('meshes') && (
-            <Group id="meshes" title="Meshes" listing={view.meshes} engineCount={info?.counts.meshes} shown={meshes.length} filtered={q !== ''}>
-              {meshes.length > 0 && <MeshesTable meshes={meshes} changed={changed} />}
+            <Group id="meshes" title="Meshes" view={view} listing={view.meshes} engineCount={info?.counts.meshes} shown={meshes.length} filter={q}>
+              {meshes.length > 0 && <MeshesTable meshes={meshes} changed={changed} view={view} />}
               {view.meshes.total === 0 && !view.meshes.error && (
                 <Empty text="No mesh files. A case can build its own mesh from its settings, so this is often fine. To use a mesh file (Gmsh, Fluent or OpenFOAM), ask Claude Code to bring it in with import_mesh." />
               )}
             </Group>
           )}
           {shown('runs') && (
-            <Group id="runs" title="Runs" listing={view.runs} engineCount={info?.counts.runs} shown={runs.length} filtered={q !== ''}>
+            <Group id="runs" title="Runs" view={view} listing={view.runs} engineCount={info?.counts.runs} shown={runs.length} filter={q}>
               {runs.length > 0 && <RunsTable runs={runRows(runs, view.runDetails, view.runDetailErrors)} changed={changed} folder={view.folder} />}
               {view.runs.total === 0 && !view.runs.error && (
                 <Empty text="No runs yet. A run solves one case and keeps its results in runs/. Run a case from the list above; Claude Code (start_run) and the CLI start the same runs, and theirs appear here as they start." />
@@ -582,9 +586,9 @@ function HomeBody({
               {view.skippedRuns.length > 0 && <SkippedRuns skipped={view.skippedRuns} />}
             </Group>
           )}
-          {kind === 'all' && view.designs && <DesignsGroup listing={view.designs} engineCount={info?.counts.designs} filter={(p) => match(p)} />}
+          {kind === 'all' && view.designs && <DesignsGroup view={view} listing={view.designs} engineCount={info?.counts.designs} filter={(p) => match(p)} />}
           {shown('notes') && (
-            <Group id="notes" title="Notes" listing={view.notes} engineCount={info?.counts.notes} shown={notes.length} filtered={q !== ''}>
+            <Group id="notes" title="Notes" view={view} listing={view.notes} engineCount={info?.counts.notes} shown={notes.length} filter={q}>
               {notes.length > 0 && <NotesTable notes={notes} changed={changed} />}
               {view.notes.total === 0 && !view.notes.error && (
                 <Empty text="No notes. Notes are free text in notes/, written by you or by Claude Code (write_note)." />
@@ -624,12 +628,14 @@ function NotLive({ view }: { view: ProjectView }) {
   );
 }
 
-function Issues({ info }: { info: NonNullable<ProjectView['info']> }) {
+function Issues({ info, view }: { info: NonNullable<ProjectView['info']>; view: ProjectView }) {
   return (
     <section className="ph-group" aria-labelledby="ph-g-issues">
       <h2 id="ph-g-issues" className="ph-group-head">
         <span className="ph-group-title">Issues</span>
-        <span className="ph-group-count" data-words="data">{info.issues_total}</span>
+        <span className="ph-group-count" data-words="data">
+          <Count view={view} pkey="home:issues" quantity="issues" value={info.issues_total} file="the project folder" readBy={ISSUES_READ} counted="by the engine: what its check of the folder found" />
+        </span>
         <span className="ph-group-what">what the engine found wrong in the folder</span>
       </h2>
       <ul className="ph-issues">
@@ -640,7 +646,11 @@ function Issues({ info }: { info: NonNullable<ProjectView['info']> }) {
             <span data-words="data">{i.message}</span>
           </li>
         ))}
-        {info.issues_total > info.issues.length && <li className="ph-more" data-words="data">and {info.issues_total - info.issues.length} more</li>}
+        {info.issues_total > info.issues.length && (
+          <li className="ph-more" data-words="data">
+            and <MoreCount view={view} pkey="home:issues:more" quantity="issues not listed" total={info.issues_total} listed={info.issues.length} file="the project folder" readBy={`${ISSUES_READ} and issues`} /> more
+          </li>
+        )}
       </ul>
     </section>
   );
@@ -649,18 +659,21 @@ function Issues({ info }: { info: NonNullable<ProjectView['info']> }) {
 function Group<T>({
   id,
   title,
+  view,
   listing,
   engineCount,
   shown,
-  filtered,
+  filter,
   children,
 }: {
   id: Exclude<Kind, 'all'>;
   title: string;
+  view: ProjectView;
   listing: Listing<T>;
   engineCount: number | undefined;
   shown: number;
-  filtered: boolean;
+  /** The filter's text as it is compared; empty, no filter. */
+  filter: string;
   children: ReactNode;
 }) {
   const disagree = engineCount !== undefined && listing.error === null && engineCount !== listing.total;
@@ -668,20 +681,32 @@ function Group<T>({
     <section className="ph-group" aria-labelledby={`ph-g-${id}`} data-group={id}>
       <h2 id={`ph-g-${id}`} className="ph-group-head">
         <span className="ph-group-title">{title}</span>
-        <span className="ph-group-count" data-words="data">{listing.total}</span>
+        <span className="ph-group-count" data-words="data">
+          <KindCount view={view} kind={id} pkey={`home:${id}`} value={listing.total} />
+        </span>
         {/* G22: what the folder is for is said to readers; a filter's count and a disagreement are shown */}
         <Quiet>
           {id}/ {DESCRIBE[id]}
         </Quiet>
         <span className="ph-group-what">
-          {filtered && listing.total > 0 ? (
+          {filter !== '' && listing.total > 0 ? (
             <>
-              ; <span data-words="data">{shown}</span> shown
+              ;{' '}
+              <span data-words="data">
+                <ShownCount view={view} kind={id} value={shown} filter={filter} />
+              </span>{' '}
+              shown
             </>
           ) : (
             ''
           )}
-          {disagree ? <span data-words="exception">; the engine counts {engineCount}</span> : ''}
+          {disagree ? (
+            <span data-words="exception">
+              ; the engine counts <EngineCount view={view} kind={id} value={engineCount} />
+            </span>
+          ) : (
+            ''
+          )}
         </span>
       </h2>
       {listing.error !== null ? (
@@ -695,7 +720,7 @@ function Group<T>({
       )}
       {listing.error === null && listing.total > listing.items.length && (
         <p className="ph-more" data-words="exception">
-          The first {listing.items.length} of {listing.total} are listed.
+          <FirstOf view={view} kind={id} listed={listing.items.length} total={listing.total} />
         </p>
       )}
     </section>
@@ -755,7 +780,7 @@ function CasesTable({
       </thead>
       <tbody data-words="data">
         {cases.map((c) => (
-          <tr key={c.path} data-path={c.path}>
+          <tr key={c.path} data-path={c.path} data-provenance={runsKey(c.path)}>
             <th scope="row" className="ph-name-cell">
               {inFolder(c.path, 'cases')}
               {unsaved.has(c.path) && <UnsavedMark path={c.path} session={unsaved.get(c.path)!} />}
@@ -767,7 +792,17 @@ function CasesTable({
               )}
             </th>
             <td>{c.meshes.length > 0 ? c.meshes.map((m) => inFolder(m, 'meshes')).join(', ') : <Dash words="none in meshes/" />}</td>
-            <td className="ph-num">{c.runs}</td>
+            <td className="ph-num">
+              <Count
+                view={view}
+                pkey={runsKey(c.path)}
+                quantity={`runs of ${c.path}`}
+                value={c.runs}
+                file="runs/"
+                readBy="list_runs (rcfd-mcp, read-only), case of each run"
+                counted={`by the Studio: the runs of the list whose case is ${c.path}`}
+              />
+            </td>
             <td className="ph-change-cell">
               <Changed at={changed.get(c.path)} />
             </td>
@@ -790,7 +825,17 @@ function CasesTable({
   );
 }
 
-function MeshesTable({ meshes, changed }: { meshes: readonly MeshEntry[]; changed: Map<string, string> }) {
+/** The files of a mesh of several files, as list_meshes counts them. */
+function MeshFiles({ view, mesh }: { view: ProjectView; mesh: MeshEntry }) {
+  return (
+    <>
+      <Count view={view} pkey={filesKey(mesh.path)} quantity={`files of ${mesh.path}`} value={mesh.files} file={mesh.path} readBy="list_meshes (rcfd-mcp, read-only), files" counted="by the engine: the files of the mesh" />{' '}
+      {mesh.files === 1 ? 'file' : 'files'}
+    </>
+  );
+}
+
+function MeshesTable({ meshes, changed, view }: { meshes: readonly MeshEntry[]; changed: Map<string, string>; view: ProjectView }) {
   return (
     <table className="ph-table">
       <thead>
@@ -812,7 +857,10 @@ function MeshesTable({ meshes, changed }: { meshes: readonly MeshEntry[]; change
             <th scope="row" className="ph-name-cell">
               {inFolder(m.path, 'meshes')}
             </th>
-            <td>{m.kind === 'openfoam' ? `OpenFOAM folder, ${plural(m.files, 'file')}` : m.files > 1 ? plural(m.files, 'file') : 'file'}</td>
+            <td>
+              {m.kind === 'openfoam' ? 'OpenFOAM folder, ' : ''}
+              {m.kind === 'openfoam' || m.files > 1 ? <MeshFiles view={view} mesh={m} /> : 'file'}
+            </td>
             <td className="ph-num">{kilobytes(m.bytes)}</td>
             <td>
               {m.used_by.length > 0 ? m.used_by.map((c) => inFolder(c, 'cases')).join(', ') : <Dash words="no case names it" />}

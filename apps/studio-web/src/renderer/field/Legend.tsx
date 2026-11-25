@@ -3,7 +3,23 @@
 // of the bar is a colour of the surface. Tick labels are rcfd-studio's (`{:.4e}`), in tabular figures; the unit sits in
 // the title (the Tabular Figures Rule).
 import { useEffect, useRef } from 'react';
+import { Traced, type ProvenanceSubject } from '../provenance/index.js';
 import { LUT_SIZE, tickLabel, ticks } from './colormap.js';
+
+/** The ticks of a legend (`ticks` of ./colormap.ts gives five). */
+export const TICKS = 5;
+/** ADR 0795: the keys of a legend's ticks, as the view that shows it names them. */
+export const tickKeys = (prefix: string): string => Array.from({ length: TICKS }, (_, i) => `${prefix}-tick-${i}`).join(' ');
+
+/** A tick as its provenance needs it. */
+export interface Tick {
+  readonly index: number;
+  readonly ticks: number;
+  readonly value: number;
+  readonly shown: string;
+  readonly lo: number;
+  readonly hi: number;
+}
 
 export interface LegendProps {
   readonly lut: Uint8Array;
@@ -11,9 +27,11 @@ export interface LegendProps {
   readonly unit: string;
   readonly lo: number;
   readonly hi: number;
+  /** ADR 0795: the provenance of each tick, and the prefix of its key. */
+  readonly provenance: { readonly prefix: string; readonly of: (t: Tick) => ProvenanceSubject | null };
 }
 
-export function Legend({ lut, quantity, unit, lo, hi }: LegendProps) {
+export function Legend({ lut, quantity, unit, lo, hi, provenance }: LegendProps) {
   const bar = useRef<HTMLCanvasElement>(null);
   useEffect(() => {
     const c = bar.current;
@@ -32,7 +50,11 @@ export function Legend({ lut, quantity, unit, lo, hi }: LegendProps) {
         <canvas ref={bar} className="fv-legend-bar" width={LUT_SIZE} height={1} aria-hidden="true" data-legend-bar="" />
         <span className="fv-legend-ticks" aria-hidden="true" data-words="data">
           {marks.map((v, i) => (
-            <span key={i}>{tickLabel(v)}</span>
+            <span key={i}>
+              <Traced pkey={`${provenance.prefix}-tick-${i}`} subject={() => provenance.of({ index: i, ticks: marks.length, value: v, shown: tickLabel(v), lo, hi })}>
+                {tickLabel(v)}
+              </Traced>
+            </span>
           ))}
         </span>
       </span>

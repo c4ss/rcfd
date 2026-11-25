@@ -80,7 +80,7 @@ export function RunsView({ view, selected, onSelect, onOpenWorkspace }: RunsView
     <div className="rv">
       <section className="rv-list" aria-labelledby="rv-title">
         <RunBar view={view} onStarted={onSelect} lead={<BudgetsButton open={budgetsOpen} onChange={setBudgetsOpen} />} />
-        {budgetsOpen && <BudgetsPanel onClose={() => setBudgetsOpen(false)} fileChange={budgetsChange} />}
+        {budgetsOpen && <BudgetsPanel onClose={() => setBudgetsOpen(false)} fileChange={budgetsChange} project={view} />}
         <div className="rv-tools">
           <h1 id="rv-title" className="rv-title sr-only">
             Runs <span className="rv-total" data-words="data">{view.runs.total}</span>

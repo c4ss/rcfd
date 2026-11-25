@@ -366,6 +366,55 @@ export function numberFacts(src: NumberSource, run: RunProvenance | null): Fact[
   return rows;
 }
 
+/**
+ * A number of the open project that belongs to no run (a count of the home, a budget of the runner): the engine's answer
+ * or the folder it was counted in. There is no run, no snapshot and no command behind it, and the popover says so.
+ */
+export interface ProjectNumberSource {
+  readonly quantity: string;
+  /** The number as shown, and the exact value when it differs. */
+  readonly shown: string;
+  readonly exact: string | null;
+  readonly unit:
+    | { readonly kind: 'engine'; readonly unit: string; readonly from: string }
+    /** The number has no unit (a count). */
+    | { readonly kind: 'none'; readonly why: string }
+    /** The number may have a unit, and no answer of the engine names it. */
+    | { readonly kind: 'unrecorded'; readonly why: string };
+  /** The project folder as opened. */
+  readonly folder: string;
+  /** Project-relative file or folder the number is about. */
+  readonly file: string;
+  /** The engine's tool and field, or what the Studio counted. */
+  readonly readBy: string;
+  /** When it was read (RFC 3339), or null when the surface does not hold it. */
+  readonly readAt: string | null;
+  /** The engine's project server that answered (MCP serverInfo), or null. */
+  readonly engine: { readonly name: string; readonly version: string } | null;
+  readonly more?: readonly Fact[];
+}
+
+/** Why no command is shown for a project number. */
+export const PROJECT_NO_REPRODUCE = 'Not recorded: the number belongs to no run, so no command reproduces it.';
+
+/** The rows of a project number's provenance. */
+export function projectFacts(src: ProjectNumberSource): Fact[] {
+  const u = src.unit;
+  const rows: Fact[] = [
+    ['Value', src.exact !== null && src.exact !== src.shown ? `${src.shown} (${src.exact})` : src.shown],
+    ['Unit', u.kind === 'none' ? `none: ${u.why}` : u.kind === 'unrecorded' ? `not recorded: ${u.why}` : `${u.unit}, ${u.from}`],
+    ['Run', 'none: a number of the project, not of a run'],
+    ['Snapshot', 'none: a number of the project, not of a snapshot'],
+    ['Project', src.folder],
+    ['File', src.file],
+    ['Read by', src.readBy],
+  ];
+  for (const m of src.more ?? []) rows.push(m);
+  if (src.readAt !== null) rows.push(['Read at', src.readAt]);
+  rows.push(['Engine', src.engine ? versionLine(src.engine) : 'not recorded: the project server gave no version']);
+  return rows;
+}
+
 /** The rows of a run's own provenance: its record as the runner wrote it. */
 export function runFacts(p: RunProvenance): Fact[] {
   const r = p.record;

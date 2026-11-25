@@ -17,6 +17,8 @@ import { createRoot, type Root } from 'react-dom/client';
 import { Dialog, Popover } from 'react-aria-components';
 import {
   numberFacts,
+  PROJECT_NO_REPRODUCE,
+  projectFacts,
   provenanceText,
   runFacts,
   sessionFacts,
@@ -27,20 +29,23 @@ import {
   versionLine,
   type Fact,
   type NumberSource,
+  type ProjectNumberSource,
   type RunProvenance,
   type SessionNumberSource,
 } from '../../shared/provenance.js';
 import { dispatch } from '../actions/index.js';
 import { Button } from '../ui/index.js';
 import { attachedEngine, copyText, runProvenance } from './door.js';
-import { addRunOpener, addTrigger, registerProvenanceCommands, setHovered, type TriggerEntry } from './registry.js';
+import { addRunOpener, addTrigger, clearOpened, registerProvenanceCommands, setHovered, setOpened, type TriggerEntry } from './registry.js';
 import './provenance.css';
 
 export type ProvenanceSubject =
   | { readonly kind: 'number'; readonly source: NumberSource }
   | { readonly kind: 'run'; readonly run: string }
   /** A number of a live service session (settings, the plots' development view): no run behind it. */
-  | { readonly kind: 'session'; readonly source: SessionNumberSource };
+  | { readonly kind: 'session'; readonly source: SessionNumberSource }
+  /** ADR 0795: a number of the open project (a count of the home, a budget of the runner): no run behind it. */
+  | { readonly kind: 'project'; readonly source: ProjectNumberSource };
 
 export interface ProvenanceProps {
   /** What the number is; a function is read when the popover opens (a live readout). */
@@ -63,7 +68,7 @@ export interface ProvenanceProps {
   readonly className?: string;
 }
 
-const unitWords = (s: NumberSource | SessionNumberSource): string => (s.unit.kind === 'engine' && s.unit.unit !== '' ? ` ${s.unit.unit}` : '');
+const unitWords = (s: NumberSource | SessionNumberSource | ProjectNumberSource): string => (s.unit.kind === 'engine' && s.unit.unit !== '' ? ` ${s.unit.unit}` : '');
 
 /** The accessible name of a trigger: its words at rest (G22). */
 export function triggerName(subject: ProvenanceSubject | null): string {
@@ -107,7 +112,8 @@ function hidePopover(owner: number, now = false): void {
 }
 let owners = 0;
 
-export function Provenance({ subject, children, tabStop = true, pkey, runOpener, onOpenChange, className }: ProvenanceProps) {
+/** What a trigger does: its entry in the registry, its popover and where the focus goes back. */
+function useTrigger({ subject, tabStop, pkey, runOpener, onOpenChange, member }: Omit<ProvenanceProps, 'children' | 'className'> & { readonly tabStop: boolean; readonly member: boolean }) {
   const ref = useRef<HTMLElement>(null);
   const [open, setOpenState] = useState<ProvenanceSubject | null>(null);
   const told = useRef(onOpenChange);
@@ -122,12 +128,13 @@ export function Provenance({ subject, children, tabStop = true, pkey, runOpener,
     () => ({
       el: () => ref.current,
       key: pkey ?? null,
+      member,
       open: () => {
         const s = readRef.current();
         if (s) setOpen(s);
       },
     }),
-    [pkey],
+    [pkey, member],
   );
   const readRef = useRef(read);
   readRef.current = read;
@@ -148,23 +155,68 @@ export function Provenance({ subject, children, tabStop = true, pkey, runOpener,
       setOpen(null);
       const restore = () => {
         const a = document.activeElement;
+        // Ctrl+I opened the next number of the same element (ADR 0795): the focus is that popover's now
+        if (popOwner !== 0) return;
         if (a === null || a === document.body || a.closest('.pv-host')) back.current?.focus();
       };
       restore();
       // and once more on the next frame, should a close from inside React's own work have left the unmount for later
       requestAnimationFrame(restore);
     };
+    setOpened(entry, close);
     showPopover(
       open.kind === 'session' ? (
         <SessionPopover source={open.source} triggerRef={ref} onClose={close} />
+      ) : open.kind === 'project' ? (
+        <ProjectPopover source={open.source} triggerRef={ref} onClose={close} />
       ) : (
         <ProvenancePopover subject={open} triggerRef={ref} onClose={close} />
       ),
       owner,
       () => setOpen(null),
     );
-    return () => hidePopover(owner);
-  }, [open, owner]);
+    return () => {
+      clearOpened(entry);
+      hidePopover(owner);
+    };
+  }, [open, owner, entry]);
+  return { ref, entry, name, open: open !== null };
+}
+
+export interface TracedProps {
+  readonly subject: ProvenanceProps['subject'];
+  readonly children: ReactNode;
+  /** The key an element names with data-provenance: the row, the segment or the view that opens it by Ctrl+I. */
+  readonly pkey?: string;
+  readonly className?: string;
+}
+
+/**
+ * ADR 0795: the passive form of a trigger for the numbers of a dense row or a row of ticks: no tab stop, no role and no
+ * click of its own (a surface opens it on a click with openMember of ./registry.ts). Ctrl+I opens it while the element
+ * that names or holds it has the focus, or the pointer is on it.
+ */
+export function Traced({ subject, children, pkey, className }: TracedProps) {
+  const { ref, entry, name, open } = useTrigger({ subject, tabStop: false, member: true, ...(pkey === undefined ? {} : { pkey }) });
+  return (
+    <span
+      ref={(e) => {
+        ref.current = e;
+      }}
+      className={`pv-num pv-num--passive${className ? ` ${className}` : ''}`}
+      data-provenance-member=""
+      data-provenance-open={open ? '' : undefined}
+      data-provenance-name={name}
+      onPointerEnter={() => setHovered(entry)}
+      onPointerLeave={() => setHovered(null, entry)}
+    >
+      {children}
+    </span>
+  );
+}
+
+export function Provenance({ children, tabStop = true, className, ...rest }: ProvenanceProps) {
+  const { ref, entry, name, open } = useTrigger({ ...rest, tabStop, member: false });
   const cls = `pv-num${tabStop ? '' : ' pv-num--passive'}${className ? ` ${className}` : ''}`;
   return (
     <>
@@ -177,7 +229,7 @@ export function Provenance({ subject, children, tabStop = true, pkey, runOpener,
           className={cls}
           aria-label={name}
           aria-haspopup="dialog"
-          aria-expanded={open !== null}
+          aria-expanded={open}
           data-provenance-trigger=""
           onClick={() => entry.open()}
           onPointerEnter={() => setHovered(entry)}
@@ -221,7 +273,7 @@ function useRunProvenance(run: string): { p: RunProvenance | null; error: string
   return { ...got, engine };
 }
 
-function ProvenancePopover({ subject, triggerRef, onClose }: { subject: Exclude<ProvenanceSubject, { kind: 'session' }>; triggerRef: React.RefObject<HTMLElement | null>; onClose: () => void }) {
+function ProvenancePopover({ subject, triggerRef, onClose }: { subject: Extract<ProvenanceSubject, { kind: 'number' | 'run' }>; triggerRef: React.RefObject<HTMLElement | null>; onClose: () => void }) {
   const run = subject.kind === 'run' ? subject.run : subject.source.run;
   const { p, error, engine } = useRunProvenance(run);
   const [copied, setCopied] = useState<{ what: 'command' | 'all'; ok: boolean; message: string } | null>(null);
@@ -357,6 +409,48 @@ function SessionPopover({ source, triggerRef, onClose }: { source: SessionNumber
               {SESSION_NO_REPRODUCE}
             </p>
           )}
+        </section>
+        <div className="pv-actions">
+          <Button icon={copied?.ok ? 'check' : undefined} onPress={() => void copy()}>
+            Copy
+          </Button>
+          <span className={copied && !copied.ok ? 'pv-copy-failed' : 'sr-only'} role="status" data-words="exception">
+            {copied?.message ?? ''}
+          </span>
+        </div>
+      </Dialog>
+    </Popover>
+  );
+}
+
+/** ADR 0795: the provenance of a number of the project: its facts, and why there is no command to reproduce it. */
+function ProjectPopover({ source, triggerRef, onClose }: { source: ProjectNumberSource; triggerRef: React.RefObject<HTMLElement | null>; onClose: () => void }) {
+  const facts = projectFacts(source);
+  const [copied, setCopied] = useState<{ ok: boolean; message: string } | null>(null);
+  const copy = async () => {
+    const r = await copyText([`Provenance of ${source.quantity}`, ...facts.map(([k, v]) => `${k}: ${v}`), PROJECT_NO_REPRODUCE].join('\n'));
+    setCopied({ ok: r.ok, message: r.ok ? 'Provenance copied' : `Not copied: ${r.error.message}` });
+  };
+  return (
+    <Popover triggerRef={triggerRef} isOpen onOpenChange={(o) => !o && onClose()} placement="bottom start" offset={4} className="ui-popover pv-pop">
+      <Dialog aria-label={`Provenance of ${source.quantity}`} className="pv-dialog" data-project="">
+        <header className="pv-head" data-words="data">
+          <span className="pv-quantity">{source.quantity}</span>
+          <span className="pv-value">{source.shown}</span>
+          {source.unit.kind === 'engine' && source.unit.unit !== '' && <span className="pv-unit">{source.unit.unit}</span>}
+        </header>
+        <dl className="pv-facts">
+          {facts.map(([k, v]) => (
+            <div key={k} data-fact={k}>
+              <dt>{k}</dt>
+              <dd data-words="data">{v}</dd>
+            </div>
+          ))}
+        </dl>
+        <section className="pv-repro" aria-label="Reproduce from the command line">
+          <p className="pv-reading" data-words="exception">
+            {PROJECT_NO_REPRODUCE}
+          </p>
         </section>
         <div className="pv-actions">
           <Button icon={copied?.ok ? 'check' : undefined} onPress={() => void copy()}>
