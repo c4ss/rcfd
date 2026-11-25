@@ -1,0 +1,35 @@
+F1 erfc	3863	88563554f7d635bb
+F1 erf	3863	e3984cc51449bcc9
+F1 erfc_inv	3122	0447d019da6b09db
+F1 norm_inv	3122	94842bb12ed22186
+F1 norm_cdf	2561	63626d76c3fac65f
+F2 Normal { mean: 0.0, sd: 1.0, lo: -1.0, hi: 2.0 }	413	72705436958afe3e
+F2 Normal { mean: 0.0, sd: 1.0, lo: 5.0, hi: 8.0 }	413	44a8ba468c02f867
+F2 Normal { mean: 0.0, sd: 1.0, lo: -8.0, hi: -5.0 }	413	5974ec9000d2d825
+F2 Normal { mean: 0.0, sd: 1.0, lo: 6.9, hi: 7.5 }	413	ffb8e3f6025d5ac0
+F2 Normal { mean: 0.0, sd: 1.0, lo: -1e300, hi: 1e300 }	413	c3d3b5abec2606cc
+F2 Normal { mean: 0.2, sd: 0.4, lo: -0.6, hi: 0.9 }	413	5b59bc0cc4598897
+F2 Normal { mean: 0.1, sd: 0.3, lo: -0.2, hi: 8.0 }	413	b29cd61b9bbef02c
+F2 Normal { mean: 0.1, sd: 0.3, lo: -8.0, hi: 0.25 }	413	9fdcf45083eaad58
+F2 Normal { mean: 1013.25, sd: 0.037, lo: 1013.2, hi: 1013.3 }	413	deac3822380e2c1e
+F2 Normal { mean: 0.0, sd: 1.0, lo: -inf, hi: inf }	413	c3d3b5abec2606cc
+F2 Normal { mean: 0.1, sd: 0.3, lo: -inf, hi: inf }	413	d2044863b4f38e81
+F2 Normal { mean: 1013.25, sd: 0.037, lo: -inf, hi: inf }	413	951057eef506f689
+F2 Uniform { lo: 2.0, hi: 5.0 }	413	618d202c32acedcf
+F2 Uniform { lo: -0.00015, hi: 0.00025 }	413	d27a6a100145b8fa
+F2 Beta { a: 2.0, b: 5.0, lo: 0.0, hi: 1.0 }	413	93002c1281fd60c2
+F2 Beta { a: 2.0, b: 3.5, lo: -0.012, hi: 0.018 }	413	1eaf455b7d93cf87
+F2 Beta { a: 0.5, b: 0.7, lo: -1.0, hi: 4.0 }	413	baafe824b8920c4a
+F2 refusals	11	ec071b693a24aff8
+F3 uq analytic mc	202	89ecd05cb8f35d51
+F3 uq analytic lhs	202	6ebbf4a1091df8ad
+F3 sobol analytic	302	b9596f17f05e7e75
+F3 uq fan-d3 mc	22	96f38e1309837ce0
+F3 uq fan-d3 lhs	22	6e337e9bb4541d6f
+F3 sobol fan-d3	27	13a747fd77a3b74c
+F3 uq fan-d1 mc	22	007e61cffa547072
+F3 uq fan-d1 lhs	22	49269902725a39c3
+F3 sobol fan-d1	17	82a5ee24d21e8d38
+F4 chi_profile	129	a0d6f3b559472fda
+F4 expected_improvement	833	aeafc1b853bc5577
+F4 prob_feasible	833	a2354a29099e62de

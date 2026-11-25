@@ -2521,3 +2521,15 @@ constants against that file. The page that records the case is [validation-data.
 | Uncertainty of the wall pressure | description, README, the `.mat` file (read) | **not stated**: transducer type only (differential, 1 psi range); no calibration, accuracy or zero |
 | Time means of the rows behind the blade tips (tip trailing edge x = 62.8 mm), Pa against the chamber | `kulite_means.csv` (computed here from the file, not published values) | x = 67: 92.82; 77: 104.81; 87: 112.77; 97: 116.54; 107: 117.30 (twice the standard error of the 30-s mean 0.5 to 0.7). Ahead of the blades, x = -23 to 17 mm: -49.83 to -39.49 |
 | Static pressure at the casing at the LDA plane x = 90 mm, and over the measured span | ADR 0769 (linear interpolation; the casing-to-span correction of the radial equilibrium from the LDA profiles of F-878) | `p_w(90)` = 113.90 Pa; `Pi_m` = 93.96 Pa +- 7.50 Pa (no measurement part; the axial-derivative term of the radial equilibrium not in it) |
+
+## F-894 the inverse CDF of a normal distribution open on one side (closed form)
+
+Recorded 2026-11-25 for ADR 0792. Nothing here is from memory or from a publication: the values are computed from the
+definition by `crates/rcfd-api/tests/f894_reference.py` (760-digit decimal arithmetic, `erf` from its Maclaurin series,
+Newton's method; residuals below 1e-30) and stand in `crates/rcfd-api/tests/f894_reference.tsv`, 1000 lines, which the test
+`f894_normal_one_open_side.rs` reads.
+
+| Quantity | Source | Value and use |
+|---|---|---|
+| `x` with `Phi(x) = Phi(a) + u (Phi(b) - Phi(a))`, standard normal, one of `a`, `b` infinite | computed from the definition | `a = 7`, `b = inf`, `u = 0.25540929798230255`: 7.0412028490371235; `a = -30`, `b = inf`, `u = 0.999`: 3.090232306167813; `a = -inf`, `b = -7`, `u = 0.9124832919467554`: -7.012820208664248 |
+| The smallest kept mass 1e-12 | computed from the definition (`Q` in 120 digits) | `Q(7.034483685858461) = 1.000001e-12`, `Q(7.034483964743939) = 0.999999e-12` |

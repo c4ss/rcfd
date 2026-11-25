@@ -126,10 +126,14 @@ pub fn erf(x: f64) -> f64 {
     }
 }
 
-/// Complementary error function: `1 - erf x` for `x < 2`, the Laplace continued fraction (modified Lentz) for `x >= 2`.
+/// Complementary error function: `1 - erf x` for `x < 2`, the Laplace continued fraction (modified Lentz) for `x >= 2`;
+/// 0 at `+inf` and 2 at `-inf` exactly.
 pub fn erfc(x: f64) -> f64 {
     if x < 2.0 {
         return 1.0 - erf(x);
+    }
+    if x == f64::INFINITY {
+        return 0.0; // the limit: the continued fraction forms inf * 0
     }
     // erfc x = e^{-x^2}/sqrt(pi) * 1/(x + (1/2)/(x + 1/(x + (3/2)/(x + ...))))
     const FPMIN: f64 = 1e-300;
