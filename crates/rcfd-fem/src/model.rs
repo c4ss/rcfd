@@ -561,15 +561,15 @@ pub struct CyclicOptions {
     pub shell_extensions: bool,
     /// With `shells`, Beam2 elements are taken by the cyclic paths (ADR 0595): the rotation unknowns of the six-unknown nodes
     /// get the rows of ADR 0556 D2, and the sector stands for the ring whose sector `j` has the sector's beams rotated by `R^j`,
-    /// their orientation vectors `R^j v` included (the element is objective, ADR 0595 D3). Since ADR 0744 the static and the
-    /// modal paths take Beam2 with `shells` alone (not with `interpolation` or `axis_nodes`); this option still selects the
-    /// beam Coriolis matrix of the whirl paths (ADR 0598) and qualifies `full_rotor_beams`. Refused without `shells` and with
-    /// `interpolation` or `axis_nodes`; [`crate::cyclic::full_rotor`] still refuses Beam2 (one orientation per block) unless
-    /// `full_rotor_beams` is also set.
+    /// their orientation vectors `R^j v` included (the element is objective, ADR 0595 D3). Accepted and without effect on any
+    /// result: since ADR 0744 the static and the modal paths, and since ADR 0799 the whirl paths (the beam Coriolis matrix of
+    /// ADR 0598) and [`crate::cyclic::full_rotor`], take Beam2 with `shells` alone (not with `interpolation` or
+    /// `axis_nodes`). Kept for callers; still refused without `shells` and with `interpolation` or `axis_nodes` (ADR 0595 D1).
     pub beams: bool,
     /// With `beams`, [`crate::cyclic::full_rotor`] takes Beam2 blocks (ADR 0601): each Beam2 block of the sector becomes `N`
     /// consecutive blocks of the full mesh, copy `j` with the orientation `R^j v` ([`crate::cyclic::FullRotor::block`]).
-    /// Refused without `beams`.
+    /// Accepted and without effect on any result since ADR 0799: `shells` alone takes Beam2 there. Kept for callers; still
+    /// refused without `beams` (ADR 0601 D1).
     pub full_rotor_beams: bool,
 }
 
@@ -598,12 +598,12 @@ impl CyclicOptions {
         self.shell_extensions = on;
         self
     }
-    /// With shells, also Beam2 elements (ADR 0595).
+    /// With shells, also Beam2 elements (ADR 0595); without effect since ADR 0799 (shells alone takes them).
     pub fn beams(mut self, on: bool) -> CyclicOptions {
         self.beams = on;
         self
     }
-    /// With beams, also the full rotor of the Beam2 blocks (ADR 0601).
+    /// With beams, also the full rotor of the Beam2 blocks (ADR 0601); without effect since ADR 0799.
     pub fn full_rotor_beams(mut self, on: bool) -> CyclicOptions {
         self.full_rotor_beams = on;
         self

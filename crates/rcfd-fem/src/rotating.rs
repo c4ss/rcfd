@@ -196,8 +196,8 @@ pub struct RotatingOptions {
     /// [`crate::model::CyclicOptions::shells`] takes them without it.
     pub shells: bool,
     /// Whether the whirl analyses of a part take Beam2 (the Coriolis matrix of the beam section, ADR 0598 D1, D2; default
-    /// false: a beam is refused there as before). A sector whose cyclic constraint has [`crate::model::CyclicOptions::beams`]
-    /// takes them without it. Shell elements keep [`RotatingOptions::shells`].
+    /// false: a beam is refused there as before). A sector whose cyclic constraint has [`crate::model::CyclicOptions::shells`]
+    /// takes them without it (ADR 0799). Shell elements keep [`RotatingOptions::shells`].
     pub beams: bool,
     /// Whether [`RotatingSector::new`] with [`RotatingOptions::stress_stiffening`] solves the index-0 centrifugal static
     /// problem of a free sector (no support, no constraint but its cyclic one) with its two rigid motions, the axial

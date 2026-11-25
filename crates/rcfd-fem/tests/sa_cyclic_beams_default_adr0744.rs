@@ -640,6 +640,7 @@ fn names(r: &Result<(), FemError>, adr: &str) -> bool {
 /// `nc1_to_nc4_refusals_amended` of `sa_cyclic_beams_f672.rs` (ADR 0595) restated by ADR 0744: NC1, NC2 and NC4 as they
 /// were (their bodies copied), NC3 as acceptance (A3), NC4 also with the shells option alone, and the controls N-X and N-W.
 #[test]
+#[ignore = "ADR 0799: retired record, NC4 and N-W assert the full_rotor and whirl refusals of a beam sector that are lifted by default; restated in sa_beam_opt_ins_default_f672.rs"]
 fn a3_nc1_nc2_nc4_restated_and_n_x_n_w() {
     let mut fails = Vec::new();
     let mut hold = |name: &str, ok: bool, what: String| {

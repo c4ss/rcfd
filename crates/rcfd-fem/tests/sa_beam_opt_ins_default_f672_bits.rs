@@ -211,17 +211,35 @@ fn whirl_texts(m: &SolidModel) -> Vec<(String, String)> {
     let speeds = [0.0, 30.0, 60.0];
     let mut out = vec![("P1 coriolis".to_string(), format!("{:?}", sec.part().coriolis()))];
     for k in ks {
-        out.push((format!("P2 whirl_modes k = {k}"), format!("{:?}", sec.whirl_modes(k, 30.0))));
+        out.push((
+            format!("P2 whirl_modes k = {k}"),
+            format!("{:?}", sec.whirl_modes(k, 30.0)),
+        ));
     }
-    out.push(("P3 whirl_campbell".to_string(), format!("{:?}", sec.whirl_campbell(&ks, &speeds))));
+    out.push((
+        "P3 whirl_campbell".to_string(),
+        format!("{:?}", sec.whirl_campbell(&ks, &speeds)),
+    ));
     for k in ks {
-        out.push((format!("P4 split_modes k = {k}"), format!("{:?}", sec.split_modes(k, 30.0))));
+        out.push((
+            format!("P4 split_modes k = {k}"),
+            format!("{:?}", sec.split_modes(k, 30.0)),
+        ));
     }
-    out.push(("P5 split_campbell".to_string(), format!("{:?}", sec.split_campbell(&ks, &speeds))));
+    out.push((
+        "P5 split_campbell".to_string(),
+        format!("{:?}", sec.split_campbell(&ks, &speeds)),
+    ));
     for k in ks {
-        out.push((format!("P6 whirl_state k = {k}"), format!("{:?}", sec.whirl_state(k, 30.0))));
+        out.push((
+            format!("P6 whirl_state k = {k}"),
+            format!("{:?}", sec.whirl_state(k, 30.0)),
+        ));
     }
-    out.push(("P7 whirl_stability".to_string(), format!("{:?}", sec.whirl_stability(&ks, &speeds))));
+    out.push((
+        "P7 whirl_stability".to_string(),
+        format!("{:?}", sec.whirl_stability(&ks, &speeds)),
+    ));
     let sparse = sec.whirl_state_sparse(1, 30.0, &SparseStateOptions::new(2.0e4, 4));
     out.push(("P8 whirl_state_sparse k = 1".to_string(), format!("{sparse:?}")));
     out
