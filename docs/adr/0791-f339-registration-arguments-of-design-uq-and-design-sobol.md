@@ -228,3 +228,134 @@ fix that would change a golden or a default result is not made and is reported.
   reader); the accuracy of the drivers and of the fan, which are unchanged. No check of kind validation is claimed: the
   acceptance claims no agreement with a measured case, and no reference value is added.
 - Keys of another distribution in `dist` (finding 7).
+
+## Addendum 1: results (2026-11-25)
+
+Registration e2a43a88, tests b853a0cd, committed mutation 7db781c3. The registered run was made once, at b853a0cd:
+`cargo test -p rcfd-mcp --release --test design_uq_sobol_args_f339 -- --nocapture --test-threads 1`, 16 passed, 0 failed,
+1 ignored (K1), 34.0 s in series (about 9 s with the default threads). `tools.rs` was not changed and no row showed it wrong.
+
+| Id | Limit | Measured | Met |
+|---|---|---|---|
+| B1 | equal, controls differ | 18 calls equal (nine pairs of forms, both tools); a finite bound on either side changes the numbers of both drivers | yes |
+| B2 | refused with the key, no file | 15 values for `lo` and for `hi`, both tools, 60 refusals; nothing written | yes |
+| B3 | refused with the key, no file | 4 pairs, both tools; nothing written | yes |
+| B4 | refused with the key, no file | 12 forms; nothing written | yes |
+| D1 | equal, controls differ | both tools equal; 7 wrong readings differ in both | yes |
+| E1 | equal, controls differ | both tools equal; 26 wrong fields give another ledger, 21 of them other numbers too (deviation 1) | yes |
+| E2 | equal, control differs | both tools equal; `naca4` differs in both | yes |
+| S1 | equal, controls differ | both tools equal for 339101 and 2^53 + 1; seed 1 and 2^53 differ | yes |
+| S2 | equal, controls differ | both tools equal seed 1; seeds 0 and 2 differ | yes |
+| C1 | equal, controls differ | equal; 4 wrong readings differ | yes |
+| A1 | equal, controls differ | equal, 2 batches of 4; without `se_abs` or `min_batches` the numbers differ | yes |
+| A2 | equal, controls differ | 4 forms equal, batches 1, 1, 2, 3; the other sampler and counts differ | yes |
+| N1 | equal, control differs | absent keys and `null` equal the defaults; another model differs | yes |
+| N2 | equal; refused through the server | both handlers equal the defaults; 8 refusals through the server | yes |
+| W1 | refused with the key, no file | both handlers; nothing written | yes |
+| G1 | 102 refused, 99 accepted | 1004 naming 102 and 100; 99 evaluations, 100 entries | yes |
+| X1 | pass | `rcfd-mcp`: 144 passed, 0 failed, 11 ignored over 36 test results (`design_uq_sobol_f339` 11 passed); `rcfd-api --lib`: 159 passed, 0 failed, 4 ignored; no existing test edited (second run, deviation 2) | yes |
+| K1 | a result, samples within the bound | the first call panics: `erfc_inv needs 0 < y < 2`, `crates/rcfd-reactor/src/mixfrac.rs:161` | **no** (record, as expected) |
+
+K1 confirms finding 1. Beside the checks, one call through the built `rcfd-mcp` on stdio (a normal with `hi` 0.25 and no
+`lo`, then a `ping`) ended the server process with exit code 101, the panic on standard error, no reply to either message
+and no file written: a client that sends one documented form ends the server.
+
+### Mutations
+
+On a scratch copy of b853a0cd, each alone in `tools.rs`, the new file run once, the file restored; the unchanged copy
+passes (16 passed). All 40 are caught by the row registered for them (the script and the logs are in the scratch folder,
+`mutate.py`, `mutations.tsv`).
+
+| Id | Registered to fail | Failed |
+|---|---|---|
+| M1 | D1 | D1, E1, E2, N2, S1, S2 |
+| M2 | D1 | A1, A2, B1, C1, D1, E1, E2, N1, N2, S1, S2 |
+| M3 | E1 | A1, A2, B1, C1, D1, E1, E2, N1, N2, S1, S2 |
+| M4 | S1 | A1, A2, B1, C1, D1, E1, E2, N1, S1 |
+| M5 | S2 | N2, S2 |
+| M6 | S1 | S1 |
+| M7 | E2 | E2 |
+| M8 | C1 | C1 |
+| M9 | A1 | A1, A2 |
+| M10 | B1 | B1, B3 |
+| M11 | B1 | B1, B3 |
+| M12 | B1 | B1 |
+| M13 | B1 | A1, A2, B1, B2, B3, C1, G1, N1, W1 |
+| M14 | B1 | A1, A2, B1, C1, G1, N1 |
+| M15 | B1 | A1, A2, B1, C1, G1, N1 |
+| M16 | B2 | B2 |
+| M17 | B2 | B2 |
+| M18 | B3 | B3 |
+| M19 | B4 | B4 |
+| M20 | B4 | B4 |
+| M21 | E1 | A1, A2, B1, C1, D1, E1, E2, N2, S1, S2 |
+| M22 | E1 | A1, A2, B1, C1, D1, E1, E2, N2, S1, S2 |
+| M23 | E1 | A1, A2, B1, C1, D1, E1, E2, N2, S1, S2 |
+| M24 | E1 | A1, A2, B1, C1, D1, E1, E2, N1, N2, S1, S2 |
+| M25 | E1 | A1, A2, B1, C1, D1, E1, E2, N1, N2, S1, S2 |
+| M26 | E1 | A1, A2, B1, C1, D1, E1, E2, N1, N2, S1, S2 |
+| M27 | E1 | A1, A2, B1, C1, D1, E1, E2, N1, N2, S1, S2 |
+| M28 | C1 | C1 |
+| M29 | A2 | A2 |
+| M30 | A2 | A2, B1, C1, D1, E1, E2, N1, N2, S1, S2 |
+| M31 | A2 | A2 |
+| M32 | N1 | N1 |
+| M33 | N1 | N1 |
+| M34 | N1 | N1 |
+| M35 | W1 | W1 |
+| M36 | G1 | G1 |
+| M37 | N2 | N2 |
+| M38 | D1 | D1, E1, E2, N2, S1, S2 |
+| M39 | N2 | N2 |
+| M40 | A1 | A1 |
+
+M10, M11, M14 and M15 make a one-sided bound, so their calls fail in B1 by the panic of finding 1, not by the equality. Two
+further mutations, not registered, make both sides finite where the library does not panic: X42 (the two strings read as
+-1 and 1) fails B1 by the equality; X41 (both defaults -1 and 1) fails A1, A2, C1 and N1, and B1 by the panic of a mixed
+pair.
+
+The committed mutation is M1, `crates/rcfd-mcp/tests/design_uq_sobol_args_f339.mutation.patch`; `git apply --check` accepts
+it on the branch, and the same edit in the copy fails six tests.
+
+### Other runs, deviations, what was not run
+
+- `cargo fmt -p rcfd-mcp -- --check` clean; `cargo clippy -p rcfd-mcp --all-targets -- -D warnings` clean. `rcfd-api` was
+  not touched. `docs_site`: 2 passed before the registration's commit; the run with this addendum is in the agent's report.
+- Deviations: (1) of E1's 26 wrong fields, `cl_max`, `cd_normal`, `nu`, `n_scan` and `radius` change no number of these
+  samples; finding 4 named only `cd_normal` and, for the circular arc, `camber_pos`. They differ in the ledger line, which
+  the equality compares and which the test was written to look at before the run; so equality can fail for each, but for
+  these five only through the `geometry_hash`. (2) The first run of X1 is void: it shared the target folder with the
+  mutation copy, cargo did not rebuild `rcfd-api` for the branch (the log compiles `rcfd-mcp` and not `rcfd-api`) and linked
+  the library of M40, the last mutation; `a1_an_absolute_target` failed, as under M40, and every other test passed. X1 was
+  then run from an empty target folder of its own, as given in the table. The registered run and K1 were made before the
+  copy existed. (3) Two unregistered mutations and one stdio call, above; they decide nothing. (4) G1's accepted call has
+  no equality with the library, only its counts, as registered.
+- The gate runs the new file's 16 tests (about 10 s); K1 is ignored. No heavy record. Not run: the Studio's tests, the
+  whole workspace, the integration tests of any crate but `rcfd-mcp`, `baseline_hashes` (no solver file touched).
+
+Size (agent), actual: done; 0; 0; 0; 240000
+
+### Decision
+
+**done** by the registered rule: every row but the record K1 holds, M1 to M40 are each caught by the registered row, and
+the existing tests of `rcfd-mcp` and `rcfd-api --lib` pass unedited. K1 is a known miss of the library, outside `tools.rs`
+and outside the rule as registered before the run; the lead decides whether F-339 reads done beside it and beside X1 of
+ADR 0784. The sentence asked for holds: for each named wrong reading a recorded mutation makes it, a registered test fails
+with the mutation and passes without it.
+
+## Open questions for the maintainer
+
+None. Finding 1 is a defect with one reading of the documentation; its repair is proposed as a follow-up. Finding 7 (a key
+of another distribution is ignored in `dist`) is left to the lead.
+
+## For the lead: roadmap entries
+
+Status proposed: done.
+
+> ADR 0791, 2026-11-25, done: every argument of design_uq and design_sobol is sent at a value that tells a wrong reading from the right one (the string, null and absent bounds of a normal distribution in every pair, a swapped Beta a and b, mean, system_l, the seed and its default, circular_arc, cmp <=, se_abs, and the further arguments found by reading): 16 tests hold against the library bit for bit, with the library's differing result for the wrong readings, 40 registered mutations of tools.rs are each caught by the row registered for it, one is committed, and the existing tests of rcfd-mcp and rcfd-api --lib pass unedited; tools.rs was right in every row; found beside it and recorded as a known miss outside the decision rule (K1): the library panics, and the server process ends, on a normal distribution open on one side only.
+
+Follow-up proposed (key `one-open-side`, deps F-339):
+
+> A normal distribution open on one side in the tolerance and Sobol drivers. Acceptance: erfc(+inf) is 0 and erfc(-inf) is 2 exactly (neither is a number now), and uq::run, sensitivity::run, design_uq and design_sobol sample a normal distribution with one finite and one open bound: every sample lies within the finite bound and equals the closed form of the truncated inverse CDF within a limit registered before the run; k1_one_open_side_known_miss of crates/rcfd-mcp/tests/design_uq_sobol_args_f339.rs passes with its limit unchanged; every result with two finite or two open bounds is bit-identical. Limits not stated here are registered before the run.
+
+The same entries as `docs/roadmap/proposals/0791-F-339.json`.
