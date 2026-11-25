@@ -4,7 +4,7 @@ tags: [foundation, multiphase, cavitation]
 sources: [ref-folden-aschmoneit-2023-cavitation-models, ref-lienhard-ahtt-6e]
 builds_on: [two-phase-flow-basics, ideal-gas-and-thermodynamics-basics]
 created: 2026-11-22
-updated: 2026-11-22
+updated: 2026-11-25
 status: draft
 ---
 
@@ -57,5 +57,6 @@ Together they give the evaporation and condensation sources (Eqs. 46, 47), with 
 
 - `multiphase.cavitation`: Schnerr-Sauer on the VOF path with `saturation_pressure`, `bubble_number_density`, `nucleus_radius`; the source is coupled implicitly to the pressure; isothermal, no vapour compressibility, no non-condensable gas, no turbulence correction (F-127, ADR 0056) ([[doc-case-schema-multiphase-mixture-cavitation]]).
 - The reference-data page lists the Schnerr-Sauer form $\alpha_v = x/(1+x)$, $x = n\frac43\pi R^3$, and the Rayleigh rate as "recalled from memory" and UNVERIFIED ([[doc-reference-data-wave29b-cavitation]]); Folden and Aschmoneit Eqs. 43 and 45 state the same forms (a secondary source, not the 2001 original).
+- Update 2026-11-25 (3b8f12c4, F-886, ADR 0796): the marks "unverified" of both rows are struck, with Folden and Aschmoneit cited as a second source; the mass source differs from its Eqs. 46 and 47 by the divisor $1 + x ho_v/ ho_l$ and a missing $ ho_v$, a finding that is not repaired ([[adr-thread-vof-multiphase-particles]]).
 - Thermal mass transfer (`lee`, `hertz_knudsen`) runs with a prescribed temperature: "There is NO energy equation in the multiphase path" ([[doc-case-schema-multiphase-mass-transfer-waves]]).
 - See [[vof]], [[adr-thread-vof-multiphase-particles]].

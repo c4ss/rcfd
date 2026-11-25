@@ -4,7 +4,7 @@ tags: [foundation, heat-transfer, heat-exchanger]
 sources: [ref-lienhard-ahtt-6e]
 builds_on: [convective-heat-transfer]
 created: 2026-11-22
-updated: 2026-11-22
+updated: 2026-11-25
 status: draft
 ---
 
@@ -48,3 +48,4 @@ Example 3.5: parallel flow with $NTU = 1.5$ and $C_r = 0.5$ gives $\varepsilon =
 - F-217 (ADR 0039) heat-exchanger macro models: counterflow "within 2 percent of eps-NTU"; the both-unmixed crossflow curve fit missed by 3.3 % and was replaced by an exact series in ADR 0044 (7.717e-6 against 1e-4) ([[adr-thread-early-physics-models]], [[doc-reference-data-wave23a-mhd-heat-exchanger]]).
 - Lumped heat-exchanger zone with $Q = \varepsilon C_{min}(T_{sec} - T_{in})$ (ADR 0012) ([[doc-reference-data-lumped-radiation]]).
 - rcfd recorded the parallel and counterflow formulas and the effectiveness definition as "citation UNVERIFIED (memory)"; Lienhard eqs. 3.17, 3.20 and 3.21 state the same forms ([[doc-reference-data-wave23a-mhd-heat-exchanger]], [[ref-lienhard-ahtt-6e]]).
+- Update 2026-11-25 (3b8f12c4, F-886, ADR 0796): read by the repo and compared with the code, at most 3.2e-14 at 96 points; the marks are struck. Table 3.1 (crossflow, shell and tube) is a proposed follow-up ([[adr-thread-vof-multiphase-particles]]).

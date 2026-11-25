@@ -356,3 +356,9 @@ Append-only. Newest at the bottom. Entry header: `## [YYYY-MM-DD] <op> | <title>
 
 - Threads: [[adr-thread-workspace-layer]] (five items done, F-273's gap), [[adr-thread-structural-fsi-coupling]] (F-465 done).
 - Sources re-read at 82985b47: [[doc-roadmap-json]], [[doc-roadmap-overview]]; roadmap area pages regenerated; [[overview]] revised (801 items, 419 / 294 / 88).
+
+## [2026-11-25] ingest | F-886, ADR 0796 (loop merge)
+
+- Thread: [[adr-thread-vof-multiphase-particles]] (ADR 0796 row, sources read). Concepts: [[cavitation-and-mass-transfer-models]], [[heat-exchanger-effectiveness-ntu]], [[gci-richardson]].
+- Sources re-read at 3b8f12c4: [[doc-reference-data-wave29b-cavitation]], [[doc-reference-data-wave23a-mhd-heat-exchanger]], [[doc-reference-data-f870-fan01-design-point]], [[doc-roadmap-json]], [[doc-roadmap-overview]]; [[overview]] revised (801 items, 420 / 294 / 87).
+- Open for the maintainer: whether the wiki keeps its copy of Folden and Aschmoneit (ADR 0796, question 3: arXiv names CC BY 4.0, the PDF's first page personal use only).

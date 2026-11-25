@@ -3,9 +3,9 @@ type: source
 tags: [adr-thread, multiphase, vof, hysing, dam-break, cavitation, mixture, population-balance, lagrangian, particles]
 sources: [doc-reference-data-wave27a-vof, doc-reference-data-wave28a-vof-wiring, doc-particles]
 origin: docs/adr/ (ADR list below)
-origin_commit: 2e94e5ef
+origin_commit: 3b8f12c4
 created: 2026-11-22
-updated: 2026-11-22
+updated: 2026-11-25
 status: draft
 ---
 
@@ -24,6 +24,7 @@ Two strands. **Particles:** one-way Lagrangian tracking in the new crate `rcfd-p
 - **AMG on the variable-density pressure matrix** works since ADR 0052: a coarse row with zero row sum and every coupling below the strength threshold got "a filtered diagonal of EXACTLY 0"; after the fix AMG "is enabled in the multiphase path above 2000 cells". See [[adr-thread-amg-coarse-lu]].
 - **Particles:** F-128 "reached its roadmap acceptance on the first-principles jet (J3 residual 3.9e-11 against 2e-2, J2 5.65e-16), which is not a published jet" (ADR 0059); F-056 is partial "whatever the numbers" because the acceptance names settling and cyclone cases (ADR 0028). See [[rcfd-particles]].
 - **Library-only closures:** wave generation and absorption (F-227) and mass transfer (F-226) wired into the VOF host by ADR 0052, but "No energy equation exists in the multiphase path, so the mass-transfer temperature is prescribed"; population balance (F-228) with no case-tree wiring (ADR 0041); mixture and Schnerr-Sauer cavitation without full Euler-Euler (F-127, ADR 0056).
+- **Sources read (F-886, ADR 0796, merged at 4027b8eb, pushed at 81a5b2fd, documents only):** $lpha_v$ and the Rayleigh rate agree with Folden and Aschmoneit Eqs. 43 and 45; `Cavitation::rate` is $ ho_v$ times the review's Eqs. 46 and 47 divided by $1 + x ho_v/ ho_l$ (ratio 0.998 at $lpha_v$ 0.99 and 0.833 at 0.9999 for $ ho_v/ ho_l$ = 2e-5). Schnerr and Sauer (2001) was not read; not repaired, question 1 of ADR 0796 is the maintainer's ([[cavitation-and-mass-transfer-models]]).
 
 ## ADRs
 
@@ -36,6 +37,7 @@ Two strands. **Particles:** one-way Lagrangian tracking in the new crate `rcfd-p
 | [0049](../../docs/adr/0049-wave27a-vof-free-surface.md) | | registration + results | F-055 | VOF free surface with compression and surface tension | every check met except A3 drift (set-up defect, corrected A3b met); dam-break 1.504 inside [1.44, 1.94] | 0052 |
 | [0052](../../docs/adr/0052-wave28a-vof-wiring.md) | | diagnosis + wiring | F-055, F-226, F-227, F-854 | AMG breakdown on the density jump; mass transfer and waves in the VOF host | AMG fixed (12.4 against 157.9 iterations per corrector); W2, W4 known misses, corrected tests met | |
 | [0056](../../docs/adr/0056-wave29b-mixture-cavitation.md) | | registration + results | F-127 | Mixture (drift flux) and Schnerr-Sauer cavitation on the VOF host | inception met; N3, N4, N4', N5, W2, W3 known misses; venturi corrected to dt 5e-5 | |
+| [0796](../../docs/adr/0796-f886-registration-three-formulas-read-against-their-open-sources.md) | 2026-11-25 | registration, amendment 1, addenda 1 and 2, the lead's reading | F-886 | Do the Schnerr-Sauer model, the effectiveness and NTU relations and the GCI agree with open sources that were read? | done: all agree but the cavitation mass source and the cap of the order, two findings not repaired | |
 | [0057](../../docs/adr/0057-wave29c-lagrangian-extensions.md) | | registration + results | F-056, F-128, F-255, F-323 | Two-way exchange library, random-walk dispersion, injection distributions | all met at first run except L1 (set-up defect); sources do not reach the flow solver | 0059 |
 | [0059](../../docs/adr/0059-wave30a-wiring-particles-mixing-plane.md) | | registration + results | F-126, F-128 | Two-way particle coupling in the solver loops (mixing plane on [[adr-thread-fan01-rotating-solve]]) | F-128 acceptance met on a first-principles jet | |
 | [0096](../../docs/adr/0096-wave39e-cavity-raster-p1-thin-limit-hysing-check.md) | | partials close-out | F-052, F-055, F-143 | Read the Hysing case-1 reference values | F-055 done; F-052 T1 met; F-143 C2 missed | 0100 |

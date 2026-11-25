@@ -3,9 +3,9 @@ type: source
 tags: [reference-data, fan-and-validation]
 sources: []
 origin: docs/reference-data.md
-origin_commit: 2e94e5ef
+origin_commit: 3b8f12c4
 created: 2026-11-22
-updated: 2026-11-22
+updated: 2026-11-25
 status: draft
 ---
 
@@ -39,6 +39,10 @@ Recorded 2026-11-22 for ADR 0762. Every source named "read" was fetched that day
 ## Contradictions with the wiki
 
 None found at ingest (2026-11-22). Contradictions within the docs are collected on [[doc-reference-data]].
+
+## Changes at 3b8f12c4 (F-886)
+
+The row of the mesh-convergence estimate has its mark struck and Celik et al. cited, read; the cap of the order is not in it (F-886, ADR 0796) ([[adr-thread-vof-multiphase-particles]]).
 
 ## Pages this source informs
 

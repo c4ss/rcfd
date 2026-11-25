@@ -3,9 +3,9 @@ type: source
 tags: [reference-data, wave-section]
 sources: []
 origin: docs/reference-data.md
-origin_commit: 2e94e5ef
+origin_commit: 3b8f12c4
 created: 2026-11-22
-updated: 2026-11-22
+updated: 2026-11-25
 status: draft
 ---
 
@@ -41,6 +41,10 @@ No web page and no paper was consulted in this wave. Every formula is derived fr
 ## Contradictions with the wiki
 
 None found at ingest (2026-11-22). Contradictions within the docs are collected on [[doc-reference-data]].
+
+## Changes at 3b8f12c4 (F-886)
+
+The counterflow and parallel row has its mark struck and Lienhard cited (F-886, ADR 0796) ([[adr-thread-vof-multiphase-particles]]).
 
 ## Pages this source informs
 

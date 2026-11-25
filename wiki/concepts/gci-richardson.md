@@ -4,7 +4,7 @@ tags: [verification, numerics, mesh-convergence]
 sources: [doc-milestone-fan, doc-reference-data-f870-fan01-design-point, doc-reference-data-wave31b-turbulence-wall, doc-reference-data-wave31a-solver-defects, doc-designs-exp-rot, adr-thread-simulation-milestones-validation, adr-thread-fan01-design-point, ref-celik-2008-jfe-discretisation-uncertainty, ref-nparc-vv-tutorial]
 builds_on: [solution-verification, truncation-error-and-order-of-accuracy]
 created: 2026-11-22
-updated: 2026-11-23
+updated: 2026-11-25
 status: draft
 ---
 
@@ -45,3 +45,4 @@ Richardson extrapolation estimates the mesh-converged value of a quantity from s
 
 - The Roache and Celik sources have not been read. The GCI formula in use is recalled from memory ([[doc-reference-data-f870-fan01-design-point]]).
 - Update 2026-11-22 (wiki P6): the wiki has now read the Celik et al. procedure from an ASME-hosted copy ([[ref-celik-2008-jfe-discretisation-uncertainty]]); the repo docs still record the formula as recalled. Roache's 1994 paper and book remain unread by the wiki. Whether the repo should cite the read copy is for the maintainer.
+- Update 2026-11-25 (3b8f12c4, F-886, ADR 0796): the repo has read the Celik et al. procedure; the order and, for $p \le 1$, the index agree, and the cap of the order at 1 in the F-870 band is not in it (half-widths 1.4969 and 1.9923 times Eq. 7 for torque and pressure rise). Roache's own papers remain unread ([[adr-thread-vof-multiphase-particles]]).
