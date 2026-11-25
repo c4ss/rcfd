@@ -3,9 +3,9 @@ type: source
 tags: [interface, mcp, assistant]
 sources: []
 origin: docs/mcp-tools.md
-origin_commit: 975beadb
+origin_commit: a1fdeb8c
 created: 2026-11-22
-updated: 2026-11-24
+updated: 2026-11-25
 status: draft
 ---
 
@@ -39,6 +39,11 @@ _None found at ingest._ (Counted: the tool table has 34 rows; 16 session tools p
 ## Changes at 975beadb (F-339)
 
 Two session tools, `design_uq` (tolerance study) and `design_sobol` (Sobol indices), class `write_files`, run the library's `design::uq::run` and `design::sensitivity::run` on the named evaluator `rcfd.fan_rom` and record the study in a design ledger; "They add nothing of their own to the numbers", and "They are not service methods; the server calls the library." The kept session tools of project mode rise from 17 to 19 (ADR 0784) ([[adr-thread-mcp-tools]]).
+
+## Changes at a1fdeb8c (F-339, ADR 0791)
+
+> [!warning] Contradiction (doc and record)
+> `docs/mcp-tools.md` gives `lo` and `hi` of a normal distribution as each optional ("no truncation on that side") ([[doc-mcp-tools]]); ADR 0791 (K1) records that one open side with one finite bound panics in the library (`erfc_inv needs 0 < y < 2`, `crates/rcfd-reactor/src/mixfrac.rs:161`, since `erfc` of infinity is not a number) and ends the `rcfd-mcp` process with exit code 101 and no reply. Only both sides open or both finite work ([[adr-thread-mcp-tools]]).
 
 ## Pages this source informs
 

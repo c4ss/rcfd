@@ -3,7 +3,7 @@ type: source
 tags: [adr-thread, mcp, tool-list, access-class, allow-list, claude-code]
 sources: [doc-mcp-tools, doc-claude-plugin-skills]
 origin: docs/adr/ (ADR list below)
-origin_commit: a903916c
+origin_commit: a1fdeb8c
 created: 2026-11-22
 updated: 2026-11-25
 status: draft
@@ -25,6 +25,7 @@ The rule every row keeps: an MCP tool list is a golden that is never re-recorded
 - **The plugin edit hook** (ADR 0195): refuses Edit and Write under `cases/`, `runs/` and `designs/`; fails open; not verified under the bypass modes.
 - ~~**Open**: F-862 (todo), the description of `start_run`'s `store` argument, approved for correction on 2026-11-21 (ADR 0741).~~ **F-862 done** (ADR 0774, merged 77e54786 on 2026-11-23): the description of `start_run`'s `store` argument "now ends 'Default plan; none is the way back to a run that stores only what its case asks for'" (ADR 0741 question 1, option (a)), "held by a test that reads the live tools list; the whole list before and after is byte-equal with the old text put back, no golden, argument or default changed and no Studio call changed". The only source change is that one string in `crates/rcfd-mcp/src/project.rs`; at the merge the lead removed the clause of `docs/mcp-tools.md` that said the description still named the earlier default ([[doc-mcp-tools]]).
 - ~~**Issued, not on main at 09647baa:** F-339 (`design_uq` and `design_sobol` tools on a named evaluator, with a registered edit of the tools-list goldens), issued on 2026-11-23 by the brief `docs/adr/briefs/f339-mcp-uq-sobol-tools.md` (ADR 0784); the item is todo ([[roadmap-design-studies-and-optimisation]]).~~ **F-339 partial** (ADR 0784, merged at 05175113, pushed at 9c0aa461): the MCP tools `design_uq` and `design_sobol` run `uq::run` and `sensitivity::run` on the named evaluator `rcfd.fan_rom` (the reduced-order fan, inputs `stagger_common_deg`, `chord_rel`, `tip_gap_delta`) with a design ledger, inside the sandbox and under `max_design_evaluations`, class `write_files`; the reply's `result` is the library's bit for bit (256 Monte Carlo samples, a Latin hypercube study with a stopping rule, 320 Sobol evaluations). They are not service methods. The lead made the additive golden edit (both tools-list goldens gain the two entries, 33 to 35 and 50 to 52; sixteen count literals raised by two) after a reader confirmed it additive. Partial: X1 (a fourth count of the list) missed by the registered rule, and the reader's findings 1-1 (no test sends the string or null bounds) and 2-1 (reference inputs that cannot tell a swapped or dropped parameter) ([[doc-mcp-tools]], [[doc-roadmap-json]]).
+- **F-339 stays partial** (ADR 0791, merged at 26185c59, pushed at 81cfd554; the agent proposed done): the reader's findings 1-1 and 2-1 are closed. Every argument of `design_uq` and `design_sobol` is sent at a value that tells a wrong reading from the right one, 16 tests against the library, 40 mutations of `tools.rs` caught (M10, M11, M14 and M15 through the panic of K1, not the equality); `tools.rs` was right in every row. What is left is **K1**: a normal distribution open on one side only panics in the library and ends the server; "held as the ignored `k1_one_open_side_known_miss`". X1 of ADR 0784 stays recorded as missed ([[doc-roadmap-json]]).
 
 ## ADRs
 
@@ -44,6 +45,7 @@ The rule every row keeps: an MCP tool list is a golden that is never re-recorded
 | [0741](../../docs/adr/0741-f271-registration-the-field-store-plan-as-the-default-of-start-run.md) | 2026-11-19 | registration | F-271 | `start_run` reply gains `store` (one additive golden edit) | "18 of 19 result shapes equal the golden" until re-recorded | [[adr-thread-workspace-layer]] |
 | [0774](../../docs/adr/0774-f862-registration-the-description-of-start-run-store-argument.md) | 2026-11-22 | registration (rule 3 lifted for one string by the maintainer's answer in ADR 0741) | F-862 | The text of `start_run`'s `store` description (no tool, argument, default or golden changes) | rows 1 to 7 met, M1 caught; done | this page |
 | [0784](../../docs/adr/0784-f339-registration-mcp-tools-for-tolerance-and-sobol-studies-of-the-reduced-order-fan.md) | 2026-11-23 | registration, amendment 1, addendum 1, a reader's report, the lead's reading | F-339 | MCP tools for tolerance and Sobol studies of a named evaluator | partial: the tools equal the library bit for bit; X1 missed; reader findings 1-1 and 2-1 | |
+| [0791](../../docs/adr/0791-f339-registration-arguments-of-design-uq-and-design-sobol.md) | 2026-11-25 | registration, addendum 1, the lead's reading | F-339 | Can each argument of the two tools be told from a wrong reading of it, the string and null bounds among them? | partial: every row but the record K1 holds, 40 mutations caught; K1 (one open side) panics | |
 
 ## Key numbers and limits
 
@@ -55,8 +57,12 @@ The rule every row keeps: an MCP tool list is a golden that is never re-recorded
 > [!warning] Contradiction (within the repo docs)
 > `docs/mcp-tools.md` says `rcfd-mcp --project <dir>` "adds 25 tools" ([[doc-mcp-tools]]), the count of ADR 0733's build ("42 tools, 25 project tools"). The same page's project-tool table names 36 tools in 34 rows (counted on this page, 2026-11-22: `pause_run`, `resume_run`, `cancel_run` share a row), and ADR 0738 already stated "27 project tools, 44 with `--project`" before the six trash tools and `list_sites` were counted. The wiki's [[mcp]] and [[rcfd-mcp]] pages repeat the 25 / 42.
 
+> [!warning] Contradiction (doc and record)
+> `docs/mcp-tools.md` gives `lo` and `hi` of a normal distribution as each optional ("no truncation on that side") ([[doc-mcp-tools]]); ADR 0791 (K1) records that one open side with one finite bound panics in the library (`erfc_inv needs 0 < y < 2`, `crates/rcfd-reactor/src/mixfrac.rs:161`, since `erfc` of infinity is not a number) and ends the `rcfd-mcp` process with exit code 101 and no reply. Only both sides open or both finite work ([[adr-thread-mcp-tools]]).
+
 ## Open questions
 
+- ADR 0791 (the maintainer's, scope): the follow-up one-open-side (the fix of K1) and finding 7 (`dist` ignores a key of another distribution) are proposed and not entered.
 - ~~ADR 0784, open question 1 (the maintainer's): whether `design_uq` and `design_sobol` also become service methods (`design.uq`, `design.sobol`); recommended (a), MCP tools only until a second caller exists.~~ Closed on 2026-11-25 by the maintainer's answer "Yes, MCP only", option (a) (ADR 0784, "The maintainer's answer on open question 1").
 
 - ~~F-862: the corrected text of `start_run`'s `store` description, "a change of the text of an existing tool, so it is made by a registration of its own" (ADR 0741, 2026-11-21).~~ Closed by ADR 0774 on 2026-11-23; its open questions for the maintainer: "None."

@@ -332,3 +332,8 @@ Append-only. Newest at the bottom. Entry header: `## [YYYY-MM-DD] <op> | <title>
 ## [2026-11-25] ingest | ADR 0784, the maintainer's answer on open question 1
 
 - Thread: [[adr-thread-mcp-tools]] (open question 1 closed: MCP tools only); roadmap area pages regenerated at a903916c (F-339's gap).
+
+## [2026-11-25] ingest | F-339, ADR 0791 (loop merge)
+
+- Thread: [[adr-thread-mcp-tools]] (ADR 0791 row, current state, a contradiction between `docs/mcp-tools.md` and K1, the open follow-ups).
+- Sources re-read at a1fdeb8c: [[doc-mcp-tools]], [[doc-design-loop]], [[doc-roadmap-json]]; roadmap area pages regenerated (counts unchanged).

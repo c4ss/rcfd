@@ -3,9 +3,9 @@ type: source
 tags: [roadmap]
 sources: []
 origin: docs/roadmap.json
-origin_commit: 2514444c
+origin_commit: a1fdeb8c
 created: 2026-11-22
-updated: 2026-11-24
+updated: 2026-11-25
 status: stable
 ---
 
@@ -73,6 +73,10 @@ F-339 todo to partial: 798 items, 409 done, 301 partial, 88 not started, about 7
 ## Changes at 2514444c (F-893)
 
 F-893 entered (2026-11-24, the maintainer's answer) and done: 799 items, 410 done, 301 partial, 88 not started, about 70 % ([[adr-thread-studio-electron]]).
+
+## Changes at a1fdeb8c (F-339, ADR 0791)
+
+F-339 stays partial; its gap is K1 of ADR 0791. Counts unchanged: 799 items, 410 done, 301 partial, 88 not started ([[adr-thread-mcp-tools]]).
 
 ## Pages this source informs
 

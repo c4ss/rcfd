@@ -3,9 +3,9 @@ type: source
 tags: [design-loop, optimisation, mcp, fan]
 sources: []
 origin: docs/design-loop.md
-origin_commit: 975beadb
+origin_commit: a1fdeb8c
 created: 2026-11-22
-updated: 2026-11-24
+updated: 2026-11-25
 status: draft
 ---
 
@@ -40,6 +40,10 @@ Contradicts the capability table of [[doc-milestone-fan]] (see the callout there
 ## Changes at 975beadb (F-339)
 
 The tolerance (`uq::run`) and Sobol (`sensitivity::run`) drivers are now reached from MCP by `design_uq` and `design_sobol` on `rcfd.fan_rom`, with a ledger inside the sandbox (ADR 0784) ([[doc-mcp-tools]]).
+
+## Changes at a1fdeb8c (F-339, ADR 0791)
+
+K1 (ADR 0791): the library's `uq::run` and `sensitivity::run` cannot sample a normal distribution open on one side only; it panics ([[adr-thread-mcp-tools]]).
 
 ## Pages this source informs
 
