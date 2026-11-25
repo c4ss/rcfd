@@ -362,3 +362,8 @@ Append-only. Newest at the bottom. Entry header: `## [YYYY-MM-DD] <op> | <title>
 - Thread: [[adr-thread-vof-multiphase-particles]] (ADR 0796 row, sources read). Concepts: [[cavitation-and-mass-transfer-models]], [[heat-exchanger-effectiveness-ntu]], [[gci-richardson]].
 - Sources re-read at 3b8f12c4: [[doc-reference-data-wave29b-cavitation]], [[doc-reference-data-wave23a-mhd-heat-exchanger]], [[doc-reference-data-f870-fan01-design-point]], [[doc-roadmap-json]], [[doc-roadmap-overview]]; [[overview]] revised (801 items, 420 / 294 / 87).
 - Open for the maintainer: whether the wiki keeps its copy of Folden and Aschmoneit (ADR 0796, question 3: arXiv names CC BY 4.0, the PDF's first page personal use only).
+
+## [2026-11-25] ingest | F-889, ADR 0797 (loop merge)
+
+- Thread: [[adr-thread-structural-case-file-and-fan-blade]] (ADR 0797 row, F-889 done).
+- Sources re-read at 045708b9: [[doc-solid-case-file]], [[doc-roadmap-json]], [[doc-roadmap-overview]]; [[overview]] revised (801 items, 421 / 294 / 86).

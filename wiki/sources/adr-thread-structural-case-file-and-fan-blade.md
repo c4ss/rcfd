@@ -3,9 +3,9 @@ type: source
 tags: [adr-thread, structural, fem, case-file, fan, demonstration]
 sources: [doc-structural-solver, doc-solid-case-file]
 origin: docs/adr/ (ADR list below)
-origin_commit: 09647baa
+origin_commit: 045708b9
 created: 2026-11-22
-updated: 2026-11-23
+updated: 2026-11-25
 status: draft
 ---
 
@@ -38,6 +38,7 @@ How a user reaches [[rcfd-fem]] without writing Rust: the [[solid-case-file]] ru
 | [0505](../../docs/adr/0505-f593-registration-library-fan-blade-mesher-in-rcfd-fem-builders.md) | 2026-11-14 | registration + maintainer answers | F-593 | Library fan-blade mesher; case-file keys proposed | partial (library half done); keys approved 2026-11-18 | |
 | [0780](../../docs/adr/0780-f842-registration-inertia-and-retry-in-the-solid-case-output.md) | 2026-11-23 | registration, stopped before code | F-842 | The inertia and the retry of the nonlinear driver in the solid case's output | todo (a third outcome of its decision rule, accepted by the lead); no check run; Q1 open | |
 | [0785](../../docs/adr/0785-f616-registration-case-file-keys-for-superelements-and-interface-enrichment.md) | 2026-11-23 | registration + amendments 1 and 2 (both before any library line) | F-616 | Case-file keys for superelements (ADR 0469, ADR 0536) and interface enrichment (ADR 0532) | done; B1 to B4 and R3 equal the library in bits; 8 of 8 mutations caught; Q1 answered (a), F-889 entered | |
+| [0797](../../docs/adr/0797-f889-registration-case-file-keys-of-the-reduction.md) | 2026-11-25 | registration, addendum 1, the lead's reading | F-889 | Do the remaining keys of the reduction reach the library from the case file? | done: every row holds; every mutation caught | |
 
 ## Key numbers and limits
 
@@ -47,6 +48,7 @@ How a user reaches [[rcfd-fem]] without writing Rust: the [[solid-case-file]] ru
 - Proposed `fan_blade` keys (ADR 0505): `divisions` default `[12, 2, 8]`, `n_c >= 2`; `centrifugal` with `axis`, `origin` (default `[0, 0, 0]`), `speed` in rad/s, "one unit only, no `rpm` alias".
 
 - **ADR 0785, the checks:** part files equal the library part's text byte for byte (314 745 bytes with one block of enrichment and 27 residual vectors; 143 980 bytes without the key and with 0). Host runs: 248 coordinates and 243 host displacements (arrangement I), 221 and 243 (II), 253 and 243 with two parts attached in the order `a_root`, `b_tip`, 0 differ; modal: 8 eigenvalues and 1984 (I) or 1768 (II) vector entries, 0 differ; with the enriched part 275 coordinates, 8 eigenvalues, 2200 entries, 0 differ. B5 (against the full model) 6.353e-13 over 81 nodes, equal to ST1 of ADR 0536. The JSON schema digest of the flow case is unchanged (`0xc611735ab88857f7`, 7712 bytes). Held by `crates/rcfd-api/tests/f616_superelement_case.rs`.
+- **F-889 done** (ADR 0797, merged at 427010ec, pushed at 2e284a34): `[reduction]` of the solid case file gains the keys cutoff, residual_vectors and load_patterns, with a model that has no interior part refused by name and the diagnostics of the reduction in the output; 12 tests in `solid_case_reduction_keys_f889.rs`. The committed mutation of F-616 was made again on the merged tree, its lines having moved ([[doc-solid-case-file]]).
 - **ADR 0785, amendments:** (1) `[reduction]` is an optional object of the schema and stays out of the settings tree of a case that does not give it; the collection `superelements` "cannot be optional (the option is for objects) and is in the tree as an empty table". (2) `cantilever_tet10_amg.toml` is refused by `run_solid_case_file` on main (CG with `amg_quadratic` does not converge to 1e-10, the existing known miss of ADR 0438's A14), so for a refused file the digest check records its problems as text.
 - **ADR 0780, findings of the reading:** the analysis type of the solid case file is `static` or `modal` (`crates/rcfd-api/src/solid_case.rs`), "and no crate of the API, the CLI or the MCP server names `NewtonOptions`" (the lead's check on main). The registered warning text: "increment <k> (load factor <lambda>): the accepted state has inertia nu = <nu> > 0, the equilibrium is not shown to be stable (ADR 0719 D2)"; the sign convention is Sylvester's law of inertia as used in ADR 0719 D2 (the negative pivots of the $L D L^T$ of the reduced tangent count its negative eigenvalues).
 

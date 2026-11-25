@@ -3,9 +3,9 @@ type: source
 tags: [interface, structural, case]
 sources: []
 origin: docs/solid-case-file.md
-origin_commit: 09647baa
+origin_commit: 045708b9
 created: 2026-11-22
-updated: 2026-11-23
+updated: 2026-11-25
 status: draft
 ---
 
@@ -29,6 +29,10 @@ A TOML file of its own for a linear solid model of [[rcfd-fem]] (F-386, ADR 0438
   - `[superelements.<name>]` makes a **host case**: `file` (a reduced part file, relative to the case file) and `set` (the node set the part attaches to), both required. Each part is attached as a superelement (ADR 0536): "every boundary node of the part must lie on a node of the set (within 1e-9 of the largest extent of the mesh) and every node of the set must be a boundary node of the part". Parts are attached in ascending name order; the unknowns are the model's, then the generalised coordinates of each part.
   - A host run is `static` (`solver.method` must be `direct`) or `modal`. The report gains `superelements` (per part: `name`, `file`, `set`, `boundary_unknowns`, `generalised_coordinates`, `offset`) and `unknowns`. "Not available in a run with superelements: stresses and reactions, the displacements inside a part, a CG solver, and a harmonic analysis (the case file has none)."
 - Example: a Tet10 cantilever from `crates/rcfd-api/tests/solid_cases/cantilever_tet10.toml`.
+
+## Changes at 045708b9 (F-889)
+
+`[reduction]` gains cutoff, residual_vectors and load_patterns; a model without an interior part is refused, and the output carries the reduction's diagnostics (ADR 0797) ([[adr-thread-structural-case-file-and-fan-blade]]).
 
 ## Contradictions with the wiki
 

@@ -3,7 +3,7 @@ type: source
 tags: [roadmap]
 sources: []
 origin: docs/roadmap.json
-origin_commit: 3b8f12c4
+origin_commit: 045708b9
 created: 2026-11-22
 updated: 2026-11-25
 status: stable
@@ -93,6 +93,10 @@ F-270, F-272, F-275, F-287, F-288 and F-465 partial to done: 801 items, 419 done
 ## Changes at 3b8f12c4 (F-886)
 
 F-886 done: 801 items, 420 done, 294 partial, 87 not started ([[adr-thread-vof-multiphase-particles]]).
+
+## Changes at 045708b9 (F-889)
+
+F-889 done: 801 items, 421 done, 294 partial, 86 not started ([[adr-thread-structural-case-file-and-fan-blade]]).
 
 ## Pages this source informs
 
