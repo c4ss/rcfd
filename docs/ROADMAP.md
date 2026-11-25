@@ -2703,7 +2703,7 @@ exist, and Phase 9 items are stretch. Phase numbers 5 and 6 may run in parallel 
 - [ ] **F-630** Shells on the linear dynamic paths
   - depends on: F-541
   - acceptance: Every limit not stated here is registered in the ADR before the run. The linear transient, the damped modes, the modal and the direct harmonic solve take Shell4 and Shell3: a cantilever strip of each against the closed-form Euler-Bernoulli response (the free-vibration frequency, the harmonic tip response off resonance) within registered limits, the direct harmonic against the mode superposition with all modes within 1e-8; models without shells keep their bits.
-  - note: Structural solver, advanced tier. Follow-up of F-541 (ADR 0545, 2026-11-15).
+  - note: Structural solver, advanced tier. Follow-up of F-541 (ADR 0545, 2026-11-15). Lead (2026-11-25): issued by docs/adr/briefs/f630-shells-linear-dynamics.md (ADR 0798).
 - [x] **F-631** Residual reference of the Newton driver in free vibration
   - depends on: F-585
   - acceptance: Every limit not stated here is registered in the ADR before the run. An opt-in residual reference of the nonlinear transient with a registered inertia term, so that a converged step of a free vibration without external load is not rejected at a rounding floor; the Shell3 strip of ADR 0545 NT1 over 100 periods at the default tolerance with that reference; the default reference and its bits unchanged.

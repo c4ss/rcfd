@@ -6922,7 +6922,7 @@
     ],
     "status": "todo",
     "acceptance": "Every limit not stated here is registered in the ADR before the run. The linear transient, the damped modes, the modal and the direct harmonic solve take Shell4 and Shell3: a cantilever strip of each against the closed-form Euler-Bernoulli response (the free-vibration frequency, the harmonic tip response off resonance) within registered limits, the direct harmonic against the mode superposition with all modes within 1e-8; models without shells keep their bits.",
-    "note": "Structural solver, advanced tier. Follow-up of F-541 (ADR 0545, 2026-11-15)."
+    "note": "Structural solver, advanced tier. Follow-up of F-541 (ADR 0545, 2026-11-15). Lead (2026-11-25): issued by docs/adr/briefs/f630-shells-linear-dynamics.md (ADR 0798)."
   },
   {
     "id": "F-631",
