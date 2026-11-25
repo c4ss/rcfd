@@ -1,0 +1,14 @@
+# expect-fail: cargo test --release -p rcfd-fem --test sa_shells_linear_dynamics_bits_f630
+diff --git a/crates/rcfd-fem/src/transient.rs b/crates/rcfd-fem/src/transient.rs
+index 342b00a..980b111 100644
+--- a/crates/rcfd-fem/src/transient.rs
++++ b/crates/rcfd-fem/src/transient.rs
+@@ -318,7 +318,7 @@ impl TransientOptions {
+             time_step,
+             damping: None,
+             threads: None,
+-            shells: false,
++            shells: true,
+         }
+     }
+     /// The same options with a method.

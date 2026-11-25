@@ -1,0 +1,16 @@
+# expect-fail: cargo test --release -p rcfd-fem --test sa_shells_linear_dynamics_f630
+diff --git a/crates/rcfd-fem/src/harmonic_direct.rs b/crates/rcfd-fem/src/harmonic_direct.rs
+index 0ef4eaa..c9f1ece 100644
+--- a/crates/rcfd-fem/src/harmonic_direct.rs
++++ b/crates/rcfd-fem/src/harmonic_direct.rs
+@@ -760,8 +760,8 @@ impl DirectHarmonic {
+                             let size: usize = ctx.nodes.iter().map(|&a| dofs.components(a)).sum();
+                             return Ok(crate::element::ElementMatrix::zeros(size));
+                         }
+-                        // ADR 0798 D2
+-                        crate::assemble::element_stiffness_of(model, ctx)
++                        let d = ctx.material.linear_elasticity_matrix()?;
++                        crate::hex8x::element_stiffness_for(model.mesh(), ctx.element, ctx.kind, ctx.coords, &d)
+                     })?;
+                     parts.push((km.val, dm.clone()));
+                 }
