@@ -271,3 +271,28 @@ unedited; **partial** otherwise, with the path named. (The brief's rule. A mutat
 1. Whether the paths take shells by default. (a) Keep the opt-in; (b) lift the refusals by default, as ADR 0744 and ADR 0746 did, which retires or restates the
    existing refusal rows (found by search: `sa_shell3_paths.rs` RC1, RC2; `sa_shell3.rs`; `si_shell.rs`; others to be listed then). Recommendation: (b), as an item
    of its own after this one is merged, because the modal analysis already takes shells and the opt-in carries no choice of method. Not decided here.
+
+## Amendment 1 (2026-11-25): set-up details the table leaves open
+
+Written after the library change and the test file were written and compiled (`cargo check`, `--no-run`) and before either was
+committed or any of their checks was run; the only runs so far are the two record runs of B1 per platform on main. No limit,
+row, control or mutation changes.
+
+1. **F5, the numbering of the peaks.** A run of ten periods from a deflection at rest starts at a maximum and ends before its
+   tenth later maximum (the damped period and the rule's period are longer than `T_1`). The start is peak 1, so peaks 3 and 10 are
+   those near `2 T_1` and `9 T_1`, seven periods apart.
+2. **R5, the kind without a reference.** The exact rotations are zero, so "rel" of the rotations has no denominator. The largest
+   difference over all unknowns (translations and rotations) is divided by `t`, the exact translation.
+3. **Modal options** of every row that calls `modal_analysis` (also the basis of the damped modes): `ResidualTest::Backward`, tolerance
+   1e-12, `subspace_size` 24, `max_iterations` 1000, as in the record runs of B1. The first record run on main with the default
+   size and 200 iterations stopped at "not converged" on block B; that is why they are set (a set-up run on the unchanged library).
+4. **Parameters not stated.** S: tip force 10 N, pressure 100 Pa; H3 compares with the sign of the load's z resultant. G5, G6, NC4: the
+   two materials differ in `E` only (`nu = 0.3`, `rho = 7850`); the three frequencies of G1. X: solid `E = 7e10, nu = 0.33, rho = 2700`, shell steel.
+   P1, P2: the frequencies of `(K + K_sigma, M)`; R2, R3, X1, X2: those of the reduced pencil. NC2: the eigenvalues of the changed
+   pencil take the places of the old ones in ascending order, with the old shapes. F3: crossings interpolated linearly.
+5. **X3.** Warp is checked with Shell4 only (a triangle is flat). The static correction gets a basis of one vector of ones, since the
+   refusal comes before the modes are used. A viscoelastic model is also given to the damped modes with a reference frequency.
+   That a table on a `Shell` block is taken is asserted beside the refusal on a layup.
+6. **Q, the format check on Windows.** `cargo fmt -p rcfd-fem -- --check` cannot start on this Windows machine ("The filename or extension
+   is too long", os error 206: the crate's file list exceeds the command line), as ADR 0793 records. The same command is run in
+   the Linux container of B1 on an export of the code commit; both outputs are reported.
