@@ -15,7 +15,13 @@
 //! study's own step cap is the runs' `max_steps` (ADR 0200 S5). Before a study's run is submitted, a run of the project
 //! that already is that evaluation ([`RunKey`], a run left by a server stopped during the study) is adopted instead:
 //! waited for, or read from its `metrics.json` ([`choose`], ADR 0201).
+//!
+//! The project journal (ADR 0794): a submitted run writes its `run_submitted` line with its tags, each evaluation that the
+//! study's store gained and each point that the map's table gained one `design_recorded` line ([`Recorder`]), written at the
+//! start of the next evaluation and after the call, so after the store holds it; a study or variant made by the design tools
+//! one `design_created` line.
 
+use crate::journal::{append, put_list, Origin};
 use crate::runs::RunService;
 use crate::{err, Workspace, INTERNAL};
 use rcfd_api::case::Case;
@@ -26,17 +32,28 @@ use rcfd_api::design::study::{Condition, Evaluator, StudyDef};
 use rcfd_api::design::tools::{call_with, EvaluatorSource, MapRun, StudyRun};
 use rcfd_api::runctl::exit;
 use rcfd_api::service::{RpcError, Service};
+use rcfd_project::records::hash_bytes;
 use rcfd_runner::client::state_name;
 use rcfd_runner::records::{LaunchSettings, RunRecord, RunSettings, RunState, RunStatus};
 use rcfd_runner::store::{extra, RunTags};
-use serde_json::{json, Value};
+use serde_json::{json, Map, Value};
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
-use std::time::{Duration, Instant};
+use std::time::{Duration, Instant, SystemTime};
 
 /// The design methods that [`Workspace::design_call`] evaluates on the runner.
 pub const ON_RUNNER: [&str; 3] = ["design.run_study", "design.evaluate", "design.run_map"];
+/// The design methods that [`Workspace::design_call`] takes: those on the runner, and those that only write journal lines for
+/// what they store (ADR 0794 D6).
+pub const JOURNALED: [&str; 6] = [
+    "design.run_study",
+    "design.evaluate",
+    "design.run_map",
+    "design.record",
+    "design.create_study",
+    "design.create_variant",
+];
 /// Most runs a result lists in `runs` (`runs_total` counts them all).
 pub const MAX_LISTED_RUNS: usize = 50;
 /// Period of reading a run's status while waiting for it.
@@ -676,6 +693,7 @@ impl Evaluator for RunnerEvaluator<'_> {
 /// restart file fits; the state carried to the next point is the id of a converged point's run.
 pub struct RunnerMapEvaluator<'s> {
     q: Queue<'s>,
+    recorder: &'s Recorder,
     prefix: Vec<(String, Value)>,
     base: Case,
     max_steps: Option<u64>,
@@ -702,6 +720,7 @@ impl PointEvaluator for RunnerMapEvaluator<'_> {
     type State = String;
 
     fn run(&self, point: &MapPoint, warm: Option<&String>) -> PointResult<String> {
+        self.recorder.flush(false);
         // the point's case as `CaseMapEvaluator::run` builds it
         let mut want = self.base.clone();
         for (path, v) in &point.set {
@@ -771,40 +790,261 @@ impl PointEvaluator for RunnerMapEvaluator<'_> {
     }
 }
 
+/// `path` relative to the project `root`, both canonical (`None` when outside it); a path that does not exist yet is taken
+/// from its nearest existing folder.
+fn in_project(root: &Path, path: &Path) -> Option<String> {
+    let root = rcfd_project::paths::canonicalize(root).ok()?;
+    let mut rest = Vec::new();
+    let mut at = path;
+    let p = loop {
+        match rcfd_project::paths::canonicalize(at) {
+            Ok(c) => break rest.iter().rev().fold(c, |c: PathBuf, n| c.join(n)),
+            Err(_) => {
+                rest.push(at.file_name()?.to_os_string());
+                at = at.parent()?;
+            }
+        }
+    };
+    rcfd_project::paths::rel_string(&root, &p).filter(|r| !r.is_empty())
+}
+
+/// The bytes of `path` and their hash.
+fn read_hashed(path: &Path) -> Option<(Vec<u8>, String)> {
+    let b = std::fs::read(path).ok()?;
+    let h = hash_bytes(&b);
+    Some((b, h))
+}
+
+/// What a design call stored and has no journal line yet (ADR 0794 D2, D3, D5).
+#[derive(Debug)]
+enum Stored {
+    /// The records of a study's `evaluations.jsonl` from byte `pos` on.
+    Study {
+        store: PathBuf,
+        path: String,
+        study: String,
+        params: Vec<String>,
+        pos: usize,
+    },
+    /// The rows of an operating map's `map.json` from row `seen` on; `table` is the file as it stood when it was last looked
+    /// at (its time and hash).
+    Map {
+        dir: PathBuf,
+        path: String,
+        seen: usize,
+        table: Option<(Option<SystemTime>, String)>,
+    },
+}
+
+/// Writes the `design_recorded` lines of one design call (ADR 0794): [`Recorder::flush`] writes one for each evaluation or map
+/// point stored since the last one, in order. Best effort, as the journal is.
+#[derive(Debug)]
+struct Recorder {
+    root: PathBuf,
+    origin: Origin,
+    stored: Mutex<Option<Stored>>,
+}
+
+impl Recorder {
+    /// The recorder of a call that stores into the study at `dir` (`None` for a call that stores no evaluation there).
+    fn new(root: &Path, origin: Origin, dir: Option<PathBuf>) -> Recorder {
+        let stored = dir.and_then(|d| {
+            let study = in_project(root, &d)?;
+            let store = d.join("evaluations.jsonl");
+            let before = std::fs::read(&store).unwrap_or_default();
+            let params = std::fs::read(d.join("study.json"))
+                .ok()
+                .and_then(|b| serde_json::from_slice::<Value>(&b).ok())
+                .and_then(|v| {
+                    let names = v["parameters"].as_array()?.iter();
+                    Some(names.filter_map(|p| p["name"].as_str().map(String::from)).collect())
+                })
+                .unwrap_or_default();
+            Some(Stored::Study {
+                path: format!("{study}/evaluations.jsonl"),
+                store,
+                study,
+                params,
+                pos: before.iter().rposition(|&b| b == b'\n').map_or(0, |i| i + 1),
+            })
+        });
+        Recorder {
+            root: root.to_path_buf(),
+            origin,
+            stored: Mutex::new(stored),
+        }
+    }
+
+    /// Record the points of the map about to run in `dir`.
+    fn map(&self, dir: &Path) {
+        let stored = in_project(&self.root, dir).map(|rel| Stored::Map {
+            dir: dir.to_path_buf(),
+            path: format!("{rel}/map.json"),
+            seen: 0,
+            table: map_table(dir).map(|(sig, _)| sig),
+        });
+        *self.stored.lock().unwrap_or_else(|e| e.into_inner()) = stored;
+    }
+
+    /// The line of a file the call wrote (ADR 0794 D4): `file`, and `more` beside it.
+    fn created(&self, file: &Path, more: Option<&Path>, study: Option<String>) {
+        let Some((path, (_, hash))) = in_project(&self.root, file).zip(read_hashed(file)) else {
+            return;
+        };
+        let mut m = Map::new();
+        m.insert("path".into(), json!(path));
+        m.insert("hash".into(), json!(hash));
+        if let Some(f) = more.and_then(|f| self.file(f)) {
+            m.insert("files".into(), json!([f]));
+        }
+        if let Some(s) = study {
+            m.insert("study".into(), json!(s));
+        }
+        append(&self.root, "design_created", &self.origin, m);
+    }
+
+    /// `{path, hash}` of a file of the project.
+    fn file(&self, f: &Path) -> Option<Value> {
+        let (path, (_, hash)) = in_project(&self.root, f).zip(read_hashed(f))?;
+        Some(json!({"path": path, "hash": hash}))
+    }
+
+    /// One `design_recorded` line per evaluation or point stored since the last call. `end`: the call has returned, so a
+    /// map's `map.meta.json` is written.
+    fn flush(&self, end: bool) {
+        let mut g = self.stored.lock().unwrap_or_else(|e| e.into_inner());
+        match g.as_mut() {
+            Some(Stored::Study {
+                store,
+                path,
+                study,
+                params,
+                pos,
+            }) => {
+                let len = std::fs::metadata(&store).map_or(0, |m| m.len());
+                if len <= *pos as u64 {
+                    return;
+                }
+                let Ok(bytes) = std::fs::read(&store) else { return };
+                while let Some(n) = bytes.get(*pos..).and_then(|b| b.iter().position(|&c| c == b'\n')) {
+                    let line = &bytes[*pos..*pos + n];
+                    *pos += n + 1;
+                    // the header line has no index
+                    let Some((rec, index)) = serde_json::from_slice::<Value>(line)
+                        .ok()
+                        .and_then(|r| r["index"].as_u64().map(|i| (r, i)))
+                    else {
+                        continue;
+                    };
+                    let mut m = Map::new();
+                    m.insert("path".into(), json!(path));
+                    m.insert("hash".into(), json!(hash_bytes(&bytes[..*pos])));
+                    m.insert("study".into(), json!(study));
+                    m.insert("variant".into(), json!(variant_of(params, &rec["params"])));
+                    m.insert("index".into(), json!(index));
+                    m.insert("source".into(), rec["source"].clone());
+                    let conds = rec["conditions"].as_array().cloned().unwrap_or_default();
+                    let ok = !conds.is_empty() && conds.iter().all(|c| c["ok"] == true);
+                    m.insert("ok".into(), json!(ok));
+                    let conds = conds
+                        .iter()
+                        .map(|c| json!({"condition": c["label"], "status": c["status"]}));
+                    put_list(&mut m, "conditions", conds.collect());
+                    append(&self.root, "design_recorded", &self.origin, m);
+                }
+            }
+            Some(Stored::Map { dir, path, seen, table }) => {
+                let Some((sig, v)) = map_table(dir) else { return };
+                if table.as_ref() == Some(&sig) {
+                    return;
+                }
+                let hash = sig.1.clone();
+                *table = Some(sig);
+                let rows = v["points"].as_array().cloned().unwrap_or_default();
+                for (i, r) in rows.iter().enumerate().skip(*seen) {
+                    let mut m = Map::new();
+                    m.insert("path".into(), json!(path));
+                    m.insert("hash".into(), json!(hash));
+                    let mut files: Vec<Value> = self.file(&dir.join("map.csv")).into_iter().collect();
+                    if end && i + 1 == rows.len() {
+                        files.extend(self.file(&dir.join("map.meta.json")));
+                    }
+                    m.insert("files".into(), json!(files));
+                    m.insert("point".into(), r["point"].clone());
+                    m.insert("label".into(), r["label"].clone());
+                    m.insert("ok".into(), json!(r["status"] == "converged"));
+                    m.insert("status".into(), r["status"].clone());
+                    append(&self.root, "design_recorded", &self.origin, m);
+                }
+                *seen = rows.len().max(*seen);
+            }
+            None => {}
+        }
+    }
+}
+
+/// A map's `map.json`: its time and hash, and its content.
+fn map_table(dir: &Path) -> Option<((Option<SystemTime>, String), Value)> {
+    let file = dir.join("map.json");
+    let t = std::fs::metadata(&file).ok()?.modified().ok();
+    let (bytes, hash) = read_hashed(&file)?;
+    Some(((t, hash), serde_json::from_slice(&bytes).ok()?))
+}
+
+/// The `variant` of a stored record, as its runs' tag ([`variant_name`]): its parameters in the order `names` of the study.
+fn variant_of(names: &[String], params: &Value) -> String {
+    let text = |n: &String| format!("{n}={}", params[n.as_str()]);
+    names.iter().map(text).collect::<Vec<_>>().join(",")
+}
+
+/// An evaluator that first writes the journal lines of what was stored before it (ADR 0794 D5).
+struct Journaled<'s> {
+    inner: Box<dyn Evaluator + 's>,
+    recorder: &'s Recorder,
+}
+
+impl Evaluator for Journaled<'_> {
+    fn evaluate(&self, def: &StudyDef, x: &[f64]) -> Vec<CondResult> {
+        self.recorder.flush(false);
+        self.inner.evaluate(def, x)
+    }
+}
+
+/// The MCP tool of a design method: the `who` of its journal lines.
+fn tool_of(method: &str) -> String {
+    match method {
+        "design.run_map" => "design_run_operating_map".into(),
+        m => m.replace('.', "_"),
+    }
+}
+
 /// The evaluator source of a project (ADR 0189 S3, ADR 0200 S5, S8): the runner's evaluators when the base case lies in
-/// the project, else the in-process evaluator with the reason; it keeps what it chose and the runs it made for the result.
+/// the project, else the in-process evaluator with the reason; it keeps what it chose and the runs it made for the result,
+/// and writes the journal lines of what the call stores.
 pub struct RunnerSource<'w> {
     ws: &'w Workspace,
+    runs: RunService,
+    recorder: Recorder,
     made: Mutex<Vec<Made>>,
     chosen: Mutex<Option<Result<(), String>>>,
 }
 
 impl<'w> RunnerSource<'w> {
-    /// The source of `ws`.
-    pub fn new(ws: &'w Workspace) -> Self {
+    /// The source of `ws` for a call of `method` that stores into the study at `dir`, when it does.
+    fn new(ws: &'w Workspace, method: &str, dir: Option<PathBuf>) -> Self {
+        let who = tool_of(method);
         RunnerSource {
             ws,
+            runs: ws.runs.by(&who, None),
+            recorder: Recorder::new(ws.root(), ws.origin(&who, None), dir),
             made: Mutex::new(Vec::new()),
             chosen: Mutex::new(None),
         }
     }
 
-    /// `path` relative to the project, both canonical (`None` when outside it); a path that does not exist yet is taken
-    /// from its nearest existing folder.
+    /// [`in_project`] of this project.
     fn in_project(&self, path: &Path) -> Option<String> {
-        let root = rcfd_project::paths::canonicalize(self.ws.root()).ok()?;
-        let mut rest = Vec::new();
-        let mut at = path;
-        let p = loop {
-            match rcfd_project::paths::canonicalize(at) {
-                Ok(c) => break rest.iter().rev().fold(c, |c: PathBuf, n| c.join(n)),
-                Err(_) => {
-                    rest.push(at.file_name()?.to_os_string());
-                    at = at.parent()?;
-                }
-            }
-        };
-        rcfd_project::paths::rel_string(&root, &p).filter(|r| !r.is_empty())
+        in_project(self.ws.root(), path)
     }
 
     /// Why the runner cannot make this study's evaluations (ADR 0200 S5), or its project-relative folder when it can.
@@ -842,7 +1082,7 @@ impl<'w> RunnerSource<'w> {
 
     fn queue(&self, base_path: &Path, adoption: Option<Adoption>) -> Queue<'_> {
         Queue {
-            runs: &self.ws.runs,
+            runs: &self.runs,
             root: self.ws.root().to_path_buf(),
             base_path: base_path.to_path_buf(),
             made: &self.made,
@@ -931,7 +1171,11 @@ impl EvaluatorSource for RunnerSource<'_> {
             Ok(f) => f,
             Err(note) => {
                 self.choose(Err(note));
-                return Ok(None);
+                // the in-process evaluator as the call makes it, with the journal lines
+                return Ok(Some(Box::new(Journaled {
+                    inner: Box::new(CaseEvaluator::new(study.base.clone(), study.limits, study.chain)),
+                    recorder: &self.recorder,
+                })));
             }
         };
         let adoption = self.adoption(study.base_path)?;
@@ -939,12 +1183,15 @@ impl EvaluatorSource for RunnerSource<'_> {
         self.choose(Ok(()));
         // ADR 0200 S5: a study's own step cap is the in-process cap of its runs
         let max_steps = study.max_steps.and(study.limits.max_steps).map(|m| m as u64);
-        Ok(Some(Box::new(RunnerEvaluator {
-            q: self.queue(study.base_path, Some(adoption)),
-            study: folder,
-            in_process: CaseEvaluator::new(study.base.clone(), study.limits, study.chain),
-            chain: study.chain,
-            max_steps,
+        Ok(Some(Box::new(Journaled {
+            inner: Box::new(RunnerEvaluator {
+                q: self.queue(study.base_path, Some(adoption)),
+                study: folder,
+                in_process: CaseEvaluator::new(study.base.clone(), study.limits, study.chain),
+                chain: study.chain,
+                max_steps,
+            }),
+            recorder: &self.recorder,
         })))
     }
 
@@ -952,6 +1199,8 @@ impl EvaluatorSource for RunnerSource<'_> {
         &'s self,
         map: &MapRun<'_>,
     ) -> Result<Option<Box<dyn PointEvaluator<State = String> + 's>>, RpcError> {
+        // asked after the stored table was looked for, so only for a map that runs
+        self.recorder.map(map.out_dir);
         if let Err(note) = self.map_rule(map) {
             self.choose(Err(note));
             return Ok(None);
@@ -960,6 +1209,7 @@ impl EvaluatorSource for RunnerSource<'_> {
         self.choose(Ok(()));
         Ok(Some(Box::new(RunnerMapEvaluator {
             q: self.queue(map.base_path, None),
+            recorder: &self.recorder,
             prefix: map.prefix.to_vec(),
             base: map.base.clone(),
             max_steps: map.max_steps.map(|m| m as u64),
@@ -972,12 +1222,36 @@ impl Workspace {
     /// 0200 S8): the candidates or points are evaluated on the project's runner when [`RunnerSource`] can, else in the server
     /// process as before; the result has the method's keys plus `evaluator` and, for the runner, `runs` and `runs_total`
     /// (and for a study `runs_adopted`, ADR 0201 S4), or `evaluator_note` (ADR 0189 S7, ADR 0200 S10). Any other design
-    /// method is the service's.
+    /// method is the service's. Each evaluation the call stored has its journal line when it returns, also with an error, and
+    /// so has a study or variant it made (ADR 0794).
     pub fn design_call(&self, svc: &Arc<Service>, method: &str, args: &Value) -> Result<Value, RpcError> {
-        let source = RunnerSource::new(self);
-        let mut out = call_with(svc, method, args, &source)?;
+        let dir = args.get("dir").and_then(Value::as_str);
+        let stores = matches!(method, "design.run_study" | "design.evaluate" | "design.record");
+        let study = dir.filter(|_| stores).and_then(|d| svc.sandbox_path(d).ok());
+        let source = RunnerSource::new(self, method, study);
+        let res = call_with(svc, method, args, &source);
+        source.recorder.flush(true);
+        let mut out = res?;
         if ON_RUNNER.contains(&method) {
             source.annotate(&mut out, method != "design.run_map");
+        }
+        let file = |key: &str| out[key].as_str().map(PathBuf::from);
+        match method {
+            "design.create_study" => {
+                if let Some(f) = file("study") {
+                    // made from a session: its case is `base.toml` beside it
+                    let base = f.with_file_name("base.toml");
+                    let base = args.get("base").is_none_or(Value::is_null).then_some(base.as_path());
+                    let study = f.parent().and_then(|d| in_project(self.root(), d));
+                    source.recorder.created(&f, base, study);
+                }
+            }
+            "design.create_variant" => {
+                if let Some(f) = file("path") {
+                    source.recorder.created(&f, None, None);
+                }
+            }
+            _ => {}
         }
         Ok(out)
     }

@@ -31,7 +31,8 @@ pub const EXTERNAL_WAIT: Duration = Duration::from_millis(500);
 pub const CLAIM_KEEP: Duration = Duration::from_secs(60);
 /// Entries a feed keeps.
 pub const KEEP: usize = 1000;
-/// The claim of a journal line that removed a file from its path (a case moved to the trash, ADR 0736).
+/// The claim of a journal line that removed a file from its path (a case moved to the trash, ADR 0736; the temporary file of
+/// a design tool's write, ADR 0794).
 const ABSENT: &str = "absent";
 
 /// Where an entry comes from.
@@ -49,7 +50,7 @@ pub struct Change {
     /// [`JOURNAL`], [`RUN`] or [`EXTERNAL`].
     pub source: String,
     /// The journal line's `kind` (`edit`, `case_created`, `mesh_imported`, `run_submitted`, `run_control`,
-    /// `stale_lock_broken`, ...), `run_state`, `run_warning`, `run_stop`, or `external`.
+    /// `design_recorded`, `design_created`, `stale_lock_broken`, ...), `run_state`, `run_warning`, `run_stop`, or `external`.
     pub kind: String,
     /// Time written (RFC 3339), when the line has one.
     pub t: Option<String>,
@@ -196,7 +197,32 @@ fn journal_text(kind: &str, line: &Value, actor: Option<&Actor>) -> String {
             line["cells"],
             s(line, "source").unwrap_or_default()
         ),
-        "run_submitted" => format!("run {run} of {} queued", s(line, "case").unwrap_or_default()),
+        "run_submitted" => {
+            let tags: Vec<String> = ["study", "variant", "condition"]
+                .iter()
+                .filter_map(|k| s(line, k))
+                .collect();
+            let tags = match tags.is_empty() {
+                true => String::new(),
+                false => format!(" ({})", tags.join(" ")),
+            };
+            format!("run {run} of {} queued{tags}", s(line, "case").unwrap_or_default())
+        }
+        // ADR 0794 D7: a stored evaluation of a study, or a point of an operating map
+        "design_recorded" => {
+            let what = match (line["index"].as_u64(), line["point"].as_u64()) {
+                (Some(i), _) => format!(
+                    "{} record {i} ({})",
+                    s(line, "study").unwrap_or_default(),
+                    s(line, "variant").unwrap_or_default()
+                ),
+                (None, Some(p)) => format!("{path} point {p} ({})", s(line, "label").unwrap_or_default()),
+                (None, None) => path.clone(),
+            };
+            let end = if line["ok"] == true { "ok" } else { "not usable" };
+            format!("recorded {what}: {end}")
+        }
+        "design_created" => format!("wrote {path}"),
         "run_control" => format!("{} run {run}", s(line, "requested").unwrap_or_default()),
         "stale_lock_broken" => format!("removed a stale edit lock of {path} ({} s old)", line["age_s"]),
         // ADR 0736: the project trash
@@ -317,7 +343,7 @@ impl Feed {
         if let Some(p) = s(line, "path") {
             let h = match kind {
                 "edit" => s(line, "new_hash"),
-                "case_created" => s(line, "hash"),
+                "case_created" | "design_recorded" | "design_created" => s(line, "hash"),
                 // ADR 0736: a trashed case is gone from its path, a restored one is back with its hash
                 "trashed" if s(line, "item").as_deref() == Some("case") => Some(ABSENT.to_string()),
                 "restored" if s(line, "item").as_deref() == Some("case") => s(line, "hash"),
@@ -331,6 +357,14 @@ impl Feed {
                     out.push((p, s(f, "hash")));
                 }
             }
+        }
+        // ADR 0794 D7: the design tools write a file through `<name>.tmp`, which a scan can have seen
+        if matches!(kind, "design_recorded" | "design_created") {
+            let tmp: Vec<String> = out
+                .iter()
+                .filter_map(|(p, _)| Path::new(p).with_extension("tmp").to_str().map(String::from))
+                .collect();
+            out.extend(tmp.into_iter().map(|p| (p, Some(ABSENT.to_string()))));
         }
         out
     }

@@ -4,7 +4,8 @@
 //!
 //! Every [`RunService`] call is the runner client's call. A submission and an accepted pause, resume or cancel request
 //! also leave one line in the project journal (`run_submitted`, `run_control`), with the service's actor when it has one
-//! and the command and reason of [`RunService::by`] (ADR 0188 J3, J5). `start_run` can make its case first (`new_case`,
+//! and the command and reason of [`RunService::by`] (ADR 0188 J3, J5); the run of a design evaluation names its study,
+//! variant and condition in its line (ADR 0794). `start_run` can make its case first (`new_case`,
 //! ADR 0186 G5) and apply the start plan of [`crate::plan`] (ADR 0173 D7).
 
 use crate::create::invalid;
@@ -19,6 +20,7 @@ use rcfd_api::facts::{InText, RunTime};
 use rcfd_runner::client::Client;
 use rcfd_runner::records::{LaunchSettings, RunSettings, RunState, RunStatus};
 use rcfd_runner::started_by::StartedBy;
+use rcfd_runner::store::RunTags;
 use serde_json::{json, Map, Value};
 use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant};
@@ -114,11 +116,7 @@ impl RunService {
         settings: &RunSettings,
         launch: &LaunchSettings,
     ) -> Result<String, String> {
-        let id = self
-            .client
-            .submit_with(case, settings, launch, &rcfd_runner::store::RunTags::default())?;
-        self.submitted(&id, case, settings, launch, None, None);
-        Ok(id)
+        self.submit_with(case, settings, launch, &RunTags::default())
     }
 
     /// [`Self::submit_launch`] on the remote site `site` for an MCP client (ADR 0739 Q6 (a)): only a site with
@@ -131,15 +129,10 @@ impl RunService {
         launch: &LaunchSettings,
         site: &str,
     ) -> Result<String, String> {
-        let id = self.client.submit_on_site(
-            case,
-            settings,
-            launch,
-            &rcfd_runner::store::RunTags::default(),
-            site,
-            true,
-        )?;
-        self.submitted(&id, case, settings, launch, None, Some(site));
+        let id = self
+            .client
+            .submit_on_site(case, settings, launch, &RunTags::default(), site, true)?;
+        self.submitted(&id, case, settings, launch, &RunTags::default(), None, Some(site));
         Ok(id)
     }
 
@@ -169,6 +162,7 @@ impl RunService {
             &self.client.project().join(&rec.case),
             &settings,
             &launch,
+            &RunTags::default(),
             Some(src),
             site,
         );
@@ -180,12 +174,14 @@ impl RunService {
         self.client.launch(id)
     }
 
+    #[allow(clippy::too_many_arguments)]
     fn submitted(
         &self,
         id: &str,
         case: &Path,
         settings: &RunSettings,
         launch: &LaunchSettings,
+        tags: &RunTags,
         rerun_of: Option<&str>,
         site: Option<&str>,
     ) {
@@ -210,6 +206,16 @@ impl RunService {
         }
         if let Some(n) = launch.max_steps {
             m.insert("max_steps".into(), json!(n));
+        }
+        // ADR 0794 D1: the run of a design evaluation names its study, variant and condition
+        for (key, tag) in [
+            ("study", &tags.study),
+            ("variant", &tags.variant),
+            ("condition", &tags.condition),
+        ] {
+            if let Some(t) = tag {
+                m.insert(key.into(), json!(t));
+            }
         }
         if let Some(r) = rerun_of {
             m.insert("rerun_of".into(), json!(r));
@@ -266,14 +272,9 @@ impl RunService {
     }
 
     /// Queue a run of `case` tagged with its design study, variant and condition, without starting a runner; returns the
-    /// run id (ADR 0189 S6).
-    pub fn submit_tagged(
-        &self,
-        case: &Path,
-        settings: &RunSettings,
-        tags: &rcfd_runner::store::RunTags,
-    ) -> Result<String, String> {
-        self.client.submit_tagged(case, settings, tags)
+    /// run id (ADR 0189 S6). Journal: one `run_submitted` line with the tags (ADR 0794 D1).
+    pub fn submit_tagged(&self, case: &Path, settings: &RunSettings, tags: &RunTags) -> Result<String, String> {
+        self.submit_with(case, settings, &LaunchSettings::default(), tags)
     }
 
     /// The `solver_version` a run submitted now records (ADR 0201 S1).
@@ -281,16 +282,18 @@ impl RunService {
         self.client.solver_version()
     }
 
-    /// [`Self::submit_tagged`] with the run's launch settings, `continue_from` and `max_steps` (ADR 0200 S2); like it, no
-    /// journal line.
+    /// [`Self::submit_tagged`] with the run's launch settings, `continue_from` and `max_steps` (ADR 0200 S2); the journal
+    /// line also names them when set. A refused submission writes no line.
     pub fn submit_with(
         &self,
         case: &Path,
         settings: &RunSettings,
-        launch: &rcfd_runner::records::LaunchSettings,
-        tags: &rcfd_runner::store::RunTags,
+        launch: &LaunchSettings,
+        tags: &RunTags,
     ) -> Result<String, String> {
-        self.client.submit_with(case, settings, launch, tags)
+        let id = self.client.submit_with(case, settings, launch, tags)?;
+        self.submitted(&id, case, settings, launch, tags, None, None);
+        Ok(id)
     }
 }
 

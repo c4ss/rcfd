@@ -1,0 +1,18 @@
+{
+  "form": 1,
+  "adr": "0794",
+  "item": "F-274",
+  "base": "25311db5205c16d93c836d3db98de2faa4e6470e",
+  "status": "done",
+  "note": "ADR 0794, 2026-11-25, done: with --project each run a design tool submits writes the run_submitted line of ADR 0188 with study, variant and condition (a map's run untagged), and each evaluation or map point the store gains writes one design_recorded line with the hash of the stored bytes up to it, after the store holds it (written at the start of the next evaluation and after the call, also a failed one); design_create_study and design_create_variant write one design_created line. An adopted run, a cached evaluation and a refused submission write none. The files under designs/ are in the feed as the workspace's own, each line once with tool and actor, and an outside write is external. Two servers in one project gave 14 lines, each numbered once. Records, tables, run records, metrics, replies and the tool list are the bytes of main (49 items, 0 differ), and without --project nothing is written. Fifteen registered mutations are each caught by their rows (M8 after its set-up was corrected by amendment 2), two are committed. The design ledger tools write no line.",
+  "follow_ups": [
+    {
+      "title": "Journal lines of the design ledger tools",
+      "deps": [
+        "F-274"
+      ],
+      "acceptance": "With --project, each call of design_ledger_append, design_ledger_export, design_uq and design_sobol that writes a file inside the project has its journal line or lines, additive and numbered as every line, written after the file holds the entries; the change feed shows each once with the tool's name and actor and no external change for the file; a refused call writes no line; the ledger, export and replies are bytes of main; without --project nothing is written. Limits not stated here are registered before the run.",
+      "key": "ledger-journal"
+    }
+  ]
+}
