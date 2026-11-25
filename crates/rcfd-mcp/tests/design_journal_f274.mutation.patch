@@ -1,0 +1,25 @@
+# expect-fail: cargo test -p rcfd-mcp --release --test design_journal_f274
+diff --git a/crates/rcfd-workspace/src/design.rs b/crates/rcfd-workspace/src/design.rs
+--- a/crates/rcfd-workspace/src/design.rs
++++ b/crates/rcfd-workspace/src/design.rs
+@@ -443,6 +443,8 @@
+                 made.run = rec.id.clone();
+                 made.continue_from = launch.continue_from.clone();
+                 made.state = self.runs.status(&rec.id).map(|st| state_name(st.state))?;
++                let s = RunSettings { set: set.to_vec(), ..RunSettings::default() };
++                self.runs.submitted(&rec.id, &self.base_path, &s, launch, tags, None, None);
+                 made.adopted = true;
+                 self.made.lock().unwrap_or_else(|e| e.into_inner()).push(made);
+                 return Ok(rec.id.clone());
+diff --git a/crates/rcfd-workspace/src/runs.rs b/crates/rcfd-workspace/src/runs.rs
+--- a/crates/rcfd-workspace/src/runs.rs
++++ b/crates/rcfd-workspace/src/runs.rs
+@@ -175,7 +175,7 @@
+     }
+ 
+     #[allow(clippy::too_many_arguments)]
+-    fn submitted(
++    pub(crate) fn submitted(
+         &self,
+         id: &str,
+         case: &Path,

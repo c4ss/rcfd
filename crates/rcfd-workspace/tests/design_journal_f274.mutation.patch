@@ -1,0 +1,13 @@
+# expect-fail: cargo test -p rcfd-workspace --release --test design_journal_f274
+diff --git a/crates/rcfd-workspace/src/feed.rs b/crates/rcfd-workspace/src/feed.rs
+--- a/crates/rcfd-workspace/src/feed.rs
++++ b/crates/rcfd-workspace/src/feed.rs
+@@ -343,7 +343,7 @@
+         if let Some(p) = s(line, "path") {
+             let h = match kind {
+                 "edit" => s(line, "new_hash"),
+-                "case_created" | "design_recorded" | "design_created" => s(line, "hash"),
++                "case_created" => s(line, "hash"),
+                 // ADR 0736: a trashed case is gone from its path, a restored one is back with its hash
+                 "trashed" if s(line, "item").as_deref() == Some("case") => Some(ABSENT.to_string()),
+                 "restored" if s(line, "item").as_deref() == Some("case") => s(line, "hash"),
