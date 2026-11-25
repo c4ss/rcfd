@@ -286,3 +286,22 @@ Gap proposed, then the note:
 > ADR 0795, 2026-11-25, partial: the numbers of F-828's gap have their provenance: the Runs residual columns, the compared run's residuals, the legend's ticks in five range modes, the domain's size, the scale bar, the runner's budgets and the home counts open it by pointer and keyboard with value, unit, run, snapshot, file, reader and engine, equal to run_status, read_residuals, derive_picture, runner_config and the counting tools asked outside the Studio; a passive trigger and a Ctrl+I that steps, Tab stops unchanged (32, 32, 41, 40, 39); a scan of Home, Runs, Workspace and Compare finds no other number without it beyond the registered exemptions; 10 of 10 mutations caught, one committed; 115 e2e tests pass, the 13 existing files unedited; npm run test:unit missed by one test, which found a bench of another checkout.
 
 The same entry as `docs/roadmap/proposals/0795-F-828.json`.
+
+## The lead's reading (2026-11-25), at the merge
+
+Merged at cf9edaf4 and pushed at 4374b19e (the report read at 21:05 UTC, 12 minutes of reading, proposed partial, written partial).
+Checked by the lead before the merge: the registration is the first commit and alone; the change is to Studio renderer files
+(the legend, the viewport's scale bar and size, the home counts, the trash, the provenance registry and sources, Compare, the
+time panel, the runs' extras) and a new spec in each of the unit and e2e folders, with its committed mutation; the 13 existing
+spec files are unedited and no engine file is touched.
+
+Row X missed at its registered run: one unit test, `data-routes.spec.ts:94`, took an `f447_bench` of 2026-11-16 from the main
+checkout, which lacks `length_unit`. Before the push the lead built `f447_bench` in its own worktree, which `findBench` finds
+before the main checkout's. The push run's `npm test` then passed 894 of 894, none skipped, and the committed mutation was caught.
+That run is not the registered run, and the status stays as the rule gives it; the gap now holds the open question of scope only.
+`findBench` takes the first bench it finds, whatever its age, which is how a stale bench reached the run; that is a weakness of
+the test support, not of this change, and is not repaired here. In `sources.ts` the provenance of a legend tick at a snapshot
+gives `step: o.step ?? 0`, so a snapshot without a known step is shown at step 0; a small finding, not repaired here.
+
+Status: **partial**, as proposed. Whether the numbers outside the registered views get their provenance (option (b) of the open
+question) is the maintainer's.
