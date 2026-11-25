@@ -360,3 +360,21 @@ of the Windows table, no row and no limit is changed; no library source is chang
   also registered to catch) were not.
 
 Decision: **done**, unchanged. No change to the roadmap entry; the proposal file stands as written.
+
+## The lead's reading (2026-11-25), at the merge
+
+Merged at c349be6e and pushed at 4404e24b (the report read at 14:00 UTC, 15 minutes of reading, proposed done, written
+done). Checked by the lead before the merge: the registration is the first commit and alone, the record of main's results
+comes before the fix, amendment 1 comes before its change; of the existing files only `erfc` and `Dist` are changed; no
+golden, default result or existing test is changed, so no reader was issued. The first hand-back asserted the hashes of F1
+to F4 on every platform though they depend on the machine's `exp`; the lead sent it back, and 24 of the 35 groups were
+found to differ between Windows and Linux on main's library (addendum 2). On the merged tree the lead ran the three new
+test files (15 tests) and `design_uq_sobol_args_f339` with its ignored K1 (17 passed), which passes unedited. The Linux
+record and the A1 run in the container are the agent's; the lead did not repeat them. In the push run the three mutations
+were caught; 129 binaries were left out for a left-out run.
+
+Status of F-894: **done**, as proposed.
+
+Status of F-339: **done**. K1 was what held it at partial (the lead's reading of ADR 0791). X1 of ADR 0784 remains a miss
+of that registration's rule and is not changed by this; it concerned a count of the tool list the registration had not
+found, and the same test programs pass unedited under X1 of ADR 0791 and of this record.

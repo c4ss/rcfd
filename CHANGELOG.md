@@ -19,7 +19,7 @@ Nothing yet.
 The first release. Everything in it is new.
 
 rcfd is early-stage software. It has not been validated for engineering decisions, must not be used for safety-critical work, and
-comes with no warranty. Of the 800 roadmap items, 410 are done, 301 partly done and 89 not started; a partly done item works for some
+comes with no warranty. Of the 800 roadmap items, 412 are done, 300 partly done and 88 not started; a partly done item works for some
 cases and its roadmap note states the gap.
 
 ### Added
