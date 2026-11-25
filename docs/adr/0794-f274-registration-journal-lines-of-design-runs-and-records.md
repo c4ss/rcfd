@@ -239,3 +239,92 @@ recorder's origin, which the `design_created` line uses too, and the test of J1 
 `design_created`, before any `design_recorded` was looked at). So that run does not show that the actor of `design_recorded` is held.
 The run of it stays on record. The corrected M8 takes the actor out of the two `design_recorded` appends only and is run once, on
 the same copy of the final code commit, with the row registered for it (J1). No row, limit or code is changed.
+
+## Addendum 1: results (2026-11-25)
+
+Commits: registration 0af66136; amendment 1 506a5781; the record of main f1fa14c0 (sources of the library unchanged, so main's); the
+change with its tests and the tool page 754b008a; the two committed mutations 11ca5969; amendment 2 a1b32274. The registered run was
+made once, at 11ca5969: `design_journal_f274` of `rcfd-workspace`, 5 passed, 0 failed, 7.8 s in series; of `rcfd-mcp`, 9 passed, 0
+failed, 31.8 s in series; row B's whole record; row X.
+
+| Id | Limit | Measured | Met |
+|---|---|---|---|
+| J1 | 1 `design_created`, 3 `R`, 3 `D`, exact | 7 lines, every field as registered; the second call 0 | yes |
+| J2 | 4 `R`, 2 `D` | 4 and 2; each `slow` run continues from its variant's `base` run | yes |
+| J3 | 2 `R` with `max_steps` 5, 2 `D` not ok | 2 and 2, `not_converged` | yes |
+| J4 | `R D R D R D` | that order; points 0, 1, 2; last hashes those of the three files; the repeated call 0 | yes |
+| J5 | 3 `R` by the first pid, 3 `D` by the second | 4 lines at the kill, then 3 `D`; adopted 3, new runs 0 | yes |
+| J6 | 1 `R`, 2 `D` | 1 and 2; index 1 `failed` | yes |
+| J7 | refused: no run folder, no line; control one line each | 4 refusals 0 lines; 2 accepted 2 lines | yes |
+| J8 | one `R` and one `D` per record, `D` of index 0 before the last `R` | 4 and 4: `R R D D R D R D` | yes |
+| J9 | the failed append: 0 `D`, bytes unchanged; control 3 `D` | 0, unchanged; 3, and the feed took the 3 lines and no `external` | yes |
+| J10 | (a) reply and store equal, the folder empty; (b) the same, one `D` without `seq` | (a) equal, empty; (b) equal, 1 without `seq` | yes |
+| J11 | as registered per tool | `design_record` 1, again 0, cached 0, new evaluation 1 `R` and 1 `D`, refused study 0, variant 1, reads 0 | yes |
+| J12 | 0 `R`; one `D` per record and per point; outside the project none | 0; 3, 4 and 3; none | yes |
+| F1 | each line once, 0 `external`, texts | 15 lines once in order, 0 `external`; a second server's `read_feed` gives the same texts | yes |
+| F2 | 3 `external` within 4 polls | 3 after 2 polls, path only | yes |
+| F3 | 0 and control 1 | 0 and 1 | yes |
+| S | 2, 6, 6; each `seq` once, in file order | 14 lines, `seq` increasing, 7 by each pid; 0 without `seq` (counted, no limit) | yes |
+| B | 0 differ | committed record 48 items, 0 differ; whole record 49 items, both files equal byte for byte to main's (`cmp` exit 0) | yes |
+| N | nothing under `.rcfd`, no run, no `evaluator` | none; 5 records stored all the same | yes |
+| X | pass, unedited | `rcfd-workspace` `adopt_f288`, `design_f274`, `design_f287`, `journal_f273`: 1, 2, 2, 9 passed; `rcfd-mcp` `adopt_f288` 2 passed, 1 ignored (as on main), `default_f1` 2, `design_runner_f274` 1, `design_runner_f287` 1, `feed_f273` 3, `project_list_f270` 1, `tool_list_adr0730` 2, `tool_list_f275` 8; `--lib`: `rcfd-project` 4, `rcfd-workspace` 2, `rcfd-mcp` 18 passed, 1 ignored (as on main); no existing test and no golden edited | yes |
+
+### Mutations
+
+On a copy of 11ca5969 with a target folder of its own, each alone, the file restored after (compared with the branch's: equal); the
+unchanged copy passes (5 and 9). `mutate.py`, `m8.py`, `mut.log` and a log each are in the scratch folder.
+
+| Id | Registered to fail | Failed (by the test that holds the rows) |
+|---|---|---|
+| M1 | J1 | J1, J4, J5, J8, J11, F1, S |
+| M2 | J5 | J5 |
+| M3 | J1 | J1, J5, J8, J11, F1, S |
+| M4 | J9 | J9, J10, J12 |
+| M5 | J7 | J7 |
+| M6 | J1 | J1, J5, J8, J11, F1, S |
+| M7 | J1 | J1, J4, J5, J8, J11, F1, S |
+| M8 | J1 | corrected (amendment 2): J1, J4, J5, J8, J11, F1, S; at the `design_recorded` line. The first set-up failed J1 at `design_created`, which does not decide it |
+| M9 | F1 | F1; in the workspace file F3 and J9 |
+| M10 | J4, J8 | J4, J8, F1 |
+| M11 | J4 | J4, F1 |
+| M12 | J1 | J1, J5, J8, J11, F1, S (J5, J8 and S take the study's creation into their count) |
+| M13 | J1 | J1, J5, J8, S |
+| M14 | F3 | F3 |
+| M15 | J1 (the second run call), J11 | J1 (10 lines where 7 are registered, at the second run call), J11, F1 |
+
+J1, J2, J3 and J6 are one test in that order; in the logs the failure of M1, M3, M6, M7, M8, M12, M13 and M15 is within the part of J1
+(no later part has printed its line). The committed ones are M9 and M2; `git apply --check` accepts both.
+
+### Other runs, deviations, what was not run
+
+- `cargo clippy -p rcfd-workspace -p rcfd-mcp --all-targets -- -D warnings` clean; `cargo fmt -p <crate> -- --check` clean for each of the
+  two. `docs_site` 2 passed before the commit of the tool page; the run with this addendum is in the agent's report.
+- Deviations: (1) amendment 2, M8's set-up. (2) Row B's whole record is a third call of the test (`b_the_bytes_of_main` alone, with the
+  two variables), since with them the test writes in place of comparing; the registered run named it without saying so.
+  (3) Development runs on the working tree before 754b008a: the mcp file once, the workspace file twice (between them J9's
+  control gained its feed poll and J10 (b) the comparison of the whole reply and store, which the registration asks for; the first
+  run was of a weaker test). Their results were those of the registered run.
+- The Electron Studio shows a kind it does not know by its `text`; nothing there was changed.
+- A cold retry of a chained run or a map point (one more `R`, in the table of D) is not provoked by any row: no row makes a restart
+  file fail to load.
+- The gate runs the two new files (14 tests, about 40 s in series). No heavy record. Not run: the whole workspace, other integration
+  tests of the crates, `baseline_hashes` (no solver file touched), Linux, the Studio's tests.
+
+Size (agent), actual: done; 0; 0; 0; 730000 (all tool output of the session, its test logs included; not the reading list alone)
+
+### Decision
+
+**done** by the registered rule: every registered row holds, M1 to M15 are each caught by the rows registered for them (M8 with the
+set-up of amendment 2), and the named existing tests pass unedited.
+
+## Open questions for the maintainer
+
+None.
+
+## For the lead: roadmap entries
+
+Status proposed: done. One follow-up is proposed, the journal lines of the design ledger tools (in the proposal file).
+
+> ADR 0794, 2026-11-25, done: with --project each run a design tool submits writes the run_submitted line of ADR 0188 with study, variant and condition (a map's run untagged), and each evaluation or map point the store gains writes one design_recorded line with the hash of the stored bytes up to it, after the store holds it (written at the start of the next evaluation and after the call, also a failed one); design_create_study and design_create_variant write one design_created line. An adopted run, a cached evaluation and a refused submission write none. The files under designs/ are in the feed as the workspace's own, each line once with tool and actor, and an outside write is external. Two servers in one project gave 14 lines, each numbered once. Records, tables, run records, metrics, replies and the tool list are the bytes of main (49 items, 0 differ), and without --project nothing is written. Fifteen registered mutations are each caught by their rows (M8 after its set-up was corrected by amendment 2), two are committed. The design ledger tools write no line.
+
+The same entry as `docs/roadmap/proposals/0794-F-274.json`.
