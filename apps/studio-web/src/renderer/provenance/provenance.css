@@ -16,7 +16,8 @@
 
 .pv-num:hover,
 .pv-num:focus-visible,
-.pv-num[aria-expanded='true'] {
+.pv-num[aria-expanded='true'],
+.pv-num[data-provenance-open] {
   text-decoration: underline dotted var(--role-text);
   text-decoration-thickness: 1px;
 }

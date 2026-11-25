@@ -7,11 +7,12 @@
 // - a mark on a case file the case editor holds unsaved changes of (its session's pending changes since it was opened or
 //   last saved, from the case port: the same count Save writes).
 import { useEffect, useState } from 'react';
-import type { DesignEntry, Listing } from '../../shared/project.js';
+import type { DesignEntry, Listing, ProjectView } from '../../shared/project.js';
 import { caseDoor } from '../case/door.js';
 import { caseHash } from '../case/hash.js';
 import { StateMark } from '../ui/index.js';
 import { clock, inFolder } from './format.js';
+import { EngineCount, FirstOf, KindCount } from './HomeCounts.js';
 
 /** A case file: what the engine reads as a case (ADR 0148). */
 export const isCaseFile = (p: string): boolean => /\.(toml|json)$/i.test(p);
@@ -81,7 +82,7 @@ export function DataFiles({ files, changed }: { files: readonly { path: string }
 }
 
 /** The Designs group: designs/ and its entries, with the engine's count when it differs. */
-export function DesignsGroup({ listing, engineCount, filter }: { listing: Listing<DesignEntry>; engineCount: number | undefined; filter: (p: string) => boolean }) {
+export function DesignsGroup({ view, listing, engineCount, filter }: { view: ProjectView; listing: Listing<DesignEntry>; engineCount: number | undefined; filter: (p: string) => boolean }) {
   const shown = listing.items.filter((d) => filter(d.path));
   if (listing.error === null && listing.total === 0) return null;
   const disagree = engineCount !== undefined && listing.error === null && engineCount !== listing.total;
@@ -94,9 +95,13 @@ export function DesignsGroup({ listing, engineCount, filter }: { listing: Listin
           designs/
         </span>
         <span className="ph-group-count" data-words="data">
-          {listing.total}
+          <KindCount view={view} kind="designs" pkey="home:designs" value={listing.total} />
         </span>
-        {disagree && <span data-words="exception">; the engine counts {engineCount}</span>}
+        {disagree && (
+          <span data-words="exception">
+            ; the engine counts <EngineCount view={view} kind="designs" value={engineCount} />
+          </span>
+        )}
       </h2>
       {listing.error !== null ? (
         <div className="ph-group-error" role="alert" data-words="exception">
@@ -119,7 +124,7 @@ export function DesignsGroup({ listing, engineCount, filter }: { listing: Listin
       )}
       {listing.error === null && listing.total > listing.items.length && (
         <p className="ph-more" data-words="exception">
-          The first {listing.items.length} of {listing.total} are listed.
+          <FirstOf view={view} kind="designs" listed={listing.items.length} total={listing.total} />
         </p>
       )}
     </section>

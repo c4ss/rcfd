@@ -13,6 +13,7 @@ import { DecisionPanel } from '../history/DecisionPanel.js';
 import { Button, IconButton } from '../ui/index.js';
 import { trashRequest } from './door.js';
 import { dateTime, kilobytes, plural } from './format.js';
+import { Count, MoreCount, TRASH_READ } from './HomeCounts.js';
 
 /** The history scope of the project home's trash steps. */
 export const trashScope = (folder: string): string => `project:${folder}`;
@@ -182,7 +183,9 @@ export function TrashGroup({ view }: { view: ProjectView }) {
     <section className="ph-group" aria-labelledby="ph-g-trash" data-group="trash" data-words="exception">
       <h2 id="ph-g-trash" className="ph-group-head">
         <span className="ph-group-title">Trash</span>
-        <span className="ph-group-count">{trash.total}</span>
+        <span className="ph-group-count">
+          <Count view={view} pkey="home:trash" quantity="items in the trash" value={trash.total} file=".rcfd/trash/" readBy={TRASH_READ} counted="by the engine: the items of the project trash" />
+        </span>
         <span className="ph-group-what">
           {' '}
           .rcfd/trash/, {kilobytes(trash.bytes)} kB
@@ -231,7 +234,11 @@ export function TrashGroup({ view }: { view: ProjectView }) {
           </tbody>
         </table>
       )}
-      {trash.total > items.length && <p className="ph-more">and {trash.total - items.length} older items</p>}
+      {trash.total > items.length && (
+        <p className="ph-more">
+          and <MoreCount view={view} pkey="home:trash:older" quantity="trash items not listed" total={trash.total} listed={items.length} file=".rcfd/trash/" readBy={`${TRASH_READ} and items`} /> older items
+        </p>
+      )}
       {items.length > 0 && <Button onPress={() => setEmptying(true)}>Empty trash</Button>}
       {emptying && (
         <DecisionPanel

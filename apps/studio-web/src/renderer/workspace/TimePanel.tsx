@@ -19,7 +19,7 @@ import { IconToggle } from '../ui/IconToggle.js';
 import { useCommandHandlers } from '../commands/host.js';
 import '../plots/plots.css';
 import { PLAY_SPEEDS, counterText, flagText, fraction, labelAfter, nearestPosition, speedText, speedWords, valueText, type Band, type Position, type PlaySpeed } from './model.js';
-import { Provenance, counterValue, seriesValue, type StopFacts } from '../provenance/index.js';
+import { Provenance, Traced, counterValue, openMember, seriesValue, type StopFacts } from '../provenance/index.js';
 
 /** The value of one series at the line's step. */
 export type CursorValue =
@@ -153,8 +153,17 @@ export function TimePanel(props: TimePanelProps) {
       : null;
   };
 
+  // ADR 0795: the compared run's residuals at the line, its own series, file and unit; its band's name opens them by Ctrl+I
+  const comparedProvenance = (n: string, v: CursorValue | undefined) => {
+    if (!compare || v?.kind !== 'value') return null;
+    const e = compare.series?.series.find((x) => x.name === n);
+    const s = seriesValue({ run: compare.row.id, name: n, kind: 'residual', shown: valueOf(v, fmtResidual), value: v.value, stop: null, step: v.step, unit: e?.unit ?? null, unitsNote: compare.series?.unitsNote ?? null });
+    return { ...s, snapshot: { none: 'none: a residual sample of the compared run at the line (the line’s snapshot is the selected run’s)' } };
+  };
+  const comparedKeys = compare ? [...comparedResiduals.keys()].map((n) => `tp-compared-${n}`).join(' ') : undefined;
+
   return (
-    <section className="tp" aria-label={`Time of ${name}`}>
+    <section className="tp" onClick={openMember} aria-label={`Time of ${name}`}>
       <div className="tp-main">
         <div className="tp-head">
           {/* G22: the bands say what they are by their place; the words are for readers */}
@@ -190,6 +199,7 @@ export function TimePanel(props: TimePanelProps) {
                     title={`${caseName(r.case)} · ${b.id}`}
                     data-words="data"
                     data-band={b.id}
+                    data-provenance={b.id === compare?.row.id ? comparedKeys : undefined}
                   >
                     {caseName(r.case) || b.id}
                   </button>
@@ -261,7 +271,11 @@ export function TimePanel(props: TimePanelProps) {
                       <li key={n} data-name={n} data-step={v?.step} data-value={v?.kind === 'value' ? String(v.value) : undefined}>
                         <Swatch style={comparedStyle(style)} />
                         <span className="tp-resid-name">{n}</span>
-                        <span className="tp-resid-value">{valueOf(v, fmtResidual)}</span>
+                        <span className="tp-resid-value">
+                          <TracedOr pkey={`tp-compared-${n}`} source={comparedProvenance(n, v)}>
+                            {valueOf(v, fmtResidual)}
+                          </TracedOr>
+                        </span>
                       </li>
                     );
                   })}
@@ -474,6 +488,17 @@ function Scrubber({
         </span>
       )}
     </div>
+  );
+}
+
+/** ADR 0795: the same without a tab stop of its own (a compared run's residual). */
+function TracedOr({ pkey, source, children }: { pkey: string; source: ReturnType<typeof seriesValue> | null; children: React.ReactNode }) {
+  return source ? (
+    <Traced pkey={pkey} subject={{ kind: 'number', source }}>
+      {children}
+    </Traced>
+  ) : (
+    <>{children}</>
   );
 }
 
