@@ -1,0 +1,24 @@
+# expect-fail: cd apps/studio-web && npm run build && npm run package:dir && npx playwright test tests/e2e/provenance-f828.spec.ts --project=electron
+diff --git a/apps/studio-web/src/renderer/runs/RunExtras.tsx b/apps/studio-web/src/renderer/runs/RunExtras.tsx
+index 7a4771af..70eba6f0 100644
+--- a/apps/studio-web/src/renderer/runs/RunExtras.tsx
++++ b/apps/studio-web/src/renderer/runs/RunExtras.tsx
+@@ -28,7 +28,9 @@ import type { RunRow } from './model.js';
+ export const RESIDUAL_EQUATIONS = ['u', 'p'] as const;
+ 
+ /** The equations some run of the list has a latest residual for. */
++let firstRun = '';
+ export function residualColumns(rows: readonly RunRow[]): string[] {
++  firstRun = rows[0]?.id ?? '';
+   return RESIDUAL_EQUATIONS.filter((k) => rows.some((r) => r.detail?.lastResidual?.[k] !== undefined));
+ }
+ 
+@@ -41,7 +43,7 @@ export function ResidualValue({ row, equation }: { row: RunRow; equation: string
+   return (
+     <span className="rv-res" data-words="data" data-residual={equation} data-value={v} title={`${equation}: ${v} (the last line of runs/${row.id}/residuals.jsonl)`}>
+       {/* ADR 0795: no tab stop; the cell (or the row) opens it by Ctrl+I, a click selects the row */}
+-      <Traced subject={() => ({ kind: 'number', source: residualValue({ run: row.id, equation, shown: residualText(v), value: v }) })}>{residualText(v)}</Traced>
++      <Traced subject={() => ({ kind: 'number', source: residualValue({ run: firstRun, equation, shown: residualText(v), value: v }) })}>{residualText(v)}</Traced>
+     </span>
+   );
+ }
