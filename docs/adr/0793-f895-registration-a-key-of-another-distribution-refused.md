@@ -168,3 +168,21 @@ rows, it is caught if each of them fails.)
 - The stdio transport (rows K to F go through `McpServer::handle`, which the binary calls with each line).
 - A key given twice in the JSON text: the parser keeps the last, and the handler cannot see the first.
 - The accuracy of the drivers and of the fan, which are unchanged.
+
+## Amendment 1 (2026-11-25, before the second run of row X)
+
+Written after the registered run of the new file (at 153674f0) and after the first run of the part
+`cargo test -p rcfd-mcp --release` of row X (at 980455f7), and committed before its second run. No limit, row, test or
+mutation is changed.
+
+**The first run of that part is void, by its set-up.** The target folder of this work was new, and its `release` folder held
+`rcfd-mcp` and not the binaries `rcfd` and `rcfd-runner` that the project tests of the crate need beside it. Two tests of the
+second test binary stopped at the check of `common/mod.rs:147` that says so ("missing: the project run tools need it next to
+rcfd-mcp (cargo build -p rcfd-cli -p rcfd-runner)") before they called anything, and cargo ran no further test binary. It
+says nothing of the change, and it ran 18 of the crate's tests. The set-up is corrected as that message says:
+`cargo build --release -p rcfd-cli -p rcfd-runner` in the same target folder, then the part is run once, whole, with
+`--no-fail-fast` so that one failure cannot hide another. What fails in that run is recorded as it comes out. The other parts of row X
+were run and are not run again for it: `design_uq_sobol_args_f339`, `design_uq_sobol_f339`, `f894_one_open_side_tools`,
+`rcfd-api --lib`.
+
+**Rows L and M.** The mutations are run on an export of 980455f7, which adds only the patch file to 153674f0; row L too.
