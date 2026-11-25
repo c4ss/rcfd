@@ -276,7 +276,7 @@ fn rotor_texts(m: &SolidModel) -> Vec<(String, String)> {
 fn fnv(texts: &[(String, String)]) -> u64 {
     let mut h: u64 = 0xcbf29ce484222325;
     for (name, text) in texts {
-        for b in name.bytes().chain([b'\n']).chain(text.bytes()).chain([b'\n']) {
+        for b in name.bytes().chain(*b"\n").chain(text.bytes()).chain(*b"\n") {
             h ^= u64::from(b);
             h = h.wrapping_mul(0x100000001b3);
         }
