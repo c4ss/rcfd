@@ -10098,6 +10098,6 @@
     ],
     "status": "todo",
     "acceptance": "erfc(+inf) is 0 and erfc(-inf) is 2 exactly (neither is a number now), and uq::run, sensitivity::run, design_uq and design_sobol sample a normal distribution with one finite and one open bound: every sample lies within the finite bound and equals the closed form of the truncated inverse CDF within a limit registered before the run; k1_one_open_side_known_miss of crates/rcfd-mcp/tests/design_uq_sobol_args_f339.rs passes with its limit unchanged; every result with two finite or two open bounds is bit-identical. Limits not stated here are registered before the run.",
-    "note": "Lead (2026-11-25): entered on the maintainer's answer of that day (\"Yes, issue it\") with the title, dependencies and acceptance of the follow-up one-open-side of docs/roadmap/proposals/0791-F-339.json as written. It is the gap that holds F-339 at partial (K1 of ADR 0791)."
+    "note": "Lead (2026-11-25): entered on the maintainer's answer of that day (\"Yes, issue it\") with the title, dependencies and acceptance of the follow-up one-open-side of docs/roadmap/proposals/0791-F-339.json as written. It is the gap that holds F-339 at partial (K1 of ADR 0791). Lead (2026-11-25): issued by docs/adr/briefs/f894-normal-one-open-side.md (ADR 0792)."
   }
 ]
