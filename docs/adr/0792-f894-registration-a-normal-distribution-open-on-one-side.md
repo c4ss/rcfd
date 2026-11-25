@@ -190,3 +190,103 @@ then done is the lead's decision at the merge. If the fix moves a golden or a de
 - `chi_profile` of a `Z` that is not a number asserts in `erfc_inv`; the error functions of other crates; finding 7 of
   ADR 0791 (a key of another distribution in `dist`).
 - Two finite bounds whose standardised value overflows to infinity: they panic on main and are answered after D1; no row.
+
+## Addendum 1: results (2026-11-25)
+
+Commits: registration 12f4a3be; the record of F on main's library 08e23e1f; the repair and the rows 5357e5fc; the
+committed mutation d03fd55d; a lint of the F test and the reference values 918ebee4. The registered run was made once, at
+5357e5fc: `cargo test -p rcfd-api -p rcfd-mcp --release --test f894_bit_identity --test f894_normal_one_open_side --test
+f894_one_open_side_tools --no-fail-fast -- --nocapture --test-threads 1`, 15 passed, 0 failed, 8 s in series.
+
+| Id | Limit | Measured | Met |
+|---|---|---|---|
+| B1 | exact | `erfc(+inf)` +0, `erfc(-inf)` 2, `erf(+-inf)` +-1, `norm_cdf(+-inf)` 1 and 0, by their bits; `erfc(NaN)` not a number | yes |
+| A1 | `1e-12 sd + 4 v (abs(x_ref) + abs(mean))` | 884 points, no miss, the worst 0.024 of its limit; for the parent (0, 1) the largest error is 2.4e-14 | yes |
+| A2 | inside | 14 484 samples finite and within their finite bound | yes |
+| A3 | at least 1e-9 | the plain form is off by up to 2.9 (`lo` 7), 3.0 (`lo` 7.034483685), 2.7e-3 (`hi` 8) and 0.13 (`hi` 30) standard deviations | yes |
+| D1 | as A1 | 116 samples of both drivers, the worst 0.004 of its limit, all within the bound | yes |
+| D2 | equal, 12 calls | 12 calls equal to the library's one-sided study, result and ledger; the two-open study differs | yes |
+| K1 | passes | passes with `--ignored`, unedited | yes |
+| K1g | as K1 | both tools, both sides | yes |
+| E1 | answered | both results without error, both pings answered by the same process | yes |
+| C1 | as stated | 7.034483685 accepted; 7.034483965 (mass 9.99998998e-13) and 50 refused; both sides | yes |
+| C2 | as stated | six bounds, both drivers, refused by name, no file | yes |
+| C3 | as stated | passes in `rcfd-api --lib` | yes |
+| C4 | as stated | four calls, -32602 with the name, nothing written | yes |
+| F1 | equal to main | 5 groups, 16 531 values, 0 differ | yes |
+| F2 | equal to main | 17 distributions with 413 values each and the 11 refusals, 0 groups differ | yes |
+| F3 | equal to main | 9 studies, 0 differ | yes |
+| F4 | equal to main | 3 groups, 1795 values, 0 differ | yes |
+| X1 | pass | `design_uq_sobol_args_f339` 16 passed, 1 ignored (K1, run above); `design_uq_sobol_f339` 11 passed; `rcfd-reactor` 46 passed, 15 ignored; `rcfd-api --lib` 160 passed, 4 ignored; `fan_rom_bands_f268` 4 passed, 1 ignored; `baseline_hashes` 3 passed, 1 ignored; no existing test edited | yes |
+
+The bit-identity of F was also compared value by value: the eight dump files of main's library (made before the fix, twice,
+equal) and of the repaired one are equal byte for byte (`bits_main` and `bits_fix` of the scratch folder). The script
+`f894_reference.py` ran to its end: its residuals and the two series for `erf` agree within the registered 1e-30.
+
+### Mutations
+
+On a copy of d03fd55d with a target folder of its own, each alone, restored after; the unchanged copy passes all
+(`mutate.py`, `mutations.tsv`, one log each, in the scratch folder).
+
+| Id | Registered to fail | Failed |
+|---|---|---|
+| P1 | B1, F2 | B1, F2, F3 and the control study of D2 (two open bounds, refused: "a probability of NaN") |
+| P2 | C3 | C3 |
+| P3 | B1, A1, K1g, E1 | all but A3 and F: A1, A2, B1, C1, C2, D1; C4, D2, K1g, E1; the server ended (no reply, `erfc_inv needs 0 < y < 2`) |
+| P4 | A1 | A1 (192 misses), D1 |
+| P5 | A1 | A1 (42 misses), D1 |
+| P6 | A1 | A1 (263 misses), D1 |
+| P7 | A1 | A1 (192 misses), D1 |
+| P8 | A1 | A1 (192 misses), D1 |
+| P9 | C1 | C1, and A1 by its check that the distribution is accepted |
+| P10 | F2 | F2, F3 |
+| P11 | F1 | F1 |
+| P12 | F2 | F2, F3 |
+| P13 | A1 | A1 (321 misses), D1 |
+| P14 | B1, K1g, D2, E1 by the refusal | those, A1, C1, D1, F2, F3; E1: -32602 "keeps a probability of NaN", the ping answered |
+| M10 | B1 of ADR 0791 by its equality, and D2 | B1 ("the result differs from the library's"), B3 of that file; D2 |
+| M11 | the same | B1 by the same, B3; D2 |
+| M14 | the same | B1 by the same, A1, A2, C1 and N1 of that file; C4, D2 |
+| M15 | the same | B1 by the same, A1, A2, C1 and N1 of that file; C4, D2 |
+
+M10, M11, M14 and M15 are caught by the equality of the gated B1, no longer by a panic (no log holds one of `erfc_inv`); no
+further test was needed. The committed mutation is P1: `git apply --check` accepts the patch on the branch and the same
+edit fails B1 in the file its first line names.
+
+### Other runs, deviations, what was not run
+
+- `cargo fmt -p <crate> -- --check` clean for `rcfd-api`, `rcfd-mcp`, `rcfd-reactor`; `cargo clippy -p rcfd-api -p rcfd-mcp
+  -p rcfd-reactor --all-targets -- -D warnings` clean. `docs_site` 2 passed before the registration's commit; the run with
+  this addendum is in the report. `baseline_hashes` passes, no golden and no existing test is changed.
+- Deviations: (1) clippy found a needless `clone` in the set-up of F3; removed after the registered run (918ebee4), and the
+  file run again (4 passed). The mutations were run on the commit before it. (2) Row C1 prints the refused mass as
+  0.999998e-12; it is 0.999999e-12 (measured 9.99998998e-13). The bound and the limit are as registered. (3) The first form of
+  the registration's text was never committed: P1, P3 and P14 were set right while it was being written, before any code.
+  (4) Row D2 is run with seed 792004, which the registration did not fix.
+- A reference fragment `docs/reference-data.d/0792-F-894.part` was added (rule 4), so the generated
+  `docs/reference-data.md` is not current, as `docs/adr/index.md`: left to the lead (rule 9).
+- Worth reading: the plain form misses by up to three standard deviations at a bound of 7 and not by 1e-5, because at
+  `u = 1 - 2^-53` it saturates. The same loss remains for two finite bounds far out in the upper tail, by the registration.
+- The gate runs 15 tests and one unit test (about 10 s). No heavy record. Not run: the whole workspace, the integration
+  tests of `rcfd-api` and `rcfd-mcp` but those named, the Studio's tests.
+
+Size (agent), actual: done; 0; 0; 0; 330000
+
+### Decision
+
+**done** by the registered rule: every row holds, K1 passes with its limit unchanged, M10, M11, M14 and M15 are each caught
+after the fix, the committed mutation is caught, and the results of F are bit-identical. The sentence asked for holds:
+every one-sided normal samples within its finite bound and agrees with the closed form of the truncated inverse CDF within
+the registered limit, and every other result is bit-identical to main.
+
+## Open questions for the maintainer
+
+None.
+
+## For the lead: roadmap entries
+
+Status proposed: done. No follow-up.
+
+> ADR 0792, 2026-11-25, done: erfc(+inf) is 0 and erfc(-inf) is 2 exactly, and a normal distribution open on one side is sampled from the smaller of its two tails: 884 points in the registered grid and 116 samples of uq::run and sensitivity::run agree with the closed form (760-digit reference) within 0.024 of the registered limit of 1e-12 sd, every sample lies within the finite bound, design_uq and design_sobol give the library's study bit for bit for every form of the open side, the server on stdio answers such a call and the ping after it, a kept mass below 1e-12 or not a number is refused by name, K1 of ADR 0791 passes with its limit unchanged, and every result with two finite or two open bounds, uniform and beta, of both drivers and of the other callers of erfc is bit-identical to main; M10, M11, M14 and M15 of ADR 0791 are caught again, by the equality.
+
+The same entry as `docs/roadmap/proposals/0792-F-894.json`.

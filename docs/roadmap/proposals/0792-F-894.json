@@ -1,0 +1,9 @@
+{
+  "form": 1,
+  "adr": "0792",
+  "item": "F-894",
+  "base": "1889caad9ced10bf10a5561f484da8bc1cffeb86",
+  "status": "done",
+  "note": "ADR 0792, 2026-11-25, done: erfc(+inf) is 0 and erfc(-inf) is 2 exactly, and a normal distribution open on one side is sampled from the smaller of its two tails: 884 points in the registered grid and 116 samples of uq::run and sensitivity::run agree with the closed form (760-digit reference) within 0.024 of the registered limit of 1e-12 sd, every sample lies within the finite bound, design_uq and design_sobol give the library's study bit for bit for every form of the open side, the server on stdio answers such a call and the ping after it, a kept mass below 1e-12 or not a number is refused by name, K1 of ADR 0791 passes with its limit unchanged, and every result with two finite or two open bounds, uniform and beta, of both drivers and of the other callers of erfc is bit-identical to main; M10, M11, M14 and M15 of ADR 0791 are caught again, by the equality.",
+  "follow_ups": []
+}
