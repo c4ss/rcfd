@@ -149,7 +149,10 @@ fn f2_distributions_and_refusals() {
         normal(0.1, 0.3, -INF, INF),
         normal(1013.25, 0.037, -INF, INF),
         Dist::Uniform { lo: 2.0, hi: 5.0 },
-        Dist::Uniform { lo: -1.5e-4, hi: 2.5e-4 },
+        Dist::Uniform {
+            lo: -1.5e-4,
+            hi: 2.5e-4,
+        },
         beta(2.0, 5.0, 0.0, 1.0),
         beta(2.0, 3.5, -0.012, 0.018),
         beta(0.5, 0.7, -1.0, 4.0),
@@ -217,7 +220,11 @@ fn fan() -> FanRomModel {
         sections: vec![s(0.029, 0.032, 0.045, 0.42), s(0.059, 0.027, 0.035, 0.46)],
     };
     let fan = free_vortex_design(&base, &mo, &op, q, 45.0 / 1.2 / op.omega()).unwrap();
-    let dp = FanRom::new(fan.clone(), mo.clone()).unwrap().point(&op, q).unwrap().dp_s;
+    let dp = FanRom::new(fan.clone(), mo.clone())
+        .unwrap()
+        .point(&op, q)
+        .unwrap()
+        .dp_s;
     FanRomModel {
         fan,
         model: mo,

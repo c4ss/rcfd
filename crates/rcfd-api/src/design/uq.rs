@@ -118,20 +118,35 @@ impl Dist {
                 if lo.is_nan() || hi.is_nan() || lo >= hi {
                     return Err(format!("truncation needs lo < hi (got {lo}, {hi})"));
                 }
-                let mass = norm_cdf((hi - mean) / sd) - norm_cdf((lo - mean) / sd);
-                if mass < 1e-12 {
-                    return Err(format!(
-                        "truncation [{lo}, {hi}] keeps a probability of {mass:e}; the inverse CDF is not accurate there"
-                    ));
-                }
-                Ok(())
+                let (a, b) = ((lo - mean) / sd, (hi - mean) / sd);
+                // one open side: the tail at the finite bound, with its relative accuracy
+                let mass = if lo == f64::NEG_INFINITY {
+                    norm_cdf(b)
+                } else if hi == f64::INFINITY {
+                    norm_cdf(-a)
+                } else {
+                    norm_cdf(b) - norm_cdf(a)
+                };
+                Dist::check_kept_mass(mass, lo, hi)
             }
             _ => Ok(()),
         }
     }
 
-    /// Inverse CDF at `u` in (0, 1). Truncated normal: `mean + sd norm_inv(Phi(a) + u (Phi(b) - Phi(a)))`, which loses
-    /// relative accuracy when both bounds lie far out in the same tail (refused below a kept mass of 1e-12).
+    /// A truncated normal keeps at least 1e-12 of its parent (a mass that is not a number is refused too).
+    fn check_kept_mass(mass: f64, lo: f64, hi: f64) -> Result<(), String> {
+        if mass >= 1e-12 {
+            return Ok(());
+        }
+        Err(format!(
+            "truncation [{lo}, {hi}] keeps a probability of {mass:e}; the inverse CDF is not accurate there"
+        ))
+    }
+
+    /// Inverse CDF at `u` in (0, 1). Normal with two finite bounds: `mean + sd norm_inv(Phi(a) + u (Phi(b) - Phi(a)))`, which
+    /// loses relative accuracy when both bounds lie far out in the upper tail (refused below a kept mass of 1e-12). With one
+    /// open side the same probability `P` and its complement are each formed from non-negative terms, and the smaller of the
+    /// two is inverted (ADR 0792), which keeps the accuracy in both tails.
     pub fn inv_cdf(&self, u: f64) -> f64 {
         let u = open_unit(u);
         match *self {
@@ -140,7 +155,21 @@ impl Dist {
                 if lo == f64::NEG_INFINITY && hi == f64::INFINITY {
                     return mean + sd * norm_inv(u);
                 }
-                let (fa, fb) = (norm_cdf((lo - mean) / sd), norm_cdf((hi - mean) / sd));
+                let (a, b) = ((lo - mean) / sd, (hi - mean) / sd);
+                if lo == f64::NEG_INFINITY || hi == f64::INFINITY {
+                    let (p, q) = if hi == f64::INFINITY {
+                        (norm_cdf(a) + u * norm_cdf(-a), (1.0 - u) * norm_cdf(-a))
+                    } else {
+                        (u * norm_cdf(b), (1.0 - u) + u * norm_cdf(-b))
+                    };
+                    let z = if p <= 0.5 {
+                        norm_inv(open_unit(p))
+                    } else {
+                        -norm_inv(open_unit(q))
+                    };
+                    return (mean + sd * z).clamp(lo, hi);
+                }
+                let (fa, fb) = (norm_cdf(a), norm_cdf(b));
                 let x = mean + sd * norm_inv(open_unit(fa + u * (fb - fa)));
                 x.clamp(lo, hi)
             }
@@ -882,6 +911,28 @@ impl Model for Standardized<'_> {
                 ..Default::default()
             },
         }
+    }
+}
+
+#[cfg(test)]
+mod kept_mass_tests {
+    use super::Dist;
+
+    /// ADR 0792 (F-894) row C3: the refusal of a kept mass that is not a number, zero or below 1e-12.
+    #[test]
+    fn c3_a_kept_mass_that_is_not_a_number_is_refused() {
+        let inf = f64::INFINITY;
+        let refused = |mass: f64| Dist::check_kept_mass(mass, -1.0, inf).unwrap_err();
+        let nan = refused(f64::NAN);
+        assert!(
+            nan.starts_with("truncation [-1, inf] keeps a probability of NaN"),
+            "{nan}"
+        );
+        for mass in [0.0, f64::from_bits(1e-12f64.to_bits() - 1)] {
+            let e = refused(mass);
+            assert!(e.contains("keeps a probability of"), "{e}");
+        }
+        assert_eq!(Dist::check_kept_mass(1e-12, -1.0, inf), Ok(()));
     }
 }
 
