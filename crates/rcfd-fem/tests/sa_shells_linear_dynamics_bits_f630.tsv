@@ -1,0 +1,54 @@
+transient clamped	7fdf0b83cfe4e8f1 270
+transient damped clamped	a392dd00c25e1202 270
+transient two materials	363f280b233fc58b 270
+transient damped two materials	a36bf37c7b66381e 270
+transient transformation	b9458f50df4c25f9 288
+transient damped transformation	91c55a9cdfbd134a 288
+transient motion	4744c16ec8d0fbc5 90
+damped clamped	e89414344e74e25b 1092
+damped two materials	e2d182526e9220af 1092
+damped residual	90485eb66f803cbd 1274
+all modes eigenvalues	d976f9703a30f0b6 72
+all modes	bf4d9671022bf4b0 6480
+superposition all	7d07f4922a7250b3 180
+superposition four	adfb45705047cd3f 180
+superposition prestress	920bed93faeefeaf 180
+superposition free	46e7c3f2e9bb19f9 180
+modal transformation	2e2c0fd48162f189 364
+superposition transformation	c271767599c9b4d9 180
+direct clamped	911522bd7ec14ffc 180
+direct two materials	56424a9f84a9a4e3 180
+direct transformation	eedc99e10c56ac6a 180
+direct loss	151e513223504c77 180
+direct base	935a14dfa53f1048 180
+direct prestress	e70152936bb606d3 180
+Shell4 modal	4f465fbe1f8d6596 425
+Shell4 modal transformation	4f465fbe1f8d6596 425
+Shell4 participation	9ad84e1bd2565402 5
+Shell4 load	17a0ee7130bf2124 84
+Shell4 superposition without correction	97b9a7f3cf0fed4e 168
+refusal Shell4 transient plain	NotYetSupported { item: "element kind", variant: "Shell4", location: "block 0", package: "a follow-up of ADR 0432" }
+refusal Shell4 transient transformation	NotYetSupported { item: "element kind", variant: "Shell4", location: "block 0", package: "a follow-up of ADR 0432" }
+refusal Shell4 transient motion	NotYetSupported { item: "element kind", variant: "Shell4", location: "block 0", package: "a follow-up of ADR 0432" }
+refusal Shell4 damped	NotYetSupported { item: "element kind", variant: "Shell4", location: "block 0", package: "a follow-up of ADR 0432" }
+refusal Shell4 all modes	NotYetSupported { item: "element kind", variant: "Shell4", location: "block 0", package: "a follow-up of ADR 0432" }
+refusal Shell4 static correction	NotYetSupported { item: "element kind", variant: "Shell4", location: "block 0", package: "a follow-up of ADR 0432" }
+refusal Shell4 static correction transformation	NotYetSupported { item: "element kind", variant: "Shell4", location: "block 0", package: "a follow-up of ADR 0432" }
+refusal Shell4 static correction free	NotYetSupported { item: "element kind", variant: "Shell4", location: "block 0", package: "a follow-up of ADR 0432" }
+refusal Shell4 direct plain	NotYetSupported { item: "element kind", variant: "Shell4", location: "block 0", package: "a follow-up of ADR 0432" }
+refusal Shell4 direct transformation	NotYetSupported { item: "element kind", variant: "Shell4", location: "block 0", package: "a follow-up of ADR 0432" }
+Shell3 modal	60e6bb17fa7bdb12 425
+Shell3 modal transformation	60e6bb17fa7bdb12 425
+Shell3 participation	e852ac7e974cd598 5
+Shell3 load	d19944710e21a801 84
+Shell3 superposition without correction	48ff14bf78118e5c 168
+refusal Shell3 transient plain	NotYetSupported { item: "element kind", variant: "Shell3", location: "block 0", package: "a follow-up of ADR 0454" }
+refusal Shell3 transient transformation	NotYetSupported { item: "element kind", variant: "Shell3", location: "block 0", package: "a follow-up of ADR 0454" }
+refusal Shell3 transient motion	NotYetSupported { item: "element kind", variant: "Shell3", location: "block 0", package: "a follow-up of ADR 0454" }
+refusal Shell3 damped	NotYetSupported { item: "element kind", variant: "Shell3", location: "block 0", package: "a follow-up of ADR 0454" }
+refusal Shell3 all modes	NotYetSupported { item: "element kind", variant: "Shell3", location: "block 0", package: "a follow-up of ADR 0454" }
+refusal Shell3 static correction	NotYetSupported { item: "element kind", variant: "Shell3", location: "block 0", package: "a follow-up of ADR 0454" }
+refusal Shell3 static correction transformation	NotYetSupported { item: "element kind", variant: "Shell3", location: "block 0", package: "a follow-up of ADR 0454" }
+refusal Shell3 static correction free	NotYetSupported { item: "element kind", variant: "Shell3", location: "block 0", package: "a follow-up of ADR 0454" }
+refusal Shell3 direct plain	NotYetSupported { item: "element kind", variant: "Shell3", location: "block 0", package: "a follow-up of ADR 0454" }
+refusal Shell3 direct transformation	NotYetSupported { item: "element kind", variant: "Shell3", location: "block 0", package: "a follow-up of ADR 0454" }
