@@ -3,7 +3,7 @@ type: source
 tags: [roadmap]
 sources: []
 origin: docs/roadmap.json
-origin_commit: 21e04d2e
+origin_commit: 82985b47
 created: 2026-11-22
 updated: 2026-11-25
 status: stable
@@ -85,6 +85,10 @@ F-894 entered and done, F-339 partial to done: 800 items, 412 done, 300 partial,
 ## Changes at 21e04d2e (F-895)
 
 F-895 entered and done: 801 items, 413 done, 300 partial, 88 not started, about 70 % ([[adr-thread-mcp-tools]]).
+
+## Changes at 82985b47 (the lead's readings)
+
+F-270, F-272, F-275, F-287, F-288 and F-465 partial to done: 801 items, 419 done, 294 partial, 88 not started ([[adr-thread-workspace-layer]], [[adr-thread-structural-fsi-coupling]]).
 
 ## Pages this source informs
 

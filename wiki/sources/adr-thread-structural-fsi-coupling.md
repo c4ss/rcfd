@@ -3,9 +3,9 @@ type: source
 tags: [adr-thread, structural, fem, fsi, coupling, cosim]
 sources: [doc-cosimulation-protocol]
 origin: docs/adr/ (ADR list below)
-origin_commit: 2e94e5ef
+origin_commit: 82985b47
 created: 2026-11-22
-updated: 2026-11-22
+updated: 2026-11-25
 status: draft
 ---
 
@@ -20,7 +20,7 @@ The structural side of the [[cosimulation-protocol]]: coupled steps whose struct
 
 - **Two-way coupling with the flow exists as a library check**, not as a case: F-401 (ADR 0434) couples an elastic bar with the PISO flow solver (the piston on an elastic bar); every acceptance clause met, but the companion VS missed (the viscous splitting of the PISO step, proportional to $\nu$), so **partial**; ADR 0434 Q1 to Q3 open. A `[solid]` table in the flow case (F-404) and a public coupled benchmark (F-434) are todo ([[roadmap-structural-solver]]).
 - **Dynamic solid participant** (F-400, ADR 0410, partial): every clause met except c7, the coupled frequency change between the matching and the 3:2 map (6.3e-3 and 2.4e-3 against 1e-3; non-consistent weights in the transposed projection). F-502 (ADR 0412, done) predicts that change from the static compliance of the mapped weights, within 2.4e-3 of the predictions against the limit 0.1. F-504 (ADR 0414, done) adds an opt-in bilinear projection on quad interface elements.
-- **Failing participants:** a failing static solve in iteration 2 or 3 (F-463, ADR 0361, done); a failing fluid (F-465, ADR 0364, partial: the start-of-iteration restore mutations caught only by a set-up panic); closed by F-469 (ADR 0444, done) from a start state that uses no restore.
+- **Failing participants:** a failing static solve in iteration 2 or 3 (F-463, ADR 0361, done); a failing fluid (F-465, ADR 0364, partial: the start-of-iteration restore mutations caught only by a set-up panic); closed by F-469 (ADR 0444, done) from a start state that uses no restore. F-465 is done by the lead's reading of 2026-11-25 (82985b47): F-469 (ADR 0444) holds the check that was missing.
 - **One-way loads:** F-384 (ADR 0436, partial: N2 defective set-up, MU4 not caught; Tet, Tet10, Hex20 surfaces refused); deck pressure on non-parallelogram faces (F-523, ADR 0441, done).
 - **Aerodynamic damping** (F-421, ADR 0446, partial): the Womersley-5 real part missed in the registered run (8.55e-2 against 3e-2), W1, LF, P1 met only after amendments; Q1 to Q3 open.
 

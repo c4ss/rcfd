@@ -351,3 +351,8 @@ Append-only. Newest at the bottom. Entry header: `## [YYYY-MM-DD] <op> | <title>
 
 - Thread: [[adr-thread-mcp-tools]] (ADR 0793 row, current state, finding 7 closed, finding 4 open).
 - Sources re-read at 21e04d2e: [[doc-mcp-tools]], [[doc-roadmap-json]], [[doc-roadmap-overview]]; roadmap area pages regenerated; [[overview]] revised (801 items, 413 / 300 / 88).
+
+## [2026-11-25] ingest | the lead's readings of F-270, F-272, F-273, F-275, F-287, F-288, F-465 (loop merge)
+
+- Threads: [[adr-thread-workspace-layer]] (five items done, F-273's gap), [[adr-thread-structural-fsi-coupling]] (F-465 done).
+- Sources re-read at 82985b47: [[doc-roadmap-json]], [[doc-roadmap-overview]]; roadmap area pages regenerated; [[overview]] revised (801 items, 419 / 294 / 88).

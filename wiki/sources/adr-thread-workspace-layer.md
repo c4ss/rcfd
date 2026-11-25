@@ -3,9 +3,9 @@ type: source
 tags: [adr-thread, workspace, mcp, studio, project-folder, runner, design-study]
 sources: [doc-mcp-tools, doc-run-control, doc-architecture]
 origin: docs/adr/ (ADR list below)
-origin_commit: 2e94e5ef
+origin_commit: 82985b47
 created: 2026-11-22
-updated: 2026-11-23
+updated: 2026-11-25
 status: draft
 ---
 
@@ -19,13 +19,14 @@ ADR 0173 (2026-11-04) answers three requirements of the maintainer: "R1 The MCP 
 ## Current state
 
 - **ADR 0173 itself** is still "proposed 2026-11-04, revised the same day ... Not yet accepted by the maintainer. Decisions D1 to D8 below are open" in its status line. Its decisions were built through the amendments on their recommendations, and two were later answered by the maintainer: D7 (the shared start plan) approved on 2026-11-18 (ADR 0186 answer Q2), and D2 (b) / D5 (b) built by F-275 (ADR 0195) and accepted in part on 2026-11-06 and 2026-11-18.
-- **F-270 partial** (ADR 0185): the crate exists and the MCP project tools are an adapter over it ("`rcfd-mcp/src/project.rs` keeps the 17 descriptors byte-for-byte and is now an adapter around them (272 lines, from 1,286)"). The maintainer's answer of 2026-11-18 re-scoped the acceptance to the Electron Studio, which "saves a project case through `edit_case`, which writes the changed lines and keeps comments". The roadmap gap: the Electron Studio's save tests "need the engine, and the hosted job packages without it. The lead confirms a local pass and then decides done."
+- **F-270 ~~partial~~ done** (the lead's reading of 2026-11-25, 82985b47) (ADR 0185): the crate exists and the MCP project tools are an adapter over it ("`rcfd-mcp/src/project.rs` keeps the 17 descriptors byte-for-byte and is now an adapter around them (272 lines, from 1,286)"). The maintainer's answer of 2026-11-18 re-scoped the acceptance to the Electron Studio, which "saves a project case through `edit_case`, which writes the changed lines and keeps comments". The roadmap gap: the Electron Studio's save tests "need the engine, and the hosted job packages without it. The lead confirms a local pass and then decides done."
 - **F-271 done** (ADRs 0186, 0741): `new_case` creates a case under `cases/` and `start_run {new_case}` starts it in one call. Since ADR 0741 (2026-11-19) "the field-store plan is the default of every start_run in project mode" (`PLAN_FOR_PROJECT_CASES` true), with `store: "none"` as the way back. The description of `start_run`'s `store` argument is now wrong ("Default plan with new_case, none with case"); the maintainer approved its correction on 2026-11-21 as a separate item, F-862 (todo).
-- **F-272 partial** (ADR 0187): `import_mesh`, `check_case_mesh`, `preview_mesh` and `list_meshes`, and a mesh check inside `edit_case`. "A mesh recipe format is not included (a later ADR)." Mesh-size limits: the 2026-11-06 answer (take the Studio's limits after F-293) was withdrawn on 2026-11-18; "no size limit on a mesh build, as built, until a large mesh is seen to block the server".
+- **F-272 ~~partial~~ done** (the lead's reading of 2026-11-25, 82985b47) (ADR 0187): `import_mesh`, `check_case_mesh`, `preview_mesh` and `list_meshes`, and a mesh check inside `edit_case`. "A mesh recipe format is not included (a later ADR)." Mesh-size limits: the 2026-11-06 answer (take the Studio's limits after F-293) was withdrawn on 2026-11-18; "no size limit on a mesh build, as built, until a large mesh is seen to block the server".
 - **F-273 partial** (ADR 0188): the project journal `.rcfd/edits.jsonl` with `seq`, `actor`, `changes` and `reason`, and the change feed `read_feed`. Linking an MCP actor to a Claude Code session stays not built ("Q4 stays (c)"). What the egui Studio deferred to F-293 (an actor on run starts, a feed panel, a notes list) is to be checked in the Electron Studio and issued as Studio items (2026-11-18). The Electron Studio names its actor through `rcfd-mcp --client` (ADR 0801 Addendum 23).
+- **F-273 stays partial, with another gap** (the lead's reading of 2026-11-25 in ADR 0188, 82985b47): the Studio's actor and the activity line are confirmed by its tests of 2026-11-24, but no view of the Electron Studio shows the reason (why) of a feed entry, which the acceptance asks. F-274's journal lines are issued (ADR 0794).
 - **F-274 partial** (ADR 0189): with `--project`, `design_run_study` and `design_evaluate` evaluate each candidate as one runner run tagged `study`, `variant`, `condition` in `run.json`. No journal line for design runs (Q6, "no item was registered").
-- **F-275 partial** (ADR 0195): with `--project` "the 16 session-only tools are neither listed nor callable (40 tools)"; the plugin's edit hook "refused a Write and an Edit under `cases/` in a real Claude Code 2.1.319 session". The hook "fails open when it cannot decide", Bash and PowerShell writes are not guarded, and its behaviour under `bypassPermissions` stays untested (accepted 2026-11-06, to be stated in the plugin's documentation, 2026-11-18).
-- **F-287 and F-288 partial, nothing measured missing** (ADRs 0200, 0201): runner runs that continue from another run with a step cap, and adoption of matching runs after an MCP server restart. Fields approved on 2026-11-18; "The lead decides the status of F-287 by the registered rule."
+- **F-275 ~~partial~~ done** (the lead's reading of 2026-11-25, 82985b47) (ADR 0195): with `--project` "the 16 session-only tools are neither listed nor callable (40 tools)"; the plugin's edit hook "refused a Write and an Edit under `cases/` in a real Claude Code 2.1.319 session". The hook "fails open when it cannot decide", Bash and PowerShell writes are not guarded, and its behaviour under `bypassPermissions` stays untested (accepted 2026-11-06, to be stated in the plugin's documentation, 2026-11-18).
+- **F-287 and F-288 ~~partial, nothing measured missing~~ done** (the lead's reading of 2026-11-25, 82985b47) (ADRs 0200, 0201): runner runs that continue from another run with a step cap, and adoption of matching runs after an MCP server restart. Fields approved on 2026-11-18; "The lead decides the status of F-287 by the registered rule."
 
 ## ADRs
 
