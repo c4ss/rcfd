@@ -458,7 +458,7 @@ One row per record of this folder, grouped by the roadmap category of the item i
 |---|---|---|---|---|---|---|
 | [0373](0373-f476-registration-field-store-of-an-adaptive-run.md) | F-476 registration: the field store of a run with [mesh.adapt] writes the adapted mesh | REGISTERED | 2026-11-12 | 1 | F-476 | done |
 
-## Design studies and optimisation (38)
+## Design studies and optimisation (39)
 
 | ADR | Title | Status word | Date | Addenda | Item | Item status |
 |---|---|---|---|---|---|---|
@@ -500,6 +500,7 @@ One row per record of this folder, grouped by the roadmap category of the item i
 | [0784](0784-f339-registration-mcp-tools-for-tolerance-and-sobol-studies-of-the-reduced-order-fan.md) | F-339 registration: the MCP tools `design_uq` and `design_sobol` for tolerance and Sobol studies of a named evaluator, the reduced-order fan first | REGISTERED | 2026-11-23 | 1 | F-339 | done |
 | [0791](0791-f339-registration-arguments-of-design-uq-and-design-sobol.md) | F-339 registration: every argument of `design_uq` and `design_sobol` sent at a value that tells a wrong reading from the right one, and the string and null bounds | REGISTERED | 2026-11-25 | 1 | F-339 | done |
 | [0792](0792-f894-registration-a-normal-distribution-open-on-one-side.md) | F-894 registration: a normal distribution open on one side (erfc at infinity, the kept mass, and a one-sided inverse CDF from the smaller tail) | REGISTERED | 2026-11-25 | 2 | F-894 | done |
+| [0793](0793-f895-registration-a-key-of-another-distribution-refused.md) | F-895 registration: `design_uq` and `design_sobol` refuse a key of another distribution in `dist` | REGISTERED | 2026-11-25 | 1 | F-895 | todo |
 
 ## Claude and the MCP server (10)
 

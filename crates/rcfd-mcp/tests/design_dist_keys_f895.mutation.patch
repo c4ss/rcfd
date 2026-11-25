@@ -1,0 +1,14 @@
+# expect-fail: cargo test --release -p rcfd-mcp --test design_dist_keys_f895
+diff --git a/crates/rcfd-api/src/design/tools.rs b/crates/rcfd-api/src/design/tools.rs
+index 8be32534..71c23230 100644
+--- a/crates/rcfd-api/src/design/tools.rs
++++ b/crates/rcfd-api/src/design/tools.rs
+@@ -1908,7 +1908,7 @@ fn study_params(p: &Value, known: &[(&str, &str)], evaluator: &str) -> Rpc<Vec<U
+         let d = object_at(o.get("dist"), &dat, &all)?;
+         let kind = d.get("type").and_then(Value::as_str);
+         let own: &[&str] = match kind {
+-            Some("uniform") => &["type", "lo", "hi"],
++            Some("uniform") => &["type", "lo", "hi", "mean"],
+             Some("normal") => &["type", "mean", "sd", "lo", "hi"],
+             Some("beta") => &["type", "a", "b", "lo", "hi"],
+             _ => &all, // refused below

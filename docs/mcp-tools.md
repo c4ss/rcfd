@@ -153,7 +153,7 @@ Arguments of both tools:
   `friction`, `annulus_drag`, `secondary_drag`, `tip_cd` (absent keys keep the registered values of ADR 0119).
 - `params`: the uncertain inputs, each `{name, unit, dist}` with `dist` one of `{type: "uniform", lo, hi}`,
   `{type: "normal", mean, sd, lo, hi}` (`lo` and `hi` optional: no truncation on that side) and
-  `{type: "beta", a, b, lo, hi}`.
+  `{type: "beta", a, b, lo, hi}`. A key of `dist` that its type does not have is refused, whatever its value.
 - `seed` (default 1) and `workers` (default 1; the result does not depend on it).
 
 `design_uq` also takes `sampler` (`monte_carlo`, the default, or `lhs`), `stop` `{batch, max_samples, min_batches,

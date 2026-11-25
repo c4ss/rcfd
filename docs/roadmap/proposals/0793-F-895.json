@@ -1,0 +1,9 @@
+{
+  "form": 1,
+  "adr": "0793",
+  "item": "F-895",
+  "base": "bc6ddd16ed000e2fbecca8eba617077f050ccfbf",
+  "status": "done",
+  "note": "ADR 0793, 2026-11-25, done: in params[i].dist of design_uq and design_sobol a key that the named type does not have (mean, sd, a or b of a uniform; a or b of a normal; mean or sd of a beta) is refused with -32602, whatever its value, the message naming the key by its path and the keys of the type, before the limit and the driver and with nothing written: 384 calls over the eight keys (number, null, string and three other values, both tools, through the server and the handler, in the first and the second input); of several the first of mean, sd, a, b is named; a key of no distribution, a type that is not known and a malformed number keep code and message; the six forms of Dist::to_json, the sixteen forms of the open sides and a study of three inputs give the library's and main's bytes on Windows x86_64 and Linux x86_64; 23 registered mutations, the eight wrong acceptances among them, are each caught by the registered rows, one is committed; no golden, tool-list text or existing test is changed.",
+  "follow_ups": []
+}
