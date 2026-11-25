@@ -284,3 +284,20 @@ Size (agent): done; 0; 2; 1; 320000
    the options are wholly inert; (c) deprecate the two options and remove them at the next change of the library's API.
    Recommendation: (b), with (c) when the API is next changed: an option that has no effect but can still cause a refusal is
    harder to explain than either a working option or none.
+
+## Amendment 1 (2026-11-25, before the Linux record and before any library change is committed or run)
+
+The Linux record of B-M and B-D as registered cannot be made: in the image of ADR 0150 with the volume
+`rcfd-examples-cargo-registry`, `cargo test --release --locked --offline -p rcfd-fem --test
+sa_beam_opt_ins_default_f672_bits` stops before compiling with "failed to select a version for the requirement `wat = "^1"`
+(locked to 1.263.0)" (twice; logs `linux/bm_record_linux_run1.log`, `run2.log` in the scratch folder). No test ran. The
+volumes `rcfd-cargo-cache`, `rcfd-hc-cargo`, `rcfd-w48l-registry` and `rcfd-studio-linux-registry` lack that crate too
+(listed). Corrected set-up, for the record of main and for the run after the change alike: the same image and `docker run`
+limits, no volume; in the container `cargo fetch --locked` downloads the crates of `Cargo.lock` from crates.io into the
+container's own file system, then the test runs as registered with `--locked --offline`. Nothing else changes: no check,
+limit, source or estimate, and the Windows record (two runs of main on d0c7a0cb plus the bits file, made before this
+amendment) is not affected by it.
+
+Observed in the two Windows record runs (a fact of main, not a result of this registration): the three hashes are equal
+between the two runs, and in the texts of `H_W` every path is `Ok` except P7, `whirl_stability` of W under (b), which is an
+error of the solver (`Err(Solver { solver: "gy`...). E-W's limit "every result `Ok`" stands as registered.
