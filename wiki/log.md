@@ -342,3 +342,7 @@ Append-only. Newest at the bottom. Entry header: `## [YYYY-MM-DD] <op> | <title>
 
 - Thread: [[adr-thread-mcp-tools]] (ADR 0792 row, current state, the contradiction of K1 resolved, F-339 done).
 - Sources re-read at d2cc5641: [[doc-mcp-tools]], [[doc-design-loop]], [[doc-roadmap-json]], [[doc-roadmap-overview]]; roadmap area pages regenerated; [[overview]] revised (800 items, 412 / 300 / 88).
+
+## [2026-11-25] ingest | docs/process/lead-process.md (the /goal line)
+
+- Source re-read at 1f9c0da9: [[doc-process-lead-process]] ("Issuing" 4: the brief's goal and the start with `claude -p`).

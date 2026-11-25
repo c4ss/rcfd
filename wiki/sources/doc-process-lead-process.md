@@ -3,9 +3,9 @@ type: source
 tags: [process, lead]
 sources: []
 origin: docs/process/lead-process.md
-origin_commit: 8732f2ae
+origin_commit: 1f9c0da9
 created: 2026-11-22
-updated: 2026-11-23
+updated: 2026-11-25
 status: stable
 ---
 
