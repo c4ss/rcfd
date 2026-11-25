@@ -111,6 +111,8 @@ was stopped makes no second run for a candidate that has one; an adopted run's o
 ([ADR 0201](adr/0201-f288-registration-adopt-matching-runs-after-an-mcp-server-restart.md)). A study or map whose base case is
 outside the project is evaluated in the server process, with `evaluator: process` and `evaluator_note`
 ([ADR 0189](adr/0189-adr-0173-amendment-5-f274-registration-design-study-evaluations-on-the-runner.md), `docs/design-loop.md`).
+Each submitted run, each stored evaluation or map point and each study or variant made inside the project has its line in the
+project journal (below, `run_submitted`, `design_recorded`, `design_created`); an adopted run and a cached evaluation have none.
 Because they start runs there, as `start_run` does, the three have the access class `execute` with `--project`; without it they
 stay `write_files` ([ADR 0196](adr/0196-three-code-changes-decided-2026-11-06-f246-r2-record-design-tool-class-sv202-text.md) B,
 ADR 0200 S9).
@@ -260,8 +262,8 @@ file is replaced only if it still has `base_hash`, while `.rcfd/locks/<hash of t
 lock (an editor, a shell command, Claude Code's own Edit and Write tools outside the folders the plugin's hook guards) are not
 stopped; the feed reports their edits afterwards as `external`.
 
-The project journal, `.rcfd/edits.jsonl`, has one JSON line per accepted write, case creation, mesh import, run submission and
-accepted run request, from the MCP server and from the Studio alike ([ADR 0188](adr/0188-adr-0173-amendment-4-f273-registration-project-journal-and-change-feed.md)).
+The project journal, `.rcfd/edits.jsonl`, has one JSON line per accepted write, case creation, mesh import, run submission,
+stored design evaluation and accepted run request, from the MCP server and from the Studio alike ([ADR 0188](adr/0188-adr-0173-amendment-4-f273-registration-project-journal-and-change-feed.md)).
 Each line has `t`, `kind`, `who` (the command), `seq` (one more than the last, given under the short lock
 `.rcfd/locks/journal.lock`; lines written before ADR 0188 have none), `actor` {`client` (`mcp` or `studio`), `instance` {`pid`,
 `started`}} when the writer has one, and `reason` when given. By kind:
@@ -271,8 +273,17 @@ Each line has `t`, `kind`, `who` (the command), `seq` (one more than the last, g
   (`changes_total` when cut); a value over 1 000 bytes of JSON is written as {`bytes`, `hash`}.
 - `case_created`: `path`, `hash`, `bytes`, `from`, `data_files` [{`path`, `hash`, `written`}].
 - `mesh_imported`: `path`, `source`, `format`, `files` [{`path`, `bytes`, `hash`}], `cells`, `faces`, `patches` (their count).
-- `run_submitted`: `run`, `case`, `set`, `priority`, `threads`, `mem_mb`.
+- `run_submitted`: `run`, `case`, `set`, `priority`, `threads`, `mem_mb`, `continue_from` and `max_steps` when set; for a run of
+  `design_run_study` or `design_evaluate` also its tags `study`, `variant` and `condition`
+  ([ADR 0794](adr/0794-f274-registration-journal-lines-of-design-runs-and-records.md)).
 - `run_control`: `run`, `requested` (`pause`, `resume` or `cancel`).
+- `design_recorded` (ADR 0794): one line per evaluation a design tool stored. A record of a study: `path`
+  (`<study>/evaluations.jsonl`), `hash` (of that file up to the end of the record's line), `study`, `variant`, `index`, `source`
+  (`evaluated` or `recorded`), `ok`, `conditions` [{`condition`, `status`}]. A point of an operating map: `path`
+  (`<out_dir>/map.json`), `hash`, `files` [{`path`, `hash`}] (`map.csv`, and `map.meta.json` in the last one), `point`, `label`,
+  `ok`, `status`. `ok` is false for a run that failed or did not converge.
+- `design_created` (ADR 0794): `path`, `hash`; for a study (`path` is its `study.json`) also `study`, and `files` when it was made
+  from a session.
 - `stale_lock_broken`: `path`, `age_s` (an edit lock older than 30 s was removed).
 - `edit_lock_remove_failed`: `path`, `error`, `attempts` (the edit was written, but its edit lock could not be removed after
   retrying a transient error, for example a handle another program holds on the lock file; the lock is left until it is 30 s

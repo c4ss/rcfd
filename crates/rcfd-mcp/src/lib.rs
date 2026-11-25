@@ -1024,8 +1024,8 @@ impl McpServer {
                     }
                 }
                 // ADR 0189 S1, ADR 0200 S8: in project mode a study's candidates and a map's points are evaluated on the
-                // project's runner
-                if let Some(proj) = self.project.as_ref().filter(|_| rcfd_workspace::design::ON_RUNNER.contains(&method)) {
+                // project's runner; ADR 0794: what the design tools store has its journal lines
+                if let Some(proj) = self.project.as_ref().filter(|_| rcfd_workspace::design::JOURNALED.contains(&method)) {
                     return Ok(ok_result(proj.workspace().design_call(svc, method, &p)?));
                 }
                 Ok(ok_result(svc.call(method, &p)?))
