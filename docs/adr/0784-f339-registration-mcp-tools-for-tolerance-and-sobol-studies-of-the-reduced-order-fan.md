@@ -443,3 +443,9 @@ passed in its first run; the committed mutation was caught; 119 binaries were le
 
 Status: **partial**, as proposed. X1 was missed under the registered rule, and findings 1-1 and 2-1 of the reader name
 inputs the tests do not reach; both are in the gap. Open question 1 (service methods) is the maintainer's.
+
+## The maintainer's answer on open question 1 (2026-11-25)
+
+To the lead's question whether `design_uq` and `design_sobol` stay MCP only, with the recommendation to keep them MCP
+tools until a second caller needs them as service methods, the maintainer answered "Yes, MCP only" (option (a)). They
+are not service methods. F-339 stays partial for X1 and the reader's findings 1-1 and 2-1.
