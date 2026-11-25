@@ -380,3 +380,9 @@ X1 of ADR 0784 is a miss of that registration's rule, not of the tools' behaviou
 partial; its record stands. The follow-up one-open-side is a question of scope for the maintainer and is not entered.
 Finding 7 (a key of another distribution in `dist` is ignored without a word) is a question of the same kind and is not
 entered.
+
+## The maintainer's answer on the follow-up (2026-11-25)
+
+To the lead's question whether to enter the fix of K1 (the follow-up one-open-side) as an item and issue it, the
+maintainer answered "Yes, issue it". It is entered as F-894 with the title, dependencies and acceptance of the proposal
+file as written. Finding 7 is not entered.
