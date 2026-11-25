@@ -437,7 +437,7 @@ One row per record of this folder, grouped by the roadmap category of the item i
 | [0778](0778-f850-registration-four-supporting-checks-of-reader-trial-1.md) | F-850 registration: four supporting checks that reader trial 1 found weaker than their record says | REGISTERED | 2026-11-23 | 1 | F-850 | done |
 | [0780](0780-f842-registration-inertia-and-retry-in-the-solid-case-output.md) | F-842 registration: the inertia and the retry of the nonlinear driver in the solid case's output (what the acceptance presupposes, what the solid case file and the CLI have today, the output registered for the opt-in, and one question of scope that is not taken) | REGISTERED | 2026-11-23 | 1 | F-842 | todo |
 | [0785](0785-f616-registration-case-file-keys-for-superelements-and-interface-enrichment.md) | F-616 registration: case-file keys for superelements and interface enrichment | REGISTERED | 2026-11-23 | 1 | F-616 | done |
-| [0797](0797-f889-registration-case-file-keys-of-the-reduction.md) | F-889 registration: case-file keys for the cutoff, the load's residual vector and the load patterns of the reduction | REGISTERED | 2026-11-25 | 1 | F-889 | todo |
+| [0797](0797-f889-registration-case-file-keys-of-the-reduction.md) | F-889 registration: case-file keys for the cutoff, the load's residual vector and the load patterns of the reduction | REGISTERED | 2026-11-25 | 1 | F-889 | done |
 
 ## Meshing and mesh formats (9)
 

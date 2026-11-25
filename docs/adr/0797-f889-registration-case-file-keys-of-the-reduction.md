@@ -298,3 +298,19 @@ None.
 Status proposed: done.
 
 > ADR 0797, 2026-11-25, done: the table [reduction] of the solid case file takes cutoff (a plain number in rad/s), residual_vectors and load_patterns (names of loads of the case, in the order of the list), the options of ADRs 0474 and 0511; part files made from case files with each key alone and in the eight combinations the library takes equal the library's byte for byte, and E1 of ADR 0532 (cutoff 32964 rad/s, the load's vector, one block of enrichment) from two case files gives the library's bytes and its 96 assembly frequencies in bits; refused by key and line: an unknown load, a cutoff that is not positive and finite or beside a mode count (the library's words), residual_vectors or a pattern with no interior load; without the keys every result is main's (20 digests on Windows and Linux x86_64, the unedited tests of F-616, baseline_hashes and the case hash tables); the schema gains 22 lines and no golden holds it; 18 of 18 mutations caught, one committed.
+
+## The lead's reading (2026-11-25), at the merge
+
+Merged at 427010ec and pushed at 2e284a34 (the report read at 21:38 UTC, 8 minutes of reading, proposed done, written done).
+Checked by the lead before the merge: the registration is the first commit and alone; the library change is the keys of the
+reduction in `solid_case.rs` and its case-file page, with a new test file of 12 tests; no golden and no existing test is edited.
+
+The first push run stopped before any test: the committed mutation of F-616 (`f616_superelement_case.mutation.patch`) no
+longer applied, since this change moved the lines it names. The lead made the same mutation again on the merged tree (the
+enrichment of `CmsOptions` set to 0 in place of the case file's value), with the same expected failure, and amended the merge
+with it; the second run applied it and the test failed as expected, as did the committed mutation of this item. 151 binaries were left out for a left-out run. M16 (a default of `residual_vectors` other than absent)
+is caught by D1, K1 and K3 of its four expected rows and not by R, for the reason addendum 1 gives; the lead counts it as
+caught, as the registered rule reads ("caught by a registered row"). The agent's target folder was made under `E:\e\...`, since
+a Git Bash path was given to `CARGO_TARGET_DIR`; it is outside the repository and is the maintainer's to remove.
+
+Status: **done**, as proposed.
