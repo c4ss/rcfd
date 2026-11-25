@@ -1567,6 +1567,23 @@ impl SolidModel {
         self.check_supports()
     }
 
+    /// As [`SolidModel::check_supported`] for a linear dynamic path with its shells option (ADR 0798 D1): Shell4 and Shell3
+    /// pass and are checked by [`crate::shell::check_shell_model`]; Beam2 stays refused.
+    pub(crate) fn check_supported_shells(&self) -> Result<()> {
+        self.check_elements(false, true, false, false)?;
+        crate::shell::check_shell_model(self)?;
+        self.check_supports()
+    }
+
+    /// As [`SolidModel::check_supported_shells`] for the linear transient, which also takes the orthotropic and the tabulated
+    /// material on solid elements (ADR 0459 D1, ADR 0798 D1).
+    pub(crate) fn check_supported_shells_with_materials(&self) -> Result<()> {
+        self.check_elements(false, true, true, false)?;
+        crate::shell::check_shell_model(self)?;
+        crate::mat_ortho::check_model(self)?;
+        self.check_supports()
+    }
+
     fn check_supports(&self) -> Result<()> {
         for (i, s) in self.supports.iter().enumerate() {
             if let Some(package) = crate::mpc::PENDING {

@@ -209,6 +209,25 @@ pub(crate) fn point_stiffness(model: &SolidModel, threads: Option<usize>) -> Res
     }
 }
 
+/// The stiffness of one element from its own material (ADR 0798 D2: the per-material stiffness of the direct harmonic solve
+/// and of the damped modes): a Beam2, Shell4 or Shell3 element by its block's property, any other kind from the elasticity
+/// matrix of its material and the block's formulation.
+pub(crate) fn element_stiffness_of(model: &SolidModel, ctx: &ElementContext) -> Result<ElementMatrix> {
+    match ctx.kind {
+        ElementKind::Beam2 => crate::beam::model_element_stiffness(model.mesh(), ctx.element, ctx.coords, ctx.material),
+        ElementKind::Shell4 => {
+            crate::shell::model_element_stiffness(model.mesh(), ctx.element, ctx.coords, ctx.material)
+        }
+        ElementKind::Shell3 => {
+            crate::shell3::model_element_stiffness(model.mesh(), ctx.element, ctx.coords, ctx.material)
+        }
+        _ => {
+            let d = ctx.material.linear_elasticity_matrix()?;
+            crate::hex8x::element_stiffness_for(model.mesh(), ctx.element, ctx.kind, ctx.coords, &d)
+        }
+    }
+}
+
 fn assemble_stiffness(
     model: &SolidModel,
     threads: Option<usize>,

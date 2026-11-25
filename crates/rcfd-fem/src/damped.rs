@@ -40,6 +40,9 @@
 //! roots are the converged ones, with [`DampedModes::own_frequency`] in the same order.
 //! ADR 0529 (F-609): with `OwnFrequency::skip_pseudo(true)` the roots flagged `pseudo` (ADR 0467) in the frozen solve are not
 //! iterated: they are reported as the frozen solve gave them, at `omega_ref`, with `OwnFrequencyRoot::skipped` set.
+//!
+//! ADR 0798 (F-630): with [`DampedOptions::shells`] Shell4 and Shell3 (not with a viscoelastic material); without it they are
+//! refused.
 
 use crate::assemble::{assemble_with, stiffness_with};
 use crate::constraint::{check_rigid_body_motions, prescribed_equations, reduce};
@@ -148,6 +151,8 @@ pub struct DampedOptions {
     pub reference_temperature: Option<f64>,
     /// Each root iterated to its own frequency (ADR 0520; default none: every root at the reference frequency).
     pub own_frequency: Option<OwnFrequency>,
+    /// Take Shell4 and Shell3 blocks (ADR 0798 D1; default `false`: refused as before).
+    pub shells: bool,
 }
 
 impl DampedOptions {
@@ -166,6 +171,7 @@ impl DampedOptions {
             reference_omega: None,
             reference_temperature: None,
             own_frequency: None,
+            shells: false,
         }
     }
     /// With the viscoelastic material of the model taken at the circular frequency `omega` (rad/s) and, for a shifted
@@ -179,6 +185,11 @@ impl DampedOptions {
     /// moduli at the reference frequency (ADR 0520; needs [`DampedOptions::viscoelastic_reference`]).
     pub fn viscoelastic_own_frequency(mut self, own: OwnFrequency) -> DampedOptions {
         self.own_frequency = Some(own);
+        self
+    }
+    /// With Shell4 and Shell3 blocks taken (ADR 0798 D1).
+    pub fn shells(mut self, on: bool) -> DampedOptions {
+        self.shells = on;
         self
     }
     /// With Rayleigh damping `a M + b K`.
@@ -568,7 +579,12 @@ pub fn damped_modes(model: &SolidModel, options: &DampedOptions) -> Result<Dampe
         Some(v) => &v.storage,
         None => model,
     };
-    model.check_supported()?;
+    // ADR 0798 D1, D3: shells by the option; not together with a viscoelastic material.
+    if options.shells && visco.is_none() {
+        model.check_supported_shells()?;
+    } else {
+        model.check_supported()?;
+    }
     // ADR 0525 D2: the damped modes take the formulations; Incompatible with a viscoelastic material is refused.
     crate::hex8x::refuse_incompatible_viscoelastic(original, "the damped modes")?;
     if crate::mpc::uses_transformation(model) {
@@ -713,8 +729,8 @@ pub fn damped_modes(model: &SolidModel, options: &DampedOptions) -> Result<Dampe
                         let size: usize = ctx.nodes.iter().map(|&a| dofs.components(a)).sum();
                         return Ok(crate::element::ElementMatrix::zeros(size));
                     }
-                    let d = ctx.material.linear_elasticity_matrix()?;
-                    crate::hex8x::element_stiffness_for(model.mesh(), ctx.element, ctx.kind, ctx.coords, &d)
+                    // ADR 0798 D2
+                    crate::assemble::element_stiffness_of(model, ctx)
                 })?;
                 let p = project(&km, phi);
                 for i in 0..m * m {
