@@ -332,3 +332,31 @@ Checks of this amendment:
 
 Also `cargo fmt -p rcfd-api -- --check`, `cargo clippy -p rcfd-api --all-targets -- -D warnings` and `docs_site`. The
 decision rule is unchanged; results go in addendum 2.
+
+## Addendum 2: results of amendment 1 (2026-11-25)
+
+Commits: amendment 37eccd26, alone and before the change and any Linux run; the change and the Linux table e9b8621c. No hash
+of the Windows table, no row and no limit is changed; no library source is changed.
+
+| Id | Limit | Measured | Met |
+|---|---|---|---|
+| G1 | 4 passed, 35 groups, 0 differ | Windows x86_64: 4 passed, 35 groups compared, 0 differ; `f894_bit_identity.tsv` unchanged since 08e23e1f | yes |
+| G2 | two records of main equal; the repaired library equal to them | Linux x86_64 (the image of ADR 0150, glibc 2.39, cargo 1.99.0, no network): the two dumps of main (08e23e1f; `mixfrac.rs` and `uq.rs` by their SHA-256 those of 1889caad) equal; at e9b8621c 4 passed, 35 groups compared, 0 differ, and the eight dump files equal to main's byte for byte | yes |
+| G3 | F2 fails | P12 on the copy of the amended tree: Windows F2 (7 groups) and F3 (6 groups) fail; Linux the same, F2 (7) and F3 (6); the unchanged copy passes | yes |
+| G4 | as stated | with neither record: 4 passed, the two uniform groups compared, the others printed; with one uniform hash changed F2 fails | yes |
+
+- The lead's expectation was right: the Linux table differs from the Windows one in 24 of the 35 groups (all of F3, 4 of 5 in
+  F1). The uniform groups, asserted everywhere, are equal in both; the names and counts of all groups too. Beside the
+  registered checks, `f894_normal_one_open_side` was run in the same container: 7 passed, A1 0.024 and D1 0.004 of the limit,
+  as on Windows.
+- What is asserted where: the whole table on Windows x86_64 and on Linux x86_64, each against its own record of main; on
+  other platforms the uniform groups and the group names, the rest is printed and nothing holds it there (amendment 1, item 4).
+- `cargo fmt -p rcfd-api -- --check` and `cargo clippy -p rcfd-api --all-targets -- -D warnings` clean; `docs_site` 2 passed
+  with the amendment and before this addendum's commit. The container's target volume was made for these runs and removed
+  after them; nothing was installed. The records are in `linux` of the scratch folder.
+- Deviation: P12's output in the Linux log is cut to its last 60 lines, so the counts of F2 there are read from its dumped
+  table. Not run on Linux: any other file of this work (the MCP test, the `rcfd-api` unit tests). The mutations of
+  addendum 1 were made with the F test before this change; P12 was run again, the others (P1, P10, P11, which the F rows are
+  also registered to catch) were not.
+
+Decision: **done**, unchanged. No change to the roadmap entry; the proposal file stands as written.
