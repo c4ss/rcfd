@@ -328,3 +328,7 @@ Append-only. Newest at the bottom. Entry header: `## [YYYY-MM-DD] <op> | <title>
 
 - Thread: [[adr-thread-studio-electron]] (ADR 0790 row, current state, key numbers; two open items struck as covered).
 - Sources re-read at 2514444c: [[doc-roadmap-json]], [[doc-roadmap-overview]]; roadmap area pages regenerated; [[overview]] revised (799 items, 410 / 301 / 88).
+
+## [2026-11-25] ingest | ADR 0784, the maintainer's answer on open question 1
+
+- Thread: [[adr-thread-mcp-tools]] (open question 1 closed: MCP tools only); roadmap area pages regenerated at a903916c (F-339's gap).

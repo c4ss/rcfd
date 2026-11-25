@@ -3,9 +3,9 @@ type: source
 tags: [adr-thread, mcp, tool-list, access-class, allow-list, claude-code]
 sources: [doc-mcp-tools, doc-claude-plugin-skills]
 origin: docs/adr/ (ADR list below)
-origin_commit: 975beadb
+origin_commit: a903916c
 created: 2026-11-22
-updated: 2026-11-24
+updated: 2026-11-25
 status: draft
 ---
 
@@ -57,7 +57,7 @@ The rule every row keeps: an MCP tool list is a golden that is never re-recorded
 
 ## Open questions
 
-- ADR 0784, open question 1 (the maintainer's): whether `design_uq` and `design_sobol` also become service methods (`design.uq`, `design.sobol`); recommended (a), MCP tools only until a second caller exists.
+- ~~ADR 0784, open question 1 (the maintainer's): whether `design_uq` and `design_sobol` also become service methods (`design.uq`, `design.sobol`); recommended (a), MCP tools only until a second caller exists.~~ Closed on 2026-11-25 by the maintainer's answer "Yes, MCP only", option (a) (ADR 0784, "The maintainer's answer on open question 1").
 
 - ~~F-862: the corrected text of `start_run`'s `store` description, "a change of the text of an existing tool, so it is made by a registration of its own" (ADR 0741, 2026-11-21).~~ Closed by ADR 0774 on 2026-11-23; its open questions for the maintainer: "None."
 - Whether `start_run {new_case}` should also need `write_files` was never answered (ADR 0195 decision record item 9).
