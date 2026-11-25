@@ -26,7 +26,7 @@ file together.
 | `[solver]` | static only. `method` = `direct` (default) or `cg`; for `cg`: `preconditioner`, `fill_level` (default 1) and `ordering` = `natural` / `node_rcm` (for `ic_fill` only), `tolerance` (1e-10), `max_iterations` (20000) |
 | `[output]` | `vtu` (default `result.vtu`), `report` (default `report.json`); empty = not written |
 | `[superelements.<name>]` | `file` (a reduced part file, relative to the case file), `set` (the node set of the model the part attaches to); both required |
-| `[reduction]` | `interface` (a node set, required), `modes` (fixed-interface modes kept, default 0 = static condensation), `interface_enrichment` (Krylov blocks, default 0 = none), `file` (the part file written, default `part.cms`) |
+| `[reduction]` | `interface` (a node set, required), `modes` (fixed-interface modes kept, default 0 = static condensation), `interface_enrichment` (Krylov blocks, default 0 = none), `cutoff` (a plain number in rad/s, default none), `residual_vectors` (default `false`), `load_patterns` (a list of names of loads, default empty), `file` (the part file written, default `part.cms`) |
 
 Preconditioners of `method = "cg"`: `block_jacobi` and `ic0` (ADR 0282), `ic_fill` (the default, ADR 0357), `amg` (ADR 0305),
 `amg_quadratic` (ADR 0370) and `amg_quadratic_smoothed` (ADR 0375) for Tet10 meshes.
@@ -81,7 +81,20 @@ a case without them runs as before, bit for bit.
 the fixed-interface reduction of [ADR 0469](adr/0469-f430-registration-substructuring-craig-bampton.md) with `modes`
 modes; `interface_enrichment = p` adds `p` Krylov blocks of the interface enrichment of
 [ADR 0532](adr/0532-f603-registration-craig-bampton-interface-enrichment.md) (one block is the residual flexibility of
-the omitted modes for the inertia load of the constraint modes). Nothing is solved: the run writes the part file and a
+the omitted modes for the inertia load of the constraint modes). Three more keys are optional
+([ADR 0797](adr/0797-f889-registration-case-file-keys-of-the-reduction.md)):
+
+- `cutoff` keeps every fixed-interface mode below an angular frequency in rad/s
+  ([ADR 0474](adr/0474-f552-registration-craig-bampton-residual-vectors-cutoff.md)) instead of a count: `modes` must then be
+  0 or absent. It is a plain number; a string with a unit is refused (`"Hz"` would be read as 1/s).
+- `residual_vectors = true` adds the static residual vector of the interior load of the case, the sum of its loads (ADR
+  0474). It is refused where that sum has no part outside the interface and the constraints.
+- `load_patterns = ["b", "a"]` adds one residual vector per named load, in the order of the list
+  ([ADR 0511](adr/0511-f559-registration-craig-bampton-residual-vectors-of-load-patterns.md)). The loads stay loads of the
+  model. An unknown name, and a load with no part outside the interface and the constraints, are refused; a vector in the span
+  of the modes and the vectors before it is dropped by the reduction.
+
+Nothing is solved: the run writes the part file and a
 report with `analysis` = `reduction` and the sizes of the part. `[analysis]`, `[solver]`, `[superelements.<name>]` and
 `output.vtu` do not apply and are refused. The constraints of a part must have the value 0.
 

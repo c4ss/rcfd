@@ -16,7 +16,9 @@
 //! Two opt-in tables of F-616 (ADR 0785), run by [`run_solid_case_any`]: `[superelements.<name>]` attaches reduced part
 //! files of ADR 0469 to the model at node sets (`rcfd_fem::cms::superelement`, ADR 0536) for the static solve and the modal
 //! analysis; `[reduction]` reduces the model to a part file instead of solving it, with the interface enrichment of ADR
-//! 0532 by its key `interface_enrichment`. A case without them takes the paths it took before, bit for bit.
+//! 0532 by its key `interface_enrichment`, the cutoff and the load's residual vector of ADR 0474 by `cutoff` and
+//! `residual_vectors`, and the load patterns of ADR 0511 by `load_patterns` (F-889, ADR 0797). A case without them takes the
+//! paths it took before, bit for bit.
 
 use crate::case::{collect_errors, locate_line, Diagnostic};
 use rcfd_core::settings::{Schema, SettingsTree};
@@ -25,10 +27,11 @@ use rcfd_core::vec3::Vec3;
 use rcfd_fem::builders::{hex_box, tet_box, upgrade_to_tet10};
 use rcfd_fem::cms::superelement::{SuperModes, SuperStatic, SuperelementModel};
 use rcfd_fem::cms::{reduce, CmsOptions, ReducedPart, MATCH_TOLERANCE};
+use rcfd_fem::loads::nodal_load_vector;
 use rcfd_fem::modal::{modal_analysis, ModalOptions, ModalResult};
 use rcfd_fem::recover::von_mises;
 use rcfd_fem::solve::{solve_static_report, CgPreconditioner, IcOrdering, SolveReport, StaticOptions, StaticSolver};
-use rcfd_fem::{Constraint, Load, Material, SolidMesh, SolidModel, SolidResult};
+use rcfd_fem::{Constraint, FemError, Load, Material, SolidMesh, SolidModel, SolidResult};
 use rcfd_linalg::amg_elastic::ElasticAmgSettings;
 use rcfd_linalg::eigen::ResidualTest;
 use rcfd_linalg::precond::IcOptions;
@@ -245,6 +248,23 @@ pub fn schema() -> Schema {
                 .doc("Krylov blocks of the interface enrichment of ADR 0532 (0: none)"),
         )
         .field(
+            "cutoff",
+            Schema::float(0.0).unit("rad/s").doc(
+                "Keep every fixed-interface mode below this angular frequency, a plain number in rad/s (ADR 0474; not \
+                 given: no cutoff; modes must then be 0)",
+            ),
+        )
+        .field(
+            "residual_vectors",
+            Schema::boolean(false).doc("Add the static residual vector of the interior load of the case (ADR 0474)"),
+        )
+        .field(
+            "load_patterns",
+            Schema::list(Schema::string("")).doc(
+                "Names of loads of the case, each asking for its own static residual vector, in this order (ADR 0511)",
+            ),
+        )
+        .field(
             "file",
             Schema::string("part.cms").doc("The part file written, in the output directory"),
         )
@@ -331,7 +351,8 @@ pub struct SuperelementEntry {
 pub struct ReductionSetup {
     /// The interface node set.
     pub interface: String,
-    /// The options of `rcfd_fem::cms::reduce`: the mode count and the blocks of interface enrichment.
+    /// The options of `rcfd_fem::cms::reduce`: the mode count, the blocks of interface enrichment, the cutoff, the load's
+    /// residual vector and the load patterns (ADR 0797).
     pub options: CmsOptions,
     /// `reduction.file` as given.
     pub file: String,
@@ -452,6 +473,13 @@ fn floats(v: &Value, key: &str) -> Vec<f64> {
     v.get(key)
         .and_then(Value::as_array)
         .map(|a| a.iter().filter_map(Value::as_f64).collect())
+        .unwrap_or_default()
+}
+
+fn strings(v: &Value, key: &str) -> Vec<String> {
+    v.get(key)
+        .and_then(Value::as_array)
+        .map(|a| a.iter().filter_map(Value::as_str).map(str::to_string).collect())
         .unwrap_or_default()
 }
 
@@ -867,6 +895,11 @@ impl SolidCase {
                 }
             }
         }
+        // ADR 0797 D2: the model without its loads and the loads by name, for the load patterns of a reduction.
+        let patterns = strings(&d["reduction"], "load_patterns");
+        let unloaded = (!patterns.is_empty()).then(|| model.clone());
+        let mut named_loads: Vec<(String, Load)> = Vec::new();
+        let before_loads = errs.len();
         for name in sorted_names(&d["loads"]) {
             let v = &d["loads"][&name];
             let set = str_at(v, "set");
@@ -893,10 +926,14 @@ impl SolidCase {
                 "nodal_force" => Load::nodal_force(set, vec3_of(&floats(v, "force"))),
                 _ => Load::gravity(vec3_of(&floats(v, "acceleration"))),
             };
+            if unloaded.is_some() {
+                named_loads.push((name.clone(), load.clone()));
+            }
             if let Err(e) = model.add_load(load) {
                 errs.push(diag(t, &path, e.to_string()));
             }
         }
+        let loads_built = errs.len() == before_loads;
         // ADR 0785 D1, D3: the part files and the node sets they attach to, in ascending order of the names.
         let mut superelements = Vec::new();
         let names = sorted_names(&d["superelements"]);
@@ -975,7 +1012,8 @@ impl SolidCase {
         let reduction = if self.given("reduction") {
             let r = &d["reduction"];
             let interface = str_at(r, "interface");
-            if model.mesh().node_set(interface).is_none() {
+            let interface_known = model.mesh().node_set(interface).is_some();
+            if !interface_known {
                 let known = list(model.mesh().node_set_names().collect());
                 errs.push(diag(
                     t,
@@ -983,10 +1021,51 @@ impl SolidCase {
                     format!("node set '{interface}' does not exist (node sets: {known})"),
                 ));
             }
+            let mut options = CmsOptions::new(r["modes"].as_i64().unwrap_or(0) as usize)
+                .interface_enrichment(r["interface_enrichment"].as_i64().unwrap_or(0) as usize);
+            // ADR 0797: the cutoff, the load's residual vector and the load patterns, in the order of the list.
+            if self.given("reduction.cutoff") {
+                options = options.cutoff(f64_at(r, "cutoff"));
+            }
+            let residual = r["residual_vectors"].as_bool().unwrap_or(false);
+            options = options.residual_vectors(residual);
+            let no_vector = |what: &str| {
+                format!(
+                    "{what} no interior part (nothing outside the interface and the constraints): there is no vector to add"
+                )
+            };
+            if residual && interface_known && loads_built {
+                // A refusal of the load vector is left to the reduction, which reports it.
+                if nodal_load_vector(&model, &[]).is_ok_and(|f| !has_interior_part(&model, interface, &f)) {
+                    errs.push(diag(
+                        t,
+                        "reduction.residual_vectors",
+                        no_vector("the loads of the case have"),
+                    ));
+                }
+            }
+            let key = "reduction.load_patterns";
+            for name in &patterns {
+                if d["loads"].get(name).is_none() {
+                    let known = sorted_names(&d["loads"]).join(", ");
+                    errs.push(diag(t, key, format!("load '{name}' does not exist (loads: {known})")));
+                    continue;
+                }
+                let load = named_loads.iter().find(|(n, _)| n == name).map(|(_, l)| l.clone());
+                let (Some(load), Some(mut single), true) = (load, unloaded.clone(), loads_built) else {
+                    continue;
+                };
+                match single.add_load(load).and_then(|()| nodal_load_vector(&single, &[])) {
+                    Ok(p) if interface_known && !has_interior_part(&model, interface, &p) => {
+                        errs.push(diag(t, key, no_vector(&format!("load '{name}' has"))));
+                    }
+                    Ok(p) => options = options.load_pattern(p),
+                    Err(e) => errs.push(diag(t, key, e.to_string())),
+                }
+            }
             Some(ReductionSetup {
                 interface: interface.to_string(),
-                options: CmsOptions::new(r["modes"].as_i64().unwrap_or(0) as usize)
-                    .interface_enrichment(r["interface_enrichment"].as_i64().unwrap_or(0) as usize),
+                options,
                 file: str_at(r, "file").to_string(),
             })
         } else {
@@ -1023,6 +1102,32 @@ fn match_tolerance(mesh: &SolidMesh) -> f64 {
         }
     }
     MATCH_TOLERANCE * if extent > 0.0 { extent } else { 1.0 }
+}
+
+/// Whether a load vector over the mesh equations has a non-zero entry at an unknown that is neither of the interface nor
+/// constrained (ADR 0797 D3: the interior load of a reduction).
+fn has_interior_part(model: &SolidModel, interface: &str, load: &[f64]) -> bool {
+    let mesh = model.mesh();
+    let dofs = model.dof_map();
+    let in_set = |set: &str, node: usize| mesh.node_set(set).is_some_and(|s| s.contains(&node));
+    let held = |node: usize, c: usize| {
+        in_set(interface, node)
+            || model.constraints().iter().any(|k| {
+                matches!(k, Constraint::Displacement { set, component, .. } if *component == c && in_set(set, node))
+            })
+    };
+    load.iter()
+        .enumerate()
+        .any(|(e, v)| *v != 0.0 && dofs.node_component(e).is_some_and(|(node, c)| !held(node, c)))
+}
+
+/// The problem of a refusal of `reduce`: a refused cutoff at its key (ADR 0797 D3), any other at the table.
+fn reduction_diag(text: &str, e: &FemError) -> Diagnostic {
+    let path = match e {
+        FemError::InvalidValue { key: "cutoff", .. } => "reduction.cutoff",
+        _ => "reduction",
+    };
+    diag(text, path, e.to_string())
 }
 
 /// A problem at the key `superelements`, on the line of its first table.
@@ -1433,8 +1538,8 @@ pub fn run_solid_case_any(path: impl AsRef<Path>, out_dir: Option<&Path>) -> Res
     let dir = out_dir.map(Path::to_path_buf).unwrap_or_else(|| case.base_dir.clone());
     let t = case.text.as_str();
     if let Some(reduction) = setup.reduction.clone() {
-        let part = reduce(&setup.model, &reduction.interface, &reduction.options)
-            .map_err(|e| vec![diag(t, "reduction", e.to_string())])?;
+        let part =
+            reduce(&setup.model, &reduction.interface, &reduction.options).map_err(|e| vec![reduction_diag(t, &e)])?;
         let mut report = reduction_report_json(&setup, &reduction, &part);
         let mut written = Vec::new();
         let mut outputs = Map::new();
