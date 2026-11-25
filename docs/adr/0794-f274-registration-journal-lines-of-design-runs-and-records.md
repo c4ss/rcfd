@@ -231,3 +231,11 @@ and would have to be edited. So in the committed record `tools/list` is left out
 key stays in the list of keys), and both are compared, once, in the registered run: the test writes all 49 items, whole, with
 `RCFD_F274_RECORD`, on the changed library, and the two files are compared with those of the unchanged library byte for byte. The
 tool list is also held by the golden tests of row X.
+
+## Amendment 2 (2026-11-25, after the registered run and the mutations, before the corrected run of M8)
+
+M8 was set up wrongly. It is registered as "the actor left out of `design_recorded`"; the copy that was run left the actor out of the
+recorder's origin, which the `design_created` line uses too, and the test of J1 stopped at that line (it failed, at
+`design_created`, before any `design_recorded` was looked at). So that run does not show that the actor of `design_recorded` is held.
+The run of it stays on record. The corrected M8 takes the actor out of the two `design_recorded` appends only and is run once, on
+the same copy of the final code commit, with the row registered for it (J1). No row, limit or code is changed.
