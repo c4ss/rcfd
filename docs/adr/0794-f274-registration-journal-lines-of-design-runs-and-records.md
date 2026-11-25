@@ -219,3 +219,15 @@ otherwise, with the piece named. (The brief's rule. Where a mutation names sever
 
 None for the maintainer. Details taken here on the lead's word that details are the registration's: the kind `design_created` (D4);
 one `design_recorded` line per map point (D3).
+
+## Amendment 1 (2026-11-25, before any library code and before any registered run)
+
+Written after the test of row B was built and run twice on the unchanged library (the two records are equal, byte for byte, 49
+items) and before its record is committed. No limit and no row is changed; what row B compares is unchanged, where it is held is.
+
+Two things in the record change with work that is not this one: the whole tool list (a tool added by any item) and the text of
+`solver_version` in `run.json` (the build's version). A committed record that held them would fail for reasons outside its subject
+and would have to be edited. So in the committed record `tools/list` is left out and the value of `solver_version` is removed (its
+key stays in the list of keys), and both are compared, once, in the registered run: the test writes all 49 items, whole, with
+`RCFD_F274_RECORD`, on the changed library, and the two files are compared with those of the unchanged library byte for byte. The
+tool list is also held by the golden tests of row X.
