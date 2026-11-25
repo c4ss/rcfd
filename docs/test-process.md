@@ -642,8 +642,11 @@ and `windows-latest` (F-823; where they run is [ADR 0800](adr/0800-electron-stud
 [ADR 0801](adr/0801-studio-web-dependencies-and-layout.md) addendum 1). `scripts/gate_test.py` does not run them, and a
 green gate says nothing about the Studio.
 
-The job, in `apps/studio-web/` with Node 22.19.0 (the version the Studio was verified on; `package.json` asks for 22.12.0 or
-later):
+The job first builds the engine from the repository root, `rcfd`, `rcfd-runner` and `rcfd-mcp` and the `f447_bench` example
+in release (`cargo build --release --locked -p rcfd-cli -p rcfd-runner -p rcfd-mcp`, then `-p rcfd-api --example f447_bench`,
+with the compiled dependencies cached), packages the Studio with that engine beside it so that no test skips for want of a
+build ([ADR 0802](adr/0802-f823-registration-the-studio-web-job-builds-the-engine.md)), and runs, in `apps/studio-web/` with
+Node 22.19.0 (the version the Studio was verified on; `package.json` asks for 22.12.0 or later):
 
 1. `npm ci`: the exact versions of the committed `package-lock.json`. Only npm's download cache is kept between runs, keyed
    on the lock file; `node_modules/`, builds and test results are never cached.

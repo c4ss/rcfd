@@ -117,8 +117,10 @@ jobs:
   # The Electron Studio (apps/studio-web, ADR 0800 Q3: its npm tests run here, not in scripts/gate_test.py). npm ci installs
   # the committed lock file exactly; npm test builds, packages the app into out/packaged/ and runs every Playwright test
   # (unit and e2e on the packaged app, ADR 0801 addendum 1). Any failed step or test fails the workflow.
-  # Both systems on every pull request: the job takes minutes, not the hour of the Rust unit tests, and Windows is the
-  # maintainer's platform and the one where the e2e test also reads the renderer's OS sandbox back (not on Linux).
+  # The engine (rcfd, rcfd-runner, rcfd-mcp) and the f447_bench example are built first, in release, so the tests that need
+  # them run and the packaged Studio has its engine beside it (F-823, ADR 0802): no test skips for want of a build.
+  # Both systems on every pull request: Windows is the maintainer's platform and the one where the e2e test also reads the
+  # renderer's OS sandbox back (not on Linux).
   studio-web:
     name: studio-web (npm ci, type checks, build, Playwright on the packaged Studio), ${{ matrix.os }}
     strategy:
@@ -126,7 +128,9 @@ jobs:
       matrix:
         os: [ubuntu-24.04, windows-latest]
     runs-on: ${{ matrix.os }}
-    timeout-minutes: 30
+    # ADR 0802: about 44 min in the worst case argued there (a cold dependency cache on windows-latest and the whole suite
+    # under load); the unit-tests job's limit.
+    timeout-minutes: 60
     defaults:
       run:
         shell: bash
@@ -137,6 +141,18 @@ jobs:
       STUDIO_NODE_VERSION: "22.19.0"
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: dtolnay/rust-toolchain@683b588c487a69d01f6c6ddf40f036ff682cc2c8 # master
+        with:
+          toolchain: ${{ env.RUST_GATE_TOOLCHAIN }}
+      # The registry and the compiled dependencies only; the workspace's own crates are built from this commit every run.
+      - uses: Swatinem/rust-cache@2201cc584a476d1b508be977bbe4b7d1c7a52e9c # v2.9.3
+      # Into the checkout's target/release, where the tests and scripts/package-dir.mjs look with no variable set
+      # (checkoutRelease of src/main/engine/locate.ts). Two commands: --example would leave the other packages' binaries out.
+      - name: build the engine (rcfd, rcfd-runner, rcfd-mcp) and the f447_bench example, release
+        working-directory: .
+        run: |
+          cargo build --release --locked -p rcfd-cli -p rcfd-runner -p rcfd-mcp
+          cargo build --release --locked -p rcfd-api --example f447_bench
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: ${{ env.STUDIO_NODE_VERSION }}
@@ -154,17 +170,24 @@ jobs:
           if [ -e /proc/sys/kernel/apparmor_restrict_unprivileged_userns ]; then
             sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
           fi
-          command -v xvfb-run >/dev/null || { sudo apt-get update && sudo apt-get install -y xvfb; }
-      # This job builds no Rust, so out/packaged has no engine beside it (scripts/package-dir.mjs fails without one unless
-      # told; ADR 0801 Addendum 21). The tests that need the engine are skipped with the reason, as before.
-      - run: npm run package:dir -- --no-engine
+          # Mesa's software drivers, for WebGL 2 on llvmpipe below (the package the Linux test image has, ADR 0801 Addendum 19)
+          missing=""
+          command -v xvfb-run >/dev/null || missing="xvfb"
+          dpkg -s libgl1-mesa-dri >/dev/null 2>&1 || missing="$missing libgl1-mesa-dri"
+          if [ -n "$missing" ]; then sudo apt-get update && sudo apt-get install -y $missing; fi
+      # With the engine built above beside the app as out/packaged/resources/bin, as an installed Studio has it (ADR 0801
+      # Addendum 21); a part missing fails this step, naming the file.
+      - run: npm run package:dir
       - name: Playwright (unit and e2e on the packaged app)
         # Linux has no display on the runner: Electron runs under a virtual one (xvfb). On Windows the window opens on the
         # runner's desktop for a few seconds; no human step either way. The HTML report is for the failure upload below.
         # What npm test runs after its build and packaging (both done by the steps above).
+        # The runner has no GPU: without --ignore-gpu-blocklist Chromium turns WebGL off as well as WebGPU on Linux and the
+        # field views and plots cannot draw; with it they draw with WebGL 2 on Mesa's llvmpipe (ADR 0801 Addendum 19). A
+        # switch of the tests' Electron (tests/support/launch.ts), not of the app.
         run: |
           if [ "$RUNNER_OS" = "Linux" ]; then
-            xvfb-run --auto-servernum npx playwright test --reporter=list,html
+            RCFD_TEST_ELECTRON_ARGS=--ignore-gpu-blocklist xvfb-run --auto-servernum npx playwright test --reporter=list,html
           else
             npx playwright test --reporter=list,html
           fi
@@ -179,11 +202,8 @@ jobs:
           if-no-files-found: ignore
           retention-days: 14
       # THIRD_PARTY_LICENSES.md lists the npm lock file too (ADR 0801 Q4); the script reads Cargo.lock through
-      # `cargo metadata --offline`, so the registry is fetched first. Once is enough: the list does not depend on the runner.
-      - uses: dtolnay/rust-toolchain@683b588c487a69d01f6c6ddf40f036ff682cc2c8 # master
-        if: runner.os == 'Linux'
-        with:
-          toolchain: ${{ env.RUST_GATE_TOOLCHAIN }}
+      # `cargo metadata --offline`, so the registry is fetched first (the toolchain is the one installed at the head of the
+      # job). Once is enough: the list does not depend on the runner.
       - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
         if: runner.os == 'Linux'
         with:
