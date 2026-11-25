@@ -1,0 +1,15 @@
+## F-886 three formulas read against their open sources (ADR 0796)
+
+Recorded 2026-11-25 for ADR 0796. Every source named "read" was opened that day and the equations read from an image of the page;
+nothing here is from memory. The comparison is by two routes that share no code: the source's equation in 60-digit decimal arithmetic and
+the repository's code, unchanged, at points registered before the reading. No copy of a source is kept.
+
+| Quantity | Source | Value and use |
+|---|---|---|
+| Vapour fraction of the Schnerr-Sauer model, `alpha_v = x/(1 + x)`, `x = (4/3) n0 pi R^3` | Folden and Aschmoneit, Physics of Fluids 35, 081301 (2023), arXiv:2211.16323v4, Eq. 43, p. 13 (read; a review, not the paper of 2001) | agrees with `Cavitation::alpha_of_radius` and `radius`, 2.1e-16 at 70 points |
+| Rayleigh growth rate `sqrt(2 abs(p_v - p)/(3 rho_l))` | the same, Eq. 45, p. 13 (read; a review) | agrees with `Cavitation::radius_rate`, with the sign of `p_sat - p`, 8.9e-17 at 60 points |
+| Schnerr-Sauer source, `4 n0 pi R^2/(1 + x) sqrt(2 abs(p_v - p)/(3 rho_l))` in 1/s | the same, Eqs. 44, 46 and 47, p. 13 (read; a review) | **differs**: `Cavitation::rate` is `rho_v` times it divided by `1 + x rho_v/rho_l` (4.1e-16 at 60 points), and negative where `p > p_sat`; for `rho_v/rho_l` = 2e-5 the ratio is 0.99802 at `alpha_v` = 0.99 and 0.83335 at 0.9999 (finding, not repaired) |
+| Effectiveness, `Q = eps C_min (T_h,in - T_c,in)`, its definition from the end temperatures, `NTU = U A/C_min` | Lienhard and Lienhard, A Heat Transfer Textbook, 6th ed., version 6.00 (2024), https://ahtt.mit.edu/, Eqs. 3.16 and 3.17, p. 121, Eq. 3.18, p. 122 (read; terms: personal or non-profit instructional use, not kept) | agrees with `hx::solve_exchanger`, 1.3e-15; the duty relation of ADR 0012 is the same formula |
+| Effectiveness of the parallel and of the counterflow exchanger | the same, Eqs. 3.20 and 3.21, p. 122 (read) | agree with `hx::effectiveness`, 5.3e-16 and 3.2e-14 at 48 points each; `Cr = 0` and `Cr = 1` are their limits; Example 3.5, `eps` 0.596, code 0.596401 |
+| Order of convergence from three meshes and the fine-grid convergence index, `1.25 e_a/(r21^p - 1)` | Celik, Ghia, Roache and Freitas, "Procedure for Estimation and Reporting of Uncertainty Due to Discretization in CFD Applications", the publisher's policy copy on www.asme.org (no licence stated, not kept), Eqs. 3 and 7, pp. 4 and 5 (read); journal: J. Fluids Eng. 130, 078001 (2008), not opened | agree with `mesh_convergence_estimate` of F-870, 1.6e-14 and, for `p <= 1`, 1.8e-14; **differs for `p > 1`** by the cap `min(p, 1)`, which is not in the source and makes the recorded half-widths 1.4969 (torque) and 1.9923 (pressure rise) times those of Eq. 7 |
+| Sample calculations of the same source, Table 1, p. 7 | the same (read) | p 1.53, 0.75, 1.51; phi_ext 6.1685, 10.8801, 6.0269; GCI 2.2, 1.1, 0.5 %: reproduced to the printed digits |

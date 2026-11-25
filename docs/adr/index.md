@@ -543,7 +543,7 @@ One row per record of this folder, grouped by the roadmap category of the item i
 | [0789](0789-f892-registration-serve-left-behind.md) | F-892 registration: the path that leaves an rcfd serve process running after npm test on Windows (the hypotheses, the recorded runs that tell them apart, the fix in the Studio's quit and in the harness, the whole runs after it, and the mutation) | REGISTERED | 2026-11-23 | 1 | F-892 | done |
 | [0790](0790-f893-registration-run-control-pause-and-orphan.md) | F-893 registration: run-control.spec.ts:320, which misses the pause request in some whole runs, and the rcfd run solver a run-control test leaves running (the hypotheses of each cause, the recorded runs that tell them apart, the fix, the consecutive runs, the whole runs and the mutation) | REGISTERED | 2026-11-24 | 1 | F-893 | done |
 
-## Quality, docs and validation (55)
+## Quality, docs and validation (56)
 
 | ADR | Title | Status word | Date | Addenda | Item | Item status |
 |---|---|---|---|---|---|---|
@@ -602,6 +602,7 @@ One row per record of this folder, grouped by the roadmap category of the item i
 | [0777](0777-f861-registration-the-process-report-checks-four-rules-that-rested-on-convention.md) | F-861 registration: the process report checks four rules that rested on convention | REGISTERED | 2026-11-23 | 1 | F-861 | done |
 | [0779](0779-f875-registration-a-simulation-milestone-for-the-structure-and-vibration-of-a-fan-rotor.md) | F-875 registration: a simulation milestone for the structure and vibration of a fan rotor | REGISTERED | 2026-11-23 | 1 | F-875 | done |
 | [0782](0782-f856-registration-udf-interpreter-wasmi-1x.md) | F-856 registration: the UDF interpreter from wasmi 0.31 to wasmi 1.1.0 (the minimum Rust read first, the port of `udf.rs`, and the checks of the fuel limit, the memory limit and the refusal of imports) | REGISTERED | 2026-11-23 | 1 | F-856 | done |
+| [0796](0796-f886-registration-three-formulas-read-against-their-open-sources.md) | F-886 registration: three formulas recorded from memory, read against their open sources | REGISTERED | 2026-11-25 | 2 | F-886 | todo |
 
 ## Records with no item in the file name (259)
 
@@ -645,7 +646,7 @@ One row per record of this folder, grouped by the roadmap category of the item i
 | [0036](0036-wave21b-tables-actuator.md) | Wave 21B, tabulated properties, actuator disk, per-region turbulence | ACCEPTED |  | 1 | F-216, F-218, F-220 |
 | [0037](0037-wave21c-wiring-fractional.md) | Wave 21C, particle and chemistry wiring, fractional-step time advance | ACCEPTED |  | 0 | F-054, F-056, F-210 |
 | [0038](0038-wave22-gpu-cuda.md) | Wave 22, GPU linear solvers through CUDA (F-101) | ACCEPTED |  | 1 | F-100, F-101 |
-| [0039](0039-wave23a-mhd-heat-exchanger.md) | Wave 23A, Lorentz-force MHD coupling (F-214) and heat-exchanger macro models (F-217) | ACCEPTED |  | 1 | F-214, F-217 |
+| [0039](0039-wave23a-mhd-heat-exchanger.md) | Wave 23A, Lorentz-force MHD coupling (F-214) and heat-exchanger macro models (F-217) | ACCEPTED |  | 2 | F-214, F-217 |
 | [0040](0040-wave23b-masstransfer-waves.md) | Wave 23B, interfacial mass-transfer closures (F-226) and free-surface wave generation and absorption (F-227), library only | ACCEPTED |  | 1 | F-226, F-227 |
 | [0041](0041-wave23c-population-balance.md) | Wave 23C, population balance and polydispersed phases (F-228) | ACCEPTED |  | 0 | F-228 |
 | [0042](0042-wave24-duct-diagnosis.md) | Wave 24 diagnosis of the segregated-solver duct misbehaviour | DIAGNOSIS |  | 1 |  |
@@ -662,7 +663,7 @@ One row per record of this folder, grouped by the roadmap category of the item i
 | [0053](0053-wave28b-chemistry-acceleration-combustion.md) | Wave 28B, stiff-chemistry acceleration (F-223) and combustion extensions (F-129) | ACCEPTED |  | 0 | F-129, F-223 |
 | [0054](0054-wave28c-adaptation-turbo-post.md) | Wave 28C, mesh adaptation and turbomachinery post-processing (F-102, F-123) | ACCEPTED |  | 3 | F-102, F-123, F-132, F-348 |
 | [0055](0055-wave29a-rotor-interfaces-bcs.md) | Wave 29A, frozen-rotor interface library and checks, mixing-plane library, guarded secant outlet update (F-126, F-200) | ACCEPTED |  | 4 | F-126, F-200 |
-| [0056](0056-wave29b-mixture-cavitation.md) | Wave 29B, mixture model with algebraic slip (drift flux) and Schnerr-Sauer cavitation on the VOF host (F-127, partial) | ACCEPTED |  | 1 | F-127 |
+| [0056](0056-wave29b-mixture-cavitation.md) | Wave 29B, mixture model with algebraic slip (drift flux) and Schnerr-Sauer cavitation on the VOF host (F-127, partial) | ACCEPTED |  | 2 | F-127 |
 | [0057](0057-wave29c-lagrangian-extensions.md) | Wave 29C, Lagrangian extensions: two-way exchange, discrete random walk dispersion, injection distributions (F-128, F-056) | ACCEPTED |  | 1 | F-056, F-128, F-255, F-323 |
 | [0058](0058-wave29d-distributed-parallel.md) | Wave 29D, transport-agnostic distributed-memory layer (F-100, F-016) | ACCEPTED |  | 1 | F-100, F-848 |
 | [0059](0059-wave30a-wiring-particles-mixing-plane.md) | Wave 30A, wiring of the two-way particle coupling (F-128) and of the mixing plane (F-126) into the solver loops | ACCEPTED |  | 2 | F-126, F-128 |

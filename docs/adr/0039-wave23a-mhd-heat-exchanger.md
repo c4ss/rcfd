@@ -420,3 +420,33 @@ against their prescribed curves (fan boundary X4; vent by the prior C3 and the c
 both-unmixed crossflow relation misses its registered limits (known misses above), the shell-and-tube relation is
 unverified against a published table, and a resolved/segmented exchanger, a multi-branch network, two-phase exchangers
 and a vent boundary exercised in a new CFD test are not delivered.
+
+## Addendum 2 (2026-11-25): the effectiveness and NTU relations read in an open source (F-886, ADR 0796)
+
+The registration, the points and the limits are in
+[ADR 0796](0796-f886-registration-three-formulas-read-against-their-open-sources.md). This addendum covers the counterflow and
+parallel relations of D2 and the definition of the effectiveness (stated also for ADR 0012 in the reference data). The shell
+and tube and the crossflow relations, and the MHD citations, are not touched. Nothing above is changed.
+
+| citation | status | where | finding |
+|---|---|---|---|
+| textbook heat-exchanger theory (Kays and London type): counterflow and parallel effectiveness, the definition of `eps` and of NTU | read, of a second source | J. H. Lienhard IV and J. H. Lienhard V, A Heat Transfer Textbook, 6th edition, version 6.00, 19 April 2024, Phlogiston Press, https://ahtt.mit.edu/wp-content/uploads/2024/04/AHTTv600.pdf, section 3.3: Eqs. 3.16 and 3.17 (p. 121), 3.18, 3.20 and 3.21 (p. 122), Example 3.5 (pp. 122 and 123), Fig. 3.16 (p. 123), read from the page images | agrees |
+
+Terms of use (the book's site and its title-page verso): copyrighted; free to download and print for personal use or for
+non-profit instructional use, every other use under copyright law. No copy is kept and no text is reproduced.
+
+Term by term (`crates/rcfd-fv/src/hx.rs`; `N` = NTU, `Cr = C_min/C_max`):
+
+| Source | Code | Agrees |
+|---|---|---|
+| Eq. 3.16: `eps = C_h (T_h,in - T_h,out)/(C_min (T_h,in - T_c,in)) = C_c (T_c,out - T_c,in)/(C_min (T_h,in - T_c,in))`; `C_min` the smaller of the two | `solve_exchanger`: the outlet temperatures `T_p + q/C_p`, `T_s - q/C_s`; `c_min = min` | yes; both fractions return the code's `eps` (L3) |
+| Eq. 3.17: `Q = eps C_min (T_h,in - T_c,in)` | `q = eps c_min (t_secondary_in - t_primary_in)` | yes, with the sign: `q` is the heat to the primary stream, `Q` the heat from hot to cold |
+| Eq. 3.18: `NTU = U A/C_min` | `ntu = ua/c_min` | yes; L3 (the four, 56 values of 10 cases): worst 1.3e-15 (limit 1e-12) |
+| Eq. 3.20, parallel: `(1 - exp(-(1 + Cr) N))/(1 + Cr)` | `Parallel`: `(1 - (-n (1 + c)).exp())/(1 + c)` | yes, identical; 48 points with `Cr` 0 and 1, worst 5.3e-16 (L1, limit 1e-12) |
+| Eq. 3.21, counterflow: `(1 - exp(-(1 - Cr) N))/(1 - Cr exp(-(1 - Cr) N))` | `Counterflow`: `e = (-n (1 - c)).exp()`, `(1 - e)/(1 - c e)` | yes, identical; 48 points with `Cr` 0 and the limit at 1, worst 3.2e-14 (L2, limit 1e-12) |
+| `Cr = 1` and `Cr = 0`: curves of Fig. 3.16, no formula of their own | `N/(1 + N)` for `abs(1 - Cr) < 1e-9`; `1 - exp(-N)` for `Cr = 0` | agrees, with the branch: they are the limits of Eqs. 3.20 and 3.21 (L1, L2); the clamps `n >= 0`, `0 <= Cr <= 1` are the code's |
+| Example 3.5: parallel, NTU 1.5, `Cr` 0.5, `eps = 0.596` | 0.596401 | yes (L4) |
+
+Limits the source states: the method "works if the overall heat transfer coefficient is fairly uniform" (p. 121). Seen on the way and
+not compared (outside the registration): Table 3.1 (p. 125) prints the one-stream-mixed crossflow and the one-shell-pass
+relations. The rows of the reference data on them keep their marks.

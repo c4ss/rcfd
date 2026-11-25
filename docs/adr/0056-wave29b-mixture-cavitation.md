@@ -303,3 +303,36 @@ and the existing VOF, mass-transfer and wave tests pass unchanged.
   p_sat of water 2339 Pa, all from memory. No published cavitation data and no bubble-column data were compared: NOT ATTEMPTED.
 * NOT DELIVERED: full multi-fluid Euler-Euler (per-phase momentum), lift, wall lubrication, virtual mass, turbulent dispersion,
   granular kinetic theory, wall boiling, thermal effects on p_sat, non-condensable gas.
+
+## Addendum 2 (2026-11-25): the Schnerr-Sauer model and the Rayleigh growth rate read in an open source (F-886, ADR 0796)
+
+The registration, the points and the limits are in
+[ADR 0796](0796-f886-registration-three-formulas-read-against-their-open-sources.md). This addendum covers two citations of this
+ADR; Manninen, Schiller-Naumann, Kynch and the vapour pressure are not touched and stay as they are. Nothing above is changed.
+
+| citation | status | where | finding |
+|---|---|---|---|
+| Schnerr and Sauer (2001): `alpha_v = x/(1 + x)`, the mass source | read, of a second source | T. S. Folden and F. J. Aschmoneit, "A classification and review of cavitation models with an emphasis on physical aspects of cavitation", Physics of Fluids 35, 081301 (2023), doi:10.1063/5.0157926; arXiv:2211.16323v4, section III.9, p. 13, Eqs. 42 to 47, read from the page image | `alpha_v` agrees (Eq. 43); the mass source **differs** from Eqs. 46 and 47, below |
+| Rayleigh (1917), Plesset (1949): `R' = sqrt(2 abs(p_v - p)/(3 rho_l))` | read, of a second source | the same, p. 13, Eq. 45, from Eq. 5 (p. 3) "with the effects of the second-order terms, viscosity, and surface tension all neglected" | agrees, with the sign |
+
+Terms of use: the arXiv page of the paper names CC BY 4.0; the first page of the PDF carries the publisher's line that the
+article "may be downloaded for personal use only" and any other use needs permission. The two do not agree. Nothing of the
+paper is kept by this work; the equations are transcribed in our notation.
+
+Term by term (`crates/rcfd-fv/src/cavitation.rs`; `x = (4/3) pi n R^3`):
+
+| Source | Code | Agrees |
+|---|---|---|
+| Eq. 42, `V_v = (4/3) n0 pi R^3`, and Eq. 43, `alpha_v = x/(1 + x)`: `n0` per volume of liquid | `alpha_of_radius`: `x = n0 4/3 PI R^3`, `x/(1 + x)`; `radius`: `cbrt(3 alpha_v/(4 PI n0 (1 - alpha_v)))`, the inverse (`x = alpha_v/(1 - alpha_v)`) | yes, identical; 70 points, worst 2.1e-16 (S1, limit 1e-12) |
+| Eq. 45, `dR/dt = sqrt(2 abs(p_v - p)/(3 rho_l))` | `radius_rate`: `sqrt(2 abs(p_sat - p)/(3 rho_l))`, negative for `p > p_sat` | yes, with the sign and with the factors `f_vap`, `f_cond` (default 1), which are not in the source; 60 points, worst 8.9e-17 (S2, limit 1e-12) |
+| Eqs. 44, 46: `d alpha_v/dt + div(alpha_v u) = m+ = 4 n0 pi R^2/(1 + x) sqrt(...)`, in 1/s | `rate`: `rho_v rho_l/rho_m alpha_v (1 - alpha_v) (3/R) R'`, in kg/(m^3 s), `= rho_v 4 n0 pi R^2 R'/((1 + x)(1 + x rho_v/rho_l))` | **no**, S3 missed at 60 of 60 points as printed; with `rho_v` and the divisor `1 + x rho_v/rho_l` it is equal, worst 4.1e-16 (S3b, limit 1e-12) |
+| Eq. 47: `m-` is printed positive, and Eq. 4 (p. 3) sets `m = m-` for `p > p_v` without a minus | negative for `p > p_sat` (condensation) | **no**, the sign as printed; the text calls `m-` the condensation term |
+| "no empirical constants besides the uniform bubble number `n0`" | `f_vap = f_cond = 1` by default; the nucleus radius `R_0` as a floor of the radius and seed of the field | agrees, with these three rules, which are not in the source |
+
+**The finding.** The review's source has no density (its Eq. 3, with `rho_i alpha_i`, would need one) and no mixture density.
+The code's divisor `1 + x rho_v/rho_l` is what decision D derives: the volume source of incompressible phases,
+`div u = mdot (1/rho_v - 1/rho_l)`, with the material growth `D alpha_v/Dt = 3 alpha_v (1 - alpha_v) R'/R` (the identity C4a) gives
+`d alpha_v/dt + div(alpha_v u) = mdot/rho_v = [4 n pi R^2 R'/(1 + x)]/(1 + x rho_v/rho_l)`. Eq. 46 is its limit for
+`x rho_v/rho_l -> 0`. Its size, code over `rho_v` times Eq. 46: for `rho_v/rho_l` = 2e-5 (the venturi of this ADR) 0.99982 at `alpha_v` = 0.9, 0.99802 at
+0.99, 0.98041 at 0.999 and 0.83335 at 0.9999; for 6.26e-4, 0.99583 at 0.87 and 0.61513 at 0.999. The original paper of
+2001 was not read, so whether it has the divisor is open. It is recorded and not repaired.
