@@ -31,10 +31,12 @@ results one by one: an item is done when its registered decision rule says so an
    reading exceeds the reading limit, split it or point it at an area page's reading list.
    The brief has a section `## Goal` with one line that starts `/goal` and states, in at most 4000 characters, the end
    state of the work, how each part of it is shown in the conversation (the command and its output), and a bound on the
-   turns. The line is set as a command where the way of starting allows it: typed into a session by the maintainer, or
-   given to `claude -p` as the whole prompt. A subagent has no goal, and a session the lead starts in the app has text put
-   before its prompt, so that the line is read there and not set (seen on 2026-11-25, F-895); the agent then works to the
-   line as text and says so, and the lead's report names which it was. The end state
+   turns. The lead makes the worktree and the branch at the brief's commit and starts the work in it with the line as the
+   whole prompt, so that the goal is set (the output then begins "Goal set:"; the lead checks it):
+   `claude -p "/goal ..." --model <the brief's> --permission-mode auto --add-dir <scratch folder> --output-format stream-json --verbose`,
+   in the background, its output to a file in `w49i-work`. The mode is never wider than the lead's own; the run asks
+   nobody for a permission, so an action it is denied is in its report. A subagent has no goal, and a session started in
+   the app has text put before its prompt and does not set it (F-895, 2026-11-25). The end state
    is the report with the verdict of the registered rule, done or partial: a miss recorded as a miss meets the goal, so
    that a goal never asks for a changed limit, a skipped test or a second run of a registered run.
 5. After the registration is committed and before the code: if the report lists one of its limits as having no source
@@ -186,7 +188,7 @@ of agents is put to the maintainer again after four weeks of the measures.
 ## Changes
 
 - 2026-11-25: "Issuing" 4 gains the `/goal` line of a brief, on the maintainer's direction of that day
-  (which way of starting sets it is asked of the maintainer) ("when you start new roadmap pieces make sure they write a clear `/goal` tool/skill call").
+  (and its way of starting, on the answer "Yes, claude -p" of the same day) ("when you start new roadmap pieces make sure they write a clear `/goal` tool/skill call").
 - 2026-11-23: "Merging and pushing" gains the wiki ingest after each merge, by the lead, on the maintainer's answer of
   that day (option (a): the lead ingests; agents do not edit the wiki).
 - 2026-11-21: the stop conditions of "When no further agent is started" are in force (the maintainer's answer in ADR
