@@ -10108,6 +10108,6 @@
     ],
     "status": "todo",
     "acceptance": "Every limit not stated here is registered in the ADR before the run. In params[i].dist of design_uq and design_sobol a key that the named type does not have (mean, sd, a or b of a uniform; a or b of a normal; mean or sd of a beta), with any value, null among them, is refused with the invalid-arguments code, the message naming the key by its path and the keys of the type, before any sample, and no file is written; every form Dist::to_json writes and every call without such a key gives results bit-identical to main; each of the eight wrong acceptances is caught by a registered test under a mutation; no golden and no tool-list text changes.",
-    "note": "Lead (2026-11-25): entered on the maintainer's answer of that day (\"Yes, issue it ...\"): finding 7 of ADR 0791, which read that dist accepts a key of another distribution and ignores it, so that a mistyped study runs on other inputs than the caller wrote. The acceptance is the lead's."
+    "note": "Lead (2026-11-25): entered on the maintainer's answer of that day (\"Yes, issue it ...\"): finding 7 of ADR 0791, which read that dist accepts a key of another distribution and ignores it, so that a mistyped study runs on other inputs than the caller wrote. The acceptance is the lead's. Lead (2026-11-25): issued by docs/adr/briefs/f895-dist-foreign-keys.md (ADR 0793)."
   }
 ]
