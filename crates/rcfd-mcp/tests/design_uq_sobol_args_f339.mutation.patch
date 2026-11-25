@@ -1,0 +1,16 @@
+# expect-fail: cargo test --release -p rcfd-mcp --test design_uq_sobol_args_f339
+diff --git a/crates/rcfd-api/src/design/tools.rs b/crates/rcfd-api/src/design/tools.rs
+index 22af6983..c0a9c74e 100644
+--- a/crates/rcfd-api/src/design/tools.rs
++++ b/crates/rcfd-api/src/design/tools.rs
+@@ -1916,8 +1916,8 @@ fn study_params(p: &Value, known: &[(&str, &str)], evaluator: &str) -> Rpc<Vec<U
+                 hi: bound_at(d, "hi", &dat, f64::INFINITY)?,
+             },
+             Some("beta") => Dist::Beta {
+-                a: number_at(d, "a", &dat)?,
+-                b: number_at(d, "b", &dat)?,
++                a: number_at(d, "b", &dat)?,
++                b: number_at(d, "a", &dat)?,
+                 lo: number_at(d, "lo", &dat)?,
+                 hi: number_at(d, "hi", &dat)?,
+             },
