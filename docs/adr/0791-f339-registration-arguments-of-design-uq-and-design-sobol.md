@@ -386,3 +386,9 @@ entered.
 To the lead's question whether to enter the fix of K1 (the follow-up one-open-side) as an item and issue it, the
 maintainer answered "Yes, issue it". It is entered as F-894 with the title, dependencies and acceptance of the proposal
 file as written. Finding 7 is not entered.
+
+## The maintainer's answer on finding 7 (2026-11-25)
+
+To the lead's question whether to enter and issue a check that refuses another distribution's keys, the maintainer
+answered "Yes, issue it and when you start new roadmap pieces make sure they write a clear `/goal` tool/skill call". It is
+entered as F-895; the second half is in `docs/process/lead-process.md`, "Issuing".

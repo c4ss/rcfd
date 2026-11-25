@@ -17,6 +17,7 @@ branch, in both streams. It begins with these lines, which `scripts/process_repo
     Size (lead): <outcome>; <further registrations>; <heavy runs>; <questions for the maintainer>; <bytes to read>
 
 Then two sections: `## Reading list`, one path per line with its size in bytes, and `## Task`.
+From 2026-11-25 also `## Goal`: the one line starting `/goal` that the work's session is started with ([lead process](../../process/lead-process.md), "Issuing" 4).
 
 A dispatch that is abandoned gets one appended line: `Closed without merge (<YYYY-MM-DD>): <why>`. A brief with no such line
 whose branch no ledger line names is work that is issued and not merged.
