@@ -416,12 +416,16 @@ fn u_what_keeps_its_message() {
         }
     }
     for k in ["mean", "sd", "a", "b"] {
-        for t in [json!(null), json!("triangular")] {
-            let v = json!({"name": "chord_rel", "unit": "1", "dist": {"type": t, "lo": -0.01, "hi": 0.01, k: 0.5}});
-            cases.push((v, unknown_type.clone()));
+        let types = [json!(null), json!(3), json!("Uniform"), json!("triangular"), json!("")];
+        for t in types.into_iter().map(Some).chain([None]) {
+            for x in [json!(0.5), json!(null)] {
+                let mut v = json!({"name": "chord_rel", "unit": "1", "dist": {"lo": -0.01, "hi": 0.01, k: x}});
+                if let Some(t) = &t {
+                    v["dist"]["type"] = t.clone();
+                }
+                cases.push((v, unknown_type.clone()));
+            }
         }
-        let v = json!({"name": "chord_rel", "unit": "1", "dist": {"lo": -0.01, "hi": 0.01, k: null}});
-        cases.push((v, unknown_type.clone()));
     }
     for d in [json!(null), json!("uniform"), json!([])] {
         let v = json!({"name": "chord_rel", "unit": "1", "dist": d});
