@@ -346,3 +346,8 @@ Append-only. Newest at the bottom. Entry header: `## [YYYY-MM-DD] <op> | <title>
 ## [2026-11-25] ingest | docs/process/lead-process.md (the /goal line)
 
 - Source re-read at 1f9c0da9: [[doc-process-lead-process]] ("Issuing" 4: the brief's goal and the start with `claude -p`).
+
+## [2026-11-25] ingest | F-895, ADR 0793 (loop merge)
+
+- Thread: [[adr-thread-mcp-tools]] (ADR 0793 row, current state, finding 7 closed, finding 4 open).
+- Sources re-read at 21e04d2e: [[doc-mcp-tools]], [[doc-roadmap-json]], [[doc-roadmap-overview]]; roadmap area pages regenerated; [[overview]] revised (801 items, 413 / 300 / 88).

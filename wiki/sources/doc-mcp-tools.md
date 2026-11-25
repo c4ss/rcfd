@@ -3,7 +3,7 @@ type: source
 tags: [interface, mcp, assistant]
 sources: []
 origin: docs/mcp-tools.md
-origin_commit: d2cc5641
+origin_commit: 21e04d2e
 created: 2026-11-22
 updated: 2026-11-25
 status: draft
@@ -44,6 +44,10 @@ Two session tools, `design_uq` (tolerance study) and `design_sobol` (Sobol indic
 
 > [!warning] Contradiction (doc and record)
 > `docs/mcp-tools.md` gives `lo` and `hi` of a normal distribution as each optional ("no truncation on that side") ([[doc-mcp-tools]]); ADR 0791 (K1) records that one open side with one finite bound panics in the library (`erfc_inv needs 0 < y < 2`, `crates/rcfd-reactor/src/mixfrac.rs:161`, since `erfc` of infinity is not a number) and ends the `rcfd-mcp` process with exit code 101 and no reply. ~~Only both sides open or both finite work~~ ([[adr-thread-mcp-tools]]). Resolved on 2026-11-25 by F-894 (ADR 0792, merged at c349be6e): one open side is sampled and the server answers.
+
+## Changes at 21e04d2e (F-895)
+
+The arguments of `design_uq` and `design_sobol` gain the sentence "A key of `dist` that its type does not have is refused, whatever its value." (ADR 0793) ([[adr-thread-mcp-tools]]).
 
 ## Pages this source informs
 

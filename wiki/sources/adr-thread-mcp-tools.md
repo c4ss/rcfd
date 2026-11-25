@@ -3,7 +3,7 @@ type: source
 tags: [adr-thread, mcp, tool-list, access-class, allow-list, claude-code]
 sources: [doc-mcp-tools, doc-claude-plugin-skills]
 origin: docs/adr/ (ADR list below)
-origin_commit: d2cc5641
+origin_commit: 21e04d2e
 created: 2026-11-22
 updated: 2026-11-25
 status: draft
@@ -27,6 +27,7 @@ The rule every row keeps: an MCP tool list is a golden that is never re-recorded
 - ~~**Issued, not on main at 09647baa:** F-339 (`design_uq` and `design_sobol` tools on a named evaluator, with a registered edit of the tools-list goldens), issued on 2026-11-23 by the brief `docs/adr/briefs/f339-mcp-uq-sobol-tools.md` (ADR 0784); the item is todo ([[roadmap-design-studies-and-optimisation]]).~~ **F-339 partial** (ADR 0784, merged at 05175113, pushed at 9c0aa461): the MCP tools `design_uq` and `design_sobol` run `uq::run` and `sensitivity::run` on the named evaluator `rcfd.fan_rom` (the reduced-order fan, inputs `stagger_common_deg`, `chord_rel`, `tip_gap_delta`) with a design ledger, inside the sandbox and under `max_design_evaluations`, class `write_files`; the reply's `result` is the library's bit for bit (256 Monte Carlo samples, a Latin hypercube study with a stopping rule, 320 Sobol evaluations). They are not service methods. The lead made the additive golden edit (both tools-list goldens gain the two entries, 33 to 35 and 50 to 52; sixteen count literals raised by two) after a reader confirmed it additive. Partial: X1 (a fourth count of the list) missed by the registered rule, and the reader's findings 1-1 (no test sends the string or null bounds) and 2-1 (reference inputs that cannot tell a swapped or dropped parameter) ([[doc-mcp-tools]], [[doc-roadmap-json]]).
 - ~~F-339 stays partial~~ (ADR 0791, merged at 26185c59, pushed at 81cfd554; the agent proposed done): the reader's findings 1-1 and 2-1 are closed. Every argument of `design_uq` and `design_sobol` is sent at a value that tells a wrong reading from the right one, 16 tests against the library, 40 mutations of `tools.rs` caught (M10, M11, M14 and M15 through the panic of K1, not the equality); `tools.rs` was right in every row. What is left is **K1**: a normal distribution open on one side only panics in the library and ends the server; "held as the ignored `k1_one_open_side_known_miss`". X1 of ADR 0784 stays recorded as missed ([[doc-roadmap-json]]).
 - **F-894 done, and F-339 done with it** (ADR 0792, merged at c349be6e, pushed at 4404e24b; entered on the maintainer's answer "Yes, issue it" of 2026-11-25): `erfc` is exactly 0 at plus infinity, and a normal distribution open on one side is sampled from the smaller of its two tails; 884 points agree with a 760-digit reference within 0.024 of the registered limit of 1e-12 sd, K1 passes unedited, and the server on stdio answers such a call and the ping after it. Every other result is bit-identical to main, held by records for Windows and Linux x86_64 (24 of 35 groups differ between the two on main's own library, since the platform's `exp` differs). M10, M11, M14 and M15 of ADR 0791 are caught by the equality. X1 of ADR 0784 stays recorded as missed and is not what decides the status ([[doc-roadmap-json]]).
+- **F-895 done** (ADR 0793, merged at 0fea72e9, pushed at c5570767; finding 7 of ADR 0791, entered on the maintainer's answer of 2026-11-25): in `params[i].dist` of `design_uq` and `design_sobol` a key that the named type does not have is refused with -32602, whatever its value, before the limit and the driver and with nothing written; the message names the key by its path and the keys of the type. Every form of `Dist::to_json` and of the open sides gives main's bytes on Windows and Linux x86_64; 23 mutations caught ([[doc-mcp-tools]]).
 
 ## ADRs
 
@@ -48,6 +49,7 @@ The rule every row keeps: an MCP tool list is a golden that is never re-recorded
 | [0784](../../docs/adr/0784-f339-registration-mcp-tools-for-tolerance-and-sobol-studies-of-the-reduced-order-fan.md) | 2026-11-23 | registration, amendment 1, addendum 1, a reader's report, the lead's reading | F-339 | MCP tools for tolerance and Sobol studies of a named evaluator | partial: the tools equal the library bit for bit; X1 missed; reader findings 1-1 and 2-1 | |
 | [0791](../../docs/adr/0791-f339-registration-arguments-of-design-uq-and-design-sobol.md) | 2026-11-25 | registration, addendum 1, the lead's reading | F-339 | Can each argument of the two tools be told from a wrong reading of it, the string and null bounds among them? | partial: every row but the record K1 holds, 40 mutations caught; K1 (one open side) panics | |
 | [0792](../../docs/adr/0792-f894-registration-a-normal-distribution-open-on-one-side.md) | 2026-11-25 | registration, addendum 1, amendment 1, addendum 2, the lead's reading | F-894 (and F-339) | Does a normal open on one side sample within its bound and agree with the closed form, with nothing else moved? | done: every row holds; K1 passes; F-339 done | |
+| [0793](../../docs/adr/0793-f895-registration-a-key-of-another-distribution-refused.md) | 2026-11-25 | registration, amendment 1, addendum 1, the lead's reading | F-895 | Is a key of another distribution in `dist` refused, with every other call unchanged? | done: every row holds; 23 of 23 mutations caught | |
 
 ## Key numbers and limits
 
@@ -64,7 +66,8 @@ The rule every row keeps: an MCP tool list is a golden that is never re-recorded
 
 ## Open questions
 
-- ADR 0791 (the maintainer's, scope): ~~the follow-up one-open-side (the fix of K1)~~ (entered and done as F-894) and finding 7 (`dist` ignores a key of another distribution), not entered.
+- ADR 0791 (the maintainer's, scope): ~~the follow-up one-open-side (the fix of K1)~~ (entered and done as F-894) and ~~finding 7 (`dist` ignores a key of another distribution)~~ (entered and done as F-895).
+- ADR 0793, finding 4 (the maintainer's, scope): `parse_robust`, `parse_method` and `parse_axes` of the `design.*` methods ignore a known key of another kind and an unknown key; not entered.
 - ~~ADR 0784, open question 1 (the maintainer's): whether `design_uq` and `design_sobol` also become service methods (`design.uq`, `design.sobol`); recommended (a), MCP tools only until a second caller exists.~~ Closed on 2026-11-25 by the maintainer's answer "Yes, MCP only", option (a) (ADR 0784, "The maintainer's answer on open question 1").
 
 - ~~F-862: the corrected text of `start_run`'s `store` description, "a change of the text of an existing tool, so it is made by a registration of its own" (ADR 0741, 2026-11-21).~~ Closed by ADR 0774 on 2026-11-23; its open questions for the maintainer: "None."
