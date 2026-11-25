@@ -21,6 +21,9 @@
 //! `P = I - M R R^T` and `K_c` the stiffness on a statically determinate support (D1); on the transformation path by the
 //! reduced solve `T K_r^{-1} T^T F` (D2); and with a pre-stressed basis by the stiffness `K + K_sigma` the modes were
 //! computed with ([`HarmonicOptions::prestress`], D3). Models without these features take the code of ADR 0391 unchanged.
+//!
+//! ADR 0798 (F-630): [`ModalBasis::all_modes_with_shells`] and, for the static correction, [`HarmonicOptions::shells`] take
+//! Shell4 and Shell3; without them they are refused.
 
 use crate::assemble::stiffness_with;
 use crate::constraint::{prescribed_equations, reduce};
@@ -67,10 +70,19 @@ fn matvec(a: &CsrMatrix, x: &[f64]) -> Vec<f64> {
     y
 }
 
+/// The model check of the dense basis and of the static correction (ADR 0798 D1: shells by the option).
+fn check_entry(model: &SolidModel, shells: bool) -> Result<()> {
+    if shells {
+        model.check_supported_shells()
+    } else {
+        model.check_supported()
+    }
+}
+
 /// The zero prescribed equations of a model not on the transformation path; `key` names the refusal.
-fn zero_prescribed(model: &SolidModel, key: &'static str, what: &str) -> Result<Vec<(usize, f64)>> {
+fn zero_prescribed(model: &SolidModel, key: &'static str, what: &str, shells: bool) -> Result<Vec<(usize, f64)>> {
     model.validate()?;
-    model.check_supported()?;
+    check_entry(model, shells)?;
     if crate::mpc::uses_transformation(model) {
         return Err(invalid(
             key,
@@ -151,7 +163,17 @@ impl ModalBasis {
     /// `K` and `M` (Cholesky of `M` and Jacobi, `rcfd_linalg::eigen::generalized_eigen_dense`); a free body is taken (its
     /// rigid modes are in the basis). Zero prescribed values only; the transformation path is refused.
     pub fn all_modes(model: &SolidModel, threads: Option<usize>) -> Result<ModalBasis> {
-        let fixed = zero_prescribed(model, "constraint", "the dense modal basis")?;
+        ModalBasis::every_mode(model, threads, false)
+    }
+
+    /// [`ModalBasis::all_modes`] with Shell4 and Shell3 blocks taken (ADR 0798 D1); the drilling rotations are unknowns like
+    /// the others.
+    pub fn all_modes_with_shells(model: &SolidModel, threads: Option<usize>) -> Result<ModalBasis> {
+        ModalBasis::every_mode(model, threads, true)
+    }
+
+    fn every_mode(model: &SolidModel, threads: Option<usize>, shells: bool) -> Result<ModalBasis> {
+        let fixed = zero_prescribed(model, "constraint", "the dense modal basis", shells)?;
         let dofs = model.dof_map();
         let n = dofs.n_equations();
         let free_count = n - {
@@ -461,6 +483,8 @@ pub struct HarmonicOptions {
     /// The pre-stress the basis was computed with ([`crate::geometric::prestressed_modes`]); the static correction then
     /// uses `K + K_sigma` (ADR 0400 D3). Default `None` (the elastic `K`). Not used without the static correction.
     pub prestress: Option<Prestress>,
+    /// Take Shell4 and Shell3 blocks in the static correction (ADR 0798 D1; default `false`: refused as before).
+    pub shells: bool,
 }
 
 impl Default for HarmonicOptions {
@@ -470,6 +494,7 @@ impl Default for HarmonicOptions {
             static_correction: true,
             threads: None,
             prestress: None,
+            shells: false,
         }
     }
 }
@@ -490,6 +515,11 @@ impl HarmonicOptions {
     /// The same options with a thread count for the assembly.
     pub fn threads(mut self, threads: usize) -> HarmonicOptions {
         self.threads = Some(threads);
+        self
+    }
+    /// The same options with Shell4 and Shell3 blocks taken in the static correction (ADR 0798 D1).
+    pub fn shells(mut self, on: bool) -> HarmonicOptions {
+        self.shells = on;
         self
     }
     /// The same options with the pre-stress of the basis for the static correction (ADR 0400 D3).
@@ -548,7 +578,7 @@ impl HarmonicSolver {
             if crate::mpc::uses_transformation(model) {
                 Some(transformation_correction(model, &basis, options)?)
             } else {
-                let fixed = zero_prescribed(model, "static correction", "the static correction")?;
+                let fixed = zero_prescribed(model, "static correction", "the static correction", options.shells)?;
                 let free_motions = free_rigid_motions(model, &[]).map_or(0, |f| f.count);
                 if free_motions > 0 {
                     Some(relief_correction(model, &basis, options, &fixed)?)
@@ -954,7 +984,7 @@ fn transformation_correction(
 ) -> Result<StaticCorrection> {
     let key = "static correction";
     model.validate()?;
-    model.check_supported()?;
+    check_entry(model, options.shells)?;
     if let Some(i) = model
         .constraints()
         .iter()

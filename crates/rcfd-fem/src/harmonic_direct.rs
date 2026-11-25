@@ -43,6 +43,9 @@
 //! model on the transformation path, `x = T q + G` with `G` the constant of the elimination for the complex base values
 //! (`T` unchanged), `A_r Q = T^T (F - A_ext G)`, and returns the reference unknowns of the rigid sets with the response
 //! ([`DirectHarmonicSolution`]). [`DirectHarmonic::response_with_base`] keeps refusing base motion on that path.
+//!
+//! ADR 0798 (F-630): with [`DirectHarmonicOptions::shells`] Shell4 and Shell3 on both paths (not with a viscoelastic
+//! material); without it they are refused.
 
 use crate::assemble::{assemble_with, stiffness_with};
 use crate::constraint::{prescribed_equations, Prescribed};
@@ -277,6 +280,8 @@ pub struct DirectHarmonicOptions {
     /// A pre-stress whose geometric stiffness `K_sigma` (ADR 0390) is added, real and undamped, to the stiffness and to the
     /// Rayleigh stiffness (ADR 0543 D5; default none).
     pub prestress: Option<Prestress>,
+    /// Take Shell4 and Shell3 blocks (ADR 0798 D1; default `false`: refused as before).
+    pub shells: bool,
 }
 
 impl Default for DirectHarmonicOptions {
@@ -290,6 +295,7 @@ impl Default for DirectHarmonicOptions {
             temperature: None,
             factor: DirectFactor::Envelope,
             prestress: None,
+            shells: false,
         }
     }
 }
@@ -303,6 +309,12 @@ impl DirectHarmonicOptions {
     /// The loss factor of the material on element set `set`.
     pub fn loss_factor(mut self, set: &str, loss: LossFactor) -> DirectHarmonicOptions {
         self.loss_factors.push((set.to_string(), loss));
+        self
+    }
+
+    /// The same options with Shell4 and Shell3 blocks taken (ADR 0798 D1).
+    pub fn shells(mut self, on: bool) -> DirectHarmonicOptions {
+        self.shells = on;
         self
     }
 
@@ -592,6 +604,17 @@ fn finite_nonneg(key: &'static str, what: &str, v: f64) -> Result<()> {
     Ok(())
 }
 
+/// Whether the element set holds an element of a Layup block (ADR 0798 D4).
+fn has_layup(model: &SolidModel, set: &str) -> bool {
+    let mesh = model.mesh();
+    mesh.element_set(set).unwrap_or(&[]).iter().any(|&e| {
+        matches!(
+            mesh.blocks()[mesh.block_of(e)].property(),
+            Some(crate::mesh::BlockProperty::Layup { .. })
+        )
+    })
+}
+
 impl DirectHarmonic {
     /// Assembles the stiffness per material, the consistent mass and the dashpots of a model (solid elements, zero
     /// prescribed displacements) and checks the options. A model with linear constraints, rigid sets or elastic supports is
@@ -602,7 +625,11 @@ impl DirectHarmonic {
         crate::hex8x::refuse_incompatible_viscoelastic(model, "the direct harmonic solve")?;
         let visco = model.materials().iter().any(|(_, m)| is_viscoelastic(m));
         if visco {
+            // ADR 0798 D5: shells stay refused beside a viscoelastic material.
             check_viscoelastic_model(model)?;
+        } else if options.shells {
+            // ADR 0798 D1
+            model.check_supported_shells()?;
         } else {
             model.check_supported()?;
         }
@@ -690,6 +717,14 @@ impl DirectHarmonic {
                     finite_nonneg("loss factor", &format!("loss factor of set '{set}'"), *eta)?;
                     Damping::Constant(*eta)
                 }
+                // ADR 0798 D4: the moduli of a layup are those of its plies.
+                LossFactor::Table(_) if has_layup(model, set) => return Err(invalid(
+                    "loss factor",
+                    format!(
+                        "a modulus table on set '{set}', which holds an element of a Layup block: E'/E refers to the \
+                             material of the set, not to those of the plies (ADR 0798 D4)"
+                    ),
+                )),
                 LossFactor::Table(t) => match &materials[m].1 {
                     Material::IsotropicElastic { e, .. } => Damping::Table(t.clone(), *e),
                     _ => {
@@ -726,8 +761,8 @@ impl DirectHarmonic {
                             let size: usize = ctx.nodes.iter().map(|&a| dofs.components(a)).sum();
                             return Ok(crate::element::ElementMatrix::zeros(size));
                         }
-                        let d = ctx.material.linear_elasticity_matrix()?;
-                        crate::hex8x::element_stiffness_for(model.mesh(), ctx.element, ctx.kind, ctx.coords, &d)
+                        // ADR 0798 D2
+                        crate::assemble::element_stiffness_of(model, ctx)
                     })?;
                     parts.push((km.val, dm.clone()));
                 }

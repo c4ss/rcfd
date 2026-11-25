@@ -24,6 +24,8 @@
 //!
 //! ADR 0459 (F-542): the orthotropic and the tabulated material of ADR 0452 on solid elements, both paths, through the
 //! per-point stiffness (a table at the model's temperature field); not with a cyclic constraint.
+//!
+//! ADR 0798 (F-630): with [`TransientOptions::shells`] Shell4 and Shell3 on both paths; without it they are refused.
 
 use crate::assemble::point_stiffness;
 use crate::constraint::{prescribed_equations, reduce, Prescribed};
@@ -304,6 +306,8 @@ pub struct TransientOptions {
     pub damping: Option<Rayleigh>,
     /// Worker threads of the assembly (`None`: the available parallelism); the result does not depend on it.
     pub threads: Option<usize>,
+    /// Take Shell4 and Shell3 blocks (ADR 0798 D1; default `false`: refused as before).
+    pub shells: bool,
 }
 
 impl TransientOptions {
@@ -314,11 +318,17 @@ impl TransientOptions {
             time_step,
             damping: None,
             threads: None,
+            shells: false,
         }
     }
     /// The same options with a method.
     pub fn method(mut self, method: Method) -> TransientOptions {
         self.method = method;
+        self
+    }
+    /// The same options with Shell4 and Shell3 blocks taken (ADR 0798 D1).
+    pub fn shells(mut self, on: bool) -> TransientOptions {
+        self.shells = on;
         self
     }
     /// The same options with Rayleigh damping.
@@ -435,6 +445,17 @@ pub struct Integrator {
     motion: Option<MotionPath>,
 }
 
+/// The model check of both paths (ADR 0459 D1, D3): solid elements and, with the shells option, Shell4 and Shell3 (ADR 0798
+/// D1).
+fn check_entry(model: &SolidModel, options: &TransientOptions) -> Result<()> {
+    if options.shells {
+        model.check_supported_shells_with_materials()?;
+    } else {
+        model.check_supported_solids_with_materials()?;
+    }
+    crate::mat_ortho::refuse_with_cyclic(model)
+}
+
 fn check_time_step(dt: f64) -> Result<()> {
     if !(dt.is_finite() && dt > 0.0) {
         return Err(FemError::InvalidValue {
@@ -496,8 +517,11 @@ impl Integrator {
         check_time_step(options.time_step)?;
         model.validate()?;
         // ADR 0459 D1, D3: solid elements, also of the orthotropic and the tabulated material; not with a cyclic constraint.
-        model.check_supported_solids_with_materials()?;
-        crate::mat_ortho::refuse_with_cyclic(model)?;
+        check_entry(model, options)?;
+        if options.shells {
+            // ADR 0798 D3: shells with a cyclic constraint only with the constraint's own option.
+            crate::mpc::check_transformation_model(model)?;
+        }
         let parameters = options.method.parameters()?;
         let damping = options.damping.unwrap_or(Rayleigh {
             mass: 0.0,
@@ -652,8 +676,7 @@ impl Integrator {
         check_time_step(options.time_step)?;
         model.validate()?;
         // ADR 0459 D1, D3, as on the transformation.
-        model.check_supported_solids_with_materials()?;
-        crate::mat_ortho::refuse_with_cyclic(model)?;
+        check_entry(model, options)?;
         let dofs = model.dof_map();
         let fixed = prescribed_equations(model, &[])?;
         if let Some(&(eq, v)) = fixed.iter().find(|&&(_, v)| v != 0.0) {

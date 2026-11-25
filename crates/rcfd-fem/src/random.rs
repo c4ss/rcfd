@@ -24,6 +24,7 @@ use crate::error::{FemError, Result};
 use crate::fatigue::spectral_rate;
 use crate::harmonic::{HarmonicOptions, HarmonicSolver, ModalBasis};
 use crate::mass::{consistent_with, rigid_motions};
+use crate::mesh::ElementKind;
 use crate::model::SolidModel;
 use crate::recover::IntegrationPointField;
 use rcfd_core::vec3::Vec3;
@@ -1101,6 +1102,19 @@ impl RandomSolver {
     /// The solver of a model from a basis of its modes: the F-399 [`HarmonicSolver`] with these options (its modal damping
     /// and static correction, and its refusals).
     pub fn new(model: &SolidModel, basis: ModalBasis, options: &HarmonicOptions) -> Result<RandomSolver> {
+        // ADR 0798 D5: the shells option of the harmonic solver is not an option of the random response.
+        if options.shells {
+            for (b, block) in model.mesh().blocks().iter().enumerate() {
+                if matches!(block.kind(), ElementKind::Shell4 | ElementKind::Shell3) {
+                    return Err(FemError::NotYetSupported {
+                        item: "element kind",
+                        variant: block.kind().name(),
+                        location: format!("block {b}, the random response"),
+                        package: "a follow-up of ADR 0798",
+                    });
+                }
+            }
+        }
         Ok(RandomSolver {
             harmonic: HarmonicSolver::new(model, basis, options)?,
             threads: options.threads,

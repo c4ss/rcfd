@@ -1357,7 +1357,7 @@ pub fn add_supports(k: &mut CsrMatrix, model: &SolidModel) -> Result<()> {
 /// or Shell4 and a cyclic constraint refused naming [`crate::beam::FOLLOW_UP`] or [`crate::shell::FOLLOW_UP`] (the cyclic
 /// rows rotate translations only). ADR 0556 D1: with the shells option of the cyclic constraint Shell4 and Shell3 are taken;
 /// ADR 0595 D1, ADR 0744 D1: and Beam2, on matched boundaries (ADR 0744 D2).
-fn check_transformation_model(model: &SolidModel) -> Result<()> {
+pub(crate) fn check_transformation_model(model: &SolidModel) -> Result<()> {
     // ADR 0457 D2: also the orthotropic and the tabulated material on solid elements (ADR 0452 D6).
     model.check_supported_with_materials()?;
     // ADR 0457 D3, ADR 0462 D2: the cyclic rows rotate translations; a material with its own axes is taken with them only
