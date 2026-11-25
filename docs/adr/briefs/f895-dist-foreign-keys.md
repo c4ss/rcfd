@@ -84,3 +84,5 @@ The registration's commit and the others; what was registered before the run; th
 was registered; what the gate runs and what is a heavy record; mutations or negative controls; deviations; what was not
 run; open questions with options and a recommendation; the result of `python scripts/process_report.py --check`; your
 verdict by the registered rule.
+
+Started 2026-11-25 as a session of the app; the `/goal` line was in its first prompt behind other text and was not set as a command, as the session said; it works to the line as text.

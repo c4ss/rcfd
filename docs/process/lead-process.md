@@ -31,8 +31,10 @@ results one by one: an item is done when its registered decision rule says so an
    reading exceeds the reading limit, split it or point it at an area page's reading list.
    The brief has a section `## Goal` with one line that starts `/goal` and states, in at most 4000 characters, the end
    state of the work, how each part of it is shown in the conversation (the command and its output), and a bound on the
-   turns. The work is started as a session of its own with that line as its first prompt, because a goal belongs to a
-   session and a subagent has no way to set one; the lead checks that the session reports the goal as set. The end state
+   turns. The line is set as a command where the way of starting allows it: typed into a session by the maintainer, or
+   given to `claude -p` as the whole prompt. A subagent has no goal, and a session the lead starts in the app has text put
+   before its prompt, so that the line is read there and not set (seen on 2026-11-25, F-895); the agent then works to the
+   line as text and says so, and the lead's report names which it was. The end state
    is the report with the verdict of the registered rule, done or partial: a miss recorded as a miss meets the goal, so
    that a goal never asks for a changed limit, a skipped test or a second run of a registered run.
 5. After the registration is committed and before the code: if the report lists one of its limits as having no source
@@ -183,8 +185,8 @@ of agents is put to the maintainer again after four weeks of the measures.
 
 ## Changes
 
-- 2026-11-25: "Issuing" 4 gains the `/goal` line of a brief and the start of the work as a session, on the maintainer's
-  direction of that day ("when you start new roadmap pieces make sure they write a clear `/goal` tool/skill call").
+- 2026-11-25: "Issuing" 4 gains the `/goal` line of a brief, on the maintainer's direction of that day
+  (which way of starting sets it is asked of the maintainer) ("when you start new roadmap pieces make sure they write a clear `/goal` tool/skill call").
 - 2026-11-23: "Merging and pushing" gains the wiki ingest after each merge, by the lead, on the maintainer's answer of
   that day (option (a): the lead ingests; agents do not edit the wiki).
 - 2026-11-21: the stop conditions of "When no further agent is started" are in force (the maintainer's answer in ADR
