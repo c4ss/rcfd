@@ -214,3 +214,25 @@ behaviour and the time limit. They are seen by the lead's first run. WebGPU on L
   `--ignore-gpu-blocklist` on Windows too. Options: (a) pass it on Windows as on Linux, a setting of the test environment
   only; (b) leave Windows as it is and record those tests as known misses of the runner; (c) run the field specs on Windows
   only on a machine with a GPU. Recommendation: (a), the change of C4 on the other branch of the step.
+
+## Amendment 1 (2026-11-25): the interrupted run W, and the marks of the Windows list output
+
+Written and committed before the runs it covers (W, L, A2w, A2l, R7, M1 to M3, P1). Nothing above is changed.
+
+1. **The first run W was interrupted and gave no result.** It was started at 23:05 on a `git archive` copy of 8dd4deaa with
+   `run_job.py` as registered; steps 1 to 10 passed (the engine step 172 s, `npm ci` 53 s, typecheck 2 s, build 5 s; step 9
+   skipped by its `if:`), and the Playwright step had reached test 686 of 880 (686 passed, none failed or skipped so far)
+   when the session that ran it ended at 23:19, not by its choice; no Electron or container of it is left. It produced no
+   count, so it is no run of A5w or S1w. The registered run W is made once, whole, on a fresh `git archive` copy of the
+   commit that adds this amendment (its `ci.yml` is that of 8dd4deaa), with `CARGO_TARGET_DIR` the registered `target-win`
+   (it already holds the four files from that run's engine step; the step runs and rebuilds what changed). The copy of the
+   interrupted run is kept in the scratch folder as `win-job-interrupted`. The work continues in a new session, model Claude
+   Opus 5.5.
+2. **The marks.** On Windows the list reporter writes `ok`, `x` and `-` where the registration names ✓, ✘ and -; they are
+   counted as the same marks. The counts are also read from Playwright's summary lines ("N passed", "N skipped",
+   "N failed", "N flaky"); the two readings must agree. Playwright's `retries` is 0 (`playwright.config.ts`), so no test is
+   run twice.
+3. **Made before this amendment**: V1 on 8dd4deaa (`actionlint .github/workflows/ci.yml`: exit 0, no message; the control,
+   main's file: exit 0, no message), A1 and A4 (the diffs: every job but studio-web and its name, matrix, `runs-on`,
+   defaults and env equal, `npm ci` kept; `dependabot.yml` 0 lines of diff), and `docs_site` on the registration (2 passed).
+   These are not made again.
