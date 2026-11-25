@@ -1,0 +1,18 @@
+{
+  "form": 1,
+  "adr": "0791",
+  "item": "F-339",
+  "base": "c49eff4bd4add40e16bb4f6bb0ad67cdde755f0b",
+  "status": "done",
+  "note": "ADR 0791, 2026-11-25, done: every argument of design_uq and design_sobol is sent at a value that tells a wrong reading from the right one (the string, null and absent bounds of a normal distribution in every pair, a swapped Beta a and b, mean, system_l, the seed and its default, circular_arc, cmp <=, se_abs, and the further arguments found by reading): 16 tests hold against the library bit for bit, with the library's differing result for the wrong readings, 40 registered mutations of tools.rs are each caught by the row registered for it, one is committed, and the existing tests of rcfd-mcp and rcfd-api --lib pass unedited; tools.rs was right in every row; found beside it and recorded as a known miss outside the decision rule (K1): the library panics, and the server process ends, on a normal distribution open on one side only.",
+  "follow_ups": [
+    {
+      "title": "A normal distribution open on one side in the tolerance and Sobol drivers",
+      "deps": [
+        "F-339"
+      ],
+      "acceptance": "erfc(+inf) is 0 and erfc(-inf) is 2 exactly (neither is a number now), and uq::run, sensitivity::run, design_uq and design_sobol sample a normal distribution with one finite and one open bound: every sample lies within the finite bound and equals the closed form of the truncated inverse CDF within a limit registered before the run; k1_one_open_side_known_miss of crates/rcfd-mcp/tests/design_uq_sobol_args_f339.rs passes with its limit unchanged; every result with two finite or two open bounds is bit-identical. Limits not stated here are registered before the run.",
+      "key": "one-open-side"
+    }
+  ]
+}
