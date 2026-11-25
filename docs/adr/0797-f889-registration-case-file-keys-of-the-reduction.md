@@ -198,3 +198,103 @@ attributed to its key in the report.
 ## Open questions for the maintainer
 
 None expected.
+
+## Addendum 1: results (2026-11-25)
+
+Commits: the registration ceca6c21 (alone); the records D1 and S1 of main 25311db5, before any library line, 2d1722a5; the
+keys, the rows and the page 5e4a41c0; the committed mutation c73c9bed; then this addendum with the proposal file. No
+amendment. The registered run was made once, at 5e4a41c0, release profile, in the scratch folder's own target (script
+`run1.sh`, logs `run1-*.log`, summary `run1-summary.log`).
+
+| Id | Limit | Measured | Met |
+|---|---|---|---|
+| K1 | equal bytes; modes 9 and 5 | B 183305 and A 143980 bytes, equal to the library's; 9 and 5 modes, no residual vector | yes |
+| K2 | equal bytes; one vector; differ | B3 and B: with the key 165147 bytes and one vector, with `false` and without the key 159233 bytes, each equal to the library's; the two differ | yes |
+| K3 | equal bytes; differ from the second | 177149 bytes, equal to the library in the order f_z, f_x, f_y; differ from f_x, f_y, f_z; 3 vectors | yes |
+| K4 | equal bytes, 8 of 8 | 8 of 8 equal (177149 to 398032 bytes) | yes |
+| K5 | equal bytes; the repeated name drops one vector | 171114 bytes and 2 vectors in both cases, equal to the library's | yes |
+| E1 | equal bytes; equal in bits; 27 and 28 vectors | A 314745 and B 381814 bytes equal to the library's E1 parts; 27 and 28; 96 eigenvalues of the assembly and their frequencies equal in bits (476.681, 572.584, 2921.422, ... rad/s) | yes |
+| R | 16 of 16 refused at the registered key, line and text | 16 of 16 | yes |
+| R2 | both | both reported, each at its key and line | yes |
+| Z | zero; not zero | the three refused loads of A: zero in every entry; B3 and Bm: not zero | yes |
+| N | accepted | 3 of 3 | yes |
+| D1 | equal | 20 digests (nine part cases, file and report each; the host, static and modal) equal to the records of main | yes |
+| S1 | equal | 0x36594e64f4f9fb2d (9021 bytes) on main and after | yes |
+| L | equal; passes | Linux x86_64 (the image of ADR 0150, glibc 2.39, cargo 1.99.0, no network): at 2d1722a5 the 20 digests and S1 of main equal the Windows ones; at c73c9bed 12 passed | yes |
+| X1 | pass | `f616_superelement_case` 6 passed; `f616_superelement_case_default_bits` 2; `sb_solid_case` 8, 4 ignored; `sb_solid_case_iterative` 3, 1 ignored; unedited | yes |
+| X2 | pass; equal | `baseline_hashes` 3 passed, 1 ignored; `case_hashes_w48u` 1 passed; `w48v_case_hashes` (an ignored print) run with `--ignored` on the branch and on an export of main: the filtered output is 45 lines on both, equal; unedited | yes |
+| X3 | pass, as on main | `sa_cms_enrich` 5 passed; `sa_cms_pattern` 9, 2 ignored; `sa_cms_residual` 8, 2 ignored; no file of `rcfd-fem` is changed | yes |
+
+Also: `cargo test -p rcfd-api --release --lib` 160 passed, 4 ignored; `cargo fmt -p rcfd-api --check` clean; `cargo clippy -p
+rcfd-api --all-targets --release -- -D warnings` clean. On Linux the final run prints only its last 60 lines, so D1 and S1
+there are held by the test's own assertions (12 passed).
+
+**Schema.** Against main the JSON schema of the solid case file gains 22 lines and loses none: the entries `cutoff`,
+`load_patterns` and `residual_vectors` of `reduction` and their three names in its `required` (`schema.diff` of the scratch
+folder, made from the branch's schema; S1 holds the rest to main's). No golden holds it (ADR 0785, finding 1): nothing to
+re-record, no "additive golden edit" is asked.
+
+**Mutations** (a copy of c73c9bed with a target folder of its own, each alone, the file restored after; script `mutate.py`,
+`mutations.tsv`, a log each). The unchanged copy passes (12). All 18 are caught:
+
+| Id | Expected | Failed |
+|---|---|---|
+| M1 | K1, K4, E1, R | K1, K4, E1, R |
+| M2 | K2, K4, E1 | K2, K4, E1 |
+| M3 | K3, K4, K5 | K3, K4, K5 |
+| M4 | K1, K4, E1 | K1, K4, E1 |
+| M5 | K3, K4, K5 | K3, K4, K5 |
+| M6 | K3, K4, K5 | K3, K4, K5 |
+| M7 | K2, K4 | K2, K4 |
+| M8 | K3, K4, K5 | K3, K4, K5 |
+| M9 | R, R2 | R, R2 |
+| M10 | R, R2 | R, R2 |
+| M11 | R | R |
+| M12 | R | R |
+| M13 | R | R |
+| M14 | R | R |
+| M15 | R | R |
+| M16 | D1, K1, K3, R | D1, K1, K2, K3, K4, K5, E1 (R was not) |
+| M17 | D1, K2, K3 | D1, K2, K3, K4, K5, N |
+| M18 | D1, K1, K2 | D1, K1, K2, K4, N |
+
+M16 does not fail R: with the vector on by default every refusal of R is still given (some cases give a second problem, which
+R does not forbid). It is caught by three of its four rows. Committed: M4 as
+`crates/rcfd-api/tests/solid_case_reduction_keys_f889.mutation.patch` (command: the test `k1_cutoff_alone`; `git apply --check`
+passes).
+
+### Deviations
+
+1. **A target folder in the wrong place.** The first build (the link check before the registration commit) was given
+   `CARGO_TARGET_DIR=/e/projects/...`, which the Windows cargo read as `E:\e\projects\...`. It made
+   `E:\e\projects\cfd\w49i-work\f889-reduction-keys-scratch\target` (402 MB), outside the worktree and the scratch folder,
+   against rule 10. It is left, because the brief forbids deleting anything there; every later command used `E:/...`. The same
+   tree holds a folder of another agent (`f828-provenance-remaining-scratch`, not mine).
+2. D1 and S1 were run on main's code twice on Windows before their commit, first with zero records to print them, then to
+   confirm them; once on Linux.
+3. S1's test was run once more after the registered run, with `F889_SCHEMA_OUT`, to write the schema text for the diff (it
+   passed); no check was run again to make it pass.
+4. The test K1 also compares with twice the cutoff (the file differs), which is not a registered row.
+5. The test file's helper `Checks` is in the code commit, not in the record commit (unused there, a warning).
+6. The text needle of R is empty where the settings give the refusal (seven cases); the key and the
+   line are checked.
+
+Not run: the workspace suite and the other integration tests of `rcfd-api` and `rcfd-fem` (the lead's gate).
+
+Size (agent), actual: done; 0; 0; 0; 250000
+
+### Decision
+
+**done** by the registered rule: every row holds at its one registered run, every mutation is caught by a registered row (M16 by
+three of the four it was expected to fail, as the table says), the named existing tests pass unedited, and no amendment was made
+after a run.
+
+### Open questions for the maintainer
+
+None.
+
+## For the lead: roadmap entries
+
+Status proposed: done.
+
+> ADR 0797, 2026-11-25, done: the table [reduction] of the solid case file takes cutoff (a plain number in rad/s), residual_vectors and load_patterns (names of loads of the case, in the order of the list), the options of ADRs 0474 and 0511; part files made from case files with each key alone and in the eight combinations the library takes equal the library's byte for byte, and E1 of ADR 0532 (cutoff 32964 rad/s, the load's vector, one block of enrichment) from two case files gives the library's bytes and its 96 assembly frequencies in bits; refused by key and line: an unknown load, a cutoff that is not positive and finite or beside a mode count (the library's words), residual_vectors or a pattern with no interior load; without the keys every result is main's (20 digests on Windows and Linux x86_64, the unedited tests of F-616, baseline_hashes and the case hash tables); the schema gains 22 lines and no golden holds it; 18 of 18 mutations caught, one committed.
