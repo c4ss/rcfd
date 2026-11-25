@@ -401,3 +401,16 @@ Status proposed: partial.
 > The whirl and full_rotor beam opt-ins are lifted and every row but one holds. Missing: E-W of ADR 0799 is a miss because whirl_stability of the wheel sector W (ADR 0595) at k = 0..3 and 0, 30, 60 rad/s is a solver error (gyroscopic_state_eigen: the QR iteration did not converge on rows 116..=119 in 30 steps), on main as well. Also missing: the known-miss form of that test (question 2) and two clippy byte_char_slices fixes in sa_beam_opt_ins_default_f672_bits.rs line 279.
 
 > Follow-up: "whirl_stability of the cyclic beam wheel sector converges", deps F-672, acceptance: RotatingSector::whirl_stability of the wheel sector W of ADR 0595 (shells option, 4 modes, coriolis on) at harmonic indices 0 to 3 and speeds 0, 30 and 60 rad/s returns Ok, with eigenvalues that agree with whirl_state of the same index and speed within the limit the registration states from the tolerance table, and the defaults bit-identical.
+
+## Addendum 2 (2026-11-25): the E-W miss held as a known miss, on the maintainer's answer of that day to question 2
+
+The maintainer answered question 2 on 2026-11-25 with option (a), relayed by the lead. The test
+`e_w_whirl_paths_of_the_beam_sector_without_the_options` is renamed `e_w_whirl_paths_of_the_beam_sector_without_the_options_known_miss`
+and carries `#[ignore = "known miss of ADR 0799 run 1 (560db037): P7 whirl_stability of W is Err(Solver gyroscopic_state_eigen: the QR iteration did not converge on rows 116..=119 in 30 steps) under (a), (b) and (c) alike, as on main under (b)"]`.
+Its body, its limit and its assertions are unchanged, and E-W is not run again: the row stays missed, as Addendum 1
+records it, and the decision stays partial. The other six tests of the file stay in the gate.
+
+At the lead's request, after Addendum 1, commit bfa09cb8 took clippy's form `*b"\n"` for `[b'\n']` at line 279 of
+`sa_beam_opt_ins_default_f672_bits.rs`. The lead counts clippy as no registered run, so a second run was allowed.
+`cargo clippy -p rcfd-fem --all-targets -- -D warnings` then passed (exit 0). The bits file, run once, gave the hashes of
+the Windows record, equal. The clippy part of the gap is closed by it.
