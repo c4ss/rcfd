@@ -38,7 +38,8 @@ results one by one: an item is done when its registered decision rule says so an
    nobody for a permission, so an action it is denied is in its report. A subagent has no goal, and a session started in
    the app has text put before its prompt and does not set it (F-895, 2026-11-25). The end state
    is the report with the verdict of the registered rule, done or partial: a miss recorded as a miss meets the goal, so
-   that a goal never asks for a changed limit, a skipped test or a second run of a registered run.
+   that a goal never asks for a changed limit, a skipped test or a second run of a registered run. It asks for the
+   output of the registered run, not for the run again at the end.
 5. After the registration is committed and before the code: if the report lists one of its limits as having no source
    (rule 15), send it back for a source.
 6. A dispatch that is abandoned gets a dated line appended to its brief: "Closed without merge (<date>): <why>".

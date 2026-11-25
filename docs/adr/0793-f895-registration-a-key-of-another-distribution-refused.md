@@ -298,3 +298,23 @@ Status proposed: done. No follow-up is proposed; finding 4 is for the lead to we
 > ADR 0793, 2026-11-25, done: in params[i].dist of design_uq and design_sobol a key that the named type does not have (mean, sd, a or b of a uniform; a or b of a normal; mean or sd of a beta) is refused with -32602, whatever its value, the message naming the key by its path and the keys of the type, before the limit and the driver and with nothing written: 384 calls over the eight keys (number, null, string and three other values, both tools, through the server and the handler, in the first and the second input); of several the first of mean, sd, a, b is named; a key of no distribution, a type that is not known and a malformed number keep code and message; the six forms of Dist::to_json, the sixteen forms of the open sides and a study of three inputs give the library's and main's bytes on Windows x86_64 and Linux x86_64; 23 registered mutations, the eight wrong acceptances among them, are each caught by the registered rows, one is committed; no golden, tool-list text or existing test is changed.
 
 The same entry as `docs/roadmap/proposals/0793-F-895.json`.
+
+## The lead's reading (2026-11-25), at the merge
+
+Merged at 0fea72e9 on the maintainer's answer "Yes, merge it", since the work ran in a session of its own, and pushed at
+c5570767 (the report read at 17:19 UTC, 12 minutes of reading, proposed done, written done). Checked by the lead before the
+merge: the registration is the first commit and alone; the record of main is made before the change, in three commits in
+which `tools.rs` is main's; amendment 1 comes before the second run of one part of row X and states the set-up that voided the
+first; of the existing files only `study_params` and one sentence of `docs/mcp-tools.md` are changed, and no golden or
+existing test, so no reader was issued. A call with a foreign key was accepted and is now refused, which is what the item
+asks. On the merged tree the lead ran the new file (16 passed), `design_uq_sobol_args_f339` (16) and
+`f894_one_open_side_tools` (4). The Linux record and the 23 mutations are the session's; the lead did not repeat them beyond
+the three patches of the push run, which were caught. 127 binaries were left out for a left-out run.
+
+The session was started with the brief's `/goal` line, which was not set as a command; it took 74 turns, past the line's 60,
+which nothing enforced. The line also asked for the named tests among the final outputs, so the new file ran again at the
+end, after its registered run (deviation 4 of the report): a goal line asks from now on for the output of the registered
+run and not for another.
+
+Status: **done**, as proposed. Finding 4 (`parse_robust`, `parse_method` and `parse_axes` ignore a known key of another kind
+and an unknown key) is a question of scope for the maintainer and is not entered.
