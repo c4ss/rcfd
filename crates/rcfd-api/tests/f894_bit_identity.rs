@@ -3,8 +3,9 @@
 //! F1: `erfc`, `erf`, `erfc_inv`, `norm_cdf` and `norm_inv` at finite arguments; F2: `Dist` with two finite or two open
 //! bounds, uniform and beta, and the texts of its refusals; F3: both drivers; F4: the other callers of `erfc`.
 //!
-//! `F894_DUMP=<folder>` also writes the table and every value there. The hashes are of one mathematical library (`exp`),
-//! as the hash tables of the repository are.
+//! `F894_DUMP=<folder>` also writes the table and every value there. The hashes are of one mathematical library (`exp`), so
+//! there is one record per platform, each made from the library of main (amendment 1): Windows x86_64 and Linux x86_64
+//! (`f894_bit_identity.linux.tsv`). Another platform prints its table and compares the groups of IEEE operations alone.
 
 use rcfd_api::design::bayes::{expected_improvement, prob_feasible};
 use rcfd_api::design::fan_rom_eval::{FanRomModel, RomCondition};
@@ -20,7 +21,21 @@ use std::path::PathBuf;
 
 const INF: f64 = f64::INFINITY;
 const SEED: u64 = 792_003;
-const RECORD: &str = include_str!("f894_bit_identity.tsv");
+const WINDOWS: &str = include_str!("f894_bit_identity.tsv");
+const LINUX: &str = include_str!("f894_bit_identity.linux.tsv");
+/// The groups without a call of the mathematical library: the same on every platform.
+const EVERYWHERE: &str = "F2 Uniform ";
+
+/// The record of this platform.
+fn record() -> Option<&'static str> {
+    if cfg!(all(windows, target_arch = "x86_64")) {
+        Some(WINDOWS)
+    } else if cfg!(all(target_os = "linux", target_arch = "x86_64")) {
+        Some(LINUX)
+    } else {
+        None
+    }
+}
 
 fn fnv(bytes: impl Iterator<Item = u8>) -> u64 {
     bytes.fold(0xcbf2_9ce4_8422_2325, |h, b| {
@@ -60,19 +75,44 @@ impl Groups {
             std::fs::write(dir.join(format!("{row}.table.tsv")), self.table.join("\n") + "\n").unwrap();
             std::fs::write(dir.join(format!("{row}.values.txt")), &self.dump).unwrap();
         }
-        let want: Vec<&str> = RECORD
-            .lines()
-            .filter(|l| l.starts_with(row) && l[row.len()..].starts_with(' '))
-            .collect();
-        let differ: Vec<String> = self
-            .table
+        let of = |record: &'static str| {
+            record
+                .lines()
+                .filter(|l| l.starts_with(row) && l[row.len()..].starts_with(' '))
+                .collect::<Vec<&str>>()
+        };
+        // the names and the numbers of values, on every platform
+        let head = |l: &str| l.rsplit_once('\t').unwrap().0.to_string();
+        let heads: Vec<String> = self.table.iter().map(|l| head(l)).collect();
+        let want: Vec<String> = of(WINDOWS).iter().map(|l| head(l)).collect();
+        assert_eq!(heads, want, "{row}: groups of the record");
+        let asserted = record().map_or_else(
+            || {
+                eprintln!("{row}: no record for this platform: {:#?}", self.table);
+                let all = of(WINDOWS);
+                all.into_iter().filter(|l| l.starts_with(EVERYWHERE)).collect()
+            },
+            of,
+        );
+        if record().is_some() {
+            assert_eq!(asserted.len(), self.table.len(), "{row}: groups of the record");
+        }
+        let differ: Vec<&str> = asserted
             .iter()
-            .filter(|l| !want.contains(&l.as_str()))
-            .cloned()
+            .filter(|l| !self.table.iter().any(|t| t == *l))
+            .copied()
             .collect();
-        eprintln!("{row}: {} groups, {} differ from main", self.table.len(), differ.len());
-        assert_eq!(want.len(), self.table.len(), "{row}: groups of the record");
-        assert!(differ.is_empty(), "{row}: not the record of main: {differ:#?}");
+        eprintln!(
+            "{row}: {} groups, {} compared, {} differ from main",
+            self.table.len(),
+            asserted.len(),
+            differ.len()
+        );
+        assert!(
+            differ.is_empty(),
+            "{row}: not the record of main: {differ:#?} in {:#?}",
+            self.table
+        );
     }
 }
 
