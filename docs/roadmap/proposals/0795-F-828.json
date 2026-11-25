@@ -1,0 +1,10 @@
+{
+  "form": 1,
+  "adr": "0795",
+  "item": "F-828",
+  "base": "25311db5205c16d93c836d3db98de2faa4e6470e",
+  "status": "partial",
+  "note": "ADR 0795, 2026-11-25, partial: the numbers of F-828's gap have their provenance: the Runs residual columns, the compared run's residuals, the legend's ticks in five range modes, the domain's size, the scale bar, the runner's budgets and the home counts open it by pointer and keyboard with value, unit, run, snapshot, file, reader and engine, equal to run_status, read_residuals, derive_picture, runner_config and the counting tools asked outside the Studio; a passive trigger and a Ctrl+I that steps, Tab stops unchanged (32, 32, 41, 40, 39); a scan of Home, Runs, Workspace and Compare finds no other number without it beyond the registered exemptions; 10 of 10 mutations caught, one committed; 115 e2e tests pass, the 13 existing files unedited; npm run test:unit missed by one test, which found a bench of another checkout.",
+  "gap": "Row X of ADR 0795 missed: npm run test:unit 562 passed, 1 failed, 22 did not run. data-routes.spec.ts:94 took an f447_bench of 2026-11-16 from the main checkout, which lacks length_unit (in the engine since 2026-11-17). Wanted: one npm run test:unit with a current bench. The other numbers on screen are an open question of scope (ADR 0795).",
+  "follow_ups": []
+}

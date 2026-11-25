@@ -183,3 +183,106 @@ The compare metrics table (`compare_runs`); the band ends and the scrubber's fla
 table Step and Time and the sizes in kB (meshes, trash); the counts of the Runs filter and of "n of m shown"; the numbers of
 the Runs rows' words beside the result; the field view's controls (cut, iso-level, rake, the two ends of a fixed range) and
 its note of cells outside the range; counts inside a sentence (log, events, confirmations).
+
+## Addendum 1: results (2026-11-25)
+
+Commits: registration 98af4079; the code and the two specs c98b5f0e; the committed mutation cfa2f9da. The registered run was
+made once, at cfa2f9da, whose only change after the final code commit is the patch file: typecheck, build, package,
+`npm run test:unit`, then the fourteen e2e files in one command with one worker (115 passed, 5.6 min). Amendments: none.
+
+### Checks
+
+| Id | Limit | Measured | |
+|---|---|---|---|
+| KR | `run_status` bit for bit, the unit's text | equal for u and p of two runs, by pointer, cell and row | met |
+| KC | `read_residuals` of B bit for bit | equal, B's run, file and unit, pointer and band name | met |
+| KL | ends equal as f32; unit the store's | equal in the five range modes (snapshot, run, fixed, shared, difference), pointer and keyboard | met |
+| KD | `bounds` as f32; `length_unit` | equal, pointer and keyboard | met |
+| KS | the text, the rule, the unit as KD; `not recorded` | as written | met |
+| KB | `runner_config` and the file | equal; unit `not recorded`; typed and empty keys say so | met |
+| KH | the second engine's answers and the folder | equal for H1 to H8 | met |
+| KF | as KL and KS by the decoder | equal | met |
+| KE | the record's `solver_version`, or the server's name and version | equal where each kind is read | met |
+| SC | 0 numbers without a trigger or an exemption | 0 in each of the seven states scanned | met |
+| KT | 32, 32, 41, 40, 39 | 32, 32, 41, 40, 39 | met |
+| KK | as written | as written | met |
+| KQ | none differs; the word budget | 0 differ; `word-budget` 10 of 10 | met |
+| U | as written | 7 of 7 | met |
+| X, typecheck | passes | passes | met |
+| X, e2e | the thirteen existing files pass unedited | 108 of 108: provenance 10, a11y 12, word-budget 10, runs 3, compare 7, field 17, field-derived 10, f837 13, f891 4, project 11, trash 3, first-path 6, idle-frames 2 | met |
+| X, `npm run test:unit` | all pass | 562 passed, **1 failed**, 22 did not run (a serial file) | **missed** |
+| P | pass; only a generated file that is not current may fail | made with this addendum; the output is in the agent's report | in the report |
+
+### The miss
+
+`tests/unit/data-routes.spec.ts:94` ("P12, tiny raw"): expected the length units `[null, "m"]`, received `[null, null]`. The
+test takes `f447_bench` from `RCFD_F447_BENCH`, from `$CARGO_TARGET_DIR/release/examples`, or from a `target` folder of a
+directory above. My target folder held `rcfd`, `rcfd-mcp` and `rcfd-runner` and not the example, so the test walked up and
+took the main checkout's, built 2026-11-16 22:03 UTC, whose bytes hold no text `length_unit`; the engine names it since
+8bba78f2 (2026-11-17). So the registered set-up (the engine of these sources) did not hold for that file. No file under
+`src/main`, which the test exercises, and no crate is changed by this work. The cause is a diagnosis and not a proof: no run
+with a bench of these sources was made, since the session's goal allows no test to be run again to pass and no run to be made
+twice; rule 2's amendment for a defective set-up was for that reason not used. The test is untouched. What decides it:
+`cargo build --release -p rcfd-api --example f447_bench`, then `npm run test:unit` once.
+
+### Mutations (each on cfa2f9da, built, packaged, the new e2e file run once, the file restored)
+
+| Id | Caught by | First failing assertion |
+|---|---|---|
+| M1 | KR | Run: the first run instead of the row's |
+| M2 | KC | Run: the selected run instead of B |
+| M3 | KL (three tests: one view, compare, learner) | Unit: `m/s` instead of the store's `unknown` |
+| M4 | KD (two tests) | Ctrl+I does not reach the domain |
+| M5 | SC (and the tests of KS and KF) | the scan lists the scale bar |
+| M6 | KB | File: `.rcfd/runner-config.json` instead of `.rcfd/runner.json` |
+| M7 | KH | Ctrl+I on Cases does not open its head's count |
+| M8 | KH (and SC) | the runs of a case |
+| M9 | KR (and five other tests) | the second Ctrl+I stays on the first number |
+| M10 | SC (and KH) | the scan lists the head's count |
+
+M7 was made on the segment Cases. Each change compiled, so none was replaced.
+
+### Deviations
+
+1. Development runs of the new e2e file before the registered run: five (dev1: 1 failed, 6 not run; dev2, on an app not
+   rebuilt: 6 failed; dev3: 5 failed; dev4: 1 failed; dev5, KB alone: passed), and one of the new unit file (7 passed). The
+   failures were faults of the test (arguments, locators) and one of the code (the scale bar took no pointer event). The
+   scan's exempt selectors gained the trash's dates and its kB text there, both of registered categories.
+2. H2, Runs: the total is `list_runs` `total`, not a count of all pages. H4: the fact says "whose text holds", since the
+   filter is compared with more than the name. Scan group C is asserted by Compare having more triggers than Workspace, and
+   by KC, not by a name of its own.
+3. A build with `CARGO_TARGET_DIR` written in Git Bash's form made
+   `E:\e\projects\cfd\w49i-work\f828-provenance-remaining-scratch\target`, outside the scratch folder. It is left for the lead
+   to remove, since the brief forbids deleting there.
+
+Not run: the other e2e files, the visual project, the engine's tests, Linux. The new specs are 7 unit tests (under a second)
+and 7 e2e tests (about 1.3 min). No heavy record.
+
+Size (agent), actual: partial; 0; 0; 1; 400000
+
+### Decision
+
+**partial** by the registered rule, for one part of one row: `npm run test:unit` did not pass whole. Every number of the list
+opens its provenance by pointer and keyboard with the registered facts, the scan finds none without, the ten mutations are
+caught and the existing e2e specs pass unedited.
+
+## Open questions for the maintainer
+
+1. Scope (left open): should the numbers of "Open" above carry provenance too, so that "any number on screen" holds without
+   exception? (a) No more: the list of the brief is the scope. (b) Those that are values of a run: the compare metrics table,
+   the band ends, the scrubber's flag, Home's Step and Time. (c) All of "Open", the tick labels of the plots and the sizes in
+   kB included. Recommended: (b), by a registration of its own: the trigger and the keyboard path exist, and the others are
+   labels of an axis, sizes of files or counts in a sentence.
+
+## For the lead: roadmap entries
+
+Status proposed: partial. No follow-up is proposed. To weigh: `findBench` of `tests/support/f447.ts` takes a bench of any age
+from a `target` folder above, so in a worktree the tests of `data-routes.spec.ts` judge another checkout's build.
+
+Gap proposed, then the note:
+
+> Row X of ADR 0795 missed: npm run test:unit 562 passed, 1 failed, 22 did not run. data-routes.spec.ts:94 took an f447_bench of 2026-11-16 from the main checkout, which lacks length_unit (in the engine since 2026-11-17). Wanted: one npm run test:unit with a current bench. The other numbers on screen are an open question of scope (ADR 0795).
+
+> ADR 0795, 2026-11-25, partial: the numbers of F-828's gap have their provenance: the Runs residual columns, the compared run's residuals, the legend's ticks in five range modes, the domain's size, the scale bar, the runner's budgets and the home counts open it by pointer and keyboard with value, unit, run, snapshot, file, reader and engine, equal to run_status, read_residuals, derive_picture, runner_config and the counting tools asked outside the Studio; a passive trigger and a Ctrl+I that steps, Tab stops unchanged (32, 32, 41, 40, 39); a scan of Home, Runs, Workspace and Compare finds no other number without it beyond the registered exemptions; 10 of 10 mutations caught, one committed; 115 e2e tests pass, the 13 existing files unedited; npm run test:unit missed by one test, which found a bench of another checkout.
+
+The same entry as `docs/roadmap/proposals/0795-F-828.json`.
