@@ -1,0 +1,14 @@
+# expect-fail: cargo test --release -p rcfd-api --test solid_case_reduction_keys_f889 k1_cutoff_alone
+diff --git a/crates/rcfd-api/src/solid_case.rs b/crates/rcfd-api/src/solid_case.rs
+index e040497f..4ec21d51 100644
+--- a/crates/rcfd-api/src/solid_case.rs
++++ b/crates/rcfd-api/src/solid_case.rs
+@@ -1025,7 +1025,7 @@ impl SolidCase {
+                 .interface_enrichment(r["interface_enrichment"].as_i64().unwrap_or(0) as usize);
+             // ADR 0797: the cutoff, the load's residual vector and the load patterns, in the order of the list.
+             if self.given("reduction.cutoff") {
+-                options = options.cutoff(f64_at(r, "cutoff"));
++                options = options.cutoff(2.0 * std::f64::consts::PI * f64_at(r, "cutoff"));
+             }
+             let residual = r["residual_vectors"].as_bool().unwrap_or(false);
+             options = options.residual_vectors(residual);

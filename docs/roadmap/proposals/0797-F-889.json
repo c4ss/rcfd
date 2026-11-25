@@ -1,0 +1,9 @@
+{
+  "form": 1,
+  "adr": "0797",
+  "item": "F-889",
+  "base": "25311db5205c16d93c836d3db98de2faa4e6470e",
+  "status": "done",
+  "note": "ADR 0797, 2026-11-25, done: the table [reduction] of the solid case file takes cutoff (a plain number in rad/s), residual_vectors and load_patterns (names of loads of the case, in the order of the list), the options of ADRs 0474 and 0511; part files made from case files with each key alone and in the eight combinations the library takes equal the library's byte for byte, and E1 of ADR 0532 (cutoff 32964 rad/s, the load's vector, one block of enrichment) from two case files gives the library's bytes and its 96 assembly frequencies in bits; refused by key and line: an unknown load, a cutoff that is not positive and finite or beside a mode count (the library's words), residual_vectors or a pattern with no interior load; without the keys every result is main's (20 digests on Windows and Linux x86_64, the unedited tests of F-616, baseline_hashes and the case hash tables); the schema gains 22 lines and no golden holds it; 18 of 18 mutations caught, one committed.",
+  "follow_ups": []
+}
