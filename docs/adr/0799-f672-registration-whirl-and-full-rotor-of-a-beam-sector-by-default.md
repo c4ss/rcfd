@@ -301,3 +301,103 @@ amendment) is not affected by it.
 Observed in the two Windows record runs (a fact of main, not a result of this registration): the three hashes are equal
 between the two runs, and in the texts of `H_W` every path is `Ok` except P7, `whirl_stability` of W under (b), which is an
 error of the solver (`Err(Solver { solver: "gy`...). E-W's limit "every result `Ok`" stands as registered.
+
+## Addendum 1: results (2026-11-25)
+
+The library change is commit 560db037 (D1 to D4 as registered). The record of main is commit 66ae54f1, made on the tree
+of 291973c3 (main's library). Every run below was made once on 560db037, in the release profile, with the target folder
+under the scratch folder; logs are in `E:/projects/cfd/w49i-work/f672-beam-opt-ins-default-scratch`. The work ran in two
+sessions: the first stopped at 23:19 when its session ended, during the clippy run. The second session read the
+first's tool results and did not repeat any run that had finished.
+
+| # | Limit | Measured | Met |
+|---|---|---|---|
+| E-W | every result `Ok`; texts of (a), (b), (c) equal | texts equal on all 17 results (P1, P2 k = 0..3, P3, P4 k = 0..3, P5, P6 k = 0..3, P7, P8); 16 of 17 `Ok`; P7 `whirl_stability` is `Err(Solver { solver: "gyroscopic_state_eigen", .. })`, "the QR iteration did not converge on rows 116..=119 in 30 steps", under (a), (b) and (c) alike | **missed** (P7 not `Ok`) |
+| E-F | every result `Ok`; texts equal | 4 of 4 `Ok` and equal (full rotor of 6772 characters, expand, expand_load, expand_field) | met |
+| E-WS | texts equal | 17 of 17 equal (and `Ok`) | met |
+| E-FS | texts equal | 4 of 4 equal | met |
+| B-M | equal to the record of the platform | Windows x86_64 `[0xd135e8503d05e054, 0xe314b82213528f82, 0x21c219cfc1e34528]` equal; Linux x86_64 (amendment 1 set-up) `[0xd853128f3fd29fe5, 0xc2c826f49eec0288, 0x027865e08223bcf8]` equal | met |
+| B-D | the two record runs of each platform equal | Windows equal, Linux equal | met |
+| A-T1 | `Ok`, equal as stated | NC4 under (b) and under (a) `Ok`, equal to (c); N-W `Ok`, equal to (b) | met |
+| N-T1 | as in T1 | NC1, NC2, A3 (k = 0: 21.574333535840786, 57.42705362457538 Hz) and N-X (4 lines) as in T1 | met |
+| A-T2 | `Ok`, equal to (c) | `Ok`, equal | met |
+| N-T2 | refused, key `cyclic`, naming ADR 0601 | refused so | met |
+| A-T3 | `Ok`; structure; bits; `<= 1e-15` | `Ok`, 6 blocks, `block(j, 0) = j`, Beam2 with 2 elements and the section's bits; copy 0 bit-equal; copies `j >= 1` max 0.000e0 | met |
+| N-T3 | as in T3 | NC2, NC3, NC4 as in T3 | met |
+| N-F | refused `UnsupportedKind { kind: "Beam2", operation: "full_rotor" }` | `Err(UnsupportedKind { block: 1, kind: "Beam2", operation: "full_rotor" })` | met |
+| R-T | the registered lines missed and no other | T1: exactly "NC4 full_rotor, beams option", "NC4 full_rotor, shells only" and "N-W whirl_modes k = 1, shells only" missed; T2: exactly "NC1 full_rotor without full_rotor_beams"; T3: exactly "NC1 full_rotor of Beam2 with the shells option" | met |
+| B1 | 0 failures | 61 test files: 259 passed, 0 failed, 43 ignored (the three retired records among them) | met |
+| B2 | 0 failures | 15 passed, 0 failed | met |
+| B3 | pass | 3 passed, 1 ignored (`rotating_channel_matches_pre_adr0005_hash`, also ignored on main) | met |
+
+Of the new file, 6 tests passed and 1 failed (`e_w_whirl_paths_of_the_beam_sector_without_the_options`, the E-W miss).
+The bits file passed on both platforms.
+
+**Diagnosis of the E-W miss.** The cause is not this change. P7 of W failed in the same way on main under (b): see
+amendment 1, which noted it from the record runs (`H_W` holds P7's error text, and B-M is bit-equal to main). The dense
+state solver of `whirl_stability` does not converge on W at one of the harmonic indices and speeds of P7. The registered
+limit assumed that every path of W gives `Ok` on main, and the estimate "holds" was wrong for P7. The limit is kept. The
+lift itself holds on P7: the texts of (a), (b) and (c) are equal, and (a) was refused before the change. This solver
+defect lies outside the item's paths, so it is reported, not repaired (brief).
+
+**Mutations** (on a scratch copy of 560db037 with its own target folder; the new test file run once per mutation):
+
+| Id | Caught by |
+|---|---|
+| Y1 (committed) | E-W (all 17 results refused under (a)) and A-T1 (N-W): `e_w_..` and `r_t1_..` failed |
+| Y2 | E-F, A-T1 (NC4), A-T2, A-T3: `e_f_..`, `r_t1_..`, `r_t2_..` and `t3::r_t3_..` failed |
+| Y3 | E-W on P5 alone ("E-W P5 split_campbell .. MISSED"; P7 missed as it does without the mutation) |
+| Y4 | E-F (the texts of (a) and (c) differ), A-T1, A-T2, A-T3 (1 block): the same four tests failed |
+
+All four were caught. The committed patch `crates/rcfd-fem/tests/sa_beam_opt_ins_default_f672.mutation.patch` (Y1) names
+`r_t1_nc4_n_w_as_acceptance` in its expect-fail line, not the whole file. The whole file already fails on E-W without
+the mutation, so a failure of it would prove nothing. Y1 failed `r_t1_..`, and `r_t1_..` passes without Y1.
+
+**Rule 7.** `cargo fmt -p rcfd-fem --check` stopped with "The filename or extension is too long. (os error 206)", as
+foreseen. Its registered replacement, `rustfmt --edition 2021 --check` on the four library files and five test files
+changed or added, passed (exit 0). `cargo clippy -p rcfd-fem --all-targets -- -D warnings` **failed** (exit 101) with
+two `clippy::byte_char_slices` errors in `sa_beam_opt_ins_default_f672_bits.rs` line 279: `[b'\n']`, twice, where it
+suggests `*b"\n"`. The suggested form is the same `[u8; 1]` value, so the bytes hashed would not change. It was not
+corrected and clippy was not run again, because a fix would need a second clippy run and each registered run is made
+once. It is left to the lead. `docs_site`, `roadmap_proposals.py check` and `process_report.py --check` were run after
+this addendum; their results are in the report.
+
+**Deviations.** (1) After its record runs and before its commit, rustfmt changed the layout of the bits file: line
+breaks inside `out.push(..)`, with no token changed (checked with a word diff). The bits file passed against both
+records after the change. (2) The registered run of the three retired records ran T1 first. The command lacked
+`--no-fail-fast`, so cargo stopped after T1's binary, and T2 and T3 were then run once each with the same filter. (3)
+In the same way, the bits file did not run in the first command, because the new file failed before it, and it was run
+once on its own. (4) Rule 2 asks that a missed limit become an ignored `*_known_miss` test. That edit (a rename of
+`e_w_..` and an ignore line that records the measured error) was denied in the first session by the permission
+classifier, and this session did not try it again. `e_w_whirl_paths_of_the_beam_sector_without_the_options` is
+therefore committed as a failing test, with its limit intact (question 2).
+
+**Not run:** nothing registered was left out. The Linux run after the change covered only the bits file, as registered.
+
+Size (actual): partial; 0; 3; 2; about 450000
+
+(Three container runs: the record attempt with the volume, which stopped before compiling, the record, and the run
+after the change. Two questions: question 1 of the registration and question 2 below.)
+
+**Decision by the registered rule: partial.** E-W is missed (P7), and clippy fails. Every other row is met, all four
+mutations are caught, the named existing tests pass with only T1, T2 and T3 made ignored records, and models without
+beams are bit-identical to main (E-WS, E-FS, B-M, B1 to B3).
+
+### Open questions for the maintainer
+
+1. As registered (the refusals of an option combination). Recommendation: (b).
+2. **How the E-W miss is held.** Options: (a) the lead adds the form of rule 2: the line
+   `#[ignore = "known miss of ADR 0799 run 1 (560db037): P7 whirl_stability of W is Err(Solver gyroscopic_state_eigen: the QR iteration did not converge on rows 116..=119 in 30 steps) under (a), (b) and (c) alike, as on main under (b)"]`
+   and the name `e_w_whirl_paths_of_the_beam_sector_without_the_options_known_miss`, the body unchanged; (b) keep the
+   test failing until the solver follow-up below is done. Recommendation: (a), the form rule 2 prescribes; the other six
+   tests of the file stay in the gate.
+
+### For the lead: roadmap entries
+
+Status proposed: partial.
+
+> ADR 0799, 2026-11-25, partial: a cyclic constraint with the shells option alone takes Beam2 on the seven sector whirl paths and the part's Coriolis matrix and in full_rotor, bit-equal to the beams and full_rotor_beams options (now documented no-ops) on 17 whirl results and 4 full-rotor results of the wheel sector W, and a shell sector keeps its bits with and without them; main's record holds on Windows and Linux x86_64; three refusal tests retired as ignored records and restated; 4 of 4 mutations caught, one committed; E-W missed: whirl_stability of W is a solver error (QR not converged) under every option set, as on main; clippy fails on two byte_char_slices lints in the bits file.
+
+> The whirl and full_rotor beam opt-ins are lifted and every row but one holds. Missing: E-W of ADR 0799 is a miss because whirl_stability of the wheel sector W (ADR 0595) at k = 0..3 and 0, 30, 60 rad/s is a solver error (gyroscopic_state_eigen: the QR iteration did not converge on rows 116..=119 in 30 steps), on main as well. Also missing: the known-miss form of that test (question 2) and two clippy byte_char_slices fixes in sa_beam_opt_ins_default_f672_bits.rs line 279.
+
+> Follow-up: "whirl_stability of the cyclic beam wheel sector converges", deps F-672, acceptance: RotatingSector::whirl_stability of the wheel sector W of ADR 0595 (shells option, 4 modes, coriolis on) at harmonic indices 0 to 3 and speeds 0, 30 and 60 rad/s returns Ok, with eigenvalues that agree with whirl_state of the same index and speed within the limit the registration states from the tolerance table, and the defaults bit-identical.
