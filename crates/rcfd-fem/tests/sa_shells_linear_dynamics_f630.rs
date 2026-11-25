@@ -3,7 +3,7 @@
 //! `sa_shells_linear_dynamics_bits_f630.rs`; B3, B4 and Q are existing tests and scripts.
 
 use rcfd_fem::assemble::stiffness;
-use rcfd_fem::builders::hex_box;
+use rcfd_fem::builders::{hex_box, BOX_FACES};
 use rcfd_fem::constraint::Prescribed;
 use rcfd_fem::damped::{damped_modes, DampedModes, DampedOptions};
 use rcfd_fem::geometric::{geometric_stiffness, Prestress};
@@ -1521,8 +1521,45 @@ fn frustum(kind: ElementKind, options: CyclicOptions) -> SolidModel {
     m
 }
 
+/// A Hex8 box with a cyclic constraint of default options on `ymin` / `ymax` and a disjoint shell element (ADR 0556, NC2).
+fn box_and_shell(kind: ElementKind) -> SolidModel {
+    let hex = hex_box([0.0, 1.0, 0.0], [1.0, 1.0, 1.0], [1, 1, 1]).unwrap();
+    let nh = hex.nodes().len();
+    let mut nodes = hex.nodes().to_vec();
+    nodes.extend_from_slice(&[[3.0, 0.0, 0.0], [4.0, 0.0, 0.0], [4.0, 1.0, 0.0], [3.0, 1.0, 0.0]]);
+    let mut conn = Vec::new();
+    push(&mut conn, kind, [nh, nh + 1, nh + 2, nh + 3]);
+    let mut mesh = SolidMesh::new(nodes).unwrap();
+    mesh.add_block(ElementKind::Hex8, hex.element_nodes(0).to_vec())
+        .unwrap();
+    mesh.add_block(kind, conn).unwrap();
+    mesh.set_block_property(1, BlockProperty::shell(0.01).unwrap()).unwrap();
+    let ne = mesh.n_elements();
+    mesh.add_element_set("all", (0..ne).collect()).unwrap();
+    for name in BOX_FACES {
+        mesh.add_surface_set(name, hex.surface_set(name).unwrap().to_vec())
+            .unwrap();
+    }
+    let mut m = SolidModel::new(mesh);
+    m.add_material("all", steel()).unwrap();
+    m.add_constraint(Constraint::cyclic("ymin", "ymax", [0.0, 0.0, 1.0], [0.0; 3], 4))
+        .unwrap();
+    m
+}
+
 #[test]
+#[ignore = "record of a defective set-up (ADR 0798 amendment 2): the frustum cannot carry the default cyclic constraint"]
 fn x3_refusals_with_the_option() {
+    x3_rows(|kind| frustum(kind, CyclicOptions::new()));
+}
+
+#[test]
+fn x3_refusals_with_the_option_corrected() {
+    x3_rows(box_and_shell);
+}
+
+/// The rows of X3; `cyclic_without` builds the model with a cyclic constraint without its shells option.
+fn x3_rows(cyclic_without: impl Fn(ElementKind) -> SolidModel) {
     let mut c = Checks::new();
     // a shell and a beam
     for kind in KINDS {
@@ -1653,7 +1690,7 @@ fn x3_refusals_with_the_option() {
         (ElementKind::Shell4, shell::FOLLOW_UP),
         (ElementKind::Shell3, shell3::FOLLOW_UP),
     ] {
-        let m = frustum(kind, CyclicOptions::new());
+        let m = cyclic_without(kind);
         let r = Integrator::new(&m, &[], &TransientOptions::new(1e-5).shells(true)).map(|_| ());
         expect(&mut c, &format!("X3 {kind:?} cyclic: transient"), &r, |e| {
             package(e, own) && matches!(e, FemError::NotYetSupported { variant: "Cyclic", .. })

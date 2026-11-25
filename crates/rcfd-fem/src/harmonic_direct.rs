@@ -718,13 +718,12 @@ impl DirectHarmonic {
                     Damping::Constant(*eta)
                 }
                 // ADR 0798 D4: the moduli of a layup are those of its plies.
-                LossFactor::Table(_) if has_layup(model, set) => return Err(invalid(
-                    "loss factor",
-                    format!(
-                        "a modulus table on set '{set}', which holds an element of a Layup block: E'/E refers to the \
-                             material of the set, not to those of the plies (ADR 0798 D4)"
-                    ),
-                )),
+                LossFactor::Table(_) if has_layup(model, set) => {
+                    let reason = format!(
+                        "a modulus table on set '{set}', which holds an element of a Layup block: E'/E refers to the                          material of the set, not to those of the plies (ADR 0798 D4)"
+                    );
+                    return Err(invalid("loss factor", reason));
+                }
                 LossFactor::Table(t) => match &materials[m].1 {
                     Material::IsotropicElastic { e, .. } => Damping::Table(t.clone(), *e),
                     _ => {
