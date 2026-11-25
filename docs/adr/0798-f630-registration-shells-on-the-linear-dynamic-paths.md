@@ -315,3 +315,124 @@ before the corrected run.
    found by the per-file check before Q was run. The message is bound to a name first; the text and the behaviour are the same. The unchanged
    copy of the mutation runs, taken from the commit that has both changes, runs every row again and is recorded as such, not as a
    second registered run.
+
+## Addendum 1: results (2026-11-25)
+
+Commits, in order: the registration 5be60173; the bit record of main on Windows x86_64 505832ec and on Linux x86_64 9d8259ad (B1 run on the
+unchanged library, two runs on each platform, which agreed); amendment 1 5d91ab3f; the library change with the test file 6c2e3cf9;
+amendment 2 7a621265; the corrected X3 7b6e9ab3; the two committed mutations 1003fc81. Release profile, Windows x86_64 unless said; the
+logs are in the scratch folder (`run/`).
+
+Library change (all under `crates/rcfd-fem/src`): `model.rs` the two entry checks of D1; `assemble.rs` `element_stiffness_of` (D2);
+`transient.rs`, `damped.rs`, `harmonic.rs`, `harmonic_direct.rs` the option, its builder and its check (D1, D3), the per-material stiffness
+(D2) and the table on a layup (D4); `harmonic.rs` `ModalBasis::all_modes_with_shells`; `mpc.rs` `check_transformation_model` made
+`pub(crate)`; `random.rs` the refusal of D5. Without the option every path calls the check it called before, in the same place.
+
+### The checks
+
+The registered run of `sa_shells_linear_dynamics_f630` at 6c2e3cf9 (`-- --nocapture --test-threads 1`): 20 of 21 tests passed, every row
+in them met; `x3_refusals_with_the_option` stopped in its own set-up (amendment 2). The corrected X3 was run once at 7b6e9ab3 and met all
+its 85 rows. The worst value of each row:
+
+| Id | Limit | Measured (worst) | Met |
+|---|---|---|---|
+| F1 | 1e-3 each mesh | Shell4 4.09e-4, 5.33e-5, 3.60e-5; Shell3 4.40e-5, 3.76e-5, 5.87e-5 (n = 16, 32, 64) | met |
+| F2 | within 0.5 of 2 | order 1.9939 (Shell4), 1.9491 (Shell3) | met |
+| F3 | 1e-3 each | 3.32e-4 (Shell4, n = 16); the others at most 1.41e-4 | met |
+| F4 | 1e-8 | 1.18e-9 (Shell4, n = 64) | met |
+| F5 | 1e-3 each | 3.50e-4 (Shell4, n = 16); the others at most 1.74e-4 | met |
+| H1 | 1e-2, 3e-3, 1e-3 | 4.97e-3, 1.06e-3, 7.88e-5 | met |
+| H2 | as H1 | 4.97e-3, 1.06e-3, 7.88e-5 | met |
+| H3 | as H1 | 6.54e-4, 2.57e-4, 1.59e-4 | met |
+| H4 | as H1 | 4.98e-3, 1.07e-3, 8.35e-5 | met |
+| G1 | 1e-8 | 2.15e-11 (V5, Rayleigh, `w_b`), 42 cases | met |
+| G2 | exact; 1e-8 | 72 modes of 72 free unknowns, all positive, each of V1 to V7; `Phi^T M Phi - I` 3.78e-14 | met |
+| G3 | 1e-8 | 1.84e-11 (V5) | met |
+| G4 | 1e-8 | 2.93e-12 (V5, Rayleigh) | met |
+| G5 | 1e-8 | 6.10e-14 | met |
+| G6 | 1e-8 | 2.45e-14 | met |
+| G7 | 1e-8 | 1.14e-16 | met |
+| G8 | 1e-8 | 1.88e-11 | met |
+| P1 | 1e-8 | 1.96e-13 | met |
+| P2 | 1e-8 | 3.41e-12 | met |
+| R1 | 1e-8 | 0 (equal bits on every route) | met |
+| R2 | 1e-8 | 1.48e-12 | met |
+| R3 | 1e-8 | 6.15e-13 | met |
+| R4 | 1e-8 | 4.65e-13 | met |
+| R5 | 1e-8 | 2.46e-13 | met |
+| X1 | 1e-8 | 6.13e-12 | met |
+| X2 | 1e-8 | 7.18e-12 | met |
+| X3 | as stated | 85 of 85 refusals by the registered name or key (corrected test) | met |
+| X4 | as stated | 20 refusals naming each element's own package; modal, modal on the rigid set, superposition without correction, participation taken | met |
+| X5 | equal bits | equal: transient, damped modes, superposition, direct | met |
+| X6 | 1e-8 | 1.68e-10 (Shell3, mode 3) | met |
+| X7 | 1e-12 | 4.44e-16 | met |
+| X8 | 1e-12 | 3.33e-16 | met |
+| B1 | equal | Windows: the dump at 7b6e9ab3 equals the record; Linux (container of ADR 0150, export of 7b6e9ab3): equal | met |
+| B2 | equal bits | 23 of 23 Hex8 results equal | met |
+| B3 | pass | `--lib` 15 passed; the 73 named test files all passed, 0 failed (their ignored records stay ignored) | met |
+| B4 | pass | `baseline_hashes` 3 passed, 1 ignored (as on main) | met |
+| N1 | at least 100 times the limit | NC1 0.439 (> 0.1); NC2 1.95 (> 1e-6); NC3 0.333 (> 1e-6); NC4 0.088 (> 1e-3) | met |
+| Q | clean | clippy `-D warnings` exit 0; `cargo fmt -p rcfd-fem -- --check` exit 0 in the Linux container, on Windows os error 206 (amendment 1, item 6), `rustfmt --check` of each changed file clean; `docs_site`, `roadmap_proposals.py check` and `process_report.py --check` as the report gives them | met |
+
+The H rows lie in the estimated range on both elements; the n = 16 values of H1, H2 and H4 at 2.5 `omega_1` (4.97e-3) are the closest
+to a limit (margin 2.0, as registered).
+
+### Mutations
+
+On a scratch copy of 7b6e9ab3 with a target folder of its own, each alone, both new test files run: the unchanged copy passed, and every
+mutation was caught.
+
+| Id | Caught by (the rows of the tests that failed) |
+|---|---|
+| M1a, M1b | X7 (and B1) |
+| M2a, M2b | G1, G2 and most rows (the mass is singular) |
+| M3a | F3 to F5, G3, R1, X3, X5 |
+| M3b | R1, R2, R3, R5, X1, X2, X3, X6 |
+| M3c | G4, G5, G6, X3, X5 |
+| M3d | G1, G3, G4, G8, R1, R5, X3, X5 |
+| M3e | G1, G7, G8, H1 to H4, P1, P2, R1, X3, X5 |
+| M3f | R1, R2, R3, X1, X2, X3 |
+| M3g | G1, G5, G7, G8, H1 to H4, P1, P2, R1, R2, R4, X1, X3, X5 |
+| M3h | X3 |
+| M4 | H3, G7 (and B1) |
+| M5 | F1, G1 and nearly every row |
+| M6a; M6b; M6c | F5, G3, R3, B2; G4, B2; H2, G1, R2, X1, B2 |
+| M7a; M7b | G5 (and X1); G6 |
+| M8, M9, M10, M12 | X3 |
+| M11a, M11c, M11d | B1, X4 |
+| M11b | B1 (X4 sets the option explicitly, so the default of the damped modes is seen by B1 only) |
+| M13 | X8 |
+
+### Deviations and what was not run
+
+- X3 of the first run was a defective set-up (amendment 2); its test stays as an ignored record and the corrected test gives the row.
+  `rustfmt` was unstable on one statement, which was reformatted with the same text (amendment 2, item 3).
+- The modal options of amendment 1 were set before any code, after the first record run on main stopped at "not converged".
+- `cargo fmt -p rcfd-fem` cannot start on Windows (os error 206); the registered command was run in the Linux container.
+- Not run: the whole workspace suite and the whole-crate integration tests (rule 7); `npm test` (no Studio file touched).
+
+Size (agent), actual: done; 0; 0; 1; 700000
+
+### Decision
+
+**done**: every registered row holds on both elements and on all the paths of the acceptance (with the corrected X3), each mutation is
+caught, and the named existing tests pass unedited.
+
+## Open questions for the maintainer
+
+1. Whether the linear dynamic paths take shells by default (the registration's open question 1). Options: (a) keep the opt-in of D1;
+   (b) lift the refusals by default, as ADR 0744 and ADR 0746 did, retiring or restating the refusal rows that hold them
+   (`sa_shell3_paths.rs` RC1, RC2, `sa_shell3.rs`, `si_shell.rs`, the refusal lines of this item's B1). Recommendation: (b), as an item of its
+   own: the modal analysis already takes shells by default, the option carries no choice of method, and every row here passed with it on.
+   Not taken here: it changes default results and existing tests.
+
+## For the lead: roadmap entries
+
+> Status: done.
+
+> Note: ADR 0798, 2026-11-25, done: the linear transient, the damped modes, the mode superposition (dense basis and static correction) and the direct harmonic take Shell4 and Shell3 by an option per path, the default refusing as before; a strip of each element on three meshes meets Euler-Bernoulli in frequency, decay and tip response (worst 4.1e-4, 3.5e-4 and 5.0e-3 against 1e-3, 1e-3 and 1e-2), the direct harmonic meets every mode within 2.2e-11 and the transient the modal recurrence within 1.8e-11, and models without shells and shells without the option are bit-equal to main on Windows and Linux.
+
+> Follow-up: Shells on the linear dynamic paths by default; deps F-630; acceptance: Every limit not stated here is registered in the ADR before the run. The options of ADR 0798 are the default on the linear transient, the damped modes, the dense modal basis, the static correction and the direct harmonic; models without shells keep their bits; the refusal rows of shells on these paths are restated or retired by name on the maintainer's word, and the checks of ADR 0798 pass with the default.
+
+> Follow-up: The random response and the harmonic stress of shells; deps F-630; acceptance: Every limit not stated here is registered in the ADR before the run. RandomSolver takes Shell4 and Shell3, and the stress of a harmonic response of a shell is given by its resultants: a strip against the closed form of one mode under a flat spectrum, and the stresses against shell::stresses of the real and the imaginary part within 1e-12; models without shells keep their bits.

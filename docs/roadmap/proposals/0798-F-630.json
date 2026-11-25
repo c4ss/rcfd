@@ -1,0 +1,24 @@
+{
+  "form": 1,
+  "adr": "0798",
+  "item": "F-630",
+  "base": "2d125d5574cabb70dd02926d8d8452107cbd4821",
+  "status": "done",
+  "note": "ADR 0798, 2026-11-25, done: the linear transient, the damped modes, the mode superposition (dense basis and static correction) and the direct harmonic take Shell4 and Shell3 by an option per path, the default refusing as before; a strip of each element on three meshes meets Euler-Bernoulli in frequency, decay and tip response (worst 4.1e-4, 3.5e-4 and 5.0e-3 against 1e-3, 1e-3 and 1e-2), the direct harmonic meets every mode within 2.2e-11 and the transient the modal recurrence within 1.8e-11, and models without shells and shells without the option are bit-equal to main on Windows and Linux.",
+  "follow_ups": [
+    {
+      "title": "Shells on the linear dynamic paths by default",
+      "deps": [
+        "F-630"
+      ],
+      "acceptance": "Every limit not stated here is registered in the ADR before the run. The options of ADR 0798 are the default on the linear transient, the damped modes, the dense modal basis, the static correction and the direct harmonic; models without shells keep their bits; the refusal rows of shells on these paths are restated or retired by name on the maintainer's word, and the checks of ADR 0798 pass with the default."
+    },
+    {
+      "title": "The random response and the harmonic stress of shells",
+      "deps": [
+        "F-630"
+      ],
+      "acceptance": "Every limit not stated here is registered in the ADR before the run. RandomSolver takes Shell4 and Shell3, and the stress of a harmonic response of a shell is given by its resultants: a strip against the closed form of one mode under a flat spectrum, and the stresses against shell::stresses of the real and the imaginary part within 1e-12; models without shells keep their bits."
+    }
+  ]
+}
