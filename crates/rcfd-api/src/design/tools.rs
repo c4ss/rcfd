@@ -1872,7 +1872,8 @@ fn fan_rom_model(v: Option<&Value>) -> Rpc<FanRomModel> {
 }
 
 /// The uncertain inputs `params`: `{name, unit, dist}` with `dist` in the form `Dist::to_json` writes. Each name and unit
-/// must be a parameter of the evaluator (`known`), which would otherwise refuse every sample.
+/// must be a parameter of the evaluator (`known`), which would otherwise refuse every sample. A key of `dist` that its type
+/// does not have is refused (ADR 0793).
 fn study_params(p: &Value, known: &[(&str, &str)], evaluator: &str) -> Rpc<Vec<UncertainParam>> {
     let list = p
         .get("params")
@@ -1903,8 +1904,24 @@ fn study_params(p: &Value, known: &[(&str, &str)], evaluator: &str) -> Rpc<Vec<U
             Some(_) => {}
         }
         let dat = format!("{at}.dist");
-        let d = object_at(o.get("dist"), &dat, &["type", "lo", "hi", "mean", "sd", "a", "b"])?;
-        let dist = match d.get("type").and_then(Value::as_str) {
+        let all = ["type", "lo", "hi", "mean", "sd", "a", "b"];
+        let d = object_at(o.get("dist"), &dat, &all)?;
+        let kind = d.get("type").and_then(Value::as_str);
+        let own: &[&str] = match kind {
+            Some("uniform") => &["type", "lo", "hi"],
+            Some("normal") => &["type", "mean", "sd", "lo", "hi"],
+            Some("beta") => &["type", "a", "b", "lo", "hi"],
+            _ => &all, // refused below
+        };
+        // a key of another type, whatever its value; of several the first in the order of `all`
+        if let Some(k) = all.iter().find(|k| d.contains_key(**k) && !own.contains(*k)) {
+            return Err(bad(format!(
+                "{dat}.{k}: not a key of a {} distribution ({})",
+                kind.unwrap_or_default(),
+                own.join(", ")
+            )));
+        }
+        let dist = match kind {
             Some("uniform") => Dist::Uniform {
                 lo: number_at(d, "lo", &dat)?,
                 hi: number_at(d, "hi", &dat)?,

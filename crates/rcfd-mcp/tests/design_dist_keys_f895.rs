@@ -1,6 +1,7 @@
 //! ADR 0793 (F-895): a key of another distribution in `params[i].dist` of `design_uq` and `design_sobol` is refused by name,
-//! and every other call gives main's bytes. Rows U (what keeps its message), F1 (the forms `Dist::to_json` writes), F2 (every
-//! form of the open sides of a normal), F3 (both drivers on three inputs).
+//! and every other call gives main's bytes. Rows K1 to K8 (the eight keys), C (the same calls without the key), T (which of
+//! several is named), N1 and N2 (before any sample, no file); U (what keeps its message), F1 (the forms `Dist::to_json`
+//! writes), F2 (every form of the open sides of a normal), F3 (both drivers on three inputs).
 //!
 //! The rows F and U are compared with the record made on main bc6ddd16 before the change (`design_dist_keys_f895.tsv`: group,
 //! number of lines, FNV-1a hash of the text), and the rows F with the library's own study. `F895_DUMP=<folder>` also writes
@@ -322,10 +323,8 @@ fn library(
 fn equal(what: &str, root: &Path, s: &McpServer, tool: &str, args: Value, want: &(Value, Vec<String>)) -> String {
     let file = root.join(args["ledger"].as_str().unwrap());
     let r = ok(&call(s, tool, args));
-    assert!(
-        r["result"].to_string() == want.0.to_string(),
-        "{what}: the result differs from the library's"
-    );
+    let (got, expected) = (r["result"].to_string(), want.0.to_string());
+    assert!(got == expected, "{what}: the result differs from the library's");
     let lines = ledger_lines(&file);
     assert!(lines == want.1, "{what}: the ledger differs from the library's");
     assert_eq!(r["entries_appended"], lines.len(), "{what}");
@@ -541,4 +540,249 @@ fn f3_both_drivers_on_three_inputs() {
         g.text(&what, &equal(&what, &root, &s, tool, a, &want));
     }
     g.check("F3", false);
+}
+
+// ---------------------------------------------------------------- the foreign keys
+
+/// The eight: a type and a key it does not have.
+const FOREIGN: [(&str, &str); 8] = [
+    ("uniform", "mean"),
+    ("uniform", "sd"),
+    ("uniform", "a"),
+    ("uniform", "b"),
+    ("normal", "a"),
+    ("normal", "b"),
+    ("beta", "mean"),
+    ("beta", "sd"),
+];
+
+/// The registered message: `key` in the input `i`, of the type `kind`.
+fn message(i: usize, kind: &str, key: &str) -> String {
+    let keys = match kind {
+        "uniform" => "type, lo, hi",
+        "normal" => "type, mean, sd, lo, hi",
+        _ => "type, a, b, lo, hi",
+    };
+    format!("params[{i}].dist.{key}: not a key of a {kind} distribution ({keys})")
+}
+
+/// The type of the other of two inputs.
+fn beside(kind: &str) -> &'static str {
+    if kind == "normal" {
+        "beta"
+    } else {
+        "normal"
+    }
+}
+
+/// `key` in a distribution of the type `kind` with every kind of value, in the first and in the second of two inputs.
+fn foreign_key(row: &str, kind: &str, key: &str) {
+    assert!(FOREIGN.contains(&(kind, key)));
+    let env = service(row, None);
+    let m = naca();
+    let mut n = 0;
+    for x in [
+        json!(0.25),
+        json!(null),
+        json!("0.5"),
+        json!(false),
+        json!([]),
+        json!({}),
+    ] {
+        let what = format!("{row}: {key} {x} in a {kind}");
+        let (bad, right) = (sent(kind, json!({ key: x })), sent(beside(kind), json!({})));
+        let first = vec![bad.clone(), right.clone()];
+        n += refused(&what, &env, &m, first, &message(0, kind, key));
+        n += refused(&what, &env, &m, vec![right, bad], &message(1, kind, key));
+    }
+    assert_eq!(n, 48);
+    eprintln!("{row}: {key} in a {kind}: {n} calls refused, nothing written");
+}
+
+#[test]
+fn k1_mean_in_a_uniform() {
+    foreign_key("K1", "uniform", "mean");
+}
+
+#[test]
+fn k2_sd_in_a_uniform() {
+    foreign_key("K2", "uniform", "sd");
+}
+
+#[test]
+fn k3_a_in_a_uniform() {
+    foreign_key("K3", "uniform", "a");
+}
+
+#[test]
+fn k4_b_in_a_uniform() {
+    foreign_key("K4", "uniform", "b");
+}
+
+#[test]
+fn k5_a_in_a_normal() {
+    foreign_key("K5", "normal", "a");
+}
+
+#[test]
+fn k6_b_in_a_normal() {
+    foreign_key("K6", "normal", "b");
+}
+
+#[test]
+fn k7_mean_in_a_beta() {
+    foreign_key("K7", "beta", "mean");
+}
+
+#[test]
+fn k8_sd_in_a_beta() {
+    foreign_key("K8", "beta", "sd");
+}
+
+/// C: the calls of K without the key are accepted.
+#[test]
+fn c_the_same_calls_without_the_key() {
+    let (root, _, s) = service("c", None);
+    let m = naca();
+    let mut n = 0;
+    for kind in ["uniform", "normal", "beta"] {
+        for (i, pair) in [[kind, beside(kind)], [beside(kind), kind]].into_iter().enumerate() {
+            for tool in TOOLS {
+                let what = format!("C {pair:?} {tool}");
+                let want = library("c", tool, &m, pair.map(lib).to_vec(), Sampler::MonteCarlo);
+                let params = pair.map(|k| sent(k, json!({}))).to_vec();
+                let a = args(tool, &format!("{kind}-{i}-{tool}.jsonl"), &m, params);
+                equal(&what, &root, &s, tool, a, &want);
+                n += 1;
+            }
+        }
+    }
+    assert_eq!(n, 12);
+    eprintln!("C: {n} calls without the key equal to the library");
+}
+
+/// T: which key is named.
+#[test]
+fn t_which_key_is_named() {
+    let env = service("t", None);
+    let m = naca();
+    let mut n = 0;
+    // two keys and four, in either order of the text, after and before the keys of the type
+    let many: [(&str, &[&str]); 9] = [
+        ("uniform", &["mean", "sd"]),
+        ("uniform", &["mean", "a"]),
+        ("uniform", &["mean", "b"]),
+        ("uniform", &["sd", "a"]),
+        ("uniform", &["sd", "b"]),
+        ("uniform", &["a", "b"]),
+        ("uniform", &["mean", "sd", "a", "b"]),
+        ("normal", &["a", "b"]),
+        ("beta", &["mean", "sd"]),
+    ];
+    for (kind, keys) in many {
+        let mut reversed = keys.to_vec();
+        reversed.reverse();
+        for order in [keys.to_vec(), reversed] {
+            let own = sent(kind, json!({}))["dist"].to_string();
+            let own = &own[1..own.len() - 1];
+            let more: Vec<String> = order.iter().map(|k| format!("\"{k}\": 0.5")).collect();
+            let more = more.join(", ");
+            for text in [format!("{{{own}, {more}}}"), format!("{{{more}, {own}}}")] {
+                let mut v = sent(kind, json!({}));
+                v["dist"] = serde_json::from_str(&text).unwrap();
+                n += refused(&format!("T {text}"), &env, &m, vec![v], &message(0, kind, keys[0]));
+            }
+        }
+    }
+    // a foreign key in both inputs
+    let (u, w) = (sent("uniform", json!({"b": 0.5})), sent("normal", json!({"a": 0.5})));
+    n += refused(
+        "T both",
+        &env,
+        &m,
+        vec![u.clone(), w.clone()],
+        &message(0, "uniform", "b"),
+    );
+    n += refused("T both", &env, &m, vec![w, u], &message(0, "normal", "a"));
+    // beside a missing and a malformed number of the type
+    for (kind, key, v) in [
+        ("uniform", "mean", without(sent("uniform", json!({"mean": 0.5})), "lo")),
+        ("uniform", "mean", sent("uniform", json!({"mean": 0.5, "lo": "x"}))),
+        ("normal", "a", without(sent("normal", json!({"a": 0.5})), "sd")),
+        ("beta", "mean", sent("beta", json!({"mean": 0.5, "a": null}))),
+    ] {
+        n += refused(
+            &format!("T {}", v["dist"]),
+            &env,
+            &m,
+            vec![v.clone()],
+            &message(0, kind, key),
+        );
+    }
+    assert_eq!(n, 4 * (9 * 4 + 2 + 4));
+    eprintln!("T: {n} calls name the registered key");
+}
+
+/// N1: the refusal comes before the limit on the evaluations, which comes before the driver.
+#[test]
+fn n1_before_the_limit_and_so_before_any_sample() {
+    let env = service("n1", Some(1));
+    let m = naca();
+    let mut n = 0;
+    for (kind, key) in FOREIGN {
+        let v = sent(kind, json!({ key: null }));
+        n += refused(&format!("N1 {kind} {key}"), &env, &m, vec![v], &message(0, kind, key));
+        for tool in TOOLS {
+            let a = args(tool, "l.jsonl", &m, vec![sent(kind, json!({}))]);
+            assert_eq!(by_server(&env.2, tool, &a).0, 1004, "N1 control: {kind} {tool}");
+            assert_eq!(by_handler(&env.1, tool, &a).0, 1004, "N1 control: {kind} {tool}");
+        }
+        empty(&env.0, "N1 control");
+    }
+    eprintln!("N1: {n} calls refused before the limit; without the key 1004");
+}
+
+/// N2: a ledger that is there is not touched, a folder that is not there is not made.
+#[test]
+fn n2_no_file_is_written() {
+    let (root, svc, s) = service("n2", None);
+    let m = naca();
+    let files = || {
+        let mut f: Vec<_> = std::fs::read_dir(&root).unwrap().map(|e| e.unwrap().path()).collect();
+        f.sort();
+        // a folder that should not be there reads as no bytes
+        f.into_iter()
+            .map(|p| (p.clone(), std::fs::read(&p).unwrap_or_default()))
+            .collect::<Vec<_>>()
+    };
+    for tool in TOOLS {
+        let ledger = format!("{tool}.jsonl");
+        ok(&call(
+            &s,
+            tool,
+            args(tool, &ledger, &m, vec![sent("normal", json!({}))]),
+        ));
+    }
+    let before = files();
+    assert_eq!(before.len(), 2);
+    let mut n = 0;
+    for tool in TOOLS {
+        for (kind, key) in FOREIGN {
+            for ledger in [format!("{tool}.jsonl"), "sub/l.jsonl".to_string()] {
+                let a = args(tool, &ledger, &m, vec![sent(kind, json!({ key: 0.5 }))]);
+                let want = (-32602, message(0, kind, key));
+                assert_eq!(by_server(&s, tool, &a), want, "N2 {tool} {ledger}");
+                assert!(files() == before, "N2 {tool} {ledger}: a file was written");
+                assert_eq!(by_handler(&svc, tool, &a), want, "N2 {tool} {ledger}");
+                assert!(files() == before, "N2 {tool} {ledger}: a file was written");
+                n += 2;
+            }
+        }
+        // without the key: the study is there
+        let a = args(tool, &format!("{tool}.jsonl"), &m, vec![sent("normal", json!({}))]);
+        let (code, t) = by_server(&s, tool, &a);
+        assert!(code == -32602 && t.starts_with("name:"), "N2 control: {code} {t}");
+        assert!(files() == before, "N2 control");
+    }
+    eprintln!("N2: {n} calls left the two ledgers and the folder as they were");
 }
