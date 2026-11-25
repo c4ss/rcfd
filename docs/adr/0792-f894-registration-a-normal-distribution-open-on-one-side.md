@@ -290,3 +290,45 @@ Status proposed: done. No follow-up.
 > ADR 0792, 2026-11-25, done: erfc(+inf) is 0 and erfc(-inf) is 2 exactly, and a normal distribution open on one side is sampled from the smaller of its two tails: 884 points in the registered grid and 116 samples of uq::run and sensitivity::run agree with the closed form (760-digit reference) within 0.024 of the registered limit of 1e-12 sd, every sample lies within the finite bound, design_uq and design_sobol give the library's study bit for bit for every form of the open side, the server on stdio answers such a call and the ping after it, a kept mass below 1e-12 or not a number is refused by name, K1 of ADR 0791 passes with its limit unchanged, and every result with two finite or two open bounds, uniform and beta, of both drivers and of the other callers of erfc is bit-identical to main; M10, M11, M14 and M15 of ADR 0791 are caught again, by the equality.
 
 The same entry as `docs/roadmap/proposals/0792-F-894.json`.
+
+## Amendment 1 (2026-11-25, after addendum 1; before the change of the F test and before any Linux run)
+
+Written on the lead's reading of the diff: rows F1 to F4 compare hashes of this machine's `exp` on every platform, though
+the full gate can run on ubuntu-24.04 (`.github/workflows/gate.yml`, input `os`), where they could differ for a reason that
+is not this item's. No hash, row or limit of the registration changes: equal to main, exactly.
+
+1. **The record is of Windows x86_64** (`f894_bit_identity.tsv`, from the library of 1889caad) and is asserted there. A
+   platform with no record of its own prints its table and does not compare, as `cavity_paths_match_registered_hashes` of
+   `baseline_hashes.rs` and T4 of `cylindrical_interface_w44b.rs` do.
+2. **Groups that need no platform.** Asserted everywhere, against the same record: the two `F2 Uniform` groups. Their values
+   are `lo + (hi - lo) u` of a clamped `u`; the `u` are literals, differences, exact powers of two (`powi`, products) and the
+   seeded generator (integer operations and one product by a power of two): IEEE operations only, no call of the
+   mathematical library. The number and the names of the groups of each row are asserted everywhere too. All others call
+   it, so they stay with their platform: F1 and the normal groups of F2 (`exp` in `erf` and `erfc`), beta (`ln`, `exp`,
+   `ln_1p` in the incomplete beta function), the refusals (two of the eleven texts print a mass of `norm_cdf`), F3 (normal
+   and beta inputs, and the fan's `sin`, `cos`, `atan`), F4 (`exp`).
+3. **Linux x86_64.** The image `rcfd-linux:ubuntu24.04-rust1.99.0` of
+   [ADR 0150](0150-job48p-linux-example-stores.md) is on this machine (ubuntu-24.04 and the toolchain of the gate); nothing
+   is installed for it. In it, offline, on an export of 08e23e1f (the library of 1889caad byte for byte, with the F test):
+   the table is recorded with `F894_DUMP`, in two runs that must be equal, and committed as
+   `f894_bit_identity.linux.tsv`, asserted on Linux x86_64. Then on an export of the amended branch the file must pass, and
+   its dump of values must equal main's byte for byte. If the container cannot build the library, no table is registered, it
+   is said, and Linux prints: not a miss. If the repaired library differs from main there, that is a miss of F and is
+   recorded as one.
+4. **What else holds the same rows elsewhere.** On a platform without a record nothing compares the repaired library with
+   main: not `baseline_hashes` (no case samples a distribution) and not the tests of ADR 0791 (they compare the tools with
+   the library of the same build). The rows of limits (A1 to A3, B1, C1 to C4, D1, D2, E1, K1g) hold on every platform, but
+   they are of one open side. A table is also of the `exp` its processor selects: the C library of Linux has variants by
+   processor, so a processor without fused multiply-add may give another table, as for the hash tables of the repository.
+
+Checks of this amendment:
+
+| Id | Clause | Check | Limit | Source of the limit | Estimate | Margin | Kind |
+|---|---|---|---|---|---|---|---|
+| G1 | F on Windows | `f894_bit_identity` on the branch | 4 passed, 35 groups, 0 differ; the Windows table unchanged | row F1 to F4; tolerances, bit-identity | equal | exact | unchanged default output |
+| G2 | F on Linux x86_64 | item 3 | two records of main equal; the repaired library equal to them, hashes and values | row F1 to F4; tolerances, bit-identity | equal | exact | unchanged default output |
+| G3 | the assertion bites | P12 of the registration (two finite bounds through the complement) on a copy of the amended tree, the F file, Windows (and Linux, where a table is registered) | F2 fails | acceptance of F-894 (bit-identical); the table of mutations | fails | exact | code verification |
+| G4 | no platform | item 2, a test build of the F file with the record of neither platform (the two `cfg` conditions false, on the copy) | passes on the uniform groups and prints the others; with the Windows hash of one uniform group changed it fails | tolerances, bit-identity | as stated | exact | code verification |
+
+Also `cargo fmt -p rcfd-api -- --check`, `cargo clippy -p rcfd-api --all-targets -- -D warnings` and `docs_site`. The
+decision rule is unchanged; results go in addendum 2.
