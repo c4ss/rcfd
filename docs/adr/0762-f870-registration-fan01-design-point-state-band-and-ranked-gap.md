@@ -585,3 +585,36 @@ Question 4 above, the compared quantity and the convergence rule of F-870, was p
 as their questions. The maintainer's answers of 2026-11-22 are recorded in ADR 0765 (question 1: the rotor quantities
 the record measures are compared beside the pressure rise) and ADR 0766 (question 2: the convergence rule waits on
 F-885).
+
+## Sources read (2026-11-25)
+
+F-886; the registration, the points and the limits are in
+[ADR 0796](0796-f886-registration-three-formulas-read-against-their-open-sources.md). Nothing above is changed; the band of F-870 and
+its result are as they were.
+
+| citation | status | where | finding |
+|---|---|---|---|
+| Celik et al. (2008), the three-mesh form: the order from three meshes, the extrapolated value and the fine-grid index with the factor 1.25 | read | I. B. Celik, U. Ghia, P. J. Roache and C. J. Freitas, "Procedure for Estimation and Reporting of Uncertainty Due to Discretization in CFD Applications", in the file "Journal of Fluids Engineering Editorial Policy", 15 pages, https://www.asme.org/wwwasmeorg/media/resourcefiles/shop/journals/jfenumaccuracy.pdf (SHA-256 3e22d96c..., the same bytes as the copy of qa12.asme.org): Eq. 1 (p. 3 of the procedure), Eq. 3 (p. 4), Eqs. 4 to 7 (p. 5), Table 1 (p. 7), read from the page images. It is the publisher's policy copy; the journal's page (J. Fluids Eng. 130, 078001, with Coleman and Raad as further authors) was not opened | agrees, with the cap of the order, which is this repository's |
+| Roache, the factor 1.25 | read, of a second source | the same, Eq. 7 (Roache is one of its authors); Roache's own papers were not read | 1.25 agrees |
+
+Terms of use of the copy: it states none (searched: copyright, licence, permission, rights), so no copy is kept and no text is
+reproduced; it does not forbid being cited and opens without a sign-in, a payment or a check.
+
+Term by term (`crates/rcfd-api/tests/f870_fan01_design_point.rs`, `FS` and `mesh_convergence_estimate`):
+
+| Source | Code | Agrees |
+|---|---|---|
+| Eq. 1: `h = (sum of volumes/N)^(1/3)`; step 3: `r21 = h2/h1` | `r21 = (N1/N2)^(1/3)` | agrees, with equal total volume of the three meshes, which the cell counts assume |
+| Step 2: `r` "desirable" above 1.3, from experience | 1.40981 and 1.40436 | inside |
+| Eq. 3a to 3c: `p = abs(ln abs(e32/e21) + q(p))/ln r21`, `q = ln((r21^p - s)/(r32^p - s))`, `s = sign(e32/e21)` | the same, fixed point | yes; seven triplets, one root each, worst 1.6e-14 (G1, limit 1e-8). The source starts from the first term, the code from 1 and stops after 500 passes without a flag: no difference at these triplets |
+| Eq. 4: `phi_ext = (r21^p phi_1 - phi_2)/(r21^p - 1)` | not in this function (the error it implies is the half-width without the factor and the cap) | not used by the band |
+| Eqs. 5 and 7: `GCI = 1.25 abs((phi_1 - phi_2)/phi_1)/(r21^p - 1)`, relative | `FS abs(e21)/(r21^min(p, 1) - 1)`, `FS = 1.25`: `abs(phi_1)` times it | yes for `p <= 1`, worst 1.8e-14 (G2, limit 1e-8); **no for `p > 1`**: the cap, below |
+| the factor 1.25 for three meshes, at any `p` | the same here; `fan01_gci_w37c.rs` takes 3 for `p` outside [0.9, 2.2] | agrees; the rule of ADR 0086 is not in the source |
+| before any estimate, residuals down by at least three orders of magnitude (p. 2 of the procedure) | not a term of the function | not compared; ADR 0110 and check A4 above record what the runs did |
+
+**The finding.** The cap `min(p, 1)` is in no equation of the source. At the recorded triplets the registered half-width is
+wider than Eq. 7 times `abs(phi_1)`: torque 0.21190 against 0.14156 N m (factor 1.4969, `p` 1.3928), pressure rise 29.755 against
+14.935 Pa (factor 1.9923, `p` 1.7379); the capped value is `1.25 abs(e21)/(r21 - 1)` to 5.1e-16 (G3). The registration above says that
+the order is capped, so the reading changes no statement of it except that the cap is not Celik's. The worked columns
+of Table 1 come out to the printed digits: p 1.53, 0.75 and 1.51 (code 1.5340, 0.7519, 1.5077), phi_ext 6.1685, 10.8801 and 6.0269,
+GCI 2.2, 1.1 and 0.5 % (G4, G4b). Recorded and not repaired.

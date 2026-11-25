@@ -192,3 +192,91 @@ the set-up of the comparison, which are fixed here before its run.
 | N3b | Eq. 46 with `(1 + x)^2` for `(1 + x)` in the denominator (the material derivative taken for the conservative one) | S3b |
 
 N3b has the limit of row N.
+
+## Addendum 1: results (2026-11-25)
+
+The three sources were opened on 2026-11-25, after the registration (7fc1da85), and read from page images; amendment 1 (560bf8d4)
+came before the comparison scripts, which were run once. The findings term by term are in the addenda of
+[ADR 0056](0056-wave29b-mixture-cavitation.md), [ADR 0039](0039-wave23a-mhd-heat-exchanger.md) and
+[ADR 0762](0762-f870-registration-fan01-design-point-state-band-and-ranked-gap.md).
+
+| Row | Limit | Measured | Result |
+|---|---|---|---|
+| R1 Folden and Aschmoneit, Eqs. 43, 45 (p. 13) | read and located | read, with 3 to 5, 42, 44, 46, 47; arXiv names CC BY 4.0, the PDF a personal-use line | met |
+| R2 Lienhard, Eqs. 3.17 (p. 121), 3.20, 3.21 (p. 122) | read and located | read, with 3.16, 3.18, Example 3.5, Table 3.1; personal or non-profit instructional use | met |
+| R3 Celik et al., Eq. 7 (p. 5) | read and located | read, with 1, 3 to 6, Table 1; publisher's policy copy on www.asme.org; no terms stated | met |
+| S1 | 1e-12 | 2.1e-16, 70 points | met |
+| S2 | 1e-12 | 8.9e-17, 60 points | met |
+| S3 | 1e-12 | worst 1.600, 60 of 60 points over it | **missed**: a difference of form, as amendment 1 expected |
+| S3b (amendment 1) | 1e-12 | 4.1e-16, 60 points | met |
+| S3c (amendment 1) | reported | rho_v/rho_l 2e-5: 0.99982 at alpha_v 0.9, 0.99802 at 0.99, 0.98041 at 0.999, 0.83335 at 0.9999; 6.26e-4: 0.99583 at 0.87, 0.61513 at 0.999 | reported |
+| L1 | 1e-12 | 5.3e-16, 48 points | met |
+| L2 | 1e-12 | 3.2e-14, 48 points | met |
+| L3 | 1e-12 | 1.3e-15, 56 values of 10 cases | met |
+| L4 | 0.596 +- 0.0005 | 0.596401 | met |
+| G1 | 1e-8 | 1.6e-14, seven triplets, one root each | met |
+| G2 | 1e-8 | 1.8e-14, two triplets (G3, G6) | met |
+| G3 | 1e-8; ratio reported | 5.1e-16, five triplets; half-width over Eq. 7 times abs(phi_1): torque 1.4969, pressure rise 1.9923, G4 1.8220, G5 2.5000, G7 1.7252 | met; the cap is a difference |
+| G4 | printed digits | p 1.5340 (1.53), phi_ext 6.168496 (6.1685), GCI 2.175 % (2.2) | met |
+| G4b (amendment 1) | printed digits | 0.7519 (0.75), 10.880104 (10.8801), 1.067 % (1.1); 1.5077 (1.51), 6.026874 (6.0269), 0.472 % (0.5) | met |
+
+Rows D1 to D3 and P are run on the commit of this addendum and recorded in addendum 2.
+
+| Control | Largest difference (limit at least 1e-3) | Points over the row's limit | Caught by |
+|---|---|---|---|
+| N1 | 1.000 | 10 of 10 | S1 |
+| N2 | 0.4226 | 60 of 60 | S2 |
+| N3 | not applicable: no mixture density in the source (amendment 1) | - | not run; N3b |
+| N3b | 999.0 | 60 of 60 | S3b |
+| N4 | 179.5 | 42 of 48 (the other six are `Cr = 0`, where the term is zero) | L1 |
+| N5 | 0.9091 | 48 of 48 | L2 |
+| N6 | 0.5000 | 8 of 8 | L3 |
+| N7 | 6.291 | 6 of 7 (the other is the equal ratios of G5, where `q = 0`) | G1 |
+| N8 | 0.5833 | 2 of 2 | G2 |
+
+**Findings, not repaired.** (1) The cavitation mass source is `rho_v` times the review's Eq. 46 divided by `1 + x rho_v/rho_l`; the review's
+equations have no density, and its Eq. 47 is printed positive. The original paper of 2001 was not read. (2) The half-width of F-870
+takes the order capped at 1, which is in no equation of Celik et al.; at the recorded triplets it is wider than Eq. 7. (3)
+Rules the code adds and the sources do not have: the factors `f_vap`, `f_cond` and the nucleus radius; the clamps and the limit branch of
+`effectiveness`; the start value and the 500 passes of the fixed point; in ADR 0086 the factor 3 outside [0.9, 2.2]. (4) ADR 0086 and EXP-ROT
+still cite Celik et al. as recalled.
+
+**Deviations.** `origin/main` moved during the work (a shared ref), so D1 and D2 are read against the branch point 25311db5. The
+command-line client curl failed inside its own library on ahtt.mit.edu; the public PDF was fetched with another client of this machine,
+which met no refusal, sign-in, payment or check. S3 is held as a miss in this table and not as an ignored test: the item changes no
+test. No mutation patch (no test). The wiki's copy of the first source was not opened; the pages were read from arXiv.
+
+**Not run:** `fmt`, `clippy`, unit tests, `baseline_hashes` (no source file touched).
+
+Size, actual: done; 0; 0; 3; about 400000.
+
+**Decision by the rule: done.** The three sources were read and each comparison is recorded with its result, agreement or
+difference.
+
+## Open questions for the maintainer
+
+1. The mass source of the cavitation model (finding 1). Options: (a) leave it: it is what decision D of ADR 0056 derives for incompressible phases,
+   and the review's form is its limit; (b) a new item that reads the paper of 2001 and adds the other form as an option; (c) change the default.
+   Recommendation: (a).
+2. The cap of the order in the F-870 band (finding 2). Options: (a) leave it, as the registered rule of ADR 0762, wider than
+   Celik et al.; (b) a new registration for the next band without the cap. Recommendation: (a).
+3. The repository keeps a copy of the first source in the wiki. arXiv names CC BY 4.0, the PDF's first page "personal use only". Options: (a)
+   keep it under the arXiv licence with both lines recorded; (b) replace it by the citation. Recommendation: (b), since the two
+   statements do not agree and nothing needs the copy. Not changed here: the wiki is not edited by this work.
+
+## Sources read (2026-11-25)
+
+| citation | status | where | finding |
+|---|---|---|---|
+| Folden and Aschmoneit (2023): Eqs. 43, 45 (and 3 to 5, 42, 44, 46, 47) | read | arXiv:2211.16323v4, pp. 3 and 13; Physics of Fluids 35, 081301, doi:10.1063/5.0157926 | Eqs. 43 and 45 agree; Eqs. 46 and 47 differ from the mass source |
+| Lienhard and Lienhard, 6th ed. v6.00: Eqs. 3.16 to 3.18, 3.20, 3.21 | read | https://ahtt.mit.edu/wp-content/uploads/2024/04/AHTTv600.pdf, pp. 121 to 123, 125 | agree |
+| Celik, Ghia, Roache, Freitas: Eqs. 1, 3 to 7, Table 1 | read | https://www.asme.org/wwwasmeorg/media/resourcefiles/shop/journals/jfenumaccuracy.pdf, pp. 3 to 5 and 7 of the procedure (the journal's J. Fluids Eng. 130, 078001 was not opened) | agree; the cap of the order is not in it |
+
+## For the lead: roadmap entries
+
+Status proposed: done. Follow-up: one, below. Also in `docs/roadmap/proposals/0796-F-886.json` (base 25311db5). Generated pages not current on this
+work, left to the lead (rule 9): `docs/adr/index.md` (ADR 0796 is new) and `docs/reference-data.md` (the fragments).
+
+> ADR 0796, 2026-11-25, done: the three open sources were read from page images and compared with the code by two routes at registered points. Agree: alpha_v (Folden and Aschmoneit Eq. 43) and the Rayleigh rate (Eq. 45), 2.1e-16 and 8.9e-17; the effectiveness and NTU relations (Lienhard Eqs. 3.16 to 3.18, 3.20, 3.21), at most 3.2e-14; the order and, for p <= 1, the index of Celik et al. (Eqs. 3 and 7), 1.8e-14, and all their Table 1 samples. Two differences are findings, not repaired: the cavitation mass source is rho_v times the review's Eqs. 46 and 47 divided by 1 + x rho_v/rho_l (S3 missed at 60 of 60 points as printed, equal with it), and the F-870 half-width takes the order capped at 1, which is not in Celik et al. (1.4969 and 1.9923 times Eq. 7). Eight controls caught; five marks struck; no code, test or default changed.
+
+> Follow-up (proposed): "Table 3.1 of Lienhard: the one-stream-mixed crossflow and the one-shell-pass relations of hx.rs read and compared", deps F-886; acceptance: Every limit not stated here is registered in the ADR before the comparison. The crossflow one-stream-mixed relations and the one-shell-pass relation of crates/rcfd-fv/src/hx.rs are compared term by term and numerically, by two routes that share no code, with Lienhard and Lienhard, A Heat Transfer Textbook, 6th ed., Table 3.1 (p. 125); the result is recorded in an addendum of ADR 0039 and a reference-data fragment, the superseded unverified marks of those rows are struck through with the source cited, and a difference is recorded as a finding. No code, default or test changes.

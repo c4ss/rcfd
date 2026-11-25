@@ -1,0 +1,17 @@
+{
+  "form": 1,
+  "adr": "0796",
+  "item": "F-886",
+  "base": "25311db5205c16d93c836d3db98de2faa4e6470e",
+  "status": "done",
+  "note": "ADR 0796, 2026-11-25, done: the three open sources were read from page images and compared with the code by two routes at registered points. Agree: alpha_v (Folden and Aschmoneit Eq. 43) and the Rayleigh rate (Eq. 45), 2.1e-16 and 8.9e-17; the effectiveness and NTU relations (Lienhard Eqs. 3.16 to 3.18, 3.20, 3.21), at most 3.2e-14; the order and, for p <= 1, the index of Celik et al. (Eqs. 3 and 7), 1.8e-14, and all their Table 1 samples. Two differences are findings, not repaired: the cavitation mass source is rho_v times the review's Eqs. 46 and 47 divided by 1 + x rho_v/rho_l (S3 missed at 60 of 60 points as printed, equal with it), and the F-870 half-width takes the order capped at 1, which is not in Celik et al. (1.4969 and 1.9923 times Eq. 7). Eight controls caught; five marks struck; no code, test or default changed.",
+  "follow_ups": [
+    {
+      "title": "Table 3.1 of Lienhard: the one-stream-mixed crossflow and the one-shell-pass relations of hx.rs read and compared",
+      "deps": [
+        "F-886"
+      ],
+      "acceptance": "Every limit not stated here is registered in the ADR before the comparison. The crossflow one-stream-mixed relations and the one-shell-pass relation of crates/rcfd-fv/src/hx.rs are compared term by term and numerically, by two routes that share no code, with Lienhard and Lienhard, A Heat Transfer Textbook, 6th ed., Table 3.1 (p. 125); the result is recorded in an addendum of ADR 0039 and a reference-data fragment, the superseded unverified marks of those rows are struck through with the source cited, and a difference is recorded as a finding. No code, default or test changes."
+    }
+  ]
+}
