@@ -290,3 +290,19 @@ work, left to the lead (rule 9): `docs/adr/index.md` (ADR 0796 is new) and `docs
 | D3 (i) | no failure but a generated file not current | `process_report.py --check`: `docs/adr/index.md` and `docs/reference-data.md` not current, no other failure; on a scratch export `--write` gives a page equal to the fragments joined, with the section of F-886 | met |
 | D3 (ii) | 0 broken links | `docs_site`: 2 passed, 0 failed; the new fragment has no relative link | met |
 | P | valid; no failure but a generated file not current | `roadmap_proposals.py check`: F-886 todo to done, one follow-up; `process_report.py --check` as in D3 (i) | met |
+
+## The lead's reading (2026-11-25), at the merge
+
+Merged at 4027b8eb and pushed at 81a5b2fd (the report read at 21:22 UTC, 8 minutes of reading, proposed done, written done).
+Checked by the lead before the merge: the registration is the first commit and alone; amendment 1 was committed 99 seconds
+after it and says that the sources had been opened and no number computed, before the commit that holds the results; the diff
+is eight files under `docs/`, the three older ADRs and this one have no removed line, and the five struck rows keep their old words.
+S3 is missed as printed and recorded as a difference, which the decision rule registered for this ("with its result,
+agreement or difference"). The agent's client curl stopped with its own error 43 (a bad argument) and not with a refusal. The
+lead did not repeat the comparison and did not open the sources. The push run passed `baseline_hashes`, the tests that the index maps to the
+ADRs and `docs_site`; no binary was left out.
+
+This was the first work started with `claude -p` and its goal line: the goal was set, the work took 75 turns against the line's
+60, which nothing enforced, and met its goal in 24 minutes with no action denied.
+
+Status: **done**, as proposed. Questions 1 to 3 and the follow-up (Table 3.1 of Lienhard) are the maintainer's.
