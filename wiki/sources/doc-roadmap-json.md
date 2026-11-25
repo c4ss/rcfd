@@ -3,7 +3,7 @@ type: source
 tags: [roadmap]
 sources: []
 origin: docs/roadmap.json
-origin_commit: a1fdeb8c
+origin_commit: d2cc5641
 created: 2026-11-22
 updated: 2026-11-25
 status: stable
@@ -77,6 +77,10 @@ F-893 entered (2026-11-24, the maintainer's answer) and done: 799 items, 410 don
 ## Changes at a1fdeb8c (F-339, ADR 0791)
 
 F-339 stays partial; its gap is K1 of ADR 0791. Counts unchanged: 799 items, 410 done, 301 partial, 88 not started ([[adr-thread-mcp-tools]]).
+
+## Changes at d2cc5641 (F-894, F-339)
+
+F-894 entered and done, F-339 partial to done: 800 items, 412 done, 300 partial, 88 not started, about 70 % ([[adr-thread-mcp-tools]]).
 
 ## Pages this source informs
 

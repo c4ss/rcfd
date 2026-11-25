@@ -337,3 +337,8 @@ Append-only. Newest at the bottom. Entry header: `## [YYYY-MM-DD] <op> | <title>
 
 - Thread: [[adr-thread-mcp-tools]] (ADR 0791 row, current state, a contradiction between `docs/mcp-tools.md` and K1, the open follow-ups).
 - Sources re-read at a1fdeb8c: [[doc-mcp-tools]], [[doc-design-loop]], [[doc-roadmap-json]]; roadmap area pages regenerated (counts unchanged).
+
+## [2026-11-25] ingest | F-894, ADR 0792 (loop merge)
+
+- Thread: [[adr-thread-mcp-tools]] (ADR 0792 row, current state, the contradiction of K1 resolved, F-339 done).
+- Sources re-read at d2cc5641: [[doc-mcp-tools]], [[doc-design-loop]], [[doc-roadmap-json]], [[doc-roadmap-overview]]; roadmap area pages regenerated; [[overview]] revised (800 items, 412 / 300 / 88).

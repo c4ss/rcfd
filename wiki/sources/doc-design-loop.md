@@ -3,7 +3,7 @@ type: source
 tags: [design-loop, optimisation, mcp, fan]
 sources: []
 origin: docs/design-loop.md
-origin_commit: a1fdeb8c
+origin_commit: d2cc5641
 created: 2026-11-22
 updated: 2026-11-25
 status: draft
@@ -43,7 +43,7 @@ The tolerance (`uq::run`) and Sobol (`sensitivity::run`) drivers are now reached
 
 ## Changes at a1fdeb8c (F-339, ADR 0791)
 
-K1 (ADR 0791): the library's `uq::run` and `sensitivity::run` cannot sample a normal distribution open on one side only; it panics ([[adr-thread-mcp-tools]]).
+K1 (ADR 0791): the library's `uq::run` and `sensitivity::run` cannot sample a normal distribution open on one side only; it panics ([[adr-thread-mcp-tools]]). Repaired by F-894 (ADR 0792, d2cc5641).
 
 ## Pages this source informs
 
