@@ -359,3 +359,24 @@ Follow-up proposed (key `one-open-side`, deps F-339):
 > A normal distribution open on one side in the tolerance and Sobol drivers. Acceptance: erfc(+inf) is 0 and erfc(-inf) is 2 exactly (neither is a number now), and uq::run, sensitivity::run, design_uq and design_sobol sample a normal distribution with one finite and one open bound: every sample lies within the finite bound and equals the closed form of the truncated inverse CDF within a limit registered before the run; k1_one_open_side_known_miss of crates/rcfd-mcp/tests/design_uq_sobol_args_f339.rs passes with its limit unchanged; every result with two finite or two open bounds is bit-identical. Limits not stated here are registered before the run.
 
 The same entries as `docs/roadmap/proposals/0791-F-339.json`.
+
+## The lead's reading (2026-11-25), at the merge
+
+Merged at 26185c59 and pushed at 81cfd554 (the report read at 11:19 UTC, 12 minutes of reading, proposed done, written
+partial). Checked by the lead before the merge: the registration is the first commit and alone; the test file, committed
+106 seconds after it, was written after that commit, as the agent's recorded steps show (both in one batch of calls, the
+commit first, no test run before); four files are added and no existing file is edited; no golden, default result or
+library source is changed, so no reader was issued. On the merged tree the lead ran the 16 tests (passed) and K1, which
+panics as recorded (`erfc_inv needs 0 < y < 2`, `crates/rcfd-reactor/src/mixfrac.rs:161`). The call on stdio that ends
+the server is the agent's record; the lead did not repeat it. Both committed mutations were caught and no binary was left
+out.
+
+Findings 1-1 and 2-1 of the reader of ADR 0784 are closed. Four of the forty mutations (M10, M11, M14, M15) are caught
+through the panic of K1 and not through the equality, as addendum 1 says; a fix of K1 has to read those four again.
+
+Status: **partial**. The registered rule, which leaves K1 out and names the lead's decision beside it, gives done. The
+lead writes partial because K1 is a documented form of an argument of the item's own tools whose call ends the server.
+X1 of ADR 0784 is a miss of that registration's rule, not of the tools' behaviour, and alone would not hold the item at
+partial; its record stands. The follow-up one-open-side is a question of scope for the maintainer and is not entered.
+Finding 7 (a key of another distribution in `dist` is ignored without a word) is a question of the same kind and is not
+entered.
