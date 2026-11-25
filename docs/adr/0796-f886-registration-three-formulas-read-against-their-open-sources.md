@@ -161,3 +161,34 @@ hold the item by itself; a defect in the set-up of a script is corrected by an a
 - The host's use of the cavitation source (radius update, floors, pressure coupling), the crossflow and the shell-and-tube
   relations, and the credibility of the F-870 band.
 - A repair: whether a difference found is repaired is a question for the maintainer.
+
+## Amendment 1 (2026-11-25, after the sources were opened, before any comparison script was written or run)
+
+The three sources were opened after the registration was committed (7fc1da85) and their equations read from page images. No
+number has been computed. No limit, point, row or the decision rule above is changed. The reading shows three things about
+the set-up of the comparison, which are fixed here before its run.
+
+1. **S3, as registered, is expected to be missed, and it is run as registered.** Eqs. 46 and 47 of Folden and Aschmoneit print
+   `4 n0 pi R^2/(1 + x) sqrt(2 abs(p_v - p)/(3 rho_l))`, `x = (4/3) n0 pi R^3`. There is no density in them: they are the right-hand
+   side of Eq. 44, `d alpha_v/dt + div(alpha_v u)`, in 1/s, where `rate` is a mass source in kg/(m^3 s). Beside S3 two rows are
+   registered that say what the difference is. With `rho_m = (rho_l + x rho_v)/(1 + x)` and `alpha_v = x/(1 + x)`, `rate` is
+   `rho_v (rho_l/rho_m) 4 n0 pi R^2 R'/(1 + x)^2 = rho_v [4 n0 pi R^2 R'/(1 + x)] / (1 + x rho_v/rho_l)`. The bracket is Eq. 46.
+   So the code's source is `rho_v` times the source's divided by `1 + x rho_v/rho_l`: equal in the limit of a small
+   `x rho_v/rho_l`, and smaller at a large `x`. The size at the points is reported.
+2. **N3 can not be applied as registered:** the printed source has no mixture density. It stays in the table as not
+   applicable and is replaced by N3b, on the row S3b.
+3. **G4 gets the two other columns of the source's Table 1**, seen in the reading (the wiki did not have them), as G8 and G9:
+   (10.7880, 10.7250, 10.6050) and (6.0042, 5.9624, 6.0909), cells per (r21 r32)^3, r32^3, 1 with r21 = 2 and
+   r32 = (4500/980)^(1/2). They are known results and not unseen points. They enter row G4b only, not G1 to G3.
+
+| Id | Clause | Check | Limit | Source of the limit | Estimate | Margin | Kind |
+|---|---|---|---|---|---|---|---|
+| S3b | Schnerr-Sauer, the difference of S3 | `rate` against `rho_v` times Eq. 46 (evaporation) or minus `rho_v` times Eq. 47 (condensation), divided by `1 + x rho_v/rho_l` | 1e-12 relative at every point | tolerances, "Same discrete problem by two routes", only rounding between them | 1e-15 | 1000 | code verification |
+| S3c | Schnerr-Sauer, the difference of S3 | the ratio `rate/(rho_v Eq. 46)` at the points, and at the venturi of ADR 0056 (n = 1e11, rho_l 1000, rho_v 0.02; `alpha_v` 0.9, 0.99, 0.999, 0.9999), by route A | none, reported | acceptance of F-886 (a difference is a finding) | 0.6 to 1 | n/a | code verification |
+| G4b | GCI | G8 and G9, Table 1, columns 2 and 3: p 0.75 and 1.51, phi_ext 10.8801 and 6.0269, GCI 1.1 % and 0.5 % by route A, and the code's order | half a unit of each printed digit | tolerances, "Agreement with a published value", the published digits | equal | n/a | code verification |
+
+| Id | Change | Must fail |
+|---|---|---|
+| N3b | Eq. 46 with `(1 + x)^2` for `(1 + x)` in the denominator (the material derivative taken for the conservative one) | S3b |
+
+N3b has the limit of row N.
