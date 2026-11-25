@@ -186,3 +186,115 @@ were run and are not run again for it: `design_uq_sobol_args_f339`, `design_uq_s
 `rcfd-api --lib`.
 
 **Rows L and M.** The mutations are run on an export of 980455f7, which adds only the patch file to 153674f0; row L too.
+
+## Addendum 1: results (2026-11-25)
+
+Commits: registration 326c8980; the record of main on Windows 1596c4a2, its row U made whole added868, the record of main on
+Linux 48f05450 (`tools.rs` is main's in these three, by its blob); the change and the rows 153674f0; the committed mutation
+980455f7; amendment 1 4481ec66. The registered run was made once, at 153674f0:
+`cargo test -p rcfd-mcp --release --test design_dist_keys_f895 -- --nocapture --test-threads 1`, 16 passed, 0 failed, 27.9 s
+in series.
+
+| Id | Limit | Measured | Met |
+|---|---|---|---|
+| K1 | refused, whole message, nothing written | `mean` in a uniform: 48 calls, -32602, the registered message, the sandbox empty after each | yes |
+| K2 | as K1 | `sd` in a uniform: 48 calls | yes |
+| K3 | as K1 | `a` in a uniform: 48 calls | yes |
+| K4 | as K1 | `b` in a uniform: 48 calls | yes |
+| K5 | as K1 | `a` in a normal: 48 calls | yes |
+| K6 | as K1 | `b` in a normal: 48 calls | yes |
+| K7 | as K1 | `mean` in a beta: 48 calls | yes |
+| K8 | as K1 | `sd` in a beta: 48 calls | yes |
+| C | accepted, equal to the library | 12 calls equal, result and ledger | yes |
+| T | the registered key and message | 168 calls | yes |
+| U | main's code and message | 102 inputs, 408 calls as main's literal text; 204 groups equal to the record of main | yes |
+| N1 | refused, not 1004 | 32 calls refused before the limit of 1 evaluation; without the key 1004; nothing written | yes |
+| N2 | nothing written | 64 calls left two ledgers byte for byte and made no folder; without the key the `name:` refusal | yes |
+| F1 | equal to the library and to main | 12 calls, 0 differ | yes |
+| F2 | equal to the library and to main | 32 calls, 0 differ | yes |
+| F3 | equal to the library and to main | 3 calls, 0 differ | yes |
+| L | two records equal, the file passes, dumps equal | Linux x86_64 (the image of ADR 0150, glibc 2.39, cargo 1.99.0, no network): the two records of main equal; at 980455f7 16 passed and the eight dump files equal main's byte for byte | yes |
+| X | pass, unedited | `design_uq_sobol_args_f339` 16 passed, 1 ignored (K1 of ADR 0791); `design_uq_sobol_f339` 11 passed; `f894_one_open_side_tools` 4 passed; `cargo test -p rcfd-mcp --release --no-fail-fast` 164 passed, 0 failed, 11 ignored over 38 test results, the tool-list golden among them (second run, amendment 1); `rcfd-api --lib` 160 passed, 4 ignored; no existing test and no golden edited | yes |
+
+On Windows too the eight dump files of main (made twice, equal) and of the changed library are equal byte for byte
+(`main_win1`, `fix_win` of the scratch folder). All 47 hashes of F differ between the two platforms' records; row U is the
+same text on both. `tools.rs` gains 20 lines and loses 3, all in `study_params` and its doc comment; `docs/mcp-tools.md` by one sentence.
+
+### Mutations
+
+On a copy of 980455f7 with a target folder of its own, each alone, the file restored after (compared with the branch's: equal);
+the unchanged copy passes (16). All 23 are caught by the rows registered for them (`mutate.py`, `mutations.tsv` and a log each
+in the scratch folder).
+
+| Id | Registered to fail | Failed |
+|---|---|---|
+| M1 | K1 | K1, K2, K3, K4, N1, N2, T |
+| M2 | K2 | K1, K2, K3, K4, N1, N2, T |
+| M3 | K3 | K1, K2, K3, K4, N1, N2, T |
+| M4 | K4 | K1, K2, K3, K4, N1, N2, T |
+| M5 | K5 | K5, K6, N1, N2, T |
+| M6 | K6 | K5, K6, N1, N2, T |
+| M7 | K7 | K7, K8, N1, N2, T |
+| M8 | K8 | K7, K8, N1, N2, T |
+| M9 | K1 to K8, N1, N2 | those, T, U |
+| M10 | K1 to K8, N1, N2 | those, T, U |
+| M11 | K1 to K8 | those, N1, N2, T |
+| M12 | K1 to K8 | those, N1, N2, T |
+| M13 | K1 to K8 | those, N1 |
+| M14 | K1 to K8 | those, N1 |
+| M15 | K1 to K8 | those |
+| M16 | T | T |
+| M17 | T | T |
+| M18 | U | U |
+| M19 | U | U, K1 to K8, N1, N2, T |
+| M20 | K1 to K8 | those, N1, N2, T |
+| M21 | F1, F2 | all 16 |
+| M22 | N1 | N1, N2, T |
+| M23 | T | T |
+
+Read in the logs: in M1 to M8 the row of the key fails because the call is accepted (its log holds the study's reply, 11
+entries); the neighbouring keys of the type fail by the list of keys in the message. In M9 and M10 the K rows fail because the
+refused call left `l.jsonl` (seen for K1 and K8 of each), N1 by 1004 and N2 by the `name:` refusal; U fails in them because
+the mutation's check in the other tool comes before `object_at`. The committed mutation is M1,
+`crates/rcfd-mcp/tests/design_dist_keys_f895.mutation.patch`; `git apply --check` accepts it.
+
+### Other runs, deviations, what was not run
+
+- `cargo clippy -p rcfd-api -p rcfd-mcp --all-targets -- -D warnings` clean. `cargo fmt -p rcfd-api -- --check` and
+  `cargo fmt -p rcfd-mcp -- --check` clean on Windows; the two crates in one command do not run there ("The filename or
+  extension is too long", os error 206: the list of files on one command line), in the worktree and in a shorter folder; on
+  Linux, in the container, the one command is clean (exit 0, on the export of 980455f7).
+- `docs_site`: 2 passed before the registration's commit; the run with this addendum is in the agent's report.
+- Deviations: (1) amendment 1, the set-up of one part of X. Its text says `rcfd` and `rcfd-runner` were missing and "the second
+  test binary": only `rcfd-runner` was (`rcfd` came from `docs_site`), and it was the third binary (the first integration test).
+  (2) The first record (1596c4a2) had row U with fewer combinations than registered (an unknown type beside each key); it
+  was made whole and recorded again on main's library before the change (added868), the 47 groups of F unchanged; a first
+  container run, stopped before it had built, is void for the same reason. (3) clippy refused two comparisons of the test file
+  (`cmp_owned`); rewritten before the registered run. (4) The runs that made the records fail by design (no record to compare
+  with). (5) The folders of the first, incomplete record were removed from the scratch folder.
+- Finding 4 (other readers of a tagged object) stands as reported; nothing of it was changed. It is proposed to the lead below
+  as an observation, not as a follow-up.
+- The gate runs the new file's 16 tests (about 28 s in series, less with the default threads). No heavy record. Not run: the
+  whole workspace, the integration tests of any crate but `rcfd-mcp`, `baseline_hashes` (no solver file touched), the Studio's tests.
+
+Size (agent), actual: done; 0; 0; 0; 340000
+
+### Decision
+
+**done** by the registered rule: every registered row holds, M1 to M23 are each caught by the registered rows, the named
+existing tests pass unedited, and the results that must not move are bit-identical to main on Windows x86_64 and on Linux
+x86_64. The sentence asked for holds: each of the eight foreign keys is refused by name in both tools with nothing written,
+and every other call registered here gives main's bytes.
+
+## Open questions for the maintainer
+
+None.
+
+## For the lead: roadmap entries
+
+Status proposed: done. No follow-up is proposed; finding 4 is for the lead to weigh: `parse_robust`, `parse_method` and
+`parse_axes` of the `design.*` methods take a known key of another kind, and an unknown key, and ignore it.
+
+> ADR 0793, 2026-11-25, done: in params[i].dist of design_uq and design_sobol a key that the named type does not have (mean, sd, a or b of a uniform; a or b of a normal; mean or sd of a beta) is refused with -32602, whatever its value, the message naming the key by its path and the keys of the type, before the limit and the driver and with nothing written: 384 calls over the eight keys (number, null, string and three other values, both tools, through the server and the handler, in the first and the second input); of several the first of mean, sd, a, b is named; a key of no distribution, a type that is not known and a malformed number keep code and message; the six forms of Dist::to_json, the sixteen forms of the open sides and a study of three inputs give the library's and main's bytes on Windows x86_64 and Linux x86_64; 23 registered mutations, the eight wrong acceptances among them, are each caught by the registered rows, one is committed; no golden, tool-list text or existing test is changed.
+
+The same entry as `docs/roadmap/proposals/0793-F-895.json`.
