@@ -1,0 +1,11 @@
+## F-894 the inverse CDF of a normal distribution open on one side (closed form)
+
+Recorded 2026-11-25 for ADR 0792. Nothing here is from memory or from a publication: the values are computed from the
+definition by `crates/rcfd-api/tests/f894_reference.py` (760-digit decimal arithmetic, `erf` from its Maclaurin series,
+Newton's method; residuals below 1e-30) and stand in `crates/rcfd-api/tests/f894_reference.tsv`, 1000 lines, which the test
+`f894_normal_one_open_side.rs` reads.
+
+| Quantity | Source | Value and use |
+|---|---|---|
+| `x` with `Phi(x) = Phi(a) + u (Phi(b) - Phi(a))`, standard normal, one of `a`, `b` infinite | computed from the definition | `a = 7`, `b = inf`, `u = 0.25540929798230255`: 7.0412028490371235; `a = -30`, `b = inf`, `u = 0.999`: 3.090232306167813; `a = -inf`, `b = -7`, `u = 0.9124832919467554`: -7.012820208664248 |
+| The smallest kept mass 1e-12 | computed from the definition (`Q` in 120 digits) | `Q(7.034483685858461) = 1.000001e-12`, `Q(7.034483964743939) = 0.999999e-12` |

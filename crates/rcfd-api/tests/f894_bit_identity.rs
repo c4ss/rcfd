@@ -220,11 +220,7 @@ fn fan() -> FanRomModel {
         sections: vec![s(0.029, 0.032, 0.045, 0.42), s(0.059, 0.027, 0.035, 0.46)],
     };
     let fan = free_vortex_design(&base, &mo, &op, q, 45.0 / 1.2 / op.omega()).unwrap();
-    let dp = FanRom::new(fan.clone(), mo.clone())
-        .unwrap()
-        .point(&op, q)
-        .unwrap()
-        .dp_s;
+    let dp = FanRom::new(fan.clone(), mo).unwrap().point(&op, q).unwrap().dp_s;
     FanRomModel {
         fan,
         model: mo,
