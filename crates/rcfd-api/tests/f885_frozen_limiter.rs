@@ -72,7 +72,19 @@ const S_SAME: f64 = 1e-8;
 /// The recorded outcomes of the registered fan run (written after the run): F at c11837 (HA1, HA2, HA3 held; `q`; the
 /// largest change of the kept factor, FA1), `C` of F, `rho` of B1r, M1, M2, M3, and result C.
 type FanRecord = ([bool; 3], f64, f64, f64, [f64; 4], &'static str);
-const FAN_RECORD: Option<FanRecord> = None;
+const FAN_RECORD: Option<FanRecord> = Some((
+    [false, false, false],
+    2.2505325177996163,
+    0.0,
+    0.014300805347754355,
+    [
+        0.853789228181186,
+        0.8541098171565654,
+        0.8713420211615733,
+        0.8926640194754057,
+    ],
+    "named HC2",
+));
 
 fn omega() -> f64 {
     RPM * 2.0 * PI / 60.0
