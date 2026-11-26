@@ -196,13 +196,19 @@ jobs:
           if [ "$RUNNER_OS" = "Linux" ]; then
             RCFD_TEST_ELECTRON_ARGS="--ignore-gpu-blocklist --enable-unsafe-webgpu" xvfb-run --auto-servernum npx playwright test --reporter=list,html,json
           else
-            npx playwright test --reporter=list,html,json
+            # windows-latest has no GPU either: without the switch the window has no WebGPU adapter, so the WebGPU tests
+            # (workspace-first-open.spec.ts) cannot hold their premise and the views draw by the WebGL 2 fallback; with it
+            # WebGPU gets the same software adapter as on Linux (ADR 0818, H1 and R1).
+            RCFD_TEST_ELECTRON_ARGS="--enable-unsafe-webgpu" npx playwright test --reporter=list,html,json
           fi
       - name: no test skipped but the registered ones
         # A test that skips passes Playwright; a lost build would go unseen (ADR 0802 Q3). This fails on any skipped test
         # (a test.skip, or a test that did not run after a failure) whose <file>:<line> is not in the list (ADR 0804: none).
+        # The registered records, by name (ADR 0818): the four tests of canvas-f979.spec.ts that ADR 0807 amendment 1 keeps
+        # as the record of its defective set-up, and the first Follow live test of workspace.spec.ts, the record of its race
+        # (ADR 0818; the corrected test after it runs).
         env:
-          STUDIO_ALLOWED_SKIPS: ""
+          STUDIO_ALLOWED_SKIPS: "e2e/canvas-f979.spec.ts:162 e2e/canvas-f979.spec.ts:175 e2e/canvas-f979.spec.ts:208 e2e/canvas-f979.spec.ts:244 e2e/workspace.spec.ts:389"
         run: |
           node --input-type=module -e '
           import { readFileSync } from "node:fs";
