@@ -164,7 +164,7 @@ One row per record of this folder, grouped by the roadmap category of the item i
 | [0687](0687-f757-registration-rhie-chow-ddt-correction-on-coupled-faces-in-the-fractional-step-and-with-bdf2.md) | F-757 registration: Rhie-Chow ddt correction on coupled faces in the fractional step and with BDF2 | REGISTERED | 2026-11-17 | 1 | F-757 | partial |
 | [0691](0691-f771-registration-body-force-in-the-fractional-step.md) | F-771 registration: body force in the fractional step | REGISTERED | 2026-11-17 | 1 | F-771 | partial |
 
-## Structural solver (273)
+## Structural solver (274)
 
 | ADR | Title | Status word | Date | Addenda | Item | Item status |
 |---|---|---|---|---|---|---|
@@ -441,6 +441,7 @@ One row per record of this folder, grouped by the roadmap category of the item i
 | [0798](0798-f630-registration-shells-on-the-linear-dynamic-paths.md) | F-630 registration: Shell4 and Shell3 on the linear dynamic paths, by an opt-in per path | REGISTERED | 2026-11-25 | 1 | F-630 | done |
 | [0799](0799-f672-registration-whirl-and-full-rotor-of-a-beam-sector-by-default.md) | F-672 registration: the whirl paths and full_rotor of a beam sector by default | REGISTERED | 2026-11-25 | 2 | F-672 | done |
 | [0806](0806-f975-registration-normwise-deflation-fallback-of-the-state-qr.md) | F-975 registration: a fallback of the state QR iteration with a normwise deflation test, so that whirl_stability of the wheel sector converges | REGISTERED | 2026-11-26 | 2 | F-975 | done |
+| [0814](0814-f975-registration-the-stalled-set-of-dg1-on-linux.md) | F-975 registration: why the diagnosis test DG1 of the wheel sector stalls at a different set on Linux, and its remedy | REGISTERED | 2026-11-26 | 1 | F-975 | done |
 
 ## Meshing and mesh formats (9)
 
