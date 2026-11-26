@@ -311,3 +311,8 @@ SwiftShader): `error-walk.spec.ts:177` waits for the engine's `case.facts` of an
 > Follow-ups: none as new items here; Q1 (a) is proposed as an engine registration, a question of scope for the maintainer.
 
 The same entries are in `docs/roadmap/proposals/0809-F-823.json`.
+
+## Answers of the maintainer (2026-11-26), written by the lead
+
+1. Q1 (a): an engine registration in which case.facts refuses by the counts' estimate before it builds, ADR 0812; taken by the lead on the maintainer's standing instruction of 2026-11-26 (go with the recommended option always).
+2. Q2 (a): the lead reads the first GitHub Actions run of the Linux job before any registration of the time limits under load; taken by the lead on the maintainer's standing instruction of 2026-11-26 (go with the recommended option always).

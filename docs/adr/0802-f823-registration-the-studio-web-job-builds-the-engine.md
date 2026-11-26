@@ -345,3 +345,9 @@ of M1 to M3 was caught. The lead's reading of the first run on GitHub Actions de
 > Follow-ups: none as new items; Q1 (a) and Q3 (a) are proposed as follow-ups registered under F-823 (rule 13).
 
 The same entries are in `docs/roadmap/proposals/0802-F-823.json`.
+
+## Answers of the maintainer (2026-11-26), written by the lead
+
+1. Q1 (a): a follow-up under F-823 (rule 13), carried out as ADR 0804 (xterm, the WebGPU switch, a polled focus check, a wait for the signalled processes); taken by the lead on the maintainer's standing instruction of 2026-11-26 (go with the recommended option always).
+2. Q2 (a), as registered; taken by the lead on the maintainer's standing instruction of 2026-11-26 (go with the recommended option always).
+3. Q3 (a): the step after Playwright that fails on any skip, carried out in ADR 0804 (K1w, K1l); taken by the lead on the maintainer's standing instruction of 2026-11-26 (go with the recommended option always).

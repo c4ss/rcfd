@@ -319,3 +319,7 @@ missed: one new Linux failure that follows the WebGPU switch, one file refused b
 > Follow-ups: none as new items; Q1 (a) is proposed as a follow-up registered under F-823 (rule 13).
 
 The same entries are in `docs/roadmap/proposals/0804-F-823.json`.
+
+## Answers of the maintainer (2026-11-26), written by the lead
+
+1. Q1 (a): a follow-up under F-823 that measures error-walk.spec.ts:177 under WebGPU with the 60 s kept, carried out as ADR 0809; taken by the lead on the maintainer's standing instruction of 2026-11-26 (go with the recommended option always).
