@@ -226,3 +226,20 @@ egui Studio. The over-limit case whose build would fail for another reason (abov
 ## Open questions for the maintainer
 
 None at registration. Any question the runs raise is listed in the addendum.
+
+## Amendment 1 (2026-11-26): E6's set-up is defective; a corrected test `e6b_`
+
+Written and committed after the registered run of the test file (R7c's `--test case_facts_estimate_adr0812`, at
+1c455481, host CPU 56 % before) and before the corrected run. Nothing above is changed.
+
+In that run `e6_` failed in its set-up, before any call of `case_facts`: `Case::set("mesh.nx", 1000000)` returned
+`InvalidValue { path: "mesh.nx", reason: "1000000 outside [Some(1), Some(100000)]" }` (the test file, line 295). The
+schema bounds the counts at 100,000, which the registration did not check. The row E6 is therefore not decided by that
+run; it is recorded as such in the addendum, not as a met or missed limit of the code.
+
+Correction: a new test `e6b_a_mesh_file_and_other_generators_are_built_then_refused`, the same as `e6_` but with
+`mesh.nx = mesh.ny = 100000` (the schema's maximum; as generator counts their estimate would be 10,000,000,000, far over
+the limit of 10, so the file case still shows the counts are not used). Its limit is E6's, unchanged. `e6_` stays in the
+file as an ignored record (`#[ignore]` with the reason), not edited otherwise. The corrected run is `e6b_` alone, once:
+`cargo test --release -p rcfd-api --test case_facts_estimate_adr0812 e6b_`. The other rows of that run stand as they
+came out (in the addendum). The mutations' runs on the scratch copy run the whole file, `e6b_` included.
