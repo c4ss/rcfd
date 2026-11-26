@@ -391,3 +391,8 @@ its result (met; addendum 1) are unchanged. This amendment changes no check and 
 For the lead: the row needs the line
 `0816-f885-registration-the-two-modes-of-the-fans-outer-loop.md: R1` in `docs/process/exceptions/registration-kind.txt`,
 as for ADR 0767 T3 and ADR 0806 DG3; that file is added to by the lead only.
+
+## Answers of the maintainer (2026-11-26), written by the lead
+
+1. Option (a): an opt-in that keeps the limiter factor of the step's first outer iteration, registered under F-885 as ADR 0819; taken by the lead on the maintainer's standing instruction of 2026-11-26 (go with the recommended option always).
+2. Option (a): a further diagnosis of mode B, the alpha_u grid with ADR 0811's term off and on, in ADR 0819; taken by the lead on the maintainer's standing instruction of 2026-11-26 (go with the recommended option always).
