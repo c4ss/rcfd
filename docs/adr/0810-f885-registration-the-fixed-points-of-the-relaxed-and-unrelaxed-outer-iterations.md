@@ -446,3 +446,8 @@ The same entries are in `docs/roadmap/proposals/0810-F-885.json` (form 1 of ADR 
 registered under F-885 (rule 13).
 
 Generated pages that this work may leave not current, for the lead (rule 9): `docs/adr/index.md` (ADR 0810 is new).
+
+## Answers of the maintainer (2026-11-26), written by the lead
+
+1. Option (a): an opt-in face flux that does not depend on alpha_u, registered under F-885 (ADR 0811), then check H again; taken by the lead on the maintainer's standing instruction of 2026-11-26 (go with the recommended option always).
+2. The fan's relaxed-loop stall is recorded in ADR 0811's registration before any long run; taken by the lead on the maintainer's standing instruction of 2026-11-26 (go with the recommended option always).
