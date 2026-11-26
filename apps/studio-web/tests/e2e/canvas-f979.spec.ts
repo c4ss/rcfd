@@ -29,6 +29,9 @@ import { FEED_POLL_MS } from '../../src/shared/project.js';
 
 const mcp = findMcp();
 test.skip(!mcp, NO_MCP);
+// ADR 0807 amendment 1: the record of the first set-up, whose refine_case_mesh call left out `factor` (error -32602);
+// canvas-f979-a1.spec.ts is the corrected test.
+test.skip(true, 'ADR 0807 amendment 1: the defective set-up of E1 (no factor); see canvas-f979-a1.spec.ts');
 test.describe.configure({ mode: 'serial' });
 
 /** ADR 0807 D4: 4 periods of the Studio's feed poll. */
