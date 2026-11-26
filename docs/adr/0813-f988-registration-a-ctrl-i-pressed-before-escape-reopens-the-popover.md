@@ -296,3 +296,51 @@ Written by Claude Opus 5.5 (`claude-opus-5-5`). `python scripts/process_report.p
 cites no brief file": the registration links the brief relatively. The brief this registration answers is
 `docs/adr/briefs/f988-provenance-popover-escape.md`. R7's other failure, `docs/adr/index.md` not current, is a generated
 file left to the lead (rule 9).
+
+## Addendum 6: amendment 4, registration of V2, the control of two requests in flight and the rows R1b to R7b (2026-11-26)
+
+REGISTERED 2026-11-26, a further registration of F-988 under rule 13 of `docs/process/agent-rules.md` (version 5),
+taken by the lead on the maintainer's standing instruction of 2026-11-26 (go with the recommended option always);
+written before any change or run it covers and committed alone, at a1ed3d18. Written by Claude Opus 5.5
+(`claude-opus-5-5`). Brief: `docs/adr/briefs/f988-provenance-popover-escape.md`.
+
+**V2**, in `src/renderer/provenance/registry.ts` only: the one slot `pressedOn` becomes a queue of records, one per
+Show provenance key pressed (not a repeat, not composing), each `{ at: opened, t: performance.now() }`. `showNow` first
+drops records older than 2000 ms (the deferral is two frames and a task; a record that old has lost its request), then
+takes the oldest record; if it was taken with a popover open and that popover is no longer the one open, it opens
+nothing. A request with no record (the palette's Show provenance) acts as before.
+
+**KK2 (c)**, added to `provenance-escape-f988.spec.ts` after (b), from `byKeys`'s two presses in flight: the RE100 row
+focused, Ctrl+I, the popover read ("iterations"), then Ctrl+I, Ctrl+I and Escape back to back, then ten frames and
+200 ms; read once: `.pv-pop` count 0 and the row focused. (a) and (b) are unchanged.
+
+**C2, the control**, on a scratch copy of a1ed3d18 (V) with only (c) added to the spec: the spec alone, 3 runs. Rule:
+(c) fails in 1 or more of 3: the two-in-flight hole of V is shown, V2 is written. (c) passes 3 of 3: not shown, V2 is
+not written, stop and report.
+
+| Row | Check | Limit | Source of the limit | Estimate | Margin | Kind |
+|---|---|---|---|---|---|---|
+| R1b | `provenance-f828.spec.ts` alone after V2, 10 runs, load recorded | 10 of 10, 0 failed, 6 passed each | F-988 acceptance (at least 10) | 10 of 10 | pass or fail | code verification |
+| R2b | `provenance-escape-f988.spec.ts` alone after V2 (with (c)), 5 runs | 5 of 5, 0 failed | F-988 acceptance (closes on Escape every time) | 5 of 5 | pass or fail | code verification |
+| R3b | `npm test` once, load recorded | 0 failed | F-988 acceptance ("npm test passes") | 0 failed | pass or fail | code verification |
+| R4b | `npm run typecheck` | exit 0 | rule 7 | exit 0 | pass or fail | code verification |
+| R5b | `cargo test -p rcfd-cli --release --test docs_site` | 0 failed | rule 7 | 0 failed | pass or fail | code verification |
+| R6b | `python scripts/roadmap_proposals.py check docs/roadmap/proposals/0813-F-988.json` (updated) | exit 0 | rule 9 | exit 0 | pass or fail | code verification |
+| R7b | `python scripts/process_report.py --check`, last | no failure but a generated file not current | rule 7 | as limit | pass or fail | code verification |
+
+`run-control.spec.ts:268` (20 ms) is a latency limit under load in code not this work's: recorded as it comes in R3b,
+not touched.
+
+Mutations of V2, on a scratch copy (own `npm ci`), each built and packaged, KK2's spec alone 3 runs; caught means it
+failed in that run:
+
+- **M3** (committed, replacing M1 in `provenance-escape-f988.spec.mutation.patch`, first line `# expect-fail: cd
+  apps/studio-web && npm run build && npm run package:dir && npx playwright test tests/e2e/provenance-escape-f988.spec.ts
+  --project=electron`): V2's queue reduced to its newest record (V's one slot). Expected: caught at (c), 3 of 3.
+- **M4**: the oldest record read but not taken from the queue. Expected: caught at (b) (its first Ctrl+I opens
+  nothing, a record of (a) being left), 3 of 3.
+
+Size (agent): done; 0; 4 (C2, R1b and R2b, M3 and M4, R3b); 0; 20000
+
+Decision rule: F-988 is **done** if C2 shows the hole, R1b to R7b hold and M3 and M4 are each caught in 3 of 3;
+**partial** otherwise.
