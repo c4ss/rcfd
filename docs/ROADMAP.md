@@ -641,7 +641,7 @@ exist, and Phase 9 items are stretch. Phase numbers 5 and 6 may run in parallel 
 
 ## Phase 8 - AI assistant and desktop app integration
 
-87 items: 57 done, 18 partly done, 12 not started.
+90 items: 58 done, 18 partly done, 14 not started.
 
 - [x] **F-090** MCP server (external tool interface) with tools: list_cases, create_case, set_setting, get_setting, load_mesh, check_mesh, run, status, get_residuals, get_field_stats, export_vtk, render_image
   - depends on: F-085, F-073
@@ -1006,10 +1006,10 @@ exist, and Phase 9 items are stretch. Phase numbers 5 and 6 may run in parallel 
   - depends on: F-976, F-273
   - acceptance: Every limit not stated here is registered in the ADR before the run. A view shows, for a case, the ordered path from its creation through mesh, set-up and each run (state changes, residuals, monitors) to its results, read from the journal, the run records and their events (the feed of ADR 0188); each step opens the view of its state. An e2e test builds a case through the MCP tools from new to a finished run, and the view lists every journaled step in order, none missing against the journal.
   - note: Lead (2026-11-26): entered on ADR 0803, the maintainer's direction and answers of that day (the Studio as Claude's canvas).
-- [ ] **F-979** Claude's canvas: meshes and values shown live as MCP clients change them
+- [x] **F-979** Claude's canvas: meshes and values shown live as MCP clients change them
   - depends on: F-976, F-447, F-272
   - acceptance: Every limit not stated here is registered in the ADR before the run. With a view open, a mesh generated or edited by an MCP tool is drawn again in the open Studio, and a setting or a monitored value changed by an MCP client or the runner is updated in the shown view, each within a registered limit of the feed's poll (ADR 0188). The change names its actor and, where one is given, its reason. An e2e test drives both from the rcfd-mcp binary; the feed's format is unchanged.
-  - note: Lead (2026-11-26): entered on ADR 0803, the maintainer's direction and answers of that day (the Studio as Claude's canvas).
+  - note: Lead (2026-11-26): entered on ADR 0803, the maintainer's direction and answers of that day (the Studio as Claude's canvas). ADR 0807, 2026-11-26, partial: the canvas follows live a case's mesh (drawn by MeshPreview, again 802 ms after refine_case_mesh), a setting (read_view settings, 342 ms after edit_case) and the monitor of a case's newest run (its end 306 ms after the client read it), each with its actor and reason (limits 1.6 s, ADR 0188 C3-St); 5 of 5 mutations caught, one committed; L2 missed: the whole npm test ran with the first e2e set-up, which left out refine_case_mesh's factor (amendment 1). Lead (2026-11-26): merged at d75a0769 and pushed at ada02345; the push ran npm test with the corrected spec of amendment 1 (903 passed, 0 failed), every selected Rust test passed, and both committed mutations failed as expected. Written done, not the proposed partial: L2's miss was the registered run's, made before amendment 1; the corrected spec's run in the whole suite is the push run's, and every other row held. Questions answered in ADR 0807 (F-986, F-987).
 - [ ] **F-980** Claude's canvas: a view exported as a self-contained styled HTML page
   - depends on: F-976
   - acceptance: Every limit not stated here is registered in the ADR before the run. export_view writes a view specification as one self-contained HTML file (no network fetch, the Studio's theme and styling) with the data of the views it names and their provenance. The page opens offline and shows the values the Studio shows for the same specification, checked by a registered comparison over a registered set of specifications; the size of the file of a registered case is recorded.
@@ -1022,6 +1022,18 @@ exist, and Phase 9 items are stretch. Phase numbers 5 and 6 may run in parallel 
   - depends on: F-979
   - acceptance: Every limit not stated here is registered in the ADR before the run. The view specification gains panel kinds for the derived pictures of derive_picture (ADR 0738) and a picture of a mesh, additive to version 1 or as a version 2 that still reads version 1; each is drawn in the open Studio by an existing view in its theme, refused with its key when invalid, and shown by an e2e test that drives the open Studio from the rcfd-mcp binary; every default unchanged.
   - note: Lead (2026-11-26): entered on ADR 0805 question 2, option (yes, as items of their own after F-979), the recommendation, taken on the maintainer's standing instruction of 2026-11-26 (go with the recommended option always).
+- [ ] **F-985** Retire the case editor and the settings surface; the Studio's README after the canvas
+  - depends on: F-979, F-823, F-981
+  - acceptance: Every limit not stated here is registered in the ADR before the run. The case editor and the settings surface are retired as hand-only surfaces (ADR 0803), their G18 undo and close-guard checks kept where a canvas action still uses them, every retired test named in the ADR; apps/studio-web/README.md describes the canvas and not the coverage map or the first path; the e2e specs that start a run end its rcfd-runner when they end; npm test passes.
+  - note: Lead (2026-11-26): entered on ADR 0808 question 1, option (a), taken by the lead on the maintainer's standing instruction of 2026-11-26 (go with the recommended option always); ADR 0808 question 2 (keep the help on demand) taken the same way. The runner left alive by the F-979 e2e (ADR 0807 deviations) is part of it.
+- [ ] **F-986** Claude's canvas: plot and field panels that follow a case's newest run and a live run's snapshot
+  - depends on: F-984
+  - acceptance: Every limit not stated here is registered in the ADR before the run. A plot or field panel naming a case follows that case's newest run, and a live run's latest snapshot, within ADR 0188's poll limit, shown by an e2e test that drives the open Studio from the rcfd-mcp binary; every default unchanged.
+  - note: Lead (2026-11-26): entered on ADR 0807 question 2, taken by the lead on the maintainer's standing instruction of 2026-11-26 (go with the recommended option always).
+- [ ] **F-987** show_view's tool description lists every panel kind
+  - depends on: F-979
+  - acceptance: show_view's description in the MCP tool list names the mesh-of-a-case, setting and monitor-of-a-case forms of ADR 0807 as well as F-976's kinds; the tool-list goldens are re-recorded by the lead for that one entry, with the maintainer's word recorded; every other entry unchanged.
+  - note: Lead (2026-11-26): entered on ADR 0807 question 1 (the lead changes it and re-records), taken by the lead on the maintainer's standing instruction of 2026-11-26 (go with the recommended option always); the re-record is not additive, so it is its own merge.
 
 ## Phase 9 - Advanced physics and scale (stretch)
 

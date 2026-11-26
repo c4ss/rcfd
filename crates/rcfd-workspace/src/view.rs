@@ -6,8 +6,13 @@
 //! `.rcfd/views/current.json` with one journal line `view_shown`; every open Studio reads that line from the change
 //! feed (ADR 0188) and the view with `read_view`. Nothing is written for a refused specification or when no Studio is
 //! open.
+//!
+//! F-979 (ADR 0807 D1, D2) adds three forms, by addition: a `mesh` panel with `case` (the picture of the case's mesh), the
+//! kind `setting` (`case`, `setting`: one setting's value, which `read_view` gives as `settings`), and a `monitor` panel
+//! with `case` (the monitor of the newest run of the case, which the Studio follows as the runner writes it).
 
 use crate::{err, journal, project_error, RpcError, Workspace, BAD_STATE, INTERNAL, VALIDATION};
+use rcfd_api::case::Case;
 use serde_json::{json, Map, Value};
 use std::path::{Path, PathBuf};
 
@@ -33,6 +38,10 @@ pub const VIEW_SHOWN: &str = "view_shown";
 const MESH_PAGES: usize = 20;
 /// The executable whose processes are canvases (`rcfd-mcp --canvas`).
 pub const CANVAS_EXE: &str = "rcfd-mcp";
+/// The kinds of panel F-979 adds after the seven of F-976 (ADR 0807 D1).
+pub const KINDS_F979: [&str; 1] = ["setting"];
+/// Longest setting path of a `setting` panel, in characters.
+pub const MAX_SETTING: usize = 200;
 
 /// One located error of a specification: the dotted path of the value and the reason.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -144,38 +153,65 @@ impl Workspace {
             e(errors, at, "a panel is a JSON object with a kind");
             return;
         };
+        let all = || format!("{}, {}", KINDS.join(", "), KINDS_F979.join(", "));
         let kind = match o.get("kind").and_then(Value::as_str) {
-            Some(k) if KINDS.contains(&k) => k,
+            Some(k) if KINDS.contains(&k) || KINDS_F979.contains(&k) => k,
             Some(k) => {
                 e(
                     errors,
                     format!("{at}.kind"),
-                    format!("'{k}' is not a kind (one of {})", KINDS.join(", ")),
+                    format!("'{k}' is not a kind (one of {})", all()),
                 );
                 return;
             }
             None => {
-                e(
-                    errors,
-                    format!("{at}.kind"),
-                    format!("is required, one of {}", KINDS.join(", ")),
-                );
+                e(errors, format!("{at}.kind"), format!("is required, one of {}", all()));
                 return;
             }
         };
         let keys: &[&str] = match kind {
             "case" => &["kind", "title", "case"],
-            "mesh" => &["kind", "title", "mesh"],
+            // ADR 0807 D1: a mesh panel names a mesh of meshes/ or a case whose mesh is drawn
+            "mesh" => &["kind", "title", "mesh", "case"],
             "run" | "plot" => &["kind", "title", "run"],
             "field" => &["kind", "title", "run", "field", "snapshot"],
-            "monitor" => &["kind", "title", "run", "monitor"],
+            // ADR 0807 D1: a monitor panel names a run, or a case whose newest run it follows
+            "monitor" => &["kind", "title", "run", "monitor", "case"],
+            "setting" => &["kind", "title", "case", "setting"],
             _ => &["kind", "title", "runs"],
         };
         extra_keys(o, keys, at, errors);
         title(o, at, errors);
         match kind {
             "case" => self.case_ref(o.get("case"), &format!("{at}.case"), errors),
+            "mesh" if o.contains_key("case") => {
+                if o.contains_key("mesh") {
+                    e(
+                        errors,
+                        format!("{at}.case"),
+                        "a mesh panel names its mesh or its case, not both",
+                    );
+                } else {
+                    self.case_read(o.get("case"), &format!("{at}.case"), errors);
+                }
+            }
             "mesh" => self.mesh_ref(o.get("mesh"), &format!("{at}.mesh"), errors),
+            "setting" => {
+                if let Some(case) = self.case_read(o.get("case"), &format!("{at}.case"), errors) {
+                    setting_ref(&case, o.get("setting"), &format!("{at}.setting"), errors);
+                }
+            }
+            "monitor" if o.contains_key("case") => {
+                if o.contains_key("run") {
+                    e(
+                        errors,
+                        format!("{at}.case"),
+                        "a monitor panel names its run or its case, not both",
+                    );
+                } else if let Some(case) = self.case_read(o.get("case"), &format!("{at}.case"), errors) {
+                    report_ref(&case, o.get("monitor"), &format!("{at}.monitor"), errors);
+                }
+            }
             "table" => {
                 let key = format!("{at}.runs");
                 match o.get("runs").and_then(Value::as_array) {
@@ -258,6 +294,47 @@ impl Workspace {
             Ok(_) => e(errors, key, format!("{p}: no such case file")),
             Err(x) => e(errors, key, format!("{p}: {x}")),
         }
+    }
+
+    /// ADR 0807 D1: a case as `case_ref` checks it that also reads as a case (`read_case_text`): the case, or errors at `key`.
+    fn case_read(&self, v: Option<&Value>, key: &str, errors: &mut Vec<ViewError>) -> Option<Case> {
+        let before = errors.len();
+        self.case_ref(v, key, errors);
+        if errors.len() > before {
+            return None;
+        }
+        let p = v.and_then(Value::as_str).unwrap_or_default().replace('\\', "/");
+        let path = rcfd_project::paths::resolve_in(self.project.root(), &p).ok()?;
+        match self.read_case_text(&path) {
+            Ok((case, _)) => Some(case),
+            Err(x) => {
+                e(errors, key, format!("{p}: does not read as a case ({})", x.message));
+                None
+            }
+        }
+    }
+
+    /// ADR 0807 D2: the value of each `setting` panel of view `v`, read from its case file now.
+    fn setting_values(&self, v: &Value) -> Vec<Value> {
+        let mut out = Vec::new();
+        for (i, p) in v["panels"].as_array().into_iter().flatten().enumerate() {
+            if p["kind"] != "setting" {
+                continue;
+            }
+            let case = p["case"].as_str().unwrap_or_default().replace('\\', "/");
+            let setting = p["setting"].as_str().unwrap_or_default();
+            let read = rcfd_project::paths::resolve_in(self.project.root(), &case)
+                .map_err(|x| x.to_string())
+                .and_then(|f| self.read_case_text(&f).map_err(|x| x.message))
+                .and_then(|(c, _)| c.get(setting).map_err(|x| x.to_string()));
+            let mut one = json!({"panel": i, "case": case, "setting": setting});
+            match read {
+                Ok(value) => one["value"] = value,
+                Err(x) => one["error"] = json!(x),
+            }
+            out.push(one);
+        }
+        out
     }
 
     fn mesh_ref(&self, v: Option<&Value>, key: &str, errors: &mut Vec<ViewError>) {
@@ -453,11 +530,58 @@ impl Workspace {
         };
         let v: Value = serde_json::from_slice(&bytes).map_err(|x| err(INTERNAL, format!("{CURRENT}: {x}")))?;
         let hash = rcfd_project::records::hash_bytes(&bytes);
-        Ok(
-            json!({"exists": true, "path": CURRENT, "id": hash, "hash": hash, "shown": v["shown"],
+        let mut out = json!({"exists": true, "path": CURRENT, "id": hash, "hash": hash, "shown": v["shown"],
             "actor": v.get("actor").cloned().unwrap_or(Value::Null), "reason": v.get("reason").cloned().unwrap_or(Value::Null),
-            "view": v["view"]}),
-        )
+            "view": v["view"]});
+        // ADR 0807 D2: each shown setting's value, only for a view that has a setting panel
+        let settings = self.setting_values(&v["view"]);
+        if !settings.is_empty() {
+            out["settings"] = Value::Array(settings);
+        }
+        Ok(out)
+    }
+}
+
+/// ADR 0807 D1: `setting` of a `setting` panel, a path that `Case::get` reads in `case`.
+fn setting_ref(case: &Case, v: Option<&Value>, key: &str, errors: &mut Vec<ViewError>) {
+    let Some(s) = v.and_then(Value::as_str) else {
+        e(
+            errors,
+            key,
+            "is required: a dotted setting path of the case (as edit_case takes it)",
+        );
+        return;
+    };
+    if s.is_empty() || s.chars().count() > MAX_SETTING || s.chars().any(char::is_control) {
+        e(
+            errors,
+            key,
+            format!("a setting path is 1 to {MAX_SETTING} characters with no control character"),
+        );
+        return;
+    }
+    if let Err(x) = case.get(s) {
+        e(errors, key, format!("'{s}' is not a setting of the case ({x})"));
+    }
+}
+
+/// ADR 0807 D1: `monitor` of a `monitor` panel with `case`, a report of the case (`reports.<monitor>`).
+fn report_ref(case: &Case, v: Option<&Value>, key: &str, errors: &mut Vec<ViewError>) {
+    let Some(name) = v.and_then(Value::as_str) else {
+        e(errors, key, "is required: a report of the case (reports.<name>)");
+        return;
+    };
+    if name.is_empty() || name.contains('.') || case.get(&format!("reports.{name}")).is_err() {
+        let have: Vec<String> = case
+            .get("reports")
+            .ok()
+            .and_then(|r| r.as_object().map(|m| m.keys().cloned().collect()))
+            .unwrap_or_default();
+        e(
+            errors,
+            key,
+            format!("'{name}' is not a report of the case (reports: {})", have.join(", ")),
+        );
     }
 }
 
@@ -697,6 +821,114 @@ mod tests {
         }
         let _ = std::fs::remove_dir_all(&dir);
         assert_eq!(cases.len(), 16);
+        assert!(failed.is_empty(), "not refused at the registered key: {failed:?}");
+    }
+
+    const RE100: &str = "cases/cavity-re100.toml";
+
+    /// ADR 0807 V3's view: F-976's seven kinds, then the three forms of F-979 (D1): 8 panels.
+    fn live() -> Value {
+        let mut v = valid();
+        let p = v["panels"].as_array_mut().unwrap();
+        p.remove(6);
+        p.remove(4);
+        p.remove(1);
+        p.push(json!({"kind": "mesh", "case": RE100}));
+        p.push(json!({"kind": "setting", "case": RE100, "setting": "physics.nu"}));
+        p.push(json!({"kind": "monitor", "case": RE100, "monitor": "lid_drag"}));
+        p.push(json!({"kind": "table", "runs": [RUN, OTHER]}));
+        v
+    }
+
+    /// ADR 0807 V3: the three new forms are accepted beside the kinds of F-976.
+    #[test]
+    fn v3_f979_the_live_forms_are_valid() {
+        let (dir, ws) = quick_start();
+        let v = live();
+        let kinds: Vec<&str> = v["panels"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|p| p["kind"].as_str().unwrap())
+            .collect();
+        let errors = ws.view_errors(&v);
+        let _ = std::fs::remove_dir_all(&dir);
+        assert_eq!(
+            kinds,
+            ["case", "field", "mesh", "monitor", "mesh", "setting", "monitor", "table"]
+        );
+        assert_eq!(errors, vec![], "the live forms are refused");
+    }
+
+    /// ADR 0807 V4: the 8 invalid views of the new forms, each refused at its key.
+    #[test]
+    fn v4_f979_invalid_live_forms_are_refused_at_their_key() {
+        let (dir, ws) = quick_start();
+        let one = |p: Value| json!({"version": 1, "panels": [p]});
+        let cases: Vec<(&str, Value, &str, &str)> = vec![
+            (
+                "mesh and case",
+                one(json!({"kind": "mesh", "mesh": "meshes/box.msh", "case": RE100})),
+                "panels[0].case",
+                "not both",
+            ),
+            (
+                "mesh of a case outside cases/",
+                one(json!({"kind": "mesh", "case": "notes/README.md"})),
+                "panels[0].case",
+                "under cases/",
+            ),
+            (
+                "setting missing",
+                one(json!({"kind": "setting", "case": RE100})),
+                "panels[0].setting",
+                "required",
+            ),
+            (
+                "not a setting",
+                one(json!({"kind": "setting", "case": RE100, "setting": "physics.nope"})),
+                "panels[0].setting",
+                "not a setting",
+            ),
+            (
+                "setting with run",
+                one(json!({"kind": "setting", "case": RE100, "setting": "physics.nu", "run": RUN})),
+                "panels[0].run",
+                "not a key",
+            ),
+            (
+                "monitor with run and case",
+                one(json!({"kind": "monitor", "run": RUN, "case": RE100, "monitor": "nu_hot"})),
+                "panels[0].case",
+                "not both",
+            ),
+            (
+                "monitor not a report",
+                one(json!({"kind": "monitor", "case": RE100, "monitor": "drag"})),
+                "panels[0].monitor",
+                "not a report",
+            ),
+            (
+                "setting of no such case",
+                one(json!({"kind": "setting", "case": "cases/nope.toml", "setting": "physics.nu"})),
+                "panels[0].case",
+                "no such case",
+            ),
+        ];
+        let mut failed = Vec::new();
+        for (what, v, key, word) in &cases {
+            let errors = ws.view_errors(v);
+            let ok = errors.len() == 1 && errors[0].key == *key && errors[0].reason.contains(word);
+            eprintln!(
+                "V4 {what}: {errors:?} -> {}",
+                if ok { "refused at its key" } else { "WRONG" }
+            );
+            if !ok {
+                failed.push(*what);
+            }
+        }
+        let _ = std::fs::remove_dir_all(&dir);
+        assert_eq!(cases.len(), 8);
         assert!(failed.is_empty(), "not refused at the registered key: {failed:?}");
     }
 }
