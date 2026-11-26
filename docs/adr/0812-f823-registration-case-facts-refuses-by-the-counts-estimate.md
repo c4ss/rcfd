@@ -243,3 +243,17 @@ the limit of 10, so the file case still shows the counts are not used). Its limi
 file as an ignored record (`#[ignore]` with the reason), not edited otherwise. The corrected run is `e6b_` alone, once:
 `cargo test --release -p rcfd-api --test case_facts_estimate_adr0812 e6b_`. The other rows of that run stand as they
 came out (in the addendum). The mutations' runs on the scratch copy run the whole file, `e6b_` included.
+
+## Amendment 2 (2026-11-26): E3's sampler cannot read a process of a few milliseconds; read once after exit
+
+Written and committed after E3's registered runs and before the corrected ones. Nothing above is changed.
+
+The sampler of the registration (every 5 ms while the process runs) gave for `e3_` "peak working set 0 bytes over 1
+reads" (host CPU 34 % before): the test ended (in 0.00 s) before a read succeeded, so P_r was not measured. For `e5_` it
+gave 6,248,591,360 bytes (5,959.1 MB) over 1,062 reads (host CPU 25 % before; the test 28.43 s). The row E3 is not
+decided by those runs.
+
+Correction of the set-up: the sampler keeps the process handle open, and after the process has exited reads
+`PeakWorkingSetSize` once from `GetProcessMemoryInfo` (psapi, through PowerShell's `Add-Type`) on that handle: the
+peak of the whole life of the process, not a sample. Scratch tool `sample-peak2.ps1`. Run once for `e3_` and once for
+`e5_`; E3's limits (P_r <= 200 MB, P_r / P_b <= 0.5) are unchanged and are read from these two runs.
