@@ -465,3 +465,64 @@ Size (agent): done; 0; 4 (D2's six runs, D3 if O1, R14, R15); 0; 40000
 
 Decision rule: F-981 is **done** if R14 and R15 hold (every row of Addendum 1 other than R1 is inside R15) and, if a
 remedy changes a Studio file, M4 is caught; **partial** otherwise.
+
+## Addendum 6: results of amendment 2 (2026-11-26)
+
+Written by Claude Opus 5.5 (`claude-opus-5-5`). Commits after Addendum 5 (250c495c): 3353ab65 (S1), 57c7f729 (the
+remedy), 021e5840 (M4 committed as `apps/studio-web/tests/e2e/a11y.spec.mutation.patch`). Every run as Addendum 5 set
+up; logs and reports are in the scratch folder (`d2.out`, `d3.out`, `r14.out` and the logs they name).
+
+**D2.** D2r (the base's home and `first/` restored, own `npm ci`): 3 of 3 runs passed all 11 cases of the file, the Runs
+case among them; its Runs surface had 33 Tab stops and the grid's Tab stop was the last row each time. D2b (this branch
+at 3353ab65): run 1 failed the Runs case only (1 failed, 3 passed, 7 not run; 32 stops, Tab stop the first row, the walk
+going into the column header as before); runs 2 and 3 passed all 11 (33 stops, Tab stop the last row). "Reduced motion"
+passed in each of the five runs that reached it: S1 is the set-up it needed. Outcome **O1**.
+
+**D3.** The instrumented copies printed the window's tabbable elements before the Runs walk: D2r's copy 33, the S1
+copy 17 (and that run failed the Runs case again). The 16 missing are all the panel of a selected run
+(`r-20261028T152641-3900`: Clear selection, Open in workspace, Run again, the log and report toggles, five provenance
+numbers). So in the base a run is already selected when the Runs case starts, and React Aria's Tab stop is the selected
+row (`firstSelectedKey`, `useSelectableCollection.mjs` line 299). Who selects it, from the code: the run workspace
+selects the newest run when nothing is selected (`workspace/RunWorkspace.tsx`, the effect after `autoSelect`), and the
+case before, "the project home of an open project", walks the tab list with the arrow keys and so shows the Workspace tab
+for a moment. The workspace is loaded on demand (`lazy`); in the base the first path imported `FieldViewport` into the
+home, so the workspace's chunk was small and mounted within that moment; without it, the chunk (with the field view)
+often comes too late, nothing is selected, and the Runs case starts from the first row.
+
+**The remedy** (57c7f729, `project/ProjectHome.tsx` only): the workspace's chunk starts loading when a project opens
+(one shared promise for `lazy` and an effect of the open project), so it is ready by the time its tab is first shown. The
+first path is not drawn again (N3 passed in R15); no test, support file, `runs/`, `ui/` or canvas file changed.
+
+| Row | Check | Limit | Measured | Met |
+|---|---|---|---|---|
+| R14 | `a11y.spec.ts` alone, 3 runs, at 57c7f729 | 3 of 3 pass | 3 of 3 passed, 11 passed each (1.0 min, 1.0 min, 55.5 s) | yes |
+| R15 | `npm test` once, at 021e5840 | 0 failed | 884 passed, **1 failed**, 4 skipped (13.7 min): `e2e/provenance-f828.spec.ts:351` "KR KK: the runs table's residuals are run_status's of their own run; …", at its line 396: after Ctrl+I pressed twice on a Runs grid cell, Escape left the provenance popover ("Provenance of residual of u") open | **no** |
+| R9b | `npm run typecheck` | exit 0 | exit 0 | yes |
+
+Deviation in R14: Addendum 5 wrote the limit as "3 of 3 pass (12 passed each)". The file has 11 cases since item 8 of
+the registration removed one (C1's 12 were counted on the base's file), so "12 passed" was a counting slip in the
+registration that no run of this file can meet. Each run passed every case of the file; the limit is not changed here,
+and the lead judges the row. The data failures of R1 did not recur (`f447_bench` from the scratch target).
+
+R15's failure is not diagnosed. The same case passed in R1 (Addendum 1, among R4's views) on the tree before S1 and the
+remedy. The remedy changes when the workspace's code loads, and the case drives the Runs grid and the popover, so the
+remedy is a candidate, but nothing here shows it; it was not run again (rule 2).
+
+| Mutation | What | Caught by | Result |
+|---|---|---|---|
+| M4 | the remedy reverted (scratch copy of 021e5840 with the patch applied, own `npm ci`), one run of `a11y.spec.ts` | `a11y.spec.ts:299`, the Runs case | caught (1 failed, 3 passed, 7 not run) |
+
+R10b (`docs_site`), R12b (`roadmap_proposals.py check`) and R13b (`process_report.py --check`) run after this addendum is
+committed, so they judge the final tree; their results are in the report to the lead.
+
+Actual size: partial; 0; 4 (D2, D3, R14 with M4, R15); 0; about 60 000 bytes read.
+
+Decision by the rule of Addendum 5: **partial**. R14 held and M4 was caught; R15 missed (1 failed, not diagnosed).
+
+### For the lead: roadmap entries
+
+> Status: partial.
+
+> Note: ADR 0808, 2026-11-26, partial (Addenda 5 and 6): the a11y Runs grid failure diagnosed (a run selected by the workspace's lazy chunk in the base; the home now loads that chunk when a project opens) and the reduced-motion set-up restored; a11y.spec passed 3 of 3 and the remedy's mutation was caught; npm test 884 passed, 1 failed (provenance-f828 KR KK: Escape left a popover open), not diagnosed.
+
+> Gap: npm test did not pass: provenance-f828.spec.ts KR KK failed once after ADR 0808's remedy (Escape after Ctrl+I twice on a Runs grid cell left the provenance popover open), not diagnosed; it passed before the remedy.
