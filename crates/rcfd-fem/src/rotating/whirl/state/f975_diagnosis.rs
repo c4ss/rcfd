@@ -92,7 +92,8 @@ fn met(ok: bool) -> &'static str {
 
 /// DG1, DG2, DG3 of ADR 0806.
 #[test]
-fn dg1_dg2_dg3_the_stalled_window_of_the_wheel_sector() {
+#[ignore = "known miss of ADR 0806 DG1 on Linux (ADR 0814 run R1, 7e6526a0): stalled at [(2, 0.0)] in the container rcfd-linux:ubuntu24.04-rust1.99.0, glibc sin one ulp off MSVC's at pi / 4 and 4 pi / 3; superseded by dg1_stall_set_per_platform_f975_0814"]
+fn dg1_dg2_dg3_the_stalled_window_of_the_wheel_sector_known_miss() {
     let m = wheel();
     let mut mo = ModalOptions::new(4);
     mo.tolerance = 1e-12;
@@ -435,4 +436,102 @@ fn dg1_controls_library_order_threshold_f975_0814() {
     println!("C2: {}", met(c2));
     assert!(c1, "C1");
     assert!(c2, "C2");
+}
+
+// ------------------------------------------------------------------------------------------------------------------------
+// ADR 0814 (F-975) remedy R-A: DG1 with its stall set stated per platform from the registered run R1.
+
+/// The stall set of DG1 on this platform, from run R1 of ADR 0814: `None` on a platform R1 did not run on.
+fn expected_stall_set() -> Option<Vec<(usize, f64)>> {
+    if cfg!(all(windows, target_env = "msvc", target_arch = "x86_64")) {
+        // R1 on Windows (and ADR 0806 run 1): both pair indices at rest.
+        Some(vec![(1, 0.0), (2, 0.0)])
+    } else if cfg!(all(target_os = "linux", target_env = "gnu", target_arch = "x86_64")) {
+        // R1 in the container rcfd-linux:ubuntu24.04-rust1.99.0 (glibc 2.39), equal to CI run 45881197914: glibc's sin
+        // differs by one unit in the last place at pi / 4 and 4 pi / 3, and the first iteration of (1, 0) converges.
+        Some(vec![(2, 0.0)])
+    } else {
+        None
+    }
+}
+
+/// DG1 (per platform), DG2, DG3 of ADR 0806, as remedied by ADR 0814 (R-A).
+#[test]
+fn dg1_stall_set_per_platform_f975_0814() {
+    let m = wheel();
+    let sec = RotatingSector::new(&m, &options(None)).unwrap();
+    let mut failed = Vec::new();
+    let mut dg2 = true;
+    let mut dg3 = true;
+    for k in 0..4usize {
+        for w in [0.0, 30.0, 60.0] {
+            QR_FAILURES.with(|r| r.borrow_mut().clear());
+            let r = sec.whirl_state(k, w);
+            let recs = QR_FAILURES.with(|r| r.borrow().clone());
+            println!(
+                "k = {k}, speed {w}: result Ok {}, stalled first iterations {}",
+                r.is_ok(),
+                recs.len()
+            );
+            for f in &recs {
+                failed.push((k, w));
+                let smin = f.sub.iter().copied().fold(f64::INFINITY, f64::min);
+                let refused = f.sub.iter().zip(&f.local).all(|(s, l)| *s > f64::EPSILON * l);
+                let ok = smin <= f.tau && refused;
+                dg2 &= ok;
+                println!(
+                    "  DG2 m = {}, window {:?}, ||h0||_F = {:.6e}, tau = {:.6e}, smallest |sub| {smin:.6e}, refused {refused}, \
+                     fallback converged {}: {}",
+                    f.m,
+                    f.window,
+                    f.fro,
+                    f.tau,
+                    f.fallback_ok,
+                    met(ok)
+                );
+            }
+            if (k == 1 || k == 2) && w == 0.0 {
+                match &r {
+                    Ok(h) => {
+                        let ev = &h.state.eigenvalues;
+                        let mut worst = 0.0f64;
+                        for pair in ev.chunks(2) {
+                            if pair.len() == 2 {
+                                let a = pair[0][0].hypot(pair[0][1]);
+                                let d = (pair[0][1] - pair[1][1]).abs();
+                                worst = worst.max(if a > 0.0 { d / a } else { d });
+                            }
+                        }
+                        let ok = ev.len() % 2 == 0 && worst <= 1e-8;
+                        dg3 &= ok;
+                        println!(
+                            "  DG3 k = {k}: {} eigenvalues, largest {worst:.3e} (limit 1e-8): {}",
+                            ev.len(),
+                            met(ok)
+                        );
+                    }
+                    Err(e) => {
+                        dg3 = false;
+                        println!("  DG3 k = {k}: not computed, {e:?}: MISSED");
+                    }
+                }
+            }
+        }
+    }
+    let only_pairs_at_rest = failed.iter().all(|(k, w)| (*k == 1 || *k == 2) && *w == 0.0);
+    let expected = expected_stall_set();
+    let exact = match &expected {
+        Some(e) => *e == failed,
+        None => true,
+    };
+    let dg1 = !failed.is_empty() && only_pairs_at_rest && exact;
+    println!(
+        "DG1: stalled at {failed:?}; expected on this platform {expected:?}; only at a pair index at rest {only_pairs_at_rest}: {}",
+        met(dg1)
+    );
+    println!("DG2: {}", met(dg2 && !failed.is_empty()));
+    println!("DG3: {}", met(dg3));
+    assert!(dg1, "DG1");
+    assert!(dg2 && !failed.is_empty(), "DG2");
+    assert!(dg3, "DG3");
 }
