@@ -173,3 +173,16 @@ K-0 included).
 - Other e2e files that press Ctrl+I and Escape back to back are not searched for; only the provenance specs are run
   besides npm test.
 - No change to the palette's deferral (`afterFocusReturns`), which other commands need.
+
+## Addendum 1: amendment 1, the control's test of the focus (2026-11-26)
+
+REGISTERED 2026-11-26, written before any run of K and before any code of V, committed alone. Written by Claude Opus 5.5
+(`claude-opus-5-5`).
+
+A defect of K's set-up, found before its run: React Aria's `Overlay` (`react-aria/dist/private/overlays/Overlay.cjs`,
+lines 42 and 64, 1.22.1 as installed) portals the popover to `document.body`, so `.pv-pop` and the dialog that has the
+focus are not inside `.pv-host` (the root's host is empty but for the portal's place). The test "the focus inside
+`.pv-host`" of K, of KA and of KB would call the focus outside the popover in every run. It is replaced, wherever K
+says "inside `.pv-host`", by "inside the popover": `document.activeElement.closest('.pv-host, .pv-pop')` is not null,
+the selector `POPOVER` of `src/renderer/provenance/registry.ts`. Nothing else of K, of its rule, of V, of the rows or of
+the mutations changes.
