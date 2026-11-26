@@ -4,3 +4,5 @@
 0741-f271-registration-the-field-store-plan-as-the-default-of-start-run.md: 12
 # 2026-11-23: row T3 of ADR 0767 holds the table's cell separator inside a code span (|u^(n+1) - u^n|), so its kind is read as "0"; addendum 2 of the ADR records it as meant, code verification.
 0767-f885-registration-check-h-by-the-velocity-change-of-the-outer-iterations.md: T3
+# 2026-11-26: row DG3 of ADR 0806 holds absolute-value bars inside a code span, which split the table's cells; amendment 1 of the ADR records its kind as meant, code verification.
+0806-f975-registration-normwise-deflation-fallback-of-the-state-qr.md: DG3
