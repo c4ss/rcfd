@@ -379,3 +379,15 @@ The same entries are in `docs/roadmap/proposals/0816-F-885.json` (form 1 of ADR 
 acceptance clause and would be registered under F-885 (rule 13).
 
 Generated pages that this work may leave not current, for the lead (rule 9): `docs/adr/index.md` (ADR 0816 is new).
+
+## Amendment 1 (2026-11-26): the kind of row R1
+
+`python scripts/process_report.py --check` at fa731013 reads the kind of row R1 of the table of checks as `0`: the row's
+check text holds absolute-value bars inside a code span (the probe's velocity change, `u_k - u_(k-1)` between bars),
+which split the table's cells. The row is meant as written: check R1, limit relative `<= 1e-6`, source "Same discrete
+problem by two routes", widened to the printed digits, estimate 0, margin n/a, kind **code verification**. Its limit and
+its result (met; addendum 1) are unchanged. This amendment changes no check and covers no run.
+
+For the lead: the row needs the line
+`0816-f885-registration-the-two-modes-of-the-fans-outer-loop.md: R1` in `docs/process/exceptions/registration-kind.txt`,
+as for ADR 0767 T3 and ADR 0806 DG3; that file is added to by the lead only.
