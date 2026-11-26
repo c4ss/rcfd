@@ -5,7 +5,7 @@
 //! E1: the estimate is the built count (two routes). E2: the over-limit cavity is refused in a fraction of its build's
 //! time, with the built count's message. E3: the refusal alone (the memory row is read by a sampler outside the test).
 //! E4: at and over a small limit. E5: without a limit the mesh is built. E6: mesh files and other generators are built,
-//! then refused.
+//! then refused (`e6b_`, amendment 1; `e6_` is the ignored record of a defective set-up).
 
 use rcfd_api::case::Case;
 use rcfd_api::facts::{self, FactsError, InText};
@@ -287,6 +287,7 @@ fn e5_without_a_limit_the_mesh_is_built() {
 /// E6: a mesh file (its counts ignored) and the generators the estimate does not name are built, then refused by their
 /// built count.
 #[test]
+#[ignore = "ADR 0812 amendment 1: a defective set-up (mesh.nx 1000000 is outside the schema's range); replaced by e6b_"]
 fn e6_a_mesh_file_and_other_generators_are_built_then_refused() {
     let msh = repo().join("crates/rcfd-io/tests/data/hex_v2.2_ascii.msh");
     let mut file = Case::new();
@@ -302,5 +303,25 @@ fn e6_a_mesh_file_and_other_generators_are_built_then_refused() {
         let r = facts::case_facts(&case, InText::NotDefault, Some(10));
         assert_eq!(r, Err(FactsError::TooLarge { cells: b, limit: 10 }), "{what}");
         eprintln!("E6 {what}: built {b}, refused at 10");
+    }
+}
+
+/// E6, corrected by ADR 0812 amendment 1: as `e6_`, with the file case's counts at the schema's maximum of 100,000.
+#[test]
+fn e6b_a_mesh_file_and_other_generators_are_built_then_refused() {
+    let msh = repo().join("crates/rcfd-io/tests/data/hex_v2.2_ascii.msh");
+    let mut file = Case::new();
+    file.set("mesh.source", json!("file")).unwrap();
+    file.set("mesh.file", json!(msh.display().to_string())).unwrap();
+    file.set("mesh.nx", json!(100_000)).unwrap();
+    file.set("mesh.ny", json!(100_000)).unwrap();
+    assert_eq!(estimate(&file), None);
+    let mut cases = vec![("mesh file", file)];
+    cases.extend(others());
+    for (what, case) in cases {
+        let b = built(&case);
+        let r = facts::case_facts(&case, InText::NotDefault, Some(10));
+        assert_eq!(r, Err(FactsError::TooLarge { cells: b, limit: 10 }), "{what}");
+        eprintln!("E6b {what}: built {b}, refused at 10");
     }
 }
