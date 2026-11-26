@@ -41,7 +41,7 @@ let group: readonly TriggerEntry[] = [];
  * later (the palette's afterFocusReturns); if that popover has closed in between (Escape), the key was about it, and is
  * spent.
  */
-let pressedOn: { readonly at: typeof opened } | null = null;
+let pressedOn: { readonly at: { entry: TriggerEntry; close: () => void } | null } | null = null;
 
 export function addTrigger(t: TriggerEntry): () => void {
   listen();
