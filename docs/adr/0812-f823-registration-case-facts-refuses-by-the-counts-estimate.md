@@ -348,3 +348,8 @@ No follow-up item is proposed here; question 1 names the one this work would rec
 Written after addendum 1, before the report; nothing above is changed and no check or run is affected.
 `python scripts/process_report.py --check` gave "registration cites no brief file" for this ADR: its opening names the
 brief by a relative link only. The brief this registration answers is `docs/adr/briefs/f823-case-facts-estimate.md`.
+
+## Answers of the maintainer (2026-11-26), written by the lead
+
+1. Option (b): a new engine item, F-989, gives `estimate` the counts of mesh files and of the generators without one, checked by two routes; taken by the lead on the maintainer's standing instruction of 2026-11-26 (go with the recommended option always).
+2. Option (a): the lead reads R7w's 20 ms miss of `run-control.spec.ts:268` with the first GitHub Actions run; taken by the lead on the maintainer's standing instruction of 2026-11-26 (go with the recommended option always).
