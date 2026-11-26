@@ -357,3 +357,26 @@ committed patch stays MU2's.
 
 **Decision rule** unchanged: done only if every row holds locally and in the lead's next run on GitHub and each mutation
 is caught; MU1 (not caught) and EMU (missed) stand, so this registration stays partial whatever these runs give.
+
+## Addendum 2: results of amendment 3 (2026-11-26)
+
+Code 88ce8fdf. Each run once; host CPU load with each. GHU of addendum 1 is met and GHW missed (the lead's run
+45906133164, amendment 3).
+
+| Id | Limit | Measured | Met |
+|---|---|---|---|
+| A3a | 0 failed; skipped only `provenance-f828.spec.ts:288` | 7 passed, 1 skipped (`:288`), exit 0, 1.4 m (CPU 65 % before). The step's script was not run on it: my run used only the list reporter, so no JSON report was written | met; the step's part not run |
+| A3b | 0 failed; skipped `:288` and `workspace-first-open.spec.ts:59` (premise); the step exit 0 with the premise line | `--disable-gpu`: 6 passed, 2 skipped (`:288` and `workspace-first-open.spec.ts:59`), exit 0, 1.1 m (CPU 79 %); the corrected SC test passed without an adapter. The step's script was not run: no JSON report (as A3a) | met but for the step's part, **not run** |
+| A3c | typecheck and `npm test` exit 0; 0 failed, 0 did not run, the 6 skipped; the step exit 0 | typecheck exit 0; `npm test` exit 0: 886 passed, 0 failed, 6 skipped, 12.7 m (CPU 37 % before; 25 samples 9 % to 100 %); the step's script over its report: 892 tests, 0 not registered, exit 0 | met |
+| A3d | exit 0 | `actionlint`: exit 0 | met |
+| MA1 | the step exits 1 | not run: it needs A3b's report, which was not written | **not run** |
+| MA2 | the step exits 1 | `canvas-f979.spec.ts:162` moved to the premise list: 1 skipped and not registered, exit 1 | caught |
+| MA3 | the corrected SC test fails | filter removed, `--disable-gpu` (CPU 34 % before): exit 1 (in the log) | caught |
+
+Deviation: A3a and A3b ran with `--reporter=list` only, so the premise line of the skip step and MA1 were not checked
+locally; the lead's next run on windows-latest checks the step against a real premise skip. Decision by the registered
+rule: **partial** (EMU and GHW missed, MU1 not caught, MA1 not run; the lead's next run is to be read).
+
+> Note: ADR 0818, 2026-11-26, partial: the studio-web skip step lists ADR 0807's four records and the records of Follow live's race and of provenance-f828's scan (each with a corrected test that passes), and workspace-first-open checks its premise (a WebGPU adapter) and is reported by STUDIO_PREMISE_SKIPS when it is missing; Windows runs with no switch again after the lead's run 45906133164 showed --enable-unsafe-webgpu does not draw; ubuntu passed on GitHub; locally npm test passed 886 with 6 registered skips.
+
+> Gap: windows-latest on GitHub is to be read again with no switch, the corrected provenance scan and workspace-first-open's premise check (ADR 0818 amendment 3); run-control.spec.ts:268's P2 holds on ubuntu only by chance (2 of 3 missed); a11y.spec.ts:427 undiagnosed (traces are a later item); a self-hosted runner for the timing specs is the lead's item.
