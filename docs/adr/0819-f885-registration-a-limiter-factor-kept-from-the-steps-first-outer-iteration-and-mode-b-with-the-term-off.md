@@ -370,3 +370,25 @@ The same entries are in `docs/roadmap/proposals/0819-F-885.json` (form 1 of ADR 
 and would be registered under F-885 (rule 13).
 
 Generated pages that this work may leave not current, for the lead (rule 9): `docs/adr/index.md` (ADR 0819 is new).
+
+## Addendum 2: the checks of rule 7
+
+Written 2026-11-26, after addendum 1 (b53e5971), from the run at that commit (scratch `rule7.log`), each once:
+
+* `cargo test --release -p rcfd-fv --lib`: 115 passed, 6 ignored.
+* `cargo test --release -p rcfd-api --lib`: 160 passed, 4 ignored.
+* `cargo test --release -p rcfd-api --test baseline_hashes`: 3 passed, 1 ignored; `baseline_hashes.rs` unchanged since
+  61a5de03 (B3 met).
+* `--test f885_two_outer_modes`: 5 passed, 1 ignored; `--test f885_outer_stall`: 5 passed, 1 ignored;
+  `--test f885_alpha_free_face_flux`: 5 passed, 3 ignored; `--test f885_outer_fixed_points`: 4 passed, 1 ignored;
+  `--test f885_check_h_outer_record`: 4 passed, 2 ignored.
+* The new file `f885_frozen_limiter`: its gate tests as in addendum 1 (each once as its registered step came due).
+* Format: `cargo fmt -p rcfd-fv -p rcfd-api --check` refuses on this machine ("The filename or extension is too long",
+  os error 206) and checked nothing; `rustfmt --check` on the two touched files (`crates/rcfd-fv/src/pimple.rs`,
+  `crates/rcfd-api/tests/f885_frozen_limiter.rs`) with the repository's `rustfmt.toml`: clean.
+* `cargo clippy --release -p rcfd-fv -p rcfd-api --all-targets -- -D warnings`: clean (no warning).
+* `cargo test -p rcfd-cli --release --test docs_site`, `python scripts/roadmap_proposals.py check` and
+  `python scripts/process_report.py --check` are run at the commit of this addendum, as reported to the lead.
+
+P is met for the cargo checks, with the fmt check made by `rustfmt` in place of `cargo fmt` (a deviation). The decision of
+addendum 1 stands: partial for this registration (N5 not caught).
