@@ -233,7 +233,6 @@ fn sim_of(text: &str) -> Simulation {
     Simulation::new(&case).unwrap_or_else(|e| panic!("{e:?}"))
 }
 
-
 // ---------------------------------------------------------------- the measures (ADR 0820 section 4)
 
 /// The upper median `x[len / 2]` of the sorted values; NaN if any is NaN or there are none.
@@ -515,7 +514,10 @@ fn f885_so_rules_on_built_records() {
     assert_eq!(mode_d(r0, [0.83, 0.70, 0.84, 0.60]).1, "named HD");
     assert_eq!(mode_d(r0, [0.83, 0.84, 0.70, 0.60]).1, "named HN");
     assert_eq!(mode_d(r0, [0.80, 0.80, 0.84, 0.70]).1, "named HX");
-    assert_eq!(mode_d(r0, [0.83, 0.84, 0.86, 0.835]).1, "HF to HX ruled out, HL by elimination");
+    assert_eq!(
+        mode_d(r0, [0.83, 0.84, 0.86, 0.835]).1,
+        "HF to HX ruled out, HL by elimination"
+    );
     assert_eq!(mode_d(r0, [0.80, 0.84, 0.84, 0.80]).1, "parts named [\"HF\", \"HX\"]");
     assert!(mode_d(r0, [0.70, 0.70, 0.84, 0.60]).1.starts_with("names the set"));
     assert_eq!(mode_d(r0, [0.70, f64::NAN, 0.84, 0.60]).1, "undecided");
@@ -526,7 +528,7 @@ fn f885_so_rules_on_built_records() {
     // the field measures on built fields: two cells, class 0 and 6; delta_k = 0.8^k (1, 2) at cell 0 and 0.1 0.8^k at cell 1
     let us: Vec<Vec<Vec3>> = (0..5)
         .map(|i| {
-            let s: f64 = (1..=i).map(|k| 0.8f64.powi(k as i32)).sum();
+            let s: f64 = (1..=i).map(|k| 0.8f64.powi(k)).sum();
             vec![[s, 2.0 * s, 0.0], [0.1 * s, 0.0, 0.0]]
         })
         .collect();
@@ -539,7 +541,9 @@ fn f885_so_rules_on_built_records() {
     assert!((f.share[0] - e0 / (e0 + e1)).abs() < 1e-12 && (f.share[6] - e1 / (e0 + e1)).abs() < 1e-12);
     assert_eq!((f.n90, f.cell), (1, 0));
     // an alternating mode: cos -1
-    let alt: Vec<Vec<Vec3>> = (0..5).map(|i| vec![[if i % 2 == 0 { 0.0 } else { 1.0 }, 0.0, 0.0]]).collect();
+    let alt: Vec<Vec<Vec3>> = (0..5)
+        .map(|i| vec![[if i % 2 == 0 { 0.0 } else { 1.0 }, 0.0, 0.0]])
+        .collect();
     let refs: Vec<&[Vec3]> = alt.iter().map(|v| v.as_slice()).collect();
     assert!((step_fields(&refs, &[0], [true, true, false]).cos + 1.0).abs() < 1e-12);
     assert!(one_mode(0.83, 0.995, 0.834) && !one_mode(0.83, 0.9, 0.834) && !one_mode(0.80, 0.995, 0.834));
@@ -691,14 +695,20 @@ fn f885_so_two_routes() {
         assert_eq!(rec.len(), 5);
         for f in &rec {
             for k in 0..3 {
-                for (what, got) in [("convection", &f.grad_convection[k]), ("laplacian", &f.grad_laplacian[k])] {
+                for (what, got) in [
+                    ("convection", &f.grad_convection[k]),
+                    ("laplacian", &f.grad_laplacian[k]),
+                ] {
                     match (got, &want[k]) {
                         (Some(a), Some(b)) => {
                             worst = worst.max(vdiff(a, b));
                             compared += 1;
                         }
                         (None, None) => {}
-                        _ => miss.push(format!("step {step} iteration {} {what} {k}: formed on one route", f.iteration)),
+                        _ => miss.push(format!(
+                            "step {step} iteration {} {what} {k}: formed on one route",
+                            f.iteration
+                        )),
                     }
                 }
             }
@@ -709,7 +719,9 @@ fn f885_so_two_routes() {
         let ub: Vec<u64> = last.u.iter().flat_map(|v| v.map(f64::to_bits)).collect();
         let sb: Vec<u64> = sol.u.values.iter().flat_map(|v| v.map(f64::to_bits)).collect();
         if ub != sb {
-            miss.push(format!("step {step}: the record's u of iteration 5 is not the velocity after the step"));
+            miss.push(format!(
+                "step {step}: the record's u of iteration 5 is not the velocity after the step"
+            ));
         }
     }
     // the non-vacuity, and the record of what was used, with the opt-ins off
@@ -721,7 +733,10 @@ fn f885_so_two_routes() {
         for i in 1..5 {
             let want = gradients(&g, &off.u, &rec[i - 1].u);
             for k in (0..3).filter(|&k| g.active[k]) {
-                let (c, l) = (rec[i].grad_convection[k].as_ref().unwrap(), rec[i].grad_laplacian[k].as_ref().unwrap());
+                let (c, l) = (
+                    rec[i].grad_convection[k].as_ref().unwrap(),
+                    rec[i].grad_laplacian[k].as_ref().unwrap(),
+                );
                 let w = want[k].as_ref().unwrap();
                 used = used.max(vdiff(c, w)).max(vdiff(l, w));
             }
@@ -748,7 +763,10 @@ fn f885_so_two_routes() {
         moved_c > MOVE_FLOOR && moved_l > MOVE_FLOOR && moved_p > MOVE_FLOOR,
         "T1 does not decide: {moved_c} {moved_l} {moved_p}"
     );
-    assert!(worst <= ROUTE_TOL && used <= ROUTE_TOL && miss.is_empty(), "T1: {worst}, {used}, {miss:?}");
+    assert!(
+        worst <= ROUTE_TOL && used <= ROUTE_TOL && miss.is_empty(),
+        "T1: {worst}, {used}, {miss:?}"
+    );
 }
 
 /// L settings: `Sh`, implicit Euler, no relaxation, 60 correctors, tight solvers, 5 outer iterations, the record of `d_k`.
@@ -871,7 +889,7 @@ const RUNS: [(&str, bool, bool, bool, bool); 5] = [
 ];
 
 /// One fan run: 20 steps of H(dt) as F of ADR 0819, with the run's opt-ins and the field record at iterations 15 to 19.
-fn fan_run(name: &str, gf: bool, gd: bool, gn: bool, hook: bool) -> (Run, Vec<(usize, StepFields)>, Vec<(f64, f64)>) {
+fn fan_run(name: &str, gf: bool, gd: bool, gn: bool, hook: bool) -> FanRun {
     let mut sim = sim_of(&h_text(H_DT));
     assert_eq!(sim.geom.mesh.n_cells(), 13627);
     let g = sim.geom.clone();
@@ -1123,7 +1141,12 @@ fn f885_so_fan_from_the_committed_record() {
         assert!(same(o.rhos[i], want.0[i]), "{} rho {}", RUNS[i].0, o.rhos[i]);
         assert!(same(o.cs[i], want.1[i]), "{} C {}", RUNS[i].0, o.cs[i]);
     }
-    assert!(same(o.rho2, want.2) && same(o.cos, want.3), "rho2 {} cos {}", o.rho2, o.cos);
+    assert!(
+        same(o.rho2, want.2) && same(o.cos, want.3),
+        "rho2 {} cos {}",
+        o.rho2,
+        o.cos
+    );
     assert_eq!(o.classes, want.4);
     assert_eq!(o.result, want.5);
     let mut miss = Vec::new();
