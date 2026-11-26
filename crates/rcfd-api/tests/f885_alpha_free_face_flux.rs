@@ -90,7 +90,11 @@ type Outcome = (Class, Verdict);
 /// amplitude [m/s] and the frequency [Hz] of the site signal.
 type Recorded = (Class, Verdict, [(f64, f64, f64); 2]);
 /// G1: the recorded values of the two registered runs (written after the runs).
-const RECORD: Option<Recorded> = None;
+const RECORD: Option<Recorded> = Some((
+    Class::NotEvaluable,
+    Verdict::DoesNotDecide,
+    [(0.0, 1.451348e-3, f64::NAN), (0.0, 2.288205e-3, f64::NAN)],
+));
 
 fn omega() -> f64 {
     RPM * 2.0 * PI / 60.0
@@ -1304,12 +1308,12 @@ fn f885_af_short_run_on_the_check_h_path() {
 
 // ---------------------------------------------------------------- check H with the switch on (ADR 0811 section 4)
 
-/// The full rows of a run as `write_full` writes them (22 columns).
+/// The full rows of a run as `write_full` writes them (21 columns).
 fn read_full(path: &Path, dt: f64, steps: usize) -> Series {
     let rows: Vec<Row> = data_lines(path)
         .iter()
         .map(|c| {
-            assert_eq!(c.len(), 22, "{c:?}");
+            assert_eq!(c.len(), 21, "{c:?}");
             let f = |i: usize| num(c, i);
             Row {
                 step: c[0].parse().unwrap(),
