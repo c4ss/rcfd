@@ -344,3 +344,49 @@ Size (agent): done; 0; 4 (C2, R1b and R2b, M3 and M4, R3b); 0; 20000
 
 Decision rule: F-988 is **done** if C2 shows the hole, R1b to R7b hold and M3 and M4 are each caught in 3 of 3;
 **partial** otherwise.
+
+## Addendum 7: results of amendment 4 (2026-11-26)
+
+Written by Claude Opus 5.5 (`claude-opus-5-5`). Commits after amendment 4 (661ee361): f63b2784 (V2 and KK2 (c)),
+1c7b2ac6 (M3 committed in place of M1). Every run with `CARGO_TARGET_DIR`, `RCFD_BIN`, `RCFD_MCP_BIN` and
+`RCFD_RUNNER_BIN` on the scratch build of the engine, Studio tests one at a time, the load recorded before each run
+(other agents' two cargo processes ran throughout; free memory 20.5 to 22.4 GB). Scripts and logs in the scratch
+folder: `c2.sh`, `c2.out`, `a4.sh`, `a4.out` and the logs they name.
+
+**C2, the control**, on a scratch copy of V's tree (a1ed3d18's code) with only (c) added to the spec, 3 runs (CPU 99 to
+100 per cent): (c) failed in 3 of 3, each "two keys in flight: a popover open after Escape" (`.pv-pop` 1, expected 0);
+(a) and (b) passed before it in each. The two-in-flight hole of V is shown; V2 was written.
+
+| Row | Check | Limit | Measured | CPU load (per cent) | Met |
+|---|---|---|---|---|---|
+| R1b | `provenance-f828.spec.ts` alone after V2 (1c7b2ac6), 10 runs | 10 of 10, 0 failed, 6 passed each | 10 of 10, 6 passed in each (1.1 to 1.6 min) | 100, 100, 94, 76, 74, 77, 79, 62, 57, 60 | yes |
+| R2b | `provenance-escape-f988.spec.ts` alone after V2, with (c), 5 runs | 5 of 5, 0 failed | 5 of 5 (6.4 s to 6.6 s) | 71, 74, 79, 73, 63 | yes |
+| R3b | `npm test` in `apps/studio-web`, once | 0 failed | 886 passed, 0 failed, 4 skipped (14.0 min); `run-control.spec.ts:268` passed in this run, untouched | 56 | yes |
+| R4b | `npm run typecheck` | exit 0 | exit 0 | 69 | yes |
+| R5b, R6b, R7b | `docs_site`, `roadmap_proposals.py check docs/roadmap/proposals/0813-F-988.json`, `process_report.py --check` | as registered | run after this addendum is committed; in the report | | |
+
+| Mutation | What | Caught by | Runs caught | CPU load (per cent) |
+|---|---|---|---|---|
+| M3 (committed) | V2's queue kept to its newest record (`splice` in place of `push`) | KK2 (c): "two keys in flight: a popover open after Escape" | 3 of 3 | 62, 73, 54 |
+| M4 | the oldest record read, not taken (`pressedOn[0]` in place of `shift()`) | KK2 (a), the cell: "residual of u: a popover open after Escape" | 3 of 3 | 56, 60, 58 |
+
+Deviation: M4 was expected to be caught at (b) and was caught at (a). The record of (a)'s first Ctrl+I, pressed with
+nothing open, is never taken, so (a)'s second key's request reads that record instead of its own, is not spent, and
+reopens the number. It was caught in 3 of 3, which is what the rule asks; the place differs from the expectation.
+A typecheck was also run once on the worktree before V2's commit, outside the rows. Not run: nothing registered was
+left out.
+
+Actual size: done; 0; 4 (C2, R1b and R2b, M3 and M4, R3b); 0; about 30 000 bytes read.
+
+Decision by amendment 4's rule: **done**, provided R5b to R7b hold as the report shows. C2 showed the hole, R1b to R4b
+held, and M3 and M4 were each caught in 3 of 3.
+
+### Open questions for the maintainer
+
+None.
+
+### For the lead: roadmap entries
+
+> Status: done.
+
+> Note: ADR 0813, 2026-11-26, done: KR KK's failure was diagnosed by a traced control (the late Ctrl+I request reopened the popover after Escape) and remedied in the provenance registry with one record per pressed key (V2, after control C2 showed two requests in flight); provenance-f828 alone 10 of 10, KK2 5 of 5, npm test 0 failed, mutations M3 and M4 caught 3 of 3.

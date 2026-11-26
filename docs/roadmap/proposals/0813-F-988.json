@@ -3,8 +3,7 @@
   "adr": "0813",
   "item": "F-988",
   "base": "e7d40a2cba195df07aa7dd40dc17045fae893160",
-  "status": "partial",
-  "note": "ADR 0813, 2026-11-26, partial: KR KK's failure diagnosed by a traced control on main (7 of 10 runs the popover reopened 10 to 15 ms after Escape by the late second Ctrl+I's deferred request); remedied in the provenance registry (a key pressed while a popover was open is spent when it closes) with KK2 and its mutation caught 3 of 3; provenance-f828 alone 9 of 10 (KH's byKeys, two keys in flight), npm test 1 failed (run-control P2 latency, 21.4 ms against 20).",
-  "gap": "provenance-f828.spec.ts alone passed 9 of 10, not 10 of 10: KH's byKeys can have two Ctrl+I requests in flight, and the registry's one slot for the pressed key guards only the first, so the late second still reopens a number after Escape; npm test had 1 failure (run-control.spec.ts:268, P2 latency 21.4 ms against 20 ms, at a CPU load of 99 per cent).",
+  "status": "done",
+  "note": "ADR 0813, 2026-11-26, done: KR KK's failure was diagnosed by a traced control (the late Ctrl+I request reopened the popover after Escape) and remedied in the provenance registry with one record per pressed key (V2, after control C2 showed two requests in flight); provenance-f828 alone 10 of 10, KK2 5 of 5, npm test 0 failed, mutations M3 and M4 caught 3 of 3.",
   "follow_ups": []
 }
