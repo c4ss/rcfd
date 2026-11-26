@@ -6,7 +6,7 @@ ADR: 0806
 Rules version: 5
 Model: Claude Opus 5.5
 Issued: 2026-11-26
-Size (lead): done; 1; 0; 0; 70000
+Size (lead): done; 1; 0; 0; 88625
 
 The rules are `docs/process/agent-rules.md`, version 5, in the repository; follow them exactly and cite them by that path and version in the
 registration. Worktree: `E:/projects/cfd/rcfd/.claude/worktrees/f975-whirl-stability-wheel-sector`, on the branch `f975-whirl-stability-wheel-sector`, which the lead made at the commit that adds this brief; you start in it. Do not touch the main checkout or another worktree. Scratch folder: `E:/projects/cfd/w49i-work/f975-whirl-stability-wheel-sector-scratch`.
@@ -23,8 +23,8 @@ You run without a person to ask: an action you are denied is left undone and is 
 
 - AGENTS.md 1698
 - docs/process/agent-rules.md 12991
-- docs/adr/0799-f672-registration-whirl-and-full-rotor-of-a-beam-sector-by-default.md (its addenda: the E-W miss, P7)
-- crates/rcfd-fem/tests/sa_beam_opt_ins_default_f672.rs (the known miss `e_w_..._known_miss` and its sector W)
+- docs/adr/0799-f672-registration-whirl-and-full-rotor-of-a-beam-sector-by-default.md 40425 (its addenda: the E-W miss, P7)
+- crates/rcfd-fem/tests/sa_beam_opt_ins_default_f672.rs 33511 (the known miss `e_w_..._known_miss` and its sector W)
 
 Also in the repository, as needed: ADR 0595 (the wheel sector W), `crates/rcfd-fem/src/rotating/whirl.rs` and the
 gyroscopic state eigen solve (`gyroscopic_state_eigen`, its QR iteration and its limit of 30 steps), `docs/process/tolerances.md`,

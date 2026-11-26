@@ -6,7 +6,7 @@ ADR: 0804
 Rules version: 5
 Model: Claude Opus 5.5
 Issued: 2026-11-26
-Size (lead): done; 0; 0; 0; 52000
+Size (lead): done; 0; 0; 0; 58099
 
 The rules are `docs/process/agent-rules.md`, version 5, in the repository; follow them exactly and cite them by that path and version in the
 registration. Worktree: `E:/projects/cfd/rcfd/.claude/worktrees/f823-studio-ci-engine`, on the branch `f823-studio-ci-engine`; you start in it. Do not touch the main checkout or another worktree. Scratch folder: `E:/projects/cfd/w49i-work/f823-linux-e2e-scratch`.
@@ -23,7 +23,7 @@ You run without a person to ask: an action you are denied is left undone and is 
 
 - AGENTS.md 1698
 - docs/process/agent-rules.md 12991
-- docs/adr/0802-f823-registration-the-studio-web-job-builds-the-engine.md (the whole ADR with its amendment and addendum 1; on this branch)
+- docs/adr/0802-f823-registration-the-studio-web-job-builds-the-engine.md 33853 (the whole ADR with its amendment and addendum 1; on this branch)
 - .github/workflows/ci.yml 9557 (the studio-web job)
 
 Also in the repository, as needed: the four failing specs (`claude-code.spec.ts:177`, `commands.spec.ts:90`,

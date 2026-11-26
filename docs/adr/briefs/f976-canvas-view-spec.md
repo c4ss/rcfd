@@ -6,7 +6,7 @@ ADR: 0805
 Rules version: 5
 Model: Claude Opus 5.5
 Issued: 2026-11-26
-Size (lead): done; 1; 0; 1; 120000
+Size (lead): done; 1; 0; 1; 108650
 
 The rules are `docs/process/agent-rules.md`, version 5, in the repository; follow them exactly and cite them by that path and version in the
 registration. Worktree: `E:/projects/cfd/rcfd/.claude/worktrees/f976-canvas-view-spec`, on the branch `f976-canvas-view-spec`, which the lead made at the commit that adds this brief; you start in it. Do not touch the main checkout or another worktree. Scratch folder: `E:/projects/cfd/w49i-work/f976-canvas-view-spec-scratch`.
@@ -23,9 +23,9 @@ You run without a person to ask: an action you are denied is left undone and is 
 
 - AGENTS.md 1698
 - docs/process/agent-rules.md 12991
-- docs/studio-guardrails.md 14395 (with the change of 2026-11-26: G15 retired, G23 added)
-- docs/adr/0803-the-studio-as-claudes-canvas-record.md (the decision this item comes from)
-- docs/mcp-tools.md (the project-mode tools and how they are listed)
+- docs/studio-guardrails.md 15516 (with the change of 2026-11-26: G15 retired, G23 added)
+- docs/adr/0803-the-studio-as-claudes-canvas-record.md 5545 (the decision this item comes from)
+- docs/mcp-tools.md 46481 (the project-mode tools and how they are listed)
 - apps/studio-web/src/main/project/session.ts 26419 (the feed poll the Studio already runs)
 
 Also in the repository, as needed, by section: ADR 0173 and ADR 0188 (the workspace layer and the feed: how a change made
