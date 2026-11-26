@@ -1,5 +1,5 @@
-// Writes the capability inventory of F-824 (capabilities/inventory.json) from the engine itself, and the coverage report
-// docs/studio-coverage.md from that inventory and the hand-kept map capabilities/coverage.json.
+// Writes the capability inventory of F-824 (capabilities/inventory.json) from the engine itself, and its report
+// docs/studio-coverage.md from that inventory (the map of G15 was retired by ADR 0808, F-981).
 //
 //   npm run capabilities                   # ask the rcfd binaries, write both files
 //   npm run capabilities -- --report-only  # only the report, from the committed inventory (no rcfd needed)
@@ -29,13 +29,12 @@ registerHooks({
 });
 
 const { findRcfd, NO_RCFD } = await import('../tests/support/rcfd.ts');
-const { checkCoverage, coverageReport, engineBinaries, inventoryText, readEngine } = await import('../tests/support/capabilities.ts');
+const { engineBinaries, inventoryReport, inventoryText, readEngine } = await import('../tests/support/capabilities.ts');
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const app = path.resolve(here, '..');
 const repo = path.resolve(app, '..', '..');
 const inventoryPath = path.join(app, 'capabilities', 'inventory.json');
-const coveragePath = path.join(app, 'capabilities', 'coverage.json');
 const reportPath = path.join(repo, 'docs', 'studio-coverage.md');
 const readJson = (p) => JSON.parse(readFileSync(p, 'utf8'));
 
@@ -58,13 +57,5 @@ if (process.argv.includes('--report-only')) {
   console.log(`wrote ${path.relative(process.cwd(), inventoryPath)} from ${rcfd}: ${JSON.stringify(inventory.counts)}`);
 }
 
-const coverage = readJson(coveragePath);
-const roadmap = readJson(path.join(repo, 'docs', 'roadmap.json'));
-writeFileSync(reportPath, coverageReport(inventory, coverage, roadmap));
+writeFileSync(reportPath, inventoryReport(inventory));
 console.log(`wrote ${path.relative(process.cwd(), reportPath)}`);
-const res = checkCoverage(inventory, coverage, roadmap);
-if (res.unmapped.length > 0 || res.problems.length > 0) {
-  for (const id of res.unmapped) console.error(`not mapped: ${id}`);
-  for (const p of res.problems) console.error(`problem: ${p}`);
-  process.exit(2);
-}

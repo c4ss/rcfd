@@ -45,9 +45,7 @@ const counts: Record<string, WordCount & { budget: number }> = {};
 /** Every surface's root (and the roots nested in it that are counted on their own). */
 const ROOTS: Record<SurfaceId, SurfaceRoot> = {
   'home-empty': { root: '.ph-page', exclude: ['.fp', '.wk'] },
-  'first-path-intro': { root: '.fp--intro' },
   'home-open': { root: '.ph-page', exclude: ['.fp', '.wk'] },
-  'first-path': { root: '.fp--open' },
   runs: { root: '.rv', exclude: ['.rv-run'] },
   'runs-selected': { root: '.rv-run', exclude: ['.pv-pop'] },
   workspace: { root: '.ws', exclude: ['.fv-derived', '.wk'] },
@@ -106,7 +104,6 @@ test.afterAll(async () => {
 test('the project home with no project open, and the first path’s four stations', async () => {
   await expect(page.getByRole('button', { name: 'Open project folder…' })).toBeEnabled();
   await atRest('home-empty');
-  await atRest('first-path-intro');
   // F-818: the Studio's settings page, from Ctrl+, and back
   await page.keyboard.press('Control+,');
   await expect(page.getByRole('radiogroup', { name: 'Theme' })).toBeVisible();
@@ -222,16 +219,6 @@ test('the settings of a session from the engine’s defaults, and the decision C
   await atRest('decision');
   await panel.getByRole('button', { name: 'Keep the session' }).click();
   await expect(panel).toHaveCount(0);
-});
-
-test('the first path on a project that holds nothing yet', async () => {
-  await page.evaluate(() => (location.hash = ''));
-  await expect(page.getByRole('heading', { level: 1, name: /Quick start/ })).toBeVisible({ timeout: 20_000 });
-  await stubDialog(studio.app, empty);
-  await page.getByRole('button', { name: 'Open project…' }).click();
-  await expect(page.getByRole('heading', { level: 1, name: 'An empty project' })).toBeVisible({ timeout: 30_000 });
-  await expect(page.locator('.fp--open .fp-primary button')).toBeEnabled({ timeout: 20_000 });
-  await atRest('first-path');
 });
 
 test('every surface at rest is within its budget of visible chrome words', () => {

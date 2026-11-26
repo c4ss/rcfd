@@ -5,8 +5,7 @@
 // by a second rcfd-mcp of the test's own, or against the stored bytes), KE (the fact Engine, in each), SC (a scan of the
 // views for a number with no provenance), KT (the Tab stops), KK (the focus) and KQ (the look at rest).
 import { expect, test, type Locator, type Page } from '@playwright/test';
-import { execFileSync } from 'node:child_process';
-import { existsSync, readFileSync } from 'node:fs';
+import { readFileSync } from 'node:fs';
 import { mkdir, mkdtemp, readdir, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
@@ -17,7 +16,6 @@ import { findRunner, NO_RUNNER, Runner } from '../support/runner.js';
 import { until } from '../support/fake-service.js';
 import { decodeField64, snapshotDirs } from '../support/rts-decode.js';
 import { ProjectServer } from '../../src/main/project/server.js';
-import { FIRST_CASE } from '../../src/shared/actions/first.js';
 
 const mcp = findMcp();
 const runnerExe = findRunner();
@@ -787,48 +785,4 @@ test('KH: the counts of the home against the engine’s answers and the folder',
   await seg('Runs').locator('[data-provenance-member]').click();
   await expect(seg('Runs')).toBeChecked();
   await expect(page.locator('.pv-pop')).toHaveCount(0);
-});
-
-test('KF: the learner’s picture: a tick and the scale bar', async () => {
-  const { page } = studio!;
-  const folder = path.join(dir, 'first');
-  folders.push(folder);
-  const rcfd = path.join(path.dirname(mcp!), process.platform === 'win32' ? 'rcfd.exe' : 'rcfd');
-  expect(existsSync(rcfd)).toBe(true);
-  await mkdir(folder);
-  execFileSync(rcfd, ['project', 'init', folder], { stdio: 'ignore' });
-  const r = new Runner(runnerExe!, folder);
-  runners.push(r);
-  r.ensure();
-  await open(folder, /first/);
-  const p = page.locator('section.fp--open');
-  await p.getByRole('button', { name: 'Make the example', exact: true }).click();
-  await expect(page.locator(`tr[data-path="${FIRST_CASE}"]`)).toBeVisible({ timeout: 20_000 });
-  await p.getByRole('button', { name: 'Run the example' }).click();
-  await expect(p.getByRole('group', { name: 'See the result', exact: true })).toBeVisible({ timeout: 90_000 });
-  await expect(p.locator('.fv-frame[data-ready]')).toBeVisible({ timeout: 30_000 });
-  const run = r.runIds()[0]!;
-  const store = path.join(folder, 'runs', run, 'fields');
-  const solver = (JSON.parse(readFileSync(path.join(folder, 'runs', run, 'run.json'), 'utf8')) as { solver_version: string }).solver_version;
-  const host = p.locator('.fv-frame');
-  const dirs = snapshotDirs(store);
-  for (const i of [0, FIVE - 1]) {
-    const t = ticksOf(p).nth(i);
-    for (const f of [await byClick(page, t), await byKeys(page, host, t)]) {
-      const field = f.name!.replace(/^legend of /, '');
-      const v = decodeField64(store, dirs.length - 1, field);
-      expect(Math.fround(exactOf(f))).toBe(Math.fround(i === 0 ? Math.min(...v) : Math.max(...v)));
-      expect(f['Unit']).toBe(`${dirs.at(-1)!.fields.find((x) => x.name === field)!.unit}, runs/${run}/fields/store.rts (the field’s unit)`);
-      expect(f['Run']).toBe(run);
-      expect(f['Engine']).toBe(solver);
-    }
-  }
-  const bar = p.locator('.fv-scalebar [data-provenance-member]');
-  for (const f of [await byClick(page, bar), await byKeys(page, host, bar)]) {
-    expect(f['Run']).toBe(run);
-    expect(exactOf(f)).toBe(Number(await p.locator('.fv-scalebar').getAttribute('data-length')));
-    expect(f['Engine']).toBe(solver);
-  }
-  const end = await until(() => (['finished', 'failed', 'cancelled'].includes(r.status(run).state) ? r.status(run).state : null), 30_000, 'the run’s end');
-  expect(end).toBe('finished');
 });

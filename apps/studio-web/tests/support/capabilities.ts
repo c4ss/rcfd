@@ -1,5 +1,5 @@
-// The capability inventory of F-824 (docs/studio-guardrails.md G15): what the engine can do, read from the engine itself,
-// and the coverage of it by the Studio.
+// The capability inventory of F-824: what the engine can do, read from the engine itself. (The map of the Studio's own
+// coverage of it, guardrail G15's, was retired by ADR 0808, F-981, on the maintainer's answer of 2026-11-26 in ADR 0803.)
 //
 // Sources, all asked of the binaries at generation time, never typed in by hand:
 //   service_method       `rcfd serve --stdio`, `service.info` -> `methods`
@@ -11,9 +11,7 @@
 //   cli_option           every `--flag` of those help texts, under the command whose block names it
 //
 // The inventory file (capabilities/inventory.json) is written by `npm run capabilities` and checked against the engine
-// by tests/unit/capabilities.spec.ts; the coverage file (capabilities/coverage.json) is kept by hand: it maps each
-// capability to a UI path or to a dated exemption that names the roadmap item expected to cover it. docs/studio-coverage.md
-// is generated from both.
+// by tests/unit/capabilities.spec.ts; docs/studio-coverage.md is the report generated from it.
 //
 // Only erasable TypeScript and Node built-ins: scripts/write-capabilities.mjs runs this file with type stripping.
 import { spawnSync } from 'node:child_process';
@@ -379,107 +377,6 @@ export function readEngine(bins: EngineBinaries): Inventory {
   );
 }
 
-// ---- Coverage: the hand-kept map from capability to UI path or exemption ----
-
-export interface Exemption {
-  /** Why there is no UI path yet. */
-  readonly reason: string;
-  /** When the exemption was recorded (YYYY-MM-DD). */
-  readonly date: string;
-  /** The roadmap item expected to give it a UI path (docs/roadmap.json). */
-  readonly item: string;
-  /** True when that item's acceptance does not name the capability: the item is its nearest home, not a plan. */
-  readonly unplanned?: boolean;
-}
-
-export interface CoverageRule {
-  /** One capability, by id. */
-  readonly id?: string;
-  /**
-   * The members of one parent: a top-level case section (`case:<section>.`) or a CLI command's options
-   * (`cli:<binary>[ <command>] --`). Never a whole kind, and never service methods or MCP tools, which are mapped one by one.
-   */
-  readonly prefix?: string;
-  /** Where the Studio reaches it, in words (later: the action of the F-827 registry). */
-  readonly ui?: string;
-  readonly exemption?: Exemption;
-}
-
-export interface CoverageFile {
-  readonly format: 'rcfd-studio-coverage';
-  readonly version: 1;
-  readonly note: string;
-  readonly rules: readonly CoverageRule[];
-}
-
-export interface RoadmapItem {
-  readonly id: string;
-  readonly title: string;
-}
-
-export interface CoverageResult {
-  /** capability id -> the rule that maps it */
-  readonly resolved: ReadonlyMap<string, CoverageRule>;
-  /** Capabilities no rule maps: each one fails the test. */
-  readonly unmapped: readonly string[];
-  /** Rules that are malformed, name an unknown item, or map nothing (a removed capability): each one fails the test. */
-  readonly problems: readonly string[];
-}
-
-const PREFIX_FORMS = [/^case:[a-z0-9_]+\.$/, /^cli:[a-z][a-z0-9-]*( [a-z][a-z0-9-]*)* --$/];
-
-function validDate(s: string): boolean {
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(s)) return false;
-  const d = new Date(`${s}T00:00:00Z`);
-  return !Number.isNaN(d.getTime()) && d.toISOString().slice(0, 10) === s;
-}
-
-export function checkCoverage(inv: Inventory, cov: CoverageFile, roadmap: readonly RoadmapItem[]): CoverageResult {
-  const problems: string[] = [];
-  const items = new Set(roadmap.map((r) => r.id));
-  const byId = new Map<string, CoverageRule>();
-  const prefixes: CoverageRule[] = [];
-  const where = (r: CoverageRule) => r.id ?? r.prefix ?? JSON.stringify(r);
-  if (cov.format !== 'rcfd-studio-coverage' || cov.version !== 1) problems.push('coverage file: format must be rcfd-studio-coverage, version 1');
-  for (const r of cov.rules) {
-    const w = where(r);
-    if ((r.id === undefined) === (r.prefix === undefined)) problems.push(`${w}: a rule has exactly one of id and prefix`);
-    if ((r.ui === undefined) === (r.exemption === undefined)) problems.push(`${w}: a rule has exactly one of ui and exemption`);
-    if (r.ui !== undefined && r.ui.trim() === '') problems.push(`${w}: ui is empty`);
-    if (r.exemption) {
-      const e = r.exemption;
-      if (typeof e.reason !== 'string' || e.reason.trim() === '') problems.push(`${w}: the exemption has no reason`);
-      if (typeof e.date !== 'string' || !validDate(e.date)) problems.push(`${w}: the exemption's date is not a YYYY-MM-DD date`);
-      if (typeof e.item !== 'string' || !items.has(e.item)) problems.push(`${w}: the exemption's item ${String(e.item)} is not in docs/roadmap.json`);
-      if (e.unplanned !== undefined && typeof e.unplanned !== 'boolean') problems.push(`${w}: unplanned is true or absent`);
-    }
-    if (r.id !== undefined) {
-      if (byId.has(r.id)) problems.push(`${w}: mapped twice`);
-      byId.set(r.id, r);
-    }
-    if (r.prefix !== undefined) {
-      if (!PREFIX_FORMS.some((f) => f.test(r.prefix!))) problems.push(`${w}: a prefix names one case section (case:<section>.) or one command's options (cli:<command> --)`);
-      if (prefixes.some((p) => p.prefix === r.prefix)) problems.push(`${w}: mapped twice`);
-      prefixes.push(r);
-    }
-  }
-  prefixes.sort((a, b) => b.prefix!.length - a.prefix!.length);
-  const resolved = new Map<string, CoverageRule>();
-  const used = new Set<CoverageRule>();
-  const unmapped: string[] = [];
-  for (const c of inv.capabilities) {
-    const rule = byId.get(c.id) ?? prefixes.find((p) => c.id.startsWith(p.prefix!));
-    if (rule) {
-      resolved.set(c.id, rule);
-      used.add(rule);
-    } else {
-      unmapped.push(c.id);
-    }
-  }
-  for (const r of cov.rules) if (!used.has(r)) problems.push(`${where(r)}: maps no capability of the inventory (removed from the engine? then remove the rule)`);
-  return { resolved, unmapped, problems };
-}
-
 // ---- The report (docs/studio-coverage.md) ----
 
 const code = (s: string) => '`' + s + '`';
@@ -488,33 +385,39 @@ function shortName(c: Capability): string {
   return c.id.slice(c.id.indexOf(':') + 1);
 }
 
-/** The markdown report: counts, then today's gaps by kind and target item. Deterministic: no clock, no paths. */
-export function coverageReport(inv: Inventory, cov: CoverageFile, roadmap: readonly RoadmapItem[]): string {
-  const res = checkCoverage(inv, cov, roadmap);
-  const title = new Map(roadmap.map((r) => [r.id, r.title.replace(/^Electron Studio: /, '')]));
+/** Counts of `keys` in first-seen order: `a` (2), `b` (1). */
+function counted(keys: readonly string[]): string {
+  const n = new Map<string, number>();
+  for (const k of keys) n.set(k, (n.get(k) ?? 0) + 1);
+  return [...n].map(([k, c]) => `${code(k)} (${c})`).join(', ');
+}
+
+/**
+ * The markdown report of the inventory: counts by kind, then every capability by name (case keys by section, CLI options
+ * by command). Deterministic: no clock, no paths. Since ADR 0808 (F-981, G15 retired by ADR 0803) it holds no map of the
+ * Studio's own surfaces.
+ */
+export function inventoryReport(inv: Inventory): string {
   const L: string[] = [];
   const caps = inv.capabilities;
-  const ui = caps.filter((c) => res.resolved.get(c.id)?.ui !== undefined);
-  const exempt = caps.filter((c) => res.resolved.get(c.id)?.exemption !== undefined);
-  const unplanned = exempt.filter((c) => res.resolved.get(c.id)!.exemption!.unplanned === true);
-  const pct = (n: number) => `${((100 * n) / Math.max(1, caps.length)).toFixed(1)} %`;
+  const of = (k: CapabilityKind) => caps.filter((c) => c.kind === k);
 
-  L.push('# Studio capability coverage', '');
+  L.push('# Studio capability inventory', '');
   L.push(
-    'This page lists what the rcfd engine can do and whether the Electron Studio can reach it, as guardrail G15 of the',
-    '[Studio guardrails](studio-guardrails.md) asks: every case-schema key, service method, MCP tool and CLI command has a UI',
-    'path or a recorded, dated exemption that names the roadmap item expected to cover it (F-824, [ADR 0800](adr/0800-electron-studio-roadmap.md)).',
-    'It is for the maintainer and for whoever builds a Studio surface: the gaps below are the work left.',
+    'This page lists what the rcfd engine can do, read from the engine itself (F-824, [ADR 0800](adr/0800-electron-studio-roadmap.md)):',
+    'every service method, MCP tool, CLI command and option, case-schema key and monitor format key. Guardrail G15, which held',
+    'each of them to a way in by hand, was retired on 2026-11-26 ([ADR 0803](adr/0803-the-studio-as-claudes-canvas-record.md));',
+    'its map went with ADR 0808 (F-981). The Studio is the canvas Claude drives (G23 of the [Studio guardrails](studio-guardrails.md)),',
+    'and every capability is reached through the engine\'s own interfaces (G16).',
     '',
   );
   L.push(
     'The page is generated; do not edit it. `npm run capabilities` in `apps/studio-web` asks the binaries (`rcfd serve --stdio`',
     'for `service.info` and `settings.schema`, `rcfd-mcp` for its MCP `tools/list` with and without `--project`, and the',
     '`--help` of `rcfd`, `rcfd-runner` and `rcfd-mcp`), writes `apps/studio-web/capabilities/inventory.json`, and writes this',
-    'page from the inventory and the hand-kept map `apps/studio-web/capabilities/coverage.json`. The Studio\'s unit tests',
-    '(`tests/unit/capabilities.spec.ts`, run by `npm test`) fail when a capability has no entry in the map, when an entry is',
-    'malformed or maps nothing, when this page is not the generated one, and when the inventory differs from the engine',
-    '(that last check is skipped, with the reason, when no `rcfd` binary is found).',
+    'page from it. The Studio\'s unit tests (`tests/unit/capabilities.spec.ts`, run by `npm test`) fail when this page is not',
+    'the generated one and when the inventory differs from the engine (that last check is skipped, with the reason, when no',
+    '`rcfd` binary is found).',
     '',
   );
   const eng = inv.engine;
@@ -525,79 +428,25 @@ export function coverageReport(inv: Inventory, cov: CoverageFile, roadmap: reado
   );
 
   L.push('## Summary', '');
-  L.push('| Kind | Capabilities | UI path | Exemption | Exemption whose item does not name it |', '|---|---|---|---|---|');
-  for (const k of KINDS) {
-    const of = (list: Capability[]) => list.filter((c) => c.kind === k).length;
-    L.push(`| ${KIND_TITLES[k]} | ${of(caps as Capability[])} | ${of(ui)} | ${of(exempt)} | ${of(unplanned)} |`);
-  }
-  L.push(`| **All** | **${caps.length}** | **${ui.length}** (${pct(ui.length)}) | **${exempt.length}** | **${unplanned.length}** |`, '');
-  if (res.unmapped.length > 0 || res.problems.length > 0) {
-    L.push(`Not mapped: ${res.unmapped.length}. Problems in the map: ${res.problems.length}. The coverage test fails until both are 0.`, '');
-  }
+  L.push('| Kind | Capabilities |', '|---|---|');
+  for (const k of KINDS) L.push(`| ${KIND_TITLES[k]} | ${of(k).length} |`);
+  L.push(`| **All** | **${caps.length}** |`, '');
   L.push(
-    'A case key stands for every value of its enumeration (the solver options of that key, listed in the inventory): the',
-    'schema-driven surface of F-825 offers them all. A CLI option is mapped with its command. "Item does not name it" marks an',
-    'exemption whose item is only the nearest home: its acceptance does not cover the capability, so it needs a clause or a',
-    'new item (see the last sections).',
+    'A case key stands for every value of its enumeration (the solver options of that key, listed in the inventory). A CLI',
+    'option is listed under its command.',
     '',
   );
 
-  L.push('## Gaps by kind and target item', '');
   for (const k of KINDS) {
-    const list = exempt.filter((c) => c.kind === k);
-    if (list.length === 0) continue;
-    L.push(`### ${KIND_TITLES[k]} (${list.length} without a UI path)`, '');
-    const byItem = new Map<string, Capability[]>();
-    for (const c of list) {
-      const item = res.resolved.get(c.id)!.exemption!.item;
-      byItem.set(item, [...(byItem.get(item) ?? []), c]);
+    const list = of(k);
+    L.push(`## ${KIND_TITLES[k]} (${list.length})`, '');
+    if (list.length === 0) {
+      L.push('None.', '');
+      continue;
     }
-    L.push('| Item | Count | Capabilities |', '|---|---|---|');
-    for (const item of [...byItem.keys()].sort(cmp)) {
-      const group = byItem.get(item)!;
-      let names: string;
-      if (k === 'case_key') {
-        const sections = new Map<string, number>();
-        for (const c of group) {
-          const s = shortName(c).split('.')[0]!;
-          sections.set(s, (sections.get(s) ?? 0) + 1);
-        }
-        names = [...sections].map(([s, n]) => `${code(s)} (${n})`).join(', ');
-      } else if (k === 'cli_option') {
-        const parents = new Map<string, number>();
-        for (const c of group) parents.set(c.parent!, (parents.get(c.parent!) ?? 0) + 1);
-        names = [...parents].map(([p, n]) => `${code(p.slice(4))} (${n})`).join(', ');
-      } else {
-        names = group.map((c) => code(shortName(c)) + (res.resolved.get(c.id)!.exemption!.unplanned ? ' (not named)' : '')).join(', ');
-      }
-      L.push(`| ${item} ${title.get(item) ?? ''} | ${group.length} | ${names} |`);
-    }
-    L.push('');
-  }
-
-  L.push('## Capabilities no Studio item names yet', '');
-  if (unplanned.length === 0) {
-    L.push('None.', '');
-  } else {
-    L.push(
-      'These exemptions point at their nearest item, whose acceptance does not cover them. Each group needs the maintainer:',
-      'a clause added to that item, a new item, or a decision that the Studio leaves it to Claude Code and the CLI (G16 still',
-      'holds the other way round). The reasons are in `coverage.json`.',
-      '',
-    );
-    const groups = new Map<string, Capability[]>();
-    for (const c of unplanned) {
-      const reason = res.resolved.get(c.id)!.exemption!.reason;
-      groups.set(reason, [...(groups.get(reason) ?? []), c]);
-    }
-    for (const [reason, group] of [...groups].sort((a, b) => cmp(a[0], b[0]))) {
-      const items = [...new Set(group.map((c) => res.resolved.get(c.id)!.exemption!.item))].sort(cmp).join(', ');
-      const names = group.map((c) =>
-        c.kind === 'cli_option' && res.resolved.get(c.id)!.prefix !== undefined ? code(c.parent!.slice(4) + ' --*') : code(shortName(c)),
-      );
-      L.push(`- ${reason} (${items}): ${[...new Set(names)].join(', ')}.`);
-    }
-    L.push('');
+    if (k === 'case_key') L.push(`By section: ${counted(list.map((c) => shortName(c).split('.')[0]!))}.`, '');
+    else if (k === 'cli_option') L.push(`By command: ${counted(list.map((c) => c.parent!.slice(4)))}.`, '');
+    else L.push(`${list.map((c) => code(shortName(c))).join(', ')}.`, '');
   }
 
   L.push('## What the inventory leaves out', '');
@@ -629,27 +478,9 @@ export function coverageReport(inv: Inventory, cov: CoverageFile, roadmap: reado
     '',
   );
 
-  L.push('## Open for the maintainer', '');
-  L.push(
-    '- **Granularity of the map** (applied, reversible): service methods, MCP tools and CLI commands are mapped one by',
-    '  one; case keys by top-level section and CLI options by command. A new method, tool, command or case section fails',
-    '  the test; a new key of a known section or a new option of a known command is covered by its parent\'s rule, as the',
-    '  schema-driven surface of F-825 will cover it. The alternatives were one rule per id (about 1 300 rules, every new',
-    '  key fails) and one rule per kind (nothing fails, against G15).',
-    '- **Capabilities no item names** (applied, reversible): they point at their nearest item and carry `unplanned`.',
-    '  Recommended: add items or acceptance clauses for the groups above, or decide which of them stay with Claude Code and',
-    '  the CLI only.',
-    '- **Service sessions or the runner**: F-807 runs through the runner only. Whether the Studio also offers the',
-    '  in-memory session run of the service (`run.*`, the MCP `run` and `status` tools) is open.',
-    '- **The engine check in CI**: the studio-web job builds no `rcfd`, so the check against the engine is skipped there.',
-    '  Recommended: build `rcfd-cli`, `rcfd-runner` and `rcfd-mcp` in that job (F-823) so a stale inventory fails CI.',
-    '',
-  );
-
   L.push('## Where to go next', '');
   L.push(
-    '- [Studio guardrails](studio-guardrails.md): G15 and G16, the rules this page checks.',
-    '- [Roadmap](ROADMAP.md): the items named above (F-805 to F-832).',
+    '- [Studio guardrails](studio-guardrails.md): G16 and G23.',
     '- [Service protocol](service-protocol.md), [MCP tools](mcp-tools.md) and [case schema](case-schema.md): what each capability does.',
   );
   return L.join('\n') + '\n';
