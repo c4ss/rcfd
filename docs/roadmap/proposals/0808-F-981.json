@@ -4,7 +4,15 @@
   "item": "F-981",
   "base": "5bf77c582c05e59a833b4d2a681efc4740806adc",
   "status": "partial",
-  "note": "ADR 0808, 2026-11-26, partial (Addenda 5 and 6): the a11y Runs grid failure diagnosed (a run selected by the workspace's lazy chunk in the base; the home now loads that chunk when a project opens) and the reduced-motion set-up restored; a11y.spec passed 3 of 3 and the remedy's mutation was caught; npm test 884 passed, 1 failed (provenance-f828 KR KK: Escape left a popover open), not diagnosed.",
-  "gap": "npm test did not pass: provenance-f828.spec.ts KR KK failed once after ADR 0808's remedy (Escape after Ctrl+I twice on a Runs grid cell left the provenance popover open), not diagnosed; it passed before the remedy.",
-  "follow_ups": []
+  "note": "ADR 0808, 2026-11-26, partial (Addenda 7 and 8): the a11y Runs case now waits for the workspace's selection of the newest run instead of racing its lazy load (57c7f729 reverted); a11y.spec 5 of 5 and its mutation caught 5 of 5; npm test 884 passed, 1 failed on provenance-f828 KR KK, which fails on the base tree 2327d4f1 too (2 of 5) and so is not this work's.",
+  "gap": "npm test did not pass: provenance-f828.spec.ts KR KK (Escape after Ctrl+I twice on a Runs grid cell sometimes leaves the provenance popover open) failed once in npm test and 1 of 5 runs alone; it fails 2 of 5 on main's tree 2327d4f1 as well, so it needs its own diagnosis and remedy.",
+  "follow_ups": [
+    {
+      "title": "KR KK of provenance-f828.spec.ts: the provenance popover a second Ctrl+I opens on a Runs grid cell closes on Escape every time",
+      "deps": [
+        "F-981"
+      ],
+      "acceptance": "Every limit not stated here is registered in the ADR before the run. The cause of the KR KK failure (provenance-f828.spec.ts, the popover left open after Escape, 2 of 5 runs on 2327d4f1 in ADR 0808 Addendum 8) is diagnosed and remedied without loosening the case; the spec run alone passes in every one of a registered number of runs (at least 10) and npm test passes."
+    }
+  ]
 }

@@ -607,3 +607,51 @@ work's files). It is recorded here for the lead.
 Size (agent): done; 0; 5 (K's ten runs, M5's copy and five runs, R14, R16, R15); 0; 40000
 
 Decision rule: F-981 is **done** if R14, R16 and R15 hold and M5 is caught in 5 of 5 runs; **partial** otherwise.
+
+## Addendum 8: results of amendment 3 (2026-11-26)
+
+Written by Claude Opus 5.5 (`claude-opus-5-5`). Commits after Addendum 7 (021cb0d9): 6dc3de14 (V1: the Runs case's
+wait in `tests/e2e/a11y.spec.ts`, and `project/ProjectHome.tsx` as at 3353ab65), bb8520a3 (M5 committed as
+`apps/studio-web/tests/e2e/a11y.spec.mutation.patch`, in place of M4's). Every run as Addendum 7 set up; logs in the
+scratch folder (`k.out`, `v1.out` and the logs they name).
+
+**K, the control of KR KK** (`provenance-f828.spec.ts` alone):
+
+| Tree | Runs | KR KK failed in | Result |
+|---|---|---|---|
+| Kb, base 2327d4f1 (`base2`, own `npm ci`; its tree checked equal to 2327d4f1) | 5 | runs 1 and 5 | 2 of 5 failed, at `shut` after Ctrl+I twice on the residual cell (line 398 of the base's file): `.pv-pop` 1, expected 0; the other 6 cases passed in each run |
+| Kw, this branch at 021cb0d9 (with 57c7f729) | 5 | runs 1, 3 and 4 | 3 of 5 failed (line 351); the other cases passed in each run |
+
+Outcome **K1**: KR KK fails on the base tree too. The failure is not this work's (the popover the second Ctrl+I opens
+on a Runs grid cell is sometimes not closed by Escape, on main as here); no remedy of it in this work; R16 ran as it
+stands.
+
+| Row | Check | Limit | Measured | Met |
+|---|---|---|---|---|
+| R14 | `a11y.spec.ts` alone at 6dc3de14 (tree of bb8520a3), 5 runs | 5 of 5, 0 failed, 11 passed each | 5 of 5: 11 passed each (54.0 s, 51.2 s, 52.6 s, 55.5 s, 59.9 s) | yes |
+| R16 | `provenance-f828.spec.ts` alone, 5 runs | 5 of 5, 0 failed | 4 of 5: run 1 failed KR KK (the residual cell's click at line 399 timed out, the cell inert under the popover left open), runs 2 to 5 passed 6 of 6 | **no** |
+| R15 | `npm test` once | 0 failed | 884 passed, **1 failed**, 4 skipped (15.0 min): KR KK, `provenance-f828.spec.ts:351` (at `shut`, the popover left open); every a11y case passed | **no** |
+| R9c | `npm run typecheck` | exit 0 | exit 0 | yes |
+
+| Mutation | What | Caught by | Runs caught |
+|---|---|---|---|
+| M4 | 57c7f729 reverted | not caught: the lead's `push_main` on 94ba5aed (11 passed with it applied); Addendum 6's one catch was a lost race | not caught |
+| M5 | the workspace's selection with nothing selected removed (scratch copy of bb8520a3, own `npm ci`, patch applied) | `a11y.spec.ts:299`, the Runs case, at V1's wait for `.ws[data-run]` (line 306) | 5 of 5 (each: 1 failed, 3 passed, 7 not run) |
+
+Deviations: none from Addendum 7. The diagnosis of KR KK beyond K1 (why Escape sometimes leaves the popover open) is not
+this work's and was not made. R10c, R12c and R13c run after this addendum is committed; their results are in the report.
+
+Actual size: partial; 0; 5 (K, M5, R14, R16, R15); 0; about 45 000 bytes read.
+
+Decision by the rule of Addendum 7: **partial**. R14 held and M5 was caught in 5 of 5; R16 (4 of 5) and R15 (1 failed)
+missed, on KR KK, which fails on the base tree as well (K1).
+
+### For the lead: roadmap entries
+
+> Status: partial.
+
+> Note: ADR 0808, 2026-11-26, partial (Addenda 7 and 8): the a11y Runs case now waits for the workspace's selection of the newest run instead of racing its lazy load (57c7f729 reverted); a11y.spec 5 of 5 and its mutation caught 5 of 5; npm test 884 passed, 1 failed on provenance-f828 KR KK, which fails on the base tree 2327d4f1 too (2 of 5) and so is not this work's.
+
+> Gap: npm test did not pass: provenance-f828.spec.ts KR KK (Escape after Ctrl+I twice on a Runs grid cell sometimes leaves the provenance popover open) failed once in npm test and 1 of 5 runs alone; it fails 2 of 5 on main's tree 2327d4f1 as well, so it needs its own diagnosis and remedy.
+
+> Follow-up: KR KK of provenance-f828.spec.ts: the provenance popover a second Ctrl+I opens on a Runs grid cell closes on Escape every time. Deps: F-981. Acceptance: Every limit not stated here is registered in the ADR before the run. The cause of the KR KK failure (provenance-f828.spec.ts, the popover left open after Escape, 2 of 5 runs on 2327d4f1 in ADR 0808 Addendum 8) is diagnosed and remedied without loosening the case; the spec run alone passes in every one of a registered number of runs (at least 10) and npm test passes.
