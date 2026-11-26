@@ -258,3 +258,166 @@ A defective set-up found before a registered run is corrected by an amendment co
 
 To be completed in the addendum with options and a recommendation: whether the switch becomes the default (a default
 change, never in this work), and any question of scope (the stall).
+
+## Addendum 1: results
+
+Written 2026-11-26, after the runs. Commits on the branch, from main d1c731b2: 1389abe2 (this registration, alone),
+11840b32 (the switch in `crates/rcfd-fv/src/pimple.rs` and the test file; every registered run was made from it),
+2979b6b3 (the fan controls' record, the cavity and fan logs, the recorded outcomes `FAN_RECORD`), 83d6a6d3 (the committed
+mutation M1), 074b7e47 (the mutation log), 3e9ba395 (check H: the full rows and logs of both runs, the recorded class
+`RECORD`, deviation 1), and the commit of this addendum with a stray comment line removed from the test file (deviation
+4) and the proposal file. Records in `docs/investigations/f885-alpha-free-face-flux/`: `fan_controls.csv`, `H_dt.csv`,
+`H_dt2.csv`, `cavity.log`, `fan.log`, `s1.log`, `H_dt.log`, `H_dt2.log`, `mutations.log`.
+
+### The sentence
+
+**The switch removes the jump; check H still does not decide.** With `alpha_free_face_flux` the relaxed outer iterations
+and the unrelaxed final one share their fixed point: on the cavity two values of `alpha_u` reach the same face flux to
+9.9e-12 (6.8e-4 without the switch), and the final iteration's jump is gone on both cases (`J` 0.27 on the cavity, 0.66
+on the fan, against 9.8 and 34.8 without it in ADR 0810). Check H was run with the switch on as registered and completed
+both runs, but no step of either window meets ADR 0183's outer-iteration rule (0 % and 0 % against 99 %), so both runs
+are NOT TIME-ACCURATE, the class is NOT EVALUABLE and the verdict of F-879 is "does not decide". The reason is the one
+recorded first in section 2: the fan's outer loop does not contract. In the window the 2nd to 5th outer iterations move
+the velocity as much as the 1st (median `d_5 / d_1` 0.95 and 1.08).
+
+### The switch's rows
+
+| Id | Limit | Measured | Met |
+| --- | --- | --- | --- |
+| A1 | passes, file unchanged | `baseline_hashes`: 3 passed, 1 ignored; `baseline_hashes.rs` unchanged | yes |
+| A2 | equal bits; `<= 1e-4` | switch on with `alpha_u = alpha_p = 1`: `u`, `p`, flux, record equal bits after 3 steps; K0 switch off, step 1: 3.4197e-2, 7.1717e-3, 1.5369e-3, 3.3740e-4, 1.4550e-3 m/s, equal to ADR 0767 A2 at the printed digits | yes |
+| K0s | `J <= 2` | `J` 0.2658 (ABSENT); step 1 `d_k` 3.4197e-2, 7.2227e-3, 1.5538e-3, 3.4198e-4, 9.7890e-5 m/s (the 5th was 1.4550e-3 without the switch) | yes |
+| K4s | `J <= 2`; `C <= 1e-2`; `Q <= 1e-2` | `J` 0.5230; `C` 9.149e-9; `Q` 1.008e-9 | yes |
+| TR | `<= 1e-8` | 9.863e-12 (largest of flux and velocity over 3 steps) | yes |
+| TRn | `> 1e-5` | 6.773e-4 (switch off: flux 9.6e-5 to 2.0e-4, velocity 3.3e-4 to 6.8e-4) | yes |
+| F0s | `J <= 2` | `J` 0.6585 (ABSENT) | yes |
+| F2s | completes | 20 of 20 steps; `C` 0.02581 (STALLS); median `d_19` 6.361e-3 m/s, in every classed step at c11837 (r 0.2492 m, z 0.2306 m: the tip gap, downstream of the blade); `Q` 3.063e-3 | yes |
+| S1 | `<= 1e-6` | 4.18e-10 (`run_h` with the switch against F0s of the record, every `d_k` of 20 steps) | yes |
+| G2 | equal, `1e-6` | `f885_af_fan_from_the_committed_record`: as recorded | yes |
+| D1 | as stated | `git diff --name-only d1c731b2` (the base) names under `crates/*/src` only `crates/rcfd-fv/src/pimple.rs` (branch lines 181 to 188, 1095, 2244 to 2260, 2291 to 2295); no roadmap, ledger, golden or existing test file changed; the committed patches of `f885_check_h_outer_record` and `f885_outer_fixed_points` apply unchanged (`git apply --check`), so neither was re-based | yes |
+
+The stall recorded first (section 2): F2s STALLS with `C` 0.026 (0.037 without the switch, ADR 0810), the relaxed changes
+of steps 11 to 20 staying at 4.3e-3 to 1.1e-2 m/s at one tip-gap cell; `P20` = 0.50 (5 of the 10 classed steps of F0s
+meet `d_5 <= 1e-2 d_1`, where `d_1` is still large, 0.6 to 3 m/s). The prediction written before the run, NOT
+TIME-ACCURATE if the stall persists, is what came out.
+
+### Check H (A3 to A5, G1)
+
+Started together at 16:01 UTC; H(dt) ended at 17:36 (94.7 min, 1.03 s a step), H(dt/2) at 19:02 (181.0 min, 0.99 s a
+step), against the estimate of about 2.7 h and 4.5 h (the machine was less loaded than for ADR 0767).
+
+| | H(dt) | H(dt/2) |
+| --- | --- | --- |
+| A3: steps, failure, fields | 5 498, none, finite; mass balance 6.0e-16 | 10 996, none, finite; 6.0e-16 |
+| A4: window steps meeting `d_5 <= 1e-2 d_1` | **0.0000** | **0.0000** |
+| `d_5 / d_1`: smallest, median, largest | 0.147, 0.953, 5.82 | 0.861, 1.085, 1.41 |
+| `d_1` (m/s): median | 0.105 | 0.0485 |
+| `d_5` (m/s): median | 0.115 | 0.0491 |
+| medians of `d_2/d_1`, `d_3/d_2`, `d_4/d_3`, `d_5/d_4` | 0.967, 0.902, 1.029, 1.22 | 1.55, 0.849, 0.862, 0.977 |
+| step change (m/s): median | 0.113 | 0.0344 |
+| site signal: cell, `A`, crossings | c157, 1.451348e-3 m/s, 1 | c157, 2.288205e-3 m/s, 1 |
+| torque, pressure rise: window means | 2.014952 N m, 71.2453 Pa | 2.017549 N m, 71.4638 Pa |
+| five cells of largest amplitude | tip region, r 0.244 to 0.247 m, A 0.070 to 0.100 m/s | tip region, r 0.246 to 0.247 m, A 0.060 to 0.061 m/s |
+
+| Id | Measured | Met |
+| --- | --- | --- |
+| A3 | both runs complete | yes |
+| A4 | 0 % and 0 % against 99 % | **no, in both runs** |
+| A5 | class NOT EVALUABLE (first clause: not TIME-ACCURATE); verdict "does not decide" | a verdict by the rule, the one that does not decide |
+| G1 | `f885_af_class_from_the_committed_records`: counts 5 498 and 10 996, windows 2 749 and 5 498, shares 0 and 0, `A` as recorded, class and verdict as recorded | yes |
+
+What the record says. Against ADR 0767 (no switch) the window's first change fell from about 1.01 and 0.97 m/s to 0.105
+and 0.049 m/s: the switch removed the 1 m/s swing between the two fixed points, and `d_1` is now of the order of the step
+change (0.11 and 0.034 m/s). But the outer iterations of a window step do not contract: `d_2` to `d_5` stay at the level
+of `d_1`, and in H(dt/2) the 2nd iteration moves the field more than the 1st. That is the stall of F2s at the scale of
+the window. A pattern read from the logs, without a limit: the largest changes sit in the tip region (F2s c11837 in the
+tip gap; the cells of largest amplitude at r 0.244 to 0.247 m). By the rule fixed in section 2 nothing else enters the
+class. Reported only: the site amplitudes (1.5e-3 and 2.3e-3 m/s) are far below the STEADY threshold 0.193 m/s, and the
+window means are within 0.4 % in torque and 2.3 % in pressure rise of ADR 0767's, but no class is asserted.
+
+### Mutations
+
+From `mutations.log` (git archive of 2979b6b3 in the scratch folder, its own target folder, the restored and mutated
+files touched before each build):
+
+| Id | What happened |
+| --- | --- |
+| K0 | unmutated: the three gate tests pass |
+| M1 | factor `alpha_u` for `1 - alpha_u`: caught by `f885_af_cavity` (K0s `J` 6.72, K4s, TR 4.9e-3). Committed as the mutation patch |
+| M2 | without `F(u*)`: caught by `f885_af_cavity` (K0s `J` 9.86, K4s, TR 4.3e-3) |
+| M3 | the term also in the final iteration: caught by `f885_af_cavity` (K0s `J` 9.23, K4s, TR 3.7e-2) |
+| M4 | the switch always on: caught by `f885_af_defaults_and_bits` (K0 switch off no longer ADR 0767 A2) and by `f885_af_cavity` (TRn 9.9e-12) |
+| M5 | TR compares route a with itself: caught by `f885_af_cavity` (TRn 0) |
+| M6 | `fan_controls.csv` cut to its first half: caught by `f885_af_fan_from_the_committed_record` |
+
+### Deviations
+
+1. `read_full` (the reader of G1) first asserted 22 columns per row; the rows have 21 (15 of ADR 0766's form, 5 of the
+   outer record, the step change), so G1's first run failed on the count before reading anything. The count and its
+   comment were corrected (the column indices were right); no limit, measure, record or registered run changed. G1 was
+   then run once and passed.
+2. The fan controls took 19 s and 73 s (estimate about 3 min); check H took 94.7 and 181.0 min (estimate 2.7 and 4.5 h).
+3. Rule 7's run of the new test file was made test by test, as each registered step came due (A2 and the cavity; G2 and
+   S1; G1), each once, not as one command over the file.
+4. `cargo clippy` first failed on one lint in the new test file ("empty line after doc comment": a comment line left by
+   the copy from `f885_check_h_outer_record.rs`, above no item). The line was removed, `cargo fmt -p rcfd-api --check`
+   and clippy then ran clean. Nothing else in the file changed; the registered runs had been made before.
+
+### What was not run
+
+Any change of a default; the switch with the consistent correctors, a face jump, an immersed solid, a moving mesh or the
+fractional step; any diagnosis of the stall; a third time step or a longer run (stop rule 4 of ADR 0183); the whole
+workspace suite.
+
+### The checks of rule 7
+
+* The new test file: `f885_af_defaults_and_bits`, `f885_af_cavity` (2 passed); `f885_af_fan_from_the_committed_record`,
+  `f885_af_short_run_on_the_check_h_path` (2 passed); `f885_af_class_from_the_committed_records` (1 passed); the three
+  heavy records run once each.
+* `cargo test -p rcfd-api --release --test baseline_hashes`: 3 passed, 1 ignored.
+* `cargo test -p rcfd-fv --release --lib`: 115 passed, 6 ignored.
+* `cargo test -p rcfd-api --release --test f885_outer_fixed_points`: 4 passed, 1 ignored;
+  `--test f885_check_h_outer_record`: 4 passed, 2 ignored.
+* `cargo fmt -p rcfd-fv --check`, `cargo fmt -p rcfd-api --check`: clean; `cargo clippy -p rcfd-fv -p rcfd-api
+  --all-targets -- -D warnings`: clean (deviation 4).
+* `cargo test -p rcfd-cli --release --test docs_site`, `python scripts/roadmap_proposals.py check` and
+  `python scripts/process_report.py --check`: at the commit of this addendum, as reported to the lead.
+
+### Size
+
+Size (agent): partial; 1; 3; 2; 260000
+
+### Decision by the registered rule
+
+**Partial.** Every row of the switch holds (A1, A2, K0s, K4s, TR, TRn, F0s, F2s, S1, D1), check H was run as registered
+with the switch on and both runs completed (A3), and it does not decide: A4 is missed in both runs (0 % against 99 %), so
+the class is NOT EVALUABLE. What it would take: an outer loop on the fan that contracts within a step in the window (the
+stall diagnosed and removed), or the maintainer's word on how ADR 0183's rule reads a loop that does not.
+
+## Open questions for the maintainer (addendum 1)
+
+1. **Whether the switch becomes the default.** Options: (a) keep it opt-in; (b) make it the default for pimple runs with
+   `n_outer > 1` and `alpha_u < 1`, in a registration of its own with the baseline hashes re-recorded on the maintainer's
+   approval (every relaxed pimple run changes its bytes); (c) remove it. I recommend (a) for now: it is shown to do what it
+   is for, but by itself it does not make check H decide, and a default change of every relaxed pimple run should wait
+   until it is shown to help a case end to end.
+2. **Scope: the stall of the fan's outer loop.** Options: (a) a diagnosis of the stall registered under F-885 (rule 13),
+   on 20 steps of H(dt) with the switch on and the cell record (F2s's c11837 in the tip gap at z 0.23 m), with controls
+   fixed in advance (the momentum and pressure solver tolerances, the deferred linear-upwind correction, the turbulence
+   update in the hook, the seam), before any further long run; (b) a reading of ADR 0183's rule for a loop that does not
+   contract (a change of the rule, the maintainer's to make); (c) leave F-885 partial with check H recorded as not
+   deciding. I recommend (a): the jump is now gone, and the stall is the one thing the record names as standing in the way.
+
+## For the lead: roadmap entries
+
+> Status proposed for F-885: partial.
+
+> Note entry: ADR 0811, 2026-11-26, partial: an opt-in face flux whose converged value does not depend on alpha_u (PimpleSettings::alpha_free_face_flux, the term (1 - alpha_u)(phi* - F(u*)) of Kuhl, arXiv:2607.21736 Eq. 25; defaults bit-identical) gives the relaxed and unrelaxed outer iterations one fixed point (two alpha_u reach the same face flux to 9.9e-12 on the cavity; the final jump d_N/d_(N-1) 0.27 on the cavity and 0.66 on 20 steps of H(dt)), but check H run with it completes and does not decide: 0 % of window steps meet d5 <= 1e-2 d1 (median d5/d1 0.95 and 1.08) because the fan's outer loop does not contract within a step; held by crates/rcfd-api/tests/f885_alpha_free_face_flux.rs and docs/investigations/f885-alpha-free-face-flux, six of six mutations caught.
+
+> Gap entry: Missing for done: a class by ADR 0183's rule. ADR 0811 removed the jump of the final outer iteration (opt-in alpha_free_face_flux) and ran check H with it: both runs complete, 0 % of window steps meet d5 <= 1e-2 d1, because the fan's outer loop does not contract within a step (d2 to d5 about d1, 0.05 to 0.1 m/s; the relaxed loop stalls near 6e-3 m/s at a tip-gap cell). Needs a diagnosis of that stall (ADR 0811 question 2) or the maintainer's reading of the rule.
+
+The same entries are in `docs/roadmap/proposals/0811-F-885.json` (form 1 of ADR 0755, base d1c731b2), checked with
+`python scripts/roadmap_proposals.py check`. No follow-up item is proposed: a diagnosis of the stall adds no acceptance
+clause and would be registered under F-885 (rule 13).
+
+Generated pages that this work may leave not current, for the lead (rule 9): `docs/adr/index.md` (ADR 0811 is new).

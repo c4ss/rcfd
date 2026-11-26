@@ -53,7 +53,6 @@ const OUTER_RATIO: f64 = 1e-2;
 const OUTER_SHARE: f64 = 0.99;
 /// ADR 0766 D-2, reported beside only (ADR 0767 E-1): the pressure ratio and its absolute floor [m^2/s^2].
 const D2_FLOOR: f64 = 0.0415;
-/// Steps of the fast test on the path of the heavy records.
 
 /// ADR 0810 section 5 (ADR 0811 section 3): the measures' decision numbers.
 const J_PRESENT: f64 = 4.0;
