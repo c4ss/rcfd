@@ -196,24 +196,29 @@ jobs:
           if [ "$RUNNER_OS" = "Linux" ]; then
             RCFD_TEST_ELECTRON_ARGS="--ignore-gpu-blocklist --enable-unsafe-webgpu" xvfb-run --auto-servernum npx playwright test --reporter=list,html,json
           else
-            # windows-latest has no GPU either: without the switch the window has no WebGPU adapter, so the WebGPU tests
-            # (workspace-first-open.spec.ts) cannot hold their premise and the views draw by the WebGL 2 fallback; with it
-            # WebGPU gets the same software adapter as on Linux (ADR 0818, H1 and R1).
-            RCFD_TEST_ELECTRON_ARGS="--enable-unsafe-webgpu" npx playwright test --reporter=list,html,json
+            # No switch on windows-latest: with --enable-unsafe-webgpu the views did not draw there (ADR 0818 amendment 3);
+            # workspace-first-open.spec.ts checks its premise (an adapter) itself and is reported below when it is not met.
+            npx playwright test --reporter=list,html,json
           fi
       - name: no test skipped but the registered ones
         # A test that skips passes Playwright; a lost build would go unseen (ADR 0802 Q3). This fails on any skipped test
         # (a test.skip, or a test that did not run after a failure) whose <file>:<line> is not in the list (ADR 0804: none).
         # The registered records, by name (ADR 0818): the four tests of canvas-f979.spec.ts that ADR 0807 amendment 1 keeps
         # as the record of its defective set-up, and the first Follow live test of workspace.spec.ts, the record of its race
-        # (ADR 0818; the corrected test after it runs).
+        # (ADR 0818; the corrected test after it runs), and the first SC test of provenance-f828.spec.ts, the record of its
+        # scan counting the renderer's fallback label (ADR 0818 amendment 3).
         env:
-          STUDIO_ALLOWED_SKIPS: "e2e/canvas-f979.spec.ts:162 e2e/canvas-f979.spec.ts:175 e2e/canvas-f979.spec.ts:208 e2e/canvas-f979.spec.ts:244 e2e/workspace.spec.ts:389"
+          STUDIO_ALLOWED_SKIPS: "e2e/canvas-f979.spec.ts:162 e2e/canvas-f979.spec.ts:175 e2e/canvas-f979.spec.ts:208 e2e/canvas-f979.spec.ts:244 e2e/workspace.spec.ts:389 e2e/provenance-f828.spec.ts:288"
+          # A test whose premise the runner does not give, allowed only with a skip reason that begins "premise not met:"
+          # and printed as such (ADR 0818 amendment 3: workspace-first-open.spec.ts needs a WebGPU adapter).
+          STUDIO_PREMISE_SKIPS: "e2e/workspace-first-open.spec.ts:59"
         run: |
           node --input-type=module -e '
           import { readFileSync } from "node:fs";
           const report = JSON.parse(readFileSync("playwright-results.json", "utf8"));
           const allowed = new Set((process.env.STUDIO_ALLOWED_SKIPS ?? "").split(" ").filter(Boolean));
+          const premise = new Set((process.env.STUDIO_PREMISE_SKIPS ?? "").split(" ").filter(Boolean));
+          const unmet = [];
           let tests = 0;
           const bad = [];
           const walk = (suite) => {
@@ -221,13 +226,17 @@ jobs:
               for (const t of spec.tests ?? []) {
                 tests += 1;
                 const where = `${spec.file}:${spec.line}`;
-                if (t.status === "skipped" && !allowed.has(where)) bad.push(`${where} [${t.projectName}] ${spec.title}`);
+                if (t.status !== "skipped" || allowed.has(where)) continue;
+                const why = (t.annotations ?? []).filter((a) => a.type === "skip").map((a) => a.description ?? "").join("; ");
+                if (premise.has(where) && why.startsWith("premise not met:")) unmet.push(`${where} [${t.projectName}] ${why}`);
+                else bad.push(`${where} [${t.projectName}] ${spec.title}`);
               }
             }
             for (const s of suite.suites ?? []) walk(s);
           };
           for (const s of report.suites ?? []) walk(s);
           console.log(`${tests} tests in the report, ${bad.length} skipped and not in the registered list`);
+          for (const u of unmet) console.log(`skipped, premise not met: ${u}`);
           for (const b of bad) console.log(`skipped: ${b}`);
           if (tests === 0 || bad.length > 0) process.exit(1);
           '
