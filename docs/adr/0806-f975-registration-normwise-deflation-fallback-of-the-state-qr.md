@@ -336,3 +336,31 @@ were met in run 1.
 The registered test stays as an ignored record, its body and limits unchanged, with `#[ignore]` naming ADR 0806 run 1 and the
 measured `inf`. The corrected row is a new function `v1_corrected_rest_frequencies_against_modal_analysis_harmonic` in the same
 file, run once. Its result goes in addendum 2.
+
+## Addendum 2 (2026-11-26): the corrected V1, run once
+
+Made under amendment 2, on the maintainer's approval of 2026-11-26. The registered test of run 1 is kept as an ignored record
+(`#[ignore]` naming ADR 0806 run 1 and the measured `inf`, body and limits unchanged). The corrected row is the new function
+`v1_corrected_rest_frequencies_against_modal_analysis_harmonic` (commit 9984a831). It was run once, in release, with the target
+folder under the scratch folder (log `logs/run2_v1.log`).
+
+| # | Limit | Measured | Met |
+|---|---|---|---|
+| V1 (amendment 2) | relative `<= 1e-8` | `k = 0`: 4 against 4, `3.412e-12`; `k = 1`: 8 against 8, `3.658e-12`; `k = 2`: 8 against 8, `2.635e-12`; `k = 3`: 4 against 4, `1.746e-13`; largest `3.658e-12` | met |
+
+Rule 7 after the change. `rustfmt --edition 2021 --check` on `state.rs`, `state/f975_diagnosis.rs` and
+`sa_whirl_stability_wheel_sector_f975.rs` gave exit 0. `cargo clippy -p rcfd-fem --all-targets -- -D warnings` gave exit 0.
+The fmt check of run 1 stays recorded as failed (addendum 1); it is no row of the table of checks.
+
+Size (actual, replacing addendum 1's): done; 1; 0; 2; about 210000
+
+**Decision by the registered rule: done.** Every row A1 to B3 holds: V1 in its corrected run, the others in run 1. All four
+mutations are caught. Two steps are left to the lead at the merge, by the maintainer's approval as the lead relays it: the
+re-record of `H_W` in `sa_beam_opt_ins_default_f672_bits.rs` (question 1, B-F), and the line for DG3 in
+`docs/process/exceptions/registration-kind.txt` (amendment 1). Question 2 is answered by amendment 2.
+
+### For the lead: roadmap entries (replacing those of addendum 1)
+
+Status proposed: done.
+
+> ADR 0806, 2026-11-26, done: the state QR iteration stalled on W because at rest every eigenvalue of a pair index is double and the local deflation test refuses the rounding-size subdiagonal between the two copies (shown: 0.1 to 0.2 eps times the Frobenius norm, refused by a factor of about 135); a fallback from a copy of the Hessenberg matrix with the normwise test m eps times the Frobenius norm makes whirl_stability of W Ok at k = 0..3 and 0, 30, 60 rad/s, equal to whirl_state, within 3.7e-12 of modal_analysis_harmonic at rest (V1 corrected by amendment 2) and 6.1e-12 of whirl_modes, all stable, residuals 4.7e-12; converging calls keep their bits (W's other paths hash to main's record, H_S, H_F, baseline_hashes); 4 of 4 mutations caught; the H_W record of the ADR 0799 bits file to be re-recorded (P7 now Ok).

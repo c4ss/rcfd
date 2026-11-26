@@ -3,8 +3,7 @@
   "adr": "0806",
   "item": "F-975",
   "base": "482348e478a7d1ecb3fbc5bb0199f8610001f6cc",
-  "status": "partial",
-  "note": "ADR 0806, 2026-11-26, partial: the state QR iteration stalled on W because at rest every eigenvalue of a pair index is double and the local deflation test refuses the rounding-size subdiagonal between the two copies (shown: 0.1 to 0.2 eps times the Frobenius norm, refused by a factor of about 135); a fallback from a copy of the Hessenberg matrix with the normwise test m eps times the Frobenius norm makes whirl_stability of W Ok at k = 0..3 and 0, 30, 60 rad/s, equal to whirl_state, frequencies within 6.1e-12 of whirl_modes, all stable, residuals 4.7e-12; converging calls keep their bits (W's other paths hash to main's record, H_S, H_F, baseline_hashes); 4 of 4 mutations caught; V1 missed on a defective set-up; fmt failed on layout, then applied.",
-  "gap": "whirl_stability of the wheel sector converges and agrees with whirl_state and whirl_modes. Missing: V1 of ADR 0806 (the rest frequencies of W against modal_analysis_harmonic) is a miss of a defective set-up (the reference doubled twice for a pair index), to be registered again with the reference as returned; the H_W record of sa_beam_opt_ins_default_f672_bits.rs is to be re-recorded (P7 now Ok).",
+  "status": "done",
+  "note": "ADR 0806, 2026-11-26, done: the state QR iteration stalled on W because at rest every eigenvalue of a pair index is double and the local deflation test refuses the rounding-size subdiagonal between the two copies (shown: 0.1 to 0.2 eps times the Frobenius norm, refused by a factor of about 135); a fallback from a copy of the Hessenberg matrix with the normwise test m eps times the Frobenius norm makes whirl_stability of W Ok at k = 0..3 and 0, 30, 60 rad/s, equal to whirl_state, within 3.7e-12 of modal_analysis_harmonic at rest (V1 corrected by amendment 2) and 6.1e-12 of whirl_modes, all stable, residuals 4.7e-12; converging calls keep their bits (W's other paths hash to main's record, H_S, H_F, baseline_hashes); 4 of 4 mutations caught; the H_W record of the ADR 0799 bits file to be re-recorded (P7 now Ok).",
   "follow_ups": []
 }
