@@ -641,7 +641,7 @@ exist, and Phase 9 items are stretch. Phase numbers 5 and 6 may run in parallel 
 
 ## Phase 8 - AI assistant and desktop app integration
 
-91 items: 58 done, 19 partly done, 14 not started.
+91 items: 59 done, 19 partly done, 13 not started.
 
 - [x] **F-090** MCP server (external tool interface) with tools: list_cases, create_case, set_setting, get_setting, load_mesh, check_mesh, run, status, get_residuals, get_field_stats, export_vtk, render_image
   - depends on: F-085, F-073
@@ -1035,9 +1035,10 @@ exist, and Phase 9 items are stretch. Phase numbers 5 and 6 may run in parallel 
   - depends on: F-979
   - acceptance: show_view's description in the MCP tool list names the mesh-of-a-case, setting and monitor-of-a-case forms of ADR 0807 as well as F-976's kinds; the tool-list goldens are re-recorded by the lead for that one entry, with the maintainer's word recorded; every other entry unchanged.
   - note: Lead (2026-11-26): entered on ADR 0807 question 1 (the lead changes it and re-records), taken by the lead on the maintainer's standing instruction of 2026-11-26 (go with the recommended option always); the re-record is not additive, so it is its own merge.
-- [ ] **F-988** KR KK of provenance-f828.spec.ts: the provenance popover a second Ctrl+I opens on a Runs grid cell closes on Escape every time
+- [x] **F-988** KR KK of provenance-f828.spec.ts: the provenance popover a second Ctrl+I opens on a Runs grid cell closes on Escape every time
   - depends on: F-981
   - acceptance: Every limit not stated here is registered in the ADR before the run. The cause of the KR KK failure (provenance-f828.spec.ts, the popover left open after Escape, 2 of 5 runs on 2327d4f1 in ADR 0808 Addendum 8) is diagnosed and remedied without loosening the case; the spec run alone passes in every one of a registered number of runs (at least 10) and npm test passes.
+  - note: ADR 0813, 2026-11-26, done: KR KK's failure was diagnosed by a traced control (the late Ctrl+I request reopened the popover after Escape) and remedied in the provenance registry with one record per pressed key (V2, after control C2 showed two requests in flight); provenance-f828 alone 10 of 10, KK2 5 of 5, npm test 0 failed, mutations M3 and M4 caught 3 of 3. Lead (2026-11-26): merged at 16f02a91 and pushed at a39a8dbb; npm test passed at its first run (886 passed) and the committed mutation failed as expected. Done as proposed.
 
 ## Phase 9 - Advanced physics and scale (stretch)
 

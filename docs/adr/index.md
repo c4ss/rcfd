@@ -550,7 +550,7 @@ One row per record of this folder, grouped by the roadmap category of the item i
 | [0805](0805-f976-registration-a-view-specification-and-show-view.md) | F-976 registration: a view specification, `show_view`, and the open Studio that renders it | REGISTERED | 2026-11-26 | 1 | F-976 | done |
 | [0807](0807-f979-registration-live-meshes-settings-and-monitors-on-the-canvas.md) | F-979 registration: meshes, settings and monitors shown live on Claude's canvas | REGISTERED | 2026-11-26 | 1 | F-979 | done |
 | [0808](0808-f981-registration-retire-the-g15-coverage-map-and-the-first-path.md) | F-981 registration: retire G15's coverage map and the learner's first path | REGISTERED | 2026-11-26 | 8 | F-981 | partial |
-| [0813](0813-f988-registration-a-ctrl-i-pressed-before-escape-reopens-the-popover.md) | F-988 registration, a Ctrl+I pressed just before Escape opens the provenance popover again |  |  | 7 | F-988 | todo |
+| [0813](0813-f988-registration-a-ctrl-i-pressed-before-escape-reopens-the-popover.md) | F-988 registration, a Ctrl+I pressed just before Escape opens the provenance popover again |  |  | 7 | F-988 | done |
 
 ## Retired: the hand-navigated Studio (1)
 
