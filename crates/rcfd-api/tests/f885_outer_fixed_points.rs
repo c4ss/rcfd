@@ -765,8 +765,11 @@ fn sim_of(text: &str) -> Simulation {
     Simulation::new(&case).unwrap_or_else(|e| panic!("{e:?}"))
 }
 
-/// The fan controls of ADR 0810 section 5: name, outer count, the change of the settings.
-fn fan_controls() -> Vec<(&'static str, usize, fn(&mut PimpleSettings))> {
+/// A fan control: name, outer count, the change of the settings.
+type FanControl = (&'static str, usize, fn(&mut PimpleSettings));
+
+/// The fan controls of ADR 0810 section 5.
+fn fan_controls() -> Vec<FanControl> {
     vec![
         ("F0", 5, |_| {}),
         ("F1", 5, |s| s.alpha_u = 1.0),

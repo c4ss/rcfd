@@ -1,0 +1,9 @@
+{
+  "form": 1,
+  "adr": "0810",
+  "item": "F-885",
+  "base": "f42518a3ba44c5b4ca6d8fad57fb2569cb0bda88",
+  "status": "partial",
+  "note": "ADR 0810, 2026-11-26, diagnosis done, item partial: the relaxed outer iterations of the pimple step converge to a different state from the unrelaxed final one because rAU = V/a_P is formed from the relaxed diagonal and enters the face flux (its pressure, transient and body-force Rhie-Chow parts), so discrete continuity depends on alpha_u while the cell momentum does not; with alpha_u = 1 in every iteration the jump of the final iteration is gone (d_N/d_(N-1) 0.074 on the cavity, 0.93 on 20 steps of H(dt), against 9.8 and 34.8 relaxed), it stays with 20 outer iterations (relaxed changes 1e-9 m/s or less on the cavity, final 1.5e-3 to 3.9e-3), it scales with 1 - alpha_u (ratio 0.487, 0.5 predicted), and neither the pressure relaxation nor the component diagonal carries it; held by crates/rcfd-api/tests/f885_outer_fixed_points.rs and docs/investigations/f885-outer-fixed-points, six of six mutations caught.",
+  "gap": "Missing for done: a class by ADR 0183's rule. ADR 0810 found the cause: the relaxed rAU in the face flux gives the relaxed and unrelaxed outer iterations different fixed points (with alpha_u = 1 the final jump is gone). Needs the remedy chosen by the maintainer (ADR 0810 question 1: a face flux independent of alpha_u, opt-in, registered under F-885) and check H run again with it; the fan's relaxed loop also stalls near 5e-3 to 9e-3 m/s, which may still fail the 1e-2 rule."
+}
