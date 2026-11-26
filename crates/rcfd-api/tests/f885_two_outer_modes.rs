@@ -66,7 +66,14 @@ const CAV_PROBE: [usize; 2] = [27, 36];
 /// The recorded outcomes of the registered fan run (written after the run): mode A (HA1, HA2, HA3 held; `q`; the result),
 /// mode B (`rho` and `r` of B1 to B4; the result).
 type FanRecord = (([bool; 3], f64, &'static str), ([f64; 4], [f64; 4], &'static str));
-const FAN_RECORD: Option<FanRecord> = None;
+const FAN_RECORD: Option<FanRecord> = Some((
+    ([true, false, false], 0.005036605059273898, "named HA1"),
+    (
+        [0.853789228181186, 0.8729920722691961, 0.8920440841467279, 0.8537402360728994],
+        [1.3805424501415016, 1.3805235301438004, 1.380475306072651, 1.3805439272334756],
+        "all ruled out",
+    ),
+));
 
 fn omega() -> f64 {
     RPM * 2.0 * PI / 60.0
