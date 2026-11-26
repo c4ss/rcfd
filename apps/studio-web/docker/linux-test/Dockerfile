@@ -2,7 +2,8 @@
 # glibc 2.39), the gate's Rust toolchain (RUST_GATE_TOOLCHAIN in .github/workflows/gate.yml), Node 22 (package.json
 # engines), the libraries Electron 45 needs on Linux, Xvfb for a display, and Mesa's software drivers. There is no GPU in
 # the container: Chromium gets no WebGPU adapter and the Studio draws with its WebGL 2 fallback, or not at all where WebGL 2
-# is also missing (see the ADR for which specs that touches).
+# is also missing (see the ADR for which specs that touches). xterm provides /usr/bin/x-terminal-emulator, the terminal
+# "Open Claude Code here" looks for on Linux (ADR 0804; in test mode it is recorded, never opened).
 #
 # Built and run by apps/studio-web/docker/linux-test/run.mjs; the repository's files are not part of the image (the build
 # context is this folder only).
@@ -18,7 +19,7 @@ RUN apt-get update \
        libcups2t64 libdrm2 libxkbcommon0 libxcomposite1 libxdamage1 libxrandr2 libxfixes3 libpango-1.0-0 libcairo2 \
        libsecret-1-0 libnotify4 libuuid1 \
        libgl1 libegl1 libgles2 libgl1-mesa-dri mesa-vulkan-drivers libvulkan1 \
-       dpkg-dev fakeroot rpm file \
+       dpkg-dev fakeroot rpm file        xterm \
     && rm -rf /var/lib/apt/lists/*
 ENV RUSTUP_HOME=/usr/local/rustup CARGO_HOME=/usr/local/cargo PATH=/usr/local/cargo/bin:/usr/local/node/bin:$PATH
 RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs \

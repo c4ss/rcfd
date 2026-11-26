@@ -1,0 +1,17 @@
+# expect-fail: cd apps/studio-web && npm run build && npm run package:dir && npx playwright test tests/e2e/commands.spec.ts --project=electron
+diff --git a/apps/studio-web/src/renderer/commands/CommandPalette.tsx b/apps/studio-web/src/renderer/commands/CommandPalette.tsx
+index 7941b6fe..fc7e933b 100644
+--- a/apps/studio-web/src/renderer/commands/CommandPalette.tsx
++++ b/apps/studio-web/src/renderer/commands/CommandPalette.tsx
+@@ -278,7 +278,10 @@ export default function CommandPalette({ request }: { request: PaletteRequest })
+     <ModalOverlay
+       isOpen={open}
+       onOpenChange={(o) => {
+-        if (!o) setOpen(false);
++        if (!o) {
++          setOpen(false);
++          afterFocusReturns(() => (document.activeElement as HTMLElement | null)?.blur());
++        }
+       }}
+       isDismissable
+       className="cp-overlay"

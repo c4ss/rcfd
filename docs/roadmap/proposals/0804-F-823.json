@@ -1,0 +1,10 @@
+{
+  "form": 1,
+  "adr": "0804",
+  "item": "F-823",
+  "base": "dcb4a1df52c5186a70a48137bdc7d8e35ff2f869",
+  "status": "partial",
+  "note": "ADR 0804, 2026-11-26, partial: the Linux studio-web job gets xterm and --enable-unsafe-webgpu (SwiftShader's adapter) and a step that fails on any skip; the four Linux failures of ADR 0802 and the 16 after them pass in the container, the skip step fails on an added skip on both systems, the mutations are seen (the package one replaced); but the Linux job failed error-walk.spec.ts:177 (over its 60 s), Windows met one file refused by the OS, and npm test in the container missed three time limits under load.",
+  "gap": "In the Ubuntu 24.04 container the job's Playwright step failed error-walk.spec.ts:177 (the preview refusal not shown within 60 s, with WebGPU on SwiftShader; 28.7 s before the switch) and 4 after it did not run; npm test there missed three time limits under load; on Windows one test met a file refused by the OS. The first run on GitHub Actions is to be read.",
+  "follow_ups": []
+}

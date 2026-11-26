@@ -1,0 +1,10 @@
+{
+  "form": 1,
+  "adr": "0809",
+  "item": "F-823",
+  "base": "dcb4a1df52c5186a70a48137bdc7d8e35ff2f869",
+  "status": "partial",
+  "note": "ADR 0809, 2026-11-26, partial: timed controls in the Linux container show that error-walk.spec.ts:177 waits for the engine's case.facts building the 2.25-million-cell mesh on the Studio's one connection, on WebGL 2 as on WebGPU (the renderer is free), not for a WebGPU draw; no code changed; the test passed in all four runs, and R7w and R7l passed 880 of 880, but the job's Linux run missed four time limits under a loaded host and Windows met a file refused by the OS.",
+  "gap": "The job's runs here missed: in the Ubuntu 24.04 container 865 passed, 4 failed (time and order limits under a loaded host) and 11 did not run; on Windows one test met a file refused by the OS. error-walk.spec.ts:177 passes, but its time is case.facts building an over-limit mesh before its max_cells check (Q1 of ADR 0809). The first run on GitHub Actions is to be read.",
+  "follow_ups": []
+}

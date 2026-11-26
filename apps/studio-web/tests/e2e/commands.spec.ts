@@ -12,6 +12,7 @@
 // - the "Keyboard shortcuts" listing holds the whole table and is reached from the palette and by Ctrl+/;
 // - no shortcut takes a key of the running application menu, and F5 does not reload the window.
 // Screenshots at 1440 by 900 go to test-results-visual/f831/ for the maintainer's view-and-report (G13).
+// ADR 0804: the focus given back after Escape is polled; React Aria puts it back in the next animation frame.
 import { expect, test, type Page } from '@playwright/test';
 import { mkdir } from 'node:fs/promises';
 import path from 'node:path';
@@ -110,7 +111,7 @@ test('Ctrl+K opens the palette on its search field; an unavailable command keeps
   await shot('palette-unavailable');
 
   await closePalette();
-  expect(await focusedName()).toBe(before);
+  await expect.poll(focusedName).toBe(before);
   await expect(open).toBeFocused();
 });
 
