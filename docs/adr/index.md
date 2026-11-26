@@ -557,7 +557,7 @@ One row per record of this folder, grouped by the roadmap category of the item i
 |---|---|---|---|---|---|---|
 | [0730](0730-f826-f830-proposal-ui-metadata-in-the-case-schema-and-help-from-the-engine.md) | F-826 and F-830 proposal: UI metadata in the case schema, and help and an error catalogue from the engine | ACCEPTED | 2026-11-17 | 0 | F-830 | partial |
 
-## Quality, docs and validation (56)
+## Quality, docs and validation (57)
 
 | ADR | Title | Status word | Date | Addenda | Item | Item status |
 |---|---|---|---|---|---|---|
@@ -617,6 +617,7 @@ One row per record of this folder, grouped by the roadmap category of the item i
 | [0779](0779-f875-registration-a-simulation-milestone-for-the-structure-and-vibration-of-a-fan-rotor.md) | F-875 registration: a simulation milestone for the structure and vibration of a fan rotor | REGISTERED | 2026-11-23 | 1 | F-875 | done |
 | [0782](0782-f856-registration-udf-interpreter-wasmi-1x.md) | F-856 registration: the UDF interpreter from wasmi 0.31 to wasmi 1.1.0 (the minimum Rust read first, the port of `udf.rs`, and the checks of the fuel limit, the memory limit and the refusal of imports) | REGISTERED | 2026-11-23 | 1 | F-856 | done |
 | [0796](0796-f886-registration-three-formulas-read-against-their-open-sources.md) | F-886 registration: three formulas recorded from memory, read against their open sources | REGISTERED | 2026-11-25 | 2 | F-886 | done |
+| [0810](0810-f885-registration-the-fixed-points-of-the-relaxed-and-unrelaxed-outer-iterations.md) | F-885 registration: why the relaxed and the unrelaxed outer iterations of a pimple step have different fixed points | REGISTERED | 2026-11-26 | 1 | F-885 | partial |
 
 ## Records with no item in the file name (260)
 
