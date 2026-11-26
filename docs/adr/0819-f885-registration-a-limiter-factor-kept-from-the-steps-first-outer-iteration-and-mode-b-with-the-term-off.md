@@ -453,3 +453,8 @@ For the lead, the note entry replaces the one of addendum 1:
 > Note entry: ADR 0819, 2026-11-26, opt-in and diagnosis done, item partial: an opt-in that keeps each component's Barth-Jespersen factor of the step's first outer iteration (outer_frozen_limiter, default off, baseline hashes unchanged) removes the fan's period-2 cycle at c11837 on 20 steps of H(dt) (factor change 0, q 2.25 against 0.005, mode A all ruled out) and gives the same steady cavity answer (u 8e-13, p 1e-12 relative), but the loop still stalls (C 0.0143 against 1e-2) with the slow mode at c6245; without the limiter, turning ADR 0811's term off leaves the slow factor as it was at alpha_u 0.9, 0.7, 0.5 (0.854, 0.871, 0.893 against 0.854, 0.873, 0.892): named HC2, the term takes no part; seven of seven mutations caught (N5 by the test of amendment 1); held by crates/rcfd-api/tests/f885_frozen_limiter.rs and docs/investigations/f885-frozen-limiter.
 
 The status (partial) and the gap entry of addendum 1 are unchanged. The proposal file carries the new note.
+
+## Answers of the maintainer (2026-11-26), written by the lead
+
+1. Option (a): a diagnosis of the slow mode that remains, ADR 0820; taken by the lead on the maintainer's standing instruction of 2026-11-26 (go with the recommended option always).
+2. Option (a): the amendment of a gate test with a limiter in which the gradient changes, carried out on this branch (amendment 1, addendum 3) before the merge; taken by the lead on the maintainer's standing instruction of 2026-11-26 (go with the recommended option always).
