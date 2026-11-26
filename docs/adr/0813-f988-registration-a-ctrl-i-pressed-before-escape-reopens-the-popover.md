@@ -218,3 +218,74 @@ touch; the committed patch `provenance-escape-f988.spec.mutation.patch` still ap
 `showNow`). The corrected run script stops at a failed build or a failed patch. Then R1 (10 runs), R2 (5), M1 and M2
 (3 each), R3 and R4 are made as registered, once each, on the corrected tree. No row, limit, rule or expected catch
 changes.
+
+## Addendum 4: results (2026-11-26)
+
+Written by Claude Opus 5.5 (`claude-opus-5-5`). Commits after the registration (1ab197d5): 29c37832 (amendment 1),
+ea5153aa (V and KK2), 696ba750 (amendment 2), cf74214c (M1 committed), 9bf318e1 (amendment 3), efab654e (V's type). Every
+run with `CARGO_TARGET_DIR`, `RCFD_BIN`, `RCFD_MCP_BIN` and `RCFD_RUNNER_BIN` on the scratch build of this tree's
+engine (with `f447_bench`), Studio tests one at a time, the load recorded before each run (other agents' cargo
+processes ran throughout: CPU 51 to 100 per cent, about 22 GB free). Logs in the scratch folder (`k.out`, `v.out`,
+`v2.out` and the logs they name).
+
+**K, the control, on e7d40a2c** (10 runs, CPU 67 to 97 per cent):
+
+| Run | KR KK | Class | Escape (ms), focus in the popover | `.pv-pop` removed, added again (ms) | Kf cell, row |
+|---|---|---|---|---|---|
+| 1 | failed at the block's `shut` | KA | 88, yes | 95, 107 | reopened, reopened |
+| 2 | failed at `shut` | KA | 83, yes | 91, 102 | reopened, reopened |
+| 3 | failed at `shut` | KA | 81, yes | 87, 97 | reopened, reopened |
+| 4 | failed at the next line (`toBeFocused`: `shut`'s retry saw the 14 ms with no popover) | KC (trace as KA: 80, yes; 86, 100) | | | reopened, reopened |
+| 5 | failed at `shut` | KA | 85, yes | 91, 102 | reopened, reopened |
+| 6, 8, 10 | passed | | | | reopened, reopened |
+| 7 | failed at `shut` | KA | 84, yes | 90, 101 | reopened, reopened |
+| 9 | failed at `shut` | KA | 83, yes | 91, 102 | reopened, reopened |
+
+7 of 10 KA, 1 KC, no KB; Kf reopened in 10 of 10 on the cell and on the row. Outcome **K-A**: H1 holds, H2 does not;
+the late second Ctrl+I's request opens the popover again 10 to 15 ms after Escape closed it. V was written.
+
+**Not runs of R1 (amendment 3):** six launches on cf74214c, whose build had failed, each `ENOENT ... out/packaged.json`
+at the first case; no Studio ran. Not counted.
+
+| Row | Check | Limit | Measured | Met |
+|---|---|---|---|---|
+| R1 | `provenance-f828.spec.ts` alone, efab654e, 10 runs | 10 of 10, 0 failed, 6 passed each | 9 of 10: runs 1 to 9 passed 6 of 6 (KR KK in each); run 10 failed KH (line 739, `byKeys` on a home segment, at `shut`: `.pv-pop` 1, expected 0), KR KK passed | **no** |
+| R2 | `provenance-escape-f988.spec.ts` (KK2) alone, 5 runs | 5 of 5, 0 failed | 5 of 5 (5.3 s to 6.1 s) | yes |
+| R3 | `npm test`, once | 0 failed | 880 passed, **1 failed**, 4 skipped, 5 not run (14.9 min, CPU 99 per cent): `run-control.spec.ts:268`, `project.cancel_run` engine answer to the renderer 21.4 ms, limit 20 (P2); every provenance case passed (14) | **no** |
+| R4 | `npm run typecheck` | exit 0 | exit 0 | yes |
+| R5, R6, R7 | `docs_site`, `roadmap_proposals.py check`, `process_report.py --check` | as registered | run after this addendum is committed; in the report | |
+
+| Mutation | What | Caught by | Runs caught |
+|---|---|---|---|
+| M1 (committed) | V's test without its return (`void 0`) | KK2, (a) the cell: "residual of u: a popover open after Escape" | 3 of 3 |
+| M2 | V's listener on `document` | KK2, (a) the cell | 3 of 3 |
+
+**R1's miss, diagnosed from the code (no control was run of it):** `byKeys` presses Ctrl+I, waits for a popover to be
+visible (the one already open passes at once) and two frames, and presses again while the first request has not run
+(its deferral is two frames and a task). Two requests are then in flight, and V keeps one slot: the first request's
+`showNow` takes and clears the second key's record, so the second request, run after `shut`'s Escape, finds no record
+and opens a number again. The same cause as H1, with two keys in flight; V covers one. KR KK's own block has one key
+in flight and passed in 10 of 10. R3's miss is a latency limit of a run-control case under a CPU load of 99 per cent,
+in code this work did not touch; not diagnosed here.
+
+Deviations: amendments 1 to 3 (the control's focus test, M1's form, V's type); the six launches without a build.
+Not run: a control of R1's miss; R1 and R3 again (each run is made once).
+
+Actual size: partial; 1 (a remedy of R1's miss, under F-988 by rule 13); 4 (K, R1 and R2, M1 and M2, R3); 0; about
+115 000 bytes read.
+
+Decision by the registered rule: **partial**. K gave K-A, M1 and M2 were caught in 3 of 3, R2 and R4 held; R1 (9 of 10)
+and R3 (1 failed) missed.
+
+### Open questions for the maintainer
+
+None of scope. The remedy of R1's miss is proposed below as a registration under F-988 (rule 13), as no acceptance
+clause of its own is added.
+
+### For the lead: roadmap entries
+
+> Status: partial.
+
+> Note: ADR 0813, 2026-11-26, partial: KR KK's failure diagnosed by a traced control on main (7 of 10 runs the popover reopened 10 to 15 ms after Escape by the late second Ctrl+I's deferred request); remedied in the provenance registry (a key pressed while a popover was open is spent when it closes) with KK2 and its mutation caught 3 of 3; provenance-f828 alone 9 of 10 (KH's byKeys, two keys in flight), npm test 1 failed (run-control P2 latency, 21.4 ms against 20).
+
+> Gap: provenance-f828.spec.ts alone passed 9 of 10, not 10 of 10: KH's byKeys can have two Ctrl+I requests in flight, and the registry's one slot for the pressed key guards only the first, so the late second still reopens a number after Escape; npm test had 1 failure (run-control.spec.ts:268, P2 latency 21.4 ms against 20 ms, at a CPU load of 99 per cent).
