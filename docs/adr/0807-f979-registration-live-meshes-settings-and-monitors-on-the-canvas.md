@@ -336,3 +336,8 @@ every mutation was caught).
 > Follow-ups: none.
 
 The same entries are `docs/roadmap/proposals/0807-F-979.json`.
+
+## Answers of the maintainer (2026-11-26), written by the lead
+
+1. show_view's description: the lead changes it and re-records the tool list, as F-987, its own merge; taken by the lead on the maintainer's standing instruction of 2026-11-26 (go with the recommended option always).
+2. Plot and field panels that follow a case's newest run and a live run's snapshot: an item of their own after F-984, F-986; taken by the lead on the maintainer's standing instruction of 2026-11-26 (go with the recommended option always).

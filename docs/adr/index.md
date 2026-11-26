@@ -548,7 +548,7 @@ One row per record of this folder, grouped by the roadmap category of the item i
 | [0790](0790-f893-registration-run-control-pause-and-orphan.md) | F-893 registration: run-control.spec.ts:320, which misses the pause request in some whole runs, and the rcfd run solver a run-control test leaves running (the hypotheses of each cause, the recorded runs that tell them apart, the fix, the consecutive runs, the whole runs and the mutation) | REGISTERED | 2026-11-24 | 1 | F-893 | done |
 | [0795](0795-f828-registration-the-numbers-that-still-have-no-provenance.md) | F-828 registration: the Studio's numbers that still have no provenance | REGISTERED | 2026-11-25 | 1 | F-828 | partial |
 | [0805](0805-f976-registration-a-view-specification-and-show-view.md) | F-976 registration: a view specification, `show_view`, and the open Studio that renders it | REGISTERED | 2026-11-26 | 1 | F-976 | done |
-| [0807](0807-f979-registration-live-meshes-settings-and-monitors-on-the-canvas.md) | F-979 registration: meshes, settings and monitors shown live on Claude's canvas | REGISTERED | 2026-11-26 | 1 | F-979 | todo |
+| [0807](0807-f979-registration-live-meshes-settings-and-monitors-on-the-canvas.md) | F-979 registration: meshes, settings and monitors shown live on Claude's canvas | REGISTERED | 2026-11-26 | 1 | F-979 | done |
 
 ## Retired: the hand-navigated Studio (1)
 
