@@ -392,3 +392,29 @@ Written 2026-11-26, after addendum 1 (b53e5971), from the run at that commit (sc
 
 P is met for the cargo checks, with the fmt check made by `rustfmt` in place of `cargo fmt` (a deviation). The decision of
 addendum 1 stands: partial for this registration (N5 not caught).
+
+## Amendment 1 (2026-11-26): a gate test for N5, written before its code
+
+The lead's answer of 2026-11-26 to question 2 of addendum 1 takes option (a), on the maintainer's standing instruction of
+2026-11-26 (go with the recommended option always): a gate test with a limiter in which the gradient changes, so that N5
+(the least-squares gradient of the step's first outer iteration kept as well) is caught. Nothing above is changed; T2 and
+its result stand, and N5 against T2 stays recorded as not caught.
+
+**T4, the opt-in with a limiter set and a scheme that forms a gradient but no factor.** The cavity KC0 of ADR 0815
+(`box_2d(8, 8, 1, 1)`, lid `(1, 0, 0)`, `pimple(0.01, 20)`, BDF2, `dt` 0.05, 3 steps from rest, the record and the switch
+on) with `convection = Quick` (it needs the cell gradient, `ConvScheme::needs_gradient`) and
+`linear_upwind_limiter = BarthJespersen`. The step forms the least-squares gradient anew in every outer iteration and
+forms no limiter factor (the factor is formed only with linear upwind, section 1), so the opt-in has nothing to keep. The
+check: the opt-in on against off, `u`, `p`, flux and the record of `d_k`, **equal bits**. Source: `docs/process/tolerances.md`,
+"Bit-identity of default output" (the opt-in must not act where no factor is formed, section 1). Non-vacuity: with the
+opt-in off, `d_2 > 0` in each of the three steps (the iterate, and so the gradient, changes between outer iterations); if
+not, T4 does not decide. Kind: unchanged default output. Estimate: equal. Test: `f885_fl_read_only_with_a_gradient` in
+`crates/rcfd-api/tests/f885_frozen_limiter.rs`.
+
+N5 is run again, unchanged, on a scratch copy of the full commit that adds T4, against T4; it must be caught by T4. The
+decision rule of the registration stands, with N5's row read against T4: done for this registration if T4 is met and N5
+is caught by it, the other rows and mutations as in addendum 1. The new test and the named F-885 test files
+(`f885_two_outer_modes`, `f885_outer_stall`, `f885_alpha_free_face_flux`, `f885_outer_fixed_points`,
+`f885_check_h_outer_record`) are run once after the code, with `cargo fmt` (or `rustfmt --check` where `cargo fmt -p`
+refuses, addendum 2), `cargo clippy -p rcfd-api --all-targets -- -D warnings`, `docs_site`, the proposal check and the
+process report. The results go in a further addendum (addendum 1 is not edited, rule 18).
