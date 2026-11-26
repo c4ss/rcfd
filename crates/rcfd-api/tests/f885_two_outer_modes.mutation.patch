@@ -1,0 +1,14 @@
+# expect-fail: cargo test -p rcfd-api --release --test f885_two_outer_modes f885_tm_probe_two_routes
+diff --git a/crates/rcfd-fv/src/pimple.rs b/crates/rcfd-fv/src/pimple.rs
+index 5e3535ae..01c5cd74 100644
+--- a/crates/rcfd-fv/src/pimple.rs
++++ b/crates/rcfd-fv/src/pimple.rs
+@@ -2211,7 +2211,7 @@ impl PimpleSolver {
+                         rot.add_magnitudes(&mut sums, k);
+                     }
+                     for ((c, _, _), pr) in probe_topo.iter().zip(probe_now.iter_mut()) {
+-                        pr.diag[k] = m.a.diag[*c];
++                        pr.diag[k] = m.a.diag[*c].max(sums[*c]) / alpha_u;
+                         pr.off_sum[k] = sums[*c];
+                     }
+                 }
