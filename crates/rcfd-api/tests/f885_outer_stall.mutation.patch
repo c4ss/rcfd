@@ -1,0 +1,14 @@
+# expect-fail: cargo test -p rcfd-api --release --test f885_outer_stall f885_os_freeze_two_routes
+diff --git a/crates/rcfd-fv/src/pimple.rs b/crates/rcfd-fv/src/pimple.rs
+index 8504b6ed..4eda73c7 100644
+--- a/crates/rcfd-fv/src/pimple.rs
++++ b/crates/rcfd-fv/src/pimple.rs
+@@ -1854,7 +1854,7 @@ impl PimpleSolver {
+             if let Some(h) = hook.as_mut() {
+                 let up = h(&self.u, &self.phi);
+                 self.source_force = up.source_force;
+-                if s.outer_freeze_source {
++                if false && s.outer_freeze_source {
+                     // F-885 (ADR 0815, opt-in): after the step's first outer iteration its source is kept
+                     if outer == 0 {
+                         frozen_source = Some(self.source_force.clone());
