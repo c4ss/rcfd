@@ -1,0 +1,14 @@
+# expect-fail: cargo test --release -p rcfd-mcp --test canvas_layout_f977
+diff --git a/crates/rcfd-workspace/src/view.rs b/crates/rcfd-workspace/src/view.rs
+index 15eda54f..869e8749 100644
+--- a/crates/rcfd-workspace/src/view.rs
++++ b/crates/rcfd-workspace/src/view.rs
+@@ -689,7 +689,7 @@ pub fn flow_category(case: &Case) -> Category {
+             return category("multiphase", format!("{path} = true"));
+         }
+     }
+-    for path in ["energy.enabled", "phase_change.enabled"] {
++    for path in ["phase_change.enabled"] {
+         if is_true(case, path) {
+             return category("heat_transfer", format!("{path} = true"));
+         }
