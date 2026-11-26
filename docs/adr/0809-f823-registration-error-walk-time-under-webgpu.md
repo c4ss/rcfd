@@ -171,3 +171,54 @@ responsiveness spec's limits are the Studio's checks of the renderer's main thre
 ## Open questions for the maintainer
 
 None at registration. Any question of scope the control or the runs raise is listed in an addendum, not decided here.
+
+## Amendment 1 (2026-11-26): the controls' results; H does not hold, the time is the engine's; no code change
+
+Written and committed after the controls T and T2 and before any registered run. Nothing above is changed. Both were made
+once, in the container on a `git archive` copy of b1e2b376 with the probe copy (scratch folder: `T-overlay/`, `T/`, `T2/`,
+`T.log`, `T2.log`; host CPU load sampled every 30 s in `T-hostload.log` and `T2-hostload.log`).
+
+### Control T (the file alone, six runs)
+
+| Run | Arm | loadavg before | D (ms) | I | F | s4 end (ms) | s10 end (ms) | other failures |
+|---|---|---|---|---|---|---|---|---|
+| 1 | A | 8.93 | 1,053 | false | 0.000 | 1,283 | 37,265 | probe 9 |
+| 2 | B | 5.43 | 49,485 | false | 0.000 | 49,691 | 52,244 | 1201 LOCK_BUSY ("Failed to save" not within 30 s); probe 9 not run |
+| 3 | A | 3.49 | 45,536 | true | 0.004 | 45,851 | 47,613 | probe 9 |
+| 4 | B | 2.91 | 31,200 | true | 0.002 | 31,922 | 33,334 | probe 9 |
+| 5 | A | 3.94 | 43,571 | true | 0.002 | 43,888 | 46,412 | probe 9 |
+| 6 | B | 5.13 | 39,489 | true | 0.003 | 39,819 | 41,517 | probe 9 |
+
+Host CPU over T: 57 % to 100 % (the lead's runs; median about 90 %). Median D of A 43,571 ms, of B 39,489 ms; ratio 1.10, under
+1.5: **T-N** by the rule, so T2 was made. The ninth probe test failed in every run in its own `openCase` ("Edit
+cases/cavity-re100.toml" not visible: the test before it leaves the Runs tab open), a defect of the probe; it gave no number.
+
+### Control T2 (the whole Linux suite, arm A, once)
+
+The 1004 test: D 40,518 ms, I true, F 0.002, the longest round trip 81 ms; the test passed in 42.1 s. By the rule: not T-H.
+**So no code change; the registered runs are made on the code as it is.** R1, C1 and C2 are not made.
+
+### What the samples and the code show (H is wrong)
+
+In every run but 1 the samples show the page free (F at most 0.004; round trips at most 81 ms) and the preview's call
+pending (`aria-busy` true) from about 1 s to the refusal; where the intermediate 1500 × 32 mesh is shown (runs 3 to 6, T2)
+it is drawn within 0.3 s of its reply on either back end. The time is not the renderer's. From the code: the case editor's
+estimate line asks `case.facts` again after every settings change (`src/renderer/case/estimate.tsx` lines 16 to 27);
+`case.facts` builds the whole mesh before its `max_cells` check (`crates/rcfd-api/src/facts.rs` lines 384 to 386), with
+`ny` 1500 a mesh of 2,250,000 cells; and the service answers one connection's requests one after another
+(`serve_stream`, `crates/rcfd-api/src/service.rs` line 1916), the Studio's dispatcher being one connection. So the
+preview's refusal waits behind `case.facts` building a mesh of 2.25 million cells, on WebGL 2 as on WebGPU. In run 1 the
+preview's call went first (the refusal at 0.84 s) and the restore's preview waited instead (s10, 35.5 s); in run 2 the save
+of the next test waited past its 30 s. ADR 0804's reading (WebGPU on SwiftShader) is not borne out: the 28.7 s, 47.3 s and
+over 60 s it saw are the time of that build on a shared, loaded machine. R1 would not remove it: `mesh.nx` 100000 gives
+`case.facts` 3,200,000 cells to build. This is the case T-X describes, met inside T-N; the registered rule is followed as
+written.
+
+### Consequences, stated before the runs
+
+- The registered runs (L, R7l, W, R7w, V1, A1, DS, P1) are made on the commit of this amendment. A1's limit is this ADR and
+  the proposal file only. E1 and E2 are read from L and W as registered; a miss is recorded as a miss.
+- ME is made as registered on a Windows scratch copy (the patch applied to a copy, not committed: no Studio file changes,
+  so rule 16 asks for no committed patch); it shows whether the unchanged test catches the mutation.
+- The remedy is in the engine or in the Studio's estimate line, not in the files this brief owns: an open question of scope
+  (addendum).
