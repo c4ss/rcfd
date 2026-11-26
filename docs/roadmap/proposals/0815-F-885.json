@@ -1,0 +1,9 @@
+{
+  "form": 1,
+  "adr": "0815",
+  "item": "F-885",
+  "base": "3b6cc7cc70b48e4bb564d6e5791041fde9ec3eb7",
+  "status": "partial",
+  "note": "ADR 0815, 2026-11-26, diagnosis done, item partial: controls of the fan's relaxed outer loop on 20 steps of H(dt) with the switch of ADR 0811 and 20 outer iterations rule out the turbulence sweep (viscosity frozen within the step), the rotating frame's explicit source (frozen), the Barth-Jespersen limiter (off), the linear-solver tolerances (four orders tighter) and the lagged rotational seam (implicit), alone and all together: every control stalls (C = median d19/d2 0.017 to 0.033 against 1e-2) while the cavity contracts (C 9e-9 to 4e-8); the stall sits at an interior cell (c11837) with a constant change per iteration, and without the limiter a slow mode of about 0.85 per iteration remains elsewhere; held by crates/rcfd-api/tests/f885_outer_stall.rs and docs/investigations/f885-outer-stall, six of six mutations caught.",
+  "gap": "Missing for done: a class by ADR 0183's rule. Check H with the alpha-free face flux (ADR 0811) does not decide because the fan's outer loop does not contract within a step; ADR 0815 ruled out the turbulence sweep, the rotating-frame source, the limiter, the linear tolerances and the rotational seam (all stall, C 0.017 to 0.033). Needs a diagnosis of the non-contracting mode at interior cell c11837 and the slow mode at c6245 (ADR 0815 question 1), or the maintainer's reading of the rule."
+}

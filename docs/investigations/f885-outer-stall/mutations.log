@@ -1,0 +1,67 @@
+=== K0 unmutated
+test f885_os_cavity_contracts ... ok
+test f885_os_fan_controls_record ... ignored, heavy record, ADR 0815: G0 to GA on 20 steps of H(dt) on B2 (13 627 cells, 2 800 outer iterations, minutes): cargo test --release -p rcfd-api --test f885_outer_stall f885_os_fan_controls_record -- --ignored --nocapture
+test f885_os_fan_from_the_committed_record ... ok
+test f885_os_freeze_two_routes ... ok
+test f885_os_freeze_without_hook ... ok
+test f885_os_rules_on_built_records ... ok
+test result: ok. 5 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out; finished in 1.57s
+=== M1 outer_freeze_source not read
+test f885_os_cavity_contracts ... ok
+test f885_os_fan_controls_record ... ignored, heavy record, ADR 0815: G0 to GA on 20 steps of H(dt) on B2 (13 627 cells, 2 800 outer iterations, minutes): cargo test --release -p rcfd-api --test f885_outer_stall f885_os_fan_controls_record -- --ignored --nocapture
+test f885_os_fan_from_the_committed_record ... ok
+test f885_os_freeze_two_routes ... FAILED
+test f885_os_freeze_without_hook ... ok
+test f885_os_rules_on_built_records ... ok
+thread 'f885_os_freeze_two_routes' (65020) panicked at crates\rcfd-api\tests\f885_outer_stall.rs:496:5:
+missed: ["T1 source", "T2 source: 0"]
+test result: FAILED. 4 passed; 1 failed; 1 ignored; 0 measured; 0 filtered out; finished in 0.62s
+=== M2 outer_freeze_viscosity not read
+test f885_os_cavity_contracts ... ok
+test f885_os_fan_controls_record ... ignored, heavy record, ADR 0815: G0 to GA on 20 steps of H(dt) on B2 (13 627 cells, 2 800 outer iterations, minutes): cargo test --release -p rcfd-api --test f885_outer_stall f885_os_fan_controls_record -- --ignored --nocapture
+test f885_os_fan_from_the_committed_record ... ok
+test f885_os_freeze_two_routes ... FAILED
+test f885_os_freeze_without_hook ... ok
+test f885_os_rules_on_built_records ... ok
+thread 'f885_os_freeze_two_routes' (40500) panicked at crates\rcfd-api\tests\f885_outer_stall.rs:496:5:
+missed: ["T1 viscosity", "T2 viscosity: 0"]
+test result: FAILED. 4 passed; 1 failed; 1 ignored; 0 measured; 0 filtered out; finished in 0.12s
+=== M3 both freezes always on
+test f885_os_cavity_contracts ... ok
+test f885_os_fan_controls_record ... ignored, heavy record, ADR 0815: G0 to GA on 20 steps of H(dt) on B2 (13 627 cells, 2 800 outer iterations, minutes): cargo test --release -p rcfd-api --test f885_outer_stall f885_os_fan_controls_record -- --ignored --nocapture
+test f885_os_fan_from_the_committed_record ... ok
+test f885_os_freeze_two_routes ... FAILED
+test f885_os_freeze_without_hook ... ok
+test f885_os_rules_on_built_records ... ok
+thread 'f885_os_freeze_two_routes' (17356) panicked at crates\rcfd-api\tests\f885_outer_stall.rs:496:5:
+missed: ["T2 source: 0", "T2 viscosity: 0"]
+test result: FAILED. 4 passed; 1 failed; 1 ignored; 0 measured; 0 filtered out; finished in 0.12s
+=== M4 viscosity freeze also in the first outer iteration
+test f885_os_cavity_contracts ... ok
+test f885_os_fan_controls_record ... ignored, heavy record, ADR 0815: G0 to GA on 20 steps of H(dt) on B2 (13 627 cells, 2 800 outer iterations, minutes): cargo test --release -p rcfd-api --test f885_outer_stall f885_os_fan_controls_record -- --ignored --nocapture
+test f885_os_fan_from_the_committed_record ... ok
+test f885_os_freeze_two_routes ... FAILED
+test f885_os_freeze_without_hook ... ok
+test f885_os_rules_on_built_records ... ok
+thread 'f885_os_freeze_two_routes' (60616) panicked at crates\rcfd-api\tests\f885_outer_stall.rs:496:5:
+missed: ["T1 viscosity"]
+test result: FAILED. 4 passed; 1 failed; 1 ignored; 0 measured; 0 filtered out; finished in 0.14s
+=== M5 CONVERGES at C <= 1e-4
+test f885_os_cavity_contracts ... ok
+test f885_os_fan_controls_record ... ignored, heavy record, ADR 0815: G0 to GA on 20 steps of H(dt) on B2 (13 627 cells, 2 800 outer iterations, minutes): cargo test --release -p rcfd-api --test f885_outer_stall f885_os_fan_controls_record -- --ignored --nocapture
+test f885_os_fan_from_the_committed_record ... ok
+test f885_os_freeze_two_routes ... ok
+test f885_os_freeze_without_hook ... ok
+test f885_os_rules_on_built_records ... FAILED
+thread 'f885_os_rules_on_built_records' (60204) panicked at crates\rcfd-api\tests\f885_outer_stall.rs:318:5:
+test result: FAILED. 4 passed; 1 failed; 1 ignored; 0 measured; 0 filtered out; finished in 0.13s
+=== M6 fan_controls.csv cut to its first half
+test f885_os_cavity_contracts ... ok
+test f885_os_fan_controls_record ... ignored, heavy record, ADR 0815: G0 to GA on 20 steps of H(dt) on B2 (13 627 cells, 2 800 outer iterations, minutes): cargo test --release -p rcfd-api --test f885_outer_stall f885_os_fan_controls_record -- --ignored --nocapture
+test f885_os_fan_from_the_committed_record ... FAILED
+test f885_os_freeze_two_routes ... ok
+test f885_os_freeze_without_hook ... ok
+test f885_os_rules_on_built_records ... ok
+thread 'f885_os_fan_from_the_committed_record' (55096) panicked at crates\rcfd-api\tests\f885_outer_stall.rs:819:5:
+test result: FAILED. 4 passed; 1 failed; 1 ignored; 0 measured; 0 filtered out; finished in 0.14s
+=== done
