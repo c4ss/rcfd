@@ -186,3 +186,14 @@ focus are not inside `.pv-host` (the root's host is empty but for the portal's p
 says "inside `.pv-host`", by "inside the popover": `document.activeElement.closest('.pv-host, .pv-pop')` is not null,
 the selector `POPOVER` of `src/renderer/provenance/registry.ts`. Nothing else of K, of its rule, of V, of the rows or of
 the mutations changes.
+
+## Addendum 2: amendment 2, the form of M1 (2026-11-26)
+
+REGISTERED 2026-11-26, written after V's commit ea5153aa and before any run of a mutation, of R1 or of R2, committed
+alone. Written by Claude Opus 5.5 (`claude-opus-5-5`).
+
+A defect of M1's set-up: removing V's `if` line from `showNow` leaves the constant `pressed` unread, and
+`tsconfig.json` has `noUnusedLocals`, so `npm run build` (its `typecheck`) would refuse the mutant and the expect-fail
+command would fail at the build, not at KK2. M1 is instead: the `return true` of V's test replaced by `void 0` (the
+test stays, its outcome does nothing), which builds and withholds V's effect in the same way. M2, the rows, the rule and
+the expected catches are unchanged. The committed patch is M1 in this form.
