@@ -1,0 +1,220 @@
+# ADR 0808: F-981 registration: retire G15's coverage map and the learner's first path
+
+Status: **REGISTERED 2026-11-26, written before any code of F-981 and before any run of its checks.** Before this text no
+Studio or test file of F-981 was changed and no check was run. What was done: reading (below), searches of the source
+tree, and, on the unchanged tree, a release build of `rcfd`, `rcfd-mcp` and `rcfd-runner` into the scratch target
+(`CARGO_TARGET_DIR=E:/projects/cfd/w49i-work/f981-retire-hand-navigation-scratch/target`) and `npm ci` in
+`apps/studio-web` (neither is a check). Results go in addenda at the end; nothing above them is changed afterwards.
+Written by Claude Opus 5.5 (`claude-opus-5-5`), as a background agent of the lead.
+
+It answers the brief `docs/adr/briefs/f981-retire-hand-navigation.md` ([the file](briefs/f981-retire-hand-navigation.md))
+and follows [docs/process/agent-rules.md](../process/agent-rules.md), version 5. Branch `f981-retire-hand-navigation`
+from main 5bf77c58, scratch `E:/projects/cfd/w49i-work/f981-retire-hand-navigation-scratch`. The decision it carries out
+is the maintainer's answer 1 of 2026-11-26 in [ADR 0803](0803-the-studio-as-claudes-canvas-record.md): the views stay
+and hand navigation goes; G15 and its coverage test are retired with the menus, editors and navigation built for it.
+
+## What is asked
+
+Roadmap item F-981 (deps F-976), the binding acceptance, read with a script:
+
+> Every limit not stated here is registered in the ADR before the run. The coverage test of guardrail G15 and the Studio's hand-only surfaces (menus, editors and navigation whose only purpose is to reach a capability by hand), each listed in the registration with its file, are removed or retired; every test retired is named in the ADR with its reason (the maintainer's answer of 2026-11-26, ADR 0803). The views the canvas uses and their tests stay and pass; npm test passes.
+
+Clauses: **c1** every limit registered here before the run; **c2** the coverage test of G15 and the hand-only surfaces,
+each listed with its file, removed or retired; **c3** every retired test named with its reason; **c4** the views the
+canvas uses and their tests stay and pass; **c5** `npm test` passes. The brief adds the rows: the canvas's e2e test and
+the views' tests pass; the inventory test against the engine still passes; the coverage report no longer requires a UI
+path and the inventory still lists every capability; the Studio opens a project and shows a view by `show_view`.
+
+## What was read
+
+`AGENTS.md`, `docs/process/agent-rules.md` (version 5) and the brief, whole; [ADR 0803](0803-the-studio-as-claudes-canvas-record.md)
+whole; [docs/studio-guardrails.md](../studio-guardrails.md) whole (G15 and G19 retired, G16, G20, G23); the head and the
+findings of [ADR 0805](0805-f976-registration-a-view-specification-and-show-view.md) (style, and that the inventory holds
+`mcp:show_view` and `mcp:read_view` after the lead's re-record); the F-981 entry of `docs/roadmap.json` (by script). Of
+`apps/studio-web`: `tests/unit/capabilities.spec.ts` whole; `tests/support/capabilities.ts` (outline, the coverage and
+report part whole); `scripts/write-capabilities.mjs` whole; the head of `capabilities/coverage.json` and of
+`docs/studio-coverage.md`; `src/renderer/main.tsx` whole (the routes); of `src/renderer/project/ProjectHome.tsx` the
+imports, `NoProject` and the places the first path is drawn; `src/renderer/canvas/Canvas.tsx` (head and imports); of
+`src/renderer/first/FirstPath.tsx` the head, the exports, `Explain` and `NotAProjectYet`; of `first/first.css` the rules
+of `.fp`, `.fp-title`, `.fp-actions`, `.fp-explain*`, `.fp--folder`, `.fp-missing`, `.fp-next`; `tests/e2e/canvas-f976.spec.ts`
+whole; of `tests/e2e/first-path.spec.ts` the head, the helpers and the cases 1, 2 and 6; of `tests/unit/first-path.spec.ts`
+the head, the imports and the G16 block; the first-path parts of `tests/e2e/a11y.spec.ts`, `tests/e2e/word-budget.spec.ts`,
+`src/shared/word-budget.ts`, `tests/e2e/provenance-f828.spec.ts` (KF), `tests/unit/provenance.spec.ts` and
+`tests/unit/help-engine.spec.ts`; of `scripts/process_report.py` its `AREA_PAGES`; `playwright.config.ts`,
+`tests/support/rcfd.ts` and `tests/support/project.ts` (where the binaries are found). Bytes read: about 230 000.
+
+## Findings of the reading (before any code)
+
+1. **The coverage test of G15** is the test "every capability has a UI path or a recorded, dated exemption that names a
+   roadmap item (G15)" of `tests/unit/capabilities.spec.ts`, with its checker `checkCoverage` in
+   `tests/support/capabilities.ts`, the hand-kept map `capabilities/coverage.json` (1 375 capabilities, 1 072 with a UI
+   path, 303 exempted) and the UI and exemption columns of the generated page [docs/studio-coverage.md](../studio-coverage.md).
+   The inventory itself (`capabilities/inventory.json`, F-824) is read from the engine by `readEngine` and is independent
+   of the map; `scripts/process_report.py` names the page for the line "Studio desktop app" (by path only), so the page
+   stays, as the inventory's report.
+2. **The canvas reuses** (`Canvas.tsx`): the project home's `CasesTable`, `MeshesTable`, `RunsTable` and `changedAt`; the
+   run workspace (`RunWorkspace`, `useSeriesMap` of the time panel); `FieldViewport`; `PlotFrame` and the plot styles;
+   `runRows` of runs; the data door. Its e2e test opens a project through the empty home's "Open project folder…" and
+   checks the canvas against the open project's view (`.ph-open`). None of these is hand-only.
+3. **The learner's first path** (`src/renderer/first/`, F-813; ADR 0803 retired F-813 as "a learner's first path through
+   the menus") has three parts in one file: `FirstPathIntro` (the four stations on the empty home), `FirstPath` (the
+   make, run, watch and result steps on an empty project) and `NotAProjectYet` (the notice for a folder the engine refused
+   as no project, with "Make a project here", the engine's `rcfd project init`, F-835). The first two lead a person by
+   hand through the menus to a first result; the third is an exception notice (G6, G22) whose button is a named action.
+   The path's run action `first.run_example` lives in `src/shared/actions/first.ts` and is dispatched by run control
+   (`src/main/project/control.ts`); it is a named action of G16 and stays.
+4. **The case editor (`#/case`) and the settings surface (`#/settings`)** are editors, and the settings surface is the
+   "schema-driven surface" G15 asked for. But they carry G18's undo, conflict and close-guard behaviour, and the specs
+   that test it (`undo.spec.ts`, `undo-case.spec.ts`, `undo-session-events.spec.ts`, `close-guard.spec.ts`, `f837.spec.ts`,
+   `case-editor.spec.ts`, `case-file-adr0737.spec.ts`, `settings*.spec.ts`, and parts of `commands.spec.ts`,
+   `theme-surfaces.spec.ts`, `word-budget.spec.ts` and `a11y.spec.ts`), and `error-walk.spec.ts` drives the case editor
+   while F-823 (ADR 0809) registers that walk under WebGPU at the same time. Whether they are hand-only is a question of
+   scope (rule 6): it is left open below, and both stay in this registration.
+5. **The engine binaries** of the main checkout's `target/release` are of 17 and 18 November (without `show_view`), and
+   the tests find them by walking up from the worktree. Every run of this registration therefore sets
+   `CARGO_TARGET_DIR`, `RCFD_BIN` and `RCFD_MCP_BIN` to the scratch build of this branch's engine (no change under
+   `crates/`), so the inventory test against the engine and the canvas test run and are not skipped.
+
+## The hand-only surfaces (removed)
+
+| Id | File | What it does | Why it is hand-only |
+|---|---|---|---|
+| H1 | `apps/studio-web/capabilities/coverage.json` | maps every capability to a UI path or a dated exemption | its only purpose is G15: holding each capability to a path by hand |
+| H1 | `apps/studio-web/tests/support/capabilities.ts`: `checkCoverage`, `CoverageRule`, `CoverageFile`, `Exemption`, `CoverageResult`, `RoadmapItem`, and the UI and exemption parts of `coverageReport` | checks the map and reports UI paths and gaps | the G15 check and its report |
+| H1 | `apps/studio-web/scripts/write-capabilities.mjs`: the reading of the map and its exit 2 | fails the generator on an unmapped capability | the G15 check |
+| H2 | `apps/studio-web/src/renderer/first/FirstPath.tsx` (`FirstPathIntro`, `FirstPath` and their parts), `first/model.ts`, `first/target.ts`, `first/words.ts`, `first/first.css` | the learner's first path through the menus to a first result (F-813) | navigation whose only purpose is to lead a person by hand to `new_case` and `start_run`; F-813 retired by ADR 0803 |
+| H2 | `apps/studio-web/src/renderer/project/ProjectHome.tsx`: the two places that draw `FirstPathIntro` and `FirstPath`, and their import | puts the path on the empty home and an empty project | the entry to H2 |
+| H2 | `apps/studio-web/src/shared/word-budget.ts`: the entries `first-path-intro` and `first-path` (22 and 22 words) | the word budgets of the two removed surfaces | the surfaces are gone; no other budget is changed or raised |
+
+`NotAProjectYet` and its `Explain` toggle move unchanged in behaviour (same text, classes, roles and names) from
+`first/FirstPath.tsx` to a new `src/renderer/project/NotAProject.tsx`, with the CSS rules it uses moved from
+`first/first.css` to a new `src/renderer/project/not-a-project.css`.
+
+## What stays, and why
+
+- The canvas (`src/renderer/canvas/`, F-976; F-979's files) and every view it draws (finding 2): `project/ProjectHome.tsx`
+  (opens a project, hosts the canvas tab, its tables are canvas panels), `workspace/` (run panel, scrub), `field/` (field
+  panel: pan, zoom, pick), `plots/` (plot and monitor panels), `runs/` (run lists as views, run rows; `RunControls` and
+  `Sites` are named actions), `data/`.
+- The short ways to look and their provenance (G23, G17): `provenance/`, the field view's pick and legend, the time panel.
+- The theme and styling: `theme/`, `design/`, `ui/`, `studio-settings/` (the theme setting).
+- Every named action of G16 and G20: `actions/`, `commands/` (the palette), `src/shared/actions/` with `first.run_example`.
+- G18's undo and trash (`history/`, `project/Trash.tsx`), G21's progress (`work/`), the error lines (`help/`).
+- The development galleries `dev/` (G9's benches and G13's view-and-report use them).
+- The inventory of F-824 (`capabilities/inventory.json`, `readEngine`, the canonical-form and engine tests) and the page
+  `docs/studio-coverage.md`, now the inventory's report.
+- `NotAProjectYet` (finding 3, moved), and the case editor and settings surface (finding 4, open question Q1).
+
+## The tests retired or removed (reason: the maintainer's answer 1 of 2026-11-26, ADR 0803, unless said)
+
+Removed, each with its file:
+
+1. `tests/unit/capabilities.spec.ts`: "a full map passes; an id rule wins over a prefix" and "fails on an unmapped
+   capability, a malformed or undated exemption, an unknown item, a whole-kind prefix and a rule that maps nothing" (the
+   describe "the coverage check": the checker of the G15 map); "every capability has a UI path or a recorded, dated
+   exemption that names a roadmap item (G15)" (the coverage test of G15).
+2. `tests/unit/capabilities.spec.ts`: "docs/studio-coverage.md is the report generated from the inventory and the map"
+   becomes "docs/studio-coverage.md is the report generated from the inventory": the same comparison of the committed page
+   with the generator's output, without the map (the generator changes with H1).
+3. `tests/e2e/first-path.spec.ts`, the file: "no project open: the four steps of the path, …", "an empty project: one
+   action, …", "run it, and the first honest result: …" and "the same walk by keyboard only, …" (the first path, H2). Its
+   cases "an empty folder: what is missing and the next step; Make a project here runs the engine's command and opens the
+   project" and "New project… from the command palette, …" test surfaces that stay and move with their steps unchanged to
+   a new `tests/e2e/project-folder.spec.ts`, with the footer's disclaimer check of case 1 (G6), which no other e2e test
+   makes; the Studio is launched in its `beforeAll` instead of in case 1, and the `rcfd serve --ui` that only the path's
+   glossary terms used is not started.
+4. `tests/unit/first-path.spec.ts`: the describes "the step a project is at (read from the engine's lists only)" (six
+   tests) and "the words of the path (G6, G15, G19)" (five tests, among them the tokens check of `first/first.css`) and
+   the imports of `src/renderer/first/`; the describes "first.run_example (G16)" and "the home and a folder that is not a
+   project (nothing written)" stay unchanged, and the head comment says what is left.
+5. `tests/unit/help-engine.spec.ts`: "every precise term of the first path is a term of the engine's glossary" (also
+   G19's retirement) and its import of `first/words.ts`.
+6. `tests/unit/provenance.spec.ts`: in "the numbers of the time panel, the workspace, Runs and the field readout are
+   wrapped in a provenance trigger", the line counting the triggers of `first/FirstPath.tsx` (3) and its comment; the
+   file is removed.
+7. `tests/e2e/provenance-f828.spec.ts`: "KF: the learner's picture: a tick and the scale bar" (drives the first path),
+   and the imports only it used.
+8. `tests/e2e/a11y.spec.ts`: "the first path on a project that holds nothing yet", and `first-path` in the list of "every
+   surface was walked".
+9. `tests/e2e/word-budget.spec.ts`: "the first path on a project that holds nothing yet"; the line counting
+   `first-path-intro` in "the project home with no project open, and the first path's four stations"; the two entries of
+   `ROOTS` (with the two of `WORD_BUDGETS`, H2).
+
+No test is kept as a skipped record: each removed test's subject is removed with it, and the ADR names it here.
+
+## New tests
+
+- **N1** (`tests/unit/capabilities.spec.ts`) "the G15 map is retired: no capabilities/coverage.json, and the generator,
+  the support code and the report name no UI path or exemption".
+- **N2** (`tests/unit/capabilities.spec.ts`) "the report counts every capability of the inventory by kind, and names
+  every service method, MCP tool, CLI command and case section".
+- **N3** (`tests/unit/hand-only-retired.spec.ts`, ADR 0808, F-981) "the first path is retired: its files are gone, no
+  source imports or draws it, and the not-a-project notice is the project home's": the five files of H2 do not exist; no
+  file under `src/` imports from a `first/` folder of the renderer or names `FirstPathIntro`, `FirstPath`, `fp--intro` or
+  `fp--open`; `project/NotAProject.tsx` exports `NotAProjectYet` and `ProjectHome.tsx` imports it from there.
+- **N4** (`tests/e2e/project-folder.spec.ts`, ADR 0808, F-981): the two moved cases of item 3 above.
+
+## Checks
+
+| Row | Clause | Check | Limit | Source of the limit | Estimate | Margin | Kind |
+|---|---|---|---|---|---|---|---|
+| R1 | c5 | `npm test` in `apps/studio-web` (build, package, every unit and e2e spec), against the scratch engine | 0 failed | acceptance of F-981 ("npm test passes") | 0 failed | pass or fail | code verification |
+| R2 | c4 | of R1, `canvas-f976.spec.ts` E1, E2, E3 | 3 of 3 pass, not skipped | acceptance of F-981; brief | 3 of 3 | pass or fail | code verification |
+| R3 | c4 | of R2's E1, the time from `show_view`'s result to the shown view (the Studio opens a project and shows a view by `show_view`) | <= 1.6 s | ADR 0805 D5 (4 periods of `FEED_POLL_MS`), held by the test unchanged | 0.5 s (ADR 0805 measured 0.481 s) | 3.2 | code verification |
+| R4 | c4 | of R1, the views' specs: unit `field-*`, `plots-*`, `workspace`, `compare`, `runs`, `provenance`, `provenance-f828`, `theme`, `mesh-preview`; e2e `field`, `field-derived`, `plots`, `workspace`, `workspace-first-open`, `compare`, `runs`, `provenance`, `provenance-f828`, `theme`, `theme-surfaces`, `idle-frames` | 0 failed | acceptance of F-981 | 0 failed | pass or fail | code verification |
+| R5 | brief | of R1, "the committed inventory is what the engine reports now" | passes, not skipped | brief | pass | pass or fail | code verification |
+| R6 | c2 | of R1, N1, N2 and "the inventory file is in its canonical form" | 3 of 3 pass | brief (the report requires no UI path; the inventory lists every capability) | 3 of 3 | pass or fail | code verification |
+| R7 | c2 | of R1, N3 | passes | acceptance of F-981 (the hand-only surfaces removed) | pass | pass or fail | code verification |
+| R8 | c4 | of R1, N4 (the kept surfaces of the moved cases) | 2 of 2 pass | acceptance of F-981 (views and their tests stay and pass) | 2 of 2 | pass or fail | code verification |
+| R9 | c5 | `npm run typecheck` in `apps/studio-web` | exit 0 | rule 7 of agent-rules.md version 5 | exit 0 | pass or fail | code verification |
+| R10 | c1 | `cargo test -p rcfd-cli --release --test docs_site` | 0 failed | rule 7 (docs touched) | 0 failed | pass or fail | code verification |
+| R11 | c3 | no change under `crates/`, to `docs/roadmap.json`, the ledger, a golden or a baseline table: `git diff --stat 5bf77c58..HEAD -- crates docs/roadmap.json docs/process/ledger.tsv` | empty | rule 3; brief ("no change under crates/") | empty | pass or fail | unchanged default output |
+| R12 | - | `python scripts/roadmap_proposals.py check` | exit 0 | rule 9 | exit 0 | pass or fail | code verification |
+| R13 | - | `python scripts/process_report.py --check` | no failure but a generated file not current | rule 7 | `docs/adr/index.md` not current | pass or fail | code verification |
+
+No crate is touched, so `cargo fmt` and `cargo clippy` have nothing to check (rule 7) and are not run. Each registered
+run is made once.
+
+## Negative control and mutations
+
+On scratch copies (`git archive` of a commit into the scratch folder, with junctions to the worktree's `node_modules`
+and, for M3, its `out/` from R1's build), never in the worktree:
+
+- **NC1**: N3's file run on the base tree 5bf77c58 (with the new spec file added): it must fail (the first path is there).
+- **M1, a retired surface's route left reachable**: a `src/renderer/first/FirstPath.tsx` that exports a `FirstPathIntro`
+  drawing `<section className="fp fp--intro">`, drawn again by `NoProject` of `ProjectHome.tsx`. Expected catch: N3.
+  **Committed** as `apps/studio-web/tests/unit/hand-only-retired.spec.mutation.patch` (rule 16).
+- **M2a, the inventory check dropped**: `readEngine` leaves out the MCP tool lists. Expected catch: "the committed
+  inventory is what the engine reports now".
+- **M2b, the report drops capabilities**: the report leaves out the case keys. Expected catch: "docs/studio-coverage.md
+  is the report generated from the inventory".
+- **M3, the canvas test made to depend on a removed surface**: `canvas-f976.spec.ts`'s `beforeAll` waits for the first
+  path's region "A first result in four steps" before it opens the project. Expected catch: `canvas-f976.spec.ts`
+  (its `beforeAll` fails, E1 to E3 do not pass).
+
+## Size
+
+Size (agent): done; 0; 2; 2; 300000
+
+## Decision rule
+
+Done if every row R1 to R13 holds, NC1 fails as expected, and each of M1, M2a, M2b and M3 is caught; partial otherwise.
+
+## Not covered
+
+- The case editor and the settings surface (Q1) and the help on demand of the surfaces that stay (Q2).
+- `apps/studio-web/README.md` describes the map and the first path; it is not among this brief's files, so it is left
+  for the lead.
+- The main checkout's stale binaries are not rebuilt: they are not this work's.
+
+## Open questions for the maintainer
+
+- **Q1. The case editor (`#/case`, `src/renderer/case/CaseEditorPage.tsx` and its parts) and the settings surface
+  (`#/settings`, `src/renderer/settings/`, and the home's Settings button to it).** Options: (a) retire both in a
+  follow-up item after F-979 and F-823 (ADR 0809) have landed, with G18's undo, conflict and close-guard checks carried by
+  the engine's session and case tools that Claude drives and by a case view on the canvas; (b) keep them as read-only views
+  a view kind can show; (c) keep both as they are. Recommended: (a); it is the maintainer's answer 1 carried through, and
+  waiting for F-979 and F-823 keeps the concurrent items' tests standing. Not taken here: it changes the scope (rule 6).
+- **Q2. The help on demand (Explain toggles, the glossary lines of `help/engine.ts`) in the surfaces that stay, now that
+  G19 is retired.** Options: (a) keep it, as G22's way to say words on demand; (b) remove it in a follow-up. Recommended:
+  (a). Not taken here, for the same reason.
