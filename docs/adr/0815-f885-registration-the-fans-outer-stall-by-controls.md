@@ -357,3 +357,8 @@ The same entries are in `docs/roadmap/proposals/0815-F-885.json` (form 1 of ADR 
 and would be registered under F-885 (rule 13).
 
 Generated pages that this work may leave not current, for the lead (rule 9): `docs/adr/index.md` (ADR 0815 is new).
+
+## Answers of the maintainer (2026-11-26), written by the lead
+
+1. Option (a): a further diagnosis under F-885 (rule 13) of the two modes, ADR 0816; taken by the lead on the maintainer's standing instruction of 2026-11-26 (go with the recommended option always).
+2. Option (a): the two freezes stay opt-in; taken by the lead on the maintainer's standing instruction of 2026-11-26 (go with the recommended option always).
