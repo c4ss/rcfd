@@ -1,0 +1,10 @@
+{
+  "form": 1,
+  "adr": "0808",
+  "item": "F-981",
+  "base": "5bf77c582c05e59a833b4d2a681efc4740806adc",
+  "status": "partial",
+  "note": "ADR 0808, 2026-11-26, partial: G15's coverage map and check and the learner's first path retired (the not-a-project notice moved to the home, the G16 action first.run_example kept), every retired test named; the canvas test passes (show_view shown 0.481 s after the result, limit 1.6 s), the inventory test against the engine passes, 4 of 4 mutations caught; npm test 841 passed, 3 failed (two the stale f447_bench of ADR 0795, one a11y Runs grid case not diagnosed).",
+  "gap": "npm test did not pass: data-routes P12 tiny raw and data.spec open fail on the main checkout's stale f447_bench (as ADR 0795 and 0805 recorded), and a11y.spec \"the Runs view, a run selected from the keyboard\" failed with three grid rows the arrow keys do not reach, not diagnosed (no Runs file changed). Open: Q1 (the case editor and the settings surface) and Q2 (help on demand) of ADR 0808.",
+  "follow_ups": []
+}

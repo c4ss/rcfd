@@ -218,3 +218,67 @@ Done if every row R1 to R13 holds, NC1 fails as expected, and each of M1, M2a, M
 - **Q2. The help on demand (Explain toggles, the glossary lines of `help/engine.ts`) in the surfaces that stay, now that
   G19 is retired.** Options: (a) keep it, as G22's way to say words on demand; (b) remove it in a follow-up. Recommended:
   (a). Not taken here, for the same reason.
+
+## Addendum 1: results (2026-11-26)
+
+Commits after the registration (c1d6abb9): 60a2f8cb (the code and tests as registered), 2c8d03d2 (the committed
+mutation). Every run used `CARGO_TARGET_DIR`, `RCFD_BIN`, `RCFD_MCP_BIN` and `RCFD_RUNNER_BIN` of the scratch build
+(finding 5). While writing, `tsc --noEmit` on the three configurations was run to find unused names (three times, the
+last exit 0); that is compiling, not R9, which was run once afterwards.
+
+| Row | Check | Limit | Measured | Met |
+|---|---|---|---|---|
+| R1 | `npm test` | 0 failed | 841 passed, 3 failed, 35 did not run (12.1 min): `unit/data-routes.spec.ts:94` "P12, tiny raw" (`lengthUnit` `[null, null]` against `[null, "m"]`), `e2e/data.spec.ts:73` "open: both routes describe the same store" (the same), `e2e/a11y.spec.ts:299` "the Runs view, a run selected from the keyboard, …" (three faded rows of the Runs grid the arrow keys do not reach, and the focus not brought back); the 35 are the serial tests after those | **no** |
+| R2 | canvas E1, E2, E3 | 3 of 3 | 3 of 3 passed, none skipped | yes |
+| R3 | E1's time from `show_view` to the shown view | <= 1.6 s | 0.481 s | yes |
+| R4 | the views' specs | 0 failed | 0 failed (none of the three failures is among them) | yes |
+| R5 | inventory against the engine | passes, not skipped | passed | yes |
+| R6 | N1, N2, canonical form | 3 of 3 | 3 of 3 passed | yes |
+| R7 | N3 | passes | passed | yes |
+| R8 | N4 (`project-folder.spec.ts`) | 2 of 2 | 2 of 2 passed, and its footer case | yes |
+| R9 | `npm run typecheck` | exit 0 | exit 0 | yes |
+| R10 | `docs_site` | 0 failed | in Addendum 2 | - |
+| R11 | `git diff --stat 5bf77c58..HEAD -- crates docs/roadmap.json docs/process/ledger.tsv` | empty | empty | yes |
+| R12 | `roadmap_proposals.py check` | exit 0 | in Addendum 2 | - |
+| R13 | `process_report.py --check` | only a generated file not current | in Addendum 2 | - |
+
+Diagnosis of R1. The two data failures are the ones ADR 0795 (row X) and ADR 0805 (row L3) recorded: the tests take an
+`f447_bench` from a `target` folder above the worktree, the main checkout's of 2026-11-16, older than `length_unit`
+(2026-11-17); this work builds no `f447_bench` and touches no data code. The a11y failure is not diagnosed: no file of
+the Runs view or of its grid changed (`git diff --stat 5bf77c58..HEAD -- apps/studio-web/src/renderer/runs` is empty),
+the case runs before every case this work removed from that file, and ADR 0805's run of the same spec passed it. A run
+of the same spec on the base tree was tried as a diagnosis on the scratch copy, but packaging that copy failed (its
+`package:dir` moves Electron out of `node_modules`, which in the copy was a junction to the worktree's; it failed on the
+path before moving anything, and the worktree's Electron was checked to be in place), so the base was not measured. The
+test is not edited, skipped or run again here.
+
+Negative control and mutations, each on its scratch copy:
+
+| Id | What | Caught by | Result |
+|---|---|---|---|
+| NC1 | N3 on the base tree 5bf77c58 | N3 | failed, as it must (`first/FirstPath.tsx` exists) |
+| M1 | a stub `FirstPathIntro` drawn again on the empty home | N3 | caught (committed as `tests/unit/hand-only-retired.spec.mutation.patch`) |
+| M2a | `readEngine` without the MCP tool lists | "the committed inventory is what the engine reports now" | caught (1 failed, 7 passed) |
+| M2b | the report without the case keys | "docs/studio-coverage.md is the report generated from the inventory" | caught (1 failed, 7 passed) |
+| M3 | the canvas test waits for the first path's region before it opens the project | `canvas-f976.spec.ts` | caught (E1 failed in `beforeAll`, E2 and E3 did not run) |
+
+Deviations: none from the registered changes. `cargo fmt` and `cargo clippy`: no crate touched, not run.
+`apps/studio-web/README.md` still describes the map and the first path (not among the brief's files; for the lead).
+
+Actual size: partial; 0; 2 (the release build, `npm test`); 2; about 330 000 bytes read.
+
+Decision by the registered rule: **partial**. R1 missed (3 failed; two diagnosed as the stale `f447_bench` of the main
+checkout, one, the a11y Runs grid, not diagnosed); every other row held, NC1 failed as it must and the four mutations
+were caught.
+
+### Open questions for the maintainer
+
+Q1 and Q2 of the registration stand as written there, with their recommendations ((a) for each).
+
+### For the lead: roadmap entries
+
+> Status: partial.
+
+> Note: ADR 0808, 2026-11-26, partial: G15's coverage map and check and the learner's first path retired (the not-a-project notice moved to the home, the G16 action first.run_example kept), every retired test named; the canvas test passes (show_view shown 0.481 s after the result, limit 1.6 s), the inventory test against the engine passes, 4 of 4 mutations caught; npm test 841 passed, 3 failed (two the stale f447_bench of ADR 0795, one a11y Runs grid case not diagnosed).
+
+> Gap: npm test did not pass: data-routes P12 tiny raw and data.spec open fail on the main checkout's stale f447_bench (as ADR 0795 and 0805 recorded), and a11y.spec "the Runs view, a run selected from the keyboard" failed with three grid rows the arrow keys do not reach, not diagnosed (no Runs file changed). Open: Q1 (the case editor and the settings surface) and Q2 (help on demand) of ADR 0808.
