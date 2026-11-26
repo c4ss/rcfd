@@ -274,3 +274,195 @@ registered run is corrected by an amendment committed before the corrected run.
 
 To be completed in the addendum with options and a recommendation: the remedy the result points to, whether check H can
 be run with it, and any question of scope.
+
+## Addendum 1: results
+
+Written 2026-11-26, after the runs. Commits on the branch, from 05cb93d7: d9ed81fa (this registration, alone), 729e2e8e
+(the opt-ins and the record in `crates/rcfd-fv/src/pimple.rs` and the test file; every registered run was made from it),
+67ae462f (the fan record, the logs, the recorded outcomes `FAN_RECORD`), b472da0c (the committed mutation patch of
+`f885_frozen_limiter` re-based, D1), cdc1e4a2 (rustfmt's layout and two clippy lints of the test file, deviation 3; the
+committed mutation N1), and the commit of this addendum with the mutation log, the rule 7 log and the proposal file.
+Records in `docs/investigations/f885-slow-outer-mode/`: `fan_d.csv`, `fields.csv`, `fan.log`, `cavity.log`,
+`mutations.log`, `rule7.log`.
+
+### The sentence
+
+**Named HD: the deferred correction of linear upwind carries the slow mode.** With the gradient that enters the
+convection kept from the step's first outer iteration, the fan's outer factor falls from 0.834 to 0.359 and `C` from
+0.0143 (STALLS) to 1.1e-8 (CONVERGES). Keeping the convecting flux takes part (0.782) but does not carry it; keeping the
+Laplacian's gradient takes no part (0.833). Before the run I had expected HF; the record does not support that. Without
+the freeze the mode is one real mode (`cos` 0.9998, `rho2` 0.8335 against `rho` 0.8344). One to fourteen cells hold it,
+on a radial line at `z` 0.148 m, `r` 0.219 to 0.250 m (c5631, c6245, c9315, c13101; c13101 has a face on the shroud).
+
+### The fan (each 20 of 20 steps, no stop; 4.9 min in one process)
+
+| Run | `rho` | `C` | Class of `C` | class against F0 | `rho2` | `cos` | median `n90` | s |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| F0 | 0.834438 | 0.014301 | STALLS | (base) | 0.833482 | 0.999754 | 2 | 62.9 |
+| GF | 0.781811 | 0.005406 | CONVERGES | PART | 0.778337 | 0.999812 | 3 | 61.9 |
+| GD | 0.358662 | 1.119e-8 | CONVERGES | CARRIES | 0.388942 | 0.524517 | 106 | 54.4 |
+| GN | 0.833496 | 0.009663 | CONVERGES | NONE | 0.824532 | 0.999554 | 3 | 62.1 |
+| GX | 0.213768 | 1.406e-12 | CONVERGES | CARRIES | 0.207852 | 0.989886 | 150 | 51.6 |
+
+`S` = {GD}: **named HD** (result D). GF lies 0.0526 below F0 and 0.019 above the threshold 0.7627; GN lies within 0.001 of
+F0. GN's `C` (0.00966) classes CONVERGES while its factor is F0's, because its `d_2` is larger: that is a property of the
+ratio (as with M3 of ADR 0819), not of the mode.
+
+The place of `delta_19` in F0 (per classed step, the cell of its largest change; `n90` the cells that hold 90 % of its
+squared norm): steps 11, 13, 15, 19 c13101 (`r` 0.2498, `z` 0.1478; shroud share 0.81 to 0.98); steps 12, 14 c9315 (`r`
+0.2475, `z` 0.1478); steps 16, 18, 20 c6245 (`r` 0.2346, `z` 0.1485); step 17 c5631 (`r` 0.2188, `z` 0.1500); `n90` 1 to
+14, median 2. Median shares over the classed steps: interior 0.979, shroud 0.187, blade 4e-6, the rest below 1e-6. With GD
+the mode is gone: what is left is spread (`n90` 106) and is no longer one real mode (`cos` 0.52). With GX the remainder is
+spread as well (`n90` 150), at the factor 0.214, below the relaxation's floor of 0.29 that section 2 estimated.
+
+SM: `cos` 0.999754 >= 0.99 and `abs(rho2 - rho)` = 0.00096 <= 0.015: **one dominant mode, yes**.
+
+Beside, without a limit (read from the committed `fan_d.csv`, not a registered measure): the acceptance's own form of the
+outer rule, `d_5 <= 1e-2 d_1`, holds in 10 of the 10 classed steps with GD (`d_5 / d_1` median 2.7e-3, largest 5.8e-3) and
+with GX (largest 8.0e-4), and in 0 of 10 in F0, GF and GN (median 0.072 to 0.074).
+
+### Table of checks
+
+| Id | Limit | Measured | Met |
+| --- | --- | --- | --- |
+| R1 | `<= 1e-6` | 4.89e-10 in the heavy run; 0 from the committed records | yes |
+| FD | complete; result D names, names HX or rules out | 20 of 20 steps each; named HD | yes |
+| FC | classed, not UNDECIDED | F0 STALLS; GF, GD, GN, GX CONVERGES | yes (classed) |
+| SM | classed | one dominant mode: yes | yes (classed) |
+| T1 | `<= 1e-12`; equal bits; non-vacuous | 75 kept quantities, largest relative difference 0; the record's `u` equal in bits; with the opt-ins off the record holds what was used (0) and iteration 5 differs from 1 by 0.938 (both gradients) and 0.902 (flux) against the floor 1e-9 | yes |
+| L | `<= 1e-8`; non-vacuous | `d_k / d_1` = 0 for `k` = 2 to 5 in all three steps; with GF, GD, GN off in turn `d_2 / d_1` 1.75e-2, 2.79e-3, 3.82e-3 against the floor 1e-6 | yes |
+| R0 | equal bits | KL with the field record (60 iterations recorded) against without: equal | yes |
+| T2 | equal bits | GD and GN with upwind: equal; GF with one outer iteration: equal | yes |
+| K | `C <= 1e-2` each | GF 8.52e-9, GD 1.07e-8, GN 1.06e-8, all three 8.62e-9 | yes |
+| T3 | as built | `f885_so_rules_on_built_records` passed | yes |
+| G2 | equal; `1e-6` | `f885_so_fan_from_the_committed_record` passed | yes |
+| B3 | passes, file unchanged | `baseline_hashes`: 3 passed, 1 ignored; `baseline_hashes.rs` unchanged since 05cb93d7 | yes |
+| D1 | as stated | under `crates/*/src` only `crates/rcfd-fv/src/pimple.rs` (lines at cdc1e4a2: 210 to 227, the four settings; 348 to 364, `OuterField`; 1188 to 1191, their defaults; 1423 to 1425, 1513 and 1555, the solver's record; 1947 to 1952, the kept vectors; 2085 to 2102, the kept flux and the record's iteration; 2203 to 2208, the kept convection gradient; 2210 and 2239, its use; 2245 to 2256, the kept Laplacian gradient and the record of both; 2801 to 2805, the record's velocity; 2914 to 2915, the push); no roadmap, ledger, golden or existing test file changed; five of the six committed F-885 patches apply unchanged; `f885_frozen_limiter.mutation.patch` no longer applied (its context, the line after `frozen_psi`, now holds this work's kept vectors) and was re-based in b472da0c with its changed lines identical (`git apply --check` passes) | yes |
+| P | rule 7 | see "The checks of rule 7"; the first run of the format check and of clippy failed on the new test file (deviation 3) | missed at the first run; met after deviation 3 |
+
+### Mutations
+
+From `mutations.log` (git archive of cdc1e4a2 in the scratch folder, its own target folder, the time of every touched file
+set after writing). Each ran against the test the registration named, and each was caught by a failing assertion of that
+test, none by a build error:
+
+| Id | What happened |
+| --- | --- |
+| K0 | unmutated: the six gate tests pass |
+| N1 | the kept flux not reset at a new step: caught by `f885_so_two_routes` (T1). Committed as the mutation patch |
+| N2 | the convection takes the gradient formed anew, the kept one still kept and recorded: caught by `f885_so_linear_map` (L) |
+| N3 | the kept Laplacian gradient of component 0 for every component: caught by `f885_so_two_routes` (T1) |
+| N4 | `outer_frozen_convection_gradient` not read: caught by `f885_so_two_routes` (T1) |
+| N5 | the record's `u` of the iteration's start: caught by `f885_so_two_routes` (T1) |
+| N6 | with the field record, the momentum solve from zero: caught by `f885_so_read_only` (R0) |
+| N7 | the band 0.15: caught by `f885_so_rules_on_built_records` (T3) |
+| N8 | `fan_d.csv` cut to its first half: caught by `f885_so_fan_from_the_committed_record` (G2) |
+
+Eight of eight caught.
+
+### Deviations
+
+1. The fan runs took 4.9 min together (estimate about 7 min).
+2. `FAN_RECORD`'s full-precision numbers were taken from the committed records by a scratch script (the same medians),
+   checked against the six printed digits of the heavy run's log, before G2 was run.
+3. The first run of rule 7's format and lint checks (at 67ae462f) failed on the new test file:
+   * `cargo fmt -p` refused on this machine (os error 206) and checked nothing.
+   * `rustfmt --check` of the two touched files named eight layouts of the test file and none in `pimple.rs`.
+   * `cargo clippy` named two lints of the test file: a cast of `i32` to `i32` in T3's built fields, and the return type
+     of `fan_run`, which is now the alias `FanRun`.
+
+   The fix in cdc1e4a2 applied rustfmt's layout and removed the two lints, with no change of behaviour. `rustfmt --check`
+   and clippy were then run once more and were clean. The gate tests ran again on cdc1e4a2 as K0 of the mutation copy and
+   passed.
+4. The first start of the mutation script stopped after K0, before any mutation was written. The error was in the script
+   itself: it made a call that this machine's Python does not support. It was corrected, and K0 to N8 each ran once on an
+   archive of cdc1e4a2 (`mutations-first-attempt.log` stays in the scratch folder).
+5. To re-base `f885_frozen_limiter.mutation.patch`, its three edits were made in the worktree's `pimple.rs`, the diff taken,
+   and the file restored with `git checkout`, all within about a second, while the rule 7 script was building in the
+   worktree. That script's `f885_frozen_limiter` run (7 passed) shows that no build read the edited file: the edits are that
+   patch's mutation, which `f885_fl_two_routes` catches. The committed N1 patch was made from a copy in the scratch folder.
+6. The cavity gate tests (T1, L, R0 and T2, K, T3) ran once, together, before the fan run; G2 ran once after the record.
+
+### What was not run
+
+Check H, H(dt/2), a long run; any remedy; the opt-ins in the steady solver or the fractional step; the whole workspace
+suite.
+
+### The checks of rule 7
+
+From `rule7.log`, each once at 67ae462f unless stated:
+
+* `cargo test --release -p rcfd-fv --lib`: 115 passed, 6 ignored. `cargo test --release -p rcfd-api --lib`: 160 passed,
+  4 ignored. `--test baseline_hashes`: 3 passed, 1 ignored.
+* `--test f885_frozen_limiter` 7 passed, 1 ignored; `--test f885_two_outer_modes` 5 passed, 1 ignored;
+  `--test f885_outer_stall` 5 passed, 1 ignored; `--test f885_alpha_free_face_flux` 5 passed, 3 ignored;
+  `--test f885_outer_fixed_points` 4 passed, 1 ignored; `--test f885_check_h_outer_record` 4 passed, 2 ignored.
+* The new file: its gate tests as in the table (and as K0 at cdc1e4a2).
+* Format: `cargo fmt -p rcfd-fv -p rcfd-api --check` refuses (os error 206); `rustfmt --check` of the touched files: failed
+  at 67ae462f, clean at cdc1e4a2 (deviation 3).
+* `cargo clippy --release -p rcfd-fv -p rcfd-api --all-targets -- -D warnings`: two lints at 67ae462f, clean at cdc1e4a2.
+* `cargo test -p rcfd-cli --release --test docs_site`, `python scripts/roadmap_proposals.py check` and
+  `python scripts/process_report.py --check` are run at the commit of this addendum, as reported to the lead.
+
+### Size
+
+Size (agent): done; 1; 1; 1; 190000
+
+### Decision by the registered rule
+
+**Done for this registration.**
+
+* Every run was made as registered.
+* R1, T1, L, R0, T2, K, T3, G2, B3 and D1 are met.
+* P is met after deviation 3 (rustfmt's layout and two lints of the test file, no change of behaviour).
+* The five runs are classed.
+* Each of the eight mutations is caught.
+* Result D names HD.
+
+F-885 stays **partial**: check H has not decided.
+
+## Open questions for the maintainer (addendum 1)
+
+1. **The remedy.** The deferred correction of linear upwind carries the fan's slow mode on a few cells at `z` 0.148 m.
+   That correction is formed anew in every outer iteration from the iterate's gradient. Options:
+   * (a) Register the opt-in `outer_frozen_convection_gradient` as the remedy. It exists now. With BDF2 its gradient is
+     that of the time-extrapolated field, so the deferred part is evaluated at second order in time. The registration
+     would add a check that the cavity keeps BDF2's observed order (`docs/process/tolerances.md`, "Observed order of
+     accuracy"), a check that a steady case gives the same answer as without it, and then check H.
+   * (b) Under-relax the deferred correction between outer iterations. The fixed point is unchanged and the blend reduces
+     the factor of the mode. This is a new opt-in with its own derivation.
+   * (c) Treat the linear-upwind correction more implicitly in the matrix. The matrix is then no longer an M-matrix, and
+     the change to the solver is larger.
+   * (d) Run more outer iterations per step: about 28 at 0.834 an iteration.
+
+   I recommend (a). It is the control that removed the mode on the fan: `d_5 / d_1` is at most 5.8e-3 in all ten classed
+   steps, against the acceptance's 1e-2. It is opt-in, tests already hold it, and a registered row can check its time
+   order before check H uses it.
+2. **Whether check H can be run with a remedy.** With (a), the fan's loop meets the acceptance's rule in every classed step
+   of the 20 steps of H(dt). Check H with it is therefore expected to decide on H(dt); H(dt/2) has not been run. Options:
+   * (a) Run check H as ADR 0183 and ADR 0766 register it, with the remedy on, in the remedy's registration, after the
+     remedy's order check.
+   * (b) Run it now with the opt-in, as a diagnosis only.
+
+   I recommend (a): check H then classes with a remedy whose effect on the answer a check holds.
+3. **Scope.** The remedy changes what a step converges to: the deferred term then uses a predicted gradient, not the
+   step's own. That is an opt-in change of the scheme within a step. Options:
+   * (a) Keep it a setting of the solver for F-885 only, with no case key.
+   * (b) Add a case key so that a fan case can ask for it.
+
+   I recommend (a) until check H has decided with it. A case key would change the schema golden and would then be a
+   separate item.
+
+## For the lead: roadmap entries
+
+> Status proposed for F-885: partial.
+
+> Note entry: ADR 0820, 2026-11-26, diagnosis done, item partial: on 20 steps of H(dt) with the opt-ins of ADRs 0811 and 0819, keeping the gradient of linear upwind's deferred correction from the step's first outer iteration (outer_frozen_convection_gradient, opt-in, baseline hashes unchanged) takes the fan's outer factor from 0.834 to 0.359 (C 0.0143 STALLS to 1.1e-8 CONVERGES; d_5/d_1 at most 5.8e-3 in all ten classed steps); the convecting flux kept takes part (0.782), the Laplacian's gradient kept none (0.833): named HD; the slow mode is one real mode (cos 0.9998) on one to fourteen cells at z 0.148 m, r 0.219 to 0.250 m; eight of eight mutations caught; held by crates/rcfd-api/tests/f885_slow_outer_mode.rs and docs/investigations/f885-slow-outer-mode.
+
+> Gap entry: Missing for done: a class by ADR 0183's rule. Check H does not decide because the fan's outer loop does not contract within a step. ADR 0820 names the cause: the deferred correction of linear upwind, re-formed from each outer iterate's gradient (factor 0.834; with the gradient kept from the step's first outer iteration 0.359 and d_5/d_1 at most 5.8e-3). Needs a remedy registered on that line and check H run with it, with a check that the remedy keeps the scheme's time order.
+
+The same entries are in `docs/roadmap/proposals/0820-F-885.json` (form 1 of ADR 0755, base 05cb93d7), checked with
+`python scripts/roadmap_proposals.py check`. No follow-up item is proposed: the remedy adds no acceptance clause of its
+own and would be registered under F-885 (rule 13).
+
+Generated pages that this work may leave not current, for the lead (rule 9): `docs/adr/index.md` (ADR 0820 is new).
