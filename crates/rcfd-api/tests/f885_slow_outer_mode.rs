@@ -67,7 +67,26 @@ const CLASSES: [&str; 7] = ["blade", "shroud", "hub", "coupled", "inlet", "outle
 /// The recorded outcomes of the registered fan run (written after the run): `rho` and `C` of F0, GF, GD, GN, GX; `rho2`
 /// and `cos` of F0; the classes of GF, GD, GN, GX; result D.
 type FanRecord = ([f64; 5], [f64; 5], f64, f64, [&'static str; 4], &'static str);
-const FAN_RECORD: Option<FanRecord> = None;
+const FAN_RECORD: Option<FanRecord> = Some((
+    [
+        0.8344381950609923,
+        0.7818107451098382,
+        0.3586621403408897,
+        0.833495900116017,
+        0.21376833963263475,
+    ],
+    [
+        0.014300805347754355,
+        0.005406352141590268,
+        1.1187101663942197e-08,
+        0.009663068082988417,
+        1.4062236549539693e-12,
+    ],
+    0.8334816951560352,
+    0.9997542159884052,
+    ["PART", "CARRIES", "NONE", "CARRIES"],
+    "named HD",
+));
 
 fn omega() -> f64 {
     RPM * 2.0 * PI / 60.0
