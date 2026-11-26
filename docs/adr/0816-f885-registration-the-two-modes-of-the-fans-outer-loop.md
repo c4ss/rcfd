@@ -222,3 +222,160 @@ registered run is corrected by an amendment committed before the corrected run.
 ## Open questions for the maintainer
 
 To be completed in the addendum with options and a recommendation: the remedy, and any question of scope.
+
+## Addendum 1: results
+
+Written 2026-11-26, after the runs. Commits on the branch, from main d8b506d8: 3535252e (this registration, alone),
+44a2e51b (the probe in `crates/rcfd-fv/src/pimple.rs` and the test file; every registered run was made from it), 9bbfee9e
+(the fan record, the logs, the recorded outcomes `FAN_RECORD`), 0238503c (the committed mutation N1, the re-based patch
+of `f885_check_h_outer_record`, rustfmt's layout of `FAN_RECORD`), and the commit of this addendum with the mutation log
+and the proposal file. Records in `docs/investigations/f885-two-outer-modes/`: `fan_d.csv`, `probe.csv`, `fan.log`,
+`cavity.log`, `mutations.log`.
+
+### The sentence
+
+**Mode A: the record names HA1.** The constant change at c11837 is a two-state cycle carried by the cell's own
+Barth-Jespersen factor: in every outer iteration of all ten classed steps the factor of the x component switches between
+two values (step 12: 1.0 and 0.60), and the iterate switches with it (`q` 0.005, `u_k` returns to `u_(k-2)`). The diagonal
+dominates at the cell and no face flux changes sign. **Mode B: the record rules all four out.** The slow contraction
+without the limiter (0.854 an iteration) is not a lost dominance, not the corrector count, not a blend of the relaxation
+with a slow unrelaxed map, and not independent of `alpha_u`.
+
+### Mode A (A0: G0 of ADR 0815 with the probe; 20 of 20 steps, 65.4 s)
+
+| Hypothesis | Number per classed step (steps 11 to 20) | Steps that count | Holds |
+| --- | --- | --- | --- |
+| HA1 | the entry of the largest change is the cell's own factor, x component, in all ten; median change 0.219 to 0.562; median `abs(psi_k - psi_(k-2))` 3.0e-5 to 2.1e-2, below 0.1 of the change in each | 10 of 10 | yes |
+| HA2 | `a_c / s` 1.527 to 1.528 (the diagonal dominates; `d = a_c`) | 0 of 10 | no |
+| HA3 | largest number of sign changes of a face's outward flux: 0 | 0 of 10 | no |
+
+`S_A = {HA1}`: **named HA1**. Beside: `q` 0.005037. The cell has six faces; two carry fluxes of 7.8e-4 m3/s (in and out),
+four carry 1e-7 to 1.5e-6 m3/s, none of which changes sign. The factor of the z component is also below 1 (0.19 to 0.53)
+but changes little within a step; the y component stays at 1.
+
+### Mode B (B1 to B4: GL of ADR 0815 with the probe; each 20 of 20 steps)
+
+| Run | `alpha_u` | correctors | `rho` | `r` at c6245 | s |
+| --- | --- | --- | --- | --- | --- |
+| B1 | 0.9 | 2 | 0.853789 | 1.38054 | 64.2 |
+| B2 | 0.7 | 2 | 0.872992 | 1.38052 | 62.4 |
+| B3 | 0.5 | 2 | 0.892044 | 1.38048 | 66.7 |
+| B4 | 0.9 | 4 | 0.853740 | 1.38054 | 120.8 |
+
+| Hypothesis | Prediction | Measured against it | Holds |
+| --- | --- | --- | --- |
+| HB1 | needs `r < 1` | `r` 1.38 (dominance kept) | no |
+| HB2 | `rho(B4) <= rho(B1) - 0.015` | `rho(B4) - rho(B1)` = -0.00005 | no |
+| HB3 | `lambda_0` 0.83754: 0.88628 (B2), 0.91877 (B3), `rho(B4) = rho(B1)` | B2 off by 0.0133 (in the band), B3 off by 0.0267 (outside), B4 off by 0.00005 | no |
+| HB4 | `rho(B2) = rho(B3) = rho(B1)` | off by 0.0192 and 0.0383 | no |
+
+`S_B` empty: **all ruled out**. Beside, without a limit: the factor depends on `alpha_u` with a slope of -0.0956 (B1 to
+B3 lie on `rho = 0.9399 - 0.0956 alpha_u` within 1e-4), about 0.6 of the blend's slope -0.163, and it does not tend to 1
+as `alpha_u` goes to 0, as a blend would. So a part of the slow mode is set by the relaxation and a part is not; the term
+of ADR 0811, `(1 - alpha_u)(phi* - F(u*))`, which grows as `alpha_u` falls, is one candidate for the part that is not (not
+tested here).
+
+### Table of checks
+
+| Id | Limit | Measured | Met |
+| --- | --- | --- | --- |
+| B1 | all runs as registered | A0, B1 to B4: 20 of 20 steps each, no stop; KL 3 of 3 steps | yes |
+| B2 | each mode names one or rules all out | A: named HA1; B: all ruled out | yes |
+| B3 | passes, file unchanged | `baseline_hashes`: 3 passed, 1 ignored; `baseline_hashes.rs` unchanged | yes |
+| R0 | `<= 1e-6` | A0 against G0 4.50e-10, B1 against GL 4.65e-10 in the heavy run; 0 and 0 from the committed records | yes |
+| R1 | `<= 1e-6` | 0 over 115 iterations in the heavy run; 4.50e-10 from the committed records (10 printed digits of `d_k`) | yes |
+| T1 | `<= 1e-12`, NaN where stated | largest relative difference 0 (steps 1 to 3, both active components, the cell and its four neighbours, its faces, the velocity); the z component NaN | yes |
+| T2 | equal bits | KC0 and KL: `u`, `p`, flux and record equal; 6 probe records with, 0 without | yes |
+| T3 | as built | `f885_tm_rules_on_built_records` passed | yes |
+| K2 | `C <= 1e-2` | KL `C` 1.112e-8 (CONVERGES) | yes |
+| K3 | rules all out | KL at cell 27: HA1, HA2, HA3 do not hold (`q` 5.67): all ruled out | yes |
+| G2 | equal, `1e-6` | `f885_tm_fan_from_the_committed_record` passed: the held sets, `q`, `rho`, `r` and both results as recorded | yes |
+| D1 | as stated | under `crates/*/src` only `crates/rcfd-fv/src/pimple.rs` (branch lines 197 to 203, the setting; 292 to 323, the two record types; 1145, its default; 1374 to 1376, 1463 and 1504, the solver's record; 1894 to 1911, the probe cells' faces and neighbours; 2026 to 2045, the iteration record and the fluxes; 2130 to 2135, the factors; 2204 to 2217, the diagonal and the sum; 2693 to 2697, the velocity; 2806 to 2815, the push); no roadmap, ledger, golden or existing test changed; of the four committed F-885 patches three apply unchanged; `f885_check_h_outer_record.mutation.patch` no longer applied (its context is the line before the outer loop, where the probe's lines now stand) and was re-based in 0238503c with its two changed lines unchanged (`git apply --check` passes) | yes |
+| P | see the checks of rule 7 | as listed | yes |
+
+### Mutations
+
+From `mutations.log` (git archive of 9bbfee9e in the scratch folder, its own target folder, every source file touched
+before each build; the gate tests of the new file):
+
+| Id | What happened |
+| --- | --- |
+| K0 | unmutated: the five gate tests pass |
+| N1 | the relaxed diagonal kept: caught by `f885_tm_probe_two_routes` (T1). Committed as the mutation patch |
+| N2 | `s` from the lower coefficients only: caught by `f885_tm_probe_two_routes` (T1) |
+| N3 | the factor of component 0 for every component: **not caught**. In T1's first outer iterations the factor is 1 at cell 27 and its four neighbours in both active components, so the two components cannot be told apart there. The fan record itself is not affected (its components differ: x 0.57, z 0.29 at c11837), but no gate test holds the component order of the factors |
+| N4 | the fluxes with the face's sign: caught by `f885_tm_probe_two_routes` (T1) |
+| N5 | the velocity of the iteration's start: caught by `f885_tm_probe_two_routes` (T1) |
+| N6 | with the probe, the momentum solve from zero: caught by `f885_tm_probe_read_only` (T2) |
+| N7 | the band 0.15: caught by `f885_tm_rules_on_built_records` (T3) and `f885_tm_fan_from_the_committed_record` (G2) |
+| N8 | `probe.csv` cut to its first half: caught by `f885_tm_fan_from_the_committed_record` (G2) |
+
+Seven of eight caught.
+
+### Deviations
+
+1. The fan runs took 6.4 min together (estimate about 8 min).
+2. The re-base of `f885_check_h_outer_record.mutation.patch` (D1, foreseen by the brief) was checked with
+   `git apply --check`; I did not run its test with it applied (the lead's push script does).
+3. Rule 7's run of the new test file was made test by test as each registered step came due (T1 to T3, K2, K3 before the
+   fan run; G2 after the record), each once. The five gate tests ran again, unmutated, as K0 of the mutation copy.
+4. rustfmt was applied to the two touched files before the code commit, and to the layout of `FAN_RECORD` after the record
+   commit (layout only); the fmt check then ran clean.
+5. The full-precision numbers of `FAN_RECORD` were taken from the committed records by a scratch script (the same
+   medians), checked against the six printed digits of the heavy run's log, before G2 was run.
+
+### What was not run
+
+Any remedy; any change of a default; check H, H(dt/2), a long run; mode A under the `alpha_u` and corrector grid; mode B
+with the term of ADR 0811 off; the whole workspace suite.
+
+### The checks of rule 7
+
+* `cargo test -p rcfd-api --release --test f885_two_outer_modes`: T1 to T3, K2 and K3 (4 passed), G2 (1 passed); the heavy
+  record run once.
+* `cargo test -p rcfd-fv --release --lib`: 115 passed, 6 ignored.
+* `cargo test -p rcfd-api --release --test baseline_hashes`: 3 passed, 1 ignored.
+* `--test f885_outer_stall`: 5 passed, 1 ignored; `--test f885_alpha_free_face_flux`: 5 passed, 3 ignored;
+  `--test f885_outer_fixed_points`: 4 passed, 1 ignored; `--test f885_check_h_outer_record`: 4 passed, 2 ignored.
+* `cargo fmt -p rcfd-fv --check`, `cargo fmt -p rcfd-api --check`: clean; `cargo clippy -p rcfd-fv -p rcfd-api
+  --all-targets -- -D warnings`: clean.
+* `cargo test -p rcfd-cli --release --test docs_site`, `python scripts/roadmap_proposals.py check` and
+  `python scripts/process_report.py --check` were run at the commit of this addendum, as reported to the lead.
+
+### Size
+
+Size (agent): done; 1; 1; 2; 150000
+
+### Decision by the registered rule
+
+**Done for this registration**: every run was made as registered (B1), mode A names HA1 and mode B rules all out (B2),
+with B3, R0, R1, T1 to T3, G2 and D1 met. One planned mutation (N3) was not caught; that is recorded, and it is not a row
+of the rule. F-885 stays **partial**: check H has not decided.
+
+## Open questions for the maintainer (addendum 1)
+
+1. **The remedy of mode A (the switching limiter factor).** Options: (a) an opt-in that keeps the Barth-Jespersen factor
+   of the step's first outer iteration for its later ones (a limiter lagged within the step; the factor still follows the
+   solution from step to step), registered under F-885 with the fan's `C` as its check; (b) a smooth limiter for the fan
+   case (Venkatakrishnan exists in `gradient.rs`), which changes the case's discretisation and its results; (c) more outer
+   iterations or a different reading of ADR 0183's rule for this case. I recommend (a): it removes the switch the record
+   names without a new case key and can be checked against the record of this ADR. It will not reach `C <= 1e-2` by
+   itself while mode B remains (GL of ADR 0815 stalls at 0.017).
+2. **Mode B.** Options: (a) a further diagnosis under F-885 (rule 13) of the slow mode: the `alpha_u` grid run with the
+   term of ADR 0811 off and on, and a per-cell record of the mode's shape; (b) take the remedy of mode A first, then see
+   what stalls. I recommend (a), registered together with question 1's control, since a remedy of mode A alone does not
+   let check H decide.
+
+## For the lead: roadmap entries
+
+> Status proposed for F-885: partial.
+
+> Note entry: ADR 0816, 2026-11-26, diagnosis done, item partial: an opt-in probe of the fan's outer iterations on 20 steps of H(dt) names the cause of the constant change at c11837: the cell's own Barth-Jespersen factor (x component) switches between two values in every outer iteration of all ten classed steps (change 0.22 to 0.56, return within 2e-2) and the iterate cycles with it (q 0.005), while the diagonal dominates (a_c/s 1.53) and no face flux changes sign; the slow contraction without the limiter (factor 0.854) is not the lost dominance (r 1.38), not the corrector count (0.854 with four), not a blend of the relaxation (0.892 at alpha_u 0.5 against 0.919 predicted) and not independent of alpha_u (0.873 at 0.7): all four ruled out; the cavity with the limiter contracts (C 1.1e-8); held by crates/rcfd-api/tests/f885_two_outer_modes.rs and docs/investigations/f885-two-outer-modes.
+
+> Gap entry: Missing for done: a class by ADR 0183's rule. Check H does not decide because the fan's outer loop does not contract within a step. ADR 0816: with the limiter the Barth-Jespersen factor at c11837 switches between two values each outer iteration (a period-2 cycle); without it a slow mode (0.854 per iteration) remains whose cause is not the dominance, the correctors or the relaxation's blend. Needs a remedy of the limiter cycle and a diagnosis of the slow mode (ADR 0816 questions 1 and 2).
+
+The same entries are in `docs/roadmap/proposals/0816-F-885.json` (form 1 of ADR 0755, base d8b506d8), checked with
+`python scripts/roadmap_proposals.py check`. No follow-up item is proposed: a remedy or a further diagnosis adds no
+acceptance clause and would be registered under F-885 (rule 13).
+
+Generated pages that this work may leave not current, for the lead (rule 9): `docs/adr/index.md` (ADR 0816 is new).

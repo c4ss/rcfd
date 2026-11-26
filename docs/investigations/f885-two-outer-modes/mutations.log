@@ -1,0 +1,87 @@
+== K0 unmutated: exit 0
+test f885_tm_cavity_control ... ok
+test f885_tm_fan_from_the_committed_record ... ok
+test f885_tm_fan_record ... ignored, heavy record, ADR 0816: A0 and B1 to B4 on 20 steps of H(dt) on B2 (13 627 cells, 2 000 outer iterations, minutes): cargo test --release -p rcfd-api --test f885_two_outer_modes f885_tm_fan_record -- --ignored --nocapture
+test f885_tm_probe_read_only ... ok
+test f885_tm_probe_two_routes ... ok
+test f885_tm_rules_on_built_records ... ok
+test result: ok. 5 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out; finished in 0.28s
+== N1: pr.diag[k] = m.a.diag[*c].max(sums[*c]) / alpha_u;: exit 101
+test f885_tm_cavity_control ... ok
+test f885_tm_fan_from_the_committed_record ... ok
+test f885_tm_fan_record ... ignored, heavy record, ADR 0816: A0 and B1 to B4 on 20 steps of H(dt) on B2 (13 627 cells, 2 000 outer iterations, minutes): cargo test --release -p rcfd-api --test f885_two_outer_modes f885_tm_fan_record -- --ignored --nocapture
+test f885_tm_probe_read_only ... ok
+test f885_tm_probe_two_routes ... FAILED
+test f885_tm_rules_on_built_records ... ok
+thread 'f885_tm_probe_two_routes' (53108) panicked at crates\rcfd-api\tests\f885_two_outer_modes.rs:640:5:
+test result: FAILED. 4 passed; 1 failed; 1 ignored; 0 measured; 0 filtered out; finished in 0.15s
+error: test failed, to rerun pass `-p rcfd-api --test f885_two_outer_modes`
+== N2: let mut sums = { let mut z = vec![0.0; m.a.diag.len()]; for f in 0..m.a.lower.len() { z[m.: exit 101
+test f885_tm_cavity_control ... ok
+test f885_tm_fan_from_the_committed_record ... ok
+test f885_tm_fan_record ... ignored, heavy record, ADR 0816: A0 and B1 to B4 on 20 steps of H(dt) on B2 (13 627 cells, 2 000 outer iterations, minutes): cargo test --release -p rcfd-api --test f885_two_outer_modes f885_tm_fan_record -- --ignored --nocapture
+test f885_tm_probe_read_only ... ok
+test f885_tm_probe_two_routes ... FAILED
+test f885_tm_rules_on_built_records ... ok
+thread 'f885_tm_probe_two_routes' (64820) panicked at crates\rcfd-api\tests\f885_two_outer_modes.rs:640:5:
+test result: FAILED. 4 passed; 1 failed; 1 ignored; 0 measured; 0 filtered out; finished in 0.14s
+error: test failed, to rerun pass `-p rcfd-api --test f885_two_outer_modes`
+== N3: pr.psi[i][k] = if k == 0 { psi[cell] } else { pr.psi[i][0] };: exit 0
+test f885_tm_cavity_control ... ok
+test f885_tm_fan_from_the_committed_record ... ok
+test f885_tm_fan_record ... ignored, heavy record, ADR 0816: A0 and B1 to B4 on 20 steps of H(dt) on B2 (13 627 cells, 2 000 outer iterations, minutes): cargo test --release -p rcfd-api --test f885_two_outer_modes f885_tm_fan_record -- --ignored --nocapture
+test f885_tm_probe_read_only ... ok
+test f885_tm_probe_two_routes ... ok
+test f885_tm_rules_on_built_records ... ok
+test result: ok. 5 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out; finished in 0.17s
+== N4: phi_conv[f]: exit 101
+test f885_tm_cavity_control ... ok
+test f885_tm_fan_from_the_committed_record ... ok
+test f885_tm_fan_record ... ignored, heavy record, ADR 0816: A0 and B1 to B4 on 20 steps of H(dt) on B2 (13 627 cells, 2 000 outer iterations, minutes): cargo test --release -p rcfd-api --test f885_two_outer_modes f885_tm_fan_record -- --ignored --nocapture
+test f885_tm_probe_read_only ... ok
+test f885_tm_probe_two_routes ... FAILED
+test f885_tm_rules_on_built_records ... ok
+thread 'f885_tm_probe_two_routes' (58800) panicked at crates\rcfd-api\tests\f885_two_outer_modes.rs:640:5:
+test result: FAILED. 4 passed; 1 failed; 1 ignored; 0 measured; 0 filtered out; finished in 0.16s
+error: test failed, to rerun pass `-p rcfd-api --test f885_two_outer_modes`
+== N5: pr.u = u_iter[*c];: exit 101
+test f885_tm_cavity_control ... ok
+test f885_tm_fan_from_the_committed_record ... ok
+test f885_tm_fan_record ... ignored, heavy record, ADR 0816: A0 and B1 to B4 on 20 steps of H(dt) on B2 (13 627 cells, 2 000 outer iterations, minutes): cargo test --release -p rcfd-api --test f885_two_outer_modes f885_tm_fan_record -- --ignored --nocapture
+test f885_tm_probe_read_only ... ok
+test f885_tm_probe_two_routes ... FAILED
+test f885_tm_rules_on_built_records ... ok
+thread 'f885_tm_probe_two_routes' (61548) panicked at crates\rcfd-api\tests\f885_two_outer_modes.rs:640:5:
+test result: FAILED. 4 passed; 1 failed; 1 ignored; 0 measured; 0 filtered out; finished in 0.19s
+error: test failed, to rerun pass `-p rcfd-api --test f885_two_outer_modes`
+== N6: let mut x = if probe_topo.is_empty() { cells } else { vec![0.0; n] };: exit 101
+test f885_tm_cavity_control ... ok
+test f885_tm_fan_from_the_committed_record ... ok
+test f885_tm_fan_record ... ignored, heavy record, ADR 0816: A0 and B1 to B4 on 20 steps of H(dt) on B2 (13 627 cells, 2 000 outer iterations, minutes): cargo test --release -p rcfd-api --test f885_two_outer_modes f885_tm_fan_record -- --ignored --nocapture
+test f885_tm_probe_read_only ... FAILED
+test f885_tm_probe_two_routes ... ok
+test f885_tm_rules_on_built_records ... ok
+thread 'f885_tm_probe_read_only' (44940) panicked at crates\rcfd-api\tests\f885_two_outer_modes.rs:664:5:
+test result: FAILED. 4 passed; 1 failed; 1 ignored; 0 measured; 0 filtered out; finished in 0.15s
+error: test failed, to rerun pass `-p rcfd-api --test f885_two_outer_modes`
+== N7: const BAND: f64 = 0.15;: exit 101
+test f885_tm_cavity_control ... ok
+test f885_tm_fan_from_the_committed_record ... FAILED
+test f885_tm_fan_record ... ignored, heavy record, ADR 0816: A0 and B1 to B4 on 20 steps of H(dt) on B2 (13 627 cells, 2 000 outer iterations, minutes): cargo test --release -p rcfd-api --test f885_two_outer_modes f885_tm_fan_record -- --ignored --nocapture
+test f885_tm_probe_read_only ... ok
+test f885_tm_probe_two_routes ... ok
+test f885_tm_rules_on_built_records ... FAILED
+thread 'f885_tm_fan_from_the_committed_record' (67480) panicked at crates\rcfd-api\tests\f885_two_outer_modes.rs:1107:5:
+thread 'f885_tm_rules_on_built_records' (4716) panicked at crates\rcfd-api\tests\f885_two_outer_modes.rs:489:5:
+test result: FAILED. 3 passed; 2 failed; 1 ignored; 0 measured; 0 filtered out; finished in 0.18s
+error: test failed, to rerun pass `-p rcfd-api --test f885_two_outer_modes`
+== N8 probe.csv cut to its first half: exit 101
+test f885_tm_cavity_control ... ok
+test f885_tm_fan_from_the_committed_record ... FAILED
+test f885_tm_fan_record ... ignored, heavy record, ADR 0816: A0 and B1 to B4 on 20 steps of H(dt) on B2 (13 627 cells, 2 000 outer iterations, minutes): cargo test --release -p rcfd-api --test f885_two_outer_modes f885_tm_fan_record -- --ignored --nocapture
+test f885_tm_probe_read_only ... ok
+test f885_tm_probe_two_routes ... ok
+test f885_tm_rules_on_built_records ... ok
+thread 'f885_tm_fan_from_the_committed_record' (65248) panicked at crates\rcfd-api\tests\f885_two_outer_modes.rs:1099:9:
+test result: FAILED. 4 passed; 1 failed; 1 ignored; 0 measured; 0 filtered out; finished in 0.18s
+error: test failed, to rerun pass `-p rcfd-api --test f885_two_outer_modes`
