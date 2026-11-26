@@ -236,3 +236,112 @@ Written and committed before the runs it covers (W, L, A2w, A2l, R7, M1 to M3, P
    main's file: exit 0, no message), A1 and A4 (the diffs: every job but studio-web and its name, matrix, `runs-on`,
    defaults and env equal, `npm ci` kept; `dependabot.yml` 0 lines of diff), and `docs_site` on the registration (2 passed).
    These are not made again.
+
+## Addendum 1: results (2026-11-26)
+
+The code is 8dd4deaa (`.github/workflows/ci.yml`, the studio-web job only; `docs/test-process.md`, the one sentence of C6).
+The runs W, L and the mutations were made on `git archive` copies of 8d91d0dd (amendment 1; its `ci.yml` is that of
+8dd4deaa) in the scratch folder, each once, by the set-up registered and amendment 1. The full logs are in the scratch
+folder (`win-job/`, `linux-job/`, `mut-M1/`, `mut-M3/`, `a2w-*.log`, `r7.log`).
+
+### Checks
+
+| Id | Limit | Measured | Met |
+|---|---|---|---|
+| A5w | 880 passed, 0 failed, 0 skipped; skipped list empty; `capabilities.spec.ts:210` and the 10 of `service.spec.ts` passed | 880 passed, 0 failed, 0 skipped (the list marks and the summary line "880 passed (11.9m)" agree); `capabilities.spec.ts:210` passed; 10 of 10 of `service.spec.ts` passed | met |
+| A5l | as A5w | 860 passed, 4 failed, 16 did not run (the list marks and the summary lines agree); `capabilities.spec.ts:210` and the 10 of `service.spec.ts` passed. Failed: `claude-code.spec.ts:177`, `commands.spec.ts:90`, `runner-lifetime.spec.ts:192`, `workspace-first-open.spec.ts:59`; the 16 that did not run are the rest of their serial files (`commands` 9, `runner-lifetime` 6, `claude-code` 1) | **missed** |
+| S1w | each step passed or skipped by its `if:`; the four files in `target-win/release` | steps 1 to 8, 10 and 11 passed (engine 160 s, `npm ci` 60 s, typecheck 2 s, build 5 s, packaging 5 s, Playwright 720 s); 9, 12, 13 and 14 skipped by their `if:`; `rcfd.exe`, `rcfd-runner.exe`, `rcfd-mcp.exe` and `examples/f447_bench.exe` there | met |
+| S1l | each step passed, the upload skipped by `failure()` | steps 1 to 10 passed (engine 81 s on the volume that held the timing build of the registration, `npm ci` 8 s, packaging 7 s); step 11, Playwright, **failed** (exit 1, 690 s); the upload step then ran (its `failure()`), the two licence steps were skipped after the failure | **missed** |
+| A2w | the mutated copy exit not 0 with one failed test; the unchanged copy exit 0 | unchanged: exit 0, 19 passed; one `expect` of `tokens.spec.ts:97` made false: exit 1, 1 failed, 18 passed ("Expected: 143, Received: 142") | met |
+| A2l | as A2w | unchanged: exit 0, 19 passed; mutated: exit 1, 1 failed, 18 passed (the same message) | met |
+| A1 | `npm ci`, the Playwright command, name and matrix unchanged; no other job changed | every top-level key and every job but studio-web equal to main's; studio-web's name, strategy, `runs-on`, defaults and env equal; `npm ci` kept (amendment 1, item 3) | met |
+| A3 | the sentence names the job and its engine build; `docs_site` passes | the lead-in of section 8 names the build of the three binaries and the example; `docs_site`: the line below the table | see below |
+| A4 | `git diff origin/main -- .github/dependabot.yml` empty | 0 lines | met |
+| V1 | `actionlint` exit 0, no message; the control's messages stated | 8dd4deaa: exit 0, no message; main's file: exit 0, no message (a first call of the control was given a path actionlint could not open, exit 3, and checked nothing) | met |
+| R7 | `npm run typecheck` and `npm test` exit 0; counts as A5w | in the worktree with `CARGO_TARGET_DIR` = `target-win`, after `npm ci` (the worktree had no `node_modules`): typecheck exit 0; `npm test` exit 0, 880 passed, 0 skipped ("880 passed (12.9m)") | met |
+| P1 | the proposal valid; the report clean but for a generated file that is only not current | `python scripts/roadmap_proposals.py check docs/roadmap/proposals/0802-F-823.json`: exit 0 ("F-823: partial -> partial; gap set"); a first call without the file was a usage error and checked nothing. `process_report.py --check` is run after this commit and stated in the report | see the report |
+
+A3, `cargo test -p rcfd-cli --release --test docs_site` on this addendum before its commit (this line, which holds no link, filled in after it): 2 passed, 0 failed, exit 0; met.
+
+### Mutations (Windows, each on its own copy and a cold `CARGO_TARGET_DIR` of its own)
+
+| Id | Expected | Seen | Caught |
+|---|---|---|---|
+| M1, `-p rcfd-runner` left out | the job fails at the packaging; unit row 3 skipped | the engine step passed (138 s cold); `npm run package:dir` failed, exit 1: "engine: rcfd-runner.exe not in ...target-M1\release. Build with: cargo build --release -p rcfd-runner"; the unit row: 574 passed, 3 skipped (`run-leftovers.spec.ts:109` and `:139`, `sites.spec.ts:322`) and 1 failed, `capabilities.spec.ts:210` (the inventory against the engine) | caught, by the failed job and the count row |
+| M2, the `f447_bench` command left out | steps up to the packaging pass; unit row 28 skipped | steps 1 to 10 passed; the unit row: 550 passed, 28 skipped (`data-routes` 24, `compare` 1, `field-derived` 3), exit 0 | caught by the count row only; the job itself stays green |
+| M3, `--no-engine` kept (on M2's copy, the bench command back) | `project.spec.ts` and `service.spec.ts`: 2 skipped | the packaging printed "engine: not included (--no-engine)"; the two files: 19 passed, 2 skipped (`project.spec.ts:302`, `service.spec.ts:229`), exit 0 | caught by the count row only |
+
+M2's step logs were overwritten when M3 reused its copy, so its time of the engine step is not kept; M3's engine step, the
+bench alone on M2's target, took 126 s. No mutation patch is committed (the brief).
+
+### Diagnosis of the four Linux misses (from the code; no test was run again)
+
+1. `claude-code.spec.ts:177`: on Linux the Studio records a terminal launch only when `/usr/bin/x-terminal-emulator`
+   exists (`src/main/claudecode/terminal.ts`, lines 65 to 67); the image has none, so the plan has no command, nothing is
+   recorded and the poll for one launch times out. Whether `ubuntu-24.04` has that alternative is not known here.
+2. `commands.spec.ts:90`: after Escape the focus is on `body`, not on the button that had it. ADR 0801 records the same
+   failure on Windows under load ("Ctrl+K, the focus found on `body`", passing alone); under Xvfb there is no window
+   manager to give the window the focus. Not diagnosed further.
+3. `runner-lifetime.spec.ts:192`, line 216: the runner's pid answers `process.kill(pid, 0)` right after `cleanUp`
+   (`tests/support/rcfd.ts`, `alive`). On Linux a process that has exited and is not yet reaped still answers; that is the
+   likely cause, not shown.
+4. `workspace-first-open.spec.ts:59`: `tests/support/gpu-hold.ts` throws "no WebGPU adapter: the GPU process cannot be
+   held"; Linux in the container has WebGL 2 on llvmpipe and no WebGPU (finding 4). The test needs WebGPU and has no skip
+   for its absence.
+
+Finding 2 of the registration (no skip call has a condition of the platform, so the change must make all 284 run) was right
+about the skip calls and wrong as a prediction for Linux: these four tests do not skip, they fail where the platform lacks a
+terminal, a WebGPU adapter or the focus behaviour. Each needs a change of a test, the app or the test image, which the brief
+does not allow this work (task 2); they are left as misses and go to Q1.
+
+### Deviations
+
+The first run W was interrupted by the end of its session (amendment 1) and made again whole. R7 needed `npm ci` in the
+worktree first. The Windows list marks were `ok` in the interrupted run and ✓ in the runs here; both are counted (amendment
+1). Nothing was run twice to pass; Playwright's retries are 0.
+
+### Not run
+
+The runners themselves (as registered under "Not covered"): the first run on GitHub Actions is the lead's. `cargo fmt` and
+`clippy` do not apply (no Rust file changed); `baseline_hashes` does not apply (no solver file changed).
+
+### Size
+
+Size (agent, actual): partial; 1; 4; 3; 300000
+
+(Heavy runs: W twice, the first interrupted, L, and R7. Questions: Q1 to Q3 below. Bytes read: an estimate over both
+sessions.)
+
+### Decision
+
+By the registered rule: **partial**. A5l and S1l missed on Linux (4 failed, 16 did not run); every other row held, and each
+of M1 to M3 was caught. The lead's reading of the first run on GitHub Actions decides the item.
+
+## Open questions for the maintainer
+
+- **Q1.** Whether the four Linux misses should be made to pass by a change of a test, the app or the test environment.
+  Options: (a) a follow-up under F-823 (rule 13) that skips `workspace-first-open.spec.ts:59` with the reason "no WebGPU
+  adapter" where `navigator.gpu` gives none, gives `claude-code.spec.ts:177` a terminal (a terminal emulator in the image and
+  on the runner, or the plan recorded in test mode whether or not the terminal exists), and diagnoses `commands.spec.ts:90`
+  and `runner-lifetime.spec.ts:192` (a wait for the pid to be reaped) with registered checks of their own; (b) keep them as
+  known misses of Linux, the job failing on Linux until they are fixed; (c) run the e2e project on Windows only.
+  Recommendation: (a), because a skip with a reason the code states is what the brief asks of a test that cannot run, and
+  the other two look like test timing, not product defects.
+- **Q2.** As registered: if `windows-latest` shows the field views without WebGL, pass `--ignore-gpu-blocklist` on Windows
+  too. Recommendation: (a), as registered.
+- **Q3.** Whether the job should fail when a test skips that the registration says must run (M2 and M3 are seen only by the
+  counts; the job stays green). Options: (a) a step after Playwright that fails on any skip, read from Playwright's JSON
+  reporter; (b) leave it to a reading of the counts. Recommendation: (a), as a follow-up under F-823, since a lost build
+  would otherwise go unseen.
+
+## For the lead: roadmap entries
+
+> Status: partial.
+
+> Note: ADR 0802, 2026-11-26, partial: the studio-web job builds rcfd, rcfd-runner, rcfd-mcp and the f447_bench example in release (rust-cache, timeout 60 min) and packages the Studio with its engine; run here as written, on Windows all 880 tests pass with none skipped (the service e2e tests and the F-824 inventory among them), in the Ubuntu 24.04 container 860 pass, 4 fail and 16 do not run (claude-code:177 no x-terminal-emulator, commands:90 focus, runner-lifetime:192 a runner pid still alive, workspace-first-open:59 no WebGPU adapter); the negative control fails the job on both; 3 of 3 mutations seen.
+
+> Gap: On Windows here 880 of 880 pass, none skipped, but in the Ubuntu 24.04 container 4 tests fail and 16 after them do not run: claude-code.spec.ts:177 (no /usr/bin/x-terminal-emulator), commands.spec.ts:90 (focus on body), runner-lifetime.spec.ts:192 (runner pid alive after cleanUp), workspace-first-open.spec.ts:59 (no WebGPU adapter); each needs a change of a test, the app or the image (Q1); the first run on GitHub Actions is to be read.
+
+> Follow-ups: none as new items; Q1 (a) and Q3 (a) are proposed as follow-ups registered under F-823 (rule 13).
+
+The same entries are in `docs/roadmap/proposals/0802-F-823.json`.

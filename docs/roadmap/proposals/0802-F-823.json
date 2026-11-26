@@ -1,0 +1,10 @@
+{
+  "form": 1,
+  "adr": "0802",
+  "item": "F-823",
+  "base": "dcb4a1df52c5186a70a48137bdc7d8e35ff2f869",
+  "status": "partial",
+  "note": "ADR 0802, 2026-11-26, partial: the studio-web job builds rcfd, rcfd-runner, rcfd-mcp and the f447_bench example in release (rust-cache, timeout 60 min) and packages the Studio with its engine; run here as written, on Windows all 880 tests pass with none skipped (the service e2e tests and the F-824 inventory among them), in the Ubuntu 24.04 container 860 pass, 4 fail and 16 do not run (claude-code:177 no x-terminal-emulator, commands:90 focus, runner-lifetime:192 a runner pid still alive, workspace-first-open:59 no WebGPU adapter); the negative control fails the job on both; 3 of 3 mutations seen.",
+  "gap": "On Windows here 880 of 880 pass, none skipped, but in the Ubuntu 24.04 container 4 tests fail and 16 after them do not run: claude-code.spec.ts:177 (no /usr/bin/x-terminal-emulator), commands.spec.ts:90 (focus on body), runner-lifetime.spec.ts:192 (runner pid alive after cleanUp), workspace-first-open.spec.ts:59 (no WebGPU adapter); each needs a change of a test, the app or the image (Q1); the first run on GitHub Actions is to be read.",
+  "follow_ups": []
+}
