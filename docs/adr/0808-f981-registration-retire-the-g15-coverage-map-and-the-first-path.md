@@ -354,3 +354,38 @@ Size (agent): done; 0; 3 (the engine build, the six controls, `npm test`); 0; 60
 
 Decision rule: F-981 is **done** if R14 and R15 hold and every row of Addendum 1 other than R1 still holds (they are
 inside R15) and, if a remedy changes a Studio file, its mutation is caught; **partial** otherwise.
+
+## Addendum 4: results of the control and the diagnosis (2026-11-26)
+
+Every run used the engine of 2327d4f1 built in the scratch target, with `f447_bench` built there as Addendum 3 set up.
+
+| Control | Tree | Runs | Result |
+|---|---|---|---|
+| C1 | base 2327d4f1, scratch copy, own `npm ci` | 3 | 3 of 3 passed (12 passed each: 1.1 min, 57.7 s, 53.6 s) |
+| C2 | this branch (440e2f65 + this ADR), worktree | 3 | 3 of 3 failed: runs 1 and 3 on `a11y.spec.ts:299` (the Runs grid, as in R1: from the first row the arrow keys go up to the column header and then down through cells, so three rows are not reached and the focus ends on the header), with 7 not run; run 2 passed that case and failed `a11y.spec.ts:418` "reduced motion: …" (the heading "Quick start" not shown within 30 s after Ctrl+O), with 2 not run |
+
+By the rule of Addendum 3 the cause is in this work, and D was run once: a scratch copy of this tree with the base's
+`ProjectHome.tsx` and `src/renderer/first/` restored (and `NotAProject.tsx` removed), this branch's `a11y.spec.ts`. D
+failed: 8 passed, 1 failed, 2 not run. The Runs case passed. "reduced motion" failed as in C2 run 2, at line 422.
+
+Diagnosis, as far as these runs go:
+
+1. **"reduced motion" (`a11y.spec.ts:418`).** It depends on the case this work removed from the spec (item 8 of the
+   registration, "the first path on a project that holds nothing yet"). That case pressed Ctrl+1 and opened the empty
+   project, and "reduced motion" then reopens the quick start with Ctrl+O and waits for its heading. Without it, the case
+   starts from the state the decision-panel case leaves, and the heading does not come. It fails with the source restored
+   (D), so it is the removal from the spec, not the Studio. The registration's item 8 was defective: it removed a case
+   that a later case of the same serial file relies on.
+2. **The Runs grid case (`a11y.spec.ts:299`).** It failed in 2 of 3 C2 runs (and in R1 and in the lead's 3 runs), passed
+   in 3 of 3 C1 runs and in D's 1 run. That points at the source change (the first path's removal from the home), but one
+   run of D does not decide it, and Addendum 3 fixed no rule for a failing D. Not diagnosed further.
+
+Not run: no remedy was written (Addendum 3 asked for one only after a passing D), so R14 and R15 were not run, nor
+R9b, R10b, R12b. The work stopped here at the limit of 100 turns that the goal line sets.
+
+Decision: **partial**, as in Addendum 1: R1 is still missed, and R14 and R15 are not run.
+
+A remedy to register next (for the lead to issue): (1) in `a11y.spec.ts`, the step the removed case gave "reduced motion"
+(Ctrl+1 and the open of another project before it) is restored as a step of that case, by an amendment; (2) the Runs grid
+case gets a control D2 of 3 runs with the source restored and 3 with this tree's source, with the spec of (1), before any
+change to `ProjectHome.tsx`; (3) then R14 (3 of 3) and R15 (`npm test` once).
