@@ -1,0 +1,14 @@
+# expect-fail: cargo test --release -p rcfd-api --test case_facts_estimate_adr0812 e4_
+diff --git a/crates/rcfd-api/src/facts.rs b/crates/rcfd-api/src/facts.rs
+index ce79d082..05e1504e 100644
+--- a/crates/rcfd-api/src/facts.rs
++++ b/crates/rcfd-api/src/facts.rs
+@@ -386,7 +386,7 @@ pub fn case_facts(case: &Case, in_text: InText<'_>, max_cells: Option<u64>) -> R
+         return Err(FactsError::Invalid(diags));
+     }
+     if let (Some(limit), Some(n)) = (max_cells, crate::mesh_preview::estimate(case)) {
+-        if n > limit {
++        if n >= limit {
+             return Err(FactsError::TooLarge { cells: n, limit });
+         }
+     }
