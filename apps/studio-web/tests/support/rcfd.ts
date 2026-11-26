@@ -3,7 +3,7 @@
 // checkout (checkoutRelease of src/main/engine/locate.ts: $CARGO_TARGET_DIR/release, else <repo>/target/release), then
 // target/release of any folder above the app (a git worktree inside the main checkout can share its target folder).
 import { execFileSync, spawn, type ChildProcess } from 'node:child_process';
-import { existsSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { checkoutRelease } from '../../src/main/engine/locate.js';
@@ -94,10 +94,19 @@ export function killIfRcfd(pid: number): void {
 export function alive(pid: number): boolean {
   try {
     process.kill(pid, 0);
-    return true;
   } catch (e) {
     return (e as NodeJS.ErrnoException).code === 'EPERM';
   }
+  // ADR 0804: on Linux a process that has ended but is not yet reaped (state Z of /proc/<pid>/stat) still answers signal 0
+  if (process.platform === 'linux') {
+    try {
+      const stat = readFileSync(`/proc/${pid}/stat`, 'utf8');
+      return stat.slice(stat.lastIndexOf(')') + 2, stat.lastIndexOf(')') + 3) !== 'Z';
+    } catch {
+      return false;
+    }
+  }
+  return true;
 }
 
 /** A lid-driven box case (the case of ADR 0350's spike, written here): `n` cells per direction. */

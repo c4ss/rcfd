@@ -89,7 +89,8 @@ export class Runner {
 
   /**
    * Ends what the test started: cancels the run if it is not over, waits for it, and stops the runner cleanly; whatever is
-   * still alive after that (the solver, the runner) is killed. Only processes this test started are touched.
+   * still alive after that (the solver, the runner) is killed, and waited for, at most 10 s, since a signal is not
+   * synchronous (ADR 0804). Only processes this test started are touched.
    */
   async cleanUp(id: string | null): Promise<void> {
     if (id) {
@@ -114,15 +115,23 @@ export class Runner {
     } catch {
       // not running
     }
+    const signalled: number[] = [];
     if (id) {
       try {
         const pid = this.status(id).pid;
-        if (pid !== null && alive(pid)) killPid(pid);
+        if (pid !== null && alive(pid)) {
+          killPid(pid);
+          signalled.push(pid);
+        }
       } catch {
         // gone
       }
     }
-    if (runnerPid !== null && alive(runnerPid)) killPid(runnerPid);
+    if (runnerPid !== null && alive(runnerPid)) {
+      killPid(runnerPid);
+      signalled.push(runnerPid);
+    }
+    for (let i = 0; i < 200 && signalled.some(alive); i++) await pause(50);
   }
 
   /** The ids of the project's runs (the folders of runs/ that have a status.json). */

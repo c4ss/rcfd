@@ -174,6 +174,9 @@ jobs:
           missing=""
           command -v xvfb-run >/dev/null || missing="xvfb"
           dpkg -s libgl1-mesa-dri >/dev/null 2>&1 || missing="$missing libgl1-mesa-dri"
+          # A terminal for "Open Claude Code here" (src/main/claudecode/terminal.ts looks for /usr/bin/x-terminal-emulator,
+          # which xterm provides; in test mode it is recorded, never opened; ADR 0804)
+          [ -e /usr/bin/x-terminal-emulator ] || missing="$missing xterm"
           if [ -n "$missing" ]; then sudo apt-get update && sudo apt-get install -y $missing; fi
       # With the engine built above beside the app as out/packaged/resources/bin, as an installed Studio has it (ADR 0801
       # Addendum 21); a part missing fails this step, naming the file.
@@ -184,13 +187,44 @@ jobs:
         # What npm test runs after its build and packaging (both done by the steps above).
         # The runner has no GPU: without --ignore-gpu-blocklist Chromium turns WebGL off as well as WebGPU on Linux and the
         # field views and plots cannot draw; with it they draw with WebGL 2 on Mesa's llvmpipe (ADR 0801 Addendum 19). A
-        # switch of the tests' Electron (tests/support/launch.ts), not of the app.
+        # switch of the tests' Electron (tests/support/launch.ts), not of the app. --enable-unsafe-webgpu gives WebGPU a
+        # software adapter (the SwiftShader Electron ships), which workspace-first-open.spec.ts needs (ADR 0804).
+        # The json report is read by the next step.
+        env:
+          PLAYWRIGHT_JSON_OUTPUT_FILE: playwright-results.json
         run: |
           if [ "$RUNNER_OS" = "Linux" ]; then
-            RCFD_TEST_ELECTRON_ARGS=--ignore-gpu-blocklist xvfb-run --auto-servernum npx playwright test --reporter=list,html
+            RCFD_TEST_ELECTRON_ARGS="--ignore-gpu-blocklist --enable-unsafe-webgpu" xvfb-run --auto-servernum npx playwright test --reporter=list,html,json
           else
-            npx playwright test --reporter=list,html
+            npx playwright test --reporter=list,html,json
           fi
+      - name: no test skipped but the registered ones
+        # A test that skips passes Playwright; a lost build would go unseen (ADR 0802 Q3). This fails on any skipped test
+        # (a test.skip, or a test that did not run after a failure) whose <file>:<line> is not in the list (ADR 0804: none).
+        env:
+          STUDIO_ALLOWED_SKIPS: ""
+        run: |
+          node --input-type=module -e '
+          import { readFileSync } from "node:fs";
+          const report = JSON.parse(readFileSync("playwright-results.json", "utf8"));
+          const allowed = new Set((process.env.STUDIO_ALLOWED_SKIPS ?? "").split(" ").filter(Boolean));
+          let tests = 0;
+          const bad = [];
+          const walk = (suite) => {
+            for (const spec of suite.specs ?? []) {
+              for (const t of spec.tests ?? []) {
+                tests += 1;
+                const where = `${spec.file}:${spec.line}`;
+                if (t.status === "skipped" && !allowed.has(where)) bad.push(`${where} [${t.projectName}] ${spec.title}`);
+              }
+            }
+            for (const s of suite.suites ?? []) walk(s);
+          };
+          for (const s of report.suites ?? []) walk(s);
+          console.log(`${tests} tests in the report, ${bad.length} skipped and not in the registered list`);
+          for (const b of bad) console.log(`skipped: ${b}`);
+          if (tests === 0 || bad.length > 0) process.exit(1);
+          '
       - name: upload the Playwright report and test results
         if: failure()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
@@ -199,6 +233,7 @@ jobs:
           path: |
             apps/studio-web/playwright-report/
             apps/studio-web/test-results/
+            apps/studio-web/playwright-results.json
           if-no-files-found: ignore
           retention-days: 14
       # THIRD_PARTY_LICENSES.md lists the npm lock file too (ADR 0801 Q4); the script reads Cargo.lock through
