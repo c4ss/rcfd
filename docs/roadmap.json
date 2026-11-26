@@ -6919,9 +6919,9 @@
     "deps": [
       "F-541"
     ],
-    "status": "todo",
+    "status": "done",
     "acceptance": "Every limit not stated here is registered in the ADR before the run. The linear transient, the damped modes, the modal and the direct harmonic solve take Shell4 and Shell3: a cantilever strip of each against the closed-form Euler-Bernoulli response (the free-vibration frequency, the harmonic tip response off resonance) within registered limits, the direct harmonic against the mode superposition with all modes within 1e-8; models without shells keep their bits.",
-    "note": "Structural solver, advanced tier. Follow-up of F-541 (ADR 0545, 2026-11-15). Lead (2026-11-25): issued by docs/adr/briefs/f630-shells-linear-dynamics.md (ADR 0798)."
+    "note": "Structural solver, advanced tier. Follow-up of F-541 (ADR 0545, 2026-11-15). Lead (2026-11-25): issued by docs/adr/briefs/f630-shells-linear-dynamics.md (ADR 0798). ADR 0798, 2026-11-25, done: the linear transient, the damped modes, the mode superposition (dense basis and static correction) and the direct harmonic take Shell4 and Shell3 by an option per path, the default refusing as before; a strip of each element on three meshes meets Euler-Bernoulli in frequency, decay and tip response (worst 4.1e-4, 3.5e-4 and 5.0e-3 against 1e-3, 1e-3 and 1e-2), the direct harmonic meets every mode within 2.2e-11 and the transient the modal recurrence within 1.8e-11, and models without shells and shells without the option are bit-equal to main on Windows and Linux. Lead (2026-11-26): merged at 06ba3229 and pushed at 70d2e5b5; the push run was cut off by the end of a session at 23:19 and started again with the same command line, which kept what had passed; every selected test passed and both committed mutations failed as expected; 464 binaries are left out to the left-out run. Done as proposed. Its two follow-ups (shells on these paths by default; the random response and the harmonic stress of shells) are not entered: the first changes a default and the second opens new structural work, both the maintainer's."
   },
   {
     "id": "F-631",
