@@ -197,3 +197,24 @@ A defect of M1's set-up: removing V's `if` line from `showNow` leaves the consta
 command would fail at the build, not at KK2. M1 is instead: the `return true` of V's test replaced by `void 0` (the
 test stays, its outcome does nothing), which builds and withholds V's effect in the same way. M2, the rows, the rule and
 the expected catches are unchanged. The committed patch is M1 in this form.
+
+## Addendum 3: amendment 3, V's type and a run script that went on after a failed build (2026-11-26)
+
+REGISTERED 2026-11-26, written before the type correction it covers and before the corrected runs, committed alone.
+Written by Claude Opus 5.5 (`claude-opus-5-5`).
+
+What happened, recorded first: `npm run build` of V's tree (cf74214c) failed in its `typecheck`:
+`registry.ts(86,97): error TS2322: Type '{ entry: TriggerEntry; close: () => void; } | null' is not assignable to type
+'null'`. V declared `pressedOn` as `{ readonly at: typeof opened }`, and `typeof` in a type takes `opened`'s type as
+narrowed at that place (`null`, from its initialiser). The run script (`v.sh` in the scratch folder) did not stop at the
+failed build, and started R1: its runs 1 to 6 failed at the first case's launch, `ENOENT ... out/packaged.json` (no
+packaged app: the worktree had never been packaged), so no Studio ran and no case of the spec was made; the lead's
+agent stopped the script during run 7 and ended its own processes. Those six are not runs of R1 (nothing of V was
+built or driven); they are recorded here and in the results, and not counted.
+
+The correction: `pressedOn` is declared with the type written out, `{ readonly at: { entry: TriggerEntry; close: () =>
+void } | null } | null`, the type of `opened`. No behaviour of V changes. M1 and M2 patch lines that this does not
+touch; the committed patch `provenance-escape-f988.spec.mutation.patch` still applies (its context is the lines of
+`showNow`). The corrected run script stops at a failed build or a failed patch. Then R1 (10 runs), R2 (5), M1 and M2
+(3 each), R3 and R4 are made as registered, once each, on the corrected tree. No row, limit, rule or expected catch
+changes.
