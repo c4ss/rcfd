@@ -22,7 +22,8 @@
 // (G16, G23): every value is what those views read from the engine. Test hooks: the root's data-canvas-view (the
 // showing's id) and data-panels, each panel's data-canvas-panel and data-canvas-kind; F-979's data-mesh-build,
 // data-setting, data-value, data-run, data-state, data-last-step, data-last-value and the change line's data-n,
-// data-who, data-actor, data-pid, data-reason, data-old and data-new.
+// data-who, data-actor, data-pid, data-reason, data-old and data-new. F-977 (ADR 0817 D3): each panel's data-canvas-field
+// and data-canvas-monitor (its field or monitor, where it names one), so a test reads which views a layout chose.
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { CanvasPanel, CanvasView, ChangeEntry, ProjectView } from '../../shared/project.js';
 import type { StoreRef } from '../../shared/data.js';
@@ -55,7 +56,7 @@ export default function Canvas({ view, canvas }: { view: ProjectView; canvas: Ca
       {spec.title && <h2 className="cv-title">{spec.title}</h2>}
       <div className="cv-grid" data-columns={columns}>
         {panels.map((p, i) => (
-          <div key={`${canvas.id}-${i}`} className="cv-panel" data-canvas-panel={i} data-canvas-kind={p.kind}>
+          <div key={`${canvas.id}-${i}`} className="cv-panel" data-canvas-panel={i} data-canvas-kind={p.kind} data-canvas-field={p.field} data-canvas-monitor={p.monitor}>
             {p.title && <h3 className="cv-panel-title">{p.title}</h3>}
             <Panel view={view} panel={p} index={i} canvas={canvas} />
           </div>
