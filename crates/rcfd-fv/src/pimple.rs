@@ -194,6 +194,13 @@ pub struct PimpleSettings {
     /// is not taken; the face viscosity of the step's first outer iteration stays (the hook still runs). Read only with a
     /// hook. Default `false` (bit-identical).
     pub outer_freeze_viscosity: bool,
+    /// F-885 (ADR 0816, a record of the outer loop): for each cell named here, keep in `PimpleSolver::outer_probe`, per outer
+    /// iteration, the momentum diagonal of each component before the relaxation, the sum of the off-diagonal magnitudes the
+    /// relaxation takes (`d = max(a_c, sum |a_nb|)`, with the periodic and rotational link magnitudes as the relaxation counts
+    /// them), the Barth-Jespersen factor of each component at the cell and its face neighbours, the convecting flux on each
+    /// face of the cell (outward) and the cell's velocity after the correctors. Read-only: the copies enter no equation. Not
+    /// read by the fractional step or the moving-mesh steps. Default empty: nothing is computed or kept (bit-identical).
+    pub outer_cell_probe: Vec<usize>,
     /// F-535 (ADR 0471 D1): refuse the first step the solver takes, through the divergence guard and before any field is
     /// touched, when the pressure-lag estimate of ADR 0073 for the step's settings (`lag_preflight` with this many power
     /// iterations, at least 2) is at least one. The message names the largest cell diffusion number `nu dt/dx^2`
@@ -280,6 +287,38 @@ pub struct OuterVelocity {
     /// The cell of `d_k` for each outer iteration, in the same order (ADR 0810): the first cell of the largest change, cell 0
     /// when every change is zero.
     pub cell: Vec<usize>,
+}
+
+/// One outer iteration at a probe cell with `PimpleSettings::outer_cell_probe` (F-885, ADR 0816). NaN where a value is not
+/// formed (an inactive component; the factor without a limiter).
+#[derive(Debug, Clone, PartialEq)]
+pub struct ProbeIteration {
+    /// The momentum diagonal `a_c` of each component before the relaxation (after the time term).
+    pub diag: Vec3,
+    /// The sum of the off-diagonal magnitudes the relaxation takes, per component.
+    pub off_sum: Vec3,
+    /// The Barth-Jespersen factor of each component: the cell first, then its face neighbours in the order of
+    /// `OuterProbe::neighbours`.
+    pub psi: Vec<Vec3>,
+    /// The convecting flux of the predictor on each face of the cell, signed outward, in the order of `OuterProbe::faces`.
+    pub flux: Vec<f64>,
+    /// The cell's velocity after the iteration's correctors.
+    pub u: Vec3,
+}
+
+/// The outer iterations of one step at one probe cell (F-885, ADR 0816).
+#[derive(Debug, Clone, PartialEq)]
+pub struct OuterProbe {
+    /// Step number (1-based).
+    pub step: usize,
+    /// The probe cell.
+    pub cell: usize,
+    /// The faces of the cell, in face order.
+    pub faces: Vec<usize>,
+    /// The other cell of each internal face of the cell, in the order of `faces`.
+    pub neighbours: Vec<usize>,
+    /// The outer iterations of the step, in order.
+    pub iterations: Vec<ProbeIteration>,
 }
 
 /// The largest Euclidean norm over the cells of `b - a` and its first cell (F-885, ADR 0767; the cell ADR 0810).
@@ -1103,6 +1142,7 @@ impl PimpleSettings {
             alpha_free_face_flux: false,
             outer_freeze_source: false,
             outer_freeze_viscosity: false,
+            outer_cell_probe: Vec::new(),
             lag_onset_refusal: None,
             rotational_periodic_implicit: false,
             coupled_non_orth: false,
@@ -1331,6 +1371,9 @@ pub struct PimpleSolver {
     /// The velocity change of each outer iteration of every completed step with `PimpleSettings::outer_velocity_record`
     /// (F-885, ADR 0767); empty while it is `false`.
     pub outer_velocity: Vec<OuterVelocity>,
+    /// The outer iterations at the probe cells of every completed step with `PimpleSettings::outer_cell_probe` (F-885, ADR
+    /// 0816); empty while it is empty.
+    pub outer_probe: Vec<OuterProbe>,
     /// F-550 (ADR 0617 S4): the first-iteration pressure changes of the last completed steps (only with the criterion and
     /// `outer_scale_window`).
     outer_firsts: std::collections::VecDeque<f64>,
@@ -1417,6 +1460,7 @@ impl PimpleSolver {
             start_projected: false,
             outer_record: Vec::new(),
             outer_velocity: Vec::new(),
+            outer_probe: Vec::new(),
             outer_firsts: std::collections::VecDeque::new(),
         }
     }
@@ -1457,6 +1501,7 @@ impl PimpleSolver {
             start_projected: self.start_projected,
             outer_record: Vec::new(),
             outer_velocity: Vec::new(),
+            outer_probe: Vec::new(),
             outer_firsts: self.outer_firsts.clone(),
         }
     }
@@ -1846,6 +1891,24 @@ impl PimpleSolver {
         // F-885 (ADR 0767): the velocity change of each outer iteration (only with `outer_velocity_record`)
         let mut outer_dv: Vec<f64> = Vec::new();
         let mut outer_cell: Vec<usize> = Vec::new();
+        // F-885 (ADR 0816, opt-in): the probe cells' faces and face neighbours, and their iterations
+        let probe_topo: Vec<(usize, Vec<usize>, Vec<usize>)> = s
+            .outer_cell_probe
+            .iter()
+            .map(|&c| {
+                let (own, nei) = (mesh.owner(), mesh.neighbour());
+                let faces: Vec<usize> = (0..mesh.n_faces())
+                    .filter(|&f| own[f] == c || (f < n_int && nei[f] == c))
+                    .collect();
+                let nbrs = faces
+                    .iter()
+                    .filter(|&&f| f < n_int)
+                    .map(|&f| if own[f] == c { nei[f] } else { own[f] })
+                    .collect();
+                (c, faces, nbrs)
+            })
+            .collect();
+        let mut probe_iters: Vec<Vec<ProbeIteration>> = vec![Vec::new(); probe_topo.len()];
         for outer in 0..s.n_outer {
             let last = outer + 1 == s.n_outer || final_next;
             let (alpha_u, alpha_p) = if last { (1.0, 1.0) } else { (s.alpha_u, s.alpha_p) };
@@ -1960,6 +2023,26 @@ impl PimpleSolver {
                 Some(a) => a.relative_flux(&phi_conv),
                 None => phi_conv,
             };
+            // F-885 (ADR 0816, opt-in): this iteration at the probe cells (the convecting flux, outward)
+            let mut probe_now: Vec<ProbeIteration> = probe_topo
+                .iter()
+                .map(|(c, faces, nbrs)| ProbeIteration {
+                    diag: [f64::NAN; 3],
+                    off_sum: [f64::NAN; 3],
+                    psi: vec![[f64::NAN; 3]; nbrs.len() + 1],
+                    flux: faces
+                        .iter()
+                        .map(|&f| {
+                            if mesh.owner()[f] == *c {
+                                phi_conv[f]
+                            } else {
+                                -phi_conv[f]
+                            }
+                        })
+                        .collect(),
+                    u: [f64::NAN; 3],
+                })
+                .collect();
             // F-743 (ADR 0664, opt-in): the rotational partner links; when any exists the component solves are deferred to
             // one block solve, so that every component is assembled from the iterate `u_iter`
             let rot = match (s.rotational_periodic_implicit, (0..3).find(|&k| g.active[k])) {
@@ -2044,6 +2127,12 @@ impl PimpleSolver {
                 let limited: Option<Vec<Vec3>> = match (s.linear_upwind_limiter, &grad) {
                     (Some(kind), Some(gr)) if s.convection == ConvScheme::LinearUpwind => {
                         let psi = crate::gradient::limiter(&g, &conv_cells, &bv, gr, kind);
+                        for ((c, _, nbrs), pr) in probe_topo.iter().zip(probe_now.iter_mut()) {
+                            // F-885 (ADR 0816, opt-in): the factor at the probe cell and its face neighbours
+                            for (i, &cell) in std::iter::once(c).chain(nbrs).enumerate() {
+                                pr.psi[i][k] = psi[cell];
+                            }
+                        }
                         Some(gr.iter().zip(&psi).map(|(v, k)| vec3::scale(*v, *k)).collect())
                     }
                     _ => None,
@@ -2110,6 +2199,20 @@ impl PimpleSolver {
                 if let Some(ts) = &transposed {
                     for c in 0..n {
                         m.b[c] += vol[c] * ts[c][k];
+                    }
+                }
+                if !probe_topo.is_empty() {
+                    // F-885 (ADR 0816, opt-in): the diagonal and the sum the relaxation takes, as the three `relax` form it
+                    let mut sums = m.a.off_diag_abs_sum();
+                    for &(r, _, a) in &lk.t {
+                        sums[r] += a.abs();
+                    }
+                    if !rot.is_empty() {
+                        rot.add_magnitudes(&mut sums, k);
+                    }
+                    for ((c, _, _), pr) in probe_topo.iter().zip(probe_now.iter_mut()) {
+                        pr.diag[k] = m.a.diag[*c];
+                        pr.off_sum[k] = sums[*c];
                     }
                 }
                 if alpha_u < 1.0 {
@@ -2587,6 +2690,11 @@ impl PimpleSolver {
                 outer_dv.push(d);
                 outer_cell.push(cell);
             }
+            for (((c, _, _), mut pr), iters) in probe_topo.iter().zip(probe_now).zip(probe_iters.iter_mut()) {
+                // F-885 (ADR 0816, opt-in): the probe cell's velocity after the correctors
+                pr.u = self.u.values[*c];
+                iters.push(pr);
+            }
             if last {
                 break;
             }
@@ -2693,6 +2801,16 @@ impl PimpleSolver {
                 step: self.step_no,
                 change: outer_dv,
                 cell: outer_cell,
+            });
+        }
+        for ((c, faces, nbrs), iterations) in probe_topo.into_iter().zip(probe_iters) {
+            // ADR 0816: the probe cells' iterations of the step
+            self.outer_probe.push(OuterProbe {
+                step: self.step_no,
+                cell: c,
+                faces,
+                neighbours: nbrs,
+                iterations,
             });
         }
         let cont = divergence(&g, &self.phi).iter().fold(0.0f64, |a, &b| a.max(b.abs()));

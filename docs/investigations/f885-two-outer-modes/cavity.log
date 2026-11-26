@@ -1,0 +1,15 @@
+test f885_tm_cavity_control ... F885-TM KL step 1: d [3.4197e-2, 7.2412e-3, 1.5663e-3, 3.4663e-4, 8.0147e-5, 2.0066e-5, 7.9764e-6, 3.6228e-6, 1.7521e-6, 8.6297e-7, 4.1914e-7, 2.0232e-7, 9.7410e-8, 4.6859e-8, 2.2539e-8, 1.0843e-8, 5.2181e-9, 2.5121e-9, 1.2099e-9, 6.2757e-10]
+F885-TM KL step 2: d [3.2343e-2, 6.7452e-3, 1.4153e-3, 2.9759e-4, 6.2665e-5, 1.3421e-5, 2.8234e-6, 6.0985e-7, 1.3740e-7, 3.9860e-8, 1.5264e-8, 6.6403e-9, 3.3817e-9, 1.7183e-9, 8.5596e-10, 4.2264e-10, 2.0785e-10, 1.0206e-10, 5.0066e-11, 2.6234e-11]
+F885-TM KL step 3: d [2.9869e-2, 6.2575e-3, 1.3252e-3, 2.8122e-4, 5.9827e-5, 1.3058e-5, 2.7802e-6, 6.2373e-7, 1.6641e-7, 5.8212e-8, 2.3677e-8, 1.0561e-8, 4.9372e-9, 2.4353e-9, 1.2082e-9, 5.9432e-10, 2.9120e-10, 1.4242e-10, 6.9612e-11, 3.6309e-11]
+F885-TM KL: C 1.112467e-8 (CONVERGES), mode A at cell 27: HA1 false HA2 false HA3 false, q 5.6731, result all ruled out
+test f885_tm_probe_read_only ... F885-TM T2 KC0: u equal true, p equal true, flux equal true, record equal true; probe records 6 (with), 0 (without)
+F885-TM T2 KL: u equal true, p equal true, flux equal true, record equal true; probe records 6 (with), 0 (without)
+test f885_tm_probe_two_routes ... F885-TM T1 step 1 component 0: a_c 4.406250e-2 (test 4.406250e-2), s 5.000000e-3 (test 5.000000e-3), factor 1.0000 (test 1.0000), largest relative difference 0.000e0
+F885-TM T1 step 1 component 1: a_c 4.406250e-2 (test 4.406250e-2), s 5.000000e-3 (test 5.000000e-3), factor 1.0000 (test 1.0000), largest relative difference 0.000e0
+F885-TM T1 step 2 component 0: a_c 4.415741e-2 (test 4.415741e-2), s 5.094913e-3 (test 5.094913e-3), factor 1.0000 (test 1.0000), largest relative difference 0.000e0
+F885-TM T1 step 2 component 1: a_c 4.415741e-2 (test 4.415741e-2), s 5.094913e-3 (test 5.094913e-3), factor 1.0000 (test 1.0000), largest relative difference 0.000e0
+F885-TM T1 step 3 component 0: a_c 4.424812e-2 (test 4.424812e-2), s 5.185621e-3 (test 5.185621e-3), factor 1.0000 (test 1.0000), largest relative difference 0.000e0
+F885-TM T1 step 3 component 1: a_c 4.424812e-2 (test 4.424812e-2), s 5.185621e-3 (test 5.185621e-3), factor 1.0000 (test 1.0000), largest relative difference 0.000e0
+F885-TM T1: largest relative difference 0.000e0 (limit 1e-12); misses []
+test f885_tm_rules_on_built_records ... ok
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 2 filtered out; finished in 0.15s

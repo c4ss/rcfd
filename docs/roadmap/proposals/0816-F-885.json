@@ -1,0 +1,9 @@
+{
+  "form": 1,
+  "adr": "0816",
+  "item": "F-885",
+  "base": "d8b506d836dbb142c149c2c987a001da4bfd2840",
+  "status": "partial",
+  "note": "ADR 0816, 2026-11-26, diagnosis done, item partial: an opt-in probe of the fan's outer iterations on 20 steps of H(dt) names the cause of the constant change at c11837: the cell's own Barth-Jespersen factor (x component) switches between two values in every outer iteration of all ten classed steps (change 0.22 to 0.56, return within 2e-2) and the iterate cycles with it (q 0.005), while the diagonal dominates (a_c/s 1.53) and no face flux changes sign; the slow contraction without the limiter (factor 0.854) is not the lost dominance (r 1.38), not the corrector count (0.854 with four), not a blend of the relaxation (0.892 at alpha_u 0.5 against 0.919 predicted) and not independent of alpha_u (0.873 at 0.7): all four ruled out; the cavity with the limiter contracts (C 1.1e-8); held by crates/rcfd-api/tests/f885_two_outer_modes.rs and docs/investigations/f885-two-outer-modes.",
+  "gap": "Missing for done: a class by ADR 0183's rule. Check H does not decide because the fan's outer loop does not contract within a step. ADR 0816: with the limiter the Barth-Jespersen factor at c11837 switches between two values each outer iteration (a period-2 cycle); without it a slow mode (0.854 per iteration) remains whose cause is not the dominance, the correctors or the relaxation's blend. Needs a remedy of the limiter cycle and a diagnosis of the slow mode (ADR 0816 questions 1 and 2)."
+}
