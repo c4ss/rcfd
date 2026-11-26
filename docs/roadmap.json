@@ -10229,9 +10229,9 @@
       "F-814",
       "F-447"
     ],
-    "status": "todo",
+    "status": "done",
     "acceptance": "Every limit not stated here is registered in the ADR before the run. A versioned JSON view specification, with its schema in the engine and validated with located errors, names what to show (case, run, field, mesh, plot, monitor, table), of which case or run, and its layout. The project-mode MCP tool show_view, and a service method of the same, sends it to the open Studio of the project, which renders it with its existing views in its theme within a registered time of the call. An invalid specification is refused with the key and the reason and the shown view is unchanged; with no Studio open the tool says so. The MCP tool list golden changes by the added tools only (additive class) and every other default is unchanged. Shown by an e2e test that drives the open Studio from the rcfd-mcp binary.",
-    "note": "Lead (2026-11-26): entered on ADR 0803, the maintainer's direction and answers of that day (the Studio as Claude's canvas)."
+    "note": "Lead (2026-11-26): entered on ADR 0803, the maintainer's direction and answers of that day (the Studio as Claude's canvas). ADR 0805, 2026-11-26, partial: the view specification rcfd-view 1 (seven kinds, layout, located errors), show_view and read_view (tools and workspace methods) and the canvas registry of rcfd-mcp --canvas; the open Studio shows a seven-kind view with its existing views 481 ms after the tool's result (limit 1.6 s), refuses an invalid one at its key and keeps the shown view; 4 of 4 mutations caught, one committed; L1 to L3 missed: the registration named too few of the tests and inventory rows that pin the tool list. Lead (2026-11-26): merged at f167aa4a and pushed at 1e92df2a; the lead re-recorded the additive edit (show_view and read_view in tool_list_f275, project_list_f270, project_w48f and project_runs_w48f, three rows of the capability inventory, two coverage rows) on the branch before the merge, and the push run passed them with every selected test and 897 Studio tests; the committed mutation failed as expected. Written done, not the proposed partial: every clause of the acceptance holds (the tool list changes by the added tools only, in the additive class), and L1 to L3 measured only how far the registration foresaw the pins; they stay as recorded misses in ADR 0805. Its questions are answered by the recommendations (ADR 0805)."
   },
   {
     "id": "F-977",
@@ -10312,5 +10312,16 @@
     "status": "todo",
     "acceptance": "Every limit not stated here is registered in the ADR before the run. RandomSolver takes Shell4 and Shell3, and the stress of a harmonic response of a shell is given by its resultants: a strip against the closed form of one mode under a flat spectrum, and the stresses against shell::stresses of the real and the imaginary part within 1e-12; models without shells keep their bits.",
     "note": "Lead (2026-11-26): entered from the follow-up of ADR 0798 as written, taken on the maintainer's standing instruction of 2026-11-26 (go with the recommended option always). It waits until the structural line's partial items are closed (priority line 4)."
+  },
+  {
+    "id": "F-984",
+    "title": "Claude's canvas: derived pictures and a mesh picture as panels",
+    "phase": 8,
+    "deps": [
+      "F-979"
+    ],
+    "status": "todo",
+    "acceptance": "Every limit not stated here is registered in the ADR before the run. The view specification gains panel kinds for the derived pictures of derive_picture (ADR 0738) and a picture of a mesh, additive to version 1 or as a version 2 that still reads version 1; each is drawn in the open Studio by an existing view in its theme, refused with its key when invalid, and shown by an e2e test that drives the open Studio from the rcfd-mcp binary; every default unchanged.",
+    "note": "Lead (2026-11-26): entered on ADR 0805 question 2, option (yes, as items of their own after F-979), the recommendation, taken on the maintainer's standing instruction of 2026-11-26 (go with the recommended option always)."
   }
 ]

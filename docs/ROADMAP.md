@@ -641,7 +641,7 @@ exist, and Phase 9 items are stretch. Phase numbers 5 and 6 may run in parallel 
 
 ## Phase 8 - AI assistant and desktop app integration
 
-86 items: 56 done, 18 partly done, 12 not started.
+87 items: 57 done, 18 partly done, 12 not started.
 
 - [x] **F-090** MCP server (external tool interface) with tools: list_cases, create_case, set_setting, get_setting, load_mesh, check_mesh, run, status, get_residuals, get_field_stats, export_vtk, render_image
   - depends on: F-085, F-073
@@ -994,10 +994,10 @@ exist, and Phase 9 items are stretch. Phase numbers 5 and 6 may run in parallel 
   - depends on: F-828
   - acceptance: Every limit not stated here is registered in the ADR before the run. The numbers on screen that are values of a run and that ADR 0795 lists under Open (the compare metrics table, the band ends, the scrubber's flag, Home's Step and Time) open their provenance by the trigger and the keyboard path of F-828, with the same content rule; axis tick labels, file sizes and counts in a sentence stay without it.
   - note: Lead (2026-11-25): entered on the maintainer's answer of that day to ADR 0795 (question 1, option (b)), with the title, dependencies and acceptance of its follow-up as written. Lead (2026-11-26, ADR 0803): held until the view specification of F-976 exists, so that it is shown through it.
-- [ ] **F-976** Claude's canvas: a view specification and show_view, which the open Studio renders
+- [x] **F-976** Claude's canvas: a view specification and show_view, which the open Studio renders
   - depends on: F-270, F-814, F-447
   - acceptance: Every limit not stated here is registered in the ADR before the run. A versioned JSON view specification, with its schema in the engine and validated with located errors, names what to show (case, run, field, mesh, plot, monitor, table), of which case or run, and its layout. The project-mode MCP tool show_view, and a service method of the same, sends it to the open Studio of the project, which renders it with its existing views in its theme within a registered time of the call. An invalid specification is refused with the key and the reason and the shown view is unchanged; with no Studio open the tool says so. The MCP tool list golden changes by the added tools only (additive class) and every other default is unchanged. Shown by an e2e test that drives the open Studio from the rcfd-mcp binary.
-  - note: Lead (2026-11-26): entered on ADR 0803, the maintainer's direction and answers of that day (the Studio as Claude's canvas).
+  - note: Lead (2026-11-26): entered on ADR 0803, the maintainer's direction and answers of that day (the Studio as Claude's canvas). ADR 0805, 2026-11-26, partial: the view specification rcfd-view 1 (seven kinds, layout, located errors), show_view and read_view (tools and workspace methods) and the canvas registry of rcfd-mcp --canvas; the open Studio shows a seven-kind view with its existing views 481 ms after the tool's result (limit 1.6 s), refuses an invalid one at its key and keeps the shown view; 4 of 4 mutations caught, one committed; L1 to L3 missed: the registration named too few of the tests and inventory rows that pin the tool list. Lead (2026-11-26): merged at f167aa4a and pushed at 1e92df2a; the lead re-recorded the additive edit (show_view and read_view in tool_list_f275, project_list_f270, project_w48f and project_runs_w48f, three rows of the capability inventory, two coverage rows) on the branch before the merge, and the push run passed them with every selected test and 897 Studio tests; the committed mutation failed as expected. Written done, not the proposed partial: every clause of the acceptance holds (the tool list changes by the added tools only, in the additive class), and L1 to L3 measured only how far the registration foresaw the pins; they stay as recorded misses in ADR 0805. Its questions are answered by the recommendations (ADR 0805).
 - [ ] **F-977** Claude's canvas: the layout of results chosen by the category of the case
   - depends on: F-976
   - acceptance: Every limit not stated here is registered in the ADR before the run. The case categories are fixed in the registration from the case schema (at least external aerodynamics, internal flow and turbomachinery, heat transfer, structural, multiphase), each with a default layout of views derived from the case and run records. show_view with a run and no layout takes its category's layout; a case of no known category takes the general layout. Each category is shown by an e2e test on an example case of the repository, with the views chosen named in the registration.
@@ -1018,6 +1018,10 @@ exist, and Phase 9 items are stretch. Phase numbers 5 and 6 may run in parallel 
   - depends on: F-976
   - acceptance: Every limit not stated here is registered in the ADR before the run. The coverage test of guardrail G15 and the Studio's hand-only surfaces (menus, editors and navigation whose only purpose is to reach a capability by hand), each listed in the registration with its file, are removed or retired; every test retired is named in the ADR with its reason (the maintainer's answer of 2026-11-26, ADR 0803). The views the canvas uses and their tests stay and pass; npm test passes.
   - note: Lead (2026-11-26): entered on ADR 0803, the maintainer's direction and answers of that day (the Studio as Claude's canvas).
+- [ ] **F-984** Claude's canvas: derived pictures and a mesh picture as panels
+  - depends on: F-979
+  - acceptance: Every limit not stated here is registered in the ADR before the run. The view specification gains panel kinds for the derived pictures of derive_picture (ADR 0738) and a picture of a mesh, additive to version 1 or as a version 2 that still reads version 1; each is drawn in the open Studio by an existing view in its theme, refused with its key when invalid, and shown by an e2e test that drives the open Studio from the rcfd-mcp binary; every default unchanged.
+  - note: Lead (2026-11-26): entered on ADR 0805 question 2, option (yes, as items of their own after F-979), the recommendation, taken on the maintainer's standing instruction of 2026-11-26 (go with the recommended option always).
 
 ## Phase 9 - Advanced physics and scale (stretch)
 

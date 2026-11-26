@@ -302,3 +302,10 @@ Decision by the registered rule: **partial**, because L1, L2 and L3 missed (ever
 > Follow-ups: none.
 
 The same entries are `docs/roadmap/proposals/0805-F-976.json`.
+
+## Answers of the maintainer (2026-11-26), written by the lead
+
+Both taken by the recommendation on the maintainer's standing instruction of 2026-11-26 (go with the recommended option always).
+
+1. The workspace method stands as the service method: a method in `rcfd-api` would make a crate cycle.
+2. Yes: the canvas shows derived pictures and a mesh picture, as an item of its own after F-979, F-984.
