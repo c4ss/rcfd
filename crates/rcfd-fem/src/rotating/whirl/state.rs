@@ -360,7 +360,9 @@ thread_local! {
 fn record_failure(h: &[f64], m: usize, window: (usize, usize), fro: f64, tau: f64, fallback_ok: bool) {
     let (l, hi) = window;
     let sub = (l + 1..=hi).map(|i| h[i * m + i - 1].abs()).collect();
-    let local = (l + 1..=hi).map(|i| h[(i - 1) * m + i - 1].abs() + h[i * m + i].abs()).collect();
+    let local = (l + 1..=hi)
+        .map(|i| h[(i - 1) * m + i - 1].abs() + h[i * m + i].abs())
+        .collect();
     QR_FAILURES.with(|r| {
         r.borrow_mut().push(QrFailure {
             m,

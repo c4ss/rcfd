@@ -54,7 +54,8 @@ fn wheel() -> SolidModel {
     nodes.push(p(a / 2.0, 0.65, 0.125));
     nodes.push(p(a / 2.0, 0.3, 0.25));
     let mut mesh = SolidMesh::new(nodes).unwrap();
-    mesh.add_block(ElementKind::Beam2, vec![0, 1, 1, 2, 2, 3, 3, 4]).unwrap();
+    mesh.add_block(ElementKind::Beam2, vec![0, 1, 1, 2, 2, 3, 3, 4])
+        .unwrap();
     mesh.add_block(ElementKind::Beam2, vec![6, 5, 5, 2]).unwrap();
     let ring = BeamSection::new(1.8e-3, 1.35e-7, 5.4e-7, 3.7e-7, 5.0 / 6.0, 5.0 / 6.0).unwrap();
     let spoke = BeamSection::new(1.2e-3, 1.0e-7, 2.5e-7, 2.4e-7, 0.85, 0.75).unwrap();
@@ -106,7 +107,11 @@ fn dg1_dg2_dg3_the_stalled_window_of_the_wheel_sector() {
             QR_FAILURES.with(|r| r.borrow_mut().clear());
             let r = sec.whirl_state(k, w);
             let recs = QR_FAILURES.with(|r| r.borrow().clone());
-            println!("k = {k}, speed {w}: result Ok {}, stalled first iterations {}", r.is_ok(), recs.len());
+            println!(
+                "k = {k}, speed {w}: result Ok {}, stalled first iterations {}",
+                r.is_ok(),
+                recs.len()
+            );
             for f in &recs {
                 failed.push((k, w));
                 let smin = f.sub.iter().copied().fold(f64::INFINITY, f64::min);

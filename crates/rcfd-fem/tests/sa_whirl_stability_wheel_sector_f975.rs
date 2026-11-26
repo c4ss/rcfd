@@ -107,7 +107,6 @@ fn options_c() -> CyclicOptions {
     options_b().full_rotor_beams(true)
 }
 
-
 fn met(ok: bool) -> &'static str {
     if ok {
         "met"
@@ -275,7 +274,9 @@ fn a1_a2_whirl_stability_of_w_and_whirl_state() {
                     Ok(x) => format!("{x:?}") == format!("{:?}", r.results[h][j]),
                     Err(_) => false,
                 };
-                let ev = one.as_ref().map(|x| x.state.eigenvalues == r.results[h][j].state.eigenvalues);
+                let ev = one
+                    .as_ref()
+                    .map(|x| x.state.eigenvalues == r.results[h][j].state.eigenvalues);
                 println!(
                     "A2 k = {k}, speed {w}: texts equal {same}, eigenvalues equal {ev:?} ({} eigenvalues): {}",
                     r.results[h][j].state.eigenvalues.len(),
@@ -307,7 +308,9 @@ fn v1_v4_frequencies_flags_and_residuals_against_the_other_routes() {
             let reference: Vec<f64> = if w == 0.0 {
                 let hm = modal_analysis_harmonic(&m, &[], k, &modal_options(4)).unwrap();
                 let base: Vec<f64> = hm.eigenvalues.iter().map(|l| l.sqrt()).collect();
-                base.iter().flat_map(|&o| std::iter::repeat(o).take(x.multiplicity)).collect()
+                base.iter()
+                    .flat_map(|&o| std::iter::repeat(o).take(x.multiplicity))
+                    .collect()
             } else {
                 match sec.whirl_modes(k, w).unwrap().modes() {
                     Some(wm) => wm.modes.iter().map(|q| q.omega).collect(),
@@ -315,7 +318,11 @@ fn v1_v4_frequencies_flags_and_residuals_against_the_other_routes() {
                 }
             };
             let worst = if omegas.len() == reference.len() && !omegas.is_empty() {
-                omegas.iter().zip(&reference).map(|(a, b)| rel(*a, *b)).fold(0.0f64, f64::max)
+                omegas
+                    .iter()
+                    .zip(&reference)
+                    .map(|(a, b)| rel(*a, *b))
+                    .fold(0.0f64, f64::max)
             } else {
                 f64::INFINITY
             };
@@ -347,7 +354,10 @@ fn v1_v4_frequencies_flags_and_residuals_against_the_other_routes() {
     let v4_ok = v4 <= 1e-10;
     println!("V1: largest {v1:.3e} (limit 1e-8): {}", met(v1_ok));
     println!("V2: largest {v2:.3e} (limit 1e-8): {}", met(v2_ok));
-    println!("V3: every index and speed Stable, largest real_defect {v3:.3e} (limit 1e-8): {}", met(v3_ok));
+    println!(
+        "V3: every index and speed Stable, largest real_defect {v3:.3e} (limit 1e-8): {}",
+        met(v3_ok)
+    );
     println!("V4: largest residual {v4:.3e} (limit 1e-10): {}", met(v4_ok));
     assert!(v1_ok, "V1");
     assert!(v2_ok, "V2");
@@ -387,10 +397,18 @@ fn b_w_the_other_paths_of_w_keep_the_record_of_main() {
         }
     }
     let got = fnv(&w);
-    println!("B-W hash with main's P7 = {got:#018x} on {} {}", std::env::consts::OS, std::env::consts::ARCH);
+    println!(
+        "B-W hash with main's P7 = {got:#018x} on {} {}",
+        std::env::consts::OS,
+        std::env::consts::ARCH
+    );
     assert_eq!(replaced, 1, "B-W: P7 not found");
     if cfg!(all(windows, target_arch = "x86_64")) {
-        println!("B-W record {H_W_WINDOWS:#018x}: equal {}: {}", got == H_W_WINDOWS, met(got == H_W_WINDOWS));
+        println!(
+            "B-W record {H_W_WINDOWS:#018x}: equal {}: {}",
+            got == H_W_WINDOWS,
+            met(got == H_W_WINDOWS)
+        );
         assert_eq!(got, H_W_WINDOWS, "B-W");
     } else {
         println!("B-W: no record of main's P7 text for this platform; printed, not compared");
