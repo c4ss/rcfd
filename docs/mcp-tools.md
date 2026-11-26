@@ -175,8 +175,8 @@ class `write_files`; they run in the server process and start no run of the proj
 
 ## Project tools (`--project`)
 
-`rcfd-mcp --project <dir>` adds 25 tools that work on one Studio project folder ([ADR 0135](adr/0135-wave48f-plugin-and-project-tools.md),
-folder contract in [ui-restart-plan.md](ui-restart-plan.md) section 8), and leaves out 16 session tools (below), so it lists 42.
+`rcfd-mcp --project <dir>` adds 38 tools that work on one Studio project folder ([ADR 0135](adr/0135-wave48f-plugin-and-project-tools.md),
+folder contract in [ui-restart-plan.md](ui-restart-plan.md) section 8), and leaves out 16 session tools (below), so it lists 57.
 Without `--project` the tool list is unchanged. The server
 refuses to start (exit 2, a message naming the folder) when `<dir>` holds no `rcfd-project.json`. The Claude Code plugin in
 `clients/claude-plugin` starts `rcfd-mcp --project ${CLAUDE_PROJECT_DIR} --root ${CLAUDE_PROJECT_DIR}` from PATH (PATH only).
@@ -250,6 +250,24 @@ cfd\sites.toml` or `~/.config/rcfd/sites.toml`): `file`, `sites` [{`name`, `kind
 | `restore_trash` | write_files | moves a trashed item back where it was: argument `token`; 1200 with `data.path` when that path is taken now, 1202 for no such token, -32602 for a malformed one; one journal line `restored` |
 | `empty_trash` | delete | removes trashed items for good: `removed` [tokens], `count`, `bytes`; arguments `tokens` (default: all), `older_than_days`; one journal line `trash_emptied`. There is no automatic emptying. The same from the command line: `rcfd project trash`, `trash-list`, `restore`, `empty-trash` |
 | `wait_run` | read | `run`, `from`, `state`, `changed`, `terminal`, `waited_s`, `status`; returns when the state differs from `from` (default: the state at the call) or the run ended, at the latest after `timeout_s` (default 30, at most 60) |
+| `show_view` | write_files | [ADR 0805](adr/0805-f976-registration-a-view-specification-and-show-view.md): shows a view in the Studio that has the project open (Claude's canvas, guardrail G23): `shown`, `id` (the hash of the written file), `path` (`.rcfd/views/current.json`), `hash`, `studios` (how many Studios have the project open), `panels`; arguments `view` (the specification below) and `reason`. The view is checked against the project first: an invalid one is error 1003 with `data.errors` [{`key`, `reason`}] (every error, at most 20; `errors_total`) and nothing changes; with no Studio open, error 1002 says so and nothing is written. Otherwise the file is written and one journal line `view_shown` (`path`, `hash`, `panels` the kinds, `studios`) tells every open Studio, through its change feed, to show it |
+| `read_view` | read | the view shown last: `exists`, `path`, `id`, `hash`, `shown`, `actor`, `reason`, `view`; `exists` false and `view` null when none was shown |
+
+The view specification of `show_view` (`rcfd-view`, version 1; checked by `crates/rcfd-workspace/src/view.rs`) is
+`{version: 1, title?, layout?: {columns}, panels}`: `title` 1 to 200 characters, `columns` 1 to 4 (default the smaller of
+2 and the number of panels; panels fill the grid row by row), `panels` 1 to 8, each `{kind, title?}` with the keys of its
+kind and no other: `case` {`case`: a `.toml` or `.json` file under `cases/`}, `run` {`run`}, `field` {`run`, `field` (stored
+in the run's field store), `snapshot`? (an index; default the last)}, `mesh` {`mesh`: an entry of `list_meshes`}, `plot`
+{`run`: its residuals}, `monitor` {`run`, `monitor`: a name of its `monitors.<name>` series}, `table` {`runs`: 1 to 10
+distinct run ids}. Each run, case, mesh, field, snapshot and monitor must exist. An error's `key` is the dotted path of
+the value (`version`, `layout.columns`, `panels[2].kind`, `panels[1].colour` for a key that is not allowed). The Studio
+draws each kind with its existing view: the case's and the mesh's rows of the project home, the run workspace, the field
+view, the residual and monitor plots of the time panel, the project home's rows of the runs.
+
+Which Studios have the project open: the Studio starts its reading server with `--canvas` (with `--project` only; without
+`--project` the server exits 2), which registers the process in `<temp>/rcfd-canvas/<hash of the project root>/<pid>.json`
+while it runs; `show_view` counts the files whose process is alive (`rcfd-mcp`) and removes the others. Nothing of this is
+in the project folder. A Studio that opens the project later shows the last view (`read_view`).
 
 On Windows the runner that `start_run` starts (and the solvers it starts) also inherit `rcfd-mcp`'s standard input and output
 pipes, because std starts processes with handle inheritance on and the workspace allows no unsafe code. Measured: after the

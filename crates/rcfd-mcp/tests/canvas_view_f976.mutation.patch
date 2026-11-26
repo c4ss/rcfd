@@ -1,0 +1,15 @@
+# expect-fail: cargo test --release -p rcfd-mcp --test canvas_view_f976
+diff --git a/crates/rcfd-workspace/src/view.rs b/crates/rcfd-workspace/src/view.rs
+index a4359c1d..7e2cc75e 100644
+--- a/crates/rcfd-workspace/src/view.rs
++++ b/crates/rcfd-workspace/src/view.rs
+@@ -52,7 +52,8 @@ fn e(errors: &mut Vec<ViewError>, key: impl Into<String>, reason: impl Into<Stri
+ 
+ /// Keys of `o` that are not in `allowed`, each an error at `<at>.<key>`.
+ fn extra_keys(o: &Map<String, Value>, allowed: &[&str], at: &str, errors: &mut Vec<ViewError>) {
+-    for k in o.keys().filter(|k| !allowed.contains(&k.as_str())) {
++    // MUTATION M1 (ADR 0805): keys that are not allowed are let through
++    for k in o.keys().filter(|k| !allowed.contains(&k.as_str()) && false) {
+         let key = if at.is_empty() { k.clone() } else { format!("{at}.{k}") };
+         e(
+             errors,
