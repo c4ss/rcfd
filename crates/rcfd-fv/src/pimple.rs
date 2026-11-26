@@ -268,15 +268,18 @@ pub struct OuterVelocity {
 
 /// The largest Euclidean norm over the cells of `b - a` and its first cell (F-885, ADR 0767; the cell ADR 0810).
 fn max_velocity_change(a: &[Vec3], b: &[Vec3]) -> (f64, usize) {
-    a.iter().zip(b).enumerate().fold((0.0f64, 0usize), |(m, at), (c, (x, y))| {
-        let (dx, dy, dz) = (y[0] - x[0], y[1] - x[1], y[2] - x[2]);
-        let v = (dx * dx + dy * dy + dz * dz).sqrt();
-        if v > m {
-            (v, c)
-        } else {
-            (m, at)
-        }
-    })
+    a.iter()
+        .zip(b)
+        .enumerate()
+        .fold((0.0f64, 0usize), |(m, at), (c, (x, y))| {
+            let (dx, dy, dz) = (y[0] - x[0], y[1] - x[1], y[2] - x[2]);
+            let v = (dx * dx + dy * dy + dz * dz).sqrt();
+            if v > m {
+                (v, c)
+            } else {
+                (m, at)
+            }
+        })
 }
 
 /// Every flag of the consistent (SIMPLEC-type) pressure correctors in one value (ADR 0258 V1). `enabled` asks for the correctors

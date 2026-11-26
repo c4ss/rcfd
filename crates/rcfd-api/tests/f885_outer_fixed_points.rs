@@ -52,9 +52,32 @@ const S2_TOL: f64 = 1e-3;
 type Entry = (&'static str, &'static str, f64);
 
 /// The cavity's outcomes of the registered run of ADR 0810, and the rows of the table that hold (written after the run).
-const CAVITY_RECORD: Option<(&[Entry], &str)> = None;
+const CAVITY_RECORD: Option<(&[Entry], &str)> = Some((
+    &[
+        ("K0", "PRESENT", 9.825472184802878),
+        ("K1", "ABSENT", 0.07409914988148718),
+        ("K2", "PRESENT", 9.845220450795065),
+        ("K3", "ABSENT", 0.4874011035830805),
+        ("K4", "PRESENT", 13289364.866419517),
+        ("K5", "PRESENT", 6.86305979852826),
+        ("K4:C", "CONVERGES", 4.777392522375897e-8),
+        ("L", "IN", 0.4869685505487506),
+    ],
+    "H1",
+));
 /// The fan's outcomes of the registered run, the rows that hold, and the result (written after the run).
-const FAN_RECORD: Option<(&[Entry], &str, &str)> = None;
+const FAN_RECORD: Option<(&[Entry], &str, &str)> = Some((
+    &[
+        ("F0", "PRESENT", 34.784013699672094),
+        ("F1", "ABSENT", 0.9338187940214693),
+        ("F2", "PRESENT", 105.25470460252978),
+        ("F3", "PRESENT", 34.78401369965596),
+        ("F4", "PRESENT", 9.79140090285106),
+        ("F2:C", "STALLS", 0.03662076573314066),
+    ],
+    "H1",
+    "named H1",
+));
 
 // ---------------------------------------------------------------- the measures (ADR 0810 section 5)
 
@@ -323,7 +346,12 @@ fn f885_fp_cell_two_routes() {
         assert_eq!((rec.step, rec.change.len(), rec.cell.len()), (n, 5, 5));
         for k in 0..5 {
             let (d, c) = change_at(&v[k], &v[k + 1]);
-            println!("P1 step {n} outer {}: record {:.12e} at c{}, route B {d:.12e} at c{c}", k + 1, rec.change[k], rec.cell[k]);
+            println!(
+                "P1 step {n} outer {}: record {:.12e} at c{}, route B {d:.12e} at c{c}",
+                k + 1,
+                rec.change[k],
+                rec.cell[k]
+            );
             assert_eq!(rec.cell[k], c, "P1: step {n}, outer {}", k + 1);
             assert!(rel(rec.change[k], d) <= 1e-12, "the value of ADR 0767");
         }
@@ -425,7 +453,11 @@ fn cavity_controls(print: bool) -> (CavityOut, Vec<(String, &'static str, f64)>,
     if print {
         println!("F885-FP K4 C {cv:.6e} {}, Q {:.6e}", cname(k4c), q_rule(&runs[4].0, 1));
         for r in [&runs[6].0, &runs[7].0] {
-            println!("F885-FP {} d {:?}", r.name, r.steps.iter().map(|s| sci(&s.1)).collect::<Vec<_>>());
+            println!(
+                "F885-FP {} d {:?}",
+                r.name,
+                r.steps.iter().map(|s| sci(&s.1)).collect::<Vec<_>>()
+            );
         }
         println!("F885-FP L {l:.6e} in [0.4, 0.6]: {l_in}");
     }
@@ -470,7 +502,10 @@ fn f885_fp_rules_on_built_records() {
     assert_eq!(jump(&built(5, 3, with(3.0)), 1).1, Jump::Undecided);
     assert_eq!(jump(&built(5, 3, with(f64::NAN)), 1).1, Jump::Undecided);
     // J reads d_N / d_(N-1): a jump at d_4 with d_5 = d_4 is no jump of the final iteration
-    assert_eq!(jump(&built(5, 3, |_| vec![1.0, 0.2, 0.05, 1.0, 1.0]), 1).1, Jump::Absent);
+    assert_eq!(
+        jump(&built(5, 3, |_| vec![1.0, 0.2, 0.05, 1.0, 1.0]), 1).1,
+        Jump::Absent
+    );
     // the median over the classed steps: two of three steps carry the jump
     let mixed = built(5, 3, |n| if n == 2 { with(1.0)(n) } else { with(6.0)(n) });
     assert_eq!(jump(&mixed, 1).1, Jump::Present);
@@ -480,7 +515,21 @@ fn f885_fp_rules_on_built_records() {
     let mut cut = built(5, 3, with(6.0));
     cut.steps.pop();
     assert_eq!(jump(&cut, 1).1, Jump::Undecided, "a run that did not complete");
-    let n20 = |c: f64| move |_: usize| (0..20).map(|k| if k == 1 { 1.0 } else if k == 18 { c } else { 0.5 }).collect();
+    let n20 = |c: f64| {
+        move |_: usize| {
+            (0..20)
+                .map(|k| {
+                    if k == 1 {
+                        1.0
+                    } else if k == 18 {
+                        c
+                    } else {
+                        0.5
+                    }
+                })
+                .collect()
+        }
+    };
     assert_eq!(conv(&built(20, 3, n20(1e-3)), 1).1, Conv::Converges);
     assert_eq!(conv(&built(20, 3, n20(0.1)), 1).1, Conv::Stalls);
     assert_eq!(conv(&built(20, 3, n20(f64::NAN)), 1).1, Conv::Undecided);
@@ -502,8 +551,23 @@ fn f885_fp_rules_on_built_records() {
     assert_eq!(fan_rows(&h1f).0, vec!["H1"]);
     assert_eq!(result(&h1c, &h1f), "named H1");
     // H4 beside: the fan's relaxed loop stalls, the cause is still named
-    assert_eq!(result(&h1c, &FanOut { f2c: Conv::Stalls, ..h1f }), "named H1");
-    assert!(fan_rows(&FanOut { f2c: Conv::Stalls, ..h1f }).1);
+    assert_eq!(
+        result(
+            &h1c,
+            &FanOut {
+                f2c: Conv::Stalls,
+                ..h1f
+            }
+        ),
+        "named H1"
+    );
+    assert!(
+        fan_rows(&FanOut {
+            f2c: Conv::Stalls,
+            ..h1f
+        })
+        .1
+    );
     let h2c = CavityOut {
         k: [P, A, A, P, P, P],
         k4c: Conv::Converges,
@@ -534,9 +598,34 @@ fn f885_fp_rules_on_built_records() {
         l_in: true,
     };
     assert_eq!(cavity_rows(&hc).0, vec!["Hc"]);
-    assert_eq!(result(&hc, &FanOut { f: [P, P, P, P, P], ..h1f }), "named Hc");
-    assert_eq!(result(&h1c, &FanOut { f: [Jump::Undecided, A, P, P, P], ..h1f }), "names none", "a baseline UNDECIDED");
-    assert!(cavity_rows(&CavityOut { k4c: Conv::Stalls, ..h1c }).1);
+    assert_eq!(
+        result(
+            &hc,
+            &FanOut {
+                f: [P, P, P, P, P],
+                ..h1f
+            }
+        ),
+        "named Hc"
+    );
+    assert_eq!(
+        result(
+            &h1c,
+            &FanOut {
+                f: [Jump::Undecided, A, P, P, P],
+                ..h1f
+            }
+        ),
+        "names none",
+        "a baseline UNDECIDED"
+    );
+    assert!(
+        cavity_rows(&CavityOut {
+            k4c: Conv::Stalls,
+            ..h1c
+        })
+        .1
+    );
 }
 
 // ---------------------------------------------------------------- the fan (ADR 0766, ADR 0767: the case of check H, copied)
@@ -735,7 +824,12 @@ fn fan_run(name: &str, n_outer: usize, set: fn(&mut PimpleSettings)) -> (Run, Ve
             }
         }
     }
-    println!("F885-FP {name} END: {} of {FAN_STEPS} steps, failed {:?}, {:.1} s", run.steps.len(), run.failed, t0.elapsed().as_secs_f64());
+    println!(
+        "F885-FP {name} END: {} of {FAN_STEPS} steps, failed {:?}, {:.1} s",
+        run.steps.len(),
+        run.failed,
+        t0.elapsed().as_secs_f64()
+    );
     (run, cc)
 }
 
@@ -751,7 +845,15 @@ fn write_fan(path: &Path, runs: &[Run]) {
         "# ADR 0810 (F-885): the fan controls F0 to F4 on 20 steps of H(dt) (dt = {H_DT:?} s); d [m/s] the velocity change of outer iteration k, cell its cell\n{FAN_HEADER}\n"
     );
     for r in runs {
-        writeln!(out, "# {} n_outer {} steps {} failed {:?}", r.name, r.n_outer, r.steps.len(), r.failed).unwrap();
+        writeln!(
+            out,
+            "# {} n_outer {} steps {} failed {:?}",
+            r.name,
+            r.n_outer,
+            r.steps.len(),
+            r.failed
+        )
+        .unwrap();
         for (n, d, c) in &r.steps {
             for k in 0..r.n_outer {
                 writeln!(out, "{},{n},{},{:.9e},{}", r.name, k + 1, d[k], c[k]).unwrap();
@@ -837,7 +939,11 @@ fn f885_fp_fan_controls_record() {
         });
     }
     let (o, out) = fan_outcomes(&runs);
-    println!("F885-FP FAN outcomes {out:?}; rows {:?}; F2 Q {:.6e}", fan_rows(&o), q_rule(&runs[2], FAN_FROM));
+    println!(
+        "F885-FP FAN outcomes {out:?}; rows {:?}; F2 Q {:.6e}",
+        fan_rows(&o),
+        q_rule(&runs[2], FAN_FROM)
+    );
     let s1 = &runs[0].steps[0].1;
     println!("C0f: F0 step 1 {} against ADR 0767 S2 {}", sci(s1), sci(&S2_STEP1));
     for (a, b) in s1.iter().zip(S2_STEP1) {
@@ -856,9 +962,16 @@ fn f885_fp_fan_from_the_committed_record() {
     let (rows, h4) = fan_rows(&o);
     let (c, _, _) = cavity_controls(false);
     let res = result(&c, &o);
-    println!("F885-FP FAN outcomes {out:?}; rows that hold {rows:?}; H4 {h4}; Q of F2 {:.6e}; RESULT {res}", q_rule(&runs[2], FAN_FROM));
-    let (want, want_rows, want_res) = FAN_RECORD.expect("no recorded outcome yet: the registered fan run of ADR 0810 has not been recorded");
-    assert!(runs.iter().all(|r| r.failed.is_some() || r.steps.len() == FAN_STEPS), "every run complete or stopped");
+    println!(
+        "F885-FP FAN outcomes {out:?}; rows that hold {rows:?}; H4 {h4}; Q of F2 {:.6e}; RESULT {res}",
+        q_rule(&runs[2], FAN_FROM)
+    );
+    let (want, want_rows, want_res) =
+        FAN_RECORD.expect("no recorded outcome yet: the registered fan run of ADR 0810 has not been recorded");
+    assert!(
+        runs.iter().all(|r| r.failed.is_some() || r.steps.len() == FAN_STEPS),
+        "every run complete or stopped"
+    );
     check_record(&out, want);
     assert_eq!(rows.join(","), want_rows);
     assert_eq!(res, want_res);
