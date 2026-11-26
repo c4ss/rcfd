@@ -186,6 +186,14 @@ pub struct PimpleSettings {
     /// consistent correctors, a face jump, an immersed solid or a moving mesh; not read by the fractional step or the
     /// moving-mesh steps. Default `false`: no term is formed (bit-identical); with `alpha_u = 1` it is not formed either.
     pub alpha_free_face_flux: bool,
+    /// F-885 (ADR 0815, a control of the outer loop): in the outer iterations after the first of a step, the hook's
+    /// `source_force` is not taken; the one of the step's first outer iteration stays. Read only with a hook. Default `false`
+    /// (bit-identical).
+    pub outer_freeze_source: bool,
+    /// F-885 (ADR 0815, a control of the outer loop): in the outer iterations after the first of a step, the hook's `nu_face`
+    /// is not taken; the face viscosity of the step's first outer iteration stays (the hook still runs). Read only with a
+    /// hook. Default `false` (bit-identical).
+    pub outer_freeze_viscosity: bool,
     /// F-535 (ADR 0471 D1): refuse the first step the solver takes, through the divergence guard and before any field is
     /// touched, when the pressure-lag estimate of ADR 0073 for the step's settings (`lag_preflight` with this many power
     /// iterations, at least 2) is at least one. The message names the largest cell diffusion number `nu dt/dx^2`
@@ -1093,6 +1101,8 @@ impl PimpleSettings {
             outer_scale_window: None,
             outer_velocity_record: false,
             alpha_free_face_flux: false,
+            outer_freeze_source: false,
+            outer_freeze_viscosity: false,
             lag_onset_refusal: None,
             rotational_periodic_implicit: false,
             coupled_non_orth: false,
@@ -1830,6 +1840,8 @@ impl PimpleSolver {
         let mut outer_used = 0usize;
         let mut outer_ratio = f64::NAN;
         let mut outer_first = 0.0f64;
+        // F-885 (ADR 0815, opt-in): the hook's source of the step's first outer iteration (only with `outer_freeze_source`)
+        let mut frozen_source: Option<Option<BodyForce>> = None;
         let mut outer_scale = 0.0f64;
         // F-885 (ADR 0767): the velocity change of each outer iteration (only with `outer_velocity_record`)
         let mut outer_dv: Vec<f64> = Vec::new();
@@ -1842,13 +1854,21 @@ impl PimpleSolver {
             if let Some(h) = hook.as_mut() {
                 let up = h(&self.u, &self.phi);
                 self.source_force = up.source_force;
+                if s.outer_freeze_source {
+                    // F-885 (ADR 0815, opt-in): after the step's first outer iteration its source is kept
+                    if outer == 0 {
+                        frozen_source = Some(self.source_force.clone());
+                    } else if let Some(f) = &frozen_source {
+                        self.source_force = f.clone();
+                    }
+                }
                 self.sink = up.sink;
                 self.face_jump = up.face_jump;
                 for (patch, pk) in up.patch_pressures {
                     let _ = self.p.set_bc(&g, &patch, Box::new(FixedValue::scalar(pk)));
                 }
-                if let Some(nu) = up.nu_face {
-                    // ADR 0199 D2: the face viscosity of this outer iteration
+                if let Some(nu) = up.nu_face.filter(|_| !(s.outer_freeze_viscosity && outer > 0)) {
+                    // ADR 0199 D2: the face viscosity of this outer iteration (ADR 0815: kept after the first if frozen)
                     gamma_nu = nu.clone();
                     self.nu_face = Some(nu);
                 }
