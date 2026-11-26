@@ -526,3 +526,84 @@ Decision by the rule of Addendum 5: **partial**. R14 held and M4 was caught; R15
 > Note: ADR 0808, 2026-11-26, partial (Addenda 5 and 6): the a11y Runs grid failure diagnosed (a run selected by the workspace's lazy chunk in the base; the home now loads that chunk when a project opens) and the reduced-motion set-up restored; a11y.spec passed 3 of 3 and the remedy's mutation was caught; npm test 884 passed, 1 failed (provenance-f828 KR KK: Escape left a popover open), not diagnosed.
 
 > Gap: npm test did not pass: provenance-f828.spec.ts KR KK failed once after ADR 0808's remedy (Escape after Ctrl+I twice on a Runs grid cell left the provenance popover open), not diagnosed; it passed before the remedy.
+
+## Addendum 7: amendment 3, registration of a remedy that does not depend on load timing, the control of KR KK and the rows R14, R15 and R16 (2026-11-26)
+
+REGISTERED 2026-11-26, a further registration of F-981 under rule 13 of `docs/process/agent-rules.md` (version 5),
+written before any change or run it covers and committed alone, at the branch's head ffd919bd. Written by Claude Opus
+5.5 (`claude-opus-5-5`), as a background agent of the lead. Every run sets `CARGO_TARGET_DIR`, `RCFD_BIN`,
+`RCFD_MCP_BIN` and `RCFD_RUNNER_BIN` to the scratch build of 2327d4f1 as Addendum 1 did (`git diff --stat 2327d4f1..HEAD
+-- crates` is empty), with `f447_bench` in the scratch target as Addendum 3 set up; scratch copies have their own
+`npm ci` (no junction); Studio tests run one at a time.
+
+**The lead's finding, recorded first.** `push_main` on the merge 94ba5aed applied the committed mutation
+`apps/studio-web/tests/e2e/a11y.spec.mutation.patch` (M4, the remedy 57c7f729 reverted) and ran `a11y.spec.ts`, and the
+file passed with the patch applied (11 passed). So M4 is not caught every time, and the remedy of Addendum 6 is
+timing-dependent: by D3 the Runs grid case (`a11y.spec.ts:299`) passes only when the run workspace's lazy chunk loads
+while the previous case's arrow walk of the project tabs shows the Workspace tab for a moment, long enough for the
+workspace to select the newest run; 57c7f729 only starts that load earlier and so makes the race likelier to be won.
+Addendum 6's "M4 caught" was one run that lost the race.
+
+**The state the Runs case needs, read from the code of the base tree 2327d4f1.** In the base, as here, the selected run
+is the project view's state (`OpenProject` in `project/ProjectHome.tsx`); nothing selects a run on open; the run
+workspace, once mounted with nothing selected, selects the live run, else the newest by `created`
+(`workspace/RunWorkspace.tsx`, the effect after `autoSelect`), and draws `<div className="ws" data-run=…>`. With a run
+selected, the Runs grid's Tab stop is the selected row (D3), and the walk passed in every base run (C1, D2r). The first
+path gave this state only by making the workspace's chunk small enough to mount in time.
+
+**The remedy (V1)**, two changes, committed together after this addendum:
+
+1. `tests/e2e/a11y.spec.ts`, the case "the Runs view, a run selected from the keyboard, …": before its `Control+2`, it
+   shows the Workspace tab from the keyboard the way the workspace case of the same file does (`tabTo` the selected tab
+   of "Project views", `arrowTo` the tab "Workspace" with ArrowRight), waits for `.ws` to carry a `data-run` of the form
+   `r-…` (the workspace's own selection, timeout 20 s, the timeout of the case's grid wait), and, after `Control+2` and the
+   grid shown, waits for `aside.rv-run` of that run to be visible (20 s) before `surface('runs', …)`. The state is thus
+   awaited, not raced. No check, limit, exclusion or timeout of the file is removed or changed; the two waits are added
+   assertions. The Tab walk and the arrow walk of the grid are unchanged.
+2. `src/renderer/project/ProjectHome.tsx`: 57c7f729 reverted (the file as at 3353ab65), since with V1.1 the early load
+   has no purpose and only fetches three.js on every project open.
+
+**The mutation (M5), committed** as `apps/studio-web/tests/e2e/a11y.spec.mutation.patch` in place of M4's (made with
+`git diff`, first line `# expect-fail: cd apps/studio-web && npx playwright test tests/e2e/a11y.spec.ts
+--project=electron`): the run workspace's selection with nothing selected removed (the effect after `autoSelect` in
+`workspace/RunWorkspace.tsx` returns at once), the state V1 needs withheld deterministically. Expected catch: the Runs
+case, at V1's wait for `.ws[data-run]`, in every run. It is run **5 times** on a scratch copy of V1's commit (own
+`npm ci`, the patch applied, built and packaged), each run recorded; caught means the Runs case failed in that run.
+M4 is recorded as not caught (the lead's run).
+
+**K, the diagnosis control of `provenance-f828.spec.ts:351` "KR KK"** (R15's one failure: after Ctrl+I twice on a Runs
+grid cell, `shut`'s Escape left `.pv-pop` open, line 396), `npx playwright test tests/e2e/provenance-f828.spec.ts
+--project=electron` alone, each tree built and packaged first:
+
+- **Kb**: the base tree 2327d4f1, the scratch copy `base2` (its own `npm ci`, used for C1), **5 runs**.
+- **Kw**: this branch at this addendum's commit (with 57c7f729), in the worktree, **5 runs**.
+
+Rule, fixed now, on the KR KK case's result in each run (another failing case is recorded, not counted here):
+
+- **K1**: Kb fails KR KK in 1 or more of 5. The failure is not this work's; no remedy of it here; R16 is run as it stands.
+- **K2**: Kb passes 5 of 5 and Kw fails 1 or more of 5. The failure is this work's; the one Studio source change between
+  R1 (where KR KK passed) and R15 is 57c7f729 (S1 and M4 touch no source), so its remedy is V1.2, the revert, already
+  registered; no other change. R16 decides.
+- **K3**: both pass 5 of 5. Not reproduced alone; no remedy beyond V1.2; R16 and R15 decide.
+
+K is a control, not a row; none of its runs is made again.
+
+| Row | Check | Limit | Source of the limit | Estimate | Margin | Kind |
+|---|---|---|---|---|---|---|
+| R14 | `a11y.spec.ts` alone, at V1's commit, 5 runs | 5 of 5 runs with 0 failed and every case of the file passed (11 passed) | Addendum 5 (R14), with the count corrected as Addendum 6 recorded; the lead's message (5 of 5); acceptance of F-981 | 5 of 5 | pass or fail | code verification |
+| R16 | `provenance-f828.spec.ts` alone, after V1, 5 runs | 5 of 5 runs with 0 failed | the lead's message; acceptance of F-981 ("npm test passes") | 5 of 5 | pass or fail | code verification |
+| R15 | `npm test` in `apps/studio-web`, once, after R14 and R16, against the scratch engine and `f447_bench` | 0 failed | Addendum 3 (R15); acceptance of F-981 | 0 failed | pass or fail | code verification |
+
+Then, once each: `npm run typecheck` (R9c), `cargo test -p rcfd-cli --release --test docs_site` (R10c), `python
+scripts/roadmap_proposals.py check docs/roadmap/proposals/0808-F-981.json` (R12c, the file updated to the verdict) and
+`python scripts/process_report.py --check` (R13c, last). No test is skipped, removed or loosened; no limit changes after
+a run; each registered run is made once.
+
+Not covered: the Runs grid walk from the first row (no run selected: ArrowUp goes into the column header and ArrowDown
+then moves by cells) fails on the base tree too whenever the race is lost (D2b run 1, C2); V1 tests the state the case
+was written for and does not change the grid or the walker (`runs/`, `ui/` and `tests/support/a11y.ts` are not this
+work's files). It is recorded here for the lead.
+
+Size (agent): done; 0; 5 (K's ten runs, M5's copy and five runs, R14, R16, R15); 0; 40000
+
+Decision rule: F-981 is **done** if R14, R16 and R15 hold and M5 is caught in 5 of 5 runs; **partial** otherwise.
