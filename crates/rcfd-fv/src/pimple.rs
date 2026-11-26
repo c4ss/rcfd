@@ -207,6 +207,24 @@ pub struct PimpleSettings {
     /// factors are reset at every step. Without the limiter nothing is kept. Not read by the fractional step or the
     /// moving-mesh steps. Default `false` (bit-identical).
     pub outer_frozen_limiter: bool,
+    /// F-885 (ADR 0820, opt-in): keep the momentum predictor's convecting flux `phi_conv` of the step's first outer
+    /// iteration (after the BDF2 extrapolation and the moving-mesh map) and use it in the step's later outer iterations (the
+    /// final one included): in the convection, the periodic and rotational links and the probe. Not the correctors' flux,
+    /// not ADR 0811's term. Reset at every step. Not read by the fractional step. Default `false` (bit-identical).
+    pub outer_frozen_convecting_flux: bool,
+    /// F-885 (ADR 0820, opt-in): keep each component's least-squares gradient that enters the convection (its deferred
+    /// correction, and the limiter factor where one is formed) in the step's first outer iteration and use it in the later
+    /// ones. Read only where a gradient is formed. Reset at every step. Default `false` (bit-identical).
+    pub outer_frozen_convection_gradient: bool,
+    /// F-885 (ADR 0820, opt-in): keep each component's gradient that enters the momentum Laplacian's non-orthogonal
+    /// correction in the step's first outer iteration and use it in the later ones. Read only where a gradient is formed and
+    /// `coupled_non_orth` is off. Reset at every step. Default `false` (bit-identical).
+    pub outer_frozen_laplacian_gradient: bool,
+    /// F-885 (ADR 0820, a record of the outer loop): for each outer iteration named here (1-based), push to
+    /// `PimpleSolver::outer_fields` the velocity after the iteration's correctors, the predictor's convecting flux and the
+    /// gradients that entered the convection and the Laplacian. Read-only: the copies enter no equation. Default empty
+    /// (bit-identical).
+    pub outer_field_record: Vec<usize>,
     /// F-535 (ADR 0471 D1): refuse the first step the solver takes, through the divergence guard and before any field is
     /// touched, when the pressure-lag estimate of ADR 0073 for the step's settings (`lag_preflight` with this many power
     /// iterations, at least 2) is at least one. The message names the largest cell diffusion number `nu dt/dx^2`
@@ -325,6 +343,23 @@ pub struct OuterProbe {
     pub neighbours: Vec<usize>,
     /// The outer iterations of the step, in order.
     pub iterations: Vec<ProbeIteration>,
+}
+
+/// One recorded outer iteration with `PimpleSettings::outer_field_record` (F-885, ADR 0820).
+#[derive(Debug, Clone, PartialEq)]
+pub struct OuterField {
+    /// Step number (1-based).
+    pub step: usize,
+    /// Outer iteration (1-based).
+    pub iteration: usize,
+    /// The velocity after the iteration's correctors.
+    pub u: Vec<Vec3>,
+    /// The convecting flux of the iteration's momentum predictor.
+    pub phi_conv: Vec<f64>,
+    /// Per component, the gradient that entered the convection (before a limiter factor); `None` where none was formed.
+    pub grad_convection: [Option<Vec<Vec3>>; 3],
+    /// Per component, the gradient that entered the Laplacian's non-orthogonal correction; `None` where none was formed.
+    pub grad_laplacian: [Option<Vec<Vec3>>; 3],
 }
 
 /// The largest Euclidean norm over the cells of `b - a` and its first cell (F-885, ADR 0767; the cell ADR 0810).
@@ -1150,6 +1185,10 @@ impl PimpleSettings {
             outer_freeze_viscosity: false,
             outer_cell_probe: Vec::new(),
             outer_frozen_limiter: false,
+            outer_frozen_convecting_flux: false,
+            outer_frozen_convection_gradient: false,
+            outer_frozen_laplacian_gradient: false,
+            outer_field_record: Vec::new(),
             lag_onset_refusal: None,
             rotational_periodic_implicit: false,
             coupled_non_orth: false,
@@ -1381,6 +1420,9 @@ pub struct PimpleSolver {
     /// The outer iterations at the probe cells of every completed step with `PimpleSettings::outer_cell_probe` (F-885, ADR
     /// 0816); empty while it is empty.
     pub outer_probe: Vec<OuterProbe>,
+    /// The recorded outer iterations of every completed step with `PimpleSettings::outer_field_record` (F-885, ADR 0820);
+    /// empty while it is empty.
+    pub outer_fields: Vec<OuterField>,
     /// F-550 (ADR 0617 S4): the first-iteration pressure changes of the last completed steps (only with the criterion and
     /// `outer_scale_window`).
     outer_firsts: std::collections::VecDeque<f64>,
@@ -1468,6 +1510,7 @@ impl PimpleSolver {
             outer_record: Vec::new(),
             outer_velocity: Vec::new(),
             outer_probe: Vec::new(),
+            outer_fields: Vec::new(),
             outer_firsts: std::collections::VecDeque::new(),
         }
     }
@@ -1509,6 +1552,7 @@ impl PimpleSolver {
             outer_record: Vec::new(),
             outer_velocity: Vec::new(),
             outer_probe: Vec::new(),
+            outer_fields: Vec::new(),
             outer_firsts: self.outer_firsts.clone(),
         }
     }
@@ -1900,6 +1944,12 @@ impl PimpleSolver {
         let mut outer_cell: Vec<usize> = Vec::new();
         // F-885 (ADR 0819, opt-in): each component's limiter factor of the step's first outer iteration
         let mut frozen_psi: [Option<Vec<f64>>; 3] = [None, None, None];
+        // F-885 (ADR 0820, opt-in): the convecting flux and each component's gradients of the step's first outer iteration,
+        // and the recorded iterations of the step
+        let mut frozen_phi_conv: Option<Vec<f64>> = None;
+        let mut frozen_grad_conv: [Option<Vec<Vec3>>; 3] = [None, None, None];
+        let mut frozen_grad_lap: [Option<Vec<Vec3>>; 3] = [None, None, None];
+        let mut fields_now: Vec<OuterField> = Vec::new();
         // F-885 (ADR 0816, opt-in): the probe cells' faces and face neighbours, and their iterations
         let probe_topo: Vec<(usize, Vec<usize>, Vec<usize>)> = s
             .outer_cell_probe
@@ -2032,6 +2082,24 @@ impl PimpleSolver {
                 Some(a) => a.relative_flux(&phi_conv),
                 None => phi_conv,
             };
+            // F-885 (ADR 0820, opt-in): the convecting flux of the step's first outer iteration kept for the later ones
+            let phi_conv = match (s.outer_frozen_convecting_flux, &frozen_phi_conv) {
+                (true, Some(kept)) => kept.clone(),
+                (true, None) => {
+                    frozen_phi_conv = Some(phi_conv.clone());
+                    phi_conv
+                }
+                _ => phi_conv,
+            };
+            // F-885 (ADR 0820, opt-in): this iteration in the field record
+            let mut field_now: Option<OuterField> = s.outer_field_record.contains(&(outer + 1)).then(|| OuterField {
+                step: self.step_no,
+                iteration: outer + 1,
+                u: Vec::new(),
+                phi_conv: phi_conv.clone(),
+                grad_convection: [None, None, None],
+                grad_laplacian: [None, None, None],
+            });
             // F-885 (ADR 0816, opt-in): this iteration at the probe cells (the convecting flux, outward)
             let mut probe_now: Vec<ProbeIteration> = probe_topo
                 .iter()
@@ -2132,8 +2200,14 @@ impl PimpleSolver {
                 } else {
                     None
                 };
+                // F-885 (ADR 0820, opt-in): the convection's gradient of the step's first outer iteration kept for the later
+                // ones
+                let grad_c: Option<&[Vec3]> = match (&grad, s.outer_frozen_convection_gradient) {
+                    (Some(gr), true) => Some(frozen_grad_conv[k].get_or_insert_with(|| gr.clone()).as_slice()),
+                    _ => grad.as_deref(),
+                };
                 // ADR 0183 P-A (opt-in): the limited gradient in the convection term only
-                let limited: Option<Vec<Vec3>> = match (s.linear_upwind_limiter, &grad) {
+                let limited: Option<Vec<Vec3>> = match (s.linear_upwind_limiter, grad_c) {
                     (Some(kind), Some(gr)) if s.convection == ConvScheme::LinearUpwind => {
                         let psi = match &frozen_psi[k] {
                             // F-885 (ADR 0819, opt-in): the factor kept from the step's first outer iteration
@@ -2162,14 +2236,24 @@ impl PimpleSolver {
                     &conv_cells,
                     &bc,
                     s.convection,
-                    limited.as_deref().or(grad.as_deref()),
+                    limited.as_deref().or(grad_c),
                 );
                 // ADR 0204 K3: the gradient options of the momentum Laplacian, with the values the gradient was computed from
                 // (F-744, ADR 0667: with `coupled_non_orth` the partner-point gradient)
                 let lap_grad = match &cn_grads {
                     Some(gs) => gs[k].as_deref(),
-                    None => grad.as_deref(),
+                    // F-885 (ADR 0820, opt-in): the Laplacian's gradient of the step's first outer iteration kept for the
+                    // later ones
+                    None => match (&grad, s.outer_frozen_laplacian_gradient) {
+                        (Some(gr), true) => Some(frozen_grad_lap[k].get_or_insert_with(|| gr.clone()).as_slice()),
+                        _ => grad.as_deref(),
+                    },
                 };
+                if let Some(fr) = field_now.as_mut() {
+                    // F-885 (ADR 0820, the record): the gradients this iteration's convection and Laplacian take
+                    fr.grad_convection[k] = grad_c.map(|x| x.to_vec());
+                    fr.grad_laplacian[k] = lap_grad.map(|x| x.to_vec());
+                }
                 m.add(&laplacian_opt(
                     &g,
                     &gamma_nu,
@@ -2714,6 +2798,11 @@ impl PimpleSolver {
                 pr.u = self.u.values[*c];
                 iters.push(pr);
             }
+            if let Some(mut fr) = field_now {
+                // F-885 (ADR 0820, the record): the velocity after the correctors
+                fr.u = self.u.values.clone();
+                fields_now.push(fr);
+            }
             if last {
                 break;
             }
@@ -2822,6 +2911,8 @@ impl PimpleSolver {
                 cell: outer_cell,
             });
         }
+        // ADR 0820: the recorded iterations of the step
+        self.outer_fields.append(&mut fields_now);
         for ((c, faces, nbrs), iterations) in probe_topo.into_iter().zip(probe_iters) {
             // ADR 0816: the probe cells' iterations of the step
             self.outer_probe.push(OuterProbe {
