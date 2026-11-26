@@ -39,8 +39,12 @@ import { openMember } from '../provenance/index.js';
 import { TrashButton, TrashGroup, caseTarget, resultsTarget, runTarget, trashScope } from './Trash.js';
 import './project.css';
 
-// F-810: the run workspace, loaded on demand (it brings three.js), so the project home costs nothing more at start
-const RunWorkspace = lazy(() => import('../workspace/RunWorkspace.js'));
+// F-810: the run workspace, loaded on demand (it brings three.js), so the project home costs nothing more at start.
+// ADR 0808 Addendum 5: its loading starts when a project opens, not when its tab is first shown, as it did while the
+// retired first path imported the field view into the home; the workspace then selects the newest run on first showing.
+let workspaceLoad: Promise<typeof import('../workspace/RunWorkspace.js')> | null = null;
+const loadWorkspace = () => (workspaceLoad ??= import('../workspace/RunWorkspace.js'));
+const RunWorkspace = lazy(loadWorkspace);
 // F-976 (ADR 0805): Claude's canvas, loaded on demand (its field and run panels bring three.js)
 const Canvas = lazy(() => import('../canvas/Canvas.js'));
 
@@ -340,6 +344,10 @@ function OpenProject({ view, state }: { view: ProjectView; state: ProjectState }
   const [tab, setTab] = useState<View>('home');
   // the selected run belongs to the project view, so it survives a switch of view; it is display state, not project state
   const [run, setRun] = useState<string | null>(null);
+  // ADR 0808 Addendum 5: the workspace's code is fetched once a project is open
+  useEffect(() => {
+    void loadWorkspace();
+  }, []);
   // F-807: a case run from the home is followed in the Runs view
   const onStarted = (id: string) => {
     setRun(id);
