@@ -237,3 +237,68 @@ recorded with its number and held as a `*_known_miss` record (rule 2).
   name it; (b) also derived pictures (`derive_picture`: iso-surfaces, streamlines, slices) and a mesh picture as kinds of
   version 2 of the specification. Recommendation: (b), entered as items of their own after F-979, since the live mesh view
   needs the same mesh picture.
+
+## Addendum 1: results (2026-11-26)
+
+Written after the runs; nothing above is changed. Release profile, `CARGO_TARGET_DIR` in the scratch folder. Code
+commits: c0a906c9 (engine), 0f0e9d9a (Studio and e2e), be51edb0 (docs and the committed mutation). Each registered run
+was made once. Between the Rust runs and the commit of the Studio code, `cargo fmt -p rcfd-workspace -p rcfd-mcp`
+changed whitespace only in `view.rs` and `canvas_view_f976.rs` (no statement changed); the fmt check was run after it.
+
+### Checks
+
+| Id | Limit | Measured | Met |
+|---|---|---|---|
+| V1 | 16 of 16 refused at the registered key, code 1003 | 16 of 16 at their key, each with a reason naming the problem (`rcfd-workspace --lib`: 4 passed, 0 failed) | yes |
+| V2 | the seven-kind view accepted | no error | yes |
+| S0 | 1002 saying no Studio is open; nothing written; the dead pid's file removed | 1002 "no Studio has this project open ..."; no `.rcfd/views/`; journal byte-identical; the stale file removed | yes |
+| S1 | `view_shown` in the canvas's feed within 4 polls of 250 ms; `read_view` equal | 1 poll (6 ms); `studios` 1; one journal line; `read_view` equal to the view given | yes |
+| S2 | `studios` 2 | 2 | yes |
+| S3 | 1003 at `panels[0].kind`, `panels[1].colour`, `panels[3].run`; file and journal unchanged | all three; both byte-identical | yes |
+| W1 | the workspace methods equal the tools | `read_view` equal; `show_view` `studios` 1 and its view read back | yes |
+| E1 | 7 panels with their existing views within 1.6 s | 481 ms; the Canvas tab selected | yes |
+| E2 | refused at `panels[0].kind` with the reason; the first view shown 1.6 s later | 1003, `'chart' is not a kind ...`; the first id and its 7 panels | yes |
+| E3 | font, ink and ground equal to `.ph-open`; no colour literal in `canvas.css` | Archivo, rgb(29, 58, 95), transparent for both; none | yes |
+| L1 | on a scratch copy with the registered edit, `project_list_f270`, `tool_list_f275`, `default_f1` pass | `project_list_f270` 1 passed, `default_f1` 2 passed; `tool_list_f275` failed at line 153: its own `PROJECT_TOOLS` list also needs the two names | **no** |
+| L2 | named files pass but `project_list_f270`, `tool_list_f275` on counts or order | `rcfd-mcp --lib` 18 passed (1 ignored); `default_f1` 2, `feed_f273` 3, `tool_list_adr0730` 2 passed; `project_list_f270` a2 failed at line 151 (order) and `tool_list_f275` c5l at line 129 (57 against 55) as registered; but `project_w48f` f2 (the read set gains `read_view`) and f3 (57 against 55) and `project_runs_w48f` f3_f11 and f13 (57 against 55) failed too | **no** |
+| L3 | typecheck passes; `npm test` passes but `capabilities.spec.ts` on the two tools' rows | typecheck exit 0; `npm test` 866 passed, 3 failed, 28 did not run (14.7 min): `capabilities.spec.ts` on three rows, `mcp:read_view`, `mcp:show_view` and `cli:rcfd-mcp --canvas`; `data-routes.spec.ts` P12 tiny raw (`lengthUnit` null against `m`; the 28 serial tests after it did not run) and `e2e/data.spec.ts` open (the same) | **no** |
+| L4 | `--canvas` alone exits 2; no registry without `--canvas` | exit 2; no registry folder | yes |
+
+Diagnosis of the misses. L1 to L3 are one cause: finding 4 named too few of the places that pin the project tool list
+and the inventory. The full additive edit for the lead: in `project_list_f270.rs` a block that takes `show_view` and
+`read_view` off the end; in `tool_list_f275.rs` 55 to 57 (line 131) and the two names appended to its `PROJECT_TOOLS`;
+in `project_w48f.rs` `read_view` in the read set (line 115) and `19 + 36` to `19 + 38`; in `project_runs_w48f.rs` 55 to
+57 twice (lines 103 and 356); and the inventory rows of the three capabilities with their coverage entries. On the scratch
+copy with the first three files edited, `project_w48f` passed (10) and `project_runs_w48f` f3_f11 stopped at `binaries()`
+because that copy's target had no `rcfd` and `rcfd-runner`, so it was not decided there. The two data failures are not
+of this item: no `f447_bench` was in this work's target, and the tests found the main checkout's copy of 2026-11-16, older
+than ADR 0738's length unit; this item changes no data reader.
+
+### Mutations
+
+| Id | Caught by |
+|---|---|
+| M1 (unknown keys let through; committed as `canvas_view_f976.mutation.patch`) | S3 (`canvas_view_f976`, line 78: the `colour` view was shown) and V1 |
+| M2 (no liveness check) | S0 (line 78: the dead pid counted, the view shown) |
+| M3 (file written before validating) | S0 (line 111) and S3 (line 198) |
+| M4 (no read on `view_shown`) | E1 (not shown within 20 s) |
+
+fmt check of `rcfd-workspace` and `rcfd-mcp`: clean. `cargo clippy -p rcfd-workspace -p rcfd-mcp --all-targets -- -D
+warnings`: clean. No shared solver file changed; `baseline_hashes` not run.
+
+Actual size: partial; 0 further registrations; 1 heavy run (`npm test`, 14.7 min; the M4 Studio build and one spec on the
+scratch copy besides); 2 questions; about 360 000 bytes read.
+
+Decision by the registered rule: **partial**, because L1, L2 and L3 missed (every behaviour row and every mutation holds).
+
+### For the lead: roadmap entries
+
+> Status: partial.
+
+> Note: ADR 0805, 2026-11-26, partial: the view specification rcfd-view 1 (seven kinds, layout, located errors), show_view and read_view (tools and workspace methods) and the canvas registry of rcfd-mcp --canvas; the open Studio shows a seven-kind view with its existing views 481 ms after the tool's result (limit 1.6 s), refuses an invalid one at its key and keeps the shown view; 4 of 4 mutations caught, one committed; L1 to L3 missed: the registration named too few of the tests and inventory rows that pin the tool list.
+
+> Gap: Every behaviour row holds. Missing: the additive edit of the tool lists is wider than ADR 0805 registered, so L1 to L3 missed: besides project_list_f270 and tool_list_f275 (counts and its PROJECT_TOOLS list), project_w48f (count, read set) and project_runs_w48f (two counts) pin the list, and the capability inventory gains three rows (mcp:show_view, mcp:read_view, cli:rcfd-mcp --canvas). The lead's re-recording closes it.
+
+> Follow-ups: none.
+
+The same entries are `docs/roadmap/proposals/0805-F-976.json`.
