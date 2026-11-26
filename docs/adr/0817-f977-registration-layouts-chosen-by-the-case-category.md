@@ -286,3 +286,76 @@ four in `quick-start`, eight in `wind-tunnel`, as finding 3 lists them (1 + 2 + 
 the category of finding 3 for each of the 13 case files, the cantilever and the still pool: **15 of 15** (not 16 of 16),
 with every category as R1 names it. The test asserts that the three `cases/` folders hold 13 files. No other row, limit,
 source or the decision rule changes.
+
+## Addendum 1: results (2026-11-26)
+
+Written after the runs; nothing above is changed. Release profile, `CARGO_TARGET_DIR` in the scratch folder, 8 build jobs
+(another agent built at the same time). Commits: 7487c225 (this registration), 9dd0c770 (amendment 1), 07c1415b (engine),
+629f6dbc (Studio hooks and tests), cd07d777 (the committed mutation), then this addendum and the proposal. Each
+registered run was made once. Deviations: `cargo fmt -p rcfd-workspace -p rcfd-mcp` (a write) was run before the code
+commit and the fmt check after it; before any test ran, the inputs of R1 and R2 were checked with `rcfd validate` and the
+code was compiled with `--no-run` (neither is a check). The CPU load (Windows `LoadPercentage`) was 70 % at the `--lib`
+run, 73 % at the binary run, 100 % at the typecheck, and 97 % at the start and 90 % at the end of `npm test`.
+
+### Checks
+
+| Id | Limit | Measured | Met |
+|---|---|---|---|
+| R1 | 15 of 15 (amendment 1) take the category of finding 3 | 15 of 15: fan `sources.frame.type = rotating_frame`; cavities `boundaries: 2 named, none freestream`; steps `boundaries: 4 named, none freestream`; heated cavities `energy.enabled = true`; cylinders and NACA 0012 `boundaries.farfield.velocity = freestream`; cantilever structural; still pool `multiphase.enabled = true` | yes |
+| R2 | 5 of 5, category and rule text | 5 of 5 (the text that does not read: "the case of the run does not read (key with no value, expected `=`)") | yes |
+| L1 | the four layouts key for key, no view error | 4 of 4, as the table of views chosen | yes |
+| L2 | the five negative controls | 5 of 5 | yes |
+| V5 | no error | no error | yes |
+| V6 | 4 of 4 refused at the registered key | 4 of 4 (`rcfd-workspace --lib`: 12 passed, 0 failed, V1 to V4 of ADR 0805 and 0807 among them) | yes |
+| B1 | shown, heat_transfer, the rule, 6 panels; the canvas reads the layout and `chosen` | as registered | yes |
+| B2 | the keys of F-976 | reply `hash, id, panels, path, shown, studios`; `read_view` `actor, exists, hash, id, path, reason, shown, view` | yes |
+| B3 | 1003 at `run` and `panels`; file and journal unchanged | as registered | yes |
+| E0 | the still pool's run finishes | `r-20261126T214532-1b89` finished 529 ms after `start_run` | yes |
+| E1 | external panels within 1.6 s, then each panel's view | 548 ms; every view at 601 ms | yes |
+| E2 | turbomachinery panels within 1.6 s, mesh drawn | 157 ms; every view (the fan's mesh drawn) at 1183 ms | yes |
+| E3 | internal panels within 1.6 s, mesh drawn | 430 ms; every view at 1122 ms | yes |
+| E4 | heat-transfer panels within 1.6 s | 277 ms; every view at 333 ms | yes |
+| E5 | multiphase panels within 1.6 s | 84 ms; every view at 91 ms | yes |
+| E6 | general panels within 1.6 s | 90 ms; every view at 96 ms | yes |
+| E7 | the run without fields: no field panel, within 1.6 s | 78 ms; every view at 81 ms | yes |
+| E8 | structural from a run | not run: no project run of a solid case can exist (finding 4) | **not run** |
+| L3 | the named files and `--lib` pass unedited | `canvas_view_f976` 4, `canvas_live_f979` 2, `feed_f273` 3, `project_list_f270` 1, `tool_list_f275` 8 passed; `rcfd-mcp --lib` 18 passed (1 ignored) | yes |
+| L4 | `npm run typecheck` and `npm test` pass | typecheck exit 0; `npm test` 894 passed, 4 skipped (main's skipped record of ADR 0807), 0 failed, 13.6 min | yes |
+| L5 | fmt, clippy, `docs_site`, the proposal check | fmt and clippy clean; `docs_site` and the proposal check were run after this addendum, their results in the report | see the report |
+
+### Mutations
+
+| Id | Caught by |
+|---|---|
+| M1 (no `energy.enabled` test; committed as `canvas_layout_f977.mutation.patch`) | B1 (`canvas_layout_f977.rs` line 84, the category) |
+| M2 (no free-stream test) | R1 |
+| M3 (external before heat) | R2 (the cylinder with energy became external_aerodynamics) |
+| M4 (no report-type filter) | L1 (the fan took m_blade, m_hub, m_in; the heated cavity nu_hot before q_hot) |
+| M5 (a field panel without the store check) | L2 (L2a: the layout named fields of a run with no store, refused by `view_errors`) |
+| M6 (the request written instead of the layout) | B1 (line 86, the panels the canvas reads) |
+
+The mutations were run three times on the scratch copy. The first two runs did not decide because the copy left out
+files that `rcfd-api` and `rcfd-workspace` read when they compile (first `docs/`, then `cases/`), so no test ran. The
+third run, on a full extraction of the final commit, built and caught each mutation once.
+
+Not run: `baseline_hashes` (no shared solver file) and E8. Found in the runs: the e2e of F-979 (`canvas-f979-a1.spec.ts`)
+left its temporary project's `rcfd-runner` alive after it ended, as ADR 0807 reports; it was ended by hand. The F-977
+spec ends the runner it starts (`afterAll`, from `.rcfd/runner.json`).
+
+Actual size: partial; 1 further registration (amendment 1); 2 heavy runs (`npm test` 13.6 min; the build of the scratch
+copy for the mutations); 2 questions; about 210 000 bytes read.
+
+Decision by the registered rule: **partial**, because E8 did not run: no structural case can be shown from a run
+(finding 4, Q2). Every other row held and every mutation was caught.
+
+### For the lead: roadmap entries
+
+> Status: partial.
+
+> Note: ADR 0817, 2026-11-26, partial: show_view of {version 1, run} takes the layout of the category of the run's case (multiphase, heat transfer, internal flow and turbomachinery, external aerodynamics, structural, general), read from the run's case.snapshot by a rule over the schema's blocks, each panel only where its record exists; the open Studio showed the five runnable categories and two negative controls with their registered panels in 78 to 548 ms (limit 1.6 s); 6 of 6 mutations caught, one committed; E8 not run: no project run of a solid case exists.
+
+> Gap: The structural category is recognised (a solid case file) and its layout (case, run) is built, but no project run of a solid case can exist, so it is not shown from a run in the Studio (E8, Q2). The show_view description does not name the run form (Q1).
+
+> Follow-up: Structural runs in a project: start_run of a solid case file, with its run records, and the structural layout shown from them. Deps F-977. Acceptance: Every limit not stated here is registered in the ADR before the run. start_run of a solid case file of the repository (crates/rcfd-api/tests/solid_cases/) makes a project run with run.json, case.snapshot, its report and its stored displacement and stress fields; show_view with that run and no layout takes the structural layout, which shows those fields and the report, shown by an e2e test in the open Studio.
+
+The same entries are `docs/roadmap/proposals/0817-F-977.json`.
