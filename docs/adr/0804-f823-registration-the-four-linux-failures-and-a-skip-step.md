@@ -233,3 +233,89 @@ The controls were made once, in the container on a `git archive` copy of d5ec114
 4. **Consequence for the whole Linux suite, stated before the runs:** with G1 every WebGPU user on Linux, three.js's
    `WebGPURenderer` among them, gets the SwiftShader adapter instead of the WebGL 2 fallback, so the field views and plots
    draw by WebGPU on a software device in L and R7l. Any failure that follows is recorded as a miss.
+
+## Addendum 1: results (2026-11-26)
+
+The code is 14442f02 (C1 to C9, amendment 1). Each run was made once on a `git archive` copy of 14442f02 in the scratch
+folder (R7w in the worktree), by the set-up registered; the logs are in the scratch folder (`L/`, `W/`, `R7l/`, `R7w.log`,
+`muts/`, `k1w/`, `MC/`). L ran alone; R7l overlapped the end of W, MC and R7w on the shared machine (a deviation, below).
+
+### Checks
+
+| Id | Limit | Measured | Met |
+|---|---|---|---|
+| L1 | 880 passed, 0 failed, 0 skipped or not run; the four and the 16 passed | 875 passed, 1 failed, 4 did not run (summary lines and marks agree); the four passed (`claude-code.spec.ts:177`, `commands.spec.ts:91`, the old line 90, `runner-lifetime.spec.ts:192`, `workspace-first-open.spec.ts:59`), and every test of their files (claude-code 4, commands 10, runner-lifetime 8); `capabilities.spec.ts:210` and the 10 of `service.spec.ts` passed. Failed: `error-walk.spec.ts:177` (`.mp-failed` not shown within its 60 s); the 4 after it in its serial file did not run | **missed** |
+| L2 | each step passed, the skip step included; the upload skipped by `failure()` | steps 1 to 10 passed (engine 162 s); 11, Playwright, failed (exit 1, 1034 s); 12, the skip step, skipped after the failure; 13, the upload, ran (`failure()`); 14 and 15 skipped | **missed** |
+| W1 | as L1 | 879 passed, 1 failed, 0 skipped; failed: `claude-code.spec.ts:193`, rcfd-mcp's `edit_case`: "replace ...from-claude.toml: failed after 12 attempts: Access is denied. (os error 5)", a file refused by the operating system on the shared machine (the brief: reported, not retried) | **missed** |
+| W2 | each step passed, the Linux steps skipped by their `if:` | steps 1 to 8 and 10 passed (engine 338 s cold, `npm ci` 48 s); 9 skipped by its `if:`; 11 failed (exit 1, 833 s); 12 skipped after the failure; 13 ran | **missed** |
+| K1w | mutated: Playwright exit 0, the skip step exit 1 naming the test; unchanged: both exit 0 | unchanged: 19 passed, exit 0; the skip step "19 tests in the report, 0 skipped and not in the registered list", exit 0. Mutated: 18 passed, 1 skipped, exit 0; the skip step exit 1, "skipped: unit/tokens.spec.ts:87 [unit] tokens.css is exactly the output of tokens.ts" | met |
+| K1l | as K1w | the same numbers and messages in the container | met |
+| V1 | exit 0, no message; the control stated | 14442f02's file: exit 0, no message (the call was made on the file as committed, before the commit); control, d5ec1145's file: exit 0, no message | met |
+| A1 | only C1 to C9, the ADR and the proposal; in ci.yml only studio-web | `git diff --stat d5ec1145..14442f02`: the six files of C1 to C9 and this ADR; every top-level key and every job but studio-web equal | met |
+| R7w | typecheck and `npm test` exit 0; 880 passed | typecheck exit 0; `npm test` exit 0, "880 passed (13.5m)" | met |
+| R7l | as R7w | typecheck exit 0; `npm test` exit 1: 872 passed, 3 failed, 5 did not run. Failed, each a time limit: `responsiveness.spec.ts:260` (tasks over 100 ms or frames over 150 ms in every pass), `run-control.spec.ts:268` (`project.queue_case` answered in 37.8 ms, limit 20 ms), `workspace-first-open.spec.ts:59` (tasks over 100 ms with the GPU process held; the adapter was there). `error-walk.spec.ts:177` passed (47.3 s) | **missed** |
+| DS | passes | run on this addendum before its commit; its output is in the report | see the report |
+| P1 | proposal valid; the report clean but for a generated file | run after the commit; in the report | see the report |
+
+### Controls and mutations
+
+D1 to D4: amendment 1. Mutations, each once:
+
+| Id | Seen | Caught |
+|---|---|---|
+| MT, `dpkg --purge xterm` | `claude-code.spec.ts:177` failed, 2 passed, 1 did not run, exit 1 | caught |
+| MW2, `--enable-unsafe-webgpu` left out | `workspace-first-open.spec.ts:59` failed, "no WebGPU adapter: the GPU process cannot be held", exit 1 | caught |
+| MW, `dpkg --purge --force-depends mesa-vulkan-drivers` (as registered) | the test passed (10.8 s): the adapter is SwiftShader, as amendment 1 said | not caught (expected) |
+| MS, a skip added | the mutated half of K1w and K1l: the skip step exit 1 naming `unit/tokens.spec.ts:87`, Playwright itself exit 0 | caught |
+| MC, committed (C9), Windows | `commands.spec.ts:91` failed, "Expected: button:Open project folder…, Received: body", 9 did not run, exit 1 | caught |
+
+### Diagnosis of the new misses (from the logs and the code; nothing was run again)
+
+1. `error-walk.spec.ts:177` (L only). It waits 60 s for the engine's refusal of a 1500 by 1500 preview. Its times: 28.7 s
+   on Linux with WebGL 2 and 34.0 s on Windows (ADR 0802's runs), 47.3 s in R7l, over 60 s in L. With G1 the previews
+   drawn before the refusal are drawn by WebGPU on SwiftShader; that drawing, near a bound the test sets itself, is the
+   likely cause. Not shown: the copy's `test-results` went with the container.
+2. The three of R7l are time limits of the responsiveness and run-control specs, on a software WebGPU device and on a
+   machine that ran W, MC and R7w at the same time; in L, run alone, all three passed. Load is the likely cause; not shown.
+3. `claude-code.spec.ts:193` (W only): a file the operating system refused (os error 5) while the engine replaced it; it
+   passed in R7w and in ADR 0802's runs.
+
+### Deviations
+
+R7l overlapped W, MC and R7w (to stay within this work's turn limit); its time-limit failures are read with that. K1w's
+first call stopped before running anything (a path form that Windows Python could not open) and was then made whole once.
+A removal of scratch folders that did not yet exist was refused by a safety check and left out. Nothing was run again to
+pass.
+
+### Not run
+
+The runners themselves (as registered). `cargo fmt`, `clippy` and `baseline_hashes` do not apply (no Rust file changed).
+
+### Size
+
+Size (agent, actual): partial; 1; 4; 1; 230000
+
+### Decision
+
+By the registered rule: **partial**. The four Linux failures of ADR 0802 and the 16 after them pass in L; every mutation
+is caught but MW, which amendment 1 replaced by MW2 (caught); K1w, K1l, V1, A1 and R7w hold; L1, L2, W1, W2 and R7l
+missed: one new Linux failure that follows the WebGPU switch, one file refused by Windows, three time limits under load.
+
+## Open questions for the maintainer
+
+- **Q1.** `error-walk.spec.ts:177` with WebGPU on SwiftShader. Options: (a) a follow-up under F-823 (rule 13) that
+  measures the test's time under G1 and finds where it goes, the 60 s kept; (b) WebGPU only for the spec that needs it
+  (`workspace-first-open.spec.ts`), the WebGL 2 fallback for the rest of the Linux suite; (c) a known miss of Linux.
+  Recommendation: (a); (b) changes what Linux CI covers, a question of scope.
+
+## For the lead: roadmap entries
+
+> Status: partial.
+
+> Note: ADR 0804, 2026-11-26, partial: the Linux studio-web job gets xterm and --enable-unsafe-webgpu (SwiftShader's adapter) and a step that fails on any skip; the four Linux failures of ADR 0802 and the 16 after them pass in the container, the skip step fails on an added skip on both systems, the mutations are seen (the package one replaced); but the Linux job failed error-walk.spec.ts:177 (over its 60 s), Windows met one file refused by the OS, and npm test in the container missed three time limits under load.
+
+> Gap: In the Ubuntu 24.04 container the job's Playwright step failed error-walk.spec.ts:177 (the preview refusal not shown within 60 s, with WebGPU on SwiftShader; 28.7 s before the switch) and 4 after it did not run; npm test there missed three time limits under load; on Windows one test met a file refused by the OS. The first run on GitHub Actions is to be read.
+
+> Follow-ups: none as new items; Q1 (a) is proposed as a follow-up registered under F-823 (rule 13).
+
+The same entries are in `docs/roadmap/proposals/0804-F-823.json`.
