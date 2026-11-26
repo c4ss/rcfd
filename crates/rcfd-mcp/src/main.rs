@@ -31,7 +31,7 @@ fn main() -> ExitCode {
         return ExitCode::from(o.code);
     }
     if args.iter().any(|a| a == "-h" || a == "--help") {
-        println!("rcfd-mcp: MCP server (stdio)\n\nOPTIONS:\n    --root <dir>            confine all file access to <dir>\n    --read-only             refuse tools that change state\n    --max-cells <n>         refuse larger meshes (default 2000000)\n    --max-steps <n>         largest iteration count per run call\n    --max-run-seconds <s>   wall-clock cap per run\n    --max-design-evaluations <n>  case runs one design call may start (default 1000)\n    --cases <dir>           cases directory for list_cases\n    --project <dir>         add the project tools for this rcfd project folder (ADR 0135);\n                            without --root, file access is confined to it\n    --client <name>         the actor client the project journal names (default mcp)\n    --edit-hook [<dir>]     answer one Claude Code PreToolUse hook input on stdin: refuse Edit and\n                            Write under cases/, runs/ and designs/ of the rcfd project <dir> (ADR 0195)");
+        println!("rcfd-mcp: MCP server (stdio)\n\nOPTIONS:\n    --root <dir>            confine all file access to <dir>\n    --read-only             refuse tools that change state\n    --max-cells <n>         refuse larger meshes (default 2000000)\n    --max-steps <n>         largest iteration count per run call\n    --max-run-seconds <s>   wall-clock cap per run\n    --max-design-evaluations <n>  case runs one design call may start (default 1000)\n    --cases <dir>           cases directory for list_cases\n    --project <dir>         add the project tools for this rcfd project folder (ADR 0135);\n                            without --root, file access is confined to it\n    --client <name>         the actor client the project journal names (default mcp)\n    --canvas                with --project: register this server as an open Studio's canvas of the\n                            project, which show_view counts (ADR 0805)\n    --edit-hook [<dir>]     answer one Claude Code PreToolUse hook input on stdin: refuse Edit and\n                            Write under cases/, runs/ and designs/ of the rcfd project <dir> (ADR 0195)");
         return ExitCode::SUCCESS;
     }
     let val = |name: &str| args.iter().position(|a| a == name).and_then(|i| args.get(i + 1));
@@ -74,6 +74,22 @@ fn main() -> ExitCode {
                 }
             }
         }
+    };
+    // ADR 0805 D3: --canvas registers this process as a canvas of the project for as long as it runs
+    let canvas = args.iter().any(|a| a == "--canvas");
+    if canvas && project.is_none() {
+        eprintln!("error: --canvas needs --project <dir>");
+        return ExitCode::from(2);
+    }
+    let _canvas = match (&project, canvas) {
+        (Some(p), true) => match rcfd_workspace::view::register_canvas(p.root()) {
+            Ok(c) => Some(c),
+            Err(e) => {
+                eprintln!("error: --canvas: the canvas registry could not be written: {e}");
+                return ExitCode::from(2);
+            }
+        },
+        _ => None,
     };
     // ADR 0135 amendment 3 item 2: --project implies --root <project> when --root is not given
     if cfg.root.is_none() {
