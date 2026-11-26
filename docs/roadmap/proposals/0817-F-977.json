@@ -1,0 +1,19 @@
+{
+  "form": 1,
+  "adr": "0817",
+  "item": "F-977",
+  "base": "d8b506d836dbb142c149c2c987a001da4bfd2840",
+  "status": "partial",
+  "note": "ADR 0817, 2026-11-26, partial: show_view of {version 1, run} takes the layout of the category of the run's case (multiphase, heat transfer, internal flow and turbomachinery, external aerodynamics, structural, general), read from the run's case.snapshot by a rule over the schema's blocks, each panel only where its record exists; the open Studio showed the five runnable categories and two negative controls with their registered panels in 78 to 548 ms (limit 1.6 s); 6 of 6 mutations caught, one committed; E8 not run: no project run of a solid case exists.",
+  "gap": "The structural category is recognised (a solid case file) and its layout (case, run) is built, but no project run of a solid case can exist, so it is not shown from a run in the Studio (E8, Q2). The show_view description does not name the run form (Q1).",
+  "follow_ups": [
+    {
+      "key": "structural-runs",
+      "title": "Structural runs in a project: start_run of a solid case file, with its run records, and the structural layout shown from them",
+      "deps": [
+        "F-977"
+      ],
+      "acceptance": "Every limit not stated here is registered in the ADR before the run. start_run of a solid case file of the repository (crates/rcfd-api/tests/solid_cases/) makes a project run with run.json, case.snapshot, its report and its stored displacement and stress fields; show_view with that run and no layout takes the structural layout, which shows those fields and the report, shown by an e2e test in the open Studio."
+    }
+  ]
+}
