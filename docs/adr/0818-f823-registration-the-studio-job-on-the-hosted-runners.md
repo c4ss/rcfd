@@ -1,0 +1,202 @@
+# ADR 0818: F-823 registration, the Studio's job on GitHub's hosted runners: the registered skips, a WebGPU adapter on Windows, and the race of Follow live
+
+REGISTERED 2026-11-26, written before any code of F-823 under this registration and before any run of its checks.
+
+Written by Claude Opus 5.5 (`claude-opus-5-5`), as a background agent of the lead. It answers the brief
+`docs/adr/briefs/f823-hosted-runners.md` ([briefs/f823-hosted-runners.md](briefs/f823-hosted-runners.md)) and follows
+`docs/process/agent-rules.md` ([agent-rules.md](../process/agent-rules.md)), version 5. A further registration of F-823
+by rule 13: it adds no acceptance clause of its own; it serves the clause "the job fails the workflow on any test
+failure" on GitHub's hosted runners, as the lead's read of ADR 0809's question 2 asks. Branch `f823-hosted-runners`, at
+the brief's commit e2908a03 (equal to `origin/main`). Scratch folder `E:/projects/cfd/w49i-work/f823-hosted-runners-scratch`.
+
+## The item
+
+F-823's acceptance (read from `docs/roadmap.json` by a script; status partial): "The Studio's unit and Playwright tests
+run as a job in .github/workflows/ci.yml (ADR 0800 Q3, maintainer 2026-11-16), with npm ci from the committed lock file
+and Electron run headless; the job fails the workflow on any test failure; docs/test-process.md names the job. A weekly,
+grouped Dependabot npm entry for /apps/studio-web lands with the job (ADR 0801 Q2). The job builds rcfd-cli, rcfd-runner
+and rcfd-mcp first so the service e2e tests and the F-824 inventory check do not skip."
+
+## What was read
+
+AGENTS.md, the rules (version 5) and the brief, in full. `.github/workflows/ci.yml` in full (the studio-web job: the
+Linux switches `--ignore-gpu-blocklist --enable-unsafe-webgpu`, none on Windows; the step "no test skipped but the
+registered ones" with `STUDIO_ALLOWED_SKIPS: ""`). [ADR 0812](0812-f823-registration-case-facts-refuses-by-the-counts-estimate.md)
+in full (its R7w miss of P2 under load, its question 2). [ADR 0807](0807-f979-registration-live-meshes-settings-and-monitors-on-the-canvas.md)
+amendment 1 (the four tests of `canvas-f979.spec.ts` kept as a skipped record by `test.skip(true, ...)` at line 34).
+Of the Studio: `tests/support/launch.ts` (`RCFD_TEST_ELECTRON_ARGS`), `tests/support/gpu-hold.ts` (lines 34 to 37: no
+adapter throws "no WebGPU adapter: the GPU process cannot be held"), `tests/e2e/workspace-first-open.spec.ts` lines 1 to
+140, `tests/e2e/provenance-f828.spec.ts` lines 1 to 40 and 200 to 345 (the scan SC and its exemptions),
+`tests/e2e/run-control.spec.ts` lines 1 to 137 and 268 to 330 (`P2_MS` 20 from G9, `SHOWN_MS` 50; both clocks are
+`performance.timeOrigin + performance.now()`, `src/main/project/control.ts` line 51), `tests/e2e/workspace.spec.ts`
+lines 1 to 120 and 380 to 459, `tests/e2e/a11y.spec.ts` lines 1 to 120 and 403 to 445,
+`src/renderer/workspace/RunWorkspace.tsx` lines 205 to 240 (Follow live sets the line by a passive effect after the count
+changes), `src/renderer/workspace/model.ts` `counterText`, `src/renderer/field/FieldCanvas.tsx` lines 905 to 940 and
+`FieldViewport.tsx` lines 750 to 751 (the label "Drawn by WebGL 2 (fallback: no WebGPU adapter or device)", visible only
+on the fallback), `src/shared/work.ts` (`LONG_TASK_LIMIT_MS` 100, `LONG_FRAME_LIMIT_MS` 150, G9's P5). G9 of
+[studio-guardrails.md](../studio-guardrails.md) and the [tolerance table](../process/tolerances.md).
+
+The logs of the three runs (`gh run view <id> --log-failed`) and their artifacts (`gh run download`: each job's
+`playwright-results.json`, `playwright-report/`, the error contexts; no traces: `retries: 0` and no trace option), read by
+a scratch script. About 210,000 bytes.
+
+## What the runs show (from the reports)
+
+One correction of the brief's account: `run-control.spec.ts:268` and `workspace.spec.ts:389` failed on **ubuntu-24.04**
+(runs 45886730170 and 45891872417), not on windows-latest, where both passed in all three runs. On ubuntu the third run
+(45894509968) passed every test (890 in the report) and failed only the skip step.
+
+| Test | Job | Runs failed | What the report gives |
+|---|---|---|---|
+| `workspace-first-open.spec.ts:59` | windows-latest | 3 of 3 | `navigator.gpu.requestAdapter()` gave null: "no WebGPU adapter: the GPU process cannot be held" (gpu-hold.ts:36). On ubuntu (with `--enable-unsafe-webgpu`) it passed 3 of 3, the hold 4150 to 5209 ms. |
+| `provenance-f828.spec.ts:288` | windows-latest | 3 of 3 | SC found one text in workspace, two in compare, one in difference, each "Drawn by WebGL 2 (fallback: no WebGPU adapter or device) < span.fv-backend"; every other scan empty, KT as registered. On ubuntu SC empty 3 of 3. |
+| `responsiveness.spec.ts:260` | windows-latest | 1 of 3 (run 1) | all 3 passes: a long task of 201 to 208 ms and a frame of 226 to 264 ms in `workspace.tab`, at a machine load of 0.03 to 0.05 busy; runs 2 and 3: at most 67 ms. |
+| `a11y.spec.ts:427` | windows-latest | 1 of 3 (run 3) | after Enter on "Open project…" with the dialog stubbed to the empty project, the heading "An empty project" did not appear in 30 s; the window still showed the quick start, no dialog or notice; the 2 later tests of the serial file did not run. |
+| `run-control.spec.ts:268` | ubuntu-24.04 | 2 of 3 | run 1: `project.cancel_run` commit 56.2 ms against `SHOWN_MS` 50 (received 19.8 ms); run 2: `project.queue_case` received 39.7 ms against P2's 20 ms. In the same processes `project.run_case` was received in 1.3 to 1.4 ms. |
+| `workspace.spec.ts:389` | ubuntu-24.04 | 2 of 3 | line 415 `expect(later.snapshot).toBe(n - 1)`: 69 against 76, then 85 against 99. |
+| skip step | ubuntu-24.04 | 1 of 1 reached | "890 tests in the report, 4 skipped and not in the registered list": `e2e/canvas-f979.spec.ts:162`, `:175`, `:208`, `:244`. On Windows the step was never reached (the Playwright step failed first). |
+
+## Hypotheses, evidence and the remedy each points to
+
+**H1, no WebGPU adapter on windows-latest (a hosted runner without a GPU).** Evidence: the null adapter of
+workspace-first-open (3 of 3), the fallback label's own reason "no WebGPU adapter or device" (so `'gpu' in navigator`
+holds and only the adapter is missing), and the Linux job, which passes `--enable-unsafe-webgpu` and has an adapter (the
+SwiftShader Electron ships, ADR 0804), passing both tests 3 of 3. It explains provenance-f828:288: the only text SC
+reports is the fallback label, whose digit is the API's name "WebGL 2", shown only when there is no adapter
+(`FieldViewport.tsx` line 750; with WebGPU the label is `sr-only` and SC skips it). Both tests were registered on a
+machine with WebGPU; their premise is an adapter. **Remedy R1:** the Windows Playwright step passes
+`RCFD_TEST_ELECTRON_ARGS` with the switch the Linux step already uses for WebGPU, `--enable-unsafe-webgpu` (a switch of
+the tests' Electron, `tests/support/launch.ts`, not of the app). The premise is stated and checked by the test itself:
+workspace-first-open fails, never skips, when no adapter exists (gpu-hold.ts:36). No test, limit or exemption changes.
+Which switches, fixed now: `--enable-unsafe-webgpu`; if the local probe PR2 below gives no adapter and PR3 gives one,
+`--enable-unsafe-webgpu --use-webgpu-adapter=swiftshader` (PR3's set). The probe does not decide the runner; the lead's
+run does.
+
+**H2, responsiveness:260 on Windows is the WebGL 2 fallback's first draw, not the runner's load.** Evidence: the three
+passes of run 1 agree (201 to 208 ms) at a load of 0.05 or less, so it is not load; the task is in `workspace.tab`, where
+the field view creates its renderer; it occurred on the runner without an adapter, and not on ubuntu, where WebGPU drew
+(at most 76 ms). That it occurred in one run of three fits a runner image whose CPU differs between runs (the fallback
+compiles its shaders on the CPU). Weaker than H1: inferred, not measured. **Remedy:** R1 (the field view then draws with
+WebGPU, as on ubuntu); `LONG_TASK_LIMIT_MS` and `LONG_FRAME_LIMIT_MS` unchanged.
+
+**H3, Follow live: a race of the test's two reads (a defect of the test).** `settled(page)` reads the line's snapshot,
+then line 414 reads the count "of N" in later calls; the run writes a snapshot every 5 iterations meanwhile, so N can
+grow between the two reads whatever the Studio does. On ubuntu the renderer is slow (software WebGL; the spec's own
+comment at line 404 says so) and the Playwright round trips are long: 7 and 14 snapshots came between. The app also
+moves the line to the newest by a passive effect after the count's commit (`RunWorkspace.tsx` lines 224 to 228), so even
+one read can land between the two commits. **Remedy R3 (rule 2, a corrected test; the old kept as the record):** a new
+test after it in `workspace.spec.ts`, the same as the old line for line but for lines 413 to 415: after `settled` and
+`later.snapshot > first.snapshot` as before, the line (`.ws` `data-snapshot`) and the count (`.tp-counter`, "of N") are
+read in one `page.evaluate` (one task of the page, one DOM state), polled by the spec's own `until` for 15 s (the wait
+the same test uses for "Follow live brings it back", line 433) until the line equals N - 1. The property held is the
+one the test names, "the line stays on the running run's newest snapshot"; a line that never reaches the newest still
+fails. The old test gets one first line `test.skip(true, 'ADR 0818: ...')` and nothing else changes (as ADR 0807
+amendment 1 did); it is the record, at `e2e/workspace.spec.ts:389`, entered in `STUDIO_ALLOWED_SKIPS`.
+
+**H4, run-control:268 on ubuntu: the runner's CPU against a limit measured on another machine.** Evidence: the misses
+are single actions (39.7 ms once, 56.2 ms once) while the same processes delivered `run_case` in 1.3 to 1.4 ms, so it is
+not a clock offset between the main process and the renderer (both use `timeOrigin + now()`, and an offset would apply
+to every action); the 4-processor runner also runs the engine, the runner, rcfd-mcp, Xvfb and llvmpipe. ADR 0812 saw the
+same limit missed under load on this host (23.6 ms). Not a race of the test and no defect found. **Remedy:** none in
+code. P2 is G9's limit and `SHOWN_MS` the spec's; neither has a source for a hosted runner, so neither changes. A miss
+in the lead's run is recorded as a miss; making it a known miss needs an amendment and is a question for the maintainer
+(Q1).
+
+**H5, a11y:427 on Windows: not diagnosed.** The report gives no trace; the window shows the quick start, no refusal and
+no dialog, so the open of the empty project either never started (the Enter lost) or did not end in 30 s (for example a
+first start of rcfd-mcp for a new folder on the runner). One run of three. **Remedy:** none in code; the lead's run
+records it. A trace on failure would change every test's timing, so it is not added here (Q2).
+
+**The four skips of ADR 0807.** `STUDIO_ALLOWED_SKIPS` gets `e2e/canvas-f979.spec.ts:162 e2e/canvas-f979.spec.ts:175
+e2e/canvas-f979.spec.ts:208 e2e/canvas-f979.spec.ts:244`, with a comment naming ADR 0807 amendment 1, and
+`e2e/workspace.spec.ts:389` with this ADR. The keys are `<spec.file>:<spec.line>` as the step builds them; both jobs'
+reports write `spec.file` with `/` (read from the Windows reports).
+
+## Changes (all of them)
+
+1. `.github/workflows/ci.yml`, studio-web job only: the Windows branch of the Playwright step runs with
+   `RCFD_TEST_ELECTRON_ARGS` set as R1 fixes, its comment saying why; `STUDIO_ALLOWED_SKIPS` as above, the step's comment
+   naming ADR 0807 amendment 1 and this ADR. Nothing else of the file.
+2. `apps/studio-web/tests/e2e/workspace.spec.ts`: R3's skip line in the old test, R3's corrected test after it.
+3. `apps/studio-web/tests/e2e/workspace.spec.mutation.patch` (MU1, rule 16), this ADR,
+   `docs/roadmap/proposals/0818-F-823.json`.
+
+No app file changes. Not the canvas files.
+
+## Table of checks
+
+| Id | Clause | Check | Limit | Source of the limit | Estimate | Margin | Kind |
+|---|---|---|---|---|---|---|---|
+| SK1 | "the job fails the workflow on any test failure" (the skip step) | the step's script (taken from the committed ci.yml by a scratch tool) over run 45894509968's ubuntu report with the new list | exit 0, "0 skipped and not in the registered list" | ADR 0804 (the step), ADR 0807 amendment 1 (the record) | passes | exact | code verification |
+| SK2 | negative control of SK1 | the same with main's list `""` | exit 1 naming the 4 tests of canvas-f979 | reproduces the run's step | exit 1 | exact | code verification |
+| AL | the job's file | `actionlint .github/workflows/ci.yml` | exit 0, no finding | the goal; rule 7 | passes | exact | code verification |
+| PR | H1, a local stand-in (not deciding) | the probe below, PR0 to PR3, once each | recorded: adapter or null, its info, WebGL 2 or not | the brief ("any local reproduction ... with its number of runs") | PR0 adapter; PR1 null; PR2 or PR3 adapter | n/a | code verification |
+| SW | R1 changes nothing on a machine with a GPU | `workspace-first-open.spec.ts`, `provenance-f828.spec.ts`, `responsiveness.spec.ts` with R1's switches on this host, once | 0 failed, 0 skipped; their limits unchanged | the specs (F-890 ADR 0787; F-828 ADR 0795; F-832 and G9 P5) | passes | exact | code verification |
+| EMU | R1 where no GPU is used (local stand-in for the runner) | the same three specs with `--disable-gpu` and R1's switches, once; made only if PR2 or PR3 gave an adapter, else recorded as not run | 0 failed, 0 skipped | as SW | passes | exact | code verification |
+| FL | R3 | in R7w: the corrected Follow live passed; the old one skipped at `e2e/workspace.spec.ts:389` | passed; skipped | F-810's spec (its own assertions) | passes | exact | code verification |
+| R7w | rule 7 | `npm run typecheck`, then `npm test` in `apps/studio-web` (Windows, this host, no switches, as the maintainer runs it); then the step's script over its report | both exit 0; 0 failed, 0 did not run, skipped exactly the 5 listed; the script exit 0 | rule 7; ADR 0812 R7w | passes (risk: P2 under load, as ADR 0812) | exact | code verification |
+| MU | rule 16 | MU1 to MU4 below | each caught | rule 16 | caught | exact | code verification |
+| GHW | the clause, windows-latest | the lead's `workflow_dispatch` run of the branch | the Playwright step 0 failed (workspace-first-open:59, provenance-f828:288, responsiveness:260, a11y:427 passed); the skip step exit 0 | the acceptance; the brief | H1 and H2 hold: passes; H5 unknown | exact | code verification |
+| GHU | the clause, ubuntu-24.04 | the same run | 0 failed (run-control:268 and the corrected Follow live included); the skip step exit 0 | the acceptance; the brief | H3 fixed; H4 may miss again | exact | code verification |
+| DS | rule 7 (docs) | `cargo test -p rcfd-cli --release --test docs_site` | passes | rule 7 | passes | exact | code verification |
+| P1 | rules 7 and 9 | `python scripts/roadmap_proposals.py check docs/roadmap/proposals/0818-F-823.json`; `python scripts/process_report.py --check` | valid; clean but for a generated file only not current | rules 7 and 9 | passes | exact | code verification |
+| A1 | owned files | `git diff --stat e2908a03..HEAD` | the files of "Changes" only | the brief | as the limit | exact | code verification |
+
+### Set-up of the runs (fixed here)
+
+- Cargo: `CARGO_TARGET_DIR=E:/projects/cfd/w49i-work/f823-hosted-runners-scratch/target`, `CARGO_BUILD_JOBS=8`, release:
+  `cargo build --release -p rcfd-cli -p rcfd-runner -p rcfd-mcp` and `-p rcfd-api --example f447_bench`, so `npm test`
+  finds this commit's engine and bench there (the variable the support files read), not a stale one.
+- `npm ci` in the worktree's `apps/studio-web` before any Studio run.
+- The host CPU load (mean `LoadPercentage` of `Win32_Processor`) is recorded before each timed run and every 30 s during
+  the long ones (a scratch sampler).
+- **The probe** (scratch, `tools/probe-gpu.mjs`): Playwright's `_electron` launches the packaged Studio
+  (`out/packaged`) with `RCFD_TEST_ELECTRON_ARGS`-like switches, and in the window evaluates
+  `navigator.gpu.requestAdapter()` (null or its `info` and `isFallbackAdapter`) and whether a canvas gives a `webgl2`
+  context. PR0 no switches; PR1 `--disable-gpu`; PR2 `--disable-gpu --enable-unsafe-webgpu`; PR3 `--disable-gpu
+  --enable-unsafe-webgpu --use-webgpu-adapter=swiftshader`. Once each.
+- Order: build, `npm ci`, probe, the code commit, SW, EMU, R7w, the mutations, SK1, SK2, AL, DS, P1. Each once. A miss
+  is recorded with its number and nothing is run again to pass; a failure on a file the OS refused under load is
+  reported, not retried.
+- The links of each ADR commit are checked before it by a scratch link checker (every relative link resolves); DS is the
+  registered run, once, at the end.
+
+## Negative controls and planned mutations
+
+SK2 is the negative control of the skip list. Mutations, each once, on a scratch copy (`git archive` of the code commit
+with a real `node_modules` from `npm ci` and this work's target folder), the e2e ones by
+`npm run build && npm run package:dir && npx playwright test tests/e2e/workspace.spec.ts --project=electron`:
+
+| Id | Mutation | Caught when |
+|---|---|---|
+| MU1 | committed: Follow live does not move the line (`RunWorkspace.tsx` line 227 without `|| (follow && stop.index !== last)`) | the corrected Follow live test fails |
+| MU2 | the corrected test's read compares the line with N, not N - 1 | the corrected test fails (its `until` runs out) |
+| MU3 | `STUDIO_ALLOWED_SKIPS` without `e2e/workspace.spec.ts:389`, over R7w's report | the step's script exits 1 naming it |
+| MU4 | `STUDIO_ALLOWED_SKIPS` without `e2e/canvas-f979.spec.ts:208`, over run 45894509968's ubuntu report | the step's script exits 1 naming it |
+
+MU1 is committed as `apps/studio-web/tests/e2e/workspace.spec.mutation.patch`, its first line `# expect-fail: cd
+apps/studio-web && npm run build && npm run package:dir && npx playwright test tests/e2e/workspace.spec.ts
+--project=electron`.
+
+## Size
+
+Size (agent): partial; 1; 3; 2; 260000
+
+(Heavy runs: R7w, SW with EMU, and the e2e mutations. Partial expected because H4 has no remedy here and H5 is not
+diagnosed; the lead's run decides.)
+
+## Decision rule
+
+**Done** if every row holds locally and in the lead's run on GitHub (GHW, GHU) and each of MU1 to MU4 is caught;
+**partial** otherwise, with each miss recorded with its number.
+
+## What is not covered
+
+The Ubuntu 24.04 container run (ADR 0809's R7l): the hosted ubuntu runner is the subject here. A cause for H4 and H5
+beyond the hypotheses above. The latent behaviour of provenance-f828's scan on a machine without an adapter (Q3). The
+unit-tests job's failure on ubuntu in run 45886730170 (one Rust unit test, not the Studio's job). The egui Studio.
+
+## Open questions for the maintainer
+
+None at registration but those named: Q1 (P2 and `SHOWN_MS` on a hosted runner), Q2 (traces on failure), Q3 (the
+fallback label in provenance-f828's scan), each with options in the addendum.
