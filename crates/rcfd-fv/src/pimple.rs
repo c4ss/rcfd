@@ -201,6 +201,12 @@ pub struct PimpleSettings {
     /// face of the cell (outward) and the cell's velocity after the correctors. Read-only: the copies enter no equation. Not
     /// read by the fractional step or the moving-mesh steps. Default empty: nothing is computed or kept (bit-identical).
     pub outer_cell_probe: Vec<usize>,
+    /// F-885 (ADR 0819, opt-in): with `linear_upwind_limiter` and linear upwind convection, keep each component's limiter
+    /// factor of the step's first outer iteration and use it in the step's later outer iterations (the final one included)
+    /// in place of a factor formed anew; the least-squares gradient is still formed from each iteration's values. The kept
+    /// factors are reset at every step. Without the limiter nothing is kept. Not read by the fractional step or the
+    /// moving-mesh steps. Default `false` (bit-identical).
+    pub outer_frozen_limiter: bool,
     /// F-535 (ADR 0471 D1): refuse the first step the solver takes, through the divergence guard and before any field is
     /// touched, when the pressure-lag estimate of ADR 0073 for the step's settings (`lag_preflight` with this many power
     /// iterations, at least 2) is at least one. The message names the largest cell diffusion number `nu dt/dx^2`
@@ -1143,6 +1149,7 @@ impl PimpleSettings {
             outer_freeze_source: false,
             outer_freeze_viscosity: false,
             outer_cell_probe: Vec::new(),
+            outer_frozen_limiter: false,
             lag_onset_refusal: None,
             rotational_periodic_implicit: false,
             coupled_non_orth: false,
@@ -1891,6 +1898,8 @@ impl PimpleSolver {
         // F-885 (ADR 0767): the velocity change of each outer iteration (only with `outer_velocity_record`)
         let mut outer_dv: Vec<f64> = Vec::new();
         let mut outer_cell: Vec<usize> = Vec::new();
+        // F-885 (ADR 0819, opt-in): each component's limiter factor of the step's first outer iteration
+        let mut frozen_psi: [Option<Vec<f64>>; 3] = [None, None, None];
         // F-885 (ADR 0816, opt-in): the probe cells' faces and face neighbours, and their iterations
         let probe_topo: Vec<(usize, Vec<usize>, Vec<usize>)> = s
             .outer_cell_probe
@@ -2126,7 +2135,17 @@ impl PimpleSolver {
                 // ADR 0183 P-A (opt-in): the limited gradient in the convection term only
                 let limited: Option<Vec<Vec3>> = match (s.linear_upwind_limiter, &grad) {
                     (Some(kind), Some(gr)) if s.convection == ConvScheme::LinearUpwind => {
-                        let psi = crate::gradient::limiter(&g, &conv_cells, &bv, gr, kind);
+                        let psi = match &frozen_psi[k] {
+                            // F-885 (ADR 0819, opt-in): the factor kept from the step's first outer iteration
+                            Some(kept) if s.outer_frozen_limiter => kept.clone(),
+                            _ => {
+                                let formed = crate::gradient::limiter(&g, &conv_cells, &bv, gr, kind);
+                                if s.outer_frozen_limiter {
+                                    frozen_psi[k] = Some(formed.clone());
+                                }
+                                formed
+                            }
+                        };
                         for ((c, _, nbrs), pr) in probe_topo.iter().zip(probe_now.iter_mut()) {
                             // F-885 (ADR 0816, opt-in): the factor at the probe cell and its face neighbours
                             for (i, &cell) in std::iter::once(c).chain(nbrs).enumerate() {
