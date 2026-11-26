@@ -1021,7 +1021,7 @@ exist, and Phase 9 items are stretch. Phase numbers 5 and 6 may run in parallel 
 
 ## Phase 9 - Advanced physics and scale (stretch)
 
-609 items: 286 done, 237 partly done, 86 not started.
+611 items: 286 done, 237 partly done, 88 not started.
 
 - [~] **F-055** Volume-of-fluid free-surface multiphase (interface compression) and surface tension
   - depends on: F-029, F-125
@@ -3785,3 +3785,11 @@ exist, and Phase 9 items are stretch. Phase numbers 5 and 6 may run in parallel 
 - [ ] **F-975** whirl_stability of the cyclic beam wheel sector converges
   - depends on: F-672
   - acceptance: RotatingSector::whirl_stability of the wheel sector W of ADR 0595 (shells option, 4 modes, coriolis on) at harmonic indices 0 to 3 and speeds 0, 30 and 60 rad/s returns Ok, with eigenvalues that agree with whirl_state of the same index and speed within the limit the registration states from the tolerance table, and the defaults bit-identical.
+- [ ] **F-982** Shells on the linear dynamic paths by default
+  - depends on: F-630
+  - acceptance: Every limit not stated here is registered in the ADR before the run. The options of ADR 0798 are the default on the linear transient, the damped modes, the dense modal basis, the static correction and the direct harmonic; models without shells keep their bits; the refusal rows of shells on these paths are restated or retired by name on the maintainer's word, and the checks of ADR 0798 pass with the default.
+  - note: Lead (2026-11-26): entered from the follow-up of ADR 0798 as written, taken on the maintainer's standing instruction of 2026-11-26 (go with the recommended option always).
+- [ ] **F-983** The random response and the harmonic stress of shells
+  - depends on: F-630
+  - acceptance: Every limit not stated here is registered in the ADR before the run. RandomSolver takes Shell4 and Shell3, and the stress of a harmonic response of a shell is given by its resultants: a strip against the closed form of one mode under a flat spectrum, and the stresses against shell::stresses of the real and the imaginary part within 1e-12; models without shells keep their bits.
+  - note: Lead (2026-11-26): entered from the follow-up of ADR 0798 as written, taken on the maintainer's standing instruction of 2026-11-26 (go with the recommended option always). It waits until the structural line's partial items are closed (priority line 4).

@@ -10290,5 +10290,27 @@
     "status": "todo",
     "acceptance": "Every limit not stated here is registered in the ADR before the run. The coverage test of guardrail G15 and the Studio's hand-only surfaces (menus, editors and navigation whose only purpose is to reach a capability by hand), each listed in the registration with its file, are removed or retired; every test retired is named in the ADR with its reason (the maintainer's answer of 2026-11-26, ADR 0803). The views the canvas uses and their tests stay and pass; npm test passes.",
     "note": "Lead (2026-11-26): entered on ADR 0803, the maintainer's direction and answers of that day (the Studio as Claude's canvas)."
+  },
+  {
+    "id": "F-982",
+    "title": "Shells on the linear dynamic paths by default",
+    "phase": 9,
+    "deps": [
+      "F-630"
+    ],
+    "status": "todo",
+    "acceptance": "Every limit not stated here is registered in the ADR before the run. The options of ADR 0798 are the default on the linear transient, the damped modes, the dense modal basis, the static correction and the direct harmonic; models without shells keep their bits; the refusal rows of shells on these paths are restated or retired by name on the maintainer's word, and the checks of ADR 0798 pass with the default.",
+    "note": "Lead (2026-11-26): entered from the follow-up of ADR 0798 as written, taken on the maintainer's standing instruction of 2026-11-26 (go with the recommended option always)."
+  },
+  {
+    "id": "F-983",
+    "title": "The random response and the harmonic stress of shells",
+    "phase": 9,
+    "deps": [
+      "F-630"
+    ],
+    "status": "todo",
+    "acceptance": "Every limit not stated here is registered in the ADR before the run. RandomSolver takes Shell4 and Shell3, and the stress of a harmonic response of a shell is given by its resultants: a strip against the closed form of one mode under a flat spectrum, and the stresses against shell::stresses of the real and the imaginary part within 1e-12; models without shells keep their bits.",
+    "note": "Lead (2026-11-26): entered from the follow-up of ADR 0798 as written, taken on the maintainer's standing instruction of 2026-11-26 (go with the recommended option always). It waits until the structural line's partial items are closed (priority line 4)."
   }
 ]
