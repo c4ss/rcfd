@@ -479,7 +479,11 @@ fn f885_os_freeze_two_routes() {
         let a = cavity_run(5, fs, fnu, Hook::Live);
         let b = cavity_run(5, false, false, Hook::Cached { src: fs, nu: fnu });
         let (ba, bb) = (bits(&a), bits(&b));
-        let dphi = a.phi.iter().zip(&off.phi).fold(0.0f64, |m, (x, y)| m.max((x - y).abs()));
+        let dphi = a
+            .phi
+            .iter()
+            .zip(&off.phi)
+            .fold(0.0f64, |m, (x, y)| m.max((x - y).abs()));
         println!(
             "F885-OS T1 {name}: u equal {}, p equal {}, flux equal {}; T2: largest flux difference to no freeze {dphi:.3e}",
             ba.0 == bb.0,
@@ -499,7 +503,10 @@ fn f885_os_freeze_two_routes() {
 /// T3 (ADR 0815): the freezes on without a hook give the bits of the freezes off.
 #[test]
 fn f885_os_freeze_without_hook() {
-    let (on, off) = (cavity_run(5, true, true, Hook::None), cavity_run(5, false, false, Hook::None));
+    let (on, off) = (
+        cavity_run(5, true, true, Hook::None),
+        cavity_run(5, false, false, Hook::None),
+    );
     let (a, b) = (bits(&on), bits(&off));
     println!(
         "F885-OS T3: u equal {}, p equal {}, flux equal {}, record equal {}",
@@ -531,7 +538,11 @@ fn as_run(name: &str, s: &PimpleSolver, n_outer: usize) -> Run {
 #[test]
 fn f885_os_cavity_contracts() {
     let mut miss = Vec::new();
-    for (name, fz, mode) in [("KC0", false, Hook::None), ("KCh", false, Hook::Live), ("KCf", true, Hook::Live)] {
+    for (name, fz, mode) in [
+        ("KC0", false, Hook::None),
+        ("KCh", false, Hook::Live),
+        ("KCf", true, Hook::Live),
+    ] {
         let s = cavity_run(N_OUT, fz, fz, mode);
         let r = as_run(name, &s, N_OUT);
         for (n, d, _) in &r.steps {

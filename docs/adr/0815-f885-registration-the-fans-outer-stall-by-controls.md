@@ -215,3 +215,145 @@ registered run is corrected by an amendment committed before the corrected run.
 ## Open questions for the maintainer
 
 To be completed in the addendum with options and a recommendation: the remedy, and any question of scope.
+
+## Addendum 1: results
+
+Written 2026-11-26, after the runs. Commits on the branch, from main 3b6cc7cc: 3ebe5e4e (this registration, alone),
+219c2cf7 (the two freezes in `crates/rcfd-fv/src/pimple.rs` and the test file; every registered run was made from it),
+6b6f16dc (the fan controls' record, the cavity and fan logs, the recorded outcomes `FAN_RECORD`), 3e034c8b (the committed
+mutation M1), and the commit of this addendum with the mutation log, rustfmt's layout of the test file (deviation 2) and
+the proposal file. Records in `docs/investigations/f885-outer-stall/`: `fan_controls.csv`, `fan.log`, `cavity.log`,
+`mutations.log`.
+
+### The sentence
+
+**The controls rule all five out.** The fan's relaxed outer loop still stalls on 20 steps of H(dt) with each of these: the
+turbulence sweep's viscosity frozen within the step, the rotating frame's source frozen, no limiter, linear solvers four
+orders tighter, the rotational seam implicit, and all five together. Every control has `C` above 1e-2 (0.017 to 0.033), so by
+the rule of section 4 none of HT, HS, HL, HP, HR is the cause, alone or together. The cause is elsewhere in the step.
+
+### The controls
+
+Fan (20 steps of H(dt), 20 outer iterations, the switch of ADR 0811 on; `C` = median `d_19 / d_2` over steps 11 to 20;
+all seven completed 20 of 20 steps, no failure):
+
+| Run | Settings | `C` | Class | median `d_19` (m/s) | cell of `d_19` (steps 11 to 20) | s |
+| --- | --- | --- | --- | --- | --- | --- |
+| G0 | as F2s of ADR 0811 | 0.02581 | STALLS | 6.361e-3 | c11837 in all 10 | 75.4 |
+| GT | face viscosity of the first outer iteration kept | 0.02602 | STALLS | 6.362e-3 | c11837 in all 10 | 66.8 |
+| GS | source of the first outer iteration kept | 0.03307 | STALLS | 8.411e-3 | c11837 in all 10 | 71.6 |
+| GL | no limiter | 0.01727 | STALLS | 8.353e-3 | c6245 in all 10 | 78.6 |
+| GP | momentum `tol_rel 1e-12`, pressure `1e-11` | 0.02581 | STALLS | 6.361e-3 | c11837 in all 10 | 99.3 |
+| GR | rotational seam implicit | 0.02578 | STALLS | 6.360e-3 | c11837 in all 10 | 94.2 |
+| GA | all five | 0.01680 | STALLS | 8.365e-3 | c6245 in all 10 | 74.5 |
+
+`S` is empty and GA STALLS: result **all ruled out**. (I had expected HT; it was not.)
+
+What the record shows, beside the result (no limit, no part in the class). c11837 (r 0.2492 m, z 0.2306 m) has no
+boundary face: it is an interior cell, not a wall cell and not on the seam (the patch list of its faces is empty in every
+classed step). At it, with the limiter, the change of each outer iteration is constant: in G0 step 20 `d_10` to `d_19` are
+5.56e-3 to 5.59e-3 m/s, a ratio `d_(k+1) / d_k` of 1.00, so the iterate moves by the same amount in every iteration and
+does not approach a fixed point there. Without the limiter (GL, GA) that cell is no longer the largest. The loop then
+contracts geometrically but slowly, at c6245 (r 0.2346 m, z 0.1485 m), by about 0.85 an iteration (GL step 20: 5.87e-3,
+4.98e-3, 4.22e-3 m/s for `d_17` to `d_19`), which over 17 iterations gives `C` about 0.017 > 1e-2. So two things sit
+under the stall. One is a mode at c11837 that does not contract, in which the limiter takes part but which it does not
+carry alone: GL removes that mode, but the loop still stalls by the rule. The other is a slow mode of about 0.85 an
+iteration elsewhere, which none of the five controls touches. The tight tolerances change nothing (GP equals G0 to 1e-8
+in `C`): the linear solves leave no floor.
+
+### Table of checks
+
+| Id | Limit | Measured | Met |
+| --- | --- | --- | --- |
+| B1 | all controls run as registered | G0 to GA: 20 of 20 steps each, no stop; KC0, KCh, KCf: 3 of 3 steps | yes |
+| B2 | names one or rules all out | all ruled out | yes |
+| B3 | passes, file unchanged | `baseline_hashes`: 3 passed, 1 ignored; `baseline_hashes.rs` unchanged | yes |
+| R0 | `<= 1e-6` | 4.50e-10 in the heavy run (G0 against the committed F2s rows); 0 from the two committed records (G2's test) | yes |
+| K1 | `C <= 1e-2` each | KC0 9.149e-9, KCh 3.555e-8, KCf 1.391e-8 (CONVERGES) | yes |
+| T1 | equal bits | source and viscosity: `u`, `p`, flux equal bits after 3 steps | yes |
+| T2 | flux differs | largest flux difference to no freeze 1.97e-5 (source), 3.50e-5 (viscosity) | yes |
+| T3 | equal bits | `u`, `p`, flux, record equal | yes |
+| T4 | as built | `f885_os_rules_on_built_records` passed | yes |
+| G2 | equal, `1e-6` | `f885_os_fan_from_the_committed_record`: seven classes, `C` and "all ruled out" as recorded | yes |
+| D1 | as stated | under `crates/*/src` only `crates/rcfd-fv/src/pimple.rs` (branch lines 189 to 196, the two fields; 1104 to 1105, their defaults; 1843 to 1844, `frozen_source`; 1857 to 1864, the source freeze; 1870 to 1871, the viscosity filter and its comment); no roadmap, ledger, golden or existing test changed; the four committed patches (`f885_check_h_outer_record`, `f885_outer_fixed_points`, `f885_alpha_free_face_flux`, `f885_outer_stall`) apply with `git apply --check`, none re-based (the source freeze was written so that the context of `f885_check_h_outer_record`'s patch stays as it was) | yes |
+| P | see the checks of rule 7 | as listed | yes |
+
+### Mutations
+
+From `mutations.log` (git archive of 6b6f16dc in the scratch folder, its own target folder, every file touched before
+each build; the gate tests of the new file):
+
+| Id | What happened |
+| --- | --- |
+| K0 | unmutated: the five gate tests pass |
+| M1 | `outer_freeze_source` not read: caught by `f885_os_freeze_two_routes` (T1 and T2 source). Committed as the mutation patch |
+| M2 | `outer_freeze_viscosity` not read: caught by `f885_os_freeze_two_routes` (T1 and T2 viscosity) |
+| M3 | both always on: caught by `f885_os_freeze_two_routes` (T2: no difference to no freeze, both) |
+| M4 | the viscosity freeze also in the first outer iteration: caught by `f885_os_freeze_two_routes` (T1 viscosity) |
+| M5 | CONVERGES at `C <= 1e-4`: caught by `f885_os_rules_on_built_records` |
+| M6 | `fan_controls.csv` cut to its first half: caught by `f885_os_fan_from_the_committed_record` |
+
+### Deviations
+
+1. The fan's seven controls took 9.5 min together (estimate about 12 min).
+2. `cargo fmt -p rcfd-api --check` first failed on the layout of three expressions in the new test file (one line each
+   that rustfmt splits). rustfmt was applied to that file; the diff is layout only, and the check then ran clean. The
+   registered runs had been made before; nothing else changed.
+3. Rule 7's run of the new test file was made test by test as each registered step came due (T1 to T4 and K1 together
+   before the fan run; G2 after the record), each once. The five gate tests ran again, unmutated, as K0 of the mutation copy.
+
+### What was not run
+
+Any remedy; any change of a default; check H, H(dt/2), a long run; a diagnosis of the two modes the record shows (the
+constant change at c11837, the slow contraction at c6245); the whole workspace suite.
+
+### The checks of rule 7
+
+* `cargo test -p rcfd-api --release --test f885_outer_stall`: T1 to T4, K1 (4 passed), G2 (1 passed); the heavy record
+  run once.
+* `cargo test -p rcfd-fv --release --lib`: 115 passed, 6 ignored.
+* `cargo test -p rcfd-api --release --test f885_alpha_free_face_flux`: 5 passed, 3 ignored; `--test f885_outer_fixed_points`:
+  4 passed, 1 ignored; `--test f885_check_h_outer_record`: 4 passed, 2 ignored.
+* `cargo test -p rcfd-api --release --test baseline_hashes`: 3 passed, 1 ignored.
+* `cargo fmt -p rcfd-fv --check`: clean; `cargo fmt -p rcfd-api --check`: clean after deviation 2; `cargo clippy -p rcfd-fv
+  -p rcfd-api --all-targets -- -D warnings`: clean.
+* `cargo test -p rcfd-cli --release --test docs_site`: 2 passed before this addendum. It, `python scripts/roadmap_proposals.py
+  check` and `python scripts/process_report.py --check` were run at the commit of this addendum, as reported to the lead.
+
+### Size
+
+Size (agent): done; 1; 1; 1; 220000
+
+### Decision by the registered rule
+
+**Done for this registration**: every control ran as registered (B1) and the result rules all out (B2), with B3, R0, K1,
+T1 to T4, G2 and D1 met. F-885 stays **partial**: check H has not decided.
+
+## Open questions for the maintainer (addendum 1)
+
+1. **The next step (the remedy is not yet known).** No remedy follows from this result: it rules out the five candidates
+   and shows where the stall sits. Options: (a) a further diagnosis under F-885 (rule 13) of the two modes the record
+   shows, on 20 steps of H(dt) with the switch on, with controls and numbers fixed in advance and no long run. At c11837
+   it would record, per iteration, the cell's momentum terms (the diagonal against the off-diagonal sum, and whether
+   `d = max(a_c, sum |a_nb|)` of the relaxation takes the off-diagonal sum there, the condition under which ADR 0811
+   section 1 says a remainder stays), the limiter factor and the cell's face fluxes. At c6245 it would record the
+   contraction factor against `alpha_u` and the corrector count. (b) The maintainer's reading of ADR 0183's rule for a
+   loop that does not contract. (c) Leave F-885 partial with check H recorded as not deciding. I recommend (a): the
+   constant change at one interior cell is a sharp signature, and the relaxation's diagonal is the one place in the step's
+   algebra already known to break the fixed-point argument.
+2. **Whether the two freezes stay.** Options: (a) keep them as opt-in controls (they leave every default unchanged and
+   cost nothing when off); (b) remove them. I recommend (a): a further diagnosis may use them.
+
+## For the lead: roadmap entries
+
+> Status proposed for F-885: partial.
+
+> Note entry: ADR 0815, 2026-11-26, diagnosis done, item partial: controls of the fan's relaxed outer loop on 20 steps of H(dt) with the switch of ADR 0811 and 20 outer iterations rule out the turbulence sweep (viscosity frozen within the step), the rotating frame's explicit source (frozen), the Barth-Jespersen limiter (off), the linear-solver tolerances (four orders tighter) and the lagged rotational seam (implicit), alone and all together: every control stalls (C = median d19/d2 0.017 to 0.033 against 1e-2) while the cavity contracts (C 9e-9 to 4e-8); the stall sits at an interior cell (c11837) with a constant change per iteration, and without the limiter a slow mode of about 0.85 per iteration remains elsewhere; held by crates/rcfd-api/tests/f885_outer_stall.rs and docs/investigations/f885-outer-stall, six of six mutations caught.
+
+> Gap entry: Missing for done: a class by ADR 0183's rule. Check H with the alpha-free face flux (ADR 0811) does not decide because the fan's outer loop does not contract within a step; ADR 0815 ruled out the turbulence sweep, the rotating-frame source, the limiter, the linear tolerances and the rotational seam (all stall, C 0.017 to 0.033). Needs a diagnosis of the non-contracting mode at interior cell c11837 and the slow mode at c6245 (ADR 0815 question 1), or the maintainer's reading of the rule.
+
+The same entries are in `docs/roadmap/proposals/0815-F-885.json` (form 1 of ADR 0755, base 3b6cc7cc), checked with
+`python scripts/roadmap_proposals.py check`. No follow-up item is proposed: a further diagnosis adds no acceptance clause
+and would be registered under F-885 (rule 13).
+
+Generated pages that this work may leave not current, for the lead (rule 9): `docs/adr/index.md` (ADR 0815 is new).
