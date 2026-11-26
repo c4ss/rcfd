@@ -246,3 +246,24 @@ naming the check that missed. A missed limit is recorded with its number and hel
 - **Q2. More panels that follow (scope).** (a) none beyond D1; (b) a `plot` and a `field` panel with `case` that follow
   the newest run, and a field panel that follows a live run's newest snapshot, as an item after F-984. Recommendation:
   (b), entered as an item of its own.
+
+## Amendment 1 (2026-11-26): the e2e set-up of E1 corrected
+
+Written after the registered run of `npm test` and before any corrected code or run; nothing above is changed.
+
+**What the run gave.** In the registered `npm test` (900 passed, 1 failed, 2 did not run, 15.0 min), E0 of
+`tests/e2e/canvas-f979.spec.ts` passed (the view shown with its mesh drawn 1188 ms after the tool's result, recorded),
+and E1 failed before it measured anything: the test called `refine_case_mesh` without `factor`, which the tool's schema
+requires (error -32602 "missing required argument 'factor'"). E2 and E3 did not run, as the file is serial. The defect is
+the test's set-up, not the canvas: no row of E1 to E3 was measured. L2 stays as it was run, a miss, and is reported so in
+addendum 1. Before this amendment the schemas of every tool the e2e calls were read from the branch's binary
+(`tools/list`): `factor` is the only required argument the test left out.
+
+**The corrected test.** A new spec `apps/studio-web/tests/e2e/canvas-f979-a1.spec.ts`, the same as the first but for
+`factor: 2` in the `refine_case_mesh` call (the factor `refine_case_mesh` takes, docs/mcp-tools.md). Its rows are E0 to
+E3c of the table above with their limits, sources and estimates unchanged. The first spec stays as the record of the
+defective set-up (rule 2): its tests are skipped with a line naming this amendment, and nothing else of it changes.
+
+**The corrected run.** Once: `npm run build`, `npm run package:dir` and `npx playwright test tests/e2e/canvas-f979-a1.spec.ts`
+in `apps/studio-web`, against the branch's engine, with nothing else of the Studio's suite run again. M3 and M4 are run
+against the corrected spec. The decision rule is unchanged.
