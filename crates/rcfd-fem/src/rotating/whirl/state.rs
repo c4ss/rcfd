@@ -23,12 +23,15 @@ mod sector;
 mod springs;
 pub use sector::{CyclicWhirlStability, HarmonicStateWhirl};
 mod arnoldi;
+#[cfg(test)]
+mod f975_diagnosis;
 pub use arnoldi::{gyroscopic_state_eigen_sparse, SparseStateEigen, SparseStateOptions, SparseStateWhirl};
 
 /// `max|Re s| / max|s|` at or below which a speed is stable (ADR 0416 D3).
 pub const STABILITY_TOLERANCE: f64 = 1e-8;
 
-/// Iterations of the Francis QR algorithm on one active window before the solve is refused.
+/// Iterations of the Francis QR algorithm on one active window before the iteration stops (then once more with the
+/// widened deflation test of ADR 0806, and only then is the solve refused).
 const QR_ITERATIONS: usize = 30;
 
 /// Solves of the inverse iteration for a mode vector.
@@ -303,8 +306,77 @@ fn eig2(a: f64, b: f64, c: f64, d: f64) -> [[f64; 2]; 2] {
     }
 }
 
-/// The eigenvalues of the upper Hessenberg row-major `h` (consumed) by the real Schur iteration (D2 steps 2, 3).
-fn hessenberg_eigenvalues(mut h: Vec<f64>, m: usize) -> Result<Vec<[f64; 2]>> {
+/// The eigenvalues of the upper Hessenberg row-major `h` (consumed) by the real Schur iteration (D2 steps 2, 3). If the
+/// iteration stalls on a window, it is run again from a copy of `h` with the deflation test widened by the normwise bound
+/// `tau = m eps ||h||_F` (ADR 0806 D1): a double semisimple eigenvalue, such as every eigenvalue of a pair index at rest,
+/// leaves subdiagonals of rounding size `eps ||h||` that the local test refuses. A call whose first iteration converges
+/// performs exactly the arithmetic it did before (ADR 0806 D2).
+fn hessenberg_eigenvalues(h: Vec<f64>, m: usize) -> Result<Vec<[f64; 2]>> {
+    let h0 = h.clone();
+    let mut h = h;
+    match schur_sweep(&mut h, m, None) {
+        Ok(out) => Ok(out),
+        Err(_first) => {
+            let fro = h0.iter().map(|v| v * v).sum::<f64>().sqrt();
+            let tau = m as f64 * f64::EPSILON * fro;
+            let mut h1 = h0;
+            let second = schur_sweep(&mut h1, m, Some(tau));
+            #[cfg(test)]
+            record_failure(&h, m, _first, fro, tau, second.is_ok());
+            second.map_err(|(l, hi)| FemError::Solver {
+                solver: "gyroscopic_state_eigen",
+                reason: format!("the QR iteration did not converge on rows {l}..={hi} in {QR_ITERATIONS} steps"),
+            })
+        }
+    }
+}
+
+/// The record of a stalled first iteration (ADR 0806 D4), written in test builds only.
+#[cfg(test)]
+#[derive(Debug, Clone)]
+pub(crate) struct QrFailure {
+    /// The order of the matrix.
+    pub m: usize,
+    /// The window `(l, hi)` that did not converge.
+    pub window: (usize, usize),
+    /// `|h_{i,i-1}|` for `i` in `l + 1 ..= hi`, at the failure.
+    pub sub: Vec<f64>,
+    /// `|h_{i-1,i-1}| + |h_{i,i}|` for the same `i`.
+    pub local: Vec<f64>,
+    /// `||h0||_F` of the Hessenberg matrix before the first step.
+    pub fro: f64,
+    /// The bound of the widened test.
+    pub tau: f64,
+    /// Whether the fallback converged.
+    pub fallback_ok: bool,
+}
+
+#[cfg(test)]
+thread_local! {
+    pub(crate) static QR_FAILURES: std::cell::RefCell<Vec<QrFailure>> = const { std::cell::RefCell::new(Vec::new()) };
+}
+
+#[cfg(test)]
+fn record_failure(h: &[f64], m: usize, window: (usize, usize), fro: f64, tau: f64, fallback_ok: bool) {
+    let (l, hi) = window;
+    let sub = (l + 1..=hi).map(|i| h[i * m + i - 1].abs()).collect();
+    let local = (l + 1..=hi).map(|i| h[(i - 1) * m + i - 1].abs() + h[i * m + i].abs()).collect();
+    QR_FAILURES.with(|r| {
+        r.borrow_mut().push(QrFailure {
+            m,
+            window,
+            sub,
+            local,
+            fro,
+            tau,
+            fallback_ok,
+        })
+    });
+}
+
+/// The real Schur iteration on `h` in place (D2 steps 2, 3): the eigenvalues, or the window `(l, hi)` that did not converge
+/// in [`QR_ITERATIONS`] steps. `widened`: the bound `tau` of ADR 0806 D1, a subdiagonal `<= tau` also negligible.
+fn schur_sweep(h: &mut [f64], m: usize, widened: Option<f64>) -> std::result::Result<Vec<[f64; 2]>, (usize, usize)> {
     let mut out = Vec::with_capacity(m);
     if m == 0 {
         return Ok(out);
@@ -319,7 +391,8 @@ fn hessenberg_eigenvalues(mut h: Vec<f64>, m: usize) -> Result<Vec<[f64; 2]>> {
             if s == 0.0 {
                 s = scale;
             }
-            if h[l * m + l - 1].abs() <= f64::EPSILON * s {
+            let sub = h[l * m + l - 1].abs();
+            if sub <= f64::EPSILON * s || widened.is_some_and(|tau| sub <= tau) {
                 h[l * m + l - 1] = 0.0;
                 break;
             }
@@ -346,10 +419,7 @@ fn hessenberg_eigenvalues(mut h: Vec<f64>, m: usize) -> Result<Vec<[f64; 2]>> {
         }
         iter += 1;
         if iter > QR_ITERATIONS {
-            return Err(FemError::Solver {
-                solver: "gyroscopic_state_eigen",
-                reason: format!("the QR iteration did not converge on rows {l}..={hi} in {QR_ITERATIONS} steps"),
-            });
+            return Err((l, hi));
         }
         let (s, t) = if iter == 10 || iter == 20 {
             let w = h[hi * m + hi - 1].abs() + h[(hi - 1) * m + hi - 2].abs();
@@ -363,7 +433,7 @@ fn hessenberg_eigenvalues(mut h: Vec<f64>, m: usize) -> Result<Vec<[f64; 2]>> {
             );
             (a + d, a * d - b * c)
         };
-        francis(&mut h, m, l, hi, s, t);
+        francis(h, m, l, hi, s, t);
     }
     Ok(out)
 }
