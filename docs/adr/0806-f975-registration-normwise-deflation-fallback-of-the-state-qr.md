@@ -318,3 +318,21 @@ ordered by (Im s, Re s), in consecutive pairs with abs(Im s_2i - Im s_2i+1) <= 1
 limit or result changes. The registration cannot be edited, and the form "| Id | Kind |" applies only to a table without a
 column "kind", so the lead is asked to list the line
 `0806-f975-registration-normwise-deflation-fallback-of-the-state-qr.md: DG3` in `docs/process/exceptions/registration-kind.txt`.
+
+## Amendment 2 (2026-11-26, before the corrected run): the corrected set-up of V1
+
+The maintainer approved on 2026-11-26, relayed by the lead, the correction of V1 by rule 2 (a defective set-up). The defect:
+the registered test `v1_v4_frequencies_flags_and_residuals_against_the_other_routes` built the reference of V1 by repeating
+each value of `modal_analysis_harmonic(W, &[], k, modal_options(4))` `multiplicity` times. For a pair index that function
+already returns `modes x multiplicity` = 8 eigenvalues, each frequency twice, so the reference had 16 entries against the 8
+reported state frequencies, and the row measured `inf` (addendum 1).
+
+The corrected reference: `omega_i = sqrt(eigenvalues[i])` of `modal_analysis_harmonic` as returned, ascending. It has 8 values for
+`k = 1, 2` and 4 for `k = 0, 3`. Each is compared one to one with `omegas[i]` of the reported modes of `whirl_stability` at
+0 rad/s, and the counts must be equal. The limit (relative `<= 1e-8`), its source (tolerance table, "Same discrete problem by
+two routes"), the estimate (`1e-11`), the margin and the kind (code verification) are unchanged. V2 to V4 are not run again: they
+were met in run 1.
+
+The registered test stays as an ignored record, its body and limits unchanged, with `#[ignore]` naming ADR 0806 run 1 and the
+measured `inf`. The corrected row is a new function `v1_corrected_rest_frequencies_against_modal_analysis_harmonic` in the same
+file, run once. Its result goes in addendum 2.
