@@ -562,7 +562,7 @@ One row per record of this folder, grouped by the roadmap category of the item i
 |---|---|---|---|---|---|---|
 | [0730](0730-f826-f830-proposal-ui-metadata-in-the-case-schema-and-help-from-the-engine.md) | F-826 and F-830 proposal: UI metadata in the case schema, and help and an error catalogue from the engine | ACCEPTED | 2026-11-17 | 0 | F-830 | partial |
 
-## Quality, docs and validation (58)
+## Quality, docs and validation (59)
 
 | ADR | Title | Status word | Date | Addenda | Item | Item status |
 |---|---|---|---|---|---|---|
@@ -624,6 +624,7 @@ One row per record of this folder, grouped by the roadmap category of the item i
 | [0796](0796-f886-registration-three-formulas-read-against-their-open-sources.md) | F-886 registration: three formulas recorded from memory, read against their open sources | REGISTERED | 2026-11-25 | 2 | F-886 | done |
 | [0810](0810-f885-registration-the-fixed-points-of-the-relaxed-and-unrelaxed-outer-iterations.md) | F-885 registration: why the relaxed and the unrelaxed outer iterations of a pimple step have different fixed points | REGISTERED | 2026-11-26 | 1 | F-885 | partial |
 | [0811](0811-f885-registration-a-face-flux-independent-of-alpha-u-then-check-h.md) | F-885 registration: an opt-in face flux whose converged value does not depend on alpha_u, then check H | REGISTERED | 2026-11-26 | 1 | F-885 | partial |
+| [0815](0815-f885-registration-the-fans-outer-stall-by-controls.md) | F-885 registration: why the fan's outer loop does not contract within a step, by controls fixed in advance | REGISTERED | 2026-11-26 | 1 | F-885 | partial |
 
 ## Records with no item in the file name (260)
 
