@@ -292,3 +292,65 @@ Q1 and Q2 of the registration stand as written there, with their recommendations
 
 R13 (`python scripts/process_report.py --check`) is run after this addendum is committed, so that it judges the final
 tree; its result is in the report to the lead. The decision of Addendum 1 stands: **partial**.
+
+## Addendum 3: amendment 1, registration of the a11y control and the remedy step (2026-11-26)
+
+REGISTERED 2026-11-26, a further registration of F-981 under rule 13 of `docs/process/agent-rules.md` (version 5),
+written before any run it covers and committed alone; on the lead's message of that day. Written by Claude Opus 5.5
+(`claude-opus-5-5`). What came before it: the lead merged this branch at a99d003e and `push_main` refused it, because
+`npm test` failed in each of its 3 runs on `tests/e2e/a11y.spec.ts:299` only (the case R1 of Addendum 1 also failed);
+the same case passed in the push of F-976 (main 1e92df2a). The branch then merged `origin/main` at 2327d4f1 (F-979;
+no conflict, no file of this work touched). Q1 and Q2 were answered by the lead (Q1 (a), entered as F-985; Q2: keep);
+he writes them into this ADR at the merge.
+
+**What the failure is (from R1's trace).** The case's `surface('runs', '.rv')` walks the Runs grid with the arrow keys
+from its Tab stop, the first row (`r-20261028T152641-f8c2`). The trace is: ArrowUp to the column header "Case and run",
+then ArrowDown through cells (`react-aria-2`, `-7`, `-12`, `-17`), not rows, and back up to the header. So the three
+other rows count as not reached, and the focus comes back to the header rather than the row. The rows are faded because
+the walk's arrow keys select (the grid's `selectionBehavior="replace"`); no run is selected before the walk.
+
+**Hypotheses, from the code.** No file of the Runs view or of `ui/Table.tsx` changed (`git diff --stat 5bf77c58..HEAD --
+apps/studio-web/src/renderer/runs apps/studio-web/src/renderer/ui` is empty). What this work changed that runs before the
+case, in the same Studio, is: (HA) the empty home lost the first path's intro (`FirstPathIntro`), so the case "the project
+home with no project open, …" walks fewer Tab stops and composites (the spec keeps the composites it has checked in
+`checkedComposites`, keyed by name and root, across the whole file); and (HB) the open home lost `FirstPath`, which drew
+nothing for the quick-start project, and the handler `openWorkspace`. (HC) The failure does not come from this work: it
+also fails on the base tree.
+
+**The control (C).** `a11y.spec.ts` run on its own (`npx playwright test tests/e2e/a11y.spec.ts --project=electron`),
+packaged from each tree, against the engine of 2327d4f1 built in the scratch target (with `CARGO_TARGET_DIR`, `RCFD_BIN`,
+`RCFD_MCP_BIN`, `RCFD_RUNNER_BIN` set as in Addendum 1):
+
+- **C1**: the base tree 2327d4f1, a scratch copy with its own `npm ci` (no junction), **3 runs**.
+- **C2**: this branch's tree, in the worktree (after `npm run build` and `npm run package:dir`), **3 runs**.
+
+The count 3 is the lead's: his push failed 3 of 3. Outcomes and what follows, fixed now:
+
+- C1 3 of 3 pass and C2 3 of 3 fail: the cause is in this work (HA or HB). A diagnosis D on a scratch copy of this tree
+  with the base's `ProjectHome.tsx` and `src/renderer/first/` restored, 1 run of the spec: if it passes, the cause is the
+  first path's removal; the remedy is then written as Addendum 4 (an amendment) before any code of it, in this work's
+  files only (`ProjectHome.tsx`, `project/NotAProject.tsx`, `not-a-project.css`), and its rows are R14 and R15 below.
+- C1 fails in any run: HC. No remedy in this work's files; R14 and R15 are run on this tree as they stand.
+- Any other split: the case does not decide between the trees; recorded as not deciding, and R14 and R15 are run as
+  they stand.
+
+**Set-up corrected (the data failures of R1).** R1's two data failures took the main checkout's `f447_bench` of
+2026-11-16. Before R15 the example is built into the scratch target (`cargo build --release -p rcfd-api --example
+f447_bench`), where `tests/support/f447.ts` looks first (`$CARGO_TARGET_DIR/release/examples`). No test changes.
+
+| Row | Check | Limit | Source of the limit | Estimate | Margin | Kind |
+|---|---|---|---|---|---|---|
+| R14 | `a11y.spec.ts` alone on this tree (after the remedy, if one), 3 runs | 3 of 3 pass | the lead's message (the spec passes on this tree); acceptance of F-981 ("npm test passes") | 3 of 3 | pass or fail | code verification |
+| R15 | `npm test` in `apps/studio-web`, once, against the scratch engine and `f447_bench` | 0 failed | acceptance of F-981 | 0 failed | pass or fail | code verification |
+
+Then, once each: `npm run typecheck` (R9b), `cargo test -p rcfd-cli --release --test docs_site` (R10b), `python
+scripts/roadmap_proposals.py check docs/roadmap/proposals/0808-F-981.json` (R12b; the file is updated with the outcome)
+and `python scripts/process_report.py --check` (R13b, last). C1 and C2 are controls, not rows; neither is run again.
+
+Mutations: if the remedy changes a Studio file, Addendum 4 registers one mutation of it and commits it as a patch beside
+the test that must fail it (rule 16). No test is edited, skipped or loosened; no limit changes.
+
+Size (agent): done; 0; 3 (the engine build, the six controls, `npm test`); 0; 60000
+
+Decision rule: F-981 is **done** if R14 and R15 hold and every row of Addendum 1 other than R1 still holds (they are
+inside R15) and, if a remedy changes a Studio file, its mutation is caught; **partial** otherwise.
