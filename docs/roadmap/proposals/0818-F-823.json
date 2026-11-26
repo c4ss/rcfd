@@ -1,0 +1,10 @@
+{
+  "form": 1,
+  "adr": "0818",
+  "item": "F-823",
+  "base": "e2908a03126e37564cf37b4be100f8405681e043",
+  "status": "partial",
+  "note": "ADR 0818, 2026-11-26, partial: the studio-web skip step lists ADR 0807's four records and the records of Follow live's race and of provenance-f828's scan (each with a corrected test that passes), and workspace-first-open checks its premise (a WebGPU adapter) and is reported by STUDIO_PREMISE_SKIPS when it is missing; Windows runs with no switch again after the lead's run 45906133164 showed --enable-unsafe-webgpu does not draw; ubuntu passed on GitHub; locally npm test passed 886 with 6 registered skips.",
+  "gap": "windows-latest on GitHub is to be read again with no switch, the corrected provenance scan and workspace-first-open's premise check (ADR 0818 amendment 3); run-control.spec.ts:268's P2 holds on ubuntu only by chance (2 of 3 missed); a11y.spec.ts:427 undiagnosed (traces are a later item); a self-hosted runner for the timing specs is the lead's item.",
+  "follow_ups": []
+}

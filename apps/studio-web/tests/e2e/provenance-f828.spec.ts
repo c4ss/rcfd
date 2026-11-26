@@ -286,6 +286,7 @@ test.afterAll(async () => {
 });
 
 test('SC KT KQ: no number of the views without provenance; the Tab stops; the look at rest', async () => {
+  test.skip(true, 'ADR 0818 amendment 3: the record of the scan that counts the renderer fallback label as a number; see the corrected test after it');
   const { page } = studio!;
   const bare: Record<string, readonly string[]> = {};
   const names: Record<string, readonly string[]> = {};
@@ -294,6 +295,71 @@ test('SC KT KQ: no number of the views without provenance; the Tab stops; the lo
   const at = async (k: string, root: string) => {
     const s = await scan(page, root);
     bare[k] = s.bare;
+    names[k] = s.names;
+    await page.mouse.move(2, 890);
+    loud[k] = await quiet(page, root);
+  };
+  await page.waitForTimeout(1500);
+  await at('home', 'body');
+  count['home'] = await tabs(page);
+  await page.getByRole('textbox', { name: 'Filter by name' }).fill('cavity');
+  await at('home filtered', '.ph-home');
+  await page.getByRole('textbox', { name: 'Filter by name' }).fill('');
+  await page.getByRole('tab', { name: 'Runs' }).click();
+  await expect(page.getByRole('grid', { name: /^Runs of / })).toBeVisible();
+  await page.waitForTimeout(1500);
+  await at('runs', '.ph-runs');
+  count['runs'] = await tabs(page);
+  await page.getByRole('button', { name: /^Runner budgets/ }).click();
+  await expect(page.getByRole('textbox', { name: 'max_runs' })).toBeVisible();
+  await page.waitForTimeout(500);
+  count['budgets'] = await tabs(page);
+  await page.locator(`.rv-case[data-run="${RE100}"]`).click();
+  await page.waitForTimeout(800);
+  await at('runs, budgets, a run selected', '.ph-runs');
+  await page.getByRole('button', { name: /^Runner budgets/ }).click();
+  await toWorkspace(page, RE100);
+  await page.waitForTimeout(1500);
+  await at('workspace', '.ws');
+  count['workspace'] = await tabs(page);
+  await page.getByRole('button', { name: 'Compare runs', exact: true }).click();
+  await page.waitForTimeout(4000);
+  count['compare'] = await tabs(page);
+  await stopAt(page, 7);
+  await compareSide(page);
+  await at('compare', '.ws');
+  await page.getByRole('radio', { name: 'Difference', exact: true }).click();
+  await expect(page.locator('.cmp--difference .fv-frame')).toHaveAttribute('data-ready', '', { timeout: 30_000 });
+  await at('difference', '.ws');
+  await page.getByRole('button', { name: 'Compare runs', exact: true }).click();
+  console.log(`SC bare ${JSON.stringify(bare)}`);
+  console.log(`KT ${JSON.stringify(count)}`);
+  expect(Object.entries(bare).filter(([, v]) => v.length > 0)).toEqual([]);
+  // no group left out of the scan
+  const has = (k: string, re: RegExp) => expect(names[k]!.some((n) => re.test(n)), `${k}: ${re} in ${names[k]!.join(' | ')}`).toBe(true);
+  has('home', /^Provenance of entries: 10$/);
+  for (const k of ['cases: 4', 'meshes: 1', 'runs: 4', 'notes: 1', 'designs: \\d+', 'runs of cases/cavity-re100\\.toml: 1']) has('home', new RegExp(`^Provenance of ${k}$`));
+  has('home filtered', /^Provenance of cases shown: 4$/);
+  has('runs', /^Provenance of residual of u: /);
+  has('runs', /^Provenance of residual of p: /);
+  has('runs, budgets, a run selected', /^Provenance of max_runs: not set$/);
+  for (const k of [/^Provenance of legend of /, /^Provenance of domain: /, /^Provenance of scale bar: /]) for (const v of ['workspace', 'compare', 'difference']) has(v, k);
+  expect(names['compare']!.length).toBeGreaterThan(names['workspace']!.length);
+  expect(Object.entries(loud).filter(([, v]) => v.length > 0)).toEqual([]);
+  expect(count).toEqual(TABS);
+});
+
+test('SC KT KQ (ADR 0818 amendment 3, the renderer’s fallback label is not a number of a view): no number of the views without provenance; the Tab stops; the look at rest', async () => {
+  // ADR 0818 amendment 3: the label of the WebGL 2 fallback (FieldViewport.tsx), shown only without a WebGPU adapter, names the renderer
+  const FALLBACK_LABEL = /^Drawn by WebGL 2 \(fallback: [^)]*\) < span\.fv-backend /;
+  const { page } = studio!;
+  const bare: Record<string, readonly string[]> = {};
+  const names: Record<string, readonly string[]> = {};
+  const loud: Record<string, readonly string[]> = {};
+  const count: Record<string, number> = {};
+  const at = async (k: string, root: string) => {
+    const s = await scan(page, root);
+    bare[k] = s.bare.filter((b) => !FALLBACK_LABEL.test(b));
     names[k] = s.names;
     await page.mouse.move(2, 890);
     loud[k] = await quiet(page, root);

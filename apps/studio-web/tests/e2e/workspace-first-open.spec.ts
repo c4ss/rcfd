@@ -69,6 +69,10 @@ test('no task over LONG_TASK_LIMIT_MS when the workspace first opens while the G
     const { page, app } = studio;
     await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0]!.setContentSize(1440, 900));
     await expect.poll(() => page.evaluate(() => [innerWidth, innerHeight])).toEqual([1440, 900]);
+    // ADR 0818 amendment 3: the premise, a WebGPU adapter in the GPU process (the hold needs one), checked before anything is
+    // measured; without it the test is reported as such (ci.yml STUDIO_PREMISE_SKIPS), never failed or skipped silently
+    const adapter = await page.evaluate(async () => (await (navigator as unknown as { gpu?: { requestAdapter(): Promise<unknown> } }).gpu?.requestAdapter()) != null);
+    test.skip(!adapter, 'premise not met: no WebGPU adapter in this window’s GPU process (a machine without a GPU); the GPU process cannot be held (ADR 0818 amendment 3, ADR 0787)');
     const loadBefore = await machineLoad();
     expect(await installRecorder(page)).toContain('longtask');
 

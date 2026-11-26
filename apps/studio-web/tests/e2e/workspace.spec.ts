@@ -387,6 +387,7 @@ test('ADR 0801 Addendum 22: Play steps one stored snapshot a second; the 2D cavi
 });
 
 test('Follow live: the line stays on the running run’s newest snapshot; moving it stops following; Follow live brings it back', async () => {
+  test.skip(true, 'ADR 0818: the record of the race of reading the line and the count apart; see the corrected test after it');
   test.setTimeout(120_000);
   const { page } = studio!;
   longRun = runner!.submit('cases/cavity-re100.toml', LONG);
@@ -413,6 +414,76 @@ test('Follow live: the line stays on the running run’s newest snapshot; moving
   expect(later.snapshot).toBeGreaterThan(first.snapshot);
   const n = Number((await counter.textContent())!.match(/of (\d+)/)![1]);
   expect(later.snapshot).toBe(n - 1);
+  await shot(page, '04-follow-live');
+  // moving the line stops following: it stays where it was put while the run goes on
+  await scrubber(page).focus();
+  await page.keyboard.press('ArrowLeft');
+  await expect(follow).toHaveAttribute('aria-pressed', 'false');
+  const held = await attr(ws, 'data-snapshot');
+  await until(async () => (Number((await counter.textContent())!.match(/of (\d+)/)![1]) > held + 3 ? true : null), 30_000, 'more snapshots');
+  expect(await attr(ws, 'data-snapshot')).toBe(held);
+  // held on the live run, the cursor reads the solver's values at that step, also past the last read of its histories
+  const heldStep = await attr(ws, 'data-step');
+  const line = (await residualLines(longRun)).get(heldStep)!;
+  const cont = page.locator('.tp-resid-values li[data-name="continuity"]');
+  await expect(cont).toHaveAttribute('data-step', String(heldStep));
+  await expect(cont).toHaveAttribute('data-value', String(line.residuals['continuity']));
+  await expect(page.locator('.tp-readout-value')).toHaveAttribute('data-value', String(line.monitors['lid_drag']));
+  // Follow live brings it to the newest again
+  await follow.click();
+  await expect(follow).toHaveAttribute('aria-pressed', 'true');
+  await until(
+    async () => {
+      const m = (await counter.textContent())!.match(/^snapshot (\d+) of (\d+)/);
+      return m && m[1] === m[2] ? true : null;
+    },
+    15_000,
+    'the line on the newest snapshot',
+  );
+  runner!.cli('cancel', longRun);
+  await until(() => (runner!.status(longRun!).state === 'cancelled' ? true : null), 30_000, 'the cancel');
+  await expect(page.locator(`.tp-band-row[data-run="${longRun}"] .tp-end`)).toHaveText(/^cancelled · it \d+$/, { timeout: 15_000 });
+  await expect(page.locator('.tp-seg--live')).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'Follow live' })).toHaveCount(0);
+});
+
+test('Follow live (ADR 0818, the line and the count read together): the line stays on the running run’s newest snapshot; moving it stops following; Follow live brings it back', async () => {
+  test.setTimeout(120_000);
+  const { page } = studio!;
+  longRun = runner!.submit('cases/cavity-re100.toml', LONG);
+  await until(() => (runner!.status(longRun!).state === 'running' && runner!.status(longRun!).step > 30 ? true : null), 60_000, 'the long run to run');
+  await expect(page.locator(`.ws-item-case[data-run="${longRun}"]`)).toBeVisible({ timeout: 20_000 });
+  await selectRun(page, longRun);
+  const follow = page.getByRole('button', { name: 'Follow live' });
+  await expect(follow).toHaveAttribute('aria-pressed', 'true');
+  // One Live Thing: one orange segment, the running run's
+  await expect(page.locator('.tp-seg--live')).toHaveCount(1);
+  await expect(page.locator(`.tp-band-row[data-run="${longRun}"] .tp-seg--live`)).toHaveCount(1);
+  await expect(page.locator(`.tp-band-row[data-run="${longRun}"] .tp-end`)).toHaveAccessibleName(/^running · it \d+$/);
+  await expect(page.locator(`.tp-band-row[data-run="${longRun}"] .tp-end`)).toHaveText(/^it \d+$/);
+  const ws = page.locator('.ws');
+  const counter = page.locator('.tp-counter');
+  // following: the line is on the newest snapshot, and moves on as the runner writes more
+  const first = await settled(page);
+  // on the newest snapshot: "N of N" (the run may have written more since `first` when the renderer is slow, as with
+  // software WebGL on Linux, so N is not pinned to first.snapshot + 1)
+  await expect(counter).toHaveText(/^snapshot (\d+) of \1 computed so far$/);
+  expect(Number((await counter.textContent())!.match(/of (\d+)/)![1])).toBeGreaterThanOrEqual(first.snapshot + 1);
+  await until(async () => ((await attr(ws, 'data-snapshot')) > first.snapshot + 2 ? true : null), 30_000, 'the line to follow new snapshots');
+  const later = await settled(page);
+  expect(later.snapshot).toBeGreaterThan(first.snapshot);
+  // ADR 0818: the line and the count in one task of the page (one DOM state), until the line is on the newest; read
+  // apart, the run wrote more snapshots between the two reads (the race of the record above)
+  await until(
+    () =>
+      page.evaluate(() => {
+        const s = document.querySelector('.ws')?.getAttribute('data-snapshot');
+        const m = document.querySelector('.tp-counter')?.textContent?.match(/of (\d+)/);
+        return s != null && m != null && Number(s) === Number(m[1]) - 1 ? true : null;
+      }),
+    15_000,
+    'the line on the newest snapshot while following',
+  );
   await shot(page, '04-follow-live');
   // moving the line stops following: it stays where it was put while the run goes on
   await scrubber(page).focus();
