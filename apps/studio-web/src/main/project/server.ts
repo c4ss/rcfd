@@ -42,6 +42,8 @@ export class StartFailure extends Error {
  */
 export interface StartOptions {
   readonly readOnly?: boolean;
+  /** F-976 (ADR 0805 D3): `--canvas`, the server registers as this Studio's canvas of the project (the session's reading server only). */
+  readonly canvas?: boolean;
 }
 
 export interface ServerInfo {
@@ -94,7 +96,7 @@ export class ProjectServer implements ProjectServerLike {
     return new Promise((resolve, reject) => {
       let child: ChildProcess;
       // ADR 0801 Addendum 23: `--client studio`, so the journal lines of the Studio's writes name the Studio, not `mcp`
-      const args = [...(options.readOnly === false ? ['--project', folder] : ['--project', folder, '--read-only']), '--client', STUDIO_CLIENT];
+      const args = [...(options.readOnly === false ? ['--project', folder] : ['--project', folder, '--read-only']), '--client', STUDIO_CLIENT, ...(options.canvas ? ['--canvas'] : [])];
       try {
         // Q-RL-2: a runner this server starts (the Studio's Run, through start_run) records this Studio as its starter
         child = spawn(exe, args, { env: runnerStarterEnv(), stdio: ['pipe', 'pipe', 'pipe'], windowsHide: true });

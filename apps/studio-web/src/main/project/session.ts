@@ -25,6 +25,8 @@ import {
   type ProjectView,
   type RunEntry,
   type ProjectTool,
+  type CanvasView,
+  VIEW_SHOWN,
   RESULT_PARTS,
   TRASH_OPS,
   type TrashItem,
@@ -304,6 +306,8 @@ export class ProjectSession {
       s.schedule();
       // the runs' details after the first view is out, so a project with many runs opens at once (G21)
       void s.read(DETAILS);
+      // F-976 (ADR 0805): the view shown last, if any (a failure here leaves the view without a canvas)
+      void s.readCanvas(true);
       return s;
     } catch (e) {
       await server.close();
@@ -366,6 +370,8 @@ export class ProjectSession {
       if (server !== this.server || this.closed) return;
       if (!this.view.liveness.live) this.set({ liveness: { live: true, since: this.deps.now() } });
       if (fresh.length > 0 || dropped > 0) {
+        // F-976 (ADR 0805): a view shown by a client is read first, so the canvas does not wait for the lists
+        if (fresh.some((e) => e.kind === VIEW_SHOWN)) await this.readCanvas(false);
         this.set({ changes: [...fresh.reverse(), ...this.view.changes].slice(0, MAX_CHANGES) });
         await this.refresh();
       } else if (this.hasActiveRun() && Date.now() - this.runsReadAt >= this.runPollMs) {
@@ -418,6 +424,34 @@ export class ProjectSession {
       this.slowTimers.add(t);
     }
     return r;
+  }
+
+  /**
+   * F-976 (ADR 0805): `read_view`, the view a client asked this Studio to show, into the view's `canvas`. `quiet` (the
+   * read when the project opens): a failure changes nothing; otherwise its message is the view's `canvasError`.
+   */
+  async readCanvas(quiet: boolean): Promise<void> {
+    const server = this.server;
+    try {
+      const r = (await server.call('read_view')) as Record<string, unknown>;
+      if (this.closed || server !== this.server || r['exists'] !== true) return;
+      const view = r['view'] as CanvasView['view'] | null;
+      if (!view || typeof view !== 'object' || !Array.isArray(view.panels)) return;
+      const a = r['actor'];
+      const canvas: CanvasView = {
+        id: str(r['id']),
+        shown: typeof r['shown'] === 'string' ? r['shown'] : null,
+        actor: actorOf(a) ?? null,
+        reason: typeof r['reason'] === 'string' ? r['reason'] : null,
+        view,
+        readAt: this.deps.now(),
+      };
+      const { canvasError: _dropped, ...rest } = this.view;
+      this.view = rest;
+      this.set({ canvas });
+    } catch (e) {
+      if (!quiet && !this.closed) this.set({ canvasError: message(e) });
+    }
   }
 
   /** Reads the lists again (coalesced: a request during a read makes one more read after it). */

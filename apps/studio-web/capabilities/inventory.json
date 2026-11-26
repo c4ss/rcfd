@@ -17,12 +17,12 @@
   },
   "counts": {
     "service_method": 69,
-    "mcp_tool": 72,
+    "mcp_tool": 74,
     "cli_command": 54,
-    "cli_option": 220,
+    "cli_option": 221,
     "case_key": 951,
     "monitor_format_key": 6,
-    "total": 1372
+    "total": 1375
   },
   "capabilities": [
     {"id":"service:cosim.advance","kind":"service_method","source":"service.info"},
@@ -147,6 +147,7 @@
     {"id":"mcp:read_project_file","kind":"mcp_tool","source":"tools/list","access":{"project":"read"}},
     {"id":"mcp:read_residuals","kind":"mcp_tool","source":"tools/list","access":{"project":"read"}},
     {"id":"mcp:read_status_stream","kind":"mcp_tool","source":"tools/list","access":{"default":"read","project":"read"}},
+    {"id":"mcp:read_view","kind":"mcp_tool","source":"tools/list","access":{"project":"read"}},
     {"id":"mcp:refine_case_mesh","kind":"mcp_tool","source":"tools/list","access":{"project":"write_files"}},
     {"id":"mcp:render_field","kind":"mcp_tool","source":"tools/list","access":{"project":"read"}},
     {"id":"mcp:render_image","kind":"mcp_tool","source":"tools/list","access":{"default":"read"}},
@@ -159,6 +160,7 @@
     {"id":"mcp:runner_config","kind":"mcp_tool","source":"tools/list","access":{"project":"read"}},
     {"id":"mcp:set_runner_config","kind":"mcp_tool","source":"tools/list","access":{"project":"write_files"}},
     {"id":"mcp:set_setting","kind":"mcp_tool","source":"tools/list","access":{"default":"mutate"}},
+    {"id":"mcp:show_view","kind":"mcp_tool","source":"tools/list","access":{"project":"write_files"}},
     {"id":"mcp:start_run","kind":"mcp_tool","source":"tools/list","access":{"project":"execute"}},
     {"id":"mcp:status","kind":"mcp_tool","source":"tools/list","access":{"default":"read"}},
     {"id":"mcp:trash_case","kind":"mcp_tool","source":"tools/list","access":{"project":"write_files"}},
@@ -400,6 +402,7 @@
     {"id":"cli:rcfd workflow run --workflow","kind":"cli_option","source":"help","parent":"cli:rcfd workflow run"},
     {"id":"cli:rcfd workflow show --template","kind":"cli_option","source":"help","parent":"cli:rcfd workflow show"},
     {"id":"cli:rcfd workflow show --workflow","kind":"cli_option","source":"help","parent":"cli:rcfd workflow show"},
+    {"id":"cli:rcfd-mcp --canvas","kind":"cli_option","source":"help","parent":"cli:rcfd-mcp"},
     {"id":"cli:rcfd-mcp --cases","kind":"cli_option","source":"help","parent":"cli:rcfd-mcp"},
     {"id":"cli:rcfd-mcp --client","kind":"cli_option","source":"help","parent":"cli:rcfd-mcp"},
     {"id":"cli:rcfd-mcp --edit-hook","kind":"cli_option","source":"help","parent":"cli:rcfd-mcp"},

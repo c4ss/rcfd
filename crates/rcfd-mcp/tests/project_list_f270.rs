@@ -36,6 +36,9 @@
 //! required `case`, `factor` and `base_hash`) come right after `set_runner_config`, and `start_run` gains exactly the
 //! properties `run_time` and `dry_run`; taken out like the others, the list is the one below.
 //!
+//! ADR 0805 restates it for F-976: `show_view` and `read_view` come last, after `empty_trash`; taken out first, the
+//! list is the F-848 one below, byte for byte (an additive edit, re-recorded by the lead on 2026-11-26).
+//!
 //! ADR 0739 restates it for F-848 (phase 1): `list_sites` (read, no argument) comes right after `refine_case_mesh`, and
 //! `start_run` gains the property `site`; taken out first, the list is the F-837 one above, byte for byte.
 
@@ -123,6 +126,18 @@ fn a2_tools_list_with_project_is_the_golden_with_the_f271_changes() {
     // live text
     assert_eq!(serde_json::to_string(&gold).unwrap(), GOLDEN);
     assert_eq!(serde_json::to_string(&live_value).unwrap(), got);
+    // ADR 0805 (F-976): show_view (write_files, required `view`) and read_view (read) last, taken out; additive,
+    // re-recorded by the lead on 2026-11-26; the rest is the F-848 list below
+    {
+        let tools = live_value["tools"].as_array_mut().unwrap();
+        let n = tools.len();
+        assert_eq!(tools[n - 2]["name"], "show_view");
+        assert_eq!(tools[n - 1]["name"], "read_view");
+        assert_eq!(tools[n - 2]["_meta"]["rcfd/access"], "write_files");
+        assert_eq!(tools[n - 1]["_meta"]["rcfd/access"], "read");
+        assert_eq!(tools[n - 3]["name"], "empty_trash");
+        tools.truncate(n - 2);
+    }
     // ADR 0739 (F-848): list_sites right after refine_case_mesh and start_run's property site, taken out; the rest is
     // the list the blocks below take apart
     {

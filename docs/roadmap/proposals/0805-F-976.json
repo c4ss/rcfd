@@ -1,0 +1,10 @@
+{
+  "form": 1,
+  "adr": "0805",
+  "item": "F-976",
+  "base": "482348e478a7d1ecb3fbc5bb0199f8610001f6cc",
+  "status": "partial",
+  "note": "ADR 0805, 2026-11-26, partial: the view specification rcfd-view 1 (seven kinds, layout, located errors), show_view and read_view (tools and workspace methods) and the canvas registry of rcfd-mcp --canvas; the open Studio shows a seven-kind view with its existing views 481 ms after the tool's result (limit 1.6 s), refuses an invalid one at its key and keeps the shown view; 4 of 4 mutations caught, one committed; L1 to L3 missed: the registration named too few of the tests and inventory rows that pin the tool list.",
+  "gap": "Every behaviour row holds. Missing: the additive edit of the tool lists is wider than ADR 0805 registered, so L1 to L3 missed: besides project_list_f270 and tool_list_f275 (counts and its PROJECT_TOOLS list), project_w48f (count, read set) and project_runs_w48f (two counts) pin the list, and the capability inventory gains three rows (mcp:show_view, mcp:read_view, cli:rcfd-mcp --canvas). The lead's re-recording closes it.",
+  "follow_ups": []
+}

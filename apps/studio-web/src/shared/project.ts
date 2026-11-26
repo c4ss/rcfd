@@ -24,8 +24,9 @@ export const PROJECT_PORT_CHANNEL = 'studio.project-port';
  * (F-810): a run's residual and monitor histories and its output/monitors.json, for the run workspace (src/shared/run.ts).
  * `runner_config` (F-837, ADR 0733): the runner's budgets, which the runner itself writes (`set_runner_config`, on the
  * run-control server: BUDGETS_WRITE_TOOL). `hash_project_file` (F-828, ADR 0734 P4): the hash of the mesh a run names
- * now, against its run.json mesh_hash. `list_trash` (ADR 0736): the project trash. */
-export const PROJECT_TOOLS = ['project_info', 'list_runs', 'list_meshes', 'read_feed', 'run_status', 'read_residuals', 'read_project_file', 'compare_runs', 'runner_config', 'hash_project_file', 'list_trash'] as const;
+ * now, against its run.json mesh_hash. `list_trash` (ADR 0736): the project trash. `read_view` (F-976, ADR 0805): the
+ * view a client asked the canvas to show (show_view). */
+export const PROJECT_TOOLS = ['project_info', 'list_runs', 'list_meshes', 'read_feed', 'run_status', 'read_residuals', 'read_project_file', 'compare_runs', 'runner_config', 'hash_project_file', 'list_trash', 'read_view'] as const;
 export type ProjectTool = (typeof PROJECT_TOOLS)[number];
 
 /** F-837 (ADR 0733): the one write tool of the runner's budgets, called on the run-control server only. */
@@ -311,6 +312,52 @@ export interface ProjectView {
   /** When the lists were last read from the engine. */
   readonly readAt: string;
   readonly liveness: Liveness;
+  /**
+   * F-976 (ADR 0805): the view an MCP client asked this project's Studio to show (`show_view`), as `read_view` gave it
+   * when the feed reported it; absent while none was shown. The engine validated it; the canvas shows it as given.
+   */
+  readonly canvas?: CanvasView;
+  /** F-976: why the last `read_view` after a `view_shown` entry failed (absent when it did not). */
+  readonly canvasError?: string;
+}
+
+/** F-976 (ADR 0805): the feed entry kind of a view shown by `show_view`. */
+export const VIEW_SHOWN = 'view_shown';
+
+/** F-976: the kinds of panel of the view specification `rcfd-view` 1 (crates/rcfd-workspace/src/view.rs). */
+export type CanvasKind = 'case' | 'run' | 'field' | 'mesh' | 'plot' | 'monitor' | 'table';
+
+/** F-976: one panel of a view specification, as the engine validated it. */
+export interface CanvasPanel {
+  readonly kind: CanvasKind;
+  readonly title?: string;
+  readonly case?: string;
+  readonly run?: string;
+  readonly field?: string;
+  readonly snapshot?: number;
+  readonly mesh?: string;
+  readonly monitor?: string;
+  readonly runs?: readonly string[];
+}
+
+/** F-976: a view specification `rcfd-view` version 1. */
+export interface CanvasSpec {
+  readonly version: number;
+  readonly title?: string;
+  readonly layout?: { readonly columns?: number };
+  readonly panels: readonly CanvasPanel[];
+}
+
+/** F-976: the shown view, `read_view`'s answer as the session keeps it. */
+export interface CanvasView {
+  /** The engine's id of this showing (the hash of .rcfd/views/current.json). */
+  readonly id: string;
+  readonly shown: string | null;
+  readonly actor: { readonly client: string; readonly pid: number | null } | null;
+  readonly reason: string | null;
+  readonly view: CanvasSpec;
+  /** When the session read it (the main process's clock). */
+  readonly readAt: string;
 }
 
 /** Feed entries the Studio keeps for the home (the engine keeps 1000). */

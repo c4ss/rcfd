@@ -4,7 +4,7 @@
 //!
 //! [`Workspace`] is one open project with its run service and change watcher. [`Workspace::call`] runs one command or
 //! query by the name of its MCP project tool (`project_info`, `list_runs`, ..., `edit_case`, `write_note`, `new_case`,
-//! the mesh commands of [`meshes`], the run service's budgets of [`runner_config`] (ADR 0733), `start_run`, `wait_run`, the project trash of [`trash`] (ADR 0736)) with that tool's arguments and returns the tool's result
+//! the mesh commands of [`meshes`], the run service's budgets of [`runner_config`] (ADR 0733), `start_run`, `wait_run`, the project trash of [`trash`] (ADR 0736), the canvas of [`view`] (ADR 0805)) with that tool's arguments and returns the tool's result
 //! object ([`Answer`]); errors are
 //! [`RpcError`]s with the codes of ADR 0135 ([`CONFLICT`], [`LOCK_BUSY`], [`NOT_FOUND`] and the service codes). The MCP
 //! descriptors (names, schemas, access classes) stay in `rcfd-mcp`, which wraps these answers as MCP results.
@@ -47,6 +47,7 @@ pub mod save;
 pub mod series;
 pub mod templates;
 pub mod trash;
+pub mod view;
 pub mod write;
 
 use rcfd_project::{Project, ProjectError, Watcher};
@@ -86,7 +87,7 @@ pub const FILE_PAGE: usize = 32_000;
 pub const MAX_WAIT_S: f64 = 60.0;
 
 /// The names [`Workspace::call`] answers, in the order of the MCP project tools.
-pub const COMMANDS: [&str; 36] = [
+pub const COMMANDS: [&str; 38] = [
     "project_info",
     "list_runs",
     "run_status",
@@ -123,6 +124,8 @@ pub const COMMANDS: [&str; 36] = [
     "trash_case",
     "restore_trash",
     "empty_trash",
+    "show_view",
+    "read_view",
 ];
 
 /// The answer of a command or query.
@@ -291,6 +294,9 @@ impl Workspace {
             "trash_case" => value(self.trash_case(args)),
             "restore_trash" => value(self.restore_trash(args)),
             "empty_trash" => value(self.empty_trash(args)),
+            // ADR 0805 (F-976): Claude's canvas
+            "show_view" => value(self.show_view(args)),
+            "read_view" => value(self.read_view()),
             _ => return None,
         })
     }
