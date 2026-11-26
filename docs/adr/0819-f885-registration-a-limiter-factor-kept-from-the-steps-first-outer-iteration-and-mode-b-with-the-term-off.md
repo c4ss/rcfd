@@ -418,3 +418,38 @@ is caught by it, the other rows and mutations as in addendum 1. The new test and
 `f885_check_h_outer_record`) are run once after the code, with `cargo fmt` (or `rustfmt --check` where `cargo fmt -p`
 refuses, addendum 2), `cargo clippy -p rcfd-api --all-targets -- -D warnings`, `docs_site`, the proposal check and the
 process report. The results go in a further addendum (addendum 1 is not edited, rule 18).
+
+## Addendum 3: results of amendment 1
+
+Written 2026-11-26. Commits: 1c2d027c (amendment 1, alone), 54ecfd02 (the test T4; its run and N5's were made from it),
+and the commit of this addendum with `docs/investigations/f885-frozen-limiter/mutations-amendment-1.log` and the updated
+proposal file. Addenda 1 and 2 stay as written (rule 18); where they say partial, this addendum gives the decision of the
+registered rule with amendment 1.
+
+| Id | Limit | Measured | Met |
+| --- | --- | --- | --- |
+| T4 | equal bits; non-vacuous `d_2 > 0` each step | KC0 with QUICK and the limiter set, the opt-in on against off: `u`, `p`, flux and record equal; `d_2` without the opt-in 8.10e-3, 6.77e-3, 6.29e-3 m/s | yes |
+
+**N5 against T4** (git archive of 54ecfd02 in the scratch folder, its own target folder, every file touched after
+extraction; the mutation's edits as in addendum 1, unchanged): `f885_fl_read_only_with_a_gradient` fails, **caught**. With
+it, seven of seven planned mutations are caught (N1 to N4 by T1, N5 by T4, N6 by T3, N7 by G2).
+
+Checks made once after the code of amendment 1: the new test T4 (above); `--test f885_two_outer_modes` 5 passed, 1
+ignored; `--test f885_outer_stall` 5 passed, 1 ignored; `--test f885_alpha_free_face_flux` 5 passed, 3 ignored;
+`--test f885_outer_fixed_points` 4 passed, 1 ignored; `--test f885_check_h_outer_record` 4 passed, 2 ignored;
+`rustfmt --check` of the two touched files: clean; `cargo clippy --release -p rcfd-api --all-targets -- -D warnings`:
+clean. The library code is unchanged by amendment 1 (only the test file), so the `--lib` runs and `baseline_hashes` of
+addendum 2 stand. `docs_site`, the proposal check and the process report are run at the commit of this addendum, as
+reported to the lead.
+
+Size (agent), after amendment 1: done; 1; 1; 2; 165000
+
+**Decision by the registered rule, with amendment 1: done for this registration.** Every row holds as registered (FA1,
+FA2, R0, R1, S1, T1, T2, T4, K, T3, G2, B3, D1 and P met, FC classed STALLS, BC named HC2) and each mutation of the table is
+caught. F-885 stays **partial**: check H has not decided (question 1 of addendum 1 is answered by the lead in ADR 0820).
+
+For the lead, the note entry replaces the one of addendum 1:
+
+> Note entry: ADR 0819, 2026-11-26, opt-in and diagnosis done, item partial: an opt-in that keeps each component's Barth-Jespersen factor of the step's first outer iteration (outer_frozen_limiter, default off, baseline hashes unchanged) removes the fan's period-2 cycle at c11837 on 20 steps of H(dt) (factor change 0, q 2.25 against 0.005, mode A all ruled out) and gives the same steady cavity answer (u 8e-13, p 1e-12 relative), but the loop still stalls (C 0.0143 against 1e-2) with the slow mode at c6245; without the limiter, turning ADR 0811's term off leaves the slow factor as it was at alpha_u 0.9, 0.7, 0.5 (0.854, 0.871, 0.893 against 0.854, 0.873, 0.892): named HC2, the term takes no part; seven of seven mutations caught (N5 by the test of amendment 1); held by crates/rcfd-api/tests/f885_frozen_limiter.rs and docs/investigations/f885-frozen-limiter.
+
+The status (partial) and the gap entry of addendum 1 are unchanged. The proposal file carries the new note.
