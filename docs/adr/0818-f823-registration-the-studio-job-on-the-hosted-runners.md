@@ -200,3 +200,17 @@ unit-tests job's failure on ubuntu in run 45886730170 (one Rust unit test, not t
 
 None at registration but those named: Q1 (P2 and `SHOWN_MS` on a hosted runner), Q2 (traces on failure), Q3 (the
 fallback label in provenance-f828's scan), each with options in the addendum.
+
+## Amendment 1 (2026-11-26): SW's first command ran no test; the same command from the right folder
+
+Written after the code commit 87ea95d5 and the probe, before the corrected run; nothing above is changed.
+
+The probe gave (once each, host CPU 66 % before): PR0 an adapter (`nvidia`, `blackwell`); PR1 (`--disable-gpu`) no
+adapter, WebGL 2 present, the state of the windows-latest runs; PR2 (`--disable-gpu --enable-unsafe-webgpu`) an adapter
+(`google`, `swiftshader`); PR3 the same as PR2. So R1's switches are `--enable-unsafe-webgpu`, as fixed above.
+
+SW's command (host CPU 90 % before) ran no test: in the scratch command the CPU sampler was started with `&` at the end
+of a `cd ... && ...` chain, so the `cd` ran in the background shell and `npx playwright` ran outside `apps/studio-web`,
+fetched another Playwright (1.65.1) and stopped with "Project(s) "electron" not found", exit 1. No test of the three
+specs started; SW is not decided by it. Corrected set-up: the same command with the `cd` in the foreground and the
+sampler started separately. Run once. SW's limit is unchanged; EMU follows it as registered (PR2 gave an adapter).
