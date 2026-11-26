@@ -26,6 +26,8 @@ import {
   type RunEntry,
   type ProjectTool,
   type CanvasView,
+  type CanvasSetting,
+  type SettingChange,
   VIEW_SHOWN,
   RESULT_PARTS,
   TRASH_OPS,
@@ -100,7 +102,27 @@ export function changeEntry(e: unknown, seen: string): ChangeEntry {
     seen,
     who: typeof o['who'] === 'string' ? o['who'] : null,
     actor: actorOf(o['actor']),
+    // F-979 (ADR 0807 D3): the reason and the settings changed, only where the entry has them
+    ...(typeof o['reason'] === 'string' ? { reason: o['reason'] } : {}),
+    ...(Array.isArray(o['changes']) ? { changes: settingChanges(o['changes']) } : {}),
   };
+}
+
+/** F-979: a feed entry's `changes` [{path, old, new}] as the journal wrote them (entries without a path dropped). */
+function settingChanges(v: readonly unknown[]): SettingChange[] {
+  return v.flatMap((c) => {
+    const o = (c ?? {}) as Record<string, unknown>;
+    return typeof o['path'] === 'string' ? [{ path: o['path'], old: o['old'] ?? null, new: o['new'] ?? null }] : [];
+  });
+}
+
+/**
+ * F-979 (ADR 0807 D3): whether a fresh feed entry changes what a shown view reads through `read_view`: the case file of
+ * one of its setting panels.
+ */
+export function canvasReadsAgain(canvas: CanvasView | undefined, entries: readonly ChangeEntry[]): boolean {
+  const cases = new Set((canvas?.view.panels ?? []).filter((p) => p.kind === 'setting' && typeof p.case === 'string').map((p) => norm(p.case!)));
+  return cases.size > 0 && entries.some((e) => e.path !== null && cases.has(norm(e.path)));
 }
 
 /** ADR 0801 Addendum 23: a journal line's actor `{client, instance: {pid}}` as the home keeps it, or null. */
@@ -371,7 +393,8 @@ export class ProjectSession {
       if (!this.view.liveness.live) this.set({ liveness: { live: true, since: this.deps.now() } });
       if (fresh.length > 0 || dropped > 0) {
         // F-976 (ADR 0805): a view shown by a client is read first, so the canvas does not wait for the lists
-        if (fresh.some((e) => e.kind === VIEW_SHOWN)) await this.readCanvas(false);
+        // F-979 (ADR 0807 D3): and again when a setting panel's case changed, so the value comes with its change
+        if (fresh.some((e) => e.kind === VIEW_SHOWN) || canvasReadsAgain(this.view.canvas, fresh)) await this.readCanvas(false);
         this.set({ changes: [...fresh.reverse(), ...this.view.changes].slice(0, MAX_CHANGES) });
         await this.refresh();
       } else if (this.hasActiveRun() && Date.now() - this.runsReadAt >= this.runPollMs) {
@@ -445,6 +468,8 @@ export class ProjectSession {
         reason: typeof r['reason'] === 'string' ? r['reason'] : null,
         view,
         readAt: this.deps.now(),
+        // F-979 (ADR 0807 D2): the values of the setting panels, when the view has any
+        ...(Array.isArray(r['settings']) ? { settings: r['settings'] as CanvasSetting[] } : {}),
       };
       const { canvasError: _dropped, ...rest } = this.view;
       this.view = rest;

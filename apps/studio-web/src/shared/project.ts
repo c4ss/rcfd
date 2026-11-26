@@ -262,6 +262,17 @@ export interface ChangeEntry {
    * with `rcfd-mcp --client studio`), and its process id; null when the entry names none (run events, external changes).
    */
   readonly actor?: { readonly client: string; readonly pid: number | null } | null;
+  /** F-979 (ADR 0807): why, as the caller said (the feed entry's `reason`); null or absent when none was given. */
+  readonly reason?: string | null;
+  /** F-979 (ADR 0807): the settings the change set, with their old and new values (the feed entry's `changes`). */
+  readonly changes?: readonly SettingChange[] | null;
+}
+
+/** F-979: one setting of a feed entry's `changes`, as the journal wrote it. */
+export interface SettingChange {
+  readonly path: string;
+  readonly old: unknown;
+  readonly new: unknown;
 }
 
 /** The live link to the folder: the feed is being read, or why it is not. */
@@ -325,7 +336,7 @@ export interface ProjectView {
 export const VIEW_SHOWN = 'view_shown';
 
 /** F-976: the kinds of panel of the view specification `rcfd-view` 1 (crates/rcfd-workspace/src/view.rs). */
-export type CanvasKind = 'case' | 'run' | 'field' | 'mesh' | 'plot' | 'monitor' | 'table';
+export type CanvasKind = 'case' | 'run' | 'field' | 'mesh' | 'plot' | 'monitor' | 'table' | 'setting';
 
 /** F-976: one panel of a view specification, as the engine validated it. */
 export interface CanvasPanel {
@@ -338,6 +349,18 @@ export interface CanvasPanel {
   readonly mesh?: string;
   readonly monitor?: string;
   readonly runs?: readonly string[];
+  /** F-979 (ADR 0807 D1): a setting panel's dotted setting path. */
+  readonly setting?: string;
+}
+
+/** F-979 (ADR 0807 D2): one shown setting's value as `read_view` read it from its case file. */
+export interface CanvasSetting {
+  readonly panel: number;
+  readonly case: string;
+  readonly setting: string;
+  /** The engine's value (Case::get); absent when `error` says why it could not be read. */
+  readonly value?: unknown;
+  readonly error?: string;
 }
 
 /** F-976: a view specification `rcfd-view` version 1. */
@@ -358,6 +381,8 @@ export interface CanvasView {
   readonly view: CanvasSpec;
   /** When the session read it (the main process's clock). */
   readonly readAt: string;
+  /** F-979 (ADR 0807 D2): the value of each setting panel, read again when a change of its case is in the feed. */
+  readonly settings?: readonly CanvasSetting[];
 }
 
 /** Feed entries the Studio keeps for the home (the engine keeps 1000). */

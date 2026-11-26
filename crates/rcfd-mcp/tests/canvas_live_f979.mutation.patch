@@ -1,0 +1,15 @@
+# expect-fail: cargo test --release -p rcfd-mcp --test canvas_live_f979
+diff --git a/crates/rcfd-workspace/src/view.rs b/crates/rcfd-workspace/src/view.rs
+index 002d399..02b6885 100644
+--- a/crates/rcfd-workspace/src/view.rs
++++ b/crates/rcfd-workspace/src/view.rs
+@@ -560,7 +560,8 @@ fn setting_ref(case: &Case, v: Option<&Value>, key: &str, errors: &mut Vec<ViewE
+         );
+         return;
+     }
+-    if let Err(x) = case.get(s) {
++    // MUTATION M1 (ADR 0807): a path that is not a setting of the case is let through
++    if let (Err(x), false) = (case.get(s), true) {
+         e(errors, key, format!("'{s}' is not a setting of the case ({x})"));
+     }
+ }

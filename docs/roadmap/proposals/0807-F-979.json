@@ -1,0 +1,10 @@
+{
+  "form": 1,
+  "adr": "0807",
+  "item": "F-979",
+  "base": "5bf77c582c05e59a833b4d2a681efc4740806adc",
+  "status": "partial",
+  "note": "ADR 0807, 2026-11-26, partial: the canvas follows live a case's mesh (drawn by MeshPreview, again 802 ms after refine_case_mesh), a setting (read_view settings, 342 ms after edit_case) and the monitor of a case's newest run (its end 306 ms after the client read it), each with its actor and reason (limits 1.6 s, ADR 0188 C3-St); 5 of 5 mutations caught, one committed; L2 missed: the whole npm test ran with the first e2e set-up, which left out refine_case_mesh's factor (amendment 1).",
+  "gap": "Every behaviour row holds in the corrected e2e (amendment 1). Missing: a whole npm test that passes with it; the registered run had 1 failure, the first spec's set-up (refine_case_mesh without factor), now a skipped record. Also the show_view description still lists only F-976's kinds (Q1), and the e2e leaves the temporary project's runner alive after it ends.",
+  "follow_ups": []
+}
