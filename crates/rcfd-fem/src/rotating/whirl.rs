@@ -62,7 +62,8 @@ pub fn coriolis_matrix(model: &SolidModel, axis: Vec3, threads: Option<usize>) -
 /// [`coriolis_matrix`] with Shell4 and Shell3 elements taking the Coriolis matrix of the shell director (ADR 0561 D2,
 /// [`crate::shell::element_coriolis`], [`crate::shell3::element_coriolis`]); every other element as [`coriolis_matrix`]
 /// (Beam2 refused by its solid-routine placeholder). [`RotatingPart::coriolis`] calls it with
-/// [`crate::rotating::RotatingOptions::shells`] or [`crate::model::CyclicOptions::shells`] (ADR 0561 D1).
+/// [`crate::rotating::RotatingOptions::shells`] (ADR 0561 D1); with [`crate::model::CyclicOptions::shells`] it takes the
+/// beam route, which gives these bits on a model without Beam2 (ADR 0799 D1).
 pub fn coriolis_matrix_with_shells(model: &SolidModel, axis: Vec3, threads: Option<usize>) -> Result<CsrMatrix> {
     coriolis_assembly(model, axis, threads, true, false)
 }
@@ -708,10 +709,11 @@ impl<'a> RotatingPart<'a> {
     /// The Coriolis matrix per unit speed `C` of the part ([`coriolis_matrix`] about its axis; `G = 2 Omega C`).
     /// With [`crate::rotating::RotatingOptions::shells`] or a cyclic constraint with [`crate::model::CyclicOptions::shells`]
     /// the shells take the matrix of their director ([`coriolis_matrix_with_shells`], ADR 0561 D1). With
-    /// [`crate::rotating::RotatingOptions::beams`] or a cyclic constraint with [`crate::model::CyclicOptions::beams`] the Beam2
-    /// elements take the matrix of their section ([`crate::beam::element_coriolis`], ADR 0598 D1).
+    /// [`crate::rotating::RotatingOptions::beams`] or a cyclic constraint with [`crate::model::CyclicOptions::shells`] the
+    /// Beam2 elements take the matrix of their section ([`crate::beam::element_coriolis`], ADR 0598 D1; a cyclic constraint
+    /// takes them without [`crate::model::CyclicOptions::beams`] since ADR 0799 D1).
     pub fn coriolis(&self) -> Result<CsrMatrix> {
-        if self.options.beams || crate::cyclic::beams_opted_in(self.model) {
+        if self.options.beams || crate::cyclic::shells_opted_in(self.model) {
             let shells = self.options.shells || crate::cyclic::shells_opted_in(self.model);
             return coriolis_assembly(self.model, self.axis, self.options.modal.threads, shells, true);
         }

@@ -809,6 +809,7 @@ fn b3_shell_full_rotor_bits_with_and_without_the_option() {
 // ---------------------------------------------------------------------------------------------- NC1, NC2
 
 #[test]
+#[ignore = "ADR 0799: retired record, NC1 asserts the full_rotor refusal without full_rotor_beams that is lifted by default; restated in sa_beam_opt_ins_default_f672.rs"]
 fn nc1_nc2_refusals() {
     let mut fails = Vec::new();
     let mut hold = |name: &str, ok: bool, what: String| {

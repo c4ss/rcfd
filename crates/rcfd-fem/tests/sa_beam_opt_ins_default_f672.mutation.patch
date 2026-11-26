@@ -1,0 +1,42 @@
+# expect-fail: cargo test --release -p rcfd-fem --test sa_beam_opt_ins_default_f672 r_t1_nc4_n_w_as_acceptance
+diff --git a/crates/rcfd-fem/src/cyclic.rs b/crates/rcfd-fem/src/cyclic.rs
+index d561356a..5cfccb45 100644
+--- a/crates/rcfd-fem/src/cyclic.rs
++++ b/crates/rcfd-fem/src/cyclic.rs
+@@ -194,6 +194,23 @@ pub(crate) fn shells_opted_in(model: &SolidModel) -> bool {
+     })
+ }
+ 
++/// Whether a model has a cyclic constraint with the shells and the beams options of ADR 0595 D1.
++pub(crate) fn beams_opted_in(model: &SolidModel) -> bool {
++    model.constraints().iter().any(|c| {
++        matches!(
++            c,
++            Constraint::Cyclic {
++                options: crate::model::CyclicOptions {
++                    shells: true,
++                    beams: true,
++                    ..
++                },
++                ..
++            }
++        )
++    })
++}
++
+ /// ADR 0595 D1: the beams option qualifies the shells option and is not taken with interpolated boundaries or nodes on the
+ /// axis. A no-op for a constraint without it.
+ pub(crate) fn check_beams_option(model: &SolidModel) -> Result<()> {
+diff --git a/crates/rcfd-fem/src/rotating/whirl.rs b/crates/rcfd-fem/src/rotating/whirl.rs
+index 3b219e3e..6ff592b6 100644
+--- a/crates/rcfd-fem/src/rotating/whirl.rs
++++ b/crates/rcfd-fem/src/rotating/whirl.rs
+@@ -713,7 +713,7 @@ impl<'a> RotatingPart<'a> {
+     /// Beam2 elements take the matrix of their section ([`crate::beam::element_coriolis`], ADR 0598 D1; a cyclic constraint
+     /// takes them without [`crate::model::CyclicOptions::beams`] since ADR 0799 D1).
+     pub fn coriolis(&self) -> Result<CsrMatrix> {
+-        if self.options.beams || crate::cyclic::shells_opted_in(self.model) {
++        if self.options.beams || crate::cyclic::beams_opted_in(self.model) {
+             let shells = self.options.shells || crate::cyclic::shells_opted_in(self.model);
+             return coriolis_assembly(self.model, self.axis, self.options.modal.threads, shells, true);
+         }

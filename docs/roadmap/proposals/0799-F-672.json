@@ -1,0 +1,16 @@
+{
+  "form": 1,
+  "adr": "0799",
+  "item": "F-672",
+  "base": "dcb4a1df52c5186a70a48137bdc7d8e35ff2f869",
+  "status": "partial",
+  "note": "ADR 0799, 2026-11-25, partial: a cyclic constraint with the shells option alone takes Beam2 on the seven sector whirl paths and the part's Coriolis matrix and in full_rotor, bit-equal to the beams and full_rotor_beams options (now documented no-ops) on 17 whirl results and 4 full-rotor results of the wheel sector W, and a shell sector keeps its bits with and without them; main's record holds on Windows and Linux x86_64; three refusal tests retired as ignored records and restated; 4 of 4 mutations caught, one committed; E-W missed: whirl_stability of W is a solver error (QR not converged) under every option set, as on main; clippy fails on two byte_char_slices lints in the bits file.",
+  "gap": "The whirl and full_rotor beam opt-ins are lifted and every row but one holds. Missing: E-W of ADR 0799 is a miss because whirl_stability of the wheel sector W (ADR 0595) at k = 0..3 and 0, 30, 60 rad/s is a solver error (gyroscopic_state_eigen: the QR iteration did not converge on rows 116..=119 in 30 steps), on main as well. Also missing: the known-miss form of that test (question 2) and two clippy byte_char_slices fixes in sa_beam_opt_ins_default_f672_bits.rs line 279.",
+  "follow_ups": [
+    {
+      "title": "whirl_stability of the cyclic beam wheel sector converges",
+      "deps": ["F-672"],
+      "acceptance": "RotatingSector::whirl_stability of the wheel sector W of ADR 0595 (shells option, 4 modes, coriolis on) at harmonic indices 0 to 3 and speeds 0, 30 and 60 rad/s returns Ok, with eigenvalues that agree with whirl_state of the same index and speed within the limit the registration states from the tolerance table, and the defaults bit-identical."
+    }
+  ]
+}

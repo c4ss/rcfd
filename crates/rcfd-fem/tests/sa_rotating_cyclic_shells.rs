@@ -988,6 +988,7 @@ fn b3_solid_twin_default_against_the_shells_options() {
 // ---------------------------------------------------------------------------------------------- NC1 to NC4
 
 #[test]
+#[ignore = "ADR 0799: retired record, NC1 asserts the full_rotor refusal of Beam2 with the shells option that is lifted by default; restated in sa_beam_opt_ins_default_f672.rs"]
 fn nc_refusals_without_the_options() {
     let mut rec = Record::new();
     // NC1: full_rotor of a Beam2 model with the shells option.

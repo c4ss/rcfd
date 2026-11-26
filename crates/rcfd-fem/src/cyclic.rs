@@ -39,11 +39,13 @@
 //! ADR 0595 (F-672): with [`crate::model::CyclicOptions::beams`] as well, the static and the modal paths take Beam2 elements
 //! (the rows of ADR 0556 D2 on their six-unknown nodes; the sector stands for the ring of its beams rotated by `R^j`,
 //! orientation vectors included). ADR 0744: the shells option alone takes them (the maintainer's approval of 2026-11-18);
-//! a beam end on an interpolated boundary or on the axis stays refused, and the beams option still selects the beam
-//! Coriolis route of the whirl paths (ADR 0598) and qualifies `full_rotor_beams`.
+//! a beam end on an interpolated boundary or on the axis stays refused.
 //!
-//! ADR 0601 (F-674): with [`crate::model::CyclicOptions::full_rotor_beams`] as well, [`full_rotor`] takes Beam2 blocks: each
-//! becomes `N` consecutive blocks of the full mesh, copy `j` with the orientation `R^j v` ([`FullRotor::block`]).
+//! ADR 0601 (F-674): [`full_rotor`] takes Beam2 blocks: each becomes `N` consecutive blocks of the full mesh, copy `j` with
+//! the orientation `R^j v` ([`FullRotor::block`]). ADR 0799: the whirl paths (the beam Coriolis route of ADR 0598) and
+//! [`full_rotor`] take Beam2 with the shells option alone (the maintainer's answer of 2026-11-21);
+//! [`crate::model::CyclicOptions::beams`] and [`crate::model::CyclicOptions::full_rotor_beams`] are accepted and have no
+//! effect.
 
 use crate::assemble::{point_stiffness, stiffness_with};
 use crate::constraint::Prescribed;
@@ -186,41 +188,6 @@ pub(crate) fn shells_opted_in(model: &SolidModel) -> bool {
             c,
             Constraint::Cyclic {
                 options: crate::model::CyclicOptions { shells: true, .. },
-                ..
-            }
-        )
-    })
-}
-
-/// Whether a model has a cyclic constraint with the shells and the beams options of ADR 0595 D1.
-pub(crate) fn beams_opted_in(model: &SolidModel) -> bool {
-    model.constraints().iter().any(|c| {
-        matches!(
-            c,
-            Constraint::Cyclic {
-                options: crate::model::CyclicOptions {
-                    shells: true,
-                    beams: true,
-                    ..
-                },
-                ..
-            }
-        )
-    })
-}
-
-/// Whether a model has a cyclic constraint with the shells, beams and full-rotor options of ADR 0601 D1.
-fn full_rotor_beams_opted_in(model: &SolidModel) -> bool {
-    model.constraints().iter().any(|c| {
-        matches!(
-            c,
-            Constraint::Cyclic {
-                options: crate::model::CyclicOptions {
-                    shells: true,
-                    beams: true,
-                    full_rotor_beams: true,
-                    ..
-                },
                 ..
             }
         )
@@ -1242,10 +1209,10 @@ fn triplets(dofs: &DofMap, p: usize) -> &'static [usize] {
 /// high nodes of copy `N - 1` with the low nodes of copy 0. Blocks keep their index, kind and property (copy `j` of element
 /// `e` of block `b` is element `start_b + j n_b + (e - start_b^sector)`); node, element and surface sets are the unions of
 /// their copies. Refuses a block of a structural kind; with [`crate::model::CyclicOptions::shells`] Shell4 and Shell3 blocks
-/// are copied as the solid blocks are (ADR 0561 D1; Beam2 stays refused, also with [`crate::model::CyclicOptions::beams`]:
-/// a block has one orientation vector, ADR 0595 D4). With [`crate::model::CyclicOptions::full_rotor_beams`] as well, a Beam2
-/// block becomes `N` consecutive blocks, copy `j` with the orientation `R^j v` (ADR 0601 D2: the element numbering is
-/// unchanged, the block indices after a split block shift; [`FullRotor::block`]).
+/// are copied as the solid blocks are (ADR 0561 D1), and a Beam2 block becomes `N` consecutive blocks, copy `j` with the
+/// orientation `R^j v` (ADR 0601 D2: the element numbering is unchanged, the block indices after a split block shift;
+/// [`FullRotor::block`]). Since ADR 0799 the shells option alone takes Beam2 here; [`crate::model::CyclicOptions::beams`]
+/// and [`crate::model::CyclicOptions::full_rotor_beams`] have no effect. Without the shells option Beam2 stays refused.
 pub fn full_rotor(model: &SolidModel) -> Result<FullRotor> {
     let ci = the_cyclic_constraint(model)?;
     let bd = boundary(model, ci)?;
@@ -1256,7 +1223,8 @@ pub fn full_rotor(model: &SolidModel) -> Result<FullRotor> {
     }
     let mesh = model.mesh();
     let shells = shells_opted_in(model);
-    let split_beams = full_rotor_beams_opted_in(model);
+    // ADR 0799 D2: with the shells option Beam2 blocks are taken and split (the full_rotor_beams option has no effect).
+    let split_beams = shells;
     for (b, block) in mesh.blocks().iter().enumerate() {
         let shell = matches!(block.kind(), ElementKind::Shell4 | ElementKind::Shell3);
         let beam = split_beams && block.kind() == ElementKind::Beam2;
