@@ -282,3 +282,13 @@ Q1 and Q2 of the registration stand as written there, with their recommendations
 > Note: ADR 0808, 2026-11-26, partial: G15's coverage map and check and the learner's first path retired (the not-a-project notice moved to the home, the G16 action first.run_example kept), every retired test named; the canvas test passes (show_view shown 0.481 s after the result, limit 1.6 s), the inventory test against the engine passes, 4 of 4 mutations caught; npm test 841 passed, 3 failed (two the stale f447_bench of ADR 0795, one a11y Runs grid case not diagnosed).
 
 > Gap: npm test did not pass: data-routes P12 tiny raw and data.spec open fail on the main checkout's stale f447_bench (as ADR 0795 and 0805 recorded), and a11y.spec "the Runs view, a run selected from the keyboard" failed with three grid rows the arrow keys do not reach, not diagnosed (no Runs file changed). Open: Q1 (the case editor and the settings surface) and Q2 (help on demand) of ADR 0808.
+
+## Addendum 2: the remaining runs (2026-11-26)
+
+| Row | Check | Limit | Measured | Met |
+|---|---|---|---|---|
+| R10 | `cargo test -p rcfd-cli --release --test docs_site` | 0 failed | 2 passed, 0 failed | yes |
+| R12 | `python scripts/roadmap_proposals.py check docs/roadmap/proposals/0808-F-981.json` | exit 0 | exit 0 ("F-981: todo -> partial; gap set; note + 468 characters"); a first call without the file stopped at the argument parser (exit 2) and checked nothing | yes |
+
+R13 (`python scripts/process_report.py --check`) is run after this addendum is committed, so that it judges the final
+tree; its result is in the report to the lead. The decision of Addendum 1 stands: **partial**.
