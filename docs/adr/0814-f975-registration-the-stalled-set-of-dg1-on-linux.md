@@ -234,3 +234,16 @@ Size (agent): done; 0; 2; 0; 130000
   the test would then fail and name it.
 - The other tests of ADR 0806 on Linux (`sa_whirl_stability_wheel_sector_f975`): not run in the container by this
   registration (B5 runs on Windows).
+
+## Amendment 1 (2026-11-26, after run R1 and C5, before the remedy): the known miss of DG1 on Linux, and remedy R-A
+
+Run R1 (commit 7e6526a0) and C5 gave outcome O1 of D3: C1 and C2 met on both platforms, the container's stall set
+`[(2, 0.0)]` (equal to CI run 45881197914, not equal to Windows), and C5 met. The numbers are in addendum 1. By D3, O1:
+
+1. The existing test `dg1_dg2_dg3_the_stalled_window_of_the_wheel_sector` of ADR 0806 missed its DG1 on Linux in R1 (stalled
+   at `[(2, 0.0)]`, against the limit "at (1, 0) and (2, 0)"). It becomes the ignored record
+   `dg1_dg2_dg3_the_stalled_window_of_the_wheel_sector_known_miss` (rule 2): its body and limits unchanged, the name and an
+   `#[ignore = "known miss of ADR 0806 DG1 on Linux (ADR 0814 run R1, 7e6526a0): stalled at [(2, 0.0)] in the container rcfd-linux:ubuntu24.04-rust1.99.0, glibc sin one ulp off MSVC's at pi / 4 and 4 pi / 3; superseded by dg1_stall_set_per_platform_f975_0814"]`
+   attribute the only changes.
+2. The new test `dg1_stall_set_per_platform_f975_0814` of D3 is added with the Linux set `[(2, 0.0)]` printed by R1, and
+   the Windows set `[(1, 0.0), (2, 0.0)]`. Run R2 of D4 follows, once on each platform. No check, limit or rule above changes.
