@@ -421,3 +421,8 @@ The same entries are in `docs/roadmap/proposals/0811-F-885.json` (form 1 of ADR 
 clause and would be registered under F-885 (rule 13).
 
 Generated pages that this work may leave not current, for the lead (rule 9): `docs/adr/index.md` (ADR 0811 is new).
+
+## Answers of the maintainer (2026-11-26), written by the lead
+
+1. Option (a): the switch stays opt-in; taken by the lead on the maintainer's standing instruction of 2026-11-26 (go with the recommended option always).
+2. Option (a): the fan's stall is diagnosed under F-885 (rule 13), on 20 steps with the cell record and the controls fixed in advance, ADR 0815; taken by the lead on the maintainer's standing instruction of 2026-11-26 (go with the recommended option always).
