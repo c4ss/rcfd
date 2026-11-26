@@ -389,3 +389,79 @@ A remedy to register next (for the lead to issue): (1) in `a11y.spec.ts`, the st
 (Ctrl+1 and the open of another project before it) is restored as a step of that case, by an amendment; (2) the Runs grid
 case gets a control D2 of 3 runs with the source restored and 3 with this tree's source, with the spec of (1), before any
 change to `ProjectHome.tsx`; (3) then R14 (3 of 3) and R15 (`npm test` once).
+
+## Addendum 5: amendment 2, registration of the spec's corrected set-up, the control D2 and the remedy step (2026-11-26)
+
+REGISTERED 2026-11-26, a further registration of F-981 under rule 13 of `docs/process/agent-rules.md` (version 5),
+written before any change or run it covers and committed alone; it carries out the next step that Addendum 4 proposed.
+Written by Claude Opus 5.5 (`claude-opus-5-5`), as a background agent of the lead. The engine is the one built at
+2327d4f1 in the scratch target (no file under `crates/` changed since: `git diff --stat 2327d4f1..HEAD -- crates` is
+empty), with `f447_bench` built there as Addendum 3 set up; every run sets `CARGO_TARGET_DIR`, `RCFD_BIN`,
+`RCFD_MCP_BIN` and `RCFD_RUNNER_BIN` as Addendum 1 did.
+
+**What was read for it (no run).** The control's reports `test-results-visual/f816/report.json` left by the last run of
+C1, of D and of C2. On the Runs surface the base (C1) and D walked 33 Tab stops and the grid's Tab stop was its last row
+(`r-20261028T152641-3900`), so the arrow walk went up through the four rows and stopped when all were reached; this
+branch (C2) walked 32 stops and the grid's Tab stop was its first row (`r-20261028T152641-f8c2`), so the walk's first
+ArrowUp left the rows for the column header "Case and run", from which React Aria's ArrowDown moves by cells, not rows.
+React Aria (`react-aria/dist/private/selection/useSelectableCollection.mjs`, lines 293 to 299) puts the focus on the
+collection's last key when the focus enters it from an element after it and on the first key otherwise, while no key
+has been focused yet: which row is the Tab stop depends on the order the focus first came into the grid. One stop of
+the window differs between the trees; which one, the reports do not say.
+
+**S1, the corrected set-up of "reduced motion" (`tests/e2e/a11y.spec.ts`).** Addendum 4, finding 1: item 8 of the
+registration removed the case that left the Studio on the empty project, and "reduced motion" relied on it. The case
+gets that step back as its first lines, as the removed case did it, without the first path's surface: Ctrl+1, the
+heading "Quick start" shown, the folder dialog stubbed to the empty project, Tab to "Open project…", Enter, the heading
+"An empty project" shown. Nothing else of the file changes; no check, limit or timeout of the case changes. The
+defective version was this branch's own and never on main, so no test of main is replaced and no ignored record is
+kept; its record is Addendum 4 and the history. S1 is committed alone, after this addendum and before D2.
+
+**D2, the control of the Runs grid case** (`a11y.spec.ts:299`, "the Runs view, a run selected from the keyboard, …"),
+`npx playwright test tests/e2e/a11y.spec.ts --project=electron`, each tree built and packaged first, the report
+`test-results-visual/f816/report.json` copied to the scratch folder after each run:
+
+- **D2r**: a scratch copy (`git archive` of the S1 commit, its own `npm ci`, no junction) with the base's (2327d4f1)
+  `src/renderer/project/ProjectHome.tsx` and `src/renderer/first/` restored and `project/NotAProject.tsx` and
+  `project/not-a-project.css` removed, **3 runs**.
+- **D2b**: this branch at the S1 commit, in the worktree, **3 runs**.
+
+Rule, fixed now for every outcome (the Runs case's result in each run; another failing case is recorded, not counted
+here):
+
+- **O1**: D2r passes the Runs case in 3 of 3 and D2b fails it in 1 or more of 3. The cause is this work's change of the
+  home. **D3**, a diagnosis: one run in each of two scratch copies (D2r's, and one of the S1 commit with its own
+  `npm ci`), where the copy's spec only gains, before the Runs case's `surface`, a line that prints the window's
+  tabbable elements in document order and the grid's focused key; the two lists are compared. **The remedy** is then a
+  change to `ProjectHome.tsx`, `project/NotAProject.tsx` or `project/not-a-project.css` only (the files this work owns),
+  that gives the branch's window the stop or the focus order D3 shows the base has, without drawing the first path again
+  (N3 holds) and without a change to a test, a support file, `runs/`, `ui/` or the canvas files. It is committed with a
+  message citing this addendum. If D3 shows no difference, or the difference is outside those files, there is no remedy,
+  and that is recorded.
+- **O2**: D2r fails the Runs case in 1 or more of 3. The case fails with the base's home too; no remedy in this work's
+  files.
+- **O3**: D2b passes the Runs case in 3 of 3 (and D2r does too). With S1 the case does not fail on this branch; no
+  remedy.
+
+In every outcome R14 and R15 follow, on this branch as it then stands. D2 and D3 are controls, not rows; none is run
+again.
+
+| Row | Check | Limit | Source of the limit | Estimate | Margin | Kind |
+|---|---|---|---|---|---|---|
+| R14 | `a11y.spec.ts` alone on this branch (after the remedy, if one), 3 runs | 3 of 3 pass (12 passed each) | Addendum 3 (R14); acceptance of F-981 ("npm test passes") | 3 of 3 | pass or fail | code verification |
+| R15 | `npm test` in `apps/studio-web`, once, against the scratch engine and `f447_bench` | 0 failed | Addendum 3 (R15); acceptance of F-981 | 0 failed | pass or fail | code verification |
+
+Then, once each: `npm run typecheck` (R9b), `cargo test -p rcfd-cli --release --test docs_site` (R10b), `python
+scripts/roadmap_proposals.py check docs/roadmap/proposals/0808-F-981.json` (R12b, the file updated to the verdict) and
+`python scripts/process_report.py --check` (R13b, last).
+
+**Mutation (rule 16), if the remedy changes a Studio file:** M4, the remedy reverted, on a scratch copy of the remedy's
+commit with its own `npm ci`; expected catch: `a11y.spec.ts`, one run. It is committed as
+`apps/studio-web/tests/e2e/a11y.spec.mutation.patch` (made with `git diff`), first line
+`# expect-fail: npx playwright test tests/e2e/a11y.spec.ts --project=electron`, and recorded as caught or not caught as
+the run comes out. No test is edited beyond S1, skipped or loosened; no limit changes.
+
+Size (agent): done; 0; 4 (D2's six runs, D3 if O1, R14, R15); 0; 40000
+
+Decision rule: F-981 is **done** if R14 and R15 hold (every row of Addendum 1 other than R1 is inside R15) and, if a
+remedy changes a Studio file, M4 is caught; **partial** otherwise.
