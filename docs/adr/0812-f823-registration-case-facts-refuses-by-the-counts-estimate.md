@@ -257,3 +257,94 @@ Correction of the set-up: the sampler keeps the process handle open, and after t
 `PeakWorkingSetSize` once from `GetProcessMemoryInfo` (psapi, through PowerShell's `Add-Type`) on that handle: the
 peak of the whole life of the process, not a sample. Scratch tool `sample-peak2.ps1`. Run once for `e3_` and once for
 `e5_`; E3's limits (P_r <= 200 MB, P_r / P_b <= 0.5) are unchanged and are read from these two runs.
+
+## Addendum 1: results (2026-11-26)
+
+The code is commit 6b91b216 (`facts.rs`, 9 added lines: the doc comment at lines 370 to 373 and the check at lines 388
+to 392) with the tests of 6b91b216 and a4811e11 (amendment 1) and the patch of 1c455481. Each registered run was made
+once, in the order below; the host CPU load (mean `LoadPercentage`) is given with each. Logs in the scratch folder
+(`logs/`). Others loaded the machine through every run.
+
+### Checks
+
+| Id | Limit | Measured | Met |
+|---|---|---|---|
+| E1 | equal for every case; all of `GENS` build | 20 cases (9 shipped cases with an estimate, the 11 of `GENS`), all equal (for example `channel_2d_interface` 47 and 47, `annulus_3d_stage` 118 and 118); all built (CPU 56 % before the file's run) | met |
+| E2 | T_r <= 1 s; T_r / T_b <= 0.5; the built count's message | T_r 0.000583 s; T_b 28.712 s; ratio 0.0000203; reply `{"code":1004,"message":"mesh has 2250000 cells, limit is 2000000"}`, built 2,250,000 (CPU 56 %) | met |
+| E3 | P_r <= 200 MB; P_r / P_b <= 0.5 | first sampler (registration): P_r not measured (0 bytes over 1 read), P_b 5,959.1 MB: not deciding (amendment 2). Corrected (amendment 2): P_r 7,725,056 bytes (7.4 MB, CPU 97 % before), P_b 6,247,583,744 bytes (5,958.2 MB, CPU 76 %), ratio 0.0012 | met (amendment 2's run) |
+| E4 | as stated | passed | met |
+| E5 | `Ok`, 2,250,000 cells | passed | met |
+| E6 | as stated | `e6_`: failed in its set-up (`mesh.nx` 1000000 outside the schema's range), not deciding (amendment 1). `e6b_` (CPU 41 %): passed; the file case built 64 cells, `cylinder_ogrid` 32, `pipe_sweep` 384, `box_3d` 64, `annulus_3d_sector_cylindrical_interface` 128, each refused at 10 with its built count | met (amendment 1's run) |
+| C5 | the two dumps equal byte for byte | 44 replies, 23,967 bytes each, `cmp` equal, sha256 `fe341dc3...bfd162` for both (CPU 49 %); the base took 30.78 s, the code 0.34 s | met |
+| BH | passes | 3 passed, 1 ignored (as on main) | met |
+| R7c | each exit 0 | `cargo fmt -p rcfd-api --check` exit 0; `cargo clippy -p rcfd-api --all-targets -- -D warnings` exit 0; `--lib` 160 passed, 4 ignored (as on main); `case_facts_adr0737` 8 passed; `mesh_preview_adr0732` 5 passed; `case_facts_estimate_adr0812`: E1 to E6 above (5 passed, `e6_` failed in its set-up in the first run; `e6b_` passed) | met but for `e6_`'s set-up (amendment 1) |
+| EW | passed, waits unchanged | `error-walk.spec.ts:177` passed in 2.7 s (ADR 0809's R7w: 36.8 s) | met |
+| R7w | typecheck and `npm test` exit 0; 0 failed, 0 skipped, 0 did not run | typecheck exit 0; `npm test` exit 1: 880 passed, 1 failed, 4 skipped, 5 did not run (12.8 m; host CPU 23 % to 93 %, median 64 %, 25 samples). Failed: `run-control.spec.ts:268`, `project.cancel_run` answered the renderer in 23.6 ms, limit P2 20 ms; the 5 later tests of that file did not run. Skipped: `canvas-f979.spec.ts` E0 to E3, ADR 0807 amendment 1's skipped record on main (`test.skip(true, ...)`) | **missed** |
+| EL | as EW | `error-walk.spec.ts:177` passed in 2.1 s (ADR 0809's R7l: 26.0 s) | met |
+| R7l | as R7w | typecheck exit 0; `npm test` exit 0: 886 passed, 0 failed, 4 skipped, 0 did not run (13.0 m; container loadavg 5.78 before, 4.22 after; host CPU 32 % to 99 %, median 54 %, 29 samples). Skipped: the same 4 of ADR 0807's record | **missed** (the 4 skips only) |
+| DS | passes | passed on this addendum before its commit (in the report) | met |
+| P1 | the proposal valid; the report clean but for a generated file only not current | in the report | see the report |
+| A1 | only the owned files | `git diff --stat 3b6cc7cc..HEAD`: `crates/rcfd-api/src/facts.rs`, `crates/rcfd-api/tests/case_facts_estimate_adr0812.rs` and its `.mutation.patch`, this ADR, `docs/roadmap/proposals/0812-F-823.json` (in the report) | met |
+
+### Mutations
+
+On the scratch copy (the code commit's `facts.rs`, `mesh_preview.rs` and test file), each once, the whole file:
+
+| Id | Caught by |
+|---|---|
+| MU1 (the refusal removed) | `e2_` (T_r 36.77 s; the reply's message unchanged, as derived); `e3_` passed, as expected without the check (CPU 70 %) |
+| MU2 (committed, `>=`) | `e4_` (the 10 × 10 cavity refused: "mesh has 100 cells, limit is 100") (CPU 43 %) |
+| MU3 (`cells: limit`) | `e2_`, `e3_`, `e4_` (the message gives 2000000 or 100) (CPU 48 %) |
+| MU4 (the estimate without a limit) | `e5_` (`TooLarge { cells: 2250000, limit: 2000000 }`) (CPU 40 %) |
+| MU5 (`channel_2d_interface` without its right block) | `e1_` and `e4_` (channel_2d_interface) (CPU 79 %) |
+
+All five caught.
+
+### Deviations
+
+Two set-up defects, each corrected by an amendment committed before its corrected run: E6's counts over the schema's
+range (amendment 1; `e6_` kept as an ignored record) and E3's sampler, which could not read a process of a few
+milliseconds (amendment 2). R7w's limit "0 skipped" was registered without counting the skipped record ADR 0807 left on
+main (4 tests); it is recorded as written, a miss. P_b came out at about 6 GB, four times the estimate of 1.5 GB (the
+estimate left out the build's intermediate copies); the row holds by far either way.
+
+### What was not run
+
+The GitHub runners (the lead reads them, ADR 0809 question 2). Nothing registered was left out.
+
+### Size
+
+Size (agent, actual): partial; 0; 2; 1; 160000
+
+### Decision by the registered rule
+
+**Partial.** E1 to E6, C5, BH, R7c, EW, EL, DS and A1 hold (E3 and E6 on their amendments' runs) and MU1 to MU5 are caught; R7w and R7l miss: on Windows one time limit of the run-control spec under load (P2, 23.6 ms against 20 ms) with the 5 tests after it not run, and on both platforms the 4 tests ADR 0807 keeps as a skipped record, which the registered "0 skipped" did not allow for. The remedy itself holds: the over-limit cavity is refused without a build, with the reply the build gave, and `error-walk.spec.ts:177` passes in 2.7 s and 2.1 s.
+
+## Open questions for the maintainer
+
+- **Q1 (scope).** `case.facts` still builds a mesh before its `max_cells` check where the counts give no estimate: a
+  mesh file and the generators `estimate` does not name (`axial_fan_sector`, `pipe_sweep`, `box_3d`, `cylinder_ogrid`,
+  `annulus_3d_sector_cylindrical_interface` and others). An over-limit case of those holds the Studio's connection as the
+  cavity did. Options: (a) leave it, since none of the Studio's tests or shipped cases meets it; (b) a new item that gives
+  `estimate` the counts of the remaining generators, each checked by E1's two routes; (c) the service answers `case.facts`
+  apart from the connection's order. Recommendation: (b), as an engine item with its own registration, since it changes
+  only the time of over-limit replies, as here.
+- **Q2.** R7w's miss (`run-control.spec.ts:268`, 23.6 ms against P2's 20 ms on a loaded host) is the limit ADR 0809's L
+  missed under load. Options: (a) the lead reads it with the first GitHub Actions run (ADR 0809 question 2, answered (a));
+  (b) a registration that measures it. Recommendation: (a).
+
+## For the lead: roadmap entries
+
+> Status: partial
+
+> Note: ADR 0812, 2026-11-26, partial: case.facts refuses a generator mesh over its cell limit by the counts' estimate before it builds it, with the reply the build gave (1004 with the built count, equal by derivation and by two routes on 20 cases; 44 replies byte-identical before and after); the 2.25-million-cell cavity is refused in 0.6 ms instead of 28.7 s, and error-walk.spec.ts:177 passed in 2.7 s on Windows and 2.1 s in the Ubuntu 24.04 container; npm test on Windows missed one P2 time limit under load, and both runs skip ADR 0807's 4 recorded tests against a registered 0.
+
+> Gap: case.facts refuses an over-limit generator mesh by its counts (ADR 0812); error-walk.spec.ts:177 passes in 2 to 3 s. npm test here: Windows 880 passed, 1 failed (run-control.spec.ts:268, 23.6 ms against P2's 20 ms on a loaded host), 5 did not run; the container 886 passed; both skip ADR 0807's 4 recorded tests. Mesh files and generators without an estimate still build first. The first run on GitHub Actions is to be read.
+
+No follow-up item is proposed here; question 1 names the one this work would recommend.
+
+## Amendment 3 (2026-11-26): the brief by its path
+
+Written after addendum 1, before the report; nothing above is changed and no check or run is affected.
+`python scripts/process_report.py --check` gave "registration cites no brief file" for this ADR: its opening names the
+brief by a relative link only. The brief this registration answers is `docs/adr/briefs/f823-case-facts-estimate.md`.
