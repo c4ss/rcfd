@@ -31,12 +31,12 @@ results one by one: an item is done when its registered decision rule says so an
    reading exceeds the reading limit, split it or point it at an area page's reading list.
    The brief has a section `## Goal` with one line that starts `/goal` and states, in at most 4000 characters, the end
    state of the work, how each part of it is shown in the conversation (the command and its output), and a bound on the
-   turns. The lead makes the worktree and the branch at the brief's commit and starts the work in it with the line as the
-   whole prompt, so that the goal is set (the output then begins "Goal set:"; the lead checks it):
-   `claude -p "/goal ..." --model <the brief's> --permission-mode auto --add-dir <scratch folder> --output-format stream-json --verbose`,
-   in the background, its output to a file in `w49i-work`. The mode is never wider than the lead's own; the run asks
-   nobody for a permission, so an action it is denied is in its report. A subagent has no goal, and a session started in
-   the app has text put before its prompt and does not set it (F-895, 2026-11-25). The end state
+   turns. The lead makes the worktree and the branch at the brief's commit and starts the work as a subagent of its own
+   session, in the background, with the line as the prompt and the worktree's path written into it; `/goal` holds in the
+   subagent, which keeps going until the end state is shown or the bound is reached. The subagent's model is the brief's.
+   A goal that asks for reads made first also asks for them again after a summary of the conversation, since a read made
+   before the summary is no longer shown. A run cut off by the end of the lead's session is started again as a new
+   subagent with the same line and a note of what already ran, so that no registered run is made twice. The end state
    is the report with the verdict of the registered rule, done or partial: a miss recorded as a miss meets the goal, so
    that a goal never asks for a changed limit, a skipped test or a second run of a registered run. It asks for the
    output of the registered run, not for the run again at the end.
@@ -188,6 +188,9 @@ of agents is put to the maintainer again after four weeks of the measures.
 
 ## Changes
 
+- 2026-11-26: "Issuing" 4 starts the work as a subagent of the lead's session with the `/goal` line as its prompt,
+  in place of a separate `claude -p` process, on the maintainer's direction of 2026-11-25 ("`/goal` should work with this
+  harness's subagent process").
 - 2026-11-25: "Issuing" 4 gains the `/goal` line of a brief, on the maintainer's direction of that day
   (and its way of starting, on the answer "Yes, claude -p" of the same day) ("when you start new roadmap pieces make sure they write a clear `/goal` tool/skill call").
 - 2026-11-23: "Merging and pushing" gains the wiki ingest after each merge, by the lead, on the maintainer's answer of
