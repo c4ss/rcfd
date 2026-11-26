@@ -58,9 +58,7 @@ export const BUDGET_STATUS = 'approved by the maintainer 2026-11-17, enforced' a
 
 export const WORD_BUDGETS = {
   'home-empty': { what: 'project home, no project open', rest: 'first start, an empty recent list', budget: 6 },
-  'first-path-intro': { what: 'learner’s first path, no project open', rest: 'the four stations, Explain closed', budget: 22 },
   'home-open': { what: 'project home, a project open', rest: 'the quick-start project, Home view, no filter', budget: 49 },
-  'first-path': { what: 'learner’s first path, an empty project', rest: 'the make step, Explain closed', budget: 22 },
   runs: { what: 'runs', rest: 'Runs view, nothing selected', budget: 14 },
   'runs-selected': { what: 'runs, the selected run', rest: 'a converged run selected', budget: 16 },
   workspace: { what: 'run workspace', rest: 'a converged run, its last snapshot drawn', budget: 17 },

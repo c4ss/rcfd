@@ -297,9 +297,18 @@ test('the project home of an open project, and Use with Claude Code opened from 
 });
 
 test('the Runs view, a run selected from the keyboard, and the provenance popover of its step count', async () => {
+  // ADR 0808 Addendum 7: the state this case starts from, made explicit. The run workspace selects the newest run when
+  // nothing is selected; on the base tree the previous case's walk of the project tabs showed it for long enough only
+  // when its code loaded in time. The case shows it from the keyboard and waits for that selection.
+  const views = page.getByRole('tablist', { name: 'Project views' });
+  await tabTo(views.getByRole('tab', { selected: true }));
+  await arrowTo(views.getByRole('tab', { name: 'Workspace' }), 'ArrowRight');
+  await expect(page.locator('.ws')).toHaveAttribute('data-run', /^r-/, { timeout: 20_000 });
+  const newest = (await page.locator('.ws').getAttribute('data-run'))!;
   await page.keyboard.press('Control+2');
   const grid = page.getByRole('grid', { name: /^Runs of / });
   await expect(grid).toBeVisible({ timeout: 20_000 });
+  await expect(page.locator(`aside.rv-run[data-run="${newest}"]`)).toBeVisible({ timeout: 20_000 });
   await surface('runs', '.rv', { exclude: ['.rv-run'] });
   // select RE100: into the grid, down its rows, Space
   await tabTo(grid);
@@ -413,20 +422,17 @@ test('case settings from the palette, a session from the engine’s defaults, an
   await expect.soft(close, 'decision: Escape gives the focus back to Close session').toBeFocused();
 });
 
-test('the first path on a project that holds nothing yet', async () => {
+// ---- reduced motion ---------------------------------------------------------------------------------------------------
+
+test('reduced motion: no CSS animation or transition runs, Play steps at most twice a second, the camera moves at once', async () => {
+  // ADR 0808 Addendum 5 (S1): the step the retired first-path case gave this case, without its surface: the home, and
+  // the empty project opened from it
   await page.keyboard.press('Control+1');
   await expect(page.getByRole('heading', { level: 1, name: /Quick start/ })).toBeVisible({ timeout: 20_000 });
   await stubDialog(studio.app, empty);
   await tabTo(page.getByRole('button', { name: 'Open project…' }));
   await page.keyboard.press('Enter');
   await expect(page.getByRole('heading', { level: 1, name: 'An empty project' })).toBeVisible({ timeout: 30_000 });
-  await expect(page.locator('.fp--open .fp-primary button')).toBeEnabled({ timeout: 20_000 });
-  await surface('first-path', '.fp--open');
-});
-
-// ---- reduced motion ---------------------------------------------------------------------------------------------------
-
-test('reduced motion: no CSS animation or transition runs, Play steps at most twice a second, the camera moves at once', async () => {
   // reopen the quick start so the run bands are drawn again
   await stubDialog(studio.app, quick);
   await page.keyboard.press('Control+O');
@@ -621,7 +627,6 @@ test('every surface was walked', () => {
       'undo',
       'settings',
       'decision',
-      'first-path',
       'studio-settings',
     ].sort(),
   );

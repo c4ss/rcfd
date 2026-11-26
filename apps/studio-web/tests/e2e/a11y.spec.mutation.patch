@@ -1,0 +1,13 @@
+# expect-fail: cd apps/studio-web && npm run build && npm run package:dir && npx playwright test tests/e2e/a11y.spec.ts --project=electron
+diff --git a/apps/studio-web/src/renderer/workspace/RunWorkspace.tsx b/apps/studio-web/src/renderer/workspace/RunWorkspace.tsx
+index 66538d2d..e7d03bd3 100644
+--- a/apps/studio-web/src/renderer/workspace/RunWorkspace.tsx
++++ b/apps/studio-web/src/renderer/workspace/RunWorkspace.tsx
+@@ -170,6 +170,7 @@ export default function RunWorkspace({ view, selected, onSelect, compareRequest
+   }, [selected]);
+   // with nothing selected the workspace brings forward the live run, else the newest run
+   useEffect(() => {
++    return; // M5 (ADR 0808 Addendum 7): the workspace never selects a run by itself
+     if (selected !== null || rows.length === 0 || !autoSelect) return;
+     const newest = [...rows].sort((a, b) => (a.created < b.created ? 1 : -1))[0]!;
+     onSelect(live ?? newest.id);

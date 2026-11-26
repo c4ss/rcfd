@@ -28,7 +28,8 @@ import { closeProject } from '../case/closeGuard.js';
 import { CaseRunButton, RunFailure } from '../runs/RunControls.js';
 import { ClaudeActivity, ClaudeCodeIcons, ClaudeCodePanel } from './claudeCode.js';
 import { requestCommand, useCommandFact, useCommandHandlers } from '../commands/host.js';
-import { FirstPath, FirstPathIntro, NotAProjectYet } from '../first/FirstPath.js';
+// F-835: a folder the engine refused as no project (the learner's first path that held it was retired by ADR 0808)
+import { NotAProjectYet } from './NotAProject.js';
 import { DataFiles, DesignsGroup, UnsavedMark, isCaseFile, useUnsavedCases } from './HomeExtras.js';
 import { STUDIO_SETTINGS_HASH } from '../studio-settings/hash.js';
 import { UndoControls } from '../history/UndoControls.js';
@@ -199,8 +200,6 @@ function NoProject({ state }: { state: ProjectState | null }) {
         )}
         <WorkProgress scope={WORK_SCOPE} placement="inline" />
         {state?.failure && <FailureNotice failure={state.failure} recent={state.recent} />}
-        {/* F-813: a learner's first path, from here to a first result */}
-        {engine?.configured !== false && !state?.failure && <FirstPathIntro />}
       </section>
       <section className="ph-recent" aria-labelledby="ph-recent-title">
         <h2 id="ph-recent-title" className="ph-section-title sr-only">
@@ -359,10 +358,6 @@ function OpenProject({ view, state }: { view: ProjectView; state: ProjectState }
     setFocus((f) => ({ path: p, n: (f?.n ?? 0) + 1 }));
     setTab('home');
   };
-  const openWorkspace = (id: string) => {
-    setRun(id);
-    setTab('workspace');
-  };
   // F-831: the command palette's commands of these views (src/shared/commands/studio.ts), and the run selected in Runs
   // for the palette to offer first
   useCommandFact('selectedRun', run);
@@ -393,7 +388,7 @@ function OpenProject({ view, state }: { view: ProjectView; state: ProjectState }
         selected={tab}
         onChange={(t) => setTab(t as View)}
         items={[
-          { id: 'home', label: 'Home', panel: <HomeBody view={view} state={state} onStarted={onStarted} onOpenWorkspace={openWorkspace} focus={focus} /> },
+          { id: 'home', label: 'Home', panel: <HomeBody view={view} state={state} onStarted={onStarted} focus={focus} /> },
           {
             id: 'runs',
             label: 'Runs',
@@ -443,14 +438,11 @@ function HomeBody({
   view,
   state,
   onStarted,
-  onOpenWorkspace,
   focus,
 }: {
   view: ProjectView;
   state: ProjectState;
   onStarted: (run: string) => void;
-  /** F-813: the first path's result opens its run in the run workspace (F-810). */
-  onOpenWorkspace: (run: string) => void;
   focus?: { path: string; n: number } | null;
 }) {
   const [kind, setKind] = useState<Kind>('all');
@@ -535,8 +527,6 @@ function HomeBody({
       {state.failure && <FailureNotice failure={state.failure} recent={state.recent} />}
       {!view.liveness.live && <NotLive view={view} />}
       {runFailure && !runFailure.ok && <RunFailure failure={runFailure.failure} onDismiss={() => setRunFailure(null)} />}
-      {/* F-813: the first path while the project holds nothing but its example */}
-      <FirstPath view={view} nav={{ openRun: onStarted, openWorkspace: onOpenWorkspace }} />
       <div className="ph-tools">
         <TextField
           aria-label="Filter by name"

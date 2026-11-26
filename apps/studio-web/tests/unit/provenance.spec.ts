@@ -389,8 +389,6 @@ test('the numbers of the time panel, the workspace, Runs and the field readout a
   expect(count(read('plots/ResidualPlot.tsx'))).toBe(1);
   expect(count(read('plots/MonitorPlot.tsx'))).toBe(1);
   expect(count(read('dev/PlotsDev.tsx'))).toBe(1);
-  // the first path's result: rounds, solver time, the report values (F-813)
-  expect(count(read('first/FirstPath.tsx'))).toBe(3);
 });
 
 test('a session number’s facts: the service’s own, and what it does not record said as not recorded', () => {

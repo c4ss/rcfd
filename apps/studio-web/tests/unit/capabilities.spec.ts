@@ -1,30 +1,28 @@
-// The capability inventory and its UI coverage (F-824, docs/studio-guardrails.md G15): every capability the engine
-// reports (service.info methods, settings.schema keys, the MCP tool list, the CLI help) is mapped in
-// capabilities/coverage.json to a UI path or to a dated exemption naming a roadmap item; the committed inventory is the
-// engine's own (regenerated here from the rcfd binaries); docs/studio-coverage.md is the generated report.
+// The capability inventory (F-824): every capability the engine reports (service.info methods, settings.schema keys, the
+// MCP tool list, the CLI help); the committed inventory is the engine's own (regenerated here from the rcfd binaries);
+// docs/studio-coverage.md is the report generated from it. ADR 0808 (F-981) retired the G15 map of UI paths
+// (capabilities/coverage.json) and its tests, on the maintainer's answer of 2026-11-26 in ADR 0803.
 //
 // The engine check needs the rcfd binary (tests/support/rcfd.ts says where it is looked for) and rcfd-runner and rcfd-mcp
 // next to it; without rcfd it is skipped with that reason. Every other test reads only committed files.
 import { expect, test } from '@playwright/test';
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import {
   buildInventory,
-  checkCoverage,
   commandNames,
-  coverageReport,
   engineBinaries,
   helpCapabilities,
   INVENTORY_NOTE,
+  inventoryReport,
   inventoryText,
+  KIND_TITLES,
+  KINDS,
   readEngine,
   schemaCapabilities,
   SOURCES,
-  type Capability,
-  type CoverageFile,
   type Inventory,
-  type RoadmapItem,
 } from '../support/capabilities.js';
 import { findRcfd, NO_RCFD } from '../support/rcfd.js';
 
@@ -33,8 +31,6 @@ const repo = path.resolve(root, '..', '..');
 const read = (...p: string[]): string => readFileSync(path.join(...p), 'utf8').replace(/\r\n/g, '\n');
 const inventoryFile = path.join(root, 'capabilities', 'inventory.json');
 const inventory = (): Inventory => JSON.parse(read(inventoryFile)) as Inventory;
-const coverage = (): CoverageFile => JSON.parse(read(root, 'capabilities', 'coverage.json')) as CoverageFile;
-const roadmap = (): RoadmapItem[] => JSON.parse(read(repo, 'docs', 'roadmap.json')) as RoadmapItem[];
 const REGENERATE = 'run `npm run capabilities` in apps/studio-web';
 
 test.describe('reading what the engine prints', () => {
@@ -123,67 +119,7 @@ test.describe('reading what the engine prints', () => {
   });
 });
 
-test.describe('the coverage check', () => {
-  const caps: Capability[] = [
-    { id: 'service:run.start', kind: 'service_method', source: 'service.info' },
-    { id: 'service:run.stop', kind: 'service_method', source: 'service.info' },
-    { id: 'case:mesh.nx', kind: 'case_key', source: 'settings.schema' },
-    { id: 'case:mesh.ny', kind: 'case_key', source: 'settings.schema' },
-    { id: 'cli:rcfd run', kind: 'cli_command', source: 'help', usage: 'run <case>' },
-    { id: 'cli:rcfd run --out', kind: 'cli_option', source: 'help', parent: 'cli:rcfd run' },
-  ];
-  const inv = buildInventory({ rcfd: 'test' }, caps);
-  const items: RoadmapItem[] = [{ id: 'F-807', title: 'Electron Studio: run control' }];
-  const ex = { reason: 'not built yet', date: '2026-11-16', item: 'F-807' };
-  const file = (rules: CoverageFile['rules']): CoverageFile => ({ format: 'rcfd-studio-coverage', version: 1, note: '', rules });
-
-  test('a full map passes; an id rule wins over a prefix', () => {
-    const r = checkCoverage(
-      inv,
-      file([
-        { id: 'service:run.start', ui: 'Run bar > Run' },
-        { id: 'service:run.stop', exemption: ex },
-        { prefix: 'case:mesh.', exemption: ex },
-        { id: 'case:mesh.ny', ui: 'Case editor > Mesh > ny' },
-        { id: 'cli:rcfd run', exemption: ex },
-        { prefix: 'cli:rcfd run --', exemption: ex },
-      ]),
-      items,
-    );
-    expect(r.unmapped).toEqual([]);
-    expect(r.problems).toEqual([]);
-    expect(r.resolved.get('case:mesh.ny')?.ui).toBe('Case editor > Mesh > ny');
-    expect(r.resolved.get('case:mesh.nx')?.prefix).toBe('case:mesh.');
-  });
-
-  test('fails on an unmapped capability, a malformed or undated exemption, an unknown item, a whole-kind prefix and a rule that maps nothing', () => {
-    const r = checkCoverage(
-      inv,
-      file([
-        { id: 'service:run.start', exemption: { ...ex, date: '16.11.2026' } },
-        { id: 'service:run.stop', exemption: { ...ex, item: 'F-999' } },
-        { prefix: 'case:', exemption: ex },
-        { id: 'cli:rcfd run', exemption: { ...ex, reason: ' ' } },
-        { id: 'cli:rcfd gone', exemption: ex },
-        { id: 'cli:rcfd run --out', ui: 'x', exemption: ex },
-      ]),
-      items,
-    );
-    expect(r.unmapped).toEqual([]);
-    expect(r.problems).toEqual([
-      "service:run.start: the exemption's date is not a YYYY-MM-DD date",
-      "service:run.stop: the exemption's item F-999 is not in docs/roadmap.json",
-      'case:: a prefix names one case section (case:<section>.) or one command\'s options (cli:<command> --)',
-      'cli:rcfd run: the exemption has no reason',
-      'cli:rcfd run --out: a rule has exactly one of ui and exemption',
-      'cli:rcfd gone: maps no capability of the inventory (removed from the engine? then remove the rule)',
-    ]);
-    const none = checkCoverage(inv, file([]), items);
-    expect(none.unmapped).toEqual(inv.capabilities.map((c) => c.id));
-  });
-});
-
-test.describe('the committed inventory, map and report', () => {
+test.describe('the committed inventory and report', () => {
   test('the inventory file is in its canonical form (order, counts, one capability per line)', () => {
     const inv = inventory();
     expect(inv.format).toBe('rcfd-studio-capabilities');
@@ -192,14 +128,43 @@ test.describe('the committed inventory, map and report', () => {
     expect(read(inventoryFile), REGENERATE).toBe(inventoryText(buildInventory(inv.engine as Record<string, string>, inv.capabilities)));
   });
 
-  test('every capability has a UI path or a recorded, dated exemption that names a roadmap item (G15)', () => {
-    const res = checkCoverage(inventory(), coverage(), roadmap());
-    expect(res.unmapped, 'capabilities with no rule in capabilities/coverage.json: map each to ui or to an exemption {reason, date, item}').toEqual([]);
-    expect(res.problems, 'rules of capabilities/coverage.json').toEqual([]);
+  test('docs/studio-coverage.md is the report generated from the inventory', () => {
+    expect(read(repo, 'docs', 'studio-coverage.md'), `${REGENERATE} -- --report-only`).toBe(inventoryReport(inventory()));
   });
 
-  test('docs/studio-coverage.md is the report generated from the inventory and the map', () => {
-    expect(read(repo, 'docs', 'studio-coverage.md'), `${REGENERATE} -- --report-only`).toBe(coverageReport(inventory(), coverage(), roadmap()));
+  // N1 (ADR 0808, F-981): G15 is retired (ADR 0803); the map of UI paths and its check are gone, the inventory stays.
+  test('the G15 map is retired: no capabilities/coverage.json, and the generator, the support code and the report name no UI path or exemption', () => {
+    expect(existsSync(path.join(root, 'capabilities', 'coverage.json'))).toBe(false);
+    const generator = read(root, 'scripts', 'write-capabilities.mjs');
+    expect(generator).not.toContain('coverage.json');
+    expect(generator).not.toMatch(/checkCoverage|coverageReport/);
+    const support = read(root, 'tests', 'support', 'capabilities.ts');
+    expect(support).not.toMatch(/checkCoverage|coverageReport|CoverageRule|exemption/i);
+    const report = read(repo, 'docs', 'studio-coverage.md');
+    expect(report).not.toMatch(/UI path|exemption/i);
+  });
+
+  // N2 (ADR 0808, F-981): the report still lists every capability the engine reports.
+  test('the report counts every capability of the inventory by kind, and names every service method, MCP tool, CLI command and case section', () => {
+    const inv = inventory();
+    const report = read(repo, 'docs', 'studio-coverage.md');
+    let total = 0;
+    for (const k of KINDS) {
+      const list = inv.capabilities.filter((c) => c.kind === k);
+      total += list.length;
+      expect(report, k).toContain(`| ${KIND_TITLES[k]} | ${list.length} |`);
+      expect(report, k).toContain(`## ${KIND_TITLES[k]} (${list.length})`);
+    }
+    expect(total).toBe(inv.capabilities.length);
+    expect(report).toContain(`| **All** | **${inv.capabilities.length}** |`);
+    const name = (id: string) => '`' + id.slice(id.indexOf(':') + 1) + '`';
+    for (const c of inv.capabilities) {
+      if (c.kind === 'service_method' || c.kind === 'mcp_tool' || c.kind === 'cli_command' || c.kind === 'monitor_format_key') {
+        expect(report, c.id).toContain(name(c.id));
+      }
+      if (c.kind === 'case_key') expect(report, c.id).toContain('`' + c.id.slice(5).split('.')[0]! + '` (');
+      if (c.kind === 'cli_option') expect(report, c.id).toContain('`' + c.parent!.slice(4) + '` (');
+    }
   });
 });
 
