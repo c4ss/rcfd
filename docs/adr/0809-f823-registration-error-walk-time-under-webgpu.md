@@ -222,3 +222,92 @@ written.
   so rule 16 asks for no committed patch); it shows whether the unchanged test catches the mutation.
 - The remedy is in the engine or in the Studio's estimate line, not in the files this brief owns: an open question of scope
   (addendum).
+
+## Addendum 1: results (2026-11-26)
+
+No code changed (amendment 1). Each registered run was made once, on a `git archive` copy of a5b7d0b8 (R7w in the
+worktree), one after another and beside no other run of this work: L 15:10 to 15:35, R7l to 15:48, W to 16:05, R7w to
+16:18, then ME. The machine was not quiet. The host CPU, sampled every 30 s (`heavy-hostload.log`), was at 90 % to 100 %
+through L and most of R7l, and between 17 % and 100 % (mostly 55 % to 100 %) through W and R7w, from processes not of this
+work. The logs are in the scratch folder (`L/`, `R7l/`, `W/`, `R7w.log`, `R7w-npm-test.log`, `ME/`, `ME.log`).
+
+### Checks
+
+| Id | Limit | Measured | Met |
+|---|---|---|---|
+| E1 | L: `error-walk.spec.ts:177` passed, its waits unchanged | passed (1.0 m in the list output) | met |
+| E2 | W: the same | passed (29.4 s); in R7w 36.8 s, in R7l 26.0 s | met |
+| L1 | 880 passed, 0 failed, 0 skipped or not run | 865 passed, 4 failed, 11 did not run (the summary lines and the marks agree). Failed: `commands.spec.ts:156` (the palette's first action `claude_code.register`, not `run.status`, within 5 s), `responsiveness.spec.ts:260` (tasks over 100 ms or frames over 150 ms in every pass), `run-control.spec.ts:268` (`project.cancel_run` answered in 51.4 ms, limit 20 ms), `workspace-first-open.spec.ts:59` (tasks over 100 ms with the GPU process held) | **missed** |
+| L2 | each step passed, the skip step included | steps 1 to 10 passed (engine 143 s); 11 failed (exit 1, 1297 s); 12 skipped after it; 13, the upload, ran (`failure()`) | **missed** |
+| W1 | as L1 | 879 passed, 1 failed, 0 skipped. Failed: `claude-code.spec.ts:193`, rcfd-mcp's `edit_case`: "replace ...from-claude.toml: failed after 12 attempts: Access is denied. (os error 5)", a file refused by the operating system (the brief: reported, not retried), as in ADR 0804's W | **missed** |
+| W2 | each step passed, the Linux steps skipped by their `if:` | steps 1 to 8 and 10 passed (engine 114 s, `npm ci` 39 s); 9 skipped by its `if:`; 11 failed (exit 1, 814 s); 12 skipped; 13 ran | **missed** |
+| R7w | typecheck and `npm test` exit 0; 880 passed | typecheck exit 0; `npm test` exit 0, "880 passed (13.2m)" | met |
+| R7l | as R7w | typecheck exit 0; `npm test` exit 0, "880 passed (13.0m)" | met |
+| V1 | exit 0, no message | actionlint 1.7.12 (`-shellcheck=`): exit 0, no message; the file is b1e2b376's, unchanged | met |
+| A1 | only this ADR and the proposal file | `git diff --stat b1e2b376..HEAD`: this ADR and `docs/roadmap/proposals/0809-F-823.json` (in the report) | met |
+| DS | passes | run on this addendum before its commit; in the report | see the report |
+| P1 | proposal valid; the report clean but for a generated file | in the report | see the report |
+
+### Controls and mutations
+
+T and T2: amendment 1 (H does not hold). ME, the preview's refusal without Build anyway (`MeshPreview.tsx` line 70,
+`tooLarge: false`), on a Windows scratch copy of a5b7d0b8 after build and packaging: `error-walk.spec.ts:177` failed at
+line 184 (`Build anyway` not visible), 3 passed, 4 did not run, exit 1: **caught**. MR is control T's arm A (amendment 1).
+No patch is committed (no Studio file changed).
+
+### Reading of the misses (from the logs; nothing was run again)
+
+1. L's four are limits on time and on order. The same commit passed all 880 in R7l, in the same container, right after L.
+   Three of the four (responsiveness, run-control, workspace-first-open) are ADR 0804's R7l misses under load, and
+   `commands.spec.ts:156` waits 5 s for the palette's list. L ran while the host CPU was at 90 % to 100 %. Load is the
+   likely cause; this is not shown.
+2. W's failure is the file refused by Windows that ADR 0804's W met, in the same test; R7w passed it.
+3. `error-walk.spec.ts:177` passed in all four runs. Its time is the engine's `case.facts` building the 2,250,000-cell
+   mesh on the Studio's one connection (amendment 1): 26.0 s to about 60 s here, with the load. With the 60 s wait at
+   line 182 kept, it can miss again on a loaded runner, on either back end.
+
+### Deviations
+
+The registered remedy R1 was not made, by the registered rule (T-N, then T2 not T-H). The probe's ninth test was defective
+(its `openCase` from the Runs tab) and gave no number. Others loaded the machine through every run; this work ran
+nothing else meanwhile.
+
+### Not run
+
+The runners themselves (as registered). `cargo fmt`, `clippy` and `baseline_hashes` do not apply (no Rust file changed).
+
+### Size
+
+Size (agent, actual): partial; 1; 5; 1; 160000
+
+### Decision
+
+By the registered rule: **partial**. E1, E2, R7w, R7l, V1, A1 and ME hold; L1, L2, W1 and W2 missed (four limits on time
+and order in L under a loaded host, one file refused by Windows in W). The controls refute ADR 0804's reading (WebGPU on
+SwiftShader): `error-walk.spec.ts:177` waits for the engine's `case.facts` of an over-limit mesh.
+
+## Open questions for the maintainer
+
+- **Q1.** `case.facts` builds a whole mesh before its `max_cells` check, and the Studio asks for it after every settings
+  change on the connection its mesh preview uses. So any edit to an over-limit count holds the Studio's engine calls for
+  tens of seconds, and a real user meets it too. Options: (a) a new registration (an engine item, or one under F-823 by
+  rule 13) in which `case.facts` refuses by the counts' estimate before building, as `mesh.preview` does
+  (`mesh_preview.rs`, `estimate`), so that its reply for an over-limit case gives the estimate instead of the built count;
+  (b) the Studio does not ask for the estimate line while the preview's estimate is over the limit, or asks for it on a
+  second connection (the engine still builds the mesh); (c) leave it, and keep the test's 60 s as it is.
+  Recommendation: (a). It changes an engine reply, so it is a question of scope and is not taken here.
+- **Q2.** The Linux job's time limits under load (L's four misses, and ADR 0804's three in R7l). Options: (a) the lead reads
+  the first run on GitHub Actions, whose runners are not shared with other work, before anything is changed; (b) a
+  registration that measures them, as amendment 1 did. Recommendation: (a).
+
+## For the lead: roadmap entries
+
+> Status: partial.
+
+> Note: ADR 0809, 2026-11-26, partial: timed controls in the Linux container show that error-walk.spec.ts:177 waits for the engine's case.facts building the 2.25-million-cell mesh on the Studio's one connection, on WebGL 2 as on WebGPU (the renderer is free), not for a WebGPU draw; no code changed; the test passed in all four runs, and R7w and R7l passed 880 of 880, but the job's Linux run missed four time limits under a loaded host and Windows met a file refused by the OS.
+
+> Gap: The job's runs here missed: in the Ubuntu 24.04 container 865 passed, 4 failed (time and order limits under a loaded host) and 11 did not run; on Windows one test met a file refused by the OS. error-walk.spec.ts:177 passes, but its time is case.facts building an over-limit mesh before its max_cells check (Q1 of ADR 0809). The first run on GitHub Actions is to be read.
+
+> Follow-ups: none as new items here; Q1 (a) is proposed as an engine registration, a question of scope for the maintainer.
+
+The same entries are in `docs/roadmap/proposals/0809-F-823.json`.
