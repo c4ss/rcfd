@@ -17,6 +17,7 @@
 // The palette commands `provenance.show` and `provenance.copy_command` (src/shared/commands/studio.ts) are run here, as
 // registered handlers (../commands/host.ts), so the palette needs no provenance code of its own.
 import { commandFact, registerCommand } from '../commands/host.js';
+import { globalCommandFor } from '../../shared/commands/shortcuts.js';
 import { copyText, runProvenance } from './door.js';
 
 export interface TriggerEntry {
@@ -35,6 +36,12 @@ const runOpeners = new Map<string, () => void>();
 /** The number whose popover is open, how to close it, and the numbers Ctrl+I steps through from it (ADR 0795). */
 let opened: { entry: TriggerEntry; close: () => void } | null = null;
 let group: readonly TriggerEntry[] = [];
+/**
+ * F-988, ADR 0813: the popover open when Show provenance's key was last pressed. The key's request runs a few frames
+ * later (the palette's afterFocusReturns); if that popover has closed in between (Escape), the key was about it, and is
+ * spent.
+ */
+let pressedOn: { readonly at: typeof opened } | null = null;
 
 export function addTrigger(t: TriggerEntry): () => void {
   listen();
@@ -73,6 +80,10 @@ function listen(): void {
   document.addEventListener('pointerover', (e) => (pointed = e.target instanceof Element ? e.target : null), true);
   document.addEventListener('pointerout', (e) => {
     if (e.relatedTarget === null) pointed = null;
+  }, true);
+  // on the window in the capture phase, as PaletteHost's: its stopPropagation would hide the key from the document
+  window.addEventListener('keydown', (e) => {
+    if (!e.repeat && !e.isComposing && globalCommandFor(e) === 'provenance.show') pressedOn = { at: opened };
   }, true);
   document.addEventListener('focusin', (e) => {
     if (e.target instanceof HTMLElement && !e.target.closest(`${PALETTE}, ${POPOVER}`)) lastFocus = e.target;
@@ -175,6 +186,10 @@ export function showUnavailable(): string | null {
 }
 
 export function showNow(): boolean {
+  // F-988, ADR 0813: a key pressed while a popover was open, that popover closed since: nothing opens
+  const pressed = pressedOn;
+  pressedOn = null;
+  if (pressed !== null && pressed.at !== null && pressed.at !== opened) return true;
   if (opened) {
     // ADR 0795: the next number of the same element; the only one stays open
     const at = opened.entry;
