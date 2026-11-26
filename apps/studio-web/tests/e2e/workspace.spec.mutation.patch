@@ -1,0 +1,14 @@
+# expect-fail: cd apps/studio-web && npm run build && npm run package:dir && npx playwright test tests/e2e/workspace.spec.ts --project=electron
+diff --git a/apps/studio-web/src/renderer/workspace/RunWorkspace.tsx b/apps/studio-web/src/renderer/workspace/RunWorkspace.tsx
+index 66538d2d..585db360 100644
+--- a/apps/studio-web/src/renderer/workspace/RunWorkspace.tsx
++++ b/apps/studio-web/src/renderer/workspace/RunWorkspace.tsx
+@@ -224,7 +224,7 @@ export default function RunWorkspace({ view, selected, onSelect, compareRequest
+   useEffect(() => {
+     // a run's first stop is set once its stops are known (its newest snapshot), not before
+     if (!row || last < 0) return;
+-    if (stop.run !== row.id || (follow && stop.index !== last)) setStop({ run: row.id, index: Math.max(0, last) });
++    if (stop.run !== row.id) setStop({ run: row.id, index: Math.max(0, last) });
+   }, [row?.id, last, follow, stop.run, stop.index]);
+   const position: Position | null = positions[index] ?? null;
+ 
