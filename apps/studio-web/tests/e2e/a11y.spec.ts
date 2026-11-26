@@ -297,9 +297,18 @@ test('the project home of an open project, and Use with Claude Code opened from 
 });
 
 test('the Runs view, a run selected from the keyboard, and the provenance popover of its step count', async () => {
+  // ADR 0808 Addendum 7: the state this case starts from, made explicit. The run workspace selects the newest run when
+  // nothing is selected; on the base tree the previous case's walk of the project tabs showed it for long enough only
+  // when its code loaded in time. The case shows it from the keyboard and waits for that selection.
+  const views = page.getByRole('tablist', { name: 'Project views' });
+  await tabTo(views.getByRole('tab', { selected: true }));
+  await arrowTo(views.getByRole('tab', { name: 'Workspace' }), 'ArrowRight');
+  await expect(page.locator('.ws')).toHaveAttribute('data-run', /^r-/, { timeout: 20_000 });
+  const newest = (await page.locator('.ws').getAttribute('data-run'))!;
   await page.keyboard.press('Control+2');
   const grid = page.getByRole('grid', { name: /^Runs of / });
   await expect(grid).toBeVisible({ timeout: 20_000 });
+  await expect(page.locator(`aside.rv-run[data-run="${newest}"]`)).toBeVisible({ timeout: 20_000 });
   await surface('runs', '.rv', { exclude: ['.rv-run'] });
   // select RE100: into the grid, down its rows, Space
   await tabTo(grid);
