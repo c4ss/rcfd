@@ -214,3 +214,14 @@ of a `cd ... && ...` chain, so the `cd` ran in the background shell and `npx pla
 fetched another Playwright (1.65.1) and stopped with "Project(s) "electron" not found", exit 1. No test of the three
 specs started; SW is not decided by it. Corrected set-up: the same command with the `cd` in the foreground and the
 sampler started separately. Run once. SW's limit is unchanged; EMU follows it as registered (PR2 gave an adapter).
+
+## Amendment 2 (2026-11-26): MU1 was not caught; the committed patch is MU2's
+
+Written after the mutation runs and before the addendum; nothing above is changed and no limit or check is affected.
+MU1 (Follow live's clause removed from `RunWorkspace.tsx` line 227), run once on its scratch copy (host CPU 39 % before):
+`workspace.spec.ts` 6 passed, 1 skipped (the record), exit 0, so the corrected test did **not** catch it; the line still
+reached the newest snapshot without that clause, by a path this work did not find. It is recorded as not caught. The
+patch committed at 412d1441 is MU1's and would not fail, so it does not meet rule 16. It is replaced, in the commit of
+this amendment, by MU2's patch (the corrected test's read compares the line with N, not N - 1), which was caught (run
+once, host CPU 80 % before: the corrected test failed, "timed out waiting for the line on the newest snapshot while
+following"). The file name and its expect-fail line are unchanged.
