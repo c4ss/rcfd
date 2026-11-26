@@ -276,3 +276,13 @@ otherwise, naming the check that missed or did not run. A missed limit is record
   shows its results (the displacement and stress fields, the report) and gets its e2e row; (b) keep the structural
   category recognized and its layout of the case only. Recommendation: (a), entered as an item of its own. Not taken
   here (it changes the scope of the item, rule 6).
+
+## Amendment 1 (2026-11-26): the count of R1 corrected
+
+Written after the code of D1 to D3 and before any test of F-977 was committed or run; nothing above is changed.
+
+The registration counts 14 case files in `example-projects/` ("What was read" and R1). There are 13: one in `axial-fan`,
+four in `quick-start`, eight in `wind-tunnel`, as finding 3 lists them (1 + 2 + 2 + 2 + 4 + 2). R1's limit is therefore
+the category of finding 3 for each of the 13 case files, the cantilever and the still pool: **15 of 15** (not 16 of 16),
+with every category as R1 names it. The test asserts that the three `cases/` folders hold 13 files. No other row, limit,
+source or the decision rule changes.
