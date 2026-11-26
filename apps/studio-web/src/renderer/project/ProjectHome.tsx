@@ -40,6 +40,8 @@ import './project.css';
 
 // F-810: the run workspace, loaded on demand (it brings three.js), so the project home costs nothing more at start
 const RunWorkspace = lazy(() => import('../workspace/RunWorkspace.js'));
+// F-976 (ADR 0805): Claude's canvas, loaded on demand (its field and run panels bring three.js)
+const Canvas = lazy(() => import('../canvas/Canvas.js'));
 
 let reported = false;
 
@@ -316,7 +318,7 @@ const DESCRIBE: Record<Exclude<Kind, 'all'>, string> = {
   notes: 'free text',
 };
 
-type View = 'home' | 'runs' | 'workspace';
+type View = 'home' | 'runs' | 'workspace' | 'canvas';
 
 /** F-831: puts the focus on the first element that matches, once the view has changed (G8: the focus follows a command). */
 function focusLater(...selectors: string[]): void {
@@ -348,6 +350,11 @@ function OpenProject({ view, state }: { view: ProjectView; state: ProjectState }
   const [focus, setFocus] = useState<{ path: string; n: number } | null>(null);
   // F-815: the palette's Compare runs, handed to the run workspace (`n` changes on every request)
   const [compareReq, setCompareReq] = useState<{ run: string; n: number } | null>(null);
+  // F-976 (ADR 0805): a view a client shows (show_view) brings the canvas to the front, once per showing
+  const canvasId = view.canvas?.id ?? null;
+  useEffect(() => {
+    if (canvasId !== null) setTab('canvas');
+  }, [canvasId]);
   const openFile = (p: string) => {
     setFocus((f) => ({ path: p, n: (f?.n ?? 0) + 1 }));
     setTab('home');
@@ -410,6 +417,22 @@ function OpenProject({ view, state }: { view: ProjectView; state: ProjectState }
               </div>
             ),
           },
+          ...(view.canvas
+            ? [
+                {
+                  id: 'canvas',
+                  label: 'Canvas',
+                  panel: (
+                    <div className="ph-runs">
+                      {!view.liveness.live && <NotLive view={view} />}
+                      <Suspense fallback={<p className="ph-empty-line">Opening the canvas…</p>}>
+                        <Canvas view={view} canvas={view.canvas} />
+                      </Suspense>
+                    </div>
+                  ),
+                },
+              ]
+            : []),
         ]}
       />
     </div>
@@ -742,7 +765,8 @@ function Changed({ at }: { at: string | undefined }) {
   );
 }
 
-function CasesTable({
+/** F-976: also a canvas panel's view of a case (src/renderer/canvas/Canvas.tsx). */
+export function CasesTable({
   cases,
   changed,
   view,
@@ -835,7 +859,8 @@ function MeshFiles({ view, mesh }: { view: ProjectView; mesh: MeshEntry }) {
   );
 }
 
-function MeshesTable({ meshes, changed, view }: { meshes: readonly MeshEntry[]; changed: Map<string, string>; view: ProjectView }) {
+/** F-976: also a canvas panel's view of a mesh. */
+export function MeshesTable({ meshes, changed, view }: { meshes: readonly MeshEntry[]; changed: Map<string, string>; view: ProjectView }) {
   return (
     <table className="ph-table">
       <thead>
@@ -875,7 +900,8 @@ function MeshesTable({ meshes, changed, view }: { meshes: readonly MeshEntry[]; 
   );
 }
 
-function RunsTable({ runs, changed, folder }: { runs: readonly RunRow[]; changed: Map<string, string>; folder: string }) {
+/** F-976: also a canvas table's view of runs. */
+export function RunsTable({ runs, changed, folder }: { runs: readonly RunRow[]; changed: Map<string, string>; folder: string }) {
   return (
     <table className="ph-table ph-table--runs">
       <thead>
@@ -977,7 +1003,8 @@ function SkippedRuns({ skipped }: { skipped: ProjectView['skippedRuns'] }) {
 }
 
 /** The latest change of each path (`cases/a.toml`) and run (`run:<id>`), from the feed entries (newest first). */
-function changedAt(changes: readonly ChangeEntry[]): Map<string, string> {
+/** When each path and run last changed, from the feed entries kept (F-976: the canvas's tables too). */
+export function changedAt(changes: readonly ChangeEntry[]): Map<string, string> {
   const m = new Map<string, string>();
   for (const c of changes) {
     const at = c.seen;

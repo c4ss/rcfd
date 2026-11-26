@@ -317,7 +317,8 @@ export class ProjectHome {
     // F-832: the tests' delay before the engine is asked (none outside them); a cancel during it starts nothing
     await testDelay('projectOpen');
     if (seq !== this.openSeq) return;
-    const start = this.deps.startServer ?? ((exe: string, f: string) => ProjectServer.start(exe, f));
+    // F-976 (ADR 0805 D3): the session's reading server is this Studio's canvas of the project, which show_view counts
+    const start = this.deps.startServer ?? ((exe: string, f: string) => ProjectServer.start(exe, f, undefined, { canvas: true }));
     let session: ProjectSession | null = null;
     try {
       session = await ProjectSession.open(

@@ -54,18 +54,33 @@ fn e(errors: &mut Vec<ViewError>, key: impl Into<String>, reason: impl Into<Stri
 fn extra_keys(o: &Map<String, Value>, allowed: &[&str], at: &str, errors: &mut Vec<ViewError>) {
     for k in o.keys().filter(|k| !allowed.contains(&k.as_str())) {
         let key = if at.is_empty() { k.clone() } else { format!("{at}.{k}") };
-        e(errors, key, format!("is not a key of the view specification here (allowed: {})", allowed.join(", ")));
+        e(
+            errors,
+            key,
+            format!(
+                "is not a key of the view specification here (allowed: {})",
+                allowed.join(", ")
+            ),
+        );
     }
 }
 
 fn title(o: &Map<String, Value>, at: &str, errors: &mut Vec<ViewError>) {
-    let key = if at.is_empty() { "title".to_string() } else { format!("{at}.title") };
+    let key = if at.is_empty() {
+        "title".to_string()
+    } else {
+        format!("{at}.title")
+    };
     match o.get("title") {
         None => {}
         Some(Value::String(t)) => {
             let n = t.chars().count();
             if n == 0 || n > MAX_TITLE || t.chars().any(char::is_control) {
-                e(errors, key, format!("a title is 1 to {MAX_TITLE} characters with no control character"));
+                e(
+                    errors,
+                    key,
+                    format!("a title is 1 to {MAX_TITLE} characters with no control character"),
+                );
             }
         }
         Some(_) => e(errors, key, "a title is a string"),
@@ -84,7 +99,11 @@ impl Workspace {
         match o.get("version") {
             None => e(&mut errors, "version", "is required (1)"),
             Some(x) if x.as_u64() == Some(VERSION) => {}
-            Some(x) => e(&mut errors, "version", format!("{x} is not a version this engine reads (1)")),
+            Some(x) => e(
+                &mut errors,
+                "version",
+                format!("{x} is not a version this engine reads (1)"),
+            ),
         }
         title(o, "", &mut errors);
         match o.get("layout") {
@@ -94,7 +113,11 @@ impl Workspace {
                 match l.get("columns") {
                     None => {}
                     Some(c) if c.as_u64().is_some_and(|c| (1..=MAX_COLUMNS).contains(&c)) => {}
-                    Some(c) => e(&mut errors, "layout.columns", format!("{c} is not an integer 1 to {MAX_COLUMNS}")),
+                    Some(c) => e(
+                        &mut errors,
+                        "layout.columns",
+                        format!("{c} is not an integer 1 to {MAX_COLUMNS}"),
+                    ),
                 }
             }
             Some(_) => e(&mut errors, "layout", "a layout is an object {columns}"),
@@ -124,11 +147,19 @@ impl Workspace {
         let kind = match o.get("kind").and_then(Value::as_str) {
             Some(k) if KINDS.contains(&k) => k,
             Some(k) => {
-                e(errors, format!("{at}.kind"), format!("'{k}' is not a kind (one of {})", KINDS.join(", ")));
+                e(
+                    errors,
+                    format!("{at}.kind"),
+                    format!("'{k}' is not a kind (one of {})", KINDS.join(", ")),
+                );
                 return;
             }
             None => {
-                e(errors, format!("{at}.kind"), format!("is required, one of {}", KINDS.join(", ")));
+                e(
+                    errors,
+                    format!("{at}.kind"),
+                    format!("is required, one of {}", KINDS.join(", ")),
+                );
                 return;
             }
         };
@@ -148,10 +179,16 @@ impl Workspace {
             "table" => {
                 let key = format!("{at}.runs");
                 match o.get("runs").and_then(Value::as_array) {
-                    None => e(errors, key, format!("is required: an array of 1 to {MAX_TABLE_RUNS} run ids")),
-                    Some(r) if r.is_empty() || r.len() > MAX_TABLE_RUNS => {
-                        e(errors, key, format!("holds {} runs; a table has 1 to {MAX_TABLE_RUNS}", r.len()))
-                    }
+                    None => e(
+                        errors,
+                        key,
+                        format!("is required: an array of 1 to {MAX_TABLE_RUNS} run ids"),
+                    ),
+                    Some(r) if r.is_empty() || r.len() > MAX_TABLE_RUNS => e(
+                        errors,
+                        key,
+                        format!("holds {} runs; a table has 1 to {MAX_TABLE_RUNS}", r.len()),
+                    ),
                     Some(r) => {
                         for (j, id) in r.iter().enumerate() {
                             let k = format!("{key}[{j}]");
@@ -187,7 +224,11 @@ impl Workspace {
         match self.project.run_dir(id) {
             Ok(d) if d.join("run.json").is_file() => Some(d),
             Ok(_) => {
-                e(errors, key, format!("{id}: no such run (runs/{id}/run.json is missing)"));
+                e(
+                    errors,
+                    key,
+                    format!("{id}: no such run (runs/{id}/run.json is missing)"),
+                );
                 None
             }
             Err(x) => {
@@ -205,7 +246,11 @@ impl Workspace {
         let norm = p.replace('\\', "/");
         let ext = Path::new(&norm).extension().and_then(|x| x.to_str()).unwrap_or("");
         if !norm.starts_with("cases/") || !(ext == "toml" || ext == "json") {
-            e(errors, key, format!("{p}: a case is a .toml or .json file under cases/"));
+            e(
+                errors,
+                key,
+                format!("{p}: a case is a .toml or .json file under cases/"),
+            );
             return;
         }
         match rcfd_project::paths::resolve_in(self.project.root(), &norm) {
@@ -226,7 +271,11 @@ impl Workspace {
             let page = match self.list_meshes(&json!({"offset": offset, "limit": 100})) {
                 Ok(r) => r,
                 Err(x) => {
-                    e(errors, key, format!("{p}: the meshes could not be listed ({})", x.message));
+                    e(
+                        errors,
+                        key,
+                        format!("{p}: the meshes could not be listed ({})", x.message),
+                    );
                     return;
                 }
             };
@@ -243,7 +292,11 @@ impl Workspace {
                 None => break,
             }
         }
-        e(errors, key, format!("{p}: not a mesh of meshes/ (list_meshes does not list it)"));
+        e(
+            errors,
+            key,
+            format!("{p}: not a mesh of meshes/ (list_meshes does not list it)"),
+        );
     }
 
     fn field_ref(&self, o: &Map<String, Value>, dir: &Path, at: &str, errors: &mut Vec<ViewError>) {
@@ -255,19 +308,31 @@ impl Workspace {
         };
         let store = dir.join("fields");
         if !store.join(STORE_FILE).is_file() {
-            e(errors, format!("{at}.run"), "the run has no stored fields (runs/<id>/fields)");
+            e(
+                errors,
+                format!("{at}.run"),
+                "the run has no stored fields (runs/<id>/fields)",
+            );
             return;
         }
         let mut r = match Reader::open(&store) {
             Ok(r) => r,
             Err(x) => {
-                e(errors, format!("{at}.run"), format!("the run's field store does not read: {x}"));
+                e(
+                    errors,
+                    format!("{at}.run"),
+                    format!("the run's field store does not read: {x}"),
+                );
                 return;
             }
         };
         let n = r.snapshots().len();
         if n == 0 {
-            e(errors, format!("{at}.run"), "the run's field store holds no snapshot yet");
+            e(
+                errors,
+                format!("{at}.run"),
+                "the run's field store holds no snapshot yet",
+            );
             return;
         }
         let i = match o.get("snapshot") {
@@ -275,7 +340,11 @@ impl Workspace {
             Some(s) => match s.as_u64() {
                 Some(s) if (s as usize) < n => s as usize,
                 _ => {
-                    e(errors, format!("{at}.snapshot"), format!("{s} is not a snapshot index (0 to {})", n - 1));
+                    e(
+                        errors,
+                        format!("{at}.snapshot"),
+                        format!("{s} is not a snapshot index (0 to {})", n - 1),
+                    );
                     return;
                 }
             },
@@ -284,7 +353,11 @@ impl Workspace {
             Ok(f) if f.iter().any(|f| f.name == field) => {}
             Ok(f) => {
                 let names: Vec<String> = f.iter().map(|f| f.name.clone()).collect();
-                e(errors, key, format!("'{field}' is not stored at snapshot {i} (stored: {})", names.join(", ")));
+                e(
+                    errors,
+                    key,
+                    format!("'{field}' is not stored at snapshot {i} (stored: {})", names.join(", ")),
+                );
             }
             Err(x) => e(errors, key, format!("snapshot {i} does not read: {x}")),
         }
@@ -292,7 +365,11 @@ impl Workspace {
 
     fn monitor_ref(&self, v: Option<&Value>, dir: &Path, key: &str, errors: &mut Vec<ViewError>) {
         let Some(name) = v.and_then(Value::as_str) else {
-            e(errors, key, "is required: a monitor of the run (monitors.<name> of read_residuals)");
+            e(
+                errors,
+                key,
+                "is required: a monitor of the run (monitors.<name> of read_residuals)",
+            );
             return;
         };
         let bytes = std::fs::read(dir.join("residuals.jsonl")).unwrap_or_default();
@@ -300,7 +377,11 @@ impl Workspace {
         let full = format!("monitors.{name}");
         if !series.contains_key(&full) {
             let have: Vec<&str> = series.keys().filter_map(|k| k.strip_prefix("monitors.")).collect();
-            e(errors, key, format!("'{name}' is not a monitor of the run (monitors: {})", have.join(", ")));
+            e(
+                errors,
+                key,
+                format!("'{name}' is not a monitor of the run (monitors: {})", have.join(", ")),
+            );
         }
     }
 
@@ -341,7 +422,8 @@ impl Workspace {
         file.insert("view".into(), view.clone());
         let bytes = serde_json::to_vec_pretty(&Value::Object(file)).map_err(|x| err(INTERNAL, x.to_string()))?;
         let path = self.project.root().join(CURRENT);
-        std::fs::create_dir_all(path.parent().expect("has a parent")).map_err(|x| err(INTERNAL, format!("{CURRENT}: {x}")))?;
+        std::fs::create_dir_all(path.parent().expect("has a parent"))
+            .map_err(|x| err(INTERNAL, format!("{CURRENT}: {x}")))?;
         rcfd_project::atomic::atomic_write(&path, &bytes).map_err(project_error)?;
         let hash = rcfd_project::records::hash_bytes(&bytes);
         let kinds: Vec<Value> = view["panels"]
@@ -371,9 +453,11 @@ impl Workspace {
         };
         let v: Value = serde_json::from_slice(&bytes).map_err(|x| err(INTERNAL, format!("{CURRENT}: {x}")))?;
         let hash = rcfd_project::records::hash_bytes(&bytes);
-        Ok(json!({"exists": true, "path": CURRENT, "id": hash, "hash": hash, "shown": v["shown"],
+        Ok(
+            json!({"exists": true, "path": CURRENT, "id": hash, "hash": hash, "shown": v["shown"],
             "actor": v.get("actor").cloned().unwrap_or(Value::Null), "reason": v.get("reason").cloned().unwrap_or(Value::Null),
-            "view": v["view"]}))
+            "view": v["view"]}),
+        )
     }
 }
 
@@ -498,28 +582,115 @@ mod tests {
             v
         };
         let cases: Vec<(&str, Value, &str, &str)> = vec![
-            ("version 2", with(&|v| v["version"] = json!(2)), "version", "not a version"),
-            ("version missing", with(&|v| { v.as_object_mut().unwrap().remove("version"); }), "version", "required"),
-            ("panels missing", with(&|v| { v.as_object_mut().unwrap().remove("panels"); }), "panels", "required"),
-            ("panels empty", with(&|v| v["panels"] = json!([])), "panels", "holds 0 panels"),
-            ("9 panels", with(&|v| v["panels"] = json!(vec![json!({"kind": "plot", "run": RUN}); 9])), "panels", "holds 9 panels"),
-            ("columns 5", with(&|v| v["layout"]["columns"] = json!(5)), "layout.columns", "not an integer 1 to 4"),
-            ("key colour", with(&|v| v["panels"][1]["colour"] = json!("red")), "panels[1].colour", "not a key"),
-            ("kind chart", with(&|v| v["panels"][0] = json!({"kind": "chart"})), "panels[0].kind", "not a kind"),
-            ("no such run", with(&|v| v["panels"][1]["run"] = json!("r-20991231T000000-0000")), "panels[1].run", "no such run"),
-            ("case outside cases/", with(&|v| v["panels"][0]["case"] = json!("notes/README.md")), "panels[0].case", "under cases/"),
-            ("no such case", with(&|v| v["panels"][0]["case"] = json!("cases/nope.toml")), "panels[0].case", "no such case"),
-            ("mesh not listed", with(&|v| v["panels"][3]["mesh"] = json!("meshes/none.msh")), "panels[3].mesh", "not a mesh"),
-            ("field not stored", with(&|v| v["panels"][2]["field"] = json!("vorticity")), "panels[2].field", "not stored"),
-            ("snapshot past the last", with(&|v| v["panels"][2]["snapshot"] = json!(100000)), "panels[2].snapshot", "not a snapshot index"),
-            ("monitor not a series", with(&|v| v["panels"][5]["monitor"] = json!("drag")), "panels[5].monitor", "not a monitor"),
-            ("table repeats a run", with(&|v| v["panels"][6]["runs"] = json!([RUN, RUN])), "panels[6].runs[1]", "named twice"),
+            (
+                "version 2",
+                with(&|v| v["version"] = json!(2)),
+                "version",
+                "not a version",
+            ),
+            (
+                "version missing",
+                with(&|v| {
+                    v.as_object_mut().unwrap().remove("version");
+                }),
+                "version",
+                "required",
+            ),
+            (
+                "panels missing",
+                with(&|v| {
+                    v.as_object_mut().unwrap().remove("panels");
+                }),
+                "panels",
+                "required",
+            ),
+            (
+                "panels empty",
+                with(&|v| v["panels"] = json!([])),
+                "panels",
+                "holds 0 panels",
+            ),
+            (
+                "9 panels",
+                with(&|v| v["panels"] = json!(vec![json!({"kind": "plot", "run": RUN}); 9])),
+                "panels",
+                "holds 9 panels",
+            ),
+            (
+                "columns 5",
+                with(&|v| v["layout"]["columns"] = json!(5)),
+                "layout.columns",
+                "not an integer 1 to 4",
+            ),
+            (
+                "key colour",
+                with(&|v| v["panels"][1]["colour"] = json!("red")),
+                "panels[1].colour",
+                "not a key",
+            ),
+            (
+                "kind chart",
+                with(&|v| v["panels"][0] = json!({"kind": "chart"})),
+                "panels[0].kind",
+                "not a kind",
+            ),
+            (
+                "no such run",
+                with(&|v| v["panels"][1]["run"] = json!("r-20991231T000000-0000")),
+                "panels[1].run",
+                "no such run",
+            ),
+            (
+                "case outside cases/",
+                with(&|v| v["panels"][0]["case"] = json!("notes/README.md")),
+                "panels[0].case",
+                "under cases/",
+            ),
+            (
+                "no such case",
+                with(&|v| v["panels"][0]["case"] = json!("cases/nope.toml")),
+                "panels[0].case",
+                "no such case",
+            ),
+            (
+                "mesh not listed",
+                with(&|v| v["panels"][3]["mesh"] = json!("meshes/none.msh")),
+                "panels[3].mesh",
+                "not a mesh",
+            ),
+            (
+                "field not stored",
+                with(&|v| v["panels"][2]["field"] = json!("vorticity")),
+                "panels[2].field",
+                "not stored",
+            ),
+            (
+                "snapshot past the last",
+                with(&|v| v["panels"][2]["snapshot"] = json!(100000)),
+                "panels[2].snapshot",
+                "not a snapshot index",
+            ),
+            (
+                "monitor not a series",
+                with(&|v| v["panels"][5]["monitor"] = json!("drag")),
+                "panels[5].monitor",
+                "not a monitor",
+            ),
+            (
+                "table repeats a run",
+                with(&|v| v["panels"][6]["runs"] = json!([RUN, RUN])),
+                "panels[6].runs[1]",
+                "named twice",
+            ),
         ];
         let mut failed = Vec::new();
         for (what, v, key, word) in &cases {
             let errors = ws.view_errors(v);
             let ok = errors.len() == 1 && errors[0].key == *key && errors[0].reason.contains(word);
-            eprintln!("V1 {what}: {errors:?} -> {}", if ok { "refused at its key" } else { "WRONG" });
+            eprintln!(
+                "V1 {what}: {errors:?} -> {}",
+                if ok { "refused at its key" } else { "WRONG" }
+            );
             if !ok {
                 failed.push(*what);
             }

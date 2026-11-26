@@ -60,8 +60,8 @@ const comparedKey = (run: string, name: string): string => `${run} · ${name}`;
 
 const pct = (f: number): string => `${(Math.max(0, Math.min(1, f)) * 100).toFixed(4)}%`;
 
-/** The series of one kind as the plots hold them, rebuilt when the run's histories are read again. */
-function useSeriesMap(series: RunSeries | null, version: number, pick: (names: string[]) => Map<string, LineStyle>, kind: 'residual' | 'monitor', only?: string | null) {
+/** The series of one kind as the plots hold them, rebuilt when the run's histories are read again (F-976: the canvas's plot and monitor panels too). */
+export function useSeriesMap(series: RunSeries | null, version: number, pick: (names: string[]) => Map<string, LineStyle>, kind: 'residual' | 'monitor', only?: string | null) {
   return useMemo(() => {
     const out = new Map<string, { data: SeriesData; style: LineStyle }>();
     if (!series) return out;

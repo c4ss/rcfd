@@ -101,7 +101,13 @@ fn s0_with_no_studio_open_the_tool_says_so_and_writes_nothing() {
     let e = error_of(&r);
     eprintln!("S0: {e}");
     assert_eq!(e["code"], 1002);
-    assert!(e["message"].as_str().unwrap().contains("no Studio has this project open"), "{e}");
+    assert!(
+        e["message"]
+            .as_str()
+            .unwrap()
+            .contains("no Studio has this project open"),
+        "{e}"
+    );
     assert!(!dir.join(".rcfd/views").exists(), "a view was written");
     assert_eq!(journal(&dir), before, "the journal changed");
     assert!(!stale.exists(), "the registry file of the ended process is still there");
@@ -112,7 +118,9 @@ fn s0_with_no_studio_open_the_tool_says_so_and_writes_nothing() {
 fn s1_s2_s3_a_view_reaches_every_open_studio_and_an_invalid_one_changes_nothing() {
     let (dir, root) = quick_start("s1");
     let mut studio = canvas(&dir);
-    let cursor = studio.call("read_feed", json!({}))["structuredContent"]["cursor"].as_u64().unwrap();
+    let cursor = studio.call("read_feed", json!({}))["structuredContent"]["cursor"]
+        .as_u64()
+        .unwrap();
     let mut c = client(&dir);
     // S1
     let r = c.call("show_view", json!({"view": view(), "reason": "the cavity at Re 100"}));
@@ -142,7 +150,10 @@ fn s1_s2_s3_a_view_reaches_every_open_studio_and_an_invalid_one_changes_nothing(
         }
         std::thread::sleep(PERIOD);
     };
-    eprintln!("S1: view_shown in the canvas's feed after {polls} poll(s), {:?} (limit {POLLS})", t0.elapsed());
+    eprintln!(
+        "S1: view_shown in the canvas's feed after {polls} poll(s), {:?} (limit {POLLS})",
+        t0.elapsed()
+    );
     assert!(seen, "the canvas's feed has no view_shown entry after {POLLS} polls");
     let read = studio.call("read_view", json!({}))["structuredContent"].clone();
     assert_eq!(read["exists"], true);
@@ -184,7 +195,11 @@ fn s1_s2_s3_a_view_reaches_every_open_studio_and_an_invalid_one_changes_nothing(
         assert_eq!(e["data"]["errors"][0]["key"], key);
         assert!(e["data"]["errors"][0]["reason"].as_str().is_some_and(|r| !r.is_empty()));
     }
-    assert_eq!(std::fs::read(root.join(CURRENT)).unwrap(), file, "the shown view changed");
+    assert_eq!(
+        std::fs::read(root.join(CURRENT)).unwrap(),
+        file,
+        "the shown view changed"
+    );
     assert_eq!(journal(&dir), before, "the journal changed");
 }
 
@@ -231,5 +246,8 @@ fn l4_canvas_is_opt_in() {
     c.request("tools/list", json!({}));
     let mine = registry_dir(&root).join(format!("{}.json", c.pid()));
     assert!(!mine.exists(), "a server without --canvas registered itself");
-    assert!(!registry_dir(&root).exists(), "the registry folder was made without --canvas");
+    assert!(
+        !registry_dir(&root).exists(),
+        "the registry folder was made without --canvas"
+    );
 }
