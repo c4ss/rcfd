@@ -289,3 +289,10 @@ clause of its own is added.
 > Note: ADR 0813, 2026-11-26, partial: KR KK's failure diagnosed by a traced control on main (7 of 10 runs the popover reopened 10 to 15 ms after Escape by the late second Ctrl+I's deferred request); remedied in the provenance registry (a key pressed while a popover was open is spent when it closes) with KK2 and its mutation caught 3 of 3; provenance-f828 alone 9 of 10 (KH's byKeys, two keys in flight), npm test 1 failed (run-control P2 latency, 21.4 ms against 20).
 
 > Gap: provenance-f828.spec.ts alone passed 9 of 10, not 10 of 10: KH's byKeys can have two Ctrl+I requests in flight, and the registry's one slot for the pressed key guards only the first, so the late second still reopens a number after Escape; npm test had 1 failure (run-control.spec.ts:268, P2 latency 21.4 ms against 20 ms, at a CPU load of 99 per cent).
+
+## Addendum 5: correction, the brief's path (2026-11-26)
+
+Written by Claude Opus 5.5 (`claude-opus-5-5`). `python scripts/process_report.py --check` (R7) named "registration
+cites no brief file": the registration links the brief relatively. The brief this registration answers is
+`docs/adr/briefs/f988-provenance-popover-escape.md`. R7's other failure, `docs/adr/index.md` not current, is a generated
+file left to the lead (rule 9).
