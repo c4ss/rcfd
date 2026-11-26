@@ -802,6 +802,35 @@ fn f885_fl_read_only() {
     assert!(a == b, "T2 missed");
 }
 
+/// T4 (ADR 0819 amendment 1): with the limiter set and QUICK (a gradient formed anew in every outer iteration, no factor
+/// formed), KC0 of ADR 0815 with the opt-in on against off; non-vacuous if `d_2 > 0` in each step.
+#[test]
+fn f885_fl_read_only_with_a_gradient() {
+    let settings = |frozen: bool| {
+        let mut s = cavity_settings(false, frozen);
+        s.convection = ConvScheme::Quick;
+        s.linear_upwind_limiter = Some(Limiter::BarthJespersen);
+        assert!(s.convection.needs_gradient());
+        s
+    };
+    let on = run_cavity(settings(true), CAV_STEPS, CAV_DT);
+    let off = run_cavity(settings(false), CAV_STEPS, CAV_DT);
+    let (a, b) = (bits(&on), bits(&off));
+    let d2: Vec<f64> = off.outer_velocity.iter().map(|r| r.change[1]).collect();
+    println!(
+        "F885-FL T4 KC0 with QUICK and the limiter set: u equal {}, p equal {}, flux equal {}, record equal {}; d_2 without the opt-in {d2:?}",
+        a.0 == b.0,
+        a.1 == b.1,
+        a.2 == b.2,
+        a.3 == b.3
+    );
+    assert!(
+        d2.len() == CAV_STEPS && d2.iter().all(|&d| d > 0.0),
+        "T4 does not decide: d_2 {d2:?}"
+    );
+    assert!(a == b, "T4 missed");
+}
+
 /// K (ADR 0819): KL of ADR 0816 with the opt-in contracts.
 #[test]
 fn f885_fl_cavity_control() {
