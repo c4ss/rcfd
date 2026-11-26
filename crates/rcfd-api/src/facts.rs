@@ -367,6 +367,10 @@ fn diag(message: String) -> Vec<Diagnostic> {
 /// What the time step of `case` depends on. The mesh is built as the run builds it and refused over `max_cells` cells
 /// (when given) before anything else is built; a transient case's simulation is then built for its fastest speed at the
 /// start. Only reads: no step is taken and nothing is written.
+///
+/// With a limit, a generator mesh whose cells [`crate::mesh_preview::estimate`] gives from its `mesh.n*` counts is
+/// refused by that estimate before it is built (ADR 0812, F-823): for the generators it names the estimate is the built
+/// count, so the refusal is the one the build would give. A mesh file and the other generators are built, then checked.
 pub fn case_facts(case: &Case, in_text: InText<'_>, max_cells: Option<u64>) -> Result<CaseFacts, FactsError> {
     let get = |p: &str| case.get(p).unwrap_or(Value::Null);
     let num = |p: &str| get(p).as_f64().unwrap_or(0.0);
@@ -380,6 +384,11 @@ pub fn case_facts(case: &Case, in_text: InText<'_>, max_cells: Option<u64>) -> R
     let diags = case.semantic_errors();
     if !diags.is_empty() {
         return Err(FactsError::Invalid(diags));
+    }
+    if let (Some(limit), Some(n)) = (max_cells, crate::mesh_preview::estimate(case)) {
+        if n > limit {
+            return Err(FactsError::TooLarge { cells: n, limit });
+        }
     }
     let mesh = crate::sim::build_mesh(case).map_err(FactsError::Invalid)?;
     let cells = mesh.n_cells() as u64;

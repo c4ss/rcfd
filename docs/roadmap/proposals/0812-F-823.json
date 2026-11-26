@@ -1,0 +1,10 @@
+{
+  "form": 1,
+  "adr": "0812",
+  "item": "F-823",
+  "base": "3b6cc7cc70b48e4bb564d6e5791041fde9ec3eb7",
+  "status": "partial",
+  "note": "ADR 0812, 2026-11-26, partial: case.facts refuses a generator mesh over its cell limit by the counts' estimate before it builds it, with the reply the build gave (1004 with the built count, equal by derivation and by two routes on 20 cases; 44 replies byte-identical before and after); the 2.25-million-cell cavity is refused in 0.6 ms instead of 28.7 s, and error-walk.spec.ts:177 passed in 2.7 s on Windows and 2.1 s in the Ubuntu 24.04 container; npm test on Windows missed one P2 time limit under load, and both runs skip ADR 0807's 4 recorded tests against a registered 0.",
+  "gap": "case.facts refuses an over-limit generator mesh by its counts (ADR 0812); error-walk.spec.ts:177 passes in 2 to 3 s. npm test here: Windows 880 passed, 1 failed (run-control.spec.ts:268, 23.6 ms against P2's 20 ms on a loaded host), 5 did not run; the container 886 passed; both skip ADR 0807's 4 recorded tests. Mesh files and generators without an estimate still build first. The first run on GitHub Actions is to be read.",
+  "follow_ups": []
+}

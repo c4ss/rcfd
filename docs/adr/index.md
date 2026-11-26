@@ -523,7 +523,7 @@ One row per record of this folder, grouped by the roadmap category of the item i
 | [0774](0774-f862-registration-the-description-of-start-run-store-argument.md) | F-862 registration: the description of start_run's store argument says what the default is | REGISTERED | 2026-11-22 | 1 | F-862 | done |
 | [0794](0794-f274-registration-journal-lines-of-design-runs-and-records.md) | F-274 registration: journal lines of design runs and of stored design records | REGISTERED | 2026-11-25 | 1 | F-274 | done |
 
-## Studio desktop app (28)
+## Studio desktop app (29)
 
 | ADR | Title | Status word | Date | Addenda | Item | Item status |
 |---|---|---|---|---|---|---|
@@ -554,6 +554,7 @@ One row per record of this folder, grouped by the roadmap category of the item i
 | [0807](0807-f979-registration-live-meshes-settings-and-monitors-on-the-canvas.md) | F-979 registration: meshes, settings and monitors shown live on Claude's canvas | REGISTERED | 2026-11-26 | 1 | F-979 | done |
 | [0808](0808-f981-registration-retire-the-g15-coverage-map-and-the-first-path.md) | F-981 registration: retire G15's coverage map and the learner's first path | REGISTERED | 2026-11-26 | 8 | F-981 | partial |
 | [0809](0809-f823-registration-error-walk-time-under-webgpu.md) | F-823 registration: where error-walk.spec.ts:177 spends its time under WebGPU in the Linux container | REGISTERED | 2026-11-26 | 1 | F-823 | partial |
+| [0812](0812-f823-registration-case-facts-refuses-by-the-counts-estimate.md) | F-823 registration, `case.facts` refuses an over-limit generator mesh by the counts' estimate before it builds it |  |  | 1 | F-823 | partial |
 | [0813](0813-f988-registration-a-ctrl-i-pressed-before-escape-reopens-the-popover.md) | F-988 registration, a Ctrl+I pressed just before Escape opens the provenance popover again |  |  | 7 | F-988 | done |
 
 ## Retired: the hand-navigated Studio (1)
