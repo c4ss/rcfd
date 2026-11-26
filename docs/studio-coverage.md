@@ -20,12 +20,12 @@ Engine read: rcfd 0.1.0, service protocol rcfd-service/1 version 1.1, MCP server
 | Kind | Capabilities | UI path | Exemption | Exemption whose item does not name it |
 |---|---|---|---|---|
 | Service methods | 69 | 20 | 49 | 40 |
-| MCP tools | 72 | 35 | 37 | 28 |
+| MCP tools | 74 | 37 | 37 | 28 |
 | CLI commands | 54 | 23 | 31 | 24 |
-| CLI options | 220 | 35 | 185 | 132 |
+| CLI options | 221 | 35 | 186 | 133 |
 | Case schema keys | 951 | 951 | 0 | 0 |
 | Monitor format keys | 6 | 6 | 0 | 0 |
-| **All** | **1372** | **1070** (78.0 %) | **302** | **224** |
+| **All** | **1375** | **1072** (78.0 %) | **303** | **225** |
 
 A case key stands for every value of its enumeration (the solver options of that key, listed in the inventory): the
 schema-driven surface of F-825 offers them all. A CLI option is mapped with its command. "Item does not name it" marks an
@@ -74,7 +74,7 @@ new item (see the last sections).
 | F-828 provenance inspector and reproduce-from-CLI | 5 | `rcfd data list` (not named), `rcfd data provenance` (not named), `rcfd data verify` (not named), `rcfd project hash`, `rcfd version` |
 | F-848 Runs on a remote site: a remote simulation service for the Studio, the CLI and the MCP server | 1 | `rcfd-runner site` (not named) |
 
-### CLI options (185 without a UI path)
+### CLI options (186 without a UI path)
 
 | Item | Count | Capabilities |
 |---|---|---|
@@ -84,7 +84,7 @@ new item (see the last sections).
 | F-811 residual and monitor plots | 2 | `rcfd post` (2) |
 | F-812 case editor validated by the engine's schema | 34 | `rcfd check` (6), `rcfd check-mesh` (1), `rcfd inflate` (12), `rcfd partition` (15) |
 | F-813 a learner's first path | 1 | `rcfd cases` (1) |
-| F-814 Claude Code, registered with Claude Code and followed live | 7 | `rcfd-mcp` (7) |
+| F-814 Claude Code, registered with Claude Code and followed live | 8 | `rcfd-mcp` (8) |
 | F-825 schema-driven case and settings surface | 2 | `rcfd schema` (2) |
 | F-827 one action layer for every UI action | 1 | `rcfd call` (1) |
 | F-828 provenance inspector and reproduce-from-CLI | 19 | `rcfd` (1), `rcfd data list` (3), `rcfd data provenance` (3), `rcfd data verify` (3), `rcfd run` (1), `rcfd version` (1), `rcfd-runner rerun` (5), `rcfd-runner start` (2) |
