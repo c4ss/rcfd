@@ -302,3 +302,58 @@ MU1 is not caught. GHW and GHU are the lead's. H4 (P2 on ubuntu) has no remedy h
 > Gap: The hosted runners: the Windows WebGPU tests now get a software adapter (--enable-unsafe-webgpu), not yet seen on GitHub, and a GPU-less local stand-in did not draw with it; run-control.spec.ts:268's P2 (20 ms) missed on ubuntu in 2 of 3 runs, no remedy; a11y.spec.ts:427 on Windows undiagnosed (no traces). The skip step and Follow live's race are corrected (ADR 0818). The lead's workflow_dispatch run decides.
 
 No follow-up item is proposed here; Q2 and Q3 name the ones this work would recommend.
+
+## Amendment 3 (2026-11-26): the lead's run on GitHub and the answers; the switch taken back, a corrected provenance scan, and workspace-first-open's premise checked
+
+Written after addendum 1 and before any change or run it covers; nothing above is changed.
+
+**The lead's run.** Run 45906133164 (workflow_dispatch, head 83e232c4), from the lead: ubuntu-24.04 studio-web passed
+(every test, the skip step with this ADR's list), so GHU is **met**; windows-latest studio-web failed, 17 failed and 806
+passed (19.2 min), the views not drawn with `--enable-unsafe-webgpu` as EMU predicted (a11y:326, cancel:207,
+canvas-f979-a1:160, compare:157, f836:85, field-derived:177, field:200, idle-frames:153, plots:177,
+provenance-escape-f988:63, provenance-f828:288 and :500, provenance:379, responsiveness:260, theme-surfaces:152,
+word-budget:164, workspace:116), so GHW is **missed** and R1 is refuted on the runner. The lead's answers (on the
+maintainer's standing instruction of 2026-11-26, go with the recommended option): Q1 the limits stay, a self-hosted
+runner becomes a roadmap item (the lead's); Q2 traces on failure are a later item; Q3 the switch is taken back for
+Windows and the scan gets a corrected test under rule 2.
+
+**Changes (all of them).**
+
+1. `.github/workflows/ci.yml`: the Windows branch of the Playwright step runs `npx playwright test` with no switch again
+   (as on main), its comment saying why (this amendment). `STUDIO_ALLOWED_SKIPS` gains `e2e/provenance-f828.spec.ts:288`
+   (the record below). A new variable `STUDIO_PREMISE_SKIPS: "e2e/workspace-first-open.spec.ts:59"`: the skip step
+   allows a skipped test listed there only when its skip annotation's description begins `premise not met:`, and prints
+   each such test on its own line `skipped, premise not met: <file>:<line> [<project>] <reason>`; any other skip of it
+   fails the step as before. So a missing build still fails it (the file's `NO_BENCH` and `NO_MCP` skips do not begin so).
+2. `apps/studio-web/tests/e2e/provenance-f828.spec.ts`: the old test at line 288 gets one first line
+   `test.skip(true, 'ADR 0818 amendment 3: ...')` and nothing else changes (the record of the defect: on a machine
+   without an adapter its scan counts the "2" of the renderer's fallback label as a number of a view). A corrected test
+   after it, the same line for line but that each scan's `bare` list drops the entries matching
+   `/^Drawn by WebGL 2 \(fallback: [^)]*\) < span\.fv-backend /`, exactly the label of `FieldViewport.tsx` line 751 as
+   the scan prints it, and nothing else. Its limits are the old test's.
+3. `apps/studio-web/tests/e2e/workspace-first-open.spec.ts`: its premise is a GPU process with a WebGPU adapter (the hold
+   of `gpu-hold.ts` needs one; ADR 0787). Checked at the test's start, after the Studio is launched and before anything
+   is measured: the window asks `navigator.gpu.requestAdapter()`; without an adapter the test is skipped with
+   `premise not met: no WebGPU adapter in this window's GPU process (a machine without a GPU); the GPU process cannot be
+   held (ADR 0818 amendment 3, ADR 0787)`, the Studio closed in its `finally`. With an adapter nothing changes. This is
+   chosen over a known miss because the test still holds its limit wherever its premise holds (ubuntu with SwiftShader,
+   the maintainer's machine), and the skip is reported by the named entry above, never silently.
+
+**Runs (each once, locally, CPU load recorded).** After `npm run build && npm run package:dir`:
+- A3a: `provenance-f828.spec.ts` and `workspace-first-open.spec.ts` with no switch: 0 failed; skipped only `:288` (the
+  record).
+- A3b: the same two with `RCFD_TEST_ELECTRON_ARGS=--disable-gpu` (the runner's state, PR1): 0 failed; skipped `:288`
+  and `workspace-first-open.spec.ts:59` with the premise reason; the skip step's script with the committed lists over
+  its report exits 0 and prints the premise line.
+- A3c: `npm run typecheck`, then `npm test` with no switch: exit 0, 0 failed, 0 did not run, skipped exactly the 6 of
+  `STUDIO_ALLOWED_SKIPS`; the step's script over its report exits 0.
+- A3d: `actionlint .github/workflows/ci.yml`: exit 0.
+
+**Mutations (each once).** MA1: A3b's report with `STUDIO_PREMISE_SKIPS` empty: the step's script exits 1 naming
+`workspace-first-open.spec.ts:59`. MA2: A3c's report with `e2e/canvas-f979.spec.ts:162` moved from
+`STUDIO_ALLOWED_SKIPS` to `STUDIO_PREMISE_SKIPS`: exits 1 (its reason is ADR 0807's, not a premise). MA3: the corrected
+provenance test with its filter removed, run once with `--disable-gpu` on a scratch copy: it fails on the label. The
+committed patch stays MU2's.
+
+**Decision rule** unchanged: done only if every row holds locally and in the lead's next run on GitHub and each mutation
+is caught; MU1 (not caught) and EMU (missed) stand, so this registration stays partial whatever these runs give.
