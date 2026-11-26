@@ -44,7 +44,7 @@ A simulation milestone is a named simulation with a stated result. Its per cent 
 
 | Milestone | Items | Done | Partly done | Not started | Per cent | Headline result |
 | --- | --- | --- | --- | --- | --- | --- |
-| Whole roadmap | 801 | 422 | 293 | 86 | 71% | not a milestone |
+| Whole roadmap | 824 | 428 | 293 | 103 | 70% | not a milestone |
 | Vortex shedding behind a cylinder | 20 | 17 | 3 | 0 | 92% | met |
 | Assistant-driven fan design | 92 | 54 | 27 | 11 | 73% | not met |
 | Aerofoil lift (NACA 0012) | 24 | 20 | 4 | 0 | 92% | not met |
