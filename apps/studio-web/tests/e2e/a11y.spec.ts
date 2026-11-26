@@ -416,6 +416,14 @@ test('case settings from the palette, a session from the engine’s defaults, an
 // ---- reduced motion ---------------------------------------------------------------------------------------------------
 
 test('reduced motion: no CSS animation or transition runs, Play steps at most twice a second, the camera moves at once', async () => {
+  // ADR 0808 Addendum 5 (S1): the step the retired first-path case gave this case, without its surface: the home, and
+  // the empty project opened from it
+  await page.keyboard.press('Control+1');
+  await expect(page.getByRole('heading', { level: 1, name: /Quick start/ })).toBeVisible({ timeout: 20_000 });
+  await stubDialog(studio.app, empty);
+  await tabTo(page.getByRole('button', { name: 'Open project…' }));
+  await page.keyboard.press('Enter');
+  await expect(page.getByRole('heading', { level: 1, name: 'An empty project' })).toBeVisible({ timeout: 30_000 });
   // reopen the quick start so the run bands are drawn again
   await stubDialog(studio.app, quick);
   await page.keyboard.press('Control+O');
