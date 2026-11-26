@@ -1,4 +1,4 @@
-# expect-fail: cd apps/studio-web && npx playwright test tests/e2e/a11y.spec.ts --project=electron
+# expect-fail: cd apps/studio-web && npm run build && npm run package:dir && npx playwright test tests/e2e/a11y.spec.ts --project=electron
 diff --git a/apps/studio-web/src/renderer/workspace/RunWorkspace.tsx b/apps/studio-web/src/renderer/workspace/RunWorkspace.tsx
 index 66538d2d..e7d03bd3 100644
 --- a/apps/studio-web/src/renderer/workspace/RunWorkspace.tsx
