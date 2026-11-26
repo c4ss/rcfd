@@ -47,7 +47,18 @@ const OMEGA_TEST: f64 = 1.0;
 /// One recorded outcome: the run, its class, its `C`.
 type Entry = (&'static str, &'static str, f64);
 /// G2: the fan controls' outcomes of the registered run, and the result (written after the run).
-const FAN_RECORD: Option<(&[Entry], &str)> = None;
+const FAN_RECORD: Option<(&[Entry], &str)> = Some((
+    &[
+        ("G0", "STALLS", 0.02580994273283583),
+        ("GT", "STALLS", 0.026023832604940185),
+        ("GS", "STALLS", 0.03307324754628127),
+        ("GL", "STALLS", 0.017267008366235827),
+        ("GP", "STALLS", 0.025809942568396187),
+        ("GR", "STALLS", 0.025778076441339885),
+        ("GA", "STALLS", 0.016801791555276994),
+    ],
+    "all ruled out",
+));
 
 fn omega() -> f64 {
     RPM * 2.0 * PI / 60.0

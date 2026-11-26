@@ -1,0 +1,26 @@
+    Finished `release` profile [optimized] target(s) in 1.14s
+     Running tests\f885_outer_stall.rs (E:/projects/cfd/w49i-work/f885-fan-outer-stall-scratch/target\release\deps\f885_outer_stall-6607ca39bb909ba2.exe)
+
+running 4 tests
+test f885_os_cavity_contracts ... F885-OS KC0 step 1: d [3.4197e-2, 7.2227e-3, 1.5538e-3, 3.4198e-4, 7.8739e-5, 1.9678e-5, 7.6097e-6, 3.6341e-6, 1.7545e-6, 8.5538e-7, 4.1330e-7, 1.9899e-7, 9.5696e-8, 4.6011e-8, 2.2126e-8, 1.0644e-8, 5.1227e-9, 2.4664e-9, 1.1880e-9, 6.1532e-10]
+F885-OS KC0 step 2: d [3.2251e-2, 6.7469e-3, 1.4035e-3, 2.9253e-4, 6.1084e-5, 1.2798e-5, 2.7013e-6, 5.7960e-7, 1.2891e-7, 3.0856e-8, 1.1564e-8, 6.0052e-9, 3.0297e-9, 1.5043e-9, 7.4171e-10, 3.6468e-10, 1.7909e-10, 8.7953e-11, 4.3181e-11, 2.2658e-11]
+F885-OS KC0 step 3: d [2.9671e-2, 6.2482e-3, 1.3061e-3, 2.7369e-4, 5.7538e-5, 1.2177e-5, 2.6146e-6, 5.7923e-7, 1.3669e-7, 3.6083e-8, 1.6344e-8, 8.3278e-9, 4.1439e-9, 2.0398e-9, 9.9960e-10, 4.8903e-10, 2.3912e-10, 1.1690e-10, 5.7168e-11, 2.9901e-11]
+F885-OS KC0: C 9.149452e-9 CONVERGES
+F885-OS KCh step 1: d [3.4197e-2, 7.8289e-3, 1.7782e-3, 4.0090e-4, 9.1067e-5, 2.2170e-5, 7.9282e-6, 4.1507e-6, 2.0942e-6, 1.0285e-6, 4.9905e-7, 2.4088e-7, 1.1603e-7, 5.5851e-8, 2.6884e-8, 1.2944e-8, 6.2348e-9, 3.0043e-9, 1.4483e-9, 7.5424e-10]
+F885-OS KCh step 2: d [3.2842e-2, 7.2203e-3, 1.5599e-3, 3.3320e-4, 7.0057e-5, 1.4396e-5, 2.8937e-6, 6.5983e-7, 2.4515e-7, 1.2086e-7, 6.2055e-8, 3.1226e-8, 1.5505e-8, 7.6506e-9, 3.7644e-9, 1.8501e-9, 9.0883e-10, 4.4641e-10, 2.1923e-10, 1.1648e-10]
+F885-OS KCh step 3: d [3.0636e-2, 6.7427e-3, 1.4550e-3, 3.1035e-4, 6.5104e-5, 1.3336e-5, 2.6973e-6, 6.5274e-7, 2.6732e-7, 1.3685e-7, 6.9798e-8, 3.4893e-8, 1.7247e-8, 8.4803e-9, 4.1601e-9, 2.0388e-9, 9.9888e-10, 4.8936e-10, 2.3972e-10, 1.2738e-10]
+F885-OS KCh: C 3.555235e-8 CONVERGES
+F885-OS KCf step 1: d [3.4197e-2, 7.2227e-3, 1.5538e-3, 3.4198e-4, 7.8739e-5, 1.9678e-5, 7.6097e-6, 3.6341e-6, 1.7545e-6, 8.5538e-7, 4.1330e-7, 1.9899e-7, 9.5696e-8, 4.6011e-8, 2.2126e-8, 1.0644e-8, 5.1227e-9, 2.4664e-9, 1.1880e-9, 6.1532e-10]
+F885-OS KCf step 2: d [3.2724e-2, 6.8466e-3, 1.4242e-3, 2.9662e-4, 6.1806e-5, 1.2892e-5, 2.7079e-6, 5.9110e-7, 1.5156e-7, 5.3758e-8, 2.4157e-8, 1.1653e-8, 5.7017e-9, 2.7971e-9, 1.3729e-9, 6.7402e-10, 3.3090e-10, 1.6248e-10, 7.9777e-11, 4.2367e-11]
+F885-OS KCf step 3: d [3.0642e-2, 6.4559e-3, 1.3495e-3, 2.8251e-4, 5.9207e-5, 1.2448e-5, 2.6531e-6, 5.9967e-7, 1.6454e-7, 6.1568e-8, 2.7896e-8, 1.3396e-8, 6.5235e-9, 3.1885e-9, 1.5603e-9, 7.6398e-10, 3.7412e-10, 1.8323e-10, 8.9790e-11, 4.7690e-11]
+F885-OS KCf: C 1.390810e-8 CONVERGES
+ok
+test f885_os_freeze_two_routes ... F885-OS T1 source: u equal true, p equal true, flux equal true; T2: largest flux difference to no freeze 1.965e-5
+F885-OS T1 viscosity: u equal true, p equal true, flux equal true; T2: largest flux difference to no freeze 3.504e-5
+ok
+test f885_os_freeze_without_hook ... F885-OS T3: u equal true, p equal true, flux equal true, record equal true
+ok
+test f885_os_rules_on_built_records ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 2 filtered out; finished in 0.14s
+
