@@ -203,3 +203,33 @@ among the owned files. The WebGPU drawing on Linux is a software device: it show
 ## Open questions for the maintainer
 
 None at registration. Any question of scope the runs raise is listed in the addendum, not decided here.
+
+## Amendment 1 (2026-11-26): the controls' results, and the WebGPU adapter is SwiftShader, not lavapipe
+
+Written and committed after the controls D1 to D4 and before any code and any registered run. Nothing above is changed.
+The controls were made once, in the container on a `git archive` copy of d5ec1145 with the overlay of the scratch folder
+(`diag/`, `diag-out/`, the log `diag-out.log`):
+
+| Id | Result | Hypothesis |
+|---|---|---|
+| D1 | before: `test -e /usr/bin/x-terminal-emulator` exit 1; `apt-get install -y --no-install-recommends xterm` exit 0; after: exit 0, `readlink -f` gives `/usr/bin/lxterm` (a program of the xterm package) | H1 holds |
+| D2 | `before`, at once, after two frames and after 1 s: all `button:Open project folder…`; the test passed (2.9 s) | not reproduced; not contradicted (the stop condition, `body` after 1 s, did not occur) |
+| D3 | at the look of line 216: `alive` true, state `D`, parent 1 (`docker-init`); 500 ms later and to 10 s: gone | H3b (a process still ending, reaped by init), not H3a (no zombie) |
+| D4 | G1: adapter, vendor `google`, architecture `swiftshader`, `isFallbackAdapter` true, `webgl` and `webgpu` `enabled`, screenshot made (345 ms); G2: the same (198 ms); G3: the same adapter, `webgpu` `unavailable_software` (105 ms) | H4 holds for G1 |
+
+1. **The switch set.** By the registered rule D4 selects **G1**: `--ignore-gpu-blocklist --enable-unsafe-webgpu`.
+2. **The adapter is not the image's package.** Under G1 the adapter is SwiftShader (vendor `google`, architecture
+   `swiftshader`, a fallback adapter), which Electron ships with itself; the registration expected G1 and G2 to use Mesa's
+   lavapipe. So: C1 does **not** install `mesa-vulkan-drivers` (the adapter does not come from it); C1 installs `xterm`
+   only, beside what it installed before. And the registered mutation MW for G1 (`dpkg --purge --force-depends
+   mesa-vulkan-drivers`) removes a package the adapter does not use: it is made as registered and recorded, and a corrected
+   mutation **MW2** is added: `--enable-unsafe-webgpu` left out of `RCFD_TEST_ELECTRON_ARGS` (the switch that gives the
+   SwiftShader adapter; with only `--ignore-gpu-blocklist` ADR 0802's run L had no adapter), then
+   `tests/e2e/workspace-first-open.spec.ts`; caught when `workspace-first-open.spec.ts:59` fails with "no WebGPU adapter".
+   The decision rule's "each mutation is caught" names MW2 in place of MW; MW's result is recorded either way.
+3. **C7 and C8 stay as registered** (C8 is the change D3 shows is needed; C7 is kept as registered, since a zombie has
+   also ended). **C6 stays as registered** (D2 did not reproduce the race the log shows; the change removes it whether or
+   not a given run meets it).
+4. **Consequence for the whole Linux suite, stated before the runs:** with G1 every WebGPU user on Linux, three.js's
+   `WebGPURenderer` among them, gets the SwiftShader adapter instead of the WebGL 2 fallback, so the field views and plots
+   draw by WebGPU on a software device in L and R7l. Any failure that follows is recorded as a miss.
