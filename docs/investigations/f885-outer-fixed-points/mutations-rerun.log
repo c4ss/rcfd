@@ -1,0 +1,18 @@
+K0: f885_fp_cell_two_routes pass; f885_fp_rules_on_built_records pass; f885_fp_cavity_controls pass; f885_fp_fan_from_the_committed_record pass => not caught
+M4 PRESENT from J >= 4 to J >= 40: f885_fp_cell_two_routes pass; f885_fp_rules_on_built_records FAIL; f885_fp_cavity_controls FAIL; f885_fp_fan_from_the_committed_record FAIL => caught by f885_fp_rules_on_built_records, f885_fp_cavity_controls, f885_fp_fan_from_the_committed_record
+    f885_fp_rules_on_built_records: thread 'f885_fp_rules_on_built_records' (50516) panicked at crates\rcfd-api\tests\f885_outer_fixed_points.rs:500:5:
+    f885_fp_rules_on_built_records: error: test failed, to rerun pass `-p rcfd-api --test f885_outer_fixed_points`
+    f885_fp_cavity_controls: thread 'f885_fp_cavity_controls' (21408) panicked at crates\rcfd-api\tests\f885_outer_fixed_points.rs:282:9:
+    f885_fp_cavity_controls: error: test failed, to rerun pass `-p rcfd-api --test f885_outer_fixed_points`
+    f885_fp_fan_from_the_committed_record: thread 'f885_fp_fan_from_the_committed_record' (56800) panicked at crates\rcfd-api\tests\f885_outer_fixed_points.rs:282:9:
+    f885_fp_fan_from_the_committed_record: error: test failed, to rerun pass `-p rcfd-api --test f885_outer_fixed_points`
+M5 J reads d_(N-1) / d_(N-2): f885_fp_cell_two_routes pass; f885_fp_rules_on_built_records FAIL; f885_fp_cavity_controls FAIL; f885_fp_fan_from_the_committed_record FAIL => caught by f885_fp_rules_on_built_records, f885_fp_cavity_controls, f885_fp_fan_from_the_committed_record
+    f885_fp_rules_on_built_records: thread 'f885_fp_rules_on_built_records' (42284) panicked at crates\rcfd-api\tests\f885_outer_fixed_points.rs:500:5:
+    f885_fp_rules_on_built_records: error: test failed, to rerun pass `-p rcfd-api --test f885_outer_fixed_points`
+    f885_fp_cavity_controls: thread 'f885_fp_cavity_controls' (65052) panicked at crates\rcfd-api\tests\f885_outer_fixed_points.rs:282:9:
+    f885_fp_cavity_controls: error: test failed, to rerun pass `-p rcfd-api --test f885_outer_fixed_points`
+    f885_fp_fan_from_the_committed_record: thread 'f885_fp_fan_from_the_committed_record' (7032) panicked at crates\rcfd-api\tests\f885_outer_fixed_points.rs:282:9:
+    f885_fp_fan_from_the_committed_record: error: test failed, to rerun pass `-p rcfd-api --test f885_outer_fixed_points`
+M6 fan_controls.csv cut to its first half: f885_fp_cell_two_routes pass; f885_fp_rules_on_built_records pass; f885_fp_cavity_controls pass; f885_fp_fan_from_the_committed_record FAIL => caught by f885_fp_fan_from_the_committed_record
+    f885_fp_fan_from_the_committed_record: thread 'f885_fp_fan_from_the_committed_record' (44768) panicked at crates\rcfd-api\tests\f885_outer_fixed_points.rs:971:5:
+    f885_fp_fan_from_the_committed_record: error: test failed, to rerun pass `-p rcfd-api --test f885_outer_fixed_points`

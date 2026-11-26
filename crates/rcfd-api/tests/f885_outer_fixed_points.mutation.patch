@@ -1,0 +1,35 @@
+# expect-fail: cargo test -p rcfd-api --release --test f885_outer_fixed_points f885_fp_cell_two_routes
+diff --git a/crates/rcfd-fv/src/pimple.rs b/crates/rcfd-fv/src/pimple.rs
+index 73d0004b..b1385349 100644
+--- a/crates/rcfd-fv/src/pimple.rs
++++ b/crates/rcfd-fv/src/pimple.rs
+@@ -268,18 +268,17 @@ pub struct OuterVelocity {
+ 
+ /// The largest Euclidean norm over the cells of `b - a` and its first cell (F-885, ADR 0767; the cell ADR 0810).
+ fn max_velocity_change(a: &[Vec3], b: &[Vec3]) -> (f64, usize) {
+-    a.iter()
+-        .zip(b)
+-        .enumerate()
+-        .fold((0.0f64, 0usize), |(m, at), (c, (x, y))| {
+-            let (dx, dy, dz) = (y[0] - x[0], y[1] - x[1], y[2] - x[2]);
+-            let v = (dx * dx + dy * dy + dz * dz).sqrt();
+-            if v > m {
+-                (v, c)
+-            } else {
+-                (m, at)
+-            }
+-        })
++    // mutation M1 (ADR 0810): the cell of the smallest change, with the value of the largest
++    let (m, _, at) = a.iter().zip(b).enumerate().fold((0.0f64, f64::INFINITY, 0usize), |(m, lo, at), (c, (x, y))| {
++        let (dx, dy, dz) = (y[0] - x[0], y[1] - x[1], y[2] - x[2]);
++        let v = (dx * dx + dy * dy + dz * dz).sqrt();
++        if v < lo {
++            (m.max(v), v, c)
++        } else {
++            (m.max(v), lo, at)
++        }
++    });
++    (m, at)
+ }
+ 
+ /// Every flag of the consistent (SIMPLEC-type) pressure correctors in one value (ADR 0258 V1). `enabled` asks for the correctors

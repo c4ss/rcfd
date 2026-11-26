@@ -1,0 +1,20 @@
+K0: f885_fp_cell_two_routes pass; f885_fp_rules_on_built_records pass; f885_fp_cavity_controls pass => not caught
+M1 the cell of the smallest change: f885_fp_cell_two_routes FAIL; f885_fp_rules_on_built_records pass; f885_fp_cavity_controls pass => caught by f885_fp_cell_two_routes
+    f885_fp_cell_two_routes: thread 'f885_fp_cell_two_routes' (51960) panicked at crates\rcfd-api\tests\f885_outer_fixed_points.rs:327:13:
+    f885_fp_cell_two_routes: error: test failed, to rerun pass `-p rcfd-api --test f885_outer_fixed_points`
+M2 the cell index plus one: f885_fp_cell_two_routes FAIL; f885_fp_rules_on_built_records pass; f885_fp_cavity_controls pass => caught by f885_fp_cell_two_routes
+    f885_fp_cell_two_routes: thread 'f885_fp_cell_two_routes' (31768) panicked at crates\rcfd-api\tests\f885_outer_fixed_points.rs:327:13:
+    f885_fp_cell_two_routes: error: test failed, to rerun pass `-p rcfd-api --test f885_outer_fixed_points`
+M3 the cell pass flips the last bit of one velocity: f885_fp_cell_two_routes FAIL; f885_fp_rules_on_built_records pass; f885_fp_cavity_controls pass => caught by f885_fp_cell_two_routes
+    f885_fp_cell_two_routes: thread 'f885_fp_cell_two_routes' (2228) panicked at crates\rcfd-api\tests\f885_outer_fixed_points.rs:339:5:
+    f885_fp_cell_two_routes: error: test failed, to rerun pass `-p rcfd-api --test f885_outer_fixed_points`
+M4 PRESENT from J >= 4 to J >= 40: f885_fp_cell_two_routes FAIL; f885_fp_rules_on_built_records FAIL; f885_fp_cavity_controls pass => caught by f885_fp_cell_two_routes, f885_fp_rules_on_built_records
+    f885_fp_cell_two_routes: thread 'f885_fp_cell_two_routes' (65024) panicked at crates\rcfd-api\tests\f885_outer_fixed_points.rs:339:5:
+    f885_fp_cell_two_routes: error: test failed, to rerun pass `-p rcfd-api --test f885_outer_fixed_points`
+    f885_fp_rules_on_built_records: thread 'f885_fp_rules_on_built_records' (60880) panicked at crates\rcfd-api\tests\f885_outer_fixed_points.rs:468:5:
+    f885_fp_rules_on_built_records: error: test failed, to rerun pass `-p rcfd-api --test f885_outer_fixed_points`
+M5 J reads d_(N-1) / d_(N-2): f885_fp_cell_two_routes FAIL; f885_fp_rules_on_built_records FAIL; f885_fp_cavity_controls pass => caught by f885_fp_cell_two_routes, f885_fp_rules_on_built_records
+    f885_fp_cell_two_routes: thread 'f885_fp_cell_two_routes' (47028) panicked at crates\rcfd-api\tests\f885_outer_fixed_points.rs:339:5:
+    f885_fp_cell_two_routes: error: test failed, to rerun pass `-p rcfd-api --test f885_outer_fixed_points`
+    f885_fp_rules_on_built_records: thread 'f885_fp_rules_on_built_records' (6820) panicked at crates\rcfd-api\tests\f885_outer_fixed_points.rs:468:5:
+    f885_fp_rules_on_built_records: error: test failed, to rerun pass `-p rcfd-api --test f885_outer_fixed_points`

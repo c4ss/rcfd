@@ -261,14 +261,25 @@ pub struct OuterVelocity {
     pub step: usize,
     /// `d_k = max_c |u_k(c) - u_(k-1)(c)|` for the outer iterations `k = 1 ..` the step ran, in that order.
     pub change: Vec<f64>,
+    /// The cell of `d_k` for each outer iteration, in the same order (ADR 0810): the first cell of the largest change, cell 0
+    /// when every change is zero.
+    pub cell: Vec<usize>,
 }
 
-/// The largest Euclidean norm over the cells of `b - a` (F-885, ADR 0767).
-fn max_velocity_change(a: &[Vec3], b: &[Vec3]) -> f64 {
-    a.iter().zip(b).fold(0.0f64, |m, (x, y)| {
-        let (dx, dy, dz) = (y[0] - x[0], y[1] - x[1], y[2] - x[2]);
-        m.max((dx * dx + dy * dy + dz * dz).sqrt())
-    })
+/// The largest Euclidean norm over the cells of `b - a` and its first cell (F-885, ADR 0767; the cell ADR 0810).
+fn max_velocity_change(a: &[Vec3], b: &[Vec3]) -> (f64, usize) {
+    a.iter()
+        .zip(b)
+        .enumerate()
+        .fold((0.0f64, 0usize), |(m, at), (c, (x, y))| {
+            let (dx, dy, dz) = (y[0] - x[0], y[1] - x[1], y[2] - x[2]);
+            let v = (dx * dx + dy * dy + dz * dz).sqrt();
+            if v > m {
+                (v, c)
+            } else {
+                (m, at)
+            }
+        })
 }
 
 /// Every flag of the consistent (SIMPLEC-type) pressure correctors in one value (ADR 0258 V1). `enabled` asks for the correctors
@@ -1813,6 +1824,7 @@ impl PimpleSolver {
         let mut outer_scale = 0.0f64;
         // F-885 (ADR 0767): the velocity change of each outer iteration (only with `outer_velocity_record`)
         let mut outer_dv: Vec<f64> = Vec::new();
+        let mut outer_cell: Vec<usize> = Vec::new();
         for outer in 0..s.n_outer {
             let last = outer + 1 == s.n_outer || final_next;
             let (alpha_u, alpha_p) = if last { (1.0, 1.0) } else { (s.alpha_u, s.alpha_p) };
@@ -2519,8 +2531,10 @@ impl PimpleSolver {
             }
             outer_used = outer + 1;
             if let Some(u0) = &u_outer_start {
-                // ADR 0767: d_k = max_c |u_k - u_(k-1)|
-                outer_dv.push(max_velocity_change(u0, &self.u.values));
+                // ADR 0767: d_k = max_c |u_k - u_(k-1)|; ADR 0810: its cell
+                let (d, cell) = max_velocity_change(u0, &self.u.values);
+                outer_dv.push(d);
+                outer_cell.push(cell);
             }
             if last {
                 break;
@@ -2627,6 +2641,7 @@ impl PimpleSolver {
             self.outer_velocity.push(OuterVelocity {
                 step: self.step_no,
                 change: outer_dv,
+                cell: outer_cell,
             });
         }
         let cont = divergence(&g, &self.phi).iter().fold(0.0f64, |a, &b| a.max(b.abs()));

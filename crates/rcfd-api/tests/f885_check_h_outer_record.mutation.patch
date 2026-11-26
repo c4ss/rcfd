@@ -3,10 +3,11 @@ diff --git a/crates/rcfd-fv/src/pimple.rs b/crates/rcfd-fv/src/pimple.rs
 index a7c43c7c..6ad13c7d 100644
 --- a/crates/rcfd-fv/src/pimple.rs
 +++ b/crates/rcfd-fv/src/pimple.rs
-@@ -1813,11 +1813,12 @@ impl PimpleSolver {
+@@ -1824,12 +1824,13 @@ impl PimpleSolver {
          let mut outer_scale = 0.0f64;
          // F-885 (ADR 0767): the velocity change of each outer iteration (only with `outer_velocity_record`)
          let mut outer_dv: Vec<f64> = Vec::new();
+         let mut outer_cell: Vec<usize> = Vec::new();
 +        let u_step_start = s.outer_velocity_record.then(|| self.u.values.clone());
          for outer in 0..s.n_outer {
              let last = outer + 1 == s.n_outer || final_next;
