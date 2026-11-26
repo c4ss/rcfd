@@ -82,4 +82,17 @@ test('KK2: Ctrl+I then Escape at once, on a Runs grid cell and on its row: the p
     expect(await page.locator('.pv-pop').count(), `${first}: a popover open after Escape`).toBe(0);
     expect(await host.evaluate((e) => e === document.activeElement), `${first}: the focus back on its host`).toBe(true);
   }
+  // (c) F-988, ADR 0813 amendment 4: two Ctrl+I requests in flight (byKeys of provenance-f828.spec.ts), then Escape
+  await page.mouse.move(2, 890);
+  await row.focus();
+  await expect(row).toBeFocused();
+  await page.keyboard.press('Control+i');
+  expect(await openName(page)).toBe('iterations');
+  await page.keyboard.press('Control+i');
+  await page.keyboard.press('Control+i');
+  await page.keyboard.press('Escape');
+  await settle(page);
+  // read once: a popover a late key opened again would be here now
+  expect(await page.locator('.pv-pop').count(), 'two keys in flight: a popover open after Escape').toBe(0);
+  expect(await row.evaluate((e) => e === document.activeElement), 'two keys in flight: the focus back on the row').toBe(true);
 });

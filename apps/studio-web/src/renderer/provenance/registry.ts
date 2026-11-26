@@ -37,11 +37,14 @@ const runOpeners = new Map<string, () => void>();
 let opened: { entry: TriggerEntry; close: () => void } | null = null;
 let group: readonly TriggerEntry[] = [];
 /**
- * F-988, ADR 0813: the popover open when Show provenance's key was last pressed. The key's request runs a few frames
- * later (the palette's afterFocusReturns); if that popover has closed in between (Escape), the key was about it, and is
- * spent.
+ * F-988, ADR 0813: one record per Show provenance key pressed, the oldest first: the popover open at the press, and its
+ * time. A key's request runs a few frames later (the palette's afterFocusReturns), and two can be in flight; if the
+ * popover a key was pressed on has closed before its request runs (Escape), the key was about it, and is spent
+ * (amendment 4, V2).
  */
-let pressedOn: { readonly at: { entry: TriggerEntry; close: () => void } | null } | null = null;
+let pressedOn: { readonly at: { entry: TriggerEntry; close: () => void } | null; readonly t: number }[] = [];
+/** A record older than this has lost its request (the deferral is two frames and a task). */
+const PRESS_LIFE_MS = 2000;
 
 export function addTrigger(t: TriggerEntry): () => void {
   listen();
@@ -83,7 +86,7 @@ function listen(): void {
   }, true);
   // on the window in the capture phase, as PaletteHost's: its stopPropagation would hide the key from the document
   window.addEventListener('keydown', (e) => {
-    if (!e.repeat && !e.isComposing && globalCommandFor(e) === 'provenance.show') pressedOn = { at: opened };
+    if (!e.repeat && !e.isComposing && globalCommandFor(e) === 'provenance.show') pressedOn.push({ at: opened, t: performance.now() });
   }, true);
   document.addEventListener('focusin', (e) => {
     if (e.target instanceof HTMLElement && !e.target.closest(`${PALETTE}, ${POPOVER}`)) lastFocus = e.target;
@@ -187,9 +190,10 @@ export function showUnavailable(): string | null {
 
 export function showNow(): boolean {
   // F-988, ADR 0813: a key pressed while a popover was open, that popover closed since: nothing opens
-  const pressed = pressedOn;
-  pressedOn = null;
-  if (pressed !== null && pressed.at !== null && pressed.at !== opened) return true;
+  const now = performance.now();
+  pressedOn = pressedOn.filter((r) => now - r.t <= PRESS_LIFE_MS);
+  const pressed = pressedOn.shift();
+  if (pressed !== undefined && pressed.at !== null && pressed.at !== opened) return true;
   if (opened) {
     // ADR 0795: the next number of the same element; the only one stays open
     const at = opened.entry;
