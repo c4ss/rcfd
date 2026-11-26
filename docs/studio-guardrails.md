@@ -143,6 +143,8 @@ Studio; no doc may tell a user to run them. (Before 2026-11-16 this rule froze t
 
 ## G15. Everything the engine can do, the Studio can do
 
+Retired 2026-11-26 by the maintainer's direction of that day ([ADR 0803](adr/0803-the-studio-as-claudes-canvas-record.md)): the Studio is Claude's canvas (G23), not a screen navigated by hand. The text below is kept as it was.
+
 Every capability of the simulation libraries is reachable from the UI: each case-schema key, service method, MCP
 tool, CLI command, post-processing output and solver option. This is how the Studio's UX is built, not a later pass.
 
@@ -177,6 +179,8 @@ it shows the conflict and lets the user choose.
 
 ## G19. Explain in place
 
+Retired 2026-11-26 by the maintainer's direction of that day ([ADR 0803](adr/0803-the-studio-as-claudes-canvas-record.md)): the Studio is Claude's canvas (G23), not a screen navigated by hand. The text below is kept as it was.
+
 Every control, term and value has help on the spot, taken from the engine's own documentation, case schema and
 glossary, not written separately for the Studio. Every error names the problem and the way to recover. A learner never
 has to leave the app to understand a word on the screen.
@@ -205,6 +209,10 @@ its normal state; a feature that needs a sentence to be understood at rest is re
 a budget of visible chrome words at rest (labels, notes, hints and empty-state text; not data, disclaimers or
 exceptions), set from its screenshots once the surface is quieted and approved by the maintainer; a test counts them
 from the DOM and fails past the budget, and raising a budget needs the maintainer's word.
+
+## G23. Claude drives the canvas
+
+Added 2026-11-26 ([ADR 0803](adr/0803-the-studio-as-claudes-canvas-record.md)). The open Studio shows what a client asks for through the view tools: a view is a versioned JSON specification (what to show, of which case or run, how it is laid out), validated by the engine and rendered by the Studio's existing views in its theme. A view never computes a result the engine did not give (G16). The Studio keeps a short way for a person to look (pan, zoom, scrub, pick, open the provenance) but no path whose only purpose is to reach a capability by hand. The same specification can be exported as a self-contained styled HTML page.
 
 ## Open (for the maintainer)
 

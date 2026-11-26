@@ -521,14 +521,13 @@ One row per record of this folder, grouped by the roadmap category of the item i
 | [0774](0774-f862-registration-the-description-of-start-run-store-argument.md) | F-862 registration: the description of start_run's store argument says what the default is | REGISTERED | 2026-11-22 | 1 | F-862 | done |
 | [0794](0794-f274-registration-journal-lines-of-design-runs-and-records.md) | F-274 registration: journal lines of design runs and of stored design records | REGISTERED | 2026-11-25 | 1 | F-274 | done |
 
-## Studio desktop app (22)
+## Studio desktop app (21)
 
 | ADR | Title | Status word | Date | Addenda | Item | Item status |
 |---|---|---|---|---|---|---|
 | [0353](0353-f456-registration-monitors-get-builds-only-what-is-asked.md) | F-456 registration: `monitors.get` builds only what is asked for | REGISTERED | 2026-11-12 | 1 | F-456 | done |
 | [0377](0377-f475-registration-studio-preview-of-an-adaptive-case.md) | F-475 registration: the Studio preview of a case with [mesh.adapt] shows the adapted mesh | REGISTERED | 2026-11-12 | 1 | F-475 | done |
 | [0730](0730-f826-f830-proposal-ui-metadata-in-the-case-schema-and-help-from-the-engine.md) | F-826 and F-830 proposal: UI metadata in the case schema, and help and an error catalogue from the engine | ACCEPTED | 2026-11-17 | 0 | F-826 | done |
-| [0730](0730-f826-f830-proposal-ui-metadata-in-the-case-schema-and-help-from-the-engine.md) | F-826 and F-830 proposal: UI metadata in the case schema, and help and an error catalogue from the engine | ACCEPTED | 2026-11-17 | 0 | F-830 | partial |
 | [0731](0731-f835-proposal-an-engine-command-that-creates-a-project.md) | F-835 proposal: an engine command that creates a project (`rcfd project init` and MCP `create_project`) | ACCEPTED | 2026-11-17 | 0 | F-835 | done |
 | [0732](0732-f836-proposal-a-mesh-preview-the-studio-can-draw-before-a-run.md) | F-836 proposal: a mesh preview the Studio can draw before a run (`mesh.preview`) | ACCEPTED | 2026-11-17 | 0 | F-836 | done |
 | [0733](0733-f837-proposal-set-runner-config-the-runner-writes-its-own-budgets.md) | F-837 proposal: `set_runner_config`, the runner writes its own budgets file | ACCEPTED | 2026-11-17 | 0 | F-837 | done |
@@ -547,6 +546,12 @@ One row per record of this folder, grouped by the roadmap category of the item i
 | [0789](0789-f892-registration-serve-left-behind.md) | F-892 registration: the path that leaves an rcfd serve process running after npm test on Windows (the hypotheses, the recorded runs that tell them apart, the fix in the Studio's quit and in the harness, the whole runs after it, and the mutation) | REGISTERED | 2026-11-23 | 1 | F-892 | done |
 | [0790](0790-f893-registration-run-control-pause-and-orphan.md) | F-893 registration: run-control.spec.ts:320, which misses the pause request in some whole runs, and the rcfd run solver a run-control test leaves running (the hypotheses of each cause, the recorded runs that tell them apart, the fix, the consecutive runs, the whole runs and the mutation) | REGISTERED | 2026-11-24 | 1 | F-893 | done |
 | [0795](0795-f828-registration-the-numbers-that-still-have-no-provenance.md) | F-828 registration: the Studio's numbers that still have no provenance | REGISTERED | 2026-11-25 | 1 | F-828 | partial |
+
+## Retired: the hand-navigated Studio (1)
+
+| ADR | Title | Status word | Date | Addenda | Item | Item status |
+|---|---|---|---|---|---|---|
+| [0730](0730-f826-f830-proposal-ui-metadata-in-the-case-schema-and-help-from-the-engine.md) | F-826 and F-830 proposal: UI metadata in the case schema, and help and an error catalogue from the engine | ACCEPTED | 2026-11-17 | 0 | F-830 | partial |
 
 ## Quality, docs and validation (56)
 
@@ -609,7 +614,7 @@ One row per record of this folder, grouped by the roadmap category of the item i
 | [0782](0782-f856-registration-udf-interpreter-wasmi-1x.md) | F-856 registration: the UDF interpreter from wasmi 0.31 to wasmi 1.1.0 (the minimum Rust read first, the port of `udf.rs`, and the checks of the fuel limit, the memory limit and the refusal of imports) | REGISTERED | 2026-11-23 | 1 | F-856 | done |
 | [0796](0796-f886-registration-three-formulas-read-against-their-open-sources.md) | F-886 registration: three formulas recorded from memory, read against their open sources | REGISTERED | 2026-11-25 | 2 | F-886 | done |
 
-## Records with no item in the file name (259)
+## Records with no item in the file name (260)
 
 | ADR | Title | Status word | Date | Addenda | Items whose note cites it |
 |---|---|---|---|---|---|
@@ -872,3 +877,4 @@ One row per record of this folder, grouped by the roadmap category of the item i
 | [0745](0745-citations-2026-w47-audit-five-citations-drawn-by-seed.md) | citations 2026 week 47, audit: five citations drawn by seed and re-read against their sources | REGISTERED | 2026-11-19 | 0 | F-851 |
 | [0800](0800-electron-studio-roadmap.md) | The Electron Studio roadmap, generated from guardrails, PRODUCT.md and DESIGN.md | ACCEPTED | 2026-11-16 | 0 | F-448, F-449, F-800, F-801, F-802, F-803, F-804, F-805, F-806, F-807, F-808, F-809 and 23 more |
 | [0801](0801-studio-web-dependencies-and-layout.md) | The dependencies and the directory layout of apps/studio-web | ACCEPTED | 2026-11-16 | 25 | F-800, F-801, F-803, F-804, F-805, F-807, F-808, F-809, F-810, F-811, F-813, F-814 and 13 more |
+| [0803](0803-the-studio-as-claudes-canvas-record.md) | The Studio as Claude's canvas, and the end of the hand-navigated Studio (record) | RECORDED | 2026-11-26 | 0 | F-151, F-264, F-266, F-273, F-293, F-448, F-813, F-828, F-830, F-974, F-976, F-977 and 4 more |
