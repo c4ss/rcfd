@@ -230,3 +230,143 @@ registered run is corrected by an amendment committed before the corrected run.
 ## Open questions for the maintainer
 
 To be completed in the addendum with options and a recommendation: the next step for check H, and any question of scope.
+
+## Addendum 1: results
+
+Written 2026-11-26, after the runs. Commits on the branch, from 61a5de03: 0d8a5472 (this registration, alone), e06ad42a
+(the opt-in in `crates/rcfd-fv/src/pimple.rs` and the test file; every registered run was made from it), 71cca463 (the fan
+record, the logs, the recorded outcomes `FAN_RECORD`), e91d00a3 (rustfmt's layout of the test file), and the commit of
+this addendum with the mutation log, the committed mutation patch and the proposal file. Records in
+`docs/investigations/f885-frozen-limiter/`: `fan_d.csv`, `probe.csv`, `fan.log`, `cavity.log`, `mutations.log`.
+
+### The sentence
+
+**The opt-in removes mode A but the fan's loop still stalls; ADR 0811's term takes no part in mode B.** With the factor
+kept from the step's first outer iteration, the factor at c11837 and its neighbours does not change within a step, the
+cell's iterate no longer cycles (`q` 2.25 against ADR 0816's 0.005; mode A rules all out), and the steady cavity gives the
+same answer to 1e-12. `C` falls from 0.0258 (G0 of ADR 0815) to 0.0143, still STALLS: the largest change of the late
+iterations now sits at c13101, c6245 and others, and the run's factor is 0.834 an iteration. Without the limiter, turning
+the term off leaves the slow factor where it was at every `alpha_u` (HC2).
+
+### The fan (each 20 of 20 steps, no stop; 6.7 min in one process)
+
+| Run | `rho` | `C` | Class | s |
+| --- | --- | --- | --- | --- |
+| F | 0.834438 | 0.014301 | STALLS | 79.4 |
+| B1r | 0.853789 | 0.017267 | STALLS | 71.4 |
+| M1 | 0.854110 | 0.017659 | STALLS | 86.6 |
+| M2 | 0.871342 | 0.011825 | STALLS | 89.6 |
+| M3 | 0.892664 | 0.009457 | CONVERGES | 68.2 |
+
+Cell of `d_19` in F's classed steps: c13101 in 4, c6245 in 3, c9315 in 2, c5631 in 1 (A0 of ADR 0816: c11837 in all ten).
+
+Mode B, the factor with the term off against on (B1 to B3 of ADR 0816), and HC1's blend from `rho_off(0.9)`
+(`lambda_off` 0.837900):
+
+| `alpha_u` | off | on | off minus on | HC1 predicts |
+| --- | --- | --- | --- | --- |
+| 0.9 | 0.854110 | 0.853789 | +0.00032 | (its base) |
+| 0.7 | 0.871342 | 0.872992 | -0.00165 | 0.886530 (off by 0.0152, outside 0.015) |
+| 0.5 | 0.892664 | 0.892044 | +0.00062 | 0.918950 (off by 0.0263) |
+
+`S_C = {HC2}`: **named HC2**. HC1 misses at 0.7 by 0.0002 beyond the band and at 0.5 by 0.011 beyond it; HC3 holds at no
+`alpha_u`. Beside, without a limit: `r` at c6245 1.376 to 1.380 (dominance kept, as in ADR 0816); M3 at `alpha_u` 0.5
+classes CONVERGES (`C` 0.0095) while its factor is the slowest, because its `d_2` is larger; that is a property of the
+ratio, not of the mode.
+
+### Table of checks
+
+| Id | Limit | Measured | Met |
+| --- | --- | --- | --- |
+| FA1 | `<= 1e-12` | 0 (10 classed steps, the cell and its six neighbours, three components, iterations 2 to 20) | yes |
+| FA2 | mode A rules all out and `q >= 0.1` | HA1, HA2, HA3 not held (all ruled out); `q` 2.2505 | yes |
+| FC | classed, not UNDECIDED | `C` 0.014301, STALLS | yes (classed) |
+| R1 | `<= 1e-6` | 1.6e-11 in the heavy run; 0 from the committed records | yes |
+| R0 | `<= 1e-6` | 4.65e-10 in the heavy run; 0 from the committed records | yes |
+| BC | M1 to M3 complete; result C names or rules all out | 20 of 20 each; named HC2 | yes |
+| S1 | `<= 1e-8`; preconditions | `u` 8.207e-13, `p` 1.337e-12; last-step change 2.8e-17 (off) and 2.9e-14 (on) against 1e-12; 42 limited cell components in each | yes |
+| T1 | `<= 1e-12`, NaN where stated; non-vacuous | 2880 factors compared, largest relative difference 0; without the opt-in a factor changes by 0.8375 in steps 2 and 3 (floor 1e-9) | yes |
+| T2 | equal bits | KC0 on against off: `u`, `p`, flux and record equal | yes |
+| K | `C <= 1e-2` | 1.0597e-8 (CONVERGES) | yes |
+| T3 | as built | `f885_fl_rules_on_built_records` passed | yes |
+| G2 | equal; `1e-6` | `f885_fl_fan_from_the_committed_record` passed | yes |
+| B3 | passes, file unchanged | in the checks of rule 7 (addendum 2) | see addendum 2 |
+| D1 | as stated | under `crates/*/src` only `crates/rcfd-fv/src/pimple.rs` (branch lines 204 to 209, the setting; 1152, its default; 1901 to 1902, the kept factors; 2138 to 2148, their use and keeping); no roadmap, ledger, golden or existing test changed; the five committed F-885 mutation patches apply unchanged with `git apply --check` after the change, none re-based | yes |
+| P | the checks of rule 7 | in addendum 2 | see addendum 2 |
+
+### Mutations
+
+From `mutations.log` (git archive of e91d00a3 in the scratch folder, its own target folder, every file touched after
+extraction; each against the test the registration named):
+
+| Id | What happened |
+| --- | --- |
+| K0 | unmutated: the four gate tests run pass |
+| N1 | the kept factor not reset at a new step: caught by `f885_fl_two_routes` (T1). Committed as the mutation patch |
+| N2 | the final iteration forms its factor anew: caught by `f885_fl_two_routes` (T1) |
+| N3 | component 0's kept factor for every component: caught by `f885_fl_two_routes` (T1) |
+| N4 | the opt-in not read: caught by `f885_fl_two_routes` (T1) |
+| N5 | the least-squares gradient of the first iteration kept as well: **not caught** by `f885_fl_read_only` (T2). KC0 uses upwind convection without non-orthogonal correctors, so the step forms no gradient there and the mutation has nothing to act on. T2 checks what it was meant to (the opt-in does nothing without a limiter), but no gate test holds that the gradient is formed anew in each iteration when a limiter is set |
+| N6 | the band 0.15: caught by `f885_fl_rules_on_built_records` (T3) |
+| N7 | `fan_d.csv` cut to its first half: caught by `f885_fl_fan_from_the_committed_record` (G2) |
+
+Six of seven caught.
+
+### Deviations
+
+1. The fan runs took 6.7 min together (estimate about 5.5 min).
+2. `FAN_RECORD`'s full-precision numbers were taken from the committed records by a scratch script (the same medians),
+   checked against the six printed digits of the heavy run's log, before G2 was run.
+3. rustfmt was applied to the new test file after the record commit (layout only). `cargo fmt -p` refused on this machine
+   ("The filename or extension is too long", os error 206), so `rustfmt` was run on the two touched files with the
+   repository's `rustfmt.toml`; `pimple.rs` was already in its layout.
+4. A first build of all of rcfd-api's test targets was stopped by me before it finished (a build, not a registered run)
+   and replaced by the build of the new test file only, to keep the load on the shared machine down.
+5. The gate tests of the new file ran once each as their registered steps came due (T1, T2, K, S1, T3 before the fan
+   run; G2 after the record); four of them ran again, unmutated, as K0 of the mutation copy.
+
+### What was not run
+
+Check H, H(dt/2), a long run; the opt-in with the term off; the opt-in in the steady solver; the whole workspace suite.
+
+### Size
+
+Size (agent): partial; 1; 1; 2; 160000
+
+### Decision by the registered rule
+
+**Partial for this registration.** Every row holds as registered (FA1, FA2, R0, R1, S1, T1, T2, K, T3, G2 and D1 met, FC
+classed STALLS, BC named HC2; B3 and P in addendum 2), but one mutation of the table (N5) was not caught, and the rule asks
+that each be caught. What it would take: a gate test with a limiter and linear upwind in which the gradient changes
+between outer iterations (for example T1's cavity, compared with the convection operator formed in the test), registered
+by an amendment. F-885 stays **partial**: check H has not decided.
+
+## Open questions for the maintainer (addendum 1)
+
+1. **The next step for check H.** With the opt-in the fan's loop still stalls (`C` 0.0143 against 1e-2, factor 0.834), so
+   check H run with the opt-in as it stands would record "does not decide". Options: (a) a further diagnosis under F-885
+   (rule 13) of the slow mode that remains (0.83 to 0.85 an iteration, dominance kept, not the correctors, not the blend,
+   not ADR 0811's term), for instance its spatial shape from the probe at the cells that now carry `d_19` (c13101, c6245,
+   c9315) and the outer map with the pressure equation's relaxation `alpha_p`; (b) check H with the opt-in and more outer
+   iterations per step (at a factor of 0.834, `d_k / d_2 = 0.834^(k - 2)` reaches 1e-2 at about `k` = 28, where 20 do not),
+   which raises the case's cost and needs a reading of ADR 0183's rule for that count; (c) the maintainer's reading of
+   ADR 0183's outer rule for a loop that contracts slowly but steadily. I recommend (a): it keeps the rule as written and
+   goes after the one mode that remains; (b) is the fallback if (a) finds no cause.
+2. **Scope: the missed mutation N5.** Options: (a) an amendment of this registration that adds the gate test named in the
+   decision above and runs N5 against it; (b) leave it recorded, since the opt-in keeps only the factor and does not
+   touch the gradient line. I recommend (a), registered together with question 1's next step, so the remedy's code is
+   held by its tests.
+
+## For the lead: roadmap entries
+
+> Status proposed for F-885: partial.
+
+> Note entry: ADR 0819, 2026-11-26, opt-in and diagnosis made, item partial: an opt-in that keeps each component's Barth-Jespersen factor of the step's first outer iteration (outer_frozen_limiter, default off, baseline hashes unchanged) removes the fan's period-2 cycle at c11837 on 20 steps of H(dt) (factor change 0, q 2.25 against 0.005, mode A all ruled out) and gives the same steady cavity answer (u 8e-13, p 1e-12 relative), but the loop still stalls (C 0.0143 against 1e-2) with the slow mode at c6245; without the limiter, turning ADR 0811's term off leaves the slow factor as it was at alpha_u 0.9, 0.7, 0.5 (0.854, 0.871, 0.893 against 0.854, 0.873, 0.892): named HC2, the term takes no part; six of seven mutations caught; held by crates/rcfd-api/tests/f885_frozen_limiter.rs and docs/investigations/f885-frozen-limiter.
+
+> Gap entry: Missing for done: a class by ADR 0183's rule. Check H does not decide because the fan's outer loop does not contract within a step. ADR 0819: the opt-in frozen limiter removes the limiter's period-2 cycle at c11837, but the loop still stalls (C 0.0143) on a slow mode (about 0.83 to 0.85 per outer iteration) at c6245 that is not the dominance, the correctors, the relaxation's blend or ADR 0811's term. Needs a diagnosis of that slow mode, or the maintainer's reading of the outer rule.
+
+The same entries are in `docs/roadmap/proposals/0819-F-885.json` (form 1 of ADR 0755, base 61a5de03), checked with
+`python scripts/roadmap_proposals.py check`. No follow-up item is proposed: a further diagnosis adds no acceptance clause
+and would be registered under F-885 (rule 13).
+
+Generated pages that this work may leave not current, for the lead (rule 9): `docs/adr/index.md` (ADR 0819 is new).
