@@ -79,7 +79,10 @@ const REC_TOL: f64 = 1e-6;
 /// One recorded outcome of the fan controls: the name, its class, its statistic.
 type Entry = (&'static str, &'static str, f64);
 /// G2: the fan controls' outcomes of the registered run (written after the run).
-const FAN_RECORD: Option<&[Entry]> = None;
+const FAN_RECORD: Option<&[Entry]> = Some(&[
+    ("F0s", "ABSENT", 0.6585016624337551),
+    ("F2s:C", "STALLS", 0.02580994273283583),
+]);
 
 /// A class with its verdict.
 type Outcome = (Class, Verdict);
