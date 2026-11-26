@@ -1,0 +1,9 @@
+{
+  "form": 1,
+  "adr": "0806",
+  "item": "F-975",
+  "base": "482348e478a7d1ecb3fbc5bb0199f8610001f6cc",
+  "status": "done",
+  "note": "ADR 0806, 2026-11-26, done: the state QR iteration stalled on W because at rest every eigenvalue of a pair index is double and the local deflation test refuses the rounding-size subdiagonal between the two copies (shown: 0.1 to 0.2 eps times the Frobenius norm, refused by a factor of about 135); a fallback from a copy of the Hessenberg matrix with the normwise test m eps times the Frobenius norm makes whirl_stability of W Ok at k = 0..3 and 0, 30, 60 rad/s, equal to whirl_state, within 3.7e-12 of modal_analysis_harmonic at rest (V1 corrected by amendment 2) and 6.1e-12 of whirl_modes, all stable, residuals 4.7e-12; converging calls keep their bits (W's other paths hash to main's record, H_S, H_F, baseline_hashes); 4 of 4 mutations caught; the H_W record of the ADR 0799 bits file to be re-recorded (P7 now Ok).",
+  "follow_ups": []
+}

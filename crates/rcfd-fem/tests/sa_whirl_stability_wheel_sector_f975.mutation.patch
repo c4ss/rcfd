@@ -1,0 +1,15 @@
+# expect-fail: cargo test -p rcfd-fem --release --test sa_whirl_stability_wheel_sector_f975 a1_a2
+diff --git a/crates/rcfd-fem/src/rotating/whirl/state.rs b/crates/rcfd-fem/src/rotating/whirl/state.rs
+index b1044ce4..1e5c0bbf 100644
+--- a/crates/rcfd-fem/src/rotating/whirl/state.rs
++++ b/crates/rcfd-fem/src/rotating/whirl/state.rs
+@@ -320,7 +320,8 @@ fn hessenberg_eigenvalues(h: Vec<f64>, m: usize) -> Result<Vec<[f64; 2]>> {
+             let fro = h0.iter().map(|v| v * v).sum::<f64>().sqrt();
+             let tau = m as f64 * f64::EPSILON * fro;
+             let mut h1 = h0;
+-            let second = schur_sweep(&mut h1, m, Some(tau));
++            let _ = schur_sweep(&mut h1, m, Some(tau));
++            let second: std::result::Result<Vec<[f64; 2]>, (usize, usize)> = Err(_first);
+             #[cfg(test)]
+             record_failure(&h, m, _first, fro, tau, second.is_ok());
+             second.map_err(|(l, hi)| FemError::Solver {
