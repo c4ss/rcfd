@@ -1,0 +1,14 @@
+# expect-fail: cargo test -p rcfd-api --release --test f885_alpha_free_face_flux f885_af_cavity
+diff --git a/crates/rcfd-fv/src/pimple.rs b/crates/rcfd-fv/src/pimple.rs
+index 2da55a39..73549833 100644
+--- a/crates/rcfd-fv/src/pimple.rs
++++ b/crates/rcfd-fv/src/pimple.rs
+@@ -2253,7 +2253,7 @@ impl PimpleSolver {
+                         if g.empty[f] || (f >= n_int && pbc.fixed_u[f - n_int]) {
+                             0.0
+                         } else {
+-                            (1.0 - alpha_u) * (self.phi[f] - fu[f])
++                            alpha_u * (self.phi[f] - fu[f])
+                         }
+                     })
+                     .collect()

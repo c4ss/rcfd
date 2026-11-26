@@ -1,0 +1,21 @@
+# ADR 0811 mutations on git archive of 2979b6b31583e8fb0e4415903dccdd3271b876b5; tests ['f885_af_defaults_and_bits', 'f885_af_cavity', 'f885_af_fan_from_the_committed_record']
+K0: exit 0; test f885_af_cavity ... ok; test f885_af_defaults_and_bits ... ok; test f885_af_fan_from_the_committed_record ... ok; test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 5 filtered out; finished in 0.23s
+M1: exit 101; test f885_af_cavity ... FAILED; test f885_af_defaults_and_bits ... ok; test f885_af_fan_from_the_committed_record ... ok; test result: FAILED. 2 passed; 1 failed; 0 ignored; 0 measured; 5 filtered out; finished in 0.31s
+    thread 'f885_af_cavity' (52316) panicked at crates\rcfd-api\tests\f885_alpha_free_face_flux.rs:1065:5:
+    missed: ["K0s: J 6.7150571518499635", "K4s: J 1683.7893449427368, C 0.0010299761146056058, Q 0.5056008996809276", "TR: 0.004873981085216858"]
+M2: exit 101; test f885_af_cavity ... FAILED; test f885_af_defaults_and_bits ... ok; test f885_af_fan_from_the_committed_record ... ok; test result: FAILED. 2 passed; 1 failed; 0 ignored; 0 measured; 5 filtered out; finished in 0.26s
+    thread 'f885_af_cavity' (55964) panicked at crates\rcfd-api\tests\f885_alpha_free_face_flux.rs:1065:5:
+    missed: ["K0s: J 9.864552736842445", "K4s: J 10743664.149363553, C 0.00000005920439107900006, Q 0.08706235473507153", "TR: 0.004305556300953872"]
+M3: exit 101; test f885_af_cavity ... FAILED; test f885_af_defaults_and_bits ... ok; test f885_af_fan_from_the_committed_record ... ok; test result: FAILED. 2 passed; 1 failed; 0 ignored; 0 measured; 5 filtered out; finished in 0.33s
+    thread 'f885_af_cavity' (8772) panicked at crates\rcfd-api\tests\f885_alpha_free_face_flux.rs:1065:5:
+    missed: ["K0s: J 9.22685261810624", "K4s: J 18859718.777577173, C 0.00000003391984831862773, Q 0.08298625006382149", "TR: 0.03670820797885355"]
+M4: exit 101; test f885_af_cavity ... FAILED; test f885_af_defaults_and_bits ... FAILED; test f885_af_fan_from_the_committed_record ... ok; test result: FAILED. 1 passed; 2 failed; 0 ignored; 0 measured; 5 filtered out; finished in 0.23s
+    thread 'f885_af_cavity' (54152) panicked at crates\rcfd-api\tests\f885_alpha_free_face_flux.rs:1065:5:
+    missed: ["TRn: 0.000000000009862735263563419"]
+    A2: K0 switch off, step 1 [3.4197e-2, 7.2227e-3, 1.5538e-3, 3.4198e-4, 9.7890e-5] against ADR 0767 A2 [3.4197e-2, 7.1717e-3, 1.5369e-3, 3.3740e-4, 1.4550e-3]
+    thread 'f885_af_defaults_and_bits' (62512) panicked at crates\rcfd-api\tests\f885_alpha_free_face_flux.rs:998:9:
+M5: exit 101; test f885_af_cavity ... FAILED; test f885_af_defaults_and_bits ... ok; test f885_af_fan_from_the_committed_record ... ok; test result: FAILED. 2 passed; 1 failed; 0 ignored; 0 measured; 5 filtered out; finished in 0.23s
+    thread 'f885_af_cavity' (65116) panicked at crates\rcfd-api\tests\f885_alpha_free_face_flux.rs:1065:5:
+    missed: ["TRn: 0"]
+M6: exit 101; test f885_af_cavity ... ok; test f885_af_defaults_and_bits ... ok; test f885_af_fan_from_the_committed_record ... FAILED; test result: FAILED. 2 passed; 1 failed; 0 ignored; 0 measured; 5 filtered out; finished in 0.22s
+    thread 'f885_af_fan_from_the_committed_record' (59484) panicked at crates\rcfd-api\tests\f885_alpha_free_face_flux.rs:1277:5:

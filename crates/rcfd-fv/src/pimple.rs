@@ -178,6 +178,14 @@ pub struct PimpleSettings {
     /// `PimpleSolver::outer_velocity`. Read-only: the copies and the norms enter no equation. Not read by the fractional step
     /// or the moving-mesh steps. Default `false`: no copy is made and nothing is kept (bit-identical).
     pub outer_velocity_record: bool,
+    /// F-885 (ADR 0811): a face flux whose converged value does not depend on `alpha_u`. In every outer iteration with
+    /// `alpha_u < 1` (never the final one) each corrector adds `(1 - alpha_u) (phi* - F(u*))` to `phiHbyA` on every face
+    /// that is neither empty nor a fixed-velocity boundary face, with `u*` and `phi*` the iterate and the flux at the start of
+    /// the outer iteration and `F` the face flux of a cell field as the correctors form it (N. Kuhl, arXiv:2607.21736, Eq. 25).
+    /// At a fixed point the relaxed iterations then have the face flux of the unrelaxed one. Refused (panics) with the
+    /// consistent correctors, a face jump, an immersed solid or a moving mesh; not read by the fractional step or the
+    /// moving-mesh steps. Default `false`: no term is formed (bit-identical); with `alpha_u = 1` it is not formed either.
+    pub alpha_free_face_flux: bool,
     /// F-535 (ADR 0471 D1): refuse the first step the solver takes, through the divergence guard and before any field is
     /// touched, when the pressure-lag estimate of ADR 0073 for the step's settings (`lag_preflight` with this many power
     /// iterations, at least 2) is at least one. The message names the largest cell diffusion number `nu dt/dx^2`
@@ -1084,6 +1092,7 @@ impl PimpleSettings {
             outer_pressure_tolerance: None,
             outer_scale_window: None,
             outer_velocity_record: false,
+            alpha_free_face_flux: false,
             lag_onset_refusal: None,
             rotational_periodic_implicit: false,
             coupled_non_orth: false,
@@ -2232,6 +2241,23 @@ impl PimpleSolver {
             // ADR 0214 F0: rAtU of the consistent correctors and its face values (`None` = the default correctors)
             let r_t: Option<Vec<f64>> = cf.enabled.then(|| consistent_rau(&vol, &a_p, &h1));
             let gamma_t: Option<Vec<f64>> = r_t.as_ref().map(|r| face_interpolate(&g, r));
+            // F-885 (ADR 0811, opt-in): `(1 - alpha_u) (phi* - F(u*))`, the same in every corrector of this outer iteration
+            let af_term: Option<Vec<f64>> = (s.alpha_free_face_flux && alpha_u < 1.0).then(|| {
+                assert!(
+                    !cf.enabled && self.ale.is_none() && self.immersed.is_none() && self.face_jump.is_none(),
+                    "alpha_free_face_flux: not supported with the consistent correctors, a face jump, an immersed solid or a moving mesh"
+                );
+                let fu = face_flux(&g, &u_iter, &boundary_hby_a(&g, &pbc, &ub, &u_iter));
+                (0..mesh.n_faces())
+                    .map(|f| {
+                        if g.empty[f] || (f >= n_int && pbc.fixed_u[f - n_int]) {
+                            0.0
+                        } else {
+                            (1.0 - alpha_u) * (self.phi[f] - fu[f])
+                        }
+                    })
+                    .collect()
+            });
 
             // ---- pressure correctors ---------------------------------------
             for corr in 0..n_corr {
@@ -2261,6 +2287,11 @@ impl PimpleSolver {
                 }
                 for &(f, t) in ddt_cp.iter().flatten() {
                     phi_hby_a[f] += t / dt;
+                }
+                if let Some(t) = &af_term {
+                    for (a, b) in phi_hby_a.iter_mut().zip(t) {
+                        *a += b;
+                    }
                 }
                 if rc {
                     let b = body.map(|bf| bf.cell.as_slice());

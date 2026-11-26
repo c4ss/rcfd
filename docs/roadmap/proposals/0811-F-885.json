@@ -1,0 +1,9 @@
+{
+  "form": 1,
+  "adr": "0811",
+  "item": "F-885",
+  "base": "d1c731b2e346bb51a50bc22248e8d8a3de1e6a3e",
+  "status": "partial",
+  "note": "ADR 0811, 2026-11-26, partial: an opt-in face flux whose converged value does not depend on alpha_u (PimpleSettings::alpha_free_face_flux, the term (1 - alpha_u)(phi* - F(u*)) of Kuhl, arXiv:2607.21736 Eq. 25; defaults bit-identical) gives the relaxed and unrelaxed outer iterations one fixed point (two alpha_u reach the same face flux to 9.9e-12 on the cavity; the final jump d_N/d_(N-1) 0.27 on the cavity and 0.66 on 20 steps of H(dt)), but check H run with it completes and does not decide: 0 % of window steps meet d5 <= 1e-2 d1 (median d5/d1 0.95 and 1.08) because the fan's outer loop does not contract within a step; held by crates/rcfd-api/tests/f885_alpha_free_face_flux.rs and docs/investigations/f885-alpha-free-face-flux, six of six mutations caught.",
+  "gap": "Missing for done: a class by ADR 0183's rule. ADR 0811 removed the jump of the final outer iteration (opt-in alpha_free_face_flux) and ran check H with it: both runs complete, 0 % of window steps meet d5 <= 1e-2 d1, because the fan's outer loop does not contract within a step (d2 to d5 about d1, 0.05 to 0.1 m/s; the relaxed loop stalls near 6e-3 m/s at a tip-gap cell). Needs a diagnosis of that stall (ADR 0811 question 2) or the maintainer's reading of the rule."
+}
