@@ -29,10 +29,12 @@ const LOADED: [usize; 5] = [0, 1, 2, 3, 5];
 const NC: usize = 2;
 const NA: usize = 3;
 
+/// H_W re-recorded by the lead on 2026-11-26 on the maintainer's word of that day (ADR 0806, F-975: P7 now returns Ok);
+/// before: Windows 0xe314b82213528f82, Linux 0xc2c826f49eec0288. H_S and H_F unchanged.
 /// The record of Windows x86_64: `[H_S, H_W, H_F]`.
-const RECORD_WINDOWS: Option<[u64; 3]> = Some([0xd135e8503d05e054, 0xe314b82213528f82, 0x21c219cfc1e34528]);
+const RECORD_WINDOWS: Option<[u64; 3]> = Some([0xd135e8503d05e054, 0x9eee16dea5faf6a2, 0x21c219cfc1e34528]);
 /// The record of Linux x86_64: `[H_S, H_W, H_F]`.
-const RECORD_LINUX: Option<[u64; 3]> = Some([0xd853128f3fd29fe5, 0xc2c826f49eec0288, 0x027865e08223bcf8]);
+const RECORD_LINUX: Option<[u64; 3]> = Some([0xd853128f3fd29fe5, 0xfb07b65e0eb4c923, 0x027865e08223bcf8]);
 
 fn axis() -> Vec3 {
     [1.0 / 3.0, 2.0 / 3.0, 2.0 / 3.0]
