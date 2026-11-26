@@ -1,0 +1,205 @@
+# ADR 0804: F-823 registration: the four Linux failures of the studio-web job, and a step that fails on a skip
+
+Status: **REGISTERED 2026-11-26, written before any code of F-823 under this ADR and before any run of its checks.** Before
+this text no file of the repository was changed and nothing was run but reading: files, the logs of ADR 0802's runs in its
+scratch folder, and the sources of two installed npm packages (below). Results go in addenda at the end; nothing above them
+is changed afterwards.
+
+It answers the brief `docs/adr/briefs/f823-linux-e2e.md` (on main, issued 2026-11-26; not on this branch, so not linked)
+and follows [docs/process/agent-rules.md](../process/agent-rules.md), version 5, with [the Studio
+guardrails](../studio-guardrails.md). It is a further registration of F-823 under rule 13, after
+[ADR 0802](0802-f823-registration-the-studio-web-job-builds-the-engine.md), on the same branch `f823-studio-ci-engine`
+after its commit d5ec1145. Scratch folder `w49i-work/f823-linux-e2e-scratch`. Model: Claude Opus 5.5.
+
+## What is asked
+
+The acceptance of F-823 in `docs/roadmap.json` (read by a script): "... the job fails the workflow on any test failure ...
+The job builds rcfd-cli, rcfd-runner and rcfd-mcp first so the service e2e tests and the F-824 inventory check do not skip."
+ADR 0802 left it partial: on Windows 880 of 880 passed, in the Ubuntu 24.04 container 860 passed, 4 failed and 16 did not
+run. The lead decided (the brief, 2026-11-26): Q1, make the four run and pass on Linux by a change of the job's environment
+(the image's packages: a terminal emulator, a software WebGPU adapter) or, where the diagnosis shows a defect of the test or
+the app, by a registered change of it, with no skip and no Windows-only e2e; Q2, `--ignore-gpu-blocklist` on Windows too if
+`windows-latest` needs it; Q3, a step of the job that fails on any skip not in the registered list.
+
+## What was read
+
+`AGENTS.md`, `docs/process/agent-rules.md` (version 5) and the brief, each whole; ADR 0802 whole; `.github/workflows/ci.yml`
+whole; of ADR 0801 addendum 19 the parts on WebGL, WebGPU and the container (its lines 2670 to 2765); the four failing specs
+(`claude-code.spec.ts` lines 1 to 60 and 170 to 215, `commands.spec.ts` 1 to 116, `runner-lifetime.spec.ts` 1 to 225,
+`workspace-first-open.spec.ts` 1 to 120); `tests/support/{gpu-hold,launch,rcfd,runner}.ts` (the parts named below);
+`src/main/claudecode/terminal.ts`; of `src/main/index.ts` its `isFile` (lines 99 to 101); of
+`src/renderer/commands/CommandPalette.tsx` lines 80 to 140 and 275 to 292; of `crates/rcfd-runner/src` the shutdown
+(`client.rs` 495 to 510), `serve` (`runner.rs` 178 to 222) and `keep_started`/`reap_started` (`sys.rs` 172 to 188);
+`docker/linux-test/Dockerfile`; `package.json` (scripts), `playwright.config.ts`; the logs `linux-job/steps.tsv` and
+`linux-job/step-11.log` of ADR 0802's scratch folder; two installed npm sources: React Aria's
+`node_modules/react-aria/dist/private/focus/FocusScope.mjs` (lines 520 to 550) and Playwright 1.65.1's
+`node_modules/playwright/lib/runner/index.js` (`resolveOutputFile`). The item F-823 by a script.
+
+## Diagnosis (hypotheses, each with the control that tests it)
+
+The four failures of ADR 0802's run L, and the 16 tests that did not run:
+
+1. **`claude-code.spec.ts:177`, "Open Claude Code here"** (log: `Expected: 1, Received: 0`, the poll for one recorded
+   launch timed out). `launchPlan` of `src/main/claudecode/terminal.ts` (lines 64 to 67) gives a launch on Linux only when
+   `isFile('/usr/bin/x-terminal-emulator')` (`statSync`, which follows a link); without it the plan has no command, the
+   test mode records nothing. *Hypothesis H1:* the image has no `/usr/bin/x-terminal-emulator`; the Debian alternative of
+   that name is provided by a terminal package, and Ubuntu's `xterm` registers it (taken from memory: no source could be
+   read here; control D1 shows it). The app is right (it says so to the user); the environment lacks the terminal.
+   *Change:* the image and the runner get `xterm` (in test mode it is never opened).
+2. **`commands.spec.ts:90`, "Escape gives the focus back"** (log: line 113, `Expected: "button:Open project folder…",
+   Received: "body"`). The palette is a React Aria `ModalOverlay`/`Dialog`; on its unmount React Aria's `FocusScope` puts
+   the focus back on the element that had it in a `requestAnimationFrame` callback (`FocusScope.mjs` lines 530 to 541),
+   not synchronously, so between the dialog's removal and the next frame the focus is on `body`. Line 113 reads the focus
+   once, without a retry, right after `toBeHidden()`; the next line (`toBeFocused()`) would retry. ADR 0801 recorded the
+   same failure on Windows under load. *Hypothesis H2:* a defect of the test: a one-shot read of a state that the library
+   sets one frame later; under Xvfb with software drawing the frame comes later than the read. *Change:* line 113 becomes a
+   polled assertion of the same value (`await expect.poll(focusedName).toBe(before)`, Playwright's default 5 s), the
+   property unchanged.
+3. **`runner-lifetime.spec.ts:192`, "Keep them running and close"** (log: line 216, `expect(alive(runnerPid)).toBe(false)`
+   received `true`, right after `runner.cleanUp(id)`). `cleanUp` (`tests/support/runner.ts` 94 to 126) asks the runner to
+   shut down (`rcfd-runner shutdown` returns once the lock is released, `client.rs` 498 to 509; the process exits after
+   that, `runner.rs` 216 to 222), then, if `alive(runnerPid)`, sends it a signal and returns at once. `alive`
+   (`tests/support/rcfd.ts` 94 to 101) is `process.kill(pid, 0)`. On Linux that answers for a process that has ended and
+   is not yet reaped (a zombie), and the process that started the runner here is `rcfd-mcp`, which reaps its started
+   runners only when it next calls `lock_held` or `pid_alive` (`sys.rs` 180 to 188); and a signal is asynchronous, so a
+   look right after it can see the process still running. *Hypothesis H3:* the runner had ended or was ending, and the
+   test's look saw a zombie (H3a) or a process a few milliseconds from its exit (H3b); either is a defect of the test's
+   support, not of the runner. *Changes (both, since both are true of the code whichever caused this failure):* C7,
+   `alive` on Linux counts a process whose `/proc/<pid>/stat` state is `Z` as ended; C8, `cleanUp` waits, at most 10 s
+   (the bound the same spec gives "the runner to end", line 361), for each process it signalled to end.
+4. **`workspace-first-open.spec.ts:59`** (log: `no WebGPU adapter: the GPU process cannot be held`, from
+   `tests/support/gpu-hold.ts` line 40). The test needs a WebGPU device of its own and has no skip for its absence. ADR
+   0801 addendum 19: with `--ignore-gpu-blocklist` Chromium gives WebGL 2 on llvmpipe but no WebGPU adapter, although the
+   image has Mesa's Vulkan drivers (`mesa-vulkan-drivers`, lavapipe) and `libvulkan1`. *Hypothesis H4:* Chromium on Linux
+   exposes WebGPU only with `--enable-unsafe-webgpu`, and its Dawn backend on Linux is Vulkan, which may also need the GPU
+   process's Vulkan (`--enable-features=Vulkan`); a software Vulkan device (Mesa's lavapipe, or the SwiftShader that
+   Electron ships) then gives an adapter. These switch names are from memory (no source could be read here; control D4
+   tests them). *Change:* the Linux branch of the Playwright step passes the set of switches that control D4 selects by the
+   rule below, through `RCFD_TEST_ELECTRON_ARGS` (a setting of the tests' Electron, `tests/support/launch.ts`, not of the
+   app); the runner gets `mesa-vulkan-drivers` when it lacks it.
+5. **The 16 that did not run** (`commands` 9, `runner-lifetime` 6, `claude-code` 1): each file is `mode: 'serial'`, and
+   Playwright does not run the rest of a serial group after a failure. No change of their own: they run when the test
+   before them passes, and the rows below require them to pass.
+
+With these, every skip the suite has on Windows and Linux stays as ADR 0802 found it: none. **The registered list of tests
+allowed to skip is empty, on both platforms.**
+
+### Controls of the hypotheses (made after this commit, before any code; on scratch copies of d5ec1145)
+
+In the container (ADR 0802's set-up: the image `rcfd-studio-linux-test:ubuntu24.04`, this item's volumes
+`rcfd-f823-target` and `rcfd-f823-cache`, the user `studio`, `xvfb-run --auto-servernum`, `RCFD_TEST_ELECTRON_ARGS` with
+`--ignore-gpu-blocklist` as ADR 0802's job). Each is made once; its output is recorded in the addendum.
+
+| Id | Tests | Control | Expected if the hypothesis holds | If not |
+|---|---|---|---|---|
+| D1 | H1 | `test -e /usr/bin/x-terminal-emulator` in the image; then, as root in the same container, `apt-get install -y --no-install-recommends xterm` and again, with `readlink -f` | absent before; present after, a link to an xterm program | stop and amend before the code |
+| D2 | H2 | `commands.spec.ts` with line 113 replaced, in the copy only, by records of `focusedName()` at once, after two animation frames and after 1 s, printed; `-g "Ctrl\+K opens"` | at once `body` or the button (a race); after two frames and after 1 s the button | if after 1 s it is still `body`: H2 is wrong, stop and amend |
+| D3 | H3 | `runner-lifetime.spec.ts` with, in the copy only, before line 216, a print of `alive(runnerPid)`, of `/proc/<pid>/stat`'s state and parent, and of the parent's `comm`; `-g "Keep them running"` | state `Z` (H3a) or `R`/`S` turning gone within 10 s (H3b), or the process already gone (not reproduced) | a process in another state after 10 s: stop and amend |
+| D4 | H4 | a probe spec in the copy only: the packaged Studio launched by `launchStudio`, then `navigator.gpu.requestAdapter()` and its `info`, `app.getGPUFeatureStatus()` and one `page.screenshot` (10 s), for each set below in its order | an adapter, WebGL 2 still `enabled`, the screenshot made | if no set gives all three: stop and amend |
+
+D4's sets, in order, each with `--ignore-gpu-blocklist` first: **G1** `--enable-unsafe-webgpu`; **G2** G1 and
+`--enable-features=Vulkan`; **G3** G2 and `--use-vulkan=swiftshader --use-webgpu-adapter=swiftshader`. **Rule, fixed here:**
+the first set in this order that gives all three is the one the job uses; the probe runs all three regardless, and all are
+recorded. The order is the least change first: G1 a switch that only unlocks the API, G2 the system's Vulkan
+(lavapipe, a package of the image), G3 Electron's own SwiftShader (no package).
+
+## Design (registered)
+
+Files changed, only these (the brief's owned files; the test files are named here because the diagnosis shows their defect):
+
+- **C1.** `.github/workflows/ci.yml`, the studio-web job, the Linux preparation step: also installs `xterm` when
+  `/usr/bin/x-terminal-emulator` is missing and, when D4 selects G1 or G2, `mesa-vulkan-drivers` when it is not
+  installed (as it installs Xvfb and Mesa's DRI drivers when missing).
+- **C2.** The Playwright step: the Linux branch's `RCFD_TEST_ELECTRON_ARGS` becomes the set D4 selects; both branches add
+  Playwright's `json` reporter (`--reporter=list,html,json`), written to `apps/studio-web/playwright-results.json` by the
+  step's `env` `PLAYWRIGHT_JSON_OUTPUT_FILE` (Playwright 1.65.1 reads `PLAYWRIGHT_<NAME>_OUTPUT_FILE`,
+  `resolveOutputFile`), so the list output is unchanged.
+- **C3.** A new step after the Playwright step, on both systems: "no test skipped but the registered ones" (Q3). A Node
+  script in the step reads `playwright-results.json`, walks every spec's tests, and fails (exit 1) when the file has no
+  test, or when any test has the status `skipped` (a `test.skip` and a test that did not run after a serial failure both
+  have it) and its `<file>:<line>` is not in the step's `env` `STUDIO_ALLOWED_SKIPS` (space-separated; empty, as
+  registered); it prints each such test and the counts. It runs after a passed Playwright step (a failed one has already
+  failed the job).
+- **C4.** The upload on failure also takes `playwright-results.json`.
+- **C5.** `apps/studio-web/docker/linux-test/Dockerfile`: `xterm` added to the packages; a comment line says why.
+- **C6.** `apps/studio-web/tests/e2e/commands.spec.ts`: line 113 as in H2; a line of the head comment names ADR 0804.
+- **C7.** `apps/studio-web/tests/support/rcfd.ts`, `alive`: as in H3; Windows and macOS unchanged.
+- **C8.** `apps/studio-web/tests/support/runner.ts`, `cleanUp`: as in H3.
+- **C9.** `apps/studio-web/tests/e2e/commands.spec.mutation.patch`, the committed mutation (rule 16), below.
+
+No other file. Windows stays as it is but for C2's reporter and C3 (Q2: nothing here shows that `windows-latest` needs the
+switch; this machine has a GPU, so it cannot show it; the lead's reading of the first run decides it, as decided).
+
+Rule 2 says existing tests are not edited and a corrected test keeps the old one as an ignored record. The brief allows a
+registered change of a test whose defect the diagnosis shows, and forbids skips; an ignored record in a Playwright spec is
+a skipped test, which C3 would fail. So the old line 113 is kept in this ADR (above, with its file and line) and in git
+history, not as an ignored test. Taken on the maintainer's standing instruction of 2026-11-11 (take the recommendation).
+
+The image is built from the changed Dockerfile under this work's own tag `rcfd-studio-linux-test:ubuntu24.04-f823b`, so
+the tag other work uses is not replaced.
+
+## Set-up of the runs (fixed here)
+
+ADR 0802's set-up, its scratch tools copied to this work's scratch folder: `run_job.py` runs the studio-web job of the
+commit under test as written, step by step, as GitHub runs `shell: bash`, in a `git archive` copy; a `uses:` step is
+replaced by a check of what it provides. **W**: Windows here, Git Bash, Node 22.19.0, Rust 1.99.0, `CARGO_TARGET_DIR` this
+work's `target-win` under the scratch folder. **L**: the container, the image of C5 (tag above), started as ADR 0802's
+(`--init --shm-size 2g --security-opt seccomp=unconfined`), the steps as the user `studio`, no `CARGO_TARGET_DIR` (the
+checkout's `target` is the volume `rcfd-f823-target`), `CARGO_HOME` and the download caches on `rcfd-f823-cache`. Counts
+from the list output's marks and Playwright's summary lines, which must agree (ADR 0802 amendment 1, item 2); retries are 0.
+
+## Checks
+
+| Id | Clause | Check | Limit | Source of the limit | Estimate | Margin | Kind |
+|---|---|---|---|---|---|---|---|
+| L1 | builds the engine first so the service e2e tests and the F-824 check do not skip; the four pass on Linux | L: the Playwright step's counts | 880 passed, 0 failed, 0 skipped or not run; the four tests of the diagnosis and the 16 among the passed; the skipped list equal to the registered list (empty) | acceptance of F-823, last sentence; the brief, task 1 | as the limit | exact | code verification |
+| L2 | the job runs | L: every step of the job as written, in order | each step passed, the new skip step included; the upload skipped by its `failure()` | the brief, task 1 | passes | exact | code verification |
+| W1 | the same | W: as L1 | as L1 | the same | as the limit | exact | code verification |
+| W2 | the same | W: as L2 | each step passed, the Linux steps skipped by their `if:`, the upload by `failure()` | the brief, task 1 | passes | exact | code verification |
+| K1w | the skip step fails the job on an added skip (Q3) | negative control on a scratch copy: in `tests/unit/tokens.spec.ts` one test begins with `test.skip(true, 'ADR 0804 negative control')`; the Playwright step's Windows command and env limited to that file, then the skip step's script; the same on the unchanged copy | mutated: Playwright exit 0 and the skip step exit 1 naming that test; unchanged: both exit 0 | the brief, task 1 | as the limit | exact | code verification |
+| K1l | the same | L: the same with the Linux command | as K1w | the brief, task 1 | as the limit | exact | code verification |
+| V1 | the workflow is valid | `actionlint` 1.7.12 on `.github/workflows/ci.yml` (no shellcheck here); control: d5ec1145's file | exit 0 and no message; the control's messages stated | the brief, task 1 | exit 0 | exact | code verification |
+| A1 | only the named files change | `git diff --stat d5ec1145..HEAD` and `git diff d5ec1145 -- .github/workflows/ci.yml` | only C1 to C9, this ADR and the proposal file; in ci.yml only the studio-web job | the brief, owned files | as the limit | exact | code verification |
+| R7w | rule 7 | in the worktree's `apps/studio-web` on Windows, `CARGO_TARGET_DIR` = `target-win`: `npm run typecheck`, then `npm test` | exit 0; 880 passed, 0 failed, 0 skipped | rule 7; the brief, task 4 | passes | exact | code verification |
+| R7l | rule 7 | in the container on a copy of the code commit: `npm run typecheck`, then `RCFD_TEST_ELECTRON_ARGS="<the D4 set>" xvfb-run --auto-servernum npm test` | as R7w | rule 7; the brief, task 4 | passes | exact | code verification |
+| DS | rule 7 (docs) | `cargo test -p rcfd-cli --release --test docs_site` | passes | rule 7 | passes | exact | code verification |
+| P1 | rules 7 and 9 | `python scripts/roadmap_proposals.py check docs/roadmap/proposals/0804-F-823.json`; `python scripts/process_report.py --check` | the proposal valid; the report clean but for a generated file that is only not current | rules 7 and 9 | passes | exact | code verification |
+
+Each registered run is made once. A failed or flaky test is recorded with its output as a miss; nothing is run again to
+pass. `cargo fmt`, `clippy` and `baseline_hashes` do not apply: no Rust file changes.
+
+## Mutations (task 3, rule 16)
+
+On scratch copies of the code commit, each once:
+
+| Id | Mutation | Where, how | Caught when |
+|---|---|---|---|
+| MT | the terminal package removed | L, the image of C5: as root before the run, `dpkg --purge xterm`; then `tests/e2e/claude-code.spec.ts` with the Playwright step's Linux command | `claude-code.spec.ts:177` fails |
+| MW | the WebGPU adapter removed | L: for G1 or G2, as root `dpkg --purge --force-depends mesa-vulkan-drivers`; for G3, the two SwiftShader switches left out of `RCFD_TEST_ELECTRON_ARGS`; then `tests/e2e/workspace-first-open.spec.ts` | `workspace-first-open.spec.ts:59` fails with "no WebGPU adapter" |
+| MS | a skip added to a spec | the mutated half of K1w and K1l (not made again) | the skip step exits 1 naming the test |
+| MC | committed (C9): the palette blurs the focus after it has gone back (in `CommandPalette.tsx`'s `onOpenChange`, `afterFocusReturns(() => (document.activeElement as HTMLElement | null)?.blur())`) | W, a scratch copy with the patch applied: `npx playwright test tests/e2e/commands.spec.ts --project=electron` after build and packaging | `commands.spec.ts:90` fails at the corrected line |
+
+C9's first line: `# expect-fail: cd apps/studio-web && npm run build && npm run package:dir && npx playwright test tests/e2e/commands.spec.ts --project=electron`, the form of the patches already beside the e2e specs.
+
+## Size
+
+Size (agent): done; 0; 4; 0; 250000
+
+(Heavy runs: L, W, R7l and R7w, whole suites; the controls, K1, the mutations and the link check are a spec or a file each.)
+
+## Decision rule
+
+**Done** for F-823 if every registered row holds on both platforms here and each of MT, MW, MS and MC is caught;
+**partial** otherwise, with the miss recorded. The lead's reading of the first run on GitHub Actions after the push decides
+the item.
+
+## Not covered
+
+The runners themselves: whether `ubuntu-24.04` has a terminal and Mesa's Vulkan drivers (C1 installs them when missing),
+whether a software WebGPU adapter behaves there as in the container, `windows-latest` without a GPU (Q2), the job's time.
+`docker/linux-test/run.mjs` (the local Docker runner of ADR 0801) keeps passing only `--ignore-gpu-blocklist`; it is not
+among the owned files. The WebGPU drawing on Linux is a software device: it shows the code runs, not its speed on a GPU.
+
+## Open questions for the maintainer
+
+None at registration. Any question of scope the runs raise is listed in the addendum, not decided here.
