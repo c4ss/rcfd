@@ -247,3 +247,70 @@ Run R1 (commit 7e6526a0) and C5 gave outcome O1 of D3: C1 and C2 met on both pla
    attribute the only changes.
 2. The new test `dg1_stall_set_per_platform_f975_0814` of D3 is added with the Linux set `[(2, 0.0)]` printed by R1, and
    the Windows set `[(1, 0.0), (2, 0.0)]`. Run R2 of D4 follows, once on each platform. No check, limit or rule above changes.
+
+## Addendum 1: results (2026-11-26)
+
+Commits: the registration 8c492a9d (alone); the controls 7e6526a0; amendment 1 6ae57d3c (alone); remedy R-A 84da16d2; the
+committed mutation M1 f6ffd657. Run R1 was made once on 7e6526a0 on each platform, C5 once, and run R2 once on f6ffd657 on
+each platform, all in release. Container: one container of `rcfd-linux:ubuntu24.04-rust1.99.0` (glibc 2.39), the `git
+archive` of the commit extracted inside it, `cargo fetch --locked`, then `cargo test -p rcfd-fem --release --locked
+--offline --lib ...`; removed at the end. Logs in `E:/projects/cfd/w49i-work/f975-dg1-on-linux-scratch/logs` (`r1_windows.log`,
+`r1_linux.log`, `c5_windows.log`, `r2_windows.log`, `r2_linux.log`, `mut_m1.log` to `mut_m3.log`, `fmt.log`, `fmt_linux.log`,
+`clippy.log`, `named.log`, `baseline.log`).
+
+| # | Limit | Measured | Met |
+|---|---|---|---|
+| R1-W | passes, set `[(1, 0.0), (2, 0.0)]` | passes; stalled at `[(1, 0.0), (2, 0.0)]`, the DG2 and DG3 numbers of ADR 0806 addendum 1 bit for bit in the 7 printed digits | met |
+| R1-L | the set printed, compared with CI `[(2, 0.0)]` | fails at DG1 (line 177); stalled at `[(2, 0.0)]`; (2, 0): smallest subdiagonal `3.087789e-10`, norm `3.567792e5`, as CI. Equal to CI, not to Windows | met (the container reproduces CI) |
+| C1 | equal outcome and bits | Windows: k = 1 stalls, k = 2 stalls; Linux: k = 1 converges, k = 2 stalls; on both the reproduction's outcome equals the library's record, the Frobenius norm bits equal, 120 of 120 eigenvalue bits equal | met on both |
+| C2 | equal | on both, L2 to L4 and the stall set equal for the second build and for threads 1 (Windows `[(1, 0.0), (2, 0.0)]` three times, Linux `[(2, 0.0)]` three times) | met on both |
+| C3 | L0 differs: H-L holds | L0 Windows `0x04708953fe90a592`, Linux `0xd83d012e42f1ccb6`. Of the 10 arguments, two differ, each by one unit in the last place of `sin`: at `pi / 4` (`0x3fe921fb54442d18`, the builder's `3 a / 4`) MSVC `0x3fe6a09e667f3bcd`, glibc `0x3fe6a09e667f3bcc`; at `4 pi / 3` (`0x4010c152382d7365`) MSVC `0xbfebb67ae8584ca9`, glibc `0xbfebb67ae8584ca8`. Every `cos` equal. L1 to L4 all differ (L1 `0xa153986af17d2930` against `0xfe76db583c8f0488`, ...) | H-L holds |
+| C4 | `0 < S_k < 16` for a k: H-T holds | Windows `S_1 = 7`, `S_2 = 2`; Linux `S_1 = 2`, `S_2 = 8` (patterns in the logs) | H-T holds on both (near the threshold) |
+| C5 | stall set and L1 to L4 equal to the container's; 0 missing | stalled at `[(2, 0.0)]`; L1 `0xfe76db583c8f0488`, L2 `0x5a858051d7a3a0db`, L3 and L4 of k = 1, 2 equal to the container's; C4 patterns equal to the container's; 0 arguments missing (8 distinct arguments in the table) | met |
+| T1 | passes | passes: stalled at `[(1, 0.0), (2, 0.0)]` as expected for Windows MSVC; DG2, DG3 met | met |
+| T2 | passes | passes: stalled at `[(2, 0.0)]` as expected for Linux GNU; DG2, DG3 met (DG3 `5.818e-14`, `8.589e-13`) | met |
+| B1 | exit 0 | Windows: "The filename or extension is too long. (os error 206)", exit 1, as foreseen; the registered replacement, `cargo fmt -p rcfd-fem --check` in the container on the R2 copy: exit 0 | met (by its registered replacement) |
+| B2 | exit 0 | exit 0 | met |
+| B3 | 0 failures | 17 passed, 0 failed, 1 ignored (the known miss of amendment 1) | met |
+| B4 | 0 failures | 17 passed, 0 failed, 1 ignored | met |
+| B5 | 0 failures | `sa_beam_opt_ins_default_f672_bits` 1 passed; `sa_whirl_stability_wheel_sector_f975` 4 passed, 1 ignored (as on main) | met |
+| B6 | pass | 3 passed, 1 ignored (as on main) | met |
+
+**Diagnosis.** Outcome O1. The input of the QR iteration differs between the platforms because the C libraries return
+different `sin` at two arguments on W's path (`pi / 4` in the test builder's node coordinates, `4 pi / 3` in the library),
+each by one unit in the last place; with the container's values substituted, Windows reproduces the container's matrices
+bit for bit and its stall set (C5), so nothing else differs. The stall of the first iteration at a pair index at rest is a
+property of the last bits of `h0`, not of W: one-ulp perturbations stall it in 2 to 8 of 16 copies (C4), on both
+platforms. G1 to G3 of ADR 0806 stand (every stall is at a pair index at rest, DG2 and DG3 hold everywhere); what ADR
+0806's DG1 asserted beyond them, that both pair indices stall, held on Windows by chance of the rounding. Not a code
+defect: the thread count and a rebuild change no bit (C2).
+
+**Mutations** (each on its own `git archive` copy of f6ffd657, own target folder, the new test run once on Windows):
+
+| Id | Caught by |
+|---|---|
+| M1 (committed) | T1: stalled at `[]`, DG1 and DG2 missed |
+| M2 | T1: stalled at `[(1, 0.0), (2, 0.0)]` against the exchanged `[(2, 0.0)]`, DG1 missed |
+| M3 | T1: `whirl_state(1, 0)` and `(2, 0)` return the solver's error, DG3 not computed; DG2 missed (no subdiagonal at most `tau = 0`) |
+
+All three caught.
+
+**Deviations.** (1) B1 on Windows stopped with os error 206 and ran by its registered replacement in the container. (2) In
+C4 the sequence of the generator advances once per moved entry (nonzero, on or above the subdiagonal), the reading taken of
+"one step per entry". (3) The table of C5 held the 8 distinct arguments of the 10 printed (`a / 2` equals `2 a / 4`, and
+`2 pi 1 / 6` equals `4 a / 4`). Not run: none of the registered rows was left out; the other tests of ADR 0806 were not run in
+the container (as registered).
+
+Size (actual): done; 0; 2; 0; about 140000
+
+**Decision by the registered rule: done.** Outcome O1; T1 and T2 pass in their one run; M1 to M3 are caught; B1 to B6 hold.
+
+### Open questions for the maintainer
+
+None of scope taken or left open by this work.
+
+### For the lead: roadmap entries
+
+Status proposed: done.
+
+> ADR 0814, 2026-11-26, done: DG1 of ADR 0806 failed on Linux because glibc's sin differs from MSVC's by one ulp at pi/4 and 4pi/3 on W's path (with glibc's values Windows reproduces the Linux matrices bit for bit and its stall set), and the stall of a pair index at rest is a property of the last bits (one-ulp perturbations stall it in 2 to 8 of 16 copies on both platforms); thread count changes no bit; DG1 is now stated per platform from a registered run (Windows (1,0),(2,0); Linux (2,0)), the ADR 0806 test held as a known miss; passes on both; 3 of 3 mutations caught.
