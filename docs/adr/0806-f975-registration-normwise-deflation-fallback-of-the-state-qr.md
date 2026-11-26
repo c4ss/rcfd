@@ -217,3 +217,93 @@ Size (agent): done; 0; 0; 1; 160000
    as the evidence that only P7 changed; (b) make the fallback an opt-in, so that P7 stays an error by default, which fails
    A1 and the acceptance; (c) remove P7 from `H_W`, an edit of an existing test's set-up. Recommendation: (a). The change turns a
    solver error into a result and changes no result that was returned before (D2, B-W, B1, B3).
+
+## Addendum 1: results (2026-11-26)
+
+The library change, the unit test of the diagnosis and the new test file are commit 6db6fe1e; the committed mutation X1 is
+f4145eff; commit 78de7b1b applies rustfmt's layout to the three new or changed Rust files after the registered fmt check
+(no token changed: each file is equal to its previous version with all whitespace removed). The registered run was made once
+on f4145eff, in the release profile, with the target folder under the scratch folder. Its logs (`logs/run_fem.log`,
+`logs/run_baseline.log`, `logs/mut_x1.log` to `mut_x4.log`, `logs/clippy.log`) are in
+`E:/projects/cfd/w49i-work/f975-whirl-stability-wheel-sector-scratch`.
+
+| # | Limit | Measured | Met |
+|---|---|---|---|
+| A1 | `Ok` | `Ok` | met |
+| A2 | equal texts | 12 of 12 (index, speed) texts equal to `whirl_state`, eigenvalues equal (60, 120, 120, 60 per index) | met |
+| V1 | relative `<= 1e-8` | not measured as registered: the test's reference repeated each eigenvalue of `modal_analysis_harmonic` `multiplicity` times, but for a pair index that function already returns `modes x multiplicity` = 8 values (each frequency twice), so the reference had 16 entries against 8 and the test gave `inf` for `k = 1, 2`; `k = 0`: `3.412e-12`, `k = 3`: `1.746e-13` | **missed** (defective set-up) |
+| V2 | relative `<= 1e-8` | largest `6.055e-12` (`k = 0`, 60 rad/s), over the 8 (index, speed) pairs at 30 and 60 rad/s | met |
+| V3 | `Stable`, `real_defect <= 1e-8` | all 12 `Stable`; largest `real_defect` `7.401e-15` | met |
+| V4 | `<= 1e-10` | largest residual `4.701e-12` | met |
+| E-W2 | every result `Ok`; texts of (a), (b), (c) equal | 17 of 17 paths `Ok` and equal | met |
+| DG1 | stalls at (1, 0) and (2, 0), none at `k = 0, 3`, none at 30 rad/s | stalled first iterations at exactly (1, 0) and (2, 0); the fallback converged at both | met |
+| DG2 | smallest subdiagonal `<= tau`, every one refused by the local test | (1, 0): window 116..=119 of `m = 120`, `norm(h0)_F = 3.657e5`, `tau = 9.74e-9`; subdiagonals `18.8`, `1.79e-11` (0.22 `eps norm(h0)_F`), `82.1`; the small one is 141 `eps` times its local sum `570`. (2, 0): `norm(h0)_F = 3.568e5`, `tau = 9.51e-9`; `80.5`, `9.38e-12` (0.12 `eps norm(h0)_F`, 129 `eps` times its local sum `328`), `237` | met |
+| DG3 | consecutive pairs within `1e-8 abs(s)` | (1, 0): `6.351e-13`; (2, 0): `1.199e-12` (120 eigenvalues each) | met |
+| B-W | hash equal to `0xe314b82213528f82` | `0xe314b82213528f82` | met |
+| B-F | fails on `H_W` alone | fails; printed `[H_S, H_W, H_F] = [0xd135e8503d05e054, 0x9eee16dea5faf6a2, 0x21c219cfc1e34528]` against the record `[0xd135e8503d05e054, 0xe314b82213528f82, 0x21c219cfc1e34528]`: `H_S`, `H_F` equal, `H_W` not | met |
+| B1 | 0 failures | 12 files: 49 passed, 0 failed, 8 ignored (all ignored on main) | met |
+| B2 | 0 failures | 16 passed, 0 failed (with DG1 to DG3) | met |
+| B3 | pass | 3 passed, 1 ignored (as on main) | met |
+
+**Diagnosis confirmed.** The QR iteration stalls exactly where G1 says the spectrum is double (the pair indices at rest). The
+window 116..=119 holds two copies of one pair split by a subdiagonal of 0.1 to 0.2 `eps norm(h0)_F`, the rounding of G2. The
+local test refuses it by a factor of about 130 to 140, because the window's diagonal is of the order of its eigenvalues
+(G3). The fallback's test accepts it, and the iteration then converges. The frequencies agree with the Hermitian route to
+`6e-12` and with the modal route to `3e-12` where V1 was measured.
+
+**The V1 miss.** It is a defect of the test, not of the solver. The registration (V1, "for a pair `omegas[2j]` and
+`omegas[2j+1]` against `omega_j`, `j = 0 .. 3`") assumed that `modal_analysis_harmonic` returns 4 values for a pair. It
+returns 8, each twice, as the printed reference shows (`153.3755669403876` twice, then `153.37556694040723` twice, ...). The
+printed values agree with the eight state frequencies to about `4e-12` relative (for example `153.3755669398265` against
+`153.3755669403876`), but that comparison is not the registered row and is not counted as met. The limit is kept. The row was
+not corrected or run again: a corrected set-up needs an amendment before a run, which belongs to a further registration
+(question 2).
+
+**Mutations** (each on its own `git archive` copy of f4145eff with its own target folder, the new test file run once; for X3
+also the bits file). V1 fails without a mutation, so it is counted for none of them.
+
+| Id | Caught by |
+|---|---|
+| X1 (committed) | A1, A2 (`a1_a2_..` failed: `Err` of the solver), E-W2 (P7 not `Ok`), `v1_v4_..` (its `expect` on A1) |
+| X2 | A1, A2, E-W2, as X1 |
+| X3 | B-W (hash not equal to the record) and B-F (`H_S` changed to `0x8e668c7ef57f1d22`); V2 to V4 still met |
+| X4 | V4 (largest residual `5.136e-7` against `1e-10`); V2 (`6.055e-12`) and V3 (`2.149e-9`) met |
+
+All four were caught. The committed patch names `a1_a2` in its expect-fail line. That test passes without X1 and fails with
+it, which is not true of the whole file (V1 fails anyway).
+
+**Rule 7.** `cargo fmt -p rcfd-fem --check` stopped with "The filename or extension is too long. (os error 206)", as foreseen.
+Its registered replacement, `rustfmt --edition 2021 --check` on the three changed or added Rust files, **failed** (exit 1),
+on line breaks only. The layout was applied afterwards (commit 78de7b1b, no token changed), and the check was not run again.
+`cargo clippy -p rcfd-fem --all-targets -- -D warnings` passed (exit 0), on 78de7b1b. `docs_site`, `roadmap_proposals.py
+check` and `process_report.py --check` were run after this addendum; their results are in the report.
+
+**Deviations.** (1) The fmt layout commit after the registered run (above). (2) V1 as stated. Nothing registered was left out.
+Not run: the Linux records (none registered).
+
+Size (actual): partial; 1; 0; 2; about 200000
+
+(One further registration expected: V1 with a corrected set-up. Two questions: 1 and 2 below.)
+
+**Decision by the registered rule: partial.** V1 is missed (defective set-up), and the fmt check failed in its one run. Every
+other row is met, all four mutations are caught, and the calls that converged before keep their bits (B-W, B-F's `H_S` and
+`H_F`, B1, B3).
+
+### Open questions for the maintainer
+
+1. As registered (the record `H_W` of the ADR 0799 bits file). Recommendation: (a), the lead re-records `H_W` (Windows
+   `0x9eee16dea5faf6a2` from B-F; Linux from the lead's run). B-W shows that P7 is the only path of W whose bits changed.
+2. **How the V1 miss is held.** Options: (a) the form of rule 2: the lead renames
+   `v1_v4_frequencies_flags_and_residuals_against_the_other_routes` to `..._known_miss` with
+   `#[ignore = "known miss of ADR 0806 run 1 (f4145eff): V1 reference doubled twice for a pair index (16 against 8 values); V2 to V4 met"]`,
+   the body unchanged, and a further registration under F-975 (rule 13) registers V1 with the reference taken as returned (8
+   values for a pair) and runs it once; (b) keep the test failing until that registration. Recommendation: (a). The other
+   tests of the file stay in the gate.
+
+### For the lead: roadmap entries
+
+Status proposed: partial.
+
+> ADR 0806, 2026-11-26, partial: the state QR iteration stalled on W because at rest every eigenvalue of a pair index is double and the local deflation test refuses the rounding-size subdiagonal between the two copies (shown: 0.1 to 0.2 eps times the Frobenius norm, refused by a factor of about 135); a fallback from a copy of the Hessenberg matrix with the normwise test m eps times the Frobenius norm makes whirl_stability of W Ok at k = 0..3 and 0, 30, 60 rad/s, equal to whirl_state, frequencies within 6.1e-12 of whirl_modes, all stable, residuals 4.7e-12; converging calls keep their bits (W's other paths hash to main's record, H_S, H_F, baseline_hashes); 4 of 4 mutations caught; V1 missed on a defective set-up; fmt failed on layout, then applied.
+
+> whirl_stability of the wheel sector converges and agrees with whirl_state and whirl_modes. Missing: V1 of ADR 0806 (the rest frequencies of W against modal_analysis_harmonic) is a miss of a defective set-up (the reference doubled twice for a pair index), to be registered again with the reference as returned; the H_W record of sa_beam_opt_ins_default_f672_bits.rs is to be re-recorded (P7 now Ok).
