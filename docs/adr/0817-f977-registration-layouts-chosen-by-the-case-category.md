@@ -359,3 +359,8 @@ Decision by the registered rule: **partial**, because E8 did not run: no structu
 > Follow-up: Structural runs in a project: start_run of a solid case file, with its run records, and the structural layout shown from them. Deps F-977. Acceptance: Every limit not stated here is registered in the ADR before the run. start_run of a solid case file of the repository (crates/rcfd-api/tests/solid_cases/) makes a project run with run.json, case.snapshot, its report and its stored displacement and stress fields; show_view with that run and no layout takes the structural layout, which shows those fields and the report, shown by an e2e test in the open Studio.
 
 The same entries are `docs/roadmap/proposals/0817-F-977.json`.
+
+## Answers of the maintainer (2026-11-26), written by the lead
+
+1. The recommendation: the description of `show_view` names the run form, with a re-record of the tool list, under F-987 (its acceptance extended); taken by the lead on the maintainer's standing instruction of 2026-11-26 (go with the recommended option always).
+2. The recommendation: the follow-up F-990 for project runs of solid case files, after which the structural layout gets its e2e test; taken by the lead on the maintainer's standing instruction of 2026-11-26 (go with the recommended option always).

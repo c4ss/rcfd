@@ -10240,9 +10240,10 @@
     "deps": [
       "F-976"
     ],
-    "status": "todo",
+    "status": "partial",
     "acceptance": "Every limit not stated here is registered in the ADR before the run. The case categories are fixed in the registration from the case schema (at least external aerodynamics, internal flow and turbomachinery, heat transfer, structural, multiphase), each with a default layout of views derived from the case and run records. show_view with a run and no layout takes its category's layout; a case of no known category takes the general layout. Each category is shown by an e2e test on an example case of the repository, with the views chosen named in the registration.",
-    "note": "Lead (2026-11-26): entered on ADR 0803, the maintainer's direction and answers of that day (the Studio as Claude's canvas)."
+    "gap": "The structural category is recognised (a solid case file) and its layout (case, run) is built, but no project run of a solid case can exist, so it is not shown from a run in the Studio (E8, Q2). The show_view description does not name the run form (Q1).",
+    "note": "Lead (2026-11-26): entered on ADR 0803, the maintainer's direction and answers of that day (the Studio as Claude's canvas). ADR 0817, 2026-11-26, partial: show_view of {version 1, run} takes the layout of the category of the run's case (multiphase, heat transfer, internal flow and turbomachinery, external aerodynamics, structural, general), read from the run's case.snapshot by a rule over the schema's blocks, each panel only where its record exists; the open Studio showed the five runnable categories and two negative controls with their registered panels in 78 to 548 ms (limit 1.6 s); 6 of 6 mutations caught, one committed; E8 not run: no project run of a solid case exists. Lead (2026-11-26): merged at 33444b14 and pushed at f5315b1f; every selected test passed and the committed mutations failed as expected. Partial as proposed: E8 (structural from a run) waits for F-990; the show_view description's run form goes with F-987's re-record."
   },
   {
     "id": "F-978",
@@ -10357,7 +10358,7 @@
       "F-979"
     ],
     "status": "todo",
-    "acceptance": "show_view's description in the MCP tool list names the mesh-of-a-case, setting and monitor-of-a-case forms of ADR 0807 as well as F-976's kinds; the tool-list goldens are re-recorded by the lead for that one entry, with the maintainer's word recorded; every other entry unchanged.",
+    "acceptance": "show_view's description in the MCP tool list names the mesh-of-a-case, setting and monitor-of-a-case forms of ADR 0807 as well as F-976's kinds; the tool-list goldens are re-recorded by the lead for that one entry, with the maintainer's word recorded; every other entry unchanged. The description also names the run form of show_view (a run without a layout takes its category's layout, ADR 0817).",
     "note": "Lead (2026-11-26): entered on ADR 0807 question 1 (the lead changes it and re-records), taken by the lead on the maintainer's standing instruction of 2026-11-26 (go with the recommended option always); the re-record is not additive, so it is its own merge."
   },
   {
@@ -10381,5 +10382,15 @@
     "status": "todo",
     "acceptance": "Every limit not stated here is registered in the ADR before the run. mesh_preview::estimate gives the cell count of a mesh file (each format the engine imports) and of every generator that has no estimate, read without building the mesh; each count equals the built count over a registered set of cases, checked by two routes; case.facts with a limit refuses by the estimate for each, within the time and memory limits of ADR 0812, with the reply of FactsError::TooLarge.",
     "note": ""
+  },
+  {
+    "id": "F-990",
+    "title": "Structural runs in a project: start_run of a solid case file, with its run records, and the structural layout shown from them",
+    "phase": 8,
+    "deps": [
+      "F-977"
+    ],
+    "status": "todo",
+    "acceptance": "Every limit not stated here is registered in the ADR before the run. start_run of a solid case file of the repository (crates/rcfd-api/tests/solid_cases/) makes a project run with run.json, case.snapshot, its report and its stored displacement and stress fields; show_view with that run and no layout takes the structural layout, which shows those fields and the report, shown by an e2e test in the open Studio."
   }
 ]
