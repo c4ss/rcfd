@@ -655,3 +655,12 @@ missed, on KR KK, which fails on the base tree as well (K1).
 > Gap: npm test did not pass: provenance-f828.spec.ts KR KK (Escape after Ctrl+I twice on a Runs grid cell sometimes leaves the provenance popover open) failed once in npm test and 1 of 5 runs alone; it fails 2 of 5 on main's tree 2327d4f1 as well, so it needs its own diagnosis and remedy.
 
 > Follow-up: KR KK of provenance-f828.spec.ts: the provenance popover a second Ctrl+I opens on a Runs grid cell closes on Escape every time. Deps: F-981. Acceptance: Every limit not stated here is registered in the ADR before the run. The cause of the KR KK failure (provenance-f828.spec.ts, the popover left open after Escape, 2 of 5 runs on 2327d4f1 in ADR 0808 Addendum 8) is diagnosed and remedied without loosening the case; the spec run alone passes in every one of a registered number of runs (at least 10) and npm test passes.
+
+## Answers of the maintainer (2026-11-26), written by the lead
+
+1. Option (a): the case editor and the settings surface are retired in a follow-up after F-979 and F-823 land, F-985, which also brings apps/studio-web/README.md up to date; taken by the lead on the maintainer's standing instruction of 2026-11-26 (go with the recommended option always).
+2. The help on demand is kept; taken by the lead on the maintainer's standing instruction of 2026-11-26 (go with the recommended option always).
+
+## The lead's correction at the merge (2026-11-26)
+
+The expect-fail command of `apps/studio-web/tests/e2e/a11y.spec.mutation.patch` ran the e2e test without `npm run build && npm run package:dir`, so push_main ran it against the app built before the patch and the mutation (M4, then M5) was not applied to what the test drove; the lead's commit f9231204 adds the build and package steps, as every other e2e mutation patch has them. The mutation is unchanged; in the push it failed as expected.

@@ -641,7 +641,7 @@ exist, and Phase 9 items are stretch. Phase numbers 5 and 6 may run in parallel 
 
 ## Phase 8 - AI assistant and desktop app integration
 
-90 items: 58 done, 18 partly done, 14 not started.
+91 items: 58 done, 19 partly done, 14 not started.
 
 - [x] **F-090** MCP server (external tool interface) with tools: list_cases, create_case, set_setting, get_setting, load_mesh, check_mesh, run, status, get_residuals, get_field_stats, export_vtk, render_image
   - depends on: F-085, F-073
@@ -1014,10 +1014,11 @@ exist, and Phase 9 items are stretch. Phase numbers 5 and 6 may run in parallel 
   - depends on: F-976
   - acceptance: Every limit not stated here is registered in the ADR before the run. export_view writes a view specification as one self-contained HTML file (no network fetch, the Studio's theme and styling) with the data of the views it names and their provenance. The page opens offline and shows the values the Studio shows for the same specification, checked by a registered comparison over a registered set of specifications; the size of the file of a registered case is recorded.
   - note: Lead (2026-11-26): entered on ADR 0803, the maintainer's direction and answers of that day (the Studio as Claude's canvas).
-- [ ] **F-981** Retire G15's coverage test and the Studio's hand-only surfaces
+- [~] **F-981** Retire G15's coverage test and the Studio's hand-only surfaces
   - depends on: F-976
   - acceptance: Every limit not stated here is registered in the ADR before the run. The coverage test of guardrail G15 and the Studio's hand-only surfaces (menus, editors and navigation whose only purpose is to reach a capability by hand), each listed in the registration with its file, are removed or retired; every test retired is named in the ADR with its reason (the maintainer's answer of 2026-11-26, ADR 0803). The views the canvas uses and their tests stay and pass; npm test passes.
-  - note: Lead (2026-11-26): entered on ADR 0803, the maintainer's direction and answers of that day (the Studio as Claude's canvas).
+  - gap: npm test did not pass: provenance-f828.spec.ts KR KK (Escape after Ctrl+I twice on a Runs grid cell sometimes leaves the provenance popover open) failed once in npm test and 1 of 5 runs alone; it fails 2 of 5 on main's tree 2327d4f1 as well, so it needs its own diagnosis and remedy.
+  - note: Lead (2026-11-26): entered on ADR 0803, the maintainer's direction and answers of that day (the Studio as Claude's canvas). ADR 0808, 2026-11-26, partial (Addenda 7 and 8): the a11y Runs case now waits for the workspace's selection of the newest run instead of racing its lazy load (57c7f729 reverted); a11y.spec 5 of 5 and its mutation caught 5 of 5; npm test 884 passed, 1 failed on provenance-f828 KR KK, which fails on the base tree 2327d4f1 too (2 of 5) and so is not this work's. Lead (2026-11-26): merged at 80086d71 and pushed at 743f26f4 after three refused pushes (a11y.spec.ts:299 failed 3 of 3; then the committed mutation passed twice, because its expect-fail command ran the e2e test against the app built before the patch: the lead corrected the command to build and package first, as every other e2e mutation patch does, f9231204, the mutation unchanged). In the push npm test passed at its first run (885 passed) and both committed mutations failed as expected. Partial as proposed; questions 1 and 2 answered in ADR 0808 (F-985; the help on demand kept).
 - [ ] **F-984** Claude's canvas: derived pictures and a mesh picture as panels
   - depends on: F-979
   - acceptance: Every limit not stated here is registered in the ADR before the run. The view specification gains panel kinds for the derived pictures of derive_picture (ADR 0738) and a picture of a mesh, additive to version 1 or as a version 2 that still reads version 1; each is drawn in the open Studio by an existing view in its theme, refused with its key when invalid, and shown by an e2e test that drives the open Studio from the rcfd-mcp binary; every default unchanged.
@@ -1034,6 +1035,9 @@ exist, and Phase 9 items are stretch. Phase numbers 5 and 6 may run in parallel 
   - depends on: F-979
   - acceptance: show_view's description in the MCP tool list names the mesh-of-a-case, setting and monitor-of-a-case forms of ADR 0807 as well as F-976's kinds; the tool-list goldens are re-recorded by the lead for that one entry, with the maintainer's word recorded; every other entry unchanged.
   - note: Lead (2026-11-26): entered on ADR 0807 question 1 (the lead changes it and re-records), taken by the lead on the maintainer's standing instruction of 2026-11-26 (go with the recommended option always); the re-record is not additive, so it is its own merge.
+- [ ] **F-988** KR KK of provenance-f828.spec.ts: the provenance popover a second Ctrl+I opens on a Runs grid cell closes on Escape every time
+  - depends on: F-981
+  - acceptance: Every limit not stated here is registered in the ADR before the run. The cause of the KR KK failure (provenance-f828.spec.ts, the popover left open after Escape, 2 of 5 runs on 2327d4f1 in ADR 0808 Addendum 8) is diagnosed and remedied without loosening the case; the spec run alone passes in every one of a registered number of runs (at least 10) and npm test passes.
 
 ## Phase 9 - Advanced physics and scale (stretch)
 
