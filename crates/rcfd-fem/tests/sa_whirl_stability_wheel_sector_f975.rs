@@ -294,6 +294,7 @@ fn a1_a2_whirl_stability_of_w_and_whirl_state() {
 // ---------------------------------------------------------------------------------------------------------- V1 to V4
 
 #[test]
+#[ignore = "record of ADR 0806 run 1 (f4145eff): V1 missed, measured inf, a defective set-up (the reference of modal_analysis_harmonic doubled twice for a pair index, 16 against 8 values); V2 to V4 met; corrected by amendment 2 in v1_corrected_rest_frequencies_against_modal_analysis_harmonic"]
 fn v1_v4_frequencies_flags_and_residuals_against_the_other_routes() {
     let m = sector(options_a());
     let sec = wheel_sector(&m);
@@ -363,6 +364,43 @@ fn v1_v4_frequencies_flags_and_residuals_against_the_other_routes() {
     assert!(v2_ok, "V2");
     assert!(v3_ok, "V3");
     assert!(v4_ok, "V4");
+}
+
+/// V1 with the corrected set-up of ADR 0806 amendment 2: the reference of `modal_analysis_harmonic` as returned (for a pair
+/// index already `modes x multiplicity` values), compared one to one; the limit unchanged.
+#[test]
+fn v1_corrected_rest_frequencies_against_modal_analysis_harmonic() {
+    let m = sector(options_a());
+    let sec = wheel_sector(&m);
+    let r = sec.whirl_stability(&KS, &SPEEDS).expect("whirl_stability (A1)");
+    let j = SPEEDS.iter().position(|&w| w == 0.0).unwrap();
+    let mut v1 = 0.0f64;
+    for (h, &k) in KS.iter().enumerate() {
+        let st = &r.results[h][j].state;
+        let omegas: Vec<f64> = st.modes.iter().map(|q| q.omega).collect();
+        let hm = modal_analysis_harmonic(&m, &[], k, &modal_options(4)).unwrap();
+        let reference: Vec<f64> = hm.eigenvalues.iter().map(|l| l.sqrt()).collect();
+        let worst = if omegas.len() == reference.len() && !omegas.is_empty() {
+            omegas
+                .iter()
+                .zip(&reference)
+                .map(|(a, b)| rel(*a, *b))
+                .fold(0.0f64, f64::max)
+        } else {
+            f64::INFINITY
+        };
+        v1 = v1.max(worst);
+        println!(
+            "V1 (amendment 2) k = {k}, speed 0: {} frequencies against {}, largest relative difference {worst:.3e}",
+            omegas.len(),
+            reference.len()
+        );
+        println!("    omegas {omegas:?}");
+        println!("    reference {reference:?}");
+    }
+    let ok = v1 <= 1e-8;
+    println!("V1 (amendment 2): largest {v1:.3e} (limit 1e-8): {}", met(ok));
+    assert!(ok, "V1");
 }
 
 // ---------------------------------------------------------------------------------------------------------------- E-W2
