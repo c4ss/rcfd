@@ -602,7 +602,10 @@ fn f885_fl_rules_on_built_records() {
     // a factor NaN
     assert_eq!(mode_c([0.85, f64::NAN, 0.9], on).1, Outcome::Undecided);
     // the class of C
-    assert_eq!((class(1e-3), class(0.1), class(f64::NAN)), ("CONVERGES", "STALLS", "UNDECIDED"));
+    assert_eq!(
+        (class(1e-3), class(0.1), class(f64::NAN)),
+        ("CONVERGES", "STALLS", "UNDECIDED")
+    );
     // FA2
     assert!(cycle_gone(&Outcome::AllRuledOut, 2.0));
     assert!(!cycle_gone(&Outcome::AllRuledOut, 0.05));
@@ -749,7 +752,11 @@ fn f885_fl_two_routes() {
                 for k in 0..3 {
                     let d = rel_nan(i.psi[0][k], want[k][p.cell]);
                     if !g.active[k] && !i.psi[0][k].is_nan() {
-                        miss.push(format!("step {step} cell {} iteration {}: inactive {k} not NaN", p.cell, n + 1));
+                        miss.push(format!(
+                            "step {step} cell {} iteration {}: inactive {k} not NaN",
+                            p.cell,
+                            n + 1
+                        ));
                     }
                     compared += 1;
                     worst = worst.max(d);
@@ -772,7 +779,10 @@ fn f885_fl_two_routes() {
     println!(
         "F885-FL T1: {compared} factors compared, largest relative difference {worst:.3e} (limit {ROUTE_TOL:e}); misses {miss:?}; without the opt-in the largest change of a factor in steps 2 and 3 {moved:.3e} (floor {PSI_FLOOR:e})"
     );
-    assert!(moved > PSI_FLOOR, "T1 does not decide: no factor changes without the opt-in ({moved})");
+    assert!(
+        moved > PSI_FLOOR,
+        "T1 does not decide: no factor changes without the opt-in ({moved})"
+    );
     assert!(worst <= ROUTE_TOL && miss.is_empty(), "T1: {worst}, {miss:?}");
 }
 
@@ -1056,7 +1066,11 @@ fn fan_outcomes(runs: &[(Run, Vec<OuterProbe>)]) -> Outcomes {
     let n_classed = FAN_STEPS - FAN_FROM + 1;
     let fa = at(0, C_A);
     let (held_a, q, out_a) = mode_a(&fa, 0.9, runs[0].0.complete() && fa.len() == n_classed);
-    let fa1 = if fa.len() == n_classed { kept_change(&fa) } else { f64::NAN };
+    let fa1 = if fa.len() == n_classed {
+        kept_change(&fa)
+    } else {
+        f64::NAN
+    };
     let rhos = [1, 2, 3, 4].map(|i| rho(&runs[i].0));
     let cs = [1, 2, 3, 4].map(|i| c_of(&runs[i].0));
     let r_b = [1, 2, 3, 4].map(|i| {
