@@ -449,3 +449,9 @@ inputs the tests do not reach; both are in the gap. Open question 1 (service met
 To the lead's question whether `design_uq` and `design_sobol` stay MCP only, with the recommendation to keep them MCP
 tools until a second caller needs them as service methods, the maintainer answered "Yes, MCP only" (option (a)). They
 are not service methods. F-339 stays partial for X1 and the reader's findings 1-1 and 2-1.
+
+## Decisions (2026-11-25), the lead's
+
+Taken by the lead under the maintainer's standing direction (ask only about scope or priority; decide the rest and record it in the ADR). None of them changes a default result, a golden or a hash table.
+
+1. Option (a): MCP tools only, as built, until a second caller exists.

@@ -372,3 +372,7 @@ M1 after 81 minutes because it waits without end; the lead notes that the agent 
 reverted them. The agent of this item ran on Claude Opus 5.5, not on the model its brief names; the lead records it
 here. The two follow-ups are scope and are put to the maintainer with the agent's recommendation (a), which the lead
 shares.
+
+## Answers of the maintainer (2026-11-25), written by the lead
+
+1. Option (a), as recommended: the follow-up that lets A-N end on such an adoption is a new item, F-968. The other follow-up of the addendum (the status read under a load of new files) was not put to the maintainer and is not entered.

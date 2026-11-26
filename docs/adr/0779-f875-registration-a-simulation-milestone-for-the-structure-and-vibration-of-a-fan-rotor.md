@@ -387,3 +387,8 @@ that stood, each of those nine compares equal to its value before the command, a
 Status: **done**, as proposed. The milestone reads 72 per cent and not met. That it could read met with no comparison
 against a published blade, and that the rotating sector items sit under no headline, are scope; both are put to the
 maintainer with the agent's recommendation (b), which the lead shares.
+
+## Answers of the maintainer (2026-11-25), written by the lead
+
+1. Option (b), as recommended: a published rotating blade or bladed disc is a fourth headline item, F-971; the milestone cannot read met before that comparison passes.
+2. Option (b), as recommended: the cyclic rotor at speed is a headline item, F-972, with F-500 and F-499 as direct dependencies.

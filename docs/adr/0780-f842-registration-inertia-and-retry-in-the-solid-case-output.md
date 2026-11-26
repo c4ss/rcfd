@@ -193,3 +193,7 @@ right to stop before code. The third outcome of the decision rule (todo) is acce
 Status: **todo**, as proposed; the brief is closed. Open question 1 is put to the maintainer with the agent's
 recommendation (c), which the lead shares. The outputs registered here (the opt-in key, the report keys, the warnings
 and the checks) stand for the next issue.
+
+## Answers of the maintainer (2026-11-25), written by the lead
+
+1. Option (c), as recommended: the nonlinear static analysis of the solid case file is a new item, F-973; the CLI summary clause of F-842 moves to F-405 (both acceptances amended 2026-11-25, the old words kept); F-842 depends on F-973 and is issued again with this registration's D1 to D4.

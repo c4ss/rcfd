@@ -427,3 +427,7 @@ committed mutation and ADR 0764's, and both failed as expected; 137 binaries wer
 Status: **done**, as proposed. That 13 and 16 degrees no longer meet the residual targets and run to the cap is noted
 for the question of the default, which is put to the maintainer with the agent's recommendation (b), which the lead
 shares.
+
+## Answers of the maintainer (2026-11-25), written by the lead
+
+1. Option (b), as recommended: the default stays; the setting is named in the aerofoil example cases and the topic page, and the follow-up on a second case set with the diagnosis of the stalled residuals at 13 and 16 degrees is a new item, F-967. Question (a) is asked again after it.

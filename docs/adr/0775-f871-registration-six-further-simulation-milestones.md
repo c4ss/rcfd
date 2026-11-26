@@ -384,3 +384,8 @@ stood, each of those three compares equal to its value before the command, and `
 Status: **done**, as proposed. The two headline items the agent proposes for the backward-facing step and the flat
 plate are scope, and are put to the maintainer with the agent's recommendation (b) for both, which the lead shares;
 they are not entered until the maintainer answers.
+
+## Answers of the maintainer (2026-11-25), written by the lead
+
+1. Option (b), as recommended: the laminar backward-facing step is a headline item of `backward-facing-step`, F-969.
+2. Option (b), as recommended: the Blasius plate is a headline item of `flat-plate`, F-970. The milestone file is the lead's to change when the items are placed in it.

@@ -525,3 +525,9 @@ move; the observed order 2.79 is above the registered range, so no extrapolated 
 notes them: the mutation M6 as registered was not caught (an unregistered variant was), B0c misses all three mesh
 gates, and the inlet-duct share does not fall steadily. The open question, whether F-880 is issued now, is put to the
 maintainer with the agent's recommendation (a), which the lead shares.
+
+## Decisions (2026-11-25), the lead's
+
+Taken by the lead under the maintainer's standing direction (ask only about scope or priority; decide the rest and record it in the ADR). None of them changes a default result, a golden or a hash table.
+
+1. Option (a): F-880 is an entered item on the third line of the priority statement (the fan path); issuing an entered item on a named line is the lead's (lead process, Issuing 1), so it is issued when its dependencies allow, and F-882 stays partial with its known miss. Option (b) is not taken: it cannot be systematic at the wall with the present wall treatment.

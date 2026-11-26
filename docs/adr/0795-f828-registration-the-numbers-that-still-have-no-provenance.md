@@ -305,3 +305,7 @@ gives `step: o.step ?? 0`, so a snapshot without a known step is shown at step 0
 
 Status: **partial**, as proposed. Whether the numbers outside the registered views get their provenance (option (b) of the open
 question) is the maintainer's.
+
+## Answers of the maintainer (2026-11-25), written by the lead
+
+1. Option (b), as recommended: the numbers that are values of a run carry provenance, by a registration of their own, the new item F-974. The tick labels, file sizes and counts stay as they are.

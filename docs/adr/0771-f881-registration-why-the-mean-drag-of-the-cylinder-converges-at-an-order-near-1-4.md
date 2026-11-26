@@ -414,3 +414,7 @@ Status: **done**, as proposed. The order of the drag is explained: the first-ord
 hold it at 1.387, second-order terms alone on the same fields give 1.777, and the grading and the far-field condition
 are not the cause. The second-order wall force as an option of rcfd-post is scope and is put to the maintainer with the
 agent's recommendation (a), which the lead shares; it is not entered until the maintainer answers.
+
+## Answers of the maintainer (2026-11-25), written by the lead
+
+1. Option (a), as recommended: the opt-in second-order wall force integral is a new item, F-966, entered with the follow-up's title, dependencies and acceptance.

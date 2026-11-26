@@ -393,3 +393,9 @@ To the lead's question with the two open points of this ADR, the maintainer answ
    F-616 stays **done**.
 2. The proposed follow-up, keys of `[reduction]` for the cutoff, the load's residual vector and the load patterns, is
    entered as F-889 with the title, dependencies and acceptance of the proposal file as written.
+
+## Decisions (2026-11-25), the lead's
+
+Taken by the lead under the maintainer's standing direction (ask only about scope or priority; decide the rest and record it in the ADR). None of them changes a default result, a golden or a hash table.
+
+1. Option (a): the bar of ADR 0536 from a case file is the static solve and the modal analysis; the harmonic solve of a combined model comes with the item that gives the solid case file a harmonic analysis. F-616's status done stands on this reading.

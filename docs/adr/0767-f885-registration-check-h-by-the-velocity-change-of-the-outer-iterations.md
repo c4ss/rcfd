@@ -480,3 +480,10 @@ Status: **partial**, as proposed. The record is shown correct, and it shows why 
 in every step the fifth outer iteration, which is not relaxed, moves the velocity about as far as the first, while the
 relaxed second to fourth contract. The cavity shows the same, so it is a property of the relaxed outer loop and not of
 the fan. Questions 1 and 2 are put to the maintainer with the agent's recommendations, which the lead shares.
+
+## Decisions (2026-11-25), the lead's
+
+Taken by the lead under the maintainer's standing direction (ask only about scope or priority; decide the rest and record it in the ADR). None of them changes a default result, a golden or a hash table.
+
+1. Option (a): a diagnosis registered under F-885 (rule 13), on the cavity and 20 steps of H(dt), with no long run; the remedy is decided on its result. A further registration of an item, not a new item, so the lead's to issue (lead process, Issuing 2).
+2. Option (a): `is_converged()` of the steady solve at 1e-5 for now; (b) is asked again only after question 1 shows the outer loop converges within a step.

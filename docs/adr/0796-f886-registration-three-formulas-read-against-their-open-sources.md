@@ -306,3 +306,9 @@ This was the first work started with `claude -p` and its goal line: the goal was
 60, which nothing enforced, and met its goal in 24 minutes with no action denied.
 
 Status: **done**, as proposed. Questions 1 to 3 and the follow-up (Table 3.1 of Lienhard) are the maintainer's.
+
+## Answers of the maintainer and decisions of the lead (2026-11-25)
+
+1. The lead's decision: option (a). The form is what decision D of ADR 0056 derives for incompressible phases; no default changes.
+2. The lead's decision: option (a). The cap stays as the registered rule of ADR 0762.
+3. The maintainer's answer, option (b), as recommended: the copy of the first source is removed from the wiki and the citation kept, since the arXiv page and the PDF's first page do not agree on the licence.

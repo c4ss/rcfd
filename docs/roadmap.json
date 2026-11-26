@@ -4160,7 +4160,7 @@
       "F-386"
     ],
     "status": "todo",
-    "acceptance": "Every limit not stated here is registered in the ADR before the run. NEEDS THE MAINTAINER'S APPROVAL of two golden edits before it starts. rcfd solid <file> runs a solid case file and writes the files and the report of the library entry with the same bytes; --check validates without solving; exit codes and located errors follow the existing subcommands (an unknown key exits non-zero with the key and the line). The MCP tools solid_check and solid_run return the validation result and the JSON report of the same run. The CLI help golden and the MCP tool-list golden change by exactly the added subcommand and the two added tools (the diff is listed in the addendum for the maintainer); every other golden, the hash tables and the flow-case behaviour are unchanged; the coupled run of ADR 0307 is reachable only through the library until a further decision.",
+    "acceptance": "Every limit not stated here is registered in the ADR before the run. NEEDS THE MAINTAINER'S APPROVAL of two golden edits before it starts. rcfd solid <file> runs a solid case file and writes the files and the report of the library entry with the same bytes; --check validates without solving; exit codes and located errors follow the existing subcommands (an unknown key exits non-zero with the key and the line). The MCP tools solid_check and solid_run return the validation result and the JSON report of the same run. The CLI help golden and the MCP tool-list golden change by exactly the added subcommand and the two added tools (the diff is listed in the addendum for the maintainer); every other golden, the hash tables and the flow-case behaviour are unchanged; the coupled run of ADR 0307 is reachable only through the library until a further decision. Amended 2026-11-25: the summary of rcfd solid also shows the inertia and the retry flag of every accepted increment, with a warning when an accepted state has nu > 0, once the case file reports increments (F-973); moved here from F-842 by the maintainer's answer of that day to ADR 0780 question 1, option (c).",
     "note": "Structural solver, intermediate tier (plan ADR 0290, 2026-11-12). Size S. Stub ADR 0308; the registration is written by the implementation agent before any code. Blocked until the maintainer approves the edits of the CLI help golden and the MCP tool-list golden (decision N2 of ADR 0290); no library package depends on it."
   },
   {
@@ -9018,10 +9018,11 @@
     "title": "The inertia and the retry of the nonlinear driver in the solid case's output",
     "phase": 9,
     "deps": [
-      "F-780"
+      "F-780",
+      "F-973"
     ],
     "status": "todo",
-    "acceptance": "Every limit not stated here is registered in the ADR before the run. With the solid case's opt-in for NewtonOptions::indefinite_retry, the inertia and the retry flag of every accepted increment written where the case reports its increments and shown by the CLI summary, with a warning when an accepted state has nu > 0; the 16^3 block of ADR 0694 run through the case file reports nu = 1 at full load; off by default, the default bits, the schema golden and the hash tables unchanged.",
+    "acceptance": "Every limit not stated here is registered in the ADR before the run. With the solid case's opt-in for NewtonOptions::indefinite_retry, the inertia and the retry flag of every accepted increment written where the case reports its increments and shown by the CLI summary, with a warning when an accepted state has nu > 0; the 16^3 block of ADR 0694 run through the case file reports nu = 1 at full load; off by default, the default bits, the schema golden and the hash tables unchanged. Amended 2026-11-25: the clause \"and shown by the CLI summary\" is moved to F-405, and the nonlinear static analysis of the case file is the new item F-973 (the maintainer's answer of that day to ADR 0780 question 1, option (c)); the other words stand.",
     "note": "Follow-up of F-780 (ADR 0719, 2026-11-16). NEEDS USER (2026-11-17): adds the inertia to the case output and CLI, which changes output goldens and schema. Maintainer (2026-11-18): the golden, schema or hash-table edit this item needs is approved under the class rule of agent rules version 2, rule 3: a change that only adds entries is re-recorded by the lead, with the diff in the ledger. The item may be issued. Lead (2026-11-23): issued by docs/adr/briefs/f842-solid-inertia-in-output.md (ADR 0780). ADR 0780, 2026-11-23, todo: registered and stopped before code, because the acceptance presupposes a nonlinear static analysis in the solid case file (the file has static and modal only, reports no increments and has no key for the hyperelastic material or the incompatible-mode formulation of the 16^3 block) and a CLI subcommand for solid cases (F-405, todo); the inertia is already returned by the library (LoadStep::inertia, LoadStep::retried); the opt-in key, the report keys, the warning's text and the checks are registered for the next issue; where the analysis and the subcommand are built is open question 1 of the ADR (recommended: a new item for the analysis, the CLI summary moved to F-405). Lead (2026-11-23): merged at c557e935 and pushed at 857bcff1; todo as proposed, the brief closed. Where the nonlinear static analysis of the solid case file and the solid CLI summary are built is the maintainer's (ADR 0780, open question 1); not issued again until answered."
   },
   {
@@ -10102,5 +10103,111 @@
     "status": "done",
     "acceptance": "Every limit not stated here is registered in the ADR before the run. In params[i].dist of design_uq and design_sobol a key that the named type does not have (mean, sd, a or b of a uniform; a or b of a normal; mean or sd of a beta), with any value, null among them, is refused with the invalid-arguments code, the message naming the key by its path and the keys of the type, before any sample, and no file is written; every form Dist::to_json writes and every call without such a key gives results bit-identical to main; each of the eight wrong acceptances is caught by a registered test under a mutation; no golden and no tool-list text changes.",
     "note": "Lead (2026-11-25): entered on the maintainer's answer of that day (\"Yes, issue it ...\"): finding 7 of ADR 0791, which read that dist accepts a key of another distribution and ignores it, so that a mistyped study runs on other inputs than the caller wrote. The acceptance is the lead's. Lead (2026-11-25): issued by docs/adr/briefs/f895-dist-foreign-keys.md (ADR 0793). ADR 0793, 2026-11-25, done: in params[i].dist of design_uq and design_sobol a key that the named type does not have (mean, sd, a or b of a uniform; a or b of a normal; mean or sd of a beta) is refused with -32602, whatever its value, the message naming the key by its path and the keys of the type, before the limit and the driver and with nothing written: 384 calls over the eight keys (number, null, string and three other values, both tools, through the server and the handler, in the first and the second input); of several the first of mean, sd, a, b is named; a key of no distribution, a type that is not known and a malformed number keep code and message; the six forms of Dist::to_json, the sixteen forms of the open sides and a study of three inputs give the library's and main's bytes on Windows x86_64 and Linux x86_64; 23 registered mutations, the eight wrong acceptances among them, are each caught by the registered rows, one is committed; no golden, tool-list text or existing test is changed. Lead (2026-11-25): merged at 0fea72e9 on the maintainer's answer \"Yes, merge it\" (the work ran in a session of its own) and pushed at c5570767; the new file and two earlier files of the tools passed on the merged tree, the three mutations of the push run were caught, and 127 binaries were left out for a left-out run. Done as proposed."
+  },
+  {
+    "id": "F-966",
+    "title": "Second-order wall force integral as an option of rcfd-post",
+    "phase": 9,
+    "deps": [
+      "F-881"
+    ],
+    "status": "todo",
+    "acceptance": "Every limit not stated here is registered in the ADR before the run. An opt-in wall force in rcfd-post with the pressure extrapolated linearly to the wall and the wall-normal velocity derivative from the wall and the first two cells (ADR 0771, C1), every default bit-identical, exact on a quadratic wall profile to a relative error of at most 1e-9, gives on the mesh sequence of ADR 0763 an observed order of the mean drag in [1.5, 2.5] (1.777 recorded by ADR 0771).",
+    "note": "Lead (2026-11-25): entered on the maintainer's answer of that day to ADR 0771 (question 1, option (a)), with the title, dependencies and acceptance of its follow-up as written."
+  },
+  {
+    "id": "F-967",
+    "title": "Steady Spalart-Allmaras with relax_nut = 1.0 on a second case set, and the stalled residuals at 13 and 16 degrees",
+    "phase": 9,
+    "deps": [
+      "F-887"
+    ],
+    "status": "todo",
+    "acceptance": "Every limit not stated here is registered in the ADR before the run. The default of the steady Spalart-Allmaras route is unchanged. The aerofoil example cases and the topic page of the turbulence models name relax_nut = 1.0 as the setting of ADR 0772 with what it measured. With relax_nut = 1.0, a second steady SA validation case of the repository (ADR 0159's mesh M2w, or another named in the registration) is run with its registered checks, each met or missed against its existing limit; and the residuals that stall at 13 and 16 degrees in ADR 0772 are diagnosed by a registered control that shows where and why the residual targets are not reached.",
+    "note": "Lead (2026-11-25): entered on the maintainer's answer of that day to ADR 0772 (question 1, option (b)), with the title, dependencies and acceptance of its follow-up as written."
+  },
+  {
+    "id": "F-968",
+    "title": "adopt_f288 A-N ends when it adopts a paused decoy",
+    "phase": 9,
+    "deps": [
+      "F-876"
+    ],
+    "status": "todo",
+    "acceptance": "Every limit not stated here is registered in the ADR before the run. A mutation that drops one item of RunKey::matches (ADR 0773 M1) makes adopt_f288 A-N fail at an assertion instead of waiting without end, shown by a committed mutation patch, and A-N passes a registered number of runs.",
+    "note": "Lead (2026-11-25): entered on the maintainer's answer of that day to ADR 0773 (question 1, option (a)), with the title, dependencies and acceptance of its follow-up as written."
+  },
+  {
+    "id": "F-969",
+    "title": "Laminar backward-facing step at Re_D 800: the reattachment length against the published values",
+    "phase": 9,
+    "deps": [
+      "F-028",
+      "F-006"
+    ],
+    "status": "todo",
+    "acceptance": "Every limit not stated here is registered in the ADR before the run. The reattachment length of the step of expansion ratio 2 at Re_D 800 lies within the published values 11.48 to 12.20 recorded in docs/reference-data.md (section \"Wave 30B: incompressible validation data actually read\"), by the checks S1 to S3 of ADR 0060 or their registered successors, on current main, in tests the gate runs. Milestone backward-facing-step, headline.",
+    "note": "Lead (2026-11-25): entered on the maintainer's answer of that day to ADR 0775 (question 1, option (b)), with the title, dependencies and acceptance of its follow-up as written."
+  },
+  {
+    "id": "F-970",
+    "title": "Laminar flat plate: the skin friction and the velocity profile against the Blasius solution",
+    "phase": 9,
+    "deps": [
+      "F-028",
+      "F-006"
+    ],
+    "status": "todo",
+    "acceptance": "Every limit not stated here is registered in the ADR before the run. The laminar plate reproduces the Blasius values of arXiv:2204.02215 recorded in docs/reference-data.md (section \"Wave 30B: incompressible validation data actually read\"), by the checks B1 to B4 of ADR 0060 or their registered successors, on current main, in tests the gate runs. Milestone flat-plate, headline.",
+    "note": "Lead (2026-11-25): entered on the maintainer's answer of that day to ADR 0775 (question 2, option (b)), with the title, dependencies and acceptance of its follow-up as written."
+  },
+  {
+    "id": "F-971",
+    "title": "Structural fan rotor: a published rotating blade or bladed disc read, recorded and compared",
+    "phase": 9,
+    "deps": [
+      "F-387",
+      "F-394",
+      "F-396"
+    ],
+    "status": "todo",
+    "acceptance": "Every limit not stated here is registered in the ADR before the run. A published case of a rotating blade or a bladed disc with its natural frequencies (measured, or a benchmark solution) is read, and its geometry, material and values are recorded with their place in the source as a fragment under docs/reference-data.d; the solid solver reproduces those frequencies at rest and at speed within a band registered before the run from the stated uncertainty of the source; a source that cannot be obtained is recorded as not obtained and the item stays partial. Milestone fan-structure, headline.",
+    "note": "Lead (2026-11-25): entered on the maintainer's answer of that day to ADR 0779 (question 1, option (b)), with the title, dependencies and acceptance of its follow-up as written."
+  },
+  {
+    "id": "F-972",
+    "title": "Fan rotor at speed by a cyclic sector: the Campbell table of the bladed hub against the full rotor",
+    "phase": 9,
+    "deps": [
+      "F-406",
+      "F-500",
+      "F-499"
+    ],
+    "status": "todo",
+    "acceptance": "Every limit not stated here is registered in the ADR before the run. One sector of the bladed hub of F-406 at registered speeds from rest to the registered maximum, with stress stiffening and spin softening and, as a second table, with the Coriolis term: for every harmonic index 0 to Z/2 the sector frequencies equal those of the full rotor on the coarse mesh within 1e-6 (heavy record), at rest they have the bits of the sector of F-406, and every crossing of the engine orders is listed with its nodal diameter. Milestone fan-structure, headline.",
+    "note": "Lead (2026-11-25): entered on the maintainer's answer of that day to ADR 0779 (question 2, option (b)), with the title, dependencies and acceptance of its follow-up as written."
+  },
+  {
+    "id": "F-973",
+    "title": "Solid case file: a nonlinear static analysis with load steps, a hyperelastic material and the incompatible-mode formulation",
+    "phase": 9,
+    "deps": [
+      "F-621",
+      "F-780"
+    ],
+    "status": "todo",
+    "acceptance": "Every limit not stated here is registered in the ADR before the run. The solid case file gains an opt-in nonlinear static analysis: load steps and the tolerances of NewtonOptions, a hyperelastic (neo-Hookean) material, the incompatible-mode formulation with its stabilisation rule, the factor, and a list of increments in the report. A file run gives the bits of the same library calls (the 16^3 block of ADR 0694 among the cases); an unknown or inconsistent key is refused with the key and its line; a case without the new keys gives every result bit-identical; the schema golden changes only by added keys (the additive class).",
+    "note": "Lead (2026-11-25): entered on the maintainer's answer of that day to ADR 0780 (question 1, option (c)), with the title, dependencies and acceptance of its follow-up as written."
+  },
+  {
+    "id": "F-974",
+    "title": "Electron Studio: provenance of the values of a run that are still without it",
+    "phase": 8,
+    "deps": [
+      "F-828"
+    ],
+    "status": "todo",
+    "acceptance": "Every limit not stated here is registered in the ADR before the run. The numbers on screen that are values of a run and that ADR 0795 lists under Open (the compare metrics table, the band ends, the scrubber's flag, Home's Step and Time) open their provenance by the trigger and the keyboard path of F-828, with the same content rule; axis tick labels, file sizes and counts in a sentence stay without it.",
+    "note": "Lead (2026-11-25): entered on the maintainer's answer of that day to ADR 0795 (question 1, option (b)), with the title, dependencies and acceptance of its follow-up as written."
   }
 ]

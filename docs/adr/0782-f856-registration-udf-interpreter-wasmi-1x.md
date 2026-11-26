@@ -250,3 +250,9 @@ with Rust 1.90, passed in CI on main at 47ade6bf (run 45131392392, job "Type-che
 1.1.0; a move to 2.x is not taken. The `rust-version` fields of the crates already lagged their dependency closure
 before this item (1.88 is needed by rcfd-api, rcfd-cli, rcfd-mcp and rcfd-workspace), so the lead did not change them
 here; the README's minimum of 1.90 is the one the CI job holds.
+
+## Decisions (2026-11-25), the lead's
+
+Taken by the lead under the maintainer's standing direction (ask only about scope or priority; decide the rest and record it in the ADR). None of them changes a default result, a golden or a hash table.
+
+1. Option (a): wasmi stays on 1.1.0 until a fix or a need names 2.x.

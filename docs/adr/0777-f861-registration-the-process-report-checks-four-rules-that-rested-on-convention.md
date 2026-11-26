@@ -366,3 +366,9 @@ at f8e433bb and pushed at 1e6dcaa0 (the report read at 03:58 UTC, 8 minutes of r
 
 Status: **done**, as proposed. The four open questions were taken on their recommendations under the maintainer's
 standing instruction of 2026-11-11, as the ADR says; each changes a constant of the script, not its design.
+
+## Decisions (2026-11-25), the lead's
+
+Taken by the lead under the maintainer's standing direction (ask only about scope or priority; decide the rest and record it in the ADR). None of them changes a default result, a golden or a hash table.
+
+The four values stand as registered: (1) a note entry of at most 1200 characters, the lead's entries held to it as well; (2) rule 4's four places with figure, section, chapter and appendix, as registered; (3) the reading limit 194023, looked at again after two weeks of briefs; (4) rule 12's item for a Rust test file unchecked, as registered. No constant of `scripts/process_report.py` changes.

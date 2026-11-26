@@ -517,3 +517,9 @@ To the lead's question whether to enter and issue the three follow-ups of the pr
 maintainer answered "Yes, issue all three". They are entered as F-890 (responsiveness-long-task), F-891
 (runner-budgets-alert) and F-892 (serve-left-behind), with the titles, dependencies and acceptance of the proposal file
 as written.
+
+## Decisions (2026-11-25), the lead's
+
+Taken by the lead under the maintainer's standing direction (ask only about scope or priority; decide the rest and record it in the ADR). None of them changes a default result, a golden or a hash table.
+
+Q1 is overtaken: the maintainer decided on 2026-11-25 (F-823, ADR 0802, its brief) that the studio-web job builds rcfd, rcfd-runner, rcfd-mcp and the bench and packages the Studio with its engine, so the engine tests run on CI. Whether that job is required for a merge is read from F-823's first run on GitHub Actions.
