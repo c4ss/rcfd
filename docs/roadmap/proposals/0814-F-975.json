@@ -1,0 +1,9 @@
+{
+  "form": 1,
+  "adr": "0814",
+  "item": "F-975",
+  "base": "3b6cc7cc70b48e4bb564d6e5791041fde9ec3eb7",
+  "status": "done",
+  "note": "ADR 0814, 2026-11-26, done: DG1 of ADR 0806 failed on Linux because glibc's sin differs from MSVC's by one ulp at pi/4 and 4pi/3 on W's path (with glibc's values Windows reproduces the Linux matrices bit for bit and its stall set), and the stall of a pair index at rest is a property of the last bits (one-ulp perturbations stall it in 2 to 8 of 16 copies on both platforms); thread count changes no bit; DG1 is now stated per platform from a registered run (Windows (1,0),(2,0); Linux (2,0)), the ADR 0806 test held as a known miss; passes on both; 3 of 3 mutations caught.",
+  "follow_ups": []
+}

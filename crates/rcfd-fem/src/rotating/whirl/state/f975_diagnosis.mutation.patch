@@ -1,0 +1,15 @@
+# expect-fail: cargo test -p rcfd-fem --release --lib f975_diagnosis::dg1_stall_set_per_platform
+diff --git a/crates/rcfd-fem/src/rotating/whirl/state.rs b/crates/rcfd-fem/src/rotating/whirl/state.rs
+index 47955c05..a822012b 100644
+--- a/crates/rcfd-fem/src/rotating/whirl/state.rs
++++ b/crates/rcfd-fem/src/rotating/whirl/state.rs
+@@ -314,7 +314,8 @@ fn eig2(a: f64, b: f64, c: f64, d: f64) -> [[f64; 2]; 2] {
+ fn hessenberg_eigenvalues(h: Vec<f64>, m: usize) -> Result<Vec<[f64; 2]>> {
+     let h0 = h.clone();
+     let mut h = h;
+-    match schur_sweep(&mut h, m, None) {
++    let tau0 = m as f64 * f64::EPSILON * h0.iter().map(|v| v * v).sum::<f64>().sqrt();
++    match schur_sweep(&mut h, m, Some(tau0)) {
+         Ok(out) => Ok(out),
+         Err(_first) => {
+             let fro = h0.iter().map(|v| v * v).sum::<f64>().sqrt();
