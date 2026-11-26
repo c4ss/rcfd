@@ -1,0 +1,14 @@
+# expect-fail: cd apps/studio-web && npm run build && npm run package:dir && npx playwright test tests/e2e/provenance-escape-f988.spec.ts --project=electron
+diff --git a/apps/studio-web/src/renderer/provenance/registry.ts b/apps/studio-web/src/renderer/provenance/registry.ts
+index a4cf1010..7e5ce177 100644
+--- a/apps/studio-web/src/renderer/provenance/registry.ts
++++ b/apps/studio-web/src/renderer/provenance/registry.ts
+@@ -86,7 +86,7 @@ function listen(): void {
+   }, true);
+   // on the window in the capture phase, as PaletteHost's: its stopPropagation would hide the key from the document
+   window.addEventListener('keydown', (e) => {
+-    if (!e.repeat && !e.isComposing && globalCommandFor(e) === 'provenance.show') pressedOn.push({ at: opened, t: performance.now() });
++    if (!e.repeat && !e.isComposing && globalCommandFor(e) === 'provenance.show') pressedOn.splice(0, pressedOn.length, { at: opened, t: performance.now() });
+   }, true);
+   document.addEventListener('focusin', (e) => {
+     if (e.target instanceof HTMLElement && !e.target.closest(`${PALETTE}, ${POPOVER}`)) lastFocus = e.target;
