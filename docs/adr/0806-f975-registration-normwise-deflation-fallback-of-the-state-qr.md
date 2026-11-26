@@ -307,3 +307,14 @@ Status proposed: partial.
 > ADR 0806, 2026-11-26, partial: the state QR iteration stalled on W because at rest every eigenvalue of a pair index is double and the local deflation test refuses the rounding-size subdiagonal between the two copies (shown: 0.1 to 0.2 eps times the Frobenius norm, refused by a factor of about 135); a fallback from a copy of the Hessenberg matrix with the normwise test m eps times the Frobenius norm makes whirl_stability of W Ok at k = 0..3 and 0, 30, 60 rad/s, equal to whirl_state, frequencies within 6.1e-12 of whirl_modes, all stable, residuals 4.7e-12; converging calls keep their bits (W's other paths hash to main's record, H_S, H_F, baseline_hashes); 4 of 4 mutations caught; V1 missed on a defective set-up; fmt failed on layout, then applied.
 
 > whirl_stability of the wheel sector converges and agrees with whirl_state and whirl_modes. Missing: V1 of ADR 0806 (the rest frequencies of W against modal_analysis_harmonic) is a miss of a defective set-up (the reference doubled twice for a pair index), to be registered again with the reference as returned; the H_W record of sa_beam_opt_ins_default_f672_bits.rs is to be re-recorded (P7 now Ok).
+
+## Amendment 1 (2026-11-26, after addendum 1): the cells of row DG3
+
+`python scripts/process_report.py --check` reads the kind of row DG3 of the table of checks as "as stated". The row's check
+and limit hold absolute-value bars inside code spans, which the table reader takes as cell separators, so the cells after
+them are shifted. As registered, the row DG3 is: check "at (k = 1, 2, 0 rad/s) the spectrum is double: the 2 nq eigenvalues,
+ordered by (Im s, Re s), in consecutive pairs with abs(Im s_2i - Im s_2i+1) <= 1e-8 abs(s_2i)"; limit "as stated"; source
+"tolerance table, Same discrete problem by two routes; G1"; estimate 1e-12; margin 1e4; kind **code verification**. No check,
+limit or result changes. The registration cannot be edited, and the form "| Id | Kind |" applies only to a table without a
+column "kind", so the lead is asked to list the line
+`0806-f975-registration-normwise-deflation-fallback-of-the-state-qr.md: DG3` in `docs/process/exceptions/registration-kind.txt`.
