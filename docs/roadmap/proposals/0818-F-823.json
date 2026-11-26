@@ -1,0 +1,10 @@
+{
+  "form": 1,
+  "adr": "0818",
+  "item": "F-823",
+  "base": "e2908a03126e37564cf37b4be100f8405681e043",
+  "status": "partial",
+  "note": "ADR 0818, 2026-11-26, partial: the studio-web job's skip step lists ADR 0807's four records and the record of Follow live's race (corrected by reading the line and the count in one task; it passed), and the Windows step gives WebGPU a software adapter (--enable-unsafe-webgpu); npm test on Windows passed 886 with 5 registered skips; a GPU-less local stand-in did not draw with that adapter, and one mutation (Follow live's clause) was not caught; the run on GitHub is to be read.",
+  "gap": "The hosted runners: the Windows WebGPU tests now get a software adapter (--enable-unsafe-webgpu), not yet seen on GitHub, and a GPU-less local stand-in did not draw with it; run-control.spec.ts:268's P2 (20 ms) missed on ubuntu in 2 of 3 runs, no remedy; a11y.spec.ts:427 on Windows undiagnosed (no traces). The skip step and Follow live's race are corrected (ADR 0818). The lead's workflow_dispatch run decides.",
+  "follow_ups": []
+}

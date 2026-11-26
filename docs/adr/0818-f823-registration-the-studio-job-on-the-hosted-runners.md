@@ -225,3 +225,80 @@ patch committed at 412d1441 is MU1's and would not fail, so it does not meet rul
 this amendment, by MU2's patch (the corrected test's read compares the line with N, not N - 1), which was caught (run
 once, host CPU 80 % before: the corrected test failed, "timed out waiting for the line on the newest snapshot while
 following"). The file name and its expect-fail line are unchanged.
+
+## Addendum 1: results (2026-11-26)
+
+Commits: e68e7b52 (this registration), 87ea95d5 (ci.yml and workspace.spec.ts), 3dd7287b (amendment 1), 412d1441 (MU1's
+patch), c74bd3c8 (amendment 2, MU2's patch), then this addendum with the proposal. Each registered run was made once;
+the host CPU load (mean `LoadPercentage`) is given with each. Logs in the scratch folder (`logs/`). Other agents loaded
+the machine throughout.
+
+### Checks
+
+| Id | Limit | Measured | Met |
+|---|---|---|---|
+| SK1 | exit 0, 0 not registered | run 45894509968's ubuntu report: "890 tests in the report, 0 skipped and not in the registered list", exit 0 | met |
+| SK2 | exit 1 naming the 4 tests | main's list: 4 skipped and not registered (`canvas-f979.spec.ts:162`, `:175`, `:208`, `:244`), exit 1 | met |
+| AL | exit 0 | `actionlint` 1.7.12: no finding, exit 0 | met |
+| PR | recorded | in amendment 1: PR0 adapter (nvidia); PR1 null, WebGL 2 present; PR2 and PR3 adapter (google, swiftshader). R1 = `--enable-unsafe-webgpu` | recorded |
+| SW | 0 failed, 0 skipped | first command ran no test (amendment 1). Corrected run (CPU 93 % before, 54 % to 87 %): 8 passed, 0 failed, 0 skipped, 1.6 m; SC empty everywhere; F-832 workspace.tab no task, frames at most 141 ms; F-890 hold 2866 ms, no task over 50 ms | met |
+| EMU | 0 failed, 0 skipped | `--disable-gpu --enable-unsafe-webgpu` (CPU 50 % before, 28 % to 100 %): 4 passed, **4 failed**, 4.5 m: `provenance-f828.spec.ts:288` and `:500` "timed out waiting for both views in one range"; `responsiveness.spec.ts:260` and `workspace-first-open.spec.ts:59` "timed out waiting for the small run drawn". The adapter exists (the hold of workspace-first-open was made), but the field views did not draw with SwiftShader's WebGPU in this stand-in | **missed** |
+| FL | passed; the record skipped | the corrected test `workspace.spec.ts:450` passed; `:389` skipped | met |
+| R7w | typecheck and `npm test` exit 0; 0 failed, 0 did not run, the 5 skipped; the step exit 0 | typecheck exit 0; `npm test` exit 0: 886 passed, 0 failed, 5 skipped (the 4 of canvas-f979 and `workspace.spec.ts:389`), 0 did not run, 13.2 m (CPU 52 % before; 26 samples 27 % to 99 %, median 67 %). `run-control.spec.ts:268` passed; `error-walk.spec.ts:177` passed in 3.2 s. The step's script over its report: 891 tests, 0 not registered, exit 0 | met |
+| MU | each caught | MU2, MU3, MU4 caught; MU1 **not caught** (below) | **missed** |
+| GHW, GHU | the lead's run | not run by this work (the lead dispatches it) | not run |
+| DS, P1, A1 | as registered | in the report | see the report |
+
+### Mutations
+
+| Id | Caught by |
+|---|---|
+| MU1 (Follow live's clause removed) | **not caught**: `workspace.spec.ts` 6 passed, 1 skipped (CPU 39 % before); amendment 2 |
+| MU2 (line compared with N) | the corrected test: "timed out waiting for the line on the newest snapshot while following" (CPU 80 %); committed |
+| MU3 (list without `workspace.spec.ts:389`, R7w's report) | the step's script: 1 skipped and not registered, exit 1 |
+| MU4 (list without `canvas-f979.spec.ts:208`, run 45894509968's report) | the step's script: 1 skipped and not registered, exit 1 |
+
+### Deviations
+
+SW's first command ran no test (my scratch command's `&`), corrected by amendment 1 before its one corrected run. The
+committed patch was MU1's, which was not caught; replaced by MU2's by amendment 2. The brief's account of where
+run-control:268 and workspace:389 failed (Windows) is corrected above: both failed on ubuntu.
+
+### What was not run
+
+The lead's GitHub run (GHW, GHU), which decides H1, H2 and H4 on the runners. The container run (not registered).
+
+### Size
+
+Size (agent, actual): partial; 1; 4; 3; 270000
+
+### Decision by the registered rule
+
+**Partial.** SK1, SK2, AL, SW, FL and R7w hold and MU2 to MU4 are caught. EMU misses: on this host, a window without the
+GPU and with SwiftShader's WebGPU adapter did not draw the field views, so R1 may change Windows's failure rather than
+remove it (the runner has its own software D3D device, which this stand-in does not reproduce; the lead's run decides).
+MU1 is not caught. GHW and GHU are the lead's. H4 (P2 on ubuntu) has no remedy here and H5 (a11y:427) is not diagnosed.
+
+## Open questions for the maintainer
+
+- **Q1 (scope).** `run-control.spec.ts:268` holds G9's P2 (20 ms) and `SHOWN_MS` (50 ms) on the hosted ubuntu runner,
+  which missed them in 2 of 3 runs. Options: (a) keep both; a miss fails the job and is recorded; (b) by an amendment, the
+  hosted runners record P2 as a measurement (reported, not failing) while the maintainer's machine holds it; (c) a
+  self-hosted runner for the timing specs. Recommendation: (a) until the lead's run gives the rate, then (c).
+- **Q2 (scope).** No traces on failure, so a11y:427 could not be diagnosed. Options: (a) leave it; (b) Playwright's trace
+  on failure in CI only, by a registration that measures its effect on the timing specs. Recommendation: (b).
+- **Q3 (scope).** On any machine without an adapter, provenance-f828's scan counts the "2" of "Drawn by WebGL 2" as a
+  number without provenance, and EMU shows SwiftShader's WebGPU may not draw where no GPU is used. Options: (a) leave
+  both, the premise being an adapter; (b) a registration that corrects the scan (rule 2: a corrected test exempting the
+  backend label, the old kept as the record) and, if the lead's run shows Windows does not draw, takes R1 back for Windows
+  and runs the WebGPU-only spec where a hardware adapter exists. Recommendation: (b).
+
+## For the lead: roadmap entries
+
+> Status: partial
+
+> Note: ADR 0818, 2026-11-26, partial: the studio-web job's skip step lists ADR 0807's four records and the record of Follow live's race (corrected by reading the line and the count in one task; it passed), and the Windows step gives WebGPU a software adapter (--enable-unsafe-webgpu); npm test on Windows passed 886 with 5 registered skips; a GPU-less local stand-in did not draw with that adapter, and one mutation (Follow live's clause) was not caught; the run on GitHub is to be read.
+
+> Gap: The hosted runners: the Windows WebGPU tests now get a software adapter (--enable-unsafe-webgpu), not yet seen on GitHub, and a GPU-less local stand-in did not draw with it; run-control.spec.ts:268's P2 (20 ms) missed on ubuntu in 2 of 3 runs, no remedy; a11y.spec.ts:427 on Windows undiagnosed (no traces). The skip step and Follow live's race are corrected (ADR 0818). The lead's workflow_dispatch run decides.
+
+No follow-up item is proposed here; Q2 and Q3 name the ones this work would recommend.
