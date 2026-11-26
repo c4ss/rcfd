@@ -1,0 +1,30 @@
+# expect-fail: cargo test -p rcfd-api --release --test f885_frozen_limiter f885_fl_two_routes
+diff --git a/crates/rcfd-fv/src/pimple.rs b/crates/rcfd-fv/src/pimple.rs
+index be48142b..9f0e564c 100644
+--- a/crates/rcfd-fv/src/pimple.rs
++++ b/crates/rcfd-fv/src/pimple.rs
+@@ -16,6 +16,7 @@
+ //!   outer iteration, which allows Courant numbers above one. With
+ //!   `n_outer = 1` the algorithm is plain PISO.
+ 
++thread_local! { static MUT_KEPT: std::cell::RefCell<[Option<Vec<f64>>; 3]> = const { std::cell::RefCell::new([None, None, None]) }; }
+ use crate::bc::FixedValue;
+ use crate::convection::{convection, face_flux, ConvScheme};
+ use crate::ddt::{add_ddt, max_courant, CflController, History, TimeScheme};
+@@ -1899,7 +1900,7 @@ impl PimpleSolver {
+         let mut outer_dv: Vec<f64> = Vec::new();
+         let mut outer_cell: Vec<usize> = Vec::new();
+         // F-885 (ADR 0819, opt-in): each component's limiter factor of the step's first outer iteration
+-        let mut frozen_psi: [Option<Vec<f64>>; 3] = [None, None, None];
++        let mut frozen_psi: [Option<Vec<f64>>; 3] = MUT_KEPT.with(|m| m.borrow().clone());
+         // F-885 (ADR 0816, opt-in): the probe cells' faces and face neighbours, and their iterations
+         let probe_topo: Vec<(usize, Vec<usize>, Vec<usize>)> = s
+             .outer_cell_probe
+@@ -2142,6 +2143,7 @@ impl PimpleSolver {
+                                 let formed = crate::gradient::limiter(&g, &conv_cells, &bv, gr, kind);
+                                 if s.outer_frozen_limiter {
+                                     frozen_psi[k] = Some(formed.clone());
++                                    MUT_KEPT.with(|m| m.borrow_mut()[k] = Some(formed.clone()));
+                                 }
+                                 formed
+                             }

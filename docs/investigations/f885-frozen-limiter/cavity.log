@@ -1,0 +1,20 @@
+    Finished `release` profile [optimized] target(s) in 0.27s
+     Running tests\f885_frozen_limiter.rs (E:/projects/cfd/w49i-work/f885-frozen-limiter-scratch/target\release\deps\f885_frozen_limiter-17720133519d9eb3.exe)
+
+running 6 tests
+test f885_fl_cavity_control ... F885-FL K step 1: d [3.4197e-2, 7.2256e-3, 1.5558e-3, 3.4277e-4, 7.8988e-5, 2.0282e-5, 7.7030e-6, 3.5990e-6, 1.7511e-6, 8.5503e-7, 4.1344e-7, 1.9914e-7, 9.5784e-8, 4.6059e-8, 2.2151e-8, 1.0657e-8, 5.1292e-9, 2.4697e-9, 1.1897e-9, 6.1613e-10]
+F885-FL K: C 1.059727e-8 (CONVERGES, limit 1e-2)
+ok
+test f885_fl_fan_record ... ignored, heavy record, ADR 0819: F, B1r, M1, M2, M3 on 20 steps of H(dt) on B2 (13 627 cells, 2 000 outer iterations, minutes): cargo test --release -p rcfd-api --test f885_frozen_limiter f885_fl_fan_record -- --ignored --nocapture
+test f885_fl_read_only ... F885-FL T2 KC0: u equal true, p equal true, flux equal true, record equal true
+ok
+test f885_fl_rules_on_built_records ... ok
+test f885_fl_steady_same_answer ... F885-FL S1 opt-in false: last step change 2.776e-17 (precondition 1e-12), limited cell components 42
+F885-FL S1 opt-in true: last step change 2.900e-14 (precondition 1e-12), limited cell components 42
+F885-FL S1: u relative 8.207e-13, p relative 1.337e-12 (limit 1e-8); preconditions [true, true]; 7.2 s
+ok
+test f885_fl_two_routes ... F885-FL T1: 2880 factors compared, largest relative difference 0.000e0 (limit 1e-12); misses []; without the opt-in the largest change of a factor in steps 2 and 3 8.375e-1 (floor 1e-9)
+ok
+
+test result: ok. 5 passed; 0 failed; 1 ignored; 0 measured; 1 filtered out; finished in 7.29s
+

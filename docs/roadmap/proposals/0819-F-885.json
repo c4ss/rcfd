@@ -1,0 +1,9 @@
+{
+  "form": 1,
+  "adr": "0819",
+  "item": "F-885",
+  "base": "61a5de03127d6ca49da62afb726127f855b7eeff",
+  "status": "partial",
+  "note": "ADR 0819, 2026-11-26, opt-in and diagnosis done, item partial: an opt-in that keeps each component's Barth-Jespersen factor of the step's first outer iteration (outer_frozen_limiter, default off, baseline hashes unchanged) removes the fan's period-2 cycle at c11837 on 20 steps of H(dt) (factor change 0, q 2.25 against 0.005, mode A all ruled out) and gives the same steady cavity answer (u 8e-13, p 1e-12 relative), but the loop still stalls (C 0.0143 against 1e-2) with the slow mode at c6245; without the limiter, turning ADR 0811's term off leaves the slow factor as it was at alpha_u 0.9, 0.7, 0.5 (0.854, 0.871, 0.893 against 0.854, 0.873, 0.892): named HC2, the term takes no part; seven of seven mutations caught (N5 by the test of amendment 1); held by crates/rcfd-api/tests/f885_frozen_limiter.rs and docs/investigations/f885-frozen-limiter.",
+  "gap": "Missing for done: a class by ADR 0183's rule. Check H does not decide because the fan's outer loop does not contract within a step. ADR 0819: the opt-in frozen limiter removes the limiter's period-2 cycle at c11837, but the loop still stalls (C 0.0143) on a slow mode (about 0.83 to 0.85 per outer iteration) at c6245 that is not the dominance, the correctors, the relaxation's blend or ADR 0811's term. Needs a diagnosis of that slow mode, or the maintainer's reading of the outer rule."
+}

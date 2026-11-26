@@ -564,7 +564,7 @@ One row per record of this folder, grouped by the roadmap category of the item i
 |---|---|---|---|---|---|---|
 | [0730](0730-f826-f830-proposal-ui-metadata-in-the-case-schema-and-help-from-the-engine.md) | F-826 and F-830 proposal: UI metadata in the case schema, and help and an error catalogue from the engine | ACCEPTED | 2026-11-17 | 0 | F-830 | partial |
 
-## Quality, docs and validation (60)
+## Quality, docs and validation (61)
 
 | ADR | Title | Status word | Date | Addenda | Item | Item status |
 |---|---|---|---|---|---|---|
@@ -628,6 +628,7 @@ One row per record of this folder, grouped by the roadmap category of the item i
 | [0811](0811-f885-registration-a-face-flux-independent-of-alpha-u-then-check-h.md) | F-885 registration: an opt-in face flux whose converged value does not depend on alpha_u, then check H | REGISTERED | 2026-11-26 | 1 | F-885 | partial |
 | [0815](0815-f885-registration-the-fans-outer-stall-by-controls.md) | F-885 registration: why the fan's outer loop does not contract within a step, by controls fixed in advance | REGISTERED | 2026-11-26 | 1 | F-885 | partial |
 | [0816](0816-f885-registration-the-two-modes-of-the-fans-outer-loop.md) | F-885 registration: the two modes of the fan's outer loop, a constant change at c11837 and a slow contraction at c6245 | REGISTERED | 2026-11-26 | 1 | F-885 | partial |
+| [0819](0819-f885-registration-a-limiter-factor-kept-from-the-steps-first-outer-iteration-and-mode-b-with-the-term-off.md) | F-885 registration: a limiter factor kept from the step's first outer iteration, and mode B with ADR 0811's term off and on | REGISTERED | 2026-11-26 | 3 | F-885 | partial |
 
 ## Records with no item in the file name (260)
 
