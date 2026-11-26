@@ -267,3 +267,72 @@ defective set-up (rule 2): its tests are skipped with a line naming this amendme
 **The corrected run.** Once: `npm run build`, `npm run package:dir` and `npx playwright test tests/e2e/canvas-f979-a1.spec.ts`
 in `apps/studio-web`, against the branch's engine, with nothing else of the Studio's suite run again. M3 and M4 are run
 against the corrected spec. The decision rule is unchanged.
+
+## Addendum 1: results (2026-11-26)
+
+Written after the runs; nothing above is changed. Release profile, `CARGO_TARGET_DIR` in the scratch folder. Commits:
+787c6603 (this registration), 866bb54c (engine), 77736d44 (Studio and tests), f7082fee (amendment 1), 67947cd8 (the
+corrected spec), then the committed mutation, this addendum and the proposal. Each registered run was made once, except
+as amendment 1 says. Deviations: a `npm run typecheck` was run once during the writing of the Studio code, before its
+tests existed (it passed); `cargo fmt -p rcfd-workspace -p rcfd-mcp` (a write) was run before the code commit and the fmt
+check after it.
+
+### Checks
+
+| Id | Limit | Measured | Met |
+|---|---|---|---|
+| V3 | the live forms accepted | accepted (`rcfd-workspace --lib`: 6 passed, 0 failed) | yes |
+| V4 | 8 of 8 refused at the registered key | 8 of 8 | yes |
+| B1 | `settings` 0.01 and 0.0025 for panels 0 and 1 | as registered | yes |
+| B2 | the edit in the canvas's feed within 4 polls of 250 ms, with actor, pid, reason, changes; then 0.005 and 0.0025 | 1 poll (6 ms); `mcp`, the client's pid, the reason, [{`physics.nu`, 0.01, 0.005}]; 0.005 and 0.0025 | yes |
+| B3 | 1003 at `panels[0].setting`; file and journal unchanged | 1003, "'physics.nope' is not a setting of the case ..."; both byte-identical | yes |
+| B4 | `read_view`'s keys those of F-976 | `actor, exists, hash, id, path, reason, shown, view` | yes |
+| U1 | one more `read_view` on an entry of the case, none on another; reason and changes kept | as registered | yes |
+| U2 | the rules of D3 | as registered | yes |
+| E0 | the view as the engine gives it | registered run: shown, mesh drawn 1188 ms after the result (recorded); corrected run: 1636 ms | yes |
+| E1 | redrawn within 1.6 s with its actor and reason | registered run: not measured (set-up defect, amendment 1); corrected run: 802 ms, 4,096 cells, `edit_case`, `mcp`, the pid, the reason | yes (corrected run) |
+| E2 | 0.005 within 1.6 s with its change; controls unchanged | registered run: did not run; corrected run: 342 ms; old 0.01, new 0.005; re400 0.0025 with no change line; mesh build 2 and its reason unchanged | yes (corrected run) |
+| E3a | the new run followed within 1.6 s | corrected run: 296 ms | yes (corrected run) |
+| E3b | at least 1 step shown between 0 and the final step | 3 (16, 107, 221 of 300) | yes (corrected run) |
+| E3c | the end within 1.6 s, values equal, actor `runner`, the reason; the fixed run unchanged | 306 ms; finished at step 300, `lid_drag` -0.0016167388960555745 equal; `runner`, "step_limit: 300 steps taken"; the fixed run -0.004911394168425979 before and after | yes (corrected run) |
+| L1 | the named files and `--lib` pass unedited | `canvas_view_f976` 4, `feed_f273` 3, `project_list_f270` 1, `tool_list_f275` 8, `project_w48f` 10, `project_runs_w48f` 3, `default_f1` 2 passed; `rcfd-mcp --lib` 18 passed (1 ignored) | yes |
+| L2 | `npm run typecheck` and `npm test` pass | typecheck exit 0; `npm test` 900 passed, 1 failed (E1 of the first spec, the set-up defect), 2 did not run (15.0 min); `canvas-f976.spec.ts` passed (E1 508 ms) | **no** |
+| L3 | fmt, clippy, `docs_site`, `roadmap_proposals check` clean | fmt and clippy clean; `docs_site` and the proposal check: below | see below |
+
+L2's miss has a diagnosed cause, the test's own set-up (amendment 1), and no other test of the Studio failed; the
+corrected spec passed alone, but the whole `npm test` with it has not been run on this branch. Held as the run gave it.
+
+### Mutations
+
+| Id | Caught by |
+|---|---|
+| M1 (no check that `setting` is a setting; committed as `canvas_live_f979.mutation.patch`) | B3 (`canvas_live_f979`, line 145: `physics.nope` was shown) and V4 |
+| M2 (no `read_view` on a setting panel's case) | U1 ("the entry of the setting panel's case did not read read_view") |
+| M3 (series read only when the run changes) | E3 (E3c: the end not shown in 30 s) |
+| M4 (the mesh session made once) | E1 (the refined mesh not drawn in 30 s) |
+| M5 (`followedRun` takes the oldest) | U2 (r-1 for r-3) |
+
+M3 and M4 were run twice on the scratch copy: the first runs did not decide (the copy's build failed: for M3 the edit left
+a variable unused, which the typecheck refuses; for M4 the packager could not rename Electron through a linked
+`node_modules`); after a compiling edit and the copy's own `npm ci`, each ran once and was caught.
+
+Not run: `baseline_hashes` (no shared solver file). Found in the runs: the e2e's `start_run` leaves the temporary
+project's `rcfd-runner` alive after the spec ends (twice, ended by hand); the spec's `afterAll` ends the MCP servers only.
+
+Actual size: partial; 1 further registration (amendment 1); 3 heavy runs (`npm test` 15.0 min; the corrected spec with
+its build; four packaged builds of the mutation copy); 2 questions; about 250 000 bytes read.
+
+Decision by the registered rule: **partial**, because L2 missed (every behaviour row holds in the corrected run, and
+every mutation was caught).
+
+### For the lead: roadmap entries
+
+> Status: partial.
+
+> Note: ADR 0807, 2026-11-26, partial: the canvas follows live a case's mesh (drawn by MeshPreview, again 802 ms after refine_case_mesh), a setting (read_view settings, 342 ms after edit_case) and the monitor of a case's newest run (its end 306 ms after the client read it), each with its actor and reason (limits 1.6 s, ADR 0188 C3-St); 5 of 5 mutations caught, one committed; L2 missed: the whole npm test ran with the first e2e set-up, which left out refine_case_mesh's factor (amendment 1).
+
+> Gap: Every behaviour row holds in the corrected e2e (amendment 1). Missing: a whole npm test that passes with it; the registered run had 1 failure, the first spec's set-up (refine_case_mesh without factor), now a skipped record. Also the show_view description still lists only F-976's kinds (Q1), and the e2e leaves the temporary project's runner alive after it ends.
+
+> Follow-ups: none.
+
+The same entries are `docs/roadmap/proposals/0807-F-979.json`.
