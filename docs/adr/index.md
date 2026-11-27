@@ -559,7 +559,7 @@ One row per record of this folder, grouped by the roadmap category of the item i
 | [0817](0817-f977-registration-layouts-chosen-by-the-case-category.md) | F-977 registration: the layout of results chosen by the category of the case | REGISTERED | 2026-11-26 | 1 | F-977 | partial |
 | [0818](0818-f823-registration-the-studio-job-on-the-hosted-runners.md) | F-823 registration, the Studio's job on GitHub's hosted runners: the registered skips, a WebGPU adapter on Windows, and the race of Follow live |  |  | 2 | F-823 | partial |
 | [0823](0823-f980-registration-a-view-exported-as-one-self-contained-html-page.md) | F-980 registration: a view exported as one self-contained styled HTML page | REGISTERED | 2026-11-27 | 3 | F-980 | done |
-| [0826](0826-f978-registration-the-process-view-of-a-case.md) | F-978 registration: the process view of a case, from its creation to its last result | REGISTERED | 2026-11-27 | 1 | F-978 | todo |
+| [0826](0826-f978-registration-the-process-view-of-a-case.md) | F-978 registration: the process view of a case, from its creation to its last result | REGISTERED | 2026-11-27 | 1 | F-978 | partial |
 
 ## Retired: the hand-navigated Studio (1)
 
@@ -901,4 +901,4 @@ One row per record of this folder, grouped by the roadmap category of the item i
 | [0800](0800-electron-studio-roadmap.md) | The Electron Studio roadmap, generated from guardrails, PRODUCT.md and DESIGN.md | ACCEPTED | 2026-11-16 | 0 | F-448, F-449, F-800, F-801, F-802, F-803, F-804, F-805, F-806, F-807, F-808, F-809 and 23 more |
 | [0801](0801-studio-web-dependencies-and-layout.md) | The dependencies and the directory layout of apps/studio-web | ACCEPTED | 2026-11-16 | 25 | F-800, F-801, F-803, F-804, F-805, F-807, F-808, F-809, F-810, F-811, F-813, F-814 and 13 more |
 | [0803](0803-the-studio-as-claudes-canvas-record.md) | The Studio as Claude's canvas, and the end of the hand-navigated Studio (record) | RECORDED | 2026-11-26 | 0 | F-151, F-264, F-266, F-273, F-293, F-448, F-813, F-828, F-830, F-974, F-976, F-977 and 4 more |
-| [0825](0825-g22-four-layer-quiet-architecture-record.md) | G22 four-layer quiet architecture replacing the per-surface word budget (record) | RECORDED | 2026-11-27 | 0 |  |
+| [0825](0825-g22-four-layer-quiet-architecture-record.md) | G22 four-layer quiet architecture replacing the per-surface word budget (record) | RECORDED | 2026-11-27 | 0 | F-833, F-978 |

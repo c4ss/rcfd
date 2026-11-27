@@ -281,3 +281,9 @@ This registration was written and committed on the branch `f978-process-view` as
 of G22's four-layer quiet architecture (d8802437). Since this text was not yet on main, the lead renumbered it 0826 at the
 merge: the file, its proposal file and every mention of "ADR 0825" in this work's code, tests and comments, and nothing
 else. The branch's commits keep the number 0825.
+
+## Answers of the maintainer (2026-11-27), written by the lead
+
+1. `export_view` draws a process panel in the exported page, as the follow-up F-996; taken by the lead on the maintainer's standing instruction of 2026-11-26 (go with the recommended option always).
+
+Merged at c2d0ab94 and pushed at 299a2aa1.
