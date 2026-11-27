@@ -199,6 +199,7 @@ class Git(unittest.TestCase):
 import argparse  # noqa: E402
 import contextlib  # noqa: E402
 import io  # noqa: E402
+import time  # noqa: E402
 import json  # noqa: E402
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -455,6 +456,43 @@ class Resume(TempRepo):
         finally:
             pm.subprocess.run = real
         self.assertEqual(self.rows()[-1]["detail"], f"exit=0;mutations=1;resumed=1;cmds={self.C1} | {self.C3}")
+
+
+class LeftRunning(unittest.TestCase):
+    """A captured command ends when its process does, not when a process it left running lets go of the output pipe
+    (a runner a test started kept push_main waiting for nine hours on 2026-11-27)."""
+
+    def test_a_child_left_holding_the_pipe_is_not_waited_for(self):
+        with tempfile.TemporaryDirectory() as d:
+            pidfile = os.path.join(d, "child.pid")
+            child = "import time; time.sleep(120)"
+            # the child inherits the command's standard output, as a detached daemon inherits the pipe's handle
+            parent = (f"import subprocess, sys; c = subprocess.Popen([sys.executable, '-c', {child!r}]); "
+                      f"open({pidfile!r}, 'w').write(str(c.pid)); print('parent done', flush=True)")
+            old = pm.PIPE_DRAIN_SECONDS
+            pm.PIPE_DRAIN_SECONDS = 1
+            out = io.StringIO()
+            try:
+                with contextlib.redirect_stdout(out):
+                    t0 = time.time()
+                    code, _, text = pm.sh(f'"{sys.executable}" -c "{parent}"', d, capture=True)
+                    took = time.time() - t0
+            finally:
+                pm.PIPE_DRAIN_SECONDS = old
+                with open(pidfile) as f:
+                    pid = int(f.read())
+                if os.name == "nt":
+                    subprocess.run(["taskkill", "/PID", str(pid), "/F"], capture_output=True)
+                else:
+                    os.kill(pid, 9)
+            self.assertEqual(code, 0)
+            self.assertIn("parent done", text)
+            self.assertLess(took, 60, "sh waited for the child instead of the command")
+            self.assertIn("still held open", out.getvalue())
+
+    def test_a_command_that_leaves_nothing_keeps_all_its_output(self):
+        code, _, text = pm.sh(f'"{sys.executable}" -c "print(1); print(2)"', ".", capture=True)
+        self.assertEqual((code, text.split()), (0, ["1", "2"]))
 
 
 class Build(unittest.TestCase):

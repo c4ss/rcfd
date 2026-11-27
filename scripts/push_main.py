@@ -85,6 +85,7 @@ import json
 import os
 import re
 import subprocess
+import threading
 import sys
 import time
 
@@ -100,6 +101,8 @@ BRIEFS = "docs/adr/briefs"
 REGENERATE = ("python scripts/process_report.py --write", "python scripts/roadmap_progress.py")
 # run after the mutation patches, so the binaries in target/release are built from the tree without any patch
 REBUILD_AFTER_MUTATIONS = "cargo build --release -p rcfd-cli -p rcfd-runner -p rcfd-mcp"
+# after a captured command has exited, how long its output pipe may still be read (the rest of its buffered output)
+PIPE_DRAIN_SECONDS = 10
 # the process measures of ADR 0754 (F-863)
 STATUSES = ("done", "partial", "todo")
 STATUS_LIST = re.compile(r"F-\d{1,4}=(?:done|partial|todo)(?:,F-\d{1,4}=(?:done|partial|todo))*")
@@ -683,15 +686,29 @@ def sh(cmd, cwd, capture=False):
         raw = getattr(sys.stdout, "buffer", None)
         p = subprocess.Popen(cmd, cwd=cwd, shell=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
         kept = []
-        for chunk in iter(p.stdout.readline, b""):
-            kept.append(chunk)
-            if raw is not None:  # the bytes as they are: the console's encoding may not hold every character
-                raw.write(chunk)
-                raw.flush()
-            else:
-                sys.stdout.write(chunk.decode("utf-8", errors="replace"))
-        p.stdout.close()
-        return p.wait(), (time.time() - t0) / 60.0, b"".join(kept).decode("utf-8", errors="replace").replace("\r\n", "\n")
+
+        def read():
+            for chunk in iter(p.stdout.readline, b""):
+                kept.append(chunk)
+                if raw is not None:  # the bytes as they are: the console's encoding may not hold every character
+                    raw.write(chunk)
+                    raw.flush()
+                else:
+                    sys.stdout.write(chunk.decode("utf-8", errors="replace"))
+
+        reader = threading.Thread(target=read, daemon=True)
+        reader.start()
+        code = p.wait()
+        # the command is over when its process is: a process it left running (a detached daemon that inherited the
+        # pipe's handle, as a runner a test started did on 2026-11-27) keeps the pipe open, and reading to its end
+        # would wait for that process instead
+        reader.join(PIPE_DRAIN_SECONDS)
+        if reader.is_alive():
+            print(f"push_main: `{cmd}` exited ({code}); its output pipe is still held open by a process it left running,"
+                  f" not waited for", flush=True)
+        else:
+            p.stdout.close()
+        return code, (time.time() - t0) / 60.0, b"".join(kept).decode("utf-8", errors="replace").replace("\r\n", "\n")
     return subprocess.run(cmd, cwd=cwd, shell=True).returncode, (time.time() - t0) / 60.0, ""
 
 
