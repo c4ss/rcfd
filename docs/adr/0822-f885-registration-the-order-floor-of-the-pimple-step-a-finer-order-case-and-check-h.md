@@ -227,3 +227,149 @@ rounding. The brief asks that a mutation be able to change what its test reads. 
 line 76, the BDF2 cell weight `c2` of the time derivative times 0.9 (`0.9 * r * r / (1.0 + r)`), which every BDF2 step of
 the mode reads; caught by `f885_oc_wall_bounded_mode` (F2). The other mutations, the committed patch (M1) and every limit
 are unchanged.
+
+## Addendum 1: results
+
+Written 2026-11-27, after the runs. Commits on the branch, from efce0cf1: 654b2364 (this registration, alone), debebd72
+(amendment 1, alone, before any code or run), 1da1fd85 (the test file; every registered run was made from it), e102244f
+(O' as a known miss, SR and G1 marked not run, the records, the mutation log, the committed mutation M1), and the commit of
+this addendum with the rule 7 log and the proposal file. Records in `docs/investigations/f885-order-case/`: `gate.log`,
+`diagnosis.log`, `order.log`, `mutations.log`, `rule7.log`. No file under `crates/*/src` changed.
+
+### The sentence
+
+**The first order of ADR 0821's case is the Rhie-Chow commutator floor of ADR 0073 (H-COMM), not the remedy, and on the
+corrected case the remedy misses BDF2's order, so check H was not run.** On the Taylor-Green set-up without the setting
+`p_f` is 1.015 at N = 16, 1.452 at 32 and 2.035 at 64; at N = 16 the step-consistent face coefficient of ADR 0245 alone
+gives 2.022; the wall-bounded mode, whose pressure is uniform, gives 2.032; the exact BDF2 start leaves the order unchanged
+(1.064). On the corrected case (N = 64) the control O2' holds (2.035) and O3' acts (4.1e-5), but with the setting on `p_f`
+is 1.822 against 1.9: O1' is missed and `e_ON / e_OFF` rises from 1.36 to 1.66 as `dt` falls, a lag of lower order than
+BDF2's that the argument of ADR 0821 section 1 did not foresee. By the registered rule F-885 stays **partial**.
+
+### Table of checks
+
+| Id | Limit | Measured | Met |
+| --- | --- | --- | --- |
+| A3 to A6 | as registered | check H not run (section 5: it runs only if O' holds and F2 is met) | not run |
+| O1' | `p_f(ON) >= 1.9` | 1.8222 (`e` 3.7568e-4, 9.7105e-5, 2.7461e-5; `p_c` 1.9519) | **no** |
+| O2' | `p_f(OFF) >= 1.9` | 2.0345 (`e` 2.7615e-4, 6.7885e-5, 1.6570e-5; `p_c` 2.0243) | yes |
+| O3' | `> 1e-9` | 4.1083e-5 | yes |
+| OF | `> 1e-9` | 4.1524e-4 | yes |
+| F2 | `p_f >= 1.9` | 2.0320 (`e` 4.4497e-3, 1.0603e-3, 2.5926e-4; `p_c` 2.0693) | yes |
+| R0 | relative `<= 1e-4` each | 3.4e-6, 1.5e-5, 3.3e-5 | yes |
+| D | recorded; the reading by its rule | H1 stands, H2 ruled out (below) | recorded |
+| SR | as registered | not run (no record of check H; section 5) | not run |
+| C5 | each as built | each of the seven as built | yes |
+| G1 | as registered | not run (no record of check H; section 5) | not run |
+| B3 | passes, file unchanged | `baseline_hashes`: 3 passed, 1 ignored; `baseline_hashes.rs` unchanged | yes |
+| D1 | as stated | `git diff --name-only efce0cf1` names this ADR, the new test file, its patch, the five logs and the proposal file; nothing under `crates/*/src`, no roadmap, ledger, golden or existing test file; the eight earlier F-885 patches and the new one apply | yes |
+| P | rule 7 | see "The checks of rule 7" | yes |
+
+Beside, without a limit: `e_ON / e_OFF` at N = 64 1.3604, 1.4304, 1.6572; `abs(p_f(ON) - p_f(OFF))` 0.2123. Wall time:
+the three gate tests 17.1 s, the diagnosis 69.8 s, O' 158.5 s, on the shared machine.
+
+### The diagnosis (section 1)
+
+| Arm | `e` at 0.1, 0.05, 0.025 | `p_c` | `p_f` |
+| --- | --- | --- | --- |
+| R0, N = 16 (ADR 0821's OFF) | 5.1468e-4, 2.2644e-4, 1.1204e-4 | 1.1846 | 1.0151 |
+| D-32, N = 32 | 2.7200e-4, 7.1771e-5, 2.6230e-5 | 1.9222 | 1.4522 |
+| O2', N = 64 | 2.7615e-4, 6.7885e-5, 1.6570e-5 | 2.0243 | 2.0345 |
+| D-s, the exact BDF2 start, N = 16 | 9.7210e-4, 4.6515e-4, 2.2248e-4 | 1.0634 | 1.0640 |
+| D-rc, `rhie_chow_step_consistent`, N = 16 | 3.8292e-4, 9.3308e-5, 2.2976e-5 | 2.0370 | 2.0219 |
+| D-cp, `coupled_ddt_correction`, N = 16 | 5.1468e-4, 2.2644e-4, 1.1204e-4 | 1.1846 | 1.0151 |
+| F2, the wall-bounded mode, N = 32 | 4.4497e-3, 1.0603e-3, 2.5926e-4 | 2.0693 | 2.0320 |
+
+By the registered reading: **H1 (H-COMM) stands**: `p_f(D-32) - p_f(16)` = 0.437 (>= 0.2), O2' 2.035 and F2 2.032 (>= 1.9).
+**H2 is ruled out**: `abs(p_f(D-s) - p_f(16))` = 0.0489 (<= 0.05, by 0.001; the exact start changes the error by a factor
+of about 2 but not its order). H3 and H5 as registered (no arm). H4: D-cp equals OFF to the printed digits, so the coupled
+faces' transient term is not the cause. D-rc goes beyond its prediction (registered: higher than OFF, not necessarily 1.9):
+at N = 16 removing `C(G p)` on the internal faces alone restores the order, so on this box the coupled faces do not carry a
+floor of their own.
+
+**The finding (no solver file changed).** The default face flux of the pimple step (`pimple.rs` lines 2454 to 2461, the
+linear face value of `rAU`, and 2496, `phiHbyA` from the cell `HbyA`) carries ADR 0073's commutator `C(G p)`, an `O(dt h^2)`
+term of the converged equations: on a mesh as coarse as N = 16 it dominates BDF2's error at these steps, so every default
+BDF2 order check on such a mesh with a pressure gradient reads first order. It is a known property (ADR 0073, ADR 0245), not
+a new defect; ADR 0245's opt-in `rhie_chow_step_consistent` removes it on internal faces. Remedy options are question 2.
+
+**The remedy's miss, not diagnosed.** With the setting on at N = 64, `e_ON / e_OFF` grows as `dt` falls (1.36, 1.43, 1.66),
+which a lag of order `dt^2` would not do: the kept gradient adds a part of lower order. Its source is not shown by a run
+of this registration. Read from the code only: the kept gradient is formed in the first outer iteration from `conv_cells`
+(the extrapolated cells) but with `bv`, the boundary values of the current iterate (`pimple.rs` lines 2191 to 2200), so on
+the periodic seam its partner values lag by `O(dt)`, as ADR 0073's H-SEAM-CONV found for the convection's partner value;
+M2 (the cells unextrapolated as well) moves `p_f(ON)` to 1.175, so the extrapolation is read and most of the order kept.
+
+### Mutations
+
+From `mutations.log` (`git archive` of 1da1fd85 in the scratch folder, its own target folder):
+
+| Id | What happened |
+| --- | --- |
+| K0 | unmutated: `f885_oc_setting_acts`, `f885_oc_wall_bounded_mode`, `f885_oc_rules_on_built_records` pass |
+| M1 | the setting not read: caught by `f885_oc_setting_acts` (OF 0 against 1e-9). Committed as the mutation patch |
+| M2 | the kept gradient from `u^n`: **not caught (the test fails unmutated)**. It changed what the test reads: `p_f(ON)` 1.1753, `e_ON / e_OFF` 3.35, 5.73, 10.39 |
+| M3 | the BDF2 cell weight `c2` times 0.9 (amendment 1): caught by `f885_oc_wall_bounded_mode` (the mode's run stopped on the divergence guard) |
+| M4 | the ratio of E-1 1e-1: caught by `f885_oc_rules_on_built_records` ("d5/d1 = 0.05 everywhere" got Steady) |
+| M5 | not run (no `H_dt.csv`; check H not run) |
+
+Three of five caught, one not caught, one not run.
+
+### Deviations
+
+1. Amendment 1 (debebd72) replaced M3 before any code or run, because the registered M3 could not change what F2 reads.
+2. O1' was missed. By rule 2 `f885_oc_time_order_record` became the ignored record `f885_oc_time_order_known_miss`, its
+   limits intact and the measured numbers in its ignore reason; SR and G1 were marked not run as section 5 fixed in advance.
+   No other test change.
+3. The mutation script failed twice before running a mutation (a `tar` path and a Python 3.9 call); K0 ran in the second
+   attempt and M1 to M4 in the third, each once. No limit or test changed.
+4. `cargo fmt -p rcfd-api --check`: exit 0 on this run (it ran). `rustfmt --check --edition 2021` of the new file is the registered replacement.
+5. The new file's gate tests were not run again for rule 7: their registered run (`gate.log`, at 1da1fd85) is the run; the
+   later commit only adds ignore attributes to other tests.
+
+### What was not run
+
+Check H (A3 to A6), SR, G1, M5; a diagnosis of the remedy's miss; the whole workspace suite.
+
+### The checks of rule 7
+
+From `rule7.log`, at e102244f: `cargo fmt -p rcfd-api --check` exit 0 (it ran on this machine this time); `rustfmt --check` of the new file clean; `cargo clippy -p rcfd-api --all-targets -- -D warnings` clean; `cargo test -p rcfd-api --release --lib` 160 passed, 4 ignored; `--test f885_frozen_convection_check_h` 3 passed, 6 ignored; `--test f885_alpha_free_face_flux` 5 passed, 3 ignored; `--test baseline_hashes` 3 passed, 1 ignored (`baseline_hashes.rs` unchanged); `cargo test -p rcfd-cli --release --test docs_site` 2 passed; `python scripts/roadmap_proposals.py check` of the proposal file exit 0; the nine F-885 patches apply. `python scripts/process_report.py --check` run at the commit of this addendum, as reported to the lead.
+
+### Size
+
+Size (agent): partial; 1; 1; 2; 170000
+
+### Decision by the registered rule
+
+**Partial.** O1' is missed (1.822 against 1.9), so O' does not hold and check H was not run; M2 is not caught and M5, SR,
+G1 were not run. O2', O3', OF, F2, R0, C5, D1 are met, and the diagnosis names the first order of ADR 0821's case
+(H-COMM). What it would take: a diagnosis of the remedy's lag on the N = 64 case, registered under F-885 (rule 13), the
+remedy's order met, then check H.
+
+## Open questions for the maintainer
+
+1. **The remedy's order.** Options: (a) a diagnosis under F-885 of the lag of the kept gradient, with arms fixed before the
+   run: the boundary values of the kept gradient extrapolated as the cells are (`periodic_partner_extrapolated` with the
+   setting, and a scratch variant of `bv`), on the N = 64 case and on N = 16 with `rhie_chow_step_consistent` (2.02 there
+   without the setting, a cheaper order case); then O again; (b) accept `p_f` 1.82 against 1.9 and run check H, which changes
+   the registered rule and is the maintainer's to make; (c) drop this remedy and look for another cause of the stalled
+   outer loop. I recommend (a): the miss is small, has a likely source in two lines, and the N = 16 case with
+   `rhie_chow_step_consistent` makes each order check take seconds.
+2. **The commutator floor of the default step (a known property, not new).** Options: (a) keep it as it is, recorded,
+   and use `rhie_chow_step_consistent` or a fine mesh in order checks; (b) a new item to make `rhie_chow_step_consistent` the
+   default of the pimple step, which changes every hash of a pimple run. I recommend (a) for F-885; (b) is a question of
+   scope for the maintainer, not of this item.
+3. **Scope.** No new item proposed; the diagnosis of question 1 adds no acceptance clause and is registered under F-885.
+
+## For the lead: roadmap entries
+
+> Status proposed for F-885: partial.
+
+> Note entry: ADR 0822, 2026-11-27, partial: the first order of ADR 0821's Taylor-Green case is the O(dt h^2) Rhie-Chow commutator floor of ADR 0073 (H-COMM; p_f 1.015 at N = 16, 1.452 at 32, 2.035 at 64; 2.022 at N = 16 with rhie_chow_step_consistent; the wall-bounded mode 2.032; the start ruled out), but on the corrected case at N = 64 the remedy outer_frozen_convection_gradient misses BDF2's order (p_f 1.822 against 1.9, the control 2.035), so check H was not run by the registered rule; held by crates/rcfd-api/tests/f885_order_case.rs and docs/investigations/f885-order-case.
+
+> Gap entry: Missing for done: a class by ADR 0183's rule. The order case now decides (N = 64, control p_f 2.035; ADR 0821's N = 16 case is held by the Rhie-Chow commutator floor), but the remedy outer_frozen_convection_gradient is below BDF2's order on it (p_f 1.822 against 1.9, e_ON / e_OFF rising 1.36 to 1.66 as dt falls). Needs a diagnosis of that lag, the remedy's order met, then check H with the remedy.
+
+The same entries are in `docs/roadmap/proposals/0822-F-885.json` (form 1 of ADR 0755, base efce0cf1), checked with
+`python scripts/roadmap_proposals.py check`. No follow-up item is proposed (question 3).
+
+Generated pages that this work may leave not current, for the lead (rule 9): `docs/adr/index.md` (ADR 0822 is new).
