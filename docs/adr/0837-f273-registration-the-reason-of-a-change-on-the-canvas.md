@@ -119,3 +119,50 @@ picked: the activity line within L of the pick shows `why:` the cut text, `data-
 Home tab shown: the line within L of the append shows `why: not given`, `data-why` `none`; (d) the Canvas tab picked: S6's
 row within L of the pick reads `why: not given`, and the rows are one more than after (a). The limits are unchanged:
 the exact texts of D2 and L = 1 600 ms (ADR 0188 C3-St). A4 and A5 are decided by this run, made once.
+
+## Addendum 2 (2026-11-27): results
+
+Release profile. Engine binaries and `f447_bench` built in the agent's own target; the Studio's `npm test` with `RCFD_BIN`
+and `RCFD_MCP_BIN` there, on an AMD Ryzen 7 9800X3D (16 logical), load 100 % before and 80 % after (other agents ran).
+
+| # | Limit | Measured | Met |
+|---|---|---|---|
+| A1 | 4 changes, each within 1 600 ms | S1 326 ms, S2 399 ms (`why: not given`), S3 421 ms, S4 340 ms | met |
+| A2 | every journaled row, within 1 600 ms | all rows `by mcp (pid N); why: ...`, one `none`, 676 ms | met |
+| A3 | exact text, 0 elements | exact in the line and the row, 0 `b` or `i` | met |
+| A4 | cut at 500 code points, within 1 600 ms | registered run: **missed** (set-up defect, Addendum 1). Amendment 1 run: row 86 ms, line 34 ms after the Home tab, `data-reason-cut` set | missed, then met under amendment 1 |
+| A5 | `not given`, one row more, within 1 600 ms | registered run: **missed** (same test). Amendment 1 run: line 387 ms, row 54 ms after the Canvas tab, `data-why` `none` | missed, then met under amendment 1 |
+| U1 | all cases | passed (in `npm test`) | met |
+| R1 | string kept, number left out, text the feed's | passed: rows' reasons `"to reach Re 50 <b>"` and none | met |
+| G1 | `npm test` 0 failed, 6 skipped | 906 passed, 6 skipped, **1 failed** (the A4, A5 test of the first set-up), 16.0 min | **missed** |
+| G2 | clean, 0 failed | clippy `-D warnings` clean; `--lib` 19 passed; `design_journal_f274` 5 passed; `canvas_process_f978` 1 passed; fmt **missed at its first run** (3 diffs of the new lines in `view.rs`), clean after `cargo fmt`, committed alone (no logic changed); `docs_site` below | fmt missed, then met |
+
+Mutations, on scratch copies: M1 (committed patch, activity line without its why) caught by A1 (`reason-f273.spec.ts`
+test 1 timed out); M2 (no cut) caught by U1; M3 (absent form empty) caught by U1; M4 (D1 reverted) caught by R1 (the row
+kept `"reason": 42`); M5 (row's reason as HTML) caught by A2/A3 (test 2 timed out). All caught. The first try of M1 and
+M5 did not run (the copy's linked `node_modules` could not be packaged); they were run after the copy got its own `npm ci`.
+
+Deviations: the defective set-up of A4 and A5 (Addendum 1); fmt's first miss; `claudeCode.tsx` changed for D5 (named in
+the registration). The first set-up's test is kept as a skipped record, so `npm test` now skips 7. Not run: a second
+`npm test` (each registered run is made once); `baseline_hashes` (no solver file changed).
+
+Size (actual): partial; 0; 1; 0; 130000
+
+Decision by the registered rule: **partial**. Every check of the acceptance held, under amendment 1 for A4 and A5, and
+every mutation was caught, but G1, the registered `npm test`, had one failure, and the rule asks that it pass. The
+next `npm test` (the lead's push run) holds the record skipped and the corrected test.
+
+### For the lead: roadmap entries
+
+> Status: partial.
+
+> Note: ADR 0837, 2026-11-27, partial: the Studio shows who, what and why of each MCP change in the activity line and the process view's rows, read from the feed (reason cut after 500 code points, "not given" when absent, shown as text), and every registered check and mutation held, but the registered npm test run had one failure, the first set-up of A4 and A5, which looked for the activity line on the Canvas tab; corrected by amendment 1 and passed.
+
+> Gap: Missing: a passing npm test of the Studio with this work. Its registered run (906 passed, 6 skipped) failed only the first set-up of A4 and A5 of reason-f273.spec.ts, which read the activity line on the Canvas tab where it is not drawn; the corrected test reason-f273-a1.spec.ts passed (ADR 0837 amendment 1) and the old one is kept as a skipped record. Linking an MCP actor to a Claude Code session is not built, by decision.
+
+The same entries are in `docs/roadmap/proposals/0837-F-273.json`. No follow-up item.
+
+### Open questions for the maintainer
+
+None of scope. (Q1, a recommendation only: F-979's `ChangeLine` could take D2's form and cut too; recommended to leave
+it until a view needs it, as it shows the reason already.)
