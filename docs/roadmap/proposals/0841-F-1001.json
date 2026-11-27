@@ -1,0 +1,19 @@
+{
+  "form": 1,
+  "adr": "0841",
+  "item": "F-1001",
+  "base": "d99e92837bc3b829d64ae31706dbf3a266488e9b",
+  "status": "partial",
+  "note": "ADR 0841, 2026-11-27, partial: tools_list_project_f270.json holds the 19 tools added since 7c960bb after export_view as the live list gives them (74 entries, the first 48 061 bytes as before), project_list_f270 compares each and golden_every_tool_f1001 finds every live tool in the golden, and 9 of 9 description mutations are caught; the registered fmt check missed (two over-wide lines), corrected by amendment 1.",
+  "gap": "Every clause of the acceptance is met in the registered run. Missing: the registered check L2 (cargo fmt -p rcfd-mcp --check) failed on two over-wide lines of the new test code; amendment 1 formats them and records its own run. The properties start_run gained since 7c960bb are compared by no recorded text but store (Q1).",
+  "follow_ups": [
+    {
+      "key": "start-run-golden",
+      "title": "start_run's live entry in a golden of its own",
+      "deps": [
+        "F-1001"
+      ],
+      "acceptance": "Every limit not stated here is registered in the ADR before the run. The live project-mode entry of start_run, with the properties new_case, store, continue_from, max_steps, from_run, run_time, dry_run and site, is recorded in a golden file of its own and compared byte for byte by a test; a change to any of their descriptions fails it (committed mutation)."
+    }
+  ]
+}
