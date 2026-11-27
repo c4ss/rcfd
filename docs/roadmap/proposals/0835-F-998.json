@@ -1,0 +1,10 @@
+{
+  "form": 1,
+  "adr": "0835",
+  "item": "F-998",
+  "base": "c1d9e64243a4535301f61d858ccdb47fb1ac583d",
+  "status": "partial",
+  "note": "ADR 0835, 2026-11-27, partial: the plain write moved into write_new_case for new case files only (write_new back to origin/main's temp file and hard link for every other caller), its checks and six mutations held and 0 of 900 edit_case were refused under arm H's load, but the interleaved control H showed 5 System holds in 2000 rounds against a floor of 8, so the hold count again did not compare the two paths.",
+  "gap": "Missing: a hold count that compares the old and the plain write of a new case file. The old path's System holds fell from 18 in 300 rounds (ADR 0833) to 0 in 450 (ADR 0834) and 5 in 2000 (ADR 0835, interleaved), with no refusal in 8900 edit_case, so the registered rule (floor 8) did not decide. The plain write for new case files (write_new_case) and its checks are in ADR 0835; whether the acceptance is met as written is ADR 0835 Q1.",
+  "follow_ups": []
+}

@@ -132,3 +132,92 @@ limit is recorded with its number (rule 2).
 - Linux and macOS, where `write_new_case` is `write_new`. Readers in other processes that do not retry a sharing
   violation while a new case is written.
 - The data files of a new case stay on the old path; whether the System process holds them is not measured.
+
+## Addendum 1: results (2026-11-27)
+
+Written after the runs; nothing above is changed. Release profile, `CARGO_TARGET_DIR` under the scratch folder spelled
+with backslashes, `CARGO_BUILD_JOBS` 8. Commits: 69926455 (the split, `cases.rs` unchanged: H's binaries, built from a
+`git archive` copy in `target-h`, `rcfd-mcp.exe` sha256 838331849e80...), df8dd64d (`cases.rs` on `write_new_case`,
+K1, K3, N4: P's binaries in `target`, 0e5c5b5a94b4...), 3bb636ee (the patch MP1). Each registered run was made once, in
+the registered order. Scratch: `runs.sh`, `blocks.log`, `trace.tsv`, `run-<tag>.log`, `run-tc-<tag>.log`,
+`analyse6.py`, `analysis.txt`, `mutations.sh`, `l12.sh`. Another agent's work kept the machine at 63 % to 94 % CPU
+before each block (per block in `analysis.txt`).
+
+### Checks
+
+| Id | Limit | Measured | Met |
+|---|---|---|---|
+| U1 | only `atomic.rs` (0 removed, one added block) and `cases.rs` (at most 3 removed); `write_new` equal | `atomic.rs` 44 added, 0 removed, one hunk after e0c235ec's line 180 (`write_new_case`); `cases.rs` 3 and 3 (lines 73, 142, 187); `write_new`'s 21 lines equal to e0c235ec's | yes |
+| W1 | partial 0; sharing at least 5 | partial 0, sharing 5432, full 45, absent 818 (CPU 76 %) | yes |
+| N3 | partial at least 1 | partial 7, full 59 | yes |
+| W2 | equal; no `.tmp` | passed | yes |
+| W3 | `Exists`; unchanged | passed | yes |
+| K1 | listed; `case_facts` names `cases/k1.toml`; intact case answers; `new_case` refused, bytes unchanged | passed | yes |
+| K3 | case temps 0; data temps at least 1; listings at least 40 | case temps 0; data temps 20 (every data file); listings 5768 | yes |
+| N4 | temps at least 1 | 20 of 20 files seen as temps (846 listings) | yes |
+| TC4 | each of 80: pid seen; one FREE 0 to 720 ms after release | **78 of 80**; FREE 1 to 178 ms after release in the 78; p24 and h32 missed | **missed** |
+| H | h(H) at least 8 | **h(H) = 5** (blocks h07, h14, h15, h16, h23, one each) of 1697 files looked at; refusals 0 of 6000 (edit_case 0 of 4000) | **missed** |
+| P | h(P) at most 0.1 × h(H), deciding only with h(H) at least 8 | h(P) = 0 of 1680 looked at; refusals 0 of 6000; H below its floor, so **the rule does not decide** | does not decide |
+| A | 0 of P's first 900 `edit_case` | **0 of 900** (0 of all 4000) | yes |
+| L1 | pass | `rcfd-project` (`--features test-hooks`) lib 4, `edit_lock_f755` 7, `edit_lock_f855` 2 (1 ignored), `hammer` 3 (1 ignored), `records` 7, `replace_refused_f978` 1, `write_new_f998` 4; `rcfd-workspace` lib 18, `mesh_f272` 7, `new_case_f271` 4, `new_case_file_f998` 3; `rcfd-runner` lib 36 (1 ignored), `run_records_adr0734` 2; `rcfd-mcp` lib 18 (1 ignored), `edit_case_refused_f978` 5 ignored, `new_simulations_f271` 1 (1 ignored), `replace_hold_f978` 1 (11 ignored): all passed | yes |
+| L2 | clean | fmt of the three crates clean; clippy of the three `--release --all-targets -D warnings` clean | yes |
+| L3 | pass | in addendum 2 | see there |
+
+Other holders seen (not System): `MsMpEng` once in h11 and once in p27, and the test's own process once in h25.
+
+**TC4's two misses**, diagnosed from the logs, not run again: the TC4 test's pid in p24 (16644) and h32 (59596) was the
+pid of an earlier TC4 (h22, p23), so the folder `rcfd-mcp-w48f-f998-hold-tc-<pid>` and its `mark-0-tc.txt` had the same
+path, and X5 keeps the marks it has seen by path (`seenMarks`): the second mark was not taken up, and the trace has one
+MARK and one FREE for that folder, both from the earlier block. A defect of the trace's set-up across many runs; the
+misses stand.
+
+**H's miss**: 5 System holds in 2000 rounds of the old path (0.25 %), against ADR 0833's 18 in 300 (6 %) and ADR 0834's
+0 in 450; neither arm had a refusal in its 4000 `edit_case`. At a rate this low the floor of 8 is reached in fewer than
+half of such runs (P(h ≤ 7 | mean 5) = 0.87), so the rule could rarely read P against H on this machine now.
+
+### Mutations
+
+| Id | Mutation | Caught by | Result |
+|---|---|---|---|
+| MP1 | `write_new_case` without `share_mode(0)` (committed patch) | W1 | **caught**, line 94, exit 101 |
+| MP2 | all bytes but the last | W2 | **caught**, line 120, exit 101 |
+| MP3 | `create(true).truncate(true)` | W3 | **caught**, line 141, exit 101 |
+| MC1 | `cases.rs` 142 on `write_new` | K3 | **caught**: 20 case temps, exit 101 |
+| MC2 | `cases.rs` 187 on `write_new` | K3 | **caught**: 20 case temps, exit 101 |
+| MC3 | `cases.rs` 180 on `write_new_case` | K3 | **caught**: no data temp, exit 101 |
+| N1 | H held | the rule | **not held** (h(H) = 5) |
+| N2 | TC4 | the trace | 78 of 80 |
+| N3, N4 | negative controls | W1's and K3's set-up | partial 7; 20 temps |
+
+Each mutation changed one line (`--numstat` 1 + 1) of a scratch copy of 3bb636ee.
+
+Deviations: U1's first `git diff --numstat` used the pathspec `crates/*/src`, which matched nothing and printed nothing;
+it was given again as `:(glob)crates/*/src/**`, a correction of the command, not a rerun of a result. The `EXIT` lines
+of the scratch logs show the exit of the last stage of a pipe, not of cargo; the results are read from the `test result`
+lines. Not run: nothing registered was left out. Actual size: partial; 1 further registration; 1 heavy run (the
+interleaved arms, 15 minutes); 1 question; about 120 000 bytes read.
+
+Decision by the registered rule: **partial**. The split holds (U1, W1 to W3, N3, K1, K3, N4), every mutation was caught,
+A gave 0 refusals of 900 (and of 4000), and L1 and L2 held; but H gave 5 holds against its floor of 8, so the rule does
+not decide, and TC4 missed in 2 of 80 blocks by a defect of the trace's set-up.
+
+## Open questions for the maintainer
+
+- **Q1. The measure** (scope; it changes how the acceptance is read). Three runs of the old path gave 18 holds in 300
+  rounds, 0 in 450 and 5 in 2000, and no refusal in the last 8900 `edit_case`; the hold is no longer common enough on
+  this machine to compare. (a) Take F-998 as met on its acceptance as written (900 edits refused 0 under H's load by a
+  registered change, every existing replace test and caller unchanged, the arms reported with their numbers), with the
+  split of this ADR; (b) a further run under F-998 of 10 000 rounds per arm, interleaved, with the trace's marks keyed
+  by path and time; (c) keep the split and close the measurement as not deciding. Recommendation: (a), since the
+  acceptance's clauses are met and a larger run spends hours of the shared machine on a rate that has fallen to 0.25 %;
+  not taken here, since it changes the reading of the acceptance.
+
+### For the lead: roadmap entries
+
+> Status: partial.
+
+> Note: ADR 0835, 2026-11-27, partial: the plain write moved into write_new_case for new case files only (write_new back to origin/main's temp file and hard link for every other caller), its checks and six mutations held and 0 of 900 edit_case were refused under arm H's load, but the interleaved control H showed 5 System holds in 2000 rounds against a floor of 8, so the hold count again did not compare the two paths.
+
+> Gap: Missing: a hold count that compares the old and the plain write of a new case file. The old path's System holds fell from 18 in 300 rounds (ADR 0833) to 0 in 450 (ADR 0834) and 5 in 2000 (ADR 0835, interleaved), with no refusal in 8900 edit_case, so the registered rule (floor 8) did not decide. The plain write for new case files (write_new_case) and its checks are in ADR 0835; whether the acceptance is met as written is ADR 0835 Q1.
+
+The same entries are `docs/roadmap/proposals/0835-F-998.json`.
