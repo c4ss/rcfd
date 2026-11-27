@@ -210,7 +210,9 @@ fn l1_show_view_and_read_view_come_last_in_the_project_list() {
     let mut c = client(&dir);
     let list = c.request("tools/list", json!({}))["result"]["tools"].clone();
     let tools = list.as_array().unwrap();
-    let n = tools.len();
+    // ADR 0823 (F-980): export_view last, taken off; additive, re-recorded with the lead's approval of 2026-11-27
+    assert_eq!(tools[tools.len() - 1]["name"], "export_view");
+    let n = tools.len() - 1;
     eprintln!("L1: {n} tools with --project");
     let (s, r) = (&tools[n - 2], &tools[n - 1]);
     assert_eq!(tools[n - 3]["name"], "empty_trash");
