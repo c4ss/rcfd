@@ -1,14 +1,14 @@
 # expect-fail: cargo test -p rcfd-api --release --test f885_frozen_convection_check_h f885_fc_steady
 diff --git a/crates/rcfd-fv/src/pimple.rs b/crates/rcfd-fv/src/pimple.rs
-index 4533cd18..e452e2b8 100644
+index 138d78cb..52cb0191 100644
 --- a/crates/rcfd-fv/src/pimple.rs
 +++ b/crates/rcfd-fv/src/pimple.rs
-@@ -2203,7 +2203,7 @@ impl PimpleSolver {
-                 // F-885 (ADR 0820, opt-in): the convection's gradient of the step's first outer iteration kept for the later
-                 // ones
+@@ -2242,7 +2242,7 @@ impl PimpleSolver {
                  let grad_c: Option<&[Vec3]> = match (&grad, s.outer_frozen_convection_gradient) {
--                    (Some(gr), true) => Some(frozen_grad_conv[k].get_or_insert_with(|| gr.clone()).as_slice()),
-+                    (Some(gr), true) => Some(frozen_grad_conv[k].get_or_insert_with(|| gr.iter().map(|v| vec3::scale(*v, 0.99)).collect()).as_slice()),
+                     (Some(gr), true) if keep => Some(
+                         frozen_grad_conv[k]
+-                            .get_or_insert_with(|| grad_e.unwrap_or_else(|| gr.clone()))
++                            .get_or_insert_with(|| grad_e.unwrap_or_else(|| gr.iter().map(|v| vec3::scale(*v, 0.99)).collect()))
+                             .as_slice(),
+                     ),
                      _ => grad.as_deref(),
-                 };
-                 // ADR 0183 P-A (opt-in): the limited gradient in the convection term only

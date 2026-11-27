@@ -1,0 +1,53 @@
+# at 4bb84d4f, 2026-11-27T02:39:04Z
+## f885_kg_variants_act
+running 1 test
+F885-KG VF: N 16, dt 0.05, A against ON 4.0386e-4, C against ON 4.1045e-4 (floor 1e-9)
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 9 filtered out; finished in 1.02s
+## f885_kg_variants_act: 2 s
+## f885_kg_order_16
+running 1 test
+F885-KG N 16 Off: e(0.1, 0.05, 0.025) [3.8292e-4, 9.3308e-5, 2.2976e-5], p_c 2.0370, p_f 2.0219
+F885-KG N 16 A: e(0.1, 0.05, 0.025) [7.4350e-4, 1.8368e-4, 4.5587e-5], p_c 2.0171, p_f 2.0105, e / e_OFF [1.9417e0, 1.9686e0, 1.9841e0]
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 9 filtered out; finished in 25.58s
+## f885_kg_order_16: 26 s
+## f885_kg_steady
+running 1 test
+F885-KG S A: steps to the criterion OFF Some(211) (last change 9.477e-13), ON with A Some(210) (last change 9.641e-13); velocity 3.3828e-13, flux 3.3426e-13 (limit 1e-8); after 5 steps 8.3136e-3 (floor 1e-6)
+F885-KG S C: steps to the criterion OFF Some(211) (last change 9.477e-13), ON with C Some(213) (last change 8.876e-13); velocity 7.8456e-13, flux 7.6156e-13 (limit 1e-8); after 5 steps 5.2638e-3 (floor 1e-6)
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 9 filtered out; finished in 1.98s
+## f885_kg_steady: 2 s
+## f885_kg_rules_on_built_records
+running 1 test
+C5 d5/d1 = 1e-3 everywhere: share 1.00000, (Steady, Steady)
+C5 d5/d1 = 0.05 everywhere: share 0.00000, (NotEvaluable, DoesNotDecide)
+C5 d5/d1 = 0.05 in 2 % of the window: share 0.97999, (NotEvaluable, DoesNotDecide)
+C5 d5/d1 = 0.05 in 0.5 % of the window: share 0.99491, (Steady, Steady)
+C5 d4/d1 = 0.5 with d5/d1 = 1e-3: the 5th is read: share 1.00000, (Steady, Steady)
+C5 d1 = d5 = 0: share 1.00000, (Steady, Steady)
+C5 a NaN d5 in 2 % of the window: share 0.97999, (NotEvaluable, DoesNotDecide)
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 9 filtered out; finished in 4.82s
+## f885_kg_rules_on_built_records: 5 s
+## f885_kg_arms_16_record
+running 1 test
+F885-KG N 16 Off: e(0.1, 0.05, 0.025) [3.8292e-4, 9.3308e-5, 2.2976e-5], p_c 2.0370, p_f 2.0219, e / e_OFF [1.0000e0, 1.0000e0, 1.0000e0]
+F885-KG N 16 On: e(0.1, 0.05, 0.025) [1.0719e-3, 4.3772e-4, 2.0053e-4], p_c 1.2921, p_f 1.1262, e / e_OFF [2.7994e0, 4.6911e0, 8.7279e0]
+F885-KG N 16 A: e(0.1, 0.05, 0.025) [7.4350e-4, 1.8368e-4, 4.5587e-5], p_c 2.0171, p_f 2.0105, e / e_OFF [1.9417e0, 1.9686e0, 1.9841e0]
+F885-KG N 16 B: e(0.1, 0.05, 0.025) [1.0719e-3, 4.3772e-4, 2.0053e-4], p_c 1.2921, p_f 1.1262, e / e_OFF [2.7994e0, 4.6911e0, 8.7279e0]
+F885-KG N 16 C: e(0.1, 0.05, 0.025) [3.8988e-4, 9.4145e-5, 2.3081e-5], p_c 2.0501, p_f 2.0282, e / e_OFF [1.0182e0, 1.0090e0, 1.0045e0]
+F885-KG N 16 D: e(0.1, 0.05, 0.025) [1.2680e-3, 6.2903e-4, 3.0595e-4], p_c 1.0113, p_f 1.0398, e / e_OFF [3.3113e0, 6.7414e0, 1.3316e1]
+F885-KG reading N 16: p_f(A) 2.0105 (A needs >= 1.9 on both meshes and p_f(A) - p_f(ON) 0.8844 >= 0.05 at N 64); abs(p_f(B) - p_f(ON)) 0.0000 (B ruled out if <= 0.05); p_f(C) 2.0282 (C needs >= 1.9); abs(p_f(D) - p_f(ON)) 0.0863 (D ruled out if <= 0.1)
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 9 filtered out; finished in 99.23s
+## f885_kg_arms_16_record: 100 s
+## f885_kg_order_64_record
+running 1 test
+F885-KG N 64 Off: e(0.1, 0.05, 0.025) [2.7615e-4, 6.7885e-5, 1.6570e-5], p_c 2.0243, p_f 2.0345
+F885-KG N 64 On: e(0.1, 0.05, 0.025) [3.7568e-4, 9.7105e-5, 2.7461e-5], p_c 1.9519, p_f 1.8222, e / e_OFF [1.3604e0, 1.4304e0, 1.6572e0]
+F885-KG N 64 A: e(0.1, 0.05, 0.025) [3.6899e-4, 9.1059e-5, 2.2307e-5], p_c 2.0187, p_f 2.0293, e / e_OFF [1.3362e0, 1.3414e0, 1.3462e0]
+F885-KG N 64 B: e(0.1, 0.05, 0.025) [3.7568e-4, 9.7105e-5, 2.7461e-5], p_c 1.9519, p_f 1.8222, e / e_OFF [1.3604e0, 1.4304e0, 1.6572e0]
+F885-KG N 64 C: e(0.1, 0.05, 0.025) [2.7845e-4, 6.8127e-5, 1.6593e-5], p_c 2.0311, p_f 2.0377, e / e_OFF [1.0083e0, 1.0036e0, 1.0013e0]
+F885-KG N 64 D: e(0.1, 0.05, 0.025) [7.7764e-5, 3.4486e-5, 1.6177e-5], p_c 1.1731, p_f 1.0921, e / e_OFF [2.8160e-1, 5.0800e-1, 9.7624e-1]
+F885-KG R1: ON at N 64 relative to ADR 0822 [1.1614e-5, 1.0385e-6, 1.4232e-5] (limit 1e-4)
+F885-KG reading N 64: p_f(A) 2.0293 (A needs >= 1.9 on both meshes and p_f(A) - p_f(ON) 0.2071 >= 0.05 at N 64); abs(p_f(B) - p_f(ON)) 0.0000 (B ruled out if <= 0.05); p_f(C) 2.0377 (C needs >= 1.9); abs(p_f(D) - p_f(ON)) 0.7301 (D ruled out if <= 0.1)
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 9 filtered out; finished in 710.01s
+## f885_kg_order_64_record: 710 s
+# done

@@ -1,0 +1,31 @@
+# ADR 0824 mutations on git archive of 4bb84d4f
+M1   F885-KG VF: N 16, dt 0.05, A against ON 0.0000e0, C against ON 4.1045e-4 (floor 1e-9)
+M1   test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 9 filtered out; finished in 1.08s
+M1   thread 'f885_kg_variants_act' (67432) panicked at crates\rcfd-api\tests\f885_kept_gradient_lag.rs:926:5:
+M1   error: test failed, to rerun pass `-p rcfd-api --test f885_kept_gradient_lag`
+M1 f885_kg_variants_act: exit 101 -> CAUGHT
+M2   F885-KG VF: N 16, dt 0.05, A against ON 4.0386e-4, C against ON 0.0000e0 (floor 1e-9)
+M2   test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 9 filtered out; finished in 1.01s
+M2   thread 'f885_kg_variants_act' (45108) panicked at crates\rcfd-api\tests\f885_kept_gradient_lag.rs:926:5:
+M2   error: test failed, to rerun pass `-p rcfd-api --test f885_kept_gradient_lag`
+M2 f885_kg_variants_act: exit 101 -> CAUGHT
+M3   F885-KG N 16 Off: e(0.1, 0.05, 0.025) [3.8292e-4, 9.3308e-5, 2.2976e-5], p_c 2.0370, p_f 2.0219
+M3   F885-KG N 16 A: e(0.1, 0.05, 0.025) [8.4378e-4, 2.7329e-4, 1.0864e-4], p_c 1.6264, p_f 1.3309, e / e_OFF [2.2036e0, 2.9289e0, 4.7284e0]
+M3   test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 9 filtered out; finished in 29.44s
+M3   thread 'f885_kg_order_16' (31672) panicked at crates\rcfd-api\tests\f885_kept_gradient_lag.rs:949:5:
+M3   K16-A missed: p_f 1.3308617431685759
+M3   error: test failed, to rerun pass `-p rcfd-api --test f885_kept_gradient_lag`
+M3 f885_kg_order_16: exit 101 -> CAUGHT
+M4   F885-KG S A: steps to the criterion OFF Some(211) (last change 9.477e-13), ON with A Some(210) (last change 8.957e-13); velocity 2.9541e-3, flux 1.7334e-3 (limit 1e-8); after 5 steps 8.9774e-3 (floor 1e-6)
+M4   F885-KG S C: steps to the criterion OFF Some(211) (last change 9.477e-13), ON with C Some(212) (last change 9.181e-13); velocity 2.9612e-3, flux 1.7446e-3 (limit 1e-8); after 5 steps 6.2001e-3 (floor 1e-6)
+M4   test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 9 filtered out; finished in 1.68s
+M4   thread 'f885_kg_steady' (53272) panicked at crates\rcfd-api\tests\f885_kept_gradient_lag.rs:1088:9:
+M4   S2 A missed: 0.0029540632430494975 0.0017334075541558362
+M4   error: test failed, to rerun pass `-p rcfd-api --test f885_kept_gradient_lag`
+M4 f885_kg_steady: exit 101 -> CAUGHT
+M5   C5 d5/d1 = 1e-3 everywhere: share 1.00000, (Steady, Steady)
+M5   C5 d5/d1 = 0.05 everywhere: share 1.00000, (Steady, Steady)
+M5   test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 9 filtered out; finished in 4.37s
+M5   thread 'f885_kg_rules_on_built_records' (64972) panicked at crates\rcfd-api\tests\f885_kept_gradient_lag.rs:1184:9:
+M5   error: test failed, to rerun pass `-p rcfd-api --test f885_kept_gradient_lag`
+M5 f885_kg_rules_on_built_records: exit 101 -> CAUGHT
