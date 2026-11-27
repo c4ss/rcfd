@@ -138,3 +138,61 @@ files).
 3. **Active runs at a folder's removal.** Options: (a) keep serving until they end, then leave; (b) cancel them and leave;
    (c) leave at once, the solvers keep running unadopted. **Recommendation:** (a), taken: a removal is not a cancel
    request.
+
+## Addendum 1: results (2026-11-27)
+
+Commits after the registration (4e4794a5): 03da0319, the code of design B in `crates/rcfd-runner/src/runner.rs` (the
+look in `serve`, `GONE_LOOK_MS`, `absent`, `project_gone`, `leave_gone`, `Runner::pending_left`, test B3), the new
+`crates/rcfd-runner/tests/gone_f997.rs` (A1, B1, B2) and `gone_f997.mutation.patch` (M1); 9ca81070, the rustfmt layout
+of `gone_f997.rs` (deviation 1). `sys.rs` and `client.rs` are not changed (finding 1). Windows 11, rustc 1.99.0, release
+profile, every check run once.
+
+### Checks
+
+| Check | Limit | Measured | Met |
+|---|---|---|---|
+| A1 (with A1c, one run) | stdout EOF at most 3.0 s after the parent's exit, runner alive | `ensure` exit 0 at 0.05 s; EOF still pending at 3.0 s (lock held, runner alive); EOF came 0.26 s after the teardown's shutdown request | **missed** (Windows), as predicted: held as the known miss `a1_..._known_miss_on_windows`, limit intact; A1c held, as predicted |
+| B1 | exit code 0 at most 5.0 s after the removal | removal failed at the held lock (os error 32) after taking `runner.json`; folder and lock left; exit 0 at 1.013 s | met |
+| B2 | alive and lock held at 3.5 s; exit 0 at most 5.0 s after the request | alive, held at 3.500 s; exit 0 at 0.031 s | met |
+| B3 | `leave_gone` true only for (gone, 0, 0); `project_gone` false whole, true for each absent piece | as the limit, 8 cases | met |
+| C | `--lib` and the six named files pass | `--lib` 36 passed, 1 ignored; `native_start_w48i` 3; `started_by_qrl2` 6; `no_window_scan` 1; `zombie_w48i` 1; `output_w48l` 8, 1 ignored (C1, the known miss of ADR 0146); `runner_w47b` 13, 1 ignored (S5) | met |
+
+Also: `cargo test -p rcfd-api --release --test baseline_hashes` 3 passed, 1 ignored (as before; no solver file touched);
+`cargo clippy -p rcfd-runner --all-targets -- -D warnings` clean.
+
+### Mutations
+
+| Mutation | Caught by |
+|---|---|
+| M1 `project_gone` always false | B1 (no exit at 5.007 s), B3 |
+| M2 without the `runner.json` term | B1 (no exit at 5.011 s, Windows), B3 |
+| M3 `leave_gone` ignores active runs | B3 (it left for (gone, 1, 0)) |
+| M4 the `runner.json` term inverted | B2 (exited before 3.5 s), B3 |
+
+### Deviations
+
+1. The first `cargo fmt -p rcfd-runner --check` failed on the layout of four `assert!` calls in `gone_f997.rs`.
+   `cargo fmt -p rcfd-runner` changed only that layout (commit 9ca81070) and the second check passed. No test changed.
+2. The first start of the mutation script stopped at a Python error before any mutation was applied. It was corrected
+   and run once.
+
+### Not run
+
+Linux and macOS (A1, B1 and B2 are not ignored there); `rcfd-mcp`'s C2; `npm test` (no Studio file).
+
+### Size
+
+Size (agent, actual): partial; 1; 0; 3; 130000
+
+### Decision
+
+By the registered rule: **partial**. B1, B2, B3 and C hold and each mutation is caught, but A1 misses on Windows because
+(a) cannot be built under rule 5 and the workspace lint (finding 1, open question 1).
+
+### For the lead: roadmap entries
+
+> Status: partial.
+
+> Note: ADR 0829, 2026-11-27, partial: a runner whose project folder is gone (folder, .rcfd, lock or runner.json absent at a 1 s look) with no run of its own left exits cleanly by itself (1.01 s after the removal, B1; a kept folder still served at 3.5 s, B2), but on Windows a runner still inherits its caller's pipes (A1 held at 3.0 s), since no fix is possible without unsafe code.
+
+> Gap: Missing: clause a on Windows. A runner started by rcfd-runner ensure or the run tools still inherits every inheritable handle of its caller (A1: the parent's stdout held at 3.0 s, released only at the runner's shutdown). Every fix needs unsafe code (CreateProcessW with PROC_THREAD_ATTRIBUTE_HANDLE_LIST), an unstable std switch or a launcher; it waits for the maintainer's answer to ADR 0829 question 1, then a follow-up registration under F-997.

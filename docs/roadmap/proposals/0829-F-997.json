@@ -1,0 +1,9 @@
+{
+  "form": 1,
+  "adr": "0829",
+  "item": "F-997",
+  "base": "2cbdfa5f4c43f4bcec0be1b5b5cfc007c8139740",
+  "status": "partial",
+  "note": "ADR 0829, 2026-11-27, partial: a runner whose project folder is gone (folder, .rcfd, lock or runner.json absent at a 1 s look) with no run of its own left exits cleanly by itself (1.01 s after the removal, B1; a kept folder still served at 3.5 s, B2), but on Windows a runner still inherits its caller's pipes (A1 held at 3.0 s), since no fix is possible without unsafe code.",
+  "gap": "Missing: clause a on Windows. A runner started by rcfd-runner ensure or the run tools still inherits every inheritable handle of its caller (A1: the parent's stdout held at 3.0 s, released only at the runner's shutdown). Every fix needs unsafe code (CreateProcessW with PROC_THREAD_ATTRIBUTE_HANDLE_LIST), an unstable std switch or a launcher; it waits for the maintainer's answer to ADR 0829 question 1, then a follow-up registration under F-997."
+}
