@@ -45,6 +45,10 @@
 //! ADR 0839 restates it for F-999: the golden holds `show_view`, `read_view` and `export_view` last, after `wait_run`, as
 //! the live list gives them; each is compared with the live list's entry byte for byte and taken off both, and the
 //! golden's other 52 entries are the list of 7c960bb, byte for byte.
+//!
+//! ADR 0841 restates it for F-1001: the golden holds the 19 tools added since 7c960bb (`ADDED`) after `export_view`, in
+//! live order, as the live list gives them; each is compared with the live entry of its name byte for byte and taken off
+//! the golden, and the blocks below take each off the live list as before.
 
 use serde_json::{json, Value};
 use std::io::Write;
@@ -95,6 +99,29 @@ const REASON_TOOLS: [&str; 8] = [
     "cancel_run",
 ];
 
+/// ADR 0841 (F-1001): the tools added since 7c960bb that the golden holds after `export_view`, in live order.
+const ADDED: [&str; 19] = [
+    "derive_picture",
+    "read_feed",
+    "hash_project_file",
+    "new_case",
+    "check_case_mesh",
+    "preview_mesh",
+    "import_mesh",
+    "list_meshes",
+    "runner_config",
+    "set_runner_config",
+    "case_facts",
+    "refine_case_mesh",
+    "list_sites",
+    "list_trash",
+    "trash_run",
+    "trash_results",
+    "trash_case",
+    "restore_trash",
+    "empty_trash",
+];
+
 #[test]
 fn a2_tools_list_with_project_is_the_golden_with_the_f271_changes() {
     let dir = std::env::temp_dir().join(format!("rcfd-mcp-f270-a2-{}", std::process::id()));
@@ -130,6 +157,26 @@ fn a2_tools_list_with_project_is_the_golden_with_the_f271_changes() {
     // live text
     assert_eq!(serde_json::to_string(&gold).unwrap(), GOLDEN);
     assert_eq!(serde_json::to_string(&live_value).unwrap(), got);
+    // ADR 0841 (F-1001): the entries after export_view, each compared with the live entry of its name, then taken off
+    // the golden; the blocks below take each off the live list
+    {
+        let golds = gold["tools"].as_array_mut().unwrap();
+        assert_eq!(golds[54]["name"], "export_view");
+        let names: Vec<&str> = golds[55..].iter().map(|t| t["name"].as_str().unwrap()).collect();
+        assert_eq!(names, ADDED);
+        let tools = live_value["tools"].as_array().unwrap();
+        let mut last = None;
+        for g in &golds[55..] {
+            let at = tools
+                .iter()
+                .position(|t| t["name"] == g["name"])
+                .unwrap_or_else(|| panic!("{} is not listed", g["name"]));
+            assert!(last.is_none_or(|p| at > p), "{} out of the live order", g["name"]);
+            last = Some(at);
+            assert_eq!(tools[at].to_string(), g.to_string(), "{} differs from the golden", g["name"]);
+        }
+        golds.truncate(55);
+    }
     // ADR 0823 (F-980): export_view last, taken out; additive, re-recorded with the lead's approval of 2026-11-27
     {
         let tools = live_value["tools"].as_array_mut().unwrap();
