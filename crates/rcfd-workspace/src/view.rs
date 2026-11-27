@@ -1001,9 +1001,85 @@ fn esc(s: &str) -> String {
         .replace('\'', "&#39;")
 }
 
-/// A number as JSON writes it (the shortest text that reads back as the same `f64`); `null` when not finite.
+/// ADR 0823 amendment 4: a number as the Studio writes it, JavaScript's `String(x)` (ECMA-262 `Number::toString`): the
+/// shortest digits that read back as the same `f64`, of two equally near the even one; `null` when not finite.
 fn num(x: f64) -> String {
-    serde_json::to_string(&json!(x)).unwrap_or_else(|_| "null".into())
+    if !x.is_finite() {
+        return "null".into();
+    }
+    if x == 0.0 {
+        return "0".into();
+    }
+    let e = format!("{:e}", x.abs());
+    let (m, p) = e.split_once('e').unwrap_or((&e, "0"));
+    let mut digits: Vec<u8> = m.bytes().filter(|b| *b != b'.').collect();
+    let mut n = p.parse::<i32>().unwrap_or(0) + 1;
+    let k = digits.len();
+    // of two shortest texts equally near x, the even one: x lies halfway when its exact expansion has k + 1 digits
+    // ending in 5
+    let exact = format!("{:.800e}", x.abs());
+    let (em, _) = exact.split_once('e').unwrap_or((&exact, "0"));
+    let all: Vec<u8> = em.bytes().filter(|b| *b != b'.').collect();
+    let sig = all.iter().rposition(|b| *b != b'0').map_or(0, |i| i + 1);
+    if sig == k + 1 && all[k] == b'5' {
+        let mut down = all[..k].to_vec();
+        if (down[k - 1] - b'0') % 2 == 1 {
+            // the even neighbour is the one above: add one in the last place
+            let mut i = k;
+            loop {
+                if i == 0 {
+                    down.insert(0, b'1');
+                    n += 1;
+                    break;
+                }
+                i -= 1;
+                if down[i] == b'9' {
+                    down[i] = b'0';
+                } else {
+                    down[i] += 1;
+                    break;
+                }
+            }
+        }
+        while down.len() > 1 && down.last() == Some(&b'0') {
+            down.pop();
+        }
+        digits = down;
+    }
+    let k = digits.len() as i32;
+    let d = String::from_utf8(digits).unwrap_or_default();
+    let body = if k <= n && n <= 21 {
+        format!("{d}{}", "0".repeat((n - k) as usize))
+    } else if 0 < n && n <= 21 {
+        format!("{}.{}", &d[..n as usize], &d[n as usize..])
+    } else if -6 < n && n <= 0 {
+        format!("0.{}{d}", "0".repeat((-n) as usize))
+    } else {
+        let s = if n - 1 < 0 { '-' } else { '+' };
+        let mant = if k == 1 {
+            d.clone()
+        } else {
+            format!("{}.{}", &d[..1], &d[1..])
+        };
+        format!("{mant}e{s}{}", (n - 1).abs())
+    };
+    format!("{}{body}", if x < 0.0 { "-" } else { "" })
+}
+
+/// ADR 0823 amendment 4: a value as the Studio's `JSON.stringify` writes it: JSON, each `f64` by [`num`].
+fn js_json(v: &Value) -> String {
+    match v {
+        Value::Number(x) if x.is_f64() => num(x.as_f64().unwrap_or(f64::NAN)),
+        Value::Array(a) => format!("[{}]", a.iter().map(js_json).collect::<Vec<_>>().join(",")),
+        Value::Object(o) => format!(
+            "{{{}}}",
+            o.iter()
+                .map(|(k, x)| format!("{}:{}", Value::String(k.clone()), js_json(x)))
+                .collect::<Vec<_>>()
+                .join(",")
+        ),
+        other => other.to_string(),
+    }
 }
 
 /// One located refusal of `export_view` (error 1003, as `show_view`'s).
@@ -1513,7 +1589,7 @@ impl Workspace {
             }
             "setting" => {
                 let got = settings.iter().find(|x| x["panel"] == json!(i));
-                let value = got.and_then(|g| g.get("value")).map(Value::to_string);
+                let value = got.and_then(|g| g.get("value")).map(js_json);
                 let error = got.and_then(|g| g.get("error")).and_then(Value::as_str);
                 let mut out = format!(
                     "<div class=\"cv-setting\" data-setting=\"{}\"{}><p class=\"cv-setting-value\"><span class=\"cv-setting-path\">{}</span> = <output>{}</output></p>",
@@ -1544,12 +1620,12 @@ impl Workspace {
                     out.push_str(&format!(
                         "<tr data-run=\"{}\" data-step=\"{}\"><th scope=\"row\">{}</th><td>{}</td><td>{}</td><td class=\"xv-num\">{}</td><td class=\"xv-num\">{}</td></tr>",
                         esc(rid),
-                        r["step"],
+                        js_json(&r["step"]),
                         esc(rid),
                         esc(r["case"].as_str().unwrap_or_default()),
                         esc(r["state"].as_str().unwrap_or_default()),
-                        r["step"],
-                        r["time"]
+                        js_json(&r["step"]),
+                        js_json(&r["time"])
                     ));
                     files.extend(run_files(rid));
                 }
@@ -1566,12 +1642,12 @@ impl Workspace {
                     format!(
                         "<div class=\"xv-run\" data-run=\"{}\" data-step=\"{}\" data-snapshots=\"{}\"><dl class=\"xv-grid\"><dt>Run</dt><dd>{}</dd><dt>Case</dt><dd>{}</dd><dt>State</dt><dd>{}</dd><dt>Steps</dt><dd>{}</dd><dt>Snapshots stored</dt><dd>{}</dd></dl></div>\n",
                         esc(&run),
-                        r["step"],
+                        js_json(&r["step"]),
                         snaps,
                         esc(&run),
                         esc(r["case"].as_str().unwrap_or_default()),
                         esc(r["state"].as_str().unwrap_or_default()),
-                        r["step"],
+                        js_json(&r["step"]),
                         snaps
                     ),
                     run_files(&run),
@@ -2523,5 +2599,46 @@ store_fields = ["alpha", "ux", "uy", "p"]
         }
         // the control: a page with a reference is found out
         assert_eq!(page_references("<link rel=\"stylesheet\" href=\"https://x\">").len(), 3);
+    }
+
+    /// ADR 0823 amendment 4 U1: `num` writes 20 numbers as `String(x)` does in Node v22.19.0 (the Studio's runtime),
+    /// whose texts were printed once after the amendment's commit and before this code.
+    #[test]
+    fn u1_f980_num_writes_a_number_as_the_studio_does() {
+        let want: [(f64, &str); 20] = [
+            (278.0, "278"),
+            (0.01, "0.01"),
+            (-152.87271118164063, "-152.87271118164062"),
+            (1078.4739990234375, "1078.4739990234375"),
+            (1.0, "1"),
+            (0.0, "0"),
+            (-0.0, "0"),
+            (2400.0, "2400"),
+            (1e-7, "1e-7"),
+            (1.5e-7, "1.5e-7"),
+            (1e-6, "0.000001"),
+            (2.5e-6, "0.0000025"),
+            (1e21, "1e+21"),
+            (1.2345678901234568e20, "123456789012345680000"),
+            (123.456, "123.456"),
+            (-0.5, "-0.5"),
+            (5e-324, "5e-324"),
+            (1.7976931348623157e308, "1.7976931348623157e+308"),
+            (100.0, "100"),
+            (0.1 + 0.2, "0.30000000000000004"),
+        ];
+        let mut equal = 0;
+        for (x, s) in want {
+            let got = num(x);
+            eprintln!("U1 {x:e}: num {got}, String {s}{}", if got == s { "" } else { " MISS" });
+            equal += usize::from(got == s);
+        }
+        eprintln!("U1: {equal} of 20 equal");
+        assert_eq!(equal, 20);
+        // js_json: JSON, each f64 by num
+        assert_eq!(
+            js_json(&json!({"a": [1.0, 2u64, "x"], "b": 0.01})),
+            "{\"a\":[1,2,\"x\"],\"b\":0.01}"
+        );
     }
 }
