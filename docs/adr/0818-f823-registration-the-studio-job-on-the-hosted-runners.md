@@ -380,3 +380,14 @@ rule: **partial** (EMU and GHW missed, MU1 not caught, MA1 not run; the lead's n
 > Note: ADR 0818, 2026-11-26, partial: the studio-web skip step lists ADR 0807's four records and the records of Follow live's race and of provenance-f828's scan (each with a corrected test that passes), and workspace-first-open checks its premise (a WebGPU adapter) and is reported by STUDIO_PREMISE_SKIPS when it is missing; Windows runs with no switch again after the lead's run 45906133164 showed --enable-unsafe-webgpu does not draw; ubuntu passed on GitHub; locally npm test passed 886 with 6 registered skips.
 
 > Gap: windows-latest on GitHub is to be read again with no switch, the corrected provenance scan and workspace-first-open's premise check (ADR 0818 amendment 3); run-control.spec.ts:268's P2 holds on ubuntu only by chance (2 of 3 missed); a11y.spec.ts:427 undiagnosed (traces are a later item); a self-hosted runner for the timing specs is the lead's item.
+
+## Answers of the maintainer (2026-11-26), written by the lead
+
+1. The recommendation: the limits stay; a self-hosted runner for the timing specs, F-991, which runs only for pushes to main and workflow_dispatch (a public repository) and which the maintainer sets up; taken by the lead on the maintainer's standing instruction of 2026-11-26 (go with the recommended option always).
+2. The recommendation: CI keeps Playwright traces on failure under a registration that measures their effect on the timing specs, F-992; taken by the lead on the maintainer's standing instruction of 2026-11-26 (go with the recommended option always).
+3. The recommendation: the switch taken back for Windows and the provenance scan's fallback label given a corrected test under rule 2, carried out on this branch by amendment 3 before the merge; taken by the lead on the maintainer's standing instruction of 2026-11-26 (go with the recommended option always).
+
+## The lead's read on GitHub (2026-11-27)
+
+Run 45906133164 at 83e232c4: ubuntu-24.04 studio-web passed; windows-latest 17 failed, 806 passed (the views not drawn with the switch).
+Run 45911324625 at 1b0b4714: ubuntu-24.04 studio-web passed; windows-latest 884 passed, 1 failed (responsiveness.spec.ts:260), the premise skip of workspace-first-open.spec.ts:59 and the skipped records as registered. The gate self-test failed on both only on the branch's docs/adr/index.md, written at the merge.
