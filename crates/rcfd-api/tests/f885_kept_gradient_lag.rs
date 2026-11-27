@@ -67,7 +67,11 @@ type Outcome = (Class, Verdict);
 /// amplitude [m/s] and the frequency [Hz] of the site signal.
 type Recorded = (Class, Verdict, [(f64, f64, f64); 2]);
 /// G1: the recorded values of the two registered runs of ADR 0824 (written after the runs).
-const RECORD: Option<Recorded> = None;
+const RECORD: Option<Recorded> = Some((
+    Class::Steady,
+    Verdict::Steady,
+    [(1.0, 1.255718e-3, 503.0523), (1.0, 2.277452e-3, f64::NAN)],
+));
 
 fn omega() -> f64 {
     RPM * 2.0 * PI / 60.0
