@@ -1,0 +1,9 @@
+{
+  "form": 1,
+  "adr": "0838",
+  "item": "F-987",
+  "base": "476de79ba32f9235ba28ad2cb559375dfd25ad57",
+  "status": "done",
+  "note": "ADR 0838, 2026-11-27, done: show_view's description names F-976's seven kinds, the setting kind, ADR 0807's mesh-of-a-case and monitor-of-a-case forms, the process panel and ADR 0817's run form (22 of 22 phrases found, the old text missing exactly 6); no golden holds show_view, so no golden byte changed and nothing is re-recorded.",
+  "follow_ups": []
+}
