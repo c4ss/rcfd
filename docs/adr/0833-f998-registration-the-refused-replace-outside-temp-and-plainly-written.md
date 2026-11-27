@@ -111,3 +111,13 @@ number (rule 2).
 - HO does not tell the folder from the volume, and HP does not tell the hard link from the sync or from the creating
   process.
 - Linux and macOS, where an open file does not block a rename.
+
+## Amendment 1 (2026-11-27): M3's set-up
+
+Written after S1, TC4, M2, H, HO, HP, HOP and M1 had run and before M3's corrected run; nothing above is changed. The
+scratch script's first M3 run did not apply the mutation: its `sed` looked for `open(path)?.write_all(bytes)` on one
+line, but rustfmt had laid the call out over lines (`.write_all(bytes)` alone), so nothing was changed (the diff stat
+in `run-m3.log` is empty) and S1 ran on the unmutated code and passed. That run is not a run of M3 and is kept in the
+scratch folder as a record. Corrected set-up: on a fresh scratch copy of the same commit, `.write_all(bytes)` in
+`create_plain` becomes `.write_all(&bytes[..bytes.len() - 1])`; the run goes ahead only if `git diff --numstat` shows
+exactly one line changed in `replace_hold_f978.rs`; then S1 once, as registered. M3's limit is unchanged: S1 must fail.
