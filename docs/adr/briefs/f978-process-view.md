@@ -6,7 +6,7 @@ ADR: 0825
 Rules version: 5
 Model: Claude Opus 5.5
 Issued: 2026-11-26
-Size (lead): done; 1; 0; 0; 214882
+Size (lead): done; 1; 0; 0; 185386
 
 The rules are `docs/process/agent-rules.md`, version 5, in the repository; follow them exactly and cite them by that path and version in the
 registration. Worktree: `E:/projects/cfd/rcfd/.claude/worktrees/f978-process-view`, on the branch `f978-process-view`, which the lead made at the commit that adds this brief; you start in it. Do not touch the main checkout or another worktree. Scratch folder: `E:/projects/cfd/w49i-work/f978-process-view-scratch`.
@@ -28,9 +28,8 @@ You run without a person to ask: an action you are denied is left undone and is 
 - docs/adr/0805-f976-registration-a-view-specification-and-show-view.md 29560
 - crates/rcfd-workspace/src/view.rs 106772
 - apps/studio-web/src/renderer/canvas/Canvas.tsx 13304
-- apps/studio-web/src/main/project/session.ts 29496
 
-Also in the repository, as needed: ADR 0188 (the feed and its events), the project journal and the run records of
+Also in the repository, as needed: `apps/studio-web/src/main/project/session.ts` (the feed poll and `view_shown`), ADR 0188 (the feed and its events), the project journal and the run records of
 `crates/rcfd-workspace`, the MCP tools that create a case, make its mesh, change its settings and start a run (`crates/rcfd-mcp`),
 ADR 0807 (the live canvas), ADR 0817 (category layouts), docs/adr/0823-f980-registration-a-view-exported-as-one-self-contained-html-page.md (export_view), the e2e tests
 `apps/studio-web/tests/e2e/canvas-f979-a1.spec.ts` and `canvas-f977.spec.ts`.
