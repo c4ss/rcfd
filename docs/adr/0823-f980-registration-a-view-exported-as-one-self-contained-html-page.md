@@ -472,3 +472,74 @@ not re-recorded; one `commands.spec.ts` failure). Every check of the acceptance 
 
 The same entries are `docs/roadmap/proposals/0823-F-980.json`, which keeps addendum 1's follow-up as the lead numbered
 it (F-993).
+
+## Amendment 6 (2026-11-27): E1's monitor value outside the worktree
+
+Written after the lead's follow-up of 2026-11-27 and before any change or run it covers; nothing above is changed.
+Written by Claude Opus 5.5 (`claude-opus-5-5`), as a background agent of the lead. A further registration under F-980
+(rule 13). The lead merged c65d8a73 (merge 2896a777 on 689fab92) and ran `scripts/push_main.py`; `npm test` failed in
+each of its 3 runs on E1 only, "panel 5 monitor value: Studio 2.257184947479129, page 13.580549682488824" (894 passed),
+where the same spec had passed in this worktree (addendum 2). The merge was taken off.
+
+**What was read before this text (nothing was built or run).** The push log (`w49i-work/push-f980.log`, lines 126 to
+131 and 2557 to 2575): of the 15 values of E1 only the monitor's value differs; its step agrees (278 and 278). In
+`runs/r-20261028T152641-3900/residuals.jsonl` of quick-start (278 lines, one sample of `nu_hot` per step) the first line
+(step 1) has `nu_hot` 13.580549682488824 and the last (step 278) 2.257184947479129, the value `metrics.json` and line 279
+of `output/monitors.csv` also give. The page's value is the first sample with the last step: the output of M1, the
+committed patch `crates/rcfd-mcp/tests/export_view_f980.mutation.patch`. `scripts/push_main.py` (its docstring step 3,
+`verify_patch` and `do_run`) applies each mutation patch with `git apply`, runs its `expect-fail` command, removes the
+patch with `git apply -R`, and then runs `npm test` with no build of the engine between; M1's command
+`cargo test --release -p rcfd-mcp --test export_view_f980` builds the binaries of the package `rcfd-mcp` for its
+integration test, so `target/release/rcfd-mcp.exe` of the checkout is built with M1 applied and stays so after the patch
+is removed. The spec's `findMcp` (`tests/support/project.ts` line 20) takes `RCFD_MCP_BIN`, then `checkoutRelease`
+(`CARGO_TARGET_DIR`'s or the checkout's `target/release`). The patches run in name order and this item's is the last of
+the five (log lines 126 to 130), so its build is the one left for `npm test`. The Studio's value is read through its own
+engine's `read_residuals`, which M1 does not change.
+
+**Hypotheses, what each predicts in the control, and the remedy each points to.**
+
+| H | Why the page's value differs from the Studio's outside the worktree | Predicts in C1, C2, C3 (below) | Remedy |
+|---|---|---|---|
+| H1 | the page is written by an `rcfd-mcp` built with M1 applied, left in the target folder by the push's mutation step | C1 pass, C2 pass, C3 E1 fails with the page's value 13.580549682488824 at step 278 and every other value of E1 equal | the patch's command builds in a target folder of its own (below), so the target `npm test` uses is never built with the mutation; the script's general defect to the lead |
+| H2 | the page reads another file or column than the Studio (`output/monitors.csv`, `monitors.json`, `metrics.json`, another monitor) | C1 fails as the push did (this head's code of the page is the merged code's); but every file gives 2.257184947479129 at step 278 | read the Studio's series (`read_residuals`, `monitors.<m>`) |
+| H3 | the page takes another sample or a reduction (a decimation to 800 points, a sample at a time, a mean) | C1 fails as the push did; but 278 samples are fewer than 800 | the Studio's sample: the last of `read_residuals {max_points: 800}` |
+| H4 | state left in the project folder by an earlier spec, or the order of the specs | C1, C2 and C3 pass (the spec alone, in its own fresh copy of quick-start, which the Studio and the page both read) | a project folder the spec owns alone |
+| H5 | the merge with main (689fab92) changed the code the page or the Studio reads | C1, C2 pass and C3 passes | merge main and diagnose there |
+
+**The control.** Each run once, in this order, at the commit of this amendment (no code change), with
+`CARGO_BUILD_JOBS=8` and the CPU load recorded. A run of the spec is `npm run build && npm run package:dir && npx
+playwright test tests/e2e/export-view-f980.spec.ts` in `apps/studio-web` with `RCFD_BIN` and `RCFD_MCP_BIN` set to that
+place's target, `rcfd`, `rcfd-mcp`, `rcfd-runner` and the example `f447_bench` built into it first.
+
+- C1: a fresh copy of the repository at this head, outside the worktree (`git clone --shared` into the new folder
+  `w49i-work/f980-export-view-html-scratch/copy6`, `npm ci` in its `apps/studio-web`), its target
+  `f980-export-view-html-scratch/target-copy`: the spec alone.
+- C2: this worktree, its target `f980-export-view-html-scratch/target`: the spec alone.
+- C3: in the copy, the push's sequence with the patch as committed: `git apply` of the patch, its `expect-fail` command
+  with the copy's target (it must fail), `git apply -R`, then the spec alone again with no build of the engine between
+  (the build of the Studio and the package only, as `npm test` does).
+
+H1 is taken if C1 and C2 pass and C3 fails as H1 predicts; H2 or H3 if C1 fails at the same value; H4 or H5 if C3
+passes. Only under H1 is the remedy below made; under any other outcome the work stops and reports.
+
+**The remedy under H1.** The first line of `crates/rcfd-mcp/tests/export_view_f980.mutation.patch` becomes
+`# expect-fail: cargo test --release -p rcfd-mcp --test export_view_f980 --target-dir target/mutation` (the command line's
+`--target-dir` takes precedence over `CARGO_TARGET_DIR`; `target/` is ignored by git, so the folder persists between
+pushes and its build is incremental). The patch's diff, the test, the page and the spec are not changed. The other
+four patches the push applies have the same defect, hidden because a later patch's build replaces their binary; their
+files are not this item's, so that and a fix of `verify_patch` (a build after `git apply -R`, or one target folder for
+every mutation) go to the lead.
+
+| Id | Check | Limit | Source | Estimate | Margin | Kind |
+|---|---|---|---|---|---|---|
+| C1 | the spec alone in the fresh copy | 6 passed, 0 failed | E1 to E6 as registered (D3) | pass | exact | code verification |
+| C2 | the spec alone in this worktree | 6 passed, 0 failed | as C1 | pass | exact | code verification |
+| C3 | the push's sequence in the copy, then the spec | the command fails; E1 fails with the page's value 13.580549682488824, the Studio's 2.257184947479129, the step 278 and 278, and no other value differs | H1; the push log lines 2570, 2571 | as stated | exact | code verification |
+| C4 | at the remedy's commit, in the copy (fetched, checked out): the four binaries built clean into `target-copy` again, then the push's sequence with the remedied patch, then the spec alone with no build of the engine between | the command fails at R2 (M1 caught); then 6 passed, 0 failed; the build minutes of `target/mutation` recorded | rule 16; E1 to E6 | pass | exact | code verification |
+| M1 to M6 | M1 by C4; M2 to M6 as amendments 4 and 5 stand, on the copy at the remedy's commit, each with its named test, each restored | each caught: M2 by R3, M3 by R6, M4 by R2, M5 by R3f, M6 by U1 | rule 16 | 6 of 6 | exact | code verification |
+| L7 | `npm test` in `apps/studio-web` of this worktree, once, after the remedy, CPU load at its start and end | pass; a failure of a spec this item does not touch on a timing limit is recorded as a miss with its number, not remedied | rule 7; L3 | pass | exact | unchanged default output |
+| L8 | in this worktree: `cargo fmt -p rcfd-workspace -p rcfd-mcp --check`; `cargo clippy -p rcfd-workspace -p rcfd-mcp --all-targets -- -D warnings`; `cargo test --release -p rcfd-mcp --test export_view_f980`; `cargo test --release -p rcfd-workspace --lib`; `cargo test -p rcfd-cli --release --test docs_site`; `python scripts/roadmap_proposals.py check docs/roadmap/proposals/0823-F-980.json`; `python scripts/process_report.py --check` | clean; 4 passed and 2 ignored; 14 passed; pass; pass; only a generated file not current | rule 7; rule 9 | pass | exact | code verification |
+
+Decision rule: **done** if C1 to C4, M1 to M6, L7 and L8 hold; **partial** otherwise, naming the check that missed or
+did not run. An addendum (append-only) records the results and the proposal is updated, its follow-ups F-993 and F-994
+kept.
