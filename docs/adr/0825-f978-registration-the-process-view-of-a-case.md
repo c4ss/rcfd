@@ -211,3 +211,65 @@ the check that missed. A missed limit is recorded with its number and held as a 
 - **Q1. A process panel in an exported page** (scope): (a) `export_view` refuses it, as here (D5); (b) a follow-up item
   draws the step list in the page of ADR 0823. Recommendation: (b), entered as an item of its own after F-978; until then
   (a), taken on the maintainer's standing instruction of 2026-11-11 (take the recommendation).
+
+## Addendum 1: results (2026-11-27)
+
+Written after the runs; nothing above is changed. Release profile, `CARGO_TARGET_DIR` in the scratch folder,
+`CARGO_BUILD_JOBS` 8. Code commits: e3f54e23 (engine, Studio, tests), fc6fd8d3 (the committed mutation M1). Each
+registered run was made once.
+
+### Checks
+
+| Id | Limit | Measured | Met |
+|---|---|---|---|
+| V7 | accepted | no error | yes |
+| V8 | 4 of 4 at their key, 1003 | 4 of 4 (`panels[0].case` twice, `panels[0].run`, `panels[0].case`), each with a reason naming it | yes |
+| P1 | journal seq equal; run records; setup, mesh; ordered; opens valid | seq [1, 2] equal; the case's run f8c2: 5 steps equal its 3 records plus residuals and results; kinds setup, mesh; ordered; every opens valid (`rcfd-workspace --lib` 17 passed) | yes |
+| B1 | as registered | **failed before any step was read**: the first `edit_case` after `new_case` got -32000 "replace ...process-cavity.toml: failed after 12 attempts: Access is denied. (os error 5)" (CPU load 82 %); not run again (the brief: an OS refusal is reported, not retried) | **no (not decided)** |
+| B2, B3 | as registered | not reached in the registered run (same test function as B1) | **no (not run)** |
+| E1 | list within 1.6 s; journal seq equal; equal to read_view; ordered; residuals equal | 372 ms; 10 steps (created, mesh, setup, state, run, state, state, residuals, results, setup); seq [1..5] against [1..5]; equal true; ordered true; 4 of 4 residual and monitor values equal | yes |
+| E2 | every step opens its view | 10 of 10 (case, mesh, case, table, run, table, table, plot+monitor, field x3, case) | yes |
+| E3 | new last step within 1.6 s | 217 ms, seq 7, its reason | yes |
+| L1 | named files pass | `rcfd-mcp --lib` 18 passed (1 ignored, existing); canvas_view_f976 4, canvas_live_f979 2, canvas_layout_f977 1, export_view_f980 4 (2 ignored, existing), project_list_f270 1, tool_list_f275 8, project_w48f 10, default_f1 2, feed_f273 3 passed | yes |
+| L2 | typecheck 0; npm test passes but 6 skips | typecheck exit 0; 903 passed, 6 skipped, 0 failed, 14.8 min; CPU 77 % at start, 79 % at end | yes |
+| L3 | inventory and coverage unchanged | `npm run capabilities` (mcp_tool 75, total 1376); `git diff` empty | yes |
+| L4 | docs_site passes | in the last run below | see the report |
+
+fmt check of `rcfd-workspace` and `rcfd-mcp`: clean. `cargo clippy --release -p rcfd-workspace -p rcfd-mcp --all-targets
+-- -D warnings`: clean. No shared solver file changed; `baseline_hashes` not run.
+
+### Mutations
+
+| Id | Caught by |
+|---|---|
+| M1 (committed, its expect-fail command in `target/mutation`) | B1 (journal seq [1, 4] against [1..5]) and P1 (seq [] against [1, 2]) |
+| M2 | P1 and B1 (times decrease) |
+| M3 | B1 (residuals 0 of 4 equal) |
+| M4 | **not caught: the mutated code did not compile** (E0283, the panels lost their type), also with `null` in place of `Value::Null` |
+| M5 | **not caught: the mutated Canvas did not typecheck** (TS18047, `s.opens` possibly null), so the Studio was not built |
+
+In the mutated runs of B1 (M2, M3) the build of B1 went through with no OS refusal, and every row of B1 but the mutated
+one held there (M3's run: journal seq equal, states 3 of 3, ordered, the after-run set-up last, 10 of 10 views shown, B2
+and B3 held). These are not the registered run. A runner started by those mutated runs held the test's output pipe
+open; it was ended by hand (it was this work's process).
+
+Deviations: none in the limits. `src/shared/project.ts` was edited (types only), as D5 named. `show_view`'s description
+gained the kind (finding 5: no golden or count pins it; L1 shows the tool list tests pass unedited).
+
+Actual size: partial; 0 further registrations; 1 heavy run (`npm test`, 14.8 min) and the mutation copy's build; 1
+question; about 300 000 bytes read.
+
+Decision by the registered rule: **partial**, because B1 to B3 did not decide (an OS refusal in their one run) and M4
+and M5 were not caught (their edits did not build).
+
+### For the lead: roadmap entries
+
+> Status: partial.
+
+> Note: ADR 0825, 2026-11-27, partial: the view kind process {case} gives a case's steps from the journal, its runs' events, residuals and field store, merged by time, each with the view of its state; the e2e listed 10 of 10 steps against the journal (seq 1 to 5 equal) 372 ms after show_view and opened every step's view; the registered run of the binary test B1 failed at its first edit_case on an OS refusal, and mutations M4 and M5 did not compile.
+
+> Gap: Every row but B1 holds (P1, V7, V8, E1 to E3, L1 to L4). Missing: a passing run of canvas_process_f978 (B1 to B3), whose one registered run failed at its first edit_case (Windows: Access is denied, os error 5, replacing the case new_case had just written); and two of five mutations, M4 and M5, whose edits did not compile (type inference, null narrowing), so they caught nothing.
+
+> Follow-ups: "Claude's canvas: the process view in an exported page", deps F-978 and F-980, acceptance: Every limit not stated here is registered in the ADR before the run. export_view draws a process panel as the list of the case's steps with the values the open Studio shows for them (the registered comparison of ADR 0823), instead of refusing it; every other default unchanged.
+
+The same entries are `docs/roadmap/proposals/0825-F-978.json`.
