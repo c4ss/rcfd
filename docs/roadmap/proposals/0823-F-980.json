@@ -1,0 +1,26 @@
+{
+  "form": 1,
+  "adr": "0823",
+  "item": "F-980",
+  "base": "efce0cf14a267c2718e62879c0f05d4c3099b02f",
+  "status": "done",
+  "note": "ADR 0823, 2026-11-27, done: export_view writes a view as one self-contained HTML page (no script, a CSP of default-src 'none', the Studio's stylesheets inline, fields and a case's mesh as inline SVG, provenance per panel) whose every value equals the open Studio's on X1 to X5 with no request beyond its own file; the push's E1 miss was the mutated rcfd-mcp left by M1's expect-fail build, reproduced to the digit in a fresh copy, and M1's command now builds in target/mutation.",
+  "follow_ups": [
+    {
+      "key": "export-step-text",
+      "title": "The exported page writes a monitor's last step as the Studio does, and the e2e of ADR 0823 runs whole",
+      "deps": [
+        "F-980"
+      ],
+      "acceptance": "Every limit not stated here is registered in the ADR before the run. The page of export_view writes each step and count as an integer, as the Studio shows it; the e2e of ADR 0823 (E1 to E6 on X1 to X5) holds every value of the registered comparison and makes no request beyond the page's own file."
+    },
+    {
+      "key": "export-fonts",
+      "title": "The Studio's Archivo fonts embedded in an exported page",
+      "deps": [
+        "F-980"
+      ],
+      "acceptance": "Every limit not stated here is registered in the ADR before the run. The page of export_view carries the Archivo fonts the Studio shows (400, 500, 700) as data: fonts written by the Studio's build, with no network fetch, and the page's computed font in the e2e of ADR 0823 is Archivo with no font installed."
+    }
+  ]
+}

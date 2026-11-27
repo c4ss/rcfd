@@ -50,7 +50,7 @@ const EXECUTE: [&str; 3] = ["design_run_study", "design_evaluate", "design_run_o
 /// `refine_case_mesh` right after `set_runner_config` (restated again for F-837), and ADR 0738 P4's `derive_picture`
 /// right after `render_field` (C5-L restated for F-809), and ADR 0739's `list_sites` right after `refine_case_mesh`
 /// (C5-L restated for F-848).
-const PROJECT_TOOLS: [&str; 38] = [
+const PROJECT_TOOLS: [&str; 39] = [
     "project_info",
     "list_runs",
     "run_status",
@@ -90,6 +90,8 @@ const PROJECT_TOOLS: [&str; 38] = [
     // ADR 0805 (F-976), additive, re-recorded by the lead 2026-11-26
     "show_view",
     "read_view",
+    // ADR 0823 (F-980), additive, re-recorded with the lead's approval of 2026-11-27
+    "export_view",
 ];
 
 /// Sorted relative paths and bytes of every file under `dir`.
@@ -131,7 +133,7 @@ fn c5l_project_list_has_no_session_only_tool() {
     assert_eq!(kept.len(), 19);
     assert_eq!(
         live.len(),
-        57,
+        58,
         "17 session tools and 38 project tools (ADR 0805: show_view, read_view; ADR 0733: two budgets tools; ADR 0734: hash_project_file; ADR 0736: six trash tools; ADR 0737: case_facts, refine_case_mesh; ADR 0738: derive_picture; ADR 0739: list_sites)"
     );
     let mut execute = 0;

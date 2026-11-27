@@ -126,6 +126,12 @@ fn a2_tools_list_with_project_is_the_golden_with_the_f271_changes() {
     // live text
     assert_eq!(serde_json::to_string(&gold).unwrap(), GOLDEN);
     assert_eq!(serde_json::to_string(&live_value).unwrap(), got);
+    // ADR 0823 (F-980): export_view last, taken out; additive, re-recorded with the lead's approval of 2026-11-27
+    {
+        let tools = live_value["tools"].as_array_mut().unwrap();
+        assert_eq!(tools.last().unwrap()["name"], "export_view");
+        tools.pop();
+    }
     // ADR 0805 (F-976): show_view (write_files, required `view`) and read_view (read) last, taken out; additive,
     // re-recorded by the lead on 2026-11-26; the rest is the F-848 list below
     {

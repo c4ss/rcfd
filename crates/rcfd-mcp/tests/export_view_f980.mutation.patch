@@ -1,0 +1,13 @@
+# expect-fail: cargo test --release -p rcfd-mcp --test export_view_f980 --target-dir target/mutation
+diff --git a/crates/rcfd-workspace/src/view.rs b/crates/rcfd-workspace/src/view.rs
+--- a/crates/rcfd-workspace/src/view.rs
++++ b/crates/rcfd-workspace/src/view.rs
+@@ -1698,7 +1698,7 @@
+                 } else {
+                     let m = s("monitor");
+                     let one = series.iter().find(|x| x.name == format!("monitors.{m}"));
+-                    let last = one.and_then(|x| Some((*x.x.last()?, *x.y.last()?)));
++                    let last = one.and_then(|x| Some((*x.x.last()?, *x.y.first()?)));
+                     let (d, k) = one.map(|x| counts(x, false)).unwrap_or((0, 0));
+                     let attrs = last
+                         .map(|(x, y)| format!(" data-last-step=\"{}\" data-last-value=\"{}\"", num(x), num(y)))

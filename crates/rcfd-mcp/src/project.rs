@@ -544,6 +544,22 @@ pub(crate) fn tools() -> Vec<Tool> {
             access: Access::Read,
             schema: || obj(json!({}), &[]),
         },
+        // ADR 0823 (F-980): the view exported as one self-contained styled HTML page, last
+        Tool {
+            name: "export_view",
+            description: "Write a view as one self-contained HTML page (no script, nothing fetched: the Studio's theme and styles inline, every picture inline SVG), with the values of the views it names and where each came from (the files read and their hashes, the engine version). view is a view specification as show_view takes it (a view {version: 1, run} is written as its category's layout); without view, the view shown last. out is the page's project-relative path exports/<name>.html (default exports/view-<id>.html). An invalid view or out is refused (error 1003) with every key and reason in data.errors, and nothing is written; no Studio need be open. Returns the page's id, path, hash and size in bytes; one journal line (view_exported).",
+            access: Access::WriteFiles,
+            schema: || {
+                obj(
+                    json!({
+                        "view": {"type": "object", "description": "the view specification (version 1); default the view shown last"},
+                        "out": {"type": "string", "description": "the page's path, exports/<name>.html"},
+                        "reason": reason_schema()
+                    }),
+                    &[],
+                )
+            },
+        },
     ]
 }
 
@@ -607,6 +623,10 @@ impl ProjectTools {
 
     /// Execute project tool `name`; `None` if it is not one.
     pub(crate) fn call(&self, name: &str, args: &Value) -> Option<Result<Value, RpcError>> {
+        // ADR 0823 (F-980) D1: answered by the workspace's method, not one of its COMMANDS
+        if name == "export_view" {
+            return Some(self.ws.export_view(args).map(ok_result));
+        }
         Some(self.ws.call(name, args)?.map(|a| match a {
             Answer::Value(v) => ok_result(v),
             Answer::Image { png_base64, meta } => json!({

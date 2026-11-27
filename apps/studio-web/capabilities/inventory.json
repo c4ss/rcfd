@@ -17,12 +17,12 @@
   },
   "counts": {
     "service_method": 69,
-    "mcp_tool": 74,
+    "mcp_tool": 75,
     "cli_command": 54,
     "cli_option": 221,
     "case_key": 951,
     "monitor_format_key": 6,
-    "total": 1375
+    "total": 1376
   },
   "capabilities": [
     {"id":"service:cosim.advance","kind":"service_method","source":"service.info"},
@@ -123,6 +123,7 @@
     {"id":"mcp:edit_case","kind":"mcp_tool","source":"tools/list","access":{"project":"write_files"}},
     {"id":"mcp:edit_workflow","kind":"mcp_tool","source":"tools/list","access":{"default":"mutate"}},
     {"id":"mcp:empty_trash","kind":"mcp_tool","source":"tools/list","access":{"project":"delete"}},
+    {"id":"mcp:export_view","kind":"mcp_tool","source":"tools/list","access":{"project":"write_files"}},
     {"id":"mcp:export_vtk","kind":"mcp_tool","source":"tools/list","access":{"default":"write_files"}},
     {"id":"mcp:field_summary","kind":"mcp_tool","source":"tools/list","access":{"project":"read"}},
     {"id":"mcp:get_field_stats","kind":"mcp_tool","source":"tools/list","access":{"default":"read"}},

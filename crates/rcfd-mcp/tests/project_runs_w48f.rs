@@ -101,7 +101,7 @@ fn f3_f11_project_tools_on_runner_made_runs() {
     // case_facts and refine_case_mesh and ADR 0738's derive_picture
     // and ADR 0739's list_sites
     // ADR 0805 (F-976): show_view and read_view, additive (the lead, 2026-11-26)
-    assert_eq!(list["result"]["tools"].as_array().unwrap().len(), 57);
+    assert_eq!(list["result"]["tools"].as_array().unwrap().len(), 58);
 
     // F11 part 1: start_run then wait_run reaches finished on a 30-step cavity
     let r = m.call("start_run", json!({"case": "cases/cavity.toml"}));
@@ -356,6 +356,6 @@ fn f13_server_start() {
             .as_array()
             .unwrap()
             .len(),
-        57
+        58
     );
 }

@@ -1,0 +1,123 @@
+/* A view exported as one self-contained HTML page (F-980, ADR 0823 D2): the page's own parts around the canvas grid of
+   canvas.css, in the Studio's tokens only (no colour, size or font of its own). The engine (crates/rcfd-workspace,
+   view.rs) puts this file, with tokens.css, base.css and canvas.css, into the page's one style element. */
+body {
+  margin: 0;
+  background: var(--role-ground);
+  color: var(--role-text);
+}
+.xv {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+}
+.xv-head {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+  padding: var(--space-md) var(--space-lg);
+  border-bottom: var(--line-header-rule);
+}
+.xv-project {
+  margin: 0;
+  font-size: var(--type-title-size);
+  font-weight: var(--type-title-weight);
+}
+.xv-note,
+.xv-sources,
+.xv-facts {
+  margin: 0;
+  font-size: var(--type-label-size);
+  color: var(--role-text-2);
+  overflow-wrap: anywhere;
+}
+.xv-spec {
+  font-size: var(--type-label-size);
+  color: var(--role-text-2);
+}
+.xv-spec pre,
+.xv-text {
+  margin: 0;
+  max-height: 240px;
+  overflow: auto;
+  padding: var(--space-sm);
+  background: var(--role-viewport);
+  font-size: var(--type-label-size);
+  white-space: pre-wrap;
+}
+.xv-picture {
+  display: block;
+  width: 100%;
+  height: auto;
+  background: var(--role-viewport);
+}
+.xv-legend {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  font-size: var(--type-chart-micro-size);
+  font-weight: var(--type-chart-micro-weight);
+}
+.xv-legend svg {
+  flex: 1;
+  height: 10px;
+}
+.xv-mesh-tri {
+  fill: var(--role-row-hover);
+  stroke: var(--role-text-2);
+  stroke-width: 0.2;
+}
+.xv-plot {
+  display: block;
+  width: 100%;
+  height: auto;
+  background: var(--role-viewport);
+}
+.xv-line {
+  fill: none;
+  stroke-width: 1;
+  vector-effect: non-scaling-stroke;
+}
+.xv-line-0 {
+  stroke: var(--color-ink);
+}
+.xv-line-1 {
+  stroke: var(--color-orange);
+}
+.xv-line-2 {
+  stroke: var(--color-meadow-deep);
+}
+.xv-line-3 {
+  stroke: var(--color-sky);
+}
+.xv-line-4 {
+  stroke: var(--color-fail);
+}
+.xv-line-5 {
+  stroke: var(--color-ink-2);
+}
+.xv-table {
+  border-collapse: collapse;
+  width: 100%;
+}
+.xv-table th,
+.xv-table td {
+  text-align: left;
+  padding: var(--space-xs) var(--space-sm);
+  border-bottom: var(--line-hair);
+}
+.xv-num {
+  font-variant-numeric: tabular-nums;
+}
+.xv-grid {
+  margin: 0;
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: var(--space-xs) var(--space-lg);
+}
+.xv-grid dt {
+  color: var(--role-text-2);
+}
+.xv-grid dd {
+  margin: 0;
+}

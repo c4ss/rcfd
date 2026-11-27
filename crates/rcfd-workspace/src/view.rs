@@ -956,6 +956,892 @@ pub fn live_canvases(root: &Path) -> usize {
     n
 }
 
+// ---- ADR 0823 (F-980): a view exported as one self-contained styled HTML page ----
+
+/// The journal kind of an exported view (ADR 0823 D1).
+pub const VIEW_EXPORTED: &str = "view_exported";
+/// The project folder of exported pages.
+pub const EXPORTS: &str = "exports";
+/// Samples per series, as the Studio reads them (`SERIES_POINTS` of apps/studio-web/src/shared/run.ts).
+pub const SERIES_POINTS: u64 = 800;
+/// The page's Content-Security-Policy (ADR 0823 D2): nothing is fetched; styles are inline, pictures `data:` only.
+pub const EXPORT_CSP: &str = "default-src 'none'; style-src 'unsafe-inline'; img-src data:";
+/// Longest `out` of `export_view`, in characters.
+pub const MAX_OUT: usize = 200;
+/// The Studio's stylesheets the page carries (ADR 0823 D2), in this order.
+pub const EXPORT_STYLES: [(&str, &str); 4] = [
+    (
+        "design/tokens.css",
+        include_str!("../../../apps/studio-web/src/renderer/design/tokens.css"),
+    ),
+    (
+        "base.css",
+        include_str!("../../../apps/studio-web/src/renderer/base.css"),
+    ),
+    (
+        "canvas/canvas.css",
+        include_str!("../../../apps/studio-web/src/renderer/canvas/canvas.css"),
+    ),
+    (
+        "canvas/export.css",
+        include_str!("../../../apps/studio-web/src/renderer/canvas/export.css"),
+    ),
+];
+/// Width of a picture's view box.
+const PIC_W: f64 = 480.0;
+/// Greatest height of a picture's view box.
+const PIC_H: f64 = 360.0;
+
+/// Text for HTML: `&`, `<`, `>`, `"` and `'` escaped.
+fn esc(s: &str) -> String {
+    s.replace('&', "&amp;")
+        .replace('<', "&lt;")
+        .replace('>', "&gt;")
+        .replace('"', "&quot;")
+        .replace('\'', "&#39;")
+}
+
+/// ADR 0823 amendment 4: a number as the Studio writes it, JavaScript's `String(x)` (ECMA-262 `Number::toString`): the
+/// shortest digits that read back as the same `f64`, of two equally near the even one; `null` when not finite.
+fn num(x: f64) -> String {
+    if !x.is_finite() {
+        return "null".into();
+    }
+    if x == 0.0 {
+        return "0".into();
+    }
+    let e = format!("{:e}", x.abs());
+    let (m, p) = e.split_once('e').unwrap_or((&e, "0"));
+    let mut digits: Vec<u8> = m.bytes().filter(|b| *b != b'.').collect();
+    let mut n = p.parse::<i32>().unwrap_or(0) + 1;
+    let k = digits.len();
+    // of two shortest texts equally near x, the even one: x lies halfway when its exact expansion has k + 1 digits
+    // ending in 5
+    let exact = format!("{:.800e}", x.abs());
+    let (em, _) = exact.split_once('e').unwrap_or((&exact, "0"));
+    let all: Vec<u8> = em.bytes().filter(|b| *b != b'.').collect();
+    let sig = all.iter().rposition(|b| *b != b'0').map_or(0, |i| i + 1);
+    if sig == k + 1 && all[k] == b'5' {
+        let mut down = all[..k].to_vec();
+        if (down[k - 1] - b'0') % 2 == 1 {
+            // the even neighbour is the one above: add one in the last place
+            let mut i = k;
+            loop {
+                if i == 0 {
+                    down.insert(0, b'1');
+                    n += 1;
+                    break;
+                }
+                i -= 1;
+                if down[i] == b'9' {
+                    down[i] = b'0';
+                } else {
+                    down[i] += 1;
+                    break;
+                }
+            }
+        }
+        while down.len() > 1 && down.last() == Some(&b'0') {
+            down.pop();
+        }
+        digits = down;
+    }
+    let k = digits.len() as i32;
+    let d = String::from_utf8(digits).unwrap_or_default();
+    let body = if k <= n && n <= 21 {
+        format!("{d}{}", "0".repeat((n - k) as usize))
+    } else if 0 < n && n <= 21 {
+        format!("{}.{}", &d[..n as usize], &d[n as usize..])
+    } else if -6 < n && n <= 0 {
+        format!("0.{}{d}", "0".repeat((-n) as usize))
+    } else {
+        let s = if n - 1 < 0 { '-' } else { '+' };
+        let mant = if k == 1 {
+            d.clone()
+        } else {
+            format!("{}.{}", &d[..1], &d[1..])
+        };
+        format!("{mant}e{s}{}", (n - 1).abs())
+    };
+    format!("{}{body}", if x < 0.0 { "-" } else { "" })
+}
+
+/// ADR 0823 amendment 4: a value as the Studio's `JSON.stringify` writes it: JSON, each `f64` by [`num`].
+fn js_json(v: &Value) -> String {
+    match v {
+        Value::Number(x) if x.is_f64() => num(x.as_f64().unwrap_or(f64::NAN)),
+        Value::Array(a) => format!("[{}]", a.iter().map(js_json).collect::<Vec<_>>().join(",")),
+        Value::Object(o) => format!(
+            "{{{}}}",
+            o.iter()
+                .map(|(k, x)| format!("{}:{}", Value::String(k.clone()), js_json(x)))
+                .collect::<Vec<_>>()
+                .join(",")
+        ),
+        other => other.to_string(),
+    }
+}
+
+/// One located refusal of `export_view` (error 1003, as `show_view`'s).
+fn refusal(errors: &[ViewError]) -> RpcError {
+    let first = &errors[0];
+    let list: Vec<Value> = errors
+        .iter()
+        .take(MAX_ERRORS)
+        .map(|x| json!({"key": x.key, "reason": x.reason}))
+        .collect();
+    RpcError {
+        code: VALIDATION,
+        message: format!("view.{}: {}", first.key, first.reason)
+            .replace("view.out: ", "out: ")
+            .replace("view.: ", "view: "),
+        data: Some(json!({"errors": list, "errors_total": errors.len()})),
+    }
+}
+
+/// ADR 0823 D1: the errors of `out`, a project-relative `exports/<name>.html`.
+fn out_errors(out: &Value) -> Vec<ViewError> {
+    let mut errors = Vec::new();
+    let reason = format!(
+        "is a project-relative path exports/<name>.html, 1 to {MAX_OUT} characters, the name of A-Z a-z 0-9 . _ - only"
+    );
+    let ok = out.as_str().is_some_and(|o| {
+        let name = o.strip_prefix("exports/").unwrap_or("");
+        o.chars().count() <= MAX_OUT
+            && name.len() > ".html".len()
+            && name.ends_with(".html")
+            && !name.starts_with('.')
+            && !name.contains("..")
+            && name
+                .bytes()
+                .all(|b| b.is_ascii_alphanumeric() || b == b'.' || b == b'_' || b == b'-')
+    });
+    if !ok {
+        e(&mut errors, "out", reason);
+    }
+    errors
+}
+
+/// The colour of table entry `k` of 256 (`colormap.ts`: entry k is `colormap(k / 255)`), as `#rrggbb`.
+fn lut_hex(k: usize) -> String {
+    let [r, g, b] = rcfd_post::render::colormap(k as f64 / 255.0);
+    format!("#{r:02x}{g:02x}{b:02x}")
+}
+
+/// The table entry of value `v` in the range `lo..hi`, as the Studio's shader finds it (`colormap.ts` lines 10 to 13).
+fn lut_index(v: f32, lo: f32, hi: f32) -> usize {
+    let inv = if hi > lo {
+        (1.0 / (f64::from(hi) - f64::from(lo))) as f32
+    } else {
+        1.0
+    };
+    let t = ((v - lo) * inv).clamp(0.0, 1.0);
+    let t = if t.is_nan() { 0.0 } else { t };
+    ((t * 255.0 + 0.5).floor() as usize).min(255)
+}
+
+/// The surface triangles of `s` that face the viewer, far to near, projected: the view axis is the thin axis of a
+/// one-layer store and z otherwise, from the side `FRONT_SIGN` names. Returns the triangles' indices, their screen
+/// corners and the view box size.
+fn projected(s: &rcfd_post::picture::StoreSurface, n_cells: usize) -> (Vec<usize>, Vec<[[f64; 2]; 3]>, f64, f64) {
+    let layers = rcfd_post::picture::mesh_layers(s, n_cells);
+    let w = if layers.two_d { layers.thin } else { 2 };
+    let sign = rcfd_post::picture::FRONT_SIGN[w];
+    let (mut a, mut b) = ((w + 1) % 3, (w + 2) % 3);
+    if sign < 0.0 {
+        std::mem::swap(&mut a, &mut b);
+    }
+    let mut keep: Vec<(f64, usize)> = Vec::new();
+    for t in 0..s.n_triangles() {
+        let p: Vec<[f64; 3]> = (0..3).map(|k| s.corner(t, k).map(f64::from)).collect();
+        let u = [p[1][0] - p[0][0], p[1][1] - p[0][1], p[1][2] - p[0][2]];
+        let v = [p[2][0] - p[0][0], p[2][1] - p[0][1], p[2][2] - p[0][2]];
+        let n = [
+            u[1] * v[2] - u[2] * v[1],
+            u[2] * v[0] - u[0] * v[2],
+            u[0] * v[1] - u[1] * v[0],
+        ];
+        if n[w] * sign > 0.0 {
+            keep.push((sign * (p[0][w] + p[1][w] + p[2][w]) / 3.0, t));
+        }
+    }
+    keep.sort_by(|x, y| x.0.total_cmp(&y.0).then(x.1.cmp(&y.1)));
+    let (mut amin, mut amax, mut bmin, mut bmax) = (f64::INFINITY, f64::NEG_INFINITY, f64::INFINITY, f64::NEG_INFINITY);
+    for &(_, t) in &keep {
+        for k in 0..3 {
+            let c = s.corner(t, k);
+            amin = amin.min(f64::from(c[a]));
+            amax = amax.max(f64::from(c[a]));
+            bmin = bmin.min(f64::from(c[b]));
+            bmax = bmax.max(f64::from(c[b]));
+        }
+    }
+    let (ra, rb) = ((amax - amin).max(1e-30), (bmax - bmin).max(1e-30));
+    let scale = (PIC_W / ra).min(PIC_H / rb);
+    let (width, height) = (ra * scale, rb * scale);
+    let tris = keep
+        .iter()
+        .map(|&(_, t)| {
+            [0, 1, 2].map(|k| {
+                let c = s.corner(t, k);
+                [(f64::from(c[a]) - amin) * scale, (bmax - f64::from(c[b])) * scale]
+            })
+        })
+        .collect();
+    (keep.iter().map(|k| k.1).collect(), tris, width, height)
+}
+
+fn points(c: &[[f64; 2]; 3]) -> String {
+    format!(
+        "{:.1},{:.1} {:.1},{:.1} {:.1},{:.1}",
+        c[0][0], c[0][1], c[1][0], c[1][1], c[2][0], c[2][1]
+    )
+}
+
+/// One series as the Studio reads it (`readRunSeries`): its source name and samples.
+struct Series {
+    name: String,
+    x: Vec<f64>,
+    y: Vec<f64>,
+}
+
+/// Drawn and skipped samples of `s` by `Extent.add` of the Studio's plots (`plots/range.ts`).
+fn counts(s: &Series, log: bool) -> (usize, usize) {
+    let mut drawn = 0;
+    for (x, y) in s.x.iter().zip(&s.y) {
+        let py = if log {
+            if *y > 0.0 {
+                y.log10()
+            } else {
+                f64::NAN
+            }
+        } else {
+            *y
+        };
+        if x.is_finite() && py.is_finite() {
+            drawn += 1;
+        }
+    }
+    (drawn, s.x.len() - drawn)
+}
+
+/// An SVG of lines (the drawable samples joined, a sample that cannot be drawn breaking the line), `log` on y.
+fn lines_svg(series: &[&Series], log: bool, height: f64) -> String {
+    let pick = |s: &Series| -> Vec<Option<[f64; 2]>> {
+        s.x.iter()
+            .zip(&s.y)
+            .map(|(x, y)| {
+                let py = if log {
+                    if *y > 0.0 {
+                        y.log10()
+                    } else {
+                        f64::NAN
+                    }
+                } else {
+                    *y
+                };
+                (x.is_finite() && py.is_finite()).then_some([*x, py])
+            })
+            .collect()
+    };
+    let all: Vec<Vec<Option<[f64; 2]>>> = series.iter().map(|s| pick(s)).collect();
+    let (mut xlo, mut xhi, mut ylo, mut yhi) = (f64::INFINITY, f64::NEG_INFINITY, f64::INFINITY, f64::NEG_INFINITY);
+    for p in all.iter().flatten().flatten() {
+        xlo = xlo.min(p[0]);
+        xhi = xhi.max(p[0]);
+        ylo = ylo.min(p[1]);
+        yhi = yhi.max(p[1]);
+    }
+    let pad = 4.0;
+    let sx = (PIC_W - 2.0 * pad) / (xhi - xlo).max(1e-300);
+    let sy = (height - 2.0 * pad) / (yhi - ylo).max(1e-300);
+    let mut out = format!(
+        "<svg class=\"xv-plot\" viewBox=\"0 0 {PIC_W} {height}\" role=\"img\" aria-label=\"{}\">",
+        if log { "lines on a log scale" } else { "a line" }
+    );
+    for (i, s) in all.iter().enumerate() {
+        let mut run: Vec<String> = Vec::new();
+        let flush = |run: &mut Vec<String>, out: &mut String| {
+            if !run.is_empty() {
+                out.push_str(&format!(
+                    "<polyline class=\"xv-line xv-line-{}\" points=\"{}\"/>",
+                    i % 6,
+                    run.join(" ")
+                ));
+                run.clear();
+            }
+        };
+        for p in s {
+            match p {
+                Some([x, y]) => run.push(format!(
+                    "{:.2},{:.2}",
+                    pad + (x - xlo) * sx,
+                    height - pad - (y - ylo) * sy
+                )),
+                None => flush(&mut run, &mut out),
+            }
+        }
+        flush(&mut run, &mut out);
+    }
+    out.push_str("</svg>");
+    out
+}
+
+impl Workspace {
+    /// A project tool's answer as a value (the commands of [`crate::COMMANDS`]).
+    fn answer(&self, name: &str, args: &Value) -> Result<Value, RpcError> {
+        match self.call(name, args) {
+            Some(Ok(crate::Answer::Value(v))) => Ok(v),
+            Some(Ok(_)) => Err(err(INTERNAL, format!("{name} answered with a picture"))),
+            Some(Err(x)) => Err(x),
+            None => Err(err(INTERNAL, format!("{name} is not a command"))),
+        }
+    }
+
+    /// Every series of run `run` as the Studio reads it (`readRunSeries`): the names (2 samples), then each with
+    /// [`SERIES_POINTS`].
+    fn studio_series(&self, run: &str) -> Result<Vec<Series>, RpcError> {
+        let names = self.answer("read_residuals", &json!({"run": run, "max_points": 2}))?;
+        let mut out = Vec::new();
+        for name in names["series"]
+            .as_object()
+            .into_iter()
+            .flatten()
+            .map(|(k, _)| k.clone())
+        {
+            let r = self.answer(
+                "read_residuals",
+                &json!({"run": run, "names": [name], "max_points": SERIES_POINTS}),
+            )?;
+            let s = &r["series"][&name];
+            let arr = |k: &str| -> Vec<f64> {
+                s[k].as_array()
+                    .into_iter()
+                    .flatten()
+                    .map(|v| v.as_f64().unwrap_or(f64::NAN))
+                    .collect()
+            };
+            if s.is_object() {
+                out.push(Series {
+                    name,
+                    x: arr("x"),
+                    y: arr("y"),
+                });
+            }
+        }
+        Ok(out)
+    }
+
+    /// The runs of the project as `list_runs` lists them.
+    fn run_entries(&self) -> Result<Vec<Value>, RpcError> {
+        let v = self.answer("list_runs", &json!({"limit": 1000}))?;
+        Ok(v["runs"].as_array().cloned().unwrap_or_default())
+    }
+
+    /// ADR 0823 D1: `export_view {view?, out?, reason?}`: check the view (or take the view shown last), build the page
+    /// (D2) and write it under `exports/` with one journal line `view_exported`.
+    pub fn export_view(&self, args: &Value) -> Result<Value, RpcError> {
+        let reason = journal::reason_arg(args)?;
+        if let Some(o) = args.get("out") {
+            let errors = out_errors(o);
+            if !errors.is_empty() {
+                return Err(refusal(&errors));
+            }
+        }
+        let (view, id, shown_actor) = match args.get("view") {
+            Some(v) => {
+                let bytes = serde_json::to_vec(v).map_err(|x| err(INTERNAL, x.to_string()))?;
+                (v.clone(), rcfd_project::records::hash_bytes(&bytes), None)
+            }
+            None => {
+                let shown = self.read_view()?;
+                if shown["exists"] != json!(true) {
+                    return Err(err(
+                        crate::NOT_FOUND,
+                        "no view has been shown in this project (.rcfd/views/current.json does not exist): give view, or show one with show_view first (nothing was written)",
+                    ));
+                }
+                let id = shown["id"].as_str().unwrap_or_default().to_string();
+                (shown["view"].clone(), id, Some(shown["actor"].clone()))
+            }
+        };
+        let errors = self.view_errors(&view);
+        if !errors.is_empty() {
+            return Err(refusal(&errors));
+        }
+        let view = match view.get("run").and_then(Value::as_str) {
+            Some(run) => {
+                let (v, _) = self.layout_of_run(run, view.get("title"), view.get("layout"))?;
+                let errors = self.view_errors(&v);
+                if let Some(first) = errors.first() {
+                    return Err(err(
+                        INTERNAL,
+                        format!(
+                            "the layout of {run} is not a valid view: {}: {}",
+                            first.key, first.reason
+                        ),
+                    ));
+                }
+                v
+            }
+            None => view,
+        };
+        let page = self.page_of(&view, &id, shown_actor.as_ref())?;
+        let rel = match args.get("out").and_then(Value::as_str) {
+            Some(o) => o.to_string(),
+            None => format!("{EXPORTS}/view-{}.html", id.trim_start_matches("fnv64:")),
+        };
+        let bytes = page.into_bytes();
+        let path = self.project.root().join(&rel);
+        std::fs::create_dir_all(path.parent().expect("has a parent"))
+            .map_err(|x| err(INTERNAL, format!("{EXPORTS}: {x}")))?;
+        rcfd_project::atomic::atomic_write(&path, &bytes).map_err(project_error)?;
+        let hash = rcfd_project::records::hash_bytes(&bytes);
+        let kinds: Vec<Value> = view["panels"]
+            .as_array()
+            .into_iter()
+            .flatten()
+            .map(|p| p["kind"].clone())
+            .collect();
+        let mut line = Map::new();
+        line.insert("path".into(), json!(rel));
+        line.insert("hash".into(), json!(hash));
+        line.insert("bytes".into(), json!(bytes.len()));
+        line.insert("panels".into(), json!(kinds));
+        journal::append(
+            self.project.root(),
+            VIEW_EXPORTED,
+            &self.origin("export_view", reason),
+            line,
+        );
+        Ok(json!({"exported": true, "id": id, "path": rel, "hash": hash, "bytes": bytes.len(), "panels": kinds.len()}))
+    }
+
+    /// ADR 0823 D2: the page of valid view `view` (with panels), its id `id`.
+    fn page_of(&self, view: &Value, id: &str, shown_actor: Option<&Value>) -> Result<String, RpcError> {
+        let info = self.answer("project_info", &json!({}))?;
+        let project = info["name"].as_str().unwrap_or("project").to_string();
+        let panels = view["panels"].as_array().cloned().unwrap_or_default();
+        let columns = view["layout"]["columns"]
+            .as_u64()
+            .unwrap_or_else(|| panels.len().min(2) as u64)
+            .clamp(1, MAX_COLUMNS);
+        let title = view["title"].as_str();
+        let runs = self.run_entries()?;
+        let settings = self.setting_values(view);
+        let version = env!("CARGO_PKG_VERSION");
+        let mut actor = self
+            .actor
+            .as_ref()
+            .map(|a| a.to_json().to_string())
+            .unwrap_or_else(|| "none".into());
+        if let Some(a) = shown_actor.filter(|a| !a.is_null()) {
+            actor.push_str(&format!("; the view was shown by {a}"));
+        }
+        let mut h = String::with_capacity(1 << 20);
+        h.push_str("<!doctype html>\n<html lang=\"en\">\n<head>\n<meta charset=\"utf-8\">\n");
+        h.push_str(&format!(
+            "<meta http-equiv=\"Content-Security-Policy\" content=\"{EXPORT_CSP}\">\n"
+        ));
+        h.push_str("<meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">\n");
+        h.push_str(&format!(
+            "<title>{}</title>\n<style>\n",
+            esc(&format!("{} - {project}", title.unwrap_or("View")))
+        ));
+        for (name, css) in EXPORT_STYLES {
+            h.push_str(&format!("/* apps/studio-web/src/renderer/{name} */\n"));
+            h.push_str(css);
+            h.push('\n');
+        }
+        h.push_str("</style>\n</head>\n<body>\n");
+        h.push_str(&format!(
+            "<main class=\"xv\" data-export-view=\"{}\" data-engine=\"{version}\">\n",
+            esc(id)
+        ));
+        h.push_str(&format!(
+            "<header class=\"xv-head\"><h1 class=\"xv-project\" data-words=\"data\">{}</h1><p class=\"xv-note\">Exported {} by export_view of rcfd {version} (actor {}); view {}. A picture of the view at that time, from the engine's records; nothing in it is computed by the page.</p>",
+            esc(&project),
+            esc(&rcfd_project::time::now()),
+            esc(&actor),
+            esc(id)
+        ));
+        let spec = serde_json::to_string_pretty(view).unwrap_or_default();
+        h.push_str(&format!(
+            "<details class=\"xv-spec\"><summary>The view specification</summary><pre>{}</pre></details></header>\n",
+            esc(&spec)
+        ));
+        h.push_str(&format!(
+            "<section class=\"cv\" aria-label=\"{}\" data-panels=\"{}\">\n",
+            esc(title.unwrap_or("Canvas")),
+            panels.len()
+        ));
+        if let Some(t) = title {
+            h.push_str(&format!("<h2 class=\"cv-title\">{}</h2>\n", esc(t)));
+        }
+        h.push_str(&format!("<div class=\"cv-grid\" data-columns=\"{columns}\">\n"));
+        for (i, p) in panels.iter().enumerate() {
+            let (body, sources) = self.panel_html(p, i, &runs, &settings)?;
+            let mut hashes = Vec::new();
+            for s in &sources {
+                let b = std::fs::read(self.project.root().join(s)).unwrap_or_default();
+                hashes.push(rcfd_project::records::hash_bytes(&b));
+            }
+            h.push_str(&format!(
+                "<div class=\"cv-panel\" data-canvas-panel=\"{i}\" data-kind=\"{}\" data-sources=\"{}\" data-hashes=\"{}\">\n",
+                esc(p["kind"].as_str().unwrap_or_default()),
+                esc(&sources.join(" ")),
+                hashes.join(" ")
+            ));
+            if let Some(t) = p["title"].as_str() {
+                h.push_str(&format!("<h3 class=\"cv-panel-title\">{}</h3>\n", esc(t)));
+            }
+            h.push_str(&body);
+            let listed: Vec<String> = sources
+                .iter()
+                .zip(&hashes)
+                .map(|(s, x)| format!("{} ({x})", esc(s)))
+                .collect();
+            h.push_str(&format!(
+                "<p class=\"xv-sources\">From {}; rcfd {version}.</p>\n</div>\n",
+                listed.join(", ")
+            ));
+        }
+        h.push_str("</div>\n</section>\n</main>\n</body>\n</html>\n");
+        Ok(h)
+    }
+
+    /// The markup of panel `p` (index `i`) and the project-relative files it read.
+    fn panel_html(
+        &self,
+        p: &Value,
+        i: usize,
+        runs: &[Value],
+        settings: &[Value],
+    ) -> Result<(String, Vec<String>), RpcError> {
+        let s = |k: &str| p[k].as_str().unwrap_or_default().replace('\\', "/");
+        let run_files = |run: &str| {
+            let mut v = vec![format!("runs/{run}/run.json")];
+            if self.project.root().join(format!("runs/{run}/status.json")).exists() {
+                v.push(format!("runs/{run}/status.json"));
+            }
+            v
+        };
+        let entry = |run: &str| {
+            runs.iter()
+                .find(|r| r["id"] == json!(run))
+                .cloned()
+                .unwrap_or(Value::Null)
+        };
+        Ok(match p["kind"].as_str().unwrap_or_default() {
+            "case" => {
+                let kase = s("case");
+                let text = std::fs::read_to_string(self.project.root().join(&kase)).unwrap_or_default();
+                (
+                    format!(
+                        "<div class=\"xv-case\" data-path=\"{}\"><p class=\"xv-facts\">{}</p><pre class=\"xv-text\">{}</pre></div>\n",
+                        esc(&kase),
+                        esc(&kase),
+                        esc(&text)
+                    ),
+                    vec![kase],
+                )
+            }
+            "mesh" if p.get("case").is_some() => {
+                let kase = s("case");
+                let mut none = Vec::new();
+                let case = self
+                    .case_read(Some(&json!(kase)), "case", &mut none)
+                    .ok_or_else(|| err(INTERNAL, format!("{kase}: does not read as a case")))?;
+                let (mesh, _) = self.build_case_mesh(&kase, &case)?;
+                let surf = rcfd_post::picture::store_surface(&mesh).map_err(|x| err(INTERNAL, x.to_string()))?;
+                let (_, tris, w, hgt) = projected(&surf, mesh.n_cells());
+                let mut svg = format!(
+                    "<svg class=\"xv-picture\" viewBox=\"0 0 {w:.1} {hgt:.1}\" role=\"img\" aria-label=\"the mesh of {}\">",
+                    esc(&kase)
+                );
+                for c in &tris {
+                    svg.push_str(&format!("<polygon class=\"xv-mesh-tri\" points=\"{}\"/>", points(c)));
+                }
+                svg.push_str("</svg>");
+                (
+                    format!(
+                        "<div class=\"xv-mesh\" data-case=\"{}\" data-triangles=\"{}\">{svg}<p class=\"xv-facts\">The mesh of {}: {} cells, {} surface triangles ({} facing the viewer drawn).</p></div>\n",
+                        esc(&kase),
+                        surf.n_triangles(),
+                        esc(&kase),
+                        mesh.n_cells(),
+                        surf.n_triangles(),
+                        tris.len()
+                    ),
+                    vec![kase],
+                )
+            }
+            "mesh" => {
+                let m = s("mesh");
+                (
+                    format!(
+                        "<div class=\"xv-meshentry\" data-path=\"{}\"><p class=\"xv-facts\">Mesh file {}</p></div>\n",
+                        esc(&m),
+                        esc(&m)
+                    ),
+                    vec![m],
+                )
+            }
+            "setting" => {
+                let got = settings.iter().find(|x| x["panel"] == json!(i));
+                let value = got.and_then(|g| g.get("value")).map(js_json);
+                let error = got.and_then(|g| g.get("error")).and_then(Value::as_str);
+                let mut out = format!(
+                    "<div class=\"cv-setting\" data-setting=\"{}\"{}><p class=\"cv-setting-value\"><span class=\"cv-setting-path\">{}</span> = <output>{}</output></p>",
+                    esc(&s("setting")),
+                    value.as_ref().map(|v| format!(" data-value=\"{}\"", esc(v))).unwrap_or_default(),
+                    esc(&s("setting")),
+                    esc(value.as_deref().unwrap_or(""))
+                );
+                if let Some(x) = error {
+                    out.push_str(&format!("<p class=\"cv-change\" role=\"alert\">{}</p>", esc(x)));
+                }
+                out.push_str("</div>\n");
+                (out, vec![s("case")])
+            }
+            "table" => {
+                let want: Vec<String> = p["runs"]
+                    .as_array()
+                    .into_iter()
+                    .flatten()
+                    .filter_map(|r| r.as_str().map(String::from))
+                    .collect();
+                let mut out = String::from(
+                    "<table class=\"xv-table\"><thead><tr><th scope=\"col\">Run</th><th scope=\"col\">Case</th><th scope=\"col\">State</th><th scope=\"col\">Step</th><th scope=\"col\">Time</th></tr></thead><tbody>",
+                );
+                let mut files = Vec::new();
+                for r in runs.iter().filter(|r| want.iter().any(|w| r["id"] == json!(w))) {
+                    let rid = r["id"].as_str().unwrap_or_default();
+                    out.push_str(&format!(
+                        "<tr data-run=\"{}\" data-step=\"{}\"><th scope=\"row\">{}</th><td>{}</td><td>{}</td><td class=\"xv-num\">{}</td><td class=\"xv-num\">{}</td></tr>",
+                        esc(rid),
+                        js_json(&r["step"]),
+                        esc(rid),
+                        esc(r["case"].as_str().unwrap_or_default()),
+                        esc(r["state"].as_str().unwrap_or_default()),
+                        js_json(&r["step"]),
+                        js_json(&r["time"])
+                    ));
+                    files.extend(run_files(rid));
+                }
+                out.push_str("</tbody></table>\n");
+                (out, files)
+            }
+            "run" => {
+                let run = s("run");
+                let r = entry(&run);
+                let snaps = rcfd_tsstore::Reader::open(&self.project.root().join(format!("runs/{run}/fields")))
+                    .map(|x| x.snapshots().len().to_string())
+                    .unwrap_or_else(|_| "none".into());
+                (
+                    format!(
+                        "<div class=\"xv-run\" data-run=\"{}\" data-step=\"{}\" data-snapshots=\"{}\"><dl class=\"xv-grid\"><dt>Run</dt><dd>{}</dd><dt>Case</dt><dd>{}</dd><dt>State</dt><dd>{}</dd><dt>Steps</dt><dd>{}</dd><dt>Snapshots stored</dt><dd>{}</dd></dl></div>\n",
+                        esc(&run),
+                        js_json(&r["step"]),
+                        snaps,
+                        esc(&run),
+                        esc(r["case"].as_str().unwrap_or_default()),
+                        esc(r["state"].as_str().unwrap_or_default()),
+                        js_json(&r["step"]),
+                        snaps
+                    ),
+                    run_files(&run),
+                )
+            }
+            "field" => {
+                let run = s("run");
+                let field = s("field");
+                let rel = format!("runs/{run}/fields");
+                let tserr = |x: &dyn std::fmt::Display| err(INTERNAL, format!("{rel}: {x}"));
+                let mut r = rcfd_tsstore::Reader::open(&self.project.root().join(&rel)).map_err(|x| tserr(&x))?;
+                let n = r.snapshots().len();
+                let snap = p["snapshot"]
+                    .as_u64()
+                    .map(|x| x as usize)
+                    .unwrap_or(n.saturating_sub(1));
+                let (step, time) = (r.snapshots()[snap].step, r.snapshots()[snap].time);
+                let unit = r
+                    .fields(snap)
+                    .map_err(|x| tserr(&x))?
+                    .into_iter()
+                    .find(|f| f.name == field)
+                    .map(|f| f.unit)
+                    .filter(|u| u != "unknown");
+                let values: Vec<f32> = r
+                    .read_field(snap, &field)
+                    .map_err(|x| tserr(&x))?
+                    .iter()
+                    .map(|&v| v as f32)
+                    .collect();
+                let mesh = r.mesh().map_err(|x| tserr(&x))?;
+                let surf = rcfd_post::picture::store_surface(&mesh).map_err(|x| err(INTERNAL, x.to_string()))?;
+                let at = |c: u32| values.get(c as usize).copied().unwrap_or(f32::NAN);
+                let (mut lo, mut hi) = (f32::INFINITY, f32::NEG_INFINITY);
+                for &c in &surf.cells {
+                    let v = at(c);
+                    if v < lo {
+                        lo = v;
+                    }
+                    if v > hi {
+                        hi = v;
+                    }
+                }
+                let (order, tris, w, hgt) = projected(&surf, mesh.n_cells());
+                let mut svg = format!(
+                    "<svg class=\"xv-picture\" viewBox=\"0 0 {w:.1} {hgt:.1}\" role=\"img\" aria-label=\"{} of {} at snapshot {snap}\">",
+                    esc(&field),
+                    esc(&run)
+                );
+                for (t, c) in order.iter().zip(&tris) {
+                    let k = lut_index(at(surf.cells[*t]), lo, hi);
+                    svg.push_str(&format!("<polygon points=\"{}\" fill=\"{}\"/>", points(c), lut_hex(k)));
+                }
+                svg.push_str("</svg>");
+                let mut legend =
+                    String::from("<svg viewBox=\"0 0 256 1\" preserveAspectRatio=\"none\" aria-hidden=\"true\">");
+                for k in 0..256 {
+                    legend.push_str(&format!(
+                        "<rect x=\"{k}\" width=\"1\" height=\"1\" fill=\"{}\"/>",
+                        lut_hex(k)
+                    ));
+                }
+                legend.push_str("</svg>");
+                let (lo64, hi64) = (f64::from(lo), f64::from(hi));
+                let unit_text = unit.map(|u| format!(", {u}")).unwrap_or_default();
+                (
+                    format!(
+                        "<div class=\"xv-field\" data-field=\"{}\" data-lo=\"{}\" data-hi=\"{}\" data-snapshot=\"{snap}\" data-step=\"{}\">{svg}<div class=\"xv-legend\"><span>{}</span>{legend}<span>{}</span></div><p class=\"xv-facts\">{}{} of {} at snapshot {snap} (step {}, time {}); colour range of the shown snapshot.</p></div>\n",
+                        esc(&field),
+                        num(lo64),
+                        num(hi64),
+                        step,
+                        num(lo64),
+                        num(hi64),
+                        esc(&field),
+                        esc(&unit_text),
+                        esc(&run),
+                        step,
+                        num(time)
+                    ),
+                    vec![format!("{rel}/store.rts")],
+                )
+            }
+            kind @ ("plot" | "monitor") => {
+                let run = match p.get("run").and_then(Value::as_str) {
+                    Some(r) => r.to_string(),
+                    None => followed_run(runs, &s("case")).unwrap_or_default(),
+                };
+                let series = if run.is_empty() {
+                    Vec::new()
+                } else {
+                    self.studio_series(&run)?
+                };
+                let files = if run.is_empty() {
+                    Vec::new()
+                } else {
+                    vec![format!("runs/{run}/residuals.jsonl")]
+                };
+                if kind == "plot" {
+                    let res: Vec<&Series> = series.iter().filter(|x| x.name.starts_with("residuals.")).collect();
+                    let (mut d, mut k) = (0, 0);
+                    for x in &res {
+                        let (a, b) = counts(x, true);
+                        d += a;
+                        k += b;
+                    }
+                    let names: Vec<String> = res
+                        .iter()
+                        .map(|x| {
+                            let last = x.y.last().copied().unwrap_or(f64::NAN);
+                            format!("{} {}", esc(x.name.trim_start_matches("residuals.")), num(last))
+                        })
+                        .collect();
+                    (
+                        format!(
+                            "<div class=\"xv-series\" data-run=\"{}\" data-drawn=\"{d}\" data-skipped=\"{k}\">{}<p class=\"xv-facts\">Residuals of {} (last values): {}; {d} samples drawn, {k} not drawn.</p></div>\n",
+                            esc(&run),
+                            lines_svg(&res, true, 120.0),
+                            esc(&run),
+                            names.join(", ")
+                        ),
+                        files,
+                    )
+                } else {
+                    let m = s("monitor");
+                    let one = series.iter().find(|x| x.name == format!("monitors.{m}"));
+                    let last = one.and_then(|x| Some((*x.x.last()?, *x.y.last()?)));
+                    let (d, k) = one.map(|x| counts(x, false)).unwrap_or((0, 0));
+                    let attrs = last
+                        .map(|(x, y)| format!(" data-last-step=\"{}\" data-last-value=\"{}\"", num(x), num(y)))
+                        .unwrap_or_default();
+                    let text = last
+                        .map(|(x, y)| format!("{} at step {}: {}", esc(&m), num(x), num(y)))
+                        .unwrap_or_else(|| format!("{}: no samples", esc(&m)));
+                    (
+                        format!(
+                            "<div class=\"xv-series\" data-run=\"{}\"{attrs} data-drawn=\"{d}\" data-skipped=\"{k}\">{}<p class=\"xv-facts\">{text} ({} of {}).</p></div>\n",
+                            esc(&run),
+                            lines_svg(&one.into_iter().collect::<Vec<_>>(), false, 80.0),
+                            esc(&m),
+                            esc(&run)
+                        ),
+                        files,
+                    )
+                }
+            }
+            other => return Err(err(INTERNAL, format!("'{other}' is not a kind the page draws"))),
+        })
+    }
+}
+
+/// The run a panel of case `kase` follows: the newest `created`, then the greatest id (`followedRun` of
+/// apps/studio-web/src/renderer/canvas/model.ts).
+fn followed_run(runs: &[Value], kase: &str) -> Option<String> {
+    let norm = |s: &str| s.replace('\\', "/");
+    let want = norm(kase);
+    let mut best: Option<(&str, &str)> = None;
+    for r in runs {
+        if norm(r["case"].as_str().unwrap_or_default()) != want {
+            continue;
+        }
+        let (c, id) = (
+            r["created"].as_str().unwrap_or_default(),
+            r["id"].as_str().unwrap_or_default(),
+        );
+        if best.is_none_or(|(bc, bid)| c > bc || (c == bc && id > bid)) {
+            best = Some((c, id));
+        }
+    }
+    best.map(|b| b.1.to_string())
+}
+
+/// ADR 0823 R3: what the page must not hold (a reference to anything outside it); empty when it holds none.
+pub fn page_references(page: &str) -> Vec<String> {
+    let mut found = Vec::new();
+    let low = page.to_ascii_lowercase();
+    for bad in [
+        "<script", "<link", "<iframe", "<object", "<embed", "<img", "@import", "http:", "https:", "src=", "href=",
+    ] {
+        if low.contains(bad) {
+            found.push(bad.to_string());
+        }
+    }
+    let mut rest = low.as_str();
+    while let Some(at) = rest.find("url(") {
+        let after = rest[at + 4..].trim_start_matches(['"', '\'', ' ']);
+        if !(after.starts_with('#') || after.starts_with("data:")) {
+            found.push(format!("url({}", &after[..after.len().min(20)]));
+        }
+        rest = &rest[at + 4..];
+    }
+    found
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1692,5 +2578,67 @@ store_fields = ["alpha", "ux", "uy", "p"]
         let _ = std::fs::remove_dir_all(&dir);
         assert_eq!(cases.len(), 4);
         assert!(failed.is_empty(), "not refused at the registered key: {failed:?}");
+    }
+
+    /// ADR 0823 R3 (unit): the page of X1 (ADR 0805 V2's view) refers to nothing outside it, carries the CSP and the
+    /// Studio's stylesheets.
+    #[test]
+    fn r3_f980_the_page_of_x1_is_self_contained() {
+        let (dir, ws) = quick_start();
+        let r = ws.export_view(&json!({"view": valid()})).unwrap();
+        let page = std::fs::read_to_string(dir.join(r["path"].as_str().unwrap())).unwrap();
+        let refs = page_references(&page);
+        eprintln!("R3 unit: {} bytes, references {refs:?}", page.len());
+        let _ = std::fs::remove_dir_all(&dir);
+        assert!(refs.is_empty(), "{refs:?}");
+        assert!(page.contains(&format!(
+            "<meta http-equiv=\"Content-Security-Policy\" content=\"{EXPORT_CSP}\">"
+        )));
+        for (name, css) in EXPORT_STYLES {
+            assert!(page.contains(css), "{name} is not in the page");
+        }
+        // the control: a page with a reference is found out
+        assert_eq!(page_references("<link rel=\"stylesheet\" href=\"https://x\">").len(), 3);
+    }
+
+    /// ADR 0823 amendment 4 U1: `num` writes 20 numbers as `String(x)` does in Node v22.19.0 (the Studio's runtime),
+    /// whose texts were printed once after the amendment's commit and before this code.
+    #[test]
+    fn u1_f980_num_writes_a_number_as_the_studio_does() {
+        let want: [(f64, &str); 20] = [
+            (278.0, "278"),
+            (0.01, "0.01"),
+            (-152.87271118164063, "-152.87271118164062"),
+            (1078.4739990234375, "1078.4739990234375"),
+            (1.0, "1"),
+            (0.0, "0"),
+            (-0.0, "0"),
+            (2400.0, "2400"),
+            (1e-7, "1e-7"),
+            (1.5e-7, "1.5e-7"),
+            (1e-6, "0.000001"),
+            (2.5e-6, "0.0000025"),
+            (1e21, "1e+21"),
+            (1.2345678901234568e20, "123456789012345680000"),
+            (123.456, "123.456"),
+            (-0.5, "-0.5"),
+            (5e-324, "5e-324"),
+            (1.7976931348623157e308, "1.7976931348623157e+308"),
+            (100.0, "100"),
+            (0.1 + 0.2, "0.30000000000000004"),
+        ];
+        let mut equal = 0;
+        for (x, s) in want {
+            let got = num(x);
+            eprintln!("U1 {x:e}: num {got}, String {s}{}", if got == s { "" } else { " MISS" });
+            equal += usize::from(got == s);
+        }
+        eprintln!("U1: {equal} of 20 equal");
+        assert_eq!(equal, 20);
+        // js_json: JSON, each f64 by num
+        assert_eq!(
+            js_json(&json!({"a": [1.0, 2u64, "x"], "b": 0.01})),
+            "{\"a\":[1,2,\"x\"],\"b\":0.01}"
+        );
     }
 }
