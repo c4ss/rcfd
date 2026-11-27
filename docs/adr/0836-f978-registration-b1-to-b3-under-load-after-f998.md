@@ -146,3 +146,12 @@ None.
 > Note: ADR 0836, 2026-11-27, done: on main after F-998, B1 to B3 held in 3 of 3 registered runs under arm H's 16 spinning threads and in the file's default run (CPU 99 % to 100 %, 10 of 10 steps, journal seq 1 to 5 against 1 to 5, every step's view shown, 0 of 12 edit_case refused), and the three committed mutations beside F-978's tests were each caught.
 
 The same entries are `docs/roadmap/proposals/0836-F-978.json`.
+
+## Addendum 2 (2026-11-27): L4
+
+Written after that run, on dc65550f; nothing above is changed. `docs_site` 2 passed
+(its first run's result line was cut by the script's output filter, which kept only the build lines; it was run once more
+to read the result, a correction of the command, not a rerun to pass); `roadmap_proposals.py check` of
+`docs/roadmap/proposals/0836-F-978.json` passed (partial to done, gap removed); `process_report.py --check` gave 1
+failure, `docs/adr/index.md` not current, a generated file left to the lead (rule 9): **met** as registered. The
+decision of addendum 1 stands: **done**.
