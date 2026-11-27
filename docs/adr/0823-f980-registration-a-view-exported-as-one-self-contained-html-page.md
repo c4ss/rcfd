@@ -413,3 +413,62 @@ Then M5 runs again, once, on a scratch copy (`git archive` of the commit of this
 `cargo test --release -p rcfd-mcp --test export_view_f980`: it must fail R3f. M6 (amendment 4) runs on the same copy
 with `cargo test --release -p rcfd-workspace --lib u1_f980`. The old M5 row stays as its record. The decision rule is
 amendment 4's, with R3f added and M5 counted by this run.
+
+## Addendum 2: results of amendments 3 to 5 (2026-11-27)
+
+Written after the runs; nothing above is changed. Written by Claude Opus 5.5 (`claude-opus-5-5`). Release profile,
+`CARGO_TARGET_DIR` `w49i-work/f980-export-view-html-scratch/target` (the copy: `target-copy`), 8 build jobs; `rcfd`,
+`rcfd-mcp`, `rcfd-runner` and `f447_bench` built into it before `npm test`. Commits: 72fe3636 (amendment 3), 43f126e0
+(the re-record), f3b3da15 (amendment 4), its code, 4785f4ce (amendment 5), f6c8fc17 (R3f), then this addendum and the
+proposal. CPU load (`LoadPercentage`): 90 % at the build, 71 % at clippy, 99 % at the `--lib` runs, 90 % at the named
+tests, 100 % at the mutations, 100 % at the typecheck, 85 % at the start and 97 % at the end of `npm test` (14.1 min).
+
+Deviation: Node printed `-152.87271118164062` for the f64 that Rust's shortest digits write `-152.87271118164063`, an
+exact tie between two 17-digit texts; ECMA-262 takes the even one. This was seen in Node's output before the code, and
+`num` takes, of two equally near texts, the even one (the rule of amendment 4, "JavaScript's `Number::toString`"); no
+limit or number of U1 changed.
+
+| Id | Limit | Measured | Met |
+|---|---|---|---|
+| U1 | 20 of 20 equal to Node v22.19.0's `String(x)` | 20 of 20 (`rcfd-workspace --lib` 14 passed) | yes |
+| R1 to R7 | as registered | `export_view_f980` 4 passed, 2 ignored (the records of amendments 1 and 2): X1 268 147 bytes, X2 409 474, X3 956 742, X4 501 473, X5 527 702; R2 5, 5, 6, 6 panels equal; R4 11, 11, 7, 7, 7 files; R5 id `fnv64:3af9f4fbf864a7a0` equal; R6 1003, 1003, 1003, 1202; R7 5 lines | yes |
+| R3f | 4 of 4 files in the page | 4 of 4 (`tokens.css` 7 534 bytes, `base.css` 3 402, `canvas.css` 1 396, `export.css` 2 504) | yes |
+| E1 | X1: every value equal; 0 other requests | 0 values differ; 0 requests beyond the page's file (268 309 bytes) | yes |
+| E2 | X2 | 0 differ; 0 requests | yes |
+| E3 | X3 | 0 differ; 0 requests | yes |
+| E4 | X4 | 0 differ; 0 requests | yes |
+| E5 | X5 (3D store) | 0 differ; 0 requests | yes |
+| E6 | the theme equal; no colour literal | both `Archivo, "Helvetica Neue", Arial, sans-serif`, `rgb(29, 58, 95)`, `rgba(0, 0, 0, 0)`; 0 literals | yes |
+| L5 | the five re-recorded files pass | `canvas_view_f976` 4, `project_list_f270` 1, `tool_list_f275` 8, `project_w48f` 10, `project_runs_w48f` 3 passed | yes |
+| L1 | the other named files and `--lib` | `canvas_layout_f977` 1, `canvas_live_f979` 2, `feed_f273` 3, `default_f1` 2, `tool_list_adr0730` 2; `rcfd-mcp --lib` 18 (1 ignored), `rcfd-workspace --lib` 14 passed | yes |
+| L6 | `capabilities.spec.ts` passes | **4 failed**: the re-record as listed added the row `mcp:export_view` but not the inventory's counts (`mcp_tool` 74 to 75, `total` 1375 to 1376) or the generated report `docs/studio-coverage.md` (75 MCP tools, the list with `export_view`); the engine's list itself agrees | **no** |
+| L3 | typecheck; `npm test` passes | typecheck exit 0; `npm test` 889 passed, 5 failed, 6 skipped (main's registered skips, ADRs 0807 and 0818), 6 did not run (after a failure in serial files): L6's four, and `commands.spec.ts:156` (the palette's active entry not `run.status` within the 5 s poll, at 85 to 97 % load, a file this item does not touch; not diagnosed); `run-control.spec.ts:268` passed this time | **no** |
+| L4 | fmt, clippy | `cargo fmt -p rcfd-workspace -p rcfd-mcp --check` clean; clippy of both `--all-targets -D warnings` clean; `docs_site`, the proposal check and the process report after this addendum, in the report | yes |
+
+| Mutation | Caught by |
+|---|---|
+| M5 again (`tokens.css` left out), on the copy of f6c8fc17 | R3f (`export_view_f980.rs` line 957: `tokens.css` not in the page, 3 of 4) |
+| M6 (an integral `f64` written with `.0`) | U1 (`view.rs` line 2637: 15 of 20, `278.0` against `278` among them) |
+
+Not run again: `npm test` (made once, as registered); L6's fix. The fix of L6 is to run `npm run capabilities` in
+`apps/studio-web` (it writes the counts and `docs/studio-coverage.md` from the binaries), which is the lead's re-record.
+
+Actual size of amendments 3 to 5: partial; 3 further registrations (amendments 3, 4, 5); 2 heavy runs (`npm test`, the
+copy's build); 0 questions; about 120 000 bytes read.
+
+Decision by the registered rule (amendments 4 and 5): **partial**: L6 and L3 missed (the inventory's counts and report
+not re-recorded; one `commands.spec.ts` failure). Every check of the acceptance held: R1 to R7, R3f, U1, E1 to E6, Z1
+(recorded), L1, L2, L5, L4; M1 to M6 are each caught (M5 by this run).
+
+### For the lead: roadmap entries
+
+> Status: partial.
+
+> Note: ADR 0823, 2026-11-27, partial: export_view's page now writes each number as the Studio does (JavaScript's String, of two equally near texts the even), and the e2e held whole: E1 to E6 on X1 to X5 agreed on every value with no request beyond the page's own file and the Studio's theme; M5 is caught by the styles read from their files; capabilities.spec.ts failed on the inventory's counts and report, which the re-record as listed did not include, and commands.spec.ts:156 failed once under load.
+
+> Gap: The capability inventory of the Studio has the row mcp:export_view but not its counts (mcp_tool 75, total 1376) nor docs/studio-coverage.md, so capabilities.spec.ts fails until npm run capabilities is run in apps/studio-web (the lead's re-record); commands.spec.ts:156 failed once at 85 to 97 % load, not diagnosed.
+
+> Follow-up: The Studio's Archivo fonts embedded in an exported page. Deps F-980. Acceptance: Every limit not stated here is registered in the ADR before the run. The page of export_view carries the Archivo fonts the Studio shows (400, 500, 700) as data: fonts written by the Studio's build, with no network fetch, and the page's computed font in the e2e of ADR 0823 is Archivo with no font installed.
+
+The same entries are `docs/roadmap/proposals/0823-F-980.json`, which keeps addendum 1's follow-up as the lead numbered
+it (F-993).
