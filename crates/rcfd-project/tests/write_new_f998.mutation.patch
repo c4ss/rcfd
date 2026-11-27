@@ -2,9 +2,9 @@
 diff --git a/crates/rcfd-project/src/atomic.rs b/crates/rcfd-project/src/atomic.rs
 --- a/crates/rcfd-project/src/atomic.rs
 +++ b/crates/rcfd-project/src/atomic.rs
-@@ -166,7 +166,7 @@ pub fn atomic_write_unsynced(path: &Path, bytes: &[u8]) -> Result<()> {
+@@ -189,7 +189,7 @@ pub fn write_new(path: &Path, bytes: &[u8]) -> Result<()> {
  #[cfg(windows)]
- pub fn write_new(path: &Path, bytes: &[u8]) -> Result<()> {
+ pub fn write_new_case(path: &Path, bytes: &[u8]) -> Result<()> {
      use std::os::windows::fs::OpenOptionsExt;
 -    let mut f = match OpenOptions::new().write(true).create_new(true).share_mode(0).open(path) {
 +    let mut f = match OpenOptions::new().write(true).create_new(true).open(path) {
