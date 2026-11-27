@@ -239,3 +239,9 @@ one run (CPU 80 %).
 > Follow-ups: one under F-978 (rule 13), no new item: "F-978: the System holder of a refused edit_case", a trace that keeps looking at a refused file until its holder ends, then F1 of ADR 0830 with its checks U0, U2, A2 and its mutation M1; its limits are ADR 0830's.
 
 The same entries are `docs/roadmap/proposals/0830-F-978.json`.
+
+## Answers of the maintainer (2026-11-27), written by the lead
+
+1. Option (a): a follow-up registration under F-978 whose trace keeps looking at a refused file until its holder lets go, then F1 if the hold is under 2 s (ADR 0832); taken by the lead on the maintainer's standing instruction of 2026-11-26 (go with the recommended option always).
+
+The lead accepts that no mutation patch is committed for this work, against rule 16: its one registered mutation was of F1, which its rule did not allow to be made. ADR 0832 commits one. Merged and pushed at 3472dda0.
