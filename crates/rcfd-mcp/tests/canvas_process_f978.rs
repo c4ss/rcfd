@@ -257,3 +257,35 @@ fn b1_b2_b3_the_process_of_a_case_built_from_new_to_a_finished_run() {
     assert!(b3, "B3");
     let _ = std::fs::remove_dir_all(dir.parent().unwrap());
 }
+
+/// ADR 0836 (F-978): B1, B2 and B3 of ADR 0826, unchanged, under the load of ADR 0832's arm H: 16 threads spinning in
+/// this test process from 500 ms before the build to its end. Ignored so that the file's default run is unchanged; run
+/// three times as ADR 0836 registers.
+#[test]
+#[ignore = "ADR 0836: B1 to B3 under arm H's load, run as registered"]
+fn b1_b2_b3_under_the_load_of_arm_h_adr0836() {
+    use std::sync::atomic::{AtomicBool, Ordering};
+    use std::sync::Arc;
+    let stop = Arc::new(AtomicBool::new(false));
+    let spin: Vec<_> = (0..16)
+        .map(|_| {
+            let stop = stop.clone();
+            std::thread::spawn(move || {
+                let mut x = 0u64;
+                while !stop.load(Ordering::Relaxed) {
+                    x = std::hint::black_box(x.wrapping_mul(6364136223846793005).wrapping_add(1));
+                }
+            })
+        })
+        .collect();
+    eprintln!("ADR 0836: {} spinning threads", spin.len());
+    std::thread::sleep(std::time::Duration::from_millis(500));
+    let r = std::panic::catch_unwind(b1_b2_b3_the_process_of_a_case_built_from_new_to_a_finished_run);
+    stop.store(true, Ordering::Relaxed);
+    for t in spin {
+        t.join().unwrap();
+    }
+    if let Err(e) = r {
+        std::panic::resume_unwind(e);
+    }
+}
