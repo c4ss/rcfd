@@ -11,7 +11,7 @@ import { IconToggle } from '../ui/IconToggle.js';
 import { caseHash } from '../case/hash.js';
 import { commandHandler } from '../commands/host.js';
 import { clock } from './format.js';
-import { activityOf, latestByClaude, registrationWords, type ActivityTarget } from './activity.js';
+import { activityOf, latestByClaude, registrationWords, whyOf, type ActivityTarget } from './activity.js';
 
 export { registrationWords } from './activity.js';
 
@@ -58,9 +58,11 @@ export function ClaudeActivity({ view }: { view: ProjectView }) {
   const c = latestByClaude(view.changes);
   if (!c) return null;
   const a = activityOf(c);
+  // F-273 (ADR 0837 D5): who (the actor), what (verb and thing) and why, the reason only as text (D3)
+  const why = whyOf(c.reason);
   return (
     // G22: the line reports the change feed's latest entry, as the Changes list does: data, not chrome
-    <span className="ph-activity" role="status" title={c.text} data-words="data">
+    <span className="ph-activity" role="status" title={c.text} data-words="data" data-actor={c.actor?.client} data-pid={c.actor?.pid ?? undefined}>
       <span className="ph-activity-text">
         Claude Code {a.verb}{' '}
         {a.target && a.thing ? (
@@ -74,6 +76,9 @@ export function ClaudeActivity({ view }: { view: ProjectView }) {
         ) : (
           <span data-words="data">{a.thing}</span>
         )}
+        <span className="ph-activity-why" data-words="data" data-why={why.given ? 'given' : 'none'} data-reason-cut={why.cut ? 'true' : undefined}>
+          ; why: {why.text}
+        </span>
       </span>
       <time className="ph-activity-time" dateTime={c.seen} data-words="data">
         {clock(c.seen)}
