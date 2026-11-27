@@ -931,3 +931,28 @@ fn r6_refusals_write_nothing() {
         assert_eq!(journal(&dir), before, "R6: the journal changed");
     }
 }
+
+/// ADR 0823 amendment 5 R3f: the page of X1 carries the Studio's four stylesheets, read from their files at the time of
+/// the test (a source a change of the page's constants does not change).
+#[test]
+fn r3_a5_the_page_carries_the_studio_styles_read_from_their_files() {
+    let dir = f980("r3f");
+    let mut c = Mcp::start(&["--project", &d(&dir)]);
+    let r = ok(&c.call("export_view", json!({"view": x1(), "reason": "F-980 R3f"})));
+    let page = std::fs::read_to_string(dir.join(r["path"].as_str().unwrap())).unwrap();
+    let renderer = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../apps/studio-web/src/renderer");
+    let mut found = 0;
+    for name in [
+        "design/tokens.css",
+        "base.css",
+        "canvas/canvas.css",
+        "canvas/export.css",
+    ] {
+        let css = std::fs::read_to_string(renderer.join(name)).unwrap();
+        let ok = !css.trim().is_empty() && page.contains(&css);
+        eprintln!("R3f: {name}, {} bytes, in the page: {ok}", css.len());
+        found += usize::from(ok);
+    }
+    eprintln!("R3f: {found} of 4");
+    assert_eq!(found, 4);
+}
