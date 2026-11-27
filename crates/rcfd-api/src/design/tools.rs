@@ -1715,15 +1715,18 @@ fn ledger_rerun_check(svc: &Service, p: &Value) -> Rpc {
 // its arguments into the evaluator and the driver's spec, runs `uq::run` or `sensitivity::run` with the ledger, and
 // returns the driver's own `result_json`.
 
-use super::fan_rom_eval::{FanRomModel, RomCondition, FAN_ROM_MODEL_ID, FAN_ROM_PARAMS};
+use super::fan_rom_eval::{
+    FanRomModel, PcFanRomModel, RomCondition, FAN_ROM_MODEL_ID, FAN_ROM_PARAMS, PC_FAN_ROM_MODEL_ID,
+};
 use super::ledger::Model as _;
 use super::sensitivity::{self, SobolSpec};
 use super::uq::{self, Dist, Requirement, Sampler, StopRule, UncertainParam, UqSpec};
 use rcfd_mesh::fan::SectionFamily;
-use rcfd_post::fan_rom::{FanRom, Operating, RomFan, RomModel, RomSection, SystemCurve};
+use rcfd_post::fan_rom::{FanRom, Operating, PcFanEffects, RomFan, RomModel, RomSection, SystemCurve};
 
-/// The evaluator names `design_uq` and `design_sobol` accept: the reduced-order fan of [`FanRomModel`].
-pub const STUDY_EVALUATORS: [&str; 1] = [FAN_ROM_MODEL_ID];
+/// The evaluator names `design_uq` and `design_sobol` accept: the ADR 0119 reduced-order fan (`rcfd.fan_rom`) and the
+/// opt-in compact PC-fan cascade + broadband turbulence model (`rcfd.pc_fan_rom`).
+pub const STUDY_EVALUATORS: [&str; 2] = [FAN_ROM_MODEL_ID, PC_FAN_ROM_MODEL_ID];
 
 /// The members of the object at `at`; a value that is not an object and a key outside `allowed` are refused with the place.
 fn object_at<'a>(v: Option<&'a Value>, at: &str, allowed: &[&str]) -> Rpc<&'a Map<String, Value>> {
@@ -1871,6 +1874,88 @@ fn fan_rom_model(v: Option<&Value>) -> Rpc<FanRomModel> {
     Ok(FanRomModel { fan, model, cond })
 }
 
+/// The opt-in PC-fan reduced-order evaluator from `evaluator_settings`: `fan`, optional `model`, `condition` (same schema
+/// as `rcfd.fan_rom`), plus optional `effects` (`PcFanEffects` fields; absent keys keep `PcFanEffects::default()`).
+fn pc_fan_rom_model(v: Option<&Value>) -> Rpc<PcFanRomModel> {
+    let at = "evaluator_settings";
+    let s = object_at(v, at, &["fan", "model", "condition", "effects"])?;
+    let mut base_obj = Map::new();
+    for key in ["fan", "model", "condition"] {
+        if let Some(val) = s.get(key) {
+            base_obj.insert(key.to_string(), val.clone());
+        }
+    }
+    let base = fan_rom_model(Some(&Value::Object(base_obj)))?;
+    let eat = format!("{at}.effects");
+    let mut effects = PcFanEffects::default();
+    if let Some(ev) = s.get("effects").filter(|e| !e.is_null()) {
+        let e = object_at(
+            Some(ev),
+            &eat,
+            &[
+                "thickness_ratio",
+                "cd_pressure_min",
+                "loading_drag",
+                "solidity_drag",
+                "base_turb_intensity",
+                "wake_turb_solidity",
+                "tip_turb_intensity",
+                "te_noise_k",
+                "tip_noise_k",
+            ],
+        )?;
+        for (key, slot) in [
+            ("thickness_ratio", &mut effects.thickness_ratio),
+            ("cd_pressure_min", &mut effects.cd_pressure_min),
+            ("loading_drag", &mut effects.loading_drag),
+            ("solidity_drag", &mut effects.solidity_drag),
+            ("base_turb_intensity", &mut effects.base_turb_intensity),
+            ("wake_turb_solidity", &mut effects.wake_turb_solidity),
+            ("tip_turb_intensity", &mut effects.tip_turb_intensity),
+            ("te_noise_k", &mut effects.te_noise_k),
+            ("tip_noise_k", &mut effects.tip_noise_k),
+        ] {
+            if e.contains_key(key) {
+                *slot = number_at(e, key, &eat)?;
+            }
+        }
+    }
+    effects.validate().map_err(|e| bad(format!("{eat}.{e}")))?;
+    Ok(PcFanRomModel { base, effects })
+}
+
+enum StudyModel {
+    FanRom(FanRomModel),
+    PcFanRom(PcFanRomModel),
+}
+
+impl ledger::Model for StudyModel {
+    fn id(&self) -> &str {
+        match self {
+            StudyModel::FanRom(m) => m.id(),
+            StudyModel::PcFanRom(m) => m.id(),
+        }
+    }
+    fn version(&self) -> &str {
+        match self {
+            StudyModel::FanRom(m) => m.version(),
+            StudyModel::PcFanRom(m) => m.version(),
+        }
+    }
+    fn fidelity(&self) -> ledger::Fidelity {
+        match self {
+            StudyModel::FanRom(m) => m.fidelity(),
+            StudyModel::PcFanRom(m) => m.fidelity(),
+        }
+    }
+    fn evaluate(&self, params: &[ledger::Quantity]) -> ledger::Outcome {
+        match self {
+            StudyModel::FanRom(m) => m.evaluate(params),
+            StudyModel::PcFanRom(m) => m.evaluate(params),
+        }
+    }
+}
+
 /// The uncertain inputs `params`: `{name, unit, dist}` with `dist` in the form `Dist::to_json` writes. Each name and unit
 /// must be a parameter of the evaluator (`known`), which would otherwise refuse every sample. A key of `dist` that its type
 /// does not have is refused (ADR 0793).
@@ -1954,7 +2039,7 @@ fn study_params(p: &Value, known: &[(&str, &str)], evaluator: &str) -> Rpc<Vec<U
 struct StudyCall {
     ledger: ledger::Ledger,
     name: String,
-    model: FanRomModel,
+    model: StudyModel,
     params: Vec<UncertainParam>,
     seed: u64,
     workers: usize,
@@ -1965,13 +2050,16 @@ fn study_call(svc: &Service, p: &Value) -> Rpc<StudyCall> {
     let name = str_arg(p, "name")?;
     check_name("name", name)?;
     let evaluator = str_arg(p, "evaluator")?;
-    if !STUDY_EVALUATORS.contains(&evaluator) {
-        return Err(bad(format!(
-            "evaluator: '{evaluator}' is not a named evaluator of these studies ({})",
-            STUDY_EVALUATORS.join(", ")
-        )));
-    }
-    let model = fan_rom_model(p.get("evaluator_settings"))?;
+    let model = match evaluator {
+        FAN_ROM_MODEL_ID => StudyModel::FanRom(fan_rom_model(p.get("evaluator_settings"))?),
+        PC_FAN_ROM_MODEL_ID => StudyModel::PcFanRom(pc_fan_rom_model(p.get("evaluator_settings"))?),
+        _ => {
+            return Err(bad(format!(
+                "evaluator: '{evaluator}' is not a named evaluator of these studies ({})",
+                STUDY_EVALUATORS.join(", ")
+            )));
+        }
+    };
     let params = study_params(p, &FAN_ROM_PARAMS, evaluator)?;
     let seed = match p.get("seed") {
         None | Some(Value::Null) => 1,
@@ -2006,7 +2094,7 @@ fn study_guard(svc: &Service, l: &ledger::Ledger, name: &str, evaluations: usize
     Ok(())
 }
 
-fn study_reply(l: &ledger::Ledger, model: &FanRomModel, entries: usize, result: Value) -> Value {
+fn study_reply(l: &ledger::Ledger, model: &StudyModel, entries: usize, result: Value) -> Value {
     json!({
         "ledger": l.path().display().to_string(), "evaluator": model.id(), "evaluator_version": model.version(),
         "fidelity": model.fidelity().as_str(), "entries_appended": entries, "result": result,

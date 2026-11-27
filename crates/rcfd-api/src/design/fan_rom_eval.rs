@@ -14,7 +14,7 @@ use super::store::CondResult;
 use super::study::{Condition, Evaluator, StudyDef};
 use super::uq::{Affine, Dist, Sampler, Standardized, StopRule, UncertainParam, UqResult, UqSpec};
 use rcfd_mesh::fan_design::{Dist as TolDist, Tolerances};
-use rcfd_post::fan_rom::{FanRom, Operating, RomFan, RomModel, SystemCurve};
+use rcfd_post::fan_rom::{FanRom, Operating, PcFanEffects, RomFan, RomModel, SystemCurve};
 use serde_json::json;
 use std::collections::BTreeMap;
 
@@ -116,6 +116,11 @@ impl Evaluator for FanRomEvaluator {
 pub const FAN_ROM_MODEL_ID: &str = "rcfd.fan_rom";
 /// Evaluator version of [`FanRomModel`] (the ADR 0119 model with the ADR 0623 parameter mapping).
 pub const FAN_ROM_MODEL_VERSION: &str = "1 (ADR 0119 model, ADR 0623 mapping)";
+/// Evaluator id of [`PcFanRomModel`] (opt-in cascade solidity, low-Re drag, and broadband turbulence proxy).
+pub const PC_FAN_ROM_MODEL_ID: &str = "rcfd.pc_fan_rom";
+/// Evaluator version of [`PcFanRomModel`].
+pub const PC_FAN_ROM_MODEL_VERSION: &str =
+    "1 (cascade solidity, low-Re drag, broadband TE/tip turbulence proxy; not validated)";
 /// Parameters of [`FanRomModel`] with their units.
 pub const FAN_ROM_PARAMS: [(&str, &str); 3] = [
     ("stagger_common_deg", "deg"),
@@ -123,11 +128,12 @@ pub const FAN_ROM_PARAMS: [(&str, &str); 3] = [
     ("tip_gap_delta", "m"),
 ];
 
-/// Unit of a metric of [`FanRomEvaluator::metrics`].
+/// Unit of a metric of [`FanRomEvaluator::metrics`] and [`PcFanRomModel`].
 pub fn fan_rom_metric_unit(name: &str) -> &'static str {
     match name {
         "q" => "m3/s",
-        "dp_s" | "dp_t" | "tone1_pa" => "Pa",
+        "dp_s" | "dp_t" | "tone1_pa" | "noise_te_pa" | "noise_tip_pa" | "noise_bb_pa" | "noise_total_pa" => "Pa",
+        "spl_db" => "dB",
         "power" => "W",
         "torque" => "N m",
         _ => "1",
@@ -281,6 +287,127 @@ impl Model for FanRomModel {
             Err(e) => Outcome {
                 verdict: Verdict::NotEvaluated,
                 reason: format!("fan_rom: {e}"),
+                metrics: Vec::new(),
+                geometry_hash,
+                settings,
+            },
+        }
+    }
+}
+
+/// Opt-in compact PC-fan reduced-order evaluator (`rcfd.pc_fan_rom`): extends [`FanRomModel`] with Weinig cascade
+/// lift-interference, low-Re profile/blockage/wake drag, and Ffowcs Williams–Hall trailing-edge + tip-vortex broadband
+/// turbulent noise proxies (not validated). Does not alter [`FanRomModel`].
+#[derive(Debug, Clone, PartialEq)]
+pub struct PcFanRomModel {
+    /// Nominal blade row, base section/loss model, and operating condition.
+    pub base: FanRomModel,
+    /// Cascade solidity, low-Re profile drag, and broadband turbulence noise parameters.
+    pub effects: PcFanEffects,
+}
+
+impl PcFanRomModel {
+    /// FNV-1a 64 hash covering base geometry, model, condition, and PC-fan effect parameters.
+    pub fn hash_of(&self, fan: &RomFan) -> String {
+        let mut h: u64 = 0xcbf2_9ce4_8422_2325;
+        for b in self.base.hash_of(fan).bytes() {
+            fnv1a64(&mut h, u64::from(b));
+        }
+        let fx = &self.effects;
+        for x in [
+            fx.thickness_ratio,
+            fx.cd_pressure_min,
+            fx.loading_drag,
+            fx.solidity_drag,
+            fx.base_turb_intensity,
+            fx.wake_turb_solidity,
+            fx.tip_turb_intensity,
+            fx.te_noise_k,
+            fx.tip_noise_k,
+        ] {
+            fnv1a64(&mut h, x.to_bits());
+        }
+        format!("fnv1a64:{h:016x}")
+    }
+
+    /// Evaluate performance and broadband turbulent noise metrics of `fan`.
+    pub fn metrics(&self, fan: RomFan) -> Result<BTreeMap<String, f64>, String> {
+        let c = &self.base.cond;
+        let rom = FanRom::new_with_effects(fan, self.base.model, self.effects)?;
+        let q_hi = rom.area() * c.op.omega() * rom.fan.r_tip;
+        let (_, p) = rom.operating_point(&c.op, &c.system, 1e-3 * q_hi, q_hi, c.n_scan)?;
+        let tone = rom.tone(&c.op, &p, c.c0, 1, c.observer_r, c.observer_theta)?;
+        let bb = rom.broadband_noise(&c.op, &p, c.c0, c.observer_r, c.observer_theta)?;
+        let mid = &p.strips[p.strips.len() / 2];
+        let solidity_mid = mid.chord / mid.pitch;
+        let m: BTreeMap<String, f64> = [
+            ("q", p.q),
+            ("dp_s", p.dp_s),
+            ("dp_t", p.dp_t),
+            ("power", p.power),
+            ("torque", p.torque),
+            ("eta_s", p.eta_s),
+            ("eta_t", p.eta_t),
+            ("tone1_pa", tone),
+            ("noise_te_pa", bb.p_te_rms_pa),
+            ("noise_tip_pa", bb.p_tip_rms_pa),
+            ("noise_bb_pa", bb.p_bb_rms_pa),
+            ("noise_total_pa", bb.p_total_rms_pa),
+            ("spl_db", bb.spl_db),
+            ("solidity_mid", solidity_mid),
+        ]
+        .into_iter()
+        .map(|(k, v)| (k.to_string(), v))
+        .collect();
+        if let Some((k, v)) = m.iter().find(|(_, v)| !v.is_finite()) {
+            return Err(format!("metric {k} is not finite ({v})"));
+        }
+        Ok(m)
+    }
+}
+
+impl Model for PcFanRomModel {
+    fn id(&self) -> &str {
+        PC_FAN_ROM_MODEL_ID
+    }
+    fn version(&self) -> &str {
+        PC_FAN_ROM_MODEL_VERSION
+    }
+    fn fidelity(&self) -> Fidelity {
+        Fidelity::ReducedOrder
+    }
+    fn evaluate(&self, params: &[Quantity]) -> Outcome {
+        let (fan, d) = match self.base.perturbed(params) {
+            Ok(x) => x,
+            Err(reason) => {
+                return Outcome {
+                    verdict: Verdict::NotEvaluated,
+                    reason,
+                    ..Default::default()
+                }
+            }
+        };
+        let c = &self.base.cond;
+        let settings = json!({
+            "stagger_common_deg": d[0], "chord_rel": d[1], "tip_gap_delta": d[2],
+            "rpm": c.op.rpm, "rho": c.op.rho, "nu": c.op.nu, "system_k": c.system.k, "system_l": c.system.l,
+            "n_blades": fan.n_blades,
+        });
+        let geometry_hash = self.hash_of(&fan);
+        match self.metrics(fan) {
+            Ok(m) => Outcome {
+                verdict: Verdict::Ok,
+                reason: String::new(),
+                metrics: m
+                    .iter()
+                    .map(|(k, &v)| Quantity::new(k, v, fan_rom_metric_unit(k)))
+                    .collect(),
+                geometry_hash,
+                settings,
+            },
+            Err(e) => Outcome {
+                verdict: Verdict::NotEvaluated,
+                reason: format!("pc_fan_rom: {e}"),
                 metrics: Vec::new(),
                 geometry_hash,
                 settings,

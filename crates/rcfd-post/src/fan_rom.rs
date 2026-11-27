@@ -23,6 +23,7 @@
 //! NOT modelled: cascade (solidity) effects on lift, deviation, 3-D blade effects, radial redistribution, laminar separation
 //! bubbles, inflow distortion, struts, unsteady loading, thickness noise, compressibility.
 
+use crate::noise_proxies::trailing_edge_power;
 use crate::rotor::{Rotor, RotorError};
 use rcfd_fv::lumped::{bisect, network_pressure};
 use rcfd_mesh::fan::{camber_line, gauss_legendre, AxialFan, SectionFamily};
@@ -214,6 +215,118 @@ impl RomModel {
     }
 }
 
+/// Opt-in cascade solidity, low-Re profile/wake-mixing drag, and broadband turbulent noise proxy parameters for compact
+/// low-Mach axial computer fans (not validated against measured fan acoustics). When not enabled (`FanRom::new`), the
+/// ADR 0119 model runs bit-identically.
+///
+/// Physics (clean-room first principles and standard scaling laws):
+/// * **Cascade lift interference**: Weinig flat-plate cascade lattice factor `K(sigma, gamma) = (2 / (pi s_e)) tanh(pi s_e / 2)`
+///   with `s_e = sigma / (1 + 0.5 sin^2(gamma))`, matching exact zero-stagger Weinig theory, `K -> 1` as `sigma -> 0`, and
+///   `1/sigma` guidance saturation at high solidity.
+/// * **Low-Re form/polar drag & cascade passage blockage**: Hoerner airfoil form factor `1 + 2(t/c) + 60(t/c)^4`, loading
+///   polar `cd_pressure_min + loading_drag (C_L / C_Lmax)^2`, passage blockage acceleration `1 / (1 - b)^2`, and solidity
+///   wake-interference drag `solidity_drag sigma^2 C_Dprof`.
+/// * **Broadband turbulent noise (unvalidated proxy)**: incoherent sum over all `B` blades of Ffowcs Williams & Hall (1970)
+///   `U^5` trailing-edge turbulent boundary-layer scattering (`noise_proxies::trailing_edge_power`) with solidity-driven
+///   blade-wake turbulence amplification, plus tip-clearance vortex broadband scattering.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct PcFanEffects {
+    /// Representative blade thickness-to-chord ratio `t/c` (default 0.06 for molded PC fan blades).
+    pub thickness_ratio: f64,
+    /// Minimum low-Re pressure/separation-bubble profile drag floor `C_Dp0` (default 0.012).
+    pub cd_pressure_min: f64,
+    /// Suction-side loading profile drag factor multiplying `(C_L / C_Lmax)^2` (default 0.025).
+    pub loading_drag: f64,
+    /// Cascade wake-interference drag factor multiplying `sigma^2 C_Dprof` (default 0.022).
+    pub solidity_drag: f64,
+    /// Baseline attached boundary-layer turbulence intensity `u_t / W_inf` at trailing edge (default 0.065).
+    pub base_turb_intensity: f64,
+    /// Blade-wake / passage turbulence amplification per unit solidity `sigma = c / s` (default 0.45).
+    pub wake_turb_solidity: f64,
+    /// Tip-leakage vortex shear-layer turbulence intensity `u_tip / v_tip` (default 0.10).
+    pub tip_turb_intensity: f64,
+    /// Uncalibrated Ffowcs Williams & Hall trailing-edge acoustic power constant `K_TE` (default 1.0).
+    pub te_noise_k: f64,
+    /// Uncalibrated tip-vortex broadband acoustic power constant `K_tip` (default 1.0).
+    pub tip_noise_k: f64,
+}
+
+impl Default for PcFanEffects {
+    fn default() -> Self {
+        PcFanEffects {
+            thickness_ratio: 0.06,
+            cd_pressure_min: 0.012,
+            loading_drag: 0.025,
+            solidity_drag: 0.022,
+            base_turb_intensity: 0.065,
+            wake_turb_solidity: 0.45,
+            tip_turb_intensity: 0.10,
+            te_noise_k: 1.0,
+            tip_noise_k: 1.0,
+        }
+    }
+}
+
+impl PcFanEffects {
+    /// Located validation of all effect parameters.
+    pub fn validate(&self) -> Result<(), String> {
+        for (name, v) in [
+            ("thickness_ratio", self.thickness_ratio),
+            ("cd_pressure_min", self.cd_pressure_min),
+            ("loading_drag", self.loading_drag),
+            ("solidity_drag", self.solidity_drag),
+            ("base_turb_intensity", self.base_turb_intensity),
+            ("wake_turb_solidity", self.wake_turb_solidity),
+            ("tip_turb_intensity", self.tip_turb_intensity),
+            ("te_noise_k", self.te_noise_k),
+            ("tip_noise_k", self.tip_noise_k),
+        ] {
+            if !(v.is_finite() && v >= 0.0) {
+                return Err(format!("{name}: must be finite and >= 0 (got {v})"));
+            }
+        }
+        if self.thickness_ratio > 0.35 {
+            return Err(format!(
+                "thickness_ratio: must be <= 0.35 (got {})",
+                self.thickness_ratio
+            ));
+        }
+        Ok(())
+    }
+}
+
+/// Broadband turbulent + steady-loading acoustic proxy breakdown at one observer (unvalidated scaling proxy).
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct BroadbandNoise {
+    /// Trailing-edge turbulent boundary-layer acoustic power [W].
+    pub te_power_w: f64,
+    /// Tip-clearance vortex broadband acoustic power [W].
+    pub tip_power_w: f64,
+    /// Total broadband acoustic power `te_power_w + tip_power_w` [W].
+    pub total_power_w: f64,
+    /// Far-field RMS pressure from trailing-edge broadband turbulence [Pa].
+    pub p_te_rms_pa: f64,
+    /// Far-field RMS pressure from tip-vortex broadband turbulence [Pa].
+    pub p_tip_rms_pa: f64,
+    /// Combined broadband RMS pressure [Pa].
+    pub p_bb_rms_pa: f64,
+    /// Combined broadband + Gutin BPF1 tonal RMS pressure [Pa].
+    pub p_total_rms_pa: f64,
+    /// Overall sound pressure level `20 log10(p_total_rms_pa / 2e-5)` [dB re 20 uPa] (unvalidated proxy).
+    pub spl_db: f64,
+}
+
+/// Weinig-type flat-plate cascade lift-interference factor `K(sigma, stagger)`: exact `(2/(pi sigma)) tanh(pi sigma / 2)`
+/// at zero stagger, `K -> 1` as `sigma -> 0`, and smooth `1/sigma` guidance roll-off at high solidity.
+pub fn cascade_lift_factor(solidity: f64, stagger: f64) -> f64 {
+    let s_eff = solidity / (1.0 + 0.5 * stagger.sin().powi(2));
+    if s_eff <= 1e-9 {
+        1.0
+    } else {
+        (2.0 / (PI * s_eff)) * (0.5 * PI * s_eff).tanh()
+    }
+}
+
 /// Operating state of the air and the rotor.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Operating {
@@ -331,11 +444,22 @@ pub struct FanRom {
     /// Model.
     pub model: RomModel,
     strips: Vec<StripGeom>,
+    pc_effects: Option<PcFanEffects>,
 }
 
 impl FanRom {
-    /// Validate and prepare.
+    /// Validate and prepare (ADR 0119 default physics, bit-identical).
     pub fn new(fan: RomFan, model: RomModel) -> Result<FanRom, String> {
+        Self::build(fan, model, None)
+    }
+
+    /// Validate and prepare with opt-in compact PC-fan cascade solidity, low-Re drag, and broadband turbulence physics.
+    pub fn new_with_effects(fan: RomFan, model: RomModel, effects: PcFanEffects) -> Result<FanRom, String> {
+        effects.validate()?;
+        Self::build(fan, model, Some(effects))
+    }
+
+    fn build(fan: RomFan, model: RomModel, pc_effects: Option<PcFanEffects>) -> Result<FanRom, String> {
         fan.validate()?;
         if model.n_strips == 0 {
             return Err("n_strips: must be >= 1".into());
@@ -366,7 +490,17 @@ impl FanRom {
                 }
             })
             .collect();
-        Ok(FanRom { fan, model, strips })
+        Ok(FanRom {
+            fan,
+            model,
+            strips,
+            pc_effects,
+        })
+    }
+
+    /// Active PC-fan cascade/broadband effects, if enabled.
+    pub fn pc_effects(&self) -> Option<PcFanEffects> {
+        self.pc_effects
     }
 
     /// Bladed annulus area [m^2].
@@ -379,18 +513,46 @@ impl FanRom {
         self.strips.iter().map(|g| g.r).collect()
     }
 
-    /// Lift and drag coefficients on a branch at effective incidence `ae`, chord Re `re`, pitch `s`.
-    fn coefficients(&self, branch: Branch, ae: f64, re: f64, s: f64) -> (f64, f64) {
+    /// Lift and drag coefficients on a branch at effective incidence `ae`, chord Re `re`, and strip geometry `g`.
+    fn coefficients(&self, branch: Branch, ae: f64, re: f64, g: &StripGeom) -> (f64, f64) {
         let m = &self.model;
+        let s = g.pitch;
+        let Some(fx) = self.pc_effects else {
+            let cl = match branch {
+                Branch::Attached => TAU * ae,
+                Branch::Stalled => m.cd_normal * ae.sin() * ae.cos(),
+                Branch::Capped => m.cl_max.copysign(ae),
+            };
+            let mut cd = m.annulus_drag * s / (self.fan.r_tip - self.fan.r_hub) + m.secondary_drag * cl * cl;
+            if m.friction {
+                cd += 2.656 / re.sqrt();
+            }
+            if branch == Branch::Stalled {
+                cd += m.cd_normal * ae.sin() * ae.sin();
+            }
+            return (cl, cd);
+        };
+        let sigma = g.chord / s;
+        let k_lift = cascade_lift_factor(sigma, g.stagger);
         let cl = match branch {
-            Branch::Attached => TAU * ae,
+            Branch::Attached => TAU * k_lift * ae,
             Branch::Stalled => m.cd_normal * ae.sin() * ae.cos(),
             Branch::Capped => m.cl_max.copysign(ae),
         };
-        let mut cd = m.annulus_drag * s / (self.fan.r_tip - self.fan.r_hub) + m.secondary_drag * cl * cl;
-        if m.friction {
-            cd += 2.656 / re.sqrt();
-        }
+        let cd_f = if m.friction { 2.656 / re.sqrt() } else { 0.0 };
+        let t = fx.thickness_ratio;
+        let f_form = 1.0 + 2.0 * t + 60.0 * t.powi(4);
+        let cl_frac = if m.cl_max > 0.0 {
+            (cl / m.cl_max).abs().min(1.5)
+        } else {
+            0.0
+        };
+        let cd_prof = cd_f * f_form + fx.cd_pressure_min + fx.loading_drag * cl_frac * cl_frac;
+        let cos_g = g.stagger.cos().abs().max(0.25);
+        let blockage = (sigma * (t + 0.5 * cd_prof) / cos_g).min(0.45);
+        let inv_open = 1.0 / (1.0 - blockage);
+        let cd_cas = cd_prof * inv_open * inv_open + fx.solidity_drag * sigma * sigma * cd_prof;
+        let mut cd = m.annulus_drag * s / (self.fan.r_tip - self.fan.r_hub) + m.secondary_drag * cl * cl + cd_cas;
         if branch == Branch::Stalled {
             cd += m.cd_normal * ae.sin() * ae.sin();
         }
@@ -405,7 +567,7 @@ impl FanRom {
         let b = w.atan2(cx);
         let ae = b - g.stagger - g.a0;
         let re = w_inf * g.chord / op.nu;
-        let (cl, cd) = self.coefficients(branch, ae, re, g.pitch);
+        let (cl, cd) = self.coefficients(branch, ae, re, g);
         let q_dyn = 0.5 * op.rho * w_inf * w_inf * g.chord;
         let (f_theta, f_x) = (
             q_dyn * (cl * b.cos() + cd * b.sin()),
@@ -455,7 +617,11 @@ impl FanRom {
     /// Strip solution with the registered branch rule: the attached root if it is attached, else the post-stall root if it
     /// is stalled, else the capped root.
     fn solve_strip(&self, g: &StripGeom, op: &Operating, cx: f64) -> Result<Strip, String> {
-        let a_s = self.model.cl_max / TAU;
+        let k_lift = match self.pc_effects {
+            Some(_) => cascade_lift_factor(g.chord / g.pitch, g.stagger),
+            None => 1.0,
+        };
+        let a_s = self.model.cl_max / (TAU * k_lift);
         let s = self.solve_branch(g, op, cx, Branch::Attached)?;
         if s.alpha_e.abs() <= a_s {
             return Ok(s);
@@ -569,6 +735,77 @@ impl FanRom {
             .map(|s| (s.r, bl * s.f_x * s.dr, bl * s.f_theta * s.r * s.dr))
             .collect();
         tonal_harmonic(self.fan.n_blades, op.omega(), c0, &loads, m, r_obs, theta).map_err(|e| e.to_string())
+    }
+
+    /// Unvalidated broadband turbulent + steady-loading noise proxy at distance `r_obs` and angle `theta`: incoherent sum
+    /// over all `B` blades of Ffowcs Williams & Hall (1970) `U^5` trailing-edge turbulent boundary-layer scattering (with
+    /// solidity wake-interaction amplification) and tip-clearance vortex broadband scattering, combined in quadrature with
+    /// the Gutin BPF1 RMS tone.
+    pub fn broadband_noise(
+        &self,
+        op: &Operating,
+        point: &FanPoint,
+        c0: f64,
+        r_obs: f64,
+        theta: f64,
+    ) -> Result<BroadbandNoise, String> {
+        if !(c0.is_finite() && c0 > 0.0) {
+            return Err(format!("c0: must be finite and positive (got {c0})"));
+        }
+        if !(r_obs.is_finite() && r_obs > 0.0) {
+            return Err(format!("r_obs: must be finite and positive (got {r_obs})"));
+        }
+        let fx = self.pc_effects.unwrap_or_default();
+        fx.validate()?;
+        let tone1_pa = self.tone(op, point, c0, 1, r_obs, theta)?;
+        let bl = self.fan.n_blades as f64;
+        let span = self.fan.r_tip - self.fan.r_hub;
+        let mut te_power_w = 0.0;
+        for s in &point.strips {
+            let sigma = s.chord / s.pitch;
+            let cd_ann = self.model.annulus_drag * s.pitch / span;
+            let cd_visc = (s.cd - cd_ann).max(1e-4);
+            let delta_star = 0.9 * s.chord * cd_visc;
+            let cl_frac = if self.model.cl_max > 0.0 {
+                (s.cl / self.model.cl_max).abs().min(1.5)
+            } else {
+                0.0
+            };
+            let stall_bump = if s.branch == Branch::Attached { 0.0 } else { 0.10 };
+            let turb_i = fx.base_turb_intensity * (1.0 + 0.35 * cl_frac + fx.wake_turb_solidity * sigma) + stall_bump;
+            let u_t = s.w_inf * turb_i;
+            te_power_w += bl
+                * trailing_edge_power(fx.te_noise_k, op.rho, u_t, s.dr, delta_star, c0).map_err(|e| e.to_string())?;
+        }
+        let tip_power_w = match point.strips.last() {
+            Some(t) if self.fan.tip_gap > 0.0 && fx.tip_noise_k > 0.0 => {
+                let sigma_tip = t.chord / t.pitch;
+                let v_tip = t.w_inf * t.cl.abs().sqrt();
+                let i_tip = fx.tip_turb_intensity * (1.0 + 0.4 * sigma_tip);
+                let u_tip = v_tip * i_tip;
+                bl * trailing_edge_power(fx.tip_noise_k, op.rho, u_tip, t.chord, self.fan.tip_gap, c0)
+                    .map_err(|e| e.to_string())?
+            }
+            _ => 0.0,
+        };
+        let total_power_w = te_power_w + tip_power_w;
+        let spread = op.rho * c0 / (4.0 * PI * r_obs * r_obs);
+        let p_te_rms_pa = (spread * te_power_w).sqrt();
+        let p_tip_rms_pa = (spread * tip_power_w).sqrt();
+        let p_bb_rms_pa = (spread * total_power_w).sqrt();
+        let p_tone_rms = tone1_pa / 2.0_f64.sqrt();
+        let p_total_rms_pa = p_bb_rms_pa.hypot(p_tone_rms);
+        let spl_db = 20.0 * (p_total_rms_pa.max(1e-30) / 2e-5).log10();
+        Ok(BroadbandNoise {
+            te_power_w,
+            tip_power_w,
+            total_power_w,
+            p_te_rms_pa,
+            p_tip_rms_pa,
+            p_bb_rms_pa,
+            p_total_rms_pa,
+            spl_db,
+        })
     }
 }
 
@@ -713,7 +950,7 @@ pub fn free_vortex_design(
         let re = wi * g.chord / op.nu;
         // F_theta / (rho W^2 c / 2) = cl cos b + (cd0 + ks cl^2) sin b = t
         let t = 2.0 * g.pitch * cx * dc / (wi * wi * g.chord);
-        let (_, cd0) = rom.coefficients(Branch::Attached, 0.0, re, g.pitch); // secondary term zero at cl = 0
+        let (_, cd0) = rom.coefficients(Branch::Attached, 0.0, re, g); // secondary term zero at cl = 0
         let (a, rhs) = (model.secondary_drag * b.sin(), t - cd0 * b.sin());
         let disc = b.cos() * b.cos() + 4.0 * a * rhs;
         if disc < 0.0 {
@@ -755,5 +992,71 @@ mod tests {
     fn operating_point_reports_no_intersection_with_its_range() {
         let e = operating_point(&|q: f64| Ok(10.0 - q), &SystemCurve { k: 100.0, l: 20.0 }, 1.0, 2.0, 10).unwrap_err();
         assert!(e.contains("no intersection") && e.contains("1.000000e0"), "{e}");
+    }
+
+    #[test]
+    fn cascade_lift_factor_matches_weinig_limits() {
+        assert!((cascade_lift_factor(0.0, 0.0) - 1.0).abs() < 1e-12);
+        let s = 1.2;
+        let exact_zero_stagger = (2.0 / (PI * s)) * (0.5 * PI * s).tanh();
+        assert!((cascade_lift_factor(s, 0.0) - exact_zero_stagger).abs() < 1e-14);
+        assert!(cascade_lift_factor(0.5, 1.1) > cascade_lift_factor(1.5, 1.1));
+        assert!(cascade_lift_factor(1.5, 1.1) > cascade_lift_factor(2.5, 1.1));
+    }
+
+    #[test]
+    fn pc_fan_effects_increase_broadband_noise_with_blades_and_preserve_energy_balance() {
+        let op = Operating {
+            rpm: 1800.0,
+            rho: 1.2,
+            nu: 1.5e-5,
+        };
+        let sys = SystemCurve { k: 12000.0, l: 0.0 };
+        let mk_fan = |n_blades: usize| RomFan {
+            n_blades,
+            r_hub: 0.020,
+            r_tip: 0.0585,
+            tip_gap: 0.0012,
+            family: SectionFamily::Naca4,
+            sections: vec![
+                RomSection {
+                    radius: 0.020,
+                    chord: 0.021,
+                    stagger: 50.0_f64.to_radians(),
+                    camber: 0.06,
+                    camber_pos: 0.4,
+                },
+                RomSection {
+                    radius: 0.039,
+                    chord: 0.028,
+                    stagger: 65.0_f64.to_radians(),
+                    camber: 0.05,
+                    camber_pos: 0.4,
+                },
+                RomSection {
+                    radius: 0.0585,
+                    chord: 0.030,
+                    stagger: 73.0_f64.to_radians(),
+                    camber: 0.04,
+                    camber_pos: 0.4,
+                },
+            ],
+        };
+        let mut spls = Vec::new();
+        for b in [5, 7, 9, 11] {
+            let rom = FanRom::new_with_effects(mk_fan(b), RomModel::default(), PcFanEffects::default()).unwrap();
+            let q_hi = rom.area() * op.omega() * rom.fan.r_tip;
+            let (_, p) = rom.operating_point(&op, &sys, 1e-3 * q_hi, q_hi, 100).unwrap();
+            let residual = (p.power - (p.q * p.dp_t + p.drag_loss + p.tip_loss)).abs() / p.power;
+            assert!(residual < 1e-12, "B={b} energy residual {residual:e}");
+            let bb = rom.broadband_noise(&op, &p, 343.0, 1.0, PI / 2.0).unwrap();
+            assert!(bb.p_bb_rms_pa > 1e-5 && bb.spl_db > 10.0 && bb.spl_db < 60.0);
+            spls.push((b, p.q * 2118.88, p.eta_s, bb.spl_db));
+        }
+        // Broadband turbulence noise increases monotonically with blade count at fixed chord & RPM.
+        assert!(
+            spls[0].3 < spls[1].3 && spls[1].3 < spls[2].3 && spls[2].3 < spls[3].3,
+            "expected SPL to rise with blade count: {spls:?}"
+        );
     }
 }

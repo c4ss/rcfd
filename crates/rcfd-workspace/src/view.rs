@@ -1172,47 +1172,90 @@ fn lut_index(v: f32, lo: f32, hi: f32) -> usize {
     ((t * 255.0 + 0.5).floor() as usize).min(255)
 }
 
-/// Projected surface for an exported SVG: drawn solid triangles (`order`, `tris`), optional translucent context
-/// wireframe triangles (`wire`, for 3D fluid-envelope boundaries around internal solid walls), `is_3d`, and viewBox.
+/// Projected surface for an exported SVG: drawn solid triangles (`order`, `tris`, Lambert `shades`), optional
+/// translucent context wireframe triangles (`wire`, for 3D fluid-envelope boundaries around internal solid walls),
+/// `is_3d`, and viewBox.
 struct ProjectedSurface {
     order: Vec<usize>,
     tris: Vec<[[f64; 2]; 3]>,
+    shades: Vec<f64>,
     wire: Vec<[[f64; 2]; 3]>,
     is_3d: bool,
     width: f64,
     height: f64,
 }
 
-/// True for a 3D boundary patch that represents an open fluid cap or outer casing rather than an internal solid body.
-fn is_envelope_patch(p: &rcfd_mesh::Patch) -> bool {
+/// Patch role for 3D surface rendering: `0` = internal solid wall, `1` = outer shroud/casing ring, `2` = open fluid
+/// cap or periodic seam.
+fn patch_role(p: &rcfd_mesh::Patch) -> u8 {
     if p.kind != rcfd_mesh::PatchKind::Wall {
-        return true;
+        return 2;
     }
     let name = p.name.to_ascii_lowercase();
-    matches!(
-        name.as_str(),
-        "shroud" | "casing" | "farfield" | "inlet" | "outlet" | "seam_lo" | "seam_hi"
-    )
+    if matches!(name.as_str(), "shroud" | "casing") {
+        1
+    } else if matches!(name.as_str(), "farfield" | "inlet" | "outlet" | "seam_lo" | "seam_hi") {
+        2
+    } else {
+        0
+    }
 }
 
-/// Triangle-to-envelope classification matching `rcfd_post::picture::store_surface`'s boundary-face iteration order.
-fn surface_envelope_mask(mesh: &rcfd_mesh::Mesh, n_triangles: usize) -> Vec<bool> {
+/// Triangle-to-role classification matching `rcfd_post::picture::store_surface`'s boundary-face iteration order.
+fn surface_patch_roles(mesh: &rcfd_mesh::Mesh, n_triangles: usize) -> Vec<u8> {
     let t = mesh.topology();
-    let mut mask = Vec::with_capacity(n_triangles);
+    let mut roles = Vec::with_capacity(n_triangles);
     for f in t.neighbour.len()..t.owner.len() {
-        let env = mesh.patch_of_face(f).is_some_and(is_envelope_patch);
+        let role = mesh.patch_of_face(f).map_or(0, patch_role);
         let n_corners = t.face_offsets[f + 1] - t.face_offsets[f];
         for _ in 0..n_corners.saturating_sub(2) {
-            mask.push(env);
+            roles.push(role);
         }
     }
-    mask
+    roles
+}
+
+/// Rotational periodicity of a sector mesh (e.g. one blade passage of an `X`-blade axial fan), returning the
+/// rotation definition and full-360° copy count `X` when the cyclic angle cleanly divides `2π`.
+fn periodic_rotor(mesh: &rcfd_mesh::Mesh) -> Option<(rcfd_mesh::PeriodicRotation, usize)> {
+    for p in mesh.patches() {
+        if p.kind == rcfd_mesh::PatchKind::Cyclic {
+            if let Some(rot) = p.rotation {
+                let ang = rot.angle.abs();
+                if ang > 1e-4 {
+                    let n = (std::f64::consts::TAU / ang).round() as usize;
+                    if (2..=36).contains(&n) && (n as f64 * ang - std::f64::consts::TAU).abs() < 0.05 {
+                        return Some((rot, n));
+                    }
+                }
+            }
+        }
+    }
+    None
+}
+
+/// Rotate point `pt` by angle `theta` (radians, right-handed) about the axis `axis` (unit) through `origin`.
+fn rotate_about(pt: [f64; 3], origin: [f64; 3], axis: [f64; 3], theta: f64) -> [f64; 3] {
+    let (s, c) = theta.sin_cos();
+    let t = 1.0 - c;
+    let r = [pt[0] - origin[0], pt[1] - origin[1], pt[2] - origin[2]];
+    let d = axis[0] * r[0] + axis[1] * r[1] + axis[2] * r[2];
+    let cx = [
+        axis[1] * r[2] - axis[2] * r[1],
+        axis[2] * r[0] - axis[0] * r[2],
+        axis[0] * r[1] - axis[1] * r[0],
+    ];
+    [
+        origin[0] + r[0] * c + cx[0] * s + axis[0] * d * t,
+        origin[1] + r[1] * c + cx[1] * s + axis[1] * d * t,
+        origin[2] + r[2] * c + cx[2] * s + axis[2] * d * t,
+    ]
 }
 
 /// Project `s` for SVG export: face-on orthographic along the thin axis for 2D stores, and 3D isometric (Studio's
 /// fitted `(1, -1.6, 1.1)` direction) for 3D stores. When a 3D mesh has internal solid walls (e.g. a fan blade and
-/// hub) inside a fluid envelope, the solid walls are drawn back-to-front in full colour and the inlet/outlet caps are
-/// drawn as subtle wireframe context so the 3D body is not hidden behind an end cap.
+/// hub) inside a fluid envelope, the solid walls are drawn back-to-front in full colour; rotationally periodic
+/// sectors are replicated `X` times around 360° into the full rotor with a translucent circular shroud ring.
 fn projected(s: &rcfd_post::picture::StoreSurface, mesh: &rcfd_mesh::Mesh) -> ProjectedSurface {
     let layers = rcfd_post::picture::mesh_layers(s, mesh.n_cells());
     if layers.two_d {
@@ -1260,9 +1303,11 @@ fn projected(s: &rcfd_post::picture::StoreSurface, mesh: &rcfd_mesh::Mesh) -> Pr
                 })
             })
             .collect();
+        let n_keep = keep.len();
         return ProjectedSurface {
             order: keep.iter().map(|k| k.1).collect(),
             tris,
+            shades: vec![1.0; n_keep],
             wire: Vec::new(),
             is_3d: false,
             width,
@@ -1270,8 +1315,6 @@ fn projected(s: &rcfd_post::picture::StoreSurface, mesh: &rcfd_mesh::Mesh) -> Pr
         };
     }
 
-    // 3D isometric orthographic projection; lay z-elongated domains (e.g. axial passages) horizontally so the flow
-    // reads left-to-right and the blade/radial direction rises upward, keeping a landscape aspect ratio.
     let norm = |v: [f64; 3]| {
         let m = (v[0] * v[0] + v[1] * v[1] + v[2] * v[2]).sqrt().max(1e-30);
         [v[0] / m, v[1] / m, v[2] / m]
@@ -1284,52 +1327,146 @@ fn projected(s: &rcfd_post::picture::StoreSurface, mesh: &rcfd_mesh::Mesh) -> Pr
             a[0] * b[1] - a[1] * b[0],
         ]
     };
+
+    let roles = surface_patch_roles(mesh, s.n_triangles());
+    let has_solid = roles.len() == s.n_triangles() && roles.contains(&0);
+    let has_env = roles.len() == s.n_triangles() && roles.iter().any(|&r| r > 0);
+    let split_solid = has_solid && has_env;
+    let rotor = if split_solid { periodic_rotor(mesh) } else { None };
+
     let ext = [
         layers.max[0] - layers.min[0],
         layers.max[1] - layers.min[1],
         layers.max[2] - layers.min[2],
     ];
-    let (view, up0) = if ext[2] > ext[0] && ext[2] > ext[1] {
-        (norm([0.55, 1.4, -0.65]), [1.0, 0.0, 0.0])
+    let (view, up0) = if rotor.is_some() {
+        // Front 3/4 view (~26 deg off-axis) looking into the circular face of the full 360° rotor.
+        (norm([0.28, -0.34, -0.90]), [0.0, 1.0, 0.0])
+    } else if ext[2] > ext[0] && ext[2] > ext[1] {
+        (norm([0.65, -0.55, -1.15]), [1.0, 0.0, 0.0])
     } else {
         (norm([1.0, -1.6, 1.1]), [0.0, 0.0, 1.0])
     };
     let right = norm(cross(up0, view));
     let up = cross(view, right);
+    let light = norm([
+        0.55 * view[0] + 0.45 * up[0] - 0.35 * right[0],
+        0.55 * view[1] + 0.45 * up[1] - 0.35 * right[1],
+        0.55 * view[2] + 0.45 * up[2] - 0.35 * right[2],
+    ]);
 
-    let env_mask = surface_envelope_mask(mesh, s.n_triangles());
-    let has_solid = env_mask.len() == s.n_triangles() && env_mask.iter().any(|&e| !e);
-    let has_env = env_mask.len() == s.n_triangles() && env_mask.iter().any(|&e| e);
-    let split_solid = has_solid && has_env;
+    let (n_copies, origin, axis, step) = match rotor {
+        Some((rot, n)) => (n, rot.origin, norm(rot.axis), std::f64::consts::TAU / n as f64),
+        None => (1, [0.0; 3], [0.0, 0.0, 1.0], 0.0),
+    };
 
-    let mut solid: Vec<(f64, usize)> = Vec::new();
-    let mut wire_ids: Vec<usize> = Vec::new();
-    for t in 0..s.n_triangles() {
-        let p = [0, 1, 2].map(|k| s.corner(t, k).map(f64::from));
-        let depth = (dot(p[0], view) + dot(p[1], view) + dot(p[2], view)) / 3.0;
-        if split_solid {
-            if !env_mask[t] {
-                solid.push((depth, t));
-            } else {
-                wire_ids.push(t);
+    let mut solid: Vec<(f64, usize, [[f64; 3]; 3], f64)> = Vec::new();
+    let mut wire_pts: Vec<[[f64; 3]; 3]> = Vec::new();
+    for copy in 0..n_copies {
+        let theta = copy as f64 * step;
+        for t in 0..s.n_triangles() {
+            let role = if split_solid { roles[t] } else { 0 };
+            if split_solid && n_copies > 1 && role == 2 {
+                // Omit internal periodic seams and inlet/outlet caps when tiling the full 360° rotor.
+                continue;
             }
-        } else {
+            let p = [0, 1, 2].map(|k| {
+                let c = s.corner(t, k).map(f64::from);
+                if copy == 0 {
+                    c
+                } else {
+                    rotate_about(c, origin, axis, theta)
+                }
+            });
             let u = [p[1][0] - p[0][0], p[1][1] - p[0][1], p[1][2] - p[0][2]];
             let v = [p[2][0] - p[0][0], p[2][1] - p[0][1], p[2][2] - p[0][2]];
-            if dot(cross(u, v), view) > 0.0 {
-                solid.push((depth, t));
+            let n = cross(u, v);
+            let facing = dot(n, view);
+            if split_solid {
+                if role == 0 {
+                    // Boundary normals point out of the fluid (into the solid), so fluid-facing solid faces have facing < 0.
+                    if facing < 0.0 {
+                        let depth = (dot(p[0], view) + dot(p[1], view) + dot(p[2], view)) / 3.0;
+                        let n_out = norm([-n[0], -n[1], -n[2]]);
+                        let lambert = dot(n_out, light).clamp(0.0, 1.0);
+                        let shade = 0.42 + 0.58 * lambert;
+                        solid.push((depth, t, p, shade));
+                    }
+                } else {
+                    wire_pts.push(p);
+                }
+            } else if facing > 0.0 {
+                let depth = (dot(p[0], view) + dot(p[1], view) + dot(p[2], view)) / 3.0;
+                let n_out = norm(n);
+                let shade = 0.42 + 0.58 * dot(n_out, light).clamp(0.0, 1.0);
+                solid.push((depth, t, p, shade));
+            }
+        }
+    }
+    // Close the front circular face of a periodic rotor hub (unmeshed motor nose) so rear blades never bleed
+    // through an open cylinder. Uses sentinel index `usize::MAX` so field plots never assign a synthetic scalar value.
+    if n_copies > 1 && !solid.is_empty() {
+        let mut r_hub = f64::INFINITY;
+        let mut z_min = f64::INFINITY;
+        let mut z_max = f64::NEG_INFINITY;
+        for &(_, _, p, _) in &solid {
+            for c in p {
+                let d = [c[0] - origin[0], c[1] - origin[1], c[2] - origin[2]];
+                let z = dot(d, axis);
+                let rad =
+                    ((d[0] - z * axis[0]).powi(2) + (d[1] - z * axis[1]).powi(2) + (d[2] - z * axis[2]).powi(2)).sqrt();
+                if rad > 1e-6 {
+                    r_hub = r_hub.min(rad);
+                }
+                z_min = z_min.min(z);
+                z_max = z_max.max(z);
+            }
+        }
+        if r_hub.is_finite() && z_min.is_finite() {
+            let z_front = if dot(axis, view) < 0.0 { z_min } else { z_max };
+            let cap_n = if dot(axis, view) < 0.0 {
+                [-axis[0], -axis[1], -axis[2]]
+            } else {
+                axis
+            };
+            let cap_shade = 0.42 + 0.58 * dot(cap_n, light).clamp(0.0, 1.0);
+            let center = [
+                origin[0] + z_front * axis[0],
+                origin[1] + z_front * axis[1],
+                origin[2] + z_front * axis[2],
+            ];
+            // Build an orthonormal basis (e1, e2) perpendicular to `axis`.
+            let ref_v = if axis[0].abs() < 0.9 {
+                [1.0, 0.0, 0.0]
+            } else {
+                [0.0, 1.0, 0.0]
+            };
+            let e1 = norm(cross(axis, ref_v));
+            let e2 = cross(axis, e1);
+            let segs = (n_copies * 4).max(36);
+            let ring_pt = |i: usize| {
+                let a = std::f64::consts::TAU * (i as f64) / (segs as f64);
+                let (sa, ca) = a.sin_cos();
+                [
+                    center[0] + r_hub * (ca * e1[0] + sa * e2[0]),
+                    center[1] + r_hub * (ca * e1[1] + sa * e2[1]),
+                    center[2] + r_hub * (ca * e1[2] + sa * e2[2]),
+                ]
+            };
+            for i in 0..segs {
+                let p = [center, ring_pt(i), ring_pt((i + 1) % segs)];
+                let depth = (dot(p[0], view) + dot(p[1], view) + dot(p[2], view)) / 3.0;
+                solid.push((depth, usize::MAX, p, cap_shade));
             }
         }
     }
     solid.sort_by(|x, y| x.0.total_cmp(&y.0).then(x.1.cmp(&y.1)));
 
     let (mut umin, mut umax, mut vmin, mut vmax) = (f64::INFINITY, f64::NEG_INFINITY, f64::INFINITY, f64::NEG_INFINITY);
-    let bounds_iter = solid.iter().map(|&(_, t)| t).chain(wire_ids.iter().copied());
-    for t in bounds_iter {
-        for k in 0..3 {
-            let c = s.corner(t, k).map(f64::from);
-            let pu = dot(c, right);
-            let pv = dot(c, up);
+    for p in solid.iter().map(|x| &x.2).chain(wire_pts.iter()) {
+        for c in p {
+            let pu = dot(*c, right);
+            let pv = dot(*c, up);
             umin = umin.min(pu);
             umax = umax.max(pu);
             vmin = vmin.min(pv);
@@ -1337,20 +1474,24 @@ fn projected(s: &rcfd_post::picture::StoreSurface, mesh: &rcfd_mesh::Mesh) -> Pr
         }
     }
     let (ru, rv) = ((umax - umin).max(1e-30), (vmax - vmin).max(1e-30));
-    let pad = 16.0;
+    let pad = 14.0;
     let scale = ((PIC_W - 2.0 * pad) / ru).min((PIC_H - 2.0 * pad) / rv);
     let (width, height) = (ru * scale + 2.0 * pad, rv * scale + 2.0 * pad);
-    let to_2d = |t: usize| {
+    let to_2d = |p: &[[f64; 3]; 3]| {
         [0, 1, 2].map(|k| {
-            let c = s.corner(t, k).map(f64::from);
-            [pad + (dot(c, right) - umin) * scale, pad + (vmax - dot(c, up)) * scale]
+            [
+                pad + (dot(p[k], right) - umin) * scale,
+                pad + (vmax - dot(p[k], up)) * scale,
+            ]
         })
     };
-    let tris = solid.iter().map(|&(_, t)| to_2d(t)).collect();
-    let wire = wire_ids.iter().map(|&t| to_2d(t)).collect();
+    let tris = solid.iter().map(|x| to_2d(&x.2)).collect();
+    let shades = solid.iter().map(|x| x.3).collect();
+    let wire = wire_pts.iter().map(to_2d).collect();
     ProjectedSurface {
-        order: solid.iter().map(|k| k.1).collect(),
+        order: solid.iter().map(|x| x.1).collect(),
         tris,
+        shades,
         wire,
         is_3d: true,
         width,
@@ -1743,8 +1884,12 @@ impl Workspace {
                 for c in &proj.wire {
                     svg.push_str(&format!("<polygon class=\"xv-env-tri\" points=\"{}\"/>", points(c)));
                 }
-                for c in &proj.tris {
-                    svg.push_str(&format!("<polygon class=\"xv-mesh-tri\" points=\"{}\"/>", points(c)));
+                for ((t, c), shade) in proj.order.iter().zip(&proj.tris).zip(&proj.shades) {
+                    let cls = if *t == usize::MAX { "xv-hub-cap" } else { "xv-mesh-tri" };
+                    svg.push_str(&format!(
+                        "<polygon class=\"{cls}\" data-s=\"{shade:.2}\" points=\"{}\"/>",
+                        points(c)
+                    ));
                 }
                 svg.push_str("</svg>");
                 PanelOutput {
@@ -1918,12 +2063,16 @@ impl Workspace {
                 }
                 let tri_class = if proj.is_3d { " class=\"xv-solid-tri\"" } else { "" };
                 for (t, c) in proj.order.iter().zip(&proj.tris) {
-                    let k = lut_index(at(surf.cells[*t]), lo, hi);
-                    svg.push_str(&format!(
-                        "<polygon{tri_class} points=\"{}\" fill=\"{}\"/>",
-                        points(c),
-                        lut_hex(k)
-                    ));
+                    if *t == usize::MAX {
+                        svg.push_str(&format!("<polygon class=\"xv-hub-cap\" points=\"{}\"/>", points(c)));
+                    } else {
+                        let k = lut_index(at(surf.cells[*t]), lo, hi);
+                        svg.push_str(&format!(
+                            "<polygon{tri_class} points=\"{}\" fill=\"{}\"/>",
+                            points(c),
+                            lut_hex(k)
+                        ));
+                    }
                 }
                 svg.push_str("</svg>");
                 let mut legend =

@@ -157,6 +157,11 @@ body {
   stroke-opacity: 0.18;
   stroke-width: 0.35;
 }
+.xv-hub-cap {
+  fill: var(--role-row-hover);
+  stroke: var(--role-row-hover);
+  stroke-width: 0.5;
+}
 .xv-plot {
   display: block;
   width: 100%;
