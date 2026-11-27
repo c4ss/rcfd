@@ -199,3 +199,13 @@ D1, D2, N1, G1, G2, E1, E2, L1 and L2 hold, M1 to M5 and M7 are caught by the te
 > Status: done.
 
 > Note: ADR 0838, 2026-11-27, done: show_view's description names F-976's seven kinds, the setting kind, ADR 0807's mesh-of-a-case and monitor-of-a-case forms, the process panel and ADR 0817's run form (22 of 22 phrases found, the old text missing exactly 6); no golden holds show_view, so no golden byte changed and nothing is re-recorded.
+
+## Addendum 2: L3 (2026-11-27)
+
+Run once each after addendum 1 was committed (9d06b751).
+
+| Id | Limit | Measured | Met |
+|---|---|---|---|
+| L3 | pass (process report: only a generated file not current may fail) | `docs_site` 2 passed, 0 failed; `roadmap_proposals.py check docs/roadmap/proposals/0838-F-987.json` exit 0 ("F-987: todo -> done; note + 333 characters"); `process_report.py --check` 1 failure, only "generated file is not current: docs/adr/index.md", left to the lead (rule 9) | yes |
+
+With L3 met, F-987 is **done** by the registered rule.
