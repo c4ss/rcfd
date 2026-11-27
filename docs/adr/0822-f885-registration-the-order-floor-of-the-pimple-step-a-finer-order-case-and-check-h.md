@@ -373,3 +373,9 @@ The same entries are in `docs/roadmap/proposals/0822-F-885.json` (form 1 of ADR 
 `python scripts/roadmap_proposals.py check`. No follow-up item is proposed (question 3).
 
 Generated pages that this work may leave not current, for the lead (rule 9): `docs/adr/index.md` (ADR 0822 is new).
+
+## Answers of the maintainer (2026-11-26), written by the lead
+
+1. Option (a): a diagnosis under F-885 of the kept gradient's lag, with its arms fixed in advance, ADR 0824; taken by the lead on the maintainer's standing instruction of 2026-11-26 (go with the recommended option always).
+2. Option (a): the commutator floor of the default step stays recorded; order checks use the opt-in `rhie_chow_step_consistent` or a finer mesh; taken by the lead on the maintainer's standing instruction of 2026-11-26 (go with the recommended option always).
+3. The recommendation: no new item; taken by the lead on the maintainer's standing instruction of 2026-11-26 (go with the recommended option always).
