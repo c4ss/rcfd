@@ -262,3 +262,145 @@ following is fixed now:
    the pimple step on periodic faces and is not a property of the remedy; if D-c gives `p_f >= 1.9`, the lagged periodic
    partner carries it; if D-b does, the outer loop. The diagnosis decides nothing for this registration. It informs the
    open questions.
+
+## Addendum 1: results
+
+Written 2026-11-27, after the runs. Commits on the branch, from e60fd829: dc737791 (this registration, alone), 36c9be6b
+(the test file; the registered run of O, S, KC and C5 was made from it), 1d023bd8 (amendment 1, alone), 557fd6e1 (the
+amendment's test changes and the diagnosis record), bea7c041 (the records, the mutation log, the committed mutation M3),
+d41f7e19 (a type alias for clippy, deviation 2), and the commit of this addendum with the rule 7 log and the proposal file.
+Records in `docs/investigations/f885-frozen-convection-check-h/`: `gate.log`, `diagnosis.log`, `mutations.log`,
+`rule7.log`. No file under `crates/*/src` changed.
+
+### The sentence
+
+**The order check does not decide, so check H was not run.** On the registered Taylor-Green set-up the pimple step with
+BDF2 is first order in `dt` with the setting off (`p_f` 1.015), and the same with it on (1.061), against 1.9: the control
+O2 is missed, so O does not decide (amendment 1). The diagnosis shows that the first order belongs to the set-up, not to
+the remedy: central convection gives 1.012, and 20 outer iterations or the extrapolated periodic partner leave the OFF
+numbers unchanged to five digits. The steady check holds: with the setting on and off the cavity reaches the same steady
+state to 3.4e-13 (velocity) and 3.3e-13 (flux), against 1e-8. By the registered rule F-885 stays **partial**.
+
+### Table of checks
+
+| Id | Limit | Measured | Met |
+| --- | --- | --- | --- |
+| A3 to A6 | as registered | check H not run (section 5: it runs only if O and S hold) | not run |
+| O1 | `p_f(ON) >= 1.9` | 1.0609 (`e` 1.1046e-3, 4.8429e-4, 2.3214e-4; `p_c` 1.1896) | no |
+| O2 | `p_f(OFF) >= 1.9` | 1.0151 (`e` 5.1468e-4, 2.2644e-4, 1.1204e-4; `p_c` 1.1846) | no: O does not decide |
+| O3 | `> 1e-9` | 4.1524e-4 | yes |
+| S1 | within 5 000 steps | OFF 211, ON 210 steps | yes |
+| S2 | `<= 1e-8` | velocity 3.3828e-13, flux 3.3426e-13 | yes |
+| S3 | `> 1e-6` | 8.3136e-3 | yes |
+| KC | classed | OFF: 20 of 20 steps meet E-1, `d_5 / d_1` median 3.02e-3; ON: 20 of 20, median 2.95e-3 | classed |
+| SR | as registered | not run (no record of check H; amendment 1) | not run |
+| C5 | each as built | each of the seven as built | yes |
+| G1 | as registered | not run (no record of check H; amendment 1) | not run |
+| B3 | passes, file unchanged | `baseline_hashes`: 3 passed, 1 ignored; `baseline_hashes.rs` unchanged | yes |
+| D1 | as stated | `git diff --name-only e60fd829` names the new test file, its patch, this ADR, the four logs and the proposal file; nothing under `crates/*/src`, no roadmap, ledger, golden or existing test file; the seven F-885 patches and the new one apply | yes |
+| P | rule 7 | see "The checks of rule 7"; clippy failed at the first run (deviation 2) | met after deviation 2 |
+
+Beside, without a limit: `e_ON / e_OFF` 2.15, 2.14, 2.07; `abs(p_f(ON) - p_f(OFF))` 0.046. SL (the limiter with
+`outer_frozen_limiter` in both arms): 207 and 206 steps, velocity 5.39e-13, flux 5.02e-13. Wall time of the four gate
+tests together: 20.9 s on the shared machine.
+
+### The diagnosis (amendment 1, item 4)
+
+| Arm | `e` at 0.1, 0.05, 0.025 | `p_c` | `p_f` |
+| --- | --- | --- | --- |
+| D-a central | 5.0673e-4, 2.2794e-4, 1.1304e-4 | 1.1526 | 1.0118 |
+| D-b linear upwind, `n_outer` 20 | 5.1468e-4, 2.2644e-4, 1.1204e-4 | 1.1846 | 1.0151 |
+| D-c linear upwind, `periodic_partner_extrapolated` | 5.1468e-4, 2.2644e-4, 1.1204e-4 | 1.1846 | 1.0151 |
+| D-d linear upwind, implicit Euler | 2.3297e-3, 1.1465e-3, 5.5472e-4 | 1.0229 | 1.0474 |
+
+None of the three readings fixed in amendment 1 applies. D-a is also first order, so the first order does not belong to the
+linear-upwind path. D-b and D-c equal the OFF arm to five digits, so neither the outer loop nor the periodic partner
+carries it. BDF2's error is 4.5 times smaller than Euler's at equal `dt` but falls at the same rate: an `O(dt)` error common
+to every arm dominates it. That D-b equals OFF exactly suggests that more outer iterations change nothing on this set-up.
+One reading, from the code and not shown by a run: the outer loop may end early on a tolerance of the `piso` settings, or
+the start (an implicit Euler first step from an exact field with no consistent face flux) leaves an error of order `dt`.
+I do not know which; ADR 0223's harness reported about order 2 for its PIMPLE-4 Taylor-Green rows. That harness measures
+its errors in its own way, which I did not read in full.
+
+### Mutations
+
+From `mutations.log` (git archive of 557fd6e1 in the scratch folder, its own target folder, the touched files' times set):
+
+| Id | What happened |
+| --- | --- |
+| K0 | unmutated: `f885_fc_steady` and `f885_fc_rules_on_built_records` pass |
+| M1 | the setting not read: **not caught** (the test fails unmutated). It changed what the test reads: O3 0 against 4.15e-4 |
+| M2 | the kept gradient from `u^n`: **not caught** (the test fails unmutated). It changed what the test reads: `e_ON` 2.8 times larger, `p_f(ON)` 1.0955 |
+| M3 | the kept gradient times 0.99: caught by `f885_fc_steady` (S2 2.95e-3 against 1e-8). Committed as the mutation patch |
+| M4 | the ratio of E-1 1e-1: caught by `f885_fc_rules_on_built_records` ("d5/d1 = 0.05 everywhere" got Steady) |
+| M5 | not run (no `H_dt.csv`; amendment 1) |
+
+Two of five caught, two not caught, one not run.
+
+### Deviations
+
+1. The registered run of O missed its control. Amendment 1 (1d023bd8) was written and committed before any further code or
+   run. It turned the order test into the ignored record `f885_fc_time_order_known_miss`, limits intact. It marked SR and G1
+   as not run, because their record files cannot exist. It moved the committed patch from M2 to M3. It fixed the diagnosis.
+2. The first run of clippy (at bea7c041) named one lint of the new test file, `type_complexity` in the diagnosis arms. The
+   fix in d41f7e19 is a type alias with no change of behaviour. `rustfmt --check` and clippy were run again on it and are
+   clean. No test was rerun for it.
+3. `cargo fmt -p rcfd-api --check` refuses on this machine (os error 206) and checks nothing. `rustfmt --check --edition
+   2021` of the new test file is the registered replacement.
+4. The rule 7 run of the new file's gate tests (S, KC, C5, at bea7c041) is the rule 7 check, not a second registered run.
+   It gave what the registered run gave.
+
+### What was not run
+
+Check H (A3 to A6), SR, G1, M5; any order case other than the registered one and its four diagnosis arms; the whole
+workspace suite.
+
+### The checks of rule 7
+
+From `rule7.log`, at bea7c041 unless stated: `cargo test -p rcfd-api --release --lib` 160 passed, 4 ignored; `--test
+f885_frozen_convection_check_h` 3 passed, 6 ignored; `--test f885_slow_outer_mode` 6 passed, 1 ignored; `--test
+f885_frozen_limiter` 7 passed, 1 ignored; `--test f885_alpha_free_face_flux` 5 passed, 3 ignored; `--test baseline_hashes` 3
+passed, 1 ignored. `rustfmt --check` of the test file clean; clippy as in deviation 2, clean at d41f7e19. `cargo test -p
+rcfd-cli --release --test docs_site`, `python scripts/roadmap_proposals.py check` and `python scripts/process_report.py
+--check` run at the commit of this addendum, as reported to the lead.
+
+### Size
+
+Size (agent): partial; 1; 0; 2; 230000
+
+### Decision by the registered rule
+
+**Partial.** O does not decide (O2 missed), so check H was not run. M1 and M2 are not caught, and M5, SR and G1 were not
+run. S, C5, B3 and D1 are met, P after deviation 2. What it would take: an order case on which the pimple step shows BDF2's
+order without the setting, then O on it as a new registration under F-885 (rule 13), then check H.
+
+## Open questions for the maintainer
+
+1. **The order case.** The registered Taylor-Green set-up is first order in `dt` with every scheme tried. Options:
+   * (a) A diagnosis registered under F-885 that finds why this harness is first order. The candidates are the start, an
+     early end of the outer loop, and how ADR 0223's harness measured its errors. Then O again on a corrected set-up,
+     registered before its run.
+   * (b) O on a case with no periodic faces whose BDF2 order the repository already holds: the wall-bounded mode of
+     `fractional_step.rs` `f2c` (order 2.07 there), built on the pimple step.
+   * (c) Accept the steady check and the first-order equality of the two arms (`p_f` 1.06 against 1.02) as enough for
+     check H. That changes the registered rule and is the maintainer's to make.
+
+   I recommend (a), with (b) as its control case in the same registration. A first-order pimple step on a smooth
+   periodic case bears on every BDF2 result of the transient solver, not only on this remedy.
+2. **The setting as a default.** Options: (a) keep it opt-in until check H has decided with it; (b) make it a default now.
+   I recommend (a). Its order is not shown, and as a default it would change every hash of a linear-upwind pimple run.
+3. **Scope.** No new item is proposed. The order case of question 1 adds no acceptance clause of F-885's own and would be
+   registered under it (rule 13).
+
+## For the lead: roadmap entries
+
+> Status proposed for F-885: partial.
+
+> Note entry: ADR 0821, 2026-11-27, partial: the remedy outer_frozen_convection_gradient (ADR 0820's opt-in, no library change, baseline hashes unchanged) gives the same steady answer on the cavity (velocity 3.4e-13, flux 3.3e-13 against 1e-8), but the registered BDF2 order check on the Taylor-Green vortex does not decide: its control without the setting is first order (p_f 1.015; 1.061 with it, against 1.9), and so is a central-convection arm, so check H was not run by the registered rule; held by crates/rcfd-api/tests/f885_frozen_convection_check_h.rs and docs/investigations/f885-frozen-convection-check-h.
+
+> Gap entry: Missing for done: a class by ADR 0183's rule. The remedy (outer_frozen_convection_gradient) holds a steady answer, but its BDF2 order check did not decide: on ADR 0821's Taylor-Green set-up the pimple step is first order with or without it (p_f 1.015 and 1.061, central 1.012). Needs an order case on which the pimple step shows BDF2's order without the setting, the remedy's order on it, then check H with the remedy.
+
+The same entries are in `docs/roadmap/proposals/0821-F-885.json` (form 1 of ADR 0755, base e60fd829), checked with
+`python scripts/roadmap_proposals.py check`. No follow-up item is proposed (question 3).
+
+Generated pages that this work may leave not current, for the lead (rule 9): `docs/adr/index.md` (ADR 0821 is new).
