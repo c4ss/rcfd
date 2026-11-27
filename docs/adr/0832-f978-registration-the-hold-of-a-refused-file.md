@@ -120,3 +120,83 @@ naming what failed. A missed limit is recorded with its number and held as a `*_
   rename.
 - A hold shorter than one loop of X3 that ends before the first look after a refusal: it is seen as free at once, and N
   is still its upper bound.
+
+## Addendum 1: results (2026-11-27)
+
+Written after the runs; nothing above is changed. Release profile, `CARGO_TARGET_DIR` in the scratch folder,
+`CARGO_BUILD_JOBS` 8. Each registered run was made once, in the registered order; the scratch logs are `run-<tag>.log`
+and `trace-<tag>.tsv`, analysed by `analyse3.py`. Another agent's solves kept the machine at 90 % to 100 % CPU.
+
+### Checks
+
+| Id | Limit | Measured | Met |
+|---|---|---|---|
+| TC3 | the test's pid seen on `arm-0.toml`; FREE − release 0 to 300 ms | pid seen (354 ms after the hold began; MARK picked up after 188 ms); **FREE − release 479 ms**; CPU 100 % to 100 % | **missed** (the second clause) |
+| H | at least 1 refusal, each with a FREE line | **15 refusals of 900** (11 files: 7 refused at edit1 only, 4 at edit1 and edit2), each after the 12-attempt budget (557 to 613 ms); CPU 90 % to 96 %, 28.99 s; **8 refusals without a FREE line** | **missed** (the second clause) |
+| R | 1.5 × N_max ≤ 2027 ms | the 7 with FREE: N = 1762, 1764, 1776, 1789, 1885, 1992, 2112 ms; the other 4 files were still held by `4:System` at X3's last look of the folder: N ≥ 3296, 8114, 9854 and 18810 ms (holds seen ≥ 2458, 7528, 9384, 18238 ms); so N_max ≥ 18810 ms | **missed**: F1 not made |
+| U0, U2, H2 | F1's | not run: F1 not made | not run |
+| B1 | every assertion | held: run finished, 10 steps, journal seq 1 to 5 against 1 to 5; CPU 100 % to 99 %, 7.57 s; X3 saw `4:System` holding `process-cavity.toml` (SEEN) without a refusal | **yes** |
+| B2 | as ADR 0826 | refused at `panels[0].kind` (1003) | **yes** |
+| B3 | as ADR 0826 | the description names `process`; the plain `read_view` has no `process` | **yes** |
+| T3 | 0 | 0 `rcfd-runner` of this work's target alive after B1 | yes |
+| L1, L2, L3 | pass, clean | in the last run, reported with the commit | see the report |
+
+Every hold seen during or after a refusal, in H and B1, was the System process (`4:System`, a kernel-mode handle); no
+other holder was seen on any case file. The holds split in two: 7 ended 1.16 to 1.51 s after the refusal (N 1.76 to
+2.11 s, already more than 2 s at the largest), and 4 lasted at least 2.5 s to 18.2 s, until the folder was removed;
+those 4 are exactly the files whose edit2 was refused too. A longer replace budget under 2 s would not have outlasted
+any of the 7 with margin, nor any of the 4 at all.
+
+**TC3's miss, diagnosed** (a timing in `tooltime3.ps1`, not a check, after TC3 and before H): one look took 76.5 ms and
+the loop's `Sleep(2)` 15.7 ms (the timer's resolution) at 85 % CPU, so a loop of two or three looks is about 170 to 245
+ms, and at 100 % CPU X3 was later; the limit of 300 ms assumed 215 ms. N is an upper bound by up to about 0.5 s; the
+lower bounds of the 4 long holds do not depend on it. The miss is held here with its number: TC3's limit is in the
+scratch analysis, not in an assertion of the test, so no `*_known_miss` test can carry it (deviation).
+
+### Mutations
+
+| Id | Mutation | Caught by | Result |
+|---|---|---|---|
+| M3 | X3 without the following of markers (`trace3-m3.ps1`), one run beside TC3 | TC3 | **caught**: the test's pid not seen on `arm-0.toml`, no MARK, no FREE |
+| M1 | `replace_if_hash_with` back to `DEFAULT_RETRY` | U2 | not made: it mutates F1, which was not made |
+| M2 | `EDIT_REPLACE_RETRY.attempts` 27 → 26 | U0 | not made: as M1 |
+
+No mutation patch is committed: the registered one (M1) mutates F1, which its rule did not allow; M3 mutates a scratch
+tool, not a committed file.
+
+Deviations: the diagnosis of TC3 above; nothing else. Not run: U0, U2, H2, M1, M2 (F1 not made), `rcfd-workspace
+--lib` (left out by the registration when F1 is not made).
+
+Actual size: partial; 1 further registration (below); 2 heavy runs (H and B1; TC3 and M3 are light); 2 questions; about
+100 000 bytes read.
+
+Decision by the registered rule: **partial**. B1 to B3 held in their one run, and M3 was caught. But TC3 missed its
+second clause, 8 refusals have no FREE line, the hold is 2 s or more (N_max ≥ 18.8 s), so F1 was not made, and M1 and
+M2 were not made.
+
+## Open questions for the maintainer
+
+- **Q1. A hold of 2 s or more** (the brief's question; scope): the System process holds a newly created case file for 1.2
+  s to more than 18 s after a refused replace, under load. (a) A registration under F-978 that runs H with the project
+  folder outside `%TEMP%` (the scratch folder on E:), and H with the case created by a plain write instead of the
+  hard link of `write_new`, so that the folder or the creation path is shown to cause or not cause the hold; (b) a longer
+  budget anyway (it would need more than 20 s, longer than `EDIT_LOCK_WAIT`, and blocks the lock that long); (c) an
+  `edit_case` refusal that names the hold as transient so the client can retry, without changing the replace. Recommendation:
+  (a), since neither budget nor retry is chosen well before the cause is known; not taken here, since it is a question of
+  scope.
+- **Q2. F-978's scope**: the acceptance of F-978 is the process view, which B1 to B3 have now held in two runs (ADR
+  0830, ADR 0832). (a) Keep the refused replace under F-978 (rule 13) until it is decided; (b) move it to a new item of
+  its own with the acceptance "0 refusals of 900 edits under arm H's load", and let the lead decide F-978 on its own
+  acceptance. Recommendation: (b), since the hold is a property of the replace on Windows, not of the process view.
+
+### For the lead: roadmap entries
+
+> Status: partial.
+
+> Note: ADR 0832, 2026-11-27, partial: B1 to B3 held in their one registered run (CPU 100 %); a trace that follows a refused case file showed the System process holding it in 15 of 15 refusals of 900 edits under load, 7 holds ending 1.2 to 1.5 s after the refusal and 4 lasting 2.5 s to more than 18 s, so the hold is 2 s or more and by its rule the longer replace budget F1 was not made.
+
+> Gap: B1 to B3 hold (ADR 0830, ADR 0832). Missing: a remedy for the refused first edit_case under load. The System process holds a newly created case file 1.2 s to more than 18 s after the refusal (15 refusals of 900 edits, ADR 0832), longer than any replace budget under 2 s; no rcfd process holds it. A registration that runs the arm outside the temp folder and with the case created without a hard link, to show what causes the hold.
+
+> Follow-ups: one under F-978 (rule 13), no new item unless the maintainer takes Q2 (b): "F-978: what makes the System process hold a new case file", arm H of ADR 0832 with the project outside the temp folder and with the case created by a plain write; its limits are registered in its ADR.
+
+The same entries are `docs/roadmap/proposals/0832-F-978.json`.

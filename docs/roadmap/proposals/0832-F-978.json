@@ -1,0 +1,10 @@
+{
+  "form": 1,
+  "adr": "0832",
+  "item": "F-978",
+  "base": "247a77c34c6a78f3f42151d1cc3c7509be222de1",
+  "status": "partial",
+  "note": "ADR 0832, 2026-11-27, partial: B1 to B3 held in their one registered run (CPU 100 %); a trace that follows a refused case file showed the System process holding it in 15 of 15 refusals of 900 edits under load, 7 holds ending 1.2 to 1.5 s after the refusal and 4 lasting 2.5 s to more than 18 s, so the hold is 2 s or more and by its rule the longer replace budget F1 was not made.",
+  "gap": "B1 to B3 hold (ADR 0830, ADR 0832). Missing: a remedy for the refused first edit_case under load. The System process holds a newly created case file 1.2 s to more than 18 s after the refusal (15 refusals of 900 edits, ADR 0832), longer than any replace budget under 2 s; no rcfd process holds it. A registration that runs the arm outside the temp folder and with the case created without a hard link, to show what causes the hold.",
+  "follow_ups": []
+}
