@@ -1,4 +1,4 @@
-# expect-fail: cargo test --release -p rcfd-mcp --test export_view_f980
+# expect-fail: cargo test --release -p rcfd-mcp --test export_view_f980 --target-dir target/mutation
 diff --git a/crates/rcfd-workspace/src/view.rs b/crates/rcfd-workspace/src/view.rs
 --- a/crates/rcfd-workspace/src/view.rs
 +++ b/crates/rcfd-workspace/src/view.rs
