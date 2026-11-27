@@ -242,3 +242,9 @@ does not decide, and L1 missed in `run_records_adr0734` by a cause of the set-up
 > Follow-ups: one under F-998 (rule 13), no new item: "F-998: the holds of the old and the plain write_new, interleaved", H and P of ADR 0834 in alternating blocks of 50 rounds, 2000 rounds each, with ADR 0834's floor and fraction; its other limits are registered in its ADR.
 
 The same entries are `docs/roadmap/proposals/0834-F-998.json`.
+
+## Addendum 2 (2026-11-27): L3
+
+Written after that run, on 53013224; nothing above is changed. `docs_site` 2 passed; `roadmap_proposals.py check` of
+`docs/roadmap/proposals/0834-F-998.json` passed (partial to partial, gap set); `process_report.py --check` gave 1
+failure, `docs/adr/index.md` not current, a generated file left to the lead (rule 9): **met** as registered.
