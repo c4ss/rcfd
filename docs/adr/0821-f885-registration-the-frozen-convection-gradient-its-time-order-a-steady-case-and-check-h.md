@@ -404,3 +404,9 @@ The same entries are in `docs/roadmap/proposals/0821-F-885.json` (form 1 of ADR 
 `python scripts/roadmap_proposals.py check`. No follow-up item is proposed (question 3).
 
 Generated pages that this work may leave not current, for the lead (rule 9): `docs/adr/index.md` (ADR 0821 is new).
+
+## Answers of the maintainer (2026-11-26), written by the lead
+
+1. Option (a), with (b) as its control: a diagnosis under F-885 of why the order case is first order, with the wall-bounded case f2c of `fractional_step.rs` as the control, then the order check again on a corrected set-up, ADR 0822; taken by the lead on the maintainer's standing instruction of 2026-11-26 (go with the recommended option always).
+2. The recommendation: the setting stays opt-in; taken by the lead on the maintainer's standing instruction of 2026-11-26 (go with the recommended option always).
+3. The recommendation: no new item; the order case is registered under F-885; taken by the lead on the maintainer's standing instruction of 2026-11-26 (go with the recommended option always).
