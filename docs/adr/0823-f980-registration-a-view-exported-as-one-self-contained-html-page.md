@@ -248,3 +248,14 @@ That test stays as an ignored record (`#[ignore]`, its code unchanged). The corr
 `r1_r2_r3_r4_r7_a1_the_pages_of_the_registered_set` is the same but asks `list_runs` with `limit: 100` (the f980 project
 has 6 runs). No row, limit, source, mutation or the decision rule changes. The binary was run a second time, with the
 same code, only to read the text of the failure (the first run's output had been filtered); it gave the same failure.
+
+## Amendment 2 (2026-11-27): the table check of R2 corrected
+
+Written after the run of the test of amendment 1 and before any further run; nothing above is changed.
+
+The run of `r1_r2_r3_r4_r7_a1_the_pages_of_the_registered_set` measured R1, R3, R4 and R2 for X1 and X2 and R1, R3, R4
+for X3, every value equal, then stopped at the test's own assertion that a table has two rows: true of X1 and X2 (two
+runs), not of the layouts of X3 to X5, whose table lists one run. A defect of the set-up, not of the page. That test
+stays as an ignored record. The corrected test `r1_r2_r3_r4_r7_a2_the_pages_of_the_registered_set` asks of a table one
+or more rows, as many steps as rows, each step `list_runs`'s, which is what R2 registered. No row, limit, source, mutation
+or the decision rule changes.
