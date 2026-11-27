@@ -1,0 +1,8 @@
+thread 'f885_fc_steady' (58352) panicked at crates\rcfd-api\tests\f885_frozen_convection_check_h.rs:1008:5:
+test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 8 filtered out; finished in 4.78s
+error: test failed, to rerun pass `-p rcfd-api --test f885_frozen_convection_check_h`
+f885_frozen_convection_check_h f885_fc_steady exit 101
+thread 'f885_oc_setting_acts' (61552) panicked at crates\rcfd-api\tests\f885_order_case.rs:884:5:
+test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 8 filtered out; finished in 1.18s
+error: test failed, to rerun pass `-p rcfd-api --test f885_order_case`
+f885_order_case f885_oc_setting_acts exit 101

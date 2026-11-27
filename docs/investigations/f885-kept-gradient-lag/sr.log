@@ -1,0 +1,7 @@
+# at 0661b643, 2026-11-27T04:39:57Z
+## f885_kg_short_run_on_the_check_h_path
+running 1 test
+F885-KG SR: 20 steps against the committed H_dt.csv, largest relative difference 4.603e-10 (limit 1e-6)
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 9 filtered out; finished in 24.34s
+## f885_kg_short_run_on_the_check_h_path: 31 s
+# done

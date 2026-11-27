@@ -1,0 +1,66 @@
+# at 4bb84d4f (solver and test code of 4bb84d4f)
+## cargo test -p rcfd-fv --release --lib
+test result: ok. 115 passed; 0 failed; 6 ignored; 0 measured; 0 filtered out; finished in 7.48s
+## exit 0
+## cargo test -p rcfd-api --release --lib
+test result: ok. 160 passed; 0 failed; 4 ignored; 0 measured; 0 filtered out; finished in 53.28s
+## exit 0
+## cargo test -p rcfd-api --release --test f885_order_case
+test result: ok. 3 passed; 0 failed; 6 ignored; 0 measured; 0 filtered out; finished in 27.65s
+## exit 0
+## cargo test -p rcfd-api --release --test f885_frozen_convection_check_h
+test result: ok. 3 passed; 0 failed; 6 ignored; 0 measured; 0 filtered out; finished in 5.06s
+## exit 0
+## cargo test -p rcfd-api --release --test baseline_hashes
+test result: ok. 3 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out; finished in 0.70s
+## exit 0
+baseline_hashes.rs unchanged since 689fab92
+# at 12f8c546
+## cargo fmt -p rcfd-fv -p rcfd-api --check
+      --check
+          Run rustfmt in check mode
+  -h, --help
+          Print help
+
+## exit 1
+## rustfmt --check --edition 2021 (touched files)
+[31m-        format!(", e / e_OFF {}", sci(&(0..3).map(|j| r.0[j] / o[j]).collect::<Vec<f64>>()))
+[0m[32m+        format!(
+[0m[32m+            ", e / e_OFF {}",
+[0m[32m+            sci(&(0..3).map(|j| r.0[j] / o[j]).collect::<Vec<f64>>())
+[0m[32m+        )
+[0m     });
+     println!(
+         "F885-KG N {n} {arm:?}: e(0.1, 0.05, 0.025) {}, p_c {:.4}, p_f {:.4}{ratio}",
+Diff in \\?\E:\projects\cfd\rcfd\.claude\worktrees\f885-kept-gradient-lag\crates\rcfd-api\tests\f885_kept_gradient_lag.rs:989:
+         rs.push(r);
+     }
+     let r1: Vec<f64> = rs[1].0.iter().zip(R1_E).map(|(a, b)| rel(*a, b)).collect();
+[31m-    println!("F885-KG R1: ON at N 64 relative to ADR 0822 {} (limit {R1_TOL:e})", sci(&r1));
+[0m[32m+    println!(
+[0m[32m+        "F885-KG R1: ON at N 64 relative to ADR 0822 {} (limit {R1_TOL:e})",
+[0m[32m+        sci(&r1)
+[0m[32m+    );
+[0m     reading(N_FINE, &rs.iter().map(|r| r.2).collect::<Vec<f64>>());
+     assert!(r1.iter().all(|&x| x <= R1_TOL), "R1: {r1:?}");
+     assert!(rs[0].2 >= ORDER_MIN, "K64-OFF missed: p_f {}", rs[0].2);
+## exit 1
+## cargo clippy -p rcfd-fv -p rcfd-api --all-targets -- -D warnings
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 50.88s
+## exit 0
+## after rustfmt: rustfmt --check --edition 2021 (touched files)
+## exit 0
+## cargo fmt -p rcfd-fv --check
+## exit 0
+## cargo fmt -p rcfd-api --check
+## exit 0
+ok crates/rcfd-api/tests/f885_alpha_free_face_flux.mutation.patch
+ok crates/rcfd-api/tests/f885_check_h_outer_record.mutation.patch
+ok crates/rcfd-api/tests/f885_frozen_convection_check_h.mutation.patch
+ok crates/rcfd-api/tests/f885_frozen_limiter.mutation.patch
+ok crates/rcfd-api/tests/f885_kept_gradient_lag.mutation.patch
+ok crates/rcfd-api/tests/f885_order_case.mutation.patch
+ok crates/rcfd-api/tests/f885_outer_fixed_points.mutation.patch
+ok crates/rcfd-api/tests/f885_outer_stall.mutation.patch
+ok crates/rcfd-api/tests/f885_slow_outer_mode.mutation.patch
+ok crates/rcfd-api/tests/f885_two_outer_modes.mutation.patch
