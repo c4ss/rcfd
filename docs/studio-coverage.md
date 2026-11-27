@@ -20,12 +20,12 @@ Engine read: rcfd 0.1.0, service protocol rcfd-service/1 version 1.1, MCP server
 | Kind | Capabilities |
 |---|---|
 | Service methods | 69 |
-| MCP tools | 74 |
+| MCP tools | 75 |
 | CLI commands | 54 |
 | CLI options | 221 |
 | Case schema keys | 951 |
 | Monitor format keys | 6 |
-| **All** | **1375** |
+| **All** | **1376** |
 
 A case key stands for every value of its enumeration (the solver options of that key, listed in the inventory). A CLI
 option is listed under its command.
@@ -34,9 +34,9 @@ option is listed under its command.
 
 `cosim.advance`, `cosim.checkpoint`, `cosim.describe`, `cosim.forces`, `cosim.list`, `cosim.open`, `cosim.restore`, `cosim.time`, `design.compare`, `design.create_study`, `design.create_variant`, `design.evaluate`, `design.get_metrics`, `design.ledger_append`, `design.ledger_export`, `design.ledger_query`, `design.ledger_rerun_check`, `design.list_study`, `design.propose`, `design.record`, `design.run_map`, `design.run_study`, `events.poll`, `field.export_vtk`, `field.grid`, `field.sample`, `field.slice`, `field.stats`, `journal.get`, `journal.replay`, `log.tail`, `mesh.check`, `mesh.inflate`, `mesh.partition`, `monitors.get`, `panel.snapshot`, `particles.report`, `render.glb`, `render.png`, `report.export`, `reports.get`, `run.check`, `run.headless`, `run.initialize`, `run.pause`, `run.resume`, `run.start`, `run.status`, `run.step`, `run.stop`, `run.wait`, `service.info`, `session.close`, `session.create`, `session.list`, `settings.get`, `settings.remove`, `settings.schema`, `settings.set`, `settings.validate`, `status.read`, `workflow.create`, `workflow.delete`, `workflow.get`, `workflow.insert`, `workflow.list`, `workflow.load`, `workflow.run`, `workflow.save`.
 
-## MCP tools (74)
+## MCP tools (75)
 
-`cancel_run`, `case_facts`, `check_case_headless`, `check_case_mesh`, `check_mesh`, `compare_runs`, `create_case`, `create_project`, `create_workflow`, `derive_picture`, `design_compare_variants`, `design_create_study`, `design_create_variant`, `design_evaluate`, `design_get_metrics`, `design_ledger_append`, `design_ledger_export`, `design_ledger_query`, `design_ledger_rerun_check`, `design_list_study`, `design_propose`, `design_record`, `design_run_operating_map`, `design_run_study`, `design_sobol`, `design_uq`, `edit_case`, `edit_workflow`, `empty_trash`, `export_vtk`, `field_summary`, `get_field_stats`, `get_residuals`, `get_setting`, `hash_project_file`, `import_mesh`, `list_cases`, `list_changes`, `list_meshes`, `list_runs`, `list_sites`, `list_trash`, `list_workflow_tasks`, `load_mesh`, `new_case`, `pause_run`, `preview_mesh`, `project_info`, `read_feed`, `read_metrics`, `read_project_file`, `read_residuals`, `read_status_stream`, `read_view`, `refine_case_mesh`, `render_field`, `render_image`, `restore_trash`, `resume_run`, `run`, `run_headless`, `run_status`, `run_workflow_task`, `runner_config`, `set_runner_config`, `set_setting`, `show_view`, `start_run`, `status`, `trash_case`, `trash_results`, `trash_run`, `wait_run`, `write_note`.
+`cancel_run`, `case_facts`, `check_case_headless`, `check_case_mesh`, `check_mesh`, `compare_runs`, `create_case`, `create_project`, `create_workflow`, `derive_picture`, `design_compare_variants`, `design_create_study`, `design_create_variant`, `design_evaluate`, `design_get_metrics`, `design_ledger_append`, `design_ledger_export`, `design_ledger_query`, `design_ledger_rerun_check`, `design_list_study`, `design_propose`, `design_record`, `design_run_operating_map`, `design_run_study`, `design_sobol`, `design_uq`, `edit_case`, `edit_workflow`, `empty_trash`, `export_view`, `export_vtk`, `field_summary`, `get_field_stats`, `get_residuals`, `get_setting`, `hash_project_file`, `import_mesh`, `list_cases`, `list_changes`, `list_meshes`, `list_runs`, `list_sites`, `list_trash`, `list_workflow_tasks`, `load_mesh`, `new_case`, `pause_run`, `preview_mesh`, `project_info`, `read_feed`, `read_metrics`, `read_project_file`, `read_residuals`, `read_status_stream`, `read_view`, `refine_case_mesh`, `render_field`, `render_image`, `restore_trash`, `resume_run`, `run`, `run_headless`, `run_status`, `run_workflow_task`, `runner_config`, `set_runner_config`, `set_setting`, `show_view`, `start_run`, `status`, `trash_case`, `trash_results`, `trash_run`, `wait_run`, `write_note`.
 
 ## CLI commands (54)
 

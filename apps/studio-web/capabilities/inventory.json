@@ -17,12 +17,12 @@
   },
   "counts": {
     "service_method": 69,
-    "mcp_tool": 74,
+    "mcp_tool": 75,
     "cli_command": 54,
     "cli_option": 221,
     "case_key": 951,
     "monitor_format_key": 6,
-    "total": 1375
+    "total": 1376
   },
   "capabilities": [
     {"id":"service:cosim.advance","kind":"service_method","source":"service.info"},
