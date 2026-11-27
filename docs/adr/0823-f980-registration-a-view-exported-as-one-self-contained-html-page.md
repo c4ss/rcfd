@@ -259,3 +259,71 @@ runs), not of the layouts of X3 to X5, whose table lists one run. A defect of th
 stays as an ignored record. The corrected test `r1_r2_r3_r4_r7_a2_the_pages_of_the_registered_set` asks of a table one
 or more rows, as many steps as rows, each step `list_runs`'s, which is what R2 registered. No row, limit, source, mutation
 or the decision rule changes.
+
+## Addendum 1: results (2026-11-27)
+
+Written after the runs; nothing above is changed. Release profile, `CARGO_TARGET_DIR` in the scratch folder, 8 build
+jobs. Commits: 6675b7b3 (this registration), c7e965cb (engine and page), 6885c8db (tests), 98cc4433 and 7362b802
+(amendment 1 and its test), 6cc7cd96 and c813878c (amendment 2 and its test), then this addendum, the committed mutation
+and the proposal. CPU load (Windows `LoadPercentage`): 53 to 66 % at the binary runs, 68 to 97 % at the `--lib` and
+named runs, 84 % at the typecheck, 70 % at the start and 80 % at the end of `npm test`, 85 % at the mutations.
+Deviations: `cargo fmt` (a write) before the code commit; two set-up defects of the binary test, corrected by amendments
+1 and 2 before their runs, the earlier tests kept as ignored records; the first binary was run a second time only to read
+its failure text (amendment 1).
+
+### Checks
+
+| Id | Limit | Measured | Met |
+|---|---|---|---|
+| R1 | 5 of 5 pages as the reply says | 5 of 5: X1 268 157 bytes, X2 409 488, X3 956 756, X4 501 487, X5 527 715; 52 to 507 ms each | yes |
+| R2 | every value equal to the engine's tools (1e-12; exact) | X1 to X4, 22 panels: every field range equal to `field_summary` as `f32` (e.g. p of 3900 -152.87271118164063 to 1078.4739990234375, snapshot 27, step 278), every monitor's last sample, plot 831 drawn 3 skipped (3900), 2400 and 0 (d5cb), run and table steps, the setting 0.01 | yes |
+| R3 | no reference, the CSP, the styles; 5 of 5 | 5 of 5, no reference found; the unit test on X1 passed (`rcfd-workspace --lib` 13 passed) | yes |
+| R4 | every source exists with its hash | 11, 11, 7, 7, 7 files, every hash equal to `hash_project_file`'s; engine version and id in the header | yes |
+| R5 | the shown view exported | page id `fnv64:1dab47f6fda7721e` equal to `read_view`'s; the six panels of the heat-transfer layout in order | yes |
+| R6 | 4 refusals, nothing written | 1003 at `panels[0].kind`, `out`, `out`; 1202; no `exports/`, journal unchanged | yes |
+| R7 | one `view_exported` line per export | 5 of 5 | yes |
+| E1 | X1: every value equal; 0 other requests | 0 requests beyond the page's file; 14 of 15 values equal; **the monitor's last step: Studio `278`, page `278.0`** (the page writes the step with the JSON text of an `f64`; the registered comparison holds a step to exact text) | **no** |
+| E2 to E5 | X2 to X5 | not run: the spec is serial and stops at E1's failure | **not run** |
+| E6 | the theme | not run (after E1) | **not run** |
+| Z1 | recorded | X1 268 157 bytes (about 0.27 MB; the estimate was 0.4 MB) | recorded |
+| L1 | pass but the assertions of finding 5 | `canvas_layout_f977` 1, `canvas_live_f979` 2, `feed_f273` 3, `default_f1` 2, `tool_list_adr0730` 2 passed; `rcfd-mcp --lib` 18 (1 ignored), `rcfd-workspace --lib` 13 passed; failing only at `canvas_view_f976.rs:216`, `project_list_f270.rs:134`, `tool_list_f275.rs:132`, `project_w48f.rs:137`, `project_runs_w48f.rs:104` and `:354` (the assertion whose `57` is on line 359) | yes |
+| L2 | the five pass with the re-record | 4, 1, 8, 10 and 3 passed on the scratch copy | yes |
+| L3 | typecheck; `npm test` but `capabilities.spec.ts` | typecheck exit 0; `npm test` 887 passed, 3 failed, 6 skipped (main's registered skips, ADRs 0807 and 0818), 10 did not run, 14.3 min: `capabilities.spec.ts` on `mcp:export_view` (as registered), E1 above, and `run-control.spec.ts:268` (the engine's answer to the renderer 23.5 ms against 20 ms, a timing limit under 70 to 80 % load in a file this item does not touch) | **no** |
+| L4 | fmt, clippy, `docs_site`, the proposal check | fmt and clippy clean; `docs_site` and the proposal check after this addendum, in the report | see the report |
+
+### Mutations
+
+| Id | Caught by |
+|---|---|
+| M1 (a monitor's first sample; committed as `export_view_f980.mutation.patch`) | R2 (`export_view_f980.rs` line 698) |
+| M2 (a link to https in the head) | R3 (line 815) |
+| M3 (a file written before the check) | R6 (line 929) |
+| M4 (the first snapshot by default) | R2 (line 662) |
+| M5 (`tokens.css` left out) | **not caught**: R3 compares the page with the same constant the mutation empties; E6 (the computed colours) would see it, but was not run on the scratch copy |
+
+Not run: E2 to E6, `baseline_hashes` (no shared solver file). The E1 miss is not held as a `*_known_miss` record in the
+spec in this work; the follow-up of the proposal names the cause and the fix.
+
+Actual size: partial; 2 further registrations (amendments 1 and 2); 2 heavy runs (`npm test` 14.3 min; the scratch
+copy's build for the mutations and L2); 1 question; about 300 000 bytes read.
+
+Decision by the registered rule: **partial**: E1 missed (the monitor's last step written `278.0` against `278`), E2 to
+E6 did not run, L3 had a failure beyond the one it named, and M5 was not caught. Every engine row (R1 to R7, L1, L2)
+held.
+
+### For the lead: roadmap entries
+
+> Status: partial.
+
+> Note: ADR 0823, 2026-11-27, partial: export_view writes a view (any form show_view takes, or the view shown last) as one self-contained HTML page under exports/ (no script, a CSP of default-src 'none', the Studio's stylesheets inline, fields and a case's mesh as inline SVG of the store's surface, provenance per panel); the engine's tools agree with every value of the five registered pages (268 to 957 kB); in the open Studio E1 made no request beyond its file and agreed on 14 of 15 values, the monitor's last step written 278.0 against 278; E2 to E6 did not run.
+
+> Gap: The page writes a monitor's last step as the JSON text of an f64 (278.0) where the Studio shows the integer (278), so E1 of ADR 0823 missed on that value (14 of 15 equal) and the serial e2e did not run E2 to E6 (the other four specifications and the theme). The tool list re-record (additive) and the inventory row mcp:export_view are the lead's.
+
+> Follow-up: The exported page writes a monitor's last step as the Studio does, and the e2e of ADR 0823 runs whole. Deps F-980. Acceptance: Every limit not stated here is registered in the ADR before the run. The page of export_view writes each step and count as an integer, as the Studio shows it; the e2e of ADR 0823 (E1 to E6 on X1 to X5) holds every value of the registered comparison and makes no request beyond the page's own file.
+
+The same entries are `docs/roadmap/proposals/0823-F-980.json`. Additive golden edit for the lead (rule 3): the six
+assertions of L1 with the edits of L2, and the row `mcp:export_view` of `apps/studio-web/capabilities/inventory.json`.
+
+## Open questions for the maintainer (addendum)
+
+Q1 above stands (the fonts; recommendation (a), taken). No other.

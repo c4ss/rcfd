@@ -1,0 +1,19 @@
+{
+  "form": 1,
+  "adr": "0823",
+  "item": "F-980",
+  "base": "efce0cf14a267c2718e62879c0f05d4c3099b02f",
+  "status": "partial",
+  "note": "ADR 0823, 2026-11-27, partial: export_view writes a view (any form show_view takes, or the view shown last) as one self-contained HTML page under exports/ (no script, a CSP of default-src 'none', the Studio's stylesheets inline, fields and a case's mesh as inline SVG of the store's surface, provenance per panel); the engine's tools agree with every value of the five registered pages (268 to 957 kB); in the open Studio E1 made no request beyond its file and agreed on 14 of 15 values, the monitor's last step written 278.0 against 278; E2 to E6 did not run.",
+  "gap": "The page writes a monitor's last step as the JSON text of an f64 (278.0) where the Studio shows the integer (278), so E1 of ADR 0823 missed on that value (14 of 15 equal) and the serial e2e did not run E2 to E6 (the other four specifications and the theme). The tool list re-record (additive) and the inventory row mcp:export_view are the lead's.",
+  "follow_ups": [
+    {
+      "key": "export-step-text",
+      "title": "The exported page writes a monitor's last step as the Studio does, and the e2e of ADR 0823 runs whole",
+      "deps": [
+        "F-980"
+      ],
+      "acceptance": "Every limit not stated here is registered in the ADR before the run. The page of export_view writes each step and count as an integer, as the Studio shows it; the e2e of ADR 0823 (E1 to E6 on X1 to X5) holds every value of the registered comparison and makes no request beyond the page's own file."
+    }
+  ]
+}
