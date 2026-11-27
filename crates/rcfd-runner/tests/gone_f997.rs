@@ -73,7 +73,11 @@ impl Proj {
                 self.pid = Some(pid);
                 return pid;
             }
-            assert!(t0.elapsed() < Duration::from_secs(10), "no runner.json in {}", self.dir.display());
+            assert!(
+                t0.elapsed() < Duration::from_secs(10),
+                "no runner.json in {}",
+                self.dir.display()
+            );
             std::thread::sleep(Duration::from_millis(20));
         }
     }
@@ -153,7 +157,10 @@ fn a1_a_capturing_parent_of_ensure_reaches_eof_within_3_s_known_miss_on_windows(
         cap.eof_after(0, t_end)
     );
     assert_eq!(code, Some(0), "set-up: ensure failed");
-    assert!(released, "A1: the parent's stdout did not reach EOF within 3.0 s of its exit");
+    assert!(
+        released,
+        "A1: the parent's stdout did not reach EOF within 3.0 s of its exit"
+    );
     assert!(eof.is_some_and(|s| s <= 3.0), "A1: EOF {eof:?} s");
     assert!(lock && alive, "A1: the runner did not live at the EOF");
 }
@@ -175,7 +182,10 @@ fn b1_a_runner_whose_folder_is_removed_exits_within_5_s() {
         p.dot().join("runner.json").exists(),
         p.dot().join("runner.lock").exists()
     );
-    assert!(status.is_some(), "B1: the runner did not exit within 5.0 s of its folder's removal");
+    assert!(
+        status.is_some(),
+        "B1: the runner did not exit within 5.0 s of its folder's removal"
+    );
     assert!(status.is_some_and(|s| s.success()), "B1: exit {status:?}");
 }
 
@@ -198,5 +208,8 @@ fn b2_a_runner_with_its_folder_keeps_serving() {
         "B2: runner {pid}; at {lived:?} alive {alive}, lock held {held}; exit {status:?} {took:?} after the shutdown request"
     );
     assert!(alive && held, "B2: the runner with its folder did not keep serving");
-    assert!(status.is_some_and(|s| s.success()), "B2: exit {status:?} within 5.0 s of the request");
+    assert!(
+        status.is_some_and(|s| s.success()),
+        "B2: exit {status:?} within 5.0 s of the request"
+    );
 }
