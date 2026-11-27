@@ -26,6 +26,7 @@ import {
   type RunEntry,
   type ProjectTool,
   type CanvasView,
+  type CanvasProcess,
   type CanvasSetting,
   type SettingChange,
   VIEW_SHOWN,
@@ -121,6 +122,8 @@ function settingChanges(v: readonly unknown[]): SettingChange[] {
  * one of its setting panels.
  */
 export function canvasReadsAgain(canvas: CanvasView | undefined, entries: readonly ChangeEntry[]): boolean {
+  // F-978 (ADR 0826 D5): a process panel's steps follow every fresh entry but a view's own
+  if ((canvas?.view.panels ?? []).some((p) => p.kind === 'process') && entries.some((e) => e.kind !== VIEW_SHOWN && e.kind !== 'view_exported')) return true;
   const cases = new Set((canvas?.view.panels ?? []).filter((p) => p.kind === 'setting' && typeof p.case === 'string').map((p) => norm(p.case!)));
   return cases.size > 0 && entries.some((e) => e.path !== null && cases.has(norm(e.path)));
 }
@@ -470,6 +473,8 @@ export class ProjectSession {
         readAt: this.deps.now(),
         // F-979 (ADR 0807 D2): the values of the setting panels, when the view has any
         ...(Array.isArray(r['settings']) ? { settings: r['settings'] as CanvasSetting[] } : {}),
+        // F-978 (ADR 0826 D5): the steps of the process panels, when the view has any
+        ...(Array.isArray(r['process']) ? { process: r['process'] as CanvasProcess[] } : {}),
       };
       const { canvasError: _dropped, ...rest } = this.view;
       this.view = rest;

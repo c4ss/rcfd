@@ -1,0 +1,14 @@
+# expect-fail: cargo test --release -p rcfd-mcp --test canvas_process_f978 --target-dir target/mutation
+diff --git a/crates/rcfd-workspace/src/view.rs b/crates/rcfd-workspace/src/view.rs
+index c7655383..280ee603 100644
+--- a/crates/rcfd-workspace/src/view.rs
++++ b/crates/rcfd-workspace/src/view.rs
+@@ -2093,7 +2093,7 @@ impl Workspace {
+         let runs = self.case_runs(&kase, &lines);
+         let is_case = |v: &Value| v.as_str().map(norm_path).as_deref() == Some(kase.as_str());
+         let concerns = |l: &Value| {
+-            is_case(&l["path"])
++            (is_case(&l["path"]) && l["kind"] != "edit")
+                 || (l["kind"] == "run_submitted" && is_case(&l["case"]))
+                 || l["run"].as_str().is_some_and(|r| runs.iter().any(|x| x == r))
+         };

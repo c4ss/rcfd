@@ -24,8 +24,14 @@
 // data-setting, data-value, data-run, data-state, data-last-step, data-last-value and the change line's data-n,
 // data-who, data-actor, data-pid, data-reason, data-old and data-new. F-977 (ADR 0817 D3): each panel's data-canvas-field
 // and data-canvas-monitor (its field or monitor, where it names one), so a test reads which views a layout chose.
+//
+// F-978 (ADR 0826 D5): the kind `process`, the ordered steps of a case from its creation to its last result as the
+// engine gave them (read_view `process`); a step picked draws the view of its state (the engine's `opens`) under it
+// with the panels above, and picked again closes it. Hooks: ol.cv-process data-steps and data-steps-total, each li's
+// data-step, data-step-kind, data-phase, data-source, data-seq, data-run and data-t, the opened view's
+// data-opened-step and data-panels, and each opened panel's data-opened-panel and data-canvas-kind.
 import { useEffect, useMemo, useRef, useState } from 'react';
-import type { CanvasPanel, CanvasView, ChangeEntry, ProjectView } from '../../shared/project.js';
+import type { CanvasPanel, CanvasView, ChangeEntry, ProcessStep, ProjectView } from '../../shared/project.js';
 import type { StoreRef } from '../../shared/data.js';
 import type { RunSeries } from '../../shared/run.js';
 import { CasesTable, MeshesTable, RunsTable, changedAt } from '../project/ProjectHome.js';
@@ -88,7 +94,64 @@ function Panel({ view, panel, index, canvas }: { view: ProjectView; panel: Canva
     case 'plot':
     case 'monitor':
       return <SeriesPanel view={view} panel={panel} />;
+    case 'process':
+      return <ProcessPanel view={view} index={index} canvas={canvas} />;
   }
+}
+
+/** F-978: what a step holds beyond its text, as the engine wrote it. */
+function stepFacts(s: ProcessStep): string[] {
+  const out: string[] = [];
+  for (const c of s.changes ?? []) out.push(`${c.path}: ${JSON.stringify(c.old ?? null)} to ${JSON.stringify(c.new ?? null)}`);
+  if (s.step === 'state' && s.reason) out.push(s.reason);
+  if (s.last) for (const [k, v] of Object.entries(s.last)) out.push(`${k} ${String(v[1])} at step ${v[0]}`);
+  if (s.fields) out.push(`fields ${s.fields.join(', ')} at the last of ${s.snapshots ?? 0} snapshots`);
+  return out;
+}
+
+/**
+ * F-978 (ADR 0826 D5): the process of a case, its steps in the engine's order; a picked step draws the view of its
+ * state (`opens`) with the canvas's own panels. Picking writes nothing.
+ */
+function ProcessPanel({ view, index, canvas }: { view: ProjectView; index: number; canvas: CanvasView }) {
+  const got = canvas.process?.find((p) => p.panel === index) ?? null;
+  const [open, setOpen] = useState<number | null>(null);
+  const steps = got?.steps ?? [];
+  return (
+    <ol className="cv-process" data-steps={steps.length} data-steps-total={got?.steps_total ?? 0}>
+      {steps.map((s) => {
+        const actor = s.actor && typeof s.actor === 'object' ? (s.actor as { client?: unknown }).client : undefined;
+        const opened = open === s.i && s.opens !== null;
+        return (
+          <li key={s.i} className="cv-step" data-step={s.i} data-step-kind={s.step} data-phase={s.phase} data-source={s.source} data-seq={s.seq} data-run={s.run} data-t={s.t ?? undefined}>
+            <button type="button" className="cv-step-pick" aria-expanded={opened} disabled={s.opens === null} onClick={() => setOpen(open === s.i ? null : s.i)} data-words="data">
+              <span className="cv-step-phase">{s.phase}</span> {s.text}
+            </button>
+            {(typeof actor === 'string' || s.reason) && s.step !== 'state' && (
+              <p className="cv-change" data-words="data">
+                {typeof actor === 'string' && `by ${actor}`}
+                {s.reason && <span className="cv-change-reason"> : {s.reason}</span>}
+              </p>
+            )}
+            {stepFacts(s).map((f, j) => (
+              <p key={j} className="cv-step-fact" data-words="data">
+                {f}
+              </p>
+            ))}
+            {opened && s.opens && (
+              <div className="cv-opened" data-opened-step={s.i} data-panels={s.opens.panels.length}>
+                {s.opens.panels.map((p, j) => (
+                  <div key={`${canvas.id}-${s.i}-${j}`} className="cv-panel" data-opened-panel={j} data-canvas-kind={p.kind}>
+                    <Panel view={view} panel={p} index={-1} canvas={canvas} />
+                  </div>
+                ))}
+              </div>
+            )}
+          </li>
+        );
+      })}
+    </ol>
+  );
 }
 
 /** The field view of a run's store at a snapshot (default the last, from the store's own list). */

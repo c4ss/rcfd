@@ -1,0 +1,20 @@
+{
+  "form": 1,
+  "adr": "0826",
+  "item": "F-978",
+  "base": "dcb5cb3e44d88d4df73f3dd7079a5b2e05b02d5e",
+  "status": "partial",
+  "note": "ADR 0826, 2026-11-27, partial: the view kind process {case} gives a case's steps from the journal, its runs' events, residuals and field store, merged by time, each with the view of its state; the e2e listed 10 of 10 steps against the journal (seq 1 to 5 equal) 372 ms after show_view and opened every step's view; the registered run of the binary test B1 failed at its first edit_case on an OS refusal, and mutations M4 and M5 did not compile.",
+  "gap": "Every row but B1 holds (P1, V7, V8, E1 to E3, L1 to L4). Missing: a passing run of canvas_process_f978 (B1 to B3), whose one registered run failed at its first edit_case (Windows: Access is denied, os error 5, replacing the case new_case had just written); and two of five mutations, M4 and M5, whose edits did not compile (type inference, null narrowing), so they caught nothing.",
+  "follow_ups": [
+    {
+      "key": "process-export",
+      "title": "Claude's canvas: the process view in an exported page",
+      "deps": [
+        "F-978",
+        "F-980"
+      ],
+      "acceptance": "Every limit not stated here is registered in the ADR before the run. export_view draws a process panel as the list of the case's steps with the values the open Studio shows for them (the registered comparison of ADR 0823), instead of refusing it; every other default unchanged."
+    }
+  ]
+}

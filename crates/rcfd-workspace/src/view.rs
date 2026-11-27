@@ -46,6 +46,10 @@ pub const CANVAS_EXE: &str = "rcfd-mcp";
 pub const KINDS_F979: [&str; 1] = ["setting"];
 /// Longest setting path of a `setting` panel, in characters.
 pub const MAX_SETTING: usize = 200;
+/// The kind of panel F-978 adds (ADR 0826 D1): the process of a case, from its creation to its last result.
+pub const KINDS_F978: [&str; 1] = ["process"];
+/// Most steps a process panel is given (ADR 0826 D2, the feed's `KEEP`); `steps_total` counts all.
+pub const MAX_STEPS: usize = 1000;
 
 /// One located error of a specification: the dotted path of the value and the reason.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -175,9 +179,16 @@ impl Workspace {
             e(errors, at, "a panel is a JSON object with a kind");
             return;
         };
-        let all = || format!("{}, {}", KINDS.join(", "), KINDS_F979.join(", "));
+        let all = || {
+            format!(
+                "{}, {}, {}",
+                KINDS.join(", "),
+                KINDS_F979.join(", "),
+                KINDS_F978.join(", ")
+            )
+        };
         let kind = match o.get("kind").and_then(Value::as_str) {
-            Some(k) if KINDS.contains(&k) || KINDS_F979.contains(&k) => k,
+            Some(k) if KINDS.contains(&k) || KINDS_F979.contains(&k) || KINDS_F978.contains(&k) => k,
             Some(k) => {
                 e(
                     errors,
@@ -200,6 +211,8 @@ impl Workspace {
             // ADR 0807 D1: a monitor panel names a run, or a case whose newest run it follows
             "monitor" => &["kind", "title", "run", "monitor", "case"],
             "setting" => &["kind", "title", "case", "setting"],
+            // ADR 0826 D1: the process of a case
+            "process" => &["kind", "title", "case"],
             _ => &["kind", "title", "runs"],
         };
         extra_keys(o, keys, at, errors);
@@ -218,6 +231,9 @@ impl Workspace {
                 }
             }
             "mesh" => self.mesh_ref(o.get("mesh"), &format!("{at}.mesh"), errors),
+            "process" => {
+                self.case_read(o.get("case"), &format!("{at}.case"), errors);
+            }
             "setting" => {
                 if let Some(case) = self.case_read(o.get("case"), &format!("{at}.case"), errors) {
                     setting_ref(&case, o.get("setting"), &format!("{at}.setting"), errors);
@@ -589,6 +605,22 @@ impl Workspace {
         // ADR 0817 D3: how a view of a run was chosen, only for such a view
         if let Some(c) = v.get("chosen") {
             out["chosen"] = c.clone();
+        }
+        // ADR 0826 D5: the steps of each process panel, only for a view that has one
+        let process: Vec<Value> = v["view"]["panels"]
+            .as_array()
+            .into_iter()
+            .flatten()
+            .enumerate()
+            .filter(|(_, p)| p["kind"] == "process")
+            .map(|(i, p)| {
+                let mut one = self.process_steps(p["case"].as_str().unwrap_or_default());
+                one["panel"] = json!(i);
+                one
+            })
+            .collect();
+        if !process.is_empty() {
+            out["process"] = Value::Array(process);
         }
         Ok(out)
     }
@@ -1500,7 +1532,19 @@ impl Workspace {
                 (shown["view"].clone(), id, Some(shown["actor"].clone()))
             }
         };
-        let errors = self.view_errors(&view);
+        let mut errors = self.view_errors(&view);
+        // ADR 0826 D5: the exported page does not draw a process panel (Q1)
+        if errors.is_empty() {
+            for (i, p) in view["panels"].as_array().into_iter().flatten().enumerate() {
+                if p["kind"] == "process" {
+                    e(
+                        &mut errors,
+                        format!("panels[{i}].kind"),
+                        "'process' is shown in the open Studio only: the exported page does not draw it (ADR 0826 Q1)",
+                    );
+                }
+            }
+        }
         if !errors.is_empty() {
             return Err(refusal(&errors));
         }
@@ -2211,6 +2255,243 @@ pub fn page_quiet_violations(page: &str) -> Vec<String> {
         }
     }
     bad
+}
+
+// ---- ADR 0826 (F-978): the process of a case, from its creation to its last result ----
+
+/// ADR 0826 D3: a time `YYYY-MM-DDTHH:MM:SS[.fraction]Z` as (a count of seconds in civil-time order, nanoseconds), or
+/// `None`.
+fn time_key(t: &str) -> Option<(i64, u32)> {
+    let b = t.as_bytes();
+    if b.len() < 20
+        || b[4] != b'-'
+        || b[7] != b'-'
+        || b[10] != b'T'
+        || b[13] != b':'
+        || b[16] != b':'
+        || !t.ends_with('Z')
+    {
+        return None;
+    }
+    let n = |r: std::ops::Range<usize>| t.get(r).and_then(|x| x.parse::<i64>().ok());
+    let (y, mo, d, h, mi, se) = (n(0..4)?, n(5..7)?, n(8..10)?, n(11..13)?, n(14..16)?, n(17..19)?);
+    let secs = ((((y * 12 + mo) * 31 + d) * 24 + h) * 60 + mi) * 60 + se;
+    let rest = &t[19..t.len() - 1];
+    let ns = match rest.strip_prefix('.') {
+        None if rest.is_empty() => 0,
+        Some(f) if !f.is_empty() && f.len() <= 9 && f.bytes().all(|c| c.is_ascii_digit()) => {
+            f.parse::<u32>().ok()? * 10u32.pow(9 - f.len() as u32)
+        }
+        _ => return None,
+    };
+    Some((secs, ns))
+}
+
+/// One step of a sequence before the merge: its time key and its JSON.
+struct Step {
+    key: (i64, u32),
+    v: Value,
+}
+
+/// A sequence's steps with their keys: a step whose `t` does not parse takes the key before it (zero at the start).
+fn keyed(steps: Vec<Value>) -> Vec<Step> {
+    let mut last = (0, 0);
+    steps
+        .into_iter()
+        .map(|v| {
+            if let Some(k) = v["t"].as_str().and_then(time_key) {
+                last = k;
+            }
+            Step { key: last, v }
+        })
+        .collect()
+}
+
+fn norm_path(p: &str) -> String {
+    p.replace('\\', "/")
+}
+
+impl Workspace {
+    /// ADR 0826 D4: `{version: 1, panels}` of the panels that are valid alone, or null.
+    fn opens(&self, panels: Vec<Value>) -> Value {
+        let kept: Vec<Value> = panels
+            .into_iter()
+            .filter(|p| self.view_errors(&json!({"version": VERSION, "panels": [p]})).is_empty())
+            .collect();
+        if kept.is_empty() {
+            Value::Null
+        } else {
+            json!({"version": VERSION, "panels": kept})
+        }
+    }
+
+    /// ADR 0826 D2: the run ids of case `kase`: its `run_submitted` lines and the run records that name it.
+    fn case_runs(&self, kase: &str, lines: &[Value]) -> Vec<String> {
+        let mut runs: Vec<String> = lines
+            .iter()
+            .filter(|l| l["kind"] == "run_submitted" && l["case"].as_str().map(norm_path).as_deref() == Some(kase))
+            .filter_map(|l| l["run"].as_str().map(str::to_string))
+            .collect();
+        for id in self.project.run_ids().unwrap_or_default() {
+            if let Ok(r) = self.project.read_run(&id) {
+                if norm_path(&r.case) == kase {
+                    runs.push(id);
+                }
+            }
+        }
+        runs.sort();
+        runs.dedup();
+        runs
+    }
+
+    /// ADR 0826 D2: the step of a journal line that concerns the case.
+    fn journal_step(&self, kase: &str, line: &Value) -> Value {
+        let kind = line["kind"].as_str().unwrap_or_default();
+        let run = line["run"].as_str().unwrap_or_default();
+        let mesh = line["changes"].as_array().is_some_and(|c| {
+            c.iter()
+                .any(|x| x["path"].as_str().is_some_and(|p| p.starts_with("mesh.")))
+        });
+        let (step, phase, panels) = match kind {
+            "case_created" => ("created", "creation", vec![json!({"kind": "case", "case": kase})]),
+            "edit" if mesh => ("mesh", "mesh", vec![json!({"kind": "mesh", "case": kase})]),
+            "edit" => ("setup", "set-up", vec![json!({"kind": "case", "case": kase})]),
+            "run_submitted" | "run_control" => ("run", "run", vec![json!({"kind": "run", "run": run})]),
+            _ => ("other", "other", vec![json!({"kind": "case", "case": kase})]),
+        };
+        let mut v = json!({"step": step, "phase": phase, "source": "journal", "kind": kind,
+            "t": line["t"], "text": crate::feed::journal_entry(line).text});
+        for k in ["seq", "run", "who", "actor", "reason", "changes"] {
+            if let Some(x) = line.get(k) {
+                v[k] = x.clone();
+            }
+        }
+        v["opens"] = self.opens(panels);
+        v
+    }
+
+    /// ADR 0826 D2: the steps of run `run`'s records: its state, warning and stop events in file order, then its
+    /// residuals and its results.
+    fn run_steps(&self, run: &str) -> Vec<Value> {
+        let Ok(dir) = self.project.run_dir(run) else {
+            return Vec::new();
+        };
+        if !dir.join("run.json").is_file() {
+            return Vec::new();
+        }
+        let (mut pos, mut skipped) = (0, 0);
+        let events = crate::journal::read_lines(&dir.join("events.jsonl"), &mut pos, &mut skipped);
+        let mut out = Vec::new();
+        let mut last_t = Value::Null;
+        for ev in &events {
+            let kind = ev["kind"].as_str().or_else(|| ev["event"].as_str()).unwrap_or_default();
+            let text = |x: &str| ev[x].as_str().unwrap_or_default().to_string();
+            let mut v = match kind {
+                "state" => {
+                    let from = ev["from"].as_str().unwrap_or("none");
+                    let to = ev["to"].as_str().or_else(|| ev["state"].as_str()).unwrap_or_default();
+                    json!({"step": "state", "from": ev["from"], "to": to,
+                        "text": format!("run {run}: {from} to {to}")})
+                }
+                "warning" => json!({"step": "warning", "message": text("message"),
+                    "text": format!("run {run}: warning: {}", text("message"))}),
+                "stop" => json!({"step": "stop", "text": format!("run {run}: stopped: {}", text("reason"))}),
+                _ => continue,
+            };
+            v["phase"] = json!("run");
+            v["source"] = json!("run");
+            v["kind"] = json!(kind);
+            v["run"] = json!(run);
+            v["t"] = ev["t"].clone();
+            last_t = ev["t"].clone();
+            if let Some(r) = ev["reason"].as_str() {
+                v["reason"] = json!(r);
+            }
+            v["opens"] = self.opens(vec![json!({"kind": "table", "runs": [run]})]);
+            out.push(v);
+        }
+        let bytes = std::fs::read(dir.join("residuals.jsonl")).unwrap_or_default();
+        let (series, lines, _) = crate::residual_series(&bytes, 0, None);
+        let shown: Vec<(&String, &Vec<[f64; 2]>)> = series
+            .iter()
+            .filter(|(k, s)| (k.starts_with("residuals.") || k.starts_with("monitors.")) && !s.is_empty())
+            .collect();
+        if !shown.is_empty() {
+            let last: Map<String, Value> = shown
+                .iter()
+                .map(|(k, s)| ((*k).clone(), json!(s[s.len() - 1])))
+                .collect();
+            let mut panels = vec![json!({"kind": "plot", "run": run})];
+            panels.extend(
+                shown
+                    .iter()
+                    .filter_map(|(k, _)| k.strip_prefix("monitors."))
+                    .take(MAX_PANELS - 1)
+                    .map(|m| json!({"kind": "monitor", "run": run, "monitor": m})),
+            );
+            out.push(
+                json!({"step": "residuals", "phase": "run", "source": "run", "kind": "residuals", "run": run,
+                "t": last_t, "samples": lines, "last": last,
+                "text": format!("run {run}: {lines} samples of residuals and monitors"), "opens": self.opens(panels)}),
+            );
+        }
+        if let Ok(mut r) = rcfd_tsstore::Reader::open(&dir.join("fields")) {
+            let n = r.snapshots().len();
+            if n > 0 {
+                let fields: Vec<String> = r
+                    .fields(n - 1)
+                    .map(|f| f.into_iter().map(|x| x.name).collect())
+                    .unwrap_or_default();
+                let panels = fields
+                    .iter()
+                    .take(MAX_PANELS)
+                    .map(|f| json!({"kind": "field", "run": run, "field": f}))
+                    .collect();
+                out.push(
+                    json!({"step": "results", "phase": "results", "source": "run", "kind": "results",
+                    "run": run, "t": last_t, "snapshots": n, "fields": fields,
+                    "text": format!("run {run}: {n} snapshots of {}", fields.join(", ")), "opens": self.opens(panels)}),
+                );
+            }
+        }
+        out
+    }
+
+    /// ADR 0826 D2, D3: the ordered steps of case `case` (project-relative): `{case, steps, steps_total}`.
+    pub fn process_steps(&self, case: &str) -> Value {
+        let kase = norm_path(case);
+        let lines = crate::journal::Reader::at_start(self.project.root()).read();
+        let runs = self.case_runs(&kase, &lines);
+        let is_case = |v: &Value| v.as_str().map(norm_path).as_deref() == Some(kase.as_str());
+        let concerns = |l: &Value| {
+            is_case(&l["path"])
+                || (l["kind"] == "run_submitted" && is_case(&l["case"]))
+                || l["run"].as_str().is_some_and(|r| runs.iter().any(|x| x == r))
+        };
+        let journal: Vec<Value> = lines
+            .iter()
+            .filter(|l| concerns(l))
+            .map(|l| self.journal_step(&kase, l))
+            .collect();
+        // the sequences: the journal first, then the runs by id (the order of ties)
+        let mut seqs: Vec<std::collections::VecDeque<Step>> = vec![keyed(journal).into()];
+        seqs.extend(runs.iter().map(|r| keyed(self.run_steps(r)).into()));
+        let mut steps = Vec::new();
+        while let Some((_, i)) = seqs
+            .iter()
+            .enumerate()
+            .filter_map(|(i, s)| s.front().map(|x| (x.key, i)))
+            .min()
+        {
+            steps.push(seqs[i].pop_front().expect("has a front").v);
+        }
+        let total = steps.len();
+        steps.truncate(MAX_STEPS);
+        for (i, s) in steps.iter_mut().enumerate() {
+            s["i"] = json!(i);
+        }
+        json!({"case": kase, "steps": steps, "steps_total": total})
+    }
 }
 
 #[cfg(test)]
@@ -3033,5 +3314,165 @@ store_fields = ["alpha", "ux", "uy", "p"]
             "<main><details><summary>Provenance</summary><p>fnv64:abc -0.223111718893.</p></details></main>"
         )
         .is_empty());
+    }
+
+    // ---- ADR 0826 (F-978): the process view ----
+
+    /// ADR 0826 V7: a view with a process panel of a case (and a title) is valid.
+    #[test]
+    fn v7_f978_a_process_panel_is_valid() {
+        let (dir, ws) = quick_start();
+        let v = json!({"version": 1, "panels": [{"kind": "process", "case": RE100, "title": "Process"}]});
+        assert_eq!(ws.view_errors(&v), Vec::<ViewError>::new());
+        let _ = std::fs::remove_dir_all(dir);
+    }
+
+    /// ADR 0826 V8: four invalid process panels, each refused at its registered key.
+    #[test]
+    fn v8_f978_invalid_process_panels_are_refused_at_their_key() {
+        let (dir, ws) = quick_start();
+        let one = |p: Value| json!({"version": 1, "panels": [p]});
+        let cases: Vec<(&str, Value, &str, &str)> = vec![
+            ("no case", one(json!({"kind": "process"})), "panels[0].case", "required"),
+            (
+                "no such case",
+                one(json!({"kind": "process", "case": "cases/nope.toml"})),
+                "panels[0].case",
+                "no such case",
+            ),
+            (
+                "a key run",
+                one(json!({"kind": "process", "case": RE100, "run": RUN})),
+                "panels[0].run",
+                "not a key",
+            ),
+            (
+                "outside cases/",
+                one(json!({"kind": "process", "case": "notes/README.md"})),
+                "panels[0].case",
+                "under cases/",
+            ),
+        ];
+        let mut held = 0;
+        for (what, v, key, word) in &cases {
+            let errors = ws.view_errors(v);
+            eprintln!("V8 {what}: {errors:?}");
+            let r = ws.show_view(&json!({"view": v})).unwrap_err();
+            if errors.first().is_some_and(|x| x.key == *key && x.reason.contains(word)) && r.code == VALIDATION {
+                held += 1;
+            }
+        }
+        assert_eq!(held, cases.len(), "V8: refused at the registered key");
+        let _ = std::fs::remove_dir_all(dir);
+    }
+
+    /// The time of a step as the test reads it: (the text before the fraction, the fraction as nanoseconds).
+    fn t_key(t: &str) -> (String, u64) {
+        let body = t.trim_end_matches('Z');
+        let (s, f) = body.split_once('.').unwrap_or((body, ""));
+        let ns = format!("{f:0<9}").parse::<u64>().unwrap();
+        (s.to_string(), ns)
+    }
+
+    /// ADR 0826 P1: the steps of a case of the quick-start copy after a set-up edit and a mesh refinement, against the
+    /// journal and the run records, as the test reads them.
+    #[test]
+    fn p1_f978_the_steps_of_a_case_against_the_journal_and_the_records() {
+        let (dir, ws) = quick_start();
+        let call = |name: &str, args: Value| match ws.call(name, &args) {
+            Some(Ok(crate::Answer::Value(v))) => v,
+            other => panic!("{name}: {:?}", other.map(|r| r.map(|_| ()))),
+        };
+        let hash = |ws: &Workspace| match ws.call("read_project_file", &json!({"path": RE100})) {
+            Some(Ok(crate::Answer::Value(v))) => v["hash"].clone(),
+            _ => panic!("read_project_file"),
+        };
+        call(
+            "edit_case",
+            json!({"path": RE100, "base_hash": hash(&ws), "set": {"physics.nu": 0.02}, "reason": "P1 set-up"}),
+        );
+        call(
+            "refine_case_mesh",
+            json!({"case": RE100, "factor": 2, "base_hash": hash(&ws), "reason": "P1 mesh"}),
+        );
+        let got = ws.process_steps(RE100);
+        let steps = got["steps"].as_array().unwrap().clone();
+        eprintln!("P1: {} steps", steps.len());
+        for s in &steps {
+            eprintln!("  {} {} {} {}", s["i"], s["step"], s["t"], s["text"]);
+        }
+        // the journal, read here: the lines of the case (rule (a) to (c) of D2)
+        let text = std::fs::read_to_string(dir.join(".rcfd/edits.jsonl")).unwrap_or_default();
+        let lines: Vec<Value> = text.lines().filter_map(|l| serde_json::from_str(l).ok()).collect();
+        let mut runs: Vec<String> = Vec::new();
+        for e in std::fs::read_dir(dir.join("runs")).unwrap().flatten() {
+            let rec: Value = serde_json::from_slice(&std::fs::read(e.path().join("run.json")).unwrap()).unwrap();
+            if rec["case"] == RE100 {
+                runs.push(e.file_name().to_string_lossy().into_owned());
+            }
+        }
+        for l in &lines {
+            if l["kind"] == "run_submitted" && l["case"] == RE100 {
+                runs.push(l["run"].as_str().unwrap().to_string());
+            }
+        }
+        runs.sort();
+        runs.dedup();
+        let want: Vec<Value> = lines
+            .iter()
+            .filter(|l| {
+                l["path"] == RE100
+                    || (l["kind"] == "run_submitted" && l["case"] == RE100)
+                    || l["run"].as_str().is_some_and(|r| runs.iter().any(|x| x == r))
+            })
+            .map(|l| l["seq"].clone())
+            .collect();
+        let journal: Vec<Value> = steps
+            .iter()
+            .filter(|s| s["source"] == "journal")
+            .map(|s| s["seq"].clone())
+            .collect();
+        let kinds: Vec<&str> = steps
+            .iter()
+            .filter(|s| s["source"] == "journal")
+            .map(|s| s["step"].as_str().unwrap())
+            .collect();
+        // per run: its state, warning and stop events in file order, then residuals and results
+        let mut runs_hold = !runs.is_empty();
+        for r in &runs {
+            let ev = std::fs::read_to_string(dir.join("runs").join(r).join("events.jsonl")).unwrap();
+            let mut want_r: Vec<String> = ev
+                .lines()
+                .filter_map(|l| serde_json::from_str::<Value>(l).ok())
+                .filter(|v| ["state", "warning", "stop"].contains(&v["kind"].as_str().unwrap_or("")))
+                .map(|v| format!("{}:{}", v["kind"].as_str().unwrap(), v["t"].as_str().unwrap()))
+                .collect();
+            want_r.push("residuals".into());
+            want_r.push("results".into());
+            let got_r: Vec<String> = steps
+                .iter()
+                .filter(|s| s["source"] == "run" && s["run"] == json!(r))
+                .map(|s| match s["step"].as_str().unwrap() {
+                    k @ ("residuals" | "results") => k.to_string(),
+                    _ => format!("{}:{}", s["kind"].as_str().unwrap(), s["t"].as_str().unwrap()),
+                })
+                .collect();
+            eprintln!("P1 run {r}: {} steps, records {}", got_r.len(), want_r.len());
+            runs_hold &= got_r == want_r;
+        }
+        let keys: Vec<(String, u64)> = steps.iter().map(|s| t_key(s["t"].as_str().unwrap_or(""))).collect();
+        let ordered = keys.windows(2).all(|w| w[0] <= w[1]);
+        let opens_valid = steps
+            .iter()
+            .all(|s| !s["opens"].is_null() && ws.view_errors(&s["opens"]).is_empty());
+        eprintln!("P1: journal seq {journal:?} against {want:?}; kinds {kinds:?}; runs {runs:?} hold {runs_hold}; ordered {ordered}; opens valid {opens_valid}");
+        assert!(!want.is_empty());
+        assert_eq!(journal, want, "P1: the journal's steps, in order, none missing");
+        assert_eq!(kinds, vec!["setup", "mesh"], "P1: the two edits");
+        assert!(runs_hold, "P1: each run's records");
+        assert!(ordered, "P1: times never decrease");
+        assert!(opens_valid, "P1: every opens is a valid view");
+        assert_eq!(got["steps_total"], json!(steps.len()));
+        let _ = std::fs::remove_dir_all(dir);
     }
 }

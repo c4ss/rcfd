@@ -336,7 +336,7 @@ export interface ProjectView {
 export const VIEW_SHOWN = 'view_shown';
 
 /** F-976: the kinds of panel of the view specification `rcfd-view` 1 (crates/rcfd-workspace/src/view.rs). */
-export type CanvasKind = 'case' | 'run' | 'field' | 'mesh' | 'plot' | 'monitor' | 'table' | 'setting';
+export type CanvasKind = 'case' | 'run' | 'field' | 'mesh' | 'plot' | 'monitor' | 'table' | 'setting' | 'process';
 
 /** F-976: one panel of a view specification, as the engine validated it. */
 export interface CanvasPanel {
@@ -383,6 +383,44 @@ export interface CanvasView {
   readonly readAt: string;
   /** F-979 (ADR 0807 D2): the value of each setting panel, read again when a change of its case is in the feed. */
   readonly settings?: readonly CanvasSetting[];
+  /** F-978 (ADR 0826 D5): the steps of each process panel, read again on each fresh entry of the feed. */
+  readonly process?: readonly CanvasProcess[];
+}
+
+/** F-978 (ADR 0826 D2): one step of a case's process, as the engine gave it (read_view `process`). */
+export interface ProcessStep {
+  readonly i: number;
+  /** created, mesh, setup, run, other (journal); state, warning, stop, residuals, results (run records). */
+  readonly step: string;
+  readonly phase: string;
+  readonly source: 'journal' | 'run';
+  readonly kind: string;
+  readonly t: string | null;
+  readonly text: string;
+  readonly seq?: number;
+  readonly run?: string;
+  readonly who?: string;
+  readonly actor?: unknown;
+  readonly reason?: string;
+  readonly changes?: readonly { readonly path: string; readonly old?: unknown; readonly new?: unknown }[];
+  readonly from?: string | null;
+  readonly to?: string;
+  readonly message?: string;
+  readonly samples?: number;
+  /** residuals: the last point [step, value] of each residuals.* and monitors.* series. */
+  readonly last?: Readonly<Record<string, readonly [number, number | null]>>;
+  readonly snapshots?: number;
+  readonly fields?: readonly string[];
+  /** The view of the step's state (a view specification the engine checked), or null. */
+  readonly opens: CanvasSpec | null;
+}
+
+/** F-978 (ADR 0826 D5): the steps of one process panel. */
+export interface CanvasProcess {
+  readonly panel: number;
+  readonly case: string;
+  readonly steps: readonly ProcessStep[];
+  readonly steps_total: number;
 }
 
 /** Feed entries the Studio keeps for the home (the engine keeps 1000). */
