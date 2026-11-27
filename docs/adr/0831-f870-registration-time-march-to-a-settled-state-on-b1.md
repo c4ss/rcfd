@@ -190,3 +190,32 @@ step; the time-marched B2 and B3 (the mesh term is the SIMPLEC family's); the of
 ## Open questions for the maintainer
 
 To be completed in the addendum: any question of scope.
+
+## Addendum 1: state at an interim hand-back (2026-11-27, 20:30 UTC), before any result
+
+Written because the lead asked for the report while the two registered marches run. No row of the table of checks has
+been formed yet; nothing above is changed. Results go in Addendum 2.
+
+Commits from 39d689c6: ab11c589 (this registration, alone), 438135a1 (the test file; both marches run from its test
+binary, copied to the scratch folder as `bin/f870_tm.exe` before they started), e6724e55 (rustfmt of the test file, a
+change of layout only, made after the binary was copied).
+
+**Running** (started 2026-11-27 18:49:38 UTC, each once, from 438135a1): M(dt) pid 23436, `f870_tm_march_dt_record`; M(dt/2)
+pid 60372, `f870_tm_march_dt2_record`; both write to `w49i-work/f870-time-march-b1-scratch/out/` (`M_dt.log`, `M_dt2.log`;
+at the end `M_dt.csv`, `M_dt_rings.csv`, `M_dt2.csv`, `M_dt2_rings.csv`). Load logger pid 21224 writes `out/load.csv`
+every 15 minutes and ends by itself when both runs have ended (a first logger, pid 67240, ended at its start on a
+defect of its argument and was restarted at 18:50 UTC; the first 30 s of load are not logged). At 20:26 UTC both runs
+were at step 1 750, about 3.0 s per step, CPU load of the machine 91 to 100 %, free memory 20 GB: the expected ends are
+about 23:40 UTC (M(dt)) and 04:00 UTC on 2026-11-28 (M(dt/2)). Every ring point is in the fluid at the three planes
+(the logs' first lines).
+
+**What remains, in order**: wait for both ends; copy the four record files, the two logs and `load.csv` into
+`docs/investigations/f870-time-march-b1/`; run `f870_tm_rows_from_the_committed_records` once with `RECORDED` `None` (the
+registered run of the rows), save its output as `rows.log`, write `RECORDED` and `VERDICTS` from it; run
+`f870_tm_acceptance` once and, if it misses, keep it ignored as `f870_tm_acceptance_known_miss` with its numbers;
+`f870_tm_short_run_holds_the_record` (SR); the mutations by `mutations.sh <commit>` in the scratch folder (M1 to M7);
+commit M1 as `crates/rcfd-api/tests/f870_time_march_b1.mutation.patch`; the checks of rule 7 and row P; Addendum 2
+with the proposal file `docs/roadmap/proposals/0831-F-870.json`.
+
+Deviations so far: `docs_site` was run on the registration's text before its commit, to check its links, as the brief
+asks; `f870_tm_measures_on_known_signals` (C1) was run once before the marches started and passed.
