@@ -99,3 +99,50 @@ mutation. T3 and L2 to L4 are reported beside it. A missed limit is recorded wit
 ## Open questions for the maintainer
 
 None at registration.
+
+## Addendum 1: results (2026-11-27)
+
+Written after the runs; nothing above is changed. Release profile, `CARGO_TARGET_DIR` under the scratch folder spelled
+with backslashes, `CARGO_BUILD_JOBS` 8. Code commit: d4456811 (the ignored test, 32 lines added, nothing else). Each
+registered run was made once, in the registered order. Scratch: `runs.sh`, `runs.log`, `run-<R1,R2,R3,L1>.log`,
+`mut.sh`, `mut.log`. Another agent's work kept the machine at 99 % to 100 % CPU through every run.
+
+### Checks
+
+| Id | Limit | Measured | Met |
+|---|---|---|---|
+| R1 | every assertion of B1 to B3; 16 spinning threads | 16 threads; run finished; 10 steps (created, mesh, setup, state, run, state, state, residuals, results, setup); journal seq 1 to 5 against 1 to 5; states 3 against 3, terminal; residuals 4 of 4 equal; results; ordered; after-run set-up last; views shown 10 of 10; B2 refused 1003 at `panels[0].kind`, nothing written; B3 held; 96.7 s; CPU 100 % at start and end | yes |
+| R2 | as R1 | the same values in every assertion; 39.7 s; CPU 100 % and 100 % | yes |
+| R3 | as R1 | the same values in every assertion; 31.9 s; CPU 100 % and 100 % | yes |
+| L1 | pass | B1 to B3 passed with the same values (1 passed, 1 ignored: the test of this work); 7.3 s; CPU 99 % and 100 % | yes |
+| T3 | 0 after each | 0, 0, 0, 0; no process of this work's targets alive at the end | yes |
+| M1 | fails at "B1: the journal's steps, in order, none missing" | exit 101 at line 238 with that message (journal seq 1, 4 against 1 to 5); CPU 82 % | **caught** |
+| M2 | fails at "P1: every opens is a valid view" | exit 101 at `view.rs` 3623 with that message; CPU 100 % | **caught** |
+| M3 | fails at S1 ("HO's project ... under") | exit 101 at `replace_hold_f978.rs` 335, "S1: HO's project ...\Temp\rcfd-mcp-w48f-f998-s1-o-40784 under ...\Temp\"; CPU 100 % | **caught** |
+| L2 | pass | `rcfd-mcp --lib` 18 passed, 1 ignored (existing) | yes |
+| L3 | clean | `cargo fmt -p rcfd-mcp --check` exit 0; clippy `--release -p rcfd-mcp --all-targets -- -D warnings` exit 0 | yes |
+| L4 | pass | in addendum 2 | see there |
+
+No `edit_case` was refused in the 12 of this work's runs, nor in the 3 of M1's run.
+
+### The acceptance, clause by clause
+
+a1 to a6 are met: every assertion the table of the clauses names held in R1, R2, R3 and L1.
+
+Deviations: none. Not run: nothing registered was left out. Actual size: done; 0 further registrations; 1 heavy run
+(the mutation copy's build); 0 questions; about 115 000 bytes read.
+
+Decision by the registered rule: **done**. B1 to B3 held in every registered run (R1, R2, R3 under the 16 threads, and
+L1), the clauses a1 to a6 are met, and each committed mutation M1 to M3 failed as expected.
+
+## Open questions for the maintainer
+
+None.
+
+### For the lead: roadmap entries
+
+> Status: done.
+
+> Note: ADR 0836, 2026-11-27, done: on main after F-998, B1 to B3 held in 3 of 3 registered runs under arm H's 16 spinning threads and in the file's default run (CPU 99 % to 100 %, 10 of 10 steps, journal seq 1 to 5 against 1 to 5, every step's view shown, 0 of 12 edit_case refused), and the three committed mutations beside F-978's tests were each caught.
+
+The same entries are `docs/roadmap/proposals/0836-F-978.json`.

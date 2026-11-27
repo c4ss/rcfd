@@ -1,0 +1,9 @@
+{
+  "form": 1,
+  "adr": "0836",
+  "item": "F-978",
+  "base": "476de79ba32f9235ba28ad2cb559375dfd25ad57",
+  "status": "done",
+  "note": "ADR 0836, 2026-11-27, done: on main after F-998, B1 to B3 held in 3 of 3 registered runs under arm H's 16 spinning threads and in the file's default run (CPU 99 % to 100 %, 10 of 10 steps, journal seq 1 to 5 against 1 to 5, every step's view shown, 0 of 12 edit_case refused), and the three committed mutations beside F-978's tests were each caught.",
+  "follow_ups": []
+}
