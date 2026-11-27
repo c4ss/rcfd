@@ -1,7 +1,7 @@
-//! ADR 0834 (F-998): `atomic::write_new` as a plain write. W1: readers of a file being created never see a partial
-//! file (Windows); N3: its negative control, a plain write without share mode 0, which they do see partially; W2: the
-//! bytes written equal, no temp file left; W3: an existing file is refused and left unchanged.
-
+//! ADR 0834 (F-998): the plain write. W1: readers of a file being created never see a partial file (Windows); N3: its
+//! negative control, a plain write without share mode 0, which they do see partially; W2: the bytes written equal, no
+//! temp file left; W3: an existing file is refused and left unchanged. ADR 0835 (F-998): the plain write is
+//! `atomic::write_new_case`, for new case files only (`write_new` is origin/main's again), and W1 to W3 check it.
 use rcfd_project::{atomic, ProjectError};
 use std::path::{Path, PathBuf};
 
@@ -86,11 +86,11 @@ mod readers {
     }
 }
 
-/// ADR 0834 W1: no partial read of a file `write_new` is creating; the readers met the write (≥ 5 sharing violations).
+/// ADR 0834 W1 (ADR 0835: of `write_new_case`): no partial read of a file it is creating; the readers met the write (≥ 5 sharing violations).
 #[cfg(windows)]
 #[test]
 fn w1_readers_never_see_a_partial_new_file() {
-    let c = readers::hammer("w1", |p, b| atomic::write_new(p, b).map_err(std::io::Error::other));
+    let c = readers::hammer("w1", |p, b| atomic::write_new_case(p, b).map_err(std::io::Error::other));
     assert_eq!(c.partial, 0, "W1: partial reads: {c:?}");
     assert!(c.sharing >= 5, "W1: the readers did not meet the write: {c:?}");
 }
@@ -116,7 +116,7 @@ fn w2_the_bytes_written_equal_and_no_temp_file_is_left() {
     for n in [0, 1, 4095, (1 << 20) + 3] {
         let p = d.join(format!("n-{n}.bin"));
         let b = pattern(n);
-        atomic::write_new(&p, &b).unwrap();
+        atomic::write_new_case(&p, &b).unwrap();
         assert_eq!(std::fs::read(&p).unwrap(), b, "W2: bytes of {n}");
     }
     let names: Vec<String> = std::fs::read_dir(&d)
@@ -138,7 +138,7 @@ fn w3_an_existing_file_is_refused_and_unchanged() {
     let d = dir("w3");
     let p = d.join("case.toml");
     std::fs::write(&p, b"old bytes\n").unwrap();
-    let e = atomic::write_new(&p, &pattern(5000)).unwrap_err();
+    let e = atomic::write_new_case(&p, &pattern(5000)).unwrap_err();
     assert!(matches!(e, ProjectError::Exists { .. }), "W3: {e}");
     assert_eq!(
         std::fs::read(&p).unwrap(),

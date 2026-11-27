@@ -12,6 +12,10 @@
 //! ADR 0834 (F-998): the arms H (`write_new` before the plain write) and P (after it), 450 rounds each of H's load with
 //! the trace X5 beside them; the measure is the count of new case files the System process holds. Each is built at its
 //! commit and run once.
+//!
+//! ADR 0835 (F-998): `f998c_block`, a block of 50 rounds of H's load whose tag `RCFD_F998_BLOCK` names its arm and
+//! block; H's blocks run from the binary built before the new case files moved to `write_new_case`, P's after it,
+//! interleaved by a scratch script, each block once.
 
 mod common;
 
@@ -388,4 +392,12 @@ fn f998b_h_hold_count() {
 #[ignore = "ADR 0834: loads every processor on purpose; run once with X5 beside it"]
 fn f998b_p_hold_count() {
     arm_f998("bp", 450, false, false);
+}
+
+/// ADR 0835: one block of 50 rounds of H's load; its tag (`h00` to `h39`, `p00` to `p39`) from `RCFD_F998_BLOCK`.
+#[test]
+#[ignore = "ADR 0835: loads every processor on purpose; run once per block with X5 beside it"]
+fn f998c_block() {
+    let tag = std::env::var("RCFD_F998_BLOCK").expect("ADR 0835: RCFD_F998_BLOCK names the block");
+    arm_f998(&format!("c{tag}"), 50, false, false);
 }
