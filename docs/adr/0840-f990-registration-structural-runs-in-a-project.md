@@ -196,3 +196,21 @@ held as a `*_known_miss` record with its number (rule 2).
 - **Q1. The solid driver in the shipped engine (scope).** (a) the lead adds `rcfd-solid-run` to the binaries the Studio's
   packaging and the installers carry, in a follow-up; (b) later move the solid path into `rcfd run` (a CLI change), and
   drop the driver. Recommendation: (a), since it changes no golden and no CLI. Not taken here (scope, rule 6).
+
+## Amendment 1 (2026-11-27): the invalid copy of N1 and S3, and one dependency
+
+Written after the code of D1 to D5 and before any test of F-990 was compiled, committed or run; nothing above is changed.
+
+1. **The invalid copy.** N1 and S3 name "the cantilever with `youngs_modulus = -1.0`" and expect a diagnostic at
+   `materials.steel.youngs_modulus`. Read again before any run: a negative modulus passes the parse (the schema's
+   `Schema::float(0.0)` has no bound, `solid_case.rs` line 98) and is refused only by the build, at the key
+   `materials.steel` (`Material::isotropic_elastic`, line 868); `start_run` parses and does not build (D4), so S3's limit
+   (1003, no run folder) could not hold for that text. The set-up is corrected: the invalid copy of N1 and S3 is the
+   cantilever **without its line `youngs_modulus = 2.0e11`**, which the parse refuses at
+   `materials.steel.youngs_modulus` ("required", `semantic_errors`, line 603). Every limit of N1 and S3 stays as
+   registered.
+2. **A dependency.** The driver (D2, D3) names the FE mesh and `recover::von_mises` of `rcfd-fem`, which `rcfd-workspace`
+   did not list (finding 2): `rcfd-fem` is added to its dependencies. It is a crate of this workspace below `rcfd-api`
+   (which depends on it), so no third-party crate is added and the graph stays acyclic (rule 5).
+
+No other row, limit, source or the decision rule changes.
