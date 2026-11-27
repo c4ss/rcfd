@@ -1,0 +1,15 @@
+# expect-fail: cargo test -p rcfd-api --release --target-dir target/mutation --test f879_check_h_class f879_hc_measures_on_known_signals
+diff --git a/crates/rcfd-api/tests/f879_check_h_class.rs b/crates/rcfd-api/tests/f879_check_h_class.rs
+index 7867f45f..b7adf0b6 100644
+--- a/crates/rcfd-api/tests/f879_check_h_class.rs
++++ b/crates/rcfd-api/tests/f879_check_h_class.rs
+@@ -203,7 +203,8 @@ fn measure(t: &[f64], x: &[f64], dt: f64) -> Meas {
+     } else {
+         f64::NAN
+     };
+-    let (y, drift) = detrend(x);
++    let (_y, drift) = detrend(x);
++    let y: Vec<f64> = x.iter().map(|v| v - mean).collect();
+     let (k, share) = periodogram_peak(&y);
+     let length = n as f64 * dt;
+     let amp = half_range(x);
