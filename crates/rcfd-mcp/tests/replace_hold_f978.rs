@@ -47,7 +47,11 @@ fn step(c: &mut Mcp, dir: &Path, tag: &str, i: usize, op: &str, tool: &str, args
     if refused && op != "new_case" {
         mark(dir, i, op, &format!("arm-{i}.toml"));
     }
-    let text: String = if refused { r.to_string().chars().take(240).collect() } else { String::new() };
+    let text: String = if refused {
+        r.to_string().chars().take(240).collect()
+    } else {
+        String::new()
+    };
     eprintln!(
         "ARM {tag} {i} {op} {t0} {t1} {} {text}",
         if refused { "refused" } else { "ok" }
@@ -82,7 +86,8 @@ fn arm(tag: &str, rounds: usize) -> usize {
     let mut refused = 0;
     for i in 0..rounds {
         let case = format!("cases/arm-{i}.toml");
-        let args = json!({"name": format!("arm-{i}"), "copy": "cases/cavity-re100.toml", "reason": "F-978 ADR 0832 arm"});
+        let args =
+            json!({"name": format!("arm-{i}"), "copy": "cases/cavity-re100.toml", "reason": "F-978 ADR 0832 arm"});
         if step(&mut c, &dir, tag, i, "new_case", "new_case", args) {
             refused += 1;
             continue;

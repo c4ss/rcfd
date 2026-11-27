@@ -200,3 +200,15 @@ M2 were not made.
 > Follow-ups: one under F-978 (rule 13), no new item unless the maintainer takes Q2 (b): "F-978: what makes the System process hold a new case file", arm H of ADR 0832 with the project outside the temp folder and with the case created by a plain write; its limits are registered in its ADR.
 
 The same entries are `docs/roadmap/proposals/0832-F-978.json`.
+
+## Addendum 2 (2026-11-27): the last run of L1 to L3
+
+Written after that run; nothing above is changed. L1: `rcfd-project --lib` 4 passed, `rcfd-mcp --lib` 18 passed (1
+ignored, as before), `hammer` 3 passed (1 ignored, as before), `replace_refused_f978` 1 passed, `edit_lock_f755` 7
+passed and `edit_lock_f855` 2 passed (1 ignored, as before) with `test-hooks`, `replace_hold_f978` 3 ignored (its
+registered runs are above): **met**. L2: clippy of `rcfd-project` and `rcfd-mcp` clean, `cargo fmt -p rcfd-project
+--check` clean; **`cargo fmt -p rcfd-mcp --check` missed**: two lines of `replace_hold_f978.rs` (a `let text` and a
+`let args`) were not in rustfmt's layout. They were corrected by rustfmt alone in a following commit, which changes no
+token, and `cargo fmt -p rcfd-mcp --check` was then run on that commit. L3: `docs_site` 2 passed; `roadmap_proposals.py
+check` passed (partial to partial, gap set); `process_report.py --check` gave 1 failure, `docs/adr/index.md` not
+current, a generated file left to the lead (rule 9): **met** as registered.
