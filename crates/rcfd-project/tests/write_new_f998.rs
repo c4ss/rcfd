@@ -28,6 +28,7 @@ mod readers {
     const READERS: usize = 3;
 
     #[derive(Debug, Default)]
+    #[allow(dead_code)]
     pub struct Counts {
         pub full: u64,
         pub partial: u64,
