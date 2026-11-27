@@ -147,3 +147,55 @@ no golden holds the entry (finding 1), so they must not differ at all.
   `tools_list_project_f270.json` (an additive golden edit the lead re-records) and has `project_list_f270.rs` compare
   them instead of taking them out, so that M6 is caught by a test. Recommendation: (a) for F-987, and (b) as a new item
   for the lead to decide; not taken here, as it touches an existing test and a golden.
+
+## Addendum 1: results (2026-11-27)
+
+Code commit 2c5009cf (the description line and the test), mutation patch fe644394; the run was made once, in the release
+profile, by `run.sh` in the scratch folder (`CARGO_BUILD_JOBS=8`, the scratch target folder). Logs: `build.log`,
+`tests.log`, `lib.log`, `fmt.log`, `clippy.log`, `mut_M1.log` to `mut_M7.log` in the scratch folder.
+
+### Checks
+
+| Id | Limit | Measured | Met |
+|---|---|---|---|
+| D1 | 0 of 22 missing | 0 of 22 missing | yes |
+| D2 | as stated in D2 | `write_files`, required `["view"]`, properties `reason` and `view`, `view`'s text as before | yes |
+| N1 | exactly the 6 phrases, in order | 6, in the registered order | yes |
+| G1 | exit 0, no output | exit 0, no output | yes |
+| G2 | one file, 1 and 1, the show_view `description:` line | `crates/rcfd-mcp/src/project.rs` only, 1 removed and 1 added, line 529, show_view's description | yes |
+| E1 | every test passes | `tool_list_f275` 8, `project_list_f270` 1, `tool_list_adr0730` 2, `default_f1` 2: 13 passed, 0 failed | yes |
+| E2 | passes | `canvas_process_f978` 1 passed in 33.5 s ("B3: description names process true") | yes |
+| L1 | passes | `rcfd-mcp --lib` 18 passed, 0 failed, 1 ignored (an existing record, not touched) | yes |
+| L2 | clean | `cargo fmt -p rcfd-mcp --check` exit 0, no output; clippy `--release --all-targets -D warnings` exit 0 | yes |
+| L3 | pass | in Addendum 2, run after this addendum is committed | Addendum 2 |
+
+### Mutations
+
+| Id | Caught by | What failed |
+|---|---|---|
+| M1 | D1 | exit 101, missing `mesh {case}` |
+| M2 | D1 | exit 101, missing `{version: 1, run, title?, layout?}` and `layout of its case's category` |
+| M3 | D1 | exit 101, missing `setting {case, setting` |
+| M4 | D1 | exit 101, missing `monitor {case, monitor` |
+| M5 | D1 | exit 101, missing `process {` and `process {case}` |
+| M6 | G2 (not by a test, as registered) | the three tests exit 0; against 476de79b the mutated `project.rs` has 2 removed and 2 added lines (529 and 543), over G2's limit of 1 |
+| M7 | `project_list_f270` | exit 101, "list_runs differs from the golden" |
+
+### Deviations and what was not run
+
+None of the registered checks deviated. The goldens are not touched (finding 1), so there is no golden diff to report and
+no re-record for the lead. Not run: the whole `rcfd-mcp` integration suite and `project_runs_w48f` (they count the tools
+only), `baseline_hashes` (no solver file touched), `npm test` (no Studio file touched).
+
+Size (actual): done; 0; 0; 1; 160000
+
+### Decision
+
+D1, D2, N1, G1, G2, E1, E2, L1 and L2 hold, M1 to M5 and M7 are caught by the tests named and M6 by G2; with L3 passing
+(Addendum 2), **done** by the registered rule. Q1 above stays open for the lead.
+
+### For the lead: roadmap entries
+
+> Status: done.
+
+> Note: ADR 0838, 2026-11-27, done: show_view's description names F-976's seven kinds, the setting kind, ADR 0807's mesh-of-a-case and monitor-of-a-case forms, the process panel and ADR 0817's run form (22 of 22 phrases found, the old text missing exactly 6); no golden holds show_view, so no golden byte changed and nothing is re-recorded.
