@@ -233,6 +233,9 @@ test('A2, A3: every journaled step of the case shows who and why in the process 
 });
 
 test('A4, A5: a reason over 500 code points is cut, a reason that is not a string reads "not given"', async () => {
+  // ADR 0837 amendment 1: the record of the first set-up, which looked for the activity line on the Canvas tab (it is
+  // drawn on the Home tab only); see reason-f273-a1.spec.ts
+  test.skip(true, 'ADR 0837 amendment 1: the defective set-up of A4 and A5; see reason-f273-a1.spec.ts');
   test.setTimeout(120_000);
   const before = (await rowLines(page)).length;
   let t0 = appendLine(LONG);
