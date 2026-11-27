@@ -932,7 +932,10 @@ fn f885_kg_variants_act() {
 
 fn print_arm(n: usize, arm: Arm, r: &ArmResult, off: Option<&[f64]>) {
     let ratio = off.map_or(String::new(), |o| {
-        format!(", e / e_OFF {}", sci(&(0..3).map(|j| r.0[j] / o[j]).collect::<Vec<f64>>()))
+        format!(
+            ", e / e_OFF {}",
+            sci(&(0..3).map(|j| r.0[j] / o[j]).collect::<Vec<f64>>())
+        )
     });
     println!(
         "F885-KG N {n} {arm:?}: e(0.1, 0.05, 0.025) {}, p_c {:.4}, p_f {:.4}{ratio}",
@@ -989,7 +992,10 @@ fn f885_kg_order_64_record() {
         rs.push(r);
     }
     let r1: Vec<f64> = rs[1].0.iter().zip(R1_E).map(|(a, b)| rel(*a, b)).collect();
-    println!("F885-KG R1: ON at N 64 relative to ADR 0822 {} (limit {R1_TOL:e})", sci(&r1));
+    println!(
+        "F885-KG R1: ON at N 64 relative to ADR 0822 {} (limit {R1_TOL:e})",
+        sci(&r1)
+    );
     reading(N_FINE, &rs.iter().map(|r| r.2).collect::<Vec<f64>>());
     assert!(r1.iter().all(|&x| x <= R1_TOL), "R1: {r1:?}");
     assert!(rs[0].2 >= ORDER_MIN, "K64-OFF missed: p_f {}", rs[0].2);

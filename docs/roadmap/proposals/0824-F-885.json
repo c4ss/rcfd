@@ -1,0 +1,8 @@
+{
+  "form": 1,
+  "adr": "0824",
+  "item": "F-885",
+  "base": "689fab92fab4aed07a649b5e7c625eb67772ffdc",
+  "status": "done",
+  "note": "ADR 0824, 2026-11-27, done: the remedy's lag was the kept convection gradient's boundary values (of u^n while its cells are extrapolated on BDF2's first outer iteration); formed from the extrapolated field (outer_frozen_convection_gradient_extrapolated_boundary) the remedy has BDF2's order (p_f 2.029 at N = 64, 2.011 at N = 16 with rhie_chow_step_consistent; the setting alone 1.822 and 1.126), the steady answer is unchanged, and check H with it is TIME-ACCURATE in 100 % of both windows and classes the hub pocket STEADY; held by crates/rcfd-api/tests/f885_kept_gradient_lag.rs and docs/investigations/f885-kept-gradient-lag."
+}

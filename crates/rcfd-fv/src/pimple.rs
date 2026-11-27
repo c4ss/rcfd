@@ -2185,7 +2185,8 @@ impl PimpleSolver {
             // F-885 (ADR 0824, opt-in): the boundary values of the extrapolated field for the kept convection gradient
             let ub_extrapolated: Option<Vec<Vec3>> = match extrap {
                 Some(r)
-                    if s.outer_frozen_convection_gradient && s.outer_frozen_convection_gradient_extrapolated_boundary =>
+                    if s.outer_frozen_convection_gradient
+                        && s.outer_frozen_convection_gradient_extrapolated_boundary =>
                 {
                     let mut ue = self.u.clone();
                     for c in 0..n {

@@ -210,3 +210,157 @@ measurement.
 ## Open questions for the maintainer
 
 To be completed in the addendum with options and a recommendation: any question of scope.
+
+## Addendum 1: results
+
+Written 2026-11-27, after the runs. Commits on the branch, from 689fab92: f8d9059d (this registration, alone), 4bb84d4f
+(the two variants in `pimple.rs` and the test file; every registered run of the order, the steady check, C5 and check H was
+made from its code), 0661b643 (the committed mutation M1, the two F-885 patches re-based, the order and mutation logs),
+12f8c546 (the records of check H, `RECORD` written from them, the SR and G1 logs), and the commit of this addendum with the
+rule 7 log and the proposal file. Records in `docs/investigations/f885-kept-gradient-lag/`: `order.log`, `mutations.log`,
+`rebased_patches.log`, `H_dt.csv`, `H_dt.log`, `H_dt2.csv`, `H_dt2.log`, `sr.log`, `g1.log`, `rule7.log`.
+
+### The sentence
+
+**The remedy's lag was the kept gradient's boundary values: on the first outer iteration of a BDF2 step they are of `u^n`
+while its cells are extrapolated, and the setting kept that mix to the end of the step. Formed from the extrapolated field
+(variant A), the remedy has BDF2's order on both meshes, the steady answer is unchanged, and check H with it classes the hub
+pocket STEADY in both runs.** `p_f` with A is 2.0293 at N = 64 (the setting as it was 1.8222, off 2.0345) and 2.0105 at
+N = 16 with `rhie_chow_step_consistent` (as it was 1.1262, off 2.0219); `e_A / e_OFF` is constant in `dt` (1.336, 1.341,
+1.346). Keeping the gradient from the second outer iteration (C) also restores the order. By the registered rule F-885 is
+**done**.
+
+### Table of checks
+
+| Id | Limit | Measured | Met |
+| --- | --- | --- | --- |
+| K64-OFF | `p_f >= 1.9` | 2.0345 (`e` 2.7615e-4, 6.7885e-5, 1.6570e-5; `p_c` 2.0243) | yes |
+| K64-A | `p_f >= 1.9` | 2.0293 (`e` 3.6899e-4, 9.1059e-5, 2.2307e-5; `p_c` 2.0187) | yes |
+| K64-C | `p_f >= 1.9` | 2.0377 (`e` 2.7845e-4, 6.8127e-5, 1.6593e-5; `p_c` 2.0311) | yes |
+| K16-OFF | `p_f >= 1.9` | 2.0219 (`e` 3.8292e-4, 9.3308e-5, 2.2976e-5; `p_c` 2.0370) | yes |
+| K16-A | `p_f >= 1.9` | 2.0105 (`e` 7.4350e-4, 1.8368e-4, 4.5587e-5; `p_c` 2.0171) | yes |
+| K16-C | `p_f >= 1.9` | 2.0282 (`e` 3.8988e-4, 9.4145e-5, 2.3081e-5; `p_c` 2.0501) | yes |
+| R1 | relative `<= 1e-4` each | 1.16e-5, 1.04e-6, 1.42e-5 | yes |
+| RD | recorded; the reading by its rule | A and C stand, B ruled out, D not ruled out (below) | recorded |
+| VF | `> 1e-9` each | A against ON 4.0386e-4, C against ON 4.1045e-4 | yes |
+| S1 to S3 (A) | as ADR 0821 S | OFF 211 steps, ON with A 210; velocity 3.3828e-13, flux 3.3426e-13; after 5 steps 8.3136e-3 | yes |
+| S1 to S3 (C) | as ADR 0821 S | ON with C 213 steps; velocity 7.8456e-13, flux 7.6156e-13; after 5 steps 5.2638e-3 | yes |
+| A3 | both complete | H(dt) 5 498 of 5 498 steps, H(dt/2) 10 996 of 10 996, no failure, fields finite, mass balance 8.9e-16 and 7.4e-16 | yes |
+| A4 | at least 99 % with `d_5 <= 1e-2 d_1` | H(dt) 1.000000 (`d_5 / d_1` median 1.26e-3, max 3.01e-3); H(dt/2) 1.000000 (median 2.39e-4, max 2.30e-3) | yes |
+| A5 | one of the four | class STEADY, verdict Steady: site amplitude 1.2557e-3 m/s (H(dt)) and 2.2775e-3 m/s (H(dt/2)), both `<= 0.193` | yes |
+| A6 | as stated | both runs decide | yes |
+| SR | relative `<= 1e-6`; finite; `d_1 > 0` | 4.603e-10 | yes |
+| C5 | each as built | each of the seven as built | yes |
+| G1 | as registered | passed: counts 5 498 and 10 996, windows 2 749 and 5 498, class and verdict Steady equal to `RECORD` | yes |
+| B3 | passes, file unchanged | `baseline_hashes`: 3 passed, 1 ignored; `baseline_hashes.rs` unchanged since 689fab92 | yes |
+| D1 | as stated | under `crates/*/src` only `pimple.rs` (the two fields, their defaults and reads); no roadmap, ledger, golden or existing test file; the patches of `f885_frozen_convection_check_h` and `f885_order_case` re-based (below); all ten F-885 patches apply | yes |
+| P | rule 7 | see "The checks of rule 7" | yes |
+
+Beside, without a limit: `e / e_OFF` at N = 64: ON 1.360, 1.430, 1.657; A 1.336, 1.341, 1.346; C 1.008, 1.004, 1.001. At
+N = 16 with `rhie_chow_step_consistent`: ON 2.80, 4.69, 8.73; A 1.94, 1.97, 1.98; C 1.018, 1.009, 1.005. Check H, beside:
+the largest seam-pair flux sum 2.3e-15 in both runs; shaft power 313.56 W and 313.96 W; the five cells of largest
+amplitude over the window lie at the tip (r 0.234 to 0.247 m), 1.54 m/s at most in H(dt) and 0.126 m/s in H(dt/2). Wall
+time: the N = 64 record 710 s, the N = 16 arms 99 s, H(dt) 106 min, H(dt/2) 165 min.
+
+### The reading (section 2)
+
+| Arm | `p_f` at N = 64 | `p_f` at N = 16, `rhie_chow_step_consistent` | Reading |
+| --- | --- | --- | --- |
+| ON | 1.8222 | 1.1262 | |
+| A | 2.0293 (`p_f(A) - p_f(ON)` 0.2071) | 2.0105 | stands |
+| B | 1.8222 (equal to ON to the printed digits) | 1.1262 (equal) | ruled out |
+| C | 2.0377 | 2.0282 | stands |
+| D | 1.0921 (`abs(p_f(D) - p_f(ON))` 0.7301) | 1.0398 (0.0863) | not ruled out |
+
+A and C stand by their rules: the lag is the mix of time levels in the kept gradient, removed by forming the first
+iteration's gradient wholly from the extrapolated field (A) or by keeping a gradient of one iterate (C). B is the
+convection's partner value, which the later iterations assemble anew, as predicted. D is not ruled out by its rule, but it
+does not bear on A: the exact start of ADR 0822 is itself first order without the setting (its D-s, 1.064 at N = 16), its
+older face flux being the face value of the exact field rather than a flux of the solver's own step, so the arm adds a
+start defect of its own; with A its order was not run. Not diagnosed further; the registered checks of A do not use it.
+
+### Mutations
+
+From `mutations.log` (`git archive` of 4bb84d4f in the scratch folder, its own target folder) and, for M6, an archive of
+12f8c546:
+
+| Id | What happened |
+| --- | --- |
+| M1 | A not read: caught by `f885_kg_variants_act` (A against ON 0). Committed as the mutation patch |
+| M2 | C not read: caught by `f885_kg_variants_act` (C against ON 0) |
+| M3 | A's extrapolation halved: caught by `f885_kg_order_16` (K16-A 1.3309) |
+| M4 | the kept gradient scaled by 0.99: caught by `f885_kg_steady` (S2 for A 2.95e-3) |
+| M5 | the ratio of E-1 1e-1: caught by `f885_kg_rules_on_built_records` ("d5/d1 = 0.05 everywhere" got Steady) |
+| M6 | `H_dt.csv` cut to 2 749 rows: caught by `f885_kg_class_from_the_committed_records` (row count 2 749 against 5 498) |
+
+Six of six caught. The two earlier F-885 patches whose lines this work moved were re-based with the mutation unchanged
+(`f885_frozen_convection_check_h`: the kept gradient scaled by 0.99; `f885_order_case`: the setting not read); on a scratch
+copy of 4bb84d4f each still fails its test (`f885_fc_steady`, `f885_oc_setting_acts`; `rebased_patches.log`).
+
+### Deviations
+
+1. Check H's two runs were not started together. The first launch started H(dt) at 02:53 UTC, but by a defect of the
+   command line H(dt/2)'s output went to a path the system refused, so no process started; its second launch failed at the
+   link (the test binary was in use by H(dt) and cargo rebuilt it after the docs commit 0661b643, which the crates read at
+   compile time) before any step. H(dt/2) was then run once, from a copy of the same binary of 4bb84d4f, from 02:58:58 UTC.
+   Each run of check H was made once; no step of either was repeated.
+2. M6's first attempt read a stale archive of 4bb84d4f (no `H_dt.csv`), so the mutation was not applied; it is void, and
+   M6 was then run once on the archive of 12f8c546.
+3. G1's log keeps only the result line (the log filter of the run script left out its print line); the pass asserts the
+   class and verdict equal to `RECORD`, which was written from the two runs' printed summaries.
+4. The N = 16 arms record prints OFF and A beside the registered run of `f885_kg_order_16`, as registered; the same numbers
+   to every printed digit.
+5. The lib tests, the named test files and `baseline_hashes` ran at 0661b643 (solver and test code of 4bb84d4f); the later
+   commits change the test file's `RECORD` only, which G1, fmt and clippy read.
+6. `rustfmt --check` of the touched files failed at 12f8c546 on line wrapping (two calls in the test file, one condition
+   in `pimple.rs`); `rustfmt` was applied, a layout change only (no token changed), and the committed M1 patch was made
+   again on the new layout with the same mutation. `cargo fmt -p rcfd-fv -p rcfd-api --check` printed its help; run per
+   crate it gave exit 0. No registered run was repeated for the layout change.
+
+### What was not run
+
+A steady check that A changes (registered as not covered); the order of A with the limiter, variable steps or a rotational
+seam; the whole workspace suite.
+
+### The checks of rule 7
+
+See `rule7.log` (copied into this commit): the five test runs of `rule7a` at 0661b643 (`rcfd-fv --lib` 115 passed,
+6 ignored; `rcfd-api --lib` 160 passed, 4 ignored; `--test f885_order_case` 3 passed, 6 ignored; `--test
+f885_frozen_convection_check_h` 3 passed, 6 ignored; `--test baseline_hashes` 3 passed, 1 ignored); `cargo clippy -p
+rcfd-fv -p rcfd-api --all-targets -- -D warnings` clean; after deviation 6 `rustfmt --check --edition 2021` of the touched
+files exit 0 and `cargo fmt -p rcfd-fv --check`, `cargo fmt -p rcfd-api --check` exit 0; the ten F-885 patches apply.
+`docs_site`, `roadmap_proposals.py check` and `process_report.py --check` run at the commit of this addendum, as reported
+to the lead.
+
+### Size
+
+Size (agent): done; 0; 3; 0; 175000
+
+### Decision by the registered rule
+
+**Done.** The corrected remedy is A (section 3): K64-OFF, K16-OFF, K64-A and K16-A are met, and S1 to S3; VF, R1, A3 and
+A4 in both runs, A5 with the verdict Steady, SR, C5, G1, B3, D1 and P are met, and each of M1 to M6 is caught. F-885's
+acceptance: check H of ADR 0183 was run as registered there and in ADR 0766 with the outer-iteration rule of ADR 0183 as
+written (100 % of the window's steps of both runs), and it classes the hub pocket as steady, with the opt-ins
+`alpha_free_face_flux`, `outer_frozen_limiter`, `outer_frozen_convection_gradient` and
+`outer_frozen_convection_gradient_extrapolated_boundary`.
+
+## Open questions for the maintainer
+
+1. **The variant A and the setting.** Options: (a) keep A a separate opt-in beside `outer_frozen_convection_gradient`, as
+   now, the setting's bytes unchanged and every earlier record valid; (b) make A the behaviour of the setting itself, which
+   changes the bytes of every run with the setting (ADRs 0820 to 0822's records) though no default. I recommend (a): it is
+   the registered state, and a run that wants the order sets both.
+2. **Scope.** The class STEADY holds with four opt-ins of the pimple step; whether the hub pocket is steady with the
+   default step is not what F-885 asks. No new item proposed; a question of the maintainer's scope only.
+
+## For the lead: roadmap entries
+
+> Status proposed for F-885: done.
+
+> Note entry: ADR 0824, 2026-11-27, done: the remedy's lag was the kept convection gradient's boundary values (of u^n while its cells are extrapolated on BDF2's first outer iteration); formed from the extrapolated field (outer_frozen_convection_gradient_extrapolated_boundary) the remedy has BDF2's order (p_f 2.029 at N = 64, 2.011 at N = 16 with rhie_chow_step_consistent; the setting alone 1.822 and 1.126), the steady answer is unchanged, and check H with it is TIME-ACCURATE in 100 % of both windows and classes the hub pocket STEADY; held by crates/rcfd-api/tests/f885_kept_gradient_lag.rs and docs/investigations/f885-kept-gradient-lag.
+
+The same entries are in `docs/roadmap/proposals/0824-F-885.json` (form 1 of ADR 0755, base 689fab92), checked with
+`python scripts/roadmap_proposals.py check`. No gap (done) and no follow-up item (question 2).
+
+Generated pages that this work may leave not current, for the lead (rule 9): `docs/adr/index.md` (ADR 0824 is new).

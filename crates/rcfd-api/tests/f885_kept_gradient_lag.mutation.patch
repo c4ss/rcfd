@@ -1,14 +1,14 @@
 # expect-fail: cargo test -p rcfd-api --release --test f885_kept_gradient_lag f885_kg_variants_act
 diff --git a/crates/rcfd-fv/src/pimple.rs b/crates/rcfd-fv/src/pimple.rs
-index 138d78cb..59b4d84a 100644
+index 1f686e5b..332013d7 100644
 --- a/crates/rcfd-fv/src/pimple.rs
 +++ b/crates/rcfd-fv/src/pimple.rs
-@@ -2185,7 +2185,7 @@ impl PimpleSolver {
-             // F-885 (ADR 0824, opt-in): the boundary values of the extrapolated field for the kept convection gradient
+@@ -2186,7 +2186,7 @@ impl PimpleSolver {
              let ub_extrapolated: Option<Vec<Vec3>> = match extrap {
                  Some(r)
--                    if s.outer_frozen_convection_gradient && s.outer_frozen_convection_gradient_extrapolated_boundary =>
-+                    if s.outer_frozen_convection_gradient && false =>
+                     if s.outer_frozen_convection_gradient
+-                        && s.outer_frozen_convection_gradient_extrapolated_boundary =>
++                        && false =>
                  {
                      let mut ue = self.u.clone();
                      for c in 0..n {
