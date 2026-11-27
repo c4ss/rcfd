@@ -898,7 +898,11 @@ fn sampled(rings: &[RingRow]) -> Sampled {
             })
             .collect()
     };
-    let mean_of = |vs: &[Vec<f64>]| -> Vec<f64> { (0..vs[0].len()).map(|j| mean_half(&vs.iter().map(|v| v[j]).collect::<Vec<_>>()).0).collect() };
+    let mean_of = |vs: &[Vec<f64>]| -> Vec<f64> {
+        (0..vs[0].len())
+            .map(|j| mean_half(&vs.iter().map(|v| v[j]).collect::<Vec<_>>()).0)
+            .collect()
+    };
     let at90 = per(X_DOWN);
     let spread = (0..at90[0].len())
         .map(|j| mean_half(&at90.iter().map(|v| v[j]).collect::<Vec<_>>()).1)
@@ -921,7 +925,9 @@ fn rows_of(a: &[Row], b: &[Row], ra: &[RingRow], rb: &[RingRow]) -> Rows {
         let mut want = radii();
         want.push(R_CASING_RING);
         rings.len() == 5 * 3 * 27
-            && rings.iter().all(|g| SAMPLE_DT.iter().any(|&s| s * f == g.step) && rel(g.m.r, want[g.ring]) <= 1e-12)
+            && rings
+                .iter()
+                .all(|g| SAMPLE_DT.iter().any(|&s| s * f == g.step) && rel(g.m.r, want[g.ring]) <= 1e-12)
     };
     o.verdict(
         "R",
@@ -938,7 +944,10 @@ fn rows_of(a: &[Row], b: &[Row], ra: &[RingRow], rb: &[RingRow]) -> Rows {
         o.num(&format!("last ft steps {name}"), w.len() as f64);
         o.num(&format!("last ft first step {name}"), rows[w[0]].step as f64);
         for (i, sig) in ["torque", "dp_ts"].iter().enumerate() {
-            let x: Vec<f64> = w.iter().map(|&k| if i == 0 { rows[k].torque } else { rows[k].dp }).collect();
+            let x: Vec<f64> = w
+                .iter()
+                .map(|&k| if i == 0 { rows[k].torque } else { rows[k].dp })
+                .collect();
             let (m, h) = mean_half(&x);
             means[j][i] = m;
             s1 &= settled(m, h);
@@ -965,7 +974,10 @@ fn rows_of(a: &[Row], b: &[Row], ra: &[RingRow], rb: &[RingRow]) -> Rows {
     o.num("S2 dp_ts", s2[1]);
     o.verdict("S2", s2.iter().all(|&v| v <= STEP_AGREE));
     for (i, sig) in ["torque", "dp_ts"].iter().enumerate() {
-        o.num(&format!("{sig} Richardson"), means[1][i] + (means[1][i] - means[0][i]) / 3.0);
+        o.num(
+            &format!("{sig} Richardson"),
+            means[1][i] + (means[1][i] - means[0][i]) / 3.0,
+        );
     }
     let (torque, dp) = (means[1][0], means[1][1]);
     // Q1, Q2, K
@@ -987,10 +999,25 @@ fn rows_of(a: &[Row], b: &[Row], ra: &[RingRow], rb: &[RingRow]) -> Rows {
     let (sa, sb) = (sampled(ra), sampled(rb));
     let t_of = |s: &Sampled, j: usize| mean_half(&[s.mean[0][j], s.mean[1][j], s.mean[2][j]]).1;
     let scal = [
-        ("Q3 e", point.e, u_num(B1_SCALARS[0], B2_SCALARS[0]), (prof.e - point.e).abs()),
-        ("Q4 q", point.q, u_num(B1_SCALARS[1], B2_SCALARS[1]), (prof.q - point.q).abs()),
+        (
+            "Q3 e",
+            point.e,
+            u_num(B1_SCALARS[0], B2_SCALARS[0]),
+            (prof.e - point.e).abs(),
+        ),
+        (
+            "Q4 q",
+            point.q,
+            u_num(B1_SCALARS[1], B2_SCALARS[1]),
+            (prof.q - point.q).abs(),
+        ),
         ("Pi_s", f64::NAN, u_num(B1_SCALARS[2], B2_SCALARS[2]), 0.0),
-        ("Q7 casing", CASING_MEAS, u_num(B1_SCALARS[2], B2_SCALARS[2]), U_STAT + U_X),
+        (
+            "Q7 casing",
+            CASING_MEAS,
+            u_num(B1_SCALARS[2], B2_SCALARS[2]),
+            U_STAT + U_X,
+        ),
     ];
     for (j, (name, meas, un, um)) in scal.iter().enumerate() {
         let v = sb.mean[1][j];
@@ -1050,11 +1077,19 @@ fn f870_tm_measures_on_known_signals() {
     for (dt, n, len, first) in [(H_DT, H_STEPS, 917, 4582), (0.5 * H_DT, 2 * H_STEPS, 1833, 9164)] {
         let t: Vec<f64> = (1..=n).map(|k| k as f64 * dt).collect();
         let w = last_ft(&t);
-        assert_eq!((w.len(), w[0] + 1), (len, first), "the last flow-through time at dt {dt}");
+        assert_eq!(
+            (w.len(), w[0] + 1),
+            (len, first),
+            "the last flow-through time at dt {dt}"
+        );
     }
     // mean and half range of 2 + 0.37 sin over whole periods
     let n = 917;
-    let sig = |a: f64| -> Vec<f64> { (0..n).map(|i| 2.0 + a * (2.0 * PI * 17.0 * i as f64 / n as f64).sin()).collect() };
+    let sig = |a: f64| -> Vec<f64> {
+        (0..n)
+            .map(|i| 2.0 + a * (2.0 * PI * 17.0 * i as f64 / n as f64).sin())
+            .collect()
+    };
     let (m, h) = mean_half(&sig(0.37));
     assert!((m - 2.0).abs() <= 1e-12 && (h / 0.37 - 1.0).abs() <= 1e-3, "{m} {h}");
     // S1: 0.05 % settled; 2.5 % not (N1)
@@ -1073,11 +1108,20 @@ fn f870_tm_measures_on_known_signals() {
     }
     let bx = band(u_num(B1_CX[0], B2_CX[0]), S_CX[0], T_CX[0], 0.0);
     let bt = band(u_num(B1_CT[0], B2_CT[0]), S_CT[0], T_CT[0], 0.0);
-    assert!((bx - 0.890).abs() <= 5e-4 && (bt - 0.251).abs() <= 5e-4, "ADR 0765's band at 0.532: {bx} {bt}");
+    assert!(
+        (bx - 0.890).abs() <= 5e-4 && (bt - 0.251).abs() <= 5e-4,
+        "ADR 0765's band at 0.532: {bx} {bt}"
+    );
     let (prof, point) = measured90();
-    assert!((point.e - 220.02).abs() <= 5e-3 && (point.q - 99.20).abs() <= 5e-3, "{point:?}");
+    assert!(
+        (point.e - 220.02).abs() <= 5e-3 && (point.q - 99.20).abs() <= 5e-3,
+        "{point:?}"
+    );
     assert!(((prof.e - point.e).abs() - 1.20).abs() <= 5e-3 && ((prof.q - point.q).abs() - 2.07).abs() <= 5e-3);
-    println!("F870TM C1: U_num {un:?}, bands at 0.532 {bx:.6} {bt:.6}, e {:.4} q {:.4}", point.e, point.q);
+    println!(
+        "F870TM C1: U_num {un:?}, bands at 0.532 {bx:.6} {bt:.6}, e {:.4} q {:.4}",
+        point.e, point.q
+    );
 }
 
 #[test]
@@ -1131,7 +1175,10 @@ fn f870_tm_short_run_holds_the_record() {
             assert!(rel(x, y) <= REC_TOL, "SR step {}: {x} against {y}", a.step);
         }
     }
-    println!("F870TM SR: 20 steps equal to the record within {REC_TOL:e}; step 20 torque {:.9}", rows[SHORT - 1].torque);
+    println!(
+        "F870TM SR: 20 steps equal to the record within {REC_TOL:e}; step 20 torque {:.9}",
+        rows[SHORT - 1].torque
+    );
 }
 
 #[test]
