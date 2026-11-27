@@ -228,3 +228,9 @@ Written after that run, on 0beae707; nothing above is changed. `docs_site` 2 pas
 `docs/roadmap/proposals/0835-F-998.json` passed (partial to partial, gap set); `process_report.py --check` gave 1
 failure, `docs/adr/index.md` not current, a generated file left to the lead (rule 9): **met** as registered. The decision
 of addendum 1 stands: **partial**.
+
+## Answers of the maintainer (2026-11-27), written by the lead
+
+1. Q1: option (a), F-998 taken as met on its acceptance as written, with this split; taken by the lead on the maintainer's standing instruction of 2026-11-26 (go with the recommended option always). The roadmap writes F-998 done against this work's proposed partial: the acceptance asks for 0 refusals of 900 edits under a registered change that leaves the other callers unchanged, and for the arms' numbers, which are reported; the control's floor and TC4's two misses stand as recorded.
+
+Merged with ADR 0834 and pushed at 08a7ebfb.

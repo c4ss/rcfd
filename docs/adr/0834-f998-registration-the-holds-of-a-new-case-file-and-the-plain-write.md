@@ -248,3 +248,10 @@ The same entries are `docs/roadmap/proposals/0834-F-998.json`.
 Written after that run, on 53013224; nothing above is changed. `docs_site` 2 passed; `roadmap_proposals.py check` of
 `docs/roadmap/proposals/0834-F-998.json` passed (partial to partial, gap set); `process_report.py --check` gave 1
 failure, `docs/adr/index.md` not current, a generated file left to the lead (rule 9): **met** as registered.
+
+## Answers of the maintainer (2026-11-27), written by the lead
+
+1. Q1: option (b), the plain write only for new case files, the temp file and hard link kept for every other caller (ADR 0835); taken by the lead on the maintainer's standing instruction of 2026-11-26 (go with the recommended option always). The lead did not merge this work alone, since its plain write covered every caller of `write_new`.
+2. Q2: option (a), H and P interleaved in blocks of 50 rounds, 2000 each (ADR 0835); taken by the lead on the maintainer's standing instruction of 2026-11-26 (go with the recommended option always).
+
+Merged with ADR 0835 and pushed at 08a7ebfb.

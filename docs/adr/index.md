@@ -523,9 +523,9 @@ One row per record of this folder, grouped by the roadmap category of the item i
 | [0774](0774-f862-registration-the-description-of-start-run-store-argument.md) | F-862 registration: the description of start_run's store argument says what the default is | REGISTERED | 2026-11-22 | 1 | F-862 | done |
 | [0794](0794-f274-registration-journal-lines-of-design-runs-and-records.md) | F-274 registration: journal lines of design runs and of stored design records | REGISTERED | 2026-11-25 | 1 | F-274 | done |
 | [0829](0829-f997-registration-a-runner-without-the-callers-handles-and-its-exit-when-its-folder-is-gone.md) | F-997 registration: a runner started without the caller's handles, and its exit when its project folder is gone | REGISTERED | 2026-11-27 | 1 | F-997 | partial |
-| [0833](0833-f998-registration-the-refused-replace-outside-temp-and-plainly-written.md) | F-998 registration: the refused case-file replace, with the project outside the temporary folder and the case written plainly | REGISTERED | 2026-11-27 | 2 | F-998 | partial |
-| [0834](0834-f998-registration-the-holds-of-a-new-case-file-and-the-plain-write.md) | F-998 registration: the System process's holds of a new case file as the measure, and the plain write that removes them | REGISTERED | 2026-11-27 | 2 | F-998 | partial |
-| [0835](0835-f998-registration-the-plain-write-for-new-case-files-only.md) | F-998 registration: the plain write for new case files only, and the arms H and P interleaved as the measure | REGISTERED | 2026-11-27 | 2 | F-998 | partial |
+| [0833](0833-f998-registration-the-refused-replace-outside-temp-and-plainly-written.md) | F-998 registration: the refused case-file replace, with the project outside the temporary folder and the case written plainly | REGISTERED | 2026-11-27 | 2 | F-998 | done |
+| [0834](0834-f998-registration-the-holds-of-a-new-case-file-and-the-plain-write.md) | F-998 registration: the System process's holds of a new case file as the measure, and the plain write that removes them | REGISTERED | 2026-11-27 | 2 | F-998 | done |
+| [0835](0835-f998-registration-the-plain-write-for-new-case-files-only.md) | F-998 registration: the plain write for new case files only, and the arms H and P interleaved as the measure | REGISTERED | 2026-11-27 | 2 | F-998 | done |
 
 ## Studio desktop app (36)
 
