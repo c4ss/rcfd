@@ -198,3 +198,9 @@ The same entries are `docs/roadmap/proposals/0833-F-998.json`.
 Written after that run, on d7b3d071; nothing above is changed. `docs_site` 2 passed; `roadmap_proposals.py check` of
 `docs/roadmap/proposals/0833-F-998.json` passed (todo to partial, gap set); `process_report.py --check` gave 1 failure,
 `docs/adr/index.md` not current, a generated file left to the lead (rule 9): **met** as registered.
+
+## Answers of the maintainer (2026-11-27), written by the lead
+
+1. Option (b): the holds seen without a refusal are the measure, then the plain-write remedy is registered with its check (ADR 0834); taken by the lead on the maintainer's standing instruction of 2026-11-26 (go with the recommended option always).
+
+Merged and pushed at 25a0c5e4.

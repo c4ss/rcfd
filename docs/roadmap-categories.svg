@@ -127,8 +127,8 @@
   <text x="24" y="478" class="row">Claude and the MCP server</text>
   <g clip-path="url(#c12)">
     <rect x="262" y="467" width="240.0" height="14" fill="var(--done)"/>
-    <rect x="502.0" y="467" width="90.0" height="14" fill="url(#h)"/>
-    <rect x="592.0" y="467" width="30.0" height="14" fill="var(--todo)"/>
+    <rect x="502.0" y="467" width="105.0" height="14" fill="url(#h)"/>
+    <rect x="607.0" y="467" width="15.0" height="14" fill="var(--todo)"/>
   </g>
   <text x="636" y="478" class="num">16 of 24 done</text>
   <text x="24" y="508" class="row">Studio desktop app</text>
