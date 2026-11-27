@@ -163,3 +163,96 @@ caught by `project_list_f270` and by `golden_every_tool_f1001`. Partial otherwis
   them; (b) a follow-up item records the live `start_run` entry in a golden file of its own and compares it byte for
   byte, as F-862 does for `store`. Recommendation: (b), as a new item for the lead to decide; not taken here, as F-1001's
   acceptance names tools, not properties.
+
+## Addendum 1: results (2026-11-27)
+
+Code commit 7e91ca69 (the golden's 19 entries, the test change, the new test), mutation patch 9862f9d4. The run was made
+once, in the release profile, by `run.sh` in the scratch folder (`CARGO_BUILD_JOBS=8`, the scratch target folders); its
+whole output is `run.log` there, with `a1.log`, `a2.log`, `e1.log`, `lib.log`, `fmt.log`, `clippy.log` and
+`mut_<id>_<test>.log`. The 19 entries were made by `make_golden.py` (D1) from the branch's release binary: the live list
+(58 tools, 63 036 bytes) re-serialised equal to the response text, its 19 added names in the registered order, no live
+name outside the golden and `ADDED`; E is 22 100 bytes; the golden went from 48 063 to 70 164 bytes and from 55 to 74
+entries.
+
+### Checks
+
+| Id | Limit | Measured | Met |
+|---|---|---|---|
+| A1 | passes | `project_list_f270` 1 passed, 0 failed | yes |
+| A2 | passes | `golden_every_tool_f1001` 1 passed, 0 failed ("58 live tools, golden 74 entries, 22 added compared") | yes |
+| G1 | 48 061 bytes identical, 19 entries added, 0 changed | prefix of 48 061 bytes identical, tail `,` + E' + `]}`, 19 added in the registered order, 55 to 74 entries, the first 55 equal as values | yes |
+| G2 | only the owned files, nothing under `crates/*/src` | the golden, `golden_every_tool_f1001.rs`, its mutation patch, `project_list_f270.rs`, ADR 0841 (the proposal file is committed with this addendum) | yes |
+| G3 | only added lines: the comment paragraph, `ADDED`, the D2 block | three hunks (+4, +23, +20), 0 lines removed, 47 added: 4 comment lines, 23 of `ADDED` with its doc line and a blank line, 20 of the block (the run's count of 46 leaves out the blank line) | yes |
+| E1 | every test passes | `canvas_view_f976` 4, `default_f1` 2, `show_view_description_f987` 3, `start_run_store_description_f862` 1, `tool_list_adr0730` 2, `tool_list_f275` 8: 20 passed, 0 failed | yes |
+| L1 | passes | `rcfd-mcp --lib` 18 passed, 0 failed, 1 ignored (an existing record, not touched) | yes |
+| L2 | clean | `cargo fmt -p rcfd-mcp --check` **exit 1**: two reflows asked, the `eprintln!` at the end of `golden_every_tool_f1001.rs` and the `assert_eq!` of the D2 block of `project_list_f270.rs` (both lines over the width); clippy `--release --all-targets -D warnings` exit 0 | **no** (fmt missed; clippy clean) |
+| L3 | pass | in Addendum 2, run after this addendum is committed | Addendum 2 |
+
+### Negative controls and mutations
+
+Each tree was one `git archive` copy (`copy-code` of 9862f9d4, `copy-base` of d99e9283); each change was applied to it,
+both tests run, and the changed file restored from a saved copy before the next, so the target folder rebuilt only
+`rcfd-mcp`. This is a deviation of form from "each on a scratch copy": one copy per tree, not per change.
+
+| Id | Expected | Measured | Met |
+|---|---|---|---|
+| N1 | both fail | `project_list_f270` exit 101 at line 166 (no names after `export_view`); `golden_every_tool_f1001` exit 101 at line 47 (a live tool not in the golden) | yes |
+| N2 | `project_list_f270` passes | exit 0, 1 passed: d99e9283's test does not catch M9 | yes |
+| M1 `new_case` | caught by both | both exit 101, `"new_case" differs from the golden` | yes |
+| M2 `preview_mesh` | caught by both | both exit 101, `"preview_mesh" differs from the golden` | yes |
+| M3 `read_feed` | caught by both | both exit 101, `"read_feed" differs from the golden` | yes |
+| M4 `set_runner_config` | caught by both | both exit 101, `"set_runner_config" differs from the golden` | yes |
+| M5 `hash_project_file` | caught by both | both exit 101, `"hash_project_file" differs from the golden` | yes |
+| M6 `empty_trash` | caught by both | both exit 101, `"empty_trash" differs from the golden` | yes |
+| M7 `derive_picture` | caught by both | both exit 101, `"derive_picture" differs from the golden` | yes |
+| M8 `refine_case_mesh` | caught by both | both exit 101, `"refine_case_mesh" differs from the golden` | yes |
+| M9 `list_sites` | caught by both | both exit 101, `"list_sites" differs from the golden` | yes |
+
+The messages print the name as a JSON value, with quotes, as in ADR 0839; what fails and why is as registered.
+
+### Diagnosis of the L2 miss
+
+The two lines were written by hand over rustfmt's width and the files were not formatted before the run; rustfmt asks
+only to break them over lines. No limit is changed and the miss stands: by the registered rule F-1001 is **partial**.
+Amendment 1 below corrects the formatting so that the branch does not carry the miss into the lead's push.
+
+### Deviations and what was not run
+
+The form of the mutation copies above. Not run: the whole `rcfd-mcp` integration suite, `project_w48f` and
+`project_runs_w48f` (they count the tools; the live list does not change), `baseline_hashes` (no solver file touched),
+`npm test` (no Studio file touched).
+
+Size (actual): partial; 1; 0; 1; 125000
+
+(One further registration: Amendment 1.)
+
+### Decision
+
+A1, A2, G1, G2, G3, E1 and L1 hold, N1 fails and N2 passes, and M1 to M9 are each caught by both tests; L2 missed (fmt
+exit 1). By the registered rule, **partial**. Q1 stays open for the lead.
+
+### For the lead: roadmap entries
+
+> Status: partial.
+
+> Note: ADR 0841, 2026-11-27, partial: tools_list_project_f270.json holds the 19 tools added since 7c960bb after export_view as the live list gives them (74 entries, the first 48 061 bytes as before), project_list_f270 compares each and golden_every_tool_f1001 finds every live tool in the golden, and 9 of 9 description mutations are caught; the registered fmt check missed (two over-wide lines), corrected by amendment 1.
+
+> Gap: Every clause of the acceptance is met in the registered run. Missing: the registered check L2 (cargo fmt -p rcfd-mcp --check) failed on two over-wide lines of the new test code; amendment 1 formats them and records its own run. The properties start_run gained since 7c960bb are compared by no recorded text but store (Q1).
+
+> Follow-up: start_run's live entry in a golden of its own; deps F-1001; acceptance: Every limit not stated here is registered in the ADR before the run. The live project-mode entry of start_run, with the properties new_case, store, continue_from, max_steps, from_run, run_time, dry_run and site, is recorded in a golden file of its own and compared byte for byte by a test; a change to any of their descriptions fails it (committed mutation).
+
+The same entries are `docs/roadmap/proposals/0841-F-1001.json`. The golden edit is additive (rule 3): the diff is the 19
+entries appended after `export_view`, made on the lead's taking of the maintainer's word as the brief records it.
+
+## Amendment 1: the formatting of the two lines (2026-11-27, before the correction)
+
+Written and committed before the correction and its run. The correction is `cargo fmt -p rcfd-mcp` (or `rustfmt` of the
+two files on os error 206), and nothing else; no limit above changes, and L2 of the registered run stays missed.
+
+| Id | Check | Limit | Source | Estimate | Margin | Kind |
+|---|---|---|---|---|---|---|
+| F1 | `cargo fmt -p rcfd-mcp --check` after the correction | clean | rule 7 | clean | exact | code verification |
+| F2 | a script: each of the two files with every whitespace character removed is equal before and after the correction; `git diff --name-only` of the correction names those two files only | equal; 2 files | this amendment (whitespace only) | holds | exact | unchanged default output |
+| F3 | `project_list_f270` and `golden_every_tool_f1001` after the correction | both pass | A1, A2 | pass | exact | code verification |
+
+Decision of this amendment: the correction stands if F1, F2 and F3 hold; it does not change F-1001's decision above.
