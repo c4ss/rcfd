@@ -236,3 +236,15 @@ not run. A missed limit is recorded with its number and held as a `*_known_miss`
   read a file of the Studio's build. Recommendation: (a) for this item, and (b) as a follow-up if the exported pages
   are to be shown outside the machine they were made on. Taken here: (a), on the maintainer's standing instruction of
   2026-11-11 (take the recommendation); asked because (b) is a change of scope.
+
+## Amendment 1 (2026-11-27): the set-up of R2 corrected
+
+Written after the first run of `export_view_f980` and before any corrected run; nothing above is changed.
+
+The first run of `r1_r2_r3_r4_r7_the_pages_of_the_registered_set` stopped inside R2 at the test's own call
+`list_runs {limit: 1000}`, which the tool refuses (-32602, "'limit' is above the maximum 100"): a defect of the test's
+set-up, not of the page. Before it stopped it had measured R1, R3 and R4 for X1 only; R5 and R6 passed in the same run.
+That test stays as an ignored record (`#[ignore]`, its code unchanged). The corrected test
+`r1_r2_r3_r4_r7_a1_the_pages_of_the_registered_set` is the same but asks `list_runs` with `limit: 100` (the f980 project
+has 6 runs). No row, limit, source, mutation or the decision rule changes. The binary was run a second time, with the
+same code, only to read the text of the failure (the first run's output had been filtered); it gave the same failure.
