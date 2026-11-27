@@ -216,3 +216,14 @@ A defective set-up found before a registered run is corrected by an amendment co
 
 To be completed in the addendum with options and a recommendation: the remedy of a solver defect if the diagnosis names
 one, and any question of scope.
+
+## Amendment 1 (2026-11-27): M3 corrected, before any code commit and before any run
+
+Written before the test file is committed and before any test or mutation of this registration is run. Nothing above is
+changed. M3 as registered (`ddt_history_weights` returning `c2` times 0.9, `pimple.rs` lines 3752 to 3760) cannot change
+what F2 reads: those weights feed only the transient Rhie-Chow carry-over of the old face defects (lines 1888 to 1910),
+and on the mode the pressure is uniform and the discrete divergence of `(0, v(x))` is zero, so the defects are zero to
+rounding. The brief asks that a mutation be able to change what its test reads. **M3 is now**: `crates/rcfd-fv/src/ddt.rs`
+line 76, the BDF2 cell weight `c2` of the time derivative times 0.9 (`0.9 * r * r / (1.0 + r)`), which every BDF2 step of
+the mode reads; caught by `f885_oc_wall_bounded_mode` (F2). The other mutations, the committed patch (M1) and every limit
+are unchanged.
