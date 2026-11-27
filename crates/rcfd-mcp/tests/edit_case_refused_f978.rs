@@ -150,3 +150,10 @@ fn arm_b_without_the_canvas_server_under_load() {
 fn arm_a2_with_the_canvas_server_under_load_after_the_fix() {
     assert_eq!(arm("a2", true), 0, "A2: refusals of 90");
 }
+
+/// ADR 0830 amendment 1, arm A1: arm A again, with the trace at high priority.
+#[test]
+#[ignore = "ADR 0830: loads every processor on purpose; run once"]
+fn arm_a1_with_the_canvas_server_under_load_traced_at_high_priority() {
+    arm("a1", true);
+}
