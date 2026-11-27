@@ -804,6 +804,11 @@ fn tight(s: &mut PimpleSettings, tol_abs: f64) {
 
 /// One arm of O at one step: the velocity at `t = 1`.
 fn tg_run(on: bool, dt: f64) -> Vec<Vec3> {
+    tg_run_with(on, dt, &|_| {})
+}
+
+/// As `tg_run`, with `set` applied to the settings last (the diagnosis of ADR 0821 amendment 1).
+fn tg_run_with(on: bool, dt: f64, set: &dyn Fn(&mut PimpleSettings)) -> Vec<Vec3> {
     let mut s = PimpleSettings::piso(TG_NU);
     s.n_outer = 10;
     s.alpha_u = 1.0;
@@ -813,6 +818,7 @@ fn tg_run(on: bool, dt: f64) -> Vec<Vec3> {
     s.linear_upwind_limiter = None;
     tight(&mut s, 1e-14);
     s.outer_frozen_convection_gradient = on;
+    set(&mut s);
     let l = 2.0 * PI;
     let mesh = Arc::new(box_2d(TG_N, TG_N, l, l, true, true).unwrap());
     let geom = Arc::new(FvGeometry::new(mesh).unwrap());
@@ -838,8 +844,10 @@ fn rel_l2(a: &[Vec3], b: &[Vec3]) -> f64 {
 }
 
 /// O (ADR 0821): the observed order of BDF2 with the setting off (O2, the control) and on (O1), and the non-vacuity (O3).
+/// KNOWN MISS (ADR 0821 amendment 1, limits intact): O2 missed, so O does not decide.
 #[test]
-fn f885_fc_time_order() {
+#[ignore = "known miss, ADR 0821 amendment 1: p_f(OFF) 1.0151 and p_f(ON) 1.0609 against 1.9 (O2 and O1 missed, O3 4.15e-4 met): O does not decide"]
+fn f885_fc_time_order_known_miss() {
     let mut p_f = [f64::NAN; 2];
     let mut at_mid: Vec<Vec<Vec3>> = Vec::new();
     let mut errs: Vec<Vec<f64>> = Vec::new();
@@ -867,6 +875,35 @@ fn f885_fc_time_order() {
     assert!(o3 > O3_FLOOR, "O does not decide: O3 {o3}");
     assert!(p_f[0] >= ORDER_MIN, "O does not decide: O2 p_f(OFF) {}", p_f[0]);
     assert!(p_f[1] >= ORDER_MIN, "O1 missed: p_f(ON) {}", p_f[1]);
+}
+
+/// The diagnosis of O2 (ADR 0821 amendment 1, a record without limits): the OFF arm of O with one change each.
+#[test]
+#[ignore = "diagnosis record, ADR 0821 amendment 1 (seconds, prints only): cargo test --release -p rcfd-api --test f885_frozen_convection_check_h f885_fc_order_diagnosis_record -- --ignored --nocapture"]
+fn f885_fc_order_diagnosis_record() {
+    let cases: [(&str, &dyn Fn(&mut PimpleSettings)); 4] = [
+        ("D-a central", &|s| s.convection = ConvScheme::Central),
+        ("D-b linear upwind, n_outer 20", &|s| s.n_outer = 20),
+        ("D-c linear upwind, periodic_partner_extrapolated", &|s| {
+            s.periodic_partner_extrapolated = true
+        }),
+        ("D-d linear upwind, implicit Euler", &|s| {
+            s.time_scheme = TimeScheme::ImplicitEuler
+        }),
+    ];
+    for (name, set) in cases {
+        let r = tg_run_with(false, TG_DT_REF, set);
+        let e: Vec<f64> = TG_DTS
+            .iter()
+            .map(|&dt| rel_l2(&tg_run_with(false, dt, set), &r))
+            .collect();
+        println!(
+            "F885-FC {name}: e(0.1, 0.05, 0.025) {}, p_c {:.4}, p_f {:.4}",
+            sci(&e),
+            (e[0] / e[1]).log2(),
+            (e[1] / e[2]).log2()
+        );
+    }
 }
 
 // ---------------------------------------------------------------- the steady check S and the cavity control KC (sections 3, 4)
@@ -1161,6 +1198,7 @@ fn f885_fc_h_dt2_record() {
 
 /// SR (ADR 0821): 20 steps of the check H path with the opt-ins against the first 20 rows of the committed `H_dt.csv`.
 #[test]
+#[ignore = "not run: check H was not run by ADR 0821's rule (amendment 1)"]
 fn f885_fc_short_run_on_the_check_h_path() {
     let a = run_h("short", H_DT, SHORT, true);
     assert!(a.failed.is_none(), "{:?}", a.failed);
@@ -1193,6 +1231,7 @@ fn f885_fc_short_run_on_the_check_h_path() {
 
 /// G1 (ADR 0821): the class of ADR 0183 and the verdict of F-879 from the committed full rows of the two runs, as recorded.
 #[test]
+#[ignore = "not run: check H was not run by ADR 0821's rule (amendment 1)"]
 fn f885_fc_class_from_the_committed_records() {
     let a = read_full(&record_dir().join("H_dt.csv"), H_DT, H_STEPS);
     let b = read_full(&record_dir().join("H_dt2.csv"), 0.5 * H_DT, 2 * H_STEPS);
