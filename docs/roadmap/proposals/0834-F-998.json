@@ -1,0 +1,10 @@
+{
+  "form": 1,
+  "adr": "0834",
+  "item": "F-998",
+  "base": "e0c235ec8bbf1ca5c972935e9441b2bf2266c8a3",
+  "status": "partial",
+  "note": "ADR 0834, 2026-11-27, partial: write_new on Windows became a plain write (create_new with share mode 0, written and synced, no temp file or hard link), its fast checks and three mutations held and 0 of 900 edit_case were refused under arm H's load, but the unchanged control H showed no System hold (0 against a floor of 8), so the hold count did not compare the two paths.",
+  "gap": "Missing: a registered comparison of the System process's holds of a new case file between the old write_new (temp file and hard link) and the plain write of ADR 0834. ADR 0833 saw 18 holds in 300 rounds on the old path; ADR 0834's control saw 0 in 450, so its rule did not decide, although the plain write gave 0 refusals of 900 edit_case. Also open: which callers keep the old path (ADR 0834 Q1).",
+  "follow_ups": []
+}

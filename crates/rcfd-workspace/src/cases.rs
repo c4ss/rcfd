@@ -70,7 +70,7 @@ pub fn check_name(name: &str, ext: &str, cases: &[String]) -> Result<String, Str
 /// Create the case file `rel` with `bytes` and the data files it reads (`(cases/<file name>, bytes)`), written next to
 /// it first (ADR 0139 D5, ADR 0147). `rel` must be `cases/<name>.toml` or `.json` with a name [`check_name`] accepts
 /// (collisions are left to the write); `cases/` is created when it is missing; every file is created atomically and an
-/// existing file is never replaced (`rcfd_project::atomic::write_new`, a hard link that fails when the target exists).
+/// existing file is never replaced (the case file `atomic::write_new_case`, ADR 0835; data files `atomic::write_new`).
 /// A data file that is there already with the same bytes is used as it is (a second case made from the same example
 /// shares it); one with other bytes refuses the creation before anything is written, because the new case would read
 /// it. When the case file cannot be written, the data files this call wrote are removed again. Returns each data file
@@ -139,7 +139,7 @@ fn create_files(
         std::fs::create_dir_all(dir).map_err(|e| format!("{}: {e}", dir.display()))?;
     }
     if companions.is_empty() {
-        rcfd_project::atomic::write_new(&path, bytes).map_err(|e| e.to_string())?;
+        rcfd_project::atomic::write_new_case(&path, bytes).map_err(|e| e.to_string())?;
         return Ok(Vec::new());
     }
     // checked before anything is written: the case file is new, every data file new or equal
@@ -184,7 +184,7 @@ fn create_files(
             written.push(cpath.as_path());
         }
     }
-    if let Err(e) = rcfd_project::atomic::write_new(&path, bytes) {
+    if let Err(e) = rcfd_project::atomic::write_new_case(&path, bytes) {
         undo(&written);
         return Err(e.to_string());
     }

@@ -178,6 +178,50 @@ pub fn write_new(path: &Path, bytes: &[u8]) -> Result<()> {
     }
 }
 
+/// Create the new case file `path` with `bytes`; fails with [`ProjectError::Exists`] if it exists (ADR 0835, F-998).
+/// Only for a new case file under `cases/`, which `edit_case` replaces later; every other new file uses [`write_new`].
+///
+/// On Windows a plain write (ADR 0834): the file is created by `create_new` with share mode 0, written, synced and
+/// closed, so no other open of it succeeds (a sharing violation, which [`read`] retries) until it is complete; on an
+/// error of the write the file is removed. No temp file and no hard link, whose new file the System process was seen to
+/// hold for up to 237 ms (ADR 0833). A writer killed in the middle leaves a prefix of the bytes under the name, which a
+/// reader of the project sees as a malformed case file (ADR 0835 K1). On other systems [`write_new`].
+#[cfg(windows)]
+pub fn write_new_case(path: &Path, bytes: &[u8]) -> Result<()> {
+    use std::os::windows::fs::OpenOptionsExt;
+    let mut f = match OpenOptions::new().write(true).create_new(true).share_mode(0).open(path) {
+        Ok(f) => f,
+        Err(e) if e.kind() == io::ErrorKind::AlreadyExists => {
+            return Err(ProjectError::Exists {
+                path: path.to_path_buf(),
+            })
+        }
+        Err(e) => {
+            return Err(ProjectError::Io {
+                op: "create",
+                path: path.to_path_buf(),
+                source: e,
+            })
+        }
+    };
+    let res = f.write_all(bytes).and_then(|()| f.sync_all());
+    drop(f);
+    res.map_err(|e| {
+        let _ = fs::remove_file(path);
+        ProjectError::Io {
+            op: "write",
+            path: path.to_path_buf(),
+            source: e,
+        }
+    })
+}
+
+/// Create the new case file `path` with `bytes` (ADR 0835): on this system [`write_new`].
+#[cfg(not(windows))]
+pub fn write_new_case(path: &Path, bytes: &[u8]) -> Result<()> {
+    write_new(path, bytes)
+}
+
 /// Read a whole file, retrying transient errors (a reader racing a Windows rename can see one).
 pub fn read(path: &Path) -> Result<Vec<u8>> {
     with_retry("read", path, &DEFAULT_RETRY, || fs::read(path))

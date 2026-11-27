@@ -8,6 +8,14 @@
 //! ADR 0833 (F-998): the arms H, HO (the project outside `%TEMP%`), HP (the case created by a plain write) and HOP
 //! (both), each 300 rounds of H's load with the trace X4 of ADR 0833 beside it; TC4, X4's control in the outside root;
 //! S1, a fast check of the arms' set-up.
+//!
+//! ADR 0834 (F-998): the arms H (`write_new` before the plain write) and P (after it), 450 rounds each of H's load with
+//! the trace X5 beside them; the measure is the count of new case files the System process holds. Each is built at its
+//! commit and run once.
+//!
+//! ADR 0835 (F-998): `f998c_block`, a block of 50 rounds of H's load whose tag `RCFD_F998_BLOCK` names its arm and
+//! block; H's blocks run from the binary built before the new case files moved to `write_new_case`, P's after it,
+//! interleaved by a scratch script, each block once.
 
 mod common;
 
@@ -370,4 +378,26 @@ fn s1_the_arms_place_and_create_as_registered() {
     );
     drop(c);
     let _ = std::fs::remove_dir_all(dir.parent().unwrap());
+}
+
+/// ADR 0834 H: 450 rounds of H's load, run from the test binary built before the plain write.
+#[test]
+#[ignore = "ADR 0834: loads every processor on purpose; run once with X5 beside it"]
+fn f998b_h_hold_count() {
+    arm_f998("bh", 450, false, false);
+}
+
+/// ADR 0834 P: 450 rounds of H's load (900 edit_case), run from the test binary built with the plain write.
+#[test]
+#[ignore = "ADR 0834: loads every processor on purpose; run once with X5 beside it"]
+fn f998b_p_hold_count() {
+    arm_f998("bp", 450, false, false);
+}
+
+/// ADR 0835: one block of 50 rounds of H's load; its tag (`h00` to `h39`, `p00` to `p39`) from `RCFD_F998_BLOCK`.
+#[test]
+#[ignore = "ADR 0835: loads every processor on purpose; run once per block with X5 beside it"]
+fn f998c_block() {
+    let tag = std::env::var("RCFD_F998_BLOCK").expect("ADR 0835: RCFD_F998_BLOCK names the block");
+    arm_f998(&format!("c{tag}"), 50, false, false);
 }
