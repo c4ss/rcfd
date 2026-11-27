@@ -327,3 +327,27 @@ assertions of L1 with the edits of L2, and the row `mcp:export_view` of `apps/st
 ## Open questions for the maintainer (addendum)
 
 Q1 above stands (the fonts; recommendation (a), taken). No other.
+
+## Amendment 3 (2026-11-27): the additive re-record of the tool list, by the lead's approval
+
+Written after addendum 1 and before any edit or run it covers; nothing above is changed. Written by Claude Opus 5.5
+(`claude-opus-5-5`), as a background agent of the lead. The lead's follow-up of 2026-11-27, decided on the maintainer's
+standing instruction of 2026-11-26 (take the recommended option): the branch cannot merge while the assertions of
+finding 5 fail, so the lead approves the additive re-record (rule 3) on this branch; Q1 is answered (a), the font stack
+named and no fonts embedded, with (b) as a follow-up; E1's miss comes back here as a further registration (rule 13,
+amendments 4 and 5).
+
+The re-record, each file and line verified at b32f0343 before the edit, and nothing else in these files changed:
+`crates/rcfd-mcp/tests/canvas_view_f976.rs` line 216 and `project_list_f270.rs` line 134 take `export_view` off the end
+of the list (an assertion that it is last, then the list without it); `tool_list_f275.rs` line 132 57 to 58 and
+`export_view` appended to `PROJECT_TOOLS` (38 to 39); `project_w48f.rs` line 137 `19 + 38` to `19 + 39`;
+`project_runs_w48f.rs` lines 104 and 359 57 to 58; the row `{"id":"mcp:export_view","kind":"mcp_tool","source":"tools/list","access":{"project":"write_files"}}`
+added to `apps/studio-web/capabilities/inventory.json` in its sorted place. The JSON goldens are not edited.
+
+| Id | Check | Limit | Source | Kind |
+|---|---|---|---|---|
+| L5 | the five re-recorded Rust files, release, on the branch | pass | rule 3 (additive class); L2 | unchanged default output |
+| L6 | `capabilities.spec.ts` in the one `npm test` run of amendment 4 | pass | rule 3; G13 | unchanged default output |
+
+The decision rule is unchanged, except that L1 and L3 no longer name these failures as allowed: after this amendment
+the five files and `capabilities.spec.ts` must pass.
