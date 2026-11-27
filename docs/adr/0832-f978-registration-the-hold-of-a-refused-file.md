@@ -212,3 +212,10 @@ registered runs are above): **met**. L2: clippy of `rcfd-project` and `rcfd-mcp`
 token, and `cargo fmt -p rcfd-mcp --check` was then run on that commit. L3: `docs_site` 2 passed; `roadmap_proposals.py
 check` passed (partial to partial, gap set); `process_report.py --check` gave 1 failure, `docs/adr/index.md` not
 current, a generated file left to the lead (rule 9): **met** as registered.
+
+## Answers of the maintainer (2026-11-27), written by the lead
+
+1. Q1: option (a), arm H with the project outside `%TEMP%` and with the case created by a plain write (ADR 0833); taken by the lead on the maintainer's standing instruction of 2026-11-26 (go with the recommended option always).
+2. Q2: option (b), the refused replace is its own item, F-998 ("0 refusals of 900 edits under arm H's load"); taken by the lead on the maintainer's standing instruction of 2026-11-26 (go with the recommended option always).
+
+The lead accepts that no mutation patch is committed for this work, against rule 16: M1 and M2 mutate F1, which its rule did not allow to be made, and M3 was caught on a scratch copy. Merged at 2cdb2834 and pushed at 69171979.
