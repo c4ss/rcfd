@@ -182,3 +182,143 @@ time (ADR 0766); any agreement with the measurement.
 
 To be completed in the addendum with options and a recommendation: F-870's convergence rule (section 4) and the scope of
 the class (the opt-ins).
+
+## Addendum 1: results
+
+Written 2026-11-27, after the run. Commits on the branch, from 2cbdfa5f: 1a7ec717 (this registration, alone), b81bdfdd
+(the test file; the registered run was made from it, once, with `RECORDED` `None`), f392a716 (`RECORDED` written from that
+run's printed keys, and its output as `rows.log`), 2842efc3 (the committed mutation M1 and `mutations.log`), and the commit
+of this addendum with `rule7.log` and the proposal file. Records in `docs/investigations/f879-check-h-class/`.
+
+### The sentence
+
+**From ADR 0824's records the hub pocket classes STEADY by ADR 0183's rule, and torque and pressure rise are steady to the
+1 % tolerance of the state in both runs; the time step changes their means by 0.13 % and 0.29 %. For F-870 a steady state
+exists to converge to.** One finding beside the class: H(dt) keeps a small oscillation of torque and pressure rise at
+2583 Hz (8.4 steps a period, half range 0.10 % and 0.18 % of the mean) that does not decay over the last three
+flow-through times; at dt/2 it is absent and every signal decays. It is tied to the time step and below the tolerance of
+the state; it is a residual of H(dt), not a class of the pocket (the site signal is steady in both).
+
+### Torque and pressure rise in time (A3)
+
+Time step 4.605e-5 s and 2.3025e-5 s; time run 0.2531829 s each (6.00 flow-through times, 6.270 revolutions, 56.43
+blade-passing periods); window 2 749 and 5 498 steps, 0.126591 s (3.00 flow-through times, 3.135 revolutions), periodogram
+resolution 7.8994 Hz, highest 10 858 and 21 716 Hz.
+
+| | H(dt) | H(dt/2) |
+| --- | --- | --- |
+| torque: mean; shaft power | 2.0149759 N m; 313.558 W | 2.0175481 N m; 313.958 W |
+| torque: half range (peak-to-peak); share of the mean | 2.0905e-3 (4.1809e-3) N m; 1.0375e-3 | 4.7505e-4 (9.5010e-4) N m; 2.3546e-4 |
+| torque: crossings; `f_x`; `f_p` (share of the periodogram) | 327; 2583.55 Hz; 2583.11 Hz (0.197) | 13; 5642.3 Hz; 7.90 Hz (0.774, the drift) |
+| torque: drift across the window | 7.27e-4 N m | 6.49e-4 N m |
+| torque: half range in flow-through times 1 to 6 | 30.3; 4.97e-3; 2.55e-3; 1.87e-3; 1.81e-3; 1.71e-3 N m | 60.3; 3.80e-3; 1.33e-3; 3.94e-4; 8.17e-5; 3.15e-5 N m |
+| pressure rise: mean | 71.25507 Pa | 71.46433 Pa |
+| pressure rise: half range (peak-to-peak); share of the mean | 0.12759 (0.25518) Pa; 1.7906e-3 | 0.015676 (0.031353) Pa; 2.1936e-4 |
+| pressure rise: crossings; `f_x`; `f_p` (share) | 327; 2582.55 Hz; 2583.11 Hz (0.226) | 19; 1833.8 Hz; 7.90 Hz (0.817, the drift) |
+| pressure rise: half range in flow-through times 1 to 6 | 680; 0.250; 0.119; 0.116; 0.111; 0.112 Pa | 1387; 0.159; 0.0279; 0.0108; 4.81e-3; 2.35e-3 Pa |
+| last flow-through time, half range over the window mean: torque; pressure rise | 8.46e-4; 1.58e-3 | 1.56e-5; 3.29e-5 |
+| site: cell; half range; `f_p` | c157; 1.2557e-3 m/s; 7.90 Hz (drift) | c157; 2.2775e-3 m/s; 7.90 Hz (drift) |
+
+The 2583 Hz of H(dt) is 11.6 times the blade-passing frequency and has no forcing in a single passage; its period is
+8.41 steps of H(dt), and H(dt/2) shows nothing at 2583 Hz or its double. The 7.90 Hz peaks are the first bin, the
+curvature of a slow drift that the least-squares line does not remove: no oscillation. Where the largest unsteadiness of
+H(dt) sits is not in these records; ADR 0824 found its five cells of largest amplitude at the tip (1.54 m/s in H(dt),
+0.126 m/s in H(dt/2)), which fits a step-tied tip oscillation; not diagnosed here.
+
+### Every check
+
+| Id | Limit | Measured | Met |
+| --- | --- | --- | --- |
+| A1 | 5 498 and 10 996 rows, steps 1 to N | 5 498 and 10 996, complete; windows 2 749 and 5 498 | yes |
+| G | TIME-ACCURATE and site `A <= 0.193` in both | share 1.000000 and 1.000000; `A` 1.2557e-3 and 2.2775e-3 m/s: STEADY, verdict steady | yes |
+| A3 | reported | the table above | yes |
+| T1 | `<= 1 %` | torque 0.104 % and 0.0235 % | yes |
+| T2 | `<= 1 %` | pressure rise 0.179 % and 0.0219 % | yes |
+| TF | only if T1 or T2 missed in both | does not apply (ratios 0.0031, printed only) | n/a |
+| T3 | `<= 1 %` each | torque 0.128 %, pressure rise 0.294 %; Richardson 2.0184055 N m (314.09 W), 71.534 Pa | yes |
+| T4 | `<= 0.21190 N m`, `<= 29.75 Pa` | torque -0.01114 N m (-0.55 %), pressure rise +7.231 Pa (+11.26 %) | yes |
+| T5 | reported | power 313.958 W against 333.30 W (-5.80 %); pressure rise 71.464 Pa against 126.46 Pa (-43.49 %) | reported |
+| A5 | stated | "What this means for F-870" below | yes |
+| K1 | half a unit of the last digit; crossings exact | all sixteen values of ADR 0766 reproduced (for example 2.007096405 N m against 2.007096; 395.139 Hz against 395.1) | yes |
+| K2 | the same | share 1.000000; site 1.2557175e-3 and 2.277452e-3 m/s; 313.5576 and 313.9578 W | yes |
+| C1 | `1e-12`; `1e-3`; as built | (a) `f_p` equal to `17 / L` to the 13 printed digits, `A` 0.36999994; (b) equal; (c) 5.0e-4 steady, 2.5e-2 not (N1); (d) 0 | yes |
+| G2 | `1e-6` relative | the 28 keys as recorded (the rule 7 run) | yes |
+| D1 | 0 files | `git diff --name-only 2cbdfa5f`: the new test, its patch, ADR 0827, the records folder and the proposal file only | yes |
+| B3 | passes, unchanged | 3 passed, 1 ignored; file unchanged | yes |
+| P | rule 7 | below | yes |
+
+### What this means for F-870 (A5)
+
+The class is STEADY, so a steady state of B2 exists, and a time march reaches it: the steady iteration's limit cycle (ADR
+0110, ADR 0762) is a property of the iteration. By the recommendation rule registered in section 4 (G STEADY, T1 to T3
+met) the recommendation is option (c), a time march to a settled state on B1 at two steps, with (b) named as the cheaper
+route because T4 is met. Against (b): the route moves the pressure rise by 7.2 Pa (11 %) on B2, inside the family's
+numerical band but a quarter of it, so the compared number depends on the route. The residual of H(dt) argues for
+running (c) at two steps and reading the settled rule at both.
+
+### Mutations
+
+From `mutations.log` (`git archive` of f392a716, one copy, the touched file restored between mutations):
+
+| Id | What happened |
+| --- | --- |
+| M1 | no least-squares line: caught by `f879_hc_measures_on_known_signals` (b). Committed as the patch |
+| M2 | 10 % for 1 %: caught by the same test (c) |
+| M3 | window from 0.0633 s: caught by `f879_hc_rows_from_the_committed_records` (A1: the window) |
+| M4 | `(k + 1) / L`: caught by the known signals (a), 142.19 against 134.29 Hz |
+| M5 | `dp_ts` read as torque: caught by `f879_hc_reproduces_the_printed_values` (69.617 against 2.007096) |
+| M6 | ADR 0824's `H_dt2.csv` cut to its first half: caught by the rows test (an empty window fails the measure's assertion) |
+
+Six of six caught.
+
+### Deviations
+
+1. M6 was caught by the measure's assertion on an empty window, not by the count assertion: the kept half of H(dt/2)
+   ends at 0.1266 s, so its window is empty.
+2. `cargo clippy` ran in the dev profile (its default); the tests in release.
+3. No limit was changed and no test was run again to pass; the registered run was made once, and G2 was asserted first in
+   the rule 7 run, as registered.
+
+### What was not run
+
+No solver run (none was registered). `docs_site`, `roadmap_proposals.py check` and `process_report.py --check` run at
+the commit of this addendum and are reported to the lead.
+
+### The checks of rule 7
+
+`rule7.log` (at 2842efc3; the later commit changes only this ADR, the proposal file and `rule7.log`): `cargo fmt -p
+rcfd-api --check` exit 0; `rustfmt --check` of the new file exit 0; `cargo clippy -p rcfd-api --all-targets -- -D
+warnings` clean; `rcfd-api --release --lib` 160 passed, 4 ignored; `--test f879_check_h_class` 3 passed;
+`--test f885_kept_gradient_lag` 6 passed, 4 ignored; `--test baseline_hashes` 3 passed, 1 ignored.
+
+### Size
+
+Size (agent): done; 0; 0; 2; 170000
+
+### Decision by the registered rule
+
+**Done.** Every row is decided (G, A1, A3, A5, T1 to T5; TF does not apply), the limited rows G, T1 to T4, K1, K2, C1, G2,
+D1, B3 and P are met, and each of M1 to M6 is caught.
+
+## Open questions for the maintainer (addendum 1)
+
+1. **The convergence rule of F-870.** Options: (a) keep `is_converged()` at 1e-5 (needs a steady iteration that converges
+   on B1; none exists); (b) the cap rule on the SIMPLEC sample, with the time-marched state of the same mesh beside it
+   (T4: 0.55 % in torque, 11 % in pressure rise on B2); (c) a time march to a settled state on B1, `pimple` with the four
+   opt-ins of ADR 0824 from the uniform start at `dt` and `dt/2`, converged iff the half range of torque and pressure rise
+   over the last flow-through time is at most 1 % of the mean and the two steps' means agree within 1 % (two runs of B1,
+   hours); (d) a time mean (only for a class PHYSICAL; not supported). I recommend (c), by the rule registered in section 4.
+2. **Scope of the class.** The class STEADY holds with the four opt-ins of the pimple step, not with the default step
+   (ADR 0767 found the default step not TIME-ACCURATE by E-1). Options: (a) F-879 is done with the class under the
+   opt-ins, as F-885 was (ADR 0824, answer 2); (b) F-879 waits for a default step that meets E-1. I recommend (a).
+
+## For the lead: roadmap entries
+
+> Status proposed for F-879: done.
+
+> Note entry: ADR 0827, 2026-11-27, done: from the committed records of ADR 0824 (check H of ADR 0183 on B2, uniform start, pimple with 5 outer iterations and the four opt-ins of F-885, dt 4.605e-5 s and dt/2, 0.2532 s or 6.27 revolutions each, window the last 3 flow-through times), the hub pocket classes STEADY (outer rule met in 100 % of both windows, site amplitude 1.26e-3 and 2.28e-3 m/s against 0.193); torque 2.01498 and 2.01755 N m (313.56 and 313.96 W), half range 0.10 % and 0.024 % of the mean, pressure rise 71.255 and 71.464 Pa, half range 0.18 % and 0.022 %, so both steady to the 1 % state tolerance of ADR 0762; H(dt) keeps a non-decaying residual at 2583 Hz (8.4 steps a period) that is absent at dt/2, where everything decays and the periodogram peak is the drift at 7.9 Hz; the two steps agree within 0.13 % and 0.29 %, and against the steady B2 run of ADR 0762 by -0.55 % in torque and +11.3 % in pressure rise, inside its numerical band; for F-870 a steady state exists, and the recommended convergence rule is a settled time march on B1 at two steps; held by crates/rcfd-api/tests/f879_check_h_class.rs and docs/investigations/f879-check-h-class.
+
+The same entries are in `docs/roadmap/proposals/0827-F-879.json` (form 1 of ADR 0755, base 2cbdfa5f), checked with
+`python scripts/roadmap_proposals.py check`. No gap (done) and no follow-up item.
+
+Generated pages that this work may leave not current, for the lead (rule 9): `docs/adr/index.md` (ADR 0827 is new).

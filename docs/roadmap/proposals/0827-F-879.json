@@ -1,0 +1,8 @@
+{
+  "form": 1,
+  "adr": "0827",
+  "item": "F-879",
+  "base": "2cbdfa5f4c43f4bcec0be1b5b5cfc007c8139740",
+  "status": "done",
+  "note": "ADR 0827, 2026-11-27, done: from the committed records of ADR 0824 (check H of ADR 0183 on B2, uniform start, pimple with 5 outer iterations and the four opt-ins of F-885, dt 4.605e-5 s and dt/2, 0.2532 s or 6.27 revolutions each, window the last 3 flow-through times), the hub pocket classes STEADY (outer rule met in 100 % of both windows, site amplitude 1.26e-3 and 2.28e-3 m/s against 0.193); torque 2.01498 and 2.01755 N m (313.56 and 313.96 W), half range 0.10 % and 0.024 % of the mean, pressure rise 71.255 and 71.464 Pa, half range 0.18 % and 0.022 %, so both steady to the 1 % state tolerance of ADR 0762; H(dt) keeps a non-decaying residual at 2583 Hz (8.4 steps a period) that is absent at dt/2, where everything decays and the periodogram peak is the drift at 7.9 Hz; the two steps agree within 0.13 % and 0.29 %, and against the steady B2 run of ADR 0762 by -0.55 % in torque and +11.3 % in pressure rise, inside its numerical band; for F-870 a steady state exists, and the recommended convergence rule is a settled time march on B1 at two steps; held by crates/rcfd-api/tests/f879_check_h_class.rs and docs/investigations/f879-check-h-class."
+}

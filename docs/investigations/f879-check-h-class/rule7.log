@@ -1,0 +1,26 @@
+== HEAD 2842efc3
+== cargo fmt -p rcfd-api --check
+exit 0
+== rustfmt --check --edition 2021 crates/rcfd-api/tests/f879_check_h_class.rs
+exit 0
+== cargo clippy -p rcfd-api --all-targets -- -D warnings
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 47.63s
+exit 0
+== cargo test -p rcfd-api --release --lib
+test result: ok. 160 passed; 0 failed; 4 ignored; 0 measured; 0 filtered out; finished in 43.64s
+exit 0
+== cargo test -p rcfd-api --release --test f879_check_h_class
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.20s
+exit 0
+== cargo test -p rcfd-api --release --test f885_kept_gradient_lag
+test result: ok. 6 passed; 0 failed; 4 ignored; 0 measured; 0 filtered out; finished in 27.63s
+exit 0
+== cargo test -p rcfd-api --release --test baseline_hashes
+test result: ok. 3 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out; finished in 0.59s
+exit 0
+== git diff --name-only 2cbdfa5f
+crates/rcfd-api/tests/f879_check_h_class.mutation.patch
+crates/rcfd-api/tests/f879_check_h_class.rs
+docs/adr/0827-f879-registration-check-h-class-torque-and-pressure-rise-in-time.md
+docs/investigations/f879-check-h-class/mutations.log
+docs/investigations/f879-check-h-class/rows.log
