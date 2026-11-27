@@ -466,3 +466,9 @@ The same entries are in `docs/roadmap/proposals/0820-F-885.json` (form 1 of ADR 
 own and would be registered under F-885 (rule 13).
 
 Generated pages that this work may leave not current, for the lead (rule 9): `docs/adr/index.md` (ADR 0820 is new).
+
+## Answers of the maintainer (2026-11-26), written by the lead
+
+1. Option (a): the remedy is `outer_frozen_convection_gradient`, with a BDF2 time-order check and a steady-case check, ADR 0821; taken by the lead on the maintainer's standing instruction of 2026-11-26 (go with the recommended option always).
+2. The recommendation: check H is run in the remedy's registration, after the order check; taken by the lead on the maintainer's standing instruction of 2026-11-26 (go with the recommended option always).
+3. The recommendation: a solver setting with no case key, so no schema golden changes; taken by the lead on the maintainer's standing instruction of 2026-11-26 (go with the recommended option always).
