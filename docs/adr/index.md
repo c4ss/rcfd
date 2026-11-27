@@ -565,7 +565,7 @@ One row per record of this folder, grouped by the roadmap category of the item i
 |---|---|---|---|---|---|---|
 | [0730](0730-f826-f830-proposal-ui-metadata-in-the-case-schema-and-help-from-the-engine.md) | F-826 and F-830 proposal: UI metadata in the case schema, and help and an error catalogue from the engine | ACCEPTED | 2026-11-17 | 0 | F-830 | partial |
 
-## Quality, docs and validation (63)
+## Quality, docs and validation (64)
 
 | ADR | Title | Status word | Date | Addenda | Item | Item status |
 |---|---|---|---|---|---|---|
@@ -632,6 +632,7 @@ One row per record of this folder, grouped by the roadmap category of the item i
 | [0819](0819-f885-registration-a-limiter-factor-kept-from-the-steps-first-outer-iteration-and-mode-b-with-the-term-off.md) | F-885 registration: a limiter factor kept from the step's first outer iteration, and mode B with ADR 0811's term off and on | REGISTERED | 2026-11-26 | 3 | F-885 | partial |
 | [0820](0820-f885-registration-the-slow-outer-mode-by-freezing-the-lagged-parts-of-the-predictor.md) | F-885 registration: the slow outer mode, by freezing the lagged parts of the momentum predictor one at a time | REGISTERED | 2026-11-26 | 1 | F-885 | partial |
 | [0821](0821-f885-registration-the-frozen-convection-gradient-its-time-order-a-steady-case-and-check-h.md) | F-885 registration: the convection's gradient kept from the step's first outer iteration as the remedy, its time order, a steady case, then check H | REGISTERED | 2026-11-27 | 1 | F-885 | partial |
+| [0822](0822-f885-registration-the-order-floor-of-the-pimple-step-a-finer-order-case-and-check-h.md) | F-885 registration: why the pimple step's time-order case is first order, the remedy's order on a corrected case, then check H | REGISTERED | 2026-11-27 | 1 | F-885 | partial |
 
 ## Records with no item in the file name (260)
 

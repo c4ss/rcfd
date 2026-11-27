@@ -1,0 +1,61 @@
+HEAD e102244ffaceb49a539db0987c9bbe6ad364326a
+== cargo fmt -p rcfd-api --check
+exit 0
+== rustfmt --check --edition 2021 crates/rcfd-api/tests/f885_order_case.rs
+exit 0
+== cargo clippy -p rcfd-api --all-targets -- -D warnings
+exit 0
+== cargo test -p rcfd-api --release --lib
+test case::tests::semantic_checks_run_after_schema_checks ... ok
+test design::ledger::tests::l6_rerun_check ... ok
+test design::opmap::tests::m2_failure_handling ... ok
+test design::optim::tests::failed_evaluations_are_worst_and_budget_is_respected ... ok
+test case::sandbox_tests::sandbox_helper_matches_the_old_check_on_resolvable_roots ... ok
+test design::study_ledger::tests::lg1_lg3_lg4_one_entry_per_pair_with_located_failures_and_exact_reruns ... ok
+test design::sensitivity::tests::c7_failed_evaluations_drop_their_rows ... ok
+test design::sensitivity::tests::c7b_failures_of_the_mixed_rows_drop_their_rows ... ok
+test design::uq::tests::u8_failures_count_as_violations ... ok
+test service::tests::mesh_check_and_validate ... ok
+test workflow::tests::rerun_and_setting_changes_make_dependants_stale ... ok
+test result: ok. 160 passed; 0 failed; 4 ignored; 0 measured; 0 filtered out; finished in 43.74s
+exit 0
+== cargo test -p rcfd-api --release --test f885_frozen_convection_check_h
+     Running tests\f885_frozen_convection_check_h.rs (E:/projects/cfd/w49i-work/f885-order-case-scratch/target\release\deps\f885_frozen_convection_check_h-5916e01bcbb0b1d1.exe)
+test f885_fc_class_from_the_committed_records ... ignored, not run: check H was not run by ADR 0821's rule (amendment 1)
+test f885_fc_h_dt2_record ... ignored, heavy record, ADR 0821: check H(dt/2) on B2 with the remedy (13 627 cells, 10 996 steps of 5 outer iterations, hours): cargo test --release -p rcfd-api --test f885_frozen_convection_check_h f885_fc_h_dt2_record -- --ignored --nocapture
+test f885_fc_h_dt_record ... ignored, heavy record, ADR 0821: check H(dt) on B2 with the remedy (13 627 cells, 5 498 steps of 5 outer iterations, hours): cargo test --release -p rcfd-api --test f885_frozen_convection_check_h f885_fc_h_dt_record -- --ignored --nocapture
+test f885_fc_order_diagnosis_record ... ignored, diagnosis record, ADR 0821 amendment 1 (seconds, prints only): cargo test --release -p rcfd-api --test f885_frozen_convection_check_h f885_fc_order_diagnosis_record -- --ignored --nocapture
+test f885_fc_short_run_on_the_check_h_path ... ignored, not run: check H was not run by ADR 0821's rule (amendment 1)
+test result: ok. 3 passed; 0 failed; 6 ignored; 0 measured; 0 filtered out; finished in 5.00s
+exit 0
+== cargo test -p rcfd-api --release --test f885_alpha_free_face_flux
+test f885_af_h_dt2_record ... ignored, heavy record, ADR 0811: check H(dt/2) on B2 with alpha_free_face_flux (13 627 cells, 10 996 steps of 5 outer iterations, hours): cargo test --release -p rcfd-api --test f885_alpha_free_face_flux f885_af_h_dt2_record -- --ignored --nocapture
+test f885_af_h_dt_record ... ignored, heavy record, ADR 0811: check H(dt) on B2 with alpha_free_face_flux (13 627 cells, 5 498 steps of 5 outer iterations, hours): cargo test --release -p rcfd-api --test f885_alpha_free_face_flux f885_af_h_dt_record -- --ignored --nocapture
+test f885_af_short_run_on_the_check_h_path ... ok
+test result: ok. 5 passed; 0 failed; 3 ignored; 0 measured; 0 filtered out; finished in 22.75s
+exit 0
+== cargo test -p rcfd-api --release --test baseline_hashes
+test result: ok. 3 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out; finished in 0.68s
+exit 0
+== cargo test -p rcfd-cli --release --test docs_site
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 18.07s
+exit 0
+== python scripts/roadmap_proposals.py check docs/roadmap/proposals/0822-F-885.json
+exit 0
+applies crates/rcfd-api/tests/f885_alpha_free_face_flux.mutation.patch
+applies crates/rcfd-api/tests/f885_check_h_outer_record.mutation.patch
+applies crates/rcfd-api/tests/f885_frozen_convection_check_h.mutation.patch
+applies crates/rcfd-api/tests/f885_frozen_limiter.mutation.patch
+applies crates/rcfd-api/tests/f885_order_case.mutation.patch
+applies crates/rcfd-api/tests/f885_outer_fixed_points.mutation.patch
+applies crates/rcfd-api/tests/f885_outer_stall.mutation.patch
+applies crates/rcfd-api/tests/f885_slow_outer_mode.mutation.patch
+applies crates/rcfd-api/tests/f885_two_outer_modes.mutation.patch
+crates/rcfd-api/tests/f885_order_case.mutation.patch
+crates/rcfd-api/tests/f885_order_case.rs
+docs/adr/0822-f885-registration-the-order-floor-of-the-pimple-step-a-finer-order-case-and-check-h.md
+docs/investigations/f885-order-case/diagnosis.log
+docs/investigations/f885-order-case/gate.log
+docs/investigations/f885-order-case/mutations.log
+docs/investigations/f885-order-case/order.log
+RULE7-DONE

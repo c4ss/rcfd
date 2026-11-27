@@ -1,0 +1,9 @@
+{
+  "form": 1,
+  "adr": "0822",
+  "item": "F-885",
+  "base": "efce0cf14a267c2718e62879c0f05d4c3099b02f",
+  "status": "partial",
+  "note": "ADR 0822, 2026-11-27, partial: the first order of ADR 0821's Taylor-Green case is the O(dt h^2) Rhie-Chow commutator floor of ADR 0073 (H-COMM; p_f 1.015 at N = 16, 1.452 at 32, 2.035 at 64; 2.022 at N = 16 with rhie_chow_step_consistent; the wall-bounded mode 2.032; the start ruled out), but on the corrected case at N = 64 the remedy outer_frozen_convection_gradient misses BDF2's order (p_f 1.822 against 1.9, the control 2.035), so check H was not run by the registered rule; held by crates/rcfd-api/tests/f885_order_case.rs and docs/investigations/f885-order-case.",
+  "gap": "Missing for done: a class by ADR 0183's rule. The order case now decides (N = 64, control p_f 2.035; ADR 0821's N = 16 case is held by the Rhie-Chow commutator floor), but the remedy outer_frozen_convection_gradient is below BDF2's order on it (p_f 1.822 against 1.9, e_ON / e_OFF rising 1.36 to 1.66 as dt falls). Needs a diagnosis of that lag, the remedy's order met, then check H with the remedy."
+}
