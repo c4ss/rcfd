@@ -450,7 +450,8 @@ class Resume(TempRepo):
             self.assertEqual((code, applied), (1, []))  # the patch is only reached when the commands pass
             r = Runner({"the-test": [(1, "")]})
             code, out = self.run_plan(plan, r)
-            self.assertEqual((code, len(applied), r.checks()), (0, 2, [self.C3, "the-test"]), out)
+            # after the patch is removed the engine binaries are built again, before any Studio test (ADR 0823 addendum 3)
+            self.assertEqual((code, len(applied), r.checks()), (0, 2, [self.C3, "the-test", pm.REBUILD_AFTER_MUTATIONS]), out)
         finally:
             pm.subprocess.run = real
         self.assertEqual(self.rows()[-1]["detail"], f"exit=0;mutations=1;resumed=1;cmds={self.C1} | {self.C3}")

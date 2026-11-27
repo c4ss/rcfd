@@ -98,6 +98,8 @@ RETRIES = 2  # further runs of a command that failed (ADR 0752: a test that fail
 BUILD_SECONDS = 1.8  # build seconds counted per selected test binary (ADR 0752: 1592.1 s over 891 commands of the lead's runs)
 BRIEFS = "docs/adr/briefs"
 REGENERATE = ("python scripts/process_report.py --write", "python scripts/roadmap_progress.py")
+# run after the mutation patches, so the binaries in target/release are built from the tree without any patch
+REBUILD_AFTER_MUTATIONS = "cargo build --release -p rcfd-cli -p rcfd-runner -p rcfd-mcp"
 # the process measures of ADR 0754 (F-863)
 STATUSES = ("done", "partial", "todo")
 STATUS_LIST = re.compile(r"F-\d{1,4}=(?:done|partial|todo)(?:,F-\d{1,4}=(?:done|partial|todo))*")
@@ -902,6 +904,12 @@ def do_run(root, a, info, plan, run=sh):
         if not ok:
             return stopped("mutation " + msg)
         record(f"mutation {p}", (time.time() - t0) / 60.0)
+    if plan["patches"]:
+        # a mutation's command builds into target/release with the patch applied, and removing the patch does not rebuild:
+        # the engine binaries the Studio's tests start would be the mutated ones (ADR 0823 addendum 3)
+        code = run(REBUILD_AFTER_MUTATIONS, root, True)[0]
+        if code:
+            return stopped(REBUILD_AFTER_MUTATIONS, code)
     if plan["studio"]:
         key = "npm test (apps/studio-web)"
         cmds.append(key)
