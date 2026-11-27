@@ -216,6 +216,16 @@ pub struct PimpleSettings {
     /// correction, and the limiter factor where one is formed) in the step's first outer iteration and use it in the later
     /// ones. Read only where a gradient is formed. Reset at every step. Default `false` (bit-identical).
     pub outer_frozen_convection_gradient: bool,
+    /// F-885 (ADR 0824, opt-in): with `outer_frozen_convection_gradient`, on the step's first outer iteration where the cells
+    /// of the convection are extrapolated in time (BDF2), form the convection gradient's boundary values from the
+    /// extrapolated field (a copy of the velocity with the extrapolated cells and the same conditions), so that the kept
+    /// gradient is of one time level. The convection's coefficients, the Laplacian's gradient and the limiter keep theirs.
+    /// Default `false` (bit-identical).
+    pub outer_frozen_convection_gradient_extrapolated_boundary: bool,
+    /// F-885 (ADR 0824, opt-in): with `outer_frozen_convection_gradient`, keep the convection gradient of the step's second
+    /// outer iteration (formed from its iterate) for the later ones; the first iteration uses the gradient it forms. With one
+    /// outer iteration nothing is kept. Default `false` (bit-identical).
+    pub outer_frozen_convection_gradient_second: bool,
     /// F-885 (ADR 0820, opt-in): keep each component's gradient that enters the momentum Laplacian's non-orthogonal
     /// correction in the step's first outer iteration and use it in the later ones. Read only where a gradient is formed and
     /// `coupled_non_orth` is off. Reset at every step. Default `false` (bit-identical).
@@ -1187,6 +1197,8 @@ impl PimpleSettings {
             outer_frozen_limiter: false,
             outer_frozen_convecting_flux: false,
             outer_frozen_convection_gradient: false,
+            outer_frozen_convection_gradient_extrapolated_boundary: false,
+            outer_frozen_convection_gradient_second: false,
             outer_frozen_laplacian_gradient: false,
             outer_field_record: Vec::new(),
             lag_onset_refusal: None,
@@ -2170,6 +2182,22 @@ impl PimpleSolver {
                 }
                 _ => Vec::new(),
             };
+            // F-885 (ADR 0824, opt-in): the boundary values of the extrapolated field for the kept convection gradient
+            let ub_extrapolated: Option<Vec<Vec3>> = match extrap {
+                Some(r)
+                    if s.outer_frozen_convection_gradient && s.outer_frozen_convection_gradient_extrapolated_boundary =>
+                {
+                    let mut ue = self.u.clone();
+                    for c in 0..n {
+                        for j in 0..3 {
+                            let older = self.hist_u[j].older.as_ref().map_or(self.hist_u[j].old[c], |v| v[c]);
+                            ue.values[c][j] = (1.0 + r) * self.hist_u[j].old[c] - r * older;
+                        }
+                    }
+                    Some(ue.boundary_values(&g))
+                }
+                _ => None,
+            };
             for k in 0..3 {
                 if !g.active[k] {
                     continue;
@@ -2200,10 +2228,23 @@ impl PimpleSolver {
                 } else {
                     None
                 };
+                // F-885 (ADR 0824, opt-in): the convection gradient with the extrapolated field's boundary values
+                let grad_e: Option<Vec<Vec3>> = match (&grad, &ub_extrapolated) {
+                    (Some(_), Some(ue)) => {
+                        let bve: Vec<f64> = ue.iter().map(|v| v[k]).collect();
+                        Some(least_squares(&g, &conv_cells, &bve))
+                    }
+                    _ => None,
+                };
                 // F-885 (ADR 0820, opt-in): the convection's gradient of the step's first outer iteration kept for the later
-                // ones
+                // ones (ADR 0824: of the second with `outer_frozen_convection_gradient_second`)
+                let keep = !(s.outer_frozen_convection_gradient_second && outer == 0);
                 let grad_c: Option<&[Vec3]> = match (&grad, s.outer_frozen_convection_gradient) {
-                    (Some(gr), true) => Some(frozen_grad_conv[k].get_or_insert_with(|| gr.clone()).as_slice()),
+                    (Some(gr), true) if keep => Some(
+                        frozen_grad_conv[k]
+                            .get_or_insert_with(|| grad_e.unwrap_or_else(|| gr.clone()))
+                            .as_slice(),
+                    ),
                     _ => grad.as_deref(),
                 };
                 // ADR 0183 P-A (opt-in): the limited gradient in the convection term only
