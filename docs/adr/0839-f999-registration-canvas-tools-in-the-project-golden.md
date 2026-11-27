@@ -194,3 +194,13 @@ passing (Addendum 2), **done** by the registered rule. Q1 and Q2 above stay open
 
 The same entries are `docs/roadmap/proposals/0839-F-999.json`. The golden edit is additive (rule 3): the diff is the
 three entries appended after `wait_run`, made by the lead's taking of the maintainer's word as the brief records it.
+
+## Addendum 2: L3 (2026-11-27)
+
+Run once each after addendum 1 was committed (dc054b09).
+
+| Id | Limit | Measured | Met |
+|---|---|---|---|
+| L3 | pass (process report: only a generated file not current may fail) | `docs_site` 2 passed, 0 failed; `roadmap_proposals.py check docs/roadmap/proposals/0839-F-999.json` exit 0 ("F-999: todo -> done; note + 301 characters"); `process_report.py --check` 1 failure, only "generated file is not current: docs/adr/index.md", left to the lead (rule 9) | yes |
+
+With L3 met, F-999 is **done** by the registered rule.
