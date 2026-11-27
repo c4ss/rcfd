@@ -1,0 +1,138 @@
+# ADR 0830: F-978 registration: why the first edit_case of B1 is refused under load, then B1 to B3 once
+
+Status: **REGISTERED 2026-11-27, written before any code of F-978 in this work and before any run of its checks.** Before
+this text nothing was changed, built or run but reading and three queries of the machine (Defender's state, the CPU load,
+the processor count). Results go in addenda at the end; nothing above them is changed afterwards. Written by Claude Opus
+5.5 (`claude-opus-5-5`), as a background agent of the lead.
+
+It answers the brief `docs/adr/briefs/f978-edit-case-refused.md` ([the file](briefs/f978-edit-case-refused.md)) and
+follows [docs/process/agent-rules.md](../process/agent-rules.md), version 5. Branch `f978-edit-case-refused` from
+39d689c6, scratch `w49i-work/f978-edit-case-refused-scratch`. It is registered under F-978 (rule 13) and continues
+[ADR 0826](0826-f978-registration-the-process-view-of-a-case.md) and
+[ADR 0828](0828-f978-registration-process-view-rows-and-runner-teardowns.md) (partial: B1 to B3 not decided, the first
+`edit_case` after `new_case` refused with "replace ...process-cavity.toml: failed after 12 attempts: Access is denied.
+(os error 5)" at 82 % and 99 % CPU).
+
+## What was read
+
+`AGENTS.md`, the rules (version 5), the brief and ADR 0828, whole; `crates/rcfd-mcp/tests/canvas_process_f978.rs` whole;
+F-978's acceptance (by a script); of `crates/rcfd-project/src/atomic.rs` lines 1 to 200 (`Retry`, `DEFAULT_RETRY`,
+`is_transient`, `with_retry`, `atomic_write_with`, `write_new`, `read`), 219 to 226 (`EDIT_LOCK_WAIT` 2 s) and 420 to 560
+(`replace_if_hash_with`) and the test hooks 640 to 704; `crates/rcfd-workspace/src/cases.rs` 60 to 200 (`create_files`:
+`new_case` writes the case by `write_new`), `write.rs` 26 and 160 to 180 (`edit_case` replaces by `replace_if_hash_with`);
+the head of `crates/rcfd-project/src/watch.rs`; `crates/rcfd-project/tests/hammer.rs` 135 to 215 (A3, the existing test
+of a replace refused while the target is held without delete sharing); `crates/rcfd-mcp/tests/common/mod.rs` (`scratch`
+in the system temp folder, `Mcp`); the toolchain's own source of `std::fs::rename` on Windows (rustc 1.99.0,
+`library/std/src/sys/fs/windows.rs` lines 1321 to 1390). Bytes read: about 80 000.
+
+## Findings of the reading
+
+1. **The replace.** `edit_case` → `replace_if_hash_with` (atomic.rs 442) → `atomic_write` (DEFAULT_RETRY: 12 attempts,
+   sleeps 1 ms doubling to 100 ms, 527 ms of sleep in all) → `fs::rename(tmp, case)`. std's rename (windows.rs 1321) calls
+   `MoveFileExW(REPLACE_EXISTING)`; on ERROR_ACCESS_DENIED it tries again with `FileRenameInfoEx` and the flags
+   `REPLACE_IF_EXISTS | POSIX_SEMANTICS`; if that fails too it returns **the first error, os error 5** (line 1382). The
+   POSIX rename replaces a target that others hold open with delete sharing. So os error 5 means the target (or the temp
+   file) was held open **without delete sharing**, for longer than the retries.
+2. **Every rcfd reader shares delete.** std's `File::open` asks for read, write and delete sharing; the only
+   `share_mode` calls outside tests (S1: `grep -rn share_mode crates --include=*.rs`) are the runner's lock files
+   (`rcfd-runner/src/sys.rs`, `site/remote.rs`) and the test hook of atomic.rs 697. The `--canvas` server and the watch
+   read case files with std. Predicted from the reading: no rcfd process can cause the refusal.
+3. The new case file is created by `write_new` (a temp file, synced, hard-linked to the case's name, the temp name
+   removed), then replaced at once by the first `edit_case`. B1's project is under the system temp folder
+   (`common::scratch`). Defender's real-time protection is on (`Get-MpComputerStatus`: RealTimeProtectionEnabled True);
+   its exclusions cannot be read without administrator rights. CPU 90 % at the time of writing, 16 logical processors.
+
+## Hypotheses and the arms that decide them
+
+| H | Hypothesis | File and line | Predicts | Arm | Remedy |
+|---|---|---|---|---|---|
+| H1 | a reader in an rcfd process (the `--canvas` server's reads, the watch) holds the new case file | watch.rs, the server's reads via std; atomic.rs 138 | refusals with the canvas server, none without; a held std reader refuses the replace | U1; arms A and B | none in the replace; the reader |
+| H2 | a process outside rcfd (an antivirus or indexer scan of the newly written file) holds it without delete sharing | atomic.rs 138, windows.rs 1382 | at each refusal the trace shows a holder whose name is not `rcfd-*` | the trace X in arms A and B | a longer replace budget (F1) |
+| H3 | the replace's retry budget (527 ms of sleep) is shorter than such a hold under load | atomic.rs 26 to 31 | the foreign hold at each refusal lasts longer than 0.53 s and less than 2 s | X in arms A and B | F1 |
+
+- **X, the trace.** A scratch PowerShell script `trace.ps1` (C# by `Add-Type`) that every 2 ms opens each
+  `cases/*.toml` of every folder `%TEMP%\rcfd-mcp-w48f-f978-*\quick-start` with read-attributes access and full sharing,
+  asks the operating system which processes have the file open (`NtQueryInformationFile`, class 47,
+  `FileProcessIdsUsingFileInformation`; the class and its layout are cited from memory, since no page of it was read,
+  and the control TC checks the tool), closes it, and writes a line `epoch ms, file, pid:name...` whenever the set
+  changes, leaving out its own pid. It runs beside arms A, B, A2 and the run of B1, and is ended after each.
+- **U1** (code verification of finding 2): a file made by `write_new`, held by `std::fs::File::open`, is replaced by
+  `atomic_write_with` with 1 attempt: Ok.
+- **Arms A and B**: an ignored test each in `crates/rcfd-mcp/tests/edit_case_refused_f978.rs`, on a copy of
+  `example-projects/quick-start` in `common::scratch("f978-arm-<a|b>")`: A with the `--canvas` server of B1 started, B
+  without; both with the load L; 30 times `new_case` `cases/arm-<i>.toml` (copy of `cavity-re100.toml`) then two
+  `edit_case` as B1's (`mesh.nx`, `mesh.ny` 16; `physics.nu` 0.02), each call's start and end in epoch ms and its result
+  printed; 90 replaces in all (30 creations, 60 edits). Then TC.
+- **L, the load**: threads equal to `available_parallelism` (16) spinning in the test process from before the first call
+  to after the last; the machine's CPU load is recorded before each arm (`Win32_Processor.LoadPercentage`).
+- **TC** (control of X): at the end of each arm the test holds the last case file with `File::open` for 500 ms; X must
+  show the test process on that file.
+
+**Rules of decision, fixed now.** H1 is refuted if U1 passes and every refusal in A and B has a holder not named `rcfd-*`
+in X during it; confirmed if a refusal has only `rcfd-*` holders in X. H2 is confirmed if at least one refusal occurs in
+A and B and every refusal has a non-rcfd holder in X during it. H3 is confirmed if H2 is and the longest non-rcfd hold
+that overlaps a refusal is under 2 s. **The cause is found** when H2 and H3 are confirmed and H1 is refuted. If A and B
+give no refusal, the arms do not decide and the cause is not found.
+
+## The fix F1, taken only if the cause is found
+
+`crates/rcfd-project/src/atomic.rs`: a constant `EDIT_REPLACE_RETRY: Retry` = 27 attempts, 1 ms doubling to 100 ms (1
++ 2 + ... + 64 + 19 × 100 = 2027 ms of sleep, at least `EDIT_LOCK_WAIT`, 2 s, the time a cooperative writer already
+waits for the edit lock, atomic.rs 219), used by `replace_if_hash_with` for its replace instead of `DEFAULT_RETRY`
+(`atomic_write_with`). Every other user of `DEFAULT_RETRY` (`atomic_write`, `read`, the locks, the trash) is unchanged.
+Defaults: a replace that succeeds writes the same bytes and journal line as before; only a refusal comes later (2.03 s
+of sleep instead of 0.53 s) and names 27 attempts. No golden, hash table or existing test is changed (hammer.rs A3 tests
+`atomic_write`, which keeps `DEFAULT_RETRY`). If the cause is not found, F1 is not made and is reported as an option.
+
+## Checks (rule 14)
+
+Release profile, `CARGO_TARGET_DIR` under the scratch folder, `CARGO_BUILD_JOBS` 8, `RCFD_BIN` from that target. New
+tests: `crates/rcfd-project/tests/replace_refused_f978.rs` (U0 to U2, Windows only) and
+`crates/rcfd-mcp/tests/edit_case_refused_f978.rs` (arms A, B, A2, ignored: they load the whole machine on purpose and
+are run once each by this work).
+
+| Id | Check | Limit | Source | Estimate | Margin | Kind |
+|---|---|---|---|---|---|---|
+| U1 | finding 2: std reader held, replace with 1 attempt | Ok | the brief (an arm per hypothesis) | Ok | exact | code verification |
+| A, B | arms A and B with X | decides H1 to H3 by the rules above | the brief | H2, H3 confirmed, H1 refuted | rule | code verification |
+| TC | X sees the test's 500 ms hold, in A and in B | at least 1 line with the test's pid on the file | the brief (a trace of the handles) | 1 | exact | code verification |
+| U0 | F1: target held without delete sharing throughout `replace_if_hash` | `ProjectError::Retry`, 27 attempts, os error 5, the file unchanged | finding 1; F1 | as limit | exact | code verification |
+| U2 | F1: the same hold released after 1.0 s | Ok, the new bytes, waited at least 0.9 s | F1 (1.0 s between 0.53 s and 2.03 s) | Ok | 2.03 | code verification |
+| A2 | arm A again after F1, same load | 0 refusals of 90 | the brief (the replace under the registered load) | 0 | exact | code verification |
+| B1 | `canvas_process_f978` once, as ADR 0826 registered it, with X beside it, CPU recorded | every assertion of B1 | ADR 0826 B1 | holds | exact | code verification |
+| B2 | the same run | as ADR 0826 B2 | ADR 0826 B2 | holds | exact | code verification |
+| B3 | the same run | as ADR 0826 B3 | ADR 0826 B3 | holds | exact | unchanged default output |
+| T3 | `rcfd-runner` processes of this work's target alive after the B1 run | 0 | ADR 0828 T3 | 0 | exact | code verification |
+| L1 | `rcfd-project --lib`, `rcfd-mcp --lib`; the existing `hammer`, `edit_lock_f755`, `edit_lock_f855` of `rcfd-project` | pass | rule 7 | pass | exact | unchanged default output |
+| L2 | `cargo fmt --check` and `cargo clippy --release --all-targets -- -D warnings` of `rcfd-project` and `rcfd-mcp` | clean | rule 7 | clean | exact | unchanged default output |
+| L3 | `docs_site`; `roadmap_proposals.py check`; `process_report.py --check` | pass (the last: only a generated file not current may fail) | rules 7, 9 | pass | exact | unchanged default output |
+
+If F1 is not taken, U0, U2 and A2 are not run and B1 runs on the unchanged code. An OS refusal in B1 is recorded as it
+comes and not run again.
+
+### Negative controls and mutations (rule 16)
+
+- **N1** is U0: the hold that F1 cannot outlast must still be refused with os error 5 (the observed message).
+- **M1** (committed as `crates/rcfd-project/tests/replace_refused_f978.mutation.patch`): `replace_if_hash_with` back to
+  `atomic_write` (DEFAULT_RETRY). Must fail: U2 (refused after 12 attempts while the hold lasts 1.0 s). First line `#
+  expect-fail: cargo test --release -p rcfd-project --test replace_refused_f978 --target-dir target/mutation`. Run on a
+  scratch copy of the final commit with its own target folder.
+
+## Size
+
+Size (agent): done; 0; 4; 0; 120000
+
+(Expected done; no further registration; four heavy runs: arms A, B, A2 under the load, and B1; no question expected;
+about 120 000 bytes read.)
+
+## Decision rule
+
+**done** for F-978 if the cause is found (the rules above), B1 to B3 hold in their one run and M1 is caught; **partial**
+otherwise, naming what failed. A missed limit is recorded with its number and held as a `*_known_miss` record (rule 2).
+
+## Not covered
+
+- Which product of the antivirus or indexer holds the file beyond its process name, and its share mode beyond what
+  finding 1 implies; Defender's settings (administrator rights).
+- The other writers of `DEFAULT_RETRY` (`atomic_write` of status files, views, derived pictures), which F1 leaves as
+  they are; Linux and macOS, where an open file does not block a rename.
