@@ -1140,55 +1140,190 @@ fn lut_index(v: f32, lo: f32, hi: f32) -> usize {
     ((t * 255.0 + 0.5).floor() as usize).min(255)
 }
 
-/// The surface triangles of `s` that face the viewer, far to near, projected: the view axis is the thin axis of a
-/// one-layer store and z otherwise, from the side `FRONT_SIGN` names. Returns the triangles' indices, their screen
-/// corners and the view box size.
-fn projected(s: &rcfd_post::picture::StoreSurface, n_cells: usize) -> (Vec<usize>, Vec<[[f64; 2]; 3]>, f64, f64) {
-    let layers = rcfd_post::picture::mesh_layers(s, n_cells);
-    let w = if layers.two_d { layers.thin } else { 2 };
-    let sign = rcfd_post::picture::FRONT_SIGN[w];
-    let (mut a, mut b) = ((w + 1) % 3, (w + 2) % 3);
-    if sign < 0.0 {
-        std::mem::swap(&mut a, &mut b);
+/// Projected surface for an exported SVG: drawn solid triangles (`order`, `tris`), optional translucent context
+/// wireframe triangles (`wire`, for 3D fluid-envelope boundaries around internal solid walls), `is_3d`, and viewBox.
+struct ProjectedSurface {
+    order: Vec<usize>,
+    tris: Vec<[[f64; 2]; 3]>,
+    wire: Vec<[[f64; 2]; 3]>,
+    is_3d: bool,
+    width: f64,
+    height: f64,
+}
+
+/// True for a 3D boundary patch that represents an open fluid cap or outer casing rather than an internal solid body.
+fn is_envelope_patch(p: &rcfd_mesh::Patch) -> bool {
+    if p.kind != rcfd_mesh::PatchKind::Wall {
+        return true;
     }
-    let mut keep: Vec<(f64, usize)> = Vec::new();
-    for t in 0..s.n_triangles() {
-        let p: Vec<[f64; 3]> = (0..3).map(|k| s.corner(t, k).map(f64::from)).collect();
-        let u = [p[1][0] - p[0][0], p[1][1] - p[0][1], p[1][2] - p[0][2]];
-        let v = [p[2][0] - p[0][0], p[2][1] - p[0][1], p[2][2] - p[0][2]];
-        let n = [
-            u[1] * v[2] - u[2] * v[1],
-            u[2] * v[0] - u[0] * v[2],
-            u[0] * v[1] - u[1] * v[0],
-        ];
-        if n[w] * sign > 0.0 {
-            keep.push((sign * (p[0][w] + p[1][w] + p[2][w]) / 3.0, t));
+    let name = p.name.to_ascii_lowercase();
+    matches!(
+        name.as_str(),
+        "shroud" | "casing" | "farfield" | "inlet" | "outlet" | "seam_lo" | "seam_hi"
+    )
+}
+
+/// Triangle-to-envelope classification matching `rcfd_post::picture::store_surface`'s boundary-face iteration order.
+fn surface_envelope_mask(mesh: &rcfd_mesh::Mesh, n_triangles: usize) -> Vec<bool> {
+    let t = mesh.topology();
+    let mut mask = Vec::with_capacity(n_triangles);
+    for f in t.neighbour.len()..t.owner.len() {
+        let env = mesh.patch_of_face(f).is_some_and(is_envelope_patch);
+        let n_corners = t.face_offsets[f + 1] - t.face_offsets[f];
+        for _ in 0..n_corners.saturating_sub(2) {
+            mask.push(env);
         }
     }
-    keep.sort_by(|x, y| x.0.total_cmp(&y.0).then(x.1.cmp(&y.1)));
-    let (mut amin, mut amax, mut bmin, mut bmax) = (f64::INFINITY, f64::NEG_INFINITY, f64::INFINITY, f64::NEG_INFINITY);
-    for &(_, t) in &keep {
-        for k in 0..3 {
-            let c = s.corner(t, k);
-            amin = amin.min(f64::from(c[a]));
-            amax = amax.max(f64::from(c[a]));
-            bmin = bmin.min(f64::from(c[b]));
-            bmax = bmax.max(f64::from(c[b]));
+    mask
+}
+
+/// Project `s` for SVG export: face-on orthographic along the thin axis for 2D stores, and 3D isometric (Studio's
+/// fitted `(1, -1.6, 1.1)` direction) for 3D stores. When a 3D mesh has internal solid walls (e.g. a fan blade and
+/// hub) inside a fluid envelope, the solid walls are drawn back-to-front in full colour and the inlet/outlet caps are
+/// drawn as subtle wireframe context so the 3D body is not hidden behind an end cap.
+fn projected(s: &rcfd_post::picture::StoreSurface, mesh: &rcfd_mesh::Mesh) -> ProjectedSurface {
+    let layers = rcfd_post::picture::mesh_layers(s, mesh.n_cells());
+    if layers.two_d {
+        let w = layers.thin;
+        let sign = rcfd_post::picture::FRONT_SIGN[w];
+        let (mut a, mut b) = ((w + 1) % 3, (w + 2) % 3);
+        if sign < 0.0 {
+            std::mem::swap(&mut a, &mut b);
         }
-    }
-    let (ra, rb) = ((amax - amin).max(1e-30), (bmax - bmin).max(1e-30));
-    let scale = (PIC_W / ra).min(PIC_H / rb);
-    let (width, height) = (ra * scale, rb * scale);
-    let tris = keep
-        .iter()
-        .map(|&(_, t)| {
-            [0, 1, 2].map(|k| {
+        let mut keep: Vec<(f64, usize)> = Vec::new();
+        for t in 0..s.n_triangles() {
+            let p: Vec<[f64; 3]> = (0..3).map(|k| s.corner(t, k).map(f64::from)).collect();
+            let u = [p[1][0] - p[0][0], p[1][1] - p[0][1], p[1][2] - p[0][2]];
+            let v = [p[2][0] - p[0][0], p[2][1] - p[0][1], p[2][2] - p[0][2]];
+            let n = [
+                u[1] * v[2] - u[2] * v[1],
+                u[2] * v[0] - u[0] * v[2],
+                u[0] * v[1] - u[1] * v[0],
+            ];
+            if n[w] * sign > 0.0 {
+                keep.push((sign * (p[0][w] + p[1][w] + p[2][w]) / 3.0, t));
+            }
+        }
+        keep.sort_by(|x, y| x.0.total_cmp(&y.0).then(x.1.cmp(&y.1)));
+        let (mut amin, mut amax, mut bmin, mut bmax) =
+            (f64::INFINITY, f64::NEG_INFINITY, f64::INFINITY, f64::NEG_INFINITY);
+        for &(_, t) in &keep {
+            for k in 0..3 {
                 let c = s.corner(t, k);
-                [(f64::from(c[a]) - amin) * scale, (bmax - f64::from(c[b])) * scale]
+                amin = amin.min(f64::from(c[a]));
+                amax = amax.max(f64::from(c[a]));
+                bmin = bmin.min(f64::from(c[b]));
+                bmax = bmax.max(f64::from(c[b]));
+            }
+        }
+        let (ra, rb) = ((amax - amin).max(1e-30), (bmax - bmin).max(1e-30));
+        let scale = (PIC_W / ra).min(PIC_H / rb);
+        let (width, height) = (ra * scale, rb * scale);
+        let tris = keep
+            .iter()
+            .map(|&(_, t)| {
+                [0, 1, 2].map(|k| {
+                    let c = s.corner(t, k);
+                    [(f64::from(c[a]) - amin) * scale, (bmax - f64::from(c[b])) * scale]
+                })
             })
+            .collect();
+        return ProjectedSurface {
+            order: keep.iter().map(|k| k.1).collect(),
+            tris,
+            wire: Vec::new(),
+            is_3d: false,
+            width,
+            height,
+        };
+    }
+
+    // 3D isometric orthographic projection; lay z-elongated domains (e.g. axial passages) horizontally so the flow
+    // reads left-to-right and the blade/radial direction rises upward, keeping a landscape aspect ratio.
+    let norm = |v: [f64; 3]| {
+        let m = (v[0] * v[0] + v[1] * v[1] + v[2] * v[2]).sqrt().max(1e-30);
+        [v[0] / m, v[1] / m, v[2] / m]
+    };
+    let dot = |a: [f64; 3], b: [f64; 3]| a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
+    let cross = |a: [f64; 3], b: [f64; 3]| {
+        [
+            a[1] * b[2] - a[2] * b[1],
+            a[2] * b[0] - a[0] * b[2],
+            a[0] * b[1] - a[1] * b[0],
+        ]
+    };
+    let ext = [
+        layers.max[0] - layers.min[0],
+        layers.max[1] - layers.min[1],
+        layers.max[2] - layers.min[2],
+    ];
+    let (view, up0) = if ext[2] > ext[0] && ext[2] > ext[1] {
+        (norm([0.55, 1.4, -0.65]), [1.0, 0.0, 0.0])
+    } else {
+        (norm([1.0, -1.6, 1.1]), [0.0, 0.0, 1.0])
+    };
+    let right = norm(cross(up0, view));
+    let up = cross(view, right);
+
+    let env_mask = surface_envelope_mask(mesh, s.n_triangles());
+    let has_solid = env_mask.len() == s.n_triangles() && env_mask.iter().any(|&e| !e);
+    let has_env = env_mask.len() == s.n_triangles() && env_mask.iter().any(|&e| e);
+    let split_solid = has_solid && has_env;
+
+    let mut solid: Vec<(f64, usize)> = Vec::new();
+    let mut wire_ids: Vec<usize> = Vec::new();
+    for t in 0..s.n_triangles() {
+        let p = [0, 1, 2].map(|k| s.corner(t, k).map(f64::from));
+        let depth = (dot(p[0], view) + dot(p[1], view) + dot(p[2], view)) / 3.0;
+        if split_solid {
+            if !env_mask[t] {
+                solid.push((depth, t));
+            } else {
+                wire_ids.push(t);
+            }
+        } else {
+            let u = [p[1][0] - p[0][0], p[1][1] - p[0][1], p[1][2] - p[0][2]];
+            let v = [p[2][0] - p[0][0], p[2][1] - p[0][1], p[2][2] - p[0][2]];
+            if dot(cross(u, v), view) > 0.0 {
+                solid.push((depth, t));
+            }
+        }
+    }
+    solid.sort_by(|x, y| x.0.total_cmp(&y.0).then(x.1.cmp(&y.1)));
+
+    let (mut umin, mut umax, mut vmin, mut vmax) = (f64::INFINITY, f64::NEG_INFINITY, f64::INFINITY, f64::NEG_INFINITY);
+    let bounds_iter = solid.iter().map(|&(_, t)| t).chain(wire_ids.iter().copied());
+    for t in bounds_iter {
+        for k in 0..3 {
+            let c = s.corner(t, k).map(f64::from);
+            let pu = dot(c, right);
+            let pv = dot(c, up);
+            umin = umin.min(pu);
+            umax = umax.max(pu);
+            vmin = vmin.min(pv);
+            vmax = vmax.max(pv);
+        }
+    }
+    let (ru, rv) = ((umax - umin).max(1e-30), (vmax - vmin).max(1e-30));
+    let pad = 16.0;
+    let scale = ((PIC_W - 2.0 * pad) / ru).min((PIC_H - 2.0 * pad) / rv);
+    let (width, height) = (ru * scale + 2.0 * pad, rv * scale + 2.0 * pad);
+    let to_2d = |t: usize| {
+        [0, 1, 2].map(|k| {
+            let c = s.corner(t, k).map(f64::from);
+            [pad + (dot(c, right) - umin) * scale, pad + (vmax - dot(c, up)) * scale]
         })
-        .collect();
-    (keep.iter().map(|k| k.1).collect(), tris, width, height)
+    };
+    let tris = solid.iter().map(|&(_, t)| to_2d(t)).collect();
+    let wire = wire_ids.iter().map(|&t| to_2d(t)).collect();
+    ProjectedSurface {
+        order: solid.iter().map(|k| k.1).collect(),
+        tris,
+        wire,
+        is_3d: true,
+        width,
+        height,
+    }
 }
 
 fn points(c: &[[f64; 2]; 3]) -> String {
@@ -1554,12 +1689,17 @@ impl Workspace {
                     .ok_or_else(|| err(INTERNAL, format!("{kase}: does not read as a case")))?;
                 let (mesh, _) = self.build_case_mesh(&kase, &case)?;
                 let surf = rcfd_post::picture::store_surface(&mesh).map_err(|x| err(INTERNAL, x.to_string()))?;
-                let (_, tris, w, hgt) = projected(&surf, mesh.n_cells());
+                let proj = projected(&surf, &mesh);
                 let mut svg = format!(
-                    "<svg class=\"xv-picture\" viewBox=\"0 0 {w:.1} {hgt:.1}\" role=\"img\" aria-label=\"the mesh of {}\">",
+                    "<svg class=\"xv-picture\" viewBox=\"0 0 {:.1} {:.1}\" role=\"img\" aria-label=\"the mesh of {}\">",
+                    proj.width,
+                    proj.height,
                     esc(&kase)
                 );
-                for c in &tris {
+                for c in &proj.wire {
+                    svg.push_str(&format!("<polygon class=\"xv-env-tri\" points=\"{}\"/>", points(c)));
+                }
+                for c in &proj.tris {
                     svg.push_str(&format!("<polygon class=\"xv-mesh-tri\" points=\"{}\"/>", points(c)));
                 }
                 svg.push_str("</svg>");
@@ -1575,7 +1715,7 @@ impl Workspace {
                         esc(&kase),
                         mesh.n_cells(),
                         surf.n_triangles(),
-                        tris.len()
+                        proj.tris.len()
                     )),
                     sources: vec![kase],
                 }
@@ -1721,15 +1861,25 @@ impl Workspace {
                         hi = v;
                     }
                 }
-                let (order, tris, w, hgt) = projected(&surf, mesh.n_cells());
+                let proj = projected(&surf, &mesh);
                 let mut svg = format!(
-                    "<svg class=\"xv-picture\" viewBox=\"0 0 {w:.1} {hgt:.1}\" role=\"img\" aria-label=\"{} of {} at snapshot {snap}\">",
+                    "<svg class=\"xv-picture\" viewBox=\"0 0 {:.1} {:.1}\" role=\"img\" aria-label=\"{} of {} at snapshot {snap}\">",
+                    proj.width,
+                    proj.height,
                     esc(&field),
                     esc(&run)
                 );
-                for (t, c) in order.iter().zip(&tris) {
+                for c in &proj.wire {
+                    svg.push_str(&format!("<polygon class=\"xv-env-tri\" points=\"{}\"/>", points(c)));
+                }
+                let tri_class = if proj.is_3d { " class=\"xv-solid-tri\"" } else { "" };
+                for (t, c) in proj.order.iter().zip(&proj.tris) {
                     let k = lut_index(at(surf.cells[*t]), lo, hi);
-                    svg.push_str(&format!("<polygon points=\"{}\" fill=\"{}\"/>", points(c), lut_hex(k)));
+                    svg.push_str(&format!(
+                        "<polygon{tri_class} points=\"{}\" fill=\"{}\"/>",
+                        points(c),
+                        lut_hex(k)
+                    ));
                 }
                 svg.push_str("</svg>");
                 let mut legend =

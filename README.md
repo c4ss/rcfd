@@ -186,9 +186,9 @@ Ready-made project folders with real solver runs and stored fields live in `exam
 
 ***rcfd simulation output** (`example-projects/quick-start`): differentially heated cavity at Ra = 10⁴ (`T`), lid-driven cavity at Re = 400 (`ux`), hot-wall Nusselt monitor (`nu_hot`) and solver residuals (coarse meshes — demonstration only).*
 
-![FAN-01 periodic blade passage 3D coarse upwind example](docs/images/studio-canvas-axial-fan.png)
+![FAN-01 periodic blade passage 3D isometric view showing blade and hub inside wireframe passage](docs/images/studio-canvas-axial-fan.png)
 
-***rcfd simulation output** (`example-projects/axial-fan`): 3D periodic blade passage (`uz`, `p`, blade torque moment and residuals). Coarse first-order upwind run for geometry and flow-pattern viewing only — not a validated fan prediction.*
+***rcfd simulation output** (`example-projects/axial-fan`): 3D isometric view of the FAN-01 blade and hub (coloured by axial velocity `uz` and kinematic pressure `p`) inside the wireframe 40° periodic passage, with blade torque moment and residuals. Coarse first-order upwind run for geometry and flow-pattern viewing only — not a validated fan prediction.*
 
 ## Platform support, prerequisites and tests
 

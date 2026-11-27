@@ -146,6 +146,17 @@ body {
   stroke: var(--role-text-2);
   stroke-width: 0.2;
 }
+.xv-env-tri {
+  fill: none;
+  stroke: var(--role-text-2);
+  stroke-opacity: 0.14;
+  stroke-width: 0.3;
+}
+.xv-solid-tri {
+  stroke: var(--role-ground);
+  stroke-opacity: 0.18;
+  stroke-width: 0.35;
+}
 .xv-plot {
   display: block;
   width: 100%;
