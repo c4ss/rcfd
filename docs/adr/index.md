@@ -507,7 +507,7 @@ One row per record of this folder, grouped by the roadmap category of the item i
 | [0792](0792-f894-registration-a-normal-distribution-open-on-one-side.md) | F-894 registration: a normal distribution open on one side (erfc at infinity, the kept mass, and a one-sided inverse CDF from the smaller tail) | REGISTERED | 2026-11-25 | 2 | F-894 | done |
 | [0793](0793-f895-registration-a-key-of-another-distribution-refused.md) | F-895 registration: `design_uq` and `design_sobol` refuse a key of another distribution in `dist` | REGISTERED | 2026-11-25 | 1 | F-895 | done |
 
-## Claude and the MCP server (11)
+## Claude and the MCP server (12)
 
 | ADR | Title | Status word | Date | Addenda | Item | Item status |
 |---|---|---|---|---|---|---|
@@ -522,6 +522,7 @@ One row per record of this folder, grouped by the roadmap category of the item i
 | [0741](0741-f271-registration-the-field-store-plan-as-the-default-of-start-run.md) | F-271 registration: the field-store plan as the default of start_run | REGISTERED | 2026-11-19 | 1 | F-271 | done |
 | [0774](0774-f862-registration-the-description-of-start-run-store-argument.md) | F-862 registration: the description of start_run's store argument says what the default is | REGISTERED | 2026-11-22 | 1 | F-862 | done |
 | [0794](0794-f274-registration-journal-lines-of-design-runs-and-records.md) | F-274 registration: journal lines of design runs and of stored design records | REGISTERED | 2026-11-25 | 1 | F-274 | done |
+| [0829](0829-f997-registration-a-runner-without-the-callers-handles-and-its-exit-when-its-folder-is-gone.md) | F-997 registration: a runner started without the caller's handles, and its exit when its project folder is gone | REGISTERED | 2026-11-27 | 1 | F-997 | todo |
 
 ## Studio desktop app (33)
 

@@ -203,9 +203,20 @@ pub fn serve(project: &Path) -> Result<i32, String> {
     records::atomic_write(&dot.join("runner.json"), info.to_string().as_bytes()).map_err(|e| e.to_string())?;
     let mut r = Runner::new(FsStore::new(project), cfg, cfg_src);
     let poll = Duration::from_millis(r.cfg.poll_ms);
+    let look = Duration::from_millis(GONE_LOOK_MS);
+    let mut next_look = Instant::now() + look;
+    let mut gone = false;
     loop {
         if dot.join("shutdown").exists() {
             break;
+        }
+        // ADR 0829 B: a runner whose project is gone leaves by itself, once nothing of its own is left
+        if Instant::now() >= next_look {
+            next_look = Instant::now() + look;
+            gone = project_gone(project, &dot);
+            if leave_gone(gone, r.active.len(), r.pending_left()) {
+                break;
+            }
         }
         r.scan();
         r.tick_pending();
@@ -214,12 +225,35 @@ pub fn serve(project: &Path) -> Result<i32, String> {
         std::thread::sleep(poll);
     }
     r.shutdown();
-    log(&format!("runner {} shut down cleanly", std::process::id()));
+    if !gone {
+        log(&format!("runner {} shut down cleanly", std::process::id()));
+    }
     let _ = std::fs::remove_file(dot.join("runner.json"));
     drop(lock);
     // after the lock: while this runner held it, the request told a start to wait for it (ADR 0229 D2)
     let _ = std::fs::remove_file(dot.join("shutdown"));
     Ok(0)
+}
+
+/// Look period of the project-gone exit, ms (ADR 0829 B; a constant, so that `runner.json`'s `config` keeps its keys).
+pub const GONE_LOOK_MS: u64 = 1000;
+
+/// Is `p` absent? Only NotFound says so; any other error reads as present.
+fn absent(p: &Path) -> bool {
+    matches!(std::fs::metadata(p), Err(e) if e.kind() == std::io::ErrorKind::NotFound)
+}
+
+/// Is the project of the runner at `dot` (`<project>/.rcfd`) gone (ADR 0829 B)? When the project folder, `.rcfd`, the
+/// lock or `runner.json` is absent. On Windows a removal under a live runner stops at the lock it holds, after
+/// `runner.json` (std's `remove_dir_all` deletes in listing order), so `runner.json` is the sign there.
+fn project_gone(project: &Path, dot: &Path) -> bool {
+    absent(project) || absent(dot) || absent(&dot.join("runner.lock")) || absent(&dot.join("runner.json"))
+}
+
+/// Does a runner leave its project (ADR 0829 B)? Only when it is `gone`, no run of its own is running or paused
+/// (`active`) and no queued or paused run whose folder is still there waits (`pending_left`).
+fn leave_gone(gone: bool, active: usize, pending_left: usize) -> bool {
+    gone && active == 0 && pending_left == 0
 }
 
 /// Missed-probe count after one probe: a hit resets it. Two consecutive misses finalise an adopted run, so one
@@ -304,6 +338,11 @@ impl<S: RunStore> Runner<S> {
             solver_facts: crate::build::SolverFacts::default(),
             remote: None,
         }
+    }
+
+    /// The pending runs whose run folder is still there (ADR 0829 B: one whose folder is gone cannot be launched).
+    fn pending_left(&self) -> usize {
+        self.pending.iter().filter(|p| self.dir(&p.id).exists()).count()
     }
 
     fn dir(&self, id: &str) -> PathBuf {
@@ -1193,6 +1232,42 @@ mod tests {
     const CASE: &str = "title = \"runner unit\"\n[mesh]\ngenerator = \"cavity_2d\"\nnx = 12\nny = 12\n[physics]\nnu = 0.01\n\
         [boundaries.lid]\nvelocity = \"fixed\"\nvelocity_value = [1.0, 0.0, 0.0]\n[boundaries.walls]\nvelocity = \"fixed\"\n\
         [solver]\nalgorithm = \"simplec\"\nconvection = \"upwind\"\nmax_iterations = 400\ntolerance_u = 1e-14\ntolerance_p = 1e-14\n";
+
+    /// ADR 0829 B3: `leave_gone` leaves only when the project is gone with no active and no pending run left;
+    /// `project_gone` reads a whole project as present and each absent piece as gone.
+    #[test]
+    fn b3_leave_gone_and_project_gone() {
+        let mut rule = Vec::new();
+        for gone in [false, true] {
+            for active in [0, 1] {
+                for pending in [0, 1] {
+                    rule.push(((gone, active, pending), leave_gone(gone, active, pending)));
+                }
+            }
+        }
+        let leaves: Vec<_> = rule.iter().filter(|(_, l)| *l).map(|(k, _)| *k).collect();
+        let dir = std::env::temp_dir().join(format!("rcfd_runner_b3_{}", std::process::id()));
+        let dot = dir.join(".rcfd");
+        let make = || {
+            let _ = std::fs::remove_dir_all(&dir);
+            std::fs::create_dir_all(&dot).unwrap();
+            std::fs::write(dot.join("runner.lock"), b"").unwrap();
+            std::fs::write(dot.join("runner.json"), b"{}").unwrap();
+        };
+        make();
+        let whole = project_gone(&dir, &dot);
+        std::fs::remove_file(dot.join("runner.json")).unwrap();
+        let no_json = project_gone(&dir, &dot);
+        make();
+        std::fs::remove_file(dot.join("runner.lock")).unwrap();
+        let no_lock = project_gone(&dir, &dot);
+        make();
+        std::fs::remove_dir_all(&dir).unwrap();
+        let no_dir = project_gone(&dir, &dot);
+        eprintln!("B3: leaves for {leaves:?} of {} cases; gone: whole {whole}, without runner.json {no_json}, without the lock {no_lock}, without the folder {no_dir}", rule.len());
+        assert_eq!(leaves, [(true, 0, 0)]);
+        assert!(!whole && no_json && no_lock && no_dir);
+    }
 
     /// ADR 0160 R1: a fixed run's line is byte-identical to the construction before ADR 0160 (copied here); an adaptive
     /// event adds exactly `correctors` and `corrector_cap`.

@@ -1,0 +1,14 @@
+# expect-fail: cargo test -p rcfd-runner --release --target-dir target/mutation --test gone_f997 b1_
+diff --git a/crates/rcfd-runner/src/runner.rs b/crates/rcfd-runner/src/runner.rs
+index 2a67e7fa..7a554ce6 100644
+--- a/crates/rcfd-runner/src/runner.rs
++++ b/crates/rcfd-runner/src/runner.rs
+@@ -247,7 +247,7 @@ fn absent(p: &Path) -> bool {
+ /// lock or `runner.json` is absent. On Windows a removal under a live runner stops at the lock it holds, after
+ /// `runner.json` (std's `remove_dir_all` deletes in listing order), so `runner.json` is the sign there.
+ fn project_gone(project: &Path, dot: &Path) -> bool {
+-    absent(project) || absent(dot) || absent(&dot.join("runner.lock")) || absent(&dot.join("runner.json"))
++    false
+ }
+ 
+ /// Does a runner leave its project (ADR 0829 B)? Only when it is `gone`, no run of its own is running or paused
