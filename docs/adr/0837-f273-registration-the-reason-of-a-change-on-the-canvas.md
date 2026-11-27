@@ -166,3 +166,7 @@ The same entries are in `docs/roadmap/proposals/0837-F-273.json`. No follow-up i
 
 None of scope. (Q1, a recommendation only: F-979's `ChangeLine` could take D2's form and cut too; recommended to leave
 it until a view needs it, as it shows the reason already.)
+
+## The lead's reading at the merge (2026-11-27)
+
+Merged and pushed at ce9c1d5b. The roadmap writes F-273 done against this work's proposed partial: the registered npm test's one failure was the first set-up of A4 and A5 (the activity line read on the Canvas tab), a defect of the test, not of the code; amendment 1 read each check on its tab with the limits unchanged and held; the push's npm test passed with the corrected test (907 passed, 7 skipped), after a first run that failed at two older specs (F-1000).

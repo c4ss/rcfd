@@ -514,7 +514,7 @@ One row per record of this folder, grouped by the roadmap category of the item i
 | [0185](0185-adr-0173-amendment-1-f270-registration-the-rcfd-workspace-crate.md) | ADR 0173 amendment 1, F-270 registration: the rcfd-workspace crate, with the MCP server and the Studio moved onto it | REGISTERED | 2026-11-05 | 1 | F-270 | done |
 | [0186](0186-adr-0173-amendment-2-f271-registration-new-simulations-from-the-mcp-server.md) | ADR 0173 amendment 2, F-271 registration: new simulations from the MCP server in project mode | REGISTERED | 2026-11-05 | 1 | F-271 | done |
 | [0187](0187-adr-0173-amendment-3-f272-registration-mesh-set-up-from-the-mcp-server.md) | ADR 0173 amendment 3, F-272 registration: mesh set-up from the MCP server in project mode | REGISTERED | 2026-11-05 | 1 | F-272 | done |
-| [0188](0188-adr-0173-amendment-4-f273-registration-project-journal-and-change-feed.md) | ADR 0173 amendment 4, F-273 registration: the project journal and the change feed | REGISTERED | 2026-11-05 | 2 | F-273 | partial |
+| [0188](0188-adr-0173-amendment-4-f273-registration-project-journal-and-change-feed.md) | ADR 0173 amendment 4, F-273 registration: the project journal and the change feed | REGISTERED | 2026-11-05 | 2 | F-273 | done |
 | [0189](0189-adr-0173-amendment-5-f274-registration-design-study-evaluations-on-the-runner.md) | ADR 0173 amendment 5, F-274 registration: design study evaluations on the runner in project mode | REGISTERED | 2026-11-05 | 1 | F-274 | done |
 | [0195](0195-adr-0173-amendment-6-f275-registration-project-mode-tool-list-and-plugin-edit-hook.md) | ADR 0173 amendment 6, F-275 registration: the project-mode tool list and the plugin edit hook | REGISTERED | 2026-11-06 | 1 | F-275 | done |
 | [0200](0200-f287-registration-runner-runs-that-continue-from-a-previous-run-with-a-step-cap.md) | F-287 registration: runner runs that continue from a previous run, with a step cap | REGISTERED | 2026-11-06 | 1 | F-287 | done |
@@ -526,8 +526,8 @@ One row per record of this folder, grouped by the roadmap category of the item i
 | [0833](0833-f998-registration-the-refused-replace-outside-temp-and-plainly-written.md) | F-998 registration: the refused case-file replace, with the project outside the temporary folder and the case written plainly | REGISTERED | 2026-11-27 | 2 | F-998 | done |
 | [0834](0834-f998-registration-the-holds-of-a-new-case-file-and-the-plain-write.md) | F-998 registration: the System process's holds of a new case file as the measure, and the plain write that removes them | REGISTERED | 2026-11-27 | 2 | F-998 | done |
 | [0835](0835-f998-registration-the-plain-write-for-new-case-files-only.md) | F-998 registration: the plain write for new case files only, and the arms H and P interleaved as the measure | REGISTERED | 2026-11-27 | 2 | F-998 | done |
-| [0837](0837-f273-registration-the-reason-of-a-change-on-the-canvas.md) | F-273 registration: the reason of a change shown with who and what, in the process view's rows and the activity line | REGISTERED | 2026-11-27 | 2 | F-273 | partial |
-| [0839](0839-f999-registration-canvas-tools-in-the-project-golden.md) | F-999 registration: the project tool-list golden holds show_view, read_view and export_view | REGISTERED | 2026-11-27 | 2 | F-999 | todo |
+| [0837](0837-f273-registration-the-reason-of-a-change-on-the-canvas.md) | F-273 registration: the reason of a change shown with who and what, in the process view's rows and the activity line | REGISTERED | 2026-11-27 | 2 | F-273 | done |
+| [0839](0839-f999-registration-canvas-tools-in-the-project-golden.md) | F-999 registration: the project tool-list golden holds show_view, read_view and export_view | REGISTERED | 2026-11-27 | 2 | F-999 | done |
 
 ## Studio desktop app (38)
 

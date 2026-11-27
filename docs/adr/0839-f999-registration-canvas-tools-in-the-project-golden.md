@@ -204,3 +204,10 @@ Run once each after addendum 1 was committed (dc054b09).
 | L3 | pass (process report: only a generated file not current may fail) | `docs_site` 2 passed, 0 failed; `roadmap_proposals.py check docs/roadmap/proposals/0839-F-999.json` exit 0 ("F-999: todo -> done; note + 301 characters"); `process_report.py --check` 1 failure, only "generated file is not current: docs/adr/index.md", left to the lead (rule 9) | yes |
 
 With L3 met, F-999 is **done** by the registered rule.
+
+## Answers of the maintainer (2026-11-27), written by the lead
+
+1. Q1: option (a), ADR 0185 A2 read as "the golden's first 52 entries are 7c960bb's, byte for byte"; taken by the lead on the maintainer's standing instruction of 2026-11-26 (go with the recommended option always).
+2. Q2: option (b), a new item, F-1001, adds the other tools added since 7c960bb the same way; taken by the lead on the maintainer's standing instruction of 2026-11-26 (go with the recommended option always).
+
+Merged and pushed at 043b2040.
