@@ -222,3 +222,43 @@ A defective set-up found before a registered run is corrected by an amendment co
 
 To be completed in the addendum with options and a recommendation: whether the setting becomes a default (not on this
 branch), and any question of scope.
+
+## Amendment 1 (2026-11-27): O does not decide; check H is not run; what follows, fixed before any further code or run
+
+Written after the one registered run of O, S, KC and C5 at 36c9be6b (`f885_fc_time_order`, `f885_fc_steady`,
+`f885_fc_cavity_control`, `f885_fc_rules_on_built_records`, together, 20.9 s), and before any other code or run. Nothing
+above is changed. The run, as it came out:
+
+* O: OFF `e` = 5.1468e-4, 2.2644e-4, 1.1204e-4, `p_c` 1.1846, `p_f` 1.0151; ON `e` = 1.1046e-3, 4.8429e-4, 2.3214e-4,
+  `p_c` 1.1896, `p_f` 1.0609; O3 4.1524e-4. **O2 missed (1.0151 against 1.9): O does not decide.** O1 is missed as well
+  (1.0609); O3 is met. The control arm, without the setting, is first order on this set-up, so the set-up cannot measure
+  BDF2's order with or without the setting.
+* S: both arms reach the criterion (211 and 210 steps); velocity 3.38e-13, flux 3.34e-13 against 1e-8; after 5 steps
+  8.31e-3. S1, S2 and S3 met. SL (beside): 207 and 206 steps, 5.39e-13 and 5.02e-13.
+* KC (classed): OFF 20 of 20 steps meet E-1, `d_5 / d_1` median 3.02e-3; ON 20 of 20, median 2.95e-3.
+* C5: each as built.
+
+By section 5 and the decision rule, **check H is not run** (it runs only if O and S hold), and F-885 stays **partial**. The
+following is fixed now:
+
+1. **The known miss (rule 2).** `f885_fc_time_order` becomes the ignored record `f885_fc_time_order_known_miss`, its limits
+   intact and the measured numbers in its ignore reason. No other change to it.
+2. **The tests that read check H's records.** `f885_fc_short_run_on_the_check_h_path` (SR) and
+   `f885_fc_class_from_the_committed_records` (G1) read files that exist only after check H. They are marked
+   `#[ignore = "not run: check H was not run by ADR 0821's rule (amendment 1)"]` and are recorded as not run, unchanged
+   otherwise, so the gate does not fail on a missing file. This is not a pass: SR, G1, A3 to A6 are "not run".
+3. **The mutations.** M1 and M2 are read by O, which fails without a mutation: both are run once and recorded as **not
+   caught (the test fails unmutated)**. M5 needs `H_dt.csv` and is not run. M3 and M4 are run as registered. The committed
+   patch is M3 (`crates/rcfd-api/tests/f885_frozen_convection_check_h.mutation.patch`, first line `# expect-fail: cargo test
+   -p rcfd-api --release --test f885_frozen_convection_check_h f885_fc_steady`), in place of M2, whose test is now ignored.
+4. **A diagnosis of O2, a record without limits** (rule 2: a miss is diagnosed). One ignored test
+   `f885_fc_order_diagnosis_record`, the OFF arm of O with one change each, `p_c` and `p_f` printed, run once:
+   * D-a: `convection = central` (ADR 0223's harness, whose PIMPLE-4 Taylor-Green rows show about order 2);
+   * D-b: linear upwind, `n_outer` 20 (whether the outer loop leaves an `O(dt)` part);
+   * D-c: linear upwind, `periodic_partner_extrapolated` (ADR 0687 amendment 1: the periodic partner of the extrapolated field);
+   * D-d: linear upwind, implicit Euler (a first-order reference).
+
+   Reading, fixed now: if D-a gives `p_f >= 1.9` and D-b, D-c do not, the first order belongs to the linear-upwind path of
+   the pimple step on periodic faces and is not a property of the remedy; if D-c gives `p_f >= 1.9`, the lagged periodic
+   partner carries it; if D-b does, the outer loop. The diagnosis decides nothing for this registration. It informs the
+   open questions.
