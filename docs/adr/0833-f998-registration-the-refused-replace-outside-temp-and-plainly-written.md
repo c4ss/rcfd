@@ -121,3 +121,74 @@ in `run-m3.log` is empty) and S1 ran on the unmutated code and passed. That run 
 scratch folder as a record. Corrected set-up: on a fresh scratch copy of the same commit, `.write_all(bytes)` in
 `create_plain` becomes `.write_all(&bytes[..bytes.len() - 1])`; the run goes ahead only if `git diff --numstat` shows
 exactly one line changed in `replace_hold_f978.rs`; then S1 once, as registered. M3's limit is unchanged: S1 must fail.
+
+## Addendum 1: results (2026-11-27)
+
+Written after the runs; nothing above is changed. Release profile, `CARGO_TARGET_DIR` in the scratch folder,
+`CARGO_BUILD_JOBS` 8, the code of commit 551494bd. Each registered run was made once, in the registered order (M3 as
+amendment 1 corrected it); scratch logs `run-<tag>.log`, traces `trace-<tag>.tsv`, `analyse4.py`. Another agent's
+solves kept the machine at 76 % to 100 % CPU before the load was added.
+
+### Checks
+
+| Id | Limit | Measured | Met |
+|---|---|---|---|
+| S1 | all hold | 1 passed (0.50 s) | yes |
+| TC4 | pid seen on `arm-0.toml`; one FREE, 0 to 720 ms after release | pid seen 171 ms after the hold began (MARK after 10 ms); one FREE, 128 ms after release; CPU 88 % to 76 % | yes |
+| H | r ≥ 5 of 900 | **r = 0** (creation 0, `edit_case` 0); 15.25 s; CPU 76 % to 90 % | **missed** |
+| HO | r reported | r = 0; 14.99 s; CPU 90 % to 83 % | free |
+| HP | r reported | r = 0; 12.37 s; CPU 77 % to 77 % | free |
+| HOP | r reported | r = 0; 12.36 s; CPU 99 % to 100 % | free |
+| C | the reading of the rule | H gave fewer than 5, so the run does not decide: no cause is read | does not decide |
+| A | 0 refusals of 900 by a registered change | no change was made | not met |
+| L1 | pass | `rcfd-mcp --lib` 18 passed (1 ignored, as before); `replace_hold_f978` 1 passed (S1), 8 ignored (the registered records) | yes |
+| L2 | clean | `cargo fmt -p rcfd-mcp --check` clean; clippy of `rcfd-mcp` `--all-targets -D warnings` clean | yes |
+| L3 | pass | in addendum 2 | see there |
+
+H's miss has no diagnosed cause. The arms ran in 12 to 15 s against ADR 0832's 29 s for the same 900 calls, so either the
+machine or the load was not the same as ADR 0832's. P(r = 0) at ADR 0832's rate was 3 × 10^-7 (above), so the rate
+of refusals was not the rate ADR 0832 measured. H's limit is in the scratch analysis and the arm's printed count, not in
+an assertion (H, like ADR 0832's H, asserts nothing), so no `*_known_miss` test carries it; the miss is held here with
+its number.
+
+**Seen, not registered** (from the traces, beside the registered measure; no limit was set on it): X4 saw the System
+process (`4:System`) hold a newly created case file without a refusal in 18 of H's 300 files and 4 of HO's, each for 141
+to 237 ms from SEEN to FREE, and in none of HP's or HOP's 300. It suggests the hold follows the creation by
+`write_new` and not the folder, but it is not a registered check and decides nothing here.
+
+### Mutations
+
+| Id | Mutation | Caught by | Result |
+|---|---|---|---|
+| M1 | the place ignores `outside` (committed patch `replace_hold_f978.mutation.patch`) | S1 | **caught**: "S1: HO's project ... under ...\Temp", exit 101 |
+| M2 | X3 beside TC4 (`trace4-m2.ps1`) | TC4 | **caught**: no MARK, the pid not seen, no FREE |
+| M3 | the plain write drops the last byte | S1 | **caught** in its corrected run (amendment 1): "S1: the plain write's bytes", exit 101; its first run did not apply the mutation |
+
+Deviations: amendment 1 (M3's set-up). Not run: no remedy (none registered). Actual size: partial; 1 further
+registration; 4 heavy runs (H, HO, HP, HOP); 1 question; about 50 000 bytes read.
+
+Decision by the registered rule: **partial**. Every mutation was caught, but no arm met the acceptance by a change made
+and checked (none was made), and the control H missed its r ≥ 5, so the arms read no cause.
+
+## Open questions for the maintainer
+
+- **Q1. The next registration** (scope): the refusal rate of ADR 0832 did not come back, so refusals cannot read a
+  cause at 300 rounds. (a) Repeat the four arms with more rounds (3000 each), interleaved, the limits registered from
+  this addendum and ADR 0832; (b) register as the measure the holds the trace sees without a refusal (SEEN to FREE per
+  new case file, 18 and 4 of 300 in H and HO, 0 in HP and HOP here), which come in every run, and read the cause from
+  them with registered counts; then the remedy (a plain write of a new case file in `write_new` or in `new_case`) with
+  its check; (c) take the client-side remedy now: an `edit_case` refusal by a held file reported as transient, so a
+  client retries. Recommendation: (b), since its measure does not depend on a refusal rate that changed from 15 to 0
+  between two days of the same arm; not taken here, since it is a question of scope.
+
+### For the lead: roadmap entries
+
+> Status: partial.
+
+> Note: ADR 0833, 2026-11-27, partial: the four arms of 300 rounds under arm H's load (H, HO outside the temp folder, HP with the case written plainly, HOP both) each gave 0 refusals of 900 calls, so the control H missed its registered 5 or more and the run does not tell the place from the creation path; no remedy was made.
+
+> Gap: Missing: a remedy for the refused first edit_case under load, registered with its check. ADR 0832 saw 15 refusals of 900 under arm H's load; ADR 0833's control H saw 0 of 900, so its arms (outside the temp folder, plain write) read no cause. Not registered but logged: the trace saw the System process hold 18 of H's 300 new case files and 4 of HO's for 141 to 237 ms, and none in HP or HOP. A registration that measures these holds per arm.
+
+> Follow-ups: one under F-998 (rule 13), no new item: "F-998: the System process's hold of a new case file by its creation path", the arms of ADR 0833 with the holds seen without refusal as the measure; its limits are registered in its ADR.
+
+The same entries are `docs/roadmap/proposals/0833-F-998.json`.
