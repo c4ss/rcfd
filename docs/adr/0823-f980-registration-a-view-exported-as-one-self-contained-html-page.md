@@ -395,3 +395,21 @@ Mutation M6: `num` of an integral `f64` written with `.0` again; must fail U1. R
 (amendment 5). The decision rule is the registration's over the checks as they stand after amendments 3 to 5: E1 to E6
 are this amendment's run, U1 and M6 are added to it, and `run-control.spec.ts`'s timing miss, if it recurs, is a
 failure of L3 recorded as such.
+
+## Amendment 5 (2026-11-27): a check of the styles against their files, and M5 again
+
+Written after amendment 4's code and before the test and runs it covers; nothing above is changed. Written by Claude
+Opus 5.5 (`claude-opus-5-5`). M5 (`tokens.css` left out of the page) was not caught (addendum 1): R3 compares the page
+with `EXPORT_STYLES`, the constant the mutation empties. A new test of `crates/rcfd-mcp/tests/export_view_f980.rs`,
+`r3_a5_the_page_carries_the_studio_styles_read_from_their_files`, exports X1 in the f980 project and checks the page
+against sources the mutation does not change: the bytes of `apps/studio-web/src/renderer/design/tokens.css`, `base.css`,
+`canvas/canvas.css` and `canvas/export.css`, read from the files at the time of the test.
+
+| Id | Check | Limit | Source | Estimate | Margin | Kind |
+|---|---|---|---|---|---|---|
+| R3f | the four files' bytes, each non-empty, each in the page of X1 | 4 of 4 | F-980 acceptance ("the Studio's theme and styling"); M5's miss | 4 of 4 | exact | code verification |
+
+Then M5 runs again, once, on a scratch copy (`git archive` of the commit of this test) with
+`cargo test --release -p rcfd-mcp --test export_view_f980`: it must fail R3f. M6 (amendment 4) runs on the same copy
+with `cargo test --release -p rcfd-workspace --lib u1_f980`. The old M5 row stays as its record. The decision rule is
+amendment 4's, with R3f added and M5 counted by this run.
