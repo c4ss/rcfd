@@ -1,0 +1,9 @@
+{
+  "form": 1,
+  "adr": "0839",
+  "item": "F-999",
+  "base": "f548023748cb211658a1f0f0d97d7310b12a1af8",
+  "status": "done",
+  "note": "ADR 0839, 2026-11-27, done: tools_list_project_f270.json holds show_view, read_view and export_view after wait_run as the live list gives them (55 entries, the first 43 967 bytes as before), project_list_f270 compares each byte for byte, and a change to each description is caught (4 of 4 mutations).",
+  "follow_ups": []
+}

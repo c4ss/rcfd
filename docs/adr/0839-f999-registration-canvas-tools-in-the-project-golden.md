@@ -136,3 +136,61 @@ by `project_list_f270`. Partial otherwise.
   tools' were. (a) leave them; (b) a follow-up item puts them in the golden in the same way (additive, first entries
   byte-identical, the test comparing each instead of taking it out). Recommendation: (b), as a new item for the lead to
   decide; not taken here, as it is outside F-999's acceptance.
+
+## Addendum 1: results (2026-11-27)
+
+Code commit 26961daf (the golden's three entries and the test change), mutation patch ff37f78c; the run was made once, in
+the release profile, by `run.sh` in the scratch folder (`CARGO_BUILD_JOBS=8`, the scratch target folder). The three
+entries were made by `make_golden.py` (D1) from the branch's release binary: the live list (58 tools, 63 036 bytes)
+re-serialised equal to the response text, E is 4 093 bytes, the golden went from 43 969 to 48 063 bytes and from 52 to 55
+entries. Logs: `build.log`, `build2.log`, `a1.log`, `e1.log`, `lib.log`, `fmt.log`, `clippy.log`, `mut_N1.log`,
+`mut_N2.log`, `mut_M1.log` to `mut_M4.log`, `run.log` in the scratch folder.
+
+### Checks
+
+| Id | Limit | Measured | Met |
+|---|---|---|---|
+| A1 | passes | `project_list_f270` 1 passed, 0 failed | yes |
+| G1 | 43 967 bytes identical, 3 entries added, 0 changed | prefix of 43 967 bytes identical, tail `,` + E' + `]}`, added `show_view`, `read_view`, `export_view`, 52 to 55 entries | yes |
+| G2 | only the owned files, nothing under `crates/*/src` | the golden, the mutation patch, `project_list_f270.rs`, ADR 0839 (and the proposal file, committed with this addendum) | yes |
+| G3 | the comment paragraph, `let mut gold`, lines inside the two canvas blocks | 4 comment lines added, the `let mut gold` line, `tools.pop()` replaced by 5 lines in the export_view block, 9 lines added in the show_view and read_view block; nothing else | yes |
+| E1 | every test passes | `canvas_view_f976` 4, `default_f1` 2, `show_view_description_f987` 3, `tool_list_adr0730` 2, `tool_list_f275` 8: 19 passed, 0 failed | yes |
+| L1 | passes | `rcfd-mcp --lib` 18 passed, 0 failed, 1 ignored (an existing record, not touched) | yes |
+| L2 | clean | `cargo fmt -p rcfd-mcp --check` exit 0, no output; clippy `--release --all-targets -D warnings` exit 0 | yes |
+| L3 | pass | in Addendum 2, run after this addendum is committed | Addendum 2 |
+
+### Negative controls and mutations
+
+| Id | Expected | Measured | Met |
+|---|---|---|---|
+| N1 | fails | exit 101 at line 139: the golden's last entry is `wait_run`, not `export_view` | yes |
+| N2 | passes | exit 0, 1 passed: f5480237's test does not catch M2 | yes |
+| M1 | caught by `project_list_f270` | exit 101, `"show_view" differs from the golden` | yes |
+| M2 | caught by `project_list_f270` | exit 101, `"read_view" differs from the golden` | yes |
+| M3 | caught by `project_list_f270` | exit 101, `export_view differs from the golden` | yes |
+| M4 | caught by `project_list_f270` | exit 101, `export_view differs from the golden` | yes |
+
+### Deviations and what was not run
+
+One of form: in the show_view and read_view block the message prints the name as a JSON value, so it reads
+`"show_view" differs from the golden` with quotes, not `show_view differs ...` as D2 wrote; what fails and why is as
+registered. To start the binary, `make_golden.py` wrote a minimal project (the six folders and `rcfd-project.json` as
+`Project::create` writes them) in the system temporary folder, which is left there. Not run: the whole `rcfd-mcp`
+integration suite, `project_w48f` and `project_runs_w48f` (they count the tools; the live list does not change),
+`baseline_hashes` (no solver file touched), `npm test` (no Studio file touched).
+
+Size (actual): done; 0; 0; 2; 115000
+
+### Decision
+
+A1, G1, G2, G3, E1, L1 and L2 hold, N1 fails and N2 passes, and M1 to M4 are each caught by `project_list_f270`; with L3
+passing (Addendum 2), **done** by the registered rule. Q1 and Q2 above stay open for the lead.
+
+### For the lead: roadmap entries
+
+> Status: done.
+
+> Note: ADR 0839, 2026-11-27, done: tools_list_project_f270.json holds show_view, read_view and export_view after wait_run as the live list gives them (55 entries, the first 43 967 bytes as before), project_list_f270 compares each byte for byte, and a change to each description is caught (4 of 4 mutations).
+
+The same entries are `docs/roadmap/proposals/0839-F-999.json`. The golden edit is additive (rule 3): the diff is the
+three entries appended after `wait_run`, made by the lead's taking of the maintainer's word as the brief records it.
