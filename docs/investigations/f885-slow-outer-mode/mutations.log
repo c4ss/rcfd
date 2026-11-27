@@ -1,0 +1,50 @@
+# ADR 0820 mutations on git archive of cdc1e4a2 (scratch mut/, target mut_target/, every touched file's time set after writing)
+== K0 against the gate tests: exit 0, unmutated: passes (62 s)
+   test f885_so_fan_record ... ignored, heavy record, ADR 0820: F0, GF, GD, GN, GX on 20 steps of H(dt) on B2 (13 627 cells, 2 000 outer iterations, minutes): cargo test --release -p rcfd-api --test f885_slow_outer_mode f885_so_fan_record -- --ignored --nocapture
+   test f885_so_rules_on_built_records ... ok
+   test f885_so_two_routes ... ok
+   test f885_so_fan_from_the_committed_record ... ok
+   test f885_so_cavity_control ... ok
+   test f885_so_read_only ... ok
+   test f885_so_linear_map ... ok
+   test result: ok. 6 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out; finished in 0.24s
+== N1 against f885_so_two_routes: exit 101, caught (39 s)
+   test f885_so_two_routes ... FAILED
+   thread 'f885_so_two_routes' (62484) panicked at crates\rcfd-api\tests\f885_slow_outer_mode.rs:766:5:
+   test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 6 filtered out; finished in 0.01s
+   error: test failed, to rerun pass `-p rcfd-api --test f885_slow_outer_mode`
+== N2 against f885_so_linear_map: exit 101, caught (39 s)
+   test f885_so_linear_map ... FAILED
+   thread 'f885_so_linear_map' (64324) panicked at crates\rcfd-api\tests\f885_slow_outer_mode.rs:818:5:
+   test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 6 filtered out; finished in 0.25s
+   error: test failed, to rerun pass `-p rcfd-api --test f885_slow_outer_mode`
+== N3 against f885_so_two_routes: exit 101, caught (39 s)
+   test f885_so_two_routes ... FAILED
+   thread 'f885_so_two_routes' (66424) panicked at crates\rcfd-api\tests\f885_slow_outer_mode.rs:766:5:
+   test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 6 filtered out; finished in 0.01s
+   error: test failed, to rerun pass `-p rcfd-api --test f885_slow_outer_mode`
+== N4 against f885_so_two_routes: exit 101, caught (39 s)
+   test f885_so_two_routes ... FAILED
+   thread 'f885_so_two_routes' (55444) panicked at crates\rcfd-api\tests\f885_slow_outer_mode.rs:766:5:
+   test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 6 filtered out; finished in 0.01s
+   error: test failed, to rerun pass `-p rcfd-api --test f885_slow_outer_mode`
+== N5 against f885_so_two_routes: exit 101, caught (39 s)
+   test f885_so_two_routes ... FAILED
+   thread 'f885_so_two_routes' (61328) panicked at crates\rcfd-api\tests\f885_slow_outer_mode.rs:766:5:
+   test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 6 filtered out; finished in 0.02s
+   error: test failed, to rerun pass `-p rcfd-api --test f885_slow_outer_mode`
+== N6 against f885_so_read_only: exit 101, caught (39 s)
+   test f885_so_read_only ... FAILED
+   thread 'f885_so_read_only' (7260) panicked at crates\rcfd-api\tests\f885_slow_outer_mode.rs:846:5:
+   test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 6 filtered out; finished in 0.10s
+   error: test failed, to rerun pass `-p rcfd-api --test f885_slow_outer_mode`
+== N7 against f885_so_rules_on_built_records: exit 101, caught (39 s)
+   test f885_so_rules_on_built_records ... FAILED
+   thread 'f885_so_rules_on_built_records' (58252) panicked at crates\rcfd-api\tests\f885_slow_outer_mode.rs:503:5:
+   test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 6 filtered out; finished in 0.00s
+   error: test failed, to rerun pass `-p rcfd-api --test f885_slow_outer_mode`
+== N8 against f885_so_fan_from_the_committed_record: exit 101, caught (3 s)
+   test f885_so_fan_from_the_committed_record ... FAILED
+   thread 'f885_so_fan_from_the_committed_record' (19852) panicked at crates\rcfd-api\tests\f885_slow_outer_mode.rs:1141:9:
+   test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 6 filtered out; finished in 0.01s
+   error: test failed, to rerun pass `-p rcfd-api --test f885_slow_outer_mode`

@@ -1,0 +1,12 @@
+test f885_so_cavity_control ... F885-SO K GF: C 8.516159e-9 (CONVERGES, limit 1e-2)
+F885-SO K GD: C 1.069767e-8 (CONVERGES, limit 1e-2)
+F885-SO K GN: C 1.059727e-8 (CONVERGES, limit 1e-2)
+F885-SO K all: C 8.620321e-9 (CONVERGES, limit 1e-2)
+test f885_so_linear_map ... F885-SO L step 1: d [4.4752e-2, 0.0000e0, 0.0000e0, 0.0000e0, 0.0000e0]
+F885-SO L step 2: d [4.0456e-2, 0.0000e0, 0.0000e0, 0.0000e0, 0.0000e0]
+F885-SO L step 3: d [3.6936e-2, 0.0000e0, 0.0000e0, 0.0000e0, 0.0000e0]
+F885-SO L: largest d_k / d_1 0.000e0 (limit 1e-8); d_2 / d_1 with GF, GD, GN off in turn [0.017475389923861537, 0.0027927214502195923, 0.0038244174413141854] (floor 1e-6)
+test f885_so_read_only ... F885-SO R0: KL with the field record against without: equal true (60 iterations recorded); T2: GD and GN with upwind equal true; GF with one outer iteration equal true
+test f885_so_rules_on_built_records ... ok
+test f885_so_two_routes ... F885-SO T1: 75 kept quantities compared, largest relative difference 0.000e0 (limit 1e-12); misses []; off: the record against what was used 0.000e0; changes of iteration 5 against 1 in steps 2 and 3: convection gradient 9.380e-1, Laplacian gradient 9.380e-1, flux 9.015e-1 (floor 1e-9)
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 2 filtered out; finished in 0.47s

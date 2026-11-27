@@ -1,0 +1,31 @@
+# expect-fail: cargo test -p rcfd-api --release --test f885_slow_outer_mode f885_so_two_routes
+diff --git a/crates/rcfd-fv/src/pimple.rs b/crates/rcfd-fv/src/pimple.rs
+index 4533cd1..41361f5 100644
+--- a/crates/rcfd-fv/src/pimple.rs
++++ b/crates/rcfd-fv/src/pimple.rs
+@@ -345,6 +345,8 @@ pub struct OuterProbe {
+     pub iterations: Vec<ProbeIteration>,
+ }
+ 
++thread_local! { static N1_KEPT: std::cell::RefCell<Option<Vec<f64>>> = const { std::cell::RefCell::new(None) }; }
++
+ /// One recorded outer iteration with `PimpleSettings::outer_field_record` (F-885, ADR 0820).
+ #[derive(Debug, Clone, PartialEq)]
+ pub struct OuterField {
+@@ -1946,7 +1948,7 @@ impl PimpleSolver {
+         let mut frozen_psi: [Option<Vec<f64>>; 3] = [None, None, None];
+         // F-885 (ADR 0820, opt-in): the convecting flux and each component's gradients of the step's first outer iteration,
+         // and the recorded iterations of the step
+-        let mut frozen_phi_conv: Option<Vec<f64>> = None;
++        let mut frozen_phi_conv: Option<Vec<f64>> = N1_KEPT.with(|k| k.borrow().clone());
+         let mut frozen_grad_conv: [Option<Vec<Vec3>>; 3] = [None, None, None];
+         let mut frozen_grad_lap: [Option<Vec<Vec3>>; 3] = [None, None, None];
+         let mut fields_now: Vec<OuterField> = Vec::new();
+@@ -2086,6 +2088,7 @@ impl PimpleSolver {
+             let phi_conv = match (s.outer_frozen_convecting_flux, &frozen_phi_conv) {
+                 (true, Some(kept)) => kept.clone(),
+                 (true, None) => {
++                    N1_KEPT.with(|k| *k.borrow_mut() = Some(phi_conv.clone()));
+                     frozen_phi_conv = Some(phi_conv.clone());
+                     phi_conv
+                 }

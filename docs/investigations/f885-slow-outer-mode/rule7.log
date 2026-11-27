@@ -1,0 +1,169 @@
+# rule 7 checks at 67ae462f
+== cargo test --release --lib -p rcfd-fv
+test result: ok. 115 passed; 0 failed; 6 ignored; 0 measured; 0 filtered out; finished in 5.89s
+== cargo test --release --lib -p rcfd-api
+test result: ok. 160 passed; 0 failed; 4 ignored; 0 measured; 0 filtered out; finished in 34.57s
+== cargo test --release -p rcfd-api --test baseline_hashes
+test result: ok. 3 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out; finished in 0.43s
+== cargo test --release -p rcfd-api --test f885_frozen_limiter
+test result: ok. 7 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out; finished in 5.97s
+== cargo test --release -p rcfd-api --test f885_two_outer_modes
+test result: ok. 5 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out; finished in 0.09s
+== cargo test --release -p rcfd-api --test f885_outer_stall
+test result: ok. 5 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out; finished in 0.07s
+== cargo test --release -p rcfd-api --test f885_alpha_free_face_flux
+test result: ok. 5 passed; 0 failed; 3 ignored; 0 measured; 0 filtered out; finished in 17.45s
+== cargo test --release -p rcfd-api --test f885_outer_fixed_points
+test result: ok. 4 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out; finished in 0.09s
+== cargo test --release -p rcfd-api --test f885_check_h_outer_record
+test result: ok. 4 passed; 0 failed; 2 ignored; 0 measured; 0 filtered out; finished in 36.49s
+== cargo fmt -p rcfd-fv -p rcfd-api --check
+The filename or extension is too long. (os error 206)
+This utility formats all bin and lib files of the current crate using rustfmt.
+
+Usage: cargo fmt [OPTIONS] [-- <rustfmt_options>...]
+
+Arguments:
+  [rustfmt_options]...  Options passed to rustfmt
+
+Options:
+  -q, --quiet
+          No output printed to stdout
+  -v, --verbose
+          Use verbose output
+      --version
+          Print rustfmt version and exit
+  -p, --package <package>...
+          Specify package to format
+      --manifest-path <manifest-path>
+          Specify path to Cargo.toml
+      --message-format <message-format>
+          Specify message-format: short|human
+      --all
+          Format all packages, and also their local path-based dependencies
+      --check
+          Run rustfmt in check mode
+  -h, --help
+          Print help
+
+exit 1
+== rustfmt --check (touched files)
+Diff in \\?\E:\projects\cfd\rcfd\.claude\worktrees\f885-slow-outer-mode\crates\rcfd-api\tests\f885_slow_outer_mode.rs:233:
+     Simulation::new(&case).unwrap_or_else(|e| panic!("{e:?}"))
+ }
+ 
+[31m-
+[0m // ---------------------------------------------------------------- the measures (ADR 0820 section 4)
+ 
+ /// The upper median `x[len / 2]` of the sorted values; NaN if any is NaN or there are none.
+Diff in \\?\E:\projects\cfd\rcfd\.claude\worktrees\f885-slow-outer-mode\crates\rcfd-api\tests\f885_slow_outer_mode.rs:515:
+     assert_eq!(mode_d(r0, [0.83, 0.70, 0.84, 0.60]).1, "named HD");
+     assert_eq!(mode_d(r0, [0.83, 0.84, 0.70, 0.60]).1, "named HN");
+     assert_eq!(mode_d(r0, [0.80, 0.80, 0.84, 0.70]).1, "named HX");
+[31m-    assert_eq!(mode_d(r0, [0.83, 0.84, 0.86, 0.835]).1, "HF to HX ruled out, HL by elimination");
+[0m[32m+    assert_eq!(
+[0m[32m+        mode_d(r0, [0.83, 0.84, 0.86, 0.835]).1,
+[0m[32m+        "HF to HX ruled out, HL by elimination"
+[0m[32m+    );
+[0m     assert_eq!(mode_d(r0, [0.80, 0.84, 0.84, 0.80]).1, "parts named [\"HF\", \"HX\"]");
+     assert!(mode_d(r0, [0.70, 0.70, 0.84, 0.60]).1.starts_with("names the set"));
+     assert_eq!(mode_d(r0, [0.70, f64::NAN, 0.84, 0.60]).1, "undecided");
+Diff in \\?\E:\projects\cfd\rcfd\.claude\worktrees\f885-slow-outer-mode\crates\rcfd-api\tests\f885_slow_outer_mode.rs:539:
+     assert!((f.share[0] - e0 / (e0 + e1)).abs() < 1e-12 && (f.share[6] - e1 / (e0 + e1)).abs() < 1e-12);
+     assert_eq!((f.n90, f.cell), (1, 0));
+     // an alternating mode: cos -1
+[31m-    let alt: Vec<Vec<Vec3>> = (0..5).map(|i| vec![[if i % 2 == 0 { 0.0 } else { 1.0 }, 0.0, 0.0]]).collect();
+[0m[32m+    let alt: Vec<Vec<Vec3>> = (0..5)
+[0m[32m+        .map(|i| vec![[if i % 2 == 0 { 0.0 } else { 1.0 }, 0.0, 0.0]])
+[0m[32m+        .collect();
+[0m     let refs: Vec<&[Vec3]> = alt.iter().map(|v| v.as_slice()).collect();
+     assert!((step_fields(&refs, &[0], [true, true, false]).cos + 1.0).abs() < 1e-12);
+     assert!(one_mode(0.83, 0.995, 0.834) && !one_mode(0.83, 0.9, 0.834) && !one_mode(0.80, 0.995, 0.834));
+Diff in \\?\E:\projects\cfd\rcfd\.claude\worktrees\f885-slow-outer-mode\crates\rcfd-api\tests\f885_slow_outer_mode.rs:691:
+         assert_eq!(rec.len(), 5);
+         for f in &rec {
+             for k in 0..3 {
+[31m-                for (what, got) in [("convection", &f.grad_convection[k]), ("laplacian", &f.grad_laplacian[k])] {
+[0m[32m+                for (what, got) in [
+[0m[32m+                    ("convection", &f.grad_convection[k]),
+[0m[32m+                    ("laplacian", &f.grad_laplacian[k]),
+[0m[32m+                ] {
+[0m                     match (got, &want[k]) {
+                         (Some(a), Some(b)) => {
+                             worst = worst.max(vdiff(a, b));
+Diff in \\?\E:\projects\cfd\rcfd\.claude\worktrees\f885-slow-outer-mode\crates\rcfd-api\tests\f885_slow_outer_mode.rs:698:
+                             compared += 1;
+                         }
+                         (None, None) => {}
+[31m-                        _ => miss.push(format!("step {step} iteration {} {what} {k}: formed on one route", f.iteration)),
+[0m[32m+                        _ => miss.push(format!(
+[0m[32m+                            "step {step} iteration {} {what} {k}: formed on one route",
+[0m[32m+                            f.iteration
+[0m[32m+                        )),
+[0m                     }
+                 }
+             }
+Diff in \\?\E:\projects\cfd\rcfd\.claude\worktrees\f885-slow-outer-mode\crates\rcfd-api\tests\f885_slow_outer_mode.rs:709:
+         let ub: Vec<u64> = last.u.iter().flat_map(|v| v.map(f64::to_bits)).collect();
+         let sb: Vec<u64> = sol.u.values.iter().flat_map(|v| v.map(f64::to_bits)).collect();
+         if ub != sb {
+[31m-            miss.push(format!("step {step}: the record's u of iteration 5 is not the velocity after the step"));
+[0m[32m+            miss.push(format!(
+[0m[32m+                "step {step}: the record's u of iteration 5 is not the velocity after the step"
+[0m[32m+            ));
+[0m         }
+     }
+     // the non-vacuity, and the record of what was used, with the opt-ins off
+Diff in \\?\E:\projects\cfd\rcfd\.claude\worktrees\f885-slow-outer-mode\crates\rcfd-api\tests\f885_slow_outer_mode.rs:721:
+         for i in 1..5 {
+             let want = gradients(&g, &off.u, &rec[i - 1].u);
+             for k in (0..3).filter(|&k| g.active[k]) {
+[31m-                let (c, l) = (rec[i].grad_convection[k].as_ref().unwrap(), rec[i].grad_laplacian[k].as_ref().unwrap());
+[0m[32m+                let (c, l) = (
+[0m[32m+                    rec[i].grad_convection[k].as_ref().unwrap(),
+[0m[32m+                    rec[i].grad_laplacian[k].as_ref().unwrap(),
+[0m[32m+                );
+[0m                 let w = want[k].as_ref().unwrap();
+                 used = used.max(vdiff(c, w)).max(vdiff(l, w));
+             }
+Diff in \\?\E:\projects\cfd\rcfd\.claude\worktrees\f885-slow-outer-mode\crates\rcfd-api\tests\f885_slow_outer_mode.rs:748:
+         moved_c > MOVE_FLOOR && moved_l > MOVE_FLOOR && moved_p > MOVE_FLOOR,
+         "T1 does not decide: {moved_c} {moved_l} {moved_p}"
+     );
+[31m-    assert!(worst <= ROUTE_TOL && used <= ROUTE_TOL && miss.is_empty(), "T1: {worst}, {used}, {miss:?}");
+[0m[32m+    assert!(
+[0m[32m+        worst <= ROUTE_TOL && used <= ROUTE_TOL && miss.is_empty(),
+[0m[32m+        "T1: {worst}, {used}, {miss:?}"
+[0m[32m+    );
+[0m }
+ 
+ /// L settings: `Sh`, implicit Euler, no relaxation, 60 correctors, tight solvers, 5 outer iterations, the record of `d_k`.
+Diff in \\?\E:\projects\cfd\rcfd\.claude\worktrees\f885-slow-outer-mode\crates\rcfd-api\tests\f885_slow_outer_mode.rs:1123:
+         assert!(same(o.rhos[i], want.0[i]), "{} rho {}", RUNS[i].0, o.rhos[i]);
+         assert!(same(o.cs[i], want.1[i]), "{} C {}", RUNS[i].0, o.cs[i]);
+     }
+[31m-    assert!(same(o.rho2, want.2) && same(o.cos, want.3), "rho2 {} cos {}", o.rho2, o.cos);
+[0m[32m+    assert!(
+[0m[32m+        same(o.rho2, want.2) && same(o.cos, want.3),
+[0m[32m+        "rho2 {} cos {}",
+[0m[32m+        o.rho2,
+[0m[32m+        o.cos
+[0m[32m+    );
+[0m     assert_eq!(o.classes, want.4);
+     assert_eq!(o.result, want.5);
+     let mut miss = Vec::new();
+exit 1
+== cargo clippy --release -p rcfd-fv -p rcfd-api --all-targets -- -D warnings
+error: casting to the same type is unnecessary (`i32` -> `i32`)
+   --> crates\rcfd-api\tests\f885_slow_outer_mode.rs:529:54
+error: very complex type used. Consider factoring parts into `type` definitions
+   --> crates\rcfd-api\tests\f885_slow_outer_mode.rs:874:69
+error: could not compile `rcfd-api` (test "f885_slow_outer_mode") due to 2 previous errors
+warning: build failed, waiting for other jobs to finish...
+clippy exit 101
+END
+# after the layout and lint fix (cdc1e4a2):
+== rustfmt --check (touched files): exit 0
+== cargo clippy --release -p rcfd-fv -p rcfd-api --all-targets -- -D warnings
+    Finished `release` profile [optimized] target(s) in 6.66s
+clippy exit 0
