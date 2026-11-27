@@ -271,3 +271,9 @@ and L3 once each after it, by `run2.sh` in the scratch folder (`run2.log`, `f1.l
 
 The correction stands by amendment 1's rule. F-1001's decision stays as Addendum 1 records it: **partial**, for the L2
 miss of the registered run; every clause of the acceptance was met in that run.
+
+## Answers of the maintainer (2026-11-27), written by the lead
+
+1. Q1: option (b), a follow-up item gives the live start_run entry a golden of its own (F-1002); taken by the lead on the maintainer's standing instruction of 2026-11-26 (go with the recommended option always).
+
+The roadmap writes F-1001 done against this work's proposed partial: L2's fmt miss is recorded as it came out; its correction changed whitespace only and the push's fmt check passed. Merged and pushed at 9b0a5498.

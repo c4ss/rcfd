@@ -10503,8 +10503,19 @@
     "deps": [
       "F-999"
     ],
-    "status": "todo",
+    "status": "done",
     "acceptance": "Every limit not stated here is registered in the ADR before the run. Every tool that project_list_f270 takes off the live list before comparing (the trash tools, list_sites and the others added since 7c960bb) is in tools_list_project_f270.json as the live list gives it, appended additively by the lead with every earlier entry byte-identical, and compared by the test; a change to any of their descriptions fails it (committed mutations).",
-    "note": "Lead (2026-11-27): entered from ADR 0839, question 2 (b), taken by the lead on the maintainer's standing instruction of 2026-11-26 (go with the recommended option always)."
+    "note": "Lead (2026-11-27): entered from ADR 0839, question 2 (b), taken by the lead on the maintainer's standing instruction of 2026-11-26 (go with the recommended option always). ADR 0841, 2026-11-27, partial: tools_list_project_f270.json holds the 19 tools added since 7c960bb after export_view as the live list gives them (74 entries, the first 48 061 bytes as before), project_list_f270 compares each and golden_every_tool_f1001 finds every live tool in the golden, and 9 of 9 description mutations are caught; the registered fmt check missed (two over-wide lines), corrected by amendment 1. Lead (2026-11-27): ADR 0841 merged and pushed at 9b0a5498; written done against the proposed partial: every clause of the acceptance held in the registered run; the one registered miss, L2's fmt check on two over-wide lines of the new test, was corrected by whitespace only (Amendment 1) and the push's fmt check passed. start_run's properties are F-1002."
+  },
+  {
+    "id": "F-1002",
+    "title": "start_run's live entry in a golden of its own",
+    "phase": 8,
+    "deps": [
+      "F-1001"
+    ],
+    "status": "todo",
+    "acceptance": "Every limit not stated here is registered in the ADR before the run. The live project-mode entry of start_run, with the properties new_case, store, continue_from, max_steps, from_run, run_time, dry_run and site, is recorded in a golden file of its own and compared byte for byte by a test; a change to any of their descriptions fails it (committed mutation).",
+    "note": "Lead (2026-11-27): entered from ADR 0841, question 1 (b), taken by the lead on the maintainer's standing instruction of 2026-11-26 (go with the recommended option always)."
   }
 ]

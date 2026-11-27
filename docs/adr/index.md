@@ -528,7 +528,7 @@ One row per record of this folder, grouped by the roadmap category of the item i
 | [0835](0835-f998-registration-the-plain-write-for-new-case-files-only.md) | F-998 registration: the plain write for new case files only, and the arms H and P interleaved as the measure | REGISTERED | 2026-11-27 | 2 | F-998 | done |
 | [0837](0837-f273-registration-the-reason-of-a-change-on-the-canvas.md) | F-273 registration: the reason of a change shown with who and what, in the process view's rows and the activity line | REGISTERED | 2026-11-27 | 2 | F-273 | done |
 | [0839](0839-f999-registration-canvas-tools-in-the-project-golden.md) | F-999 registration: the project tool-list golden holds show_view, read_view and export_view | REGISTERED | 2026-11-27 | 2 | F-999 | done |
-| [0841](0841-f1001-registration-every-added-tool-in-the-project-golden.md) | F-1001 registration: the project tool-list golden holds every tool added since 7c960bb | REGISTERED | 2026-11-27 | 2 | F-1001 | todo |
+| [0841](0841-f1001-registration-every-added-tool-in-the-project-golden.md) | F-1001 registration: the project tool-list golden holds every tool added since 7c960bb | REGISTERED | 2026-11-27 | 2 | F-1001 | done |
 
 ## Studio desktop app (38)
 

@@ -641,7 +641,7 @@ exist, and Phase 9 items are stretch. Phase numbers 5 and 6 may run in parallel 
 
 ## Phase 8 - AI assistant and desktop app integration
 
-104 items: 65 done, 20 partly done, 19 not started.
+105 items: 66 done, 20 partly done, 19 not started.
 
 - [x] **F-090** MCP server (external tool interface) with tools: list_cases, create_case, set_setting, get_setting, load_mesh, check_mesh, run, status, get_residuals, get_field_stats, export_vtk, render_image
   - depends on: F-085, F-073
@@ -1080,10 +1080,14 @@ exist, and Phase 9 items are stretch. Phase numbers 5 and 6 may run in parallel 
   - depends on: F-988
   - acceptance: Every limit not stated here is registered in the ADR before the run. The cause of KK2's failure in the first npm test of F-273's push (2026-11-27, "two keys in flight: a popover open after Escape", the machine at about 100 % CPU) is diagnosed and remedied without loosening the case; KK2 passes in every one of a registered number of whole npm test runs under a registered load (at least 5), and alone in at least 10.
   - note: Lead (2026-11-27): entered from the push of ADR 0837 (F-273), whose npm test failed in its first run at KK2 and at run-control.spec.ts:268's P2 (a timing spec of F-991) and passed in its second. F-988 had KK2 pass 5 of 5 and the spec 10 of 10 alone.
-- [ ] **F-1001** The project tool-list golden holds every tool added since 7c960bb
+- [x] **F-1001** The project tool-list golden holds every tool added since 7c960bb
   - depends on: F-999
   - acceptance: Every limit not stated here is registered in the ADR before the run. Every tool that project_list_f270 takes off the live list before comparing (the trash tools, list_sites and the others added since 7c960bb) is in tools_list_project_f270.json as the live list gives it, appended additively by the lead with every earlier entry byte-identical, and compared by the test; a change to any of their descriptions fails it (committed mutations).
-  - note: Lead (2026-11-27): entered from ADR 0839, question 2 (b), taken by the lead on the maintainer's standing instruction of 2026-11-26 (go with the recommended option always).
+  - note: Lead (2026-11-27): entered from ADR 0839, question 2 (b), taken by the lead on the maintainer's standing instruction of 2026-11-26 (go with the recommended option always). ADR 0841, 2026-11-27, partial: tools_list_project_f270.json holds the 19 tools added since 7c960bb after export_view as the live list gives them (74 entries, the first 48 061 bytes as before), project_list_f270 compares each and golden_every_tool_f1001 finds every live tool in the golden, and 9 of 9 description mutations are caught; the registered fmt check missed (two over-wide lines), corrected by amendment 1. Lead (2026-11-27): ADR 0841 merged and pushed at 9b0a5498; written done against the proposed partial: every clause of the acceptance held in the registered run; the one registered miss, L2's fmt check on two over-wide lines of the new test, was corrected by whitespace only (Amendment 1) and the push's fmt check passed. start_run's properties are F-1002.
+- [ ] **F-1002** start_run's live entry in a golden of its own
+  - depends on: F-1001
+  - acceptance: Every limit not stated here is registered in the ADR before the run. The live project-mode entry of start_run, with the properties new_case, store, continue_from, max_steps, from_run, run_time, dry_run and site, is recorded in a golden file of its own and compared byte for byte by a test; a change to any of their descriptions fails it (committed mutation).
+  - note: Lead (2026-11-27): entered from ADR 0841, question 1 (b), taken by the lead on the maintainer's standing instruction of 2026-11-26 (go with the recommended option always).
 
 ## Phase 9 - Advanced physics and scale (stretch)
 
