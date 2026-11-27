@@ -877,11 +877,14 @@ fn f885_fc_time_order_known_miss() {
     assert!(p_f[1] >= ORDER_MIN, "O1 missed: p_f(ON) {}", p_f[1]);
 }
 
+/// One change of the settings of a diagnosis arm.
+type SetFn<'a> = &'a dyn Fn(&mut PimpleSettings);
+
 /// The diagnosis of O2 (ADR 0821 amendment 1, a record without limits): the OFF arm of O with one change each.
 #[test]
 #[ignore = "diagnosis record, ADR 0821 amendment 1 (seconds, prints only): cargo test --release -p rcfd-api --test f885_frozen_convection_check_h f885_fc_order_diagnosis_record -- --ignored --nocapture"]
 fn f885_fc_order_diagnosis_record() {
-    let cases: [(&str, &dyn Fn(&mut PimpleSettings)); 4] = [
+    let cases: [(&str, SetFn); 4] = [
         ("D-a central", &|s| s.convection = ConvScheme::Central),
         ("D-b linear upwind, n_outer 20", &|s| s.n_outer = 20),
         ("D-c linear upwind, periodic_partner_extrapolated", &|s| {
