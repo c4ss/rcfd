@@ -156,3 +156,24 @@ The set-up was defective (the trace ran at the priority of the load it watches).
   (the same function, tag `a1`); then **arm B** with X', as registered. The rules of decision use A1 and B in place of A
   and B; arm A's 2 refusals are kept beside them as its record. TC applies to A1 and B with its registered limit.
 - Nothing else changes: limits, U0, U2, F1, A2, B1 to B3 and M1 are as registered.
+
+## Amendment 2 (2026-11-27): one look of the trace takes 71 ms; X looks at the newest case only; 100 rounds
+
+Written after arm A1 and before any other run; nothing above is changed. **Arm A1** (CPU 85 % at the start, 82 % at the
+end, 3.04 s): **0 refusals of 90**; **TC missed again** (0 lines with the test's pid): X' looked at each file once in
+about 2 s. A timing of the tool alone (`tooltime.ps1` in the scratch folder, 20 looks each, not a check) gave 71 ms
+per look on a file in the temp folder and 71 ms on one in the scratch folder, against 0.15 ms and 0.05 ms for a plain
+`GetAttributes`, and a held file was seen (`61640:powershell`): the class-47 query is slow in itself, not starved. With
+30 files a look per file came every 2 s, longer than TC's hold and than a refusal (619 ms).
+
+Corrected, by rule 2:
+
+- **X''**: X' that looks, in each folder, only at the newest `arm-<i>.toml` (the largest i present) and at
+  `process-cavity.toml`: one look per 71 ms or so, about 8 looks in a refusal of 0.62 s and 7 in TC's 500 ms.
+- **Rounds**: arm A gave 2 refusals in 90 replaces and A1 none, about 1 in 90. At 30 rounds (90 replaces) an arm sees no
+  refusal with a chance of about e^-1 = 37 %; at 100 rounds (300 replaces) about e^-3.3 = 4 %. The new arms make **100
+  rounds** (300 replaces).
+- **Arms A3 and B**: A3 is arm A with X'' and 100 rounds (a new ignored test, tag `a3`); arm B is as registered with X''
+  and 100 rounds. The rules of decision use A3 and B; arms A and A1 are kept beside them as their records. TC applies to
+  A3 and B. A2 (after F1) also makes 100 rounds, with its limit of 0 refusals.
+- Nothing else changes.
