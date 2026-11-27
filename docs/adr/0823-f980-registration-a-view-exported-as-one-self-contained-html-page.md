@@ -351,3 +351,47 @@ added to `apps/studio-web/capabilities/inventory.json` in its sorted place. The 
 
 The decision rule is unchanged, except that L1 and L3 no longer name these failures as allowed: after this amendment
 the five files and `capabilities.spec.ts` must pass.
+
+## Amendment 4 (2026-11-27): the page writes each number as the Studio writes it
+
+Written after amendment 3 and before any code or run it covers; nothing above is changed. Written by Claude Opus 5.5
+(`claude-opus-5-5`). A further registration of E1's miss (rule 13), by the lead's follow-up of 2026-11-27.
+
+**Diagnosis of E1's miss.** The page wrote every `f64` with `num()` of `crates/rcfd-workspace/src/view.rs` (line 1005),
+`serde_json`'s text, which writes an integral `f64` with `.0` (`278.0`). The Studio writes a number as JavaScript's
+`String(x)` writes it (ECMA-262, `Number::toString`): `278`. The monitor's last step is an `f64` in `read_residuals`
+(the series' `x`), so the two texts differed though the values are equal. The old E1 stays as its record (addendum 1).
+
+**The rule, by the kind of value the page shows**, each as the Studio writes it (lines at b32f0343 of
+`apps/studio-web/src/renderer`):
+
+| Value | The Studio writes it | The page writes it |
+|---|---|---|
+| field lo, hi | `${drawnRange.lo} ${drawnRange.hi}`, `field/FieldViewport.tsx` line 774: `String` of a number | `num` |
+| field snapshot, step | `data-snapshot={shown.snapshot}`, `data-step={snap?.step}`, `FieldViewport.tsx` lines 768, 769: React writes a number attribute as `String` | integers, `num` of the step |
+| mesh triangles | `data-triangles={drawn.values.length}`, `case/MeshPreview.tsx` line 128 | a count (`usize`) |
+| plot drawn, skipped | `data-drawn`, `data-skipped`, `plots/PlotFrame.tsx` lines 114, 115 | counts |
+| monitor last step, last value | `data-last-step={last?.step}`, `String(last.value)`, `canvas/Canvas.tsx` line 246 | `num` of each |
+| run steps, snapshots stored | `{row.step}`, `{store.snapshots.length}`, `workspace/RunWorkspace.tsx` lines 505, 519 | `js_json` of `list_runs`'s step; a count |
+| table step | `{r.step}`, `project/ProjectHome.tsx` line 928 | `js_json` of `list_runs`'s step |
+| setting value | `JSON.stringify(got.value)`, `canvas/Canvas.tsx` line 200 | `js_json` (JSON, each number by `num`) |
+| the facts' text (time, legend ends, residuals' last values) | not a hook of the comparison | `num` |
+
+`num(x)` becomes JavaScript's `Number::toString` of the `f64` x, written in Rust from the shortest round-trip digits
+Rust gives (`format!("{:e}", x)`: digits d of length k, exponent n with x = 0.d * 10^n): `0` for zero of either sign; a
+leading `-` for x < 0; digits and n - k zeros when k <= n <= 21; `d[..n].d[n..]` when 0 < n <= 21; `0.` and -n zeros
+then the digits when -6 < n <= 0; otherwise `d[0]`, `.d[1..]` when k > 1, `e`, the sign `+` or `-` and |n - 1|; `null`
+when not finite (the engine's JSON carries no other). The rule is ECMA-262's `Number::toString` as recalled from
+memory: no copy of the standard was read in this work, so it is checked against the Studio's runtime instead (U1).
+`js_json(v)`: JSON as `serde_json` writes it, each number by `num` (a `u64` or `i64` by its digits).
+
+| Id | Check | Limit | Source | Estimate | Margin | Kind |
+|---|---|---|---|---|---|---|
+| U1 | unit (`view.rs`): `num` of 20 numbers (278, 0.01, -152.87271118164063, 1078.4739990234375, 1, 0, -0, 2400, 1e-7, 1.5e-7, 1e-6, 2.5e-6, 1e21, 1.2345678901234568e20, 123.456, -0.5, 5e-324, 1.7976931348623157e308, 100, 0.1 + 0.2) | each equal to the text `String(x)` gives in Node (the Studio's runtime), printed once after this amendment's commit and before the code, written into the test | ECMA-262 via its runtime; E1's miss | 20 of 20 | exact | code verification |
+| E1 to E6 | as registered, the spec unedited, run once in the one `npm test` run after amendments 3 to 5, CPU load recorded | as registered | as registered | equal; 0 | exact | code verification |
+| R1 to R7 | `export_view_f980` (the a2 test, R5, R6), run once after the code as rule 7's named test; the ignored records stay ignored | as registered | as registered | pass | exact | code verification |
+
+Mutation M6: `num` of an integral `f64` written with `.0` again; must fail U1. Run on the scratch copy with M5's rerun
+(amendment 5). The decision rule is the registration's over the checks as they stand after amendments 3 to 5: E1 to E6
+are this amendment's run, U1 and M6 are added to it, and `run-control.spec.ts`'s timing miss, if it recurs, is a
+failure of L3 recorded as such.
