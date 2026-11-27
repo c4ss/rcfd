@@ -1,0 +1,14 @@
+# expect-fail: cargo test --release -p rcfd-mcp --test replace_hold_f978 --target-dir target/mutation s1_
+diff --git a/crates/rcfd-mcp/tests/replace_hold_f978.rs b/crates/rcfd-mcp/tests/replace_hold_f978.rs
+index ff62c020..63a712ac 100644
+--- a/crates/rcfd-mcp/tests/replace_hold_f978.rs
++++ b/crates/rcfd-mcp/tests/replace_hold_f978.rs
+@@ -154,7 +154,7 @@ fn tc3_the_trace_follows_a_marked_file_until_it_is_free() {
+ /// ADR 0833: the folder a project of an F-998 arm is made in: `%TEMP%` as ADR 0832, or outside it in
+ /// `RCFD_F998_OUTSIDE` (else `CARGO_TARGET_TMPDIR`).
+ fn place(name: &str, outside: bool) -> PathBuf {
+-    if !outside {
++    if true {
+         return common::scratch(name);
+     }
+     let dir = outside_root().join(format!("rcfd-mcp-w48f-{name}-{}", std::process::id()));
