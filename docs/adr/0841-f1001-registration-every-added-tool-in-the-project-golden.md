@@ -256,3 +256,18 @@ two files on os error 206), and nothing else; no limit above changes, and L2 of 
 | F3 | `project_list_f270` and `golden_every_tool_f1001` after the correction | both pass | A1, A2 | pass | exact | code verification |
 
 Decision of this amendment: the correction stands if F1, F2 and F3 hold; it does not change F-1001's decision above.
+
+## Addendum 2: amendment 1's run and L3 (2026-11-27)
+
+The correction is 9a5ff1f7 (`cargo fmt -p rcfd-mcp`); F1 and F2 were run on the corrected tree before that commit, F3
+and L3 once each after it, by `run2.sh` in the scratch folder (`run2.log`, `f1.log`, `f3.log`, `docs_site.log`).
+
+| Id | Limit | Measured | Met |
+|---|---|---|---|
+| F1 | clean | `cargo fmt -p rcfd-mcp --check` exit 0, no output | yes |
+| F2 | equal; 2 files | `project_list_f270.rs` and `golden_every_tool_f1001.rs` changed, each equal to its committed text with whitespace removed; no other file | yes |
+| F3 | both pass | `golden_every_tool_f1001` 1 passed, `project_list_f270` 1 passed, 0 failed | yes |
+| L3 | pass (process report: only a generated file not current may fail) | `docs_site` 2 passed, 0 failed; `roadmap_proposals.py check docs/roadmap/proposals/0841-F-1001.json` exit 0 ("F-1001: todo -> partial; gap set; note + 416 characters", follow-up entered as F-1002); `process_report.py --check` 1 failure, only "generated file is not current: docs/adr/index.md", left to the lead (rule 9) | yes |
+
+The correction stands by amendment 1's rule. F-1001's decision stays as Addendum 1 records it: **partial**, for the L2
+miss of the registered run; every clause of the acceptance was met in that run.
