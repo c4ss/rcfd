@@ -1,0 +1,14 @@
+# expect-fail: cargo test -p rcfd-mcp --release --target-dir target/mutation --test golden_every_tool_f1001
+diff --git a/crates/rcfd-mcp/src/project.rs b/crates/rcfd-mcp/src/project.rs
+index 7175d9c3..b26eb4d5 100644
+--- a/crates/rcfd-mcp/src/project.rs
++++ b/crates/rcfd-mcp/src/project.rs
+@@ -384,7 +384,7 @@ pub(crate) fn tools() -> Vec<Tool> {
+         },
+         Tool {
+             name: "list_sites",
+-            description: "The run sites of the user's sites file (ADR 0739): name, kind, host, engine and work folders, budgets, whether MCP clients may name the site (assistant) and whether the user confirmed it. start_run with site queues a run on one with assistant true. Nothing is started and nothing is sent.",
++            description: "The run sites of the sites file (ADR 0739): name, kind, host, engine and work folders, budgets, whether MCP clients may name the site (assistant) and whether the user confirmed it. start_run with site queues a run on one with assistant true. Nothing is started and nothing is sent.",
+             access: Access::Read,
+             schema: || obj(json!({}), &[]),
+         },
