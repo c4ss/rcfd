@@ -1,0 +1,14 @@
+# expect-fail: cargo test --release -p rcfd-workspace --lib --target-dir target/mutation -- p1_f978
+diff --git a/crates/rcfd-workspace/src/view.rs b/crates/rcfd-workspace/src/view.rs
+index c6e51844..06ca3f69 100644
+--- a/crates/rcfd-workspace/src/view.rs
++++ b/crates/rcfd-workspace/src/view.rs
+@@ -2450,7 +2450,7 @@ impl Workspace {
+                 out.push(
+                     json!({"step": "results", "phase": "results", "source": "run", "kind": "results",
+                     "run": run, "t": last_t, "snapshots": n, "fields": fields,
+-                    "text": format!("run {run}: {n} snapshots of {}", fields.join(", ")), "opens": self.opens(panels)}),
++                    "text": format!("run {run}: {n} snapshots of {}", fields.join(", ")), "opens": (self.opens(panels), Value::Null).1}),
+                 );
+             }
+         }

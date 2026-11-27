@@ -1,0 +1,10 @@
+{
+  "form": 1,
+  "adr": "0828",
+  "item": "F-978",
+  "base": "2cbdfa5f4c43f4bcec0be1b5b5cfc007c8139740",
+  "status": "partial",
+  "note": "ADR 0828, 2026-11-27, partial: M4 and M5 built and were caught (P1 and B1; E2 0 of 10), and the canvas tests now end the runner their start_run started (0 runners left after npm test, 903 passed; 1 left with a teardown removed); the one registered run of B1 failed again at its first edit_case on Windows' Access is denied (CPU 99 %), while the same build passed in both of this work's mutated runs.",
+  "gap": "Every row of ADR 0826 holds but B1 to B3. Missing: a passing registered run of canvas_process_f978. In both registered runs (CPU 82 % and 99 %) the first edit_case after new_case was refused by Windows (Access is denied, os error 5, replacing the new case file); in all four mutated runs (CPU 70 % or less) the same build passed. A diagnosis of the refusal, registered under F-978 (rule 13), and then one run of B1 to B3.",
+  "follow_ups": []
+}

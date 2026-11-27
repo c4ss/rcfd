@@ -10,13 +10,14 @@
 // Needs rcfd-mcp, with rcfd-runner and rcfd beside it (tests/support/project.ts); without rcfd-mcp the tests are skipped.
 import { expect, test, type Page } from '@playwright/test';
 import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process';
-import { existsSync, readFileSync, writeFileSync } from 'node:fs';
+import { writeFileSync } from 'node:fs';
 import { cp, rm } from 'node:fs/promises';
 import readline from 'node:readline';
 import path from 'node:path';
 import { launchStudio, type Studio } from '../support/studio.js';
 import { copyExample, copyRun, findMcp, mcpPids, NO_MCP, repoRoot, scratch, stubDialog } from '../support/project.js';
 import { killPid } from '../support/rcfd.js';
+import { endProjectRunner } from '../support/runner.js';
 import { FEED_POLL_MS } from '../../src/shared/project.js';
 
 const mcp = findMcp();
@@ -211,16 +212,16 @@ test.beforeAll(async () => {
 });
 
 test.afterAll(async () => {
-  client?.close();
-  await studio?.app.close();
-  for (const p of mcpPids(project)) killPid(p);
-  // the runner E0's start_run started (ADR 0807 addendum 1: it outlives the spec otherwise)
-  const info = path.join(project, '.rcfd', 'runner.json');
-  if (existsSync(info)) {
-    const pid = (JSON.parse(readFileSync(info, 'utf8')) as { pid?: number }).pid;
-    if (typeof pid === 'number') killPid(pid);
+  try {
+    client?.close();
+    await studio?.app.close();
+    for (const p of mcpPids(project)) killPid(p);
+  } finally {
+    // the runner E0's start_run started (ADR 0807 addendum 1: it outlives the spec otherwise); ADR 0828: shut down
+    // (and killed only if it is still alive) before the folder is removed
+    await endProjectRunner(project);
+    await rm(dir, { recursive: true, force: true }).catch(() => undefined);
   }
-  await rm(dir, { recursive: true, force: true }).catch(() => undefined);
 });
 
 test('E0: the still pool is run by the MCP client', async () => {

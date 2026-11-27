@@ -524,7 +524,7 @@ One row per record of this folder, grouped by the roadmap category of the item i
 | [0794](0794-f274-registration-journal-lines-of-design-runs-and-records.md) | F-274 registration: journal lines of design runs and of stored design records | REGISTERED | 2026-11-25 | 1 | F-274 | done |
 | [0829](0829-f997-registration-a-runner-without-the-callers-handles-and-its-exit-when-its-folder-is-gone.md) | F-997 registration: a runner started without the caller's handles, and its exit when its project folder is gone | REGISTERED | 2026-11-27 | 1 | F-997 | todo |
 
-## Studio desktop app (33)
+## Studio desktop app (34)
 
 | ADR | Title | Status word | Date | Addenda | Item | Item status |
 |---|---|---|---|---|---|---|
@@ -561,6 +561,7 @@ One row per record of this folder, grouped by the roadmap category of the item i
 | [0818](0818-f823-registration-the-studio-job-on-the-hosted-runners.md) | F-823 registration, the Studio's job on GitHub's hosted runners: the registered skips, a WebGPU adapter on Windows, and the race of Follow live |  |  | 2 | F-823 | partial |
 | [0823](0823-f980-registration-a-view-exported-as-one-self-contained-html-page.md) | F-980 registration: a view exported as one self-contained styled HTML page | REGISTERED | 2026-11-27 | 3 | F-980 | done |
 | [0826](0826-f978-registration-the-process-view-of-a-case.md) | F-978 registration: the process view of a case, from its creation to its last result | REGISTERED | 2026-11-27 | 1 | F-978 | partial |
+| [0828](0828-f978-registration-process-view-rows-and-runner-teardowns.md) | F-978 registration: the process view's undecided rows, and the tests that leave a runner behind | REGISTERED | 2026-11-27 | 1 | F-978 | partial |
 
 ## Retired: the hand-navigated Studio (1)
 
