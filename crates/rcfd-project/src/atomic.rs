@@ -156,8 +156,46 @@ pub fn atomic_write_unsynced(path: &Path, bytes: &[u8]) -> Result<()> {
     res
 }
 
+/// Create `path` with `bytes`; fails with [`ProjectError::Exists`] if it exists. Used for immutable files (`run.json`,
+/// `case.snapshot`) and new case files.
+///
+/// On Windows (ADR 0834, F-998) a plain write: the file is created by `create_new` with share mode 0, written, synced
+/// and closed, so no other open of it succeeds (a sharing violation, which [`read`] retries) until it is complete; on an
+/// error of the write the file is removed. No temp file and no hard link, whose new file the System process was seen to
+/// hold for up to 237 ms. A writer killed in the middle leaves a partial file under the name (ADR 0834 Q1).
+#[cfg(windows)]
+pub fn write_new(path: &Path, bytes: &[u8]) -> Result<()> {
+    use std::os::windows::fs::OpenOptionsExt;
+    let mut f = match OpenOptions::new().write(true).create_new(true).share_mode(0).open(path) {
+        Ok(f) => f,
+        Err(e) if e.kind() == io::ErrorKind::AlreadyExists => {
+            return Err(ProjectError::Exists {
+                path: path.to_path_buf(),
+            })
+        }
+        Err(e) => {
+            return Err(ProjectError::Io {
+                op: "create",
+                path: path.to_path_buf(),
+                source: e,
+            })
+        }
+    };
+    let res = f.write_all(bytes).and_then(|()| f.sync_all());
+    drop(f);
+    res.map_err(|e| {
+        let _ = fs::remove_file(path);
+        ProjectError::Io {
+            op: "write",
+            path: path.to_path_buf(),
+            source: e,
+        }
+    })
+}
+
 /// Atomically create `path` with `bytes`; fails with [`ProjectError::Exists`] if it exists.
-/// Used for immutable files (`run.json`, `case.snapshot`). Needs hard-link support (NTFS, ext4, APFS).
+/// Used for immutable files (`run.json`, `case.snapshot`). Needs hard-link support (ext4, APFS).
+#[cfg(not(windows))]
 pub fn write_new(path: &Path, bytes: &[u8]) -> Result<()> {
     let tmp = write_temp(path, bytes)?;
     let res = fs::hard_link(&tmp, path);
