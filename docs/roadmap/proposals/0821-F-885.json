@@ -1,0 +1,9 @@
+{
+  "form": 1,
+  "adr": "0821",
+  "item": "F-885",
+  "base": "e60fd82946666a75f5bed0707b7013f79335f5f2",
+  "status": "partial",
+  "note": "ADR 0821, 2026-11-27, partial: the remedy outer_frozen_convection_gradient (ADR 0820's opt-in, no library change, baseline hashes unchanged) gives the same steady answer on the cavity (velocity 3.4e-13, flux 3.3e-13 against 1e-8), but the registered BDF2 order check on the Taylor-Green vortex does not decide: its control without the setting is first order (p_f 1.015; 1.061 with it, against 1.9), and so is a central-convection arm, so check H was not run by the registered rule; held by crates/rcfd-api/tests/f885_frozen_convection_check_h.rs and docs/investigations/f885-frozen-convection-check-h.",
+  "gap": "Missing for done: a class by ADR 0183's rule. The remedy (outer_frozen_convection_gradient) holds a steady answer, but its BDF2 order check did not decide: on ADR 0821's Taylor-Green set-up the pimple step is first order with or without it (p_f 1.015 and 1.061, central 1.012). Needs an order case on which the pimple step shows BDF2's order without the setting, the remedy's order on it, then check H with the remedy."
+}

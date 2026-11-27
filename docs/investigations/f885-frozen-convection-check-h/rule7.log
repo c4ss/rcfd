@@ -1,0 +1,41 @@
+== head bea7c041
+== cargo test -p rcfd-api --release --lib
+test result: ok. 160 passed; 0 failed; 4 ignored; 0 measured; 0 filtered out; finished in 36.24s
+   exit 0, 83 s
+== cargo test -p rcfd-api --release --test f885_frozen_convection_check_h
+test result: ok. 3 passed; 0 failed; 6 ignored; 0 measured; 0 filtered out; finished in 4.32s
+   exit 0, 36 s
+== cargo test -p rcfd-api --release --test f885_slow_outer_mode
+test result: ok. 6 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out; finished in 0.29s
+   exit 0, 4 s
+== cargo test -p rcfd-api --release --test f885_frozen_limiter
+test result: ok. 7 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out; finished in 5.92s
+   exit 0, 9 s
+== cargo test -p rcfd-api --release --test f885_alpha_free_face_flux
+test result: ok. 5 passed; 0 failed; 3 ignored; 0 measured; 0 filtered out; finished in 19.03s
+   exit 0, 22 s
+== cargo test -p rcfd-api --release --test baseline_hashes
+test result: ok. 3 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out; finished in 0.52s
+   exit 0, 3 s
+== cargo fmt -p rcfd-api --check
+  -h, --help
+          Print help
+
+   exit 1
+== rustfmt --check --edition 2021 crates/rcfd-api/tests/f885_frozen_convection_check_h.rs
+   exit 0
+== cargo clippy -p rcfd-api --all-targets -- -D warnings
+error: very complex type used. Consider factoring parts into `type` definitions
+   --> crates\rcfd-api\tests\f885_frozen_convection_check_h.rs:884:16
+error: could not compile `rcfd-api` (test "f885_frozen_convection_check_h") due to 1 previous error
+warning: build failed, waiting for other jobs to finish...
+   exit 101
+== git diff --name-only e60fd829 HEAD
+crates/rcfd-api/tests/f885_frozen_convection_check_h.mutation.patch
+crates/rcfd-api/tests/f885_frozen_convection_check_h.rs
+docs/adr/0821-f885-registration-the-frozen-convection-gradient-its-time-order-a-steady-case-and-check-h.md
+docs/investigations/f885-frozen-convection-check-h/diagnosis.log
+docs/investigations/f885-frozen-convection-check-h/gate.log
+docs/investigations/f885-frozen-convection-check-h/mutations.log
+== end
+== after the fix at d41f7e19: cargo fmt -p rcfd-api --check refuses (os error 206); rustfmt --check of the test file: exit 0; cargo clippy -p rcfd-api --all-targets -- -D warnings: exit 0
