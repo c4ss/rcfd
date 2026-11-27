@@ -1,6 +1,6 @@
 //! ADR 0830 (F-978): the arms that decide why the first `edit_case` after `new_case` is refused under load (B1 of ADR
 //! 0826). Each arm, on a copy of `example-projects/quick-start`, keeps every logical processor busy in this process and
-//! makes 30 times `new_case` then B1's two `edit_case`, printing each call's start and end (epoch ms) and its result;
+//! makes 30 times (100 by amendment 2) `new_case` then B1's two `edit_case`, printing each call's start and end (epoch ms) and its result;
 //! the trace of the handles on the case files (the scratch tool X of ADR 0830) runs beside it. A: with the `--canvas`
 //! server of B1; B: without; A2: A again after the fix F1, which must give no refusal. Then the control TC: this
 //! process holds the last case file for 500 ms. Ignored: they load the whole machine on purpose and are run once each.
@@ -49,6 +49,11 @@ fn step(c: &mut Mcp, tag: &str, i: usize, op: &str, tool: &str, args: Value) -> 
 }
 
 fn arm(tag: &str, canvas: bool) -> usize {
+    arm_rounds(tag, canvas, 30)
+}
+
+/// [`arm`] with `rounds` rounds (ADR 0830 amendment 2: 100 for A3, B and A2).
+fn arm_rounds(tag: &str, canvas: bool, rounds: usize) -> usize {
     common::binaries();
     let repo = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
     let dir: PathBuf = common::scratch(&format!("f978-arm-{tag}")).join("quick-start");
@@ -80,7 +85,7 @@ fn arm(tag: &str, canvas: bool) -> usize {
     std::thread::sleep(Duration::from_millis(500));
     let mut refused = 0;
     let mut last = String::new();
-    for i in 0..30 {
+    for i in 0..rounds {
         let case = format!("cases/arm-{i}.toml");
         let (r, _) = step(
             &mut c,
@@ -123,7 +128,7 @@ fn arm(tag: &str, canvas: bool) -> usize {
         drop(f);
         eprintln!("ARM {tag} TC released at {}", ms());
     }
-    eprintln!("ARM {tag} refusals {refused} of 90");
+    eprintln!("ARM {tag} refusals {refused} of {}", 3 * rounds);
     drop(c);
     drop(studio);
     let _ = std::fs::remove_dir_all(dir.parent().unwrap());
@@ -141,14 +146,14 @@ fn arm_a_with_the_canvas_server_under_load() {
 #[test]
 #[ignore = "ADR 0830: loads every processor on purpose; run once"]
 fn arm_b_without_the_canvas_server_under_load() {
-    arm("b", false);
+    arm_rounds("b", false, 100);
 }
 
 /// ADR 0830 arm A2: arm A after the fix F1: no refusal.
 #[test]
 #[ignore = "ADR 0830: loads every processor on purpose; run once"]
 fn arm_a2_with_the_canvas_server_under_load_after_the_fix() {
-    assert_eq!(arm("a2", true), 0, "A2: refusals of 90");
+    assert_eq!(arm_rounds("a2", true, 100), 0, "A2: refusals of 300");
 }
 
 /// ADR 0830 amendment 1, arm A1: arm A again, with the trace at high priority.
@@ -156,4 +161,11 @@ fn arm_a2_with_the_canvas_server_under_load_after_the_fix() {
 #[ignore = "ADR 0830: loads every processor on purpose; run once"]
 fn arm_a1_with_the_canvas_server_under_load_traced_at_high_priority() {
     arm("a1", true);
+}
+
+/// ADR 0830 amendment 2, arm A3: arm A with the trace at the newest case only, 100 rounds.
+#[test]
+#[ignore = "ADR 0830: loads every processor on purpose; run once"]
+fn arm_a3_with_the_canvas_server_under_load_100_rounds() {
+    arm_rounds("a3", true, 100);
 }
