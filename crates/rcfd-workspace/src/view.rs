@@ -1417,7 +1417,11 @@ impl Workspace {
         Ok(json!({"exported": true, "id": id, "path": rel, "hash": hash, "bytes": bytes.len(), "panels": kinds.len()}))
     }
 
-    /// ADR 0823 D2: the page of valid view `view` (with panels), its id `id`.
+    /// ADR 0823 D2 + G22 four-layer quiet architecture: the page of valid view `view` (with panels), its id `id`.
+    ///
+    /// Visible pixels carry only the glance layer (short titles, graphics, compact 3–4 sig-fig readouts/ticks with
+    /// units, and tables). Provenance, exact hashes, actor/PID, export timestamp, per-panel facts and the JSON spec
+    /// live in `data-*` attributes and collapsed `<details class="xv-audit">` blocks (G17, G22 Layers 1–3).
     fn page_of(&self, view: &Value, id: &str, shown_actor: Option<&Value>) -> Result<String, RpcError> {
         let info = self.answer("project_info", &json!({}))?;
         let project = info["name"].as_str().unwrap_or("project").to_string();
@@ -1458,51 +1462,53 @@ impl Workspace {
             "<main class=\"xv\" data-export-view=\"{}\" data-engine=\"{version}\">\n",
             esc(id)
         ));
+        let spec = serde_json::to_string_pretty(view).unwrap_or_default();
+        let heading = title.unwrap_or(&project);
         h.push_str(&format!(
-            "<header class=\"xv-head\"><h1 class=\"xv-project\" data-words=\"data\">{}</h1><p class=\"xv-note\">Exported {} by export_view of rcfd {version} (actor {}); view {}. A picture of the view at that time, from the engine's records; nothing in it is computed by the page.</p>",
+            "<header class=\"xv-head\"><h1 class=\"xv-project\" data-project=\"{}\" data-words=\"data\">{}</h1><details class=\"xv-audit xv-head-audit\"><summary>Provenance</summary><p class=\"xv-note\">Project {}; exported {} by export_view of rcfd {version} (actor {}); view {}.</p><pre>{}</pre></details></header>\n",
+            esc(&project),
+            esc(heading),
             esc(&project),
             esc(&rcfd_project::time::now()),
             esc(&actor),
-            esc(id)
-        ));
-        let spec = serde_json::to_string_pretty(view).unwrap_or_default();
-        h.push_str(&format!(
-            "<details class=\"xv-spec\"><summary>The view specification</summary><pre>{}</pre></details></header>\n",
+            esc(id),
             esc(&spec)
         ));
         h.push_str(&format!(
             "<section class=\"cv\" aria-label=\"{}\" data-panels=\"{}\">\n",
-            esc(title.unwrap_or("Canvas")),
+            esc(heading),
             panels.len()
         ));
-        if let Some(t) = title {
-            h.push_str(&format!("<h2 class=\"cv-title\">{}</h2>\n", esc(t)));
-        }
         h.push_str(&format!("<div class=\"cv-grid\" data-columns=\"{columns}\">\n"));
         for (i, p) in panels.iter().enumerate() {
-            let (body, sources) = self.panel_html(p, i, &runs, &settings)?;
+            let panel = self.panel_html(p, i, &runs, &settings)?;
             let mut hashes = Vec::new();
-            for s in &sources {
+            for s in &panel.sources {
                 let b = std::fs::read(self.project.root().join(s)).unwrap_or_default();
                 hashes.push(rcfd_project::records::hash_bytes(&b));
             }
             h.push_str(&format!(
                 "<div class=\"cv-panel\" data-canvas-panel=\"{i}\" data-kind=\"{}\" data-sources=\"{}\" data-hashes=\"{}\">\n",
                 esc(p["kind"].as_str().unwrap_or_default()),
-                esc(&sources.join(" ")),
+                esc(&panel.sources.join(" ")),
                 hashes.join(" ")
             ));
             if let Some(t) = p["title"].as_str() {
                 h.push_str(&format!("<h3 class=\"cv-panel-title\">{}</h3>\n", esc(t)));
             }
-            h.push_str(&body);
-            let listed: Vec<String> = sources
+            h.push_str(&panel.glance);
+            let listed: Vec<String> = panel
+                .sources
                 .iter()
                 .zip(&hashes)
                 .map(|(s, x)| format!("{} ({x})", esc(s)))
                 .collect();
+            let facts_html = panel
+                .audit_facts
+                .map(|f| format!("<p class=\"xv-facts\">{f}</p>"))
+                .unwrap_or_default();
             h.push_str(&format!(
-                "<p class=\"xv-sources\">From {}; rcfd {version}.</p>\n</div>\n",
+                "<details class=\"xv-audit xv-panel-audit\"><summary aria-label=\"Panel provenance\">ⓘ</summary>{facts_html}<p class=\"xv-sources\">From {}; rcfd {version}.</p></details>\n</div>\n",
                 listed.join(", ")
             ));
         }
@@ -1510,14 +1516,8 @@ impl Workspace {
         Ok(h)
     }
 
-    /// The markup of panel `p` (index `i`) and the project-relative files it read.
-    fn panel_html(
-        &self,
-        p: &Value,
-        i: usize,
-        runs: &[Value],
-        settings: &[Value],
-    ) -> Result<(String, Vec<String>), RpcError> {
+    /// The typed glance/audit markup of panel `p` (index `i`) and the project-relative files it read (G22 Layer 3).
+    fn panel_html(&self, p: &Value, i: usize, runs: &[Value], settings: &[Value]) -> Result<PanelOutput, RpcError> {
         let s = |k: &str| p[k].as_str().unwrap_or_default().replace('\\', "/");
         let run_files = |run: &str| {
             let mut v = vec![format!("runs/{run}/run.json")];
@@ -1536,15 +1536,15 @@ impl Workspace {
             "case" => {
                 let kase = s("case");
                 let text = std::fs::read_to_string(self.project.root().join(&kase)).unwrap_or_default();
-                (
-                    format!(
-                        "<div class=\"xv-case\" data-path=\"{}\"><p class=\"xv-facts\">{}</p><pre class=\"xv-text\">{}</pre></div>\n",
-                        esc(&kase),
+                PanelOutput {
+                    glance: format!(
+                        "<div class=\"xv-case\" data-path=\"{}\"><pre class=\"xv-text\">{}</pre></div>\n",
                         esc(&kase),
                         esc(&text)
                     ),
-                    vec![kase],
-                )
+                    audit_facts: Some(esc(&kase)),
+                    sources: vec![kase],
+                }
             }
             "mesh" if p.get("case").is_some() => {
                 let kase = s("case");
@@ -1563,36 +1563,41 @@ impl Workspace {
                     svg.push_str(&format!("<polygon class=\"xv-mesh-tri\" points=\"{}\"/>", points(c)));
                 }
                 svg.push_str("</svg>");
-                (
-                    format!(
-                        "<div class=\"xv-mesh\" data-case=\"{}\" data-triangles=\"{}\">{svg}<p class=\"xv-facts\">The mesh of {}: {} cells, {} surface triangles ({} facing the viewer drawn).</p></div>\n",
+                PanelOutput {
+                    glance: format!(
+                        "<div class=\"xv-mesh\" data-case=\"{}\" data-triangles=\"{}\">{svg}<div class=\"xv-keys\"><span class=\"xv-num\">{} cells</span></div></div>\n",
                         esc(&kase),
                         surf.n_triangles(),
+                        mesh.n_cells()
+                    ),
+                    audit_facts: Some(format!(
+                        "The mesh of {}: {} cells, {} surface triangles ({} facing the viewer drawn).",
                         esc(&kase),
                         mesh.n_cells(),
                         surf.n_triangles(),
                         tris.len()
-                    ),
-                    vec![kase],
-                )
+                    )),
+                    sources: vec![kase],
+                }
             }
             "mesh" => {
                 let m = s("mesh");
-                (
-                    format!(
-                        "<div class=\"xv-meshentry\" data-path=\"{}\"><p class=\"xv-facts\">Mesh file {}</p></div>\n",
+                PanelOutput {
+                    glance: format!(
+                        "<div class=\"xv-meshentry\" data-path=\"{}\"><span class=\"xv-keys\">{}</span></div>\n",
                         esc(&m),
                         esc(&m)
                     ),
-                    vec![m],
-                )
+                    audit_facts: Some(format!("Mesh file {}", esc(&m))),
+                    sources: vec![m],
+                }
             }
             "setting" => {
                 let got = settings.iter().find(|x| x["panel"] == json!(i));
                 let value = got.and_then(|g| g.get("value")).map(js_json);
                 let error = got.and_then(|g| g.get("error")).and_then(Value::as_str);
                 let mut out = format!(
-                    "<div class=\"cv-setting\" data-setting=\"{}\"{}><p class=\"cv-setting-value\"><span class=\"cv-setting-path\">{}</span> = <output>{}</output></p>",
+                    "<div class=\"cv-setting\" data-setting=\"{}\"{}><div class=\"cv-setting-value\"><span class=\"cv-setting-path\">{}</span> = <output>{}</output></div>",
                     esc(&s("setting")),
                     value.as_ref().map(|v| format!(" data-value=\"{}\"", esc(v))).unwrap_or_default(),
                     esc(&s("setting")),
@@ -1602,7 +1607,11 @@ impl Workspace {
                     out.push_str(&format!("<p class=\"cv-change\" role=\"alert\">{}</p>", esc(x)));
                 }
                 out.push_str("</div>\n");
-                (out, vec![s("case")])
+                PanelOutput {
+                    glance: out,
+                    audit_facts: None,
+                    sources: vec![s("case")],
+                }
             }
             "table" => {
                 let want: Vec<String> = p["runs"]
@@ -1612,25 +1621,44 @@ impl Workspace {
                     .filter_map(|r| r.as_str().map(String::from))
                     .collect();
                 let mut out = String::from(
-                    "<table class=\"xv-table\"><thead><tr><th scope=\"col\">Run</th><th scope=\"col\">Case</th><th scope=\"col\">State</th><th scope=\"col\">Step</th><th scope=\"col\">Time</th></tr></thead><tbody>",
+                    "<table class=\"xv-table\"><thead><tr><th scope=\"col\">Case</th><th scope=\"col\">State</th><th scope=\"col\">Step</th><th scope=\"col\">Time</th></tr></thead><tbody>",
                 );
                 let mut files = Vec::new();
                 for r in runs.iter().filter(|r| want.iter().any(|w| r["id"] == json!(w))) {
                     let rid = r["id"].as_str().unwrap_or_default();
+                    let case_rel = r["case"].as_str().unwrap_or_default();
+                    let case_short = case_rel
+                        .strip_prefix("cases/")
+                        .unwrap_or(case_rel)
+                        .strip_suffix(".toml")
+                        .or_else(|| {
+                            case_rel
+                                .strip_prefix("cases/")
+                                .unwrap_or(case_rel)
+                                .strip_suffix(".json")
+                        })
+                        .unwrap_or(case_rel);
+                    let time_disp = r["time"]
+                        .as_f64()
+                        .map(fmt_glance)
+                        .unwrap_or_else(|| js_json(&r["time"]));
                     out.push_str(&format!(
-                        "<tr data-run=\"{}\" data-step=\"{}\"><th scope=\"row\">{}</th><td>{}</td><td>{}</td><td class=\"xv-num\">{}</td><td class=\"xv-num\">{}</td></tr>",
+                        "<tr data-run=\"{}\" data-step=\"{}\"><th scope=\"row\">{}</th><td>{}</td><td class=\"xv-num\">{}</td><td class=\"xv-num\">{}</td></tr>",
                         esc(rid),
                         js_json(&r["step"]),
-                        esc(rid),
-                        esc(r["case"].as_str().unwrap_or_default()),
+                        esc(case_short),
                         esc(r["state"].as_str().unwrap_or_default()),
                         js_json(&r["step"]),
-                        js_json(&r["time"])
+                        esc(&time_disp)
                     ));
                     files.extend(run_files(rid));
                 }
                 out.push_str("</tbody></table>\n");
-                (out, files)
+                PanelOutput {
+                    glance: out,
+                    audit_facts: None,
+                    sources: files,
+                }
             }
             "run" => {
                 let run = s("run");
@@ -1638,20 +1666,22 @@ impl Workspace {
                 let snaps = rcfd_tsstore::Reader::open(&self.project.root().join(format!("runs/{run}/fields")))
                     .map(|x| x.snapshots().len().to_string())
                     .unwrap_or_else(|_| "none".into());
-                (
-                    format!(
-                        "<div class=\"xv-run\" data-run=\"{}\" data-step=\"{}\" data-snapshots=\"{}\"><dl class=\"xv-grid\"><dt>Run</dt><dd>{}</dd><dt>Case</dt><dd>{}</dd><dt>State</dt><dd>{}</dd><dt>Steps</dt><dd>{}</dd><dt>Snapshots stored</dt><dd>{}</dd></dl></div>\n",
+                let case_rel = r["case"].as_str().unwrap_or_default();
+                let case_short = case_rel.strip_prefix("cases/").unwrap_or(case_rel);
+                PanelOutput {
+                    glance: format!(
+                        "<div class=\"xv-run\" data-run=\"{}\" data-step=\"{}\" data-snapshots=\"{}\"><dl class=\"xv-grid\"><dt>Case</dt><dd>{}</dd><dt>State</dt><dd>{}</dd><dt>Steps</dt><dd class=\"xv-num\">{}</dd><dt>Snapshots</dt><dd class=\"xv-num\">{}</dd></dl></div>\n",
                         esc(&run),
                         js_json(&r["step"]),
                         snaps,
-                        esc(&run),
-                        esc(r["case"].as_str().unwrap_or_default()),
+                        esc(case_short),
                         esc(r["state"].as_str().unwrap_or_default()),
                         js_json(&r["step"]),
                         snaps
                     ),
-                    run_files(&run),
-                )
+                    audit_facts: Some(format!("Run {} ({})", esc(&run), esc(case_rel))),
+                    sources: run_files(&run),
+                }
             }
             "field" => {
                 let run = s("run");
@@ -1712,24 +1742,33 @@ impl Workspace {
                 }
                 legend.push_str("</svg>");
                 let (lo64, hi64) = (f64::from(lo), f64::from(hi));
+                let unit_span = unit
+                    .as_deref()
+                    .map(|u| format!("<span class=\"xv-unit\">{}</span>", esc(u)))
+                    .unwrap_or_default();
                 let unit_text = unit.map(|u| format!(", {u}")).unwrap_or_default();
-                (
-                    format!(
-                        "<div class=\"xv-field\" data-field=\"{}\" data-lo=\"{}\" data-hi=\"{}\" data-snapshot=\"{snap}\" data-step=\"{}\">{svg}<div class=\"xv-legend\"><span>{}</span>{legend}<span>{}</span></div><p class=\"xv-facts\">{}{} of {} at snapshot {snap} (step {}, time {}); colour range of the shown snapshot.</p></div>\n",
+                PanelOutput {
+                    glance: format!(
+                        "<div class=\"xv-field\" data-field=\"{}\" data-lo=\"{}\" data-hi=\"{}\" data-snapshot=\"{snap}\" data-step=\"{}\">{svg}<div class=\"xv-legend\"><span class=\"xv-num\">{}</span>{legend}<span class=\"xv-num\">{}</span>{unit_span}</div></div>\n",
                         esc(&field),
                         num(lo64),
                         num(hi64),
                         step,
-                        num(lo64),
-                        num(hi64),
+                        esc(&fmt_glance(lo64)),
+                        esc(&fmt_glance(hi64))
+                    ),
+                    audit_facts: Some(format!(
+                        "{}{} of {} at snapshot {snap} (step {}, time {}); range {} to {}.",
                         esc(&field),
                         esc(&unit_text),
                         esc(&run),
                         step,
-                        num(time)
-                    ),
-                    vec![format!("{rel}/store.rts")],
-                )
+                        num(time),
+                        num(lo64),
+                        num(hi64)
+                    )),
+                    sources: vec![format!("{rel}/store.rts")],
+                }
             }
             kind @ ("plot" | "monitor") => {
                 let run = match p.get("run").and_then(Value::as_str) {
@@ -1754,6 +1793,19 @@ impl Workspace {
                         d += a;
                         k += b;
                     }
+                    let chips: Vec<String> = res
+                        .iter()
+                        .enumerate()
+                        .map(|(idx, x)| {
+                            let last = x.y.last().copied().unwrap_or(f64::NAN);
+                            let short = esc(x.name.trim_start_matches("residuals."));
+                            format!(
+                                "<span class=\"xv-key\"><span class=\"xv-swatch xv-swatch-{}\" aria-hidden=\"true\"></span>{short} <span class=\"xv-num\">{}</span></span>",
+                                idx % 6,
+                                esc(&fmt_glance(last))
+                            )
+                        })
+                        .collect();
                     let names: Vec<String> = res
                         .iter()
                         .map(|x| {
@@ -1761,16 +1813,20 @@ impl Workspace {
                             format!("{} {}", esc(x.name.trim_start_matches("residuals.")), num(last))
                         })
                         .collect();
-                    (
-                        format!(
-                            "<div class=\"xv-series\" data-run=\"{}\" data-drawn=\"{d}\" data-skipped=\"{k}\">{}<p class=\"xv-facts\">Residuals of {} (last values): {}; {d} samples drawn, {k} not drawn.</p></div>\n",
+                    PanelOutput {
+                        glance: format!(
+                            "<div class=\"xv-series\" data-run=\"{}\" data-drawn=\"{d}\" data-skipped=\"{k}\">{}<div class=\"xv-keys\">{}</div></div>\n",
                             esc(&run),
                             lines_svg(&res, true, 120.0),
+                            chips.join("")
+                        ),
+                        audit_facts: Some(format!(
+                            "Residuals of {} (last values): {}; {d} samples drawn, {k} not drawn.",
                             esc(&run),
                             names.join(", ")
-                        ),
-                        files,
-                    )
+                        )),
+                        sources: files,
+                    }
                 } else {
                     let m = s("monitor");
                     let one = series.iter().find(|x| x.name == format!("monitors.{m}"));
@@ -1779,23 +1835,74 @@ impl Workspace {
                     let attrs = last
                         .map(|(x, y)| format!(" data-last-step=\"{}\" data-last-value=\"{}\"", num(x), num(y)))
                         .unwrap_or_default();
+                    let kpi = last
+                        .map(|(_, y)| {
+                            format!(
+                                "<div class=\"xv-kpi\"><span class=\"xv-num\">{}</span></div>",
+                                esc(&fmt_glance(y))
+                            )
+                        })
+                        .unwrap_or_else(|| "<div class=\"xv-keys\">no samples</div>".into());
                     let text = last
                         .map(|(x, y)| format!("{} at step {}: {}", esc(&m), num(x), num(y)))
                         .unwrap_or_else(|| format!("{}: no samples", esc(&m)));
-                    (
-                        format!(
-                            "<div class=\"xv-series\" data-run=\"{}\"{attrs} data-drawn=\"{d}\" data-skipped=\"{k}\">{}<p class=\"xv-facts\">{text} ({} of {}).</p></div>\n",
+                    PanelOutput {
+                        glance: format!(
+                            "<div class=\"xv-series\" data-run=\"{}\"{attrs} data-drawn=\"{d}\" data-skipped=\"{k}\">{}{kpi}</div>\n",
                             esc(&run),
-                            lines_svg(&one.into_iter().collect::<Vec<_>>(), false, 80.0),
-                            esc(&m),
-                            esc(&run)
+                            lines_svg(&one.into_iter().collect::<Vec<_>>(), false, 80.0)
                         ),
-                        files,
-                    )
+                        audit_facts: Some(format!("{text} ({} of {}).", esc(&m), esc(&run))),
+                        sources: files,
+                    }
                 }
             }
             other => return Err(err(INTERNAL, format!("'{other}' is not a kind the page draws"))),
         })
+    }
+}
+
+/// Typed panel output separating the visible glance layer from collapsed audit/provenance facts (G22 Layer 3).
+struct PanelOutput {
+    glance: String,
+    audit_facts: Option<String>,
+    sources: Vec<String>,
+}
+
+/// One shared compact number formatter for visible glance-layer labels and ticks (G22 Layers 1 & 3).
+/// Exact round-trip values stay in `data-*` attributes and collapsed `<details>` blocks.
+pub fn fmt_glance(v: f64) -> String {
+    if !v.is_finite() {
+        return "—".into();
+    }
+    if v == 0.0 {
+        return "0".into();
+    }
+    let a = v.abs();
+    if (1e-3..1e4).contains(&a) {
+        let raw = if a >= 100.0 {
+            format!("{v:.1}")
+        } else if a >= 10.0 {
+            format!("{v:.2}")
+        } else if a >= 0.1 {
+            format!("{v:.3}")
+        } else if a >= 0.01 {
+            format!("{v:.4}")
+        } else {
+            format!("{v:.5}")
+        };
+        if raw.contains('.') {
+            let trimmed = raw.trim_end_matches('0').trim_end_matches('.');
+            if trimmed == "-0" {
+                "0".into()
+            } else {
+                trimmed.into()
+            }
+        } else {
+            raw
+        }
+    } else {
+        format!("{v:.2e}")
     }
 }
 
@@ -1840,6 +1947,120 @@ pub fn page_references(page: &str) -> Vec<String> {
         rest = &rest[at + 4..];
     }
     found
+}
+
+/// G22 Layer 2: universal no-prose, no-machine-strings check on the visible glance layer of an exported HTML page.
+///
+/// Strips `<head>`, `<style>`, collapsed `<details>...</details>` (the audit/provenance layer) and `<pre>...</pre>`
+/// (user-authored case text), then reports any remaining:
+/// - visible `<p>` paragraph outside `.cv-change` / `.xv-exception` / `.xv-disclaimer`,
+/// - raw machine string (`fnv64:`, `runs/r-`, `{"client":`, `"pid":`, ISO timestamp, or float with >= 6 decimal digits),
+/// - multi-clause sentence (`; ` or sentence-ending `.`) in visible text.
+pub fn page_quiet_violations(page: &str) -> Vec<String> {
+    fn strip_block(s: &str, open: &str, close: &str) -> String {
+        let mut out = String::with_capacity(s.len());
+        let mut rest = s;
+        while let Some(i) = rest.find(open) {
+            out.push_str(&rest[..i]);
+            let after = &rest[i + open.len()..];
+            if let Some(j) = after.find(close) {
+                rest = &after[j + close.len()..];
+            } else {
+                rest = "";
+                break;
+            }
+        }
+        out.push_str(rest);
+        out
+    }
+    let mut glance = strip_block(page, "<head", "</head>");
+    glance = strip_block(&glance, "<style", "</style>");
+    glance = strip_block(&glance, "<details", "</details>");
+    glance = strip_block(&glance, "<pre", "</pre>");
+
+    let mut bad = Vec::new();
+    // 1. No visible <p> paragraphs outside exception/disclaimer alerts
+    let mut scan = glance.as_str();
+    while let Some(i) = scan.find("<p") {
+        let after = &scan[i + 2..];
+        let is_p = after
+            .as_bytes()
+            .first()
+            .is_some_and(|b| matches!(b, b'>' | b' ' | b'\t' | b'\n' | b'\r'));
+        if is_p {
+            let tag_end = after.find('>').unwrap_or(after.len());
+            let tag = &after[..tag_end];
+            let allowed = tag.contains("cv-change")
+                || tag.contains("xv-exception")
+                || tag.contains("xv-disclaimer")
+                || tag.contains("role=\"alert\"");
+            if !allowed {
+                bad.push(format!("visible <p> paragraph: <p{}>", &tag[..tag.len().min(48)]));
+            }
+        }
+        scan = after;
+    }
+
+    // Extract visible text segments between tags
+    let mut visible = Vec::new();
+    let mut in_tag = false;
+    let mut cur = String::new();
+    for ch in glance.chars() {
+        match ch {
+            '<' => {
+                let t = cur.trim();
+                if !t.is_empty() {
+                    visible.push(t.to_string());
+                }
+                cur.clear();
+                in_tag = true;
+            }
+            '>' => in_tag = false,
+            _ if !in_tag => cur.push(ch),
+            _ => {}
+        }
+    }
+    let tail = cur.trim();
+    if !tail.is_empty() {
+        visible.push(tail.to_string());
+    }
+
+    for text in &visible {
+        for pat in ["fnv64:", "runs/r-", "{\"client\":", "\"pid\":"] {
+            if text.contains(pat) {
+                bad.push(format!("machine string '{pat}' in visible text: {text}"));
+            }
+        }
+        // ISO timestamp pattern Tdd:dd:dd
+        let bytes = text.as_bytes();
+        for w in bytes.windows(9) {
+            if w[0] == b'T'
+                && w[1].is_ascii_digit()
+                && w[2].is_ascii_digit()
+                && w[3] == b':'
+                && w[4].is_ascii_digit()
+                && w[5].is_ascii_digit()
+                && w[6] == b':'
+                && w[7].is_ascii_digit()
+                && w[8].is_ascii_digit()
+            {
+                bad.push(format!("ISO timestamp in visible text: {text}"));
+                break;
+            }
+        }
+        // Over-precise float: '.' followed by 6+ ASCII digits
+        for (idx, b) in bytes.iter().enumerate() {
+            if *b == b'.' && idx + 6 < bytes.len() && bytes[idx + 1..=idx + 6].iter().all(u8::is_ascii_digit) {
+                bad.push(format!("over-precise float (>=6 decimals) in visible text: {text}"));
+                break;
+            }
+        }
+        // Multi-clause prose or sentence punctuation
+        if text.contains("; ") || text.ends_with('.') {
+            bad.push(format!("sentence punctuation in visible text: {text}"));
+        }
+    }
+    bad
 }
 
 #[cfg(test)]
@@ -2640,5 +2861,27 @@ store_fields = ["alpha", "ux", "uy", "p"]
             js_json(&json!({"a": [1.0, 2u64, "x"], "b": 0.01})),
             "{\"a\":[1,2,\"x\"],\"b\":0.01}"
         );
+    }
+
+    /// G22 Layers 1-3: exported page has zero standing prose or machine strings in the visible glance layer, and the
+    /// linter catches each banned class in negative controls.
+    #[test]
+    fn g22_f980_exported_page_obeys_quiet_invariants() {
+        let (dir, ws) = quick_start();
+        let r = ws.export_view(&json!({"view": valid()})).unwrap();
+        let page = std::fs::read_to_string(dir.join(r["path"].as_str().unwrap())).unwrap();
+        let _ = std::fs::remove_dir_all(&dir);
+        let bad = page_quiet_violations(&page);
+        assert!(bad.is_empty(), "G22 quiet violations on exported page: {bad:?}");
+        // Negative controls: each banned pattern must be caught when visible outside <details>
+        assert!(!page_quiet_violations("<main><p>A picture of the view.</p></main>").is_empty());
+        assert!(!page_quiet_violations("<main><span>fnv64:c0ec92f5</span></main>").is_empty());
+        assert!(!page_quiet_violations("<main><span>-0.22311171889305115</span></main>").is_empty());
+        assert!(!page_quiet_violations("<main><span>2026-11-27T11:51:50Z</span></main>").is_empty());
+        // Collapsed <details> is the audit layer and is allowed
+        assert!(page_quiet_violations(
+            "<main><details><summary>Provenance</summary><p>fnv64:abc -0.223111718893.</p></details></main>"
+        )
+        .is_empty());
     }
 }

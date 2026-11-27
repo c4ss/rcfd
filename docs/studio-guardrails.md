@@ -129,11 +129,9 @@ The Studio reads and writes the project folder only as `docs/ui-restart-plan.md`
 elsewhere (Claude Code, the CLI, a text editor) show up live. The Studio never keeps project state that exists only
 inside the app.
 
-## G13. Testable without eyes
+## G13. Testable with eyes and without
 
-Agents cannot see the window. Each roadmap item has automated tests (unit tests, Playwright driving Electron) or a
-view-and-report step for the maintainer, named in its acceptance. Each wave ends with a short view-and-report
-checklist. Whether `scripts/gate_test.py` also runs the Studio's npm tests is the maintainer's decision.
+Every roadmap item has automated tests (unit tests, Playwright driving Electron, or HTML structural checks) **and**, for any change that touches a rendered view or exported graphic, a visual review step on rendered PNGs (G22 Layer 4). Each wave ends with a short view-and-report checklist for the maintainer. Whether `scripts/gate_test.py` also runs the Studio's npm tests is the maintainer's decision.
 
 ## G14. rcfd-studio is retired
 
@@ -168,8 +166,10 @@ result by a path only it has. This is G15 read the other way, and it keeps the C
 ## G17. Reproducible, with provenance one click away
 
 A run started from the Studio can be run again from the CLI with the same result, and the Studio shows the command that
-does it. Any number on screen can show where it came from: run id, snapshot, file, engine version and unit. Every value
-carries its unit (from the engine, G2). Builds on `docs/provenance.md`.
+does it. Any number on screen can show where it came from: run id, snapshot, file, hash, engine version and unit. Every
+value carries its unit (from the engine, G2). Provenance stays **one click away** (a popover or, in static HTML exports
+without JavaScript, a collapsed `<details>` block plus `data-*` attributes) — never printed as standing paragraphs,
+hashes, PIDs or raw JSON under panels (G22). Builds on `docs/provenance.md`.
 
 ## G18. Non-destructive by default
 
@@ -197,22 +197,42 @@ Engine work never runs on the renderer's main thread. Long operations (opening a
 derived picture) show progress and can be cancelled, and the window stays responsive while runs, loads and scrubbing
 happen.
 
-## G22. Implicit by default, explicit on exception
+## G22. Implicit by default, explicit on exception (four-layer quiet architecture)
 
-What is normal and expected is carried by the pictogram, position and layout, with no visible words of its own. Visible
-words appear only for the exception: a failure, a loss, a conflict, something blocked or unavailable, or a value the user
-must act on. Everything G6, G8, G18 and G19 ask to be said in words is still said, but in the accessible name, a tooltip
-or focus detail, the help on demand or the command palette, not as standing text on the screen. Tests check those words
-by role and accessible name, so G13 holds without painting a sentence for the test to read. G6's disclaimers, failed
-runs and known misses stay visible: they are exceptions by definition. A surface that grows adds no standing prose for
-its normal state; a feature that needs a sentence to be understood at rest is redesigned, not annotated. Each surface has
-a budget of visible chrome words at rest (labels, notes, hints and empty-state text; not data, disclaimers or
-exceptions), set from its screenshots once the surface is quieted and approved by the maintainer; a test counts them
-from the DOM and fails past the budget, and raising a budget needs the maintainer's word.
+What is normal and expected is carried by the graphic, pictogram, position and layout — never by standing prose or
+machine-formatted metadata. Visible words appear at rest only as minimal noun labels, compact formatted values with
+units, and exceptions (a failure, a loss, a conflict, something blocked, an unvalidated model, or a value the user must
+act on).
+
+A per-surface word budget is insufficient on its own (new surfaces fail open, and `data-words="data"` exempts machine
+dumps). Every Studio view, Canvas surface and exported HTML/SVG graphic enforces four structural layers:
+
+1. **Layer 1 — Glance vs Audit/Test separation:** Visible pixels carry only the *glance layer* (picture, short noun
+   label, 3–4 significant-digit formatted ticks/readouts with unit, and exceptions). Exact `f64`/`f32` values, file
+   paths, FNV-64 hashes, actor/PID records, ISO timestamps, sample counts and view specs belong in the *audit/test
+   layer* (`data-*` attributes and a collapsed `<details>` block or click/keyboard popover).
+2. **Layer 2 — Universal no-prose, no-machine-strings invariants:** Enforced automatically across every rendered view
+   and exported HTML/SVG without per-surface registration or a `data-words="data"` escape hatch. Outside `<details>`,
+   `.exception`/`.disclaimer` and user-authored text (case files, notes):
+   - No `<p>` paragraphs visible at rest in graphics or canvas panels.
+   - No multi-clause sentences in visible labels (no trailing `.`, no `;`).
+   - No raw machine strings visible at rest (`fnv64:`, `runs/r-`, JSON `{...}`, `pid`, ISO timestamps `T\d\d:\d\d:\d\d`,
+     or floats with six or more digits after the decimal point).
+   - Data-ink ceiling: visible text chrome stays a small fraction of a data panel's area.
+3. **Layer 3 — Typed visual slots and one shared formatter:** Panel and figure renderers accept typed slots (`label`,
+   `unit`, `range`/ticks, `kpi`, `exception`, `provenance`) and format visible numbers through one shared compact
+   formatter. Renderers do not accept free-form caption or explanatory-note prose parameters.
+4. **Layer 4 — Image-only visual critic:** Any change touching a rendered view or export renders PNGs and passes a
+   separate visual-critic review that inspects only the PNG (not the code) to flag any visible text that is inferable
+   from the graphic, redundant, machine-formatted or written as a sentence.
+
+G6's disclaimers, failed runs and known misses stay visible: they are exceptions by definition. The earlier per-surface
+word-budget test (`apps/studio-web/tests/e2e/word-budget.spec.ts`) remains in place until the universal Layer 2
+invariants cover every GUI surface.
 
 ## G23. Claude drives the canvas
 
-Added 2026-11-26 ([ADR 0803](adr/0803-the-studio-as-claudes-canvas-record.md)). The open Studio shows what a client asks for through the view tools: a view is a versioned JSON specification (what to show, of which case or run, how it is laid out), validated by the engine and rendered by the Studio's existing views in its theme. A view never computes a result the engine did not give (G16). The Studio keeps a short way for a person to look (pan, zoom, scrub, pick, open the provenance) but no path whose only purpose is to reach a capability by hand. The same specification can be exported as a self-contained styled HTML page.
+Added 2026-11-26 ([ADR 0803](adr/0803-the-studio-as-claudes-canvas-record.md)). The open Studio shows what a client asks for through the view tools: a view is a versioned JSON specification (what to show, of which case or run, how it is laid out), validated by the engine and rendered by the Studio's existing views in its theme. A view never computes a result the engine did not give (G16). The Studio keeps a short way for a person to look (pan, zoom, scrub, pick, open the provenance) but no path whose only purpose is to reach a capability by hand. The same specification can be exported as a self-contained styled HTML page. Both the live canvas and exported HTML pages obey G22's four-layer quiet architecture (G17 provenance stays inside popovers or collapsed `<details>` + `data-*`).
 
 ## Open (for the maintainer)
 

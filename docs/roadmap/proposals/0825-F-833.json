@@ -1,0 +1,21 @@
+{
+  "form": 1,
+  "adr": "0825",
+  "item": "F-833",
+  "base": "5af42535d650279e4c2148a8192b1799a4bc7668",
+  "status": "done",
+  "note": "ADR 0825, 2026-11-27, done: G22 evolved in studio-guardrails.md and DESIGN.md to the four-layer quiet architecture (glance/audit separation, universal no-prose/no-machine-string invariants, typed visual slots with one compact formatter, image-only visual critic) and applied immediately to export_view; follow-up entered for all remaining Studio and Canvas GUI surfaces.",
+  "follow_ups": [
+    {
+      "key": "gui-quiet-four-layers",
+      "title": "Studio and Canvas GUI compliance with G22 four-layer quiet architecture (Layers 1 to 4)",
+      "phase": 8,
+      "deps": [
+        "F-833",
+        "F-976",
+        "F-980"
+      ],
+      "acceptance": "Every limit not stated here is registered in the ADR before the run. Every live Studio surface, Canvas panel kind and exported HTML view separates the visible glance layer from the audit/test layer (Layer 1), routes figure and panel chrome through typed visual-slot components and one shared 3 to 4 significant-digit number formatter with no free-form prose caption parameter (Layer 3), passes one universal DOM and HTML quiet-invariant test covering every rendered view without per-surface registration or a data-words=data escape hatch for machine strings (Layer 2: zero visible <p> paragraphs outside <details>/exceptions/disclaimers, zero raw hashes, run paths, JSON, PIDs, ISO timestamps or 6+-decimal floats, zero sentence punctuation in visible labels, and a registered data-ink text-area ceiling on data panels, with negative controls), and passes an image-only visual-critic review on rendered 1440x900 PNGs of every Canvas layout and Studio view (Layer 4); once green across all surfaces, retire the superseded per-surface word-budget allow-list in apps/studio-web/tests/e2e/word-budget.spec.ts."
+    }
+  ]
+}
