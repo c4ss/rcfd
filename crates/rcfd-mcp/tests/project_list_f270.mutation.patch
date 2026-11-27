@@ -1,0 +1,14 @@
+# expect-fail: cargo test -p rcfd-mcp --release --target-dir target/mutation --test project_list_f270
+diff --git a/crates/rcfd-mcp/src/project.rs b/crates/rcfd-mcp/src/project.rs
+index 7175d9c3..2d03f5fd 100644
+--- a/crates/rcfd-mcp/src/project.rs
++++ b/crates/rcfd-mcp/src/project.rs
+@@ -540,7 +540,7 @@ pub(crate) fn tools() -> Vec<Tool> {
+         },
+         Tool {
+             name: "read_view",
+-            description: "The view shown last in the Studio (show_view): its id, when and by whom it was shown, the reason, and the view specification; exists false when none was shown.",
++            description: "The view shown last in the Studio (show_view): its id, when and by whom it was shown, the reason, and the view specification; exists: false when none was shown.",
+             access: Access::Read,
+             schema: || obj(json!({}), &[]),
+         },

@@ -41,6 +41,10 @@
 //!
 //! ADR 0739 restates it for F-848 (phase 1): `list_sites` (read, no argument) comes right after `refine_case_mesh`, and
 //! `start_run` gains the property `site`; taken out first, the list is the F-837 one above, byte for byte.
+//!
+//! ADR 0839 restates it for F-999: the golden holds `show_view`, `read_view` and `export_view` last, after `wait_run`, as
+//! the live list gives them; each is compared with the live list's entry byte for byte and taken off both, and the
+//! golden's other 52 entries are the list of 7c960bb, byte for byte.
 
 use serde_json::{json, Value};
 use std::io::Write;
@@ -121,7 +125,7 @@ fn a2_tools_list_with_project_is_the_golden_with_the_f271_changes() {
         .and_then(|b| b.strip_suffix('}'))
         .unwrap_or_else(|| panic!("unexpected response {}", &line[..line.len().min(80)]));
     let mut live_value: Value = serde_json::from_str(got).unwrap();
-    let gold: Value = serde_json::from_str(GOLDEN).unwrap();
+    let mut gold: Value = serde_json::from_str(GOLDEN).unwrap();
     // the golden's own text is the serialisation of its value, so equal values are equal bytes; the same holds for the
     // live text
     assert_eq!(serde_json::to_string(&gold).unwrap(), GOLDEN);
@@ -130,7 +134,11 @@ fn a2_tools_list_with_project_is_the_golden_with_the_f271_changes() {
     {
         let tools = live_value["tools"].as_array_mut().unwrap();
         assert_eq!(tools.last().unwrap()["name"], "export_view");
-        tools.pop();
+        // ADR 0839 (F-999): compared with the golden's last entry, then taken off both
+        let g = gold["tools"].as_array_mut().unwrap().pop().unwrap();
+        assert_eq!(g["name"], "export_view");
+        let l = tools.pop().unwrap();
+        assert_eq!(l.to_string(), g.to_string(), "export_view differs from the golden");
     }
     // ADR 0805 (F-976): show_view (write_files, required `view`) and read_view (read) last, taken out; additive,
     // re-recorded by the lead on 2026-11-26; the rest is the F-848 list below
@@ -142,6 +150,15 @@ fn a2_tools_list_with_project_is_the_golden_with_the_f271_changes() {
         assert_eq!(tools[n - 2]["_meta"]["rcfd/access"], "write_files");
         assert_eq!(tools[n - 1]["_meta"]["rcfd/access"], "read");
         assert_eq!(tools[n - 3]["name"], "empty_trash");
+        // ADR 0839 (F-999): compared with the golden's last two entries, then taken off both
+        let golds = gold["tools"].as_array_mut().unwrap();
+        let m = golds.len();
+        for k in 0..2 {
+            let (l, g) = (&tools[n - 2 + k], &golds[m - 2 + k]);
+            assert_eq!(g["name"], l["name"]);
+            assert_eq!(l.to_string(), g.to_string(), "{} differs from the golden", l["name"]);
+        }
+        golds.truncate(m - 2);
         tools.truncate(n - 2);
     }
     // ADR 0739 (F-848): list_sites right after refine_case_mesh and start_run's property site, taken out; the rest is

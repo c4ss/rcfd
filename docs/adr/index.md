@@ -507,7 +507,7 @@ One row per record of this folder, grouped by the roadmap category of the item i
 | [0792](0792-f894-registration-a-normal-distribution-open-on-one-side.md) | F-894 registration: a normal distribution open on one side (erfc at infinity, the kept mass, and a one-sided inverse CDF from the smaller tail) | REGISTERED | 2026-11-25 | 2 | F-894 | done |
 | [0793](0793-f895-registration-a-key-of-another-distribution-refused.md) | F-895 registration: `design_uq` and `design_sobol` refuse a key of another distribution in `dist` | REGISTERED | 2026-11-25 | 1 | F-895 | done |
 
-## Claude and the MCP server (16)
+## Claude and the MCP server (17)
 
 | ADR | Title | Status word | Date | Addenda | Item | Item status |
 |---|---|---|---|---|---|---|
@@ -527,6 +527,7 @@ One row per record of this folder, grouped by the roadmap category of the item i
 | [0834](0834-f998-registration-the-holds-of-a-new-case-file-and-the-plain-write.md) | F-998 registration: the System process's holds of a new case file as the measure, and the plain write that removes them | REGISTERED | 2026-11-27 | 2 | F-998 | done |
 | [0835](0835-f998-registration-the-plain-write-for-new-case-files-only.md) | F-998 registration: the plain write for new case files only, and the arms H and P interleaved as the measure | REGISTERED | 2026-11-27 | 2 | F-998 | done |
 | [0837](0837-f273-registration-the-reason-of-a-change-on-the-canvas.md) | F-273 registration: the reason of a change shown with who and what, in the process view's rows and the activity line | REGISTERED | 2026-11-27 | 2 | F-273 | partial |
+| [0839](0839-f999-registration-canvas-tools-in-the-project-golden.md) | F-999 registration: the project tool-list golden holds show_view, read_view and export_view | REGISTERED | 2026-11-27 | 2 | F-999 | todo |
 
 ## Studio desktop app (38)
 
