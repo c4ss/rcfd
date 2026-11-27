@@ -543,3 +543,67 @@ every mutation) go to the lead.
 Decision rule: **done** if C1 to C4, M1 to M6, L7 and L8 hold; **partial** otherwise, naming the check that missed or
 did not run. An addendum (append-only) records the results and the proposal is updated, its follow-ups F-993 and F-994
 kept.
+
+## Addendum 3: results of amendment 6 (2026-11-27)
+
+Written after the runs; nothing above is changed. Written by Claude Opus 5.5 (`claude-opus-5-5`), as a background agent
+of the lead. Release profile, `CARGO_BUILD_JOBS=8`; the worktree's target `w49i-work/f980-export-view-html-scratch/target`,
+the copy's `target-copy`; `rcfd`, `rcfd-mcp`, `rcfd-runner` and `f447_bench` built into each before its first spec run;
+`RCFD_BIN`, `RCFD_MCP_BIN` and `CARGO_TARGET_DIR` set to that target. Commits: 3f5b4acc (amendment 6, alone), 2632f9b7
+(the remedy: the first line of the committed patch), then this addendum and the proposal. The copy:
+`w49i-work/f980-export-view-html-scratch/copy6`, `git clone --shared` of the repository, checked out at 3f5b4acc for C1
+to C3 and at 2632f9b7 for C4 and the mutations, `npm ci` in its `apps/studio-web`. Scripts and logs: `ctl.py`,
+`mut6.py`, `ctl-*.log`, `npm-test6.log`, `rust6.log` in the scratch folder.
+
+| Id | Limit | Measured | Met |
+|---|---|---|---|
+| C1 | the spec alone in the fresh copy: 6 passed | 6 passed in 18.4 s; E1 to E5 0 values differ; CPU 80 % | yes |
+| C2 | the spec alone in this worktree: 6 passed | 6 passed in 17.0 s; E1 to E5 0 values differ; CPU 76 % | yes |
+| C3 | the push's sequence, then the spec: the command fails; E1 fails with page 13.580549682488824, Studio 2.257184947479129, steps 278 and 278, no other value different | `git apply`; the command exit 101 (`r1_r2_r3_r4_r7_a2_...` at `export_view_f980.rs:698`); `git apply -R`, the copy clean; the spec: E1 failed, "panel 5 monitor value: Studio 2.257184947479129, page 13.580549682488824", monitor step 278 and 278, the other 14 values equal, 5 did not run (serial); CPU 65 to 90 % | yes |
+| C4 | at 2632f9b7: binaries rebuilt clean, the push's sequence with the remedied patch fails at R2, then 6 passed | `target-copy`'s `rcfd-mcp.exe` rebuilt from the clean source (04:01); the command `... --target-dir target/mutation` exit 101 at `export_view_f980.rs:698` (R2); the sequence took 2.2 min with the first build of `copy6/target/mutation`; `git apply -R`, the copy clean; the spec 6 passed in 16.2 s, 0 values differ | yes |
+| L7 | `npm test` once in this worktree: pass | 900 passed, 6 skipped (main's registered skips, ADRs 0807 and 0818), 0 failed, 14.6 min; CPU 80 % at the start, 71 % at the end; its build ran `npm run typecheck` (exit 0); `capabilities.spec.ts` passed; no timing miss this run (`run-control.spec.ts:268` and `commands.spec.ts:156` passed) | yes |
+| L8 | fmt, clippy clean; `export_view_f980` 4 passed 2 ignored; `rcfd-workspace --lib` 14 passed; `docs_site` pass; proposal check pass; process report | `cargo fmt -p rcfd-workspace -p rcfd-mcp --check` exit 0; clippy of both `--all-targets -D warnings` exit 0 (CPU 71 %); `export_view_f980` 4 passed, 2 ignored (the records of amendments 1 and 2; CPU 68 %); `rcfd-workspace --lib` 14 passed (CPU 59 %); `docs_site` 2 passed (CPU 66 %); the proposal check and the process report after this addendum, in the report | yes (see the report for the last two) |
+
+| Mutation | Caught by |
+|---|---|
+| M1 (the committed patch, remedied command) | R2 (`export_view_f980.rs` line 698), in C4 |
+| M2 (a link to https in the head) | R3 (line 815) |
+| M3 (a file written before the check) | R6 (`r6_refusals_write_nothing`, line 929) |
+| M4 (the first snapshot by default) | R2 (line 662) |
+| M5 (`tokens.css` left out) | R3f (`r3_a5_...`, line 957) |
+| M6 (an integral `f64` written with `.0`) | U1 (`view.rs` line 2637: `278.0` against `278`, `1.0` against `1`) |
+
+Diagnosis: H1. The page of the push's `npm test` was written by an `rcfd-mcp` built with M1 applied: the push's
+mutation step builds the package's binaries into the checkout's target with the patch applied and removes the patch
+without a build, and `npm test` builds only the Studio. C1 and C2 pass, so the code at this head is not the cause in
+either place (H2, H3 are refuted); C3 reproduces the push's failure to the digit without any other spec before it (H4
+refuted) and without main (H5 refuted). The remedy (the patch's command builds in `target/mutation`) leaves the target
+`npm test` uses as the clean build left it (C4).
+
+For the lead: the four other committed patches the push applied to this merge (`canvas_layout_f977`, `canvas_live_f979`,
+`canvas_view_f976`, `design_uq_sobol_f339`) also build `rcfd-mcp` into the checkout's target with their mutation; only
+the last patch's build survives to `npm test`, so any merge whose last patch mutates code a spec reads will fail the
+same way. A fix in `scripts/push_main.py` (a build of the touched packages after `git apply -R`, or every patch's
+command run with its own target folder) is the lead's file and is not made here. The first push after this merge builds
+`target/mutation` from nothing (2.2 min on the copy, at 65 to 90 % load); later pushes build it incrementally.
+
+Deviations: none in the registered runs; each was made once. The loop of L8 wrote a temporary file of its output in the
+worktree's root and deleted it at the end (`git status --short` empty after).
+
+Actual size of amendment 6: done; 1 further registration (amendment 6); 2 heavy runs (`npm test`; the copy's builds and
+four spec runs); 0 questions; about 90 000 bytes read.
+
+Decision by the registered rule (amendment 6): **done**. C1 to C4, M1 to M6, L7 and L8 hold. With the lead's re-record
+of c65d8a73, every check of the registration as amended holds (R1 to R7, R3f, U1, E1 to E6, Z1 recorded, L1, L2, L4 to
+L8, M1 to M6), and L3 and L6, which missed in addendum 2, passed in L7's run.
+
+### For the lead: roadmap entries
+
+> Status: done.
+
+> Note: ADR 0823, 2026-11-27, done: export_view writes a view as one self-contained HTML page (no script, a CSP of default-src 'none', the Studio's stylesheets inline, fields and a case's mesh as inline SVG, provenance per panel) whose every value equals the open Studio's on X1 to X5 with no request beyond its own file; the push's E1 miss was the mutated rcfd-mcp left by M1's expect-fail build, reproduced to the digit in a fresh copy, and M1's command now builds in target/mutation.
+
+> Follow-up: The Studio's Archivo fonts embedded in an exported page. Deps F-980. Acceptance: Every limit not stated here is registered in the ADR before the run. The page of export_view carries the Archivo fonts the Studio shows (400, 500, 700) as data: fonts written by the Studio's build, with no network fetch, and the page's computed font in the e2e of ADR 0823 is Archivo with no font installed.
+
+The same entries are `docs/roadmap/proposals/0823-F-980.json`, which keeps both follow-ups as the lead numbered them
+(F-993, F-994) and drops the gap (the status is done).

@@ -3,9 +3,8 @@
   "adr": "0823",
   "item": "F-980",
   "base": "efce0cf14a267c2718e62879c0f05d4c3099b02f",
-  "status": "partial",
-  "note": "ADR 0823, 2026-11-27, partial: export_view's page now writes each number as the Studio does (JavaScript's String, of two equally near texts the even), and the e2e held whole: E1 to E6 on X1 to X5 agreed on every value with no request beyond the page's own file and the Studio's theme; M5 is caught by the styles read from their files; capabilities.spec.ts failed on the inventory's counts and report, which the re-record as listed did not include, and commands.spec.ts:156 failed once under load.",
-  "gap": "The capability inventory of the Studio has the row mcp:export_view but not its counts (mcp_tool 75, total 1376) nor docs/studio-coverage.md, so capabilities.spec.ts fails until npm run capabilities is run in apps/studio-web (the lead's re-record); commands.spec.ts:156 failed once at 85 to 97 % load, not diagnosed.",
+  "status": "done",
+  "note": "ADR 0823, 2026-11-27, done: export_view writes a view as one self-contained HTML page (no script, a CSP of default-src 'none', the Studio's stylesheets inline, fields and a case's mesh as inline SVG, provenance per panel) whose every value equals the open Studio's on X1 to X5 with no request beyond its own file; the push's E1 miss was the mutated rcfd-mcp left by M1's expect-fail build, reproduced to the digit in a fresh copy, and M1's command now builds in target/mutation.",
   "follow_ups": [
     {
       "key": "export-step-text",
