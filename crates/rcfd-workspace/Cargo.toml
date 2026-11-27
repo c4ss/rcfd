@@ -27,3 +27,6 @@ toml.workspace = true
 # its quality report. Both below api in the layering rule; not new crates.
 rcfd-io.workspace = true
 rcfd-mesh.workspace = true
+# ADR 0840 D3: the solid driver reads the FE mesh and the element stress of a solid result. Below api in the layering
+# rule (rcfd-api depends on it); not a new crate.
+rcfd-fem.workspace = true

@@ -339,6 +339,10 @@ impl Workspace {
         if args.get("from_run").is_some() {
             return self.rerun_run(args, reason, site.as_deref());
         }
+        // ADR 0840 D4: a solid case file is run by the runner's solid driver, without a plan or entries
+        if let Some(out) = self.start_solid(args, &reason)? {
+            return Ok(out);
+        }
         let launch = self.launch_arg(args)?;
         // ADR 0186 G5: a project case, or a new case made first; and whether the start plan applies
         let new_case = args.get("new_case").filter(|v| !v.is_null());
@@ -500,6 +504,75 @@ impl Workspace {
             out["run_time"] = t;
         }
         Ok(out)
+    }
+
+    /// ADR 0840 D4: `start_run {case}` of a solid case file (its text has a top-level `materials`,
+    /// `rcfd_runner::mesh::solid_case`): parsed as one (1003 with its diagnostics), refused (-32602) with `set`, `store`
+    /// `plan`, `run_time`, `dry_run`, `continue_from`, `max_steps` or `site`, else submitted with no plan and no entries;
+    /// the reply `{run, case, state}`. `None` for every other start, which goes on as before.
+    fn start_solid(&self, args: &Value, reason: &Option<String>) -> Result<Option<Value>, RpcError> {
+        if args.get("new_case").is_some_and(|v| !v.is_null()) {
+            return Ok(None);
+        }
+        let Some(rel) = args.get("case").and_then(Value::as_str) else {
+            return Ok(None);
+        };
+        let Ok(path) = self.project.resolve(rel) else {
+            return Ok(None);
+        };
+        let Ok(bytes) = rcfd_project::atomic::read(&path) else {
+            return Ok(None);
+        };
+        if !path.is_file() || !rcfd_runner::mesh::solid_case(&bytes, &path) {
+            return Ok(None);
+        }
+        let given = |k: &str| args.get(k).is_some_and(|v| !v.is_null());
+        let mut with: Vec<&str> = ["set", "run_time", "dry_run", "continue_from", "max_steps", "site"]
+            .into_iter()
+            .filter(|k| given(k))
+            .collect();
+        if args.get("store").and_then(Value::as_str) == Some("plan") {
+            with.insert(1, "store");
+        }
+        if !with.is_empty() {
+            return Err(err(
+                PARAMS,
+                format!(
+                    "start_run: {rel} is a solid case file (docs/solid-case-file.md); it takes no {}",
+                    with.join(", ")
+                ),
+            ));
+        }
+        let rel = self.rel(&path);
+        let text =
+            std::str::from_utf8(&bytes).map_err(|e| err(VALIDATION, format!("{rel} is not UTF-8 text ({e})")))?;
+        let dir = path.parent().unwrap_or(self.project.root());
+        rcfd_api::solid_case::SolidCase::parse_toml_in(text, dir)
+            .map_err(|d| invalid(&format!("{rel}: not a valid solid case file"), d))?;
+        let settings = RunSettings {
+            priority: args
+                .get("priority")
+                .and_then(Value::as_i64)
+                .unwrap_or(0)
+                .clamp(i32::MIN as i64, i32::MAX as i64) as i32,
+            threads: u64_arg(args, "threads").unwrap_or(1) as usize,
+            mem_mb: u64_arg(args, "mem_mb"),
+            set: Vec::new(),
+        };
+        let id = self
+            .runs
+            .by("start_run", reason.clone())
+            .submit_launch(&path, &settings, &LaunchSettings::default())
+            .map_err(|e| err(INTERNAL, e))?;
+        if let Err(e) = self.runs.ensure_runner() {
+            return Err(RpcError {
+                code: INTERNAL,
+                message: format!("run {id} is queued, but the run service did not start: {e}"),
+                data: Some(json!({"run": id})),
+            });
+        }
+        let st = self.runs.status(&id).map_err(|e| err(INTERNAL, e))?;
+        Ok(Some(json!({"run": id, "case": rel, "state": state_name(st.state)})))
     }
 
     /// What `start_run` would do (ADR 0737 P2 `dry_run`), written nowhere: the case, the `--set` entries, the store and

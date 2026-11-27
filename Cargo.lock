@@ -446,6 +446,7 @@ name = "rcfd-workspace"
 version = "0.1.0"
 dependencies = [
  "rcfd-api",
+ "rcfd-fem",
  "rcfd-io",
  "rcfd-mesh",
  "rcfd-post",

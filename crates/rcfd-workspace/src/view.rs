@@ -799,6 +799,8 @@ enum Template {
     Mesh,
     Field(&'static str),
     Monitors,
+    /// ADR 0840 D5: one monitor panel per name whose series is in `residuals.jsonl`.
+    Reported(&'static [&'static str]),
     Plot,
     Table,
 }
@@ -810,7 +812,14 @@ fn templates(id: &str) -> &'static [Template] {
         "internal_flow_and_turbomachinery" => &[Mesh, Field("ux"), Field("p"), Monitors, Plot],
         "heat_transfer" => &[Field("T"), Field("ux"), Monitors, Plot, Table],
         "multiphase" => &[Field("alpha"), Field("ux"), Field("p"), Monitors, Plot, Table],
-        "structural" => &[Case, Table],
+        // ADR 0840 D5: the stored displacement and stress of a solid run and its report's values
+        "structural" => &[
+            Case,
+            Field("u_magnitude"),
+            Field("von_mises"),
+            Reported(&["displacement_max_magnitude", "von_mises_max"]),
+            Table,
+        ],
         _ => &[Case, Plot, Table],
     }
 }
@@ -915,6 +924,11 @@ impl Workspace {
                         }
                     }
                     for r in chosen {
+                        panels.push(json!({"kind": "monitor", "title": r, "run": run, "monitor": r}));
+                    }
+                }
+                Template::Reported(names) => {
+                    for r in names.iter().filter(|r| series.contains_key(&format!("monitors.{r}"))) {
                         panels.push(json!({"kind": "monitor", "title": r, "run": run, "monitor": r}));
                     }
                 }
@@ -3336,6 +3350,61 @@ store_fields = ["alpha", "ux", "uy", "p"]
     }
 
     /// ADR 0817 V5: the view of a run is valid, with or without a title and a layout.
+    /// ADR 0840 L1: a run folder made by the solid driver (its case, snapshot, store and the residual line of its stream)
+    /// takes the structural layout with the stored fields and the report's values.
+    #[test]
+    fn l1_f990_a_solid_run_takes_the_structural_layout_with_its_fields_and_report() {
+        let (dir, ws) = f977_project();
+        let id = "r-20261127T000000-f990";
+        let cant = repo().join("crates/rcfd-api/tests/solid_cases/cantilever_hex8.toml");
+        std::fs::copy(&cant, dir.join("cases/cantilever-hex8.toml")).unwrap();
+        let run_dir = dir.join("runs").join(id);
+        std::fs::create_dir_all(&run_dir).unwrap();
+        std::fs::copy(&cant, run_dir.join("case.snapshot")).unwrap();
+        let record = json!({"id": id, "case": "cases/cantilever-hex8.toml", "created": "2026-11-27T00:00:00Z"});
+        std::fs::write(run_dir.join("run.json"), record.to_string()).unwrap();
+        let text = std::fs::read_to_string(&cant).unwrap();
+        let setup = rcfd_api::solid_case::SolidCase::parse_toml_in(&text, &dir.join("cases"))
+            .unwrap()
+            .build()
+            .unwrap();
+        let mut r = rcfd_api::solid_case::run(setup).unwrap();
+        crate::solid_run::write_outputs(&mut r, &run_dir.join("output")).unwrap();
+        crate::solid_run::store_fields(&r, &run_dir.join("fields")).unwrap();
+        let mut monitors = Map::new();
+        for (name, group, key) in crate::solid_run::MONITORS {
+            monitors.insert(name.into(), r.report[group][key].clone());
+        }
+        let line = json!({"step": 1, "time": 0.0, "residuals": {"u": null, "p": null, "continuity": null},
+            "monitors": monitors});
+        std::fs::write(
+            run_dir.join("residuals.jsonl"),
+            format!(
+                "{line}
+"
+            ),
+        )
+        .unwrap();
+        let (_, c) = ws.layout_of_run(id, None, None).unwrap();
+        assert_eq!(c["category"], "structural", "L1 category");
+        let ok = check_layout(
+            &ws,
+            "L1 (F-990) structural",
+            id,
+            &format!("Structural: cases/cantilever-hex8.toml ({id})"),
+            vec![
+                case_panel("cases/cantilever-hex8.toml"),
+                field(id, "u_magnitude"),
+                field(id, "von_mises"),
+                monitor(id, "displacement_max_magnitude"),
+                monitor(id, "von_mises_max"),
+                table(id),
+            ],
+        );
+        let _ = std::fs::remove_dir_all(dir);
+        assert!(ok, "L1 (F-990)");
+    }
+
     #[test]
     fn v5_f977_the_view_of_a_run_is_valid() {
         let (dir, ws) = quick_start();
