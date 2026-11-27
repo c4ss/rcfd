@@ -192,3 +192,9 @@ and checked (none was made), and the control H missed its r ≥ 5, so the arms r
 > Follow-ups: one under F-998 (rule 13), no new item: "F-998: the System process's hold of a new case file by its creation path", the arms of ADR 0833 with the holds seen without refusal as the measure; its limits are registered in its ADR.
 
 The same entries are `docs/roadmap/proposals/0833-F-998.json`.
+
+## Addendum 2 (2026-11-27): L3
+
+Written after that run, on d7b3d071; nothing above is changed. `docs_site` 2 passed; `roadmap_proposals.py check` of
+`docs/roadmap/proposals/0833-F-998.json` passed (todo to partial, gap set); `process_report.py --check` gave 1 failure,
+`docs/adr/index.md` not current, a generated file left to the lead (rule 9): **met** as registered.
