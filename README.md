@@ -8,7 +8,7 @@
 
 ![Cylinder wake at Re 100 rendered by rcfd export_view from the shipped wind-tunnel example project](docs/images/studio-canvas-wind-tunnel.png)
 
-*Real solver output from `example-projects/wind-tunnel` (`cylinder-re100.toml`, coarse demonstration mesh — not a validation), rendered by `rcfd-mcp`'s `export_view` using Studio's stylesheet, Viridis colour table and per-panel provenance hashes.*
+***rcfd simulation output** from `example-projects/wind-tunnel` (`cylinder-re100.toml`, coarse demonstration mesh — not a validation), rendered by `rcfd-mcp`'s `export_view` using Studio's stylesheet and Viridis colour table.*
 
 ## Why rcfd?
 
@@ -22,7 +22,7 @@
 | Area | Available today |
 | :--- | :--- |
 | **Flow solvers** | Unstructured finite-volume incompressible steady & transient (`SIMPLE`, `SIMPLEC`, `PISO`, `PIMPLE`), compressible Euler (`HLLC`, `Roe`, `AUSM`, `MUSCL`, explicit RK3 / implicit), energy & Boussinesq buoyancy, species transport, porous media, MRF rotating frames, rotor-stator sliding mesh (`[mesh.sliding]`, laminar PISO/PIMPLE), one-way Lagrangian particles. |
-| **Turbulence** | Spalart-Allmaras, $k$-$\varepsilon$ (standard, RNG, realizable), $k$-$\omega$ SST / BSL, wall-function & near-wall treatments. |
+| **Turbulence** | Spalart-Allmaras, k-ε (standard, RNG, realizable), k-ω SST / BSL, wall-function & near-wall treatments. |
 | **Meshes & I/O** | Built-in parametric generators (cavities, channels, wedges, cylinders, NACA aerofoils, axial-fan sectors), mesh quality checker, import from Gmsh, Fluent (`.msh`/`.cas`) and OpenFOAM (`polyMesh`), export to VTK (`.vtu`), GLB derived views (cut planes, iso-surfaces, streamlines, vectors) and self-contained HTML. |
 | **Design & UQ** | Parametric sweeps, operating maps with warm restarts, Nelder-Mead & CMA-ES optimisation, Monte Carlo / LHS uncertainty quantification, Sobol sensitivity indices, append-only design ledger. |
 | **Interfaces** | `rcfd` CLI, JSON-RPC solver service (`rcfd serve`), background job runner (`rcfd-runner`), stdio MCP server (`rcfd-mcp`), pure-Python wrapper (`python/rcfd`), sandboxed WebAssembly UDFs ([docs/udf-abi.md](docs/udf-abi.md)), optional CUDA linear solvers ([docs/gpu.md](docs/gpu.md)), Electron Studio canvas (`apps/studio-web/`). |
@@ -34,22 +34,22 @@
 
 Each milestone tracks the roadmap items needed to set up, run and trust a named simulation. **Headline result** is **met** only when every comparison against its published reference passes its pre-registered limit ([full details and citations](docs/roadmap-overview.md#simulation-milestones)):
 
-| Milestone | Roadmap items landed | Headline result |
+| Milestone | Roadmap items landed | Headline result (rcfd vs published reference) |
 | :--- | :---: | :--- |
 | Packed bed pressure drop (Ergun) | 100% (14/14) | **Met** |
 | Lid-driven cavity (Ghia et al., Re 100–1000) | 96% | **Met** |
-| Differentially heated cavity (de Vahl Davis, Ra $10^3$–$10^6$) | 96% | **Met** |
-| Shock tube & oblique shock wedge (Sod / $\theta$-$\beta$-$M$) | 94% | **Met** |
-| Vortex shedding behind a cylinder (Re 100, $St$ & $C_D$) | 92% | **Met** |
-| Aerofoil lift (NACA 0012, Re $6\times 10^6$) | 92% | Not met *(lift curve met; SST/wall-treatment clauses open)* |
+| Differentially heated cavity (de Vahl Davis, Ra 10³–10⁶) | 96% | **Met** |
+| Shock tube & oblique shock wedge (Sod / θ-β-M) | 94% | **Met** |
+| Vortex shedding behind a cylinder (Re 100, St & C<sub>D</sub>) | 92% | **Met** |
+| Aerofoil lift (NACA 0012, Re 6×10⁶) | 92% | Not met *(lift curve met; SST/wall-treatment clauses open)* |
 | Turbulent backward-facing step (Driver & Seegmiller) | 88% | Not met |
 | Turbulent flat plate skin friction (NASA TMR) | 86% | Not met |
 | Assistant-driven fan design (FAN-01) | 73% | Not met *(steady MRF stalls / under-predicts pressure rise)* |
 | Structure & vibration of a fan rotor | 72% | Not met *(not yet validated against measured blades)* |
 
-![NACA 0012 lift curve against Ladson 1988 experimental data and NASA TMR CFL3D](docs/investigations/job49d-aoa-sweep-fixed/cl_alpha.png)
+![NACA 0012 lift curve comparing rcfd Spalart-Allmaras and k-omega SST runs against Ladson 1988 wind-tunnel data and NASA CFL3D](docs/images/naca0012-lift-validation.svg)
 
-*Example solver check: NACA 0012 lift coefficient $C_l(\alpha)$ at $\mathrm{Re} = 6\times 10^6$ compared with Ladson (1988) experiment and NASA TMR CFL3D.*
+***rcfd simulation vs published reference:** solid blue (`rcfd` Spalart-Allmaras) and dashed orange (`rcfd` k-ω SST) curves are simulation outputs from this solver at Re = 6×10⁶ (vertical bars past 16° show the unsteady RANS oscillation range); open squares (Ladson 1988 wind-tunnel experiment) and stars (NASA TMR CFL3D) are external reference datasets ([full job record](docs/investigations/job49d-aoa-sweep-fixed/README.md)).*
 
 ### Roadmap progress
 
@@ -178,17 +178,17 @@ npm start
 
 Ready-made project folders with real solver runs and stored fields live in `example-projects/` (Windows runs) and `example-projects-linux/` (x86_64 Linux runs). Copy a folder out of the repository before starting new runs, or open it read-only directly in Studio:
 
-* `example-projects/quick-start` — 2D lid-driven cavity (Re 100 & 400) and differentially heated cavity (Ra $10^3$ & $10^4$).
-* `example-projects/wind-tunnel` — 2D cylinder vortex shedding (Re 100 & 200), NACA 0012 aerofoil ($k$-$\omega$ SST) and laminar backward-facing step.
+* `example-projects/quick-start` — 2D lid-driven cavity (Re 100 & 400) and differentially heated cavity (Ra 10³ & 10⁴).
+* `example-projects/wind-tunnel` — 2D cylinder vortex shedding (Re 100 & 200), NACA 0012 aerofoil (k-ω SST) and laminar backward-facing step.
 * `example-projects/axial-fan` — 3D periodic blade passage of FAN-01 (coarse first-order upwind run for geometry and 3D viewing only; not a validated fan prediction).
 
 ![Benchmark cavities: heated cavity temperature field, lid-driven cavity velocity, Nusselt number and residuals](docs/images/studio-canvas-quick-start.png)
 
-*`example-projects/quick-start`: differentially heated cavity at $\mathrm{Ra}=10^4$ (`T`), lid-driven cavity at $\mathrm{Re}=400$ (`ux`), hot-wall Nusselt monitor (`nu_hot`) and solver residuals (coarse meshes — demonstration only).*
+***rcfd simulation output** (`example-projects/quick-start`): differentially heated cavity at Ra = 10⁴ (`T`), lid-driven cavity at Re = 400 (`ux`), hot-wall Nusselt monitor (`nu_hot`) and solver residuals (coarse meshes — demonstration only).*
 
 ![FAN-01 periodic blade passage 3D coarse upwind example](docs/images/studio-canvas-axial-fan.png)
 
-*`example-projects/axial-fan`: 3D periodic blade passage (`uz`, `p`, blade torque moment and residuals). Coarse first-order upwind run for geometry and flow-pattern viewing only — not a validated fan prediction.*
+***rcfd simulation output** (`example-projects/axial-fan`): 3D periodic blade passage (`uz`, `p`, blade torque moment and residuals). Coarse first-order upwind run for geometry and flow-pattern viewing only — not a validated fan prediction.*
 
 ## Platform support, prerequisites and tests
 

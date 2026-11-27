@@ -1,0 +1,120 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 760 440" width="760" role="img" aria-labelledby="t d">
+  <title id="t">NACA 0012 lift curve: rcfd simulation vs published reference data</title>
+  <desc id="d">Lift coefficient versus angle of attack at Re 6e6 comparing rcfd Spalart-Allmaras and k-omega SST runs against Ladson 1988 wind-tunnel measurements and NASA CFL3D reference points.</desc>
+  <style>
+    :root { --bg:#ffffff; --panel:#f6f8fa; --ink:#1d3a5f; --mute:#4a6382; --grid:#d8dee4; --sa:#1d6fa5; --sst:#c46810; --ref:#1f2328; --bar:#8ab4d4; }
+    @media (prefers-color-scheme: dark) {
+      :root { --bg:#0d1117; --panel:#161b22; --ink:#dce6f2; --mute:#9bb0c8; --grid:#2a3545; --sa:#62b4e8; --sst:#f3a052; --ref:#e6edf3; --bar:#3b6f96; }
+    }
+    text { font-family: -apple-system, "Segoe UI", Helvetica, Arial, sans-serif; fill: var(--ink); }
+    .title { font-size: 16px; font-weight: 700; }
+    .axis { font-size: 12px; font-weight: 600; fill: var(--mute); }
+    .tick { font-size: 11px; fill: var(--mute); font-variant-numeric: tabular-nums; }
+    .leg-head { font-size: 10px; font-weight: 700; letter-spacing: 0.06em; fill: var(--mute); }
+    .leg { font-size: 11.5px; fill: var(--ink); }
+    .note { font-size: 10.5px; fill: var(--mute); }
+  </style>
+  <rect width="760" height="440" fill="var(--bg)"/>
+  <rect x="68" y="46" width="664" height="336" fill="var(--panel)"/>
+  <text x="68" y="28" class="title">NACA 0012 lift curve · Re 6×10⁶</text>
+  <line x1="93.5" y1="46" x2="93.5" y2="382" stroke="var(--grid)" stroke-width="1"/>
+  <text x="93.5" y="400" class="tick" text-anchor="middle">0°</text>
+  <line x1="221.2" y1="46" x2="221.2" y2="382" stroke="var(--grid)" stroke-width="1"/>
+  <text x="221.2" y="400" class="tick" text-anchor="middle">5°</text>
+  <line x1="348.9" y1="46" x2="348.9" y2="382" stroke="var(--grid)" stroke-width="1"/>
+  <text x="348.9" y="400" class="tick" text-anchor="middle">10°</text>
+  <line x1="476.6" y1="46" x2="476.6" y2="382" stroke="var(--grid)" stroke-width="1"/>
+  <text x="476.6" y="400" class="tick" text-anchor="middle">15°</text>
+  <line x1="604.3" y1="46" x2="604.3" y2="382" stroke="var(--grid)" stroke-width="1"/>
+  <text x="604.3" y="400" class="tick" text-anchor="middle">20°</text>
+  <line x1="706.5" y1="46" x2="706.5" y2="382" stroke="var(--grid)" stroke-width="1"/>
+  <text x="706.5" y="400" class="tick" text-anchor="middle">24°</text>
+  <line x1="68" y1="348.4" x2="732" y2="348.4" stroke="var(--grid)" stroke-width="1.2"/>
+  <text x="58" y="352.4" class="tick" text-anchor="end">0.0</text>
+  <line x1="68" y1="281.2" x2="732" y2="281.2" stroke="var(--grid)" stroke-width="1"/>
+  <text x="58" y="285.2" class="tick" text-anchor="end">0.5</text>
+  <line x1="68" y1="214" x2="732" y2="214" stroke="var(--grid)" stroke-width="1"/>
+  <text x="58" y="218" class="tick" text-anchor="end">1.0</text>
+  <line x1="68" y1="146.8" x2="732" y2="146.8" stroke="var(--grid)" stroke-width="1"/>
+  <text x="58" y="150.8" class="tick" text-anchor="end">1.5</text>
+  <line x1="68" y1="79.6" x2="732" y2="79.6" stroke="var(--grid)" stroke-width="1"/>
+  <text x="58" y="83.6" class="tick" text-anchor="end">2.0</text>
+  <rect x="68" y="46" width="664" height="336" fill="none" stroke="var(--grid)" stroke-width="1"/>
+  <text x="400" y="424" class="axis" text-anchor="middle">Angle of attack, deg</text>
+  <text x="20" y="214" class="axis" text-anchor="middle" transform="rotate(-90 20 214)">Lift coefficient (Cl)</text>
+  <rect x="517.5" y="46" width="214.5" height="336" fill="var(--grid)" opacity="0.22"/>
+  <text x="525.5" y="62" class="note">Post-stall (unsteady)</text>
+  <line x1="527.7" y1="357.2" x2="527.7" y2="85.7" stroke="var(--bar)" stroke-width="1.5"/>
+  <line x1="524.2" y1="357.2" x2="531.2" y2="357.2" stroke="var(--bar)" stroke-width="1.5"/>
+  <line x1="524.2" y1="85.7" x2="531.2" y2="85.7" stroke="var(--bar)" stroke-width="1.5"/>
+  <line x1="553.2" y1="375.9" x2="553.2" y2="110.5" stroke="var(--bar)" stroke-width="1.5"/>
+  <line x1="549.7" y1="375.9" x2="556.7" y2="375.9" stroke="var(--bar)" stroke-width="1.5"/>
+  <line x1="549.7" y1="110.5" x2="556.7" y2="110.5" stroke="var(--bar)" stroke-width="1.5"/>
+  <line x1="604.3" y1="362.2" x2="604.3" y2="112.5" stroke="var(--bar)" stroke-width="1.5"/>
+  <line x1="600.8" y1="362.2" x2="607.8" y2="362.2" stroke="var(--bar)" stroke-width="1.5"/>
+  <line x1="600.8" y1="112.5" x2="607.8" y2="112.5" stroke="var(--bar)" stroke-width="1.5"/>
+  <line x1="655.4" y1="334.9" x2="655.4" y2="79.6" stroke="var(--bar)" stroke-width="1.5"/>
+  <line x1="651.9" y1="334.9" x2="658.9" y2="334.9" stroke="var(--bar)" stroke-width="1.5"/>
+  <line x1="651.9" y1="79.6" x2="658.9" y2="79.6" stroke="var(--bar)" stroke-width="1.5"/>
+  <line x1="706.5" y1="323.9" x2="706.5" y2="59.3" stroke="var(--bar)" stroke-width="1.5"/>
+  <line x1="703" y1="323.9" x2="710" y2="323.9" stroke="var(--bar)" stroke-width="1.5"/>
+  <line x1="703" y1="59.3" x2="710" y2="59.3" stroke="var(--bar)" stroke-width="1.5"/>
+  <polyline points="93.5,348.4 195.7,289.7 297.8,232.9 400,181 451.1,159.4 502.2,145.5 553.2,208.8 604.3,206" fill="none" stroke="var(--sst)" stroke-width="1.8" stroke-dasharray="5 3"/>
+  <polygon points="93.5,343.9 89.5,351.9 97.5,351.9" fill="none" stroke="var(--sst)" stroke-width="1.6"/>
+  <polygon points="195.7,285.2 191.7,293.2 199.7,293.2" fill="none" stroke="var(--sst)" stroke-width="1.6"/>
+  <polygon points="297.8,228.4 293.8,236.4 301.8,236.4" fill="none" stroke="var(--sst)" stroke-width="1.6"/>
+  <polygon points="400,176.5 396,184.5 404,184.5" fill="none" stroke="var(--sst)" stroke-width="1.6"/>
+  <polygon points="451.1,154.9 447.1,162.9 455.1,162.9" fill="none" stroke="var(--sst)" stroke-width="1.6"/>
+  <polygon points="502.2,141 498.2,149 506.2,149" fill="none" stroke="var(--sst)" stroke-width="1.6"/>
+  <polygon points="553.2,204.3 549.2,212.3 557.2,212.3" fill="none" stroke="var(--sst)" stroke-width="1.6"/>
+  <polygon points="604.3,201.5 600.3,209.5 608.3,209.5" fill="none" stroke="var(--sst)" stroke-width="1.6"/>
+  <polyline points="93.5,348.4 144.6,318.8 195.7,289.4 246.8,260.5 297.8,232.3 348.9,205.2 400,179.7 425.5,167.9 451.1,157.1 476.6,147.7 502.2,140.9 527.7,207.6 553.2,214.3 604.3,202.6 655.4,182.5 706.5,177.1" fill="none" stroke="var(--sa)" stroke-width="2.2"/>
+  <circle cx="93.5" cy="348.4" r="3.4" fill="var(--sa)"/>
+  <circle cx="144.6" cy="318.8" r="3.4" fill="var(--sa)"/>
+  <circle cx="195.7" cy="289.4" r="3.4" fill="var(--sa)"/>
+  <circle cx="246.8" cy="260.5" r="3.4" fill="var(--sa)"/>
+  <circle cx="297.8" cy="232.3" r="3.4" fill="var(--sa)"/>
+  <circle cx="348.9" cy="205.2" r="3.4" fill="var(--sa)"/>
+  <circle cx="400" cy="179.7" r="3.4" fill="var(--sa)"/>
+  <circle cx="425.5" cy="167.9" r="3.4" fill="var(--sa)"/>
+  <circle cx="451.1" cy="157.1" r="3.4" fill="var(--sa)"/>
+  <circle cx="476.6" cy="147.7" r="3.4" fill="var(--sa)"/>
+  <circle cx="502.2" cy="140.9" r="3.4" fill="var(--sa)"/>
+  <circle cx="527.7" cy="207.6" r="3.4" fill="var(--sa)"/>
+  <circle cx="553.2" cy="214.3" r="3.4" fill="var(--sa)"/>
+  <circle cx="604.3" cy="202.6" r="3.4" fill="var(--sa)"/>
+  <circle cx="655.4" cy="182.5" r="3.4" fill="var(--sa)"/>
+  <circle cx="706.5" cy="177.1" r="3.4" fill="var(--sa)"/>
+  <rect x="88.8" y="346.6" width="7" height="7" fill="none" stroke="var(--ref)" stroke-width="1.4"/>
+  <rect x="142.4" y="316.3" width="7" height="7" fill="none" stroke="var(--ref)" stroke-width="1.4"/>
+  <rect x="193.2" y="286.9" width="7" height="7" fill="none" stroke="var(--ref)" stroke-width="1.4"/>
+  <rect x="245.6" y="256.9" width="7" height="7" fill="none" stroke="var(--ref)" stroke-width="1.4"/>
+  <rect x="302" y="225.6" width="7" height="7" fill="none" stroke="var(--ref)" stroke-width="1.4"/>
+  <rect x="348.5" y="201" width="7" height="7" fill="none" stroke="var(--ref)" stroke-width="1.4"/>
+  <rect x="374.3" y="187.9" width="7" height="7" fill="none" stroke="var(--ref)" stroke-width="1.4"/>
+  <rect x="399.6" y="175.5" width="7" height="7" fill="none" stroke="var(--ref)" stroke-width="1.4"/>
+  <rect x="424.1" y="164.1" width="7" height="7" fill="none" stroke="var(--ref)" stroke-width="1.4"/>
+  <rect x="453.2" y="151.8" width="7" height="7" fill="none" stroke="var(--ref)" stroke-width="1.4"/>
+  <rect x="479.8" y="141.6" width="7" height="7" fill="none" stroke="var(--ref)" stroke-width="1.4"/>
+  <rect x="506.3" y="133.4" width="7" height="7" fill="none" stroke="var(--ref)" stroke-width="1.4"/>
+  <rect x="527.5" y="128.3" width="7" height="7" fill="none" stroke="var(--ref)" stroke-width="1.4"/>
+  <rect x="550.2" y="210.9" width="7" height="7" fill="none" stroke="var(--ref)" stroke-width="1.4"/>
+  <rect x="577.3" y="192.2" width="7" height="7" fill="none" stroke="var(--ref)" stroke-width="1.4"/>
+  <polygon points="93.5,341.9 95.1,346.2 99.7,346.4 96.1,349.2 97.3,353.7 93.5,351.1 89.7,353.7 90.9,349.2 87.3,346.4 91.9,346.2" fill="var(--ref)"/>
+  <polygon points="348.9,195.3 350.5,199.6 355.1,199.8 351.5,202.6 352.7,207.1 348.9,204.5 345.1,207.1 346.3,202.6 342.7,199.8 347.3,199.6" fill="var(--ref)"/>
+  <polygon points="476.6,134.1 478.2,138.4 482.8,138.6 479.2,141.4 480.4,145.9 476.6,143.3 472.8,145.9 474,141.4 470.4,138.6 475,138.4" fill="var(--ref)"/>
+  <rect x="82" y="58" width="226" height="128" fill="var(--bg)" stroke="var(--grid)" stroke-width="1"/>
+  <text x="94" y="76" class="leg-head">RCFD SIMULATION</text>
+  <line x1="94" y1="92" x2="114" y2="92" stroke="var(--sa)" stroke-width="2.2"/>
+  <circle cx="104" cy="92" r="3.2" fill="var(--sa)"/>
+  <text x="122" y="96" class="leg">rcfd · Spalart-Allmaras</text>
+  <line x1="94" y1="112" x2="114" y2="112" stroke="var(--sst)" stroke-width="1.8" stroke-dasharray="5 3"/>
+  <polygon points="104,108 100,115.5 108,115.5" fill="none" stroke="var(--sst)" stroke-width="1.5"/>
+  <text x="122" y="116" class="leg">rcfd · k-ω SST</text>
+  <line x1="94" y1="126" x2="296" y2="126" stroke="var(--grid)" stroke-width="1"/>
+  <text x="94" y="142" class="leg-head">PUBLISHED REFERENCE</text>
+  <rect x="100.5" y="152.5" width="7" height="7" fill="none" stroke="var(--ref)" stroke-width="1.4"/>
+  <text x="122" y="160" class="leg">Ladson (1988) wind tunnel</text>
+  <polygon points="104,166.5 105.4,170.1 109.2,170.3 106.2,172.7 107.2,176.4 104,174.3 100.8,176.4 101.8,172.7 98.8,170.3 102.6,170.1" fill="var(--ref)"/>
+  <text x="122" y="176" class="leg">NASA CFL3D (TMR)</text>
+</svg>
