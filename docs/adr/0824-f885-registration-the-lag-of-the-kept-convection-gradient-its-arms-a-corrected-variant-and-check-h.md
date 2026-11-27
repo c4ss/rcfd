@@ -364,3 +364,10 @@ The same entries are in `docs/roadmap/proposals/0824-F-885.json` (form 1 of ADR 
 `python scripts/roadmap_proposals.py check`. No gap (done) and no follow-up item (question 2).
 
 Generated pages that this work may leave not current, for the lead (rule 9): `docs/adr/index.md` (ADR 0824 is new).
+
+## Answers of the maintainer (2026-11-27), written by the lead
+
+1. The corrected boundary values stay a separate opt-in, `outer_frozen_convection_gradient_extrapolated_boundary`, and are not made the setting's own behaviour; taken by the lead on the maintainer's standing instruction of 2026-11-26 (go with the recommended option always).
+2. No new item: check H's STEADY class with the four opt-ins of the pimple step meets F-885; taken by the lead on the maintainer's standing instruction of 2026-11-26 (go with the recommended option always).
+
+Merged at 72409cd6 and pushed at 6a51ded9.
