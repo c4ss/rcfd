@@ -140,3 +140,11 @@ is partial. A missed limit is recorded with its number (rule 2).
 - A writer killed in the middle (Q1). Linux and macOS, where `write_new` is unchanged.
 - Readers in other processes that open with `fs::read` and do not retry see an error, not a partial file, while a new
   file is written; whether any caller's reader minds is checked only by the L1 tests.
+
+## Amendment 1 (2026-11-27): a lint of the test file
+
+Written after `write_new_f998` (W1 to W3, N3), TC4, H and P had run and before the mutations and L1 to L3; nothing
+above is changed. The build of `write_new_f998.rs` warns that the fields `absent` and `other` of its `Counts` are never
+read (they are read only by the derived `Debug` of the printed counts), which L2's clippy with `-D warnings` would
+refuse. Correction: `#[allow(dead_code)]` on `Counts`, which changes no behaviour, no limit and no count. The runs already
+made are not run again; MP1 to MP3 and L1 to L3 run on the corrected commit.
