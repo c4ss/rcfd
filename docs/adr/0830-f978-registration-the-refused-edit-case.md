@@ -136,3 +136,23 @@ otherwise, naming what failed. A missed limit is recorded with its number and he
   finding 1 implies; Defender's settings (administrator rights).
 - The other writers of `DEFAULT_RETRY` (`atomic_write` of status files, views, derived pictures), which F1 leaves as
   they are; Linux and macOS, where an open file does not block a rename.
+
+## Amendment 1 (2026-11-27): the trace starved under the load; X corrected before any further run
+
+Written after U1 and arm A and before any other run; nothing above is changed. U1 passed (`U1: Ok(())`). Arm A was run
+once (CPU 52 % at the start, 68 % at the end, 3.65 s): **2 refusals of 90**, `arm-19.toml` edit1 (619 ms) and edit2
+(618 ms), both "failed after 12 attempts: Access is denied. (os error 5)"; the other 28 creations and 56 edits went
+through. A first start of the arm script stopped on a cargo argument error before any test ran; it is not a run. Under the
+load L the trace X was starved: it reached each file about once every 60 ms, saw no holder of `arm-19.toml` during
+either refusal and one line `4:System` on it 665 ms after the second, and never reached `arm-29.toml` during TC. **TC
+missed in arm A** (0 lines with the test's pid), so X does not decide in arm A and the rules of decision cannot use it.
+
+The set-up was defective (the trace ran at the priority of the load it watches). Corrected, by rule 2:
+
+- **X'**: `trace.ps1` sets its own process to the priority class High (`ProcessPriorityClass.High`, which a user may
+  set), resolves each pid's name once, and looks only at `arm-*.toml` and `process-cavity.toml`. Everything else of X
+  is as registered.
+- **Arm A1**: arm A again with X', a new ignored test `arm_a1_with_the_canvas_server_under_load_traced_at_high_priority`
+  (the same function, tag `a1`); then **arm B** with X', as registered. The rules of decision use A1 and B in place of A
+  and B; arm A's 2 refusals are kept beside them as its record. TC applies to A1 and B with its registered limit.
+- Nothing else changes: limits, U0, U2, F1, A2, B1 to B3 and M1 are as registered.
