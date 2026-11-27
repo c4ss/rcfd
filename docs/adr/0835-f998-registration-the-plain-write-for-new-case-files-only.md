@@ -221,3 +221,10 @@ not decide, and TC4 missed in 2 of 80 blocks by a defect of the trace's set-up.
 > Gap: Missing: a hold count that compares the old and the plain write of a new case file. The old path's System holds fell from 18 in 300 rounds (ADR 0833) to 0 in 450 (ADR 0834) and 5 in 2000 (ADR 0835, interleaved), with no refusal in 8900 edit_case, so the registered rule (floor 8) did not decide. The plain write for new case files (write_new_case) and its checks are in ADR 0835; whether the acceptance is met as written is ADR 0835 Q1.
 
 The same entries are `docs/roadmap/proposals/0835-F-998.json`.
+
+## Addendum 2 (2026-11-27): L3
+
+Written after that run, on 0beae707; nothing above is changed. `docs_site` 2 passed; `roadmap_proposals.py check` of
+`docs/roadmap/proposals/0835-F-998.json` passed (partial to partial, gap set); `process_report.py --check` gave 1
+failure, `docs/adr/index.md` not current, a generated file left to the lead (rule 9): **met** as registered. The decision
+of addendum 1 stands: **partial**.
