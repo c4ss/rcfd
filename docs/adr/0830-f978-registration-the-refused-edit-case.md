@@ -177,3 +177,65 @@ Corrected, by rule 2:
   and 100 rounds. The rules of decision use A3 and B; arms A and A1 are kept beside them as their records. TC applies to
   A3 and B. A2 (after F1) also makes 100 rounds, with its limit of 0 refusals.
 - Nothing else changes.
+
+## Addendum 1: results (2026-11-27)
+
+Written after the runs; nothing above is changed. Release profile, `CARGO_TARGET_DIR` in the scratch folder,
+`CARGO_BUILD_JOBS` 8. Each registered run was made once; the scratch logs are `arm-<tag>.log` and `trace-<tag>.tsv`.
+
+### Checks
+
+| Id | Limit | Measured | Met |
+|---|---|---|---|
+| U1 | Ok | `U1: Ok(())`, the new bytes, one attempt | yes |
+| A (record) | decides H1 to H3 | 2 refusals of 90 (`arm-19.toml` edit1 619 ms, edit2 618 ms), CPU 52 % to 68 %; X starved | not decided (amendment 1) |
+| A1 (record) | as A | 0 refusals of 90, CPU 85 % to 82 % | not decided (amendment 2) |
+| A3 | as A, X'', 100 rounds | **1 refusal of 300** (`arm-5.toml` edit1, 594 ms), CPU 83 % to 79 %; no holder seen during it, `4:System` seen 175 ms after it | see the rules below |
+| B | as A3, without the `--canvas` server | **4 refusals of 300** (`arm-26` edit1 587 ms; `arm-42` edit1 590 ms and edit2 603 ms; `arm-87` edit1 612 ms), CPU 88 % to 88 %; `4:System` seen during `arm-42`'s two and `arm-87`'s; none seen during `arm-26`'s, `4:System` 68 ms after it | see the rules below |
+| TC | the test's pid seen, in A, A1, A3 and B | A no, A1 no, A3 **no**, B **yes** (`59076:edit_case_refused_f978-...` on `arm-99.toml`) | **missed** in A3 |
+| U0, U2, A2 | F1's | not run: F1 not taken | not run |
+| B1 | every assertion | held: 10 steps, journal seq 1 to 5 against 1 to 5, states 3 against 3 and terminal, residuals 4 of 4 equal, results, ordered, after-run set-up last, views shown 10 of 10; CPU 80 % at the start, 68 % at the end, 5.30 s; X saw no holder of `process-cavity.toml` | **yes** |
+| B2 | as ADR 0826 | refused at `panels[0].kind` (1003), nothing written | **yes** |
+| B3 | as ADR 0826 | the description names `process {case}`; the plain `read_view` has no `process` | **yes** |
+| T3 | 0 | 0 runners of this work's target alive after the B1 run | yes |
+| L1, L2, L3 | pass, clean | in the last run, reported with the commit | see the report |
+
+**The rules of decision.** Over A3 and B, 5 refusals: 3 with a holder not named `rcfd-*` in X'' during them (all
+`4:System`, a handle held in kernel mode), 2 with no holder seen during them (and `4:System` seen at the next look after
+them). No rcfd process was seen holding a case file in any arm, and B, without the `--canvas` server, had more refusals
+(4) than A3 with it (1). By the registered rules: H1 is **not refuted** (2 refusals without a seen non-rcfd holder) and
+**not confirmed** (no refusal with only rcfd holders); H2 is **not confirmed** (not every refusal has one); H3 **does not
+decide**: X'' leaves a file when a newer one is made, so no hold has a seen end. **The cause is not found**, and F1 was
+not made. What the arms show, without deciding: the refusal does not need the `--canvas` server (B), a reader sharing
+delete does not refuse the replace (U1), and in 3 of 5 refusals the System process held the file during the refusal.
+
+Deviations: amendments 1 and 2 (the trace's set-up corrected twice before the runs that use it; arms A and A1 kept as
+records). The committed mutation of rule 16 (M1) is not made: it mutates F1, which was not taken; no other mutation was
+registered, so this work commits none. Not run: U0, U2, A2.
+
+Actual size: partial; 1 further registration (the follow-up below); 5 heavy runs (arms A, A1, A3, B, and B1); 0
+questions taken from the brief's list beyond the one below; about 95 000 bytes read.
+
+Decision by the registered rule: **partial**, because the cause is not found and M1 was not made; B1 to B3 held in their
+one run (CPU 80 %).
+
+## Open questions for the maintainer
+
+- **Q1. The remedy, with the cause not decided** (scope; a change of `crates/rcfd-project/src/atomic.rs`, a shared file
+  outside the brief's list): (a) F1 as registered (27 attempts, 2.03 s of sleep, for `replace_if_hash_with` only), in
+  a follow-up registration that first decides H3 with a trace that keeps looking at a refused file until its holder
+  ends; (b) F1 now, on the evidence above (every refusal took 587 to 619 ms, the 12-attempt budget, and no rcfd holder
+  was ever seen); (c) nothing until the System holder is named. Recommendation: (a), since the registered rule did not
+  find the cause; not taken here, since it is a question of scope.
+
+### For the lead: roadmap entries
+
+> Status: partial.
+
+> Note: ADR 0830, 2026-11-27, partial: B1 to B3 held in their one registered run (CPU 80 %, 10 of 10 steps, journal seq 1 to 5 against 1 to 5); the diagnosis of the refused edit_case reproduced it under a 16-thread load (1 of 300 replaces with the canvas server, 4 of 300 without it, each refused after the 12-attempt budget, 587 to 619 ms) and saw only the System process holding the file, in 3 of the 5 refusals, so by its rule the cause is not found.
+
+> Gap: B1 to B3 now hold (ADR 0830). Missing: the cause of the refused first edit_case under load. The refusal comes without the canvas server (4 of 300 replaces), a reader that shares delete does not cause it, and in 3 of 5 refusals the System process (a kernel-mode handle) held the new case file; its length is not measured. A registration under F-978 that traces a refused file until its holder ends, then F1 (a longer replace budget for edits) if the hold is under 2 s.
+
+> Follow-ups: one under F-978 (rule 13), no new item: "F-978: the System holder of a refused edit_case", a trace that keeps looking at a refused file until its holder ends, then F1 of ADR 0830 with its checks U0, U2, A2 and its mutation M1; its limits are ADR 0830's.
+
+The same entries are `docs/roadmap/proposals/0830-F-978.json`.

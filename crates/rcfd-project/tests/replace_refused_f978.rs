@@ -1,8 +1,6 @@
 //! ADR 0830 (F-978): the replace of a cooperative edit against a file held open by another process (Windows). U1: a
 //! reader that shares delete (std's `File::open`, every rcfd reader) does not refuse the replace, even with one attempt.
-//! U0: a holder without delete sharing that outlasts the replace's budget refuses it with os error 5, after
-//! `EDIT_REPLACE_RETRY.attempts`, and the file is unchanged. U2: the same holder released after 1.0 s, longer than the
-//! old budget (0.53 s of sleep) and shorter than `EDIT_REPLACE_RETRY`'s (2.03 s), is outlasted.
+//! U0 and U2 of ADR 0830 belong to its fix F1, which was not made (the arms did not find the cause).
 
 #![cfg(windows)]
 
