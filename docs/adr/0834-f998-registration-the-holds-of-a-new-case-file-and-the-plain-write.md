@@ -159,3 +159,86 @@ test's expected path mixes `/` and `\`, while the runner writes `current_exe()`,
 test at dc7bb9cb (before the remedy), from `git archive` into the scratch folder `hcopy`, built in `target-h` with the
 same spelling of the target folder, with `--nocapture`. If it fails at the same line, the miss is of the set-up and not
 of the remedy; if it passes, the miss is the remedy's. Either way L1 stays missed in this ADR.
+
+## Addendum 1: results (2026-11-27)
+
+Written after the runs; nothing above is changed. Release profile, `CARGO_TARGET_DIR` in the scratch folder,
+`CARGO_BUILD_JOBS` 8. H's binaries were built at dc7bb9cb (`rcfd-mcp.exe` sha256 b95bcca8...), P's at fc3488b8
+(05773487...). Each registered run was made once, in the registered order. Scratch logs are `run-<tag>.log`, the traces
+`trace-<tag>.tsv`, and the analysis `analyse5.py`, which reproduces ADR 0833's counts (H 18, 141 to 237 ms; TC4 128
+ms) from ADR 0833's files. Another agent's work kept the machine at 97 % to 100 % CPU before the load was added.
+
+### Checks
+
+| Id | Limit | Measured | Met |
+|---|---|---|---|
+| W1 | partial = 0; sharing violations ≥ 5 | partial 0, sharing violations 5691, full reads 32, absent 650 (CPU 97 %) | yes |
+| N3 | partial ≥ 1 | partial 6, full 37, sharing violations 0 | yes |
+| W2 | equal; no `.tmp` | passed | yes |
+| W3 | `Exists`; unchanged | passed | yes |
+| TC4 | pid seen; one FREE 0 to 720 ms after release | pid seen 277 ms after the hold began (MARK after 90 ms); one FREE, 43 ms after release; CPU 99 % to 100 % | yes |
+| H | h ≥ 8 | **h = 0** (no SEEN line of any holder) among 398 files looked at; refusals 0 of 1350 (edit_case 0); 33.9 s; CPU 100 % to 100 % | **missed** |
+| P | h(P) ≤ 0.1 × h(H), deciding only with H ≥ 8 | h = 0 among 382 files looked at; H missed its floor, so **the rule does not decide** | does not decide |
+| A | 0 of P's 900 `edit_case` refused | **0 of 900** (creation 0 of 450); 31.9 s; CPU 100 % to 100 % | yes |
+| L1 | pass | `rcfd-project` (`--features test-hooks`) lib 4, `edit_lock_f755` 7, `edit_lock_f855` 2 (1 ignored), `hammer` 3 (1 ignored), `records` 7, `replace_refused_f978` 1, `write_new_f998` 4; `rcfd-workspace` lib 18, `mesh_f272` 7, `new_case_f271` 4; `rcfd-runner` lib 36 (1 ignored); `rcfd-mcp` lib 18 (1 ignored), `edit_case_refused_f978` 5 ignored, `new_simulations_f271` 1 (1 ignored), `replace_hold_f978` 1 (10 ignored): all passed. **`run_records_adr0734`: 1 passed, 1 failed** (`l1_l4_l6_launch_record_replay_and_rerun`, line 205) | **missed** |
+| L2 | clean | `cargo fmt -p rcfd-project -p rcfd-mcp --check` clean; clippy `-p rcfd-project -p rcfd-mcp --release --all-targets -D warnings` clean | yes |
+| L3 | pass | in addendum 2 | see there |
+
+**H's miss**: the trace saw no hold at all on the unchanged path, against ADR 0833's 18 in 300 rounds a day earlier
+(P(h ≤ 7) was 5.2 × 10^-6 at that rate). It has no diagnosed cause. Like ADR 0833's refusal rate (15 to 0), the hold
+rate changed between runs of the same arm on this machine; the machine was at 100 % CPU from other work before the
+arm's load, while ADR 0833's arms ran from 76 % to 90 %. H, like ADR 0833's arms, asserts nothing: its limit is in the
+analysis, so no `*_known_miss` test carries it, and the miss is held here with its number.
+
+**L1's miss**, diagnosed by amendment 2: the run at dc7bb9cb (before the remedy) fails at the same line with left
+`E:\projects\cfd\w49i-work\f998-plain-write-scratch\target-h\release\rcfd.exe` and right
+`E:/projects/cfd/w49i-work/f998-plain-write-scratch/target-h\release\rcfd.exe`. The test compares path strings, and
+the `/` spelling of `CARGO_TARGET_DIR` breaks the comparison; the miss comes from the set-up, not from `write_new`. It stays a miss
+here: L1 was not run again.
+
+### Mutations
+
+| Id | Mutation | Caught by | Result |
+|---|---|---|---|
+| MP1 | `write_new` without `share_mode(0)` (committed patch `crates/rcfd-project/tests/write_new_f998.mutation.patch`) | W1 | **caught**: "W1: partial reads: Counts { full: 55, partial: 10, sharing: 0, ... }", exit 101 |
+| MP2 | all bytes but the last | W2 | **caught**: "W2: bytes of 1", exit 101 |
+| MP3 | `create(true).truncate(true)` for `create_new(true)` | W3 | **caught**: W3 panicked at line 141 (no error where `Exists` was due), exit 101 |
+| N1 | H, the unchanged path, held | the rule | **not held** (h = 0): see H |
+| N2 | TC4 | the trace | seen |
+| N3 | a shared plain write | W1's set-up | partial 6 |
+
+Each mutation changed exactly one line (`git diff --numstat` 1 + 1) of a scratch copy of c7e90e95.
+
+Deviations: amendment 1 (a lint of the test file) and amendment 2 (the diagnosis run). Not run: nothing registered was
+left out. Actual size: partial; 1 further registration; 2 heavy runs (H, P); 2 questions; about 85 000 bytes read.
+
+Decision by the registered rule: **partial**. Every mutation was caught, and W1 to W3, N3, TC4 and A held (0 refusals of
+900 `edit_case` under P). But the control H gave 0 holds against its floor of 8, so the rule that compares P with H
+does not decide, and L1 missed in `run_records_adr0734` by a cause of the set-up.
+
+## Open questions for the maintainer
+
+- **Q1. The guarantee P gives up** (a writer killed in the middle leaves a partial file under the final name; the old
+  path left at most a `.tmp` file). (a) Keep P for every caller of `write_new`; (b) use the plain write for new case
+  files only (`rcfd-workspace` `cases.rs`, the files `edit_case` replaces), and keep the temp file and hard link for the
+  immutable records (`run.json`, `case.snapshot`, the launch and trash records), which are never replaced and so cannot
+  be refused by a hold; (c) revert P. Recommendation: (b), since the holds matter only for files edited after they are
+  created; not taken here, since it changes callers outside `write_new`, which is scope.
+- **Q2. The measure** (scope): on this day neither the refusals (ADR 0833) nor the holds (here) of the unchanged path
+  came, so neither reads P against H. (a) Repeat H and P under F-998 (rule 13), interleaved in blocks of 50 rounds,
+  2000 rounds each, the floor and fraction kept from this ADR; (b) take F-998 as met on A (0 of 900 under P) with the
+  cause unread, which changes the acceptance's reading; (c) stop measuring and keep P on its fast checks.
+  Recommendation: (a), since an interleaved run sees H and P under the same machine state; not taken here, since it is
+  scope.
+
+### For the lead: roadmap entries
+
+> Status: partial.
+
+> Note: ADR 0834, 2026-11-27, partial: write_new on Windows became a plain write (create_new with share mode 0, written and synced, no temp file or hard link), its fast checks and three mutations held and 0 of 900 edit_case were refused under arm H's load, but the unchanged control H showed no System hold (0 against a floor of 8), so the hold count did not compare the two paths.
+
+> Gap: Missing: a registered comparison of the System process's holds of a new case file between the old write_new (temp file and hard link) and the plain write of ADR 0834. ADR 0833 saw 18 holds in 300 rounds on the old path; ADR 0834's control saw 0 in 450, so its rule did not decide, although the plain write gave 0 refusals of 900 edit_case. Also open: which callers keep the old path (ADR 0834 Q1).
+
+> Follow-ups: one under F-998 (rule 13), no new item: "F-998: the holds of the old and the plain write_new, interleaved", H and P of ADR 0834 in alternating blocks of 50 rounds, 2000 rounds each, with ADR 0834's floor and fraction; its other limits are registered in its ADR.
+
+The same entries are `docs/roadmap/proposals/0834-F-998.json`.
