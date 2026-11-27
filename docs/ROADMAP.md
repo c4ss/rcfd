@@ -641,7 +641,7 @@ exist, and Phase 9 items are stretch. Phase numbers 5 and 6 may run in parallel 
 
 ## Phase 8 - AI assistant and desktop app integration
 
-95 items: 59 done, 20 partly done, 16 not started.
+97 items: 60 done, 20 partly done, 17 not started.
 
 - [x] **F-090** MCP server (external tool interface) with tools: list_cases, create_case, set_setting, get_setting, load_mesh, check_mesh, run, status, get_residuals, get_field_stats, export_vtk, render_image
   - depends on: F-085, F-073
@@ -1011,10 +1011,10 @@ exist, and Phase 9 items are stretch. Phase numbers 5 and 6 may run in parallel 
   - depends on: F-976, F-447, F-272
   - acceptance: Every limit not stated here is registered in the ADR before the run. With a view open, a mesh generated or edited by an MCP tool is drawn again in the open Studio, and a setting or a monitored value changed by an MCP client or the runner is updated in the shown view, each within a registered limit of the feed's poll (ADR 0188). The change names its actor and, where one is given, its reason. An e2e test drives both from the rcfd-mcp binary; the feed's format is unchanged.
   - note: Lead (2026-11-26): entered on ADR 0803, the maintainer's direction and answers of that day (the Studio as Claude's canvas). ADR 0807, 2026-11-26, partial: the canvas follows live a case's mesh (drawn by MeshPreview, again 802 ms after refine_case_mesh), a setting (read_view settings, 342 ms after edit_case) and the monitor of a case's newest run (its end 306 ms after the client read it), each with its actor and reason (limits 1.6 s, ADR 0188 C3-St); 5 of 5 mutations caught, one committed; L2 missed: the whole npm test ran with the first e2e set-up, which left out refine_case_mesh's factor (amendment 1). Lead (2026-11-26): merged at d75a0769 and pushed at ada02345; the push ran npm test with the corrected spec of amendment 1 (903 passed, 0 failed), every selected Rust test passed, and both committed mutations failed as expected. Written done, not the proposed partial: L2's miss was the registered run's, made before amendment 1; the corrected spec's run in the whole suite is the push run's, and every other row held. Questions answered in ADR 0807 (F-986, F-987).
-- [ ] **F-980** Claude's canvas: a view exported as a self-contained styled HTML page
+- [x] **F-980** Claude's canvas: a view exported as a self-contained styled HTML page
   - depends on: F-976
   - acceptance: Every limit not stated here is registered in the ADR before the run. export_view writes a view specification as one self-contained HTML file (no network fetch, the Studio's theme and styling) with the data of the views it names and their provenance. The page opens offline and shows the values the Studio shows for the same specification, checked by a registered comparison over a registered set of specifications; the size of the file of a registered case is recorded.
-  - note: Lead (2026-11-26): entered on ADR 0803, the maintainer's direction and answers of that day (the Studio as Claude's canvas).
+  - note: Lead (2026-11-26): entered on ADR 0803, the maintainer's direction and answers of that day (the Studio as Claude's canvas). ADR 0823, 2026-11-27, done: export_view writes a view as one self-contained HTML page (no script, a CSP of default-src 'none', the Studio's stylesheets inline, fields and a case's mesh as inline SVG, provenance per panel) whose every value equals the open Studio's on X1 to X5 with no request beyond its own file; the push's E1 miss was the mutated rcfd-mcp left by M1's expect-fail build, reproduced to the digit in a fresh copy, and M1's command now builds in target/mutation. Lead (2026-11-27): the first push of the merge (2896a777) failed on E1 in each of 3 runs; amendment 6 found the cause in push_main (a mutation's build left in target/release), fixed in the patch and in push_main (4244f4ba). Merged at 582c140d and pushed at 3479ebbb; every selected test passed and the committed mutations failed as expected. Done as proposed.
 - [~] **F-981** Retire G15's coverage test and the Studio's hand-only surfaces
   - depends on: F-976
   - acceptance: Every limit not stated here is registered in the ADR before the run. The coverage test of guardrail G15 and the Studio's hand-only surfaces (menus, editors and navigation whose only purpose is to reach a capability by hand), each listed in the registration with its file, are removed or retired; every test retired is named in the ADR with its reason (the maintainer's answer of 2026-11-26, ADR 0803). The views the canvas uses and their tests stay and pass; npm test passes.
@@ -1052,6 +1052,12 @@ exist, and Phase 9 items are stretch. Phase numbers 5 and 6 may run in parallel 
 - [ ] **F-992** The Studio's CI keeps Playwright traces on failure, with their effect on the timing specs measured
   - depends on: F-823
   - acceptance: Every limit not stated here is registered in the ADR before the run. The studio-web job keeps a Playwright trace of each failed test (retain-on-failure) and uploads it as an artifact; the effect of tracing on the timing specs is measured over a registered number of runs and stays within a registered bound; a11y.spec.ts:427's failure, where it occurs, is diagnosed from its trace.
+- [ ] **F-993** The exported page writes a monitor's last step as the Studio does, and the e2e of ADR 0823 runs whole
+  - depends on: F-980
+  - acceptance: Every limit not stated here is registered in the ADR before the run. The page of export_view writes each step and count as an integer, as the Studio shows it; the e2e of ADR 0823 (E1 to E6 on X1 to X5) holds every value of the registered comparison and makes no request beyond the page's own file.
+- [ ] **F-994** The Studio's Archivo fonts embedded in an exported page
+  - depends on: F-980
+  - acceptance: Every limit not stated here is registered in the ADR before the run. The page of export_view carries the Archivo fonts the Studio shows (400, 500, 700) as data: fonts written by the Studio's build, with no network fetch, and the page's computed font in the e2e of ADR 0823 is Archivo with no font installed.
 
 ## Phase 9 - Advanced physics and scale (stretch)
 

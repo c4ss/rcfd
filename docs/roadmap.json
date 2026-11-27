@@ -10277,9 +10277,9 @@
     "deps": [
       "F-976"
     ],
-    "status": "todo",
+    "status": "done",
     "acceptance": "Every limit not stated here is registered in the ADR before the run. export_view writes a view specification as one self-contained HTML file (no network fetch, the Studio's theme and styling) with the data of the views it names and their provenance. The page opens offline and shows the values the Studio shows for the same specification, checked by a registered comparison over a registered set of specifications; the size of the file of a registered case is recorded.",
-    "note": "Lead (2026-11-26): entered on ADR 0803, the maintainer's direction and answers of that day (the Studio as Claude's canvas)."
+    "note": "Lead (2026-11-26): entered on ADR 0803, the maintainer's direction and answers of that day (the Studio as Claude's canvas). ADR 0823, 2026-11-27, done: export_view writes a view as one self-contained HTML page (no script, a CSP of default-src 'none', the Studio's stylesheets inline, fields and a case's mesh as inline SVG, provenance per panel) whose every value equals the open Studio's on X1 to X5 with no request beyond its own file; the push's E1 miss was the mutated rcfd-mcp left by M1's expect-fail build, reproduced to the digit in a fresh copy, and M1's command now builds in target/mutation. Lead (2026-11-27): the first push of the merge (2896a777) failed on E1 in each of 3 runs; amendment 6 found the cause in push_main (a mutation's build left in target/release), fixed in the patch and in push_main (4244f4ba). Merged at 582c140d and pushed at 3479ebbb; every selected test passed and the committed mutations failed as expected. Done as proposed."
   },
   {
     "id": "F-981",
@@ -10414,5 +10414,25 @@
     "status": "todo",
     "acceptance": "Every limit not stated here is registered in the ADR before the run. The studio-web job keeps a Playwright trace of each failed test (retain-on-failure) and uploads it as an artifact; the effect of tracing on the timing specs is measured over a registered number of runs and stays within a registered bound; a11y.spec.ts:427's failure, where it occurs, is diagnosed from its trace.",
     "note": ""
+  },
+  {
+    "id": "F-993",
+    "title": "The exported page writes a monitor's last step as the Studio does, and the e2e of ADR 0823 runs whole",
+    "phase": 8,
+    "deps": [
+      "F-980"
+    ],
+    "status": "todo",
+    "acceptance": "Every limit not stated here is registered in the ADR before the run. The page of export_view writes each step and count as an integer, as the Studio shows it; the e2e of ADR 0823 (E1 to E6 on X1 to X5) holds every value of the registered comparison and makes no request beyond the page's own file."
+  },
+  {
+    "id": "F-994",
+    "title": "The Studio's Archivo fonts embedded in an exported page",
+    "phase": 8,
+    "deps": [
+      "F-980"
+    ],
+    "status": "todo",
+    "acceptance": "Every limit not stated here is registered in the ADR before the run. The page of export_view carries the Archivo fonts the Studio shows (400, 500, 700) as data: fonts written by the Studio's build, with no network fetch, and the page's computed font in the e2e of ADR 0823 is Archivo with no font installed."
   }
 ]

@@ -558,7 +558,7 @@ One row per record of this folder, grouped by the roadmap category of the item i
 | [0813](0813-f988-registration-a-ctrl-i-pressed-before-escape-reopens-the-popover.md) | F-988 registration, a Ctrl+I pressed just before Escape opens the provenance popover again |  |  | 7 | F-988 | done |
 | [0817](0817-f977-registration-layouts-chosen-by-the-case-category.md) | F-977 registration: the layout of results chosen by the category of the case | REGISTERED | 2026-11-26 | 1 | F-977 | partial |
 | [0818](0818-f823-registration-the-studio-job-on-the-hosted-runners.md) | F-823 registration, the Studio's job on GitHub's hosted runners: the registered skips, a WebGPU adapter on Windows, and the race of Follow live |  |  | 2 | F-823 | partial |
-| [0823](0823-f980-registration-a-view-exported-as-one-self-contained-html-page.md) | F-980 registration: a view exported as one self-contained styled HTML page | REGISTERED | 2026-11-27 | 3 | F-980 | todo |
+| [0823](0823-f980-registration-a-view-exported-as-one-self-contained-html-page.md) | F-980 registration: a view exported as one self-contained styled HTML page | REGISTERED | 2026-11-27 | 3 | F-980 | done |
 
 ## Retired: the hand-navigated Studio (1)
 
