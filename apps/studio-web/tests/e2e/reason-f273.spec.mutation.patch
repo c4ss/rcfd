@@ -1,0 +1,13 @@
+# expect-fail: cd apps/studio-web && npm run build && npm run package:dir && npx playwright test tests/e2e/reason-f273.spec.ts --project=electron
+diff --git a/apps/studio-web/src/renderer/project/claudeCode.tsx b/apps/studio-web/src/renderer/project/claudeCode.tsx
+index 9796e2b5..f1e25494 100644
+--- a/apps/studio-web/src/renderer/project/claudeCode.tsx
++++ b/apps/studio-web/src/renderer/project/claudeCode.tsx
+@@ -77,7 +77,6 @@ export function ClaudeActivity({ view }: { view: ProjectView }) {
+           <span data-words="data">{a.thing}</span>
+         )}
+         <span className="ph-activity-why" data-words="data" data-why={why.given ? 'given' : 'none'} data-reason-cut={why.cut ? 'true' : undefined}>
+-          ; why: {why.text}
+         </span>
+       </span>
+       <time className="ph-activity-time" dateTime={c.seen} data-words="data">

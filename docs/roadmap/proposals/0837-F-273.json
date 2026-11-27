@@ -1,0 +1,10 @@
+{
+  "form": 1,
+  "adr": "0837",
+  "item": "F-273",
+  "base": "476de79ba32f9235ba28ad2cb559375dfd25ad57",
+  "status": "partial",
+  "note": "ADR 0837, 2026-11-27, partial: the Studio shows who, what and why of each MCP change in the activity line and the process view's rows, read from the feed (reason cut after 500 code points, \"not given\" when absent, shown as text), and every registered check and mutation held, but the registered npm test run had one failure, the first set-up of A4 and A5, which looked for the activity line on the Canvas tab; corrected by amendment 1 and passed.",
+  "gap": "Missing: a passing npm test of the Studio with this work. Its registered run (906 passed, 6 skipped) failed only the first set-up of A4 and A5 of reason-f273.spec.ts, which read the activity line on the Canvas tab where it is not drawn; the corrected test reason-f273-a1.spec.ts passed (ADR 0837 amendment 1) and the old one is kept as a skipped record. Linking an MCP actor to a Claude Code session is not built, by decision.",
+  "follow_ups": []
+}

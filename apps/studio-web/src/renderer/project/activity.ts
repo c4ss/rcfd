@@ -70,3 +70,18 @@ export function activityOf(c: ChangeEntry): { readonly verb: string; readonly th
       return onPath(`${c.who ?? c.kind}:`);
   }
 }
+
+/** ADR 0188 J4: the longest reason a write command takes, in characters (Unicode code points). */
+export const MAX_REASON = 500;
+
+/**
+ * F-273 (ADR 0837 D2): the words of a change's reason (why). Given when the feed's `reason` is a string with a character
+ * other than white space; cut after MAX_REASON code points, with an ellipsis. Absent otherwise: "not given". The text is
+ * put in the page only as a text node (D3), so markup in a reason shows as its characters.
+ */
+export function whyOf(reason: unknown): { readonly text: string; readonly given: boolean; readonly cut: boolean } {
+  if (typeof reason !== 'string' || reason.trim() === '') return { text: 'not given', given: false, cut: false };
+  const points = [...reason];
+  if (points.length <= MAX_REASON) return { text: reason, given: true, cut: false };
+  return { text: `${points.slice(0, MAX_REASON).join('')}…`, given: true, cut: true };
+}

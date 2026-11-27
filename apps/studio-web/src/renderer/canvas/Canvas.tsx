@@ -47,6 +47,7 @@ import { runRows } from '../runs/model.js';
 import { MeshPreview } from '../case/MeshPreview.js';
 import { dispatch } from '../actions/index.js';
 import { actorOf, changeOf, panelRun, settingChange } from './model.js';
+import { whyOf } from '../project/activity.js';
 // the mesh preview's own styles, as the case editor loads them
 import '../case/case.css';
 import './canvas.css';
@@ -109,6 +110,12 @@ function stepFacts(s: ProcessStep): string[] {
   return out;
 }
 
+/** F-273: the process id of a step's actor ({client, instance {pid}}), or null. */
+function stepPid(actor: unknown): number | null {
+  const pid = actor && typeof actor === 'object' ? (actor as { instance?: { pid?: unknown } }).instance?.pid : undefined;
+  return typeof pid === 'number' ? pid : null;
+}
+
 /**
  * F-978 (ADR 0826 D5): the process of a case, its steps in the engine's order; a picked step draws the view of its
  * state (`opens`) with the canvas's own panels. Picking writes nothing.
@@ -121,17 +128,28 @@ function ProcessPanel({ view, index, canvas }: { view: ProjectView; index: numbe
     <ol className="cv-process" data-steps={steps.length} data-steps-total={got?.steps_total ?? 0}>
       {steps.map((s) => {
         const actor = s.actor && typeof s.actor === 'object' ? (s.actor as { client?: unknown }).client : undefined;
+        const pid = stepPid(s.actor);
+        const why = whyOf(s.reason);
         const opened = open === s.i && s.opens !== null;
         return (
           <li key={s.i} className="cv-step" data-step={s.i} data-step-kind={s.step} data-phase={s.phase} data-source={s.source} data-seq={s.seq} data-run={s.run} data-t={s.t ?? undefined}>
             <button type="button" className="cv-step-pick" aria-expanded={opened} disabled={s.opens === null} onClick={() => setOpen(open === s.i ? null : s.i)} data-words="data">
               <span className="cv-step-phase">{s.phase}</span> {s.text}
             </button>
-            {(typeof actor === 'string' || s.reason) && s.step !== 'state' && (
-              <p className="cv-change" data-words="data">
-                {typeof actor === 'string' && `by ${actor}`}
-                {s.reason && <span className="cv-change-reason"> : {s.reason}</span>}
+            {s.source === 'journal' ? (
+              // F-273 (ADR 0837 D4): who and why of every journaled step; the reason only as text (D3)
+              <p className="cv-change" data-words="data" data-actor={typeof actor === 'string' ? actor : undefined} data-pid={pid ?? undefined} data-why={why.given ? 'given' : 'none'} data-reason-cut={why.cut ? 'true' : undefined}>
+                {typeof actor === 'string' && `by ${actor}${pid !== null ? ` (pid ${pid})` : ''}; `}
+                <span className="cv-change-reason">why: {why.text}</span>
               </p>
+            ) : (
+              (typeof actor === 'string' || s.reason) &&
+              s.step !== 'state' && (
+                <p className="cv-change" data-words="data">
+                  {typeof actor === 'string' && `by ${actor}`}
+                  {s.reason && <span className="cv-change-reason"> : {s.reason}</span>}
+                </p>
+              )
             )}
             {stepFacts(s).map((f, j) => (
               <p key={j} className="cv-step-fact" data-words="data">

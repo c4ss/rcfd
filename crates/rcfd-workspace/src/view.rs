@@ -2508,11 +2508,18 @@ impl Workspace {
             "run_submitted" | "run_control" => ("run", "run", vec![json!({"kind": "run", "run": run})]),
             _ => ("other", "other", vec![json!({"kind": "case", "case": kase})]),
         };
+        let entry = crate::feed::journal_entry(line);
         let mut v = json!({"step": step, "phase": phase, "source": "journal", "kind": kind,
-            "t": line["t"], "text": crate::feed::journal_entry(line).text});
+            "t": line["t"], "text": entry.text});
         for k in ["seq", "run", "who", "actor", "reason", "changes"] {
-            if let Some(x) = line.get(k) {
-                v[k] = x.clone();
+            // ADR 0837 D1: the reason as the feed reads it (a string, or none)
+            let x = if k == "reason" {
+                entry.reason.clone().map(Value::from)
+            } else {
+                line.get(k).cloned()
+            };
+            if let Some(x) = x {
+                v[k] = x;
             }
         }
         v["opens"] = self.opens(panels);
@@ -3521,6 +3528,55 @@ store_fields = ["alpha", "ux", "uy", "p"]
         let (s, f) = body.split_once('.').unwrap_or((body, ""));
         let ns = format!("{f:0<9}").parse::<u64>().unwrap();
         (s.to_string(), ns)
+    }
+
+    /// ADR 0837 R1: a journal step's reason is the feed's: the string of a line, none for a reason that is not a string;
+    /// its text is the feed entry's.
+    #[test]
+    fn r1_f273_a_steps_reason_is_the_feeds() {
+        let (dir, ws) = quick_start();
+        let lines = [
+            json!({"kind": "edit", "t": "2026-11-27T10:00:00.000000000Z", "seq": 1, "path": RE100, "who": "edit_case",
+                "actor": {"client": "mcp", "instance": {"pid": 4242, "started": "2026-11-27T09:00:00Z"}},
+                "reason": "to reach Re 50 <b>"}),
+            json!({"kind": "edit", "t": "2026-11-27T10:00:01.000000000Z", "seq": 2, "path": RE100, "who": "edit_case",
+                "actor": {"client": "mcp", "instance": {"pid": 4242, "started": "2026-11-27T09:00:00Z"}},
+                "reason": 42}),
+        ];
+        std::fs::create_dir_all(dir.join(".rcfd")).unwrap();
+        let text: String = lines
+            .iter()
+            .map(|l| {
+                format!(
+                    "{l}
+"
+                )
+            })
+            .collect();
+        std::fs::write(dir.join(".rcfd/edits.jsonl"), text).unwrap();
+        let got = ws.process_steps(RE100);
+        let rows: Vec<&Value> = got["steps"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .filter(|s| s["source"] == "journal")
+            .collect();
+        eprintln!(
+            "R1: {} journal rows: {:?}",
+            rows.len(),
+            rows.iter().map(|r| &r["reason"]).collect::<Vec<_>>()
+        );
+        assert_eq!(rows.len(), 2);
+        assert_eq!(rows[0]["reason"], json!("to reach Re 50 <b>"));
+        assert!(
+            rows[1].get("reason").is_none(),
+            "a numeric reason is left out: {}",
+            rows[1]
+        );
+        for (r, l) in rows.iter().zip(&lines) {
+            assert_eq!(r["text"], json!(crate::feed::journal_entry(l).text));
+        }
+        let _ = std::fs::remove_dir_all(&dir);
     }
 
     /// ADR 0826 P1: the steps of a case of the quick-start copy after a set-up edit and a mesh refinement, against the
