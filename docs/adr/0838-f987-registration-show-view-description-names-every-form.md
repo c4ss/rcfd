@@ -209,3 +209,9 @@ Run once each after addendum 1 was committed (9d06b751).
 | L3 | pass (process report: only a generated file not current may fail) | `docs_site` 2 passed, 0 failed; `roadmap_proposals.py check docs/roadmap/proposals/0838-F-987.json` exit 0 ("F-987: todo -> done; note + 333 characters"); `process_report.py --check` 1 failure, only "generated file is not current: docs/adr/index.md", left to the lead (rule 9) | yes |
 
 With L3 met, F-987 is **done** by the registered rule.
+
+## Answers of the maintainer (2026-11-27), written by the lead
+
+1. Q1: option (a) for F-987, the re-record clause met with nothing to re-record, since no tool-list golden holds show_view; and option (b) as a new item, F-999 (the project golden holds show_view, read_view and export_view, compared by project_list_f270); taken by the lead on the maintainer's standing instruction of 2026-11-26 (go with the recommended option always).
+
+Merged and pushed at 951a66ba.

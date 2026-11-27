@@ -563,12 +563,12 @@ One row per record of this folder, grouped by the roadmap category of the item i
 | [0817](0817-f977-registration-layouts-chosen-by-the-case-category.md) | F-977 registration: the layout of results chosen by the category of the case | REGISTERED | 2026-11-26 | 1 | F-977 | partial |
 | [0818](0818-f823-registration-the-studio-job-on-the-hosted-runners.md) | F-823 registration, the Studio's job on GitHub's hosted runners: the registered skips, a WebGPU adapter on Windows, and the race of Follow live |  |  | 2 | F-823 | partial |
 | [0823](0823-f980-registration-a-view-exported-as-one-self-contained-html-page.md) | F-980 registration: a view exported as one self-contained styled HTML page | REGISTERED | 2026-11-27 | 3 | F-980 | done |
-| [0826](0826-f978-registration-the-process-view-of-a-case.md) | F-978 registration: the process view of a case, from its creation to its last result | REGISTERED | 2026-11-27 | 1 | F-978 | partial |
-| [0828](0828-f978-registration-process-view-rows-and-runner-teardowns.md) | F-978 registration: the process view's undecided rows, and the tests that leave a runner behind | REGISTERED | 2026-11-27 | 1 | F-978 | partial |
-| [0830](0830-f978-registration-the-refused-edit-case.md) | F-978 registration: why the first edit_case of B1 is refused under load, then B1 to B3 once | REGISTERED | 2026-11-27 | 1 | F-978 | partial |
-| [0832](0832-f978-registration-the-hold-of-a-refused-file.md) | F-978 registration: how long a refused case file stays held, and the replace budget it calls for | REGISTERED | 2026-11-27 | 2 | F-978 | partial |
-| [0836](0836-f978-registration-b1-to-b3-under-load-after-f998.md) | F-978 registration: B1 to B3 under arm H's load on main after F-998, F-978's closing run | REGISTERED | 2026-11-27 | 2 | F-978 | partial |
-| [0838](0838-f987-registration-show-view-description-names-every-form.md) | F-987 registration: show_view's description names every panel kind, the three forms of ADR 0807 and the run form | REGISTERED | 2026-11-27 | 2 | F-987 | todo |
+| [0826](0826-f978-registration-the-process-view-of-a-case.md) | F-978 registration: the process view of a case, from its creation to its last result | REGISTERED | 2026-11-27 | 1 | F-978 | done |
+| [0828](0828-f978-registration-process-view-rows-and-runner-teardowns.md) | F-978 registration: the process view's undecided rows, and the tests that leave a runner behind | REGISTERED | 2026-11-27 | 1 | F-978 | done |
+| [0830](0830-f978-registration-the-refused-edit-case.md) | F-978 registration: why the first edit_case of B1 is refused under load, then B1 to B3 once | REGISTERED | 2026-11-27 | 1 | F-978 | done |
+| [0832](0832-f978-registration-the-hold-of-a-refused-file.md) | F-978 registration: how long a refused case file stays held, and the replace budget it calls for | REGISTERED | 2026-11-27 | 2 | F-978 | done |
+| [0836](0836-f978-registration-b1-to-b3-under-load-after-f998.md) | F-978 registration: B1 to B3 under arm H's load on main after F-998, F-978's closing run | REGISTERED | 2026-11-27 | 2 | F-978 | done |
+| [0838](0838-f987-registration-show-view-description-names-every-form.md) | F-987 registration: show_view's description names every panel kind, the three forms of ADR 0807 and the run form | REGISTERED | 2026-11-27 | 2 | F-987 | done |
 
 ## Retired: the hand-navigated Studio (1)
 
