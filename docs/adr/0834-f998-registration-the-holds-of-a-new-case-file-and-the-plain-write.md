@@ -148,3 +148,14 @@ above is changed. The build of `write_new_f998.rs` warns that the fields `absent
 read (they are read only by the derived `Debug` of the printed counts), which L2's clippy with `-D warnings` would
 refuse. Correction: `#[allow(dead_code)]` on `Counts`, which changes no behaviour, no limit and no count. The runs already
 made are not run again; MP1 to MP3 and L1 to L3 run on the corrected commit.
+
+## Amendment 2 (2026-11-27): a diagnosis of L1's miss in `run_records_adr0734`
+
+Written after L1 and L2 had run on c7e90e95 and before the run named here; nothing above is changed. L1's registered run
+of `run_records_adr0734` failed `l1_l4_l6_launch_record_replay_and_rerun` at line 205, `argv[0]` of `launch.json`
+against `solver()`, the path of `rcfd` beside `env!("CARGO_BIN_EXE_rcfd-runner")`. That miss stands as measured; L1 is
+missed. The suspected cause is not `write_new`: `CARGO_TARGET_DIR` was spelled with `/` (`E:/projects/...`), so the
+test's expected path mixes `/` and `\`, while the runner writes `current_exe()`, all `\`. Diagnosis, made once: the same
+test at dc7bb9cb (before the remedy), from `git archive` into the scratch folder `hcopy`, built in `target-h` with the
+same spelling of the target folder, with `--nocapture`. If it fails at the same line, the miss is of the set-up and not
+of the remedy; if it passes, the miss is the remedy's. Either way L1 stays missed in this ADR.
