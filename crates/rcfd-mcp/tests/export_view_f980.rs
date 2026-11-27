@@ -550,6 +550,7 @@ fn check_values_a1(c: &mut Mcp, tag: &str, page: &str, settings: &Value) -> usiz
 
 /// ADR 0823 R1, R2, R3, R4, R7 as amendment 1 corrects them: the pages of the registered set.
 #[test]
+#[ignore = "ADR 0823 amendment 2: a record; it holds every table to two rows, X3 to X5 have one"]
 fn r1_r2_r3_r4_r7_a1_the_pages_of_the_registered_set() {
     let dir = f980("r1");
     let mut c = Mcp::start(&["--project", &d(&dir)]);
@@ -614,6 +615,235 @@ fn r1_r2_r3_r4_r7_a1_the_pages_of_the_registered_set() {
                 Value::Null
             };
             let checked = check_values_a1(&mut c, tag, &page, &settings);
+            eprintln!("R2 {tag}: {checked} panels with values checked");
+        }
+        // R7
+        let after = journal(&dir);
+        let new: Vec<Value> = String::from_utf8_lossy(&after[before.len()..])
+            .lines()
+            .map(|l| serde_json::from_str(l).unwrap())
+            .filter(|l: &Value| l["kind"] == VIEW_EXPORTED)
+            .collect();
+        assert_eq!(new.len(), 1, "R7 {tag}");
+        assert_eq!(new[0]["path"], r["path"]);
+        assert_eq!(new[0]["hash"], r["hash"]);
+        assert_eq!(new[0]["bytes"], r["bytes"]);
+        lines += 1;
+    }
+    eprintln!("R7: {lines} view_exported lines");
+}
+
+/// ADR 0823 amendment 2: as check_values_a1, a table with as many rows as it lists (one or more), each with its step.
+fn check_values_a2(c: &mut Mcp, tag: &str, page: &str, settings: &Value) -> usize {
+    let runs = ok(&c.call("list_runs", json!({"limit": 100})))["runs"].clone();
+    let step_of = |id: &str| -> Value {
+        runs.as_array()
+            .unwrap()
+            .iter()
+            .find(|r| r["id"] == json!(id))
+            .map(|r| r["step"].clone())
+            .unwrap()
+    };
+    let mut n = 0;
+    for (i, p) in panels(page).iter().enumerate() {
+        let kind = attr(p, "data-kind").unwrap();
+        match kind.as_str() {
+            "field" => {
+                let run = attr(p, "data-sources").unwrap();
+                let run = run.split('/').nth(1).unwrap().to_string();
+                let field = attr(p, "data-field").unwrap();
+                let s = ok(&c.call("field_summary", json!({"run": run, "field": field})));
+                let (lo, hi) = (
+                    s["min"].as_f64().unwrap() as f32 as f64,
+                    s["max"].as_f64().unwrap() as f32 as f64,
+                );
+                let (plo, phi) = (f(&attr(p, "data-lo")), f(&attr(p, "data-hi")));
+                eprintln!("R2 {tag} panel {i} field {field} of {run}: page {plo} {phi}, field_summary {lo} {hi}, snapshot {:?} step {:?} against {}", attr(p, "data-snapshot"), attr(p, "data-step"), s["snapshot"]);
+                assert!(close(plo, lo) && close(phi, hi), "R2 {tag} panel {i}: the range");
+                assert_eq!(
+                    attr(p, "data-snapshot").unwrap(),
+                    s["snapshot"]["index"].to_string(),
+                    "R2 {tag} panel {i}: the snapshot"
+                );
+                assert_eq!(
+                    attr(p, "data-step").unwrap(),
+                    s["snapshot"]["step"].to_string(),
+                    "R2 {tag} panel {i}: the step"
+                );
+            }
+            "monitor" => {
+                let run = attr(p, "data-run").unwrap();
+                let title = attr(p, "data-sources").unwrap();
+                assert!(title.contains(&run));
+                let m = p
+                    .split("<h3 class=\"cv-panel-title\">")
+                    .nth(1)
+                    .map(|t| t.split('<').next().unwrap().to_string());
+                // the monitor's name: from the facts line "<m> at step"
+                let name = p
+                    .split("<p class=\"xv-facts\">")
+                    .nth(1)
+                    .unwrap()
+                    .split(" at step")
+                    .next()
+                    .unwrap()
+                    .to_string();
+                let (x, y) = series(c, &run, &format!("monitors.{}", unescape(&name)));
+                let (ps, pv) = (f(&attr(p, "data-last-step")), f(&attr(p, "data-last-value")));
+                eprintln!(
+                    "R2 {tag} panel {i} monitor {name} ({m:?}) of {run}: page {ps} {pv}, read_residuals {} {}",
+                    x[x.len() - 1],
+                    y[y.len() - 1]
+                );
+                assert!(
+                    close(ps, x[x.len() - 1]) && close(pv, y[y.len() - 1]),
+                    "R2 {tag} panel {i}: the last sample"
+                );
+            }
+            "plot" => {
+                let run = attr(p, "data-run").unwrap();
+                let names = ok(&c.call("read_residuals", json!({"run": run, "max_points": 2})))["series"].clone();
+                let (mut drawn, mut skipped) = (0usize, 0usize);
+                for k in names
+                    .as_object()
+                    .unwrap()
+                    .keys()
+                    .filter(|k| k.starts_with("residuals."))
+                {
+                    let (x, y) = series(c, &run, k);
+                    for (a, b) in x.iter().zip(&y) {
+                        if a.is_finite() && *b > 0.0 && b.log10().is_finite() {
+                            drawn += 1;
+                        } else {
+                            skipped += 1;
+                        }
+                    }
+                }
+                eprintln!(
+                    "R2 {tag} panel {i} plot of {run}: page {:?} {:?}, read_residuals {drawn} {skipped}",
+                    attr(p, "data-drawn"),
+                    attr(p, "data-skipped")
+                );
+                assert_eq!(
+                    attr(p, "data-drawn").unwrap(),
+                    drawn.to_string(),
+                    "R2 {tag} panel {i}: drawn"
+                );
+                assert_eq!(
+                    attr(p, "data-skipped").unwrap(),
+                    skipped.to_string(),
+                    "R2 {tag} panel {i}: skipped"
+                );
+            }
+            "run" => {
+                let run = attr(p, "data-run").unwrap();
+                eprintln!(
+                    "R2 {tag} panel {i} run {run}: page step {:?}, list_runs {}",
+                    attr(p, "data-step"),
+                    step_of(&run)
+                );
+                assert_eq!(
+                    attr(p, "data-step").unwrap(),
+                    step_of(&run).to_string(),
+                    "R2 {tag} panel {i}: the step"
+                );
+            }
+            "table" => {
+                let ids = attrs(p, "data-run");
+                let steps = attrs(p, "data-step");
+                eprintln!("R2 {tag} panel {i} table: {ids:?} {steps:?}");
+                assert!(!ids.is_empty() && ids.len() == steps.len());
+                for (id, s) in ids.iter().zip(&steps) {
+                    assert_eq!(*s, step_of(id).to_string(), "R2 {tag} panel {i}: the step of {id}");
+                }
+            }
+            "setting" => {
+                let want = settings
+                    .as_array()
+                    .unwrap()
+                    .iter()
+                    .find(|s| s["panel"] == json!(i))
+                    .unwrap()["value"]
+                    .to_string();
+                eprintln!(
+                    "R2 {tag} panel {i} setting: page {:?}, read_view {want}",
+                    attr(p, "data-value")
+                );
+                assert_eq!(attr(p, "data-value").unwrap(), want, "R2 {tag} panel {i}: the setting");
+            }
+            _ => continue,
+        }
+        n += 1;
+    }
+    n
+}
+
+/// ADR 0823 R1, R2, R3, R4, R7 as amendments 1 and 2 correct them: the pages of the registered set.
+#[test]
+fn r1_r2_r3_r4_r7_a2_the_pages_of_the_registered_set() {
+    let dir = f980("r1");
+    let mut c = Mcp::start(&["--project", &d(&dir)]);
+    // the settings of X2 as read_view gives them (R2), from a Studio's reading server
+    let mut studio = Mcp::start(&["--project", &d(&dir), "--client", "studio", "--read-only", "--canvas"]);
+    studio.request("tools/list", json!({}));
+    let mut lines = 0;
+    for (tag, view, n) in registered() {
+        let before = journal(&dir);
+        let t0 = std::time::Instant::now();
+        let r = ok(&c.call("export_view", json!({"view": view, "reason": format!("F-980 {tag}")})));
+        let ms = t0.elapsed().as_millis();
+        let path = dir.join(r["path"].as_str().unwrap());
+        let bytes = std::fs::read(&path).unwrap();
+        eprintln!(
+            "R1 {tag}: {} in {ms} ms, {} bytes, {} panels",
+            r["path"],
+            bytes.len(),
+            r["panels"]
+        );
+        // R1
+        assert_eq!(r["exported"], true);
+        assert!(r["path"].as_str().unwrap().starts_with("exports/"));
+        assert_eq!(r["bytes"], json!(bytes.len()));
+        assert_eq!(r["hash"], json!(rcfd_project::records::hash_bytes(&bytes)));
+        assert_eq!(r["panels"], json!(n));
+        let page = String::from_utf8(bytes).unwrap();
+        assert!(page.starts_with("<!doctype html>"));
+        assert_eq!(panels(&page).len(), n, "R1 {tag}: the panels");
+        // R3
+        let refs = page_references(&page);
+        eprintln!("R3 {tag}: references {refs:?}");
+        assert!(refs.is_empty(), "R3 {tag}: {refs:?}");
+        assert!(page.contains(&format!(
+            "<meta http-equiv=\"Content-Security-Policy\" content=\"{EXPORT_CSP}\">"
+        )));
+        for (name, css) in &EXPORT_STYLES[..3] {
+            assert!(page.contains(css), "R3 {tag}: {name} is not in the page");
+        }
+        // R4
+        assert!(page.contains(&format!("data-engine=\"{}\"", env!("CARGO_PKG_VERSION"))));
+        assert_eq!(attr(&page, "data-export-view").unwrap(), r["id"].as_str().unwrap());
+        let mut files = 0;
+        for p in panels(&page) {
+            let sources = attr(&p, "data-sources").unwrap();
+            let hashes = attr(&p, "data-hashes").unwrap();
+            assert!(!sources.is_empty());
+            for (s, h) in sources.split(' ').zip(hashes.split(' ')) {
+                assert!(dir.join(s).is_file(), "R4 {tag}: {s} is not a file");
+                let got = ok(&c.call("hash_project_file", json!({"path": s})));
+                assert_eq!(got["hash"].as_str().unwrap(), h, "R4 {tag}: the hash of {s}");
+                files += 1;
+            }
+        }
+        eprintln!("R4 {tag}: {files} files named with their hashes");
+        // R2 (X1 to X4)
+        if tag != "X5" {
+            let settings = if tag == "X2" {
+                ok(&c.call("show_view", json!({"view": view})));
+                ok(&studio.call("read_view", json!({})))["settings"].clone()
+            } else {
+                Value::Null
+            };
+            let checked = check_values_a2(&mut c, tag, &page, &settings);
             eprintln!("R2 {tag}: {checked} panels with values checked");
         }
         // R7
