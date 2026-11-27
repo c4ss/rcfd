@@ -123,3 +123,61 @@ record (rule 2).
 - **Q1. The skipped record `canvas-f979.spec.ts`** (scope): (a) left as it is, since it starts nothing; (b) given the
   same teardown, so that it is safe if it is ever unskipped. Recommendation: (a), since ignored records are not edited
   (rule 2); not taken here, since it is a question of scope.
+
+## Addendum 1: results (2026-11-27)
+
+Written after the runs; nothing above is changed. Release profile, `CARGO_TARGET_DIR` in the scratch folder,
+`CARGO_BUILD_JOBS` 8. Code commits: 22d3dc9e (the teardowns, D1 and D2), 37d3b325 (the committed mutation M4). Each
+registered run was made once.
+
+### Checks
+
+| Id | Limit | Measured | Met |
+|---|---|---|---|
+| B1 | every assertion of B1 | **failed before any step was read**: the first `edit_case` after `new_case` got -32000 "replace ...process-cavity.toml: failed after 12 attempts: Access is denied. (os error 5)", CPU 99 % at the start; not run again | **no (not decided)** |
+| B2, B3 | as ADR 0826 | not reached (the same test function as B1) | **no (not run)** |
+| T1 | 0 before `npm test` | 0 (13 runners of other agents on the machine, not counted) | yes |
+| T2 | 0 after `npm test` | 0 started at or after 16:58:52 UTC and alive at 17:13:43 | yes |
+| T3 | 0 after the B1 run | 0; but the run ended before `start_run`, so no runner was started and T3 does not decide | not decided |
+| L2 | typecheck 0; all pass but the 6 skips | typecheck exit 0; 903 passed, 6 skipped, 0 failed, 14.6 min; CPU 100 % at the start, 70 % at the end. In it, F-978's E1 692 ms (limit 1600), 10 steps, seq 1 to 5 against 1 to 5, 4 of 4 residuals equal; E2 10 of 10; E3 162 ms; `canvas-f977` E0 to E7 and `canvas-f979-a1` E0 to E3 passed with their new teardowns | yes |
+| L5 | pass, clean | `rcfd-mcp --lib` 18 passed, 1 ignored (existing); `cargo fmt -p rcfd-mcp --check` clean; `cargo clippy --release -p rcfd-mcp --all-targets -- -D warnings` clean | yes |
+| L4 | pass | in the last run, reported with the commit | see the report |
+
+### Negative controls and mutations
+
+| Id | Caught by |
+|---|---|
+| N1 (teardown call removed from `canvas-f979-a1`) | the count: 1 runner of the scratch build alive after the spec (pid 51620); the spec itself passed (4 of 4) |
+| N2 (the `EndRunner` guard removed) | the count: 1 runner of the mutated build alive after the test (pid 53516); in that run B1 to B3 passed |
+| M4 (committed, `crates/rcfd-workspace/src/view.mutation.patch`) | P1 ("every opens is a valid view") and B1 (line 252, "every step's view is shown": 9 of 10, step 8 `results` opens nothing) |
+| M5 | E2 of `canvas-f978.spec.ts`: 0 of 10 steps opened their view |
+
+Both M4 and M5 built (the Studio of M5 passed `npm run build`, which typechecks). The two runners that N1 and N2 left
+were this work's and were ended by pid after their counts. The count script first failed in N2 on a 7-digit fraction of a
+second (Python's `fromisoformat`) and was corrected before N2's first count. In T1 to T3 no runner matched the path
+filter, so the time was never parsed there.
+
+The mutated runs of B1 (M4 at CPU 55 %, N2 at CPU 69 %) made the build with no OS refusal, and in N2 every row of B1, B2
+and B3 held. Those are not the registered run. The refusal came in both registered runs (ADR 0826 at CPU 82 %, here at
+99 %) and in none of the four other runs (all at 70 % or less). Not diagnosed: a cause to look at is a reader of the new
+case file (the `--canvas` server reads the project when the feed moves) holding it while `edit_case` replaces it.
+
+Deviations: none in the limits. `canvas-f979.spec.ts` left as it is (finding 1, Q1). Not run: B2 and B3 (not reached).
+
+Actual size: partial; 0 further registrations; 3 heavy runs (`npm test` 14.6 min, the scratch Studio build with N1 and
+M5, the scratch cargo build with M4 and N2); 1 question; about 140 000 bytes read.
+
+Decision by the registered rule: **partial**, because B1 to B3 did not decide (an OS refusal in their one run). M4 and
+M5 are caught, and the other rows of ADR 0826 hold. The teardown rows held beside it (T1, T2, N1, N2); T3 did not decide.
+
+### For the lead: roadmap entries
+
+> Status: partial.
+
+> Note: ADR 0828, 2026-11-27, partial: M4 and M5 built and were caught (P1 and B1; E2 0 of 10), and the canvas tests now end the runner their start_run started (0 runners left after npm test, 903 passed; 1 left with a teardown removed); the one registered run of B1 failed again at its first edit_case on Windows' Access is denied (CPU 99 %), while the same build passed in both of this work's mutated runs.
+
+> Gap: Every row of ADR 0826 holds but B1 to B3. Missing: a passing registered run of canvas_process_f978. In both registered runs (CPU 82 % and 99 %) the first edit_case after new_case was refused by Windows (Access is denied, os error 5, replacing the new case file); in all four mutated runs (CPU 70 % or less) the same build passed. A diagnosis of the refusal, registered under F-978 (rule 13), and then one run of B1 to B3.
+
+> Follow-ups: one under F-978 (rule 13), no new item: "F-978: the refused first edit_case of B1", the diagnosis of the os error 5 (who holds the new case file when edit_case replaces it), then B1 to B3 run once; its limits are B1 to B3 of ADR 0826.
+
+The same entries are `docs/roadmap/proposals/0828-F-978.json`.
