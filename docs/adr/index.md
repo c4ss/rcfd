@@ -522,7 +522,7 @@ One row per record of this folder, grouped by the roadmap category of the item i
 | [0741](0741-f271-registration-the-field-store-plan-as-the-default-of-start-run.md) | F-271 registration: the field-store plan as the default of start_run | REGISTERED | 2026-11-19 | 1 | F-271 | done |
 | [0774](0774-f862-registration-the-description-of-start-run-store-argument.md) | F-862 registration: the description of start_run's store argument says what the default is | REGISTERED | 2026-11-22 | 1 | F-862 | done |
 | [0794](0794-f274-registration-journal-lines-of-design-runs-and-records.md) | F-274 registration: journal lines of design runs and of stored design records | REGISTERED | 2026-11-25 | 1 | F-274 | done |
-| [0829](0829-f997-registration-a-runner-without-the-callers-handles-and-its-exit-when-its-folder-is-gone.md) | F-997 registration: a runner started without the caller's handles, and its exit when its project folder is gone | REGISTERED | 2026-11-27 | 1 | F-997 | todo |
+| [0829](0829-f997-registration-a-runner-without-the-callers-handles-and-its-exit-when-its-folder-is-gone.md) | F-997 registration: a runner started without the caller's handles, and its exit when its project folder is gone | REGISTERED | 2026-11-27 | 1 | F-997 | partial |
 
 ## Studio desktop app (34)
 
@@ -615,7 +615,7 @@ One row per record of this folder, grouped by the roadmap category of the item i
 | [0763](0763-f869-registration-the-mesh-converged-mean-drag-of-the-cylinder-at-re-100.md) | F-869 registration: the mesh-converged mean drag of the cylinder at Re 100 | REGISTERED | 2026-11-22 | 1 | F-869 | done |
 | [0764](0764-f868-registration-naca0012-17-degrees-by-an-unsteady-arm.md) | F-868 registration: the NACA 0012 at 17 degrees by an unsteady arm | REGISTERED | 2026-11-22 | 1 | F-868 | done |
 | [0765](0765-f878-registration-fan01-lda-profiles-euler-work-and-the-division-of-the-missing-pressure-rise.md) | F-878 registration: the FAN-01 rotor against the measured LDA profiles, the Euler work and the division of the missing pressure rise | REGISTERED | 2026-11-22 | 1 | F-878 | partial |
-| [0766](0766-f879-registration-fan01-check-h-the-hub-pocket-in-time.md) | F-879 registration: FAN-01, check H of ADR 0183, the hub trailing-edge pocket in time | REGISTERED | 2026-11-22 | 1 | F-879 | partial |
+| [0766](0766-f879-registration-fan01-check-h-the-hub-pocket-in-time.md) | F-879 registration: FAN-01, check H of ADR 0183, the hub trailing-edge pocket in time | REGISTERED | 2026-11-22 | 1 | F-879 | done |
 | [0767](0767-f885-registration-check-h-by-the-velocity-change-of-the-outer-iterations.md) | F-885 registration: the velocity change of each outer iteration, and check H read by its own rule | REGISTERED | 2026-11-22 | 2 | F-885 | done |
 | [0768](0768-f882-registration-fan01-rotor-loss-budget-and-a-finer-mesh.md) | F-882 registration: the loss of total pressure of the simulated FAN-01 rotor, where it arises and what a finer mesh makes of it | REGISTERED | 2026-11-22 | 1 | F-882 | partial |
 | [0769](0769-f883-registration-fan01-wall-pressure-behind-the-rotor.md) | F-883 registration: FAN-01, a mean static pressure behind the rotor from the wall-pressure data of the record | REGISTERED | 2026-11-22 | 1 | F-883 | done |
@@ -638,7 +638,7 @@ One row per record of this folder, grouped by the roadmap category of the item i
 | [0821](0821-f885-registration-the-frozen-convection-gradient-its-time-order-a-steady-case-and-check-h.md) | F-885 registration: the convection's gradient kept from the step's first outer iteration as the remedy, its time order, a steady case, then check H | REGISTERED | 2026-11-27 | 1 | F-885 | done |
 | [0822](0822-f885-registration-the-order-floor-of-the-pimple-step-a-finer-order-case-and-check-h.md) | F-885 registration: why the pimple step's time-order case is first order, the remedy's order on a corrected case, then check H | REGISTERED | 2026-11-27 | 1 | F-885 | done |
 | [0824](0824-f885-registration-the-lag-of-the-kept-convection-gradient-its-arms-a-corrected-variant-and-check-h.md) | F-885 registration: the lag of the kept convection gradient, its arms fixed in advance, a corrected variant, then check H | REGISTERED | 2026-11-27 | 1 | F-885 | done |
-| [0827](0827-f879-registration-check-h-class-torque-and-pressure-rise-in-time.md) | F-879 registration: check H's class from ADR 0824's records, torque and pressure rise in time, and what it means for F-870 | REGISTERED | 2026-11-27 | 1 | F-879 | partial |
+| [0827](0827-f879-registration-check-h-class-torque-and-pressure-rise-in-time.md) | F-879 registration: check H's class from ADR 0824's records, torque and pressure rise in time, and what it means for F-870 | REGISTERED | 2026-11-27 | 1 | F-879 | done |
 
 ## Records with no item in the file name (261)
 

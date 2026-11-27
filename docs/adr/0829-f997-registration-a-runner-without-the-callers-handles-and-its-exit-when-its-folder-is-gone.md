@@ -196,3 +196,11 @@ By the registered rule: **partial**. B1, B2, B3 and C hold and each mutation is 
 > Note: ADR 0829, 2026-11-27, partial: a runner whose project folder is gone (folder, .rcfd, lock or runner.json absent at a 1 s look) with no run of its own left exits cleanly by itself (1.01 s after the removal, B1; a kept folder still served at 3.5 s, B2), but on Windows a runner still inherits its caller's pipes (A1 held at 3.0 s), since no fix is possible without unsafe code.
 
 > Gap: Missing: clause a on Windows. A runner started by rcfd-runner ensure or the run tools still inherits every inheritable handle of its caller (A1: the parent's stdout held at 3.0 s, released only at the runner's shutdown). Every fix needs unsafe code (CreateProcessW with PROC_THREAD_ATTRIBUTE_HANDLE_LIST), an unstable std switch or a launcher; it waits for the maintainer's answer to ADR 0829 question 1, then a follow-up registration under F-997.
+
+## Answers of the maintainer (2026-11-27), written by the lead
+
+1. Not answered. The Windows route for (a), one reviewed unsafe module with the lint lowered from `forbid` to `deny`, changes rule 5 of `docs/process/agent-rules.md`, and a change to a rule needs the maintainer's word; the standing instruction of 2026-11-26 does not cover it. A1 stays a held known miss until the maintainer answers.
+2. The look interval of 1 s, as taken; taken by the lead on the maintainer's standing instruction of 2026-11-26 (go with the recommended option always).
+3. Active runs at a folder's removal: the runner serves until they end, then leaves, nothing cancelled, as taken; taken by the lead on the maintainer's standing instruction of 2026-11-26 (go with the recommended option always).
+
+Merged at 6675d546 and pushed at 6ea8cd54.

@@ -322,3 +322,10 @@ The same entries are in `docs/roadmap/proposals/0827-F-879.json` (form 1 of ADR 
 `python scripts/roadmap_proposals.py check`. No gap (done) and no follow-up item.
 
 Generated pages that this work may leave not current, for the lead (rule 9): `docs/adr/index.md` (ADR 0827 is new).
+
+## Answers of the maintainer (2026-11-27), written by the lead
+
+1. F-870's convergence rule is option (c): a time march to a settled state on B1 at dt and dt/2, by the limits of section 4; taken by the lead on the maintainer's standing instruction of 2026-11-26 (go with the recommended option always).
+2. F-879 is done with the class STEADY under the four opt-ins of ADR 0824, as for F-885; taken by the lead on the maintainer's standing instruction of 2026-11-26 (go with the recommended option always).
+
+Merged and pushed at d7209cc2.

@@ -181,3 +181,10 @@ M5 are caught, and the other rows of ADR 0826 hold. The teardown rows held besid
 > Follow-ups: one under F-978 (rule 13), no new item: "F-978: the refused first edit_case of B1", the diagnosis of the os error 5 (who holds the new case file when edit_case replaces it), then B1 to B3 run once; its limits are B1 to B3 of ADR 0826.
 
 The same entries are `docs/roadmap/proposals/0828-F-978.json`.
+
+## Answers of the maintainer (2026-11-27), written by the lead
+
+1. `canvas-f979.spec.ts`, a skipped record that starts nothing, keeps its teardown as it is (option a); taken by the lead on the maintainer's standing instruction of 2026-11-26 (go with the recommended option always).
+2. The diagnosis of the refused `edit_case`, then one run of B1 to B3, is a follow-up registration under F-978 (ADR 0830); taken by the lead on the maintainer's standing instruction of 2026-11-26 (go with the recommended option always).
+
+Merged at 34017c43 and pushed at 30d79bdb.
