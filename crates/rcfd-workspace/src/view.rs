@@ -2513,7 +2513,11 @@ impl Workspace {
             "t": line["t"], "text": entry.text});
         for k in ["seq", "run", "who", "actor", "reason", "changes"] {
             // ADR 0837 D1: the reason as the feed reads it (a string, or none)
-            let x = if k == "reason" { entry.reason.clone().map(Value::from) } else { line.get(k).cloned() };
+            let x = if k == "reason" {
+                entry.reason.clone().map(Value::from)
+            } else {
+                line.get(k).cloned()
+            };
             if let Some(x) = x {
                 v[k] = x;
             }
@@ -3540,8 +3544,15 @@ store_fields = ["alpha", "ux", "uy", "p"]
                 "reason": 42}),
         ];
         std::fs::create_dir_all(dir.join(".rcfd")).unwrap();
-        let text: String = lines.iter().map(|l| format!("{l}
-")).collect();
+        let text: String = lines
+            .iter()
+            .map(|l| {
+                format!(
+                    "{l}
+"
+                )
+            })
+            .collect();
         std::fs::write(dir.join(".rcfd/edits.jsonl"), text).unwrap();
         let got = ws.process_steps(RE100);
         let rows: Vec<&Value> = got["steps"]
@@ -3550,10 +3561,18 @@ store_fields = ["alpha", "ux", "uy", "p"]
             .iter()
             .filter(|s| s["source"] == "journal")
             .collect();
-        eprintln!("R1: {} journal rows: {:?}", rows.len(), rows.iter().map(|r| &r["reason"]).collect::<Vec<_>>());
+        eprintln!(
+            "R1: {} journal rows: {:?}",
+            rows.len(),
+            rows.iter().map(|r| &r["reason"]).collect::<Vec<_>>()
+        );
         assert_eq!(rows.len(), 2);
         assert_eq!(rows[0]["reason"], json!("to reach Re 50 <b>"));
-        assert!(rows[1].get("reason").is_none(), "a numeric reason is left out: {}", rows[1]);
+        assert!(
+            rows[1].get("reason").is_none(),
+            "a numeric reason is left out: {}",
+            rows[1]
+        );
         for (r, l) in rows.iter().zip(&lines) {
             assert_eq!(r["text"], json!(crate::feed::journal_entry(l).text));
         }
