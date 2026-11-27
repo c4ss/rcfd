@@ -58,5 +58,10 @@ fn every_live_tool_is_in_the_golden_and_every_added_entry_is_live() {
             .unwrap_or_else(|| panic!("{} is not listed", g["name"]));
         assert_eq!(l.to_string(), g.to_string(), "{} differs from the golden", g["name"]);
     }
-    eprintln!("F-1001: {} live tools, golden {} entries, {} added compared", live.len(), gold.len(), gold.len() - 52);
+    eprintln!(
+        "F-1001: {} live tools, golden {} entries, {} added compared",
+        live.len(),
+        gold.len(),
+        gold.len() - 52
+    );
 }

@@ -173,7 +173,12 @@ fn a2_tools_list_with_project_is_the_golden_with_the_f271_changes() {
                 .unwrap_or_else(|| panic!("{} is not listed", g["name"]));
             assert!(last.is_none_or(|p| at > p), "{} out of the live order", g["name"]);
             last = Some(at);
-            assert_eq!(tools[at].to_string(), g.to_string(), "{} differs from the golden", g["name"]);
+            assert_eq!(
+                tools[at].to_string(),
+                g.to_string(),
+                "{} differs from the golden",
+                g["name"]
+            );
         }
         golds.truncate(55);
     }
