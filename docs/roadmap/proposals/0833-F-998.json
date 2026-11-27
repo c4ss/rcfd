@@ -1,0 +1,10 @@
+{
+  "form": 1,
+  "adr": "0833",
+  "item": "F-998",
+  "base": "091c5ff1a136d303026a75dc46caeea17d581910",
+  "status": "partial",
+  "note": "ADR 0833, 2026-11-27, partial: the four arms of 300 rounds under arm H's load (H, HO outside the temp folder, HP with the case written plainly, HOP both) each gave 0 refusals of 900 calls, so the control H missed its registered 5 or more and the run does not tell the place from the creation path; no remedy was made.",
+  "gap": "Missing: a remedy for the refused first edit_case under load, registered with its check. ADR 0832 saw 15 refusals of 900 under arm H's load; ADR 0833's control H saw 0 of 900, so its arms (outside the temp folder, plain write) read no cause. Not registered but logged: the trace saw the System process hold 18 of H's 300 new case files and 4 of HO's for 141 to 237 ms, and none in HP or HOP. A registration that measures these holds per arm.",
+  "follow_ups": []
+}
