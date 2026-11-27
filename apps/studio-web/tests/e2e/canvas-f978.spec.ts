@@ -22,6 +22,7 @@ import path from 'node:path';
 import { launchStudio, type Studio } from '../support/studio.js';
 import { copyExample, findMcp, mcpPids, NO_MCP, scratch, stubDialog } from '../support/project.js';
 import { killPid } from '../support/rcfd.js';
+import { endProjectRunner } from '../support/runner.js';
 import { FEED_POLL_MS } from '../../src/shared/project.js';
 
 const mcp = findMcp();
@@ -155,10 +156,15 @@ test.beforeAll(async () => {
 });
 
 test.afterAll(async () => {
-  client?.close();
-  await studio?.app.close();
-  for (const p of mcpPids(quick)) killPid(p);
-  await rm(dir, { recursive: true, force: true }).catch(() => undefined);
+  try {
+    client?.close();
+    await studio?.app.close();
+    for (const p of mcpPids(quick)) killPid(p);
+  } finally {
+    // ADR 0828: the runner start_run started (detached, no idle exit), ended before the folder is removed
+    await endProjectRunner(quick);
+    await rm(dir, { recursive: true, force: true }).catch(() => undefined);
+  }
 });
 
 test('E1: a case built from new to a finished run lists every journaled step in order, none missing', async () => {

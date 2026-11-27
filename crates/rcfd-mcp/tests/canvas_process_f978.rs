@@ -56,6 +56,18 @@ fn t_key(t: &str) -> (String, u64) {
     (s.to_string(), format!("{f:0<9}").parse::<u64>().unwrap())
 }
 
+/// ADR 0828: ends the project's runner, which `start_run` started detached and which has no idle exit, when the test
+/// ends, whether it passed or panicked: `rcfd-runner`'s shutdown, as the guards of `feed_f273.rs` do.
+struct EndRunner(PathBuf);
+
+impl Drop for EndRunner {
+    fn drop(&mut self) {
+        let exe = Path::new(env!("CARGO_BIN_EXE_rcfd-mcp"))
+            .with_file_name(format!("rcfd-runner{}", std::env::consts::EXE_SUFFIX));
+        let _ = rcfd_runner::client::Client::new(&self.0, exe).shutdown(std::time::Duration::from_secs(10));
+    }
+}
+
 fn edit(c: &mut Mcp, set: Value, reason: &str) {
     let hash = ok(&c.call("read_project_file", json!({"path": CASE})))["hash"].clone();
     let r = ok(&c.call(
@@ -70,6 +82,7 @@ fn edit(c: &mut Mcp, set: Value, reason: &str) {
 fn b1_b2_b3_the_process_of_a_case_built_from_new_to_a_finished_run() {
     common::binaries();
     let dir = quick_start("b1");
+    let runner = EndRunner(dir.clone());
     let mut studio = Mcp::start(&["--project", &d(&dir), "--client", "studio", "--read-only", "--canvas"]);
     let tools = studio.request("tools/list", json!({}));
     let mut c = Mcp::start(&["--project", &d(&dir)]);
@@ -220,6 +233,7 @@ fn b1_b2_b3_the_process_of_a_case_built_from_new_to_a_finished_run() {
     );
     drop(c);
     drop(studio);
+    drop(runner);
     assert!(!want.is_empty(), "B1: the journal has lines of the case");
     assert_eq!(got, want, "B1: the journal's steps, in order, none missing");
     assert_eq!(kinds.first(), Some(&"created"), "B1: the first step");

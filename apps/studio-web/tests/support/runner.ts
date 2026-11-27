@@ -206,3 +206,19 @@ export class Runner {
     return killed;
   }
 }
+
+/**
+ * ADR 0828 (F-978): ends the runner that a run started through the MCP tools left for `project` (`start_run` starts
+ * `rcfd-runner serve` detached, and it has no idle exit): `Runner.endAll` cancels a run not over, runs `rcfd-runner
+ * shutdown --project <project>` and kills the runner if it is still alive. For an `afterAll`, before the folder is
+ * removed; it never throws (a failure is printed), so the rest of the teardown runs.
+ */
+export async function endProjectRunner(project: string): Promise<void> {
+  const exe = findRunner();
+  if (!project || !exe || !existsSync(path.join(project, '.rcfd'))) return;
+  try {
+    await new Runner(exe, project).endAll();
+  } catch (e) {
+    console.log(`runner teardown of ${project}: ${e instanceof Error ? e.message : String(e)}`);
+  }
+}
