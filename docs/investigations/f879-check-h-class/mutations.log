@@ -1,0 +1,33 @@
+M1 exit 101 (CAUGHT) by f879_hc_measures_on_known_signals
+   C1 (a): f_p 1.342902699985e2 against 1.342902699985e2; A 3.699999396e-1 against 0.37
+   thread 'f879_hc_measures_on_known_signals' (39800) panicked at crates\rcfd-api\tests\f879_check_h_class.rs:396:5:
+   test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 2 filtered out; finished in 0.07s
+   error: test failed, to rerun pass `-p rcfd-api --test f879_check_h_class`
+M2 exit 101 (CAUGHT) by f879_hc_measures_on_known_signals
+   C1 (a): f_p 1.342902699985e2 against 1.342902699985e2; A 3.699999396e-1 against 0.37
+   thread 'f879_hc_measures_on_known_signals' (67044) panicked at crates\rcfd-api\tests\f879_check_h_class.rs:402:5:
+   test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 2 filtered out; finished in 0.16s
+   error: test failed, to rerun pass `-p rcfd-api --test f879_check_h_class`
+M3 exit 101 (CAUGHT) by f879_hc_rows_from_the_committed_records
+   F879-HC T4 dt/2 against steady B2: torque -0.012011 N m (-0.5920 %, limit 0.2119), dp_ts +7.2121 Pa (+11.2281 %, limit 29.75)
+   F879-HC T5 dt/2 against FAN-01: power 313.823 W against 333.3 (-5.844 %), dp_ts 71.4450 Pa against 126.46 (-43.504 %)
+   thread 'f879_hc_rows_from_the_committed_records' (17616) panicked at crates\rcfd-api\tests\f879_check_h_class.rs:505:5:
+   assertion `left == right` failed: A1: the window
+   test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 2 filtered out; finished in 1.54s
+   error: test failed, to rerun pass `-p rcfd-api --test f879_check_h_class`
+M4 exit 101 (CAUGHT) by f879_hc_measures_on_known_signals
+   C1 (a): f_p 1.421896976455e2 against 1.342902699985e2; A 3.699999396e-1 against 0.37
+   thread 'f879_hc_measures_on_known_signals' (61276) panicked at crates\rcfd-api\tests\f879_check_h_class.rs:385:5:
+   test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 2 filtered out; finished in 0.07s
+   error: test failed, to rerun pass `-p rcfd-api --test f879_check_h_class`
+M5 exit 101 (CAUGHT) by f879_hc_reproduces_the_printed_values
+   F879-HC K1 H(dt) torque mean: 6.961718885e1 against the printed 2.007096 (half unit 5e-7)
+   thread 'f879_hc_reproduces_the_printed_values' (50476) panicked at crates\rcfd-api\tests\f879_check_h_class.rs:367:5:
+   K1 H(dt) torque mean: 69.6171888484648 against 2.007096
+   test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 2 filtered out; finished in 0.26s
+   error: test failed, to rerun pass `-p rcfd-api --test f879_check_h_class`
+M6 exit 101 (CAUGHT) by f879_hc_rows_from_the_committed_records
+   thread 'f879_hc_rows_from_the_committed_records' (63580) panicked at crates\rcfd-api\tests\f879_check_h_class.rs:192:5:
+   assertion failed: n >= 4 && t.len() == n
+   test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 2 filtered out; finished in 0.17s
+   error: test failed, to rerun pass `-p rcfd-api --test f879_check_h_class`

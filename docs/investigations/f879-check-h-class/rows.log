@@ -1,0 +1,57 @@
+
+running 3 tests
+test f879_hc_measures_on_known_signals ... C1 (a): f_p 1.342902699985e2 against 1.342902699985e2; A 3.699999396e-1 against 0.37
+C1 (b): f_p 1.342902699985e2; drift 3.658453
+C1 (c): 5.0000e-4 and 2.5000e-2 of the mean
+ok
+test f879_hc_reproduces_the_printed_values ... F879-HC K1 H(dt) torque mean: 2.007096405e0 against the printed 2.007096 (half unit 5e-7)
+F879-HC K1 H(dt) torque A: 2.829825000e-4 against the printed 0.000283 (half unit 5e-7)
+F879-HC K1 H(dt) torque crossings: 4.200000000e1 against the printed 42 (half unit 0e0)
+F879-HC K1 H(dt) torque f_x: 1.009510997e3 against the printed 1009.5 (half unit 5e-2)
+F879-HC K1 H(dt) dp_ts mean: 6.961718885e1 against the printed 69.6172 (half unit 5e-5)
+F879-HC K1 H(dt) dp_ts A: 2.119700500e-2 against the printed 0.0212 (half unit 5e-5)
+F879-HC K1 H(dt) dp_ts crossings: 4.100000000e1 against the printed 41 (half unit 0e0)
+F879-HC K1 H(dt) dp_ts f_x: 3.951391175e2 against the printed 395.1 (half unit 5e-2)
+F879-HC K1 H(dt/2) torque mean: 2.010155589e0 against the printed 2.010156 (half unit 5e-7)
+F879-HC K1 H(dt/2) torque A: 3.530305000e-4 against the printed 0.000353 (half unit 5e-7)
+F879-HC K1 H(dt/2) torque crossings: 1.610000000e2 against the printed 161 (half unit 0e0)
+F879-HC K1 H(dt/2) torque f_x: 1.307589213e3 against the printed 1307.6 (half unit 5e-2)
+F879-HC K1 H(dt/2) dp_ts mean: 7.007286593e1 against the printed 70.0729 (half unit 5e-5)
+F879-HC K1 H(dt/2) dp_ts A: 3.636241500e-2 against the printed 0.0364 (half unit 5e-5)
+F879-HC K1 H(dt/2) dp_ts crossings: 1.060000000e2 against the printed 106 (half unit 0e0)
+F879-HC K1 H(dt/2) dp_ts f_x: 9.574507526e2 against the printed 957.5 (half unit 5e-2)
+F879-HC K2 H(dt) outer rule share: 1.000000000e0 against the printed 1 (half unit 5e-7)
+F879-HC K2 H(dt) site A: 1.255717500e-3 against the printed 0.0012557 (half unit 5e-8)
+F879-HC K2 H(dt) shaft power: 3.135575639e2 against the printed 313.56 (half unit 5e-3)
+F879-HC K2 H(dt/2) outer rule share: 1.000000000e0 against the printed 1 (half unit 5e-7)
+F879-HC K2 H(dt/2) site A: 2.277452000e-3 against the printed 0.0022775 (half unit 5e-8)
+F879-HC K2 H(dt/2) shaft power: 3.139578328e2 against the printed 313.96 (half unit 5e-3)
+ok
+test f879_hc_rows_from_the_committed_records ... F879-HC H(dt): dt 4.605e-5 s; rows 5498 (complete true); window 2749 steps, length 0.126591 s, resolution 7.8994 Hz, highest 10857.8 Hz; outer rule share 1.000000
+  site c157 [m/s]: mean 1.9073887e0; A 1.2557e-3 (peak-to-peak 2.5114e-3, 6.5834e-4 of the mean); crossings 4; f_x 503.05 Hz; f_p 7.90 Hz (share 0.3935); drift across the window 1.5324e-3
+  torque [N m]: mean 2.0149759e0; A 2.0905e-3 (peak-to-peak 4.1809e-3, 1.0375e-3 of the mean); crossings 327; f_x 2583.55 Hz; f_p 2583.11 Hz (share 0.1965); drift across the window 7.2743e-4
+  dp_ts [Pa]: mean 7.1255072e1; A 1.2759e-1 (peak-to-peak 2.5518e-1, 1.7906e-3 of the mean); crossings 327; f_x 2582.55 Hz; f_p 2583.11 Hz (share 0.2261); drift across the window 3.2969e-2
+  shaft power 313.5576 W
+  torque A per flow-through time 1..6: [3.0328e1, 4.9728e-3, 2.5519e-3, 1.8671e-3, 1.8144e-3, 1.7053e-3]
+  dp_ts A per flow-through time 1..6: [6.8047e2, 2.4971e-1, 1.1930e-1, 1.1556e-1, 1.1149e-1, 1.1226e-1]
+  last flow-through time: torque 8.4630e-4, dp_ts 1.5755e-3 of the window mean
+F879-HC H(dt/2): dt 2.3025e-5 s; rows 10996 (complete true); window 5498 steps, length 0.126591 s, resolution 7.8994 Hz, highest 21715.5 Hz; outer rule share 1.000000
+  site c157 [m/s]: mean 1.8444685e0; A 2.2775e-3 (peak-to-peak 4.5549e-3, 1.2347e-3 of the mean); crossings 1; f_x NaN Hz; f_p 7.90 Hz (share 0.4989); drift across the window 3.2655e-4
+  torque [N m]: mean 2.0175481e0; A 4.7505e-4 (peak-to-peak 9.5010e-4, 2.3546e-4 of the mean); crossings 13; f_x 5642.32 Hz; f_p 7.90 Hz (share 0.7742); drift across the window 6.4924e-4
+  dp_ts [Pa]: mean 7.1464334e1; A 1.5676e-2 (peak-to-peak 3.1353e-2, 2.1936e-4 of the mean); crossings 19; f_x 1833.77 Hz; f_p 7.90 Hz (share 0.8171); drift across the window 2.4789e-2
+  shaft power 313.9578 W
+  torque A per flow-through time 1..6: [6.0290e1, 3.8028e-3, 1.3280e-3, 3.9425e-4, 8.1742e-5, 3.1539e-5]
+  dp_ts A per flow-through time 1..6: [1.3865e3, 1.5863e-1, 2.7898e-2, 1.0793e-2, 4.8126e-3, 2.3504e-3]
+  last flow-through time: torque 1.5632e-5, dp_ts 3.2889e-5 of the window mean
+F879-HC G: class by ADR 0183 Steady; site A 1.2557e-3 and 2.2775e-3 against 0.193
+F879-HC T1 torque 1.0375e-3, 2.3546e-4; T2 dp_ts 1.7906e-3, 2.1936e-4 of the mean (limit 0.01)
+F879-HC TF ratios (applies only if T1 or T2 is missed in both runs): torque f_p 0.0031, dp_ts f_p 0.0031
+F879-HC T3 dt/2 against dt: torque 1.2765e-3, dp_ts 2.9368e-3 (limit 0.01); Richardson 2.0184055 N m, 71.53409 Pa
+F879-HC T4 dt/2 against steady B2: torque -0.011144 N m (-0.5493 %, limit 0.2119), dp_ts +7.2314 Pa (+11.2581 %, limit 29.75)
+F879-HC T5 dt/2 against FAN-01: power 313.958 W against 333.3 (-5.803 %), dp_ts 71.4643 Pa against 126.46 (-43.489 %)
+F879-HC keys: [[1.0, 0.0012557174999999754, 7.899427646969839, 2.0149758910734805, 0.002090469500000136, 2583.5500537110815, 2583.1128405591376, 0.0007274271035703657, 71.25507226994182, 0.12759189999999876, 2582.547913263499, 2583.1128405591376, 0.0017052745000001313, 0.11226307000000446], [1.0, 0.0022774519999999576, 7.899427646969839, 2.017548089584219, 0.00047504950000010204, 5642.318604616576, 7.899427646969839, 0.0006492423765225696, 71.46433381081641, 0.01567641999999836, 1833.7693683650537, 7.899427646969839, 3.1538500000038994e-5, 0.002350419999999076]]
+F879-HC G2: no record yet (the registered run)
+ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.92s
+

@@ -568,7 +568,7 @@ One row per record of this folder, grouped by the roadmap category of the item i
 |---|---|---|---|---|---|---|
 | [0730](0730-f826-f830-proposal-ui-metadata-in-the-case-schema-and-help-from-the-engine.md) | F-826 and F-830 proposal: UI metadata in the case schema, and help and an error catalogue from the engine | ACCEPTED | 2026-11-17 | 0 | F-830 | partial |
 
-## Quality, docs and validation (65)
+## Quality, docs and validation (66)
 
 | ADR | Title | Status word | Date | Addenda | Item | Item status |
 |---|---|---|---|---|---|---|
@@ -637,6 +637,7 @@ One row per record of this folder, grouped by the roadmap category of the item i
 | [0821](0821-f885-registration-the-frozen-convection-gradient-its-time-order-a-steady-case-and-check-h.md) | F-885 registration: the convection's gradient kept from the step's first outer iteration as the remedy, its time order, a steady case, then check H | REGISTERED | 2026-11-27 | 1 | F-885 | done |
 | [0822](0822-f885-registration-the-order-floor-of-the-pimple-step-a-finer-order-case-and-check-h.md) | F-885 registration: why the pimple step's time-order case is first order, the remedy's order on a corrected case, then check H | REGISTERED | 2026-11-27 | 1 | F-885 | done |
 | [0824](0824-f885-registration-the-lag-of-the-kept-convection-gradient-its-arms-a-corrected-variant-and-check-h.md) | F-885 registration: the lag of the kept convection gradient, its arms fixed in advance, a corrected variant, then check H | REGISTERED | 2026-11-27 | 1 | F-885 | done |
+| [0827](0827-f879-registration-check-h-class-torque-and-pressure-rise-in-time.md) | F-879 registration: check H's class from ADR 0824's records, torque and pressure rise in time, and what it means for F-870 | REGISTERED | 2026-11-27 | 1 | F-879 | partial |
 
 ## Records with no item in the file name (261)
 
