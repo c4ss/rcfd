@@ -1,0 +1,13 @@
+F885-OC OF: N 16, dt 0.05, ON against OFF 4.1524e-4 (floor 1e-9)
+test f885_oc_setting_acts ... ok
+C5 d5/d1 = 1e-3 everywhere: share 1.00000, (Steady, Steady)
+C5 d5/d1 = 0.05 everywhere: share 0.00000, (NotEvaluable, DoesNotDecide)
+C5 d5/d1 = 0.05 in 2 % of the window: share 0.97999, (NotEvaluable, DoesNotDecide)
+C5 d5/d1 = 0.05 in 0.5 % of the window: share 0.99491, (Steady, Steady)
+C5 d4/d1 = 0.5 with d5/d1 = 1e-3: the 5th is read: share 1.00000, (Steady, Steady)
+C5 d1 = d5 = 0: share 1.00000, (Steady, Steady)
+C5 a NaN d5 in 2 % of the window: share 0.97999, (NotEvaluable, DoesNotDecide)
+test f885_oc_rules_on_built_records ... ok
+F885-OC F2: wall-bounded mode, N 32, OFF: e(0.1, 0.05, 0.025) [4.4497e-3, 1.0603e-3, 2.5926e-4], p_c 2.0693, p_f 2.0320 (limit 1.9)
+test f885_oc_wall_bounded_mode ... ok
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 6 filtered out; finished in 17.13s

@@ -1,0 +1,13 @@
+test f885_oc_time_order_record has been running for over 60 seconds
+F885-OC O' OFF: N 64, e(0.1, 0.05, 0.025) [2.7615e-4, 6.7885e-5, 1.6570e-5], p_c 2.0243, p_f 2.0345 (limit 1.9)
+F885-OC O' ON: N 64, e(0.1, 0.05, 0.025) [3.7568e-4, 9.7105e-5, 2.7461e-5], p_c 1.9519, p_f 1.8222 (limit 1.9)
+F885-OC O': O3' ON against OFF at dt 0.05 4.1083e-5 (floor 1e-9); e_ON / e_OFF [1.3604e0, 1.4304e0, 1.6572e0]; abs(p_f(ON) - p_f(OFF)) 0.2123
+thread 'f885_oc_time_order_record' (63224) panicked at crates\rcfd-api\tests\f885_order_case.rs:915:5:
+O1' missed: p_f(ON) 1.8221834506574788
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+test f885_oc_time_order_record ... FAILED
+failures:
+failures:
+    f885_oc_time_order_record
+test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 8 filtered out; finished in 158.46s
+error: test failed, to rerun pass `-p rcfd-api --test f885_order_case`

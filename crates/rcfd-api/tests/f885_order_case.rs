@@ -885,10 +885,10 @@ fn f885_oc_setting_acts() {
 }
 
 /// O' (ADR 0822 section 4): the observed order of BDF2 at N = 64 with the setting off (O2', the control) and on (O1'), and
-/// the non-vacuity (O3').
+/// the non-vacuity (O3'). KNOWN MISS (ADR 0822 addendum 1, limits intact): O1' missed.
 #[test]
-#[ignore = "heavy record, ADR 0822: O' on 64 x 64 cells (minutes): cargo test --release -p rcfd-api --test f885_order_case f885_oc_time_order_record -- --ignored --nocapture"]
-fn f885_oc_time_order_record() {
+#[ignore = "known miss, ADR 0822 addendum 1: p_f(ON) 1.8222 against 1.9 (O1' missed; O2' p_f(OFF) 2.0345 and O3' 4.11e-5 met), on 64 x 64 cells (minutes): cargo test --release -p rcfd-api --test f885_order_case f885_oc_time_order_known_miss -- --ignored --nocapture"]
+fn f885_oc_time_order_known_miss() {
     let mut p_f = [f64::NAN; 2];
     let mut at_mid: Vec<Vec<Vec3>> = Vec::new();
     let mut errs: Vec<Vec<f64>> = Vec::new();
@@ -1159,6 +1159,7 @@ fn f885_oc_h_dt2_record() {
 
 /// SR (ADR 0822): 20 steps of the check H path with the opt-ins against the first 20 rows of the committed `H_dt.csv`.
 #[test]
+#[ignore = "not run: check H was not run by ADR 0822's rule (O1' missed; section 5)"]
 fn f885_oc_short_run_on_the_check_h_path() {
     let a = run_h("short", H_DT, SHORT, true);
     assert!(a.failed.is_none(), "{:?}", a.failed);
@@ -1191,6 +1192,7 @@ fn f885_oc_short_run_on_the_check_h_path() {
 
 /// G1 (ADR 0822): the class of ADR 0183 and the verdict of F-879 from the committed full rows of the two runs, as recorded.
 #[test]
+#[ignore = "not run: check H was not run by ADR 0822's rule (O1' missed; section 5)"]
 fn f885_oc_class_from_the_committed_records() {
     let a = read_full(&record_dir().join("H_dt.csv"), H_DT, H_STEPS);
     let b = read_full(&record_dir().join("H_dt2.csv"), 0.5 * H_DT, 2 * H_STEPS);

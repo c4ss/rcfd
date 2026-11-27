@@ -1,0 +1,9 @@
+F885-OC R0: N 16 OFF e [5.1468e-4, 2.2644e-4, 1.1204e-4], p_c 1.1846, p_f 1.0151; relative to ADR 0821 [3.4048e-6, 1.5466e-5, 3.3249e-5] (limit 1e-4)
+F885-OC D-32 (N 32): e(0.1, 0.05, 0.025) [2.7200e-4, 7.1771e-5, 2.6230e-5], p_c 1.9222, p_f 1.4522
+F885-OC D-s (exact BDF2 start, N 16): e(0.1, 0.05, 0.025) [9.7210e-4, 4.6515e-4, 2.2248e-4], p_c 1.0634, p_f 1.0640
+F885-OC D-rc (rhie_chow_step_consistent, N 16): e(0.1, 0.05, 0.025) [3.8292e-4, 9.3308e-5, 2.2976e-5], p_c 2.0370, p_f 2.0219
+test f885_oc_diagnosis_record has been running for over 60 seconds
+F885-OC D-cp (coupled_ddt_correction, N 16): e(0.1, 0.05, 0.025) [5.1468e-4, 2.2644e-4, 1.1204e-4], p_c 1.1846, p_f 1.0151
+F885-OC reading: p_f(D-32) - p_f(16) 0.4371 (H1 needs >= 0.2 with O2' and F2 >= 1.9); abs(p_f(D-s) - p_f(16)) 0.0489 (H2 ruled out if <= 0.05)
+test f885_oc_diagnosis_record ... ok
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 8 filtered out; finished in 69.83s

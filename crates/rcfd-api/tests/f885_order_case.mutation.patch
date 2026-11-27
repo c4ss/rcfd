@@ -1,0 +1,14 @@
+# expect-fail: cargo test -p rcfd-api --release --test f885_order_case f885_oc_setting_acts
+diff --git a/crates/rcfd-fv/src/pimple.rs b/crates/rcfd-fv/src/pimple.rs
+index 4533cd18..01e51232 100644
+--- a/crates/rcfd-fv/src/pimple.rs
++++ b/crates/rcfd-fv/src/pimple.rs
+@@ -2202,7 +2202,7 @@ impl PimpleSolver {
+                 };
+                 // F-885 (ADR 0820, opt-in): the convection's gradient of the step's first outer iteration kept for the later
+                 // ones
+-                let grad_c: Option<&[Vec3]> = match (&grad, s.outer_frozen_convection_gradient) {
++                let grad_c: Option<&[Vec3]> = match (&grad, false) {
+                     (Some(gr), true) => Some(frozen_grad_conv[k].get_or_insert_with(|| gr.clone()).as_slice()),
+                     _ => grad.as_deref(),
+                 };
