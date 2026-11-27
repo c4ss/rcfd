@@ -99,3 +99,23 @@ R1 hold, `npm test` passes (G1), G2 holds and each mutation is caught. Partial o
 F-979's `ChangeLine` of the live panels (it shows the reason already, without D2's form or cut); the exported page's
 process panel (F-996's); linking an `mcp` actor to a Claude Code session (ADR 0188 Q4 (c)); the reason of the Studio's
 own writes (it gives none); run steps' event reasons (shown as before).
+
+## Addendum 1 (2026-11-27): amendment 1, the set-up of A4 and A5
+
+Written after the registered `npm test` run of `reason-f273.spec.ts` and before any corrected run. In that run A1, A2
+and A3 held (S1 326 ms, S2 399 ms, S3 421 ms, S4 340 ms, A2 676 ms, limit 1 600 ms), and the test of A4 and A5 failed:
+its first wait for the activity line timed out after 30 s. **A4 and A5 missed in the registered run.**
+
+Diagnosis. The activity line (`ClaudeActivity`) is drawn in the Home tab's fact strip (`ProjectHome.tsx`, "one quiet
+line at the strip's end"). `show_view` had selected the Canvas tab, so no `.ph-activity` was in the page and the wait could
+not hold, whatever the Studio showed. The page at the time out had S5's row with `by mcp (pid 61776); why: why why ...`,
+cut. The set-up was defective, not the code: the test assumed the line visible on every tab.
+
+Corrected set-up (a new file `tests/e2e/reason-f273-a1.spec.ts`; the old test of A4 and A5 stays in
+`reason-f273.spec.ts` as an ignored record by one `test.skip(true, ...)` line, as ADR 0807 amendment 1 keeps its record).
+Same project copy, server and Studio as before; S1 `new_case` with a reason and `show_view` of the case's process, then:
+(a) S5 appended with the Canvas tab shown: its row within L of the append, cut (`data-reason-cut`); (b) the Home tab
+picked: the activity line within L of the pick shows `why:` the cut text, `data-reason-cut` set; (c) S6 appended with the
+Home tab shown: the line within L of the append shows `why: not given`, `data-why` `none`; (d) the Canvas tab picked: S6's
+row within L of the pick reads `why: not given`, and the rows are one more than after (a). The limits are unchanged:
+the exact texts of D2 and L = 1 600 ms (ADR 0188 C3-St). A4 and A5 are decided by this run, made once.
