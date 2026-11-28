@@ -282,3 +282,20 @@ run) and before the corrected runs. Nothing above is changed.
 3. `cargo fmt -p rcfd-api --check` failed with os error 206 (the file name or extension is too long), before checking any
    file. As the lead's instruction for that case says, `rustfmt --check` (edition 2021, the repository's `rustfmt.toml`)
    of the three touched files is run in its place, once.
+
+## Amendment 2 (2026-11-28): H11's reference build fails; a corrected case H11b
+
+Written and committed after the heavy runs of H1 to H11 (at 56468503) and before the corrected run. Nothing above is
+changed.
+
+H11's refusal held (`r11_`: T_r 0.000568 s, P_r 7,307,264 bytes, CPU 70 % before), but in `h11_` the reference build
+failed (CPU 66 % before): `mesh.fan.front_gap`: "the line family is folded at layer 0 (r = 0.10000), C block around line
+110, row 34: the leading-edge fan cannot be built for this blade with the front_gap 0.3 and n_nose 10 given". As
+registered, K4 and K5 are not decided for H11 by that run. The cause is the set-up: `n_nose = 10` was raised from the
+shipped case's 4 without checking that the C-grid's leading-edge fan builds, which is a matter of geometry, not of the
+count. Correction: H11b, H11 with the shipped case's `n_nose = 4` and everything else as H11: per layer
+`2·(40 + 60)·70 + 2·4·40 = 14,320`, times 140 layers, plus `4·60` core cells in the 20 gap layers:
+`2,004,800 + 4,800 = 2,009,600` cells (over 2,000,000). New ignored tests named `r11b_` and
+`h11b_`, the same as `r11_` and `h11_` for H11b; `r11_` and `h11_` stay as they are, as the record of this run. Their
+limits are K4's and K5's, unchanged. The corrected runs are `r11b_` and then `h11b_`, each once, under the sampler. If
+H11b's build also fails, K4 and K5 stay not decided for the C-grid, and the decision is partial.
