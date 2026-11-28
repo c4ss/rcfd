@@ -1,0 +1,14 @@
+# expect-fail: cargo test -p rcfd-api --release --target-dir target/mutation --test f870_time_march_b1 f870_tm_measures_on_known_signals
+diff --git a/crates/rcfd-api/tests/f870_time_march_b1.rs b/crates/rcfd-api/tests/f870_time_march_b1.rs
+index da265a71..4b9d6e42 100644
+--- a/crates/rcfd-api/tests/f870_time_march_b1.rs
++++ b/crates/rcfd-api/tests/f870_time_march_b1.rs
+@@ -45,7 +45,7 @@ const CELLS: usize = 38184;
+ const SETTLE: f64 = 0.01;
+ const STEP_AGREE: f64 = 0.01;
+ /// The last flow-through time starts after this many flow-through times.
+-const LAST_FT_FROM: f64 = 5.0;
++const LAST_FT_FROM: f64 = 4.0;
+ /// The steps of M(dt) at which the rings are sampled; M(dt/2) at twice these (the same times).
+ const SAMPLE_DT: [usize; 5] = [4582, 4811, 5040, 5269, 5498];
+ /// The casing ring [m]: in the wall-adjacent cell (ADR 0831 section 1).

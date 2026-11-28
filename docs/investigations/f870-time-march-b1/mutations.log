@@ -1,0 +1,17 @@
+mutations on git archive of 1b9282eb, 2026-11-28T10:45:20Z
+M1 (s/^const LAST_FT_FROM: f64 = 5.0;/const LAST_FT_FROM: f64 = 4.0;/) -> f870_tm_measures_on_known_signals: caught
+    thread 'f870_tm_measures_on_known_signals' (22984) panicked at crates\rcfd-api\tests\f870_time_march_b1.rs:1331:9:
+    assertion `left == right` failed: the last flow-through time at dt 0.00004605
+M2 (s/^const SETTLE: f64 = 0.01;/const SETTLE: f64 = 0.1;/) -> f870_tm_measures_on_known_signals: caught
+    thread 'f870_tm_measures_on_known_signals' (18912) panicked at crates\rcfd-api\tests\f870_time_march_b1.rs:1350:5:
+M3 (s/            torque: c\[2\],/            torque: c[3],/) -> f870_tm_rows_from_the_committed_records: caught
+    thread 'f870_tm_rows_from_the_committed_records' (37052) panicked at crates\rcfd-api\tests\f870_time_march_b1.rs:1392:13:
+M4 (record) -> f870_tm_rows_from_the_committed_records: caught
+    thread 'f870_tm_rows_from_the_committed_records' (53340) panicked at crates\rcfd-api\tests\f870_time_march_b1.rs:945:60:
+M5 (s/^    u_num + s + t + u_meas$/    u_num + s + u_meas + 0.0 * t/) -> f870_tm_measures_on_known_signals: caught
+    thread 'f870_tm_measures_on_known_signals' (21784) panicked at crates\rcfd-api\tests\f870_time_march_b1.rs:1362:5:
+M6 (s/s.outer_frozen_convection_gradient_extrapolated_boundary = true;/s.outer_frozen_convection_gradient_extrapolated_boundary = false;/) -> f870_tm_short_run_holds_the_record: caught
+    thread 'f870_tm_short_run_holds_the_record' (64892) panicked at crates\rcfd-api\tests\f870_time_march_b1.rs:1427:13:
+M7 (s/^const R_CASING_RING: f64 = 0.2495;/const R_CASING_RING: f64 = 0.2475;/) -> f870_tm_rows_from_the_committed_records: caught
+    thread 'f870_tm_rows_from_the_committed_records' (63196) panicked at crates\rcfd-api\tests\f870_time_march_b1.rs:1387:5:
+end 2026-11-28T10:48:04Z
