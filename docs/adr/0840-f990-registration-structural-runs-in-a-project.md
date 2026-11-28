@@ -271,3 +271,16 @@ Decision by the registered rule: **done**. Every row held and every mutation was
 > For F-977: E8 of ADR 0817 ran as ADR 0840 E1 on 2026-11-28 and held (the structural layout shown from a project run in 609 ms, limit 1.6 s).
 
 The same entries for F-990 are `docs/roadmap/proposals/0840-F-990.json`.
+
+## Amendment 2 (2026-11-28): the cells of row D3
+
+Written after addendum 1, when `python scripts/process_report.py --check` named row D3 ("kind 'exact' is not one of the
+four"); nothing above is changed. Row D3 of the table of checks has one cell too many: its limit was written in two cells
+(the description, then "0 (bit for bit)"), so every later cell sits one column to the right and the column kind reads
+"exact". The row as registered, in its columns: check "the store of D1: every cell's `ux, uy, uz` against the mean of its
+element's corner-node displacements of the test's run, every cell's `sxx..szx` against `element_stress` of the test's
+run"; limit "max abs difference 0 (bit for bit)"; source "D3 (the same formula on the same result)"; estimate 0; margin
+exact; kind **code verification**. The limit, the measured result of addendum 1 (0) and the decision are unchanged. The
+table cannot be edited (rule 18), so the process report keeps naming the row; for the lead: the row is listed as
+`0840-f990-registration-structural-runs-in-a-project.md: D3` where the lead lists such rows (the registration-kind
+exceptions of `scripts/process_report.py`).
