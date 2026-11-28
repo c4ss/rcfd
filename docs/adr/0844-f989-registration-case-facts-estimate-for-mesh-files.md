@@ -262,3 +262,23 @@ what the code gives; no case of the set has them. `[mesh.adapt]` and `[mesh.slid
   with the maintainer's word to amend `e6b_`'s assertion and `mesh.preview`'s reply for large files; (c) `mesh.preview`
   refuses by `cell_estimate` too, under a new reply text. Recommendation: (a) now, (b) if the Studio's preview meets large
   files.
+
+## Amendment 1 (2026-11-28): `a3_`'s set-up is defective; a corrected test `a3b_`; the test file's two clippy lints; fmt by rustfmt
+
+Written and committed after the registered run of R7 (code commit 6fd86d7b, patch e978d684; CPU 60 % before the new file's
+run) and before the corrected runs. Nothing above is changed.
+
+1. `a3_at_and_below_the_built_count` failed in its set-up, before any check of its limit: it and `a1_` run in parallel in
+   one process and write their files into the same temporary folder (`rcfd-adr0844-<pid>-files`), which `a1_` deletes at
+   its end; `a3_`'s build of W1 then found no file (`io error: The system cannot find the path specified. (os error 3)`,
+   at the test file's line 63). K3 is not decided by that run. Correction: a new test `a3b_at_and_below_the_built_count`,
+   the same as `a3_` with a folder of its own (`files_in("a3b")`). `a3_` stays in the file as an ignored record. Its
+   limit is K3's, unchanged. The corrected run is `a3b_` alone, once.
+2. `cargo clippy -p rcfd-api --all-targets -- -D warnings` failed on two lints in the new test file, not in the library:
+   `write!` with a format string ending in a newline (the 2D Fluent writer, line 171) and a field assigned after
+   `ServiceConfig::default()` (`a4_`, lines 461 to 462). Correction: `writeln!` and a struct literal with
+   `..ServiceConfig::default()`; they change neither a file written nor a check. Clippy is run again once after this
+   correction.
+3. `cargo fmt -p rcfd-api --check` failed with os error 206 (the file name or extension is too long), before checking any
+   file. As the lead's instruction for that case says, `rustfmt --check` (edition 2021, the repository's `rustfmt.toml`)
+   of the three touched files is run in its place, once.
