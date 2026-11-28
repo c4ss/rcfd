@@ -1,0 +1,14 @@
+# expect-fail: cargo test --release -p rcfd-api --target-dir target/mutation --test case_facts_estimate_cgrid_adr0846 s1_
+diff --git a/crates/rcfd-api/src/mesh_preview.rs b/crates/rcfd-api/src/mesh_preview.rs
+index a8f91d4d..93857a3c 100644
+--- a/crates/rcfd-api/src/mesh_preview.rs
++++ b/crates/rcfd-api/src/mesh_preview.rs
+@@ -185,7 +185,7 @@ fn fan_cells(case: &Case) -> u64 {
+     let n_k = f("n_span").saturating_add(f("n_gap"));
+     if text(case, "mesh.fan.topology") == "c_grid" {
+         let c = m(2 * f("n_down").saturating_add(f("n_chord")), f("n_side"));
+-        let fe = m(2 * f("n_nose"), f("n_up"));
++        let fe = m(f("n_nose"), f("n_up"));
+         let k0 = if blade { f("n_span") } else { 0 };
+         let core = m(m(f("n_core"), f("n_chord")), n_k.saturating_sub(k0));
+         m(c.saturating_add(fe), n_k).saturating_add(core)
