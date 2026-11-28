@@ -299,3 +299,84 @@ count. Correction: H11b, H11 with the shipped case's `n_nose = 4` and everything
 `h11b_`, the same as `r11_` and `h11_` for H11b; `r11_` and `h11_` stay as they are, as the record of this run. Their
 limits are K4's and K5's, unchanged. The corrected runs are `r11b_` and then `h11b_`, each once, under the sampler. If
 H11b's build also fails, K4 and K5 stay not decided for the C-grid, and the decision is partial.
+
+## Addendum 1: results (2026-11-28)
+
+The code is commit 6fd86d7b (`mesh_preview.rs`: `cell_estimate` and its readers, added after `estimate`, which is
+unchanged; `facts.rs`: the doc comment and the one call in `case_facts`), the patch e978d684, the tests of 56468503
+(amendment 1) and 561460ba (amendment 2). Each run made once; the host CPU before each is given. Others loaded the machine
+throughout. Logs in the scratch folder (`logs/`).
+
+### Checks
+
+| Id | Limit | Measured | Met |
+|---|---|---|---|
+| K1 | equal, both routes, 17 files | all 17 equal by both routes: the Gmsh files 64, 336, 1139 in each of the four variants; both `naca0012-ogrid` 6144; W1 60, W2 60, W3 6 (CPU 60 %) | met |
+| K2 | equal, both routes, 11 generators | all 11 equal: G1 32, G2 384, G3 64, G4 64, G5 128, G6 128, G7 112, G8 13,332, G9 13,524, G10 11,536, G11 11,760 (CPU 60 %) | met |
+| K3 | `a3_`, `a4_`, `n1_` | `a4_` and `n1_` passed (CPU 60 %); `a3_` failed in its set-up (shared folder, os error 3), not deciding (amendment 1); `a3b_` passed (CPU 68 %) | met (amendment 1's run) |
+| K4 | T_r ≤ 1 s, T_r / T_b ≤ 0.5, built = count | H1 0.468 s / 29.27 s (0.016); H2 0.0305 / 26.70 (0.0011); H3 0.138 / 26.78 (0.0052); H4 0.156 / 19.82 (0.0079); H5 0.00042 / 29.86; H6 0.00030 / 17.56; H7 0.00027 / 17.11; H8 0.00037 / 17.15; H9 0.00032 / 28.99; H10 0.00059 / 22.59; every built count equal to the estimate (CPU 50 % to 100 % before). H11 and H11b: refused (T_r 0.00057 s and 0.00035 s, the right count) but the reference build failed in the C-grid's leading-edge fan: not deciding | met for H1 to H10; **not decided** for the C-grid |
+| K5 | P_r ≤ 200 MB, P_r / P_b ≤ 0.5 | P_r 6.5 MB to 7.4 MB for every case (H11 7.0 MB, H11b 7.0 MB); P_b H1 5,342 MB, H2 5,364, H3 5,365, H4 2,959, H5 5,477, H6 3,752, H7 3,708, H8 3,765, H9 3,327, H10 3,941 (largest ratio 0.0025); H11, H11b no build | met for H1 to H10; **not decided** for the C-grid |
+| K6 | `n2_` | passed | met |
+| K7 | the named files as on main | `case_facts_adr0737` 8 passed (CPU 100 %); `mesh_preview_adr0732` 5 passed (CPU 100 %; 2,489 s under load); `case_facts_estimate_adr0812` 6 passed, 1 ignored, `e6b_` included (CPU 88 %) | met |
+| BH | as on main | 3 passed, 1 ignored (CPU 65 %) | met |
+| R7 | each exit 0 | `--lib` 160 passed, 4 ignored (CPU 70 %); the new file as K1 to K3; clippy first failed on the test file's two lints (amendment 1), then exit 0 (CPU 63 %); `cargo fmt -p rcfd-api --check` failed with os error 206 (amendment 1), `rustfmt --check` of the three files exit 0 (CPU 51 %) | met (amendment 1's runs) |
+| DS, P1, A1 | as registered | in the report | see the report |
+
+H1 written by `p0_` in 20.8 s. The file case's largest refusal time (H1, 2.2 million Gmsh 2.2 ASCII elements, about
+190 MB) is 0.47 s against the limit of 1 s, the estimate of 0.3 s.
+
+### Mutations
+
+On a `git archive` copy of 561460ba, each once, the new file's fast tests:
+
+| Id | Caught by |
+|---|---|
+| MU1 (surfaces as cells) | `a1_`, `a3b_` (CPU 71 %) |
+| MU2 (`pipe_sweep` without its ring) | `a2_`, `a4_` (CPU 60 %) |
+| MU3 (OpenFOAM without `+ 1`) | `a1_`, `n1_` (CPU 100 %) |
+| MU4 (committed: `case_facts` on `estimate`) | `n1_` (CPU 100 %) |
+| MU5 (C-grid core in every layer) | `a2_`, `a3b_`, `a4_` (CPU 100 %) |
+| MU6 (Gmsh 4.1 binary block count as 4 bytes) | `a1_` (CPU 100 %) |
+| MU7 (Fluent binary cell sections not counted) | `a1_` (CPU 65 %) |
+
+All seven caught. A first start of the mutation script stopped on a syntax error of the script before any mutation ran.
+
+### Deviations
+
+Amendment 1 (a shared temporary folder; two clippy lints in the test file; os error 206) and amendment 2 (H11's C-grid
+does not build). The function is `cell_estimate`, not `estimate` (registered; question 1). H11b, with the shipped
+`n_nose`, failed in the same way, so the over-limit C-grid case is not decided; the counts were raised per direction
+without a check that the C-grid's leading-edge fan builds at those counts.
+
+### What was not run
+
+K4 and K5 for an over-limit C-grid case (no registered C-grid case over 2,000,000 cells builds). Nothing else registered
+was left out.
+
+### Size
+
+Size (agent, actual): partial; 1; 1; 2; 210000
+
+### Decision by the registered rule
+
+**Partial.** K1 and K2 hold by both routes for all 28 cases, K3, K6, K7, BH and R7 hold (K3 and R7 on amendment 1's runs),
+K4 and K5 hold for H1 to H10 (every file format and every generator but the C-grid), and MU1 to MU7 are caught. K4 and K5
+are not decided for the C-grid topology of `axial_fan_sector`: its refusal was measured (0.35 ms, 7.0 MB), but no reference
+build over the limit was made, so the rule's "for each of H1 to H11" is not met.
+
+## Open questions for the maintainer (results)
+
+- **Q2 (an over-limit C-grid that builds).** Options: (a) a further registration under F-989 (rule 13) that fixes an
+  over-limit C-grid case by raising only the radial counts of the shipped case (`n_span`, `n_gap`; per layer 544 cells, so
+  about 3,700 layers), with a small build of the same planform first to check the leading-edge fan, and runs K4 and K5 on
+  it; (b) take H10 (the H-grid, same generator, same code path in `case_facts`) and the C-grid's small cases G10 and G11
+  as enough. Recommendation: (a).
+- Q1 of the registration stands.
+
+## For the lead: roadmap entries
+
+> Status: partial
+
+> Note: ADR 0844, 2026-11-28, partial: case.facts refuses by mesh_preview::cell_estimate, a count read without building, for Gmsh 2.x and 4.1 (ASCII and binary), Fluent (ASCII, binary sections, 2D) and OpenFOAM files and for cylinder_ogrid, pipe_sweep, box_3d, annulus_3d_sector_cylindrical_interface and axial_fan_sector; the count equals the built count by two routes on 28 cases, ten over-limit cases are refused in 0.3 ms to 0.47 s (builds 17 s to 30 s) at 6.5 MB to 7.4 MB (builds 3.0 GB to 5.5 GB), seven mutations caught; the over-limit C-grid fan case did not build, so its time and memory are not decided.
+
+> Gap: case.facts refuses by mesh_preview::cell_estimate for every mesh format and generator (ADR 0844), equal to the built count on 28 cases and within ADR 0812's limits on 10 over-limit cases. Not decided: the over-limit axial_fan_sector C-grid case (its build folds at the leading-edge fan at the counts registered). mesh.preview keeps its own estimate (ADR 0844 Q1).
