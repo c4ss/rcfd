@@ -168,7 +168,7 @@ fn fluent_2d() -> String {
     );
     let mut first = 1;
     for (z, bc, list) in [(3, 2, &inner), (4, 3, &wall)] {
-        let _ = write!(s, "(13 ({z:x} {first:x} {:x} {bc:x} 2)(\n", first + list.len() - 1);
+        let _ = writeln!(s, "(13 ({z:x} {first:x} {:x} {bc:x} 2)(", first + list.len() - 1);
         for f in list.iter() {
             let _ = writeln!(s, "{:x} {:x} {:x} {:x}", f[0], f[1], f[2], f[3]);
         }
@@ -318,6 +318,11 @@ fn box_mesh(n: [usize; 3]) -> Mesh {
 
 /// R1 to R14 and W1 to W3 with their registered counts (route B).
 fn files() -> (Vec<(String, Case, u64)>, PathBuf) {
+    files_in("files")
+}
+
+/// As [`files`], with the test's files in a folder of its own (ADR 0844 amendment 1).
+fn files_in(folder: &str) -> (Vec<(String, Case, u64)>, PathBuf) {
     let mut out = Vec::new();
     let data = repo().join("crates/rcfd-io/tests/data");
     for (stem, n) in [("hex", 64), ("prism", 336), ("tet", 1139)] {
@@ -330,7 +335,7 @@ fn files() -> (Vec<(String, Case, u64)>, PathBuf) {
         let p = repo().join(root).join("wind-tunnel/meshes/naca0012-ogrid");
         out.push((format!("{root} naca0012-ogrid"), file_case(&p), 6144));
     }
-    let d = tmp("files");
+    let d = tmp(folder);
     let m = box_mesh([3, 4, 5]);
     for (name, bin) in [("W1 fluent ascii", false), ("W2 fluent binary", true)] {
         let p = d.join(format!("w{}.msh", u8::from(bin) + 1));
@@ -435,8 +440,31 @@ fn a2_generators_by_two_routes() {
 
 /// K3: not refused at the built count, refused one below it with the built count.
 #[test]
+#[ignore = "ADR 0844 amendment 1: a defective set-up (its folder is shared with a1_ and deleted by it); replaced by a3b_"]
 fn a3_at_and_below_the_built_count() {
     let (mut set, d) = files();
+    set.extend(generators().into_iter().map(|(w, c, n)| (w.to_string(), c, n)));
+    for (what, case, _) in &set {
+        let n = built(case);
+        match facts::case_facts(case, InText::NotDefault, Some(n)) {
+            Ok(f) => assert_eq!(f.cells, n, "{what}"),
+            Err(FactsError::TooLarge { cells, limit }) => panic!("{what}: refused at the limit ({cells} > {limit})"),
+            Err(e) => eprintln!("{what}: at the limit, not refused; the build after it: {e:?}"),
+        }
+        match facts::case_facts(case, InText::NotDefault, Some(n - 1)) {
+            Err(FactsError::TooLarge { cells, limit }) => {
+                assert_eq!((cells, limit), (n, n - 1), "{what}")
+            }
+            other => panic!("{what}: below the limit: {other:?}"),
+        }
+    }
+    let _ = std::fs::remove_dir_all(d);
+}
+
+/// K3 (ADR 0844 amendment 1): not refused at the built count, refused one below it with the built count.
+#[test]
+fn a3b_at_and_below_the_built_count() {
+    let (mut set, d) = files_in("a3b");
     set.extend(generators().into_iter().map(|(w, c, n)| (w.to_string(), c, n)));
     for (what, case, _) in &set {
         let n = built(case);
@@ -458,8 +486,10 @@ fn a3_at_and_below_the_built_count() {
 /// K3: the service's reply.
 #[test]
 fn a4_the_service_reply() {
-    let mut cfg = ServiceConfig::default();
-    cfg.max_cells = 20;
+    let cfg = ServiceConfig {
+        max_cells: 20,
+        ..ServiceConfig::default()
+    };
     let svc = Service::new(cfg);
     svc.enable_ui();
     let call = |method: &str, params: Value| {
