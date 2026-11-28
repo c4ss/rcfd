@@ -1,0 +1,8 @@
+{
+  "form": 1,
+  "adr": "0840",
+  "item": "F-990",
+  "base": "d99e92837bc3b829d64ae31706dbf3a266488e9b",
+  "status": "done",
+  "note": "ADR 0840, 2026-11-27, done: start_run of a solid case file (a text with a top-level materials table) is run by the runner's solid driver rcfd-solid-run with the arguments of rcfd run; the cantilever_hex8 run holds run.json, case.snapshot, the report (equal to run_solid_case_file's), the .vtu and 11 stored cell fields of displacement and stress, and show_view of it takes the structural layout (case, u_magnitude, von_mises, two report monitors, run), shown in the open Studio 609 ms after the tool's result (limit 1.6 s) with the report's values; 5 of 5 mutations caught, one committed."
+}

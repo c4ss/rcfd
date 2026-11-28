@@ -214,3 +214,60 @@ Written after the code of D1 to D5 and before any test of F-990 was compiled, co
    (which depends on it), so no third-party crate is added and the graph stays acyclic (rule 5).
 
 No other row, limit, source or the decision rule changes.
+
+## Addendum 1: results (2026-11-28)
+
+Written after the runs; nothing above is changed. Release profile, `CARGO_TARGET_DIR` in the scratch folder, 8 build
+jobs (other agents built and ran on the machine at the same time). Commits: 63b8bdbe (this registration), 13ef5b71
+(amendment 1), af54eb1f (engine and Rust tests), 8400d958 (the e2e spec), 4614b5ec (the committed mutation), then this
+addendum and the proposal. Each registered run was made once. Deviations: `cargo fmt` (a write) was run before the code
+commit; the code and the new tests were compiled with `--no-run` and the spec type-checked (`tsc -p tsconfig.test.json`)
+before the commit (none is a check). The CPU load (Windows `LoadPercentage`) was 80 % at the runner's `--lib` run, 74 % at
+the workspace's, 55 % at `solid_run_f990`, 79 % at `structural_run_f990`, 46 % at `baseline_hashes`, 80 % at the start
+and 99 % at the end of `npm test`.
+
+### Checks
+
+| Id | Limit | Measured | Met |
+|---|---|---|---|
+| R1 | 22 of 22 | 9 solid, 13 flow, 22 of 22 (`rcfd-runner --lib`: 37 passed, 1 ignored) | yes |
+| D1 | exit 0, finish finished, 3 monitors, outputs, the report equal | exit 0, finish finished exit 0, one iteration event with the 3 values, `.vtu` and report written, the report equal to `run_solid_case_file`'s | yes |
+| D2 | 11 cell fields of 1280, 1280 cells, 2025 points; max `von_mises` = `element_von_mises_max`; ratio in [0.97, 1.0] | as registered; max `von_mises` 8.725448871789154e6 Pa, bit for bit the report's; ratio 0.990337 | yes |
+| D3 | max abs difference 0 | 0 | yes |
+| D4 | `{"ok": true, "cells": 1280}`, exit 0 | as registered | yes |
+| N1 | refused at `materials.steel.youngs_modulus`, exit 2; run failed, no store; `--set` named | check-only exit 2 at that key (line 20); run exit 2, finish failed, no store; `--set` exit 2, finish failed naming `--set` | yes |
+| L1 | the 6 panels, structural, no view error | as registered (`rcfd-workspace --lib`: 20 passed, ADR 0817 R1, R2, L1, L2 among them, L2 (d) still `case, table`) | yes |
+| S1 | finished within 60 s with its records | `r-20261127T235310-181f` finished after 0.54 s; `run.json`, the snapshot byte-identical, the report equal, `.vtu`, the 11 fields, `metrics.json` `reports` the 3 values (displacement_max_magnitude 0.0015527103817975585 m, von_mises_max 11577681.623922525 Pa, element_von_mises_max 8725448.871789154 Pa), one residual line | yes |
+| S2 | structural, the rule, 6 panels; `read_view` the panels of L1 | as registered, `studios` 1 | yes |
+| S3 | -32602, -32602, 1003 at the key; no run folder | as registered | yes |
+| E1 (F-977 E8) | the run finishes; the panels within 1.6 s; each panel's view, the monitors the report's values | `r-20261128T000825-1d33` finished 572 ms after `start_run`; the 6 panels 609 ms after the tool's result; every view, the monitors `0.0015527103817975585` and `11577681.623922525`, at 720 ms | yes |
+| L2 | pass, unedited | `rcfd-mcp --lib` 18 passed (1 ignored); `canvas_layout_f977` 1, `canvas_view_f976` 4, `project_list_f270` 1 (1 ignored), `new_simulations_f271` 1 passed; `baseline_hashes` 3 passed (1 ignored) | yes |
+| L3 | pass, 7 skipped | `npm test` 908 passed, 7 skipped, 0 failed, 14.4 min | yes |
+| L4 | fmt, clippy, `docs_site`, the proposal check, the process report | fmt and clippy clean; the other three were run after this addendum, their results in the report | see the report |
+
+### Mutations
+
+| Id | Caught by |
+|---|---|
+| M1 (`solid_case` always false) | `structural_run_f990`, at S3 (line 110: the call with `set` was not refused as a solid case, since D4 uses the same rule) before S1 is reached; registered: S1 |
+| M2 (no `Field(von_mises)`) | L1 (`view.rs`, `l1_f990`) |
+| M3 (cell von Mises from a node; committed as `solid_run_f990.mutation.patch`) | D2 (`solid_run_f990.rs` line 157, the maximum) |
+| M4 (cell displacement from the first corner) | D2 (line 165, the ratio left [0.97, 1.0]) before D3 is reached; registered: D3 |
+| M5 (no solid branch in `start_run`) | `structural_run_f990`, at S3 (line 110) before S1; registered: S1 |
+
+Each mutation was caught by the registered test file, M1, M4 and M5 by an earlier row of it than the registered one.
+
+Not run: nothing registered was left out. Actual size: done; 1 further registration (amendment 1); 2 heavy runs
+(`npm test`, the mutations' build); 1 question; about 260 000 bytes read.
+
+Decision by the registered rule: **done**. Every row held and every mutation was caught. F-977's E8 ran as E1 and held.
+
+### For the lead: roadmap entries
+
+> Status: done.
+
+> Note: ADR 0840, 2026-11-27, done: start_run of a solid case file (a text with a top-level materials table) is run by the runner's solid driver rcfd-solid-run with the arguments of rcfd run; the cantilever_hex8 run holds run.json, case.snapshot, the report (equal to run_solid_case_file's), the .vtu and 11 stored cell fields of displacement and stress, and show_view of it takes the structural layout (case, u_magnitude, von_mises, two report monitors, run), shown in the open Studio 609 ms after the tool's result (limit 1.6 s) with the report's values; 5 of 5 mutations caught, one committed.
+
+> For F-977: E8 of ADR 0817 ran as ADR 0840 E1 on 2026-11-28 and held (the structural layout shown from a project run in 609 ms, limit 1.6 s).
+
+The same entries for F-990 are `docs/roadmap/proposals/0840-F-990.json`.
