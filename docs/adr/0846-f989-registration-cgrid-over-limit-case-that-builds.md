@@ -196,3 +196,17 @@ limit, case or mutation changes. Four locators of "What was read" and of the rea
    before the registration and not listed there): the station is interpolated linearly between the given stations (chord,
    stagger, camber, camber position, thickness, sweep, lean) and held at the tip station beyond it, so in the gap the
    section is the tip's.
+
+## Amendment 2 (2026-11-28): the mutation runs' copy was incomplete; the corrected copy
+
+Written and committed after the registered runs of R7, C1 to C6, K7 and BH (code commit b6df1fbd) and after a first
+start of the mutation script, before the corrected mutation runs. Nothing above is changed; the mutations MU1 to MU4 and
+what must catch each are unchanged.
+
+The mutation runs did not decide anything. A first start of the scratch script stopped on an error of the script
+(`Path.write_text` with a `newline` argument, which this Python does not take) before any mutation was written. The second
+start wrote and restored each mutation, but the copy was a `git archive` of only `crates`, `cases` and the workspace
+files of b6df1fbd, and `rcfd-api` reads `docs/glossary.md` and `docs/case-schema.md` at compile time: each of the four
+builds failed (`couldn't read ... docs/glossary.md`, os error 3) before any test ran. Correction: the copy is the whole
+tree of b6df1fbd (`git archive b6df1fbd`, every path), in a new scratch folder; each mutation is then run once as
+registered.
