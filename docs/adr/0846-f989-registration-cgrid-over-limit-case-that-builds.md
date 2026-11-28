@@ -210,3 +210,73 @@ files of b6df1fbd, and `rcfd-api` reads `docs/glossary.md` and `docs/case-schema
 builds failed (`couldn't read ... docs/glossary.md`, os error 3) before any test ran. Correction: the copy is the whole
 tree of b6df1fbd (`git archive b6df1fbd`, every path), in a new scratch folder; each mutation is then run once as
 registered.
+
+## Addendum 1: results (2026-11-28)
+
+The code is commit b6df1fbd (the new test file and its patch; no library, generator or solver file changed). Each run made
+once, on b6df1fbd, in the order registered; the host CPU before and after each is given. Others loaded the machine. Logs in
+the scratch folder (`logs/`).
+
+### Checks
+
+| Id | Limit | Measured | Met |
+|---|---|---|---|
+| C1 | S1 builds; estimate, registered and built equal | `n_nose` 4, `front_gap` 0.3; estimate 11,536, registered 11,536, built 11,536 (CPU 18 % / 32 %) | met |
+| C2 | as C1 for S2; refused at `n − 1`, not at `n` | estimate 230,720, registered 230,720, built 230,720; `Ok` at 230,720, `TooLarge { 230,720, 230,719 }` below (3.68 s; CPU 28 % / 31 %) | met |
+| C3 | N1's build fails, folded at layer 0; estimate 302,400 | estimate 302,400; "the line family is folded at layer 0 (r = 0.10000), C block around line 39, row 12", the place of H11b's fold with 140 layers (CPU 23 % / 32 %) | met |
+| C4 | `TooLarge { 2,010,560, 2,000,000 }`; HC builds with 2,010,560 cells | refused with that reply in both processes; HC built, 2,010,560 cells, equal to the estimate | met |
+| C5 | T_r ≤ 1 s; T_r / T_b ≤ 0.5 | T_r 0.000309 s (0.000321 s in `rc_` alone); T_b 18.514 s; ratio 0.0000167 (CPU 21 % / 13 %) | met |
+| C6 | P_r ≤ 200 MB; P_r / P_b ≤ 0.5 | P_r 7,118,848 bytes (6.8 MB; CPU 34 % / 56 %); P_b 4,487,303,168 bytes (4,279.4 MB); ratio 0.0016; free memory before 21,065 MB | met |
+| K7 | ADR 0844's file as on main | 6 passed, 26 ignored (the heavy records and `a3_`) (CPU 23 % / 34 %) | met |
+| BH | as on main | 3 passed, 1 ignored (CPU 34 % / 60 %) | met |
+| R7 | each exit 0 | `cargo fmt -p rcfd-api --check` exit 0 (no os error 206; CPU 99 % / 90 %); clippy `--all-targets -D warnings` exit 0 (CPU 90 % / 21 %); `--lib` 160 passed, 4 ignored (CPU 43 % / 100 %); the new file's fast tests as C1 to C3 | met |
+| MP | every committed patch applies | 99 patches of the repository, `git apply --check` of each: 99 apply | met |
+| DS, P1, A1 | as registered | in the report | see the report |
+
+The estimate of T_b (40 s) was high by a factor of two: the C-grid at 3,660 layers of 544 cells built in 18.5 s, under
+H10's 22.6 s for the H-grid. P_b 4.3 GB against the estimate of 4 GB.
+
+### Mutations
+
+On a `git archive` copy of the whole tree of b6df1fbd (amendment 2), each once, the new file's fast tests:
+
+| Id | Caught by |
+|---|---|
+| MU1 (committed: F-block cells `n_nose · n_up`) | `s1_` (estimate 10,864), `s2_` (217,280), `n1_` (its estimate) (CPU 73 % / 62 %) |
+| MU2 (core cells in every layer) | `s1_` (11,760), `s2_` (235,200), `n1_` (CPU 73 % / 48 %) |
+| MU3 (gap layers left out) | `s1_` (7,728), `s2_` (154,560), `n1_` (CPU 54 % / 100 %) |
+| MU4 (planar fold check removed) | `n1_` (the build then fails later, in the assembly: "a directed edge appears twice ... the cell family is tangled", at `mesh.fan.mesh`) (CPU 100 % / 65 %) |
+
+All four caught.
+
+### Deviations
+
+Amendment 1 (four locators of the registration corrected, before any code). Amendment 2 (the first two starts of the
+mutation script decided nothing: a script error, then a copy without `docs/`). No limit, case or test changed.
+
+### What was not run
+
+Nothing registered was left out.
+
+### Size
+
+Size (agent, actual): done; 0; 1; 0; 140000
+
+### Decision by the registered rule
+
+**Done.** The over-limit C-grid case HC (the shipped `axial_fan_cgrid` with `n_span` 2440 and `n_gap` 1220) builds; its
+estimate, 2,010,560, equals the built count; its refusal is within ADR 0812's limits (0.31 ms against 1 s, ratio
+0.0000167 against 0.5; 6.8 MB against 200 MB, ratio 0.0016 against 0.5); MU1 to MU4 are caught; C1 to C3, K7, BH, R7 and
+MP hold. With ADR 0844's results for the other 28 cases and ten over-limit cases, every clause of F-989's acceptance has a
+passing registered check. The folds of H11 and H11b were planar, at the hub, from their planar controls (N1), not from
+the count.
+
+## Open questions for the maintainer (results)
+
+None. ADR 0844's Q1 (two functions, `estimate` and `cell_estimate`) stands as answered there.
+
+## For the lead: roadmap entries
+
+> Status: done
+
+> Note: ADR 0846, 2026-11-28, done: the over-limit C-grid fan case (the shipped axial_fan_cgrid with n_span 2440 and n_gap 1220) builds with 2,010,560 cells, equal to mesh_preview::cell_estimate, and case.facts refuses it in 0.31 ms (build 18.5 s) at 6.8 MB (build 4.3 GB), within ADR 0812's limits; small builds of the same planar controls at 21 and 420 layers build, H11b's planar controls fold at the hub at 21 layers too (the fold is planar, not of the count), four mutations caught.

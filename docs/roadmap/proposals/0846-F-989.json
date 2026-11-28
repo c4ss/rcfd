@@ -1,0 +1,9 @@
+{
+  "form": 1,
+  "adr": "0846",
+  "item": "F-989",
+  "base": "ecac9eec14431d6a57454a14bee80aec509f626b",
+  "status": "done",
+  "note": "ADR 0846, 2026-11-28, done: the over-limit C-grid fan case (the shipped axial_fan_cgrid with n_span 2440 and n_gap 1220) builds with 2,010,560 cells, equal to mesh_preview::cell_estimate, and case.facts refuses it in 0.31 ms (build 18.5 s) at 6.8 MB (build 4.3 GB), within ADR 0812's limits; small builds of the same planar controls at 21 and 420 layers build, H11b's planar controls fold at the hub at 21 layers too (the fold is planar, not of the count), four mutations caught.",
+  "follow_ups": []
+}
