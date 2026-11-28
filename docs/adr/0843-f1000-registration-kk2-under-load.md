@@ -251,3 +251,74 @@ Size (agent): partial; 0; 5; 0; 130000
 
 Decision rule (replacing the registered one for T-C): **done** if T-C traced to HC as above, T4 fails 3 of 3, R1 to R8
 and R4b hold, and MA1, MA2, MC1 and MC2 are each caught in 3 of 3. **Partial** otherwise.
+
+## Addendum 2: results (2026-11-28)
+
+Written by Claude Opus 5.5 (`claude-opus-5-5`). Commits after amendment 1 (cc49cfad): 9ce24af8 (RA, RC, KK3, KK4),
+c028ad1d (MA1 and MC1 committed). Every run with `RCFD_BIN`, `RCFD_MCP_BIN`, `RCFD_RUNNER_BIN` and `CARGO_TARGET_DIR` on
+the scratch build of this tree's engine and `f447_bench`; the CPU and the process counts beside each run in `t.out`,
+`t4.out` and `rows.out` of the scratch folder (script `rows.sh`, logs it names). Other agents' work ran throughout.
+
+**T4** (KK4 on the copy without RC, no L): failed 3 of 3, "Escape in the gap of a step: a popover open after Escape"
+(CPU 51 to 71 per cent).
+
+| Row | Check | Limit | Measured | CPU (per cent) | Met |
+|---|---|---|---|---|---|
+| R1 | KK2 alone after the remedies, under L, 10 runs | 10 of 10 | 8 of 10 (runs 1 and 10 failed: "iterations: a popover open after Escape", "two keys in flight: a popover open after Escape") | 100 at start and end of each | **no** |
+| R2 | KK2 in whole `npm test` under L, 5 runs | 5 of 5 | 1 of 5 (passed in run 2 only) | 100 at start and end of each | **no** |
+| R3 | provenance specs in the same 5 runs | 0 failed in each | a failure in every run (KK2 4, KK3 4, KK4 4 of 5; `provenance-f828` passed in all 5) | 100 | **no** |
+| R4 | KK3 alone after RA, no L, 5 runs | 5 of 5 | 3 of 5 (runs 1 and 5 failed, "held renderer, two keys in flight") | 59 to 96 | **no** |
+| R4b | KK4 alone after RC, no L, 5 runs | 5 of 5 | 0 of 5 ("Escape in the gap of a step") | 63 to 99 | **no** |
+| R5 | `npm run typecheck` | exit 0 | exit 0 (on 9ce24af8's code; a typecheck of an earlier uncommitted draft also gave 0) | | yes |
+| R6, R7, R8 | `docs_site`, `roadmap_proposals.py check`, `process_report.py --check` | as registered | run after this addendum is committed; in the report | | |
+
+Whole runs (R2), every failure: run 1, 8 failed (claude-code:159, close-guard:220, KK2, KK4, KK3, service:177,
+service:229, workspace-first-open:59), 900 passed, 1.4 h; run 2, 8 failed (close-guard:220, project:245, KK4, KK3,
+service:145, service:177, service:229, workspace-first-open:59), 900 passed, 1.3 h; run 3, 8 failed (claude-code:159,
+KK2, KK4, KK3, service:145, 177, 229, workspace-first-open:59), 1.3 h; run 4, 7 failed (close-guard:220, KK2, KK3,
+service:145, 177, 229, workspace-first-open:59), 903 passed, 1.2 h; run 5, 4 failed (KK2, KK4, service:177,
+workspace-first-open:59), 906 passed, 1.2 h. The specs outside the provenance ones are not this work's.
+
+| Mutation | What | Caught by | Runs caught | CPU (per cent) |
+|---|---|---|---|---|
+| MA1 (committed) | the drop by time alone | KK3, "held renderer, two keys in flight" | 3 of 3 | 54 to 79 |
+| MA2 | `PRESS_LIFE_FRAMES` 1 | KK3 | 3 of 3 | 46 to 74 |
+| MC1 (committed) | `setOpened`'s cancelled test without its return | KK4, "Escape in the gap of a step" | 3 of 3 | 43 to 80 |
+| MC2 | the token cleared at once | KK4 | 3 of 3 | 43 to 80 |
+
+The catches of MC1 and MC2 show nothing about RC: KK4 fails on RC's own tree (R4b 0 of 5). Those of MA1 and MA2 are
+weak for the same reason (R4 3 of 5).
+
+**Diagnosis, from the code only (no traced control of the remedied tree was run):** T showed the cause, HC, and T4
+reproduces it. RC cancels an open only while its token is unclaimed, that is until `setOpened` runs in the stepped
+trigger's effect. The popover's dialog takes the focus after that, in React Aria's own effect (`useDialog`, ADR 0813's
+reading). An Escape handled after `setOpened` but before the dialog has the focus meets no token and no focused
+popover, so it closes nothing. RC narrows the gap but does not close it. The likely remedy is a token held until the
+dialog has the focus (or an Escape that closes `opened` whenever the focus is not in a popover); it needs a traced
+control of KK4 on RC's tree first. RA's 3 of 5 is not diagnosed: KK3's stall may let the first late request run before
+the next key (as in T2's run 2), which puts it into the same gap.
+
+Deviations: amendment 1 (T-C); the restart of `t.sh` after its failed packaging (no run made twice); RA and RC moved to a
+second keydown listener before their commit, so that the committed patch of ADR 0813 (M3) still applies; L's own end at
+60 minutes ended before T2's run 1 did. Not run: a traced control of the remedied tree; any run again.
+
+Actual size: partial; 1 (a registration under F-1000 by rule 13); 5 (T, T4, the mutations, R1 and R4, R2's five whole
+runs); 0; about 130 000 bytes read.
+
+Decision by amendment 1's rule: **partial**. T gave T-C traced to HC, and T4 failed 3 of 3. R1, R2, R3, R4 and R4b
+missed. The mutations were caught, but KK4 and KK3 fail without them.
+
+### Open questions for the maintainer
+
+1. Should the remedies of 9ce24af8 be merged as they are? Options: (a) merge them (RC narrows the gap, and nothing
+   passed before them that fails now in the provenance specs) and register the rest under F-1000; (b) do not merge this
+   branch's code, and register the next step from main. Recommendation: (b), because KK3 and KK4 would fail in the push's
+   npm test.
+
+### For the lead: roadmap entries
+
+> Status: partial.
+
+> Note: ADR 0843, 2026-11-28, partial: KK2's failure under load diagnosed by a traced control (T1 3 of 10 and T2 2 of 2 failed; every failure an Escape between a stepped popover's removal and the next one's mount, the late keys' requests having run before it); remedies RC (an Escape cancels an open not yet mounted) and RA (a key's record lives ten frames) did not hold: KK2 alone under load 8 of 10, in whole npm test 1 of 5, KK4 0 of 5, KK3 3 of 5.
+
+> Gap: The cause is known (under load the late Ctrl+I requests step the popover before the Escape, and an Escape in the gap before the next popover has the focus closes nothing), but ADR 0843's remedy RC cancels an open only until setOpened, not until the dialog has the focus; KK2 passed 8 of 10 alone and 1 of 5 in whole npm test under load, KK4 0 of 5, KK3 3 of 5. Next: a traced control of KK4 on RC's tree, then a remedy held until the focus, under F-1000 by rule 13.

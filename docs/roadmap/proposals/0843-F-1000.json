@@ -1,0 +1,10 @@
+{
+  "form": 1,
+  "adr": "0843",
+  "item": "F-1000",
+  "base": "8e5e7bb0769565e74bb8f2324f5721e88ecb3b76",
+  "status": "partial",
+  "note": "ADR 0843, 2026-11-28, partial: KK2's failure under load diagnosed by a traced control (T1 3 of 10 and T2 2 of 2 failed; every failure an Escape between a stepped popover's removal and the next one's mount, the late keys' requests having run before it); remedies RC (an Escape cancels an open not yet mounted) and RA (a key's record lives ten frames) did not hold: KK2 alone under load 8 of 10, in whole npm test 1 of 5, KK4 0 of 5, KK3 3 of 5.",
+  "gap": "The cause is known (under load the late Ctrl+I requests step the popover before the Escape, and an Escape in the gap before the next popover has the focus closes nothing), but ADR 0843's remedy RC cancels an open only until setOpened, not until the dialog has the focus; KK2 passed 8 of 10 alone and 1 of 5 in whole npm test under load, KK4 0 of 5, KK3 3 of 5. Next: a traced control of KK4 on RC's tree, then a remedy held until the focus, under F-1000 by rule 13.",
+  "follow_ups": []
+}
