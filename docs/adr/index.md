@@ -529,7 +529,7 @@ One row per record of this folder, grouped by the roadmap category of the item i
 | [0837](0837-f273-registration-the-reason-of-a-change-on-the-canvas.md) | F-273 registration: the reason of a change shown with who and what, in the process view's rows and the activity line | REGISTERED | 2026-11-27 | 2 | F-273 | done |
 | [0839](0839-f999-registration-canvas-tools-in-the-project-golden.md) | F-999 registration: the project tool-list golden holds show_view, read_view and export_view | REGISTERED | 2026-11-27 | 2 | F-999 | done |
 | [0841](0841-f1001-registration-every-added-tool-in-the-project-golden.md) | F-1001 registration: the project tool-list golden holds every tool added since 7c960bb | REGISTERED | 2026-11-27 | 2 | F-1001 | done |
-| [0842](0842-f1002-registration-start-run-in-a-golden-of-its-own.md) | F-1002 registration: start_run's live project-mode entry in a golden of its own | REGISTERED | 2026-11-28 | 2 | F-1002 | todo |
+| [0842](0842-f1002-registration-start-run-in-a-golden-of-its-own.md) | F-1002 registration: start_run's live project-mode entry in a golden of its own | REGISTERED | 2026-11-28 | 2 | F-1002 | done |
 
 ## Studio desktop app (39)
 
@@ -564,7 +564,7 @@ One row per record of this folder, grouped by the roadmap category of the item i
 | [0809](0809-f823-registration-error-walk-time-under-webgpu.md) | F-823 registration: where error-walk.spec.ts:177 spends its time under WebGPU in the Linux container | REGISTERED | 2026-11-26 | 1 | F-823 | partial |
 | [0812](0812-f823-registration-case-facts-refuses-by-the-counts-estimate.md) | F-823 registration, `case.facts` refuses an over-limit generator mesh by the counts' estimate before it builds it |  |  | 1 | F-823 | partial |
 | [0813](0813-f988-registration-a-ctrl-i-pressed-before-escape-reopens-the-popover.md) | F-988 registration, a Ctrl+I pressed just before Escape opens the provenance popover again |  |  | 7 | F-988 | done |
-| [0817](0817-f977-registration-layouts-chosen-by-the-case-category.md) | F-977 registration: the layout of results chosen by the category of the case | REGISTERED | 2026-11-26 | 1 | F-977 | partial |
+| [0817](0817-f977-registration-layouts-chosen-by-the-case-category.md) | F-977 registration: the layout of results chosen by the category of the case | REGISTERED | 2026-11-26 | 1 | F-977 | done |
 | [0818](0818-f823-registration-the-studio-job-on-the-hosted-runners.md) | F-823 registration, the Studio's job on GitHub's hosted runners: the registered skips, a WebGPU adapter on Windows, and the race of Follow live |  |  | 2 | F-823 | partial |
 | [0823](0823-f980-registration-a-view-exported-as-one-self-contained-html-page.md) | F-980 registration: a view exported as one self-contained styled HTML page | REGISTERED | 2026-11-27 | 3 | F-980 | done |
 | [0826](0826-f978-registration-the-process-view-of-a-case.md) | F-978 registration: the process view of a case, from its creation to its last result | REGISTERED | 2026-11-27 | 1 | F-978 | done |
@@ -573,7 +573,7 @@ One row per record of this folder, grouped by the roadmap category of the item i
 | [0832](0832-f978-registration-the-hold-of-a-refused-file.md) | F-978 registration: how long a refused case file stays held, and the replace budget it calls for | REGISTERED | 2026-11-27 | 2 | F-978 | done |
 | [0836](0836-f978-registration-b1-to-b3-under-load-after-f998.md) | F-978 registration: B1 to B3 under arm H's load on main after F-998, F-978's closing run | REGISTERED | 2026-11-27 | 2 | F-978 | done |
 | [0838](0838-f987-registration-show-view-description-names-every-form.md) | F-987 registration: show_view's description names every panel kind, the three forms of ADR 0807 and the run form | REGISTERED | 2026-11-27 | 2 | F-987 | done |
-| [0840](0840-f990-registration-structural-runs-in-a-project.md) | F-990 registration: structural runs in a project, their records, and the structural layout shown from them | REGISTERED | 2026-11-27 | 1 | F-990 | todo |
+| [0840](0840-f990-registration-structural-runs-in-a-project.md) | F-990 registration: structural runs in a project, their records, and the structural layout shown from them | REGISTERED | 2026-11-27 | 1 | F-990 | done |
 
 ## Retired: the hand-navigated Studio (1)
 

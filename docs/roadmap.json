@@ -10237,10 +10237,9 @@
     "deps": [
       "F-976"
     ],
-    "status": "partial",
+    "status": "done",
     "acceptance": "Every limit not stated here is registered in the ADR before the run. The case categories are fixed in the registration from the case schema (at least external aerodynamics, internal flow and turbomachinery, heat transfer, structural, multiphase), each with a default layout of views derived from the case and run records. show_view with a run and no layout takes its category's layout; a case of no known category takes the general layout. Each category is shown by an e2e test on an example case of the repository, with the views chosen named in the registration.",
-    "gap": "The structural category is recognised (a solid case file) and its layout (case, run) is built, but no project run of a solid case can exist, so it is not shown from a run in the Studio (E8, Q2). The show_view description does not name the run form (Q1).",
-    "note": "Lead (2026-11-26): entered on ADR 0803, the maintainer's direction and answers of that day (the Studio as Claude's canvas). ADR 0817, 2026-11-26, partial: show_view of {version 1, run} takes the layout of the category of the run's case (multiphase, heat transfer, internal flow and turbomachinery, external aerodynamics, structural, general), read from the run's case.snapshot by a rule over the schema's blocks, each panel only where its record exists; the open Studio showed the five runnable categories and two negative controls with their registered panels in 78 to 548 ms (limit 1.6 s); 6 of 6 mutations caught, one committed; E8 not run: no project run of a solid case exists. Lead (2026-11-26): merged at 33444b14 and pushed at f5315b1f; every selected test passed and the committed mutations failed as expected. Partial as proposed: E8 (structural from a run) waits for F-990; the show_view description's run form goes with F-987's re-record."
+    "note": "Lead (2026-11-26): entered on ADR 0803, the maintainer's direction and answers of that day (the Studio as Claude's canvas). ADR 0817, 2026-11-26, partial: show_view of {version 1, run} takes the layout of the category of the run's case (multiphase, heat transfer, internal flow and turbomachinery, external aerodynamics, structural, general), read from the run's case.snapshot by a rule over the schema's blocks, each panel only where its record exists; the open Studio showed the five runnable categories and two negative controls with their registered panels in 78 to 548 ms (limit 1.6 s); 6 of 6 mutations caught, one committed; E8 not run: no project run of a solid case exists. Lead (2026-11-26): merged at 33444b14 and pushed at f5315b1f; every selected test passed and the committed mutations failed as expected. Partial as proposed: E8 (structural from a run) waits for F-990; the show_view description's run form goes with F-987's re-record. Lead (2026-11-28): done: E8 (the structural category shown from a run in the Studio) ran as ADR 0840's E1 and held (panels in 609 ms against 1.6 s), and the show_view description names the run form (F-987, ADR 0838)."
   },
   {
     "id": "F-978",
@@ -10387,8 +10386,9 @@
     "deps": [
       "F-977"
     ],
-    "status": "todo",
-    "acceptance": "Every limit not stated here is registered in the ADR before the run. start_run of a solid case file of the repository (crates/rcfd-api/tests/solid_cases/) makes a project run with run.json, case.snapshot, its report and its stored displacement and stress fields; show_view with that run and no layout takes the structural layout, which shows those fields and the report, shown by an e2e test in the open Studio."
+    "status": "done",
+    "acceptance": "Every limit not stated here is registered in the ADR before the run. start_run of a solid case file of the repository (crates/rcfd-api/tests/solid_cases/) makes a project run with run.json, case.snapshot, its report and its stored displacement and stress fields; show_view with that run and no layout takes the structural layout, which shows those fields and the report, shown by an e2e test in the open Studio.",
+    "note": "ADR 0840, 2026-11-27, done: start_run of a solid case file (a text with a top-level materials table) is run by the runner's solid driver rcfd-solid-run with the arguments of rcfd run; the cantilever_hex8 run holds run.json, case.snapshot, the report (equal to run_solid_case_file's), the .vtu and 11 stored cell fields of displacement and stress, and show_view of it takes the structural layout (case, u_magnitude, von_mises, two report monitors, run), shown in the open Studio 609 ms after the tool's result (limit 1.6 s) with the report's values; 5 of 5 mutations caught, one committed. Lead (2026-11-28): ADR 0840 merged and pushed at 5f22065e (the first push stopped because push_main built no rcfd-workspace binary; fixed at a28a0d22); done as proposed. The installers carrying rcfd-solid-run is F-1003."
   },
   {
     "id": "F-991",
@@ -10514,8 +10514,19 @@
     "deps": [
       "F-1001"
     ],
-    "status": "todo",
+    "status": "done",
     "acceptance": "Every limit not stated here is registered in the ADR before the run. The live project-mode entry of start_run, with the properties new_case, store, continue_from, max_steps, from_run, run_time, dry_run and site, is recorded in a golden file of its own and compared byte for byte by a test; a change to any of their descriptions fails it (committed mutation).",
-    "note": "Lead (2026-11-27): entered from ADR 0841, question 1 (b), taken by the lead on the maintainer's standing instruction of 2026-11-26 (go with the recommended option always)."
+    "note": "Lead (2026-11-27): entered from ADR 0841, question 1 (b), taken by the lead on the maintainer's standing instruction of 2026-11-26 (go with the recommended option always). ADR 0842, 2026-11-28, done: golden/start_run_project_f1002.json holds start_run's live project-mode entry (4 125 bytes, 14 properties, written by script from the live list), start_run_golden_f1002 compares the eight properties added since 7c960bb one by one and the entry byte for byte, and 8 of 8 description mutations are caught; every existing golden is unchanged. Lead (2026-11-28): ADR 0842 merged and pushed at 9df67bf7; done as proposed, its question 1 answered (a), the whole live entry."
+  },
+  {
+    "id": "F-1003",
+    "title": "The Studio's packaging and installers carry rcfd-solid-run",
+    "phase": 8,
+    "deps": [
+      "F-990"
+    ],
+    "status": "todo",
+    "acceptance": "Every limit not stated here is registered in the ADR before the run. The Studio's packaged app and its installers carry rcfd-solid-run beside rcfd and rcfd-runner, found the same way; a packaged Studio runs a solid case file of the repository as a project run and shows the structural layout (an e2e test on the packaged app).",
+    "note": "Lead (2026-11-28): entered from ADR 0840, question 1 (a), taken by the lead on the maintainer's standing instruction of 2026-11-26 (go with the recommended option always)."
   }
 ]

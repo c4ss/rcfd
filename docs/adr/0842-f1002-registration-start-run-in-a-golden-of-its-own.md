@@ -211,3 +211,9 @@ Run once at 6f779053, after Addendum 1's commit, by one command in the scratch f
 | L3 | pass (process report: only a generated file not current may fail) | `docs_site` 2 passed, 0 failed; `roadmap_proposals.py check docs/roadmap/proposals/0842-F-1002.json` exit 0 ("F-1002: todo -> done; note + 368 characters"); `process_report.py --check` 1 failure, only "generated file is not current: docs/adr/index.md", left to the lead (rule 9) | yes |
 
 Every registered check holds, N1 passes, N2 fails and M1 to M8 are caught: by the registered rule F-1002 is **done**.
+
+## Answers of the maintainer (2026-11-28), written by the lead
+
+1. Q1: option (a), the whole live entry, as the acceptance words it; taken by the lead on the maintainer's standing instruction of 2026-11-26 (go with the recommended option always).
+
+Merged and pushed at 9df67bf7.

@@ -284,3 +284,9 @@ exact; kind **code verification**. The limit, the measured result of addendum 1 
 table cannot be edited (rule 18), so the process report keeps naming the row; for the lead: the row is listed as
 `0840-f990-registration-structural-runs-in-a-project.md: D3` where the lead lists such rows (the registration-kind
 exceptions of `scripts/process_report.py`).
+
+## Answers of the maintainer (2026-11-28), written by the lead
+
+1. Q1: option (a), the lead adds rcfd-solid-run to the binaries the Studio's packaging and installers carry, in a follow-up (F-1003); taken by the lead on the maintainer's standing instruction of 2026-11-26 (go with the recommended option always).
+
+Merged and pushed at 5f22065e. The first push stopped at structural_run_f990: push_main built no rcfd-workspace binary before the selected tests; push_main was fixed at a28a0d22 and the merge pushed again.
