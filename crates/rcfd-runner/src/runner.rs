@@ -729,8 +729,19 @@ impl<S: RunStore> Runner<S> {
         }
     }
 
+    /// The program that runs run `rec` (its folder `dir`): ADR 0840 D1, the solid driver for a solid case file's
+    /// snapshot, else the solver.
+    fn program(&self, rec: &RunRecord, dir: &Path) -> PathBuf {
+        let snap = std::fs::read(dir.join("case.snapshot")).unwrap_or_default();
+        if crate::mesh::solid_case(&snap, Path::new(&rec.case)) {
+            sibling_exe(crate::mesh::SOLID_DRIVER)
+        } else {
+            self.solver.clone()
+        }
+    }
+
     fn solver_cmd(&self, rec: &RunRecord, settings: &RunSettings, dir: &Path) -> Command {
-        let mut cmd = Command::new(&self.solver);
+        let mut cmd = Command::new(self.program(rec, dir));
         cmd.arg("run")
             .arg(dir.join("case.snapshot"))
             .arg("--case-dir")
@@ -857,7 +868,7 @@ impl<S: RunStore> Runner<S> {
             "argv": std::iter::once(cmd.get_program()).chain(cmd.get_args())
                 .map(|a| a.to_string_lossy().into_owned()).collect::<Vec<_>>(),
             "cwd": dir.display().to_string(),
-            "solver": self.solver_facts.of(&self.solver),
+            "solver": self.solver_facts.of(Path::new(cmd.get_program())),
             "started": records::now_iso(),
         });
         if let Err(e) = self.store.write_launch(&id, &launch) {

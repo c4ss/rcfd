@@ -50,9 +50,53 @@ pub fn case_mesh(text: &[u8], name: &Path, case_dir: &Path, set: &[String]) -> O
     })
 }
 
+/// ADR 0840 D1: whether case text `text` (file name `name`, for its format) is a solid case file: read as
+/// [`case_value`] reads it, it has a top-level key `materials`, which the solid schema has and the flow schema has not
+/// (so `rcfd run` refuses every such text as an unknown setting).
+pub fn solid_case(text: &[u8], name: &Path) -> bool {
+    case_value(text, name).is_some_and(|v| v.get("materials").is_some())
+}
+
+/// The program of the solid runs of ADR 0840 D2: `rcfd-solid-run` next to the current executable (as `rcfd` is).
+pub const SOLID_DRIVER: &str = "rcfd-solid-run";
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// ADR 0840 R1: the 9 solid case files of the repository are solid; the 13 case files of example-projects are not.
+    #[test]
+    fn r1_f990_solid_case_files_are_told_from_flow_cases() {
+        let repo = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
+        let mut solid = 0;
+        for e in std::fs::read_dir(repo.join("crates/rcfd-api/tests/solid_cases"))
+            .unwrap()
+            .flatten()
+        {
+            let p = e.path();
+            if p.extension().is_some_and(|x| x == "toml") {
+                assert!(solid_case(&std::fs::read(&p).unwrap(), &p), "{} is solid", p.display());
+                solid += 1;
+            }
+        }
+        let mut flow = 0;
+        for proj in std::fs::read_dir(repo.join("example-projects")).unwrap().flatten() {
+            let Ok(cases) = std::fs::read_dir(proj.path().join("cases")) else {
+                continue;
+            };
+            for e in cases.flatten() {
+                let p = e.path();
+                assert!(
+                    !solid_case(&std::fs::read(&p).unwrap(), &p),
+                    "{} is not solid",
+                    p.display()
+                );
+                flow += 1;
+            }
+        }
+        println!("R1: {solid} solid, {flow} flow");
+        assert_eq!((solid, flow), (9, 13), "R1 counts");
+    }
 
     #[test]
     fn only_a_file_mesh_names_one_and_set_entries_apply() {

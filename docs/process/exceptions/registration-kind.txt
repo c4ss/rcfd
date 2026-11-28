@@ -8,3 +8,5 @@
 0806-f975-registration-normwise-deflation-fallback-of-the-state-qr.md: DG3
 # 2026-11-26: row R1 of ADR 0816 holds absolute-value bars inside a code span, which split the table's cells; amendment 1 of the ADR records its kind as meant, code verification.
 0816-f885-registration-the-two-modes-of-the-fans-outer-loop.md: R1
+# 2026-11-28: row D3 of ADR 0840 has one cell too many, so its kind reads exact; amendment 2 of the ADR restates its cells, kind code verification.
+0840-f990-registration-structural-runs-in-a-project.md: D3

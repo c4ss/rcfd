@@ -1,0 +1,14 @@
+# expect-fail: cargo test --release --target-dir target/mutation -p rcfd-workspace --test solid_run_f990
+diff --git a/crates/rcfd-workspace/src/solid_run.rs b/crates/rcfd-workspace/src/solid_run.rs
+index d6b8a208..51b07d2a 100644
+--- a/crates/rcfd-workspace/src/solid_run.rs
++++ b/crates/rcfd-workspace/src/solid_run.rs
+@@ -276,7 +276,7 @@ pub fn cell_fields(r: &SolidRun) -> Result<Option<Vec<Vec<f64>>>, String> {
+         }
+         let s: [f64; 6] = f.element_stress[6 * e..6 * e + 6].try_into().expect("6 per element");
+         let mag = (u[0] * u[0] + u[1] * u[1] + u[2] * u[2]).sqrt();
+-        let vm = rcfd_fem::recover::von_mises(&s);
++        let vm = f.von_mises[nodes[0]];
+         for (k, v) in [u[0], u[1], u[2], mag, vm, s[0], s[1], s[2], s[3], s[4], s[5]]
+             .into_iter()
+             .enumerate()

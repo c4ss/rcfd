@@ -45,6 +45,7 @@ pub mod runner_config;
 pub mod runs;
 pub mod save;
 pub mod series;
+pub mod solid_run;
 pub mod templates;
 pub mod trash;
 pub mod view;
