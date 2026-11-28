@@ -139,3 +139,65 @@ Done for F-1002 if A1, A2, G1, E1, L1, L2 and L3 hold, N1 passes and N2 fails as
   acceptance says ("the live project-mode entry"); (b) record only the eight properties' descriptions. Recommendation:
   (a); this work builds (a), which is the acceptance's wording; the question stays open only for whether the coupling is
   wanted.
+
+## Addendum 1: results (2026-11-28)
+
+Code commit ee9fa8d8 (the golden and the test), mutation patch c7c0b881. The golden was written by `make_golden.py` (D1)
+from the branch's release binary: 58 live tools, the `start_run` entry 4 125 bytes with 14 properties (`case`,
+`continue_from`, `dry_run`, `from_run`, `max_steps`, `mem_mb`, `new_case`, `priority`, `reason`, `run_time`, `set`,
+`site`, `store`, `threads`, the binary's key order). `cargo fmt -p rcfd-mcp --check` was run once on the new code before
+the commit, as the lead's brief asked (exit 0). The registered run was made once, in the release profile, by `run.sh` in
+the scratch folder (`CARGO_BUILD_JOBS=8`, the scratch target folders), with `mut.sh` at its end; its whole output is
+`run.log` there, with `a1.log`, `e1.log`, `lib.log`, `fmt.log`, `clippy.log` and `mut_<id>.log`.
+
+### Checks
+
+| Id | Limit | Measured | Met |
+|---|---|---|---|
+| A1 | passes | `start_run_golden_f1002` 1 passed, 0 failed | yes |
+| A2 | all hold, the golden written | every assertion held; 4 125 bytes written, no trailing newline | yes |
+| G1 | only additions of the owned files | `A` of the golden, the test, its patch and ADR 0842 (the proposal file is added with this addendum); no `M` or `D`, nothing under `crates/*/src` | yes |
+| E1 | every test passes | `canvas_view_f976` 4, `default_f1` 2, `golden_every_tool_f1001` 1, `project_list_f270` 1, `show_view_description_f987` 3, `start_run_store_description_f862` 1, `tool_list_adr0730` 2, `tool_list_f275` 8: 22 passed, 0 failed | yes |
+| L1 | passes | `rcfd-mcp --lib` 18 passed, 0 failed, 1 ignored (an existing record, not touched) | yes |
+| L2 | clean | `cargo fmt -p rcfd-mcp --check` exit 0; clippy `--release --all-targets -D warnings` exit 0 | yes |
+| L3 | pass | in Addendum 2, run after this addendum is committed | Addendum 2 |
+
+### Negative controls and mutations
+
+One `git archive` copy per tree (`copy-base` of b7d5cdc6, `copy-code` of c7c0b881); each change applied, the test run,
+the file restored from a saved copy before the next (the same form as ADR 0841's, one copy per tree).
+
+| Id | Expected | Measured | Met |
+|---|---|---|---|
+| N1 | the three tests pass | `project_list_f270`, `golden_every_tool_f1001`, `start_run_store_description_f862` each exit 0, 1 passed: b7d5cdc6 does not catch M4 | yes |
+| N2 | fails | exit 101 at line 32 (`new_case has no description in the golden`: 7c960bb's entry lacks the eight) | yes |
+| M1 `new_case` | caught | exit 101, `new_case differs from the golden` | yes |
+| M2 `store` | caught | exit 101, `store differs from the golden` | yes |
+| M3 `continue_from` | caught | exit 101, `continue_from differs from the golden` | yes |
+| M4 `max_steps` | caught | exit 101, `max_steps differs from the golden` | yes |
+| M5 `from_run` | caught | exit 101, `from_run differs from the golden` | yes |
+| M6 `run_time` | caught | exit 101, `run_time differs from the golden` | yes |
+| M7 `dry_run` | caught | exit 101, `dry_run differs from the golden` | yes |
+| M8 `site` | caught | exit 101, `site differs from the golden` | yes |
+
+### Deviations and what was not run
+
+The form of the mutation copies above. Not run: the whole `rcfd-mcp` integration suite, `baseline_hashes` (no solver
+file touched), `npm test` (no Studio file touched).
+
+Size (actual): done; 0; 0; 1; 80000
+
+### Decision
+
+A1, A2, G1, E1, L1 and L2 hold, N1 passes, N2 fails, and M1 to M8 are each caught by `start_run_golden_f1002`; L3 is in
+Addendum 2. By the registered rule, **done** if L3 holds there. The new golden is an added file: no existing golden
+byte changes; it was written by this work's script from the live list, on the lead's taking of the maintainer's word as
+the brief records it. Q1 stays open for the lead.
+
+### For the lead: roadmap entries
+
+> Status: done.
+
+> Note: ADR 0842, 2026-11-28, done: golden/start_run_project_f1002.json holds start_run's live project-mode entry (4 125 bytes, 14 properties, written by script from the live list), start_run_golden_f1002 compares the eight properties added since 7c960bb one by one and the entry byte for byte, and 8 of 8 description mutations are caught; every existing golden is unchanged.
+
+The same entries are `docs/roadmap/proposals/0842-F-1002.json`.
