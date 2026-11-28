@@ -1,0 +1,56 @@
+
+running 1 test
+test f870_tm_march_dt2_record ... F870TM M_dt2 points not in the fluid at x = 88.7 mm, per ring: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+F870TM M_dt2 points not in the fluid at x = 90 mm, per ring: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+F870TM M_dt2 points not in the fluid at x = 91.3 mm, per ring: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+F870TM M_dt2 step 1: t 2.30250e-5 s, res_u 1.000e0, continuity 2.105e-11, d5/d1 3.728e-3, torque 79.113117 N m, dp_ts -1762.4618 Pa, 2.832 s per step, 0.0 min
+F870TM M_dt2 step 2: t 4.60500e-5 s, res_u 2.174e-1, continuity 2.066e-12, d5/d1 3.970e-3, torque -37.410238 N m, dp_ts 1459.1637 Pa, 2.743 s per step, 0.1 min
+F870TM M_dt2 step 250: t 5.75625e-3 s, res_u 8.731e-4, continuity 8.361e-13, d5/d1 4.733e-3, torque 2.176078 N m, dp_ts 91.8428 Pa, 2.895 s per step, 12.1 min
+F870TM M_dt2 step 500: t 1.15125e-2 s, res_u 4.919e-4, continuity 3.277e-13, d5/d1 4.512e-3, torque 2.128396 N m, dp_ts 88.7895 Pa, 2.953 s per step, 24.6 min
+F870TM M_dt2 step 750: t 1.72687e-2 s, res_u 3.435e-4, continuity 6.762e-13, d5/d1 4.937e-3, torque 2.100820 N m, dp_ts 86.9126 Pa, 2.942 s per step, 36.8 min
+F870TM M_dt2 step 1000: t 2.30250e-2 s, res_u 2.064e-4, continuity 5.462e-13, d5/d1 7.860e-2, torque 2.085056 N m, dp_ts 85.0418 Pa, 2.952 s per step, 49.2 min
+F870TM M_dt2 step 1250: t 2.87813e-2 s, res_u 1.049e-4, continuity 1.790e-12, d5/d1 1.461e-4, torque 2.076595 N m, dp_ts 82.5473 Pa, 2.939 s per step, 61.2 min
+F870TM M_dt2 step 1500: t 3.45375e-2 s, res_u 5.559e-5, continuity 1.106e-12, d5/d1 9.588e-5, torque 2.071816 N m, dp_ts 81.5869 Pa, 2.906 s per step, 72.6 min
+F870TM M_dt2 step 1750: t 4.02938e-2 s, res_u 3.281e-5, continuity 2.325e-12, d5/d1 1.305e-3, torque 2.067981 N m, dp_ts 81.2331 Pa, 2.927 s per step, 85.4 min
+F870TM M_dt2 step 2000: t 4.60500e-2 s, res_u 2.494e-5, continuity 6.517e-13, d5/d1 2.271e-3, torque 2.064903 N m, dp_ts 81.4490 Pa, 2.913 s per step, 97.1 min
+F870TM M_dt2 step 2250: t 5.18062e-2 s, res_u 2.059e-5, continuity 6.517e-13, d5/d1 1.333e-3, torque 2.062635 N m, dp_ts 81.7148 Pa, 2.951 s per step, 110.6 min
+F870TM M_dt2 step 2500: t 5.75625e-2 s, res_u 1.766e-5, continuity 1.371e-12, d5/d1 1.973e-3, torque 2.060675 N m, dp_ts 81.8870 Pa, 2.965 s per step, 123.5 min
+F870TM M_dt2 step 2750: t 6.33188e-2 s, res_u 1.538e-5, continuity 8.706e-13, d5/d1 1.702e-3, torque 2.059180 N m, dp_ts 81.9733 Pa, 2.952 s per step, 135.3 min
+F870TM M_dt2 step 3000: t 6.90750e-2 s, res_u 1.346e-5, continuity 7.909e-13, d5/d1 3.056e-3, torque 2.057546 N m, dp_ts 81.9717 Pa, 3.004 s per step, 150.2 min
+F870TM M_dt2 step 3250: t 7.48313e-2 s, res_u 1.226e-5, continuity 2.282e-12, d5/d1 3.738e-3, torque 2.057484 N m, dp_ts 82.0225 Pa, 3.015 s per step, 163.3 min
+F870TM M_dt2 step 3500: t 8.05875e-2 s, res_u 1.109e-5, continuity 2.224e-12, d5/d1 3.444e-3, torque 2.053908 N m, dp_ts 81.7696 Pa, 3.007 s per step, 175.4 min
+F870TM M_dt2 step 3750: t 8.63437e-2 s, res_u 9.512e-6, continuity 1.865e-12, d5/d1 3.758e-3, torque 2.052005 N m, dp_ts 81.6072 Pa, 2.993 s per step, 187.0 min
+F870TM M_dt2 step 4000: t 9.21000e-2 s, res_u 8.250e-6, continuity 2.083e-12, d5/d1 4.559e-3, torque 2.050546 N m, dp_ts 81.4610 Pa, 2.982 s per step, 198.8 min
+F870TM M_dt2 step 4250: t 9.78563e-2 s, res_u 7.333e-6, continuity 1.920e-12, d5/d1 3.532e-3, torque 2.049269 N m, dp_ts 81.3264 Pa, 2.991 s per step, 211.9 min
+F870TM M_dt2 step 4500: t 1.03612e-1 s, res_u 6.498e-6, continuity 2.073e-12, d5/d1 3.681e-3, torque 2.048110 N m, dp_ts 81.2082 Pa, 2.985 s per step, 223.9 min
+F870TM M_dt2 step 4750: t 1.09369e-1 s, res_u 5.847e-6, continuity 2.494e-12, d5/d1 3.804e-3, torque 2.047173 N m, dp_ts 81.1064 Pa, 2.970 s per step, 235.1 min
+F870TM M_dt2 step 5000: t 1.15125e-1 s, res_u 5.312e-6, continuity 2.710e-12, d5/d1 3.858e-3, torque 2.046354 N m, dp_ts 81.0114 Pa, 2.963 s per step, 246.9 min
+F870TM M_dt2 step 5250: t 1.20881e-1 s, res_u 4.944e-6, continuity 2.801e-12, d5/d1 3.514e-3, torque 2.045617 N m, dp_ts 80.9260 Pa, 2.942 s per step, 257.5 min
+F870TM M_dt2 step 5500: t 1.26638e-1 s, res_u 4.652e-6, continuity 3.226e-12, d5/d1 3.617e-3, torque 2.044931 N m, dp_ts 80.8518 Pa, 2.924 s per step, 268.1 min
+F870TM M_dt2 step 5750: t 1.32394e-1 s, res_u 4.364e-6, continuity 3.153e-12, d5/d1 3.763e-3, torque 2.044329 N m, dp_ts 80.7894 Pa, 2.905 s per step, 278.4 min
+F870TM M_dt2 step 6000: t 1.38150e-1 s, res_u 4.106e-6, continuity 3.000e-12, d5/d1 4.108e-3, torque 2.043819 N m, dp_ts 80.7342 Pa, 2.879 s per step, 287.9 min
+F870TM M_dt2 step 6250: t 1.43906e-1 s, res_u 3.813e-6, continuity 2.085e-12, d5/d1 2.502e-3, torque 2.043378 N m, dp_ts 80.6800 Pa, 2.859 s per step, 297.9 min
+F870TM M_dt2 step 6500: t 1.49663e-1 s, res_u 3.542e-6, continuity 1.475e-12, d5/d1 1.883e-3, torque 2.042951 N m, dp_ts 80.6253 Pa, 2.847 s per step, 308.5 min
+F870TM M_dt2 step 6750: t 1.55419e-1 s, res_u 3.308e-6, continuity 2.385e-12, d5/d1 2.301e-3, torque 2.042562 N m, dp_ts 80.5792 Pa, 2.834 s per step, 318.8 min
+F870TM M_dt2 step 7000: t 1.61175e-1 s, res_u 3.090e-6, continuity 2.692e-12, d5/d1 2.521e-3, torque 2.042226 N m, dp_ts 80.5390 Pa, 2.822 s per step, 329.3 min
+F870TM M_dt2 step 7250: t 1.66931e-1 s, res_u 2.870e-6, continuity 2.813e-12, d5/d1 2.885e-3, torque 2.041944 N m, dp_ts 80.5077 Pa, 2.807 s per step, 339.2 min
+F870TM M_dt2 step 7500: t 1.72687e-1 s, res_u 2.692e-6, continuity 2.836e-12, d5/d1 3.200e-3, torque 2.041692 N m, dp_ts 80.4806 Pa, 2.790 s per step, 348.8 min
+F870TM M_dt2 step 7750: t 1.78444e-1 s, res_u 2.534e-6, continuity 3.007e-12, d5/d1 3.171e-3, torque 2.041471 N m, dp_ts 80.4530 Pa, 2.774 s per step, 358.4 min
+F870TM M_dt2 step 8000: t 1.84200e-1 s, res_u 2.360e-6, continuity 3.065e-12, d5/d1 3.127e-3, torque 2.041275 N m, dp_ts 80.4242 Pa, 2.755 s per step, 367.4 min
+F870TM M_dt2 step 8250: t 1.89956e-1 s, res_u 2.261e-6, continuity 3.172e-12, d5/d1 2.983e-3, torque 2.041116 N m, dp_ts 80.3989 Pa, 2.818 s per step, 387.5 min
+F870TM M_dt2 step 8500: t 1.95713e-1 s, res_u 2.134e-6, continuity 3.219e-12, d5/d1 2.698e-3, torque 2.040953 N m, dp_ts 80.3795 Pa, 3.099 s per step, 439.0 min
+F870TM M_dt2 step 8750: t 2.01469e-1 s, res_u 2.004e-6, continuity 3.109e-12, d5/d1 2.363e-3, torque 2.040802 N m, dp_ts 80.3654 Pa, 3.286 s per step, 479.3 min
+F870TM M_dt2 step 9000: t 2.07225e-1 s, res_u 1.925e-6, continuity 3.073e-12, d5/d1 2.246e-3, torque 2.040667 N m, dp_ts 80.3530 Pa, 3.481 s per step, 522.2 min
+F870TM M_dt2 step 9250: t 2.12981e-1 s, res_u 1.839e-6, continuity 2.646e-12, d5/d1 2.314e-3, torque 2.040556 N m, dp_ts 80.3413 Pa, 3.479 s per step, 536.4 min
+F870TM M_dt2 step 9500: t 2.18738e-1 s, res_u 2.038e-6, continuity 2.036e-12, d5/d1 2.463e-3, torque 2.040516 N m, dp_ts 80.3290 Pa, 3.706 s per step, 586.8 min
+F870TM M_dt2 step 9750: t 2.24494e-1 s, res_u 2.052e-6, continuity 2.876e-12, d5/d1 3.201e-3, torque 2.040494 N m, dp_ts 80.3192 Pa, 3.923 s per step, 637.4 min
+F870TM M_dt2 step 10000: t 2.30250e-1 s, res_u 1.976e-6, continuity 9.510e-13, d5/d1 5.480e-3, torque 2.040475 N m, dp_ts 80.3106 Pa, 4.129 s per step, 688.2 min
+F870TM M_dt2 step 10250: t 2.36006e-1 s, res_u 2.028e-6, continuity 9.670e-13, d5/d1 5.217e-3, torque 2.040441 N m, dp_ts 80.3064 Pa, 4.329 s per step, 739.5 min
+F870TM M_dt2 step 10500: t 2.41763e-1 s, res_u 1.998e-6, continuity 8.462e-13, d5/d1 4.186e-3, torque 2.040443 N m, dp_ts 80.3036 Pa, 4.519 s per step, 790.9 min
+F870TM M_dt2 step 10750: t 2.47519e-1 s, res_u 1.928e-6, continuity 2.332e-12, d5/d1 3.391e-3, torque 2.040448 N m, dp_ts 80.3012 Pa, 4.701 s per step, 842.2 min
+F870TM M_dt2 step 10996: t 2.53183e-1 s, res_u 1.805e-6, continuity 2.546e-12, d5/d1 3.312e-3, torque 2.040365 N m, dp_ts 80.2861 Pa, 4.872 s per step, 892.8 min
+F870TM M_dt2 END: 10996 of 10996 steps, failed None, 4.872 s per step (892.8 min)
+ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 5 filtered out; finished in 53577.02s
+
