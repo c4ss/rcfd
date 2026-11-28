@@ -1,0 +1,9 @@
+{
+  "form": 1,
+  "adr": "0831",
+  "item": "F-870",
+  "base": "39d689c633caa8500653d64c1d3730f8d2639da9",
+  "status": "partial",
+  "note": "ADR 0831, 2026-11-28, partial: the FAN-01 design point as a time march on B1 (38 184 cells, pimple with the four opt-ins of F-885, uniform start, dt 4.605e-5 s and dt/2, six flow-through times each, 4.6 h and 14.9 h) is converged by option (c) of ADR 0827: over the last flow-through time torque and pressure rise vary by 0.023 % and 0.055 % of their means, the two steps agree within 0.014 % and 0.074 %; read from it: shaft power 317.53 W against 333.30 W (inside 32.98 W), Euler head 228.99 Pa against 220.02 (inside 15.51), kinetic energy 102.66 Pa against 99.20 (inside 15.15); missed: pressure rise 80.31 Pa against 126.46 (distance 46.15, band 29.75), casing pressure 69.11 Pa against 113.90 (band 22.65), c_x and c_t within their bands at 14 of 26 radii each; against the B1 SIMPLEC sample of ADR 0762 -0.058 N m and +6.33 Pa; mesh gates and u_meas still missing; held by crates/rcfd-api/tests/f870_time_march_b1.rs and docs/investigations/f870-time-march-b1.",
+  "gap": "Missing for done: the pressure rise (80.31 Pa on the converged B1 march against 126.46 Pa, band 29.75), the casing pressure behind the rotor (69.11 against 113.90 Pa, band 22.65), the profiles of c_x and c_t (14 of 26 radii each within band); the mesh gates of B1 (83.37 deg, skewness 3.765), with F-133; the stated uncertainty and density of the measurement (F-877). Converged by the march rule; shaft power, Euler head and kinetic energy within band."
+}

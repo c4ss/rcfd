@@ -1,0 +1,21 @@
+rule 7 at 1b9282eb plus the uncommitted records, patch and proposal, 2026-11-28T10:48:26Z
+== cargo fmt -p rcfd-api --check
+exit 0
+== rustfmt --check of the new file
+exit 0
+== cargo clippy -p rcfd-api --all-targets -- -D warnings
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 37.65s
+exit 0
+== cargo test -p rcfd-api --release --lib
+test result: ok. 160 passed; 0 failed; 4 ignored; 0 measured; 0 filtered out; finished in 31.05s
+exit 0
+== cargo test -p rcfd-api --release --test f870_time_march_b1
+test result: ok. 3 passed; 0 failed; 3 ignored; 0 measured; 0 filtered out; finished in 77.75s
+exit 0
+== cargo test -p rcfd-api --release --test f885_kept_gradient_lag
+test result: ok. 6 passed; 0 failed; 4 ignored; 0 measured; 0 filtered out; finished in 21.68s
+exit 0
+== cargo test -p rcfd-api --release --test baseline_hashes
+test result: ok. 3 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out; finished in 0.51s
+exit 0
+end 2026-11-28T10:51:57Z

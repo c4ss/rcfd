@@ -219,3 +219,123 @@ with the proposal file `docs/roadmap/proposals/0831-F-870.json`.
 
 Deviations so far: `docs_site` was run on the registration's text before its commit, to check its links, as the brief
 asks; `f870_tm_measures_on_known_signals` (C1) was run once before the marches started and passed.
+
+## Addendum 2: results
+
+Written 2026-11-28, after the runs. Commits from 39d689c6: ab11c589 (the registration, alone), 438135a1 (the test file;
+both marches ran from its binary), e6724e55 (rustfmt, layout only), ce5b4af5 (addendum 1), 1b9282eb (the records, the
+rows as recorded from the registered run, the acceptance kept as a known miss), and the commit of this addendum with
+the mutation patch, `mutations.log`, `rule7.log`, `load.csv` and the proposal file. Everything is in
+`docs/investigations/f870-time-march-b1/`.
+
+### The sentence
+
+**The time march on B1 settles by the rule of ADR 0827, so F-870 now has a converged solve, and the shaft power, Euler
+head and kinetic energy leaving the rotor lie within their bands. The pressure rise, the casing pressure and the
+profiles do not.** The pressure rise is 80.31 Pa against 126.46 Pa, a distance of 46.15 Pa with a band of 29.75. The
+casing pressure is 69.11 Pa against 113.90 Pa, band 22.65. `c_x` and `c_t` are within their bands at 14 of 26 radii
+each. The mesh gates and `u_meas` (G) stay missed as before.
+
+### The runs (R) and the wall clock
+
+M(dt): 5 498 of 5 498 steps, no failure, 276.1 min (3.013 s per step). M(dt/2): 10 996 of 10 996 steps, no failure,
+892.8 min (4.872 s per step). Both started 2026-11-27 18:49:38 UTC; M(dt) ended at 23:25 UTC and M(dt/2) at 09:42 UTC on
+2026-11-28. The machine's CPU load was 91 to 100 % for most of the time (`load.csv`); M(dt/2) slowed after M(dt) ended,
+which points to other work on the machine. Each run used about 0.18 GB of memory. Every ring point is in the fluid.
+
+### Every check
+
+| Id | Limit | Measured | Met |
+| --- | --- | --- | --- |
+| R | 5 498 and 10 996 rows, steps 1 to N; 5 ring samples each | complete; rings as registered (radii and casing ring equal to the test's) | yes |
+| S1 | `A / abs(m) <= 1 %` | torque 0.0234 % (dt) and 0.0233 % (dt/2); `dp_ts` 0.0534 % and 0.0555 % | yes |
+| S2 | `<= 1 %` | torque 0.0144 %, `dp_ts` 0.0744 % | yes |
+| Q1 | `abs(dp_ts - 126.46) <= 29.75 Pa` | 80.314 Pa, distance 46.146 Pa | **no, a miss** |
+| Q2 | `abs(P - 333.30) <= 32.98 W` | 317.531 W (2.040512 N m), distance 15.769 W | yes |
+| Q3 | `abs(e - 220.02) <= 15.43 + S + T` | 228.986 Pa (dt 228.903), distance 8.971 Pa, band 15.511 | yes |
+| Q4 | `abs(q - 99.20) <= 15.01 + S + T` | 102.662 Pa (dt 102.477), distance 3.465 Pa, band 15.154 | yes |
+| Q5 | `c_x` within at every radius | 14 of 26; missed at r / 250 mm 0.532, 0.692 to 0.752, 0.792 to 0.832, 0.892, 0.968 to 0.984; largest excess 3.594 m/s | **no, a miss** |
+| Q6 | `c_t` within at every radius | 14 of 26; missed at 0.532 to 0.572, 0.612, 0.632, 0.672, 0.692, 0.732, 0.752, 0.832 to 0.872; largest excess 1.254 m/s | **no, a miss** |
+| Q7 | `abs(p_c - 113.90) <= 22.34 + S + T` | 69.114 Pa (dt 69.031), distance 44.786 Pa, band 22.653 | **no, a miss** |
+| G | mesh gates and a registered `u_meas` | unchanged: 83.37 deg, 3.765; `u_meas` not registered (F-877) | **no, a miss** |
+| K | `<= 0.21190 N m`, `<= 29.75 Pa` | -0.05765 N m (-2.7 %), +6.326 Pa (+8.5 %) against ADR 0762's B1 SIMPLEC | yes |
+| C1 | as registered | U_num 14.2291, 12.9361, 21.2799 Pa; ADR 0765's band at 0.532 0.8897 and 0.2507; `e` 220.0154, `q` 99.1963; N1 not settled | yes |
+| SR | `1e-6` relative | 20 steps equal to `M_dt.csv` | yes |
+| H | `1e-6`; verdicts equal | 238 keys and 11 verdicts as recorded (`acceptance_sr.log`, `rule7.log`) | yes |
+| D1 | 0 files | `git diff --name-only 39d689c6`: the new test, its patch, ADR 0831, the records folder, the proposal file only | yes |
+| B3 | passes, unchanged | 3 passed, 1 ignored | yes |
+| P | rule 7 | below | yes |
+
+Reported, no limit. Richardson values: 2.040610 N m and 80.334 Pa. Share of the last flow-through time's steps that
+meet E-1: 0.558 (dt) and 1.000 (dt/2). The half range still halves with each flow-through time (torque 7.8e-3, 2.9e-3,
+1.6e-3, 8.2e-4, 4.8e-4 N m over times 2 to 6 at dt), so the state is settled to the rule, not stationary to the last
+digit. Against ADR 0765's B1 SIMPLEC record: `e` +2.12 Pa, `q` +0.38 Pa, `Pi_s` 65.92 Pa (+4.21 Pa, band 21.37), and the
+profiles move by at most 0.80 m/s. The march does not change which radii miss: the misses are those of the SIMPLEC
+sample in ADR 0765 (12 of 26 each, nearly the same radii).
+
+### Mutations
+
+`mutations.log`, from a `git archive` of 1b9282eb with its own target folder: M1 caught (known signals, the window
+count); M2 caught (N1); M3 caught (rows, H); M4 caught (rows: an empty last flow-through time fails at its index, before
+R's assertion); M5 caught (ADR 0765's band); M6 caught (SR); M7 caught (rows, by R's check of the record's ring radius
+against the test's, where the table says H). Seven of seven. M1 is committed as
+`crates/rcfd-api/tests/f870_time_march_b1.mutation.patch`.
+
+### Deviations
+
+1. `docs_site` was run on the registration's text before its commit, to check its links, as the brief asks.
+2. The load logger's first start failed on its argument and was restarted 30 s later.
+3. e6724e55 (rustfmt) came after the run binary was built; it changes layout only.
+4. SR took 18.2 min in its first run (step 1 alone 1 032 s on a machine at 100 % load, `acceptance_sr.log`). In the rule 7
+   run the new file's three gate tests took 77.8 s.
+5. M4 and M7 were caught by the assertions named in the list above, not the ones the registration's table names.
+6. The registered run of the rows was made once with `RECORDED` `None`; H was first asserted in the next run. The
+   acceptance test was run once, failed on Q1, Q5, Q6 and Q7, and is kept ignored as `f870_tm_acceptance_known_miss`
+   with its numbers and its limits unchanged.
+7. `cargo clippy` ran in its dev profile; the tests ran in release.
+
+### What was not run
+
+A third step or a longer run, a new mesh, the time-marched B2 and B3, the off-design point. `docs_site`,
+`roadmap_proposals.py check` and `process_report.py --check` run at the commit of this addendum and are reported to the
+lead.
+
+### The checks of rule 7
+
+`rule7.log`: `cargo fmt -p rcfd-api --check` exit 0; `rustfmt --check` of the new file exit 0; `cargo clippy -p rcfd-api
+--all-targets -- -D warnings` clean; `rcfd-api --release --lib` 160 passed, 4 ignored; `--test f870_time_march_b1` 3
+passed, 3 ignored; `--test f885_kept_gradient_lag` 6 passed, 4 ignored; `--test baseline_hashes` 3 passed, 1 ignored.
+
+### Size
+
+Size (agent): partial; 0; 2; 1; 450000
+
+### Decision by the registered rule
+
+**Partial.** The march is converged (S1, S2 met), and Q2 to Q4, R, K, C1, SR, H, D1, B3 and P are met, with all seven
+mutations caught. Q1, Q5, Q6, Q7 and G are missed, with the numbers above.
+
+## Open questions for the maintainer
+
+1. **What F-870 can still reach on this model (scope).** With a converged solve, four clauses still miss. Three of them
+   (Q1 pressure rise, Q7 casing pressure, G) belong to items that exist already: the outlet as on the rig (F-880), the
+   simulated loss (F-882), the mesh gates (F-133) and the measurement's uncertainty (F-877). The profile misses (Q5, Q6)
+   are the same as in ADR 0765's SIMPLEC sample. Options:
+   - (a) F-870 stays partial, with the gap below, until those items report; no new item.
+   - (b) Split F-870 into a rotor-quantity headline (power, Euler head, kinetic energy, now met) and an installation
+     headline (pressure rise, casing pressure).
+
+   I recommend (a): (b) changes an acceptance, and the casing-pressure miss (44.8 Pa) says the rotor's loss differs from
+   the rig's, so even the rotor-local pressure is not yet right.
+
+## For the lead: roadmap entries
+
+> Status proposed for F-870: partial.
+
+> Note entry: ADR 0831, 2026-11-28, partial: the FAN-01 design point as a time march on B1 (38 184 cells, pimple with the four opt-ins of F-885, uniform start, dt 4.605e-5 s and dt/2, six flow-through times each, 4.6 h and 14.9 h) is converged by option (c) of ADR 0827: over the last flow-through time torque and pressure rise vary by 0.023 % and 0.055 % of their means, the two steps agree within 0.014 % and 0.074 %; read from it: shaft power 317.53 W against 333.30 W (inside 32.98 W), Euler head 228.99 Pa against 220.02 (inside 15.51), kinetic energy 102.66 Pa against 99.20 (inside 15.15); missed: pressure rise 80.31 Pa against 126.46 (distance 46.15, band 29.75), casing pressure 69.11 Pa against 113.90 (band 22.65), c_x and c_t within their bands at 14 of 26 radii each; against the B1 SIMPLEC sample of ADR 0762 -0.058 N m and +6.33 Pa; mesh gates and u_meas still missing; held by crates/rcfd-api/tests/f870_time_march_b1.rs and docs/investigations/f870-time-march-b1.
+
+> Gap entry: Missing for done: the pressure rise (80.31 Pa on the converged B1 march against 126.46 Pa, band 29.75), the casing pressure behind the rotor (69.11 against 113.90 Pa, band 22.65), the profiles of c_x and c_t (14 of 26 radii each within band); the mesh gates of B1 (83.37 deg, skewness 3.765), with F-133; the stated uncertainty and density of the measurement (F-877). Converged by the march rule; shaft power, Euler head and kinetic energy within band.
+
+The same entries are in `docs/roadmap/proposals/0831-F-870.json` (form 1 of ADR 0755, base 39d689c6), checked with
+`python scripts/roadmap_proposals.py check`. No follow-up item. Generated pages this work may leave not current, for
+the lead (rule 9): `docs/adr/index.md` (ADR 0831 is new).
