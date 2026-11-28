@@ -707,6 +707,23 @@ fn heavy_case(k: usize) -> (Case, u64) {
             ),
             2_076_800,
         ),
+        // H11b (ADR 0844 amendment 2): H11 with the shipped case's n_nose 4
+        12 => (
+            fan(
+                FAN_C,
+                &[
+                    ("n_up", 40),
+                    ("n_chord", 60),
+                    ("n_down", 40),
+                    ("n_side", 70),
+                    ("n_nose", 4),
+                    ("n_core", 4),
+                    ("n_span", 120),
+                    ("n_gap", 20),
+                ],
+            ),
+            2_009_600,
+        ),
         _ => unreachable!(),
     }
 }
@@ -767,3 +784,6 @@ heavy!(
     1 r1_ h1_, 2 r2_ h2_, 3 r3_ h3_, 4 r4_ h4_, 5 r5_ h5_, 6 r6_ h6_, 7 r7_ h7_, 8 r8_ h8_, 9 r9_ h9_, 10 r10_ h10_,
     11 r11_ h11_,
 );
+
+// H11b (ADR 0844 amendment 2; printed as H12)
+heavy!(12 r11b_ h11b_);
