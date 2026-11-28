@@ -280,3 +280,7 @@ None. ADR 0844's Q1 (two functions, `estimate` and `cell_estimate`) stands as an
 > Status: done
 
 > Note: ADR 0846, 2026-11-28, done: the over-limit C-grid fan case (the shipped axial_fan_cgrid with n_span 2440 and n_gap 1220) builds with 2,010,560 cells, equal to mesh_preview::cell_estimate, and case.facts refuses it in 0.31 ms (build 18.5 s) at 6.8 MB (build 4.3 GB), within ADR 0812's limits; small builds of the same planar controls at 21 and 420 layers build, H11b's planar controls fold at the hub at 21 layers too (the fold is planar, not of the count), four mutations caught.
+
+## Answers of the maintainer (2026-11-28), written by the lead
+
+No open questions. Merged and pushed at 5bfaf7d1 (ledger 4b820c22); the push recorded one flaky test, service::tests::in_process_run_to_convergence_with_monitors_reports_and_render (failed once under another agent's registered CPU load, passed on rerun).
