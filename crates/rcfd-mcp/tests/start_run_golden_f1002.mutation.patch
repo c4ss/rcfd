@@ -1,0 +1,14 @@
+# expect-fail: cargo test -p rcfd-mcp --release --target-dir target/mutation --test start_run_golden_f1002
+diff --git a/crates/rcfd-mcp/src/project.rs b/crates/rcfd-mcp/src/project.rs
+index 7175d9c3..62608fda 100644
+--- a/crates/rcfd-mcp/src/project.rs
++++ b/crates/rcfd-mcp/src/project.rs
+@@ -406,7 +406,7 @@ pub(crate) fn tools() -> Vec<Tool> {
+                         "run_time": run_time_schema(),
+                         "dry_run": {"type": "boolean", "description": "return what the call would do (case, set, store and run-time plans, the check, memory, whether a runner would start) and write nothing (ADR 0737)"},
+                         "continue_from": {"type": "string", "description": "a run id of this project: the run starts from that ended run's output/restart.rcfd"},
+-                        "max_steps": {"type": "integer", "minimum": 1, "description": "at most this many steps"},
++                        "max_steps": {"type": "integer", "minimum": 1, "description": "at most this number of steps"},
+                         "from_run": {"type": "string", "description": "instead of case or new_case: rerun that run id from its case.snapshot with its run.json settings (priority, threads and mem_mb given override them); the new run.json has rerun_of"},
+                         "site": {"type": "string", "description": "a site of list_sites with assistant true: the run goes there (its inputs are uploaded, its folder here is kept up to date from the site); any other site is refused before anything is sent"}
+                     }),
