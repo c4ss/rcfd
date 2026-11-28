@@ -1,0 +1,14 @@
+# expect-fail: cargo test --release -p rcfd-api --target-dir target/mutation --test case_facts_estimate_files_adr0844 n1_
+diff --git a/crates/rcfd-api/src/facts.rs b/crates/rcfd-api/src/facts.rs
+index 50b93cfa..14adeb7a 100644
+--- a/crates/rcfd-api/src/facts.rs
++++ b/crates/rcfd-api/src/facts.rs
+@@ -385,7 +385,7 @@ pub fn case_facts(case: &Case, in_text: InText<'_>, max_cells: Option<u64>) -> R
+     if !diags.is_empty() {
+         return Err(FactsError::Invalid(diags));
+     }
+-    if let (Some(limit), Some(n)) = (max_cells, crate::mesh_preview::cell_estimate(case)) {
++    if let (Some(limit), Some(n)) = (max_cells, crate::mesh_preview::estimate(case)) {
+         if n > limit {
+             return Err(FactsError::TooLarge { cells: n, limit });
+         }

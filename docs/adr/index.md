@@ -531,7 +531,7 @@ One row per record of this folder, grouped by the roadmap category of the item i
 | [0841](0841-f1001-registration-every-added-tool-in-the-project-golden.md) | F-1001 registration: the project tool-list golden holds every tool added since 7c960bb | REGISTERED | 2026-11-27 | 2 | F-1001 | done |
 | [0842](0842-f1002-registration-start-run-in-a-golden-of-its-own.md) | F-1002 registration: start_run's live project-mode entry in a golden of its own | REGISTERED | 2026-11-28 | 2 | F-1002 | done |
 
-## Studio desktop app (40)
+## Studio desktop app (41)
 
 | ADR | Title | Status word | Date | Addenda | Item | Item status |
 |---|---|---|---|---|---|---|
@@ -575,6 +575,7 @@ One row per record of this folder, grouped by the roadmap category of the item i
 | [0838](0838-f987-registration-show-view-description-names-every-form.md) | F-987 registration: show_view's description names every panel kind, the three forms of ADR 0807 and the run form | REGISTERED | 2026-11-27 | 2 | F-987 | done |
 | [0840](0840-f990-registration-structural-runs-in-a-project.md) | F-990 registration: structural runs in a project, their records, and the structural layout shown from them | REGISTERED | 2026-11-27 | 1 | F-990 | done |
 | [0843](0843-f1000-registration-kk2-under-load.md) | F-1000 registration, KK2 of provenance-escape-f988.spec.ts under load |  |  | 2 | F-1000 | todo |
+| [0844](0844-f989-registration-case-facts-estimate-for-mesh-files.md) | F-989 registration, `case.facts` refuses by an estimate for mesh files and the generators that have none |  |  | 1 | F-989 | todo |
 
 ## Retired: the hand-navigated Studio (1)
 
