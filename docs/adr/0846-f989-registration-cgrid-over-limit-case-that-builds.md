@@ -182,3 +182,17 @@ other hosts.
 ## Open questions for the maintainer
 
 None at registration.
+
+## Amendment 1 (2026-11-28): four locators corrected, before any code
+
+Written and committed after the registration (28042792) and before any code or run. Nothing above is changed; no check,
+limit, case or mutation changes. Four locators of "What was read" and of the reason above are corrected:
+
+1. `cgrid_spec_of` is `crates/rcfd-api/src/fan_case.rs` lines 258 to 277 (not 258 to 290).
+2. The uniform branch of `graded_two_sided` (the middle cells uniform when their first cell is not below their mean) is
+   `fan_cgrid.rs` line 329 (not 327).
+3. The volume check of the C-grid assembly is `fan_cgrid.rs` lines 2398 to 2402 (not 2394).
+4. The smoothness of the blade with the radius rests on `crates/rcfd-mesh/src/fan.rs` `station_at` (lines 339 to 364, read
+   before the registration and not listed there): the station is interpolated linearly between the given stations (chord,
+   stagger, camber, camber position, thickness, sweep, lean) and held at the tip station beyond it, so in the gap the
+   section is the tip's.
