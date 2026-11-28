@@ -1,0 +1,8 @@
+{
+  "form": 1,
+  "adr": "0842",
+  "item": "F-1002",
+  "base": "b7d5cdc655e7cc1c413f3467d1caf9bb6b942ee2",
+  "status": "done",
+  "note": "ADR 0842, 2026-11-28, done: golden/start_run_project_f1002.json holds start_run's live project-mode entry (4 125 bytes, 14 properties, written by script from the live list), start_run_golden_f1002 compares the eight properties added since 7c960bb one by one and the entry byte for byte, and 8 of 8 description mutations are caught; every existing golden is unchanged."
+}
