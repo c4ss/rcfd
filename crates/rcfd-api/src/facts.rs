@@ -368,9 +368,9 @@ fn diag(message: String) -> Vec<Diagnostic> {
 /// (when given) before anything else is built; a transient case's simulation is then built for its fastest speed at the
 /// start. Only reads: no step is taken and nothing is written.
 ///
-/// With a limit, a generator mesh whose cells [`crate::mesh_preview::estimate`] gives from its `mesh.n*` counts is
-/// refused by that estimate before it is built (ADR 0812, F-823): for the generators it names the estimate is the built
-/// count, so the refusal is the one the build would give. A mesh file and the other generators are built, then checked.
+/// With a limit, a mesh whose cells [`crate::mesh_preview::cell_estimate`] gives is refused by that estimate before it is
+/// built (ADR 0812, F-823; ADR 0844, F-989: mesh files and every generator): the estimate is the built count, so the
+/// refusal is the one the build would give. A case without an estimate is built, then checked.
 pub fn case_facts(case: &Case, in_text: InText<'_>, max_cells: Option<u64>) -> Result<CaseFacts, FactsError> {
     let get = |p: &str| case.get(p).unwrap_or(Value::Null);
     let num = |p: &str| get(p).as_f64().unwrap_or(0.0);
@@ -385,7 +385,7 @@ pub fn case_facts(case: &Case, in_text: InText<'_>, max_cells: Option<u64>) -> R
     if !diags.is_empty() {
         return Err(FactsError::Invalid(diags));
     }
-    if let (Some(limit), Some(n)) = (max_cells, crate::mesh_preview::estimate(case)) {
+    if let (Some(limit), Some(n)) = (max_cells, crate::mesh_preview::cell_estimate(case)) {
         if n > limit {
             return Err(FactsError::TooLarge { cells: n, limit });
         }
