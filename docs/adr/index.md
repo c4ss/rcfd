@@ -574,8 +574,8 @@ One row per record of this folder, grouped by the roadmap category of the item i
 | [0836](0836-f978-registration-b1-to-b3-under-load-after-f998.md) | F-978 registration: B1 to B3 under arm H's load on main after F-998, F-978's closing run | REGISTERED | 2026-11-27 | 2 | F-978 | done |
 | [0838](0838-f987-registration-show-view-description-names-every-form.md) | F-987 registration: show_view's description names every panel kind, the three forms of ADR 0807 and the run form | REGISTERED | 2026-11-27 | 2 | F-987 | done |
 | [0840](0840-f990-registration-structural-runs-in-a-project.md) | F-990 registration: structural runs in a project, their records, and the structural layout shown from them | REGISTERED | 2026-11-27 | 1 | F-990 | done |
-| [0843](0843-f1000-registration-kk2-under-load.md) | F-1000 registration, KK2 of provenance-escape-f988.spec.ts under load |  |  | 2 | F-1000 | todo |
-| [0844](0844-f989-registration-case-facts-estimate-for-mesh-files.md) | F-989 registration, `case.facts` refuses by an estimate for mesh files and the generators that have none |  |  | 1 | F-989 | todo |
+| [0843](0843-f1000-registration-kk2-under-load.md) | F-1000 registration, KK2 of provenance-escape-f988.spec.ts under load |  |  | 2 | F-1000 | partial |
+| [0844](0844-f989-registration-case-facts-estimate-for-mesh-files.md) | F-989 registration, `case.facts` refuses by an estimate for mesh files and the generators that have none |  |  | 1 | F-989 | partial |
 
 ## Retired: the hand-navigated Studio (1)
 

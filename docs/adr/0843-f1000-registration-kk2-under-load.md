@@ -322,3 +322,12 @@ missed. The mutations were caught, but KK4 and KK3 fail without them.
 > Note: ADR 0843, 2026-11-28, partial: KK2's failure under load diagnosed by a traced control (T1 3 of 10 and T2 2 of 2 failed; every failure an Escape between a stepped popover's removal and the next one's mount, the late keys' requests having run before it); remedies RC (an Escape cancels an open not yet mounted) and RA (a key's record lives ten frames) did not hold: KK2 alone under load 8 of 10, in whole npm test 1 of 5, KK4 0 of 5, KK3 3 of 5.
 
 > Gap: The cause is known (under load the late Ctrl+I requests step the popover before the Escape, and an Escape in the gap before the next popover has the focus closes nothing), but ADR 0843's remedy RC cancels an open only until setOpened, not until the dialog has the focus; KK2 passed 8 of 10 alone and 1 of 5 in whole npm test under load, KK4 0 of 5, KK3 3 of 5. Next: a traced control of KK4 on RC's tree, then a remedy held until the focus, under F-1000 by rule 13.
+
+## Answers of the maintainer (2026-11-28), written by the lead
+
+1. The decision on the remedies: option (b), the branch's remedies RA and RC are not merged, since KK3 and KK4 fail on them
+   and would fail the push's `npm test`; the registration, amendment 1 and Addendum 2 are merged alone (cherry-picked as
+   167b7c2e, 512bd7db and 02aa8277, merge 2d6bed78), and the next step, a traced control of KK4 on RC's tree and a remedy
+   held until the dialog has the focus, is registered under F-1000 by rule 13 from the branch's head b5fceafa; taken by the lead on the maintainer's standing instruction of 2026-11-26 (go with the recommended option always).
+
+Merged and pushed at ab7afa49 (the ADR's commits only).

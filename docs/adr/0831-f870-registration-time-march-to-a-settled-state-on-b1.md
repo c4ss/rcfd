@@ -339,3 +339,10 @@ mutations caught. Q1, Q5, Q6, Q7 and G are missed, with the numbers above.
 The same entries are in `docs/roadmap/proposals/0831-F-870.json` (form 1 of ADR 0755, base 39d689c6), checked with
 `python scripts/roadmap_proposals.py check`. No follow-up item. Generated pages this work may leave not current, for
 the lead (rule 9): `docs/adr/index.md` (ADR 0831 is new).
+
+## Answers of the maintainer (2026-11-28), written by the lead
+
+1. The question of scope: option (a), F-870 stays partial until F-880 (outlet), F-882 (loss), F-133 (mesh gates) and
+   F-877 (measurement uncertainty) report; its acceptance is unchanged; taken by the lead on the maintainer's standing instruction of 2026-11-26 (go with the recommended option always).
+
+Merged and pushed at 9525f05f.

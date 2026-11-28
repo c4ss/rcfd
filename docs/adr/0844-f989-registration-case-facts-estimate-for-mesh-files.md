@@ -380,3 +380,13 @@ build over the limit was made, so the rule's "for each of H1 to H11" is not met.
 > Note: ADR 0844, 2026-11-28, partial: case.facts refuses by mesh_preview::cell_estimate, a count read without building, for Gmsh 2.x and 4.1 (ASCII and binary), Fluent (ASCII, binary sections, 2D) and OpenFOAM files and for cylinder_ogrid, pipe_sweep, box_3d, annulus_3d_sector_cylindrical_interface and axial_fan_sector; the count equals the built count by two routes on 28 cases, ten over-limit cases are refused in 0.3 ms to 0.47 s (builds 17 s to 30 s) at 6.5 MB to 7.4 MB (builds 3.0 GB to 5.5 GB), seven mutations caught; the over-limit C-grid fan case did not build, so its time and memory are not decided.
 
 > Gap: case.facts refuses by mesh_preview::cell_estimate for every mesh format and generator (ADR 0844), equal to the built count on 28 cases and within ADR 0812's limits on 10 over-limit cases. Not decided: the over-limit axial_fan_sector C-grid case (its build folds at the leading-edge fan at the counts registered). mesh.preview keeps its own estimate (ADR 0844 Q1).
+
+## Answers of the maintainer (2026-11-28), written by the lead
+
+1. Q1: option (a), `cell_estimate` is kept beside `estimate`; `mesh.preview` and ADR 0812's `e6b_` are unchanged; taken by the lead on the maintainer's standing instruction of 2026-11-26 (go with the recommended option always).
+2. Q2: option (a), a further registration under F-989 with an over-limit C-grid case that builds, raising only `n_span` and
+   `n_gap`, with a small build of the leading-edge fan first; taken by the lead on the maintainer's standing instruction of 2026-11-26 (go with the recommended option always).
+
+Merged and pushed at 96d36fbc. The first push stopped: ADR 0812's committed mutation patch no longer applied to `facts.rs`,
+whose estimate call this work changed; the lead moved the patch onto the new call with the same mutation (`n > limit` made
+`n >= limit`, commit 3ba50765) and the merge was pushed again.
