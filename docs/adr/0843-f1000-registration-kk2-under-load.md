@@ -167,3 +167,87 @@ Size (agent): partial; 1; 5 (T1 and T2, T3 and the mutations, R1, R2's five whol
 - The palette's deferral (`afterFocusReturns`) is not changed; other commands need it.
 - The run-control timing specs under L (F-991's P2) are recorded, not diagnosed.
 - Load L is one form of load (CPU threads in one process); a load of disk or memory is not registered.
+
+## Addendum 1: amendment 1, T's outcome T-C and the remedy RC (2026-11-28)
+
+REGISTERED 2026-11-28, written after control T and before any code of a remedy, of KK4 or of RA and before any run of a
+row, committed alone. Written by Claude Opus 5.5 (`claude-opus-5-5`).
+
+**What T gave** (copy `t` of 8e5e7bb0 with the trace; scripts `t.sh`, `run.sh`, `load.mjs`, `classify.py`, logs `t.out`
+and the logs it names, in the scratch folder). A first start of `t.sh` stopped at the copy's packaging (the engine was
+looked for without `CARGO_TARGET_DIR`) before any run; it was started again with the variable set, and no run of T was
+made twice.
+
+- **T3** (KK3 on the tree without RA, no L): failed 3 of 3, "held renderer, two keys in flight: a popover open after
+  Escape" (CPU 88 to 99 per cent from other work).
+- **T1** (KK2 alone under L, CPU 100 per cent before and at the end of every run): 7 passed, 3 failed (runs 3, 4, 7),
+  each at (c), "two keys in flight: a popover open after Escape". All three **TC**: the Escape's keydown found `.pv-pop`
+  count 0 and the focus outside the popover; "Provenance of residual of p" was added after it. In all 10 runs, under L,
+  each of (c)'s two late keys had its request run *before* the next key (Playwright's round trips under L, 10 to 30 ms,
+  are slower than the deferral) and step the popover: "iterations" removed, "residual of u" added, removed, "residual of
+  p" added; between a removal and the next addition 8 to 27 ms pass with no popover. The failing runs are those whose
+  Escape fell in such a gap (0, 8 and 83 ms after the last removal; run 7's addition came after its Escape). No request
+  ran after an Escape; no record was dropped by age; the largest key-to-request time was 315 to 331 ms (the first Ctrl+I
+  of the spec, the palette's first load), the late keys' 3 to 24 ms. No TA, TB or TD.
+- **T2** (the copy's whole `npm test` under L): run 1, 900 passed, 5 failed, 7 skipped, 4 not run, 1.0 h; KK2 failed at
+  (c), **TC** as in T1 ("residual of p" added after an Escape that met no popover); KK3 failed (no RA in the copy, as
+  T3); claude-code.spec.ts:159, close-guard.spec.ts:220 and project.spec.ts:245 failed (specs this work does not touch).
+  L ended itself at its 60 minutes about 3 minutes before run 1 ended (CPU 31 per cent at its end). Run 2: 901 passed, 5 failed, 7 skipped, 3 not run, 1.0 h (CPU 100 per cent before, 71 at its end); KK2 failed at (b), "iterations: a popover open after Escape", **TC** (one late key stepped, the Escape met no popover, "Provenance of residual of u" added after it); KK3 passed in this run (under L its first late key's request ran before the next key, found no record and stepped, so the stall did not leave two keys in flight); case-file-adr0737.spec.ts:121, close-guard.spec.ts:220, project.spec.ts:245 and service.spec.ts:145 failed (specs this work does not touch). provenance-f828.spec.ts passed in both runs.
+
+Outcome by the registered rule: **T-C**. HC holds: under load the late keys' requests run before the Escape, and an
+Escape pressed in the gap between a stepped popover's removal and the next one's mount closes nothing; the stepped open
+then mounts after it. The cause is in the app (an open asked for by Show provenance is not cancelled by an Escape pressed
+before it mounts); the case is right to expect the popover closed. HA is not seen under load, but T3 shows its mechanism
+(a record dropped by age while its request is still to run).
+
+**RC**, the remedy of HC, in `src/renderer/provenance/registry.ts` and `src/renderer/provenance/Provenance.tsx` only:
+
+1. registry: an `opening` token `{ cancelled, frames }`, set by `showNow` just before it calls a trigger's `open` (the
+   first number, the next number of a step, or the run opener), with its own chain of animation frames that clears it
+   after `PRESS_LIFE_FRAMES` (10) frames if no popover took it.
+2. registry, `listen()`: a `keydown` listener on the window in the capture phase: an Escape (not a repeat) while
+   `opening` is set marks it cancelled.
+3. registry, `setOpened` returns a boolean: it takes `opening` (clears it); if it was cancelled it returns false and
+   records nothing; else it acts as before and returns true.
+4. Provenance.tsx, `useTrigger`'s effect: when `setOpened` returns false, the trigger sets its state back to closed and
+   shows no popover.
+
+A popover opened by a click (no `opening`) and every open that mounts before an Escape act as before.
+
+**RA is written too**, as registered (T3 shows its mechanism; it is not the cause seen under load). Both remedies are in
+one commit before the rows.
+
+**KK4, the new check of RC**, in a new spec `apps/studio-web/tests/e2e/provenance-gap-f1000.spec.ts` (header: F-1000, ADR
+0843), its own Studio set up as KK2's: the RE100 row focused, Ctrl+I, the popover read ("iterations"); a one-shot
+`MutationObserver` installed on `document.body` that, at the first `.pv-pop` removed, holds the renderer's thread for
+1500 ms, as a loaded machine holds it in the gap; Ctrl+I (its request steps: "iterations" removed, the hold begins); then
+300 ms; Escape (sent during the hold, handled after it, before the stepped popover mounts); then KK2's `settle`; read
+once: `.pv-pop` count 0, and the row has the focus. The 300 ms is above the late keys' 3 to 24 ms key-to-request times
+under L (margin 12) and below the hold (1500 ms). It assumes that the Escape queued during the hold is handled before
+React's render of the step; T4 tests that assumption.
+
+**T4**, KK4's negative control: KK4 copied unchanged into the copy `t` (no RC), alone, no L, 3 runs. Expected: fails
+3 of 3. If it fails in fewer than 3, KK4 does not show HC and cannot check RC: it is recorded, R4b and MC1, MC2 are
+run as registered, and the item is partial.
+
+Rows added (the rows R1 to R8 and their limits are unchanged; R3 adds `provenance-gap-f1000` to its specs):
+
+| Row | Check | Limit | Source of the limit | Estimate | Margin | Kind |
+|---|---|---|---|---|---|---|
+| R4b | `provenance-gap-f1000.spec.ts` (KK4) alone after RC, without L, 5 runs | 5 of 5, 0 failed | F-1000 acceptance (remedied without loosening the case) | 5 of 5 | pass or fail | code verification |
+
+L for R1 and R2: as registered, with its own end set to 90 minutes for a whole run (T2's run 1 outlasted 60).
+
+Mutations of RC, on the scratch copy `m` of the remedies' commit, each alone, built and packaged, KK4's spec alone 3 runs:
+
+- **MC1** (committed as `apps/studio-web/tests/e2e/provenance-gap-f1000.spec.mutation.patch`, first line `# expect-fail:
+  cd apps/studio-web && npm run build && npm run package:dir && npx playwright test tests/e2e/provenance-gap-f1000.spec.ts
+  --project=electron`): `setOpened`'s cancelled test without its return (`void 0`). Expected: caught 3 of 3.
+- **MC2**: the `opening` token cleared at once after the trigger's `open` (no life). Expected: caught 3 of 3.
+
+MA1 (committed) and MA2 of RA stay as registered.
+
+Size (agent): partial; 0; 5; 0; 130000
+
+Decision rule (replacing the registered one for T-C): **done** if T-C traced to HC as above, T4 fails 3 of 3, R1 to R8
+and R4b hold, and MA1, MA2, MC1 and MC2 are each caught in 3 of 3. **Partial** otherwise.
