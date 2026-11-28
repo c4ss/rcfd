@@ -241,8 +241,12 @@ class Runner:
         return code, 0.5, out
 
     def checks(self):
-        """The commands of the plan that were run: without the regeneration and the listing of the generated files."""
-        return [c for c in self.calls if c not in pm.REGENERATE and c != LISTED]
+        """The commands of the plan that were run: without the regeneration, the listing of the generated files and the
+        build of the engine binaries before the plan (its first run; a later one is the rebuild after the mutations)."""
+        calls = [c for c in self.calls if c not in pm.REGENERATE and c != LISTED]
+        if pm.ENGINE_BINARIES in calls:
+            calls.remove(pm.ENGINE_BINARIES)
+        return calls
 
 
 class TempRepo(unittest.TestCase):
@@ -753,7 +757,7 @@ class Regenerate(TempRepo):
         r = Runner()
         code, out = self.run_plan(self.plan(docs, CHECK), r)
         self.assertEqual(code, 0, out)
-        self.assertEqual(r.calls[:4], [WRITE, "python scripts/roadmap_progress.py", docs, CHECK])
+        self.assertEqual(r.calls[:5], [WRITE, "python scripts/roadmap_progress.py", pm.ENGINE_BINARIES, docs, CHECK])
         self.assertEqual(r.calls.count(WRITE), 1)
         self.assertEqual(self.rows()[-1]["detail"], f"exit=0;mutations=0;cmds={docs} | {CHECK}")  # not a command of the plan
 

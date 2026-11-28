@@ -100,7 +100,10 @@ BUILD_SECONDS = 1.8  # build seconds counted per selected test binary (ADR 0752:
 BRIEFS = "docs/adr/briefs"
 REGENERATE = ("python scripts/process_report.py --write", "python scripts/roadmap_progress.py")
 # run after the mutation patches, so the binaries in target/release are built from the tree without any patch
-REBUILD_AFTER_MUTATIONS = "cargo build --release -p rcfd-cli -p rcfd-runner -p rcfd-mcp"
+# the engine binaries the tests start from target/release: built before the selected tests (a test that starts a binary of
+# another crate, such as rcfd-solid-run of rcfd-workspace, does not build it; F-990) and again after the mutation patches
+ENGINE_BINARIES = "cargo build --release --bins -p rcfd-cli -p rcfd-runner -p rcfd-mcp -p rcfd-workspace"
+REBUILD_AFTER_MUTATIONS = ENGINE_BINARIES
 # after a captured command has exited, how long its output pipe may still be read (the rest of its buffered output)
 PIPE_DRAIN_SECONDS = 10
 # the process measures of ADR 0754 (F-863)
@@ -902,6 +905,9 @@ def do_run(root, a, info, plan, run=sh):
         code = run(cmd, root, True)[0]
         if code:
             return stopped(cmd, code)
+    code = run(ENGINE_BINARIES, root, True)[0]
+    if code:
+        return stopped(ENGINE_BINARIES, code)
     for cmd in plan["always"] + [u["cmd"] for u in plan["selected"]]:
         cmds.append(cmd)
         if repeated(cmd):
