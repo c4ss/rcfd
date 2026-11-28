@@ -201,3 +201,13 @@ the brief records it. Q1 stays open for the lead.
 > Note: ADR 0842, 2026-11-28, done: golden/start_run_project_f1002.json holds start_run's live project-mode entry (4 125 bytes, 14 properties, written by script from the live list), start_run_golden_f1002 compares the eight properties added since 7c960bb one by one and the entry byte for byte, and 8 of 8 description mutations are caught; every existing golden is unchanged.
 
 The same entries are `docs/roadmap/proposals/0842-F-1002.json`.
+
+## Addendum 2: L3 (2026-11-28)
+
+Run once at 6f779053, after Addendum 1's commit, by one command in the scratch folder (`run2.log`, `docs_site.log`).
+
+| Id | Limit | Measured | Met |
+|---|---|---|---|
+| L3 | pass (process report: only a generated file not current may fail) | `docs_site` 2 passed, 0 failed; `roadmap_proposals.py check docs/roadmap/proposals/0842-F-1002.json` exit 0 ("F-1002: todo -> done; note + 368 characters"); `process_report.py --check` 1 failure, only "generated file is not current: docs/adr/index.md", left to the lead (rule 9) | yes |
+
+Every registered check holds, N1 passes, N2 fails and M1 to M8 are caught: by the registered rule F-1002 is **done**.
